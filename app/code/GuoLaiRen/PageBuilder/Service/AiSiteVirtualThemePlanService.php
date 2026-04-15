@@ -108,6 +108,54 @@ final class AiSiteVirtualThemePlanService
             $pagePlans
         );
 
+        $stage1TaskCues = [
+            'shared' => [],
+            'pages' => [],
+        ];
+        $sharedComponentPlans = \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : [];
+        foreach ($sharedTasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+            $region = \trim((string)($task['region'] ?? ''));
+            if ($region === '' && \str_starts_with($taskKey, 'shared:')) {
+                $region = \trim(\substr($taskKey, 7));
+            }
+            $sharedPlan = ($region !== '' && \is_array($sharedComponentPlans[$region] ?? null))
+                ? $sharedComponentPlans[$region]
+                : [];
+            $stage1TaskCues['shared'][$taskKey] = [
+                'task_key' => $taskKey,
+                'stage1_goal' => (string)($sharedPlan['goal'] ?? $task['plan_context']['stage1_goal'] ?? $task['label'] ?? ''),
+            ];
+        }
+        foreach ($pageTasks as $pageType => $tasks) {
+            if (!\is_array($tasks)) {
+                continue;
+            }
+            foreach ($tasks as $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $taskKey = \trim((string)($task['task_key'] ?? ''));
+                if ($taskKey === '') {
+                    continue;
+                }
+                $stage1TaskCues['pages'][$taskKey] = [
+                    'task_key' => $taskKey,
+                    'page_type' => (string)$pageType,
+                    'section_code' => (string)($task['section_code'] ?? ''),
+                    'block_goal' => (string)($task['plan_context']['block_goal'] ?? ''),
+                    'page_goal' => (string)($task['plan_context']['page_goal'] ?? ''),
+                    'why' => (string)($task['plan_context']['block_why'] ?? ''),
+                ];
+            }
+        }
+
         $executionOrder = \array_values(\array_map(
             static fn(array $task): array => [
                 'task_key' => (string)($task['task_key'] ?? ''),
@@ -118,6 +166,208 @@ final class AiSiteVirtualThemePlanService
             ],
             $buildTasks
         ));
+
+        $sessionScope = (string)($scope['public_id'] ?? $scope['session_id'] ?? '');
+        foreach ($sharedTasks as $idx => $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $sharedTasks[$idx] = \array_replace($task, [
+                'runtime_context' => $this->buildTaskRuntimeContext($scope, $task, $sessionScope, 'root', 'shared'),
+            ]);
+        }
+        foreach ($pageTasks as $pageType => $tasks) {
+            if (!\is_array($tasks)) {
+                continue;
+            }
+            foreach ($tasks as $idx => $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $pageTasks[$pageType][$idx] = \array_replace($task, [
+                    'runtime_context' => $this->buildTaskRuntimeContext($scope, $task, $sessionScope, 'shared', $pageType),
+                ]);
+            }
+        }
+
+        $taskTree = [
+            'root' => [
+                'node_key' => 'root',
+                'node_type' => 'site',
+                'task_key' => 'site:virtual_theme',
+                'status' => 'pending',
+                'goal' => '从第一阶段确认方案拆解出可执行第二阶段任务树并映射为执行清单',
+                'reason' => '保证第二阶段只执行已确认方案，避免运行期漂移',
+                'inputs' => [
+                    'plan_signature' => (string)($scope['execution_blueprint_confirmed_signature'] ?? $executionBlueprint['signature'] ?? ''),
+                ],
+                'outputs' => ['task_tree', 'execution_blueprint.tasks'],
+                'completion_rule' => 'first-stage confirmed plan fully decomposed into stage-2 execution tasks',
+                'dependencies' => [],
+                'resource_plan' => [],
+                'parallel_group' => 'site',
+                'children' => [],
+            ],
+            'shared' => [],
+            'pages' => [],
+        ];
+        foreach ($sharedTasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskKey = (string)($task['task_key'] ?? 'shared:task');
+            $taskTree['shared'][] = [
+                'node_key' => $taskKey,
+                'parent_key' => 'root',
+                'node_type' => 'shared',
+                'task_key' => $taskKey,
+                'status' => (string)($task['status'] ?? 'pending'),
+                'goal' => (string)($task['label'] ?? $taskKey),
+                'reason' => '共享任务需要先完成，后续页面任务才能复用',
+                'inputs' => [
+                    'task_key' => $taskKey,
+                    'page_type' => '',
+                ],
+                'outputs' => [
+                    'result_ref' => \is_array($task['result_ref'] ?? null) ? $task['result_ref'] : [],
+                ],
+                'dependencies' => \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
+                'completion_rule' => (string)($task['completion_rule'] ?? 'shared task complete when its output can be reused globally'),
+                'resource_plan' => [
+                    'field_plan' => \is_array($task['field_plan'] ?? null) ? $task['field_plan'] : [],
+                    'content_brief' => \is_array($task['content_brief'] ?? null) ? $task['content_brief'] : [],
+                ],
+                'parallel_group' => 'shared',
+                'children' => [],
+            ];
+        }
+        foreach ($pageTasks as $pageType => $tasks) {
+            if (!\is_array($tasks)) {
+                continue;
+            }
+            foreach ($tasks as $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $taskKey = (string)($task['task_key'] ?? ($pageType . ':task'));
+                $taskTree['pages'][$pageType][] = [
+                    'node_key' => $taskKey,
+                    'parent_key' => 'shared',
+                    'node_type' => 'page_task',
+                    'task_key' => $taskKey,
+                    'page_type' => $pageType,
+                    'status' => (string)($task['status'] ?? 'pending'),
+                    'goal' => (string)($task['label'] ?? $taskKey),
+                    'reason' => (string)($task['plan_context']['block_goal'] ?? '页面任务完成后支持该页面物化与编辑'),
+                    'inputs' => [
+                        'task_key' => $taskKey,
+                        'page_type' => $pageType,
+                    ],
+                    'outputs' => [
+                        'result_ref' => \is_array($task['result_ref'] ?? null) ? $task['result_ref'] : [],
+                    ],
+                    'dependencies' => \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
+                    'completion_rule' => (string)($task['completion_rule'] ?? 'page task complete when the page can be materialized and edited'),
+                    'resource_plan' => [
+                        'field_plan' => \is_array($task['field_plan'] ?? null) ? $task['field_plan'] : [],
+                        'content_brief' => \is_array($task['content_brief'] ?? null) ? $task['content_brief'] : [],
+                        'seo_brief' => \is_array($task['seo_brief'] ?? null) ? $task['seo_brief'] : [],
+                    ],
+                    'parallel_group' => 'page:' . $pageType,
+                    'children' => [],
+                ];
+            }
+        }
+
+        $executionBlueprintTasks = [];
+        foreach ($sharedTasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $executionBlueprintTasks[] = [
+                'task_key' => (string)($task['task_key'] ?? ''),
+                'from_node_key' => (string)($task['task_key'] ?? ''),
+                'group_key' => 'shared',
+                'task_group' => 'shared',
+                'page_type' => '',
+                'sort_order' => (int)($task['sort_order'] ?? 0),
+                'dependencies' => \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
+                'status' => (string)($task['status'] ?? 'pending'),
+                'parent_task_key' => 'root',
+                'can_parallel' => true,
+                'materialize_after_done' => false,
+                'materialize_policy' => 'none',
+                'prompt_template_key' => 'stage2_task_execute',
+                'prompt_variables' => [
+                    'task_key' => (string)($task['task_key'] ?? ''),
+                    'page_type' => '',
+                ],
+                'progress_weight' => (float)($task['progress_weight'] ?? 1.0),
+                'result_ref' => \is_array($task['result_ref'] ?? null) ? $task['result_ref'] : [],
+                'runtime_context' => \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [],
+            ];
+        }
+        foreach ($pageTasks as $pageType => $tasks) {
+            if (!\is_array($tasks)) {
+                continue;
+            }
+            foreach ($tasks as $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $executionBlueprintTasks[] = [
+                    'task_key' => (string)($task['task_key'] ?? ''),
+                    'from_node_key' => (string)($task['task_key'] ?? ''),
+                    'group_key' => (string)($task['group_key'] ?? 'page'),
+                    'task_group' => $pageType === 'home_page' ? 'home' : 'other',
+                    'page_type' => $pageType,
+                    'sort_order' => (int)($task['sort_order'] ?? 0),
+                    'dependencies' => \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
+                    'status' => (string)($task['status'] ?? 'pending'),
+                    'parent_task_key' => 'shared',
+                    'can_parallel' => true,
+                    'materialize_after_done' => true,
+                    'materialize_policy' => 'page',
+                    'prompt_template_key' => 'stage2_task_execute',
+                    'prompt_variables' => [
+                        'task_key' => (string)($task['task_key'] ?? ''),
+                        'page_type' => $pageType,
+                    ],
+                    'progress_weight' => (float)($task['progress_weight'] ?? 1.0),
+                    'result_ref' => \is_array($task['result_ref'] ?? null) ? $task['result_ref'] : [],
+                    'runtime_context' => \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [],
+                ];
+            }
+        }
+        \usort($executionBlueprintTasks, static fn(array $left, array $right): int => ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0)));
+        $executionBlueprintTasks = $this->normalizeExecutionBlueprintTasks($executionBlueprintTasks);
+        $executionBlueprintPlan = [
+            'signature' => (string)($executionBlueprint['signature'] ?? ''),
+            'task_groups' => [
+                'shared' => \array_values(\array_filter(\array_map(static fn(array $task): array => [
+                    'task_key' => (string)($task['task_key'] ?? ''),
+                    'status' => (string)($task['status'] ?? 'pending'),
+                    'can_parallel' => (bool)($task['can_parallel'] ?? true),
+                    'materialize_after_done' => (bool)($task['materialize_after_done'] ?? false),
+                    'runtime_context' => \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [],
+                ], $sharedTasks), static fn(array $task): bool => $task['task_key'] !== '')),
+                'pages' => [],
+            ],
+            'tasks' => \array_values($executionBlueprintTasks),
+            'task_count' => \count($executionBlueprintTasks),
+        ];
+        foreach ($pageTasks as $pageType => $tasks) {
+            if (!\is_array($tasks)) {
+                continue;
+            }
+            $executionBlueprintPlan['task_groups']['pages'][$pageType] = \array_values(\array_map(static fn(array $task): array => [
+                'task_key' => (string)($task['task_key'] ?? ''),
+                'status' => (string)($task['status'] ?? 'pending'),
+                'can_parallel' => (bool)($task['can_parallel'] ?? true),
+                'materialize_after_done' => (bool)($task['materialize_after_done'] ?? true),
+                'runtime_context' => \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [],
+            ], $tasks));
+        }
 
         $structured = [
             'plan_signature' => (string)($scope['execution_blueprint_confirmed_signature'] ?? $executionBlueprint['signature'] ?? ''),
@@ -130,8 +380,11 @@ final class AiSiteVirtualThemePlanService
                 'goal' => '将第一阶段方向骨架转为可直接编码实现的任务脚本，第三阶段仅按脚本生成组件。',
                 'rule' => '每个任务必须包含完整字段、内容意图、示例值与验收条件。',
             ],
+            'stage1_task_cues' => $stage1TaskCues,
             'shared_tasks' => $sharedTasks,
             'page_tasks' => $pageTasks,
+            'task_tree' => $taskTree,
+            'execution_blueprint' => $executionBlueprintPlan,
             'meta_field_matrix' => $metaFieldMatrix,
             'style_tokens' => [
                 'palette' => \is_array($planStructured['palette'] ?? null) ? $planStructured['palette'] : (\is_array($scope['palette'] ?? null) ? $scope['palette'] : []),
@@ -147,15 +400,45 @@ final class AiSiteVirtualThemePlanService
                 'page_types' => $pageTypes,
             ],
             'execution_order' => $executionOrder,
+            'task_runtime' => [
+                'isolation' => [
+                    'session_scope' => $sessionScope,
+                    'shared_prompt_only' => true,
+                    'task_key_required' => true,
+                ],
+                'parallelism' => [
+                    'page_level_parallel' => true,
+                    'component_level_parallel' => true,
+                    'independent_stream_buffer_per_task' => true,
+                ],
+            ],
             'risk_notes' => [
                 '共享组件需先完成，再推进页面任务。',
                 '恢复执行时应跳过已完成任务，从首个未完成任务继续。',
                 '页面生成语言应遵循 default_locale，方案/任务说明语言应遵循 plan_locale（若已提供）。',
+                '同一份提示词可以并发复用，但每个 SSE 会话必须具备独立 task_key 与 chunk 缓冲。',
             ],
         ];
 
         $virtualThemePlan = $structured;
         $virtualThemePlan['signature'] = \sha1((string)\json_encode($structured, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+
+        if ((int)($scope['fake_mode'] ?? 0) === 1) {
+            $deterministic = $this->buildDeterministicTaskPlanStructured($structured);
+            $deterministic = $this->ensureTaskDirectoryHierarchy($deterministic);
+            $markdown = $this->buildMarkdown($pageTypes, $sharedTasks, $pageTasks, $deterministic);
+            $virtualThemePlan = \array_replace_recursive($virtualThemePlan, $deterministic, [
+                'task_directory_tree' => $deterministic['task_directory_tree'] ?? [],
+                'task_tree' => $deterministic['task_tree'] ?? [],
+            ]);
+            $virtualThemePlan['signature'] = $this->buildSignature($deterministic);
+            return [
+                'markdown' => $markdown,
+                'structured' => $deterministic,
+                'virtual_theme_plan' => $virtualThemePlan,
+                'generation_source' => 'deterministic',
+            ];
+        }
 
         $aiTaskPlan = $this->buildTaskPlanArtifactsByAi($scope, $buildBlueprint, $structured, $virtualThemePlan, $chunkCallback);
         $markdown = \trim((string)($aiTaskPlan['markdown'] ?? ''));
@@ -169,6 +452,7 @@ final class AiSiteVirtualThemePlanService
         $mergedStructured = $this->ensureTaskDirectoryHierarchy($mergedStructured);
         $mergedVirtualThemePlan = \array_replace_recursive($mergedVirtualThemePlan, [
             'task_directory_tree' => $mergedStructured['task_directory_tree'] ?? [],
+            'task_tree' => $mergedStructured['task_tree'] ?? [],
         ]);
         $mergedVirtualThemePlan['signature'] = $this->buildSignature($mergedStructured);
         return [
@@ -222,6 +506,7 @@ final class AiSiteVirtualThemePlanService
         $virtualThemePlan['change_scope_report'] = $report;
         $virtualThemePlan = \array_replace_recursive($virtualThemePlan, [
             'task_directory_tree' => $structured['task_directory_tree'] ?? [],
+            'task_tree' => $structured['task_tree'] ?? [],
         ]);
         $virtualThemePlan['signature'] = $this->buildSignature(\array_replace($virtualThemePlan, ['markdown' => $markdown]));
 
@@ -256,6 +541,7 @@ final class AiSiteVirtualThemePlanService
         $round = \max(1, (int)($payload['round'] ?? 1));
         $sharedTasks = \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [];
         $pageTasks = \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [];
+        $taskTree = \is_array($structured['task_tree'] ?? null) ? $structured['task_tree'] : [];
         $taskCount = \count(\is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : []);
         $pageTaskCount = 0;
         foreach ($pageTasks as $tasks) {
@@ -267,6 +553,7 @@ final class AiSiteVirtualThemePlanService
             'task_count' => $taskCount,
             'shared_task_count' => \count($sharedTasks),
             'page_task_count' => $pageTaskCount,
+            'task_tree_node_count' => $this->countTaskTreeNodes($taskTree),
             'updated_at' => \date('Y-m-d H:i:s'),
             'risk_notes' => \is_array($structured['risk_notes'] ?? null) ? $structured['risk_notes'] : [],
         ];
@@ -275,6 +562,7 @@ final class AiSiteVirtualThemePlanService
         $virtualThemePlan['rebuild_summary'] = $summary;
         $virtualThemePlan = \array_replace_recursive($virtualThemePlan, [
             'task_directory_tree' => $structured['task_directory_tree'] ?? [],
+            'task_tree' => $structured['task_tree'] ?? [],
         ]);
         $virtualThemePlan['signature'] = $this->buildSignature(\array_replace($virtualThemePlan, ['markdown' => $markdown]));
 
@@ -295,12 +583,16 @@ final class AiSiteVirtualThemePlanService
      */
     private function buildMarkdown(array $pageTypes, array $sharedTasks, array $pageTasks, array $structured): string
     {
+        $taskTree = \is_array($structured['task_tree'] ?? null) ? $structured['task_tree'] : [];
         $lines = [];
         $lines[] = '# 第二阶段任务方案';
         $lines[] = '';
         $lines[] = '- 计划签名：' . (string)($structured['plan_signature'] ?? '');
         $lines[] = '- 站点：' . (string)($structured['virtual_theme_strategy']['site_display_name'] ?? '未命名站点');
         $lines[] = '- 页面类型：' . (\count($pageTypes) > 0 ? \implode('、', $pageTypes) : '未指定');
+        $lines[] = '';
+        $lines[] = '## 任务树';
+        $lines[] = $this->renderTaskTreeMarkdown($taskTree);
         $lines[] = '';
         $lines[] = '## 执行顺序';
         $lines[] = '1. shared:header';
@@ -402,6 +694,140 @@ final class AiSiteVirtualThemePlanService
     }
 
     /**
+     * 递归统计任务树节点数。
+     *
+     * @param array<string, mixed> $taskTree
+     */
+    private function countTaskTreeNodes(array $taskTree): int
+    {
+        $count = 0;
+        foreach ($taskTree as $key => $node) {
+            if ($key === 'root') {
+                $count++;
+                continue;
+            }
+            if (\is_array($node)) {
+                if (\array_is_list($node)) {
+                    foreach ($node as $child) {
+                        if (\is_array($child)) {
+                            $count++;
+                            $count += $this->countTaskTreeNodes($child);
+                        }
+                    }
+                } else {
+                    $count++;
+                    $count += $this->countTaskTreeNodes($node);
+                }
+            }
+        }
+        return $count;
+    }
+
+    /**
+     * 渲染任务树为 Markdown。
+     *
+     * @param array<string, mixed> $taskTree
+     */
+    private function renderTaskTreeMarkdown(array $taskTree): string
+    {
+        $lines = [];
+        if (\is_array($taskTree['root'] ?? null)) {
+            $root = $taskTree['root'];
+            $lines[] = '- root: ' . (string)($root['task_key'] ?? 'site:virtual_theme');
+            $lines[] = '  - completion: ' . (string)($root['completion_rule'] ?? '');
+        }
+        foreach (['shared', 'pages'] as $groupKey) {
+            $nodes = $taskTree[$groupKey] ?? [];
+            $lines[] = '- ' . $groupKey;
+            if (!\is_array($nodes)) {
+                continue;
+            }
+            foreach ($nodes as $pageKey => $pageNodes) {
+                if ($groupKey === 'pages') {
+                    $lines[] = '  - ' . (string)$pageKey;
+                }
+                if (!\is_array($pageNodes)) {
+                    continue;
+                }
+                foreach ($pageNodes as $node) {
+                    if (!\is_array($node)) {
+                        continue;
+                    }
+                    $lines[] = '    - ' . (string)($node['task_key'] ?? ($node['node_key'] ?? 'task')) . ' [' . (string)($node['status'] ?? 'pending') . ']';
+                    $lines[] = '      - parent: ' . (string)($node['parent_key'] ?? '');
+                    $lines[] = '      - completion: ' . (string)($node['completion_rule'] ?? '');
+                }
+            }
+        }
+        return $lines === [] ? '-（空）' : \implode("\n", $lines);
+    }
+
+    /**
+     * 构建任务运行上下文，供并发 SSE / 会话隔离使用。
+     *
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $task
+     * @return array<string, mixed>
+     */
+    private function buildTaskRuntimeContext(array $scope, array $task, string $sessionScope, string $parentTaskKey, string $sseScope): array
+    {
+        $taskKey = \trim((string)($task['task_key'] ?? ''));
+        return [
+            'session_id' => $sessionScope,
+            'task_session_id' => $sessionScope !== '' && $taskKey !== '' ? \sha1($sessionScope . ':' . $taskKey) : '',
+            'task_key' => $taskKey,
+            'parent_task_key' => $parentTaskKey,
+            'prompt_mode' => 'task_plan',
+            'prompt_template_key' => 'stage2_task_execute',
+            'round' => (int)($scope['task_plan_round'] ?? 1),
+            'source_signature' => (string)($scope['execution_blueprint_confirmed_signature'] ?? ''),
+            'target_scope' => (string)($task['page_type'] ?? ''),
+            'sse_scope' => $sseScope,
+            'stream_session_key' => $sessionScope !== '' && $taskKey !== '' ? ($sessionScope . ':' . $taskKey) : $taskKey,
+        ];
+    }
+
+    /**
+     * 规范化执行蓝图任务。
+     *
+     * @param list<array<string, mixed>> $tasks
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeExecutionBlueprintTasks(array $tasks): array
+    {
+        $normalized = [];
+        foreach ($tasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+            $normalized[] = [
+                'task_key' => $taskKey,
+                'from_node_key' => \trim((string)($task['from_node_key'] ?? $taskKey)),
+                'group_key' => \trim((string)($task['group_key'] ?? '')),
+                'task_group' => \trim((string)($task['task_group'] ?? '')),
+                'page_type' => \trim((string)($task['page_type'] ?? '')),
+                'sort_order' => (int)($task['sort_order'] ?? 0),
+                'dependencies' => \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
+                'status' => \trim((string)($task['status'] ?? 'pending')),
+                'parent_task_key' => \trim((string)($task['parent_task_key'] ?? '')),
+                'can_parallel' => (bool)($task['can_parallel'] ?? true),
+                'materialize_after_done' => (bool)($task['materialize_after_done'] ?? false),
+                'materialize_policy' => \trim((string)($task['materialize_policy'] ?? 'none')),
+                'prompt_template_key' => \trim((string)($task['prompt_template_key'] ?? 'stage2_task_execute')),
+                'prompt_variables' => \is_array($task['prompt_variables'] ?? null) ? $task['prompt_variables'] : [],
+                'progress_weight' => (float)($task['progress_weight'] ?? 1.0),
+                'result_ref' => \is_array($task['result_ref'] ?? null) ? $task['result_ref'] : [],
+                'runtime_context' => \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [],
+            ];
+        }
+        return $normalized;
+    }
+
+    /**
      * 为第二阶段任务补齐第一阶段计划上下文，确保任务可直接驱动实现。
      *
      * @param list<array<string, mixed>> $sharedTasks
@@ -423,7 +849,7 @@ final class AiSiteVirtualThemePlanService
                 if (!\is_array($task)) {
                     continue;
                 }
-                $blockCode = $this->resolveTaskBlockCode($task);
+                $blockCode = $this->resolveTaskBlockCodeFromPlan($task, (string)$pageType, $blockPlanMatrix);
                 $pageGoal = (string)($pagePlans[$pageType]['page_goal'] ?? '');
                 $blockMeta = \is_array($metaFieldMatrix[$pageType][$blockCode] ?? null) ? $metaFieldMatrix[$pageType][$blockCode] : [];
                 $blockPlan = \is_array($blockPlanMatrix[$pageType][$blockCode] ?? null) ? $blockPlanMatrix[$pageType][$blockCode] : [];
@@ -432,7 +858,9 @@ final class AiSiteVirtualThemePlanService
                     'page_type' => $pageType,
                     'page_goal' => $pageGoal,
                     'block_code' => $blockCode,
+                    'section_code' => (string)($blockPlan['section_code'] ?? $task['section_code'] ?? ''),
                     'block_goal' => (string)($blockMeta['goal'] ?? ''),
+                    'block_why' => (string)($blockPlan['why'] ?? ''),
                     'content_brief' => \is_array($blockPlan['content_brief'] ?? null) ? $blockPlan['content_brief'] : [],
                     'field_plan' => \is_array($blockMeta['field_plan'] ?? null) ? $blockMeta['field_plan'] : [],
                     'result_ref' => \is_array($blockMeta['result_ref'] ?? null) ? $blockMeta['result_ref'] : [],
@@ -455,6 +883,7 @@ final class AiSiteVirtualThemePlanService
             $task['plan_context'] = [
                 'source_stage' => 'stage_1',
                 'scope' => 'shared',
+                'stage1_goal' => (string)($task['label'] ?? $task['task_key'] ?? 'shared'),
                 'content_rules' => [
                     'navigation_or_footer' => '遵循第一阶段 navigation_plan/footer_plan 与 seo_strategy 约束',
                 ],
@@ -642,13 +1071,13 @@ final class AiSiteVirtualThemePlanService
      */
     private function resolveTaskBlockCode(array $task): string
     {
-        $sectionCode = \trim((string)($task['section_code'] ?? ''));
-        if ($sectionCode !== '') {
-            return $sectionCode;
-        }
         $blockKey = \trim((string)($task['block_key'] ?? ''));
         if ($blockKey !== '') {
             return $blockKey;
+        }
+        $sectionCode = \trim((string)($task['section_code'] ?? ''));
+        if ($sectionCode !== '') {
+            return $sectionCode;
         }
         $taskKey = \trim((string)($task['task_key'] ?? ''));
         if ($taskKey !== '' && \str_contains($taskKey, ':')) {
@@ -659,6 +1088,28 @@ final class AiSiteVirtualThemePlanService
             }
         }
         return 'block';
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @param array<string, array<string, array<string, mixed>>> $blockPlanMatrix
+     */
+    private function resolveTaskBlockCodeFromPlan(array $task, string $pageType, array $blockPlanMatrix): string
+    {
+        $sectionCode = \trim((string)($task['section_code'] ?? ''));
+        if ($sectionCode !== '') {
+            $pageBlocks = \is_array($blockPlanMatrix[$pageType] ?? null) ? $blockPlanMatrix[$pageType] : [];
+            foreach ($pageBlocks as $blockKey => $blockPlan) {
+                if (!\is_array($blockPlan)) {
+                    continue;
+                }
+                $planSectionCode = \trim((string)($blockPlan['section_code'] ?? ''));
+                if ($planSectionCode !== '' && $planSectionCode === $sectionCode) {
+                    return (string)$blockKey;
+                }
+            }
+        }
+        return $this->resolveTaskBlockCode($task);
     }
 
     /**
@@ -680,7 +1131,29 @@ final class AiSiteVirtualThemePlanService
             throw new \RuntimeException('AI task plan generation failed: AiService unavailable.');
         }
         $prompt = $this->buildTaskPlanGenerationPrompt($scope, $buildBlueprint, $structured, $virtualThemePlan);
+        $requestParams = [
+            'allow_zero_balance_provider' => true,
+            'temperature' => 0.2,
+            'max_tokens' => 6000,
+            'timeout' => 120,
+            'response_format' => ['type' => 'json_object'],
+        ];
         try {
+            if ($chunkCallback === null) {
+                $raw = (string)$ai->generate(
+                    $prompt,
+                    null,
+                    'pagebuilder_task_plan_generation',
+                    null,
+                    $requestParams
+                );
+                $decoded = \json_decode($raw, true);
+                if (!\is_array($decoded)) {
+                    throw new \RuntimeException('AI task plan generation failed: invalid JSON response.');
+                }
+                return $decoded;
+            }
+
             $raw = '';
             $streamCallback = static function (string $chunk) use (&$raw, $chunkCallback): void {
                 $raw .= $chunk;
@@ -694,14 +1167,22 @@ final class AiSiteVirtualThemePlanService
                 null,
                 'pagebuilder_task_plan_generation',
                 null,
-                [
-                    'allow_zero_balance_provider' => true,
-                    'temperature' => 0.2,
-                    'max_tokens' => 6000,
-                    'timeout' => 120,
-                ]
+                \array_merge($requestParams, [
+                    'enforce_timeout_in_stream' => true,
+                ])
             );
             $decoded = \json_decode($raw, true);
+            if (!\is_array($decoded)) {
+                // 回退到非流式，避免因上游流式空返回导致任务方案无法生成。
+                $raw = (string)$ai->generate(
+                    $prompt,
+                    null,
+                    'pagebuilder_task_plan_generation',
+                    null,
+                    $requestParams
+                );
+                $decoded = \json_decode($raw, true);
+            }
             if (!\is_array($decoded)) {
                 throw new \RuntimeException('AI task plan generation failed: invalid JSON response.');
             }
@@ -803,40 +1284,49 @@ final class AiSiteVirtualThemePlanService
         $stage1PlanJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $stage1PlanMarkdown = \trim((string)($scope['plan_markdown'] ?? ''));
         $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        $stage1TaskCues = \is_array($structured['stage1_task_cues'] ?? null) ? $structured['stage1_task_cues'] : [];
+        $planLocale = \trim((string)($scope['plan_locale'] ?? ($scope['plan_workbench']['plan_locale'] ?? '')));
+        $defaultLocale = \trim((string)($scope['default_locale'] ?? ''));
+        $pageCoverage = \is_array($scope['page_coverage'] ?? null) ? $scope['page_coverage'] : [];
         $modeRules = match ($mode) {
             'refine_task_plan' => [
                 'Mode: refine_task_plan.',
-                'Preserve unaffected tasks and keep execution order stable unless a dependency must change.',
-                'Focus updates on the requested target_scope and directly linked tasks only.',
-                'Return the full task-plan document, not a patch.',
+                'Only modify the user-specified target_scope and the minimum necessary linked content.',
+                'Keep the rest of the confirmed plan and execution blueprint stable.',
+                'Return a full replacement document for the affected scope, not an annotation patch.',
             ],
             'rebuild_task_plan' => [
                 'Mode: rebuild_task_plan.',
-                'You may rewrite task grouping and execution order if the new direction requires it.',
-                'Keep the confirmed stage-1 plan as the only source of truth.',
-                'Return the full rebuilt task-plan document, not a patch.',
+                'Rebuild the entire second-stage task plan from the confirmed first-stage document.',
+                'Do not inherit partial old draft content as default truth.',
+                'Return a full rebuilt document, not a patch.',
             ],
             default => [
                 'Mode: generate_task_plan.',
-                'Create the initial detailed stage-2 execution plan from the confirmed stage-1 plan.',
-                'Return the full task-plan document.',
+                'Derive the initial second-stage task plan from the confirmed first-stage document.',
+                'Return the complete task-plan document.',
             ],
         };
 
         $lines = [
-            'You are an AI planner for PageBuilder stage-2 execution detail plan.',
+            'You are PageBuilder AI planner for stage-2 virtual theme task planning.',
             'Return STRICT JSON only.',
             'Do not wrap the response in markdown fences.',
-            'Do not output explanations, comments, or any text outside JSON.',
+            'Do not output explanations, comments, code fences, or any text outside JSON.',
             'The JSON root object must contain exactly these keys: markdown, virtual_theme_plan.',
+            'This is the confirmed virtual-theme task plan for stage 2: output must be directly usable for virtual_theme_plan.confirmed persistence after user confirmation.',
+            'The markdown field is the human-readable task-plan document.',
+            'The virtual_theme_plan field is the structured execution source of truth.',
             'Output schema:',
             '{',
             '  "markdown": "string",',
             '  "virtual_theme_plan": {',
+            '    "plan_signature": "string",',
             '    "task_script_brief": {"goal":"string","rule":"string"},',
             '    "virtual_theme_strategy": {},',
             '    "shared_tasks": [],',
             '    "page_tasks": {},',
+            '    "task_tree": {},',
             '    "meta_field_matrix": {},',
             '    "style_tokens": {},',
             '    "content_rules": {},',
@@ -846,23 +1336,45 @@ final class AiSiteVirtualThemePlanService
             '  }',
             '}',
             'Hard rules:',
-            '- Must use confirmed stage-1 plan as the source of truth.',
-            '- Output detailed actionable stage-2 execution plan.',
-            '- 每个 task 都必须代表一次独立的 SSE 对话，且只输出一个组件或一个明确页面片段的生成任务。',
-            '- header 与 footer 是全站共享组件，只允许生成一次；其余页面内容按 page_tasks 中的规划逐页生成。',
-            '- Fill each task as a self-contained script: plan_context + implementation_contract + task_script + field_content_requirements.',
-            '- Every task must include enough content details so stage-3 can generate components directly without extra planning.',
-            '- DO NOT echo user instruction text as generic policy filler.',
-            '- page_tasks.*[].plan_context.block_goal must be concrete and specific to the block.',
-            '- page_tasks.*[].task_script.story_goal must be concrete and specific to the business page.',
-            '- page_tasks.*[].task_script.field_content_requirements must be non-empty with concrete sample values.',
-            '- markdown must explain concrete execution steps by shared/page task groups.',
-            '- Stage-2 contract (AI建站中台 / plan doc): derive ONLY from confirmed stage-1 markdown + plan_json + execution_blueprint; never invent requirements absent from stage-1.',
-            '- Produce virtual_theme_plan fields: plan_signature, virtual_theme_strategy, shared_tasks, page_tasks, meta_field_matrix, style_tokens, content_rules, responsive_rules, execution_order, risk_notes.',
-            '- shared:header / shared:footer tasks MUST spell out visuals, nav/brand/CTA slots, variable fields + defaults, responsive collapse, SEO/internal-link rationale.',
-            '- Each page-type block task MUST include order, block goal, design rationale, content fields, variable meta, CTA direction, internal links, SEO keywords/anchors.',
-            '- execution_order MUST follow: shared:header, shared:footer, then home page tasks, then other page types in blueprint order; state why in risk_notes if dependencies block.',
+            '- Use the confirmed stage-1 plan as the only source of truth.',
+            '- The second stage must拆解第一阶段方案文档，先形成 task_tree，再组装 execution_blueprint.tasks.',
+            '- Each task_tree node must state what to do, why to do it, completion criteria, and dependencies.',
+            '- Each task must be independently executable by one SSE session, with isolated context and buffered chunks.',
+            '- Header and footer are global shared tasks and must appear explicitly.',
+            '- Page-level tasks must cover every selected page, and only selected pages.',
+            '- Do not invent unselected pages or omit selected pages.',
+            '- Every task must include enough content detail for direct implementation in stage 3.',
+            '- Every task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, completion_rule.',
+            '- The markdown must explain concrete execution steps by shared tasks, page tasks, and task tree order.',
+            '- The stage-2 document must include page coverage, task tree, execution order, and risk notes.',
+            '- The second stage must define task completion by status, and status changes drive progress and recovery.',
+            '- The AI module must support session isolation for concurrent SSE runs; one prompt template can be used by many tasks, but each task must isolate session_id, task_key, and runtime state.',
+            '- Concurrent tasks may run in parallel across pages/components, but they must not share streaming buffers or stateful caches.',
+            '- Page completion may materialize a page immediately and open its visual editing SSE.',
+            '- Component-level generation may also run concurrently in isolated SSE sessions.',
+            '- Shared tasks and page tasks must preserve the confirmed locale rules: plan_locale for plan text, default_locale for content generation.',
+            '- Stage-2 contract: derive ONLY from confirmed stage-1 markdown + plan_json + execution_blueprint; never invent requirements absent from stage-1.',
+            '- Produce virtual_theme_plan fields: plan_signature, virtual_theme_strategy, shared_tasks, page_tasks, task_tree, meta_field_matrix, style_tokens, content_rules, responsive_rules, execution_order, risk_notes.',
+            '- shared:header must specify visuals, nav structure, brand slot, CTA slots, variable fields, defaults, responsive collapse rules, SEO/internal-link rationale.',
+            '- shared:footer must specify information groups, policy links, trust blocks, social/contact slots, variable fields, defaults, SEO/crawl rationale.',
+            '- Each page-type block task must include order, block goal, design rationale, content fields, variable meta, CTA direction, internal links, SEO keywords, and anchors.',
+            '- execution_order must follow: shared:header, shared:footer, home page tasks, then other page types in blueprint order.',
+            '- If dependencies block ordering, explain why in risk_notes.',
+            '- The task plan must make shared -> home -> other page execution explicit and explain why shared tasks block later tasks.',
+            '- Use the confirmed page coverage report as the page scope authority.',
+            '- For refine mode, only update target_scope and linked tasks; output change_scope_report.',
+            '- For rebuild mode, output rebuild_summary and a full new task tree.',
         ];
+        if ($planLocale !== '') {
+            $lines[] = 'Plan locale: ' . $planLocale;
+        }
+        if ($defaultLocale !== '') {
+            $lines[] = 'Default locale: ' . $defaultLocale;
+        }
+        if ($pageCoverage !== []) {
+            $lines[] = 'Page coverage report:';
+            $lines[] = \json_encode($pageCoverage, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
+        }
         foreach ($modeRules as $rule) {
             $lines[] = '- ' . $rule;
         }
@@ -882,6 +1394,8 @@ final class AiSiteVirtualThemePlanService
         $lines[] = \json_encode($buildBlueprint, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
         $lines[] = 'Baseline virtual_theme_plan (must keep keys compatible):';
         $lines[] = \json_encode($virtualThemePlan, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
+        $lines[] = 'Extracted stage-1 task cues:';
+        $lines[] = \json_encode($stage1TaskCues, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
         $lines[] = 'Baseline structured:';
         $lines[] = \json_encode($structured, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
 
@@ -906,6 +1420,7 @@ final class AiSiteVirtualThemePlanService
         $mergedStructured = $this->ensureTaskDirectoryHierarchy($mergedStructured);
         $mergedVirtualThemePlan = \array_replace_recursive($mergedVirtualThemePlan, [
             'task_directory_tree' => $mergedStructured['task_directory_tree'] ?? [],
+            'task_tree' => $mergedStructured['task_tree'] ?? [],
         ]);
         $this->assertAiTaskPlanIsContentful($mergedStructured);
         $mergedVirtualThemePlan['signature'] = $this->buildSignature($mergedStructured);

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\Blog\Service;
 
 use GuoLaiRen\Blog\Model\TrendsConfig;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 class GoogleTrendsService
 {
@@ -59,7 +60,7 @@ class GoogleTrendsService
 
         foreach ($chunks as $chunk) {
             if (!$isFirst) {
-                sleep(1);
+                SchedulerSystem::sleep(1);
             }
             $isFirst = false;
             $q = implode(',', $chunk);
@@ -151,7 +152,7 @@ class GoogleTrendsService
         $isFirst = true;
         foreach ($chunks as $chunk) {
             if (!$isFirst) {
-                sleep(1);
+                SchedulerSystem::sleep(1);
             }
             $isFirst = false;
             $q = implode(',', $chunk);
@@ -250,7 +251,7 @@ class GoogleTrendsService
                 return $lastBody;
             }
             if ($attempt < $maxAttempts) {
-                usleep(500000);
+                SchedulerSystem::yieldDelay(500);
             }
         }
         trigger_error(__('Google Trends 请求失败（已重试）：%{url}', ['url' => $url]), E_USER_WARNING);

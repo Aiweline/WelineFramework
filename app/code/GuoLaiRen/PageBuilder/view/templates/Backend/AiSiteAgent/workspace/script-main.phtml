@@ -203,6 +203,9 @@
             plan_locale: String((scope.plan_locale || (scope.website_profile && scope.website_profile.plan_locale) || '')),
         };
         var vtPlan = scope.virtual_theme_plan && typeof scope.virtual_theme_plan === 'object' ? scope.virtual_theme_plan : {};
+        var persistedTaskPlanStructured = (scope.task_plan_structured && typeof scope.task_plan_structured === 'object')
+            ? scope.task_plan_structured
+            : {};
         window.__pbWorkspaceConfirmedTaskPlan = {
             markdown: String(vtPlan.confirmed_markdown || ''),
             confirmed_markdown: String(vtPlan.confirmed_markdown || ''),
@@ -210,11 +213,15 @@
             signature: String(vtPlan.confirmed_signature || vtPlan.plan_signature || ''),
             task_plan_signature: String(vtPlan.confirmed_signature || vtPlan.plan_signature || ''),
             plan_locale: String((scope.plan_locale || (scope.website_profile && scope.website_profile.plan_locale) || '')),
-            structured: vtPlan.confirmed && typeof vtPlan.confirmed === 'object' ? vtPlan.confirmed : {},
+            structured: isNonEmptyObject(persistedTaskPlanStructured)
+                ? persistedTaskPlanStructured
+                : (vtPlan.confirmed && typeof vtPlan.confirmed === 'object' ? vtPlan.confirmed : {}),
         };
         var taskPlanDraftMarkdown = String(vtPlan.draft_markdown || '').trim();
         var taskPlanConfirmedMarkdown = String(vtPlan.confirmed_markdown || '').trim();
-        var taskPlanDraftStructured = vtPlan.draft && typeof vtPlan.draft === 'object' ? vtPlan.draft : {};
+        var taskPlanDraftStructured = isNonEmptyObject(persistedTaskPlanStructured)
+            ? persistedTaskPlanStructured
+            : (vtPlan.draft && typeof vtPlan.draft === 'object' ? vtPlan.draft : {});
         var taskPlanConfirmedStructured = vtPlan.confirmed && typeof vtPlan.confirmed === 'object' ? vtPlan.confirmed : {};
         if (
             taskPlanDraftMarkdown !== ''
@@ -3708,14 +3715,6 @@
         if (!payload || typeof payload !== 'object') {
             return null;
         }
-        if (payload.virtual_theme_plan && typeof payload.virtual_theme_plan === 'object') {
-            if (isNonEmptyObject(payload.virtual_theme_plan.draft)) {
-                return payload.virtual_theme_plan.draft;
-            }
-            if (isNonEmptyObject(payload.virtual_theme_plan.confirmed)) {
-                return payload.virtual_theme_plan.confirmed;
-            }
-        }
         if (isNonEmptyObject(payload.structured)) {
             return payload.structured;
         }
@@ -3724,6 +3723,14 @@
         }
         if (isNonEmptyObject(payload.plan_json)) {
             return payload.plan_json;
+        }
+        if (payload.virtual_theme_plan && typeof payload.virtual_theme_plan === 'object') {
+            if (isNonEmptyObject(payload.virtual_theme_plan.draft)) {
+                return payload.virtual_theme_plan.draft;
+            }
+            if (isNonEmptyObject(payload.virtual_theme_plan.confirmed)) {
+                return payload.virtual_theme_plan.confirmed;
+            }
         }
         return null;
     }
@@ -3997,9 +4004,130 @@
         return cards || '';
     }
 
+    function isTaskPlanStructuredRoot(planRoot) {
+        if (!planRoot || typeof planRoot !== 'object') {
+            return false;
+        }
+        if (Array.isArray(planRoot.shared_tasks) && planRoot.shared_tasks.length > 0) {
+            return true;
+        }
+        if (isNonEmptyObject(planRoot.page_tasks)) {
+            return true;
+        }
+        if (isNonEmptyObject(planRoot.task_script_brief)) {
+            return true;
+        }
+        return false;
+    }
+
+    function renderTaskPlanTaskCard(task, idx, pageType) {
+        if (!task || typeof task !== 'object') {
+            return '';
+        }
+        var title = escapeHtml(String(task.label || task.task_key || ('task_' + (idx + 1))));
+        var taskKey = escapeHtml(String(task.task_key || ''));
+        var groupKey = escapeHtml(String(task.group_key || pageType || 'shared'));
+        var planContext = (task.plan_context && typeof task.plan_context === 'object') ? task.plan_context : {};
+        var taskScript = (task.task_script && typeof task.task_script === 'object') ? task.task_script : {};
+        var implementationContract = (task.implementation_contract && typeof task.implementation_contract === 'object') ? task.implementation_contract : {};
+        var pageGoal = escapeHtml(String(planContext.page_goal || '')).replace(/\n/g, '<br>');
+        var blockGoal = escapeHtml(String(planContext.block_goal || '')).replace(/\n/g, '<br>');
+        var scene = escapeHtml(String(taskScript.scene || '')).replace(/\n/g, '<br>');
+        var storyGoal = escapeHtml(String(taskScript.story_goal || '')).replace(/\n/g, '<br>');
+        var fillRule = escapeHtml(String(taskScript.content_fill_rule || '')).replace(/\n/g, '<br>');
+        var stage3Directive = escapeHtml(String(taskScript.stage3_directive || '')).replace(/\n/g, '<br>');
+        var acceptance = normalizeStructuredItems(implementationContract.acceptance || []);
+        var fieldRequirements = Array.isArray(taskScript.field_content_requirements) ? taskScript.field_content_requirements : [];
+        var fieldTable = renderFieldPlanTable(fieldRequirements);
+
+        return ''
+            + '<div class="border rounded p-3 mb-2 bg-white">'
+            + '<div class="d-flex flex-wrap align-items-start justify-content-between gap-2">'
+            + '<div><div class="fw-semibold">' + title + '</div>'
+            + '<div class="text-muted small mt-1">' + taskKey + '</div></div>'
+            + '<span class="badge text-bg-light border">' + groupKey + '</span>'
+            + '</div>'
+            + (pageGoal ? '<div class="small mt-2"><span class="fw-semibold"><?= (string)__('页面目标') ?>:</span> ' + pageGoal + '</div>' : '')
+            + (blockGoal ? '<div class="small mt-2"><span class="fw-semibold"><?= (string)__('区块目标') ?>:</span> ' + blockGoal + '</div>' : '')
+            + (scene ? '<div class="small mt-2"><span class="fw-semibold"><?= (string)__('脚本场景') ?>:</span> <code>' + scene + '</code></div>' : '')
+            + (storyGoal ? '<div class="small mt-2"><span class="fw-semibold"><?= (string)__('脚本目标') ?>:</span> ' + storyGoal + '</div>' : '')
+            + (fillRule ? '<div class="small mt-2"><span class="fw-semibold"><?= (string)__('内容填充规则') ?>:</span> ' + fillRule + '</div>' : '')
+            + fieldTable
+            + (acceptance.length ? ('<div class="mt-2"><div class="fw-semibold small"><?= (string)__('验收标准') ?></div><ul class="mb-0 ps-3">' + acceptance.map(function (item) {
+                return '<li class="small">' + escapeHtml(item) + '</li>';
+            }).join('') + '</ul></div>') : '')
+            + (stage3Directive ? '<div class="small mt-2"><span class="fw-semibold"><?= (string)__('第三阶段执行指令') ?>:</span> ' + stage3Directive + '</div>' : '')
+            + '</div>';
+    }
+
+    function renderTaskPlanStructuredPreviewHtml(planRoot) {
+        if (!planRoot || typeof planRoot !== 'object') {
+            return '<div class="text-muted small">' + escapeHtml(String(messages.planStructuredPreviewEmpty || '')) + '</div>';
+        }
+        var sections = [];
+        var scriptBrief = planRoot.task_script_brief && typeof planRoot.task_script_brief === 'object' ? planRoot.task_script_brief : null;
+        if (scriptBrief) {
+            sections.push(renderStructuredListSection('<?= (string)__('任务脚本概览') ?>', scriptBrief));
+        }
+
+        var sharedTasks = Array.isArray(planRoot.shared_tasks) ? planRoot.shared_tasks : [];
+        if (sharedTasks.length > 0) {
+            sections.push(
+                '<div class="card border-0 shadow-sm mb-3">'
+                + '<div class="card-body">'
+                + '<div class="fw-semibold"><?= (string)__('共享任务') ?></div>'
+                + '<div class="mt-3">' + sharedTasks.map(function (task, idx) {
+                    return renderTaskPlanTaskCard(task, idx, 'shared');
+                }).filter(Boolean).join('') + '</div>'
+                + '</div>'
+                + '</div>'
+            );
+        }
+
+        var pageTasks = planRoot.page_tasks && typeof planRoot.page_tasks === 'object' ? planRoot.page_tasks : {};
+        Object.keys(pageTasks).forEach(function (pageType) {
+            var tasks = Array.isArray(pageTasks[pageType]) ? pageTasks[pageType] : [];
+            if (tasks.length === 0) {
+                return;
+            }
+            sections.push(
+                '<div class="card border-0 shadow-sm mb-3">'
+                + '<div class="card-body">'
+                + '<div class="d-flex flex-wrap align-items-start justify-content-between gap-2">'
+                + '<div class="fw-semibold">' + escapeHtml(String(pageType)) + '</div>'
+                + '<span class="text-muted small">' + escapeHtml(String(tasks.length)) + ' <?= (string)__('项任务') ?></span>'
+                + '</div>'
+                + '<div class="mt-3">' + tasks.map(function (task, idx) {
+                    return renderTaskPlanTaskCard(task, idx, pageType);
+                }).filter(Boolean).join('') + '</div>'
+                + '</div>'
+                + '</div>'
+            );
+        });
+
+        var riskHtml = renderStructuredListSection('<?= (string)__('风险提示') ?>', planRoot.risk_notes || null);
+        if (riskHtml) {
+            sections.push(riskHtml);
+        }
+
+        if (sections.length === 0) {
+            return '<div class="text-muted small">' + escapeHtml(String(messages.planStructuredPreviewEmpty || '')) + '</div>';
+        }
+
+        return ''
+            + '<div class="mb-2">'
+            + '<div class="fw-semibold">' + escapeHtml(String(messages.planStructuredPreviewTitle || '')) + '</div>'
+            + '<div class="text-muted small">' + escapeHtml('<?= (string)__('这里展示的是第二阶段任务方案的结构化摘要，避免直接阅读原始 JSON。') ?>') + '</div>'
+            + '</div>'
+            + sections.join('');
+    }
+
     function renderPlanStructuredPreviewHtml(planRoot) {
         if (!planRoot || typeof planRoot !== 'object') {
             return '<div class="text-muted small">' + escapeHtml(String(messages.planStructuredPreviewEmpty || '')) + '</div>';
+        }
+        if (isTaskPlanStructuredRoot(planRoot)) {
+            return renderTaskPlanStructuredPreviewHtml(planRoot);
         }
         function looksLikePagePlanObject(value) {
             if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -4688,7 +4816,7 @@
             return null;
         }
         var vt = (payload.virtual_theme_plan && typeof payload.virtual_theme_plan === 'object') ? payload.virtual_theme_plan : {};
-        var draftPlan = isNonEmptyObject(vt.draft) ? vt.draft : (isNonEmptyObject(structured) ? structured : {});
+        var draftPlan = isNonEmptyObject(structured) ? structured : (isNonEmptyObject(vt.draft) ? vt.draft : {});
         var patch = {
             virtual_theme_plan: {
                 draft: draftPlan,
