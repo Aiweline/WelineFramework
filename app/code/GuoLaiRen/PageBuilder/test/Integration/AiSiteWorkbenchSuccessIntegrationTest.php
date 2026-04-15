@@ -76,6 +76,12 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
             (int)($planFlow['confirm_plan']['data']['plan_confirmed'] ?? 0),
             'Confirmed plan state should be visible before build starts.'
         );
+        $taskPlanFlow = $this->generateAndConfirmTaskPlan($publicId, $scopePatch);
+        self::assertSame(
+            1,
+            (int)($taskPlanFlow['confirm_task_plan']['data']['task_plan_confirmed'] ?? 0),
+            'Confirmed task-plan state should be visible before build starts.'
+        );
 
         $startBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
