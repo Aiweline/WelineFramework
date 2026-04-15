@@ -340,6 +340,7 @@ class Start extends CommandAbstract
         }
         // 本实例已运行：未指定 -r 则提示并退出；指定 -r 则平滑重启（先维护模式+等待）或 -f 直接切换
         $maintenanceEnabledByUs = false;
+        $maintenanceResetAfterForceSwitch = false;
         if ($occupantWls === $instanceName || $this->isServerRunning($instanceName, $port)) {
             if (!$forceRestart) {
                 $this->showAlreadyRunningInfo($instanceName, $port);
@@ -350,6 +351,8 @@ class Start extends CommandAbstract
                 $this->printer->warning(__('检测到服务器已运行，-f 直接切换（不等待）...'));
                 $this->printer->warning(__('注意：-f 强制切换属于停机型更新，不会自动等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。'));
                 $this->stopExistingServer($instanceName, $port, $count, true);
+                // -r -f 是停机型切换：新实例启动后默认恢复到业务流量态，避免残留 system.maintenance 让 WLS 继续 sticky 维护。
+                $maintenanceResetAfterForceSwitch = true;
                 // Windows 下端口释放需要更长时间（TIME_WAIT 状态）
                 // 等待最多 3 秒让端口完全释放
                 $maxWaitMs = 3000;
@@ -625,14 +628,14 @@ class Start extends CommandAbstract
         if ($dispatcherEnabled) {
             // Dispatcher 模式：检查主端口（Dispatcher 用）+ Worker 内网端口
             if (!$this->checkAndReleasePort($host, $port, $forceRestart, 'Dispatcher', $instanceName)) {
-                if (!empty($maintenanceEnabledByUs)) {
+                if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
                     $this->disableMaintenanceMode($instanceName);
                     $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
                 }
                 return;
             }
             if (!$this->checkAndReleasePorts($host, $workerPort, $count, $forceRestart, $instanceName)) {
-                if (!empty($maintenanceEnabledByUs)) {
+                if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
                     $this->disableMaintenanceMode($instanceName);
                     $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
                 }
@@ -646,7 +649,7 @@ class Start extends CommandAbstract
                 ? $this->checkAndReleasePort($host, $port, $forceRestart, 'Worker(Main)', $instanceName)
                 : $this->checkAndReleasePorts($host, $port, $count, $forceRestart, $instanceName);
             if (!$checkResult) {
-                if (!empty($maintenanceEnabledByUs)) {
+                if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
                     $this->disableMaintenanceMode($instanceName);
                     $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
                 }
@@ -728,9 +731,13 @@ class Start extends CommandAbstract
         // ========== 热重载结束 ==========
         
         // 平滑重启时由我们开启的维护模式，启动完成后关闭
-        if (!empty($maintenanceEnabledByUs)) {
+        if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
             $this->disableMaintenanceMode($instanceName);
-            $this->printer->success(__('维护模式已关闭。'));
+            if (!empty($maintenanceResetAfterForceSwitch) && empty($maintenanceEnabledByUs)) {
+                $this->printer->success(__('已清理残留维护态，恢复业务流量模式。'));
+            } else {
+                $this->printer->success(__('维护模式已关闭。'));
+            }
         }
         
         // ========== Master 进程负责启动所有进程 ==========

@@ -102,9 +102,10 @@ class AiSiteScopeCompatibilityService
     public function normalizeStage(string $stage): string
     {
         return match (\trim($stage)) {
+            'plan' => 'plan',
             'visual_edit' => 'visual_edit',
             'publish' => 'publish',
-            default => 'virtual_theme',
+            default => 'plan',
         };
     }
 

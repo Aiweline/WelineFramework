@@ -5448,6 +5448,7 @@ class ServiceOrchestrator
                     // 尚未连上 IPC 且子进程已死 → 不等到 register 超时，立即拉起
                     if ($instance->ipcClientId === null
                         && $instance->pid > 0
+                        && !$this->shouldSkipEarlyPidDeathResurrectionCheck($instance)
                         && !$this->isProcessRunning($instance->pid)
                         && \in_array($instance->role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)
                         && ($provider->getResurrectionPriority() > 0)) {
@@ -6788,7 +6789,7 @@ class ServiceOrchestrator
         }
 
         WlsLogger::warning_("[Orchestrator] 未找到匹配的实例: role={$role}, pid={$pid}, port={$port}, workerId={$workerId}, epoch={$epoch}, launch_id={$launchId}");
-        if ($pid > 0 && $this->shouldTerminateUnmatchedRegisterPid($role)) {
+        if ($pid > 0 && $this->shouldTerminateUnmatchedRegisterPid($role, $pid, $port, $launchId)) {
             $killed = Processer::killByPid($pid);
             if ($killed) {
                 WlsLogger::warning_("[Orchestrator] 已终止未匹配 register 进程: role={$role}, pid={$pid}");
@@ -6797,7 +6798,7 @@ class ServiceOrchestrator
         $this->controlServer?->closeClient($clientId);
     }
 
-    private function shouldTerminateUnmatchedRegisterPid(string $role): bool
+    private function shouldTerminateUnmatchedRegisterPid(string $role, int $pid = 0, int $port = 0, string $launchId = ''): bool
     {
         if (!\in_array(
             $role,
@@ -6809,6 +6810,10 @@ class ServiceOrchestrator
             ],
             true
         )) {
+            return false;
+        }
+
+        if ($this->shouldSuppressUnmatchedRegisterTermination($role, $pid, $port, $launchId)) {
             return false;
         }
 
@@ -7078,7 +7083,26 @@ class ServiceOrchestrator
         }
 
         if (!$inPool) {
-            WlsLogger::warning_("[Orchestrator] Dispatcher 回执 Worker 未入池: worker#{$worker->instanceId}, port={$port}");
+            $failedAt = \microtime(true);
+            $worker->setMeta('dispatcher_pool_rejected_at', $failedAt);
+            $worker->setMeta(
+                'dispatcher_pool_reject_count',
+                (int) ($worker->getMeta('dispatcher_pool_reject_count') ?? 0) + 1
+            );
+            $this->registry->updateInstance($worker);
+            // 关键：清空签名，避免同一签名下次被 syncDispatcherFullWorkerPoolFromRegistry() 误判“已同步”而跳过重试。
+            $this->lastDispatcherWorkerPoolSignature = '';
+            $taskKey = "worker_pool_recover:{$port}";
+            if (!$this->hasMainLoopTask($taskKey)) {
+                $this->scheduleMainLoopTask($taskKey, 'worker_pool_recover', function () use ($port): void {
+                    // 给 Dispatcher 一点时间完成当前 warmup Fiber，再做一次全量对齐，避免“启动抖动期”永久卡池。
+                    SchedulerSystem::yieldDelay(120);
+                    $this->syncDispatcherFullWorkerPoolFromRegistry();
+                });
+            }
+            WlsLogger::warning_(
+                "[Orchestrator] Dispatcher 回执 Worker 未入池，已触发自愈重试: worker#{$worker->instanceId}, port={$port}"
+            );
             return;
         }
 
@@ -8685,126 +8709,39 @@ class ServiceOrchestrator
             $this->controlServer?->poll(0, 150000);
         }
 
-        $requestId = 'wm_on_' . \bin2hex(\random_bytes(8));
-        $expected = [];
-        if ($this->controlServer !== null) {
-            foreach ($normalWorkers as $w) {
-                if ($w->ipcClientId !== null
-                    && $w->state === Contract\ServiceInstance::STATE_READY
-                    && $w->role === ControlMessage::ROLE_WORKER) {
-                    $expected[(int) $w->ipcClientId] = true;
-                }
-            }
-            if ($skipBusinessDrainAck) {
-                // 快速接管（如 se:rel -f）：仅切 Dispatcher 到 maintenance 池，不改业务 Worker 维护态。
-                $this->logMaintenanceOperation(
-                    '维护启用采用快速接管：跳过业务 Worker set_maintenance_mode，仅执行流量池切换，'
-                    . $this->formatMaintenanceOperationContext(),
-                    'WARN',
-                    'enable_maintenance:skip_worker_toggle:' . $this->formatMaintenanceOperationContext(),
-                    0.0
-                );
-                $expected = [];
-            }
-            if (!$shouldWaitForWorkerAck) {
-                $this->logMaintenanceOperation(
-                    '维护启用采用快速接管：不会等待业务 Worker 排空 ACK，'
-                    . $this->formatMaintenanceOperationContext(),
-                    'WARN',
-                    'enable_maintenance:fast_takeover:' . $this->formatMaintenanceOperationContext(),
-                    0.0
-                );
-            }
-            $noDrainPath = $immediateAckOnEnable;
-            $this->logMaintenanceOperation(
-                "开始向业务 Worker 下发维护排空信号：request_id={$requestId}, expected="
-                . \count($expected)
-                . ', immediate_ack=' . ($immediateAckOnEnable ? 'true' : 'false')
-                . ', wait_for_ack=' . ($shouldWaitForWorkerAck ? 'true' : 'false')
-                . '，' . $this->formatMaintenanceOperationContext(),
-                'INFO',
-                "enable_maintenance:drain_request:{$requestId}:" . \count($expected),
-                0.0
-            );
-            foreach (\array_keys($expected) as $cid) {
-                $this->controlServer->sendTo($cid, ControlMessage::setMaintenanceMode(true, $requestId, $noDrainPath));
-            }
-        }
-
+        $this->pendingMaintenanceModeAck = null;
+        // 维护模式只通过 Dispatcher 池切换做分流，不直接切业务 Worker 进程内维护态。
+        $this->logMaintenanceOperation(
+            '维护启用采用 Dispatcher 分流：不下发业务 Worker set_maintenance_mode，'
+            . $this->formatMaintenanceOperationContext(),
+            'WARN',
+            'enable_maintenance:dispatcher_only:' . $this->formatMaintenanceOperationContext(),
+            0.0
+        );
         $ackedClients = [];
-        if ($expected !== [] && $shouldWaitForWorkerAck) {
-            $this->pendingMaintenanceModeAck = [
-                'request_id' => $requestId,
-                'expected' => $expected,
-                'acked' => [],
-            ];
-            $deadline = \microtime(true) + $drainAckTimeout;
-            while (\microtime(true) < $deadline) {
-                if (\count($this->pendingMaintenanceModeAck['acked']) >= \count($expected)) {
-                    break;
-                }
-                $this->controlServer?->poll(0, 100000);
-            }
-            $ackedClients = \array_keys($this->pendingMaintenanceModeAck['acked']);
-            $missing = \array_diff_key($expected, $this->pendingMaintenanceModeAck['acked']);
-            $this->pendingMaintenanceModeAck = null;
-
-            if ($missing !== []) {
-                if ($hasDispatcher && $normalPortsSnapshot !== []) {
-                    $this->notifyDispatcherSetWorkerPool($normalPortsSnapshot);
-                    $this->controlServer?->poll(0, 150000);
-                }
-                $revId = 'wm_rev_' . \bin2hex(\random_bytes(4));
-                foreach ($ackedClients as $cid) {
-                    $this->controlServer?->sendTo((int) $cid, ControlMessage::setMaintenanceMode(false, $revId, true));
-                }
-                $this->controlServer?->poll(0, 200000);
-                $this->stopMaintenanceWorkers();
-                $maintenanceProvider->disable();
-                $missList = \implode(',', \array_map('strval', \array_keys($missing)));
-                $this->logMaintenanceOperation(
-                    "启用维护失败：业务 Worker 排空 ACK 超时，missing_clients={$missList}, acked="
-                    . \count($ackedClients)
-                    . '/' . \count($expected)
-                    . '，' . $this->formatMaintenanceOperationContext(),
-                    'ERROR',
-                    "enable_maintenance:drain_timeout:{$missList}:" . $this->formatMaintenanceOperationContext(),
-                    0.0
-                );
-
-                return [
-                    'success' => false,
-                    'message' => (string) __('维护切换超时或存量连接未排空，缺失 ACK: %{1}', [$missList]),
-                    'maintenance_workers' => 0,
-                ];
-            }
-        } elseif ($expected !== []) {
-            $ackedClients = \array_keys($expected);
-        }
 
         $this->maintenanceMode = true;
         $this->maintenanceSticky = $sticky;
         $this->desiredState['maintenance'] = $nMaint;
         $this->persistServicesInfo($this->context);
         $this->logMaintenanceOperation(
-            "维护模式启用完成：acked=" . \count($ackedClients) . '/' . \count($expected)
-            . ", maintenance_workers={$nMaint}, ports={$maintPortsStr}，"
+            "维护模式启用完成：dispatcher_only=true, maintenance_workers={$nMaint}, ports={$maintPortsStr}，"
             . $this->formatMaintenanceOperationContext(),
             'WARN',
-            "enable_maintenance:done:{$maintPortsStr}:" . \count($ackedClients) . ':' . \count($expected) . ':' . $this->formatMaintenanceOperationContext(),
+            "enable_maintenance:done:dispatcher_only:{$maintPortsStr}:" . $this->formatMaintenanceOperationContext(),
             0.0
         );
 
         return [
             'success' => true,
-            'message' => (string) __('维护模式已启用: 业务 Worker 排空确认 %{1} 个, 维护进程 %{2} 个', [\count($ackedClients), $nMaint]),
+            'message' => (string) __('维护模式已启用: Dispatcher 已切至维护池, 维护进程 %{1} 个', [$nMaint]),
             'maintenance_workers' => $nMaint,
             'worker_ipc_acked' => \count($ackedClients),
         ];
     }
 
     /**
-     * 禁用维护模式：停止维护 Worker
+     * 禁用维护模式：仅将流量切回业务 Worker，维护 Worker 常驻待命。
      *
      * @return array{success: bool, message: string}
      */
@@ -8839,7 +8776,7 @@ class ServiceOrchestrator
             ];
         }
 
-        WlsLogger::info_('[Orchestrator] 禁用维护: 恢复业务池 → 关维护页 → 销毁维护进程');
+        WlsLogger::info_('[Orchestrator] 禁用维护: 恢复业务池（维护 Worker 常驻）');
 
         $restorePorts = [];
         foreach ($this->registry->getInstancesByRole('worker') as $w) {
@@ -8860,25 +8797,12 @@ class ServiceOrchestrator
             $this->controlServer?->poll(0, 150000);
         }
 
-        $workerClientIds = [];
-        foreach ($this->registry->getInstancesByRole('worker') as $w) {
-            if ($w->ipcClientId !== null && $w->state === Contract\ServiceInstance::STATE_READY) {
-                $workerClientIds[] = (int) $w->ipcClientId;
-            }
-        }
+        $this->pendingMaintenanceModeAck = null;
 
-        $this->sendWorkersMaintenanceIpc(false, $workerClientIds);
-
-        $maintenanceProvider = $this->getMaintenanceProvider();
-        if ($maintenanceProvider !== null) {
-            $maintenanceProvider->disable();
-        }
-
-        $this->clearMaintenanceResurrectQueue();
-        $this->stopMaintenanceWorkers();
+        // 维护 Worker 保持常驻，不执行 provider->disable / stopMaintenanceWorkers。
+        // 仅退出“维护流量态”，下次切换可直接复用已就绪维护池，减少抖动。
         $this->maintenanceMode = false;
         $this->maintenanceSticky = false;
-        unset($this->desiredState['maintenance']);
 
         if ($this->context !== null) {
             $this->persistServicesInfo($this->context);
@@ -9812,6 +9736,15 @@ class ServiceOrchestrator
 
         // 凡 Master 管理的、参与复活的子进程：进程已死则立即单槽拉起，不整组重启
         if (!$processStillRunning && $canResurrectLocally) {
+            if ($this->shouldSkipEarlyPidDeathResurrectionCheck($instance)) {
+                $delay = \max(2.0, $this->ipcReconnectGraceSec);
+                WlsLogger::warning_(
+                    "[Orchestrator] {$instance->role}#{$instance->instanceId} IPC 断开且 PID 不存活，但命中前台启动早期保护，{$delay}s 后复核复活"
+                );
+                $this->scheduleResurrectionWithDelay($instance, $delay);
+
+                return;
+            }
             WlsLogger::warning_(
                 "[Orchestrator] {$instance->role}#{$instance->instanceId} IPC 断开且进程已退出，单实例复活"
             );
@@ -9947,6 +9880,51 @@ class ServiceOrchestrator
             $this->processRunningCache = [];
         }
         return $running;
+    }
+
+    /**
+     * Windows foreground spawn 场景下，返回的 PID 可能是短生命周期壳进程，
+     * 启动初期按 PID 早判“已退出”会误触发复活，导致同槽位重复拉起与 launchId 竞态。
+     */
+    private function shouldSkipEarlyPidDeathResurrectionCheck(ServiceInstance $instance): bool
+    {
+        $transport = (string) ($instance->getMeta('spawn_transport') ?? '');
+        if ($transport !== 'processer_create_foreground') {
+            return false;
+        }
+
+        // 仅在启动早期启用保护，避免永久掩盖真实故障。
+        return $instance->getUptime() <= ($this->startupGracePeriod * 2);
+    }
+
+    private function shouldSuppressUnmatchedRegisterTermination(
+        string $role,
+        int $pid,
+        int $port,
+        string $launchId
+    ): bool {
+        if (!\in_array($role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
+            return false;
+        }
+
+        foreach ($this->registry->getInstancesByRole($role) as $candidate) {
+            if ($port > 0 && (int) ($candidate->port ?? 0) !== $port) {
+                continue;
+            }
+            if (!$this->shouldSkipEarlyPidDeathResurrectionCheck($candidate)) {
+                continue;
+            }
+            if ($launchId !== '' && $candidate->launchId === $launchId) {
+                continue;
+            }
+            WlsLogger::warning_(
+                "[Orchestrator] 前台启动早期保护：跳过终止未匹配 register 进程 role={$role}, pid={$pid}, port={$port}, launch_id={$launchId}"
+            );
+
+            return true;
+        }
+
+        return false;
     }
 
     /**
