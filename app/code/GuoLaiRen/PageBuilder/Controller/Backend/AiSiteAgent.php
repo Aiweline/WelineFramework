@@ -1389,6 +1389,14 @@ SCRIPT;
         );
         $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
         $artifacts = $this->virtualThemePlanService->buildTaskPlanArtifacts($scope, $buildBlueprint);
+        $taskPlanGenerationSource = (string)($artifacts['generation_source'] ?? '');
+        if ((int)($scope['fake_mode'] ?? 0) !== 1 && $taskPlanGenerationSource !== 'ai') {
+            return $this->jsonError(
+                'TASK_PLAN_AI_GENERATION_REQUIRED',
+                (string)__('第二阶段任务方案生成失败：未获取到 AI 生成结果，请检查 AI 服务配置后重试'),
+                ['public_id']
+            );
+        }
         $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
         $markdown = (string)($artifacts['markdown'] ?? '');
         $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
@@ -1589,6 +1597,10 @@ SCRIPT;
             $markdown = (string)($result['markdown'] ?? '');
             $structured = \is_array($result['structured'] ?? null) ? $result['structured'] : [];
             $virtualThemePlan = \is_array($result['virtual_theme_plan'] ?? null) ? $result['virtual_theme_plan'] : [];
+            $taskPlanGenerationSource = (string)($result['generation_source'] ?? '');
+            if ((int)($scope['fake_mode'] ?? 0) !== 1 && $taskPlanGenerationSource !== 'ai') {
+                throw new \RuntimeException((string)__('第二阶段任务方案生成失败：当前结果不是 AI 生成，请检查 AI 服务后重试'));
+            }
             $scopePatch = [
                 'virtual_theme_plan' => [
                     'draft' => $virtualThemePlan,
@@ -1699,68 +1711,7 @@ SCRIPT;
                 'progress_percent' => 12,
             ]);
 
-            $draftPlan = \is_array($scope['virtual_theme_plan']['draft'] ?? null) ? $scope['virtual_theme_plan']['draft'] : [];
-            $draftMarkdown = \trim((string)($scope['virtual_theme_plan']['draft_markdown'] ?? ''));
-            $confirmedPlan = \is_array($scope['virtual_theme_plan']['confirmed'] ?? null) ? $scope['virtual_theme_plan']['confirmed'] : [];
-            $confirmedMarkdown = \trim((string)($scope['virtual_theme_plan']['confirmed_markdown'] ?? ''));
-            $taskPlanConfirmed = (int)($scope['task_plan_confirmed'] ?? 0) === 1;
-            $structuredBaseline = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
-
-            $markdown = '';
-            $virtualThemePlan = [];
-            $structured = $structuredBaseline;
-            $fromExisting = false;
-
-            if ($taskPlanConfirmed && $confirmedPlan !== [] && $confirmedMarkdown !== '') {
-                $markdown = $confirmedMarkdown;
-                $virtualThemePlan = $confirmedPlan;
-                $fromExisting = true;
-            } elseif ($draftPlan !== [] && $draftMarkdown !== '') {
-                $markdown = $draftMarkdown;
-                $virtualThemePlan = $draftPlan;
-                $fromExisting = true;
-            }
-
-            if ($fromExisting && $markdown !== '' && $virtualThemePlan !== []) {
-                $sse->sendEvent('info', [
-                    'phase' => 'plan_detected',
-                    'message' => (string)__('已检测到有效的第二阶段任务方案，正在回填预览'),
-                    'prompt_mode' => $promptMode,
-                    'task_plan_signature' => (string)($virtualThemePlan['signature'] ?? ''),
-                ]);
-                $sse->sendEvent('progress', [
-                    'message' => (string)__('正在流式输出已保存的任务方案内容'),
-                    'prompt_mode' => $promptMode,
-                    'progress_percent' => 55,
-                ]);
-                foreach ($this->chunkStringForSse($markdown, 220) as $chunk) {
-                    $sse->sendEvent('chunk', [
-                        'content' => $chunk,
-                        'chunk' => $chunk,
-                        'prompt_mode' => $promptMode,
-                    ]);
-                    if (!$sse->isAlive()) {
-                        break;
-                    }
-                    SchedulerSystem::yieldDelay(4);
-                }
-                $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-                $state = $this->buildWorkspaceEventStatePayload($this->buildWorkspaceState($fresh, $adminId, 80, true));
-                $sse->complete([
-                    'success' => true,
-                    'message' => (string)__('第二阶段任务方案已回填，可继续微调或确认'),
-                    'prompt_mode' => $promptMode,
-                    'phase' => 'plan_detected',
-                    'task_plan' => [
-                        'markdown' => $markdown,
-                        'structured' => $structured,
-                        'virtual_theme_plan' => $virtualThemePlan,
-                    ],
-                    'state' => $state,
-                ]);
-                return;
-            }
-
+            // detect_bootstrap：不再使用会话内已存草案/确认稿作为“缓存快路径”，始终走 AI 生成（与前端期望一致）。
             $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
             if ($executionBlueprint === []) {
                 $this->sendSseContractError($sse, 'EXECUTION_BLUEPRINT_REQUIRED', (string)__('缺少已确认执行蓝图，请重新生成并确认方案'), ['public_id', 'execution_blueprint'], 409);
@@ -1769,7 +1720,7 @@ SCRIPT;
             }
 
             $sse->sendEvent('progress', [
-                'message' => (string)__('未检测到可用的第二阶段任务方案草案，正在根据阶段一确认方案生成'),
+                'message' => (string)__('正在通过 AI 根据阶段一确认方案生成第二阶段任务方案'),
                 'prompt_mode' => $promptMode,
                 'progress_percent' => 28,
             ]);
@@ -1781,6 +1732,10 @@ SCRIPT;
             );
             $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
             $artifacts = $this->virtualThemePlanService->buildTaskPlanArtifacts($scope, $buildBlueprint);
+            $taskPlanGenerationSource = (string)($artifacts['generation_source'] ?? '');
+            if ((int)($scope['fake_mode'] ?? 0) !== 1 && $taskPlanGenerationSource !== 'ai') {
+                throw new \RuntimeException((string)__('第二阶段任务方案生成失败：未获取到 AI 生成结果，请检查 AI 服务配置后重试'));
+            }
             $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
             $markdown = (string)($artifacts['markdown'] ?? '');
             $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
@@ -4122,7 +4077,10 @@ SCRIPT;
             $normalized['selected_website_id'] = $draftWebsiteId;
         }
 
-        $virtualThemeId = $this->resolveScopedVirtualThemeId($normalized, $session);
+        $virtualThemeId = \max(
+            (int)($normalized['virtual_theme_id'] ?? 0),
+            (int)$session->getVirtualThemeId()
+        );
         if ($virtualThemeId > 0) {
             $normalized['virtual_theme_id'] = $virtualThemeId;
         }
@@ -4177,11 +4135,9 @@ SCRIPT;
             : ['preview_full_url' => '', 'visual_preview_url' => '', 'visual_edit_url' => ''];
         $normalized['pre_publish_visual_urls'] = $prePublishVisualUrls;
 
-        // 虚拟主题可视化阶段必须固定走 workspace-preview，避免在已物化出 page_id 后漂移到 preview/full。
-        // 仅在没有虚拟主题上下文时（例如纯 page_id 预览）才回退 preview/full。
-        if ($virtualThemeId > 0) {
-            $normalized = \array_replace($normalized, $prePublishVisualUrls);
-        } elseif ((int)$normalized['preview_page_id'] > 0) {
+        // 已物化出 Page 时始终走 preview/full（与是否已发布无关）。workspace-preview 仅依赖 scope 内虚拟 blocks，
+        // 若落库内容与 scope 不同步会仍显示主题静态占位，而任务进度已显示完成。
+        if ((int)$normalized['preview_page_id'] > 0) {
             $normalized = \array_replace(
                 $normalized,
                 $this->visualUrlService->resolveUrls((int)$normalized['preview_page_id'], $virtualThemeId)
@@ -6815,7 +6771,7 @@ SCRIPT;
         }
 
         $websiteId = \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId());
-        $virtualThemeId = $this->resolveScopedVirtualThemeId($scope, $session);
+        $virtualThemeId = \max((int)($scope['virtual_theme_id'] ?? 0), (int)$session->getVirtualThemeId());
         $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
         if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
             if ($websiteId <= 0) {
@@ -7618,18 +7574,6 @@ SCRIPT;
             (string)__('检测到方案配置变更（语言/页面类型），已取消旧任务并重新排队生成'),
             ['operation' => 'plan', 'details' => ['reason' => 'plan_scope_changed']]
         );
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function resolveScopedVirtualThemeId(array $scope, AiSiteAgentSession $session): int
-    {
-        if (\array_key_exists('virtual_theme_id', $scope)) {
-            return \max(0, (int)$scope['virtual_theme_id']);
-        }
-
-        return \max(0, (int)$session->getVirtualThemeId());
     }
 
     /**

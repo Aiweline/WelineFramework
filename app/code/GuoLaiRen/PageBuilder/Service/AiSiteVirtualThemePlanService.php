@@ -20,7 +20,8 @@ final class AiSiteVirtualThemePlanService
      * @return array{
      *   markdown:string,
      *   structured:array<string, mixed>,
-     *   virtual_theme_plan:array<string, mixed>
+     *   virtual_theme_plan:array<string, mixed>,
+     *   generation_source:string
      * }
      */
     public function buildTaskPlanArtifacts(array $scope, array $buildBlueprint): array
@@ -56,7 +57,6 @@ final class AiSiteVirtualThemePlanService
         $pagePlans = \is_array($executionBlueprint['pages'] ?? null) ? $executionBlueprint['pages'] : [];
         $metaFieldMatrix = [];
         $blockPlanMatrix = [];
-        $blockLookupMatrix = [];
         foreach ($pagePlans as $pageType => $pagePlan) {
             if (!\is_array($pagePlan)) {
                 continue;
@@ -66,19 +66,13 @@ final class AiSiteVirtualThemePlanService
                 if (!\is_array($block)) {
                     continue;
                 }
-                $blockKey = \trim((string)($block['block_key'] ?? $block['section_code'] ?? 'block'));
-                if ($blockKey === '') {
-                    $blockKey = 'block';
-                }
+                $blockKey = (string)($block['block_key'] ?? $block['section_code'] ?? 'block');
                 $metaFieldMatrix[$pageType][$blockKey] = [
                     'goal' => (string)($block['goal'] ?? ''),
                     'field_plan' => \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [],
                     'result_ref' => \is_array($block['result_ref'] ?? null) ? $block['result_ref'] : [],
                 ];
                 $blockPlanMatrix[$pageType][$blockKey] = $block;
-                foreach ($this->buildBlockLookupAliases($blockKey, $block, (string)$pageType) as $alias) {
-                    $blockLookupMatrix[$pageType][$alias] = $blockKey;
-                }
             }
         }
 
@@ -87,12 +81,8 @@ final class AiSiteVirtualThemePlanService
             $pageTasks,
             $metaFieldMatrix,
             $blockPlanMatrix,
-            $pagePlans,
-            $blockLookupMatrix,
-            $planStructured,
-            $executionBlueprint
+            $pagePlans
         );
-        $stage1TaskCues = $this->buildStage1TaskCues($sharedTasks, $pageTasks, $planStructured, $executionBlueprint);
 
         $executionOrder = \array_values(\array_map(
             static fn(array $task): array => [
@@ -118,7 +108,6 @@ final class AiSiteVirtualThemePlanService
             ],
             'shared_tasks' => $sharedTasks,
             'page_tasks' => $pageTasks,
-            'stage1_task_cues' => $stage1TaskCues,
             'meta_field_matrix' => $metaFieldMatrix,
             'style_tokens' => [
                 'palette' => \is_array($planStructured['palette'] ?? null) ? $planStructured['palette'] : (\is_array($scope['palette'] ?? null) ? $scope['palette'] : []),
@@ -141,37 +130,42 @@ final class AiSiteVirtualThemePlanService
             ],
         ];
 
-        $structured = $this->buildDeterministicTaskPlanStructured($structured);
         $virtualThemePlan = $structured;
         $virtualThemePlan['signature'] = \sha1((string)\json_encode($structured, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
 
-        $shouldPreferLocalFallback = (int)($scope['fake_mode'] ?? 0) === 1;
-        $aiTaskPlan = null;
-        if (!$shouldPreferLocalFallback) {
-            try {
-                $aiTaskPlan = $this->buildTaskPlanArtifactsByAi($scope, $buildBlueprint, $structured, $virtualThemePlan);
-            } catch (\Throwable $throwable) {
-                $aiTaskPlan = null;
-            }
+        $forceDeterministicBaseline = (int)($scope['fake_mode'] ?? 0) === 1;
+        if ($forceDeterministicBaseline) {
+            $fallbackStructured = $this->buildDeterministicTaskPlanStructured($structured);
+            $fallbackStructured = $this->ensureTaskDirectoryHierarchy($fallbackStructured);
+            $fallbackVirtualThemePlan = $fallbackStructured;
+            $fallbackVirtualThemePlan['signature'] = $this->buildSignature($fallbackStructured);
+            return [
+                'markdown' => $this->buildMarkdown($pageTypes, $sharedTasks, $pageTasks, $fallbackStructured),
+                'structured' => $fallbackStructured,
+                'virtual_theme_plan' => $fallbackVirtualThemePlan,
+                'generation_source' => 'deterministic_fallback',
+            ];
         }
 
-        if (\is_array($aiTaskPlan)) {
-            try {
-                return $this->mergeAiTaskPlanArtifacts($structured, $virtualThemePlan, $aiTaskPlan);
-            } catch (\Throwable) {
-                // Invalid or generic AI output should not block the deterministic stage-2 plan.
-            }
+        $aiTaskPlan = $this->buildTaskPlanArtifactsByAi($scope, $buildBlueprint, $structured, $virtualThemePlan);
+        $markdown = \trim((string)($aiTaskPlan['markdown'] ?? ''));
+        $aiVirtualThemePlan = \is_array($aiTaskPlan['virtual_theme_plan'] ?? null) ? $aiTaskPlan['virtual_theme_plan'] : [];
+        if ($markdown === '' || $aiVirtualThemePlan === []) {
+            throw new \RuntimeException('AI task plan generation failed: empty markdown or virtual_theme_plan.');
         }
-
-        $fallbackStructured = $this->buildDeterministicTaskPlanStructured($structured);
-        $fallbackVirtualThemePlan = $fallbackStructured;
-        $fallbackVirtualThemePlan['signature'] = $this->buildSignature($fallbackStructured);
-        $markdownSharedTasks = \is_array($fallbackStructured['shared_tasks'] ?? null) ? $fallbackStructured['shared_tasks'] : $sharedTasks;
-        $markdownPageTasks = \is_array($fallbackStructured['page_tasks'] ?? null) ? $fallbackStructured['page_tasks'] : $pageTasks;
+        $mergedVirtualThemePlan = \array_replace_recursive($virtualThemePlan, $aiVirtualThemePlan);
+        $mergedStructured = \array_replace_recursive($structured, $mergedVirtualThemePlan);
+        $this->assertAiTaskPlanIsContentful($mergedStructured);
+        $mergedStructured = $this->ensureTaskDirectoryHierarchy($mergedStructured);
+        $mergedVirtualThemePlan = \array_replace_recursive($mergedVirtualThemePlan, [
+            'task_directory_tree' => $mergedStructured['task_directory_tree'] ?? [],
+        ]);
+        $mergedVirtualThemePlan['signature'] = $this->buildSignature($mergedStructured);
         return [
-            'markdown' => $this->buildMarkdown($pageTypes, $markdownSharedTasks, $markdownPageTasks, $fallbackStructured),
-            'structured' => $fallbackStructured,
-            'virtual_theme_plan' => $fallbackVirtualThemePlan,
+            'markdown' => $markdown,
+            'structured' => $mergedStructured,
+            'virtual_theme_plan' => $mergedVirtualThemePlan,
+            'generation_source' => 'ai',
         ];
     }
 
@@ -184,7 +178,8 @@ final class AiSiteVirtualThemePlanService
      *   markdown:string,
      *   structured:array<string, mixed>,
      *   virtual_theme_plan:array<string, mixed>,
-     *   change_scope_report:array<string, mixed>
+     *   change_scope_report:array<string, mixed>,
+     *   generation_source:string
      * }
      */
     public function refineDraftTaskPlan(
@@ -193,43 +188,7 @@ final class AiSiteVirtualThemePlanService
         array $draftPlan,
         array $payload
     ): array {
-        if (!$this->shouldPreferLocalFallback($scope)) {
-            try {
-                $artifacts = $this->buildTaskPlanArtifactsByAiMode($scope, $buildBlueprint, 'refine_task_plan', $payload, $draftPlan);
-                $markdown = (string)($artifacts['markdown'] ?? '');
-                $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
-                $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
-
-                $targetScope = \trim((string)($payload['target_scope'] ?? ''));
-                $round = \max(1, (int)($payload['round'] ?? 1));
-                $report = [
-                    'mode' => 'refine_task_plan',
-                    'round' => $round,
-                    'target_scope' => $targetScope,
-                    'updated_at' => \date('Y-m-d H:i:s'),
-                    'changes' => [
-                        [
-                            'target' => $targetScope !== '' ? $targetScope : 'task_plan',
-                            'reason' => 'Local AI-assisted refine prompt applied to the current task plan.',
-                        ],
-                    ],
-                ];
-                $structured['change_scope_report'] = $report;
-                $virtualThemePlan['change_scope_report'] = $report;
-                $virtualThemePlan['signature'] = $this->buildSignature(\array_replace($virtualThemePlan, ['markdown' => $markdown]));
-
-                return [
-                    'markdown' => $markdown,
-                    'structured' => $structured,
-                    'virtual_theme_plan' => $virtualThemePlan,
-                    'change_scope_report' => $report,
-                ];
-            } catch (\Throwable) {
-                // fall back to deterministic synthesis below
-            }
-        }
-
-        $artifacts = $this->buildTaskPlanArtifacts($scope, $buildBlueprint);
+        $artifacts = $this->buildTaskPlanArtifactsByAiMode($scope, $buildBlueprint, 'refine_task_plan', $payload, $draftPlan);
         $markdown = (string)($artifacts['markdown'] ?? '');
         $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
         $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
@@ -249,7 +208,11 @@ final class AiSiteVirtualThemePlanService
             ],
         ];
         $structured['change_scope_report'] = $report;
+        $structured = $this->ensureTaskDirectoryHierarchy($structured);
         $virtualThemePlan['change_scope_report'] = $report;
+        $virtualThemePlan = \array_replace_recursive($virtualThemePlan, [
+            'task_directory_tree' => $structured['task_directory_tree'] ?? [],
+        ]);
         $virtualThemePlan['signature'] = $this->buildSignature(\array_replace($virtualThemePlan, ['markdown' => $markdown]));
 
         return [
@@ -257,6 +220,7 @@ final class AiSiteVirtualThemePlanService
             'structured' => $structured,
             'virtual_theme_plan' => $virtualThemePlan,
             'change_scope_report' => $report,
+            'generation_source' => 'ai',
         ];
     }
 
@@ -268,51 +232,13 @@ final class AiSiteVirtualThemePlanService
      *   markdown:string,
      *   structured:array<string, mixed>,
      *   virtual_theme_plan:array<string, mixed>,
-     *   rebuild_summary:array<string, mixed>
+     *   rebuild_summary:array<string, mixed>,
+     *   generation_source:string
      * }
      */
     public function rebuildDraftTaskPlan(array $scope, array $buildBlueprint, array $payload): array
     {
-        if (!$this->shouldPreferLocalFallback($scope)) {
-            try {
-                $artifacts = $this->buildTaskPlanArtifactsByAiMode($scope, $buildBlueprint, 'rebuild_task_plan', $payload);
-                $markdown = (string)($artifacts['markdown'] ?? '');
-                $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
-                $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
-
-                $round = \max(1, (int)($payload['round'] ?? 1));
-                $sharedTasks = \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [];
-                $pageTasks = \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [];
-                $taskCount = \count(\is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : []);
-                $pageTaskCount = 0;
-                foreach ($pageTasks as $tasks) {
-                    $pageTaskCount += \is_array($tasks) ? \count($tasks) : 0;
-                }
-                $summary = [
-                    'mode' => 'rebuild_task_plan',
-                    'round' => $round,
-                    'task_count' => $taskCount,
-                    'shared_task_count' => \count($sharedTasks),
-                    'page_task_count' => $pageTaskCount,
-                    'updated_at' => \date('Y-m-d H:i:s'),
-                    'risk_notes' => \is_array($structured['risk_notes'] ?? null) ? $structured['risk_notes'] : [],
-                ];
-                $structured['rebuild_summary'] = $summary;
-                $virtualThemePlan['rebuild_summary'] = $summary;
-                $virtualThemePlan['signature'] = $this->buildSignature(\array_replace($virtualThemePlan, ['markdown' => $markdown]));
-
-                return [
-                    'markdown' => $markdown,
-                    'structured' => $structured,
-                    'virtual_theme_plan' => $virtualThemePlan,
-                    'rebuild_summary' => $summary,
-                ];
-            } catch (\Throwable) {
-                // fall back to deterministic synthesis below
-            }
-        }
-
-        $artifacts = $this->buildTaskPlanArtifacts($scope, $buildBlueprint);
+        $artifacts = $this->buildTaskPlanArtifactsByAiMode($scope, $buildBlueprint, 'rebuild_task_plan', $payload);
         $markdown = (string)($artifacts['markdown'] ?? '');
         $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
         $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
@@ -335,7 +261,11 @@ final class AiSiteVirtualThemePlanService
             'risk_notes' => \is_array($structured['risk_notes'] ?? null) ? $structured['risk_notes'] : [],
         ];
         $structured['rebuild_summary'] = $summary;
+        $structured = $this->ensureTaskDirectoryHierarchy($structured);
         $virtualThemePlan['rebuild_summary'] = $summary;
+        $virtualThemePlan = \array_replace_recursive($virtualThemePlan, [
+            'task_directory_tree' => $structured['task_directory_tree'] ?? [],
+        ]);
         $virtualThemePlan['signature'] = $this->buildSignature(\array_replace($virtualThemePlan, ['markdown' => $markdown]));
 
         return [
@@ -343,6 +273,7 @@ final class AiSiteVirtualThemePlanService
             'structured' => $structured,
             'virtual_theme_plan' => $virtualThemePlan,
             'rebuild_summary' => $summary,
+            'generation_source' => 'ai',
         ];
     }
 
@@ -453,14 +384,6 @@ final class AiSiteVirtualThemePlanService
     }
 
     /**
-     * @param array<string, mixed> $scope
-     */
-    private function shouldPreferLocalFallback(array $scope): bool
-    {
-        return (int)($scope['fake_mode'] ?? 0) === 1;
-    }
-
-    /**
      * @param array<string, mixed> $payload
      */
     private function buildSignature(array $payload): string
@@ -483,17 +406,14 @@ final class AiSiteVirtualThemePlanService
         array $pageTasks,
         array $metaFieldMatrix,
         array $blockPlanMatrix,
-        array $pagePlans,
-        array $blockLookupMatrix,
-        array $planStructured,
-        array $executionBlueprint
+        array $pagePlans
     ): array {
         foreach ($pageTasks as $pageType => $tasks) {
             foreach ($tasks as $idx => $task) {
                 if (!\is_array($task)) {
                     continue;
                 }
-                $blockCode = $this->resolveTaskBlockCode($task, $blockLookupMatrix[$pageType] ?? []);
+                $blockCode = $this->resolveTaskBlockCode($task);
                 $pageGoal = (string)($pagePlans[$pageType]['page_goal'] ?? '');
                 $blockMeta = \is_array($metaFieldMatrix[$pageType][$blockCode] ?? null) ? $metaFieldMatrix[$pageType][$blockCode] : [];
                 $blockPlan = \is_array($blockPlanMatrix[$pageType][$blockCode] ?? null) ? $blockPlanMatrix[$pageType][$blockCode] : [];
@@ -502,15 +422,10 @@ final class AiSiteVirtualThemePlanService
                     'page_type' => $pageType,
                     'page_goal' => $pageGoal,
                     'block_code' => $blockCode,
-                    'section_code' => (string)($blockPlan['section_code'] ?? ''),
                     'block_goal' => (string)($blockMeta['goal'] ?? ''),
-                    'why' => (string)($blockPlan['why'] ?? ''),
                     'content_brief' => \is_array($blockPlan['content_brief'] ?? null) ? $blockPlan['content_brief'] : [],
                     'field_plan' => \is_array($blockMeta['field_plan'] ?? null) ? $blockMeta['field_plan'] : [],
                     'result_ref' => \is_array($blockMeta['result_ref'] ?? null) ? $blockMeta['result_ref'] : [],
-                    'execution_script' => \is_array($blockPlan['execution_script'] ?? null) ? $blockPlan['execution_script'] : [],
-                    'seo_brief' => \is_array($blockPlan['seo_brief'] ?? null) ? $blockPlan['seo_brief'] : [],
-                    'keywords' => \is_array($blockPlan['keywords'] ?? null) ? $blockPlan['keywords'] : [],
                 ];
                 $task['implementation_contract'] = [
                     'delivery_rule' => '按任务脚本直接实现组件，不做额外内容脑补。',
@@ -527,23 +442,10 @@ final class AiSiteVirtualThemePlanService
             if (!\is_array($task)) {
                 continue;
             }
-            $component = \trim((string)($task['task_key'] ?? ''));
-            $component = \str_starts_with($component, 'shared:') ? \substr($component, 7) : $component;
-            $sharedBlueprint = \is_array($executionBlueprint['shared_components'][$component] ?? null)
-                ? $executionBlueprint['shared_components'][$component]
-                : [];
             $task['plan_context'] = [
                 'source_stage' => 'stage_1',
                 'scope' => 'shared',
-                'component' => $component,
-                'goal' => (string)($sharedBlueprint['goal'] ?? ''),
-                'payload' => \is_array($sharedBlueprint['payload'] ?? null) ? $sharedBlueprint['payload'] : [],
-                'style_brief' => \is_array($sharedBlueprint['style_brief'] ?? null) ? $sharedBlueprint['style_brief'] : [],
-                'seo_brief' => \is_array($sharedBlueprint['seo_brief'] ?? null) ? $sharedBlueprint['seo_brief'] : [],
                 'content_rules' => [
-                    'navigation_plan' => \is_array($planStructured['navigation_plan'] ?? null) ? $planStructured['navigation_plan'] : [],
-                    'footer_plan' => \is_array($planStructured['footer_plan'] ?? null) ? $planStructured['footer_plan'] : [],
-                    'seo_strategy' => \is_array($planStructured['seo_strategy'] ?? null) ? $planStructured['seo_strategy'] : [],
                     'navigation_or_footer' => '遵循第一阶段 navigation_plan/footer_plan 与 seo_strategy 约束',
                 ],
             ];
@@ -557,316 +459,6 @@ final class AiSiteVirtualThemePlanService
         }
 
         return [\array_values($sharedTasks), $pageTasks];
-    }
-
-    /**
-     * @param array<string, array<string, string>> $blockLookupMatrix
-     * @param array<string, mixed> $planStructured
-     * @param array<string, mixed> $executionBlueprint
-     * @return array<string, mixed>
-     */
-    private function buildStage1TaskCues(
-        array $sharedTasks,
-        array $pageTasks,
-        array $planStructured,
-        array $executionBlueprint
-    ): array {
-        $sharedCueMap = [];
-        foreach ($sharedTasks as $task) {
-            if (!\is_array($task)) {
-                continue;
-            }
-            $taskKey = \trim((string)($task['task_key'] ?? ''));
-            if ($taskKey === '') {
-                continue;
-            }
-            $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
-            $contentRules = \is_array($planContext['content_rules'] ?? null) ? $planContext['content_rules'] : [];
-            $payload = \is_array($planContext['payload'] ?? null) ? $planContext['payload'] : [];
-            $component = \trim((string)($planContext['component'] ?? ''));
-            $headerItems = \is_array($contentRules['navigation_plan']['header_items'] ?? null) ? $contentRules['navigation_plan']['header_items'] : [];
-            $footerFeatured = \is_array($contentRules['footer_plan']['featured'] ?? null) ? $contentRules['footer_plan']['featured'] : [];
-            $footerPolicies = \is_array($contentRules['footer_plan']['policies'] ?? null) ? $contentRules['footer_plan']['policies'] : [];
-            $sharedCueMap[$taskKey] = [
-                'component' => $component,
-                'task_label' => (string)($task['label'] ?? $taskKey),
-                'stage1_goal' => (string)($planContext['goal'] ?? ''),
-                'nav_items' => $this->summarizeLinkLikeItems($headerItems),
-                'footer_featured' => $this->summarizeLinkLikeItems($footerFeatured),
-                'footer_policies' => $this->summarizeLinkLikeItems($footerPolicies),
-                'payload_summary' => $this->summarizePayloadValues($payload),
-                'seo_intent' => (string)($contentRules['seo_strategy']['core_intent'] ?? ''),
-                'style_focus' => $this->summarizeSharedStyleBrief(\is_array($planContext['style_brief'] ?? null) ? $planContext['style_brief'] : []),
-            ];
-        }
-
-        $pageCueMap = [];
-        foreach ($pageTasks as $pageType => $tasks) {
-            if (!\is_array($tasks)) {
-                continue;
-            }
-            foreach ($tasks as $task) {
-                if (!\is_array($task)) {
-                    continue;
-                }
-                $taskKey = \trim((string)($task['task_key'] ?? ''));
-                if ($taskKey === '') {
-                    continue;
-                }
-                $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
-                $fieldPlan = \is_array($planContext['field_plan'] ?? null) ? $planContext['field_plan'] : [];
-                $contentBrief = \is_array($planContext['content_brief'] ?? null) ? $planContext['content_brief'] : [];
-                $executionScript = \is_array($planContext['execution_script'] ?? null) ? $planContext['execution_script'] : [];
-                $seoBrief = \is_array($planContext['seo_brief'] ?? null) ? $planContext['seo_brief'] : [];
-                $pageCueMap[$taskKey] = [
-                    'page_type' => (string)$pageType,
-                    'task_label' => (string)($task['label'] ?? $taskKey),
-                    'page_goal' => (string)($planContext['page_goal'] ?? ''),
-                    'block_code' => (string)($planContext['block_code'] ?? ''),
-                    'section_code' => (string)($planContext['section_code'] ?? ''),
-                    'block_goal' => (string)($planContext['block_goal'] ?? ''),
-                    'block_why' => (string)($planContext['why'] ?? ''),
-                    'content_direction' => $this->buildPageCueContentDirection($contentBrief, $executionScript),
-                    'field_samples' => $this->summarizeFieldPlan($fieldPlan),
-                    'seo_focus' => [
-                        'keywords' => \array_values(\array_filter(\array_map(
-                            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-                            \is_array($seoBrief['keywords'] ?? null) ? $seoBrief['keywords'] : (\is_array($planContext['keywords'] ?? null) ? $planContext['keywords'] : [])
-                        ), static fn(string $value): bool => $value !== '')),
-                        'anchors' => \array_values(\array_filter(\array_map(
-                            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-                            \is_array($seoBrief['anchors'] ?? null) ? $seoBrief['anchors'] : []
-                        ), static fn(string $value): bool => $value !== '')),
-                        'internal_links' => \array_values(\array_filter(\array_map(
-                            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-                            \is_array($seoBrief['internal_links'] ?? null) ? $seoBrief['internal_links'] : []
-                        ), static fn(string $value): bool => $value !== '')),
-                    ],
-                    'feature_points' => \array_values(\array_filter(\array_map(
-                        static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-                        \is_array($executionScript['feature_points'] ?? null) ? $executionScript['feature_points'] : []
-                    ), static fn(string $value): bool => $value !== '')),
-                ];
-            }
-        }
-
-        return [
-            'site_summary' => (string)($planStructured['site_strategy']['summary'] ?? ''),
-            'site_display_name' => (string)($planStructured['site_strategy']['site_display_name'] ?? ''),
-            'shared' => $sharedCueMap,
-            'pages' => $pageCueMap,
-            'execution_steps' => \is_array($planStructured['execution_steps'] ?? null) ? $planStructured['execution_steps'] : [],
-            'stage2_task_hints' => \is_array($executionBlueprint['stage2_task_hints'] ?? null) ? $executionBlueprint['stage2_task_hints'] : [],
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $block
-     * @return list<string>
-     */
-    private function buildBlockLookupAliases(string $blockKey, array $block, string $pageType): array
-    {
-        $aliases = [];
-        foreach ([
-            $blockKey,
-            (string)($block['section_code'] ?? ''),
-            (string)($block['block_key'] ?? ''),
-            (string)($block['component_kind'] ?? ''),
-        ] as $candidate) {
-            foreach ($this->buildAliasCandidates($candidate, $pageType) as $alias) {
-                if ($alias !== '' && !\in_array($alias, $aliases, true)) {
-                    $aliases[] = $alias;
-                }
-            }
-        }
-
-        return $aliases;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function buildAliasCandidates(string $value, string $pageType = ''): array
-    {
-        $value = \trim($value);
-        if ($value === '') {
-            return [];
-        }
-
-        $normalized = \strtolower(\str_replace('\\', '/', $value));
-        $candidates = [$normalized];
-        if (\str_contains($normalized, ':')) {
-            $parts = \explode(':', $normalized);
-            $tail = \trim((string)\end($parts));
-            if ($tail !== '') {
-                $candidates[] = $tail;
-            }
-        }
-        if (\str_contains($normalized, '/')) {
-            $tail = \trim((string)\basename($normalized));
-            if ($tail !== '') {
-                $candidates[] = $tail;
-            }
-        }
-
-        $pageSlug = \str_replace('_', '-', \strtolower(\trim($pageType)));
-        foreach ($candidates as $candidate) {
-            if ($pageSlug !== '' && \str_starts_with($candidate, $pageSlug . '-')) {
-                $candidates[] = \substr($candidate, \strlen($pageSlug) + 1);
-            }
-            if (\str_starts_with($candidate, 'content/' . $pageSlug . '-')) {
-                $candidates[] = \substr($candidate, \strlen('content/' . $pageSlug . '-'));
-            }
-        }
-
-        $deduplicated = [];
-        foreach ($candidates as $candidate) {
-            $candidate = \trim($candidate);
-            if ($candidate === '') {
-                continue;
-            }
-            if (!\in_array($candidate, $deduplicated, true)) {
-                $deduplicated[] = $candidate;
-            }
-        }
-
-        return $deduplicated;
-    }
-
-    /**
-     * @param list<array<string, mixed>> $items
-     * @return list<string>
-     */
-    private function summarizeLinkLikeItems(array $items): array
-    {
-        $summary = [];
-        foreach ($items as $item) {
-            if (\is_scalar($item)) {
-                $text = \trim((string)$item);
-                if ($text !== '') {
-                    $summary[] = $text;
-                }
-                continue;
-            }
-            if (!\is_array($item)) {
-                continue;
-            }
-            $label = \trim((string)($item['label'] ?? $item['title'] ?? $item['name'] ?? ''));
-            $href = \trim((string)($item['href'] ?? $item['url'] ?? ''));
-            $text = $label !== '' ? $label : $href;
-            if ($text === '') {
-                continue;
-            }
-            if ($href !== '' && $href !== $text) {
-                $text .= ' -> ' . $href;
-            }
-            $summary[] = $text;
-        }
-
-        return \array_slice(\array_values(\array_unique($summary)), 0, 8);
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     * @return list<string>
-     */
-    private function summarizePayloadValues(array $payload): array
-    {
-        $summary = [];
-        foreach ($payload as $key => $value) {
-            if (\is_scalar($value)) {
-                $text = \trim((string)$value);
-                if ($text !== '') {
-                    $summary[] = (string)$key . ': ' . $text;
-                }
-                continue;
-            }
-            if (!\is_array($value) || $value === []) {
-                continue;
-            }
-            $nested = [];
-            foreach ($value as $nestedValue) {
-                if (!\is_scalar($nestedValue)) {
-                    continue;
-                }
-                $text = \trim((string)$nestedValue);
-                if ($text !== '') {
-                    $nested[] = $text;
-                }
-                if (\count($nested) >= 3) {
-                    break;
-                }
-            }
-            if ($nested !== []) {
-                $summary[] = (string)$key . ': ' . \implode(' | ', $nested);
-            }
-        }
-
-        return \array_slice($summary, 0, 8);
-    }
-
-    /**
-     * @param array<string, mixed> $styleBrief
-     * @return array<string, string>
-     */
-    private function summarizeSharedStyleBrief(array $styleBrief): array
-    {
-        $palette = \is_array($styleBrief['palette'] ?? null) ? $styleBrief['palette'] : [];
-        $themeStyle = \is_array($styleBrief['theme_style'] ?? null) ? $styleBrief['theme_style'] : [];
-
-        return \array_filter([
-            'palette_name' => \trim((string)($palette['name'] ?? '')),
-            'palette_primary' => \trim((string)($palette['primary'] ?? '')),
-            'palette_accent' => \trim((string)($palette['accent'] ?? '')),
-            'theme_name' => \trim((string)($themeStyle['name'] ?? '')),
-            'visual_tone' => \trim((string)($themeStyle['visual_tone'] ?? '')),
-            'responsive_rule' => \trim((string)($themeStyle['responsive_rule'] ?? '')),
-        ], static fn(string $value): bool => $value !== '');
-    }
-
-    /**
-     * @param array<string, mixed> $contentBrief
-     * @param array<string, mixed> $executionScript
-     * @return array<string, string>
-     */
-    private function buildPageCueContentDirection(array $contentBrief, array $executionScript): array
-    {
-        return \array_filter([
-            'goal' => \trim((string)($contentBrief['goal'] ?? '')),
-            'why' => \trim((string)($contentBrief['why'] ?? '')),
-            'headline_direction' => \trim((string)($contentBrief['headline_direction'] ?? '')),
-            'body_direction' => \trim((string)($contentBrief['body_direction'] ?? '')),
-            'cta_direction' => \trim((string)($contentBrief['cta_direction'] ?? '')),
-            'core_copy' => \trim((string)($executionScript['core_copy'] ?? '')),
-            'typography' => \trim((string)($executionScript['typography'] ?? '')),
-            'style_tone' => \trim((string)($executionScript['style_tone'] ?? '')),
-            'background_direction' => \trim((string)($executionScript['background_direction'] ?? '')),
-        ], static fn(string $value): bool => $value !== '');
-    }
-
-    /**
-     * @param list<array<string, mixed>> $fieldPlan
-     * @return list<array{field:string,sample:string,reason:string}>
-     */
-    private function summarizeFieldPlan(array $fieldPlan): array
-    {
-        $summary = [];
-        foreach ($fieldPlan as $field) {
-            if (!\is_array($field)) {
-                continue;
-            }
-            $name = \trim((string)($field['field'] ?? ''));
-            if ($name === '') {
-                continue;
-            }
-            $summary[] = [
-                'field' => $name,
-                'sample' => \trim((string)($field['sample'] ?? '')),
-                'reason' => \trim((string)($field['reason'] ?? '')),
-            ];
-        }
-
-        return $summary;
     }
 
     /**
@@ -1029,23 +621,13 @@ final class AiSiteVirtualThemePlanService
     /**
      * @param array<string, mixed> $task
      */
-    private function resolveTaskBlockCode(array $task, array $lookup = []): string
+    private function resolveTaskBlockCode(array $task): string
     {
         $sectionCode = \trim((string)($task['section_code'] ?? ''));
-        foreach ($this->buildAliasCandidates($sectionCode, (string)($task['page_type'] ?? '')) as $alias) {
-            if (isset($lookup[$alias])) {
-                return (string)$lookup[$alias];
-            }
-        }
         if ($sectionCode !== '') {
             return $sectionCode;
         }
         $blockKey = \trim((string)($task['block_key'] ?? ''));
-        foreach ($this->buildAliasCandidates($blockKey, (string)($task['page_type'] ?? '')) as $alias) {
-            if (isset($lookup[$alias])) {
-                return (string)$lookup[$alias];
-            }
-        }
         if ($blockKey !== '') {
             return $blockKey;
         }
@@ -1053,11 +635,6 @@ final class AiSiteVirtualThemePlanService
         if ($taskKey !== '' && \str_contains($taskKey, ':')) {
             $parts = \explode(':', $taskKey);
             $tail = \trim((string)\end($parts));
-            foreach ($this->buildAliasCandidates($tail, (string)($task['page_type'] ?? '')) as $alias) {
-                if (isset($lookup[$alias])) {
-                    return (string)$lookup[$alias];
-                }
-            }
             if ($tail !== '') {
                 return $tail;
             }
@@ -1199,7 +776,6 @@ final class AiSiteVirtualThemePlanService
         $stage1PlanJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $stage1PlanMarkdown = \trim((string)($scope['plan_markdown'] ?? ''));
         $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        $stage1TaskCues = \is_array($structured['stage1_task_cues'] ?? null) ? $structured['stage1_task_cues'] : [];
         $modeRules = match ($mode) {
             'refine_task_plan' => [
                 'Mode: refine_task_plan.',
@@ -1248,20 +824,12 @@ final class AiSiteVirtualThemePlanService
             '- page_tasks.*[].plan_context.block_goal must be concrete and specific to the block.',
             '- page_tasks.*[].task_script.story_goal must be concrete and specific to the business page.',
             '- page_tasks.*[].task_script.field_content_requirements must be non-empty with concrete sample values.',
-            '- shared_tasks.*[].task_script.story_goal / content_fill_rule / stage3_directive / field_content_requirements must all be concrete and non-empty.',
-            '- Use the extracted stage-1 task cues as the primary per-task drafting source whenever they are available.',
             '- markdown must explain concrete execution steps by shared/page task groups.',
             '- Stage-2 contract (AI建站中台 / plan doc): derive ONLY from confirmed stage-1 markdown + plan_json + execution_blueprint; never invent requirements absent from stage-1.',
             '- Produce virtual_theme_plan fields: plan_signature, virtual_theme_strategy, shared_tasks, page_tasks, meta_field_matrix, style_tokens, content_rules, responsive_rules, execution_order, risk_notes.',
             '- shared:header / shared:footer tasks MUST spell out visuals, nav/brand/CTA slots, variable fields + defaults, responsive collapse, SEO/internal-link rationale.',
             '- Each page-type block task MUST include order, block goal, design rationale, content fields, variable meta, CTA direction, internal links, SEO keywords/anchors.',
             '- execution_order MUST follow: shared:header, shared:footer, then home page tasks, then other page types in blueprint order; state why in risk_notes if dependencies block.',
-            '- This is the confirmed virtual-theme task plan for stage 2: output must be directly usable for virtual_theme_plan.confirmed persistence after user confirmation.',
-            '- The task plan must make shared -> home -> other page execution explicit and explain why shared tasks block later tasks.',
-            '- Every task must make clear what will be persisted into result_ref/component config/meta so the stage-2 executor and page editor can resume safely.',
-            '- Header/Footer tasks must describe media/logo slot expectations, editable meta/defaults, policy/internal-link usage, and responsive behavior for the eventual visual editor.',
-            '- Page block tasks must explain why the block exists, how it serves conversion rhythm, what content/meta stays editable, and what the stage-3 generator must build without asking for more planning.',
-            '- The markdown output must read like a confirmation-ready task-plan document, not raw analysis notes or model self-talk.',
         ];
         foreach ($modeRules as $rule) {
             $lines[] = '- ' . $rule;
@@ -1280,8 +848,6 @@ final class AiSiteVirtualThemePlanService
         $lines[] = \json_encode($executionBlueprint, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
         $lines[] = 'Current build_blueprint:';
         $lines[] = \json_encode($buildBlueprint, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
-        $lines[] = 'Extracted stage-1 task cues:';
-        $lines[] = \json_encode($stage1TaskCues, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
         $lines[] = 'Baseline virtual_theme_plan (must keep keys compatible):';
         $lines[] = \json_encode($virtualThemePlan, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
         $lines[] = 'Baseline structured:';
@@ -1305,6 +871,10 @@ final class AiSiteVirtualThemePlanService
         }
         $mergedVirtualThemePlan = \array_replace_recursive($virtualThemePlan, $aiVirtualThemePlan);
         $mergedStructured = \array_replace_recursive($structured, $mergedVirtualThemePlan);
+        $mergedStructured = $this->ensureTaskDirectoryHierarchy($mergedStructured);
+        $mergedVirtualThemePlan = \array_replace_recursive($mergedVirtualThemePlan, [
+            'task_directory_tree' => $mergedStructured['task_directory_tree'] ?? [],
+        ]);
         $this->assertAiTaskPlanIsContentful($mergedStructured);
         $mergedVirtualThemePlan['signature'] = $this->buildSignature($mergedStructured);
         return [
@@ -1316,17 +886,81 @@ final class AiSiteVirtualThemePlanService
 
     /**
      * @param array<string, mixed> $structured
+     * @return array<string, mixed>
+     */
+    private function ensureTaskDirectoryHierarchy(array $structured): array
+    {
+        $existing = \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [];
+        if ($existing !== []) {
+            return $structured;
+        }
+        $sharedTasks = \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [];
+        $pageTasks = \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [];
+        $executionOrder = \is_array($structured['execution_order'] ?? null) ? $structured['execution_order'] : [];
+
+        $sharedNodes = [];
+        foreach ($sharedTasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+            $sharedNodes[] = [
+                'task_key' => $taskKey,
+                'label' => (string)($task['label'] ?? $taskKey),
+                'sort_order' => (int)($task['sort_order'] ?? 0),
+                'group_key' => (string)($task['group_key'] ?? 'shared'),
+            ];
+        }
+
+        $pageNodes = [];
+        foreach ($pageTasks as $pageType => $tasks) {
+            if (!\is_array($tasks)) {
+                continue;
+            }
+            $nodes = [];
+            foreach ($tasks as $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $taskKey = \trim((string)($task['task_key'] ?? ''));
+                if ($taskKey === '') {
+                    continue;
+                }
+                $nodes[] = [
+                    'task_key' => $taskKey,
+                    'label' => (string)($task['label'] ?? $taskKey),
+                    'sort_order' => (int)($task['sort_order'] ?? 0),
+                    'section_code' => (string)($task['section_code'] ?? ''),
+                ];
+            }
+            if ($nodes !== []) {
+                $pageNodes[(string)$pageType] = [
+                    'page_type' => (string)$pageType,
+                    'label' => (string)$pageType,
+                    'tasks' => $nodes,
+                ];
+            }
+        }
+
+        $structured['task_directory_tree'] = [
+            'shared' => [
+                'label' => 'shared',
+                'tasks' => $sharedNodes,
+            ],
+            'pages' => $pageNodes,
+            'execution_order' => $executionOrder,
+        ];
+        return $structured;
+    }
+
+    /**
+     * @param array<string, mixed> $structured
      */
     private function assertAiTaskPlanIsContentful(array $structured): void
     {
-        $sharedTasks = \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [];
-        if ($sharedTasks === []) {
-            throw new \RuntimeException('AI task plan generation failed: empty shared_tasks.');
-        }
-        foreach ($sharedTasks as $task) {
-            $this->assertTaskNodeIsContentful($task, true);
-        }
-
         $pageTasks = \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [];
         if ($pageTasks === []) {
             throw new \RuntimeException('AI task plan generation failed: empty page_tasks.');
@@ -1336,54 +970,31 @@ final class AiSiteVirtualThemePlanService
                 throw new \RuntimeException('AI task plan generation failed: empty tasks for page ' . (string)$pageType);
             }
             foreach ($tasks as $task) {
-                $this->assertTaskNodeIsContentful($task, false);
+                if (!\is_array($task)) {
+                    throw new \RuntimeException('AI task plan generation failed: invalid task node.');
+                }
+                $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
+                $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
+                $blockGoal = \trim((string)($planContext['block_goal'] ?? ''));
+                $storyGoal = \trim((string)($taskScript['story_goal'] ?? ''));
+                $requirements = \is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [];
+                if ($blockGoal === '' || $storyGoal === '' || $requirements === []) {
+                    throw new \RuntimeException('AI task plan generation failed: task script content is incomplete.');
+                }
+                $hasSample = false;
+                foreach ($requirements as $requirement) {
+                    if (!\is_array($requirement)) {
+                        continue;
+                    }
+                    if (\trim((string)($requirement['sample'] ?? '')) !== '') {
+                        $hasSample = true;
+                        break;
+                    }
+                }
+                if (!$hasSample) {
+                    throw new \RuntimeException('AI task plan generation failed: field samples are missing.');
+                }
             }
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $task
-     */
-    private function assertTaskNodeIsContentful(array $task, bool $shared): void
-    {
-        if (!\is_array($task)) {
-            throw new \RuntimeException('AI task plan generation failed: invalid task node.');
-        }
-        $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
-        $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
-        $requirements = \is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [];
-        $storyGoal = \trim((string)($taskScript['story_goal'] ?? ''));
-        $contentFillRule = \trim((string)($taskScript['content_fill_rule'] ?? ''));
-        $stage3Directive = \trim((string)($taskScript['stage3_directive'] ?? ''));
-
-        if ($storyGoal === '' || $contentFillRule === '' || $stage3Directive === '' || $requirements === []) {
-            throw new \RuntimeException('AI task plan generation failed: task script content is incomplete.');
-        }
-
-        if ($shared) {
-            $goal = \trim((string)($planContext['goal'] ?? ''));
-            if ($goal === '') {
-                throw new \RuntimeException('AI task plan generation failed: shared task goal is missing.');
-            }
-        } else {
-            $blockGoal = \trim((string)($planContext['block_goal'] ?? ''));
-            if ($blockGoal === '') {
-                throw new \RuntimeException('AI task plan generation failed: task block goal is missing.');
-            }
-        }
-
-        $hasSample = false;
-        foreach ($requirements as $requirement) {
-            if (!\is_array($requirement)) {
-                continue;
-            }
-            if (\trim((string)($requirement['sample'] ?? '')) !== '') {
-                $hasSample = true;
-                break;
-            }
-        }
-        if (!$hasSample) {
-            throw new \RuntimeException('AI task plan generation failed: field samples are missing.');
         }
     }
 
