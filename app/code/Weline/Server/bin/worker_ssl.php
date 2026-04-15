@@ -2401,7 +2401,7 @@ while (true) {
                         if (\count($longLivedConnections) < $longLivedMaxActive) {
                             break;
                         }
-                        \usleep(50_000);
+                        \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(50);
                     }
                 }
             }
@@ -3210,41 +3210,17 @@ function safeCloseStream(mixed $conn): void
 }
 
 /**
- * 判断是否属于可预期的 TLS 握手失败（客户端主动中断、证书不信任等）。
- */
-function isBenignSslHandshakeFailure(string $errorMsg): bool
-{
-    $msg = \strtolower($errorMsg);
-    $patterns = [
-        'certificate unknown',
-        'alert unknown ca',
-        'connection reset by peer',
-        'software caused connection abort',
-        '你的主机中的软件中止了一个已建立的连接',
-        'sslv3 alert certificate unknown',
-    ];
-
-    foreach ($patterns as $pattern) {
-        if (\str_contains($msg, $pattern)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/**
  * 统一记录握手失败日志：可预期失败降级为 info，保留关键告警信噪比。
  */
 function logSslHandshakeFailure(string $peerName, int $connId, string $errorMsg): void
 {
-    $message = "SSL 握手失败: {$peerName} (connId: {$connId}) - {$errorMsg}";
-    if (isBenignSslHandshakeFailure($errorMsg)) {
-        WlsLogger::info_($message . ' [benign]');
+    $classification = \Weline\Server\Service\SslHandshakeFailureClassifier::classify($peerName, $connId, $errorMsg);
+    if ($classification['level'] === 'info') {
+        WlsLogger::info_($classification['message']);
         return;
     }
 
-    WlsLogger::warning_($message);
+    WlsLogger::warning_($classification['message']);
 }
 
 /**
