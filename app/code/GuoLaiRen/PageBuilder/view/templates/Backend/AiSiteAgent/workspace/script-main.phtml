@@ -4162,13 +4162,7 @@
 
     function updatePlanModalContent(markdown) {
         var markdownText = normalizePlanMarkdownText(markdown);
-        var mdContent = document.getElementById('pb-ai-plan-md-content');
         var previewContent = document.getElementById('pb-ai-plan-rendered-content');
-        if (mdContent) {
-            mdContent.textContent = markdownText
-                || (pickStructuredPlanRoot(currentPlanPayload) ? ('<?= (string)__('（当前为结构化方案预览）') ?>') : '')
-                || messages.planGenerating;
-        }
         if (previewContent) {
             previewContent.innerHTML = buildPlanPreviewHtml(markdownText, currentPlanPayload || {});
         }
@@ -4485,16 +4479,6 @@
             }
             if (payload && payload.state && typeof payload.state === 'object') {
                 hydrateWorkspaceFromState(payload.state);
-            } else if (!nextPlan && String(payloadMarkdown || '').trim() === '' && window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.refreshWorkspaceStateFromServer === 'function') {
-                // 兜底：done 未携带 plan/state 时，主动刷新一次工作区状态，确保预览与 markdown 同步到最新方案
-                window.__pbWorkspaceApi.refreshWorkspaceStateFromServer();
-                window.setTimeout(function () {
-                    var latestMarkdown = String((currentPlanPayload && currentPlanPayload.markdown) || '').trim();
-                    if (latestMarkdown !== '') {
-                        updatePlanModalContent(latestMarkdown);
-                        setPlanModalProgress(messages.planModeDone, 100, !planConfirmedState && (latestMarkdown !== '' || hasCurrentPhaseOnePlanDraft()));
-                    }
-                }, 800);
             }
             setPlanModeStatus(messages.planModeDone);
             var doneLatestMd = String((currentPlanPayload && currentPlanPayload.markdown) || '').trim();
@@ -5213,26 +5197,23 @@
             if (taskPlanStartRequestInFlight || taskPlanSseRunning) {
                 return;
             }
-            if (applyCachedTaskPlanToPanel()) {
-                return;
-            }
             if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
                 window.BackendConfirm.show(messages.taskPlanGenerateConfirmMessage, {
                     title: messages.taskPlanGenerateConfirmTitle,
                     confirmText: messages.immediateGenerate,
                     cancelText: messages.laterGenerate
                 }).then(function (confirmed) {
-                    if (confirmed) {
-                        startTaskPlanDetectBootstrapSse();
+                    if (!confirmed) {
+                        toast('info', messages.taskPlanGenerateCancelled);
+                        var c = (typeof bootstrap !== 'undefined' && bootstrap.Collapse)
+                            ? bootstrap.Collapse.getInstance(panel)
+                            : null;
+                        if (c && typeof c.hide === 'function') {
+                            c.hide();
+                        }
                         return;
                     }
-                    toast('info', messages.taskPlanGenerateCancelled);
-                    var c = (typeof bootstrap !== 'undefined' && bootstrap.Collapse)
-                        ? bootstrap.Collapse.getInstance(panel)
-                        : null;
-                    if (c && typeof c.hide === 'function') {
-                        c.hide();
-                    }
+                    startTaskPlanDetectBootstrapSse();
                 }).catch(function () {});
                 return;
             }
@@ -5588,12 +5569,15 @@
         var opts = options && typeof options === 'object' ? options : {};
         var normalizedTypes = ensureRequiredPageTypeSelected(selectedTypes);
         var canUseTaskPlanFlow = !!(startTaskPlanUrl && confirmTaskPlanUrl);
-        var hasPhase2PlanReady = !!(hasVirtualThemePlanState || hasExecutionBlueprintState);
-        if (!canUseTaskPlanFlow || taskPlanConfirmedState) {
+        if (!canUseTaskPlanFlow) {
             startConfirmedBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes, opts);
             return;
         }
-        if (!hasPhase2PlanReady) {
+        if (!lastPhaseOnePlanPresent) {
+            toast('warning', messages.phaseOnePlanMissingForTaskPlan);
+            return;
+        }
+        if (taskPlanConfirmedState) {
             startConfirmedBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes, opts);
             return;
         }
@@ -5607,10 +5591,6 @@
      * 嵌入预览 iframe（预览占位页）通过 postMessage 请求在工作区启动 AI 页面生成。
      */
     function handleEmbeddedPreviewGenerateRequest(pageType) {
-        if (!workspaceApi.getTaskPlanConfirmedState()) {
-            toast('warning', messages.taskPlanDetailRequiredBeforeAiGenerate);
-            return;
-        }
         var pt = String(pageType || '').trim();
         if (pt !== '' && window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview.switchPreviewByType === 'function') {
             window.PbAiWorkspacePreview.switchPreviewByType(pt);

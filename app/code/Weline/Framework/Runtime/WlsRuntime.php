@@ -60,20 +60,21 @@ class WlsRuntime implements RuntimeInterface
      * one request cannot overwrite another request's cookies/headers/status
      * during scheduler yields.
      *
-     * @var \WeakMap<\Fiber, array{cookies: array, headers: array, status_code:?int, explicit: bool}>|null
+     * @var \WeakMap<\Fiber, array{cookies: array, headers: array, status_code:?int, explicit: bool, sse_started: bool}>|null
      */
     private ?\WeakMap $fiberPendingResponseStates = null;
 
     /**
      * Fallback pending response state for non-fiber callers such as unit tests.
      *
-     * @var array{cookies: array, headers: array, status_code:?int, explicit: bool}
+     * @var array{cookies: array, headers: array, status_code:?int, explicit: bool, sse_started: bool}
      */
     private array $mainPendingResponseState = [
         'cookies' => [],
         'headers' => [],
         'status_code' => null,
         'explicit' => false,
+        'sse_started' => false,
     ];
     
     /**
@@ -1307,7 +1308,7 @@ class WlsRuntime implements RuntimeInterface
     }
 
     /**
-     * @return array{status_code:?int, explicit:bool}
+     * @return array{status_code:?int, explicit:bool, sse_started:bool}
      */
     public function consumePendingResponseStatus(): array
     {
@@ -1315,9 +1316,11 @@ class WlsRuntime implements RuntimeInterface
         $status = [
             'status_code' => $state['status_code'],
             'explicit' => $state['explicit'],
+            'sse_started' => $state['sse_started'],
         ];
         $state['status_code'] = null;
         $state['explicit'] = false;
+        $state['sse_started'] = false;
         $this->setPendingResponseState($state);
 
         return $status;
@@ -1325,16 +1328,23 @@ class WlsRuntime implements RuntimeInterface
 
     protected function snapshotPendingResponseState(\Weline\Framework\Http\HeaderCollector $headerCollector): void
     {
+        $headers = $headerCollector->getHeaders();
+        $sseStarted = (bool)RequestContext::get(RequestContext::SSE_WRITER_KEY, false);
+        if ($sseStarted) {
+            $headers['Content-Type'] ??= 'text/event-stream; charset=utf-8';
+        }
+
         $this->setPendingResponseState([
             'cookies' => $headerCollector->getCookies(),
-            'headers' => $headerCollector->getHeaders(),
+            'headers' => $headers,
             'status_code' => $headerCollector->getStatusCode(),
             'explicit' => $headerCollector->hasExplicitStatusCode(),
+            'sse_started' => $sseStarted,
         ]);
     }
 
     /**
-     * @return array{cookies: array, headers: array, status_code:?int, explicit: bool}
+     * @return array{cookies: array, headers: array, status_code:?int, explicit: bool, sse_started: bool}
      */
     private function getPendingResponseState(): array
     {
@@ -1351,7 +1361,7 @@ class WlsRuntime implements RuntimeInterface
     }
 
     /**
-     * @param array{cookies: array, headers: array, status_code:?int, explicit: bool} $state
+     * @param array{cookies: array, headers: array, status_code:?int, explicit: bool, sse_started: bool} $state
      */
     private function setPendingResponseState(array $state): void
     {
@@ -1369,7 +1379,7 @@ class WlsRuntime implements RuntimeInterface
     }
 
     /**
-     * @return array{cookies: array, headers: array, status_code:?int, explicit: bool}
+     * @return array{cookies: array, headers: array, status_code:?int, explicit: bool, sse_started: bool}
      */
     private function emptyPendingResponseState(): array
     {
@@ -1378,6 +1388,7 @@ class WlsRuntime implements RuntimeInterface
             'headers' => [],
             'status_code' => null,
             'explicit' => false,
+            'sse_started' => false,
         ];
     }
     
