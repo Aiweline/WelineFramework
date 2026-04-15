@@ -1,6 +1,7 @@
 ﻿<script>
 (function () {
     'use strict';
+    var PB_SSE_CONNECT_DELAY_MS = 5000;
 
     var previewBridge = window.PbAiWorkspacePreview || {};
     var compactPageDisplayLabel = typeof previewBridge.compactPageDisplayLabel === 'function'
@@ -29,6 +30,7 @@
     var stateJsonUrl = <?= \json_encode($stateJsonUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var workspaceTerminal = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
     var runningSource = null;
+    var runningSourceStartTimer = null;
     var runningOperationKey = '';
     var runningStartAtByOperationKey = Object.create(null);
     var resumePromptHandledByKey = Object.create(null);
@@ -385,6 +387,10 @@
     }
 
     function closeOperationSource(source) {
+        if (runningSourceStartTimer) {
+            window.clearTimeout(runningSourceStartTimer);
+            runningSourceStartTimer = null;
+        }
         var target = source || runningSource;
         if (!target) {
             return;
@@ -689,45 +695,47 @@
         var settled = false;
         var lastServerError = '';
         var source = null;
-        try {
-            source = new EventSource(streamUrl);
-        } catch (eventSourceError) {
-            toast('error', <?= \json_encode((string)__('操作事件流创建失败，请检查 URL 或浏览器连接策略。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
-            if (typeof previewBridge.resumeWorkspaceStream === 'function') {
-                previewBridge.resumeWorkspaceStream();
-            }
-            resetOperationUiOnFailure(operation);
-            return false;
-        }
-        runningSource = source;
-
-        source.addEventListener('start', function (event) {
-            logOperationToWorkspaceTerminal('start', parsePayload(event), 'start', <?= \json_encode((string)__('工作区操作已启动'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
-        });
-
-        source.addEventListener('error', function (event) {
-            var payload = parsePayload(event);
-            if (payload && payload.message) {
-                lastServerError = normalizeToastMessage(String(payload.message));
-                if (Array.isArray(payload.required_params) && payload.required_params.length > 0) {
-                    lastServerError += ' [' + payload.required_params.join(', ') + ']';
+        runningSourceStartTimer = window.setTimeout(function () {
+            runningSourceStartTimer = null;
+            try {
+                source = new EventSource(streamUrl);
+            } catch (eventSourceError) {
+                toast('error', <?= \json_encode((string)__('操作事件流创建失败，请检查 URL 或浏览器连接策略。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
                 }
-                logOperationToWorkspaceTerminal('error', payload, 'error', lastServerError);
+                resetOperationUiOnFailure(operation);
+                return;
             }
-        });
+            runningSource = source;
 
-        source.addEventListener('warning', function (event) {
-            var payload = parsePayload(event);
-            var wmsg = normalizeToastMessage((payload && payload.message) ? String(payload.message) : (messages.operationDuplicateStream || ''));
-            if (wmsg) {
-                logOperationToWorkspaceTerminal('warning', payload, 'warning', wmsg);
-                if (!(payload && payload.retry_attempt)) {
-                    toast('warning', wmsg);
+            source.addEventListener('start', function (event) {
+                logOperationToWorkspaceTerminal('start', parsePayload(event), 'start', <?= \json_encode((string)__('工作区操作已启动'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            });
+
+            source.addEventListener('error', function (event) {
+                var payload = parsePayload(event);
+                if (payload && payload.message) {
+                    lastServerError = normalizeToastMessage(String(payload.message));
+                    if (Array.isArray(payload.required_params) && payload.required_params.length > 0) {
+                        lastServerError += ' [' + payload.required_params.join(', ') + ']';
+                    }
+                    logOperationToWorkspaceTerminal('error', payload, 'error', lastServerError);
                 }
-            }
-        });
+            });
 
-        source.addEventListener('environment_ready', function (event) {
+            source.addEventListener('warning', function (event) {
+                var payload = parsePayload(event);
+                var wmsg = normalizeToastMessage((payload && payload.message) ? String(payload.message) : (messages.operationDuplicateStream || ''));
+                if (wmsg) {
+                    logOperationToWorkspaceTerminal('warning', payload, 'warning', wmsg);
+                    if (!(payload && payload.retry_attempt)) {
+                        toast('warning', wmsg);
+                    }
+                }
+            });
+
+            source.addEventListener('environment_ready', function (event) {
             var payload = parsePayload(event);
             if (payload && payload.state) {
                 hydrateWorkspaceFromState(payload.state);
@@ -743,7 +751,7 @@
             toast('success', (payload && payload.message) ? String(payload.message) : (messages.buildReady || '编辑环境已就绪'));
         });
 
-        source.addEventListener('progress', function (event) {
+            source.addEventListener('progress', function (event) {
             var payload = parsePayload(event);
             if (!payload || !payload.message) {
                 return;
@@ -842,7 +850,7 @@
             }
         });
 
-        source.addEventListener('page_generated', function (event) {
+            source.addEventListener('page_generated', function (event) {
             var payload = parsePayload(event);
             if (!payload || !payload.page_type) {
                 return;
@@ -890,7 +898,7 @@
             logOperationToWorkspaceTerminal('task_completed', payload, 'done', taskMessage);
         });
 
-        source.addEventListener('done', function (event) {
+            source.addEventListener('done', function (event) {
             if (settled) {
                 return;
             }
@@ -1024,6 +1032,7 @@
             }
         };
 
+        }, PB_SSE_CONNECT_DELAY_MS);
         return true;
     }
 

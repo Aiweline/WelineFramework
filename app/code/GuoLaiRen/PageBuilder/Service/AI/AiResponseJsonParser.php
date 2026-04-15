@@ -18,8 +18,34 @@ class AiResponseJsonParser
      */
     public function extractAndDecode(string $response): ?array
     {
+        // 容错：如果响应包含 markdown 标题（AI 未遵守 JSON-only 约束），先提取 JSON 部分
+        $response = $this->stripMarkdownPrefix($response);
         $json = $this->extractJson($response);
         return $json !== null ? $this->decodeWithRepair($json) : null;
+    }
+
+    /**
+     * 容错处理：AI 可能返回 markdown 格式的开头（如 "# Site Blueprint"），
+     * 需要跳过这些非 JSON 内容再提取 JSON。
+     */
+    private function stripMarkdownPrefix(string $response): string
+    {
+        $trimmed = \trim($response);
+        // 如果以 # 或 ``` 开头，说明 AI 没有严格返回纯 JSON，尝试找到真正的 JSON 开始位置
+        if ($trimmed !== '' && ($trimmed[0] === '#' || \str_starts_with($trimmed, '```'))) {
+            // 查找第一个 { 的位置
+            $bracePos = \strpos($response, '{');
+            if ($bracePos !== false && $bracePos > 0) {
+                $jsonStart = \substr($response, $bracePos);
+                // 跳过可能的 ```json 前的空白
+                $jsonStart = \ltrim($jsonStart);
+                // 验证截取的字符串看起来像 JSON
+                if (\str_starts_with($jsonStart, '{')) {
+                    return $jsonStart;
+                }
+            }
+        }
+        return $response;
     }
 
     /**
@@ -78,6 +104,16 @@ class AiResponseJsonParser
 
         if (str_starts_with($response, '{') && str_ends_with($response, '}')) {
             return $response;
+        }
+
+        if (str_starts_with($response, '{')) {
+            $repaired = $this->repairTruncatedJson($response);
+            if ($repaired !== null) {
+                $decoded = json_decode($repaired, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    return $repaired;
+                }
+            }
         }
 
         if ($firstBrace !== false) {
@@ -277,10 +313,6 @@ class AiResponseJsonParser
         if (!str_starts_with($trimmed, '{')) {
             return null;
         }
-        if (str_ends_with($trimmed, '}')) {
-            return null;
-        }
-
         $stack = [];
         $inString = false;
         $len = strlen($trimmed);
@@ -307,6 +339,10 @@ class AiResponseJsonParser
             };
         }
 
+        if (!$inString && empty($stack)) {
+            return null;
+        }
+
         if ($inString) {
             $trimmed = rtrim($trimmed);
             if (str_ends_with($trimmed, '\\') && !str_ends_with(rtrim($trimmed, " \t"), '\\\\')) {
@@ -315,15 +351,17 @@ class AiResponseJsonParser
             $trimmed .= '"';
         }
 
+        // 如果字符串仍在 JSON 结构内部（stack 不为空），需要先关闭所有未闭合的括号
+        // 这处理了 markdown 字段等长字符串值被截断的情况
+        while (!empty($stack)) {
+            $trimmed .= array_pop($stack);
+        }
+
         $trimmed = rtrim($trimmed);
         if (str_ends_with($trimmed, ',')) {
             $trimmed = substr($trimmed, 0, -1);
         }
         $trimmed = preg_replace('/,\s*$/', '', $trimmed);
-
-        while (!empty($stack)) {
-            $trimmed .= array_pop($stack);
-        }
 
         return $trimmed;
     }

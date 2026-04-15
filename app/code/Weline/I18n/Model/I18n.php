@@ -10,7 +10,6 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\File\Data\File;
 use Weline\I18n\Config\Reader;
-use Weline\I18n\Observer\ParserWordsRegister;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
 use Weline\I18n\Service\TranslationCollector;
 
@@ -849,7 +848,7 @@ class I18n
 
     public function getCollectedWords(): array
     {
-        return ObjectManager::getInstance(ParserWordsRegister::class)->getWords();
+        return $this->getLocalWords(Env::default_LANGUAGE_CODE);
     }
     
     private function getFullModuleName(string $module_name): string

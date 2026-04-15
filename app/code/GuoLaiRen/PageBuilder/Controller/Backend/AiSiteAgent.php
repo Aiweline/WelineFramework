@@ -222,7 +222,7 @@ class AiSiteAgent extends BaseController
         $this->assign('set_stage_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-set-stage'));
         $this->assign('start_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-plan'));
         $this->assign('confirm_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-confirm-plan'));
-        $this->assign('plan_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-plan-sse'));
+        $this->assign('plan_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/plan-sse'));
         $this->assign('start_task_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-task-plan'));
         $this->assign('confirm_task_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-confirm-task-plan'));
         $this->assign('task_plan_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-task-plan-sse'));
@@ -541,11 +541,95 @@ SCRIPT;
             return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无权访问')]);
         }
 
+        $autoPlan = $this->ensurePhaseOnePlanQueuedFromStateFetch($session, $adminId);
+        if ($autoPlan['session'] instanceof AiSiteAgentSession) {
+            $session = $autoPlan['session'];
+        }
+
         return $this->fetchJson([
             'success' => true,
-            // JSON state fetch is also a read path; keep it side-effect free.
             'data' => $this->buildWorkspaceState($session, $adminId, 80, false),
+            'auto_plan' => [
+                'attempted' => !empty($autoPlan['attempted']),
+                'queued' => !empty($autoPlan['queued']),
+                'blocked' => !empty($autoPlan['blocked']),
+                'reason' => (string)($autoPlan['reason'] ?? ''),
+                'message' => (string)($autoPlan['message'] ?? ''),
+                'execution_token' => (string)($autoPlan['execution_token'] ?? ''),
+                'stream_url' => (string)($autoPlan['stream_url'] ?? ''),
+            ],
         ]);
+    }
+
+    /**
+     * get-state-json 返回工作区状态：
+     * - 若已有阶段一方案或正在生成中，返回对应状态
+     * - 若方案为空且无生成任务，返回 needs_user_confirmation，由用户点击「AI构建方案」按钮后触发生成
+     *
+     * @return array{
+     *     attempted:bool,
+     *     queued:bool,
+     *     blocked:bool,
+     *     reason:string,
+     *     message:string,
+     *     execution_token:string,
+     *     stream_url:string,
+     *     session:AiSiteAgentSession|null
+     * }
+     */
+    private function ensurePhaseOnePlanQueuedFromStateFetch(AiSiteAgentSession $session, int $adminId): array
+    {
+        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $hasPlanDraft = (\is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== [])
+            || \trim((string)($scope['plan_markdown'] ?? '')) !== ''
+            || (\is_array($scope['execution_blueprint_draft'] ?? null) && $scope['execution_blueprint_draft'] !== [])
+            || ((int)($scope['plan_confirmed'] ?? 0) === 1);
+        if ($hasPlanDraft) {
+            return [
+                'attempted' => false,
+                'queued' => false,
+                'blocked' => false,
+                'reason' => 'plan_exists',
+                'message' => '',
+                'execution_token' => '',
+                'stream_url' => '',
+                'session' => $session,
+            ];
+        }
+
+        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $activeOperationStatus = \trim((string)($activeOperation['status'] ?? ''));
+        $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
+        if (\in_array($activeOperationStatus, ['queued', 'running'], true)) {
+            $isPlanGenerating = $activeOperationName === 'plan';
+            return [
+                'attempted' => true,
+                'queued' => false,
+                'blocked' => true,
+                'reason' => $isPlanGenerating ? 'plan_generating' : 'other_operation_running',
+                'message' => $isPlanGenerating
+                    ? (string)__('阶段一方案已在生成中，已阻止重复申请')
+                    : (string)__('当前已有执行中的操作，暂不重复申请阶段一方案'),
+                'execution_token' => $isPlanGenerating ? \trim((string)($activeOperation['execution_token'] ?? '')) : '',
+                'stream_url' => ($isPlanGenerating && \trim((string)($activeOperation['execution_token'] ?? '')) !== '')
+                    ? $this->buildOperationStreamUrl($session->getPublicId(), \trim((string)($activeOperation['execution_token'] ?? '')))
+                    : '',
+                'session' => $session,
+            ];
+        }
+
+        // 不再自动生成方案，改为返回 needs_user_confirmation 标志
+        // 由用户在界面点击「AI构建方案」按钮后，前端再弹窗确认是否生成
+        return [
+            'attempted' => false,
+            'queued' => false,
+            'blocked' => false,
+            'reason' => 'needs_user_confirmation',
+            'message' => (string)__('当前方案为空，请点击「AI构建方案」按钮生成'),
+            'execution_token' => '',
+            'stream_url' => '',
+            'session' => $session,
+        ];
     }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '合并 scope', 'GuoLaiRen_PageBuilder::ai_site_agent')]
@@ -599,6 +683,10 @@ SCRIPT;
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '流式微调/重建阶段一方案书', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postPlanSse(): void { $this->handlePlanSse(); }
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '流式微调/重建阶段一方案书(GET兼容)', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function getPlanSse(): void { $this->handlePlanSse(); }
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '流式微调/重建阶段一方案书(POST路由GET兼容)', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function getPostPlanSse(): void { $this->handlePlanSse(); }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '生成第二阶段任务方案', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartTaskPlan(): string { return $this->handleStartTaskPlan(); }
@@ -608,6 +696,8 @@ SCRIPT;
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '流式微调/重建第二阶段任务方案', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postTaskPlanSse(): void { $this->handleTaskPlanSse(); }
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '流式微调/重建第二阶段任务方案(POST路由GET兼容)', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function getPostTaskPlanSse(): void { $this->handleTaskPlanSse(); }
 
     public function postStartTaskPlanSse(): void { $this->handleTaskPlanSse(); }
 
@@ -1076,6 +1166,15 @@ SCRIPT;
                 ? ((string)__('请按目标 plan_locale 翻译当前方案，并保留原有结构与页面类型。') . ' ' . $instruction)
                 : (string)__('请按目标 plan_locale 翻译当前方案，并保留原有结构与页面类型。');
         }
+        if ($effectivePromptMode === 'rebuild') {
+            $instruction = $instruction !== ''
+                ? ((string)__('本轮属于重建：请基于用户最新要求，完整重新生成阶段一方案。按全新方案输出，不沿用旧方案结构，不输出局部片段，必须覆盖 markdown 全文与完整 plan_json。') . ' ' . $instruction)
+                : (string)__('本轮属于重建：请基于用户最新要求，完整重新生成阶段一方案。按全新方案输出，不沿用旧方案结构，不输出局部片段，必须覆盖 markdown 全文与完整 plan_json。');
+        } else {
+            $instruction = $instruction !== ''
+                ? ((string)__('本轮属于对话式微调：请把用户最新指令当作新的对话上下文，重新生成完整阶段一方案。允许保留有效历史内容，但必须严格落实本轮新增/删除/改写要求。输出必须是完整方案（非局部片段），覆盖 markdown 全文与完整 plan_json。') . ' ' . $instruction)
+                : (string)__('本轮属于对话式微调：请把用户最新指令当作新的对话上下文，重新生成完整阶段一方案。允许保留有效历史内容，但必须严格落实本轮新增/删除/改写要求。输出必须是完整方案（非局部片段），覆盖 markdown 全文与完整 plan_json。');
+        }
 
         $sse->sendEvent('start', [
             'message' => $effectivePromptMode === 'rebuild'
@@ -1139,7 +1238,8 @@ SCRIPT;
                 'plan_ai_generated' => (int)($artifacts['ai_generated'] ?? 0),
                 'plan_ai_fallback' => (int)($artifacts['ai_fallback'] ?? 0),
                 'plan_generated_at' => \date('Y-m-d H:i:s'),
-                'plan_confirmed' => 0,
+                // 微调在已有确认状态下默认保持已确认，避免仅做文案/区块增补后打断后续阶段。
+                'plan_confirmed' => $effectivePromptMode === 'rebuild' ? 0 : (int)($scope['plan_confirmed'] ?? 0),
                 'plan_last_prompt_mode' => $effectivePromptMode,
                 'plan_last_target_scope' => $targetScope,
                 'plan_last_round' => $round,
@@ -1153,6 +1253,22 @@ SCRIPT;
             }
             $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $this->appendWorkspaceEvent(
+                $session->getId(),
+                $adminId,
+                $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
+                'plan_saved',
+                (string)__('阶段一方案已保存'),
+                [
+                    'operation' => 'plan',
+                    'details' => [
+                        'prompt_mode' => $effectivePromptMode,
+                        'target_scope' => $targetScope,
+                        'round' => $round,
+                        'plan_locale' => $requestedPlanLocale,
+                    ],
+                ]
+            );
 
             $this->appendWorkspaceEvent(
                 $session->getId(),
@@ -1586,7 +1702,7 @@ SCRIPT;
         }
         $startStage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
         if ($startStage !== AiSiteAgentSession::STAGE_VISUAL_EDIT) {
-            $startStage = AiSiteAgentSession::STAGE_VIRTUAL_THEME;
+            $startStage = AiSiteAgentSession::STAGE_PLAN;
         }
 
         $startResult = $this->startOperation(
@@ -2629,6 +2745,9 @@ SCRIPT;
             return;
         }
 
+        // active_operation 已明确为 queued plan，说明是用户动作触发后的待执行任务。
+        // 这里应直接启动执行，避免“已入队后再次被误判为需点击按钮”的回退提示。
+
         $this->updateActiveOperation(
             $fresh,
             $adminId,
@@ -2652,6 +2771,23 @@ SCRIPT;
             'event_id' => 0,
             'created_at' => \date('Y-m-d H:i:s'),
         ]);
+        $this->appendWorkspaceEvent(
+            $fresh->getId(),
+            $adminId,
+            'plan',
+            'operation_progress',
+            (string)__('AI 正在生成阶段一方案，请稍候…'),
+            ['operation' => 'plan', 'progress_percent' => 45]
+        );
+        $sse->sendEvent('log', [
+            'event_type' => 'operation_progress',
+            'stage_code' => 'plan',
+            'message' => (string)__('AI 正在生成阶段一方案，请稍候…'),
+            'payload' => ['operation' => 'plan', 'progress_percent' => 45],
+            'level' => 'info',
+            'event_id' => 0,
+            'created_at' => \date('Y-m-d H:i:s'),
+        ]);
 
         try {
             $scope = $this->scopeCompatibilityService->normalizeScope(($this->sessionService->loadById($fresh->getId(), $adminId) ?? $fresh)->getScopeArray());
@@ -2662,44 +2798,99 @@ SCRIPT;
             $lastGeneratedPageTypes = \is_array($scope['plan_generated_page_types'] ?? null) ? $scope['plan_generated_page_types'] : [];
             $planLocaleChanged = $lastGeneratedPlanLocale !== '' && $scope['plan_locale'] !== '' && $scope['plan_locale'] !== $lastGeneratedPlanLocale;
             $pageTypesChanged = !$this->isSamePageTypeSelection($currentPageTypes, $lastGeneratedPageTypes);
-            $onChunk = function (string $chunk) use ($fresh, $adminId, $sse): void {
-                $trimmed = \trim($chunk);
-                if ($trimmed === '') {
+            $aiChunkCount = 0;
+            $onChunk = function (string $chunk) use ($sse, $fresh, $adminId, &$aiChunkCount): void {
+                // 第一阶段改为块级渲染：不再透传 AI 原始 JSON 字符流，避免前端出现半截 JSON。
+                if ($chunk === '') {
                     return;
                 }
-                $this->appendWorkspaceEvent(
-                    $fresh->getId(),
-                    $adminId,
-                    'plan',
-                    'plan_chunk',
-                    $trimmed,
-                    ['operation' => 'plan']
-                );
-                $sse->sendEvent('log', [
-                    'event_type' => 'plan_chunk',
-                    'stage_code' => 'plan',
-                    'message' => $trimmed,
-                    'payload' => ['operation' => 'plan'],
-                    'level' => 'info',
-                    'event_id' => 0,
-                    'created_at' => \date('Y-m-d H:i:s'),
-                ]);
+                $aiChunkCount++;
+                if ($aiChunkCount === 1 || $aiChunkCount % 12 === 0) {
+                    $this->appendWorkspaceEvent(
+                        $fresh->getId(),
+                        $adminId,
+                        'plan',
+                        'operation_progress',
+                        (string)__('AI 正在生成阶段一方案内容…'),
+                        [
+                            'operation' => 'plan',
+                            'progress_percent' => 55,
+                            'ai_chunk_count' => $aiChunkCount,
+                        ]
+                    );
+                    $sse->sendEvent('log', [
+                        'event_type' => 'operation_progress',
+                        'stage_code' => 'plan',
+                        'message' => (string)__('AI 正在生成阶段一方案内容…'),
+                        'payload' => [
+                            'operation' => 'plan',
+                            'progress_percent' => 55,
+                            'ai_chunk_count' => $aiChunkCount,
+                        ],
+                        'level' => 'info',
+                        'event_id' => 0,
+                        'created_at' => \date('Y-m-d H:i:s'),
+                    ]);
+                }
                 $sse->maybeHeartbeat();
             };
-            if ($planLocaleChanged && !$pageTypesChanged && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
-                $translateInstruction = (string)__('请保留当前方案结构与页面类型，仅将方案内容完整翻译为目标 plan_locale，不新增或删除页面。');
-                $artifacts = $this->executionBlueprintService->refineDraftPlan($scope, \is_array($websiteProfile) ? $websiteProfile : [], [
-                    'instruction' => $translateInstruction,
-                    'target_scope' => 'locale_translation',
-                    'round' => 1,
-                ], $onChunk);
-            } else {
-                $artifacts = $this->executionBlueprintService->buildPlanArtifactsByAiStream($scope, \is_array($websiteProfile) ? $websiteProfile : [], [], $onChunk);
+            $maxAttempts = 3;
+            $attempt = 0;
+            $artifacts = [];
+            $lastAttemptThrowable = null;
+            while ($attempt < $maxAttempts) {
+                $attempt++;
+                try {
+                    if ($attempt > 1) {
+                        $retryMessage = (string)__('AI 输出格式异常，正在自动重试（%{1}/%{2}）…', [$attempt, $maxAttempts]);
+                        $this->appendWorkspaceEvent(
+                            $fresh->getId(),
+                            $adminId,
+                            'plan',
+                            'operation_progress',
+                            $retryMessage,
+                            ['operation' => 'plan', 'details' => ['attempt' => $attempt, 'max_attempts' => $maxAttempts]]
+                        );
+                        $sse->sendEvent('log', [
+                            'event_type' => 'operation_progress',
+                            'stage_code' => 'plan',
+                            'message' => $retryMessage,
+                            'payload' => ['operation' => 'plan', 'attempt' => $attempt, 'max_attempts' => $maxAttempts],
+                            'level' => 'info',
+                            'event_id' => 0,
+                            'created_at' => \date('Y-m-d H:i:s'),
+                        ]);
+                        SchedulerSystem::yieldDelay(500);
+                    }
+
+                    if ($planLocaleChanged && !$pageTypesChanged && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
+                        $translateInstruction = (string)__('请保留当前方案结构与页面类型，仅将方案内容完整翻译为目标 plan_locale，不新增或删除页面。');
+                        $artifacts = $this->executionBlueprintService->refineDraftPlan($scope, \is_array($websiteProfile) ? $websiteProfile : [], [
+                            'instruction' => $translateInstruction,
+                            'target_scope' => 'locale_translation',
+                            'round' => 1,
+                        ], $onChunk);
+                    } else {
+                        $artifacts = $this->executionBlueprintService->buildPlanArtifactsByAiStream($scope, \is_array($websiteProfile) ? $websiteProfile : [], [], $onChunk);
+                    }
+
+                    $lastAttemptThrowable = null;
+                    break;
+                } catch (\Throwable $attemptThrowable) {
+                    $lastAttemptThrowable = $attemptThrowable;
+                    if (!$this->isRetryablePlanGenerationException($attemptThrowable) || $attempt >= $maxAttempts) {
+                        throw $attemptThrowable;
+                    }
+                }
+            }
+            if ($artifacts === [] && $lastAttemptThrowable instanceof \Throwable) {
+                throw $lastAttemptThrowable;
             }
             if ((int)($artifacts['ai_generated'] ?? 0) !== 1) {
                 throw new \RuntimeException((string)__('阶段一方案必须由 AI 生成，本次未成功调用 AI，请检查模型配置后重试。'));
             }
 
+            $this->emitPlanMarkdownBlocks($sse, $fresh, $adminId, (string)($artifacts['markdown'] ?? ''));
             $derivedPatch = \is_array($artifacts['derived_scope_patch'] ?? null) ? $artifacts['derived_scope_patch'] : [];
             $executionBlueprint = \is_array($artifacts['execution_blueprint'] ?? null) ? $artifacts['execution_blueprint'] : [];
             $planJson = \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [];
@@ -2773,6 +2964,53 @@ SCRIPT;
                 'created_at' => \date('Y-m-d H:i:s'),
             ]);
         }
+    }
+
+    private function emitPlanMarkdownBlocks(SseWriter $sse, AiSiteAgentSession $session, int $adminId, string $markdown): void
+    {
+        $text = \trim($markdown);
+        if ($text === '') {
+            return;
+        }
+        $blocks = \preg_split('/\n\s*\n(?=##\s|###\s|####\s|#\s)/u', $text) ?: [];
+        if ($blocks === []) {
+            $blocks = [$text];
+        }
+        foreach ($blocks as $block) {
+            $chunk = \trim((string)$block);
+            if ($chunk === '') {
+                continue;
+            }
+            $this->appendWorkspaceEvent(
+                $session->getId(),
+                $adminId,
+                'plan',
+                'plan_chunk',
+                $chunk,
+                ['operation' => 'plan', 'format' => 'markdown_block']
+            );
+            $sse->sendEvent('log', [
+                'event_type' => 'plan_chunk',
+                'stage_code' => 'plan',
+                'message' => $chunk,
+                'payload' => ['operation' => 'plan', 'format' => 'markdown_block'],
+                'level' => 'info',
+                'event_id' => 0,
+                'created_at' => \date('Y-m-d H:i:s'),
+            ]);
+            $sse->maybeHeartbeat();
+        }
+    }
+
+    private function isRetryablePlanGenerationException(\Throwable $throwable): bool
+    {
+        $message = \mb_strtolower(\trim($throwable->getMessage()));
+        if ($message === '') {
+            return false;
+        }
+
+        return \str_contains($message, 'invalid ai json')
+            || (\str_contains($message, 'ai plan generation failed') && \str_contains($message, 'json'));
     }
 
     /**
@@ -3648,6 +3886,7 @@ SCRIPT;
         ) || (
             \is_array($virtualThemePlan['confirmed'] ?? null) && $virtualThemePlan['confirmed'] !== []
         );
+        $taskPlanConfirmedAt = (string)($virtualThemePlan['confirmed_at'] ?? '');
 
         $eventsStartedAt = \microtime(true);
         $events = $this->sessionService->listRecentEvents($session->getId(), $adminId, $eventLimit);
@@ -3710,8 +3949,13 @@ SCRIPT;
             ],
             'plan_confirmed' => (int)($normalized['plan_confirmed'] ?? 0),
             'has_execution_blueprint' => \is_array($normalized['execution_blueprint'] ?? null) && $normalized['execution_blueprint'] !== [],
-            'plan_sse_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-plan-sse'),
+            'plan_confirmed_at' => (string)($normalized['plan_confirmed_at'] ?? ''),
+            'plan_sse_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/plan-sse'),
+            // T36: 历史确认方案数据
+            'confirmed_plan_markdown' => (string)($normalized['plan_markdown'] ?? ''),
+            'confirmed_plan_signature' => (string)($normalized['execution_blueprint_confirmed_signature'] ?? ''),
             'task_plan_confirmed' => (int)($normalized['task_plan_confirmed'] ?? 0),
+            'task_plan_confirmed_at' => $taskPlanConfirmedAt,
             'has_virtual_theme_plan' => $hasVirtualThemePlan,
             'has_pending_build_tasks' => (int)($taskSummary['pending'] ?? 0) > 0,
             'task_plan_sse_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-task-plan-sse'),
@@ -3964,7 +4208,7 @@ SCRIPT;
         $eventType = \trim((string)($event['event_type'] ?? ''));
         if ($streamStage === 'plan') {
             return $operation === 'plan'
-                || \in_array($eventType, ['plan_chunk', 'plan_generated', 'plan_refined', 'plan_rebuilt'], true);
+                || \in_array($eventType, ['plan_chunk', 'plan_generated', 'plan_saved', 'plan_refined', 'plan_rebuilt'], true);
         }
         return false;
     }
@@ -6996,7 +7240,7 @@ SCRIPT;
     private function getStageOptions(): array
     {
         return [
-            ['value' => AiSiteAgentSession::STAGE_VIRTUAL_THEME, 'label' => (string)__('准备信息')],
+            ['value' => AiSiteAgentSession::STAGE_PLAN, 'label' => (string)__('计划阶段')],
             ['value' => AiSiteAgentSession::STAGE_VISUAL_EDIT, 'label' => (string)__('虚拟编辑')],
             ['value' => AiSiteAgentSession::STAGE_PUBLISH, 'label' => (string)__('确认发布')],
         ];
