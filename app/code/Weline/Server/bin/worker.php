@@ -35,6 +35,7 @@ $instanceName = $argv[4] ?? 'default';
 $processName = '';
 $isFrontend = false;
 $useReusePort = false;  // 是否使用 SO_REUSEPORT（Linux 直连模式）
+$wlsLoopDriver = 'auto';
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
 
@@ -55,6 +56,8 @@ foreach ($argv as $arg) {
         $orchestratorEpoch = (int)\substr($arg, 8);
     } elseif (\str_starts_with($arg, '--launch-id=')) {
         $orchestratorLaunchId = (string)\substr($arg, 12);
+    } elseif (\str_starts_with($arg, '--wls-loop-driver=')) {
+        $wlsLoopDriver = (string)\substr($arg, 18);
     }
 }
 
@@ -151,6 +154,9 @@ $envConfig = \array_replace_recursive($envConfig, $envOverrides);
 \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig($envOverrides);
 $sessionRuntime = $sharedStateRuntime->getSession();
 $memoryRuntime = $sharedStateRuntime->getMemory();
+$envLoopDriver = (string) (($envConfig['wls']['loop']['driver'] ?? 'auto'));
+$wlsLoopDriver = $wlsLoopDriver !== '' ? $wlsLoopDriver : $envLoopDriver;
+$wlsLoopDriver = \Weline\Server\EventLoop\EventLoopFactory::normalizeDriver($wlsLoopDriver);
 $wlsEnv = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
 
 // Origin Token 回源校验配置（可选安全增强）
@@ -329,10 +335,16 @@ if (!isset($sessionHost, $sessionPort, $memoryHost, $memoryPort)) {
 
 // ========== Fiber 调度器初始化 ==========
 $fiberScheduler = new \Weline\Server\Scheduler\FiberScheduler();
+$eventLoopMeta = \Weline\Server\EventLoop\EventLoopFactory::create($wlsLoopDriver);
+$eventLoop = $eventLoopMeta['loop'];
+$coroutineRuntime = new \Weline\Server\Runtime\CoroutineRuntime($eventLoop, $fiberScheduler);
 \Weline\Server\Observer\SchedulerWaitObserver::setScheduler($fiberScheduler);
 \Weline\Framework\Runtime\SchedulerSystem::enableScheduler();
 $longLivedProtocolResolver = new \Weline\Server\Service\Protocol\LongLived\ProtocolResolver();
 WlsLogger::info_("Fiber 调度器已初始化");
+WlsLogger::info_(
+    "EventLoop 已初始化 requested={$eventLoopMeta['requested']} resolved={$eventLoopMeta['resolved']} backend={$coroutineRuntime->getLoopBackend()}"
+);
 $asyncBizAdapters = new \Weline\Server\Runtime\Async\AsyncBizAdapters();
 
 // 活跃 Fiber 列表：connId => Fiber
@@ -1415,21 +1427,8 @@ while (true) {
     }
     $except = [];
 
-    // Fiber 调度器感知：有待到期定时器时缩短 select timeout
-    $selectTimeoutSec = 0;
-    $selectTimeoutUsec = 100000; // 默认 100ms
-    $nextDelay = $fiberScheduler->getNextTimerDelay();
-    if ($nextDelay !== null) {
-        $delayUsec = (int) ($nextDelay * 1_000_000);
-        if ($delayUsec < $selectTimeoutUsec) {
-            $selectTimeoutUsec = \max(0, $delayUsec);
-        }
-    }
-
-    $activeFiberCount = \count($activeFibers);
-    $longLivedCount = \count($longLivedConnections);
-
-    $changed = @\stream_select($read, $write, $except, $selectTimeoutSec, $selectTimeoutUsec);
+    // EventLoop + CoroutineRuntime：统一等待语义（select/event 后端可切换）
+    $changed = $coroutineRuntime->wait($read, $write, $except, 100000);
     // #endregion
 
     // 调度器 tick：处理到期定时器，resume 前恢复该 Fiber 的请求级上下文
