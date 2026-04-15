@@ -6,6 +6,7 @@ namespace Weline\Server\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\Error\ErrorContext;
 use Weline\Server\Service\Control\IpcControlGateway;
 
@@ -15,6 +16,8 @@ use Weline\Server\Service\Control\IpcControlGateway;
  */
 class MaintenanceCheckObserver implements ObserverInterface
 {
+    private const DEFAULT_STATUS_TIMEOUT_SEC = 2.0;
+    private const REQUEST_FIBER_STATUS_TIMEOUT_SEC = 0.2;
     public function execute(Event &$event): void
     {
         if ($this->isCurrentProcessMaintenanceWorker()) {
@@ -26,13 +29,24 @@ class MaintenanceCheckObserver implements ObserverInterface
         try {
             /** @var IpcControlGateway $gateway */
             $gateway = ObjectManager::getInstance(IpcControlGateway::class);
-            $status = $gateway->getStatus($instance, 2.0);
+            $status = $gateway->getStatus($instance, $this->resolveStatusTimeout());
             if (!empty($status['success']) && isset($status['data']['maintenance_mode'])) {
                 $event->setData('result', (bool) $status['data']['maintenance_mode']);
             }
         } catch (\Throwable) {
             // 保持降级到文件配置检查
         }
+    }
+
+    private function resolveStatusTimeout(): float
+    {
+        // Request fibers should not spend seconds waiting on control-plane status.
+        // If IPC is slow or temporarily unavailable, Env will fall back to the local config value.
+        if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent() !== null) {
+            return self::REQUEST_FIBER_STATUS_TIMEOUT_SEC;
+        }
+
+        return self::DEFAULT_STATUS_TIMEOUT_SEC;
     }
 
     private function isCurrentProcessMaintenanceWorker(): bool

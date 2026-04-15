@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Observer;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\Error\ErrorContext;
 use Weline\Server\Observer\MaintenanceCheckObserver;
 use Weline\Server\Service\Control\IpcControlGateway;
@@ -15,6 +16,7 @@ final class MaintenanceCheckObserverTest extends TestCase
     protected function tearDown(): void
     {
         ErrorContext::reset();
+        SchedulerSystem::disableScheduler();
         ObjectManager::removeInstance(IpcControlGateway::class);
         parent::tearDown();
     }
@@ -48,10 +50,12 @@ final class MaintenanceCheckObserverTest extends TestCase
     {
         $gateway = new class extends IpcControlGateway {
             public int $statusCalls = 0;
+            public float $lastTimeout = 0.0;
 
             public function getStatus(string $instanceName = 'default', float $timeout = 4.0): array
             {
                 $this->statusCalls++;
+                $this->lastTimeout = $timeout;
 
                 return ['success' => true, 'data' => ['maintenance_mode' => true]];
             }
@@ -67,6 +71,39 @@ final class MaintenanceCheckObserverTest extends TestCase
 
         self::assertTrue((bool) $event->getData('result'));
         self::assertSame(1, $gateway->statusCalls);
+        self::assertSame(2.0, $gateway->lastTimeout);
+    }
+
+    public function testRequestFiberUsesFailFastStatusTimeout(): void
+    {
+        $gateway = new class extends IpcControlGateway {
+            public int $statusCalls = 0;
+            public float $lastTimeout = 0.0;
+
+            public function getStatus(string $instanceName = 'default', float $timeout = 4.0): array
+            {
+                $this->statusCalls++;
+                $this->lastTimeout = $timeout;
+
+                return ['success' => true, 'data' => ['maintenance_mode' => false]];
+            }
+        };
+
+        ObjectManager::setInstance(IpcControlGateway::class, $gateway);
+        ErrorContext::setProcessTag('WorkerSSL#1:16899@default');
+        ErrorContext::setContext(['is_maintenance' => false]);
+        SchedulerSystem::enableScheduler();
+
+        $observer = new MaintenanceCheckObserver();
+        $event = new Event(['data' => ['result' => null]]);
+        $fiber = new \Fiber(static function () use ($observer, $event): void {
+            $observer->execute($event);
+        });
+        $fiber->start();
+
+        self::assertFalse((bool) $event->getData('result'));
+        self::assertSame(1, $gateway->statusCalls);
+        self::assertSame(0.2, $gateway->lastTimeout);
     }
 
     public function testMaintenanceWorkerRuntimeFlagIsWiredIntoWorkerEntriesAndInterceptor(): void
