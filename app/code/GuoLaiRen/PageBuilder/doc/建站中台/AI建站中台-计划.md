@@ -488,6 +488,29 @@
 
 > 目标：提示词由系统设计并固化模板，严格承载老板定义的业务要求，不依赖临场自由发挥。
 
+#### 第一阶段提示词优化目标
+
+- MUST 第一阶段提示词在输入层显式携带：
+  - `plan_locale`（方案书语言）
+  - `default_locale`（页面内容主语言）
+  - 当前模式（`refine` / `rebuild`）
+  - 用户最新补充要求
+  - 当前草案 `draft.plan_json` 与 `draft.execution_blueprint`
+  - 页面覆盖清单（必须与已选页面严格一致）
+- MUST 第一阶段提示词在输出层强制返回：
+  - 完整 Markdown 方案书
+  - `draft.plan_json`
+  - `draft.execution_blueprint`
+  - `page_coverage_report`
+  - `change_scope_report` 或 `rebuild_summary`
+- MUST 第一阶段 Markdown 明确包含“决策结论 + 理由备注”，对风格、色盘、Header/Footer、页面块、SEO、响应式分别给出理由。
+- MUST 第一阶段微调模式只改动用户指定位置及必要联动项，禁止补丁式追加说明，必须返回替换后的完整方案。
+- MUST 第一阶段重建模式重新生成整份方案，禁止默认继承旧草案局部内容。
+- MUST 第一阶段提示词明确禁止：
+  - 输出未选择页面
+  - 只补充说明不回写原位置
+  - 混入第二阶段执行日志或任务状态
+
 #### A. 通用系统提示词骨架（两模式共享）
 
 - 角色定义（System）MUST 包含：
@@ -500,24 +523,94 @@
   - Header/Footer 显式任务约束
   - “先完整规划后执行”约束
 
-#### B. 重建模式提示词（`prompt_mode=rebuild`）
+#### B. 第一阶段模式化提示词设计
 
-- 重建系统指令 MUST 强调：
+- MUST 使用两套入口：
+  - `buildPlanRefinePrompt(...)`
+  - `buildPlanRebuildPrompt(...)`
+- MUST 通过 `resolvePlanPromptByMode(...)` 按模式路由，禁止单入口拼接弱区分提示词。
+- MUST 第一阶段 `rebuild` 模式强调：
   - 基于当前用户需求重新生成完整方案，不继承旧草案局部结论。
   - 方案必须使用 Markdown，并包含固定章节（风格、色系、Header/Footer、页面类型块级设计、执行顺序）。
   - 每个页面类型下每个块必须写“怎么设计 + 为什么这样设计”。
   - 同步生成完整 `draft.execution_blueprint.tasks[]`（含 shared 和页面块任务）。
-- 重建输出格式 MUST 为两段：
-  - `MARKDOWN_PLAN`：完整 Markdown 文本
-  - `STRUCTURED_PLAN`：结构化 JSON（含 execution_blueprint）
-
-#### C. 微调模式提示词（`prompt_mode=refine`）
-
-- 微调系统指令 MUST 强调：
+- MUST 第一阶段 `refine` 模式强调：
   - 仅修改用户指定位置（`target_scope`）及必要联动项。
   - 禁止全局重写，不得改动无关页面/区块结论。
   - 仍需保证 Markdown 章节结构完整，不得破坏文档可读性。
   - 同步输出受影响任务的蓝图差异。
+- MUST 第一阶段两种模式都要输出页面覆盖校验：
+  - `page_coverage_report`
+  - `change_scope_report` 或 `rebuild_summary`
+
+#### C. 第二阶段提示词设计：以第一阶段确认方案为输入源
+
+- MUST 第二阶段提示词必须直接把第一阶段 `confirmed.*` 放入上下文内。
+- MUST 第二阶段不再依赖口述需求直接拆任务，而是拆解第一阶段确认文档。
+- MUST 先把第一阶段确认 Markdown / JSON 拆为结构化任务树，再由任务树组装 `execution_blueprint.tasks[]`。
+- MUST 任务树至少分三层：
+  - 站点/全局层（风格、SEO、语言、响应式、媒体规范）
+  - 页面层（home/about/contact/...）
+  - 区块/组件层（header/footer/hero/cta/content blocks）
+- MUST 任务树输出每个节点的：
+  - `node_key`
+  - `parent_key`
+  - `task_key`
+  - `node_type`
+  - `dependencies`
+  - `status`
+  - `field_plan`
+  - `result_ref`
+  - `completion_rule`
+- MUST 第二阶段任务蓝图由任务树派生，且任务状态直接驱动执行与恢复。
+- MUST 支持“先生成任务树，再生成执行清单”的两段式第二阶段提示词流程。
+- MUST 第二阶段输出格式建议分两步：
+  1) `TASK_TREE_PLAN`：结构化任务树
+  2) `EXECUTION_BLUEPRINT`：可执行任务清单 + 顺序 + 依赖
+
+#### D. 第二阶段任务树与任务清单的设计约束
+
+- MUST 任务树节点表达的是“要做什么、为什么、完成标准是什么”。
+- MUST 任务清单表达的是“按什么顺序执行、依赖谁、结果落哪、状态怎么变”。
+- MUST 每个任务单元都能独立 SSE 执行，并可被并发执行时隔离上下文。
+- MUST 页面级任务完成后可立即物化该页面，并触发页面级可视化编辑入口。
+- MUST 组件级任务可以继续拆成并发子任务，用于虚拟主题/单页/组件的并行生成。
+- MUST 任务状态机统一约束为：
+  - `pending -> running -> done`
+  - `running -> failed`
+  - `running -> paused`
+  - `failed/paused -> running`
+- MUST 任务树与执行清单都显式记录 `prompt_mode`、`round`、`source_signature`、`task_group`。
+
+#### E. 会话隔离与并发 SSE 约束
+
+- MUST AI 模块支持会话级隔离：每个 SSE 连接必须有独立会话上下文，互不串流。
+- MUST 同一份提示词可以并发投喂给多个任务，但每个任务必须拥有独立的上下文、进度、chunk 缓冲与结果落库位置。
+- MUST 并发任务之间只共享第一阶段确认方案，不共享运行态缓存。
+- MUST 智能体可同时开启多个 SSE 链接到虚拟主题生成的不同页面/任务。
+- MUST 前端同时展示总进度与各任务独立进度，允许展开查看单任务实现状态。
+- MUST 任务级并发时，单任务完成可立即触发页面物化，不必等待全站完成。
+- MUST 某页面级任务完成后，允许立即进入该页面的可视化编辑 SSE 流（组件级并发也是独立会话）。
+
+#### F. 并发提示词输入上下文
+
+- MUST 每个并发任务提示词都携带：
+  - `session_id`
+  - `task_key`
+  - `parent_task_key`
+  - `prompt_mode`
+  - `round`
+  - `source_signature`
+  - `target_scope`
+  - `page_type`
+  - `component_kind`
+- MUST 第二阶段提示词必须引用第一阶段确认方案中的：
+  - 页面覆盖清单
+  - 风格/色盘结论
+  - Header/Footer 规则
+  - SEO/响应式/语言约束
+  - 任务边界与完成标准
+- MUST 对每个任务明确定义“完成后输出什么、写回哪里、如何判定 done”。
 - 微调输出格式 MUST 为三段：
   - `MARKDOWN_PLAN_PATCH`：更新后的完整 Markdown（但仅指定位置发生变化）
   - `BLUEPRINT_PATCH`：受影响任务列表与字段变更
@@ -1445,3 +1538,219 @@
 - MUST 在本地供应商模式下采用简化校验策略（不要求与正式供应商同等级外部校验链路）。
 - MUST 在域名未通过可用性检测时阻断“用于正式建站”流程，并提示用户更换域名或供应商。
 - MUST 在域名通过后将选中域名与供应商信息写入会话 scope，供后续两阶段与最终落库使用。
+
+## 13. 提示词与任务树编排优化（本轮新增）
+
+> 本节用于把“第一阶段方案生成 -> 第二阶段任务树拆解 -> 并发执行与物化”的链路固化为可编码实现。若与旧条款冲突，以本节为准。
+
+### 13.1 第一阶段提示词优化（Plan Generation v2）
+
+- MUST 第一阶段提示词采用“三段式构造”：`System Contract` + `Input Context` + `Output Contract`。
+- MUST 第一阶段输出采用“Markdown + JSON 双产物同源”：
+  - Markdown 给用户阅读；
+  - JSON 给第二阶段拆解；
+  - 两者语义必须一致。
+- MUST 将“理由”设为每个决策对象的强制字段，不允许仅输出结论。
+
+#### 13.1.1 第一阶段输入上下文（最小完整集）
+
+- `session_id`
+- `site_profile`（行业/受众/品牌语气/地域）
+- `page_types`（用户已选页面类型）
+- `workspace_track`
+- `default_locale`
+- `plan_locale`
+- `prompt_mode`（`refine|rebuild`）
+- `target_scope`（refine 必填，rebuild 为空）
+- `previous_plan_structured`（可空）
+- `previous_execution_blueprint`（可空）
+- `user_requirement_latest`
+- `hard_constraints`
+
+#### 13.1.2 第一阶段结构化输出契约（MUST）
+
+- MUST 返回对象：`PLAN_STAGE_OUTPUT`
+- MUST 包含字段：
+  - `markdown`
+  - `structured_plan`
+  - `execution_blueprint_draft`
+  - `coverage_report`
+  - `decision_reason_index`
+  - `change_scope_report`（refine）
+  - `rebuild_summary`（rebuild）
+
+```json
+{
+  "stage": "plan",
+  "prompt_mode": "refine|rebuild",
+  "source_signature": "sha1(...)",
+  "markdown": "...",
+  "structured_plan": {
+    "style_strategy": {"decision": "", "reason": ""},
+    "palette_strategy": {"decision": "", "reason": ""},
+    "shared_strategy": {
+      "header": {"decision": "", "reason": ""},
+      "footer": {"decision": "", "reason": ""}
+    },
+    "pages": []
+  },
+  "execution_blueprint_draft": {"tasks": []},
+  "coverage_report": {
+    "selected_pages": [],
+    "planned_pages": [],
+    "is_exact_match": true,
+    "missing_pages": [],
+    "overflow_pages": []
+  },
+  "decision_reason_index": [],
+  "change_scope_report": [],
+  "rebuild_summary": {}
+}
+```
+
+#### 13.1.3 第一阶段提示词核心优化点（MUST）
+
+- MUST 显式要求“页面集合严格等于 `page_types`”。
+- MUST 显式要求“每个页面块输出 `what + why + completion_hint`”。
+- MUST 显式要求“shared header/footer 作为独立任务域输出，不得隐式处理”。
+- MUST 对 `refine` 增加“最大改动边界”约束：非 `target_scope` 内容默认只读。
+- MUST 对 `rebuild` 增加“禁止继承旧稿局部结论”约束：仅允许继承输入事实，不继承旧结论。
+
+### 13.2 第二阶段提示词：基于第一阶段确认方案拆任务树
+
+- MUST 第二阶段提示词输入源只读引用第一阶段 `confirmed.*`，不直接吃用户口述作为主源。
+- MUST 采用两步生成：
+  1) 先生成 `TASK_TREE_PLAN`
+  2) 再生成 `EXECUTION_BLUEPRINT`
+- MUST 任务树与任务清单分别承担“语义层”和“执行层”，禁止混写。
+
+#### 13.2.1 TASK_TREE_PLAN 结构（语义层）
+
+- 节点类型：`site|shared|page|block|component|content_resource`
+- 每个节点 MUST 包含：
+  - `node_key`
+  - `parent_key`
+  - `node_type`
+  - `goal`
+  - `reason`
+  - `inputs`
+  - `outputs`
+  - `completion_rule`
+  - `resource_plan`（内容规划/素材/SEO/字段来源）
+  - `parallel_group`
+  - `depends_on`
+
+```json
+{
+  "task_tree_plan": {
+    "source_signature": "from_plan_confirmed_signature",
+    "root": "site:root",
+    "nodes": []
+  }
+}
+```
+
+#### 13.2.2 EXECUTION_BLUEPRINT 结构（执行层）
+
+- MUST 由任务树自动派生，不允许手写绕过。
+- MUST 每个执行任务包含：
+  - `task_key`
+  - `from_node_key`
+  - `task_group`（shared/home/other/component/content）
+  - `order_index`
+  - `dependencies`
+  - `status`
+  - `prompt_template_key`
+  - `prompt_variables`
+  - `result_ref`
+  - `materialize_policy`（`none|page|component`）
+  - `progress_weight`
+
+#### 13.2.3 任务树组装为任务清单规则（MUST）
+
+- 规则 R1：`shared` 永远先于 `page`。
+- 规则 R2：`home` 任务组优先于 `other pages`。
+- 规则 R3：同页面内按区块拓扑顺序，区块内组件可并发。
+- 规则 R4：`content_resource` 节点可并发，但必须在消费方任务前完成。
+- 规则 R5：任何任务的 `done` 判定必须依赖 `completion_rule`，不能仅凭 SSE 完成事件。
+
+### 13.3 并发执行设计（会话隔离 + 多 SSE）
+
+- MUST 每个任务运行时拥有独立 `task_session_id`，并与 `session_id` 形成父子关系。
+- MUST 同一提示词模板可并发复用，但每个任务实例必须携带独立变量与独立输出落点。
+- MUST 隔离运行态缓存：
+  - 禁止共享 chunk buffer
+  - 禁止共享 round 计数
+  - 禁止共享任务级 memory state
+- MUST 共享只读上下文仅限：
+  - 第一阶段 `confirmed.*`
+  - 只读素材索引
+  - 只读风格 token
+
+#### 13.3.1 并发 SSE 通道规范
+
+- 主通道：`operation-sse`（聚合态，展示总进度和任务摘要）
+- 子通道：`task-sse:{task_key}`（任务细粒度流）
+- 页面通道：`page-sse:{page_type}`（页面物化与编辑态事件）
+- 组件通道：`component-sse:{page_type}:{component_id}`（组件并发微调/重建）
+
+- MUST 前端支持：
+  - 总览视图（总进度 + 任务列表）
+  - 展开视图（单任务 chunk/progress/log）
+  - 多任务并发状态同时可见
+
+#### 13.3.2 并发数与调度策略（建议默认）
+
+- 默认并发 `max_parallel_tasks=3`（可配置）。
+- 调度策略：
+  - `shared` 阶段并发=1（避免公共布局冲突）
+  - `page` 阶段并发<=2
+  - `component/content` 阶段并发<=3
+- MUST 加入“冲突资源锁”（如同一 `page_type` 同时写入）以避免覆盖。
+
+### 13.4 状态驱动的任务接续（接你/续跑语义）
+
+- MUST 续跑仅基于状态机，不基于临时内存。
+- MUST 状态定义：`pending|queued|running|done|failed|paused|cancelled|blocked`
+- MUST 接续规则：
+  - `done`：永不重跑（除非用户显式重建）
+  - `failed|paused|blocked`：可重试进入 `running`
+  - `running`：重连观察，不重复启动
+  - `queued`：等待调度器拉起
+
+- MUST 在 `build_checkpoint` 增加：
+  - `active_parallel_tasks[]`
+  - `queue_snapshot[]`
+  - `last_materialized_pages[]`
+
+### 13.5 页面物化与组件级并发编辑
+
+- MUST 某页面任务组达到页面完成条件后立即触发 `materialize_policy=page`：
+  - 立即生成该页面可视化产物；
+  - 立即开放该页面编辑入口；
+  - 不等待全站任务完成。
+- MUST 页面物化后允许组件级并发 SSE 微调/重建。
+- MUST 组件级任务同样走任务状态机并写回统一任务体系（可挂 `parent_task_key=page:*`）。
+- MUST 在发布门禁处校验：
+  - 全站发布：所有 `required_for_publish=true` 任务为 `done`；
+  - 页面即时编辑：仅要求该页面任务组达到 `page_materialize_ready=true`。
+
+### 13.6 建议新增后端函数落点（实现约束）
+
+- `buildPlanPromptV2CommonContext(...)`
+- `buildPlanPromptV2Refine(...)`
+- `buildPlanPromptV2Rebuild(...)`
+- `buildTaskTreePromptFromConfirmedPlan(...)`
+- `buildExecutionBlueprintFromTaskTree(...)`
+- `deriveParallelExecutionBatches(...)`
+- `openTaskSseChannel(...)`
+- `materializePageWhenReady(...)`
+- `resumeTasksByStateMachine(...)`
+
+### 13.7 验收补充（本轮新增）
+
+- 验收 H1：第二阶段必须可展示 `TASK_TREE_PLAN` 结构化结果。
+- 验收 H2：任务树变更后，执行清单自动重算且保留签名链路。
+- 验收 H3：并发执行时任一任务失败不影响其他独立任务继续推进。
+- 验收 H4：页面完成即物化可编辑；组件并发 SSE 可用且状态可追踪。
+- 验收 H5：会话隔离验证通过（多任务同模板并发无串流、无错写、无状态污染）。
