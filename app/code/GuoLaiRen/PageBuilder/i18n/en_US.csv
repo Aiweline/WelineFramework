@@ -122,7 +122,12 @@ AI生成组件配置,AI生成组件配置
 "PageBuilder AI 建站工作台","PageBuilder AI 建站工作台"
 未登录或会话令牌无效,"Not signed in or invalid session token"
 会话不存在或无权访问,"Session not found or access denied"
-预览页面不存在或无访问权限,预览页面不存在或无访问权限
+预览页面不存在或无访问权限,"Preview is unavailable or you do not have access"
+预览页面尚未生成,"This preview page has not been generated yet"
+"当前预览页面尚未生成。完善并确认「生成细节任务规划方案」后，点击下方按钮即可由 AI 生成该页面。","This preview page has not been generated yet. After you complete and confirm the detailed task plan, click the button below to generate it with AI."
+"请先完善并确认细节任务规划方案，再进行 AI 生成。","Complete and confirm the detailed task plan before running AI generation."
+请先在第一阶段生成并确认建站方案。,"Generate and confirm the phase-one site plan first."
+返回第一阶段生成建站方案再试,"Back to phase one to generate the site plan"
 参数无效,"Invalid parameters"
 无效的阶段,"Invalid stage"
 工作区阶段已切换,工作区阶段已切换
@@ -1095,7 +1100,13 @@ Pending,Pending
 重新生成阶段一方案,重新生成阶段一方案
 确认阶段一方案,确认阶段一方案
 阶段二任务计划,阶段二任务计划
-"AI 正在基于阶段一方案生成阶段二任务计划，确认后再进入构建执行。","AI 正在基于阶段一方案生成阶段二任务计划，确认后再进入构建执行。"
+生成细节任务规划方案,"Generate detailed task plan"
+"本阶段将阶段一已确认的建站方案拆解为可执行的页面/区块级任务清单（Markdown + 结构化任务），与《AI建站中台-计划》中第二阶段语义一致：微调仅改指定范围，重建生成全量新方案；确认后才可进入构建。","In this phase, the confirmed phase-I site plan is broken down into executable page/block-level tasks (Markdown + structured tasks), matching phase II in the AI site builder plan: refine adjusts only the specified scope; rebuild produces a full new plan; build proceeds only after confirmation."
+"基于阶段一方案生成阶段二任务拆解，确认后再进入构建执行。","Generate the phase-II task breakdown from the phase-I plan, then confirm before starting the build."
+仅调整你指定的任务位置，适合局部优化。,"Adjust only the task areas you specify—best for local optimization."
+重新生成整份任务方案，适合方向变化较大场景。,"Regenerate the full task plan—best when the direction changes significantly."
+收起阶段二面板,"Collapse phase II panel"
+"AI 正在基于阶段一方案生成阶段二任务计划，确认后再进入构建执行。","AI is generating the phase-II task plan from the phase-I plan; confirm before starting the build."
 任务计划生成中…,任务计划生成中…
 任务方案模式,任务方案模式
 微调任务方案,微调任务方案
@@ -1106,6 +1117,15 @@ Pending,Pending
 执行当前模式,执行当前模式
 可在此继续微调或重建任务方案。,可在此继续微调或重建任务方案。
 准备开始生成任务计划…,准备开始生成任务计划…
+正在检测第二阶段任务方案,"Checking for phase-II task plan"
+正在连接任务方案流并检查会话草案,"Connecting to the task-plan stream and checking the session draft"
+已检测到有效的第二阶段任务方案，正在回填预览,"A valid phase-II task plan was found; streaming it into the preview"
+正在流式输出已保存的任务方案内容,"Streaming saved task-plan content"
+第二阶段任务方案已回填，可继续微调或确认,"Phase-II task plan loaded; you can refine or confirm"
+未检测到可用的第二阶段任务方案草案，正在根据阶段一确认方案生成,"No usable phase-II draft found; generating from the confirmed phase-I plan"
+第二阶段任务方案已持久化,"Phase-II task plan saved"
+正在输出任务方案 Markdown,"Streaming task-plan Markdown"
+正在通过 SSE 检测并同步第二阶段任务方案…,"Detecting and syncing the phase-II task plan over SSE…"
 确认阶段二任务计划,确认阶段二任务计划
 "AI 微调区块","AI 微调区块"
 当前还没有选中的区块。,当前还没有选中的区块。
@@ -1139,6 +1159,7 @@ Close,Close
 页面类型与方案语言均已变更，正在重建阶段一方案，请稍候…,页面类型与方案语言均已变更，正在重建阶段一方案，请稍候…
 阶段一方案已生成，请确认后再进入构建。,阶段一方案已生成，请确认后再进入构建。
 请先确认阶段一方案，再开始执行构建。,请先确认阶段一方案，再开始执行构建。
+生成细节任务规划前，请先完成阶段一建站方案（生成并确认）。,Before generating the detailed task plan, complete and confirm the phase-one site plan first.
 阶段一方案已保存。,阶段一方案已保存。
 阶段一方案已保存，是否进入阶段二任务计划确认？,阶段一方案已保存，是否进入阶段二任务计划确认？
 已保留阶段一确认结果，你可以稍后继续。,已保留阶段一确认结果，你可以稍后继续。

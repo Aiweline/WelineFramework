@@ -17,7 +17,7 @@ use Weline\Server\Service\Control\IpcControlGateway;
 class MaintenanceCheckObserver implements ObserverInterface
 {
     private const DEFAULT_STATUS_TIMEOUT_SEC = 2.0;
-    private const REQUEST_FIBER_STATUS_TIMEOUT_SEC = 0.2;
+    private const REQUEST_FIBER_STATUS_TIMEOUT_SEC = 0.05;
     public function execute(Event &$event): void
     {
         if ($this->isCurrentProcessMaintenanceWorker()) {

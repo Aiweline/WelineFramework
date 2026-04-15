@@ -16,7 +16,6 @@ $scope = $this->getData('scope');
 $scope = \is_array($scope) ? $scope : [];
 $scopePreview = (string)($this->getData('scope_preview') ?? '{}');
 $stateJsonUrl = (string)($this->getData('state_json_url') ?? '');
-$streamSseUrl = (string)($this->getData('stream_sse_url') ?? '');
 $mergeScopeUrl = (string)($this->getData('merge_scope_url') ?? '');
 $replaceScopeUrl = (string)($this->getData('replace_scope_url') ?? '');
 $setStageUrl = (string)($this->getData('set_stage_url') ?? '');
@@ -25,9 +24,7 @@ $confirmPlanUrl = (string)($this->getData('confirm_plan_url') ?? '');
 $planSseUrl = (string)($this->getData('plan_sse_url') ?? $this->getData('start_plan_sse_url') ?? '');
 $startTaskPlanUrl = (string)($this->getData('start_task_plan_url') ?? '');
 $confirmTaskPlanUrl = (string)($this->getData('confirm_task_plan_url') ?? '');
-$taskPlanSseUrl = (string)($this->getData('task_plan_sse_url')
-    ?? $this->getData('task_plan_stream_sse_url')
-    ?? '');
+$taskPlanSseUrl = (string)($this->getData('task_plan_sse_url') ?? '');
 $resumeBuildUrl = (string)($this->getData('resume_build_url') ?? '');
 $runVirtualThemeUrl = (string)($this->getData('run_virtual_theme_url') ?? '');
 $startRegeneratePageUrl = (string)($this->getData('start_regenerate_page_url') ?? '');
@@ -98,15 +95,8 @@ if (!$session instanceof \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession) {
 }
 
 $publicId = $session->getPublicId();
+// 必须与会话持久化 stage 一致，勿因「已有阶段一方案」改写为 visual_edit，否则步骤条无法切回阶段一。
 $currentStage = (string)($state['stage'] ?? \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession::STAGE_PLAN);
-$statePlanMarkdown = \trim((string)($state['plan_markdown'] ?? $scope['plan_markdown'] ?? ''));
-$statePlanJson = \is_array($state['plan_json'] ?? null)
-    ? $state['plan_json']
-    : (\is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : []);
-$hasStageOnePlan = $statePlanMarkdown !== '' || $statePlanJson !== [];
-if ($currentStage === \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession::STAGE_PLAN && $hasStageOnePlan) {
-    $currentStage = 'visual_edit';
-}
 $websiteProfile = \is_array($state['website_profile'] ?? null) ? $state['website_profile'] : [];
 $cfgDebugSiteTitle = \trim((string)($this->getData('ai_site_debug_default_site_title') ?? ''));
 $cfgDebugBrief = \trim((string)($this->getData('ai_site_debug_default_brief') ?? ''));
@@ -128,6 +118,34 @@ if ($guidedWorkspaceDefaultLocale === '') {
         : \GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspaceDebugDefaults::DEFAULT_LOCALE;
 }
 $guidedWorkspacePlanLocale = \trim((string)($scope['plan_locale'] ?? $scope['default_language'] ?? $guidedWorkspaceDefaultLocale));
+
+/** 会话中的目标域名（含 Websites 手传 selected_domain、推荐列表首项） */
+$sessionResolvedTargetDomain = \trim((string)(
+    $scope['target_domain'] ?? $scope['selected_domain'] ?? $websiteProfile['target_domain'] ?? ''
+));
+if ($sessionResolvedTargetDomain === '' && \is_array($scope['recommended_domain_list'] ?? null)) {
+    foreach ($scope['recommended_domain_list'] as $candidate) {
+        $c = \trim(\is_string($candidate) ? $candidate : (string)$candidate);
+        if ($c !== '') {
+            $sessionResolvedTargetDomain = \strtolower($c);
+            break;
+        }
+    }
+}
+
+/** 阶段一建站方案是否已在会话中存在（用于第二阶段「生成细节任务规划方案」按钮门闩） */
+$statePlanBlock = \is_array($state['plan'] ?? null) ? $state['plan'] : [];
+$scopePlanMarkdown = \trim((string)($scope['plan_markdown'] ?? ''));
+$statePlanMarkdown = \trim((string)($statePlanBlock['markdown'] ?? ''));
+$scopePlanJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+$statePlanJson = \is_array($statePlanBlock['json'] ?? null) ? $statePlanBlock['json'] : [];
+$scopePlanStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+$pbAiPhaseOnePlanPresent = (int)($state['plan_confirmed'] ?? 0) === 1
+    || $scopePlanMarkdown !== ''
+    || $statePlanMarkdown !== ''
+    || $scopePlanJson !== []
+    || $statePlanJson !== []
+    || $scopePlanStructured !== [];
 
 $pageTypes = $scope['page_types'] ?? [];
 $pageTypes = \is_array($pageTypes) ? $pageTypes : [];
@@ -231,11 +249,6 @@ if ($previewPageType !== '' && \is_array($virtualPagesByType[$previewPageType] ?
         'blocks' => $initialBlocks,
     ];
 }
-$initialLastEventId = 0;
-foreach ($events as $eventItem) {
-    $initialLastEventId = \max($initialLastEventId, (int)($eventItem['event_id'] ?? 0));
-}
-
 $workspaceTrack = (string)($state['workspace_track'] ?? \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME);
 $siteReadyFlag = (int)($state['site_ready'] ?? 1);
 $buildTaskSummary = \is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : [];
@@ -293,7 +306,7 @@ $pbAiTargetDomainHelpTitle = $pbAiGuidedFakeMode
 $guidedScopeDefaults = [
     'site_title' => $guidedWorkspaceSiteTitle,
     'site_tagline' => (string)($scope['site_tagline'] ?? $websiteProfile['site_tagline'] ?? ''),
-    'target_domain' => (string)($scope['target_domain'] ?? $websiteProfile['target_domain'] ?? ''),
+    'target_domain' => $sessionResolvedTargetDomain,
     'brief_description' => $guidedWorkspaceBrief,
     'default_locale' => $guidedWorkspaceDefaultLocale,
     'plan_locale' => $guidedWorkspacePlanLocale,
@@ -331,11 +344,32 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 ?>
 <?php $workspaceTplData = \get_defined_vars(); ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/styles-device.phtml', $workspaceTplData) ?>
+<?php
+$workspaceRenderStage = \in_array($currentStage, ['plan', 'visual_edit', 'publish'], true)
+    ? $currentStage
+    : 'plan';
+?>
+<?php if ($workspaceRenderStage === 'plan'): ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/style-plan.phtml', $workspaceTplData) ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/layout.phtml', $workspaceTplData) ?>
+<?php elseif ($workspaceRenderStage === 'visual_edit'): ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/style-visual-edit.phtml', $workspaceTplData) ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/layout.phtml', $workspaceTplData) ?>
+<?php else: ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/style-publish.phtml', $workspaceTplData) ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/layout.phtml', $workspaceTplData) ?>
+<?php endif; ?>
 
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/modals.phtml', $workspaceTplData) ?>
 
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-main.phtml', $workspaceTplData) ?>
+<?php if ($workspaceRenderStage === 'plan'): ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-stage-plan.phtml', $workspaceTplData) ?>
+<?php elseif ($workspaceRenderStage === 'visual_edit'): ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-stage-visual-edit.phtml', $workspaceTplData) ?>
+<?php else: ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-stage-publish.phtml', $workspaceTplData) ?>
+<?php endif; ?>
 
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-runtime.phtml', $workspaceTplData) ?>
 

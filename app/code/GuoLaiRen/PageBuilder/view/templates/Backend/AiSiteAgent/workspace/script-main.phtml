@@ -2747,6 +2747,19 @@
         return new bootstrap.Modal(modalEl);
     }
 
+    function resolveBootstrapCollapseInstance(collapseEl, options) {
+        if (!collapseEl || typeof bootstrap === 'undefined' || !bootstrap.Collapse) {
+            return null;
+        }
+        if (typeof bootstrap.Collapse.getOrCreateInstance === 'function') {
+            return bootstrap.Collapse.getOrCreateInstance(collapseEl, options || { toggle: false });
+        }
+        if (typeof bootstrap.Collapse.getInstance === 'function') {
+            return bootstrap.Collapse.getInstance(collapseEl) || new bootstrap.Collapse(collapseEl, options || { toggle: false });
+        }
+        return new bootstrap.Collapse(collapseEl, options || { toggle: false });
+    }
+
     function openBlockSseModal(title, contextText, url, formData) {
         var modalEl = document.getElementById('pb-ai-block-sse-modal');
         var titleEl = document.getElementById('pb-ai-block-sse-modal-title');
@@ -4457,11 +4470,13 @@
 
     function showTaskPlanPanel() {
         var el = getTaskPlanPanelCollapseEl();
-        if (!el || typeof bootstrap === 'undefined' || !bootstrap.Collapse) {
+        if (!el) {
             return;
         }
-        var c = bootstrap.Collapse.getOrCreateInstance(el, { toggle: false });
-        c.show();
+        var c = resolveBootstrapCollapseInstance(el, { toggle: false });
+        if (c && typeof c.show === 'function') {
+            c.show();
+        }
     }
 
     function setTaskPlanModeStatus(message) {
@@ -4498,6 +4513,9 @@
 
     function hasCachedTaskPlanForAccordion() {
         if (hasTaskPlanDraft()) {
+            return true;
+        }
+        if (hasVirtualThemePlanState || taskPlanConfirmedState) {
             return true;
         }
         if (isNonEmptyObject(pickStructuredPlanRoot(currentTaskPlanPayload || {}))) {
@@ -5004,9 +5022,7 @@
         }
         panel.dataset.pbCollapseLifecycleBound = '1';
         function showTaskPlanAccordionPanel() {
-            var collapse = (typeof bootstrap !== 'undefined' && bootstrap.Collapse)
-                ? bootstrap.Collapse.getOrCreateInstance(panel, { toggle: false })
-                : null;
+            var collapse = resolveBootstrapCollapseInstance(panel, { toggle: false });
             if (collapse && typeof collapse.show === 'function') {
                 collapse.show();
                 return;
@@ -5044,8 +5060,11 @@
             return Promise.resolve(true);
         }
         function fetchAndRenderTaskPlanByAjax() {
-            updateTaskPlanModalContent(messages.taskPlanLoadingFromServer);
-            setTaskPlanModalProgress(messages.taskPlanLoadingFromServer, 10, false);
+            var hadLocalPlan = hasCachedTaskPlanForAccordion();
+            if (!hadLocalPlan) {
+                updateTaskPlanModalContent(messages.taskPlanLoadingFromServer);
+                setTaskPlanModalProgress(messages.taskPlanLoadingFromServer, 10, false);
+            }
             var api = window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object'
                 ? window.__pbWorkspaceApi
                 : null;
@@ -5053,22 +5072,37 @@
                 ? api.refreshWorkspaceStateFromServer
                 : null;
             if (!refresh) {
-                return Promise.resolve(applyCachedTaskPlanToPanel());
+                return Promise.resolve(applyCachedTaskPlanToPanel() || hadLocalPlan);
             }
             return Promise.resolve(refresh()).then(function () {
-                return applyCachedTaskPlanToPanel();
+                return applyCachedTaskPlanToPanel() || hadLocalPlan;
             }).catch(function () {
-                return applyCachedTaskPlanToPanel();
+                return applyCachedTaskPlanToPanel() || hadLocalPlan;
             });
         }
-        var triggerBtn = document.getElementById('pb-ai-task-plan-accordion-trigger');
-        if (triggerBtn && triggerBtn.dataset.pbBound !== '1') {
-            triggerBtn.dataset.pbBound = '1';
-            triggerBtn.addEventListener('click', function (event) {
+        if (document.documentElement.dataset.pbTaskPlanAccordionDelegatedBound !== '1') {
+            document.documentElement.dataset.pbTaskPlanAccordionDelegatedBound = '1';
+            document.addEventListener('click', function (event) {
+                var target = event.target && typeof event.target.closest === 'function'
+                    ? event.target.closest('#pb-ai-task-plan-accordion-trigger')
+                    : null;
+                if (!target) {
+                    return;
+                }
                 if (taskPlanStartRequestInFlight || taskPlanSseRunning) {
                     return;
                 }
+                var latestPanel = getTaskPlanPanelCollapseEl();
+                if (!latestPanel) {
+                    return;
+                }
+                panel = latestPanel;
                 event.preventDefault();
+                if (hasCachedTaskPlanForAccordion()) {
+                    showTaskPlanAccordionPanel();
+                    fetchAndRenderTaskPlanByAjax();
+                    return;
+                }
                 fetchAndRenderTaskPlanByAjax().then(function (hasPlan) {
                     if (hasPlan) {
                         showTaskPlanAccordionPanel();
@@ -5735,7 +5769,11 @@
             return true;
         },
         markPageGenerationStatus: markPageGenerationStatus,
-        queueGenerationStatus: queueGenerationStatus,
+        queueGenerationStatus: (typeof queueGenerationStatus === 'function'
+            ? queueGenerationStatus
+            : function (pageType, status, meta) {
+                return markPageGenerationStatus(pageType, status, meta);
+            }),
         buildVirtualThemePatch: buildVirtualThemePatch,
         syncPreviewMetaFromState: syncPreviewMetaFromState,
         switchWorkspaceStage: switchWorkspaceStage,

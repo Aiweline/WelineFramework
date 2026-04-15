@@ -2355,7 +2355,7 @@ function wlsDispatchRequestFiberStep(
                     if (\count($longLivedConnections) < $longLivedMaxActive) {
                         break;
                     }
-                    \usleep(50_000);
+                    \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(50);
                 }
             }
         }

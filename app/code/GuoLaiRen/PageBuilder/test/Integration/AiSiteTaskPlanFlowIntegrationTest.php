@@ -42,6 +42,11 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
 
         $phaseOne = $this->generateAndConfirmPlan($publicId, $scopePatch);
         self::assertSame(1, (int)($phaseOne['confirm_plan']['data']['plan_confirmed'] ?? 0));
+        self::assertSame(
+            'visual_edit',
+            (string)($phaseOne['confirm_plan']['data']['stage'] ?? ''),
+            'post-confirm-plan should advance persisted workspace stage to visual_edit'
+        );
 
         $startTaskPlanPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-task-plan',

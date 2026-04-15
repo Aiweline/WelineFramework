@@ -145,6 +145,46 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         );
     }
 
+    public function testBuildAiPlanPromptContainsStageOneMustConstraints(): void
+    {
+        $capturedPrompt = null;
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generateStream')
+            ->willReturnCallback(function (string $prompt, callable $callback) use (&$capturedPrompt): void {
+                $capturedPrompt = $prompt;
+                $callback($this->buildValidAiPlanResponse());
+            });
+
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $aiService
+        );
+
+        $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'zh_Hans_CN',
+            'default_locale' => 'en_US',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ], [
+            'instruction' => 'Focus more on trust messaging.',
+            'target_scope' => 'about_page',
+        ]);
+
+        self::assertIsString($capturedPrompt);
+        self::assertStringContainsString('第一阶段只输出 plan，不允许出现 build started / executing / task running / log stream / percent complete 等执行态措辞。', $capturedPrompt);
+        self::assertStringContainsString('必须输出 stage2_task_hints，并显式说明每个页面/区块将如何进入第二阶段任务拆分。', $capturedPrompt);
+        self::assertStringContainsString('Selected page coverage hints (must all be represented in the final plan):', $capturedPrompt);
+        self::assertStringContainsString('- home_page: must include page goal, conversion rhythm, block why, field plan, execution script, SEO structure, CTA usage, responsive guidance.', $capturedPrompt);
+        self::assertStringContainsString('baseline_execution_blueprint:', $capturedPrompt);
+        self::assertStringContainsString('"default_locale": "en_US"', $capturedPrompt);
+    }
+
     private function createStreamingAiServiceStub(string $response): AiService
     {
         $aiService = $this->createMock(AiService::class);

@@ -33,7 +33,6 @@
     var runningSourceStartTimer = null;
     var runningOperationKey = '';
     var runningStartAtByOperationKey = Object.create(null);
-    var resumePromptHandledByKey = Object.create(null);
     var lastOperationTerminalFingerprint = '';
     var blockRefreshState = (window.__pbBlockRefreshState && typeof window.__pbBlockRefreshState === 'object')
         ? window.__pbBlockRefreshState
@@ -139,113 +138,7 @@
         }
     }
 
-    function showWorkspaceResumeConfirm(message) {
-        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-            return window.BackendConfirm.show(message, {
-                title: messages.resumePromptTitle
-            }).then(function (confirmed) {
-                return !!confirmed;
-            });
-        }
-        return Promise.resolve(window.confirm(message));
-    }
-
-    function requestExplicitResumeBuild() {
-        if (!resumeBuildUrl || !publicId) {
-            toast('error', messages.planConfirmRequired);
-            return;
-        }
-        postForm(resumeBuildUrl, {
-            public_id: publicId
-        }).then(function (response) {
-            if (response && response.data && typeof response.data === 'object') {
-                hydrateWorkspaceFromState(response.data);
-            }
-            if (response && response.success && window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function') {
-                if (window.PbAiOperationRunner.startFromResponse(response, 'build')) {
-                    toast('success', messages.resumeStarted);
-                    return;
-                }
-            }
-            toast(response && response.success ? 'info' : 'error', (response && response.message) ? String(response.message) : messages.networkError);
-        }).catch(function (error) {
-            toast('error', (error && error.message) ? String(error.message) : messages.networkError);
-        });
-    }
-
-    function maybePromptToObserveRunningOperation(data) {
-        if (!data || typeof data !== 'object') {
-            return false;
-        }
-        var op = data.active_operation && typeof data.active_operation === 'object' ? data.active_operation : null;
-        if (!op) {
-            return false;
-        }
-        var opStatus = String(op.status || '');
-        var opName = String(op.operation || '');
-        var executionToken = String(op.execution_token || '');
-        if (['queued', 'running'].indexOf(opStatus) < 0 || !executionToken || !opName) {
-            return false;
-        }
-        if (['build', 'regenerate_page', 'publish'].indexOf(opName) < 0) {
-            return false;
-        }
-        var operationKey = 'observe:' + opName + ':' + executionToken;
-        if (resumePromptHandledByKey[operationKey]) {
-            return false;
-        }
-        resumePromptHandledByKey[operationKey] = true;
-        showWorkspaceResumeConfirm(messages.resumeRunningPrompt).then(function (confirmed) {
-            if (!confirmed) {
-                toast('info', messages.resumeDeferred);
-                return;
-            }
-            disableNavigationDuringOperation();
-            startOperationStream(buildOperationUrl(executionToken), opName, executionToken, 'explicitResumeRunningOperation');
-        });
-        return true;
-    }
-
-    function maybePromptToContinuePendingBuild(data) {
-        if (!data || typeof data !== 'object') {
-            return false;
-        }
-        var op = data.active_operation && typeof data.active_operation === 'object' ? data.active_operation : null;
-        if (op && ['queued', 'running'].indexOf(String(op.status || '')) >= 0) {
-            return false;
-        }
-        if (!data.plan_confirmed || !data.has_execution_blueprint || !data.has_pending_build_tasks || !resumeBuildUrl || !publicId) {
-            return false;
-        }
-        var signature = '';
-        if (data.scope && typeof data.scope === 'object') {
-            signature = String(
-                data.scope.execution_blueprint_confirmed_signature
-                || data.scope.execution_blueprint_signature
-                || ''
-            );
-        }
-        var promptKey = 'pending:' + (signature || publicId);
-        if (resumePromptHandledByKey[promptKey]) {
-            return false;
-        }
-        resumePromptHandledByKey[promptKey] = true;
-        showWorkspaceResumeConfirm(messages.resumePendingPrompt).then(function (confirmed) {
-            if (!confirmed) {
-                toast('info', messages.resumeDeferred);
-                return;
-            }
-            requestExplicitResumeBuild();
-        });
-        return true;
-    }
-
-    function maybePromptWorkspaceContinuation(data) {
-        if (maybePromptToObserveRunningOperation(data)) {
-            return true;
-        }
-        return maybePromptToContinuePendingBuild(data);
-    }
+    // 已禁用页面加载阶段的自动续跑/自动接管提示逻辑，仅允许用户显式触发。
 
     if (workspaceTerminal && typeof workspaceTerminal.on === 'function') {
         workspaceTerminal.on('snapshot', function (event) {
@@ -256,7 +149,6 @@
             if (data.active_operation && typeof data.active_operation === 'object') {
                 activeOperation = data.active_operation;
             }
-            maybePromptWorkspaceContinuation(data);
         });
     }
 
@@ -461,9 +353,6 @@
             if (publishBtn) {
                 publishBtn.disabled = false;
             }
-            document.querySelectorAll('.pb-ai-start-publish-shortcut').forEach(function (btn) {
-                btn.disabled = false;
-            });
         }
         clearBlockStreamingState();
     }
@@ -634,7 +523,6 @@
                 if (payload.data.active_operation && typeof payload.data.active_operation === 'object') {
                     activeOperation = payload.data.active_operation;
                 }
-                maybePromptWorkspaceContinuation(payload.data);
                 return payload.data;
             });
         }).catch(function () {
@@ -1036,9 +924,7 @@
         return true;
     }
 
-    window.setTimeout(function () {
-        refreshWorkspaceStateFromServer();
-    }, 0);
+    // 禁止页面加载后自动刷新并触发 SSE 续连逻辑；仅保留用户显式触发。
 
     function pickOperationResponsePayload(data) {
         if (!data || typeof data !== 'object') {
@@ -1183,24 +1069,7 @@
         });
     }
 
-    document.querySelectorAll('.pb-ai-start-publish-shortcut').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            checkBeforePublishAndStart(btn);
-        });
-    });
-
-    window.setTimeout(function () {
-        var workspaceApiState = resolveWorkspaceApi();
-        maybePromptWorkspaceContinuation({
-            active_operation: activeOperation,
-            plan_confirmed: typeof workspaceApiState.getPlanConfirmedState === 'function' ? workspaceApiState.getPlanConfirmedState() : false,
-            has_execution_blueprint: typeof workspaceApiState.getHasExecutionBlueprintState === 'function' ? workspaceApiState.getHasExecutionBlueprintState() : false,
-            has_pending_build_tasks: typeof workspaceApiState.getHasPendingBuildTasksState === 'function' ? workspaceApiState.getHasPendingBuildTasksState() : false,
-            scope: {
-                execution_blueprint_confirmed_signature: ''
-            }
-        });
-    }, 300);
+    // 禁止页面加载时自动弹出继续构建/观察执行流确认。
 
     // 禁用会跳走的导航按钮
     function disableNavigationDuringOperation() {
@@ -1241,6 +1110,9 @@
             el.style.opacity = '';
             el.style.pointerEvents = '';
         });
+        if (window.__pbSyncRunVirtualThemeGateState && typeof window.__pbSyncRunVirtualThemeGateState === 'function') {
+            window.__pbSyncRunVirtualThemeGateState();
+        }
     }
 })();
 </script>
