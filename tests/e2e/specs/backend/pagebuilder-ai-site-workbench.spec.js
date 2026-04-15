@@ -359,23 +359,27 @@ function buildPagebuilderWorkspacePostUrlFromWorkspaceUrl(workspaceUrl, action) 
 }
 
 async function ensureWorkspaceSameOriginPage(page, workspaceUrl) {
+  const targetUrl = new URL(workspaceUrl);
   try {
     const current = new URL(page.url());
-    if (/^https?:$/i.test(current.protocol)) {
+    if (/^https?:$/i.test(current.protocol) && current.origin === targetUrl.origin) {
       return;
     }
   } catch (error) {
     // fall through to navigation
   }
   const candidateUrls = [
-    buildBackendUrl('admin'),
-    buildBackendUrl('admin/login'),
     workspaceUrl,
+    `${targetUrl.origin}/`,
+    `${targetUrl.origin}${targetUrl.pathname.split('/').slice(0, 2).join('/')}/admin/login`,
   ].filter((value, index, list) => value && list.indexOf(value) === index);
   for (const candidateUrl of candidateUrls) {
     try {
       await gotoStable(page, candidateUrl);
-      return;
+      const landed = new URL(page.url());
+      if (landed.origin === targetUrl.origin) {
+        return;
+      }
     } catch (error) {
       // try the next stable browser origin
     }
