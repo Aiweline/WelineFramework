@@ -13,6 +13,8 @@ namespace Weline\Ai\Service\Provider;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Framework\App\Exception;
+use Weline\Framework\Http\Sse\SseContext;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * Anthropic Claude API提供者
@@ -207,14 +209,16 @@ class AnthropicProvider implements ProviderInterface
         $systemMessage = $this->extractSystemMessage($params);
         
         // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
-        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
+        $timeout = $this->resolveStreamTimeout($params, $config);
         
         // 设置执行时间限制
-        if ($timeout > 0) {
-            $timeLimit = $timeout + 10;
-            @set_time_limit($timeLimit);
-        } else {
-            @set_time_limit(0);
+        $shouldRestoreExecutionTimeLimit = !SseContext::isSseEnabled();
+        if ($shouldRestoreExecutionTimeLimit) {
+            if ($timeout > 0) {
+                @set_time_limit($timeout + 10);
+            } else {
+                @set_time_limit(0);
+            }
         }
 
         try {
@@ -307,7 +311,9 @@ class AnthropicProvider implements ProviderInterface
                 'usage' => $totalTokens,
             ];
         } finally {
-            @set_time_limit(0);
+            if ($shouldRestoreExecutionTimeLimit) {
+                @set_time_limit(0);
+            }
         }
     }
 
@@ -546,7 +552,7 @@ class AnthropicProvider implements ProviderInterface
             
             error_clear_last();
             
-            $response = curl_exec($ch);
+            $response = $this->executeCurl($ch);
             
             // 检查是否超时
             $lastError = error_get_last();
@@ -575,7 +581,7 @@ class AnthropicProvider implements ProviderInterface
             $result = json_decode($response, true);
             
             if ($httpCode >= 500 && $retryCount < self::MAX_RETRIES) {
-                sleep(self::RETRY_DELAY * ($retryCount + 1));
+                SchedulerSystem::sleep(self::RETRY_DELAY * ($retryCount + 1));
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
 
@@ -597,7 +603,7 @@ class AnthropicProvider implements ProviderInterface
             }
             
             if ($retryCount < self::MAX_RETRIES) {
-                sleep(self::RETRY_DELAY * ($retryCount + 1));
+                SchedulerSystem::sleep(self::RETRY_DELAY * ($retryCount + 1));
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
             throw new Exception("API调用失败（已重试{$retryCount}次）: " . $e->getMessage());
@@ -617,11 +623,12 @@ class AnthropicProvider implements ProviderInterface
      */
     private function callStreamApi(string $url, string $apiKey, array $data, callable $callback, array $proxyInfo, int $timeout): void
     {
+        $isSseMode = SseContext::isSseEnabled();
         $startTime = microtime(true);
-        $maxExecutionTime = ini_get('max_execution_time');
-        $timeLimit = $maxExecutionTime > 0 ? (int)$maxExecutionTime : null;
+        $maxExecutionTime = $isSseMode ? 0 : (int)ini_get('max_execution_time');
+        $timeLimit = $maxExecutionTime > 0 ? $maxExecutionTime : null;
         
-        $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout);
+        $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, true);
         
         if ($timeLimit !== null && $timeLimit > 0) {
             $elapsedBeforeRequest = microtime(true) - $startTime;
@@ -710,18 +717,20 @@ class AnthropicProvider implements ProviderInterface
             return strlen($data);
         });
 
-        curl_exec($ch);
+        $this->executeCurl($ch);
         
         // 获取 HTTP 状态码
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
-        $lastError = error_get_last();
-        if ($lastError && (
-            strpos($lastError['message'], 'Maximum execution time') !== false ||
-            strpos($lastError['message'], 'exceeded') !== false
-        )) {
-            curl_close($ch);
-            throw new Exception($this->getTimeoutErrorMessage($timeout));
+        if (!$isSseMode) {
+            $lastError = error_get_last();
+            if ($lastError && (
+                strpos($lastError['message'], 'Maximum execution time') !== false ||
+                strpos($lastError['message'], 'exceeded') !== false
+            )) {
+                curl_close($ch);
+                throw new Exception($this->getTimeoutErrorMessage($timeout));
+            }
         }
         
         $error = curl_error($ch);
@@ -757,7 +766,14 @@ class AnthropicProvider implements ProviderInterface
      * @param int $timeout
      * @return \CurlHandle|false
      */
-    private function initCurl(string $url, string $apiKey, array $data, array $proxyInfo, int $timeout): \CurlHandle|false
+    private function initCurl(
+        string $url,
+        string $apiKey,
+        array $data,
+        array $proxyInfo,
+        int $timeout,
+        bool $isStream = false
+    ): \CurlHandle|false
     {
         $ch = curl_init($url);
         
@@ -772,12 +788,8 @@ class AnthropicProvider implements ProviderInterface
             'anthropic-version: ' . self::API_VERSION,
         ]);
         
-        $timeout = max(0, (int)$timeout);
-        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-        if ($timeout > 0) {
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($timeout, 60));
-        } else {
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);
+        foreach ($this->buildCurlTimeoutOptions($timeout, $isStream) as $option => $value) {
+            curl_setopt($ch, $option, $value);
         }
         
         // SSL配置
@@ -801,6 +813,81 @@ class AnthropicProvider implements ProviderInterface
         }
 
         return $ch;
+    }
+
+    private function resolveStreamTimeout(array $params, array $config): int
+    {
+        if (!empty($params['enforce_timeout_in_stream'])) {
+            return isset($params['timeout'])
+                ? (int)$params['timeout']
+                : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
+        }
+
+        return 0;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function buildCurlTimeoutOptions(int $timeout, bool $isStream = false): array
+    {
+        $timeout = max(0, (int)$timeout);
+
+        if ($isStream) {
+            return [
+                CURLOPT_TIMEOUT => 0,
+                CURLOPT_CONNECTTIMEOUT => 60,
+            ];
+        }
+
+        return [
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_CONNECTTIMEOUT => $timeout > 0 ? min($timeout, 60) : 60,
+        ];
+    }
+
+    private function executeCurl(\CurlHandle $ch): string|bool
+    {
+        if (!SchedulerSystem::isSchedulerActive() || !\Fiber::getCurrent()) {
+            return curl_exec($ch);
+        }
+
+        $multi = curl_multi_init();
+        curl_multi_add_handle($multi, $ch);
+
+        $running = 0;
+        $multiResult = \CURLM_OK;
+        $curlResult = \CURLE_OK;
+
+        do {
+            do {
+                $multiResult = curl_multi_exec($multi, $running);
+            } while ($multiResult === \CURLM_CALL_MULTI_PERFORM);
+
+            while ($info = curl_multi_info_read($multi)) {
+                if (($info['handle'] ?? null) === $ch) {
+                    $curlResult = (int)($info['result'] ?? \CURLE_OK);
+                }
+            }
+
+            if ($multiResult !== \CURLM_OK || $curlResult !== \CURLE_OK) {
+                break;
+            }
+
+            if ($running > 0) {
+                SchedulerSystem::yieldDelay(10);
+            }
+        } while ($running > 0);
+
+        $content = curl_multi_getcontent($ch);
+        curl_multi_remove_handle($multi, $ch);
+        curl_multi_close($multi);
+
+        if ($multiResult !== \CURLM_OK || $curlResult !== \CURLE_OK) {
+            return false;
+        }
+
+        return $content;
     }
 
     /**

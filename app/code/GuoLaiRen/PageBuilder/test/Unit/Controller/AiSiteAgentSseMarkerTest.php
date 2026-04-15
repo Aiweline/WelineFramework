@@ -36,4 +36,16 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertTrue((bool)RequestContext::get(RequestContext::SSE_WRITER_KEY, false));
         self::assertFalse(RequestContext::has(self::AI_CHUNK_FORWARDER_KEY));
     }
+
+    public function testDetectBootstrapGateAllowsExplicitDeterministicFallback(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(AiSiteAgent::class, 'shouldRejectTaskPlanGenerationSource');
+        $method->setAccessible(true);
+
+        self::assertFalse((bool)$method->invoke($controller, ['fake_mode' => 0], 'ai', false));
+        self::assertTrue((bool)$method->invoke($controller, ['fake_mode' => 0], 'deterministic', false));
+        self::assertFalse((bool)$method->invoke($controller, ['fake_mode' => 0], 'deterministic', true));
+        self::assertFalse((bool)$method->invoke($controller, ['fake_mode' => 1], 'deterministic', false));
+    }
 }

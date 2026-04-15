@@ -89,6 +89,18 @@ class ControlMessage
 
     /** Master → Worker：确认收到 ready 消息（启动确认协议） */
     public const TYPE_ACK_READY = 'ack_ready';
+    /** Master → 子进程：控制会话租约分配 */
+    public const TYPE_LEASE_ASSIGN = 'lease_assign';
+    /** Master → 子进程：ready 状态确认 */
+    public const TYPE_READY_ACK = 'ready_ack';
+    /** Master → Dispatcher：Worker 池快照确认 */
+    public const TYPE_POOL_SNAPSHOT_ACK = 'pool_snapshot_ack';
+    /** Master → 子进程：命令已接收 */
+    public const TYPE_COMMAND_ACCEPT = 'command_accept';
+    /** Master → 子进程：命令已完成 */
+    public const TYPE_COMMAND_DONE = 'command_done';
+    /** 心跳消息 */
+    public const TYPE_HEARTBEAT = 'heartbeat';
     /** Dispatcher → Master：Worker 入池检查回执（闭环确认） */
     public const TYPE_WORKER_POOL_ACK = 'worker_pool_ack';
 
@@ -340,7 +352,8 @@ class ControlMessage
         string $launchId = '',
         string $processKind = self::PROCESS_KIND_FRAMEWORK,
         string $moduleCode = '',
-        string $instanceCode = ''
+        string $instanceCode = '',
+        string $msgId = ''
     ): string
     {
         $data = [
@@ -350,6 +363,9 @@ class ControlMessage
             'port'      => $port,
             'worker_id' => $workerId,
         ];
+        if ($msgId !== '') {
+            $data['msg_id'] = $msgId;
+        }
         if ($epoch > 0) {
             $data['epoch'] = $epoch;
         }
@@ -371,12 +387,17 @@ class ControlMessage
     /**
      * 构建 ack 消息
      */
-    public static function ack(int $resurrectionPriority = self::RESURRECTION_NONE): string
+    public static function ack(int $resurrectionPriority = self::RESURRECTION_NONE, string $msgId = ''): string
     {
-        return self::encode([
+        $data = [
             'type'                  => self::TYPE_ACK,
             'resurrection_priority' => $resurrectionPriority,
-        ]);
+        ];
+        if ($msgId !== '') {
+            $data['msg_id'] = $msgId;
+        }
+
+        return self::encode($data);
     }
 
     /**
@@ -387,7 +408,8 @@ class ControlMessage
         int $workerId = 0,
         int $port = 0,
         int $epoch = 0,
-        string $launchId = ''
+        string $launchId = '',
+        string $msgId = ''
     ): string
     {
         $data = [
@@ -396,6 +418,9 @@ class ControlMessage
             'worker_id' => $workerId,
             'port'      => $port,
         ];
+        if ($msgId !== '') {
+            $data['msg_id'] = $msgId;
+        }
         if ($epoch > 0) {
             $data['epoch'] = $epoch;
         }
@@ -580,13 +605,17 @@ class ControlMessage
     /**
      * 构建 draining_complete 消息
      */
-    public static function drainingComplete(int $workerId, int $port): string
+    public static function drainingComplete(int $workerId, int $port, string $msgId = ''): string
     {
-        return self::encode([
+        $data = [
             'type'      => self::TYPE_DRAINING_COMPLETE,
             'worker_id' => $workerId,
             'port'      => $port,
-        ]);
+        ];
+        if ($msgId !== '') {
+            $data['msg_id'] = $msgId;
+        }
+        return self::encode($data);
     }
 
     /**
@@ -699,14 +728,18 @@ class ControlMessage
     /**
      * 构建 command_result 消息
      */
-    public static function commandResult(bool $success, array $data = [], string $message = ''): string
+    public static function commandResult(bool $success, array $data = [], string $message = '', string $msgId = ''): string
     {
-        return self::encode([
+        $payload = [
             'type'    => self::TYPE_COMMAND_RESULT,
             'success' => $success,
             'data'    => $data,
             'message' => $message,
-        ]);
+        ];
+        if ($msgId !== '') {
+            $payload['msg_id'] = $msgId;
+        }
+        return self::encode($payload);
     }
 
     /**
@@ -727,15 +760,19 @@ class ControlMessage
     /**
      * 构建 exited 消息（子进程退出前发送）
      */
-    public static function exited(string $role, int $pid, int $port = 0, int $workerId = 0): string
+    public static function exited(string $role, int $pid, int $port = 0, int $workerId = 0, string $msgId = ''): string
     {
-        return self::encode([
+        $data = [
             'type'      => self::TYPE_EXITED,
             'role'      => $role,
             'pid'       => $pid,
             'port'      => $port,
             'worker_id' => $workerId,
-        ]);
+        ];
+        if ($msgId !== '') {
+            $data['msg_id'] = $msgId;
+        }
+        return self::encode($data);
     }
 
     /**
@@ -744,16 +781,117 @@ class ControlMessage
      * @param int $workerId Worker ID
      * @return string NDJSON 消息
      */
-    public static function ackReady(int $workerId, bool $dispatcherConfirmed = false, int $port = 0): string
+    public static function ackReady(int $workerId, bool $dispatcherConfirmed = false, int $port = 0, string $msgId = ''): string
     {
         $data = [
             'type'      => self::TYPE_ACK_READY,
             'worker_id' => $workerId,
             'dispatcher_confirmed' => $dispatcherConfirmed,
         ];
+        if ($msgId !== '') {
+            $data['msg_id'] = $msgId;
+        }
         if ($port > 0) {
             $data['port'] = $port;
         }
+        return self::encode($data);
+    }
+
+    public static function leaseAssign(string $leaseId, int $generation, string $role, int $workerId = 0, int $port = 0, string $msgId = ''): string
+    {
+        $data = [
+            'type' => self::TYPE_LEASE_ASSIGN,
+            'lease_id' => $leaseId,
+            'generation' => $generation,
+            'role' => $role,
+        ];
+        if ($msgId !== '') {
+            $data['msg_id'] = $msgId;
+        }
+        if ($workerId > 0) {
+            $data['worker_id'] = $workerId;
+        }
+        if ($port > 0) {
+            $data['port'] = $port;
+        }
+        return self::encode($data);
+    }
+
+    public static function readyAck(string $leaseId, int $generation, bool $accepted = true, string $reason = '', int $workerId = 0, int $port = 0, string $msgId = ''): string
+    {
+        $data = [
+            'type' => self::TYPE_READY_ACK,
+            'lease_id' => $leaseId,
+            'generation' => $generation,
+            'accepted' => $accepted,
+        ];
+        if ($msgId !== '') {
+            $data['msg_id'] = $msgId;
+        }
+        if ($reason !== '') {
+            $data['reason'] = $reason;
+        }
+        if ($workerId > 0) {
+            $data['worker_id'] = $workerId;
+        }
+        if ($port > 0) {
+            $data['port'] = $port;
+        }
+        return self::encode($data);
+    }
+
+    public static function commandAccept(string $msgId, string $command, string $leaseId = '', int $generation = 0, string $phase = ''): string
+    {
+        $data = [
+            'type' => self::TYPE_COMMAND_ACCEPT,
+            'msg_id' => $msgId,
+            'command' => $command,
+            'lease_id' => $leaseId,
+            'generation' => $generation,
+        ];
+        if ($phase !== '') {
+            $data['phase'] = $phase;
+        }
+
+        return self::encode($data);
+    }
+
+    public static function commandDone(string $msgId, string $command, bool $success, string $message = '', array $data = [], string $phase = ''): string
+    {
+        $payload = [
+            'type' => self::TYPE_COMMAND_DONE,
+            'msg_id' => $msgId,
+            'command' => $command,
+            'success' => $success,
+        ];
+        if ($phase !== '') {
+            $payload['phase'] = $phase;
+        }
+        if ($message !== '') {
+            $payload['message'] = $message;
+        }
+        if ($data !== []) {
+            $payload['data'] = $data;
+        }
+        return self::encode($payload);
+    }
+
+    public static function heartbeat(string $leaseId, int $seq, int $generation = 0, string $msgId = ''): string
+    {
+        $data = [
+            'type' => self::TYPE_HEARTBEAT,
+            'lease_id' => $leaseId,
+            'seq' => $seq,
+            'generation' => $generation,
+            'timestamp' => \time(),
+        ];
+        if ($msgId !== '') {
+            $data['msg_id'] = $msgId;
+        }
+        if ($msgId !== '') {
+            $data['msg_id'] = $msgId;
+        }
+
         return self::encode($data);
     }
 

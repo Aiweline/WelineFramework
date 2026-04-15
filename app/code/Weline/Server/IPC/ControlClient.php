@@ -15,9 +15,10 @@ declare(strict_types=1);
 
 namespace Weline\Server\IPC;
 
+use Weline\Server\IPC\ChildControl\ChildControlClientInterface;
 use Weline\Server\Log\WlsLogger;
 
-class ControlClient
+class ControlClient implements ChildControlClientInterface
 {
     /** TCP 连接 */
     private $socket = null;
@@ -313,7 +314,8 @@ class ControlClient
         string $launchId = '',
         string $processKind = ControlMessage::PROCESS_KIND_FRAMEWORK,
         string $moduleCode = '',
-        string $instanceCode = ''
+        string $instanceCode = '',
+        string $msgId = ''
     ): bool
     {
         // 保存注册信息，用于重连后自动重新注册
@@ -329,7 +331,7 @@ class ControlClient
             'instance_code' => $instanceCode,
         ];
 
-        return $this->send(ControlMessage::register($role, $pid, $port, $workerId, $epoch, $launchId, $processKind, $moduleCode, $instanceCode));
+        return $this->send(ControlMessage::register($role, $pid, $port, $workerId, $epoch, $launchId, $processKind, $moduleCode, $instanceCode, $msgId));
     }
 
     public function rememberRegistration(
@@ -341,7 +343,8 @@ class ControlClient
         string $launchId = '',
         string $processKind = ControlMessage::PROCESS_KIND_FRAMEWORK,
         string $moduleCode = '',
-        string $instanceCode = ''
+        string $instanceCode = '',
+        string $msgId = ''
     ): void {
         $this->registerInfo = [
             'role'          => $role,
@@ -353,6 +356,7 @@ class ControlClient
             'process_kind'  => $processKind,
             'module_code'   => $moduleCode,
             'instance_code' => $instanceCode,
+            'msg_id'        => $msgId,
         ];
     }
 
@@ -369,7 +373,8 @@ class ControlClient
         int $workerId = 0,
         int $port = 0,
         int $epoch = 0,
-        string $launchId = ''
+        string $launchId = '',
+        string $msgId = ''
     ): bool
     {
         if ($role === '' && $this->registerInfo) {
@@ -378,10 +383,11 @@ class ControlClient
             $port     = $this->registerInfo['port'];
             $epoch    = (int)($this->registerInfo['epoch'] ?? 0);
             $launchId = (string)($this->registerInfo['launch_id'] ?? '');
+            $msgId    = (string)($this->registerInfo['msg_id'] ?? $msgId);
         }
 
         $this->isReady = true;
-        return $this->send(ControlMessage::ready($role, $workerId, $port, $epoch, $launchId));
+        return $this->send(ControlMessage::ready($role, $workerId, $port, $epoch, $launchId, $msgId));
     }
 
     /**
@@ -392,14 +398,15 @@ class ControlClient
         return $this->send(ControlMessage::workerLoopStarted($workerId, $port, $pid));
     }
 
-    public function sendDrainingComplete(int $workerId = 0, int $port = 0): bool
+    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool
     {
         if ($workerId === 0 && $this->registerInfo) {
             $workerId = $this->registerInfo['worker_id'];
             $port     = $this->registerInfo['port'];
+            $msgId    = (string)($this->registerInfo['msg_id'] ?? $msgId);
         }
 
-        return $this->send(ControlMessage::drainingComplete($workerId, $port));
+        return $this->send(ControlMessage::drainingComplete($workerId, $port, $msgId));
     }
 
     /**
@@ -726,7 +733,8 @@ class ControlClient
                 (string)($this->registerInfo['launch_id'] ?? ''),
                 (string)($this->registerInfo['process_kind'] ?? ControlMessage::PROCESS_KIND_FRAMEWORK),
                 (string)($this->registerInfo['module_code'] ?? ''),
-                (string)($this->registerInfo['instance_code'] ?? '')
+                (string)($this->registerInfo['instance_code'] ?? ''),
+                ''
             );
             if (!$registered) {
                 return false;
