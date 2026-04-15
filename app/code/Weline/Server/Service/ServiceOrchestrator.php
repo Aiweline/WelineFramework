@@ -333,6 +333,26 @@ class ServiceOrchestrator
         SchedulerSystem::yield();
     }
 
+    private function clearStaleIpcClientIfNeeded(ServiceInstance $instance): bool
+    {
+        if ($instance->ipcClientId === null || $this->controlServer === null) {
+            return false;
+        }
+
+        if ($this->controlServer->clientExists($instance->ipcClientId)) {
+            return false;
+        }
+
+        WlsLogger::warning_(
+            "[Orchestrator] 检测到失效 IPC 槽位: {$instance->role}#{$instance->instanceId} "
+            . "(client_id={$instance->ipcClientId})，按已断开处理"
+        );
+        $instance->ipcClientId = null;
+        $this->registry->updateInstance($instance);
+
+        return true;
+    }
+
     public function __construct()
     {
         $this->registry = new ServiceRegistry();
@@ -5489,6 +5509,8 @@ class ServiceOrchestrator
 
                 // 运行中的实例：检查 IPC 连接状态
                 // 优先以 IPC 连接判断存活（Windows 下 PID 可能不准确）
+                $this->clearStaleIpcClientIfNeeded($instance);
+
                 if ($instance->ipcClientId !== null) {
                     // 有 IPC 连接，视为健康
                     $result = $provider->healthCheck($instance);
@@ -8434,6 +8456,7 @@ class ServiceOrchestrator
                     || ($this->controlServer !== null && !$this->controlServer->clientExists($instance->ipcClientId));
                 $pidBad = $instance->pid > 0 && !$this->isProcessRunning($instance->pid);
                 if ($ipcBad || $pidBad) {
+                    $this->clearStaleIpcClientIfNeeded($instance);
                     WlsLogger::warning_(
                         '[Master自检] ' . $role . '#' . (string) $slot . ' 标记 READY 但失效 ipc='
                         . ($ipcBad ? '断' : '通') . ' pid=' . ($pidBad ? '死' : '活') . '，回收重启'
