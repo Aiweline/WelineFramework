@@ -1886,6 +1886,68 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertFalse($this->readPrivateBool($orchestrator, 'fullRestartRequested'));
     }
 
+    public function testMasterSelfAuditRecyclesReadyDispatcherWhenIpcClientSlotIsStale(): void
+    {
+        $server = new class extends MasterControlServer {
+            public array $existingClientIds = [];
+
+            public function getPort(): int
+            {
+                return 19981;
+            }
+
+            public function clientExists(int $clientId): bool
+            {
+                return \in_array($clientId, $this->existingClientIds, true);
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+
+        $registry = $orchestrator->getRegistry();
+        if (!$registry->hasProvider(ControlMessage::ROLE_DISPATCHER)) {
+            $registry->registerProvider(new DispatcherProvider());
+        }
+
+        $context = $this->createWorkerInfraContext();
+        $oldDispatcher = new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'dispatcher-stale-ipc',
+            pid: 43210,
+            port: $context->mainPort,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 999,
+            startedAt: \microtime(true) - 120.0,
+        );
+        $registry->addInstance($oldDispatcher);
+
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+        $this->writePrivate($orchestrator, 'running', true);
+        $this->writePrivate($orchestrator, 'desiredState', [
+            ControlMessage::ROLE_DISPATCHER => 1,
+        ]);
+
+        $readyBefore = (int) $this->invokePrivateWithArgs($orchestrator, 'countRoleSlotsReadyHealthy', [
+            ControlMessage::ROLE_DISPATCHER,
+        ]);
+        $this->invokePrivate($orchestrator, 'performMasterSelfAudit');
+        $readyAfter = (int) $this->invokePrivateWithArgs($orchestrator, 'countRoleSlotsReadyHealthy', [
+            ControlMessage::ROLE_DISPATCHER,
+        ]);
+
+        self::assertSame(0, $readyBefore);
+        self::assertSame(0, $readyAfter);
+        $dispatcher = $registry->getInstance(ControlMessage::ROLE_DISPATCHER, 1);
+        self::assertInstanceOf(ServiceInstance::class, $dispatcher);
+        self::assertNotSame($oldDispatcher->launchId, $dispatcher->launchId);
+        self::assertSame(ServiceInstance::STATE_STARTING, $dispatcher->state);
+        self::assertNull($dispatcher->ipcClientId);
+        self::assertSame($context->mainPort, $dispatcher->port);
+    }
+
     public function testSerialStartupFallbackHelpersRemoved(): void
     {
         $reflection = new \ReflectionClass(ServiceOrchestrator::class);
