@@ -225,8 +225,11 @@ class Stop extends CommandAbstract
         $this->showInstanceInfo($instanceInfo);
         echo "\n";
 
-        if ($fastLocal) {
-            $this->printer->note(__('快速清场模式：跳过 IPC 排水，直接终止旧实例子进程...'));
+        if ($force || $fastLocal) {
+            $message = $force
+                ? __('-f 强制模式：跳过 IPC 排水，直接终止实例进程...')
+                : __('快速清场模式：跳过 IPC 排水，直接终止旧实例子进程...');
+            $this->printer->note($message);
             if ($masterPid > 0) {
                 Processer::killProcessTreeByPid($masterPid, true);
                 SchedulerSystem::usleep(500000);
@@ -237,7 +240,11 @@ class Stop extends CommandAbstract
             $this->cleanupPidFiles($name, $instanceInfo);
             $this->releaseStartLock($name);
             echo "\n";
-            $this->printer->success(__('实例 [%{1}] 已停止（快速清场） ✓', [$name]));
+            $this->printer->success(
+                $force
+                    ? __('实例 [%{1}] 已停止（-f 强制模式） ✓', [$name])
+                    : __('实例 [%{1}] 已停止（快速清场） ✓', [$name])
+            );
             $this->printGoodbye(true);
             return;
         }
@@ -1388,7 +1395,7 @@ class Stop extends CommandAbstract
             [
                 '[name]' => __('实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）'),
                 '-a, --all' => __('停止所有运行中的实例（含 Weline Server 与 CLI 服务器）'),
-                '-f, --force' => __('强制停止（缩短超时时间）'),
+                '-f, --force' => __('强制停止（跳过 IPC 排水并立即终止进程）'),
                 '--help' => __('显示帮助信息'),
             ],
             [],

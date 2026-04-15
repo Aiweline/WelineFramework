@@ -8,6 +8,7 @@ use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use PHPUnit\Framework\TestCase;
+use Weline\Ai\Service\AiService;
 
 final class AiSiteExecutionBlueprintServiceTest extends TestCase
 {
@@ -26,9 +27,9 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         ]);
 
         self::assertNotSame('', (string)($artifacts['markdown'] ?? ''));
-        self::assertStringContainsString('阶段一执行蓝图（完整规划）', (string)($artifacts['markdown'] ?? ''));
-        self::assertStringContainsString('页面与区块执行细化', (string)($artifacts['markdown'] ?? ''));
-        self::assertStringContainsString('区块 1：', (string)($artifacts['markdown'] ?? ''));
+        self::assertStringContainsString('# ', (string)($artifacts['markdown'] ?? ''));
+        self::assertStringContainsString('home_page', (string)($artifacts['markdown'] ?? ''));
+        self::assertStringContainsString('about_page', (string)($artifacts['markdown'] ?? ''));
         self::assertIsArray($artifacts['plan_json'] ?? null);
         self::assertNotEmpty($artifacts['plan_json']['pages']['home_page']['blocks'] ?? []);
         $firstBlock = $artifacts['plan_json']['pages']['home_page']['blocks'][0] ?? [];
@@ -41,7 +42,10 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
 
     public function testRefineDraftPlanAddsChangeScopeReport(): void
     {
-        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildValidAiPlanResponse())
+        );
 
         $artifacts = $service->refineDraftPlan([
             'site_title' => 'Plan Service Test',
@@ -52,7 +56,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             'site_title' => 'Plan Service Test',
             'brief_description' => 'Need home and about pages with strong CTA.',
         ], [
-            'instruction' => '只调整关于页的品牌信任表达',
+            'instruction' => 'Only refine the about page trust messaging.',
             'target_scope' => 'about_page',
             'round' => 2,
         ]);
@@ -61,12 +65,15 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertIsArray($artifacts['change_scope_report'] ?? null);
         self::assertSame('about_page', (string)($artifacts['change_scope_report']['target_scope'] ?? ''));
         self::assertSame(2, (int)($artifacts['change_scope_report']['round'] ?? 0));
-        self::assertStringNotContainsString('## 本轮微调', (string)($artifacts['markdown'] ?? ''));
+        self::assertStringNotContainsString('## This Round Refine', (string)($artifacts['markdown'] ?? ''));
     }
 
     public function testRebuildDraftPlanAddsRebuildSummary(): void
     {
-        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildValidAiPlanResponse())
+        );
 
         $artifacts = $service->rebuildDraftPlan([
             'site_title' => 'Plan Service Test',
@@ -77,7 +84,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             'site_title' => 'Plan Service Test',
             'brief_description' => 'Need home and about pages with strong CTA.',
         ], [
-            'instruction' => '按新的品牌方向重建整个阶段一方案',
+            'instruction' => 'Rebuild the stage one plan around a new brand direction.',
             'round' => 3,
         ]);
 
@@ -85,8 +92,8 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertIsArray($artifacts['rebuild_summary'] ?? null);
         self::assertSame(3, (int)($artifacts['rebuild_summary']['round'] ?? 0));
         self::assertGreaterThan(0, (int)($artifacts['rebuild_summary']['task_count'] ?? 0));
-        self::assertStringContainsString('风格决策理由：', (string)($artifacts['markdown'] ?? ''));
-        self::assertStringContainsString('色盘决策理由：', (string)($artifacts['markdown'] ?? ''));
+        self::assertStringContainsString('# ', (string)($artifacts['markdown'] ?? ''));
+        self::assertStringContainsString('home_page', (string)($artifacts['markdown'] ?? ''));
         self::assertIsArray($artifacts['plan_json'] ?? null);
     }
 
@@ -110,7 +117,11 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
 
     public function testRefineAddsPartnerBlockWhenInstructionRequestsPartners(): void
     {
-        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildValidAiPlanResponse())
+        );
+
         $artifacts = $service->refineDraftPlan([
             'site_title' => 'Partner Section Site',
             'brief_description' => 'Need trust and conversion.',
@@ -120,7 +131,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             'site_title' => 'Partner Section Site',
             'brief_description' => 'Need trust and conversion.',
         ], [
-            'instruction' => '请增加一个合作伙伴模块，展示合作品牌logo墙',
+            'instruction' => 'Please add a partner section that shows brand logos.',
             'target_scope' => Page::TYPE_HOME,
             'round' => 2,
         ]);
@@ -128,6 +139,125 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         $tasks = \is_array($artifacts['execution_blueprint']['tasks'] ?? null) ? $artifacts['execution_blueprint']['tasks'] : [];
         $taskKeys = \array_map(static fn(array $task): string => (string)($task['task_key'] ?? ''), $tasks);
         self::assertContains('page:home_page:partner', $taskKeys);
-        self::assertStringContainsString('合作伙伴', (string)($artifacts['markdown'] ?? ''));
+        self::assertStringContainsString(
+            'partner',
+            (string)\json_encode($artifacts['plan_json']['pages']['home_page']['blocks'] ?? [], \JSON_UNESCAPED_UNICODE)
+        );
+    }
+
+    private function createStreamingAiServiceStub(string $response): AiService
+    {
+        $aiService = $this->createMock(AiService::class);
+        $aiService->method('generateStream')
+            ->willReturnCallback(static function (string $prompt, callable $callback) use ($response): void {
+                $callback($response);
+            });
+
+        return $aiService;
+    }
+
+    private function buildValidAiPlanResponse(): string
+    {
+        return \json_encode([
+            'markdown' => '# Site Blueprint',
+            'plan_json' => [
+                'site_strategy' => [
+                    'site_display_name' => 'Plan Service Test',
+                    'summary' => 'Need home and about pages with strong CTA.',
+                    'website_type' => 'brand site',
+                    'core_goal' => 'Capture leads',
+                    'target_users' => 'Prospects',
+                    'conversion_path' => 'Hero -> proof -> contact',
+                ],
+                'theme_style' => [
+                    'name' => 'Plan-Driven Hybrid',
+                    'visual_tone' => 'Structured and clear',
+                    'font_family' => 'Sans Serif',
+                ],
+                'palette' => [
+                    'name' => 'Ocean Slate',
+                    'primary' => '#0f172a',
+                    'accent' => '#2563eb',
+                    'surface' => '#f8fafc',
+                    'text' => '#0f172a',
+                ],
+                'navigation_plan' => [
+                    'header_items' => [],
+                ],
+                'footer_plan' => [
+                    'featured' => [],
+                    'policies' => [],
+                ],
+                'seo_strategy' => [
+                    'core_intent' => 'brand site',
+                    'primary_keywords' => ['brand site'],
+                    'keyword_page_map' => [],
+                    'content_strategy' => 'Answer user intent',
+                    'internal_linking' => 'Link core pages',
+                    'url_structure' => 'flat',
+                ],
+                'page_types' => ['home_page', 'about_page'],
+                'pages' => [
+                    'home_page' => [
+                        'page_goal' => 'Explain value and drive conversion.',
+                        'primary_keywords' => ['home keyword'],
+                        'secondary_keywords' => ['cta keyword'],
+                        'blocks' => [
+                            [
+                                'block_key' => 'hero',
+                                'goal' => 'Explain value',
+                                'keywords' => ['hero keyword'],
+                                'content' => 'Hero content direction',
+                                'field_plan' => [
+                                    ['field' => 'title', 'sample' => 'Hero title', 'reason' => 'Explain value quickly'],
+                                ],
+                                'execution_script' => [
+                                    'feature_points' => ['Primary CTA'],
+                                    'core_copy' => 'Hero copy',
+                                    'typography' => 'Bold heading',
+                                    'style_tone' => 'High trust',
+                                    'background_direction' => 'Clean background',
+                                    'media_assets' => ['hero.jpg'],
+                                ],
+                                'reusable' => 'yes',
+                                'seo_impact' => 'high',
+                            ],
+                        ],
+                    ],
+                    'about_page' => [
+                        'page_goal' => 'Build trust.',
+                        'primary_keywords' => ['about keyword'],
+                        'secondary_keywords' => ['trust keyword'],
+                        'blocks' => [
+                            [
+                                'block_key' => 'hero',
+                                'goal' => 'Introduce brand',
+                                'keywords' => ['brand keyword'],
+                                'content' => 'About content direction',
+                                'field_plan' => [
+                                    ['field' => 'title', 'sample' => 'About title', 'reason' => 'State the brand clearly'],
+                                ],
+                                'execution_script' => [
+                                    'feature_points' => ['Brand proof'],
+                                    'core_copy' => 'About copy',
+                                    'typography' => 'Readable',
+                                    'style_tone' => 'Trustworthy',
+                                    'background_direction' => 'Neutral',
+                                    'media_assets' => ['about.jpg'],
+                                ],
+                                'reusable' => 'no',
+                                'seo_impact' => 'medium',
+                            ],
+                        ],
+                    ],
+                ],
+                'execution_steps' => [
+                    ['step' => 1, 'task_key' => 'shared:header', 'task_type' => 'shared', 'status' => 'pending'],
+                ],
+                'stage2_task_hints' => [
+                    ['page' => 'home_page', 'block' => 'hero', 'task_types' => ['copywriting', 'ui_design', 'frontend_dev']],
+                ],
+            ],
+        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }
 }

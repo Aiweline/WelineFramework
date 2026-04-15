@@ -102,7 +102,55 @@ function resolveProxyOrigin(runtimeInfo) {
 const runtimeInfo = getRuntimeInfo({ refresh: true });
 const baseURL = resolveProxyOrigin(runtimeInfo);
 const moduleFilter = process.env.MODULE_FILTER || process.argv.find(arg => arg.startsWith('--module='))?.split('=')[1];
+const cliSpecArgs = (() => {
+  const args = process.argv.slice(2);
+  const result = [];
+  args.forEach((arg) => {
+    const raw = String(arg || '').trim();
+    if (!raw || raw.startsWith('-')) {
+      return;
+    }
+    // Playwright positional filter 可能是测试标题/正则；仅把明显的 spec 路径当成显式文件
+    if (!/\.spec\.js$/i.test(raw)) {
+      return;
+    }
+    const normalized = raw.replace(/\\/g, '/');
+    result.push(normalized);
+  });
+  return result;
+})();
+// 主进程与 worker 进程的 argv 可能不同；显式 spec 通过环境变量固化，避免 “Test not found in worker process”
+if (cliSpecArgs.length > 0 && !process.env.PLAYWRIGHT_TEST_FILES) {
+  const normalized = [];
+  cliSpecArgs.forEach((specArg) => {
+    const absolute = path.isAbsolute(specArg)
+      ? specArg
+      : path.resolve(process.cwd(), specArg);
+    if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) {
+      return;
+    }
+    normalized.push(path.relative(rootDir, absolute).replace(/\\/g, '/'));
+  });
+  if (normalized.length > 0) {
+    process.env.PLAYWRIGHT_TEST_FILES = JSON.stringify(normalized);
+  }
+}
 const explicitTestFiles = (() => {
+  if (cliSpecArgs.length > 0) {
+    const normalized = [];
+    cliSpecArgs.forEach((specArg) => {
+      const absolute = path.isAbsolute(specArg)
+        ? specArg
+        : path.resolve(process.cwd(), specArg);
+      if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) {
+        return;
+      }
+      normalized.push(path.relative(rootDir, absolute).replace(/\\/g, '/'));
+    });
+    if (normalized.length > 0) {
+      return new Set(normalized);
+    }
+  }
   const raw = process.env.PLAYWRIGHT_TEST_FILES;
   if (!raw) {
     return null;
