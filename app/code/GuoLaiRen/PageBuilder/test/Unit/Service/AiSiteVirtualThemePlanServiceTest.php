@@ -19,7 +19,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             'tasks' => [
                 ['task_key' => 'shared:header', 'group_key' => 'shared', 'page_type' => '', 'label' => 'Header', 'sort_order' => 10],
                 ['task_key' => 'shared:footer', 'group_key' => 'shared', 'page_type' => '', 'label' => 'Footer', 'sort_order' => 20],
-                ['task_key' => 'page:home_page:hero', 'group_key' => 'home_page', 'page_type' => 'home_page', 'label' => 'Hero', 'sort_order' => 100],
+                ['task_key' => 'page:home_page:content/home-page-hero', 'group_key' => 'home_page', 'page_type' => 'home_page', 'label' => 'Hero', 'section_code' => 'content/home-page-hero', 'sort_order' => 100],
             ],
         ];
         $scope = [
@@ -33,22 +33,42 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                         'blocks' => [
                             [
                                 'block_key' => 'hero',
+                                'section_code' => 'content/home-page-hero',
                                 'goal' => 'Explain value',
+                                'why' => 'Hero should translate the main value into first-screen conversion intent.',
+                                'content_brief' => ['goal' => 'Lead with value', 'cta_direction' => 'Drive to the main CTA first.'],
+                                'execution_script' => ['feature_points' => ['Primary headline', 'Primary CTA'], 'core_copy' => 'Hero core copy'],
+                                'seo_brief' => ['keywords' => ['india games'], 'anchors' => ['#hero'], 'internal_links' => ['/about']],
                                 'field_plan' => [['field' => 'title', 'sample' => 'Hero title', 'reason' => 'Explain the offer']],
                                 'result_ref' => [],
                             ],
                         ],
                     ],
                 ],
+                'shared_components' => [
+                    'header' => [
+                        'goal' => 'Build a reusable header with primary navigation.',
+                        'payload' => ['header_items' => [['label' => 'Home', 'href' => '/']]],
+                        'style_brief' => ['palette' => ['name' => 'Ocean Slate'], 'theme_style' => ['name' => 'Plan-Driven Hybrid']],
+                        'seo_brief' => ['core_intent' => 'intent'],
+                    ],
+                    'footer' => [
+                        'goal' => 'Build a reusable footer with policies.',
+                        'payload' => ['featured' => [['label' => 'About', 'href' => '/about']]],
+                        'style_brief' => ['palette' => ['name' => 'Ocean Slate'], 'theme_style' => ['name' => 'Plan-Driven Hybrid']],
+                        'seo_brief' => ['core_intent' => 'intent'],
+                    ],
+                ],
             ],
             'execution_blueprint_confirmed_signature' => 'phase-one-signature',
+            'plan_markdown' => "# Stage 1 Plan\n\n## Home\n- Hero focuses on first-screen conversion",
             'plan_structured' => [
                 'site_strategy' => ['site_display_name' => 'Task Plan Test', 'summary' => 'Summary'],
                 'palette' => ['name' => 'Ocean Slate'],
                 'theme_style' => ['name' => 'Plan-Driven Hybrid', 'responsive_rule' => 'Single column first'],
                 'seo_strategy' => ['core_intent' => 'intent'],
-                'navigation_plan' => ['header_items' => []],
-                'footer_plan' => ['featured' => []],
+                'navigation_plan' => ['header_items' => [['label' => 'Home', 'href' => '/']]],
+                'footer_plan' => ['featured' => [['label' => 'About', 'href' => '/about']], 'policies' => [['label' => 'Privacy', 'href' => '/privacy']]],
             ],
         ];
 
@@ -60,6 +80,11 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertSame('phase-one-signature', (string)($artifacts['structured']['plan_signature'] ?? ''));
         self::assertIsArray($artifacts['structured']['execution_order'] ?? null);
         self::assertNotEmpty($artifacts['structured']['page_tasks']['home_page'] ?? []);
+        self::assertSame('Open with a clear value proposition.', (string)($artifacts['structured']['page_tasks']['home_page'][0]['plan_context']['block_goal'] ?? ''));
+        self::assertSame('hero', (string)($artifacts['structured']['page_tasks']['home_page'][0]['plan_context']['block_code'] ?? ''));
+        self::assertSame('content/home-page-hero', (string)($artifacts['structured']['page_tasks']['home_page'][0]['plan_context']['section_code'] ?? ''));
+        self::assertIsArray($artifacts['structured']['stage1_task_cues']['pages']['page:home_page:content/home-page-hero'] ?? null);
+        self::assertSame('Build a reusable header with primary navigation.', (string)($artifacts['structured']['stage1_task_cues']['shared']['shared:header']['stage1_goal'] ?? ''));
     }
 
     public function testBuildTaskPlanArtifactsFallsBackDeterministicallyWhenFakeModeIsEnabled(): void
@@ -113,6 +138,29 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertSame('Open with a clear value proposition.', (string)($pageTask['task_script']['story_goal'] ?? ''));
         self::assertNotEmpty($pageTask['task_script']['field_content_requirements'] ?? []);
         self::assertNotEmpty($pageTask['implementation_contract']['acceptance'] ?? []);
+    }
+
+    public function testBuildTaskPlanArtifactsPassesStageOneTaskCuesIntoAiPrompt(): void
+    {
+        $capturedPrompt = null;
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generate')
+            ->willReturnCallback(function (string $prompt) use (&$capturedPrompt): string {
+                $capturedPrompt = $prompt;
+                return $this->buildTaskPlanResponse();
+            });
+        $service = new AiSiteVirtualThemePlanService($aiService);
+
+        $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
+
+        self::assertIsString($capturedPrompt);
+        self::assertStringContainsString('Extracted stage-1 task cues:', $capturedPrompt);
+        self::assertStringContainsString('page:home_page:content\\/home-page-hero', $capturedPrompt);
+        self::assertStringContainsString('Build a reusable header with primary navigation.', $capturedPrompt);
+        self::assertStringContainsString('Hero should translate the main value into first-screen conversion intent.', $capturedPrompt);
+        self::assertStringContainsString('This is the confirmed virtual-theme task plan for stage 2: output must be directly usable for virtual_theme_plan.confirmed persistence after user confirmation.', $capturedPrompt);
+        self::assertStringContainsString('The task plan must make shared -> home -> other page execution explicit and explain why shared tasks block later tasks.', $capturedPrompt);
     }
 
     public function testRefineDraftTaskPlanAddsChangeScopeReport(): void
@@ -303,5 +351,75 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 ],
             ],
         ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildPromptBlueprint(): array
+    {
+        return [
+            'tasks' => [
+                ['task_key' => 'shared:header', 'group_key' => 'shared', 'page_type' => '', 'label' => 'Header', 'sort_order' => 10],
+                ['task_key' => 'shared:footer', 'group_key' => 'shared', 'page_type' => '', 'label' => 'Footer', 'sort_order' => 20],
+                ['task_key' => 'page:home_page:content/home-page-hero', 'group_key' => 'home_page', 'page_type' => 'home_page', 'label' => 'Hero', 'section_code' => 'content/home-page-hero', 'sort_order' => 100],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildPromptScope(): array
+    {
+        return [
+            'site_title' => 'Task Plan Test',
+            'workspace_track' => 'virtual_theme',
+            'execution_blueprint' => [
+                'page_types' => ['home_page'],
+                'pages' => [
+                    'home_page' => [
+                        'page_goal' => 'Explain value',
+                        'blocks' => [
+                            [
+                                'block_key' => 'hero',
+                                'section_code' => 'content/home-page-hero',
+                                'goal' => 'Open with a clear value proposition.',
+                                'why' => 'Hero should translate the main value into first-screen conversion intent.',
+                                'content_brief' => ['goal' => 'Lead with value', 'body_direction' => 'Keep the first fold scannable.'],
+                                'execution_script' => ['feature_points' => ['Primary headline', 'Primary CTA'], 'core_copy' => 'Hero core copy'],
+                                'seo_brief' => ['keywords' => ['india games'], 'anchors' => ['#hero'], 'internal_links' => ['/about']],
+                                'field_plan' => [['field' => 'title', 'sample' => 'Hero title', 'reason' => 'Explain the offer']],
+                                'result_ref' => [],
+                            ],
+                        ],
+                    ],
+                ],
+                'shared_components' => [
+                    'header' => [
+                        'goal' => 'Build a reusable header with primary navigation.',
+                        'payload' => ['header_items' => [['label' => 'Home', 'href' => '/'], ['label' => 'About', 'href' => '/about']]],
+                        'style_brief' => ['palette' => ['name' => 'Ocean Slate', 'primary' => '#0f172a'], 'theme_style' => ['name' => 'Plan-Driven Hybrid', 'visual_tone' => 'Trustworthy']],
+                        'seo_brief' => ['core_intent' => 'intent'],
+                    ],
+                    'footer' => [
+                        'goal' => 'Build a reusable footer with policies.',
+                        'payload' => ['featured' => [['label' => 'About', 'href' => '/about']]],
+                        'style_brief' => ['palette' => ['name' => 'Ocean Slate', 'primary' => '#0f172a'], 'theme_style' => ['name' => 'Plan-Driven Hybrid', 'visual_tone' => 'Trustworthy']],
+                        'seo_brief' => ['core_intent' => 'intent'],
+                    ],
+                ],
+            ],
+            'execution_blueprint_confirmed_signature' => 'phase-one-signature',
+            'plan_markdown' => "# Stage 1 Plan\n\n## Home\n- Hero focuses on first-screen conversion",
+            'plan_structured' => [
+                'site_strategy' => ['site_display_name' => 'Task Plan Test', 'summary' => 'Summary'],
+                'palette' => ['name' => 'Ocean Slate'],
+                'theme_style' => ['name' => 'Plan-Driven Hybrid', 'responsive_rule' => 'Single column first'],
+                'seo_strategy' => ['core_intent' => 'intent'],
+                'navigation_plan' => ['header_items' => [['label' => 'Home', 'href' => '/'], ['label' => 'About', 'href' => '/about']]],
+                'footer_plan' => ['featured' => [['label' => 'About', 'href' => '/about']], 'policies' => [['label' => 'Privacy', 'href' => '/privacy']]],
+            ],
+        ];
     }
 }

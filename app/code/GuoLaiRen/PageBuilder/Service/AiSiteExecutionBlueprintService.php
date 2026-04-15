@@ -472,6 +472,12 @@ final class AiSiteExecutionBlueprintService
         $baselineText = $baselinePlanJson === []
             ? '{}'
             : (\json_encode($baselinePlanJson, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}');
+        $baselineExecutionBlueprint = \is_array($baseline['execution_blueprint'] ?? null) ? $baseline['execution_blueprint'] : [];
+        $baselineExecutionBlueprintText = $baselineExecutionBlueprint === []
+            ? '{}'
+            : (\json_encode($baselineExecutionBlueprint, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}');
+        $selectedPageCoverageHints = $this->buildSelectedPageCoverageHints($pageTypes);
+        $promptInputProfile = $this->buildPromptInputProfile($scope, $websiteProfile, $instruction, $targetScope);
 
         $outputLanguage = $planLocale !== '' ? $planLocale : 'zh_Hans_CN';
         $pageTypeText = $pageTypes === [] ? '-' : \implode(', ', $pageTypes);
@@ -506,22 +512,78 @@ final class AiSiteExecutionBlueprintService
             '- page_types 只能使用 selected_page_types。',
             '- 信息不足时允许补全，但必须标记前缀“[假设]”。',
             '- 即便是 refine/rebuild/translation，也必须输出完整整案，不得片段。',
+            '- 第一阶段只输出 plan，不允许出现 build started / executing / task running / log stream / percent complete 等执行态措辞。',
+            '- 每个页面都必须能被第二阶段拆成 shared_tasks + page_tasks，因此 page-level why / block-level why / field_plan / execution_script / stage2_task_hints 都必须完整。',
+            '- 每个 page block 必须包含 why、content、field_plan、execution_script、keywords、seo_impact，不允许空数组或空字符串占位。',
+            '- execution_script 必须解释 feature_points、core_copy、typography、style_tone、background_direction、media_assets，且可直接指导设计与开发。',
+            '- 必须输出 stage2_task_hints，并显式说明每个页面/区块将如何进入第二阶段任务拆分。',
+            '- 必须覆盖 selected_page_types 中的每一个页面，不允许遗漏，也不允许新增未选页面。',
+            '- Header/Footer 必须写成全站共享规划，明确导航、政策链接、品牌入口、CTA体系、SEO/internal-link 角色。',
+            '- Markdown 方案必须能被产品和开发直接确认，不得只给抽象方向词。',
             '严格遵循文档约束（app/code/GuoLaiRen/PageBuilder/doc/建站中台/AI建站中台-计划.md 第一阶段MUST）：',
             '- 第一阶段只输出方案（plan），禁止任何 build 执行语义或日志语义。',
             '- 输出必须覆盖全部选中页面类型，不得遗漏页面。',
             '- 输出必须可拆解为第二阶段任务蓝图；并保持字段契约完整。',
             '- 输出需确保 Markdown 方案与结构化蓝图一致。',
+            '- 方案必须支持后续“确认后刷新进入第二阶段、生成虚拟主题任务方案、shared -> home -> other pages”流程。',
             'Markdown 输出模板（必须严格按结构填写，不得缺段）：',
             $this->buildPageMarkdownTemplate($pageTypes),
+            'Selected page coverage hints (must all be represented in the final plan):',
+            $selectedPageCoverageHints,
             'Input context:',
             'site_display_name: ' . $siteDisplayName,
             'site_summary: ' . ($siteSummary !== '' ? $siteSummary : '-'),
             'selected_page_types: ' . $pageTypeText,
             'target_scope: ' . ($targetScope !== '' ? $targetScope : 'full_plan'),
             'instruction: ' . ($instruction !== '' ? $instruction : '-'),
+            'prompt_input_profile:',
+            $promptInputProfile,
             'baseline_plan_json:',
             $baselineText,
+            'baseline_execution_blueprint:',
+            $baselineExecutionBlueprintText,
         ]);
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     */
+    private function buildSelectedPageCoverageHints(array $pageTypes): string
+    {
+        $lines = [];
+        foreach ($pageTypes as $pageType) {
+            $pageType = \trim((string)$pageType);
+            if ($pageType === '') {
+                continue;
+            }
+            $lines[] = '- ' . $pageType . ': must include page goal, conversion rhythm, block why, field plan, execution script, SEO structure, CTA usage, responsive guidance.';
+        }
+
+        return $lines === [] ? '-' : \implode("\n", $lines);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     */
+    private function buildPromptInputProfile(
+        array $scope,
+        array $websiteProfile,
+        string $instruction,
+        string $targetScope
+    ): string {
+        $profile = [
+            'site_title' => \trim((string)($scope['site_title'] ?? $websiteProfile['site_title'] ?? '')),
+            'site_tagline' => \trim((string)($scope['site_tagline'] ?? $websiteProfile['site_tagline'] ?? '')),
+            'brief_description' => \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? '')),
+            'target_domain' => \trim((string)($scope['target_domain'] ?? $websiteProfile['target_domain'] ?? '')),
+            'default_locale' => \trim((string)($scope['default_locale'] ?? $scope['default_language'] ?? '')),
+            'plan_locale' => \trim((string)($scope['plan_locale'] ?? '')),
+            'instruction' => $instruction,
+            'target_scope' => $targetScope,
+        ];
+
+        return (string)(\json_encode($profile, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}');
     }
 
     /**
