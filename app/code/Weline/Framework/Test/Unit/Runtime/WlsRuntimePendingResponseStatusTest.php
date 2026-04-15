@@ -51,8 +51,8 @@ final class WlsRuntimePendingResponseStatusTest extends TestCase
         $runtime->capture($collector);
         $status = $runtime->consumePendingResponseStatus();
 
-        self::assertSame(['status_code' => 200, 'explicit' => true], $status);
-        self::assertSame(['status_code' => null, 'explicit' => false], $runtime->consumePendingResponseStatus());
+        self::assertSame(['status_code' => 200, 'explicit' => true, 'sse_started' => false], $status);
+        self::assertSame(['status_code' => null, 'explicit' => false, 'sse_started' => false], $runtime->consumePendingResponseStatus());
         self::assertSame(['Content-Type' => 'application/json'], $runtime->consumePendingHeaders());
     }
 
@@ -102,7 +102,7 @@ final class WlsRuntimePendingResponseStatusTest extends TestCase
         $resultB = $fiberB->getReturn();
         self::assertSame('application/json; charset=utf-8', $resultB['headers']['Content-Type'] ?? null);
         self::assertSame('fiber-b', $resultB['cookies']['sid']['value'] ?? null);
-        self::assertSame(['status_code' => 202, 'explicit' => true], $resultB['status']);
+        self::assertSame(['status_code' => 202, 'explicit' => true, 'sse_started' => false], $resultB['status']);
 
         self::assertNull($fiberA->resume());
         self::assertTrue($fiberA->isTerminated());
@@ -110,7 +110,7 @@ final class WlsRuntimePendingResponseStatusTest extends TestCase
         $resultA = $fiberA->getReturn();
         self::assertSame('text/html; charset=utf-8', $resultA['headers']['Content-Type'] ?? null);
         self::assertSame('fiber-a', $resultA['cookies']['sid']['value'] ?? null);
-        self::assertSame(['status_code' => 201, 'explicit' => true], $resultA['status']);
+        self::assertSame(['status_code' => 201, 'explicit' => true, 'sse_started' => false], $resultA['status']);
     }
 
     public function testSseHandledMarkerDoesNotRequireEventSourceAcceptHeader(): void
@@ -128,5 +128,28 @@ final class WlsRuntimePendingResponseStatusTest extends TestCase
         $method->setAccessible(true);
 
         self::assertTrue((bool)$method->invoke($runtime, $request));
+    }
+
+    public function testSnapshotPendingResponseStateMarksSseContentTypeWhenStreamAlreadyStarted(): void
+    {
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        RequestContext::init();
+        RequestContext::set(RequestContext::SSE_WRITER_KEY, true);
+
+        $runtime = new class extends WlsRuntime {
+            public function capture(HeaderCollector $collector): void
+            {
+                $this->snapshotPendingResponseState($collector);
+            }
+        };
+
+        $collector = HeaderCollector::getInstance();
+        $runtime->capture($collector);
+
+        $headers = $runtime->consumePendingHeaders();
+        $status = $runtime->consumePendingResponseStatus();
+
+        self::assertSame('text/event-stream; charset=utf-8', $headers['Content-Type'] ?? null);
+        self::assertTrue((bool)($status['sse_started'] ?? false));
     }
 }
