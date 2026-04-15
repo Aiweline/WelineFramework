@@ -12,6 +12,7 @@ namespace Weline\Ai\Service\Provider;
 
 use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Service\ModelCollector;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * AI 供应商模型同步服务
@@ -438,7 +439,7 @@ class ModelSyncService
             }
         }
 
-        $response = curl_exec($ch);
+        $response = $this->executeCurl($ch);
         if ($response === false) {
             $error = curl_error($ch);
             throw new \Exception($error ?: __('模型列表请求失败'));
@@ -455,6 +456,50 @@ class ModelSyncService
         }
 
         return $decoded;
+    }
+
+    private function executeCurl(\CurlHandle $ch): string|bool
+    {
+        if (!SchedulerSystem::isSchedulerActive() || !\Fiber::getCurrent()) {
+            return curl_exec($ch);
+        }
+
+        $multi = curl_multi_init();
+        curl_multi_add_handle($multi, $ch);
+
+        $running = 0;
+        $multiResult = \CURLM_OK;
+        $curlResult = \CURLE_OK;
+
+        do {
+            do {
+                $multiResult = curl_multi_exec($multi, $running);
+            } while ($multiResult === \CURLM_CALL_MULTI_PERFORM);
+
+            while ($info = curl_multi_info_read($multi)) {
+                if (($info['handle'] ?? null) === $ch) {
+                    $curlResult = (int)($info['result'] ?? \CURLE_OK);
+                }
+            }
+
+            if ($multiResult !== \CURLM_OK || $curlResult !== \CURLE_OK) {
+                break;
+            }
+
+            if ($running > 0) {
+                SchedulerSystem::yieldDelay(10);
+            }
+        } while ($running > 0);
+
+        $content = curl_multi_getcontent($ch);
+        curl_multi_remove_handle($multi, $ch);
+        curl_multi_close($multi);
+
+        if ($multiResult !== \CURLM_OK || $curlResult !== \CURLE_OK) {
+            return false;
+        }
+
+        return $content;
     }
 
     /**

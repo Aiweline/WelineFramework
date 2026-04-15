@@ -235,6 +235,13 @@ final class PreviewContextService
             $normalized['preview_token'] ? self::SHELL_PREVIEW : self::SHELL_THEME_EDITOR
         );
 
+        // Canonical frontend preview routes must never inherit backend editor area.
+        // Keeping editor_area=backend on shell=preview will sync legacy preview keys
+        // toward backend theme selection and pollute frontend preview resolution.
+        if ($normalized['shell'] === self::SHELL_PREVIEW) {
+            $normalized['editor_area'] = self::AREA_FRONTEND;
+        }
+
         $previewMode = \trim((string)($normalized['preview_mode'] ?? ''));
         $normalized['preview_mode'] = $previewMode !== '' ? $previewMode : self::DEFAULT_PREVIEW_MODE;
 
@@ -460,7 +467,10 @@ final class PreviewContextService
 
     private function getRawQueryParams(): array
     {
-        $requestUri = (string) (\w_env('request.uri', '') ?? '');
+        $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        if ($requestUri === '') {
+            $requestUri = (string) (\w_env('request.uri', '') ?? '');
+        }
         $query = (string)\parse_url($requestUri, \PHP_URL_QUERY);
         if ($query === '') {
             return [];
