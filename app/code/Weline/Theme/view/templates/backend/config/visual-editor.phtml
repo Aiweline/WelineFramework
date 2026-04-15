@@ -13,6 +13,23 @@ $optionsUrl = $this->getUrl('theme/backend/config/themeConfig/options');
 $saveSelectionUrl = $this->getUrl('theme/backend/config/themeConfig/saveSelection');
 $fileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/fileParams');
 $saveFileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/saveFileParams');
+
+$themeIdValue = 0;
+$themeNameValue = __('未选择主题');
+if (is_object($theme)) {
+    if (method_exists($theme, 'getId')) {
+        $themeIdValue = (int)$theme->getId();
+    }
+    if (method_exists($theme, 'getName') && $theme->getName()) {
+        $themeNameValue = (string)$theme->getName();
+    }
+} elseif (is_array($theme)) {
+    $themeIdValue = (int)($theme['id'] ?? 0);
+    if (!empty($theme['name'])) {
+        $themeNameValue = (string)$theme['name'];
+    }
+}
+$hasTheme = $themeIdValue > 0;
 ?>
 <!DOCTYPE html>
 <html lang="<?= \Weline\Framework\App\Env::getInstance()->getLocale() ?>">
@@ -85,16 +102,16 @@ $saveFileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/saveFilePar
     <header class="editor-toolbar">
         <div class="toolbar-left">
             <div class="theme-info">
-                <span class="theme-name"><?= $theme ? $theme->getName() : __('未选择主题') ?></span>
+                <span class="theme-name"><?= $themeNameValue ?></span>
                 <span class="theme-badge"><?= $area ?></span>
             </div>
             
             <div class="area-switcher btn-group btn-group-sm">
-                <a href="<?= $theme ? $this->getUrl('*/*/*', ['area' => 'frontend', 'theme_id' => $theme->getId()]) : '#' ?>" 
+                <a href="<?= $hasTheme ? $this->getUrl('*/*/*', ['area' => 'frontend', 'theme_id' => $themeIdValue]) : '#' ?>" 
                    class="btn <?= $area === 'frontend' ? 'btn-primary' : 'btn-outline-secondary' ?>">
                    <i class="mdi mdi-web"></i> <?= __('前端') ?>
                 </a>
-                <a href="<?= $theme ? $this->getUrl('*/*/*', ['area' => 'backend', 'theme_id' => $theme->getId()]) : '#' ?>" 
+                <a href="<?= $hasTheme ? $this->getUrl('*/*/*', ['area' => 'backend', 'theme_id' => $themeIdValue]) : '#' ?>" 
                    class="btn <?= $area === 'backend' ? 'btn-primary' : 'btn-outline-secondary' ?>">
                    <i class="mdi mdi-cog"></i> <?= __('后端') ?>
                 </a>
@@ -241,7 +258,7 @@ $saveFileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/saveFilePar
         <!-- Center Panel: Live Preview -->
         <main class="preview-panel">
             <div class="preview-container desktop" id="preview-container">
-                <iframe src="<?= $theme ? $this->getUrl('theme/backend/index/preview', ['theme_id' => $theme->getId(), 'area' => $area]) : 'about:blank' ?>" 
+                <iframe src="<?= $hasTheme ? $this->getUrl('theme/backend/index/preview', ['theme_id' => $themeIdValue, 'area' => $area]) : 'about:blank' ?>" 
                         frameborder="0" id="preview-iframe" title="<?= __('预览') ?>"></iframe>
                 <div class="preview-loading" id="preview-loading">
                     <div class="spinner-border text-primary" role="status"></div>
@@ -316,7 +333,7 @@ $saveFileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/saveFilePar
 <!-- Data Passing -->
 <script>
     window.ThemeEditorConfig = {
-        themeId: '<?= $theme ? $theme->getId() : 0 ?>',
+        themeId: '<?= $themeIdValue ?>',
         area: '<?= $area ?>',
         scope: '<?= $scope ?>',
         locale: '<?= $currentLocale ?>',
