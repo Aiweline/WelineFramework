@@ -756,6 +756,12 @@ SCRIPT;
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'AI 建站事件流', 'mdi-access-point', '订阅 AI 建站会话事件流', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function getStreamSse(): void
     {
+        // #region agent log
+        $this->appendDebugSessionLog('H9', 'getStreamSse entry', [
+            'has_admin' => ((int)$this->getLoginUserId()) > 0,
+            'public_id_present' => \trim((string)$this->request->getGet('public_id', '')) !== '',
+        ]);
+        // #endregion
         if (\defined('DEV') && DEV && !\headers_sent()) {
             \header('X-AiSite-Sse-Debug: getStreamSse-entered');
         }
@@ -922,6 +928,12 @@ SCRIPT;
     {
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
+        // #region agent log
+        $this->appendDebugSessionLog('H5', 'handleStartPlan entry', [
+            'has_admin' => $adminId > 0,
+            'public_id_present' => $publicId !== '',
+        ]);
+        // #endregion
         if ($adminId <= 0 || $publicId === '') {
             return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
         }
@@ -955,6 +967,14 @@ SCRIPT;
         $currentScope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
         $planStartDecision = $this->resolvePlanStartDecision($currentScope);
         $hasPlanDraft = \is_array($currentScope['plan_json'] ?? null) && $currentScope['plan_json'] !== [];
+        // #region agent log
+        $this->appendDebugSessionLog('H6', 'start-plan decision snapshot', [
+            'has_plan_draft' => $hasPlanDraft,
+            'decision_action' => (string)($planStartDecision['action'] ?? ''),
+            'confirm_regenerate' => $confirmRegenerate,
+            'plan_locale' => (string)($scope['plan_locale'] ?? ''),
+        ]);
+        // #endregion
         if (
             $hasPlanDraft
             && \in_array((string)($planStartDecision['action'] ?? ''), ['rebuild', 'translate'], true)
@@ -993,6 +1013,13 @@ SCRIPT;
             $planStartDecision = $this->resolvePlanStartDecision($currentScope);
         }
         if ((string)($planStartDecision['action'] ?? '') === 'reuse' && $hasPlanDraft) {
+            // #region agent log
+            $this->appendDebugSessionLog('H7', 'start-plan response reuse-no-sse', [
+                'start_sse' => false,
+                'requires_confirmation' => false,
+                'operation' => 'plan',
+            ]);
+            // #endregion
             return $this->fetchJson([
                 'success' => true,
                 'message' => (string)__('当前方案无需重建，已保留并回显已有方案内容。'),
@@ -1014,6 +1041,19 @@ SCRIPT;
         ]);
         if (empty($result['success'])) {
             if ((string)($result['operation'] ?? '') === 'plan') {
+                $activeOperationDebug = \is_array($currentScope['active_operation'] ?? null) ? $currentScope['active_operation'] : [];
+                // #region agent log
+                $this->appendDebugSessionLog('H7', 'start-plan response running-with-sse', [
+                    'start_sse' => true,
+                    'requires_confirmation' => false,
+                    'operation' => 'plan',
+                    'reason' => 'operation-already-running',
+                    'active_operation_status' => (string)($activeOperationDebug['status'] ?? ''),
+                    'active_operation_operation' => (string)($activeOperationDebug['operation'] ?? ''),
+                    'active_operation_execution_token' => (string)($activeOperationDebug['execution_token'] ?? ''),
+                    'active_operation_progress_percent' => (int)($activeOperationDebug['progress_percent'] ?? 0),
+                ]);
+                // #endregion
                 return $this->fetchJson([
                     'success' => true,
                     'message' => (string)__('检测到阶段一方案任务已在执行中，已继续复用当前任务进度。'),
@@ -1035,6 +1075,17 @@ SCRIPT;
             ]);
         }
 
+        $responseState = \is_array($result['data'] ?? null) ? $result['data'] : $this->buildWorkspaceState($session, $adminId, 80, true);
+        // #region agent log
+        $this->appendDebugSessionLog('H7', 'start-plan response created-with-sse', [
+            'start_sse' => true,
+            'requires_confirmation' => false,
+            'operation' => (string)($result['operation'] ?? 'plan'),
+            'has_operation_sse_url' => \trim((string)($responseState['operation_sse_url'] ?? '')) !== '',
+            'has_active_operation' => \is_array($responseState['scope']['active_operation'] ?? null),
+            'execution_token_present' => \trim((string)($responseState['scope']['active_operation']['execution_token'] ?? '')) !== '',
+        ]);
+        // #endregion
         return $this->fetchJson([
             'success' => true,
             'message' => (string)__('阶段一方案生成任务已创建，请查看工作区事件流进度'),
@@ -1046,8 +1097,29 @@ SCRIPT;
             'plan_translation_required' => !empty($planStartDecision['translation_required']),
             'plan_locale_changed' => !empty($planStartDecision['plan_locale_changed']),
             'plan_page_types_changed' => !empty($planStartDecision['page_types_changed']),
-            'data' => \is_array($result['data'] ?? null) ? $result['data'] : $this->buildWorkspaceState($session, $adminId, 80, true),
+            'data' => $responseState,
         ]);
+    }
+
+    private function appendDebugSessionLog(string $hypothesisId, string $message, array $data = []): void
+    {
+        try {
+            $payload = [
+                'sessionId' => '0e84c6',
+                'runId' => 'pre-fix',
+                'hypothesisId' => $hypothesisId,
+                'location' => 'AiSiteAgent.php',
+                'message' => $message,
+                'data' => $data,
+                'timestamp' => (int)\round(\microtime(true) * 1000),
+            ];
+            @\file_put_contents(
+                'e:\\WelineFramework\\DEV-workspace\\debug-0e84c6.log',
+                (\json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}') . PHP_EOL,
+                FILE_APPEND
+            );
+        } catch (\Throwable) {
+        }
     }
 
     private function handleConfirmPlan(): string
@@ -2735,14 +2807,52 @@ SCRIPT;
 
     private function runQueuedPlanOperationFromWorkspaceStream(SseWriter $sse, AiSiteAgentSession $session, int $adminId): void
     {
+        // #region agent log
+        $this->appendDebugSessionLog('H10', 'runQueuedPlanOperationFromWorkspaceStream entry', [
+            'public_id' => $session->getPublicId(),
+            'admin_id_present' => $adminId > 0,
+        ]);
+        // #endregion
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        // #region agent log
+        $this->appendDebugSessionLog('H10', 'runQueuedPlanOperationFromWorkspaceStream active-operation snapshot', [
+            'operation' => \trim((string)($activeOperation['operation'] ?? '')),
+            'status' => \trim((string)($activeOperation['status'] ?? '')),
+            'execution_token' => (string)($activeOperation['execution_token'] ?? ''),
+            'progress_percent' => (int)($activeOperation['progress_percent'] ?? 0),
+        ]);
+        // #endregion
         if (\trim((string)($activeOperation['operation'] ?? '')) !== 'plan') {
+            // #region agent log
+            $this->appendDebugSessionLog('H10', 'runQueuedPlanOperationFromWorkspaceStream skipped-non-plan', [
+                'operation' => \trim((string)($activeOperation['operation'] ?? '')),
+            ]);
+            // #endregion
             return;
         }
-        if (\trim((string)($activeOperation['status'] ?? '')) !== 'queued') {
+        $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+        $progressPercent = (int)($activeOperation['progress_percent'] ?? 0);
+        $allowResumeStuckRunning = ($activeStatus === 'running' && $progressPercent <= 0);
+        if ($activeStatus !== 'queued' && !$allowResumeStuckRunning) {
+            // #region agent log
+            $this->appendDebugSessionLog('H10', 'runQueuedPlanOperationFromWorkspaceStream skipped-non-queued', [
+                'status' => $activeStatus,
+                'execution_token' => (string)($activeOperation['execution_token'] ?? ''),
+                'progress_percent' => $progressPercent,
+            ]);
+            // #endregion
             return;
+        }
+        if ($allowResumeStuckRunning) {
+            // #region agent log
+            $this->appendDebugSessionLog('H11', 'runQueuedPlanOperationFromWorkspaceStream resume-stuck-running', [
+                'status' => $activeStatus,
+                'execution_token' => (string)($activeOperation['execution_token'] ?? ''),
+                'progress_percent' => $progressPercent,
+            ]);
+            // #endregion
         }
 
         // active_operation 已明确为 queued plan，说明是用户动作触发后的待执行任务。
@@ -3139,6 +3249,13 @@ SCRIPT;
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
         $executionToken = \trim((string)$this->request->getGet('execution_token', ''));
+        // #region agent log
+        $this->appendDebugSessionLog('H8', 'handleOperationSse entry', [
+            'has_admin' => $adminId > 0,
+            'public_id_present' => $publicId !== '',
+            'execution_token_present' => $executionToken !== '',
+        ]);
+        // #endregion
         if ($adminId <= 0 || $publicId === '' || $executionToken === '') {
             $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_OPERATION_SSE);
             $sse->complete(['success' => false]);
