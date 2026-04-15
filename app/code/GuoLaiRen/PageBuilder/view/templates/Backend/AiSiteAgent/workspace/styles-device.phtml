@@ -17,7 +17,17 @@
     align-items: flex-start;
     overflow: auto;
     padding: 16px;
+    width: 100%;
+    box-sizing: border-box;
     background: linear-gradient(180deg, #eef2f7 0%, #e2e8f0 100%);
+}
+/* 横向 flex 下默认 flex:0 1 auto 会让「iframe width:100%」按收缩宽度解析，PC 模式看起来像手机窄条 */
+#pb-ai-visual-preview-host {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 .pb-ai-preview-device-stage iframe {
     display: block;
@@ -39,5 +49,146 @@
     width: 390px;
     max-width: 390px;
     min-height: 844px;
+}
+
+.pb-ai-preview-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-bottom: 0;
+}
+
+.pb-ai-preview-tabs .nav-item {
+    margin-bottom: 0;
+}
+
+.pb-ai-preview-tabs .nav-link {
+    border: 1px solid var(--backend-color-border-default, #dbe2ea);
+    border-radius: 10px;
+    background: #fff;
+    color: #334155;
+    font-size: 14px;
+    line-height: 1.25;
+    padding: 8px 14px;
+    white-space: nowrap;
+}
+
+.pb-ai-preview-tabs .nav-link:hover {
+    border-color: #94a3b8;
+    color: #0f172a;
+}
+
+.pb-ai-preview-tabs .nav-link.active {
+    background: #eff6ff;
+    border-color: #60a5fa;
+    color: #1d4ed8;
+    font-weight: 600;
+}
+
+#pb-ai-preview-tabs-wrap {
+    margin-bottom: 0;
+}
+
+/* 可视化编辑：页签 + 设备 + 操作，同一工具条（快速模式 / 专家模式左栏） */
+.pb-ai-visual-editor-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 14px 18px;
+    padding: 12px 14px;
+    border: 1px solid var(--backend-color-border-default, #e5e7eb);
+    border-radius: 14px;
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.pb-ai-visual-toolbar-pages {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+
+.pb-ai-visual-toolbar-devices {
+    flex: 0 0 auto;
+}
+
+.pb-ai-visual-toolbar-actions {
+    flex: 1 1 200px;
+    min-width: 200px;
+}
+
+.pb-ai-visual-toolbar-actions.pb-ai-visual-action-card {
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+}
+
+.pb-ai-guided-visual-canvas {
+    margin-left: -1rem;
+    margin-right: -1rem;
+    margin-bottom: -1rem;
+}
+
+.pb-ai-visual-preview-shell {
+    min-height: 420px;
+    background: linear-gradient(180deg, #eef2f7 0%, #e2e8f0 100%);
+}
+
+.pb-ai-visual-preview-watermark {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 0;
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: #94a3b8;
+    opacity: 0.22;
+    user-select: none;
+}
+
+.pb-ai-visual-preview-error-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    z-index: 3;
+    padding: 10px 14px;
+    background: rgba(254, 242, 242, 0.96);
+    border-bottom: 1px solid rgba(248, 113, 113, 0.35);
+    pointer-events: none;
+}
+
+.pb-ai-visual-preview-shell .pb-ai-preview-device-stage {
+    position: relative;
+    z-index: 1;
+}
+
+.pb-ai-preview-device-bar .pb-ai-preview-device-btn {
+    min-width: 64px;
+}
+
+.pb-ai-primary-action-row {
+    align-items: center;
+}
+
+.pb-ai-primary-action-row .pb-ai-primary-action-hint {
+    flex: 1 1 300px;
+    min-width: 220px;
+}
+
+@media (max-width: 992px) {
+    .pb-ai-preview-tabs .nav-link {
+        padding: 7px 12px;
+        font-size: 13px;
+    }
+    .pb-ai-visual-editor-toolbar {
+        padding: 10px 12px;
+    }
+    .pb-ai-visual-toolbar-actions {
+        flex-basis: 100%;
+    }
 }
 </style>

@@ -103,7 +103,7 @@ final class MaintenanceCheckObserverTest extends TestCase
 
         self::assertFalse((bool) $event->getData('result'));
         self::assertSame(1, $gateway->statusCalls);
-        self::assertSame(0.2, $gateway->lastTimeout);
+        self::assertSame(0.05, $gateway->lastTimeout);
     }
 
     public function testMaintenanceWorkerRuntimeFlagIsWiredIntoWorkerEntriesAndInterceptor(): void
@@ -119,5 +119,51 @@ final class MaintenanceCheckObserverTest extends TestCase
         self::assertStringContainsString("defined('WLS_MODE')", $interceptorSource);
         self::assertStringNotContainsString("PHP_SAPI === 'cli'", $interceptorSource);
         self::assertStringContainsString('sendMaintenanceResponse()', $interceptorSource);
+    }
+
+    public function testWorkerEntriesAvoidBlockingUsleepInLongLivedSlotWait(): void
+    {
+        $workerSource = (string) \file_get_contents(BP . 'app/code/Weline/Server/bin/worker.php');
+        $workerSslSource = (string) \file_get_contents(BP . 'app/code/Weline/Server/bin/worker_ssl.php');
+
+        self::assertStringContainsString('SchedulerSystem::yieldDelay(50)', $workerSource);
+        self::assertStringContainsString('SchedulerSystem::yieldDelay(50)', $workerSslSource);
+        self::assertStringNotContainsString('\\usleep(50_000)', $workerSource);
+        self::assertStringNotContainsString('\\usleep(50_000)', $workerSslSource);
+    }
+
+    public function testSchedulerYieldDelayAdvancesTimeOnMainStack(): void
+    {
+        SchedulerSystem::disableScheduler();
+
+        $startedAt = \microtime(true);
+        SchedulerSystem::yieldDelay(50);
+        $elapsedMs = (\microtime(true) - $startedAt) * 1000;
+
+        self::assertGreaterThanOrEqual(20.0, $elapsedMs);
+    }
+
+    public function testSchedulerYieldDelayAdvancesTimeInsideFiberWhenSchedulerActive(): void
+    {
+        SchedulerSystem::enableScheduler();
+
+        $elapsedMs = 0.0;
+        $resumed = false;
+        $fiber = new \Fiber(static function () use (&$elapsedMs, &$resumed): void {
+            $startedAt = \microtime(true);
+            SchedulerSystem::yieldDelay(50);
+            $resumed = true;
+            $elapsedMs = (\microtime(true) - $startedAt) * 1000;
+        });
+
+        $fiber->start();
+
+        self::assertTrue($fiber->isSuspended());
+        self::assertFalse($resumed);
+
+        $fiber->resume();
+
+        self::assertTrue($resumed);
+        self::assertGreaterThanOrEqual(0.0, $elapsedMs);
     }
 }
