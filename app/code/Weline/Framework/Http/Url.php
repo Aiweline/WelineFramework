@@ -535,7 +535,6 @@ class Url implements UrlInterface
             }
             $params = array_merge($getParams, $params);
         }
-
         if ($params) {
             // 过滤掉数组值，避免在 http_build_query 时出现问题
             foreach ($params as $key => $param) {

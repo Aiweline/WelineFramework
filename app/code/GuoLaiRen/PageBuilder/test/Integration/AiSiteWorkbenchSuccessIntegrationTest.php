@@ -153,9 +153,9 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
             'Prompt-driven build should create multiple content sections per page.'
         );
         self::assertStringContainsString(
-            '/pagebuilder/backend/preview/full',
+            '/pagebuilder/backend/ai-site-agent/workspace-preview',
             $visualPreviewUrl,
-            'Draft workbench with materialized preview_page_id should embed preview/full, not scope-only workspace-preview.'
+            'Draft workbench in virtual-theme visual stage should stay on workspace-preview and must not drift to preview/full.'
         );
         self::assertStringContainsString('virtual_theme_id=' . $virtualThemeId, $visualPreviewUrl);
         self::assertStringNotContainsString('weline_theme_id=', $visualPreviewUrl);
