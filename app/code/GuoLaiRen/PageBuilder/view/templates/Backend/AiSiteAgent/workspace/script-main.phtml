@@ -1396,6 +1396,7 @@
         return false;
     }
 
+
     var REQUIRED_PAGE_TYPE = 'home_page';
     var TASK_ALWAYS_VISIBLE_PAGE_TYPE_MAP = {
         shared: true,
@@ -1689,6 +1690,18 @@
             extra_page_types_panel_open: extraPageTypesPanelOpen,
             site_profile_manual: Object.assign({}, siteProfileManual)
         };
+        // SSE 方案流完成后，把生成的方案内容合并进 scope patch，触发自动保存
+        var draftMarkdown = currentPlanPayload && typeof currentPlanPayload === 'object'
+            ? String(currentPlanPayload.markdown || '').trim()
+            : '';
+        if (draftMarkdown !== '') {
+            patch.plan_markdown = draftMarkdown;
+            patch.plan_confirmed = 0;
+            if (currentPlanPayload.json && typeof currentPlanPayload.json === 'object' && Object.keys(currentPlanPayload.json).length > 0) {
+                patch.plan_json = currentPlanPayload.json;
+            }
+        }
+        return patch;
     }
 
     function validateVirtualThemeInputs() {
@@ -4118,6 +4131,8 @@
             if (typeof terminal.stop === 'function') {
                 terminal.stop({ suppressTransportError: true });
             }
+            // SSE 方案流完成后，立即触发自动保存，将方案内容持久化到后端
+            autoSaveScope();
         });
         terminal.on('error', function (event) {
             planSseRunning = false;
@@ -4624,6 +4639,9 @@
             var emptyConfirmText = <?= \json_encode((string)__('当前方案为空，是否立即生成方案？'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
             if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
                 window.BackendConfirm.show(emptyConfirmText, { title: emptyTitleText }).then(function (confirmed) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7273/ingest/516ee328-a532-4da8-911d-8a8358883f7f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0e84c6'},body:JSON.stringify({sessionId:'0e84c6',runId:'pre-fix',hypothesisId:'H1',location:'workspace/script-main.phtml:startPlanGenerationForSelection:BackendConfirm.then',message:'empty-plan confirm result',data:{confirmed:!!confirmed,hasPlanDraft:hasPlanDraft(),planStartRequestPending:!!planStartRequestPending},timestamp:Date.now()})}).catch(function(){});
+                    // #endregion
                     planEmptyPromptPending = false;
                     if (!confirmed) {
                         planStartRequestPending = false;
@@ -4648,6 +4666,9 @@
     }
 
     function proceedToShowPlanModalAndRequestStart(previousPlanMarkdown) {
+        // #region agent log
+        fetch('http://127.0.0.1:7273/ingest/516ee328-a532-4da8-911d-8a8358883f7f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0e84c6'},body:JSON.stringify({sessionId:'0e84c6',runId:'pre-fix',hypothesisId:'H2',location:'workspace/script-main.phtml:proceedToShowPlanModalAndRequestStart:entry',message:'enter proceedToShowPlanModalAndRequestStart',data:{hasPlanDraft:hasPlanDraft(),currentPlanMode:String(currentPlanMode||''),planSseUrl:String(planSseUrl||'')},timestamp:Date.now()})}).catch(function(){});
+        // #endregion
         bindPlanModalViewSwitchers();
         bindPlanModeSwitchers();
         setPlanMode(currentPlanMode);
@@ -4669,6 +4690,9 @@
 
         function triggerWorkspacePlanStream(startReason) {
             var reason = String(startReason || 'start-plan');
+            // #region agent log
+            fetch('http://127.0.0.1:7273/ingest/516ee328-a532-4da8-911d-8a8358883f7f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0e84c6'},body:JSON.stringify({sessionId:'0e84c6',runId:'pre-fix',hypothesisId:'H4',location:'workspace/script-main.phtml:triggerWorkspacePlanStream:entry',message:'trigger workspace stream called',data:{reason:reason,hasEnsureFn:typeof window.__pbEnsureWorkspaceStream==='function',hasStartFn:typeof window.__pbStartWorkspaceStream==='function'},timestamp:Date.now()})}).catch(function(){});
+            // #endregion
             var maxAttempts = 20;
             var attempt = 0;
             function tryStart() {
@@ -4700,7 +4724,13 @@
             });
         }
         planStartRequestPending = true;
+        // #region agent log
+        fetch('http://127.0.0.1:7273/ingest/516ee328-a532-4da8-911d-8a8358883f7f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0e84c6'},body:JSON.stringify({sessionId:'0e84c6',runId:'pre-fix',hypothesisId:'H2',location:'workspace/script-main.phtml:proceedToShowPlanModalAndRequestStart:beforeRequestStartPlan',message:'requestStartPlan about to post',data:{publicId:String(publicId||''),selectedTypes:Array.isArray(currentPlanSelection)?currentPlanSelection:[],planStartRequestPending:!!planStartRequestPending},timestamp:Date.now()})}).catch(function(){});
+        // #endregion
         requestStartPlan(false).then(function (data) {
+            // #region agent log
+            fetch('http://127.0.0.1:7273/ingest/516ee328-a532-4da8-911d-8a8358883f7f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0e84c6'},body:JSON.stringify({sessionId:'0e84c6',runId:'pre-fix',hypothesisId:'H3',location:'workspace/script-main.phtml:proceedToShowPlanModalAndRequestStart:requestStartPlanThen',message:'requestStartPlan response snapshot',data:{success:!!(data&&data.success),requires_confirmation:!!(data&&data.requires_confirmation),start_sse_raw:data?data.start_sse:null,start_sse_type:data?typeof data.start_sse:'undefined',operation:data?String(data.operation||''):'',message:data?String(data.message||''):''},timestamp:Date.now()})}).catch(function(){});
+            // #endregion
             if (!data || !data.success) {
                 var startErrorMessage = normalizePlanFailureMessage((data && data.message) ? String(data.message) : messages.networkError);
                 setPlanModalProgress(startErrorMessage, 100, false);
