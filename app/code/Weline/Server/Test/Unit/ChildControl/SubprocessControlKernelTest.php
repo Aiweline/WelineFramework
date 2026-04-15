@@ -9,6 +9,13 @@ use Weline\Server\IPC\ChildControl\ChildProcessIdentity;
 use Weline\Server\IPC\ChildControl\MasterOrphanGuard;
 use Weline\Server\IPC\ChildControl\RoleControlHandlerInterface;
 use Weline\Server\IPC\ChildControl\SubprocessControlKernel;
+use Weline\Server\Supervisor\Client\SupervisorChildClient;
+use Weline\Server\Supervisor\Endpoint\ControlEndpoint;
+use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
+use Weline\Server\Supervisor\Lease\LeaseRegistry;
+use Weline\Server\Supervisor\Supervisor;
+use Weline\Server\Supervisor\SupervisorRuntime;
+use Weline\Server\Supervisor\SupervisorServer;
 
 final class SubprocessControlKernelTest extends TestCase
 {
@@ -144,6 +151,117 @@ final class SubprocessControlKernelTest extends TestCase
             self::assertTrue($kernel->isConnected());
         } finally {
             @\fclose($server);
+        }
+    }
+
+    public function testKernelCanConnectViaSupervisorClientFactory(): void
+    {
+        $runtime = new SupervisorRuntime(
+            instanceName: 'ut-instance',
+            channelId: 'channel-ut-instance',
+            endpointResolver: new ControlEndpointResolver(BP, 27000, 1000),
+            supervisor: new Supervisor(new LeaseRegistry(
+                static fn(string $slotId, int $generation): string => "{$slotId}-lease-{$generation}"
+            )),
+        );
+        $server = new SupervisorServer($runtime);
+        $endpoint = $server->start(ControlEndpoint::tcp('127.0.0.1', 0));
+
+        $identity = new ChildProcessIdentity(
+            ControlMessage::ROLE_WORKER,
+            \getmypid(),
+            19091,
+            1,
+            7,
+            'ut-supervisor-launch'
+        );
+        $handler = new class implements RoleControlHandlerInterface {
+            public function onMessage(array $message, SubprocessControlKernel $kernel): void
+            {
+            }
+
+            public function onDisconnect(bool $receivedShutdown, SubprocessControlKernel $kernel): void
+            {
+            }
+        };
+
+        $kernel = new SubprocessControlKernel(
+            identity: $identity,
+            handler: $handler,
+            selfTag: 'UT-Supervisor-Kernel',
+            verboseLog: false,
+            instanceCode: 'ut-instance',
+            clientFactory: static function (SubprocessControlKernel $kernel) use ($endpoint, $server): SupervisorChildClient {
+                unset($kernel);
+                return new SupervisorChildClient(
+                    instanceName: 'ut-instance',
+                    channelId: 'channel-ut-instance',
+                    endpointResolver: new ControlEndpointResolver(BP, 27000, 1000),
+                    endpoint: $endpoint,
+                    progressCallback: static function () use ($server): void {
+                        $server->poll(0, 10000);
+                    },
+                );
+            }
+        );
+
+        try {
+            self::assertTrue($kernel->connectAndRegister(0));
+            self::assertNotNull($kernel->getClient());
+            self::assertTrue($kernel->isConnected());
+
+            $slotSnapshot = $runtime->slotSnapshot();
+            self::assertSame(2, $slotSnapshot['version']);
+            self::assertCount(1, $slotSnapshot['slots']);
+            self::assertSame('worker#1', $slotSnapshot['slots'][0]['slot_id']);
+            self::assertSame('ready', $slotSnapshot['slots'][0]['state']);
+
+            $poolSnapshot = $runtime->workerPoolSnapshot();
+            self::assertSame(1, $poolSnapshot['version']);
+            self::assertCount(1, $poolSnapshot['workers']);
+            self::assertSame('worker#1', $poolSnapshot['workers'][0]['slot_id']);
+        } finally {
+            $kernel->close();
+            $server->close();
+        }
+    }
+
+    public function testKernelChoosesSupervisorClientWhenFeatureFlagEnabled(): void
+    {
+        \putenv('WLS_SUPERVISOR_ENABLED=1');
+        \putenv('WLS_SUPERVISOR_CHANNEL=channel-ut-instance');
+        \putenv('WLS_SUPERVISOR_BASE_PATH=' . BP);
+
+        $identity = new ChildProcessIdentity(
+            ControlMessage::ROLE_WORKER,
+            \getmypid(),
+            19091,
+            1,
+            7,
+            'ut-supervisor-env'
+        );
+        $handler = new class implements RoleControlHandlerInterface {
+            public function onMessage(array $message, SubprocessControlKernel $kernel): void
+            {
+            }
+
+            public function onDisconnect(bool $receivedShutdown, SubprocessControlKernel $kernel): void
+            {
+            }
+        };
+
+        try {
+            $kernel = new SubprocessControlKernel($identity, $handler, 'UT-Kernel', false, 'ut-instance');
+
+            $reflection = new \ReflectionMethod($kernel, 'createClient');
+            $reflection->setAccessible(true);
+            $client = $reflection->invoke($kernel);
+
+            self::assertInstanceOf(SupervisorChildClient::class, $client);
+        } finally {
+            \putenv('WLS_SUPERVISOR_ENABLED');
+            \putenv('WLS_SUPERVISOR_CHANNEL');
+            \putenv('WLS_SUPERVISOR_BASE_PATH');
         }
     }
 

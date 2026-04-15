@@ -17,6 +17,7 @@ use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Http\Sse\SseContext;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * OpenAI API提供者
@@ -426,7 +427,7 @@ class OpenAiProvider implements ProviderInterface
             return strlen($data);
         });
 
-        curl_exec($ch);
+        $this->executeCurl($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
         curl_close($ch);
@@ -776,7 +777,7 @@ class OpenAiProvider implements ProviderInterface
             // 清除之前的错误
             error_clear_last();
             
-            $response = curl_exec($ch);
+            $response = $this->executeCurl($ch);
             
             // 检查 PHP 超时（SSE 模式下跳过）
             if (!$isSseMode) {
@@ -810,7 +811,7 @@ class OpenAiProvider implements ProviderInterface
             
             if ($httpCode >= 500 && $retryCount < self::MAX_RETRIES) {
                 // 服务器错误，重试
-                sleep(self::RETRY_DELAY * ($retryCount + 1));
+                SchedulerSystem::sleep(self::RETRY_DELAY * ($retryCount + 1));
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
 
@@ -833,7 +834,7 @@ class OpenAiProvider implements ProviderInterface
             }
             
             if ($retryCount < self::MAX_RETRIES) {
-                sleep(self::RETRY_DELAY * ($retryCount + 1));
+                SchedulerSystem::sleep(self::RETRY_DELAY * ($retryCount + 1));
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
             throw new Exception("API调用失败（已重试{$retryCount}次）: " . $e->getMessage());
@@ -936,7 +937,7 @@ class OpenAiProvider implements ProviderInterface
             return strlen($data);
         });
 
-        curl_exec($ch);
+        $this->executeCurl($ch);
         
         // 获取 HTTP 状态码
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -1124,6 +1125,50 @@ class OpenAiProvider implements ProviderInterface
         }
 
         return $options;
+    }
+
+    private function executeCurl(\CurlHandle $ch): string|bool
+    {
+        if (!SchedulerSystem::isSchedulerActive() || !\Fiber::getCurrent()) {
+            return curl_exec($ch);
+        }
+
+        $multi = curl_multi_init();
+        curl_multi_add_handle($multi, $ch);
+
+        $running = 0;
+        $multiResult = \CURLM_OK;
+        $curlResult = \CURLE_OK;
+
+        do {
+            do {
+                $multiResult = curl_multi_exec($multi, $running);
+            } while ($multiResult === \CURLM_CALL_MULTI_PERFORM);
+
+            while ($info = curl_multi_info_read($multi)) {
+                if (($info['handle'] ?? null) === $ch) {
+                    $curlResult = (int)($info['result'] ?? \CURLE_OK);
+                }
+            }
+
+            if ($multiResult !== \CURLM_OK || $curlResult !== \CURLE_OK) {
+                break;
+            }
+
+            if ($running > 0) {
+                SchedulerSystem::yieldDelay(10);
+            }
+        } while ($running > 0);
+
+        $content = curl_multi_getcontent($ch);
+        curl_multi_remove_handle($multi, $ch);
+        curl_multi_close($multi);
+
+        if ($multiResult !== \CURLM_OK || $curlResult !== \CURLE_OK) {
+            return false;
+        }
+
+        return $content;
     }
 
     /**

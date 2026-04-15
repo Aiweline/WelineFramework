@@ -3439,6 +3439,7 @@ HTML;
     private function buildFrontendPreviewUrl(array $context, string $pageType): string
     {
         $context = $this->getPreviewContextService()->buildContext(\array_replace($context, [
+            'editor_area' => PreviewContextService::AREA_FRONTEND,
             'shell' => PreviewContextService::SHELL_PREVIEW,
             'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
             'target_value' => $pageType,
