@@ -7,10 +7,12 @@ namespace Weline\Server\IPC\ChildControl;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\ControlClient;
 use Weline\Server\Log\WlsLogger;
+use Weline\Server\Supervisor\Client\SupervisorChildClient;
+use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
 
 final class SubprocessControlKernel
 {
-    private ?ControlClient $client = null;
+    private ?ChildControlClientInterface $client = null;
 
     private const E2E_READY_DELAY_LIMIT_MS = 60000;
 
@@ -19,7 +21,8 @@ final class SubprocessControlKernel
         private readonly RoleControlHandlerInterface $handler,
         private readonly string $selfTag,
         private readonly bool $verboseLog = false,
-        private readonly string $instanceCode = ''
+        private readonly string $instanceCode = '',
+        private readonly mixed $clientFactory = null
     ) {
     }
 
@@ -169,7 +172,7 @@ final class SubprocessControlKernel
 
     public function connectAndRegister(int $controlPort): bool
     {
-        if ($controlPort <= 0) {
+        if ($controlPort <= 0 && !$this->shouldUseSupervisorTransport() && !\is_callable($this->clientFactory)) {
             return false;
         }
 
@@ -182,7 +185,7 @@ final class SubprocessControlKernel
 
         while ($retryAttempt < $maxStartupRetries) {
             $retryAttempt++;
-            $client = new ControlClient();
+            $client = $this->createClient();
             $this->client = $client;
             $client->setSelfTag($this->selfTag);
             $client->setVerboseLog($this->verboseLog);
@@ -195,14 +198,15 @@ final class SubprocessControlKernel
                 $this->identity->launchId,
                 $this->identity->processKind,
                 $this->identity->moduleCode,
-                $this->instanceCode
+                $this->instanceCode,
+                $this->identity->launchId !== '' ? $this->identity->launchId : ''
             );
             $client->markReadyState(true);
             $kernel = $this;
-            $client->onMessage(static function (array $msg, ControlClient $client) use ($kernel): void {
+            $client->onMessage(static function (array $msg, ChildControlClientInterface $client) use ($kernel): void {
                 $kernel->handler->onMessage($msg, $kernel);
             });
-            $client->onDisconnect(static function (bool $receivedShutdown, ControlClient $client) use ($kernel): void {
+            $client->onDisconnect(static function (bool $receivedShutdown, ChildControlClientInterface $client) use ($kernel): void {
                 $kernel->handler->onDisconnect($receivedShutdown, $kernel);
             });
             
@@ -225,7 +229,8 @@ final class SubprocessControlKernel
                 $this->identity->launchId,
                 $this->identity->processKind,
                 $this->identity->moduleCode,
-                $this->instanceCode
+                $this->instanceCode,
+                $this->identity->launchId !== '' ? $this->identity->launchId : ''
             );
             if (!$registered) {
                 $lastError = "[注册失败]";
@@ -256,7 +261,8 @@ final class SubprocessControlKernel
                 $this->identity->workerId,
                 $this->identity->port,
                 $this->identity->epoch,
-                $this->identity->launchId
+                $this->identity->launchId,
+                $this->identity->launchId !== '' ? $this->identity->launchId : ''
             );
             if (!$ready) {
                 $lastError = "[Ready 消息失败]";
@@ -342,7 +348,7 @@ final class SubprocessControlKernel
         return $this->client?->getSocket();
     }
 
-    public function getClient(): ?ControlClient
+    public function getClient(): ?ChildControlClientInterface
     {
         return $this->client;
     }
@@ -357,7 +363,8 @@ final class SubprocessControlKernel
             $this->identity->role,
             $this->identity->pid,
             $this->identity->port,
-            $this->identity->workerId
+            $this->identity->workerId,
+            $this->identity->launchId !== '' ? $this->identity->launchId : ''
         ));
     }
 
@@ -374,7 +381,7 @@ final class SubprocessControlKernel
         if ($this->client === null || !$this->client->isConnected()) {
             return;
         }
-        $this->client->sendDrainingComplete($this->identity->workerId, $this->identity->port);
+        $this->client->sendDrainingComplete($this->identity->workerId, $this->identity->port, $this->identity->launchId !== '' ? $this->identity->launchId : '');
     }
 
     public function close(): void
@@ -388,5 +395,37 @@ final class SubprocessControlKernel
     {
         WlsLogger::info_("[{$this->selfTag}] {$message}");
     }
-}
 
+    private function shouldUseSupervisorTransport(): bool
+    {
+        $flag = \getenv('WLS_SUPERVISOR_ENABLED');
+        if ($flag === false || $flag === '') {
+            return false;
+        }
+
+        return \in_array(\strtolower((string) $flag), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    private function createClient(): ChildControlClientInterface
+    {
+        if (\is_callable($this->clientFactory)) {
+            /** @var ChildControlClientInterface $client */
+            $client = ($this->clientFactory)($this);
+
+            return $client;
+        }
+
+        if ($this->shouldUseSupervisorTransport()) {
+            $channelId = (string) (\getenv('WLS_SUPERVISOR_CHANNEL') ?: ('channel-' . ($this->instanceCode !== '' ? $this->instanceCode : 'default')));
+            $basePath = (string) (\getenv('WLS_SUPERVISOR_BASE_PATH') ?: BP);
+
+            return new SupervisorChildClient(
+                instanceName: $this->instanceCode !== '' ? $this->instanceCode : 'default',
+                channelId: $channelId,
+                endpointResolver: new ControlEndpointResolver($basePath),
+            );
+        }
+
+        return new ControlClient();
+    }
+}

@@ -123,6 +123,28 @@ class PreviewContextServiceTest extends TestCase
         $this->assertSame('pv_6_raw_token', $context['preview_token']);
     }
 
+    public function testFrontendPreviewShellNormalizesEditorAreaToFrontend(): void
+    {
+        $_SERVER['REQUEST_URI'] = '/theme/frontend/theme-preview/content?frontend_theme_id=6&backend_theme_id=9&editor_area=backend&shell=preview';
+
+        $service = $this->createService(
+            [
+                'frontend_theme_id' => 6,
+                'backend_theme_id' => 9,
+                'editor_area' => 'backend',
+                'shell' => PreviewContextService::SHELL_PREVIEW,
+            ],
+            null
+        );
+
+        $context = $service->getCurrentContext();
+
+        $this->assertSame(6, $context['frontend_theme_id']);
+        $this->assertSame(9, $context['backend_theme_id']);
+        $this->assertSame(PreviewContextService::AREA_FRONTEND, $context['editor_area']);
+        $this->assertSame(PreviewContextService::SHELL_PREVIEW, $context['shell']);
+    }
+
     public function testVirtualThemeIdIsIgnoredByThemePreviewContext(): void
     {
         $service = $this->createService(

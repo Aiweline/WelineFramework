@@ -442,6 +442,15 @@ class AiSiteAgentSessionService
         $limit = \min(50, \max(1, $limit));
         $session = clone $this->sessionModel;
         $rows = $session->clearData()->clearQuery()
+            ->fields([
+                AiSiteAgentSession::schema_fields_ID,
+                AiSiteAgentSession::schema_fields_PUBLIC_ID,
+                AiSiteAgentSession::schema_fields_STAGE,
+                AiSiteAgentSession::schema_fields_PUBLISH_STATUS,
+                AiSiteAgentSession::schema_fields_WEBSITE_ID,
+                AiSiteAgentSession::schema_fields_VIRTUAL_THEME_ID,
+                AiSiteAgentSession::schema_fields_UPDATE_TIME,
+            ])
             ->where(AiSiteAgentSession::schema_fields_ADMIN_USER_ID, $adminUserId)
             ->order(AiSiteAgentSession::schema_fields_UPDATE_TIME, 'DESC')
             ->limit($limit)

@@ -103,7 +103,9 @@ final class ThemePreviewEntryApplication
         $context = $previewContextService->buildContext([
             'frontend_theme_id' => $area === PreviewContextService::AREA_FRONTEND ? $themeId : 0,
             'backend_theme_id' => $area === PreviewContextService::AREA_BACKEND ? $themeId : 0,
-            'editor_area' => $previewEditorArea,
+            'editor_area' => $area === PreviewContextService::AREA_FRONTEND
+                ? PreviewContextService::AREA_FRONTEND
+                : $previewEditorArea,
             'shell' => $area === PreviewContextService::AREA_BACKEND
                 ? PreviewContextService::SHELL_THEME_EDITOR
                 : PreviewContextService::SHELL_PREVIEW,
