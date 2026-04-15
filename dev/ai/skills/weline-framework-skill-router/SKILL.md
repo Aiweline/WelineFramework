@@ -23,6 +23,7 @@ alwaysApply: false
 |---|---|---|
 | 计划、拆任务、pre-plan、plan.md、task.md | planning | `dev/ai/skills/planning/SKILL.md` |
 | dev/ai/codex、ACTIVE.md、任务状态、任务进度、resume | codex-task-workspace | `dev/ai/skills/codex-task-workspace/SKILL.md` |
+| AI 模块、AI 适配器、ScenarioAdapterInterface、ai:adapter:scan、未注册适配器、AiScenarioAdapter | ai-module-development | `.cursor/skills/ai-module-development/SKILL.md` |
 | 通用模块开发、register.php、Backend Controller | module-development | `dev/ai/skills/module-development/SKILL.md` |
 | 代码生成规范、strict_types、ObjectManager | code-generation-standards | `dev/ai/skills/code-generation-standards/SKILL.md` |
 | env.php、SystemConfig、PHP 扩展 | config-and-env | `dev/ai/skills/config-and-env/SKILL.md` |
