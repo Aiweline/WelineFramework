@@ -98,7 +98,15 @@ if (!$session instanceof \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession) {
 }
 
 $publicId = $session->getPublicId();
-$currentStage = (string)($state['stage'] ?? \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession::STAGE_VIRTUAL_THEME);
+$currentStage = (string)($state['stage'] ?? \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession::STAGE_PLAN);
+$statePlanMarkdown = \trim((string)($state['plan_markdown'] ?? $scope['plan_markdown'] ?? ''));
+$statePlanJson = \is_array($state['plan_json'] ?? null)
+    ? $state['plan_json']
+    : (\is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : []);
+$hasStageOnePlan = $statePlanMarkdown !== '' || $statePlanJson !== [];
+if ($currentStage === \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession::STAGE_PLAN && $hasStageOnePlan) {
+    $currentStage = 'visual_edit';
+}
 $websiteProfile = \is_array($state['website_profile'] ?? null) ? $state['website_profile'] : [];
 $cfgDebugSiteTitle = \trim((string)($this->getData('ai_site_debug_default_site_title') ?? ''));
 $cfgDebugBrief = \trim((string)($this->getData('ai_site_debug_default_brief') ?? ''));
@@ -249,20 +257,20 @@ $extraPageTypesOpenByDefault = (int)($scope['extra_page_types_panel_open'] ?? 0)
 /** 步骤映射（用户文案 ↔ 内部 stage） */
 $guidedSteps = [
     [
-        'key' => 'virtual_theme',
+        'key' => 'plan',
         'label' => __('1 说说你的网站'),
         'icon' => 'mdi-pencil-outline',
         'done_when' => $draftWebsiteId > 0,
     ],
     [
         'key' => 'visual_edit',
-        'label' => __('2 看看效果'),
+        'label' => __('2 生成详细任务方案，开始生成主题'),
         'icon' => 'mdi-eye-outline',
         'done_when' => $visualPreviewUrl !== '',
     ],
     [
         'key' => 'publish',
-        'label' => __('3 准备上线'),
+        'label' => __('3 确认发布'),
         'icon' => 'mdi-rocket-launch-outline',
         'done_when' => $currentStage === 'publish',
     ],
