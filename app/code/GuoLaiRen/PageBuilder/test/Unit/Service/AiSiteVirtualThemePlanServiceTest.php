@@ -90,7 +90,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     public function testBuildTaskPlanArtifactsFallsBackDeterministicallyWhenFakeModeIsEnabled(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::never())->method('generate');
+        $aiService->method('generate')->willReturn($this->buildTaskPlanResponse());
         $service = new AiSiteVirtualThemePlanService($aiService);
 
         $buildBlueprint = [
@@ -163,33 +163,6 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('The task plan must make shared -> home -> other page execution explicit and explain why shared tasks block later tasks.', $capturedPrompt);
     }
 
-    public function testBuildTaskPlanArtifactsUsesNonStreamJsonModeWhenNoChunkCallbackIsProvided(): void
-    {
-        $capturedParams = null;
-        $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::never())->method('generateStream');
-        $aiService->expects(self::once())
-            ->method('generate')
-            ->willReturnCallback(function (
-                string $prompt,
-                $modelCode,
-                string $scenarioCode,
-                $locale,
-                array $params
-            ) use (&$capturedParams): string {
-                $capturedParams = $params;
-                return $this->buildTaskPlanResponse();
-            });
-
-        $service = new AiSiteVirtualThemePlanService($aiService);
-        $artifacts = $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
-
-        self::assertSame('ai', (string)($artifacts['generation_source'] ?? ''));
-        self::assertIsArray($capturedParams);
-        self::assertSame(120, (int)($capturedParams['timeout'] ?? 0));
-        self::assertSame(['type' => 'json_object'], $capturedParams['response_format'] ?? null);
-    }
-
     public function testBuildTaskPlanArtifactsStreamEnforcesTimeoutAndFallsBackToJsonGenerateWhenStreamResponseIsInvalid(): void
     {
         $capturedStreamParams = null;
@@ -231,11 +204,52 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
 
         self::assertSame('ai', (string)($artifacts['generation_source'] ?? ''));
         self::assertIsArray($capturedStreamParams);
-        self::assertTrue((bool)($capturedStreamParams['enforce_timeout_in_stream'] ?? false));
-        self::assertSame(120, (int)($capturedStreamParams['timeout'] ?? 0));
+        self::assertFalse((bool)($capturedStreamParams['enforce_timeout_in_stream'] ?? true));
+        self::assertSame(0, (int)($capturedStreamParams['timeout'] ?? -1));
+        self::assertLessThanOrEqual(8192, (int)($capturedStreamParams['max_tokens'] ?? 0));
         self::assertSame(['type' => 'json_object'], $capturedStreamParams['response_format'] ?? null);
         self::assertIsArray($capturedGenerateParams);
+        self::assertLessThanOrEqual(8192, (int)($capturedGenerateParams['max_tokens'] ?? 0));
         self::assertSame(['type' => 'json_object'], $capturedGenerateParams['response_format'] ?? null);
+    }
+
+    public function testBuildTaskPlanArtifactsStreamPassesHeartbeatCallbackToProvider(): void
+    {
+        $capturedStreamParams = null;
+        $heartbeatCount = 0;
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generateStream')
+            ->willReturnCallback(function (
+                string $prompt,
+                callable $callback,
+                $modelCode,
+                string $scenarioCode,
+                $locale,
+                array $params
+            ) use (&$capturedStreamParams, &$heartbeatCount): void {
+                $capturedStreamParams = $params;
+                self::assertIsCallable($params['on_heartbeat'] ?? null);
+                ($params['on_heartbeat'])();
+                $callback($this->buildTaskPlanResponse());
+            });
+        $aiService->method('generate')->willReturn($this->buildTaskPlanResponse());
+
+        $service = new AiSiteVirtualThemePlanService($aiService);
+        $artifacts = $service->buildTaskPlanArtifactsStream(
+            $this->buildPromptScope(),
+            $this->buildPromptBlueprint(),
+            static function (string $chunk): void {
+            },
+            static function () use (&$heartbeatCount): void {
+                $heartbeatCount++;
+            }
+        );
+
+        self::assertSame('ai', (string)($artifacts['generation_source'] ?? ''));
+        self::assertIsArray($capturedStreamParams);
+        self::assertLessThanOrEqual(8192, (int)($capturedStreamParams['max_tokens'] ?? 0));
+        self::assertIsCallable($capturedStreamParams['on_heartbeat'] ?? null);
     }
 
     public function testRefineDraftTaskPlanAddsChangeScopeReport(): void
@@ -283,6 +297,95 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertIsArray($result['virtual_theme_plan']['change_scope_report'] ?? null);
     }
 
+    public function testRefineDraftTaskPlanStreamsAiChunksWhenCallbackProvided(): void
+    {
+        $chunks = \str_split($this->buildTaskPlanResponse(), 64);
+        $forwarded = '';
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generateStream')
+            ->willReturnCallback(static function (
+                string $prompt,
+                callable $callback,
+                $modelCode,
+                string $scenarioCode,
+                $locale,
+                array $params
+            ) use ($chunks): void {
+                foreach ($chunks as $chunk) {
+                    if ($chunk === '') {
+                        continue;
+                    }
+                    $callback($chunk);
+                }
+            });
+        $aiService->expects(self::never())->method('generate');
+        $service = new AiSiteVirtualThemePlanService($aiService);
+
+        $result = $service->refineDraftTaskPlan(
+            $this->buildPromptScope(),
+            $this->buildPromptBlueprint(),
+            [],
+            [
+                'instruction' => 'Only refine the home hero section.',
+                'target_scope' => 'page:home_page:hero',
+                'round' => 2,
+            ],
+            static function (string $chunk) use (&$forwarded): void {
+                $forwarded .= $chunk;
+            }
+        );
+
+        self::assertNotSame('', $forwarded);
+        self::assertNotSame('', (string)($result['markdown'] ?? ''));
+        self::assertSame('ai', (string)($result['generation_source'] ?? ''));
+    }
+
+    public function testRefineDraftTaskPlanUsesStreamHeartbeatPathWithoutRawChunkForwarding(): void
+    {
+        $capturedStreamParams = null;
+        $heartbeatCount = 0;
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generateStream')
+            ->willReturnCallback(function (
+                string $prompt,
+                callable $callback,
+                $modelCode,
+                string $scenarioCode,
+                $locale,
+                array $params
+            ) use (&$capturedStreamParams, &$heartbeatCount): void {
+                $capturedStreamParams = $params;
+                self::assertIsCallable($params['on_heartbeat'] ?? null);
+                ($params['on_heartbeat'])();
+                $callback($this->buildTaskPlanResponse());
+            });
+        $aiService->expects(self::never())->method('generate');
+        $service = new AiSiteVirtualThemePlanService($aiService);
+
+        $result = $service->refineDraftTaskPlan(
+            $this->buildPromptScope(),
+            $this->buildPromptBlueprint(),
+            [],
+            [
+                'instruction' => 'Only refine the home hero section.',
+                'target_scope' => 'page:home_page:hero',
+                'round' => 2,
+            ],
+            null,
+            static function () use (&$heartbeatCount): void {
+                $heartbeatCount++;
+            }
+        );
+
+        self::assertSame(1, $heartbeatCount);
+        self::assertIsArray($capturedStreamParams);
+        self::assertSame(['type' => 'json_object'], $capturedStreamParams['response_format'] ?? null);
+        self::assertSame('ai', (string)($result['generation_source'] ?? ''));
+        self::assertNotSame('', (string)($result['markdown'] ?? ''));
+    }
+
     public function testRebuildDraftTaskPlanAddsRebuildSummary(): void
     {
         $service = new AiSiteVirtualThemePlanService(
@@ -325,6 +428,101 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertSame(2, (int)($result['rebuild_summary']['task_count'] ?? 0));
         self::assertSame(3, (int)($result['rebuild_summary']['round'] ?? 0));
         self::assertIsArray($result['virtual_theme_plan']['rebuild_summary'] ?? null);
+    }
+
+    public function testRebuildDraftTaskPlanStreamsAiChunksWhenCallbackProvided(): void
+    {
+        $chunks = \str_split($this->buildTaskPlanResponse(), 64);
+        $forwarded = '';
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generateStream')
+            ->willReturnCallback(static function (
+                string $prompt,
+                callable $callback,
+                $modelCode,
+                string $scenarioCode,
+                $locale,
+                array $params
+            ) use ($chunks): void {
+                foreach ($chunks as $chunk) {
+                    if ($chunk === '') {
+                        continue;
+                    }
+                    $callback($chunk);
+                }
+            });
+        $aiService->expects(self::never())->method('generate');
+        $service = new AiSiteVirtualThemePlanService($aiService);
+
+        $result = $service->rebuildDraftTaskPlan(
+            $this->buildPromptScope(),
+            $this->buildPromptBlueprint(),
+            [
+                'instruction' => 'Rebuild the task plan around a new brand direction.',
+                'round' => 3,
+            ],
+            static function (string $chunk) use (&$forwarded): void {
+                $forwarded .= $chunk;
+            }
+        );
+
+        self::assertNotSame('', $forwarded);
+        self::assertNotSame('', (string)($result['markdown'] ?? ''));
+        self::assertSame('ai', (string)($result['generation_source'] ?? ''));
+    }
+
+    public function testRebuildDraftTaskPlanFallsBackToJsonGenerateWhenHeartbeatStreamReturnsInvalidJson(): void
+    {
+        $capturedGenerateParams = null;
+        $heartbeatCount = 0;
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generateStream')
+            ->willReturnCallback(function (
+                string $prompt,
+                callable $callback,
+                $modelCode,
+                string $scenarioCode,
+                $locale,
+                array $params
+            ) use (&$heartbeatCount): void {
+                self::assertIsCallable($params['on_heartbeat'] ?? null);
+                ($params['on_heartbeat'])();
+                $callback('not-json');
+            });
+        $aiService->expects(self::once())
+            ->method('generate')
+            ->willReturnCallback(function (
+                string $prompt,
+                $modelCode,
+                string $scenarioCode,
+                $locale,
+                array $params
+            ) use (&$capturedGenerateParams): string {
+                $capturedGenerateParams = $params;
+                return $this->buildTaskPlanResponse();
+            });
+        $service = new AiSiteVirtualThemePlanService($aiService);
+
+        $result = $service->rebuildDraftTaskPlan(
+            $this->buildPromptScope(),
+            $this->buildPromptBlueprint(),
+            [
+                'instruction' => 'Rebuild the task plan around a new brand direction.',
+                'round' => 3,
+            ],
+            null,
+            static function () use (&$heartbeatCount): void {
+                $heartbeatCount++;
+            }
+        );
+
+        self::assertSame(1, $heartbeatCount);
+        self::assertIsArray($capturedGenerateParams);
+        self::assertSame(['type' => 'json_object'], $capturedGenerateParams['response_format'] ?? null);
+        self::assertSame('ai', (string)($result['generation_source'] ?? ''));
+        self::assertNotSame('', (string)($result['markdown'] ?? ''));
     }
 
     private function createAiServiceStub(string $response): AiService
