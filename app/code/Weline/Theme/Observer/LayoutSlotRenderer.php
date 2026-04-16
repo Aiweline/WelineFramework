@@ -10,6 +10,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Model\ThemeLayout;
+use Weline\Theme\Service\PreviewRequestInspector;
 use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\ThemeCacheGenerator;
@@ -45,6 +46,7 @@ class LayoutSlotRenderer implements ObserverInterface
     private ThemeCacheGenerator $cacheGenerator;
     private Url $url;
     private PreviewTokenService $previewTokenService;
+    private PreviewRequestInspector $previewRequestInspector;
     private ThemePageTypeResolver $pageTypeResolver;
     private bool $isEnabled = true;
 
@@ -55,6 +57,7 @@ class LayoutSlotRenderer implements ObserverInterface
         ThemeCacheGenerator $cacheGenerator,
         Url $url,
         PreviewTokenService $previewTokenService,
+        PreviewRequestInspector $previewRequestInspector,
         ThemePageTypeResolver $pageTypeResolver
     ) {
         $this->slotRenderer = $slotRenderer;
@@ -63,6 +66,7 @@ class LayoutSlotRenderer implements ObserverInterface
         $this->cacheGenerator = $cacheGenerator;
         $this->url = $url;
         $this->previewTokenService = $previewTokenService;
+        $this->previewRequestInspector = $previewRequestInspector;
         $this->pageTypeResolver = $pageTypeResolver;
     }
 
@@ -87,7 +91,9 @@ class LayoutSlotRenderer implements ObserverInterface
         // === 绗竴姝ワ細澶勭悊棰勮妯″紡锛堢嫭绔嬩簬鎻掓Ы澶勭悊锛?==
         // 妫€娴?URL 鍙傛暟涓殑棰勮 token锛屽鏋滄湁鏁堝垯璁剧疆 Cookie锛堝疄鐜伴瑙堢姸鎬佹寔涔呭寲锛?
         $urlToken = $this->request->getParam(PreviewTokenService::TOKEN_KEY);
-        if ($urlToken && $this->previewTokenService->validateToken($urlToken)) {
+        if ($urlToken
+            && !$this->previewRequestInspector->shouldKeepPreviewStateOnlyForCurrentRequest()
+            && $this->previewTokenService->validateToken($urlToken)) {
             // 鑷姩璁剧疆 Cookie锛岃繖鏍峰悗缁〉闈㈣烦杞笉闇€瑕佹瘡娆￠兘甯?token 鍙傛暟
             $this->previewTokenService->setPreviewCookie($urlToken);
         }

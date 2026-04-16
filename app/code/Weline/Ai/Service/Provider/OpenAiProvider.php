@@ -42,6 +42,26 @@ class OpenAiProvider implements ProviderInterface
     private const RETRY_DELAY = 1;
 
     /**
+     * curl 在 CURLOPT_WRITEFUNCTION 返回 -1 中止传输时的典型错误（如 SSE 对端断开、回调返回 false）。
+     * 不应按「上游 API 故障」向上抛致命异常，否则已断开的 SSE 链路仍会在服务端记一条误导性 exception。
+     */
+    private function isCurlStreamWriteAbortError(string $error): bool
+    {
+        if ($error === '') {
+            return false;
+        }
+        if (stripos($error, 'failure writing output to destination') !== false) {
+            return true;
+        }
+        if (stripos($error, 'returned -1') !== false) {
+            return true;
+        }
+
+        return stripos($error, 'returned -1') !== false
+            && (stripos($error, 'writestring') !== false || stripos($error, 'callback') !== false);
+    }
+
+    /**
      * 构造函数
      */
     public function __construct()
@@ -260,6 +280,7 @@ class OpenAiProvider implements ProviderInterface
             }
         }
 
+        $streamWriteAborted = false;
         try {
             $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
@@ -310,6 +331,7 @@ class OpenAiProvider implements ProviderInterface
 
         $rawResponseBuffer = '';
         $hasValidChunk = false;
+        $streamLineBuffer = '';
         $startTime = microtime(true);
         $lastProgressNotify = $startTime;
         $progressInterval = 5; // 每 5 秒发送一次等待状态
@@ -334,8 +356,8 @@ class OpenAiProvider implements ProviderInterface
                     }
                     $lastProgressNotify = $now;
                 }
-                // AI 已有数据流时，降频发送心跳（每 15 秒）
-                elseif ($hasValidChunk && $onHeartbeat && $sinceLast >= 15) {
+                // AI 已有数据流时，仍保持较高频保活，避免代理空闲超时误断（每 8 秒）
+                elseif ($hasValidChunk && $onHeartbeat && $sinceLast >= 8) {
                     $onHeartbeat();
                     $lastProgressNotify = $now;
                 }
@@ -346,7 +368,7 @@ class OpenAiProvider implements ProviderInterface
 
         curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, $data) use (
             &$fullContent, &$fullReasoning, &$toolCallsAccum, &$finishReason, &$modelName,
-            &$rawResponseBuffer, &$hasValidChunk, $startTime, $timeout,
+            &$rawResponseBuffer, &$hasValidChunk, &$streamLineBuffer, $startTime, $timeout,
             $onReasoning, $onContent, $onHeartbeat
         ) {
             if (strlen($rawResponseBuffer) < 4096) {
@@ -358,7 +380,9 @@ class OpenAiProvider implements ProviderInterface
                 $onHeartbeat();
             }
 
-            $lines = explode("\n", $data);
+            $streamLineBuffer .= $data;
+            $lines = explode("\n", $streamLineBuffer);
+            $streamLineBuffer = array_pop($lines) ?? '';
             foreach ($lines as $line) {
                 $line = trim($line);
                 if (empty($line) || !str_starts_with($line, 'data: ')) {
@@ -436,12 +460,16 @@ class OpenAiProvider implements ProviderInterface
             if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
                 throw new Exception($this->getTimeoutErrorMessage($timeout));
             }
-            throw new Exception("流式API调用失败: {$error}");
+            if ($this->isCurlStreamWriteAbortError($error)) {
+                $streamWriteAborted = true;
+            } else {
+                throw new Exception(__('流式API调用失败: %{error}', ['error' => $error]));
+            }
         }
-        if ($httpCode !== 200) {
+        if (!$streamWriteAborted && $httpCode !== 200) {
             throw new Exception($this->parseApiErrorResponse($rawResponseBuffer, $httpCode));
         }
-        if (!$hasValidChunk && !empty($rawResponseBuffer)) {
+        if (!$streamWriteAborted && !$hasValidChunk && !empty($rawResponseBuffer)) {
             throw new Exception($this->parseApiErrorResponse($rawResponseBuffer, $httpCode));
         }
 
@@ -592,6 +620,7 @@ class OpenAiProvider implements ProviderInterface
         // 推理/思考内容回调
         $reasoningCallback = $params['reasoning_callback'] ?? null;
         $fullReasoning = '';
+        $onHeartbeat = \is_callable($params['on_heartbeat'] ?? null) ? $params['on_heartbeat'] : null;
 
         $this->callStreamApi(
             $apiUrl,
@@ -607,12 +636,13 @@ class OpenAiProvider implements ProviderInterface
             $reasoningCallback ? function($chunk) use ($reasoningCallback, &$fullReasoning) {
                 $fullReasoning .= $chunk;
                 return $reasoningCallback($chunk);
-            } : null
+            } : null,
+            $onHeartbeat
         );
 
         // 如果流式调用没有返回任何内容，抛出明确错误
         if (empty(trim($fullContent)) && empty(trim($fullReasoning))) {
-            throw new Exception('AI 流式生成完成但未返回任何内容，请检查模型配置（API Key、Base URL、模型名称）是否正确');
+            throw new Exception(__('AI 流式生成完成但未返回任何内容，请检查模型配置（API Key、Base URL、模型名称）是否正确'));
         }
 
         // 估算token使用量
@@ -638,13 +668,18 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 将请求的 max_tokens 限制在模型/API 允许范围内，避免 HTTP 400（如 valid range [1, 8192]）
+     * 解析 max_tokens：
+     * - 调用方显式传参时，以调用方为准（业务侧可按场景提升预算）
+     * - 未传参时，回落模型/配置默认值
      */
     private function capMaxTokens(AiModel $model, array $config, array $params): int
     {
-        $requested = (int)($params['max_tokens'] ?? $config['max_tokens'] ?? 2000);
-        $modelMax = (int)($model->getData(AiModel::schema_fields_MAX_TOKENS) ?? $config['max_tokens'] ?? 8192);
-        return min(max(1, $requested), max(1, $modelMax));
+        if (\array_key_exists('max_tokens', $params)) {
+            return \max(1, (int)$params['max_tokens']);
+        }
+
+        $fallback = (int)($model->getData(AiModel::schema_fields_MAX_TOKENS) ?? $config['max_tokens'] ?? 2000);
+        return \max(1, $fallback);
     }
 
     /**
@@ -804,7 +839,7 @@ class OpenAiProvider implements ProviderInterface
                 if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
                     throw new Exception($this->getTimeoutErrorMessage($timeout));
                 }
-                throw new Exception("API请求失败: {$error}");
+                throw new Exception(__('API请求失败: %{error}', ['error' => $error]));
             }
 
             $result = json_decode($response, true);
@@ -816,12 +851,12 @@ class OpenAiProvider implements ProviderInterface
             }
 
             if ($httpCode !== 200) {
-                $errorMsg = $result['error']['message'] ?? "HTTP错误: {$httpCode}";
-                throw new Exception("API返回错误: {$errorMsg}");
+                $errorMsg = $result['error']['message'] ?? __('HTTP错误: %{code}', ['code' => $httpCode]);
+                throw new Exception(__('API返回错误: %{error}', ['error' => $errorMsg]));
             }
 
             if (!isset($result['choices'][0]['message']['content'])) {
-                throw new Exception("API响应格式错误");
+                throw new Exception(__('API响应格式错误'));
             }
 
             return $result;
@@ -837,7 +872,10 @@ class OpenAiProvider implements ProviderInterface
                 SchedulerSystem::sleep(self::RETRY_DELAY * ($retryCount + 1));
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
-            throw new Exception("API调用失败（已重试{$retryCount}次）: " . $e->getMessage());
+            throw new Exception(__('API调用失败（已重试%{count}次）: %{msg}', [
+                'count' => $retryCount,
+                'msg' => $e->getMessage()
+            ]));
         }
     }
 
@@ -852,8 +890,16 @@ class OpenAiProvider implements ProviderInterface
      * @param int $timeout
      * @throws Exception
      */
-    private function callStreamApi(string $url, string $apiKey, array $data, callable $callback, array $proxyInfo, int $timeout, ?callable $reasoningCallback = null): void
-    {
+    private function callStreamApi(
+        string $url,
+        string $apiKey,
+        array $data,
+        callable $callback,
+        array $proxyInfo,
+        int $timeout,
+        ?callable $reasoningCallback = null,
+        ?callable $onHeartbeat = null
+    ): void {
         // SSE 模式下不做 PHP 层面的超时检测，由 SseWriter 和 curl 自身控制
         $isSseMode = SseContext::isSseEnabled();
         
@@ -879,9 +925,42 @@ class OpenAiProvider implements ProviderInterface
         // 用于捕获非 SSE 格式的响应（API 错误等）
         $rawResponseBuffer = '';
         $hasValidChunk = false;
+        $streamLineBuffer = '';
+        $streamTerminatedNormally = false;
+        // on_heartbeat：仅允许「轻量保活」（如 SseWriter::sendComment），禁止在进度回调里 sendEvent（会触发 checkHeartbeat/yield，与 curl 读并行时易异常）。
+        // 与 WRITEFUNCTION 共用节流：上游首包前可能长时间无 chunk，仅靠 PROGRESS 在部分环境不可靠，故在收到原始 TCP 片时也尝试保活。
+        $streamKeepaliveIntervalSec = 5.0;
+        $lastStreamKeepaliveAt = microtime(true);
+        if ($onHeartbeat !== null) {
+            try {
+                $onHeartbeat();
+                $lastStreamKeepaliveAt = microtime(true);
+            } catch (\Throwable) {
+            }
+            curl_setopt($ch, CURLOPT_NOPROGRESS, false);
+            curl_setopt($ch, CURLOPT_PROGRESSFUNCTION, function (
+                $curl,
+                $dlTotal,
+                $dlNow,
+                $ulTotal,
+                $ulNow
+            ) use ($onHeartbeat, &$lastStreamKeepaliveAt, $streamKeepaliveIntervalSec) {
+                $now = microtime(true);
+                if (($now - $lastStreamKeepaliveAt) < $streamKeepaliveIntervalSec) {
+                    return 0;
+                }
+                $lastStreamKeepaliveAt = $now;
+                try {
+                    $onHeartbeat();
+                } catch (\Throwable) {
+                }
+
+                return 0;
+            });
+        }
         
         // 设置流式处理回调
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback, $reasoningCallback, $startTime, $timeLimit, &$rawResponseBuffer, &$hasValidChunk) {
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback, $reasoningCallback, $startTime, $timeLimit, &$rawResponseBuffer, &$hasValidChunk, &$streamLineBuffer, &$streamTerminatedNormally, $onHeartbeat, &$lastStreamKeepaliveAt, $streamKeepaliveIntervalSec) {
             // 检查是否超时
             if ($timeLimit !== null) {
                 $elapsedTime = microtime(true) - $startTime;
@@ -890,12 +969,25 @@ class OpenAiProvider implements ProviderInterface
                 }
             }
 
+            if ($onHeartbeat !== null) {
+                $nowHb = microtime(true);
+                if (($nowHb - $lastStreamKeepaliveAt) >= $streamKeepaliveIntervalSec) {
+                    $lastStreamKeepaliveAt = $nowHb;
+                    try {
+                        $onHeartbeat();
+                    } catch (\Throwable) {
+                    }
+                }
+            }
+
             // 累积原始响应（限制大小，仅用于错误诊断）
             if (strlen($rawResponseBuffer) < 4096) {
                 $rawResponseBuffer .= $data;
             }
 
-            $lines = explode("\n", $data);
+            $streamLineBuffer .= $data;
+            $lines = explode("\n", $streamLineBuffer);
+            $streamLineBuffer = array_pop($lines) ?? '';
 
             foreach ($lines as $line) {
                 $line = trim($line);
@@ -907,6 +999,7 @@ class OpenAiProvider implements ProviderInterface
                 $jsonData = substr($line, 6);
 
                 if ($jsonData === '[DONE]') {
+                    $streamTerminatedNormally = true;
                     continue;
                 }
 
@@ -934,11 +1027,43 @@ class OpenAiProvider implements ProviderInterface
                 }
             }
 
+            if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent()) {
+                SchedulerSystem::yieldDelay(1);
+            }
+
             return strlen($data);
         });
 
         $this->executeCurl($ch);
-        
+
+        // 兜底处理尾包：某些上游在结束时最后一行可能不带换行，若不补解析会丢失末尾 delta。
+        $tailLine = trim($streamLineBuffer);
+        if ($tailLine !== '' && str_starts_with($tailLine, 'data: ')) {
+            $jsonData = substr($tailLine, 6);
+            if ($jsonData === '[DONE]') {
+                $streamTerminatedNormally = true;
+            } else {
+                $chunk = json_decode($jsonData, true);
+                $delta = $chunk['choices'][0]['delta'] ?? [];
+
+                if (!empty($delta['reasoning_content']) && $reasoningCallback) {
+                    $hasValidChunk = true;
+                    $result = $reasoningCallback($delta['reasoning_content']);
+                    if ($result === false) {
+                        throw new Exception(__('SSE stream aborted by reasoning callback'));
+                    }
+                }
+
+                if (isset($delta['content'])) {
+                    $hasValidChunk = true;
+                    $result = $callback($delta['content']);
+                    if ($result === false) {
+                        throw new Exception(__('SSE stream aborted by content callback'));
+                    }
+                }
+            }
+        }
+
         // 获取 HTTP 状态码
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
@@ -957,24 +1082,37 @@ class OpenAiProvider implements ProviderInterface
         $error = curl_error($ch);
         curl_close($ch);
 
+        $streamWriteAborted = false;
         if ($error) {
             // curl 超时错误始终需要检测（非 PHP 层面超时）
             if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
                 throw new Exception($this->getTimeoutErrorMessage($timeout));
             }
-            throw new Exception("流式API调用失败: {$error}");
+            if ($this->isCurlStreamWriteAbortError($error)) {
+                $streamWriteAborted = true;
+            } else {
+                throw new Exception(__('流式API调用失败: %{error}', ['error' => $error]));
+            }
         }
         
         // 检查 HTTP 状态码
-        if ($httpCode !== 200) {
+        if (!$streamWriteAborted && $httpCode !== 200) {
             $errorMsg = $this->parseApiErrorResponse($rawResponseBuffer, $httpCode);
             throw new Exception($errorMsg);
         }
         
         // 检查是否收到了有效内容
-        if (!$hasValidChunk && !empty($rawResponseBuffer)) {
+        if (!$streamWriteAborted && !$hasValidChunk && !empty($rawResponseBuffer)) {
             $errorMsg = $this->parseApiErrorResponse($rawResponseBuffer, $httpCode);
             throw new Exception($errorMsg);
+        }
+
+        if (!$streamWriteAborted && $hasValidChunk && !$streamTerminatedNormally) {
+            $tailPreview = mb_substr(trim($streamLineBuffer), 0, 180);
+            throw new Exception(
+                'AI 上游流式输出提前终止：未收到 [DONE] 结束标记。'
+                . ($tailPreview !== '' ? " tail={$tailPreview}" : '')
+            );
         }
     }
     
@@ -1168,7 +1306,7 @@ class OpenAiProvider implements ProviderInterface
             return false;
         }
 
-        return $content;
+        return $content === null ? false : $content;
     }
 
     /**

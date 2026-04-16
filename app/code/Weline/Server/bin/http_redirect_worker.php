@@ -107,6 +107,10 @@ unset($_envFile);
 
 $isDev = (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE)
     || ($envConfig !== null && isset($envConfig['deploy']) && $envConfig['deploy'] === 'dev');
+$supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
+$supervisorEnabled = $supervisorEnabledRaw !== false
+    && $supervisorEnabledRaw !== ''
+    && \in_array(\strtolower((string) $supervisorEnabledRaw), ['1', 'true', 'yes', 'on'], true);
 
 
 $context = \stream_context_create([
@@ -141,7 +145,7 @@ $ipcReceivedShutdown = false;
 $orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
 $kernel = null;
 $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
-if ($controlPort > 0) {
+if ($controlPort > 0 || $supervisorEnabled) {
     $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
         \Weline\Server\IPC\ControlMessage::ROLE_REDIRECT,
         \getmypid(),
