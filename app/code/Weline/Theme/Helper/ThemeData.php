@@ -19,6 +19,8 @@ use Weline\I18n\Model\Locale\Dictionary;
 use Weline\Meta\Helper\MetaData;
 use Weline\Meta\Model\MetaConfig;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\PreviewThemeScopeService;
+use Weline\Theme\Service\ThemeContextService;
 use Weline\Widget\Ui\ParamType\AbstractParamType;
 
 final class ThemeDataRequestState
@@ -121,6 +123,40 @@ class ThemeData
 
         return $scopeId === null || $scopeId === '' ? null : 'conn:' . $scopeId;
     }
+
+    private static function resolveRequestedScopeForArea(string $area): string
+    {
+        try {
+            /** @var ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+            return $themeContext->resolveCurrentScope($area);
+        } catch (\Throwable) {
+            return 'default';
+        }
+    }
+
+    private static function resolveEffectiveScope(string $scope = 'default', ?string $area = null): string
+    {
+        self::ensureInitialized();
+
+        $scope = trim($scope) !== '' ? trim($scope) : 'default';
+        $state = self::state();
+        $area = strtolower(trim((string)($area ?? $state->currentArea ?? '')));
+        $area = $area === 'backend' ? 'backend' : 'frontend';
+        $themeId = $state->currentTheme?->getId();
+
+        if (!$themeId) {
+            return $scope;
+        }
+
+        try {
+            /** @var PreviewThemeScopeService $previewThemeScopeService */
+            $previewThemeScopeService = ObjectManager::getInstance(PreviewThemeScopeService::class);
+            return $previewThemeScopeService->resolveEffectiveScope((int)$themeId, $area, $scope);
+        } catch (\Throwable) {
+            return $scope;
+        }
+    }
     
     /**
      * 自动初始化（延迟加载），使用performanceLoad预加载配置
@@ -140,9 +176,15 @@ class ThemeData
 
             // 获取当前主题（按当前区域解析激活主题，缺失时回退全局）
             if ($state->currentTheme === null) {
-                /** @var WelineTheme $theme */
-                $theme = ObjectManager::getInstance(WelineTheme::class);
-                $state->currentTheme = $theme->getActiveTheme($state->currentArea);
+                try {
+                    /** @var ThemeContextService $themeContext */
+                    $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+                    $state->currentTheme = $themeContext->resolveTheme($state->currentArea);
+                } catch (\Throwable) {
+                    /** @var WelineTheme $theme */
+                    $theme = ObjectManager::getInstance(WelineTheme::class);
+                    $state->currentTheme = $theme->getActiveTheme($state->currentArea);
+                }
             }
             
             // 如果主题存在且不在加载中，预加载配置（防止循环调用）
@@ -172,6 +214,34 @@ class ThemeData
         
         // 规范化identify（自动补全前缀）
         $identify = self::normalizeIdentify($identify);
+
+        if (preg_match('/^theme\.(frontend|backend)\.(.+)\.value$/', $identify, $matches)) {
+            $area = $matches[1];
+            $configKeyWithoutValue = $matches[2];
+            $requestedScope = self::resolveRequestedScopeForArea($area);
+            $effectiveScope = self::resolveEffectiveScope($requestedScope, $area);
+            $themeId = self::state()->currentTheme?->getId();
+
+            if ($themeId) {
+                /** @var MetaConfig $metaConfig */
+                $metaConfig = ObjectManager::getInstance(MetaConfig::class);
+                $locale = Cookie::getLang() ?? 'zh_Hans_CN';
+                $configValue = $metaConfig->getConfig(
+                    $themeId,
+                    'theme.' . $area,
+                    $configKeyWithoutValue,
+                    $effectiveScope,
+                    $locale
+                );
+                if ($configValue !== null) {
+                    return $configValue;
+                }
+            }
+
+            if ($effectiveScope !== $requestedScope) {
+                return $default;
+            }
+        }
         
         // 优先从本地缓存读取配置值
         // 检查是否是 .value 格式
@@ -226,7 +296,15 @@ class ThemeData
         }
         
         // 统一使用MetaData设置值
-        $result = MetaData::set($identify, $value, $scope, $locale, $themeId);
+        $result = MetaData::set(
+            $identify,
+            $value,
+            preg_match('/^theme\.(frontend|backend)\./', $identify, $scopeMatches)
+                ? self::resolveEffectiveScope($scope, $scopeMatches[1])
+                : $scope,
+            $locale,
+            $themeId
+        );
         
         // 清除缓存
         if ($result) {
@@ -365,6 +443,9 @@ class ThemeData
     {
         self::ensureInitialized();
         $identify = self::normalizeIdentify($identify);
+        $identifyParts = explode('.', $identify);
+        $identifyArea = $identifyParts[1] ?? 'frontend';
+        $effectiveScope = self::resolveEffectiveScope($scope, $identifyArea);
 
         $definitions = self::getParamDefinitions($identify);
         if (empty($definitions)) {
@@ -380,7 +461,7 @@ class ThemeData
                 $values[$paramName] = self::getParamTranslation(
                     $identify,
                     $paramName,
-                    $scope,
+                    $effectiveScope,
                     $locale,
                     is_scalar($defaultValue) ? (string)$defaultValue : null
                 );
@@ -396,7 +477,7 @@ class ThemeData
 
             $value = null;
             if ($themeId) {
-                $value = $metaConfig->getConfig($themeId, $namespace, $configKey, $scope, $resolvedLocale);
+                $value = $metaConfig->getConfig($themeId, $namespace, $configKey, $effectiveScope, $resolvedLocale);
             }
 
             if ($value === null && is_scalar($defaultValue)) {
@@ -448,12 +529,15 @@ class ThemeData
     {
         self::ensureInitialized();
         $identify = self::normalizeIdentify($identify);
+        $identifyParts = explode('.', $identify);
+        $identifyArea = $identifyParts[1] ?? 'frontend';
+        $effectiveScope = self::resolveEffectiveScope($scope, $identifyArea);
         $definitions = self::getParamDefinitions($identify);
         $definition = $definitions[$paramName] ?? null;
         $isTranslatable = $definition && !empty($definition['translate']);
 
         if ($isTranslatable) {
-            self::deleteParamTranslation($identify, $paramName, $scope, $locale);
+            self::deleteParamTranslation($identify, $paramName, $effectiveScope, $locale);
             return;
         }
 
@@ -463,7 +547,7 @@ class ThemeData
         if ($themeId) {
             /** @var MetaConfig $metaConfig */
             $metaConfig = ObjectManager::getInstance(MetaConfig::class);
-            $metaConfig->deleteConfig($themeId, $namespace, $configKey, $scope, $locale);
+            $metaConfig->deleteConfig($themeId, $namespace, $configKey, $effectiveScope, $locale);
             self::clearCache();
         }
     }
@@ -482,11 +566,14 @@ class ThemeData
     {
         self::ensureInitialized();
         $identify = self::normalizeIdentify($identify);
+        $identifyParts = explode('.', $identify);
+        $identifyArea = $identifyParts[1] ?? 'frontend';
+        $effectiveScope = self::resolveEffectiveScope($scope, $identifyArea);
         $configIdentify = "{$identify}.param.{$paramName}.value";
 
         return MetaTranslation::getTranslatedValueWithScope(
             $configIdentify,
-            $scope,
+            $effectiveScope,
             $locale,
             $default
         );
@@ -509,6 +596,9 @@ class ThemeData
     {
         self::ensureInitialized();
         $identify = self::normalizeIdentify($identify);
+        $identifyParts = explode('.', $identify);
+        $identifyArea = $identifyParts[1] ?? 'frontend';
+        $effectiveScope = self::resolveEffectiveScope($scope, $identifyArea);
 
         if ($locale === null) {
             $locale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
@@ -517,8 +607,8 @@ class ThemeData
         // 与 MetaTranslation::getTranslatedValueWithScope 保持相同的 key 约定
         $metaKey = "{$identify}.param.{$paramName}.value";
         $translationKey = '@meta::' . $metaKey;
-        if ($scope !== 'default') {
-            $translationKey .= '|scope:' . $scope;
+        if ($effectiveScope !== 'default') {
+            $translationKey .= '|scope:' . $effectiveScope;
         }
 
         /** @var Dictionary $dict */
@@ -544,6 +634,9 @@ class ThemeData
     {
         self::ensureInitialized();
         $identify = self::normalizeIdentify($identify);
+        $identifyParts = explode('.', $identify);
+        $identifyArea = $identifyParts[1] ?? 'frontend';
+        $effectiveScope = self::resolveEffectiveScope($scope, $identifyArea);
 
         if ($locale === null) {
             $locale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
@@ -551,8 +644,8 @@ class ThemeData
 
         $metaKey = "{$identify}.param.{$paramName}.value";
         $translationKey = '@meta::' . $metaKey;
-        if ($scope !== 'default') {
-            $translationKey .= '|scope:' . $scope;
+        if ($effectiveScope !== 'default') {
+            $translationKey .= '|scope:' . $effectiveScope;
         }
 
         /** @var Dictionary $dict */
@@ -638,8 +731,9 @@ class ThemeData
             
             // 如果没有提供scope，使用 'default'
             if ($scope === null) {
-                $scope = 'default';
+                $scope = self::resolveRequestedScopeForArea($state->currentArea ?? 'frontend');
             }
+            $scope = self::resolveEffectiveScope($scope, $state->currentArea);
             
             // 如果没有提供locale，使用当前语言
             if ($locale === null) {
@@ -1160,6 +1254,7 @@ class ThemeData
     public static function getConfigList(string $area, string $type, string $scope = 'default'): array
     {
         self::ensureInitialized();
+        $effectiveScope = self::resolveEffectiveScope($scope, $area);
         
         // 获取主题ID（用于查询配置）
         $state = self::state();
@@ -1168,7 +1263,7 @@ class ThemeData
             $themeId = $state->currentTheme->getId();
         }
         
-        $cacheKey = "config_list_{$area}_{$type}_{$scope}_{$themeId}";
+        $cacheKey = "config_list_{$area}_{$type}_{$effectiveScope}_{$themeId}";
         if (isset($state->performanceCache[$cacheKey])) {
             return $state->performanceCache[$cacheKey];
         }
@@ -1185,7 +1280,7 @@ class ThemeData
             
             $query = $metaConfig->where(\Weline\Meta\Model\MetaConfig::schema_fields_NAMESPACE, $namespace)
                 ->where(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_KEY, $configKeyPrefix, 'LIKE')
-                ->where(\Weline\Meta\Model\MetaConfig::schema_fields_SCOPE, $scope);
+                ->where(\Weline\Meta\Model\MetaConfig::schema_fields_SCOPE, $effectiveScope);
             
             // 如果提供了主题ID，添加 identify_id 条件
             if ($themeId !== null) {
@@ -1284,6 +1379,15 @@ class ThemeData
         }
 
         $scopes = array_values(array_unique($scopes));
+        try {
+            /** @var PreviewThemeScopeService $previewThemeScopeService */
+            $previewThemeScopeService = ObjectManager::getInstance(PreviewThemeScopeService::class);
+            $scopes = $previewThemeScopeService->filterPreviewScopes($scopes);
+        } catch (\Throwable) {
+        }
+        if (empty($scopes)) {
+            $scopes = ['default'];
+        }
         usort($scopes, static function (string $left, string $right): int {
             if ($left === 'default') {
                 return -1;
@@ -1704,11 +1808,14 @@ class ThemeData
     ): ?string {
         self::ensureInitialized();
         $identify = self::normalizeIdentify($identify);
+        $identifyParts = explode('.', $identify);
+        $identifyArea = $identifyParts[1] ?? 'frontend';
+        $effectiveScope = self::resolveEffectiveScope($scope, $identifyArea);
         $configIdentify = "{$identify}.path.{$path}.value";
 
         $result = MetaTranslation::getTranslatedValueWithScope(
             $configIdentify,
-            $scope,
+            $effectiveScope,
             $locale,
             $default
         );
@@ -1727,6 +1834,9 @@ class ThemeData
     ): bool {
         self::ensureInitialized();
         $identify = self::normalizeIdentify($identify);
+        $identifyParts = explode('.', $identify);
+        $identifyArea = $identifyParts[1] ?? 'frontend';
+        $effectiveScope = self::resolveEffectiveScope($scope, $identifyArea);
 
         if ($locale === null) {
             $locale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
@@ -1734,8 +1844,8 @@ class ThemeData
 
         $metaKey = "{$identify}.path.{$path}.value";
         $translationKey = '@meta::' . $metaKey;
-        if ($scope !== 'default') {
-            $translationKey .= '|scope:' . $scope;
+        if ($effectiveScope !== 'default') {
+            $translationKey .= '|scope:' . $effectiveScope;
         }
 
         /** @var Dictionary $dict */

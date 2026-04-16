@@ -29,7 +29,33 @@ class SseTerminalTaglibTest extends TestCore
         $this->assertStringContainsString('setStatus: setStatus', $html);
         $this->assertStringContainsString('keepStatus', $html);
         $this->assertStringContainsString('manualStopRequested', $html);
-        $this->assertStringContainsString('connecting', $html);
-        $this->assertStringContainsString('连接重试中', $html);
+        $this->assertStringContainsString("setStatus('connecting'", $html);
+    }
+
+    public function testSseTerminalMarkupRoutesEventsThroughSingleDispatchPath(): void
+    {
+        $callback = SseTerminal::callback();
+
+        $html = $callback(
+            'single',
+            [],
+            [''],
+            [
+                'id' => 'demo-terminal',
+                'title' => 'Demo',
+                'show-start-toggle' => 'false',
+            ]
+        );
+
+        $this->assertIsString($html);
+        $this->assertStringContainsString('function dispatchSseEvent(eventName, data, rawEvent)', $html);
+        $this->assertStringContainsString('var callbackEvent = rawEvent || { data: JSON.stringify(data) };', $html);
+        $this->assertStringContainsString('dispatchSseEvent(eventName, data, e);', $html);
+        $this->assertStringNotContainsString('dispatchSseEvent(eventName, data);', $html);
+        $this->assertStringContainsString('// 自动重连同一 URL', $html);
+        $this->assertStringContainsString(
+            "if (eventName === 'done' || eventName === 'failed' || eventName === 'error')",
+            $html
+        );
     }
 }

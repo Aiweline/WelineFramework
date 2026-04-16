@@ -90,6 +90,26 @@ class LanguageSwitcher implements TaglibInterface
             $currentFlag = (string)($welineCurrentLanguage['flag'] ?? '');
             $renderFor = strtolower(trim((string)($attributes['for'] ?? '')));
             $switcherId = 'weline-i18n-switcher-' . substr(md5((string)$websiteId . '|' . $currentCode . '|' . json_encode(array_keys($welineLanguages))), 0, 12);
+            // #region agent log
+            try {
+                $debugLogFile = dirname(__DIR__, 6) . DIRECTORY_SEPARATOR . 'debug-27e05e.log';
+                $debugPayload = [
+                    'sessionId' => '27e05e',
+                    'runId' => 'run1',
+                    'hypothesisId' => 'H5',
+                    'location' => 'Weline/I18n/Taglib/LanguageSwitcher.php:callback',
+                    'message' => 'server-render-switcher',
+                    'data' => [
+                        'switcherId' => $switcherId,
+                        'renderFor' => $renderFor,
+                        'websiteId' => $websiteId,
+                    ],
+                    'timestamp' => (int)(microtime(true) * 1000),
+                ];
+                file_put_contents($debugLogFile, json_encode($debugPayload, JSON_UNESCAPED_UNICODE) . PHP_EOL, FILE_APPEND);
+            } catch (\Throwable) {
+            }
+            // #endregion
             $parts = explode('_', $currentCode);
             $shortCode = strtoupper(substr($currentCode, 0, 2));
             if (count($parts) >= 2) {
@@ -103,20 +123,23 @@ class LanguageSwitcher implements TaglibInterface
             }
             $currentDisplay = htmlspecialchars($shortCode, ENT_QUOTES, 'UTF-8');
 
+            $toggleId = $switcherId . '-toggle';
+            $panelId = $switcherId . '-panel';
+
             $html = [];
             if ($renderFor === 'js') {
                 $html[] = '<div class="dropdown d-inline-block" data-i18n-switcher data-i18n-switcher-id="' . $switcherId . '">';
             } else {
                 $html[] = '<div class="dropdown d-inline-block" data-i18n-switcher-id="' . $switcherId . '">';
             }
-            $html[] = '    <button type="button" class="btn header-item waves-effect" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">';
+            $html[] = '    <button type="button" id="' . htmlspecialchars($toggleId, ENT_QUOTES, 'UTF-8') . '" class="btn header-item waves-effect weline-i18n-switcher-toggle position-relative" style="z-index:1056" aria-haspopup="true" aria-expanded="false" aria-controls="' . htmlspecialchars($panelId, ENT_QUOTES, 'UTF-8') . '">';
             if ($renderFor === 'js') {
                 $html[] = '        ' . $currentFlag . '<span class="align-middle current-language"> ' . $currentDisplay . '</span>';
             } else {
                 $html[] = '        ' . $currentFlag . '<span class="align-middle"> ' . $currentName . '</span>';
             }
             $html[] = '    </button>';
-            $html[] = '    <div class="dropdown-menu dropdown-menu-end languages">';
+            $html[] = '    <div id="' . htmlspecialchars($panelId, ENT_QUOTES, 'UTF-8') . '" class="dropdown-menu dropdown-menu-end languages weline-i18n-switcher-panel" role="menu" aria-labelledby="' . htmlspecialchars($toggleId, ENT_QUOTES, 'UTF-8') . '">';
             $html[] = '        <div class="px-2 pt-2 pb-1">';
             $html[] = '            <input type="text" class="form-control form-control-sm weline-language-search" placeholder="' . htmlspecialchars((string)__('搜索语言名或语言码'), ENT_QUOTES, 'UTF-8') . '" autocomplete="off">';
             $html[] = '        </div>';
@@ -140,38 +163,34 @@ class LanguageSwitcher implements TaglibInterface
             $html[] = '    </div>';
             $html[] = '</div>';
             $html[] = '<script>(function(){';
-            $html[] = 'var root=document.querySelector(\'[data-i18n-switcher-id="' . $switcherId . '"]\');if(!root){return;}';
-            $html[] = 'var input=root.querySelector(".weline-language-search");if(!input){return;}';
+            $html[] = 'var currentScript=document.currentScript;var root=currentScript?currentScript.previousElementSibling:null;';
+            $html[] = 'if(!root||!root.hasAttribute("data-i18n-switcher-id")||root.dataset.welineI18nNative==="1"){return;}root.dataset.welineI18nNative="1";';
+            $html[] = 'var toggle=root.querySelector(".weline-i18n-switcher-toggle");';
+            $html[] = 'var panel=root.querySelector(".weline-i18n-switcher-panel");';
+            $html[] = 'var input=root.querySelector(".weline-language-search");';
+            $html[] = 'if(!toggle||!panel){return;}';
             $html[] = 'var options=function(){return root.querySelectorAll(".weline-language-option");};';
             $html[] = 'var emptyId="weline-language-empty-' . $switcherId . '";';
-            $html[] = 'function ensureEmpty(){var empty=root.querySelector("#"+emptyId);if(!empty){empty=document.createElement("div");empty.id=emptyId;empty.className="dropdown-item text-muted small";empty.style.display="none";empty.textContent=' . json_encode((string)__('没有匹配语言')) . ';var menu=root.querySelector(".dropdown-menu.languages");if(menu){menu.appendChild(empty);}}return empty;}';
-            $html[] = 'function filter(){var kw=String(input.value||"").trim().toLowerCase();var visible=0;options().forEach(function(opt){var search=(opt.getAttribute("data-search")||"").toLowerCase();var ok=(kw==="")||search.indexOf(kw)!==-1;opt.style.display=ok?"":"none";if(ok){visible++;}});var empty=ensureEmpty();empty.style.display=visible===0?"":"none";}';
-            $html[] = 'input.addEventListener("input",filter);';
-            $html[] = 'root.addEventListener("shown.bs.dropdown",function(){input.value="";filter();setTimeout(function(){try{input.focus();}catch(e){}},10);});';
-            $html[] = 'root.addEventListener("hidden.bs.dropdown",function(){input.value="";filter();});';
-            $html[] = 'filter();';
-            $html[] = '})();</script>';
-            $html[] = '<script>(function(){';
-            $html[] = 'var root=document.querySelector(\'[data-i18n-switcher-id="' . $switcherId . '"]\');if(!root){return;}';
-            $html[] = 'if(root.dataset.welineDropdownFixBound==="1"){return;}root.dataset.welineDropdownFixBound="1";';
-            $html[] = 'var btn=root.querySelector(\'[data-bs-toggle="dropdown"]\');if(!btn){return;}';
-            $html[] = 'btn.addEventListener("click",function(){';
-            $html[] = 'setTimeout(function(){';
-            $html[] = 'try{';
-            $html[] = 'if(btn.getAttribute("aria-expanded")==="true"){return;}';
-            $html[] = 'if(!window.bootstrap||!window.bootstrap.Dropdown){return;}';
-            $html[] = 'var Dropdown=window.bootstrap.Dropdown;var config={autoClose:true};';
-            $html[] = 'var instance=null;';
-            $html[] = 'if(typeof Dropdown.getOrCreateInstance==="function"){instance=Dropdown.getOrCreateInstance(btn,config);}';
-            $html[] = 'else if(typeof Dropdown.getInstance==="function"){instance=Dropdown.getInstance(btn)||new Dropdown(btn,config);}';
-            $html[] = 'else{instance=new Dropdown(btn,config);}';
-            $html[] = 'instance.toggle();';
-            $html[] = '}catch(e){}';
-            $html[] = '},0);';
-            $html[] = '});';
-            $html[] = '})();</script>';
-            $html[] = '<script>(function(){';
-            $html[] = 'var root=document.querySelector(\'[data-i18n-switcher-id="' . $switcherId . '"]\');if(!root){return;}';
+            $html[] = '// #region agent log';
+            $html[] = 'function dbg(hypothesisId,message,data){fetch(\'http://127.0.0.1:7273/ingest/516ee328-a532-4da8-911d-8a8358883f7f\',{method:\'POST\',headers:{\'Content-Type\':\'application/json\',\'X-Debug-Session-Id\':\'27e05e\'},body:JSON.stringify({sessionId:\'27e05e\',runId:\'run1\',hypothesisId:hypothesisId,location:\'Weline/I18n/Taglib/LanguageSwitcher.php:script-native\',message:message,data:data||{},timestamp:Date.now()})}).catch(function(){});}';
+            $html[] = '// #endregion';
+            $html[] = 'dbg("H0","init",{switcherId:root.getAttribute("data-i18n-switcher-id"),hasToggle:!!toggle,hasPanel:!!panel});';
+            $html[] = 'function ensureEmpty(){var empty=root.querySelector("#"+emptyId);if(!empty){empty=document.createElement("div");empty.id=emptyId;empty.className="dropdown-item text-muted small";empty.style.display="none";empty.textContent=' . json_encode((string)__('没有匹配语言')) . ';panel.appendChild(empty);}return empty;}';
+            $html[] = 'function filter(){if(!input){return;}var kw=String(input.value||"").trim().toLowerCase();var visible=0;options().forEach(function(opt){var search=(opt.getAttribute("data-search")||"").toLowerCase();var ok=(kw==="")||search.indexOf(kw)!==-1;opt.style.display=ok?"":"none";if(ok){visible++;}});var empty=ensureEmpty();empty.style.display=visible===0?"":"none";}';
+            $html[] = 'function openMenu(){panel.classList.add("show");toggle.setAttribute("aria-expanded","true");if(input){input.value="";filter();setTimeout(function(){try{input.focus();}catch(e){}},0);}}';
+            $html[] = 'function closeMenu(reason){dbg("H4","closeMenu",{reason:reason||"unknown",isOpen:panel.classList.contains("show")});panel.classList.remove("show");toggle.setAttribute("aria-expanded","false");if(input){input.value="";filter();}}';
+            $html[] = 'function isOpen(){return panel.classList.contains("show");}';
+            $html[] = 'toggle.addEventListener("click",function(e){e.stopPropagation();var before=isOpen();dbg("H1","toggle-click",{beforeOpen:before,targetTag:(e.target&&e.target.tagName)||""});if(before){closeMenu("toggle-click");}else{openMenu();dbg("H1","openMenu-by-toggle",{afterOpen:isOpen()});}});';
+            $html[] = 'function stopInside(e){e.stopPropagation();}';
+            $html[] = 'panel.addEventListener("pointerdown",function(e){dbg("H2","panel-pointerdown",{targetTag:(e.target&&e.target.tagName)||"",targetClass:(e.target&&e.target.className)||""});stopInside(e);});';
+            $html[] = 'panel.addEventListener("mousedown",stopInside);';
+            $html[] = 'panel.addEventListener("click",stopInside);';
+            $html[] = 'if(input){input.addEventListener("input",function(){dbg("H2","input-change",{valueLength:String(input.value||"").length});filter();});input.addEventListener("pointerdown",stopInside);input.addEventListener("mousedown",stopInside);input.addEventListener("click",stopInside);}';
+            $html[] = 'function isFromRoot(ev){if(!ev){return false;}if(typeof ev.composedPath==="function"){var path=ev.composedPath();return Array.isArray(path)&&path.indexOf(root)!==-1;}return root.contains(ev.target);}';
+            $html[] = 'document.addEventListener("pointerdown",function(ev){if(!isOpen()){return;}var fromRoot=isFromRoot(ev);dbg("H3","doc-pointerdown",{fromRoot:fromRoot,targetTag:(ev.target&&ev.target.tagName)||"",targetClass:(ev.target&&ev.target.className)||""});if(fromRoot){return;}closeMenu("doc-pointerdown-outside");},true);';
+            $html[] = 'document.addEventListener("mousedown",function(ev){if(!isOpen()){return;}var fromRoot=isFromRoot(ev);if(fromRoot){return;}closeMenu("doc-mousedown-outside");},true);';
+            $html[] = 'document.addEventListener("click",function(ev){if(!isOpen()){return;}var fromRoot=isFromRoot(ev);if(fromRoot){return;}closeMenu("doc-click-outside");},true);';
+            $html[] = 'document.addEventListener("keydown",function(e){if(e.key!=="Escape"||!isOpen()){return;}closeMenu();try{toggle.focus();}catch(err){}});';
             $html[] = 'function buildLangHref(lang){var currentPath=window.location.pathname+window.location.search;if(typeof window.urlWithLang==="function"){return window.urlWithLang(currentPath,lang);}if(typeof window.inject_path==="function"){var po=currentPath.split("?")[0];var s=currentPath.indexOf("?")>-1?currentPath.split("?")[1]:"";return window.inject_path(po,lang,"lang")+(s?("?"+s):"");}return"";}';
             $html[] = 'root.querySelectorAll("[data-language-option]").forEach(function(opt){';
             $html[] = 'var code=opt.getAttribute("data-lang")||"";if(!code){return;}';
@@ -183,6 +202,7 @@ class LanguageSwitcher implements TaglibInterface
             $html[] = 'var target=opt.getAttribute("href")||href||buildLangHref(code);if(target){window.location.href=target;}';
             $html[] = '});';
             $html[] = '});';
+            $html[] = 'filter();';
             $html[] = '})();</script>';
             if ($renderFor === 'js') {
                 $html[] = '<script>(function(){';
