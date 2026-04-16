@@ -339,9 +339,9 @@ class MetaData
                         
                         // 获取主题ID
                         try {
-                            /** @var \Weline\Theme\Model\WelineTheme $theme */
-                            $theme = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
-                            $theme = $theme->getActiveTheme();
+                            /** @var \Weline\Theme\Service\ThemeContextService $themeContext */
+                            $themeContext = ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
+                            $theme = $themeContext->resolveTheme($area);
                             
                             if ($theme && $theme->getId()) {
                                 $configValue = $metaConfig->getConfig($theme->getId(), $namespace, $configKey, 'default', $locale);
@@ -1152,9 +1152,9 @@ class MetaData
             // 获取主题ID
             if ($themeId === null) {
                 try {
-                    /** @var \Weline\Theme\Model\WelineTheme $theme */
-                    $theme = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
-                    $theme = $theme->getActiveTheme();
+                    /** @var \Weline\Theme\Service\ThemeContextService $themeContext */
+                    $themeContext = ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
+                    $theme = $themeContext->resolveTheme($area);
                     
                     if (!$theme || !$theme->getId()) {
                         return false;

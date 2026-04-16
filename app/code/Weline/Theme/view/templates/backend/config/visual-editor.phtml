@@ -13,6 +13,8 @@ $optionsUrl = $this->getUrl('theme/backend/config/themeConfig/options');
 $saveSelectionUrl = $this->getUrl('theme/backend/config/themeConfig/saveSelection');
 $fileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/fileParams');
 $saveFileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/saveFileParams');
+$publishPreviewScopeUrl = $this->getUrl('theme/backend/config/themeConfig/publishPreviewScope');
+$discardPreviewScopeUrl = $this->getUrl('theme/backend/config/themeConfig/discardPreviewScope');
 
 $themeIdValue = 0;
 $themeNameValue = __('未选择主题');
@@ -159,6 +161,9 @@ $hasTheme = $themeIdValue > 0;
             <a href="<?= $this->getUrl('theme/backend/index') ?>" class="btn btn-sm btn-outline-secondary me-2">
                 <?= __('退出') ?>
             </a>
+            <button type="button" class="btn btn-sm btn-outline-warning me-2" id="discard-preview-btn">
+                <i class="mdi mdi-restore"></i> <?= __('鏀惧純棰勮') ?>
+            </button>
             <button type="button" class="btn btn-sm btn-primary" id="global-save-btn">
                 <i class="mdi mdi-content-save"></i> <?= __('保存更改') ?>
             </button>
@@ -343,6 +348,8 @@ $hasTheme = $themeIdValue > 0;
             saveSelection: '<?= $saveSelectionUrl ?>',
             fileParams: '<?= $fileParamsUrl ?>',
             saveFileParams: '<?= $saveFileParamsUrl ?>',
+            publishPreviewScope: '<?= $publishPreviewScopeUrl ?>',
+            discardPreviewScope: '<?= $discardPreviewScopeUrl ?>',
             upload: '<?= $this->getUrl('theme/backend/config/layout/upload') ?>',
             syncThemeMode: '<?= $this->getUrl('theme/backend/config/themeConfig/syncThemeMode') ?>'
         },
