@@ -27,6 +27,21 @@ class PreviewRequestInspectorTest extends TestCase
         );
 
         $this->assertTrue($inspector->shouldUseStoredPreviewContext());
+        $this->assertTrue($inspector->shouldKeepPreviewStateOnlyForCurrentRequest());
+        $this->assertFalse($inspector->shouldAllowPreviewTokenCookie());
+    }
+
+    public function testPageBuilderVisualPreviewKeepsPreviewStateRequestScoped(): void
+    {
+        $inspector = new PreviewRequestInspector(
+            $this->createRequest('/pagebuilder/backend/preview/full', [
+                'visual_editor' => '1',
+                'frontend_theme_id' => 9,
+            ])
+        );
+
+        $this->assertTrue($inspector->shouldUseStoredPreviewContext());
+        $this->assertTrue($inspector->shouldKeepPreviewStateOnlyForCurrentRequest());
         $this->assertFalse($inspector->shouldAllowPreviewTokenCookie());
     }
 

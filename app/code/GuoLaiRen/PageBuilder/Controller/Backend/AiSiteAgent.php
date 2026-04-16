@@ -35,6 +35,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Framework\System\Process\Processer;
 use Weline\Server\Log\WlsLogger;
 use Weline\Websites\Model\AiSiteBuilderSession as WebsitesAiSiteBuilderSession;
 use Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService as WebsitesDomainPurchaseWorkbenchService;
@@ -1211,9 +1212,25 @@ SCRIPT;
         try {
             $websiteProfile = $this->profileGenerationService->generate($scope, false);
             $aiChunkCount = 0;
-            $emitAiChunkProgress = function (string $chunk) use (&$aiChunkCount, $sse, $effectivePromptMode): void {
+            $rawChunkInfoBuffer = '';
+            $emitAiChunkProgress = function (string $chunk) use (&$aiChunkCount, &$rawChunkInfoBuffer, $sse, $effectivePromptMode): void {
                 if (\trim($chunk) === '') {
                     return;
+                }
+                $rawChunkInfoBuffer .= $chunk;
+                while (\mb_strlen($rawChunkInfoBuffer, 'UTF-8') >= 360) {
+                    if (!$sse->isAlive()) {
+                        $rawChunkInfoBuffer = '';
+                        return;
+                    }
+                    $part = (string)\mb_substr($rawChunkInfoBuffer, 0, 360, 'UTF-8');
+                    $rawChunkInfoBuffer = (string)\mb_substr($rawChunkInfoBuffer, 360, null, 'UTF-8');
+                    $sse->sendEvent('info', [
+                        'message' => $part,
+                        'prompt_mode' => $effectivePromptMode,
+                        'stream_stage' => 'ai_raw_chunk',
+                        'chunk' => $part,
+                    ]);
                 }
                 $aiChunkCount++;
                 if ($aiChunkCount === 1 || $aiChunkCount % 12 === 0) {
@@ -1235,6 +1252,15 @@ SCRIPT;
                     'target_scope' => $targetScope,
                     'round' => $round,
                 ], $emitAiChunkProgress);
+            if ($rawChunkInfoBuffer !== '' && $sse->isAlive()) {
+                $sse->sendEvent('info', [
+                    'message' => $rawChunkInfoBuffer,
+                    'prompt_mode' => $effectivePromptMode,
+                    'stream_stage' => 'ai_raw_chunk',
+                    'chunk' => $rawChunkInfoBuffer,
+                ]);
+                $rawChunkInfoBuffer = '';
+            }
             if ((int)($artifacts['ai_generated'] ?? 0) !== 1) {
                 throw new \RuntimeException((string)__('阶段一方案必须由 AI 生成，本次未成功调用 AI，请检查模型配置后重试。'));
             }
@@ -1573,29 +1599,94 @@ SCRIPT;
         try {
             $draftPlan = \is_array($scope['virtual_theme_plan']['draft'] ?? null) ? $scope['virtual_theme_plan']['draft'] : [];
             $streamBuffer = '';
-            $chunkCallback = static function (string $chunk) use (&$streamBuffer, $sse, $promptMode): void {
+            $rawChunkInfoBuffer = '';
+            // 与阶段一方案流对齐：等 AI 整包 JSON 期间只发 progress + 注释保活，不把原始 token 当 chunk 推给前端；完成后再分块输出 markdown。
+            $taskPlanStreamHeartbeat = function () use ($sse): void {
+                $sse->sendComment(\str_repeat(' ', 512) . 'pb-task-plan-ai');
+            };
+            $aiChunkCount = 0;
+            $chunkCallback = static function (string $chunk) use (&$streamBuffer, &$rawChunkInfoBuffer, $sse, $promptMode, &$aiChunkCount): void {
                 $streamBuffer .= $chunk;
                 if (\trim($chunk) === '') {
                     return;
                 }
-                $sse->sendEvent('chunk', [
-                    'content' => $chunk,
-                    'chunk' => $chunk,
-                    'prompt_mode' => $promptMode,
-                ]);
+                $rawChunkInfoBuffer .= $chunk;
+                while (\mb_strlen($rawChunkInfoBuffer, 'UTF-8') >= 360) {
+                    if (!$sse->isAlive()) {
+                        $rawChunkInfoBuffer = '';
+                        return;
+                    }
+                    $part = (string)\mb_substr($rawChunkInfoBuffer, 0, 360, 'UTF-8');
+                    $rawChunkInfoBuffer = (string)\mb_substr($rawChunkInfoBuffer, 360, null, 'UTF-8');
+                    $sse->sendEvent('info', [
+                        'message' => $part,
+                        'prompt_mode' => $promptMode,
+                        'stream_stage' => 'ai_raw_chunk',
+                        'chunk' => $part,
+                    ]);
+                }
+                $aiChunkCount++;
+                if ($aiChunkCount === 1 || $aiChunkCount % 12 === 0) {
+                    if (!$sse->isAlive()) {
+                        return;
+                    }
+                    $sse->sendEvent('progress', [
+                        'message' => (string)__('AI 正在生成第二阶段任务方案…'),
+                        'prompt_mode' => $promptMode,
+                        'progress_percent' => 55,
+                        'ai_chunk_count' => $aiChunkCount,
+                    ]);
+                }
             };
             $result = $promptMode === 'rebuild_task_plan'
                 ? $this->virtualThemePlanService->rebuildDraftTaskPlan($scope, $buildBlueprint, [
                     'instruction' => $instruction,
                     'round' => $round,
-                ], $chunkCallback)
+                ], null, $taskPlanStreamHeartbeat)
                 : $this->virtualThemePlanService->refineDraftTaskPlan($scope, $buildBlueprint, $draftPlan, [
                     'instruction' => $instruction,
                     'target_scope' => $targetScope,
                     'round' => $round,
-                ], $chunkCallback);
+                ], null, $taskPlanStreamHeartbeat);
+
+            if ($rawChunkInfoBuffer !== '' && $sse->isAlive()) {
+                $sse->sendEvent('info', [
+                    'message' => $rawChunkInfoBuffer,
+                    'prompt_mode' => $promptMode,
+                    'stream_stage' => 'ai_raw_chunk',
+                    'chunk' => $rawChunkInfoBuffer,
+                ]);
+                $rawChunkInfoBuffer = '';
+            }
 
             $markdown = (string)($result['markdown'] ?? '');
+            if ($markdown !== '' && $sse->isAlive()) {
+                $sse->sendEvent('progress', [
+                    'message' => (string)__('AI 已生成完整任务方案，正在输出正文'),
+                    'prompt_mode' => $promptMode,
+                    'progress_percent' => 72,
+                    'stream_stage' => 'markdown_stream',
+                ]);
+                foreach ($this->chunkStringForSse($markdown, 220) as $mdChunk) {
+                    if (\trim($mdChunk) === '') {
+                        continue;
+                    }
+                    if (!$sse->isAlive()) {
+                        break;
+                    }
+                    $sse->sendEvent('chunk', [
+                        'content' => $mdChunk,
+                        'chunk' => $mdChunk,
+                        'prompt_mode' => $promptMode,
+                    ]);
+                    SchedulerSystem::yieldDelay(5);
+                }
+            }
+            $sse->sendEvent('progress', [
+                'message' => (string)__('任务方案正文输出完成，正在保存并生成最终状态'),
+                'prompt_mode' => $promptMode,
+                'progress_percent' => 92,
+            ]);
             $structured = \is_array($result['structured'] ?? null) ? $result['structured'] : [];
             $virtualThemePlan = \is_array($result['virtual_theme_plan'] ?? null) ? $result['virtual_theme_plan'] : [];
             $taskPlanGenerationSource = (string)($result['generation_source'] ?? '');
@@ -1633,9 +1724,19 @@ SCRIPT;
                 $scopePatch['task_plan_change_scope_report'] = \is_array($result['change_scope_report'] ?? null) ? $result['change_scope_report'] : [];
             }
             $scopePatch['_task_plan_sse_request'] = [];
+            $sse->sendEvent('progress', [
+                'message' => (string)__('正在持久化任务方案草案'),
+                'prompt_mode' => $promptMode,
+                'progress_percent' => 95,
+            ]);
             $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
 
+            $sse->sendEvent('progress', [
+                'message' => (string)__('正在写入工作区事件并整理最终状态'),
+                'prompt_mode' => $promptMode,
+                'progress_percent' => 97,
+            ]);
             $this->appendWorkspaceEvent(
                 $session->getId(),
                 $adminId,
@@ -1655,9 +1756,9 @@ SCRIPT;
             );
 
             $sse->sendEvent('progress', [
-                'message' => (string)__('第二阶段任务方案已生成并持续输出中'),
+                'message' => (string)__('第二阶段任务方案已生成，正在输出完成标记'),
                 'prompt_mode' => $promptMode,
-                'progress_percent' => 90,
+                'progress_percent' => 99,
             ]);
 
             $state = $this->buildWorkspaceEventStatePayload($this->buildWorkspaceState($fresh, $adminId, 80, true));
@@ -1698,6 +1799,8 @@ SCRIPT;
         array $buildBlueprint
     ): void {
         $promptMode = 'detect_bootstrap_task_plan';
+        $streamBuffer = '';
+        $rawChunkInfoBuffer = '';
         try {
             $sse->sendEvent('start', [
                 'message' => (string)__('正在检测第二阶段任务方案'),
@@ -1734,22 +1837,26 @@ SCRIPT;
                 (string)($scope['workspace_track'] ?? '')
             );
             $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-            $streamBuffer = '';
+            // 保活必须用 SSE 注释行：上游 AI 可能数十秒无 token，Nginx proxy_read_timeout 等会断客端连接；
+            // 禁止在等完整 JSON 阶段 sendEvent(progress/info) 透传模型原始流：既拉长可读字节间隔、又可能把半截 JSON 推给浏览器；完成后再统一 chunk markdown。
+            $taskPlanStreamHeartbeat = function () use ($sse): void {
+                $sse->sendComment(\str_repeat(' ', 512) . 'pb-task-plan-ai');
+            };
             $artifacts = $this->virtualThemePlanService->buildTaskPlanArtifactsStream(
                 $scope,
                 $buildBlueprint,
-                function (string $chunk) use (&$streamBuffer, $sse, $promptMode): void {
-                    $streamBuffer .= $chunk;
-                    if (\trim($chunk) === '') {
-                        return;
-                    }
-                    $sse->sendEvent('chunk', [
-                        'content' => $chunk,
-                        'chunk' => $chunk,
-                        'prompt_mode' => $promptMode,
-                    ]);
-                }
+                null,
+                $taskPlanStreamHeartbeat
             );
+            if ($rawChunkInfoBuffer !== '' && $sse->isAlive()) {
+                $sse->sendEvent('info', [
+                    'message' => $rawChunkInfoBuffer,
+                    'prompt_mode' => $promptMode,
+                    'stream_stage' => 'ai_raw_chunk',
+                    'chunk' => $rawChunkInfoBuffer,
+                ]);
+                $rawChunkInfoBuffer = '';
+            }
             $taskPlanGenerationSource = (string)($artifacts['generation_source'] ?? '');
             if ((int)($scope['fake_mode'] ?? 0) !== 1 && $taskPlanGenerationSource !== 'ai') {
                 throw new \RuntimeException('Task plan generation failed: AI result unavailable.');
@@ -1788,18 +1895,36 @@ SCRIPT;
             $markdown = (string)($artifacts['markdown'] ?? '');
             $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
 
+            if ($sse->isAlive()) {
+                $sse->sendEvent('progress', [
+                    'message' => (string)__('AI 已生成完整任务方案，正在输出正文'),
+                    'prompt_mode' => $promptMode,
+                    'progress_percent' => 72,
+                    'stream_stage' => 'markdown_stream',
+                ]);
+            }
+
             if ($markdown !== '') {
                 foreach ($this->chunkStringForSse($markdown, 220) as $chunk) {
                     if (\trim($chunk) === '') {
                         continue;
+                    }
+                    if (!$sse->isAlive()) {
+                        break;
                     }
                     $sse->sendEvent('chunk', [
                         'content' => $chunk,
                         'chunk' => $chunk,
                         'prompt_mode' => $promptMode,
                     ]);
+                    SchedulerSystem::yieldDelay(5);
                 }
             }
+            $sse->sendEvent('progress', [
+                'message' => (string)__('任务方案正文输出完成，正在保存并生成最终状态'),
+                'prompt_mode' => $promptMode,
+                'progress_percent' => 92,
+            ]);
 
             $taskPlanDirectoryTree = \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [];
             $scopePatch = [
@@ -1825,8 +1950,18 @@ SCRIPT;
                 ],
                 'task_plan_confirmed' => 0,
             ];
+            $sse->sendEvent('progress', [
+                'message' => (string)__('正在持久化任务方案草案'),
+                'prompt_mode' => $promptMode,
+                'progress_percent' => 95,
+            ]);
             $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $sse->sendEvent('progress', [
+                'message' => (string)__('正在写入工作区事件并整理最终状态'),
+                'prompt_mode' => $promptMode,
+                'progress_percent' => 97,
+            ]);
             $this->appendWorkspaceEvent(
                 $session->getId(),
                 $adminId,
@@ -1844,9 +1979,9 @@ SCRIPT;
             );
 
             $sse->sendEvent('progress', [
-                'message' => (string)__('第二阶段任务方案已生成并持续输出中'),
+                'message' => (string)__('第二阶段任务方案已生成，正在输出完成标记'),
                 'prompt_mode' => $promptMode,
-                'progress_percent' => 90,
+                'progress_percent' => 99,
             ]);
 
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
@@ -1864,10 +1999,15 @@ SCRIPT;
                 'state' => $state,
             ]);
         } catch (\Throwable $throwable) {
-            $sse->sendError($throwable->getMessage(), $this->inferThrowableHttpCode($throwable));
+            $streamTail = \trim((string)\mb_substr($streamBuffer, -900, null, 'UTF-8'));
+            $errorMessage = $throwable->getMessage();
+            if ($streamTail !== '') {
+                $errorMessage .= "\n\n[stream_tail]\n" . $streamTail;
+            }
+            $sse->sendError($errorMessage, $this->inferThrowableHttpCode($throwable));
             $sse->complete([
                 'success' => false,
-                'message' => $throwable->getMessage(),
+                'message' => $errorMessage,
                 'prompt_mode' => $promptMode,
             ]);
         }
@@ -3532,9 +3672,42 @@ SCRIPT;
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $operation = \trim((string)($activeOperation['operation'] ?? ''));
+        $status = \trim((string)($activeOperation['status'] ?? ''));
         if ($operation === '' || (string)($activeOperation['execution_token'] ?? '') !== $executionToken) {
             $this->sendSseContractError($sse, 'OPERATION_NOT_FOUND', (string)__('未找到待执行的工作区操作'), self::PARAMS_OPERATION_SSE, 404);
             $sse->complete(['success' => false]);
+            return;
+        }
+
+        if ($this->supportsBackgroundOperation($operation) && \in_array($status, ['queued', 'running'], true)) {
+            $spawn = $this->startBackgroundOperationRunnerIfNeeded($session, $adminId, $executionToken, $operation);
+            if (!$spawn['success']) {
+                $message = (string)($spawn['message'] ?? 'Failed to start background operation runner.');
+                $this->sendSseContractError($sse, 'OPERATION_BACKGROUND_START_FAILED', $message, self::PARAMS_OPERATION_SSE, 500);
+                $sse->complete(['success' => false, 'message' => $message]);
+                return;
+            }
+
+            $sse->sendEvent('warning', [
+                'message' => 'Operation is running in a background process; this SSE connection is observing progress only.',
+                'operation' => $operation,
+                'observer_mode' => true,
+                'background_mode' => true,
+            ]);
+            $observed = $this->observeDuplicateOperationStream($sse, $session, $adminId, $operation, $executionToken);
+            if (!(bool)($observed['success'] ?? true)) {
+                $sse->sendError(
+                    (string)($observed['message'] ?? 'Operation failed.'),
+                    (int)($observed['http_code'] ?? 500)
+                );
+            }
+            $sse->complete([
+                'success' => (bool)($observed['success'] ?? true),
+                'message' => (string)($observed['message'] ?? 'Operation completed.'),
+                'operation' => $operation,
+                'data' => \is_array($observed['data'] ?? null) ? $observed['data'] : [],
+                'state' => \is_array($observed['state'] ?? null) ? $observed['state'] : [],
+            ]);
             return;
         }
 
@@ -5478,6 +5651,10 @@ SCRIPT;
                 $this->buildWorkspaceState($fresh, $adminId, 80, true),
                 [$pageType]
             );
+            $pageCompleted = $this->buildTaskService->arePageTasksComplete($scope, $pageType);
+            $pageGeneratedMessage = $pageCompleted
+                ? 'Page generation complete: ' . $pageLabel
+                : 'Page updated and ready to edit: ' . $pageLabel;
             $this->appendWorkspaceEvent(
                 $session->getId(),
                 $adminId,
@@ -5487,7 +5664,10 @@ SCRIPT;
                 [
                     'operation' => 'build',
                     'page_type' => $pageType,
-                    'details' => ['section_code' => $sectionCode],
+                    'details' => [
+                        'section_code' => $sectionCode,
+                        'page_completed' => $pageCompleted ? 1 : 0,
+                    ],
                 ]
             );
             $sse->sendEvent('page_generated', $this->enrichTaskEventPayload($scope, [
@@ -5498,6 +5678,8 @@ SCRIPT;
                 'virtual_theme_id' => 0,
                 'progress_percent' => $progressPercent,
                 'section_code' => $sectionCode,
+                'page_completed' => $pageCompleted,
+                'message' => $pageGeneratedMessage,
                 'state' => $state,
             ]));
             $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
@@ -6609,6 +6791,10 @@ SCRIPT;
                 $this->buildWorkspaceState($fresh, $adminId, 80, true),
                 [$pageType]
             );
+            $pageCompleted = $this->buildTaskService->arePageTasksComplete($scope, $pageType);
+            $pageGeneratedMessage = $pageCompleted
+                ? 'Page generation complete: ' . $pageLabel
+                : 'Page updated and ready to edit: ' . $pageLabel;
             $this->appendWorkspaceEvent(
                 $session->getId(),
                 $adminId,
@@ -6618,7 +6804,11 @@ SCRIPT;
                 [
                     'operation' => 'build',
                     'page_type' => $pageType,
-                    'details' => ['section_code' => $sectionCode, 'virtual_theme_id' => (int)$scope['virtual_theme_id']],
+                    'details' => [
+                        'section_code' => $sectionCode,
+                        'virtual_theme_id' => (int)$scope['virtual_theme_id'],
+                        'page_completed' => $pageCompleted ? 1 : 0,
+                    ],
                 ]
             );
             $sse->sendEvent('page_generated', $this->enrichTaskEventPayload($scope, [
@@ -6629,6 +6819,8 @@ SCRIPT;
                 'virtual_theme_id' => (int)$scope['virtual_theme_id'],
                 'progress_percent' => $progressPercent,
                 'section_code' => $sectionCode,
+                'page_completed' => $pageCompleted,
+                'message' => $pageGeneratedMessage,
                 'state' => $state,
             ]));
             $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
@@ -7253,6 +7445,62 @@ SCRIPT;
     private function buildOperationStreamUrl(string $publicId, string $executionToken): string
     {
         return $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/operation-sse', ['public_id' => $publicId, 'execution_token' => $executionToken]);
+    }
+
+    private function supportsBackgroundOperation(string $operation): bool
+    {
+        return \in_array($operation, ['build', 'regenerate_page', 'publish'], true);
+    }
+
+    /**
+     * @return array{success: bool, message?: string, pid?: int}
+     */
+    private function startBackgroundOperationRunnerIfNeeded(
+        AiSiteAgentSession $session,
+        int $adminId,
+        string $executionToken,
+        string $operation
+    ): array {
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        if (
+            \trim((string)($active['operation'] ?? '')) !== $operation
+            || \trim((string)($active['execution_token'] ?? '')) !== $executionToken
+        ) {
+            return ['success' => false, 'message' => 'Active operation token mismatch.'];
+        }
+
+        $details = \is_array($active['details'] ?? null) ? $active['details'] : [];
+        $backgroundPid = (int)($details['background_pid'] ?? 0);
+        if ($backgroundPid > 0 && Processer::isRunningByPid($backgroundPid)) {
+            return ['success' => true, 'pid' => $backgroundPid];
+        }
+
+        $processName = 'weline-pagebuilder-ai-op-' . \substr($executionToken, 0, 16);
+        $command = \sprintf(
+            '%s %s %s %d %s --name=%s',
+            \escapeshellarg(PHP_BINARY),
+            \escapeshellarg(BP . 'app/code/GuoLaiRen/PageBuilder/bin/run_operation.php'),
+            \escapeshellarg($fresh->getPublicId()),
+            $adminId,
+            \escapeshellarg($executionToken),
+            \escapeshellarg($processName)
+        );
+
+        $pid = Processer::create($command, false, false);
+        if ($pid <= 0) {
+            return ['success' => false, 'message' => 'Failed to launch background operation process.'];
+        }
+
+        $details['background_pid'] = $pid;
+        $details['background_process_name'] = $processName;
+        $details['background_started_at'] = \date('Y-m-d H:i:s');
+        $active['details'] = $details;
+        $scope['active_operation'] = $active;
+        $this->sessionService->replaceScope($fresh->getId(), $adminId, $scope);
+
+        return ['success' => true, 'pid' => $pid];
     }
 
     /**

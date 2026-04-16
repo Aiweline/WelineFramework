@@ -1125,6 +1125,8 @@ Pending,Pending
 未检测到可用的第二阶段任务方案草案，正在根据阶段一确认方案生成,"No usable phase-II draft found; generating from the confirmed phase-I plan"
 第二阶段任务方案已持久化,"Phase-II task plan saved"
 正在输出任务方案 Markdown,"Streaming task-plan Markdown"
+AI 已生成完整任务方案，正在输出正文,"Full task plan received; streaming markdown body"
+AI 正在生成第二阶段任务方案…,"AI is generating the phase-II task plan…"
 正在通过 SSE 检测并同步第二阶段任务方案…,"Detecting and syncing the phase-II task plan over SSE…"
 确认阶段二任务计划,确认阶段二任务计划
 "AI 微调区块","AI 微调区块"
