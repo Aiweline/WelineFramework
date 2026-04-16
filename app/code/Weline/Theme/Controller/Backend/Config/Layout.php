@@ -589,7 +589,10 @@ class Layout extends BackendController
                     $metaConfig = ObjectManager::make(\Weline\Meta\Model\MetaConfig::class);
                     $namespace = "theme.{$area}";
                     $configKey = "{$typeForStorage}.{$path}.value";
-                    $currentValue = $metaConfig->getConfig($theme->getId(), $namespace, $configKey, $scope);
+                    /** @var \Weline\Theme\Service\PreviewThemeScopeService $previewThemeScopeService */
+                    $previewThemeScopeService = ObjectManager::make(\Weline\Theme\Service\PreviewThemeScopeService::class);
+                    $effectiveScope = $previewThemeScopeService->resolveEffectiveScope((int)$theme->getId(), $area, $scope);
+                    $currentValue = $metaConfig->getConfig($theme->getId(), $namespace, $configKey, $effectiveScope);
                 }
             } catch (\Exception $e) {
                 // 如果读取失败，记录错误但不影响后续流程（如果 logger 可用）
@@ -873,7 +876,10 @@ class Layout extends BackendController
                         $varMetaConfig = ObjectManager::make(\Weline\Meta\Model\MetaConfig::class);
                         $varNamespace = "theme.{$area}";
                         $varConfigKey = "variables.{$path}.{$fileName}.value";
-                        $varValue = $varMetaConfig->getConfig($theme->getId(), $varNamespace, $varConfigKey, $scope);
+                        /** @var \Weline\Theme\Service\PreviewThemeScopeService $previewThemeScopeService */
+                        $previewThemeScopeService = ObjectManager::make(\Weline\Theme\Service\PreviewThemeScopeService::class);
+                        $effectiveScope = $previewThemeScopeService->resolveEffectiveScope((int)$theme->getId(), $area, $scope);
+                        $varValue = $varMetaConfig->getConfig($theme->getId(), $varNamespace, $varConfigKey, $effectiveScope);
                         if ($varValue !== null) {
                             $currentConfig['variables'][$fileName] = $varValue;
                         }
@@ -1024,12 +1030,15 @@ class Layout extends BackendController
                     try {
                         /** @var \Weline\Meta\Model\MetaConfig $metaConfig */
                         $metaConfig = ObjectManager::make(\Weline\Meta\Model\MetaConfig::class);
+                        /** @var \Weline\Theme\Service\PreviewThemeScopeService $previewThemeScopeService */
+                        $previewThemeScopeService = ObjectManager::make(\Weline\Theme\Service\PreviewThemeScopeService::class);
+                        $effectiveScope = $previewThemeScopeService->resolveEffectiveScope((int)$theme->getId(), $area, $scope);
                         $metaConfig->setConfig(
                             $theme->getId(),
                             $namespace,
                             $varConfigKey,
                             (string)$varValue,
-                            $scope,
+                            $effectiveScope,
                             null,
                             null,
                             $varBaseIdentify
@@ -1094,12 +1103,15 @@ class Layout extends BackendController
                 $metaIdentifyValue = $metaIdentify ?: $baseIdentify;
                 
                 // 直接调用 setConfig，传递 meta_id 和 meta_identify
+                /** @var \Weline\Theme\Service\PreviewThemeScopeService $previewThemeScopeService */
+                $previewThemeScopeService = ObjectManager::make(\Weline\Theme\Service\PreviewThemeScopeService::class);
+                $effectiveScope = $previewThemeScopeService->resolveEffectiveScope((int)$theme->getId(), $area, $scope);
                 $metaConfig->setConfig(
                     $theme->getId(),
                     $namespace,
                     $configKey,
                     (string)$configValue,
-                    $scope,
+                    $effectiveScope,
                     null, // locale
                     $metaIdInt,
                     $metaIdentifyValue

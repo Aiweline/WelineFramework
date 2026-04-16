@@ -95,6 +95,11 @@ final class SupervisorChildClient implements ChildControlClientInterface
         return $this->receivedShutdown;
     }
 
+    public function isReadyStateConfirmed(): bool
+    {
+        return $this->isReady;
+    }
+
     public function onMessage(callable $handler): void
     {
         $this->messageHandler = $handler;
