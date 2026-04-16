@@ -6,6 +6,7 @@ namespace GuoLaiRen\PageBuilder\Service;
 
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 final class AiSiteVirtualThemePlanService
 {
@@ -35,20 +36,32 @@ final class AiSiteVirtualThemePlanService
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $buildBlueprint
      * @param callable|null $chunkCallback function(string $chunk): void
+     * @param callable|null $heartbeatCallback function(): void
      * @return array{markdown:string,structured:array<string, mixed>,virtual_theme_plan:array<string, mixed>,generation_source:string}
      */
-    public function buildTaskPlanArtifactsStream(array $scope, array $buildBlueprint, ?callable $chunkCallback = null): array
+    public function buildTaskPlanArtifactsStream(
+        array $scope,
+        array $buildBlueprint,
+        ?callable $chunkCallback = null,
+        ?callable $heartbeatCallback = null
+    ): array
     {
-        return $this->buildTaskPlanArtifactsInternal($scope, $buildBlueprint, $chunkCallback);
+        return $this->buildTaskPlanArtifactsInternal($scope, $buildBlueprint, $chunkCallback, $heartbeatCallback);
     }
 
     /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $buildBlueprint
      * @param callable|null $chunkCallback
+     * @param callable|null $heartbeatCallback
      * @return array{markdown:string,structured:array<string, mixed>,virtual_theme_plan:array<string, mixed>,generation_source:string}
      */
-    private function buildTaskPlanArtifactsInternal(array $scope, array $buildBlueprint, ?callable $chunkCallback): array
+    private function buildTaskPlanArtifactsInternal(
+        array $scope,
+        array $buildBlueprint,
+        ?callable $chunkCallback,
+        ?callable $heartbeatCallback = null
+    ): array
     {
         $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
         $planStructured = \is_array($scope['plan_json'] ?? null)
@@ -440,7 +453,14 @@ final class AiSiteVirtualThemePlanService
             ];
         }
 
-        $aiTaskPlan = $this->buildTaskPlanArtifactsByAi($scope, $buildBlueprint, $structured, $virtualThemePlan, $chunkCallback);
+        $aiTaskPlan = $this->buildTaskPlanArtifactsByAi(
+            $scope,
+            $buildBlueprint,
+            $structured,
+            $virtualThemePlan,
+            $chunkCallback,
+            $heartbeatCallback
+        );
         $markdown = \trim((string)($aiTaskPlan['markdown'] ?? ''));
         $aiVirtualThemePlan = \is_array($aiTaskPlan['virtual_theme_plan'] ?? null) ? $aiTaskPlan['virtual_theme_plan'] : [];
         if ($markdown === '' || $aiVirtualThemePlan === []) {
@@ -468,6 +488,7 @@ final class AiSiteVirtualThemePlanService
      * @param array<string, mixed> $buildBlueprint
      * @param array<string, mixed> $draftPlan
      * @param array<string, mixed> $payload
+     * @param callable|null $heartbeatCallback 流式期间轻量保活（如 SseWriter::sendComment）
      * @return array{
      *   markdown:string,
      *   structured:array<string, mixed>,
@@ -480,9 +501,19 @@ final class AiSiteVirtualThemePlanService
         array $scope,
         array $buildBlueprint,
         array $draftPlan,
-        array $payload
+        array $payload,
+        ?callable $chunkCallback = null,
+        ?callable $heartbeatCallback = null
     ): array {
-        $artifacts = $this->buildTaskPlanArtifactsByAiMode($scope, $buildBlueprint, 'refine_task_plan', $payload, $draftPlan);
+        $artifacts = $this->buildTaskPlanArtifactsByAiMode(
+            $scope,
+            $buildBlueprint,
+            'refine_task_plan',
+            $payload,
+            $draftPlan,
+            $chunkCallback,
+            $heartbeatCallback
+        );
         $markdown = (string)($artifacts['markdown'] ?? '');
         $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
         $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
@@ -523,6 +554,7 @@ final class AiSiteVirtualThemePlanService
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $buildBlueprint
      * @param array<string, mixed> $payload
+     * @param callable|null $heartbeatCallback 流式期间轻量保活（如 SseWriter::sendComment），与阶段一/detect_bootstrap 一致
      * @return array{
      *   markdown:string,
      *   structured:array<string, mixed>,
@@ -531,9 +563,22 @@ final class AiSiteVirtualThemePlanService
      *   generation_source:string
      * }
      */
-    public function rebuildDraftTaskPlan(array $scope, array $buildBlueprint, array $payload): array
-    {
-        $artifacts = $this->buildTaskPlanArtifactsByAiMode($scope, $buildBlueprint, 'rebuild_task_plan', $payload);
+    public function rebuildDraftTaskPlan(
+        array $scope,
+        array $buildBlueprint,
+        array $payload,
+        ?callable $chunkCallback = null,
+        ?callable $heartbeatCallback = null
+    ): array {
+        $artifacts = $this->buildTaskPlanArtifactsByAiMode(
+            $scope,
+            $buildBlueprint,
+            'rebuild_task_plan',
+            $payload,
+            [],
+            $chunkCallback,
+            $heartbeatCallback
+        );
         $markdown = (string)($artifacts['markdown'] ?? '');
         $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
         $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
@@ -1019,6 +1064,7 @@ final class AiSiteVirtualThemePlanService
      * @param array<string, mixed> $buildBlueprint
      * @param array<string, mixed> $payload
      * @param array<string, mixed> $draftPlan
+     * @param callable|null $heartbeatCallback 传给 AI generateStream 的 on_heartbeat
      * @return array{markdown:string,structured:array<string,mixed>,virtual_theme_plan:array<string,mixed>}
      */
     private function buildTaskPlanArtifactsByAiMode(
@@ -1026,7 +1072,9 @@ final class AiSiteVirtualThemePlanService
         array $buildBlueprint,
         string $mode,
         array $payload,
-        array $draftPlan = []
+        array $draftPlan = [],
+        ?callable $chunkCallback = null,
+        ?callable $heartbeatCallback = null
     ): array {
         $ai = $this->getAiService();
         if ($ai === null) {
@@ -1045,22 +1093,84 @@ final class AiSiteVirtualThemePlanService
             ? $this->buildTaskPlanRefinePrompt($scope, $buildBlueprint, $baselineStructured, $baselineVirtualThemePlan, $payload)
             : $this->buildTaskPlanRebuildPrompt($scope, $buildBlueprint, $baselineStructured, $baselineVirtualThemePlan, $payload);
 
-        $raw = (string)$ai->generate(
-            $prompt,
-            null,
-            'pagebuilder_task_plan_generation',
-            null,
-            [
-                'allow_zero_balance_provider' => true,
-                'temperature' => $mode === 'refine_task_plan' ? 0.15 : 0.2,
-                'max_tokens' => 6000,
-                'timeout' => 120,
-                'response_format' => ['type' => 'json_object'],
-            ]
-        );
-        $decoded = \json_decode($raw, true);
+        $publicId = \trim((string)($scope['public_id'] ?? ''));
+        $requestParams = [
+            'allow_zero_balance_provider' => true,
+            'temperature' => $mode === 'refine_task_plan' ? 0.15 : 0.2,
+            // 第二阶段返回 markdown + virtual_theme_plan，体量远大于阶段一，需显式抬高输出预算。
+            'max_tokens' => 8192,
+            // SSE 任务方案流不设置 provider 业务超时，避免生成中途被参数阈值截断。
+            'timeout' => 0,
+            'session_id' => $publicId,
+        ];
+        
+        $jsonRequestParams = \array_merge($requestParams, [
+            'response_format' => ['type' => 'json_object'],
+        ]);
+
+        if ($chunkCallback === null && $heartbeatCallback === null) {
+            $raw = (string)$ai->generate(
+                $prompt,
+                null,
+                'pagebuilder_task_plan_generation',
+                null,
+                $jsonRequestParams
+            );
+            $decoded = \json_decode($raw, true);
+            if (!\is_array($decoded)) {
+                throw new \RuntimeException('AI task plan generation failed: invalid JSON response.');
+            }
+
+            return $this->mergeAiTaskPlanArtifacts($baselineStructured, $baselineVirtualThemePlan, $decoded);
+        }
+
+        $raw = '';
+        $decoded = null;
+        $streamThrowable = null;
+        $streamCallback = static function (string $chunk) use (&$raw, $chunkCallback): void {
+            $raw .= $chunk;
+            if ($chunkCallback !== null) {
+                $chunkCallback($chunk);
+            }
+            if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent()) {
+                SchedulerSystem::yieldDelay(1);
+            }
+        };
+
+        $streamRequestParams = \array_merge($jsonRequestParams, [
+            'enforce_timeout_in_stream' => false,
+        ]);
+        if ($heartbeatCallback !== null) {
+            $streamRequestParams['on_heartbeat'] = $heartbeatCallback;
+        }
+
+        try {
+            $ai->generateStream(
+                $prompt,
+                $streamCallback,
+                null,
+                'pagebuilder_task_plan_generation',
+                null,
+                $streamRequestParams
+            );
+            $decoded = \json_decode($raw, true);
+        } catch (\Throwable $throwable) {
+            $streamThrowable = $throwable;
+        }
+
         if (!\is_array($decoded)) {
-            throw new \RuntimeException('AI task plan generation failed: invalid JSON response.');
+            $jsonRaw = (string)$ai->generate(
+                $prompt,
+                null,
+                'pagebuilder_task_plan_generation',
+                null,
+                $jsonRequestParams
+            );
+            $decoded = \json_decode($jsonRaw, true);
+        }
+
+        if (!\is_array($decoded)) {
+            throw new \RuntimeException('AI task plan generation failed: invalid JSON response.', 0, $streamThrowable);
         }
 
         return $this->mergeAiTaskPlanArtifacts($baselineStructured, $baselineVirtualThemePlan, $decoded);
@@ -1117,6 +1227,8 @@ final class AiSiteVirtualThemePlanService
      * @param array<string, mixed> $buildBlueprint
      * @param array<string, mixed> $structured
      * @param array<string, mixed> $virtualThemePlan
+     * @param callable|null $chunkCallback
+     * @param callable|null $heartbeatCallback
      * @return array<string, mixed>|null
      */
     private function buildTaskPlanArtifactsByAi(
@@ -1124,7 +1236,8 @@ final class AiSiteVirtualThemePlanService
         array $buildBlueprint,
         array $structured,
         array $virtualThemePlan,
-        ?callable $chunkCallback = null
+        ?callable $chunkCallback = null,
+        ?callable $heartbeatCallback = null
     ): array {
         $ai = $this->getAiService();
         if ($ai === null) {
@@ -1134,57 +1247,62 @@ final class AiSiteVirtualThemePlanService
         $requestParams = [
             'allow_zero_balance_provider' => true,
             'temperature' => 0.2,
-            'max_tokens' => 6000,
-            'timeout' => 120,
-            'response_format' => ['type' => 'json_object'],
+            // detect_bootstrap 返回完整任务计划 JSON，需足够输出预算避免中途截断。
+            'max_tokens' => 8192,
+            'timeout' => 0,
         ];
         try {
-            if ($chunkCallback === null) {
-                $raw = (string)$ai->generate(
-                    $prompt,
-                    null,
-                    'pagebuilder_task_plan_generation',
-                    null,
-                    $requestParams
-                );
-                $decoded = \json_decode($raw, true);
-                if (!\is_array($decoded)) {
-                    throw new \RuntimeException('AI task plan generation failed: invalid JSON response.');
-                }
-                return $decoded;
-            }
-
             $raw = '';
+            $decoded = null;
+            $streamThrowable = null;
             $streamCallback = static function (string $chunk) use (&$raw, $chunkCallback): void {
                 $raw .= $chunk;
                 if ($chunkCallback !== null) {
                     $chunkCallback($chunk);
                 }
+                if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent()) {
+                    SchedulerSystem::yieldDelay(1);
+                }
             };
-            $ai->generateStream(
-                $prompt,
-                $streamCallback,
-                null,
-                'pagebuilder_task_plan_generation',
-                null,
-                \array_merge($requestParams, [
-                    'enforce_timeout_in_stream' => true,
-                ])
-            );
-            $decoded = \json_decode($raw, true);
+            try {
+                $streamRequestParams = \array_merge($requestParams, [
+                    'enforce_timeout_in_stream' => false,
+                    'response_format' => ['type' => 'json_object'],
+                ]);
+                if ($heartbeatCallback !== null) {
+                    $streamRequestParams['on_heartbeat'] = $heartbeatCallback;
+                }
+                $ai->generateStream(
+                    $prompt,
+                    $streamCallback,
+                    null,
+                    'pagebuilder_task_plan_generation',
+                    null,
+                    $streamRequestParams
+                );
+                $decoded = \json_decode($raw, true);
+            } catch (\Throwable $throwable) {
+                $streamThrowable = $throwable;
+                $decoded = null;
+            }
             if (!\is_array($decoded)) {
-                // 回退到非流式，避免因上游流式空返回导致任务方案无法生成。
-                $raw = (string)$ai->generate(
+                $jsonRaw = (string)$ai->generate(
                     $prompt,
                     null,
                     'pagebuilder_task_plan_generation',
                     null,
-                    $requestParams
+                    \array_merge($requestParams, [
+                        'response_format' => ['type' => 'json_object'],
+                    ])
                 );
-                $decoded = \json_decode($raw, true);
+                $decoded = \json_decode($jsonRaw, true);
             }
             if (!\is_array($decoded)) {
-                throw new \RuntimeException('AI task plan generation failed: invalid JSON response.');
+                throw new \RuntimeException(
+                    'AI task plan generation failed: invalid JSON response.',
+                    0,
+                    $streamThrowable
+                );
             }
             return $decoded;
         } catch (\Throwable $throwable) {

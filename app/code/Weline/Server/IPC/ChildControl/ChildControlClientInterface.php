@@ -15,6 +15,8 @@ interface ChildControlClientInterface
 
     public function hasReceivedShutdown(): bool;
 
+    public function isReadyStateConfirmed(): bool;
+
     public function onMessage(callable $handler): void;
 
     public function onDisconnect(callable $handler): void;

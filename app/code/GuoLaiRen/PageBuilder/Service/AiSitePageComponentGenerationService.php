@@ -1407,6 +1407,10 @@ final class AiSitePageComponentGenerationService
         $styleDirection = $this->describeStyleDirection($styleCode);
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
         $sharedRefinement = $this->resolveSharedComponentRefinement($scope, 'header');
+        $taskPlanPromptAddon = $this->buildTaskPlanPromptAddon(
+            $this->resolveSharedTaskPlanTask($scope, 'header'),
+            'header'
+        );
 
         return $langRule
             . "You are generating a PageBuilder website header component.\n"
@@ -1415,6 +1419,7 @@ final class AiSitePageComponentGenerationService
             . "Style reference: {$styleCode} ({$styleDirection})\n"
             . "Selected pages: " . \implode(', ', $pageList) . "\n"
             . "Current navigation fallback: " . \json_encode($headerConfig['nav_items'] ?? [], \JSON_UNESCAPED_UNICODE) . "\n"
+            . $taskPlanPromptAddon
             . ($sharedRefinement !== '' ? "Latest user refinement for this header: {$sharedRefinement}\n" : '')
             . "Rules:\n"
             . "1. Output only one header component, never a full page.\n"
@@ -1436,12 +1441,17 @@ final class AiSitePageComponentGenerationService
         $styleDirection = $this->describeStyleDirection($styleCode);
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
         $sharedRefinement = $this->resolveSharedComponentRefinement($scope, 'footer');
+        $taskPlanPromptAddon = $this->buildTaskPlanPromptAddon(
+            $this->resolveSharedTaskPlanTask($scope, 'footer'),
+            'footer'
+        );
 
         return $langRule
             . "You are generating a PageBuilder website footer component.\n"
             . "Site name: {$siteDisplayName}\n"
             . "Visitor-facing brand summary: {$siteSummary}\n"
             . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . $taskPlanPromptAddon
             . ($sharedRefinement !== '' ? "Latest user refinement for this footer: {$sharedRefinement}\n" : '')
             . "Footer link fallback: " . \json_encode([
                 'column1' => $footerConfig['links.column1_items'] ?? '',
@@ -1475,6 +1485,10 @@ final class AiSitePageComponentGenerationService
         $styleCode = $this->resolvePromptStyleCode($scope, $pageType);
         $styleDirection = $this->describeStyleDirection($styleCode);
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
+        $taskPlanPromptAddon = $this->buildTaskPlanPromptAddon(
+            $this->resolveSectionTaskPlanTask($scope, $pageType, (string)($section['code'] ?? ''), $sectionKey),
+            'section'
+        );
 
         return $langRule
             . "You are generating a PageBuilder content component.\n"
@@ -1486,6 +1500,7 @@ final class AiSitePageComponentGenerationService
             . "Page guidance: {$pageInstruction}\n"
             . "Suggested section config: {$sectionConfig}\n"
             . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . $taskPlanPromptAddon
             . ($refinement !== '' ? "Latest refine instruction for this section: {$refinement}\n" : '')
             . ($blogPrompt !== '' ? $blogPrompt . "\n" : '')
             . "Rules:\n"
@@ -1683,7 +1698,7 @@ final class AiSitePageComponentGenerationService
             $navTextLines[] = \trim((string)($item['title'] ?? '')) . '=>' . \trim((string)($item['url'] ?? '#'));
         }
 
-        return [
+        $defaultConfig = [
             'logo.display' => 'yes',
             'logo.text' => $siteDisplayName,
             'logo.image' => (string)($websiteProfile['logo'] ?? ''),
@@ -1697,6 +1712,8 @@ final class AiSitePageComponentGenerationService
             'cta.text' => $this->resolvePrimaryCtaText($scope),
             'cta.url' => '#contact',
         ];
+
+        return $this->applyTaskPlanDefaults($defaultConfig, $this->resolveSharedTaskPlanTask($scope, 'header'));
     }
 
     /**
@@ -1741,7 +1758,7 @@ final class AiSitePageComponentGenerationService
             $legalLines = \array_slice($allLines, 1, 3);
         }
 
-        return [
+        $defaultConfig = [
             'brand.name' => $siteDisplayName,
             'brand.logo' => (string)($websiteProfile['logo'] ?? ''),
             'brand.description' => $brandSummary,
@@ -1754,6 +1771,8 @@ final class AiSitePageComponentGenerationService
             'copyright.text' => 'All rights reserved.',
             'copyright.year' => \date('Y'),
         ];
+
+        return $this->applyTaskPlanDefaults($defaultConfig, $this->resolveSharedTaskPlanTask($scope, 'footer'));
     }
 
     /**
@@ -1792,7 +1811,7 @@ final class AiSitePageComponentGenerationService
             $bgColor = '#0f172a';
         }
 
-        return [
+        $defaultConfig = [
             'content.title' => $title,
             'content.subtitle' => $subtitle,
             'content.description' => $description,
@@ -1806,6 +1825,182 @@ final class AiSitePageComponentGenerationService
             'style.title_color' => ((string)($section['template'] ?? '') === 'cta') ? '#ffffff' : '#0f172a',
             'style.accent_color' => '#2563eb',
         ];
+
+        $taskPlanTask = $this->resolveSectionTaskPlanTask(
+            $scope,
+            $pageType,
+            (string)($section['code'] ?? ''),
+            (string)($section['key'] ?? '')
+        );
+
+        return $this->applyTaskPlanDefaults($defaultConfig, $taskPlanTask);
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function resolveTaskPlanRoot(array $scope): array
+    {
+        $structured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
+        if ($structured !== []) {
+            return $structured;
+        }
+
+        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
+        if ((int)($scope['task_plan_confirmed'] ?? 0) === 1) {
+            $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
+            if ($confirmed !== []) {
+                return $confirmed;
+            }
+        }
+
+        $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
+        if ($draft !== []) {
+            return $draft;
+        }
+
+        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
+        return $confirmed !== [] ? $confirmed : [];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function resolveSharedTaskPlanTask(array $scope, string $region): array
+    {
+        $region = \trim($region);
+        if ($region === '') {
+            return [];
+        }
+
+        $root = $this->resolveTaskPlanRoot($scope);
+        foreach (\is_array($root['shared_tasks'] ?? null) ? $root['shared_tasks'] : [] as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            if (\trim((string)($task['region'] ?? '')) === $region) {
+                return $task;
+            }
+            if (\trim((string)($task['task_key'] ?? '')) === 'shared:' . $region) {
+                return $task;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function resolveSectionTaskPlanTask(array $scope, string $pageType, string $sectionCode, string $sectionKey = ''): array
+    {
+        $root = $this->resolveTaskPlanRoot($scope);
+        $pageTasks = \is_array($root['page_tasks'][$pageType] ?? null) ? $root['page_tasks'][$pageType] : [];
+        foreach ($pageTasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskSectionCode = \trim((string)($task['section_code'] ?? ''));
+            $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
+            $planSectionCode = \trim((string)($planContext['section_code'] ?? ''));
+            $blockKey = \trim((string)($task['block_key'] ?? ''));
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+
+            if ($sectionCode !== '' && ($taskSectionCode === $sectionCode || $planSectionCode === $sectionCode)) {
+                return $task;
+            }
+            if ($sectionKey !== '' && ($blockKey === $sectionKey || \str_ends_with($taskKey, ':' . $sectionKey))) {
+                return $task;
+            }
+            if ($sectionCode !== '' && \str_ends_with($taskKey, ':' . $sectionCode)) {
+                return $task;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $taskPlanTask
+     */
+    private function buildTaskPlanPromptAddon(array $taskPlanTask, string $contextLabel): string
+    {
+        if ($taskPlanTask === []) {
+            return '';
+        }
+
+        $planContext = \is_array($taskPlanTask['plan_context'] ?? null) ? $taskPlanTask['plan_context'] : [];
+        $taskScript = \is_array($taskPlanTask['task_script'] ?? null) ? $taskPlanTask['task_script'] : [];
+        $implementationContract = \is_array($taskPlanTask['implementation_contract'] ?? null) ? $taskPlanTask['implementation_contract'] : [];
+        $runtimeContext = \is_array($taskPlanTask['runtime_context'] ?? null) ? $taskPlanTask['runtime_context'] : [];
+        $fieldRequirements = \is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [];
+        $acceptance = \is_array($implementationContract['acceptance'] ?? null) ? $implementationContract['acceptance'] : [];
+
+        return "Stage-2 task context for this {$contextLabel}:\n"
+            . "- task_key: " . (string)($taskPlanTask['task_key'] ?? '') . "\n"
+            . "- page_goal: " . (string)($planContext['page_goal'] ?? '') . "\n"
+            . "- block_goal: " . (string)($planContext['block_goal'] ?? '') . "\n"
+            . "- story_goal: " . (string)($taskScript['story_goal'] ?? '') . "\n"
+            . "- content_fill_rule: " . (string)($taskScript['content_fill_rule'] ?? '') . "\n"
+            . "- stage3_directive: " . (string)($taskScript['stage3_directive'] ?? '') . "\n"
+            . "- field_content_requirements: " . \json_encode($fieldRequirements, \JSON_UNESCAPED_UNICODE) . "\n"
+            . "- acceptance: " . \json_encode($acceptance, \JSON_UNESCAPED_UNICODE) . "\n"
+            . "- runtime_context: " . \json_encode($runtimeContext, \JSON_UNESCAPED_UNICODE) . "\n";
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $taskPlanTask
+     * @return array<string,mixed>
+     */
+    private function applyTaskPlanDefaults(array $defaultConfig, array $taskPlanTask): array
+    {
+        if ($taskPlanTask === []) {
+            return $defaultConfig;
+        }
+
+        $taskScript = \is_array($taskPlanTask['task_script'] ?? null) ? $taskPlanTask['task_script'] : [];
+        $fieldRequirements = \is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [];
+        foreach ($fieldRequirements as $requirement) {
+            if (!\is_array($requirement)) {
+                continue;
+            }
+            $field = \strtolower(\trim((string)($requirement['field'] ?? '')));
+            $sample = \trim((string)($requirement['sample'] ?? ''));
+            if ($field === '' || $sample === '') {
+                continue;
+            }
+
+            $candidateKeys = match (true) {
+                \str_contains($field, 'title'), \str_contains($field, 'headline') => ['content.title', 'logo.text', 'brand.name'],
+                \str_contains($field, 'subtitle'), \str_contains($field, 'eyebrow') => ['content.subtitle'],
+                \str_contains($field, 'description'), \str_contains($field, 'body'), \str_contains($field, 'text') => ['content.description', 'brand.description'],
+                \str_contains($field, 'button_text'), \str_contains($field, 'cta') => ['cta.text'],
+                \str_contains($field, 'button_url'), \str_contains($field, 'url') => ['cta.url'],
+                default => [],
+            };
+            foreach ($candidateKeys as $candidateKey) {
+                if (\array_key_exists($candidateKey, $defaultConfig)) {
+                    $defaultConfig[$candidateKey] = $sample;
+                    break;
+                }
+            }
+        }
+
+        $storyGoal = \trim((string)($taskScript['story_goal'] ?? ''));
+        if ($storyGoal !== '' && \trim((string)($defaultConfig['content.title'] ?? '')) === '') {
+            $defaultConfig['content.title'] = $this->clipText($storyGoal, 72);
+        }
+
+        $fillRule = \trim((string)($taskScript['content_fill_rule'] ?? ''));
+        if ($fillRule !== '' && \trim((string)($defaultConfig['content.description'] ?? '')) === '') {
+            $defaultConfig['content.description'] = $this->clipText($fillRule, 160);
+        }
+
+        return $defaultConfig;
     }
 
     /**

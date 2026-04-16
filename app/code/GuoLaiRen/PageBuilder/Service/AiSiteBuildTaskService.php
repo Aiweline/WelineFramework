@@ -250,6 +250,27 @@ class AiSiteBuildTaskService
 
     /**
      * @param array<string, mixed> $scope
+     */
+    public function arePageTasksComplete(array $scope, string $pageType): bool
+    {
+        $taskKeys = $this->listTaskKeysByPageType($scope, $pageType);
+        if ($taskKeys === []) {
+            return false;
+        }
+
+        $taskState = $this->extractTaskState($scope);
+        foreach ($taskKeys as $taskKey) {
+            $state = \is_array($taskState[$taskKey] ?? null) ? $taskState[$taskKey] : [];
+            if ((string)($state['status'] ?? self::TASK_STATUS_PENDING) !== self::TASK_STATUS_DONE) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
     public function resetPageTasksForRetry(array $scope, string $pageType): array
