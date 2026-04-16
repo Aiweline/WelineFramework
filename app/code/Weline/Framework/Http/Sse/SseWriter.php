@@ -202,7 +202,7 @@ class SseWriter
         $this->checkHeartbeat();
 
         $id = $id ?? ++$this->eventId;
-        $dataStr = \is_string($data) ? $data : \json_encode($data, JSON_UNESCAPED_UNICODE);
+        $dataStr = $this->encodeJsonForSseData($data);
 
         $message = "id: {$id}\n";
         $message .= "event: {$event}\n";
@@ -236,7 +236,7 @@ class SseWriter
 
         $this->checkHeartbeat();
 
-        $dataStr = \is_string($data) ? $data : \json_encode($data, JSON_UNESCAPED_UNICODE);
+        $dataStr = $this->encodeJsonForSseData($data);
 
         // SSE 数据格式：多行数据需要每行都加 "data: " 前缀
         $lines = \explode("\n", $dataStr);
@@ -264,6 +264,32 @@ class SseWriter
      * @param int $maxRetries 最大重试次数
      * @return bool 是否成功写入
      */
+    /**
+     * SSE 的 data 行必须是单行 JSON；非法 UTF-8 或编码失败时 json_encode 会返回 false，
+     * 若拼进帧内会导致浏览器 EventSource 解析失败并表现为「突然断线 / 重连中」。
+     */
+    private function encodeJsonForSseData(mixed $data): string
+    {
+        if (\is_string($data)) {
+            return $data;
+        }
+        $flags = JSON_UNESCAPED_UNICODE;
+        if (\defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+            $flags |= (int) \constant('JSON_INVALID_UTF8_SUBSTITUTE');
+        }
+        $encoded = \json_encode($data, $flags);
+        if ($encoded !== false) {
+            return $encoded;
+        }
+
+        $fallback = \json_encode([
+            'message' => (string) __('SSE 载荷编码失败，请检查模型输出是否含非法二进制数据'),
+            '_sse_encode_failed' => true,
+        ], JSON_UNESCAPED_UNICODE);
+
+        return $fallback !== false ? $fallback : '{"message":"SSE encode failed","_sse_encode_failed":true}';
+    }
+
     private function writeWithRetry(string $data, int $maxRetries = 50): bool
     {
         $writtenLen = \strlen($data);
