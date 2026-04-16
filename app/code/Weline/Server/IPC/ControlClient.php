@@ -156,6 +156,11 @@ class ControlClient implements ChildControlClientInterface
         return $this->receivedShutdown;
     }
 
+    public function isReadyStateConfirmed(): bool
+    {
+        return false;
+    }
+
     /**
      * 获取复活优先级
      */

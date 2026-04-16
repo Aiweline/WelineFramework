@@ -350,12 +350,13 @@ function setStatus(status, text) {
     if (statusText) statusText.textContent = text;
 }
 
-function dispatchSseEvent(eventName, data) {
+function dispatchSseEvent(eventName, data, rawEvent) {
     try {
+        var callbackEvent = rawEvent || { data: JSON.stringify(data) };
         if (eventName === 'chunk' && data.content !== undefined) {
             var chunkContent = typeof data.content === 'string' ? data.content : '';
             if (eventCallbacks.chunk) {
-                eventCallbacks.chunk({ data: JSON.stringify(data) });
+                eventCallbacks.chunk(callbackEvent);
             } else {
                 appendChunk(chunkContent);
             }
@@ -367,7 +368,7 @@ function dispatchSseEvent(eventName, data) {
         var type = (eventName === 'failed' || eventName === 'error') ? 'error' : eventName;
         var hasCallback = !!eventCallbacks[eventName];
         if (hasCallback) {
-            eventCallbacks[eventName]({ data: JSON.stringify(data) });
+            eventCallbacks[eventName](callbackEvent);
         } else {
             log(msg, type);
         }
@@ -379,12 +380,11 @@ function dispatchSseEvent(eventName, data) {
         if (data.progress !== undefined) {
             setProgress(data.progress);
         }
-        // 如果存在 done/failed/error 事件的回调，则由回调负责管理连接生命周期，不自动 stop()
-        // 这样前端可以在 done 回调中先 reconnection 再 stop()，避免状态显示"已断开"但日志还在输出
+        // done/failed/error 表示服务端流已结束：必须关闭原生 EventSource，否则 TCP 关闭后浏览器会
+        // 自动重连同一 URL，状态栏长期显示「连接重试中...」且可能重复打后端。
+        // 回调仍先于 stop() 执行；若需在完成后立刻发起新流，请在回调里 setTimeout(0, () => term.start(...))。
         if (eventName === 'done' || eventName === 'failed' || eventName === 'error') {
-            if (!hasCallback) {
-                stop();
-            }
+            stop();
         }
     } catch (err) {
         log(typeof data === 'string' ? data : eventName, eventName);
@@ -470,22 +470,30 @@ function start(url, options) {
         if (eventSource !== source || sourceSeq !== eventSourceSeq) {
             return;
         }
+        var isBenignTransition = false;
         if (source.readyState === EventSource.CLOSED) {
             if (manualStopRequested) {
                 stop({ keepStatus: true, internal: true });
                 setStatus('disconnected', '$t_disconnected');
+                isBenignTransition = true;
             } else {
                 setStatus('connecting', '$t_reconnecting');
+                isBenignTransition = true;
             }
         } else if (source.readyState === EventSource.CONNECTING) {
             // 完全遵循原生 EventSource：CONNECTING 由浏览器自动重连管理
             setStatus('connecting', '$t_reconnecting');
+            isBenignTransition = true;
         } else {
             setStatus('error', '$t_error');
             log('$t_error', 'error');
             log('$t_connection_failed', 'error');
+            isBenignTransition = false;
         }
-        if (eventCallbacks.error) eventCallbacks.error(e);
+        // CONNECTING/CLOSED 多数是浏览器自动重连或流结束过程，不应向上层冒泡为业务错误。
+        if (!isBenignTransition && eventCallbacks.error) {
+            eventCallbacks.error(e);
+        }
     };
     
     source.onmessage = function(e) {
@@ -513,10 +521,7 @@ function start(url, options) {
             }
             try {
                 var data = JSON.parse(e.data || '{}');
-                if (eventCallbacks[eventName]) {
-                    eventCallbacks[eventName](e);
-                }
-                dispatchSseEvent(eventName, data);
+                dispatchSseEvent(eventName, data, e);
             } catch (err) {
                 log(e.data || eventName, eventName);
                 if (eventCallbacks[eventName]) eventCallbacks[eventName](e);
@@ -721,8 +726,8 @@ terminal.setProgress(50);   // 设置进度条百分比 0-100
 terminal.on('open', callback);      // 连接成功
 terminal.on('error', callback);     // 连接错误
 terminal.on('message', callback);   // 收到消息
-terminal.on('done', callback);      // 任务完成
-terminal.on('stop', callback);      // 连接停止
+terminal.on('done', callback);      // 任务完成（收到 done 事件后会自动 stop，防止浏览器重连）
+terminal.on('stop', callback);      // 连接停止（含流正常结束后的自动关闭）
 terminal.on('progress', callback);  // 进度更新
 terminal.on('start', callback);     // 任务开始
 </pre>

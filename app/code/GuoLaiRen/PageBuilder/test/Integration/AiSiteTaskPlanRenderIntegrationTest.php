@@ -66,6 +66,9 @@ final class AiSiteTaskPlanRenderIntegrationTest extends AbstractAiSiteWorkbenchI
         self::assertStringContainsString('function isTaskPlanStructuredRoot(planRoot)', $html);
         self::assertStringContainsString('function renderTaskPlanStructuredPreviewHtml(planRoot)', $html);
         self::assertStringContainsString("var pageTasks = planRoot.page_tasks && typeof planRoot.page_tasks === 'object' ? planRoot.page_tasks : {};", $html);
+        self::assertStringContainsString("tab.setAttribute('data-generation-status', 'idle');", $html);
+        self::assertStringContainsString('function applyPreviewTabGenerationStatus(tab)', $html);
+        self::assertStringContainsString("var pageCompleted = payload.page_completed !== false;", $html);
         self::assertStringContainsString('detect_bootstrap_task_plan', $html);
         self::assertStringContainsString('refine_task_plan', $html);
         self::assertStringContainsString('rebuild_task_plan', $html);
