@@ -8,6 +8,7 @@ use GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser;
 use GuoLaiRen\PageBuilder\Service\AI\CodeFixer;
 use GuoLaiRen\PageBuilder\Service\AI\CodeValidator;
 use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
+use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
 use PHPUnit\Framework\TestCase;
 use Weline\Ai\Service\AiService;
@@ -247,5 +248,126 @@ HTML,
         $check = (new CodeValidator())->checkSyntax($phtml);
 
         self::assertTrue($check['valid'], (string)($check['error'] ?? 'footer markup should stay syntax-valid after repair'));
+    }
+
+    public function testBuildSectionGenerationPromptIncludesStageTwoTaskContext(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $prompt = (function (string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): string {
+            return $this->buildSectionGenerationPrompt($pageType, $section, $blueprint, $websiteProfile, $scope);
+        })->call(
+            $service,
+            'home_page',
+            [
+                'code' => 'content/home-page-hero',
+                'key' => 'hero',
+                'name' => 'Hero',
+                'template' => 'hero',
+                'config' => [],
+            ],
+            [
+                'page_label' => 'Home',
+                'page_title' => 'Task Plan Test',
+                'ai_description' => 'Explain value',
+                'meta_title' => 'Task Plan Test',
+                'meta_description' => 'Explain value',
+                'meta_keywords' => 'task,plan',
+            ],
+            [
+                'site_title' => 'Task Plan Test',
+                'brief_description' => 'Explain value',
+                'default_locale' => 'en_US',
+            ],
+            [
+                'default_locale' => 'en_US',
+                'task_plan_structured' => [
+                    'page_tasks' => [
+                        'home_page' => [
+                            [
+                                'task_key' => 'page:home_page:content/home-page-hero',
+                                'section_code' => 'content/home-page-hero',
+                                'plan_context' => [
+                                    'page_goal' => 'Explain value',
+                                    'block_goal' => 'Open with a clear value proposition.',
+                                ],
+                                'task_script' => [
+                                    'story_goal' => 'Make the hero conversion-ready.',
+                                    'content_fill_rule' => 'Use short headline and one CTA.',
+                                    'stage3_directive' => 'Follow the confirmed hero task contract.',
+                                    'field_content_requirements' => [
+                                        ['field' => 'title', 'sample' => 'Grow faster with our service', 'reason' => 'Lead with value'],
+                                    ],
+                                ],
+                                'implementation_contract' => [
+                                    'acceptance' => ['Hero must render value proposition and CTA.'],
+                                ],
+                                'runtime_context' => [
+                                    'task_session_id' => 'abc123',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ]
+        );
+
+        self::assertStringContainsString('Stage-2 task context for this section:', $prompt);
+        self::assertStringContainsString('Follow the confirmed hero task contract.', $prompt);
+        self::assertStringContainsString('Grow faster with our service', $prompt);
+        self::assertStringContainsString('Hero must render value proposition and CTA.', $prompt);
+    }
+
+    public function testBuildSectionDefaultConfigUsesTaskPlanFieldSamples(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $config = (function (string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): array {
+            return $this->buildSectionDefaultConfig($pageType, $section, $blueprint, $websiteProfile, $scope);
+        })->call(
+            $service,
+            'home_page',
+            [
+                'code' => 'content/home-page-hero',
+                'key' => 'hero',
+                'name' => 'Hero',
+                'template' => 'hero',
+                'config' => [],
+            ],
+            [
+                'page_title' => 'Task Plan Test',
+                'page_label' => 'Home',
+                'ai_description' => 'Explain value',
+            ],
+            [
+                'site_title' => 'Task Plan Test',
+                'brief_description' => 'Explain value',
+            ],
+            [
+                'task_plan_structured' => [
+                    'page_tasks' => [
+                        'home_page' => [
+                            [
+                                'task_key' => 'page:home_page:content/home-page-hero',
+                                'section_code' => 'content/home-page-hero',
+                                'task_script' => [
+                                    'field_content_requirements' => [
+                                        ['field' => 'title', 'sample' => 'Grow faster with our service', 'reason' => 'Lead with value'],
+                                        ['field' => 'description', 'sample' => 'Launch faster with a focused hero message.', 'reason' => 'Clarify value'],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ]
+        );
+
+        self::assertSame('Grow faster with our service', (string)($config['content.title'] ?? ''));
+        self::assertSame('Launch faster with a focused hero message.', (string)($config['content.description'] ?? ''));
     }
 }

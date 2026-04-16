@@ -7,7 +7,6 @@ namespace Weline\Theme\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Session\Session;
-use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreviewRequestInspector;
 
@@ -26,8 +25,14 @@ class ClearScopedPreviewStateAfter implements ObserverInterface
             return;
         }
 
-        $this->previewContextService->clearContext();
-        PreviewManager::clearPreviewConfig();
-        $this->session->delete('preview_auto_login');
+        try {
+            $this->previewContextService->clearContext();
+        } catch (\Throwable) {
+        }
+
+        try {
+            $this->session->delete('preview_auto_login');
+        } catch (\Throwable) {
+        }
     }
 }

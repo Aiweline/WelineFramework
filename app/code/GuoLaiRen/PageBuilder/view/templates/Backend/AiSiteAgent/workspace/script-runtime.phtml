@@ -738,15 +738,23 @@
             }
         });
 
-            source.addEventListener('page_generated', function (event) {
+        source.addEventListener('page_generated', function (event) {
             var payload = parsePayload(event);
             if (!payload || !payload.page_type) {
                 return;
             }
+            var pageCompleted = payload.page_completed !== false;
             if (payload.state) {
                 hydrateWorkspaceFromState(payload.state);
             }
-            logOperationToWorkspaceTerminal('page_generated', payload, 'done', <?= \json_encode((string)__('页面已完成真实 AI 生成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            logOperationToWorkspaceTerminal(
+                'page_generated',
+                payload,
+                pageCompleted ? 'done' : 'progress',
+                pageCompleted
+                    ? <?= \json_encode((string)__('页面已完成真实 AI 生成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    : <?= \json_encode((string)__('页面已更新并可提前编辑'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+            );
 
             if (window.PbAiWorkspacePreview) {
                 var pageType = String(payload.page_type);
@@ -754,7 +762,13 @@
                 var pageId = parseInt(payload.page_id || 0, 10) || 0;
                 var shouldActivate = buildStartupPending || !document.querySelector('.pb-ai-preview-tab.active');
                 window.PbAiWorkspacePreview.upsertPreviewTab(pageType, pageLabel, pageId, shouldActivate);
-                window.PbAiWorkspacePreview.markPageGenerationStatus(pageType, 'done', <?= \json_encode((string)__('已生成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                window.PbAiWorkspacePreview.markPageGenerationStatus(
+                    pageType,
+                    pageCompleted ? 'done' : 'ready',
+                    pageCompleted
+                        ? <?= \json_encode((string)__('已完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                        : <?= \json_encode((string)__('可编辑'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                );
                 if (shouldActivate) {
                     window.PbAiWorkspacePreview.switchPreviewByType(pageType);
                 }
@@ -771,7 +785,13 @@
 
             // 显示页面生成完成的提示
             var pageLabel = payload.page_label || payload.page_type;
-            toast('success', <?= \json_encode((string)__('页面已生成：'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + pageLabel);
+            toast(
+                'success',
+                (pageCompleted
+                    ? <?= \json_encode((string)__('页面已生成完成：'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    : <?= \json_encode((string)__('页面已更新，可提前编辑：'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>)
+                + pageLabel
+            );
         });
 
         source.addEventListener('task_completed', function (event) {
