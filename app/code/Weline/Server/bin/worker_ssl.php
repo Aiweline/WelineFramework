@@ -1225,8 +1225,12 @@ if ($isMaintenanceWorker) {
 $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
 $instanceInfoGateway = new \Weline\Server\IPC\ChildControl\InstanceInfoGateway($instanceName);
 $ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
+$supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
+$supervisorEnabled = $supervisorEnabledRaw !== false
+    && $supervisorEnabledRaw !== ''
+    && \in_array(\strtolower((string) $supervisorEnabledRaw), ['1', 'true', 'yes', 'on'], true);
 
-if ($controlPort > 0) {
+if ($controlPort > 0 || $supervisorEnabled) {
     $ipcSelfTag = ($isMaintenanceWorker ? 'Maintenance' : 'Worker') . "#{$workerId}";
     $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
         $ipcRole,
@@ -1256,6 +1260,7 @@ if ($controlPort > 0) {
                     break;
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_ACK_READY:
+                case \Weline\Server\IPC\ControlMessage::TYPE_READY_ACK:
                     $waitingForAck = false;
                     $ackWorkerId = $msg['worker_id'] ?? 0;
                     $dispatcherConfirmed = (bool)($msg['dispatcher_confirmed'] ?? false);
@@ -1460,9 +1465,14 @@ if ($controlPort > 0) {
     $ipcClient = $kernel->getClient();
     if ($kernel->connectAndRegister($controlPort)) {
         $ipcClient = $kernel->getClient();
-        WlsLogger::info_("IPC 控制通道已连接 (控制端口: {$controlPort})");
-        WlsLogger::info_("已上报就绪状态");
-        $waitingForAck = true;
+        $ipcTransportLabel = $supervisorEnabled && $controlPort <= 0 ? 'Supervisor channel' : "控制端口: {$controlPort}";
+        WlsLogger::info_("IPC 控制通道已连接 ({$ipcTransportLabel})");
+        $waitingForAck = !($ipcClient?->isReadyStateConfirmed() ?? false);
+        WlsLogger::info_(
+            $waitingForAck
+                ? "已上报就绪状态，等待 Master ACK 确认"
+                : "已上报就绪状态，控制面已同步确认 READY"
+        );
         $readySentTime = \microtime(true);
         if (\Weline\Server\Log\LogConfig::isDevMode() && $ipcClient !== null) {
             WlsLogger::getInstance()->setIpcLogSink(static function (string $line, string $level, string $tag) use ($ipcClient): void {
@@ -1686,7 +1696,7 @@ while (true) {
             $ipcClient = $kernel->getClient();
             unset($ipcReconnectDueTime, $ipcReconnectAttempts, $ipcReconnectMaxAttempts);
             WlsLogger::info_("[IPC] 成功重新连接到 Master，已上报就绪状态");
-            $waitingForAck = true;
+            $waitingForAck = !($ipcClient?->isReadyStateConfirmed() ?? false);
             $readySentTime = \microtime(true);
         } else {
             // 重连失败，设置下一次重连时间（指数退避：5秒 + attempt*1秒）
@@ -3451,6 +3461,7 @@ function sslFinalizeHttpResponseAfterHandle(
     $responseLenPre = \strlen($response);
     WlsLogger::info_("Worker 即将写回响应 connId={$connId} len={$responseLenPre}");
 
+    $hasQueuedSsePayload = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
     $actualSseStarted = $isSseProtocolRequest
         && (
             \Weline\Framework\Http\Sse\SseContext::isSseEnabled()
@@ -3463,7 +3474,8 @@ function sslFinalizeHttpResponseAfterHandle(
             . $connId . ', status: ' . $statusLine . ', len: ' . \strlen($response) . ')'
         );
     }
-    $isSseMode = $actualSseStarted;
+    // SSE 收尾兜底：上下文标记可能先于写队列排空被重置，此时仍必须按 SSE 分支处理。
+    $isSseMode = $actualSseStarted || ($isSseProtocolRequest && $hasQueuedSsePayload);
     $keepAlive = isKeepAlive($rawRequest);
     $bufferedBytesBeforeWrite = isset($writeBuffers[$connId]) ? \strlen($writeBuffers[$connId]) : 0;
     $forceCloseAfterResponse = \Weline\Server\Service\WorkerResponseMemoryGuard::shouldForceConnectionClose(

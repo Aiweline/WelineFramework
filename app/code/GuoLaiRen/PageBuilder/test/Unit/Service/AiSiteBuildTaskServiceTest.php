@@ -83,4 +83,25 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertSame(2, (int)($scope['build_tasks']['page:home_page:content/home-page-hero']['attempt_no'] ?? 0));
         $this->assertSame(1, (int)($scope['build_tasks']['page:about_page:content/about-page-hero']['attempt_no'] ?? 0));
     }
+
+    public function testArePageTasksCompleteOnlyTurnsTrueAfterAllPageTasksAreDone(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page', 'about_page'],
+        ], [
+            'site_title' => 'Example Site',
+            'brief_description' => 'Example site summary',
+        ], 'virtual_theme');
+
+        $this->assertFalse($service->arePageTasksComplete($scope, 'home_page'));
+
+        foreach ($service->listTaskKeysByPageType($scope, 'home_page') as $taskKey) {
+            $scope = $service->markTaskDone($scope, $taskKey, ['page_type' => 'home_page']);
+        }
+
+        $this->assertTrue($service->arePageTasksComplete($scope, 'home_page'));
+        $this->assertFalse($service->arePageTasksComplete($scope, 'about_page'));
+    }
 }

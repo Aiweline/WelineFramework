@@ -96,6 +96,11 @@ class AiService
     private AgentScanner $agentScanner;
 
     /**
+     * 会话历史存储（按需加载，避免影响现有构造签名）。
+     */
+    private ?AiConversationFileSessionService $conversationSessionService = null;
+
+    /**
      * 构造函数
      * 
      * @param AiModel $aiModel
@@ -223,6 +228,28 @@ class AiService
     }
 
     /**
+     * 获取文件会话历史（仅当调用方使用 session_id 时有意义）。
+     *
+     * @param string $sessionId
+     * @return array<string,mixed>
+     */
+    public function getSessionConversation(string $sessionId): array
+    {
+        return $this->getConversationSessionService()->getSession($sessionId);
+    }
+
+    /**
+     * 清理文件会话历史。
+     *
+     * @param string $sessionId
+     * @return bool
+     */
+    public function clearSessionConversation(string $sessionId): bool
+    {
+        return $this->getConversationSessionService()->clearSession($sessionId);
+    }
+
+    /**
      * 检查是否默认启用流式输出
      * 
      * @return bool
@@ -306,9 +333,12 @@ class AiService
         if (!$isBackend && $userId) {
             $estimatedTokens = $this->estimateTokens($prompt);
             if (!$configResolver->checkUserBalance($userId, $model->getModelCode(), $estimatedTokens)) {
-                throw new Exception('用户余额不足，请充值后使用');
+                throw new Exception(__('用户余额不足，请充值后使用'));
             }
         }
+
+        // 可选会话模式：调用方传 session_id 时，自动注入历史。
+        $params = $this->attachConversationHistory($params);
 
         // 4. 场景适配器处理
         $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
@@ -316,7 +346,7 @@ class AiService
         // 5. 语言验证
         $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
         if ($locale && !$this->i18nIntegration->isLocaleSupported($locale)) {
-            throw new Exception("不支持的语言: {$locale}");
+            throw new Exception(__('不支持的语言: %{locale}', ['locale' => $locale]));
         }
 
         // 6. 调用AI模型API
@@ -329,6 +359,8 @@ class AiService
         if ($locale) {
             $processedResponse = $this->processLanguageResponse($processedResponse, $locale);
         }
+
+        $this->persistConversationTurn($params, $prompt, $processedResponse);
 
         // 9. 记录使用情况
         $this->recordUsage($model, $adaptedPrompt, $processedResponse, $userId, $isBackend);
@@ -416,13 +448,23 @@ class AiService
             $isBackend
         );
 
+        $params = $this->attachConversationHistory($params);
         $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
 
         if ($locale && !$this->i18nIntegration->isLocaleSupported($locale)) {
-            throw new Exception("不支持的语言: {$locale}");
+            throw new Exception(__('不支持的语言: %{locale}', ['locale' => $locale]));
         }
 
-        $this->callModelApiStream($model, $adaptedPrompt, $callback, $scenarioCode, $locale, $params);
+        $assistantBuffer = '';
+        $wrappedCallback = function ($chunk) use ($callback, &$assistantBuffer) {
+            if (is_string($chunk) && trim($chunk) !== '') {
+                $assistantBuffer .= $chunk;
+            }
+            return $callback($chunk);
+        };
+
+        $this->callModelApiStream($model, $adaptedPrompt, $wrappedCallback, $scenarioCode, $locale, $params);
+        $this->persistConversationTurn($params, $prompt, $assistantBuffer);
     }
 
     /**
@@ -471,14 +513,64 @@ class AiService
             $userId,
             $isBackend
         );
+        $params = $this->attachConversationHistory($params);
         $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
 
         if ($locale && !$this->i18nIntegration->isLocaleSupported($locale)) {
-            throw new Exception("不支持的语言: {$locale}");
+            throw new Exception(__('不支持的语言: %{locale}', ['locale' => $locale]));
         }
 
-        $this->callModelApiStream($model, $adaptedPrompt, $callback, $scenarioCode, $locale, $params);
+        $assistantBuffer = '';
+        $wrappedCallback = function ($chunk) use ($callback, &$assistantBuffer) {
+            if (is_string($chunk) && trim($chunk) !== '') {
+                $assistantBuffer .= $chunk;
+            }
+            return $callback($chunk);
+        };
+
+        $this->callModelApiStream($model, $adaptedPrompt, $wrappedCallback, $scenarioCode, $locale, $params);
+        $this->persistConversationTurn($params, $prompt, $assistantBuffer);
         return ['success' => true, 'mode' => 'stream'];
+    }
+
+    private function attachConversationHistory(array $params): array
+    {
+        if (isset($params['messages']) && is_array($params['messages']) && $params['messages'] !== []) {
+            return $params;
+        }
+
+        $service = $this->getConversationSessionService();
+        if (!$service->hasSessionId($params)) {
+            return $params;
+        }
+
+        $history = $service->buildHistoryMessages($params);
+        if ($history !== []) {
+            $params['history'] = $history;
+        }
+        return $params;
+    }
+
+    private function persistConversationTurn(array $params, string $prompt, string $response): void
+    {
+        $service = $this->getConversationSessionService();
+        if (!$service->hasSessionId($params)) {
+            return;
+        }
+        if (trim($prompt) === '' || trim($response) === '') {
+            return;
+        }
+        $service->appendTurn($params, $prompt, $response);
+    }
+
+    private function getConversationSessionService(): AiConversationFileSessionService
+    {
+        if ($this->conversationSessionService === null) {
+            /** @var AiConversationFileSessionService $service */
+            $service = ObjectManager::getInstance(AiConversationFileSessionService::class);
+            $this->conversationSessionService = $service;
+        }
+        return $this->conversationSessionService;
     }
 
     /**
@@ -725,7 +817,7 @@ class AiService
         // 验证参数
         $validationErrors = $adapter->validateParams($params);
         if (!empty($validationErrors)) {
-            throw new Exception('参数验证失败: ' . implode(', ', $validationErrors));
+            throw new Exception(__('参数验证失败: %{errors}', ['errors' => implode(', ', $validationErrors)]));
         }
 
         return $adapter->adaptPrompt($prompt, $params);
@@ -789,7 +881,7 @@ class AiService
                 $providerCode = $this->accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
             }
             if (!$providerCode) {
-                throw new Exception('无法确定模型的供应商');
+                throw new Exception(__('无法确定模型的供应商'));
             }
             
             // 2. 获取该供应商的账户列表（用于回退重试）
@@ -890,7 +982,7 @@ class AiService
             if ($lastError) {
                 throw $lastError;
             }
-            throw new Exception('未能使用任何账户完成请求');
+            throw new Exception(__('未能使用任何账户完成请求'));
             
         } catch (\Exception $e) {
             // 记录错误到供应商使用记录
@@ -908,7 +1000,7 @@ class AiService
             
             // 记录错误
             w_log_error("AI API调用失败: " . $e->getMessage());
-            throw new Exception("AI生成失败: " . $e->getMessage());
+            throw new Exception(__('AI生成失败: %{msg}', ['msg' => $e->getMessage()]));
         }
     }
 
@@ -934,7 +1026,7 @@ class AiService
                 $providerCode = $this->accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
             }
             if (!$providerCode) {
-                throw new Exception('无法确定模型的供应商');
+                throw new Exception(__('无法确定模型的供应商'));
             }
 
             $allAccounts = $this->accountService->getProviderAccounts($providerCode);
@@ -1012,7 +1104,7 @@ class AiService
             if ($lastError) {
                 throw $lastError;
             }
-            throw new Exception('未能使用任何账户完成请求');
+            throw new Exception(__('未能使用任何账户完成请求'));
         } catch (\Exception $e) {
             if ($account) {
                 $requestTime = (int)((microtime(true) - $startTime) * 1000);
@@ -1027,7 +1119,7 @@ class AiService
             }
 
             w_log_error('AI structured API调用失败: ' . $e->getMessage());
-            throw new Exception('AI生成失败: ' . $e->getMessage());
+            throw new Exception(__('AI生成失败: %{msg}', ['msg' => $e->getMessage()]));
         }
     }
 
@@ -1082,7 +1174,7 @@ class AiService
         array $params
     ): void {
         if (false) {
-            throw new Exception('AI流式生成失败: AI API 错误 (HTTP 402, unknown_error): Insufficient Balance');
+            throw new Exception(__('AI流式生成失败: AI API 错误 (HTTP 402, unknown_error): Insufficient Balance'));
         }
 
         $startTime = microtime(true);
@@ -1096,7 +1188,7 @@ class AiService
                 $providerCode = $this->accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
             }
             if (!$providerCode) {
-                throw new Exception('无法确定模型的供应商');
+                throw new Exception(__('无法确定模型的供应商'));
             }
 
             $allAccounts = $this->accountService->getProviderAccounts($providerCode);
@@ -1187,7 +1279,7 @@ class AiService
                 throw $lastError;
             }
 
-            throw new Exception('未能使用任何账户完成请求');
+            throw new Exception(__('未能使用任何账户完成请求'));
         } catch (\Exception $e) {
             if ($account) {
                 $requestTime = (int)((microtime(true) - $startTime) * 1000);
@@ -1207,8 +1299,33 @@ class AiService
                 w_log_error("AI流式API调用失败: " . $e->getMessage());
             }
             $cleanMessage = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
-            throw new Exception("AI流式生成失败: " . $cleanMessage);
+            $friendlyMessage = $this->normalizeStreamErrorMessage((string)$cleanMessage);
+            throw new Exception(__('AI流式生成失败: %{msg}', ['msg' => $friendlyMessage]));
         }
+    }
+
+    /**
+     * 统一 AI 流式错误文案，避免前端看到“黑盒”或难以行动的信息。
+     */
+    private function normalizeStreamErrorMessage(string $message): string
+    {
+        $trimmed = trim($message);
+        if ($trimmed === '') {
+            return (string)__('AI 服务返回空错误，请检查供应商连接与账户状态。');
+        }
+
+        $lower = strtolower($trimmed);
+        if (str_contains($lower, 'invalid max_tokens value') || str_contains($lower, 'valid range of max_tokens')) {
+            return (string)__('max_tokens 超出模型上限。请降低调用方 max_tokens（例如 <=8192），或切换支持更大输出的模型。原始错误：%{msg}', ['msg' => $trimmed]);
+        }
+        if (str_contains($lower, 'timed out') || str_contains($lower, 'timeout')) {
+            return (string)__('AI 上游请求超时。请稍后重试，或减少一次性输出内容并提高保活频率。原始错误：%{msg}', ['msg' => $trimmed]);
+        }
+        if (str_contains($trimmed, '未收到 [DONE]') || str_contains($trimmed, '未收到 Anthropic 结束事件')) {
+            return (string)__('AI 上游流式输出提前终止（未返回完整结束标记）。请重试或更换供应商线路。原始错误：%{msg}', ['msg' => $trimmed]);
+        }
+
+        return $trimmed;
     }
 
     private function isInsufficientBalanceError(\Throwable $throwable): bool

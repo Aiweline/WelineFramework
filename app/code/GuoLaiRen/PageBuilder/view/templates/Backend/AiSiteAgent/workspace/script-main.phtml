@@ -2375,11 +2375,38 @@
             }
             tab.setAttribute('data-page-id', String(pageId > 0 ? pageId : 0));
             tab.setAttribute('data-page-value', String(pageId > 0 ? pageId : pageType));
-            tab.textContent = compactPageDisplayLabel(pageLabel, pageType);
+            tab.setAttribute('data-page-label', compactPageDisplayLabel(pageLabel, pageType));
+            if (!tab.getAttribute('data-generation-status')) {
+                tab.setAttribute('data-generation-status', 'idle');
+            }
+            if (!tab.getAttribute('data-generation-text')) {
+                tab.setAttribute('data-generation-text', '');
+            }
+            applyPreviewTabGenerationStatus(tab);
             if (shouldActivate) {
                 setActiveTab(pageType);
             }
         });
+    }
+
+    function applyPreviewTabGenerationStatus(tab) {
+        if (!tab) {
+            return;
+        }
+        var baseLabel = String(tab.getAttribute('data-page-label') || tab.textContent || '').trim();
+        var status = String(tab.getAttribute('data-generation-status') || 'idle').trim();
+        var statusText = String(tab.getAttribute('data-generation-text') || '').trim();
+        var suffix = statusText;
+        if (suffix.length > 14) {
+            suffix = status === 'done'
+                ? <?= \json_encode((string)__('已完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                : (status === 'ready'
+                    ? <?= \json_encode((string)__('可编辑'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    : <?= \json_encode((string)__('生成中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+        }
+        tab.textContent = suffix !== '' ? (baseLabel + ' · ' + suffix) : baseLabel;
+        tab.classList.toggle('text-success', status === 'done');
+        tab.classList.toggle('text-warning', status === 'running' || status === 'ready');
     }
 
     function buildLabelMapFromChecks() {
@@ -2398,9 +2425,21 @@
 
     // 任务进度统一在侧边栏面板展示；保留空实现供 runtime 回调兼容。
     function markPageGenerationStatus(pageType, status, text) {
-        void pageType;
-        void status;
-        void text;
+        var normalizedPageType = String(pageType || '').trim();
+        if (!normalizedPageType) {
+            return;
+        }
+        var normalizedStatus = String(status || 'idle').trim().toLowerCase();
+        var normalizedText = String(text || '').trim();
+        getPreviewTabContainers().forEach(function (container) {
+            var tab = container.querySelector('.pb-ai-preview-tab[data-page-type="' + normalizedPageType + '"]');
+            if (!tab) {
+                return;
+            }
+            tab.setAttribute('data-generation-status', normalizedStatus);
+            tab.setAttribute('data-generation-text', normalizedText);
+            applyPreviewTabGenerationStatus(tab);
+        });
     }
 
     // 兼容历史调用方：旧命名 queueGenerationStatus 已被外部脚本引用。
@@ -2436,7 +2475,10 @@
                 btn.setAttribute('data-page-id', '0');
                 btn.setAttribute('data-page-type', pageType);
                 btn.setAttribute('data-page-value', pageType);
-                btn.textContent = labelMap[pageType] || normalizePageTypeLabel(pageType);
+                btn.setAttribute('data-page-label', labelMap[pageType] || normalizePageTypeLabel(pageType));
+                btn.setAttribute('data-generation-status', 'idle');
+                btn.setAttribute('data-generation-text', '');
+                applyPreviewTabGenerationStatus(btn);
                 btn.addEventListener('click', function () { switchPreviewByTab(btn); });
                 li.appendChild(btn);
                 container.appendChild(li);
@@ -5087,6 +5129,11 @@
                     startTaskPlanModeStream(queuedMode);
                 }
             }
+            // 与阶段一方案流一致：必须主动 stop，否则服务端结束连接后原生 EventSource 会重连同一 URL，
+            // detect_bootstrap 等长任务会表现为「卡住后又重复发起 post-task-plan-sse」。
+            if (typeof terminal.stop === 'function') {
+                terminal.stop({ suppressTransportError: true });
+            }
         });
         terminal.on('error', function (event) {
             taskPlanSseRunning = false;
@@ -5104,6 +5151,9 @@
             }
             if (typeof terminal.log === 'function') {
                 terminal.log(message, 'error', payload || {});
+            }
+            if (typeof terminal.stop === 'function') {
+                terminal.stop({ suppressTransportError: true });
             }
         });
         taskPlanSseHandlersBound = true;

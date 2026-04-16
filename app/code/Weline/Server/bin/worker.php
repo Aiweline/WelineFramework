@@ -691,6 +691,10 @@ if ($isMaintenanceWorker) {
 $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
 $instanceInfoGateway = new \Weline\Server\IPC\ChildControl\InstanceInfoGateway($instanceName);
 $ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
+$supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
+$supervisorEnabled = $supervisorEnabledRaw !== false
+    && $supervisorEnabledRaw !== ''
+    && \in_array(\strtolower((string) $supervisorEnabledRaw), ['1', 'true', 'yes', 'on'], true);
 $waitingForAck = false;
 $readySentTime = 0.0;
 $ackRetryCount = 0;
@@ -704,7 +708,7 @@ $ipcReceivedShutdown = false;
 $drainStartTime = 0;
 $shouldExit = false;
 
-if ($controlPort > 0) {
+if ($controlPort > 0 || $supervisorEnabled) {
     $ipcSelfTag = ($isMaintenanceWorker ? 'Maintenance' : 'Worker') . "#{$workerId}";
     $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
         $ipcRole,
@@ -733,6 +737,7 @@ if ($controlPort > 0) {
                     break;
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_ACK_READY:
+                case \Weline\Server\IPC\ControlMessage::TYPE_READY_ACK:
                     // 收到 Master ACK 确认，启动完成
                     $waitingForAck = false;
                     $ackWorkerId = $msg['worker_id'] ?? 0;
@@ -889,9 +894,14 @@ if ($controlPort > 0) {
     $ipcClient = $kernel->getClient();
     if ($kernel->connectAndRegister($controlPort)) {
         $ipcClient = $kernel->getClient();
-        WlsLogger::info_("IPC 控制通道已连接 (控制端口: {$controlPort})");
-        WlsLogger::info_("已上报就绪状态，等待 Master ACK 确认...");
-        $waitingForAck = true;
+        $ipcTransportLabel = $supervisorEnabled && $controlPort <= 0 ? 'Supervisor channel' : "控制端口: {$controlPort}";
+        WlsLogger::info_("IPC 控制通道已连接 ({$ipcTransportLabel})");
+        $waitingForAck = !($ipcClient?->isReadyStateConfirmed() ?? false);
+        WlsLogger::info_(
+            $waitingForAck
+                ? "已上报就绪状态，等待 Master ACK 确认..."
+                : "已上报就绪状态，控制面已同步确认 READY"
+        );
         $readySentTime = \microtime(true);
         if (\Weline\Server\Log\LogConfig::isDevMode() && $ipcClient !== null) {
             WlsLogger::getInstance()->setIpcLogSink(static function (string $line, string $level, string $tag) use ($ipcClient): void {
@@ -1226,7 +1236,7 @@ while (true) {
             $ipcClient = $kernel->getClient();
             unset($ipcReconnectDueTime, $ipcReconnectAttempts, $ipcReconnectMaxAttempts);
             WlsLogger::info_("[IPC] 成功重新连接到 Master，已上报就绪状态");
-            $waitingForAck = true;
+            $waitingForAck = !($ipcClient?->isReadyStateConfirmed() ?? false);
             $readySentTime = \microtime(true);
         } else {
             $nextRetryDelay = 5 + \min($ipcReconnectAttempts, 10);
@@ -1704,7 +1714,12 @@ function wlsFinalizeTerminatedFiberResponseStep(
 
     $handleDuration = \round((\microtime(true) - $handleStartTime) * 1000, 2);
     $response = injectWlsProcessTimeHeader($response, $handleDuration);
-    if (isset($connections[$connId]) && \is_resource($conn)) {
+    $currentConn = $connections[$connId] ?? null;
+    $hasLiveCurrentConn = \is_resource($currentConn) && \in_array(\get_resource_type($currentConn), ['stream', 'Socket'], true);
+    if ($hasLiveCurrentConn) {
+        // 关键：Fiber 结束时优先使用连接表中的当前连接句柄，避免使用闭包捕获的陈旧资源。
+        // 在高并发/复用边界下，陈旧句柄会导致收尾阶段误写/误关，触发 SSE 尾包丢失。
+        $conn = $currentConn;
         sendResponseAndCleanup(
             $conn,
             $connId,
@@ -2078,8 +2093,13 @@ function wlsHttpIsSseClientConnected(
                 if (\function_exists('socket_clear_error')) {
                     \socket_clear_error($socket);
                 }
-
-                return \in_array($error, [11, 35, 10035], true);
+                // EAGAIN/EWOULDBLOCK/WSAEWOULDBLOCK：无数据可读，连接仍可能正常
+                if (\in_array($error, [11, 35, 10035], true)) {
+                    return true;
+                }
+                // 其它 errno 下 MSG_PEEK 不可靠（TLS/平台差异），勿直接判死；
+                // 误判会导致 SSE 仍在上游吐 token 时 isAlive=false → 业务停写、浏览器像「发包被掐断」。
+                return !@\feof($conn);
             }
         }
     }
@@ -2175,7 +2195,7 @@ function wlsHttpReadStep(
     }
 
     $data = @\fread($conn, 65535);
-    if ($data === false || $data === '') {
+    if ($data === false) {
         @\fclose($conn);
         unset(
             $connections[$connId],
@@ -2198,6 +2218,11 @@ function wlsHttpReadStep(
         }
         $activeRequests = \max(0, $activeRequests - 1);
         return ['closed' => true, 'request_ready' => false];
+    }
+    if ($data === '') {
+        // 非阻塞 socket 空读只表示“当前无数据可读”，并不等于连接断开。
+        // 若在此直接关闭，会导致 SSE 长连接被误杀并触发浏览器重连。
+        return ['closed' => false, 'request_ready' => false];
     }
 
     $connectionLastActivity[$connId] = \time();
@@ -2818,6 +2843,7 @@ function sendResponseAndCleanup(
     $responseLenPre = \strlen($response);
     WlsLogger::info_("Worker 即将写回响应 connId={$connId} len={$responseLenPre}");
 
+    $hasQueuedSsePayload = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
     $actualSseStarted = $isSseProtocolRequest
         && (
             \Weline\Framework\Http\Sse\SseContext::isSseEnabled()
@@ -2830,7 +2856,9 @@ function sendResponseAndCleanup(
             . $connId . ', status: ' . $statusLine . ', len: ' . \strlen($response) . ')'
         );
     }
-    $isSseMode = $actualSseStarted;
+    // SSE 收尾兜底：即便当前上下文标记已经被重置，只要该连接仍有 SSE 写队列待排空，仍按 SSE 模式处理，
+    // 禁止回退到普通 HTTP 分支导致提前关连。
+    $isSseMode = $actualSseStarted || ($isSseProtocolRequest && $hasQueuedSsePayload);
     $keepAlive = isKeepAlive($rawRequest);
     $bufferedBytesBeforeWrite = isset($writeBuffers[$connId]) ? \strlen($writeBuffers[$connId]) : 0;
     $forceCloseAfterResponse = \Weline\Server\Service\WorkerResponseMemoryGuard::shouldForceConnectionClose(
