@@ -1,110 +1,88 @@
 <?php
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
+declare(strict_types=1);
 
 namespace Weline\Theme\Controller\Backend\Config;
 
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Helper\ThemeConfigManager;
+use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemeResourceCatalog;
 
-/**
- * 主题组件配置控制器
- */
 class Component extends BackendController
 {
-    /**
-     * 保存组件参数
-     */
+    public function __construct(
+        private readonly WelineTheme $welineTheme,
+        private readonly ThemeResourceCatalog $themeResourceCatalog,
+        private readonly ThemeContextService $themeContextService,
+    ) {
+    }
+
     public function postSaveParams()
     {
-        $themeId = $this->request->getPost('theme_id');
-        $component = $this->request->getPost('component');
-        $area = $this->request->getPost('area', 'frontend');
-        $scope = $this->request->getPost('scope', 'default');
+        $themeId = (int)$this->request->getPost('theme_id', 0);
+        $component = \trim((string)$this->request->getPost('component', ''));
+        $area = $this->themeContextService->normalizeArea((string)$this->request->getPost('area', 'frontend'));
+        $scope = (string)$this->request->getPost('scope', 'default');
         $params = $this->request->getPost('params', []);
-        
-        if (!$themeId) {
-            return $this->fetchJson($this->error(__('请选择主题')));
+
+        if ($themeId <= 0) {
+            return $this->fetchJson($this->error(__('璇烽€夋嫨涓婚')));
         }
-        
-        if (!$component) {
-            return $this->fetchJson($this->error(__('请选择组件')));
+
+        if ($component === '') {
+            return $this->fetchJson($this->error(__('璇烽€夋嫨缁勪欢')));
         }
-        
-        /** @var WelineTheme $theme */
-        $theme = ObjectManager::getInstance(WelineTheme::class);
-        $theme->load($themeId);
-        
+
+        $theme = clone $this->welineTheme;
+        $theme->clearData()->clearQuery()->load($themeId);
         if (!$theme->getId()) {
-            return $this->fetchJson($this->error(__('主题不存在')));
+            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?)));
         }
-        
+
+        $availableComponents = $this->themeResourceCatalog->getComponents($area, $theme);
+        $componentExists = false;
+        foreach ($availableComponents as $componentOption) {
+            if ((string)($componentOption['value'] ?? '') === $component) {
+                $componentExists = true;
+                break;
+            }
+        }
+
+        if (!$componentExists) {
+            return $this->fetchJson($this->error(__('缁勪欢涓嶅瓨鍦?)));
+        }
+
+        ThemeData::setCurrentTheme($theme);
+        ThemeData::setCurrentArea($area);
+
+        $normalizedParams = [];
+        foreach ((array)$params as $paramName => $paramValue) {
+            if (\is_array($paramValue)) {
+                $normalizedParams[(string)$paramName] = \json_encode($paramValue, \JSON_UNESCAPED_UNICODE);
+                continue;
+            }
+
+            if ($paramValue === true) {
+                $normalizedParams[(string)$paramName] = '1';
+                continue;
+            }
+
+            if ($paramValue === false) {
+                $normalizedParams[(string)$paramName] = '0';
+                continue;
+            }
+
+            $normalizedParams[(string)$paramName] = (string)$paramValue;
+        }
+
         try {
-            // 获取当前配置
-            $config = $theme->getConfig();
-            
-            // 初始化组件配置结构
-            if (!isset($config['components'])) {
-                $config['components'] = [];
-            }
-            if (!isset($config['components'][$area])) {
-                $config['components'][$area] = [];
-            }
-            if (!isset($config['components'][$area][$component])) {
-                $config['components'][$area][$component] = [];
-            }
-            if (!isset($config['components'][$area][$component][$scope])) {
-                $config['components'][$area][$component][$scope] = [];
-            }
-            
-            // 保存参数值
-            foreach ($params as $paramName => $paramValue) {
-                // 处理不同类型的值
-                if (is_string($paramValue) && (strpos($paramValue, '[') === 0 || strpos($paramValue, '{') === 0)) {
-                    // 尝试解析 JSON
-                    $decoded = json_decode($paramValue, true);
-                    if (json_last_error() === JSON_ERROR_NONE) {
-                        $paramValue = $decoded;
-                    }
-                } elseif ($paramValue === '1' || $paramValue === '0') {
-                    // 布尔值
-                    $paramValue = (bool)$paramValue;
-                } elseif (is_numeric($paramValue)) {
-                    // 数字
-                    if (strpos($paramValue, '.') !== false) {
-                        $paramValue = (float)$paramValue;
-                    } else {
-                        $paramValue = (int)$paramValue;
-                    }
-                }
-                
-                $config['components'][$area][$component][$scope][$paramName] = $paramValue;
-            }
-            
-            // 保存配置
-            $theme->setConfig($config);
-            $result = $theme->save();
-            
-            if ($result) {
-                // 清除缓存
-                $theme->_cache->delete('theme');
-                $theme->_cache->delete('theme_parent_' . $theme->getId());
-                $theme->_cache->delete('theme_config_' . $theme->getId());
-                
-                return $this->fetchJson($this->success(__('参数保存成功')));
-            } else {
-                return $this->fetchJson($this->error(__('参数保存失败')));
-            }
-        } catch (\Exception $e) {
-            return $this->fetchJson($this->error(__('保存失败：%{error}', ['error' => $e->getMessage()])));
+            ThemeData::setParamValues("components.{$component}", $normalizedParams, $scope);
+            ThemeData::clearCache();
+            return $this->fetchJson($this->success(__('鍙傛暟淇濆瓨鎴愬姛')));
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson($this->error(__('淇濆瓨澶辫触锛?{error}', ['error' => $throwable->getMessage()])));
         }
     }
 }
-

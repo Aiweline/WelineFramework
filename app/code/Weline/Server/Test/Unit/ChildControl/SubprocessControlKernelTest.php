@@ -311,5 +311,34 @@ final class SubprocessControlKernelTest extends TestCase
             self::assertLessThan($guardPos, $shutdownInitPos, "{$script} should initialize \$ipcReceivedShutdown before orphan guard checks");
         }
     }
+
+    public function testSessionAndRedirectEntrypointsAllowSupervisorModeWithoutLegacyControlPort(): void
+    {
+        foreach (['session_server.php', 'http_redirect_worker.php'] as $script) {
+            $path = BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Weline'
+                . DIRECTORY_SEPARATOR . 'Server' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . $script;
+            $source = \file_get_contents($path);
+
+            self::assertNotFalse($source, "failed to read {$script}");
+            self::assertStringContainsString("\$supervisorEnabledRaw = \\getenv('WLS_SUPERVISOR_ENABLED');", $source);
+            self::assertStringContainsString('if ($controlPort > 0 || $supervisorEnabled)', $source);
+            self::assertStringContainsString('new \\Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel(', $source);
+        }
+    }
+
+    public function testWorkerEntrypointsAllowSupervisorModeAndRespectSyncReadyConfirmation(): void
+    {
+        foreach (['worker.php', 'worker_ssl.php'] as $script) {
+            $path = BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Weline'
+                . DIRECTORY_SEPARATOR . 'Server' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . $script;
+            $source = \file_get_contents($path);
+
+            self::assertNotFalse($source, "failed to read {$script}");
+            self::assertStringContainsString("\$supervisorEnabledRaw = \\getenv('WLS_SUPERVISOR_ENABLED');", $source);
+            self::assertStringContainsString('if ($controlPort > 0 || $supervisorEnabled)', $source);
+            self::assertStringContainsString("case \\Weline\\Server\\IPC\\ControlMessage::TYPE_READY_ACK:", $source);
+            self::assertStringContainsString("\$waitingForAck = !(\$ipcClient?->isReadyStateConfirmed() ?? false);", $source);
+        }
+    }
 }
 

@@ -126,6 +126,10 @@ unset($_envFile);
 
 $isDev = (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE)
     || ($envConfig !== null && isset($envConfig['deploy']) && $envConfig['deploy'] === 'dev');
+$supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
+$supervisorEnabled = $supervisorEnabledRaw !== false
+    && $supervisorEnabledRaw !== ''
+    && \in_array(\strtolower((string) $supervisorEnabledRaw), ['1', 'true', 'yes', 'on'], true);
 
 $sessionConfig = (\is_array($envConfig) && \is_array($envConfig['wls']['session'] ?? null))
     ? $envConfig['wls']['session'] : [];
@@ -209,7 +213,7 @@ if ($controlPort <= 0) {
     $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 6);
 }
 $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
-if ($controlPort > 0) {
+if ($controlPort > 0 || $supervisorEnabled) {
     $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
         $role,
         \getmypid(),

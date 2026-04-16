@@ -205,7 +205,7 @@ class AccountService
             return false;
         }
 
-        return $content;
+        return $content === null ? false : $content;
     }
 
     /**

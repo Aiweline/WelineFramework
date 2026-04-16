@@ -427,12 +427,15 @@ class ThemeConfig extends BackendController
                     }
                     
                     // 使用 setConfig 方法保存
+                    /** @var \Weline\Theme\Service\PreviewThemeScopeService $previewThemeScopeService */
+                    $previewThemeScopeService = ObjectManager::getInstance(\Weline\Theme\Service\PreviewThemeScopeService::class);
+                    $effectiveScope = $previewThemeScopeService->resolveEffectiveScope((int)$themeId, $area, $scope);
                     $metaConfig->setConfig(
                         (string)$themeId,
                         $namespace,
                         $configKey,
                         (string)$value,
-                        $scope,
+                        $effectiveScope,
                         null,
                         $metaId,
                         $metaIdentify
