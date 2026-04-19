@@ -150,6 +150,26 @@ final class FileStorage implements SessionStorageInterface
     }
 
     /**
+     * var/session 目录下除会话数据文件外，还有 Session/Memory Server 的 token、持久化 .dat 等；
+     * GC 只清理「会话镜像」文件，避免误删基础设施文件。
+     */
+    private function isGcEligibleSessionDataFile(string $basename): bool
+    {
+        if ($basename === '' || $basename === '.' || $basename === '..') {
+            return false;
+        }
+        if (\str_ends_with($basename, '.token') || \str_ends_with($basename, '.dat')) {
+            return false;
+        }
+        // 其它带点号的非会话文件（如 *.lock）
+        if (\str_contains($basename, '.')) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * @inheritDoc
      */
     public function gc(int $maxLifetime): int
@@ -163,12 +183,17 @@ final class FileStorage implements SessionStorageInterface
         }
         
         foreach ($files as $file) {
-            if (\is_file($file)) {
-                $mtime = \filemtime($file);
-                if ($mtime !== false && ($now - $mtime) > $maxLifetime) {
-                    if (@\unlink($file)) {
-                        $count++;
-                    }
+            if (!\is_file($file)) {
+                continue;
+            }
+            $basename = \basename($file);
+            if (!$this->isGcEligibleSessionDataFile($basename)) {
+                continue;
+            }
+            $mtime = \filemtime($file);
+            if ($mtime !== false && ($now - $mtime) > $maxLifetime) {
+                if (@\unlink($file)) {
+                    $count++;
                 }
             }
         }
