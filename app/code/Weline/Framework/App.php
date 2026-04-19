@@ -22,6 +22,7 @@ use Weline\Framework\Http\Response;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\DevToolMemoryLimitBootstrap;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
@@ -88,6 +89,7 @@ class App
 
     public function bootstrapRequestCycle(): void
     {
+        DevToolMemoryLimitBootstrap::captureProcessMemoryBaselineIfUnset();
         self::init();
         self::syncCurrentContextFromGlobals();
 
@@ -102,6 +104,7 @@ class App
 
         $this->primeRequestRouteHints($this->getCurrentRequestUri());
         RequestContext::init();
+        DevToolMemoryLimitBootstrap::applyIfDevToolSessionActive();
     }
 
     public function dispatchRunBefore(): void

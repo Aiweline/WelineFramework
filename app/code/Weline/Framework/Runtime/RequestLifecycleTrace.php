@@ -17,8 +17,8 @@ class RequestLifecycleTrace
 {
     private static bool $stateManagerRegistered = false;
 
-    /** 极端重试/风暴时防止静态 span 无限增长导致 OOM */
-    private const MAX_SPANS = 4096;
+    /** 极端重试/风暴时防止静态 span 无限增长导致 OOM（可被 wls.debug.request_trace_max_spans 覆盖） */
+    private const DEFAULT_MAX_SPANS = 4096;
 
     private const HEAVY_ROUTE_PREFIXES = [
         '/pagebuilder/backend/ai-site-agent/',
@@ -26,6 +26,12 @@ class RequestLifecycleTrace
     ];
 
     private static bool $maxSpansLogged = false;
+
+    /** @var positive-int|null 缓存 getMaxSpansCap()，reset 时清空 */
+    private static ?int $maxSpansCapCache = null;
+
+    /** @var int|null 缓存 getMetaStringMaxBytes()（0=不截断），reset 时清空 */
+    private static ?int $metaStringMaxBytesCache = null;
 
     /** @var list<array{name: string, duration_ms: float, category?: string, parent?: string, meta?: array<string, mixed>}> */
     private static array $spans = [];
@@ -138,10 +144,11 @@ class RequestLifecycleTrace
         if (!self::isEnabled()) {
             return;
         }
-        if (\count(self::$spans) >= self::MAX_SPANS) {
+        $maxSpans = self::getMaxSpansCap();
+        if (\count(self::$spans) >= $maxSpans) {
             if (!self::$maxSpansLogged) {
                 self::$maxSpansLogged = true;
-                \error_log('[RequestLifecycleTrace] span 已达上限 ' . (string) self::MAX_SPANS . '，已停止记录直至 reset');
+                \error_log('[RequestLifecycleTrace] span 已达上限 ' . (string) $maxSpans . '，已停止记录直至 reset');
             }
 
             return;
@@ -160,9 +167,81 @@ class RequestLifecycleTrace
             $span['parent'] = $resolvedParent;
         }
         if (!empty($meta)) {
-            $span['meta'] = $meta;
+            $span['meta'] = self::sanitizeMetaForStorage($meta);
         }
         self::$spans[] = $span;
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     * @return array<string, mixed>
+     */
+    private static function sanitizeMetaForStorage(array $meta): array
+    {
+        $max = self::getMetaStringMaxBytes();
+        if ($max <= 0) {
+            return $meta;
+        }
+
+        $suffix = '...(truncated)';
+        $out = [];
+        foreach ($meta as $key => $value) {
+            if (\is_string($value) && \strlen($value) > $max) {
+                $out[$key] = \substr($value, 0, $max) . $suffix;
+                continue;
+            }
+            $out[$key] = $value;
+        }
+
+        return $out;
+    }
+
+    private static function getMaxSpansCap(): int
+    {
+        if (self::$maxSpansCapCache !== null) {
+            return self::$maxSpansCapCache;
+        }
+
+        $cap = self::DEFAULT_MAX_SPANS;
+        if (\class_exists(\Weline\Framework\App\Env::class, false)) {
+            $configured = (int)\Weline\Framework\App\Env::get('wls.debug.request_trace_max_spans', self::DEFAULT_MAX_SPANS);
+            if ($configured > 0) {
+                $cap = \min($configured, 65535);
+            }
+        }
+
+        self::$maxSpansCapCache = \max(1, $cap);
+
+        return self::$maxSpansCapCache;
+    }
+
+    private static function getMetaStringMaxBytes(): int
+    {
+        if (self::$metaStringMaxBytesCache !== null) {
+            return self::$metaStringMaxBytesCache;
+        }
+
+        if (!\class_exists(\Weline\Framework\App\Env::class, false)) {
+            self::$metaStringMaxBytesCache = 0;
+
+            return 0;
+        }
+
+        $configured = (int)\Weline\Framework\App\Env::get('wls.debug.request_trace_meta_max_bytes', 0);
+        if ($configured === 0) {
+            self::$metaStringMaxBytesCache = 0;
+
+            return 0;
+        }
+        if ($configured > 0) {
+            self::$metaStringMaxBytesCache = \min($configured, 1048576);
+
+            return self::$metaStringMaxBytesCache;
+        }
+
+        self::$metaStringMaxBytesCache = 2048;
+
+        return self::$metaStringMaxBytesCache;
     }
 
     /**
@@ -317,6 +396,8 @@ class RequestLifecycleTrace
         self::$startStack = [];
         self::$currentParentStack = [];
         self::$maxSpansLogged = false;
+        self::$maxSpansCapCache = null;
+        self::$metaStringMaxBytesCache = null;
     }
 
     private static function currentRequestUri(): string
