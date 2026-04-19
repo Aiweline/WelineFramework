@@ -13,7 +13,7 @@ use Weline\Framework\Console\CommandAbstract;
  * 2. 匹配 Fatal/ParseError/E_COMPILE_ERROR/TypeError/PDOException 等关键错误
  * 3. 与上次记录去重（hash 签名，缓存于 var/cache/wls_error_last_signature.json）
  * 4. 命中新错误时：
- *    - 写入 var/log/wls_monitor.log（独立告警日志）
+ *    - 写入 var/log/wls/wls_monitor.log（独立告警日志，与其它 WLS 日志同目录）
  *    - 调用 Agent_CursorSupervisor AutoTaskGeneratorService 生成修复任务
  */
 class WlsErrorScanner extends CommandAbstract
@@ -39,11 +39,11 @@ class WlsErrorScanner extends CommandAbstract
         'PDOException',
     ];
 
-    /** 去重缓存文件 */
-    private const SIGNATURE_CACHE = 'weline/cache/wls_error_last_signature.json';
+    /** 去重缓存文件（相对 var/） */
+    private const SIGNATURE_CACHE = 'cache/wls_error_last_signature.json';
 
-    /** 告警日志 */
-    private const ALERT_LOG = 'weline/log/wls_monitor.log';
+    /** 告警日志（相对 var/，与 WlsLogService 默认 var/log/wls 一致） */
+    private const ALERT_LOG = 'log/wls/wls_monitor.log';
 
     /** 任务池文件 */
     private const TASKS_FILE = 'dev/ai/agents/tasks.json';
