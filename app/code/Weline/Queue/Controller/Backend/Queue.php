@@ -47,6 +47,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         $status = $this->request->getGet('status');
         $search = $this->request->getGet('q');
         $id = $this->request->getGet('id');
+        $bizKey = \trim((string)$this->request->getGet('biz_key', ''));
         
         $this->queue->joinModel(\Weline\Queue\Model\Queue\Type::class, 't', 'main_table.type_id=t.type_id', 'left');
         
@@ -58,6 +59,9 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         }
         if ($id) {
             $this->queue->where('main_table.' . $this->queue::schema_fields_ID, $id);
+        }
+        if ($bizKey !== '') {
+            $this->queue->where('main_table.' . \Weline\Queue\Model\Queue::schema_fields_BIZ_KEY, $bizKey);
         }
         if ($status) {
             $this->queue->where('main_table.status', $status);
@@ -72,6 +76,8 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         $this->assign('queues', $this->queue->getItems());
         $this->assign('module', $module);
         $this->assign('status', $status);
+        $this->assign('q', $search);
+        $this->assign('biz_key', $bizKey);
         $this->assign('stats', $stats);
         $this->assign('pagination', $this->queue->getPagination());
         return $this->fetch();
@@ -157,6 +163,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         if (empty($name)) {
             $name = $type->getName();
         }
+        $postAll = $this->request->getPost();
 
         # 创建队列 或者 编辑队列 id
         $queue_id = $this->request->getPost('id', 0);
@@ -165,18 +172,26 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             $this->queue->load($queue_id);
             $this->queue->setTypeId($type_id)
                 ->setName($name)
-                ->setModule($module)
-                ->save();
+                ->setModule($module);
+            if (\array_key_exists('biz_key', $postAll)) {
+                $bk = \trim((string)$postAll['biz_key']);
+                $this->queue->setBizKey($bk !== '' ? $bk : null);
+            }
+            $this->queue->save();
             if (!$this->queue->getId()) {
                 $json['msg'] = __('队列不存在');
                 return $this->fetchJson($json);
             }
         } else {
             try {
-                $queue_id = $this->queue->setTypeId($type_id)
+                $this->queue->setTypeId($type_id)
                     ->setName($name)
-                    ->setModule($module)
-                    ->save();
+                    ->setModule($module);
+                if (\array_key_exists('biz_key', $postAll)) {
+                    $bk = \trim((string)$postAll['biz_key']);
+                    $this->queue->setBizKey($bk !== '' ? $bk : null);
+                }
+                $queue_id = $this->queue->save();
                 $edit = 0;
             } catch (ModelException $e) {
                 $json['msg'] = $e->getMessage();
