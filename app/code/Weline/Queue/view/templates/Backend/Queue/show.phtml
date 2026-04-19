@@ -322,6 +322,20 @@ $statusText = match($status) {
                         
                         <div class="weline-queue-detail-item">
                             <div class="weline-queue-detail-label">
+                                <i class="mdi mdi-key-variant"></i>
+                                <lang>业务键</lang>
+                            </div>
+                            <div class="weline-queue-detail-value">
+                                <if condition="queue.biz_key">
+                                    <code style="font-size:0.85rem;word-break:break-all;">{{queue.biz_key}}</code>
+                                <else/>
+                                    <span style="color: var(--backend-color-text-tertiary, #adb5bd);">-</span>
+                                </if>
+                            </div>
+                        </div>
+
+                        <div class="weline-queue-detail-item">
+                            <div class="weline-queue-detail-label">
                                 <i class="mdi mdi-cog-outline"></i>
                                 <lang>进程 ID</lang>
                             </div>
