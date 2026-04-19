@@ -101,11 +101,19 @@
                 <!-- 工具栏 -->
                 <div class="weline-queue-toolbar d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <div class="weline-queue-search">
+                        <div class="weline-queue-search d-flex align-items-center flex-wrap gap-2">
+                            <form method="get" action="@backend-url('*/backend/queue')" class="d-flex align-items-center gap-1 mb-0">
+                                <if condition="module"><input type="hidden" name="module" value="{{module}}"/></if>
+                                <if condition="status"><input type="hidden" name="status" value="{{status}}"/></if>
+                                <if condition="q"><input type="hidden" name="q" value="{{q}}"/></if>
+                                <input type="text" name="biz_key" class="form-control form-control-sm" style="width:200px;max-width:40vw;"
+                                       placeholder="@lang{业务键精确筛选}" value="{{biz_key}}"/>
+                                <button type="submit" class="btn btn-sm btn-outline-secondary"><lang>筛选</lang></button>
+                            </form>
                             <block class='Weline\Component\Block\Form\Search' id='queue-search'
                                    action='*/backend/queue'
                                    vars="req"
-                                   action-params="{module:req.module,status:req.status}"
+                                   action-params="{module:req.module,status:req.status,biz_key:req.biz_key}"
                                    method='get' keyword='q'
                                    value=''
                                    placeholder='搜索队列名称/内容/结果'></block>
@@ -192,6 +200,9 @@
                                         <div class="weline-queue-name" title="{{queue.name}}">
                                             <string>queue.name|30</string>
                                         </div>
+                                        <if condition="queue.biz_key">
+                                            <div class="text-muted small font-monospace" title="@lang{业务键}">{{queue.biz_key}}</div>
+                                        </if>
                                         <if condition="queue.pid">
                                             <div class="weline-queue-pid">
                                                 <i class="mdi mdi-cog-outline"></i>
@@ -744,9 +755,11 @@
         if (statusFilter) {
             statusFilter.addEventListener('change', function() {
                 var status = this.value;
-                var url = new URL(config.baseUrl, window.location.origin);
+                var url = new URL(window.location.href);
                 if (status) {
                     url.searchParams.set('status', status);
+                } else {
+                    url.searchParams.delete('status');
                 }
                 window.location.href = url.toString();
             });
