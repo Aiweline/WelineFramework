@@ -55,14 +55,19 @@ final class WlsSharedStorage implements SessionStorageInterface
                 $fileData = $this->fallbackStorage()->read($sessionId);
                 if ($fileData !== []) {
                     $ttl = $this->defaultTtl > 0 ? $this->defaultTtl : 3600;
-                    $facade->write($sessionId, $fileData, $ttl);
-                    $data = $fileData;
-                    if (\function_exists('w_log_warning')) {
-                        w_log_warning(
-                            '[WlsSharedStorage] Session 已从文件回灌到共享存储（此前可能仅写入了 fallback 文件）。sid=' . \substr($sessionId, 0, 8) . '...',
-                            ['keys' => \count($data)],
-                            'session'
-                        );
+                    $repairOk = $facade->write($sessionId, $fileData, $ttl);
+                    if ($repairOk) {
+                        $data = $fileData;
+                        if (\function_exists('w_log_warning')) {
+                            w_log_warning(
+                                '[WlsSharedStorage] Session 已从文件回灌到共享存储（此前可能仅写入了 fallback 文件）。sid=' . \substr($sessionId, 0, 8) . '...',
+                                ['keys' => \count($data)],
+                                'session'
+                            );
+                        }
+                    } else {
+                        $this->markSharedUnavailable('Shared session facade lost health during read repair');
+                        return $fileData;
                     }
                 }
             }
@@ -84,7 +89,12 @@ final class WlsSharedStorage implements SessionStorageInterface
         $facade = $this->sessionFacade();
         if ($facade !== null) {
             $ok = $facade->write($sessionId, $data, $ttl);
-            $this->persistFallbackMirror($sessionId, $data, $ttl);
+            if ($ok) {
+                $this->persistFallbackMirror($sessionId, $data, $ttl);
+            } else {
+                $this->markSharedUnavailable('Shared session facade is not healthy after write');
+                $ok = $this->fallbackStorage()->write($sessionId, $data, $ttl);
+            }
         } else {
             $ok = $this->fallbackStorage()->write($sessionId, $data, $ttl);
         }
@@ -98,7 +108,7 @@ final class WlsSharedStorage implements SessionStorageInterface
         if (!$ok && \function_exists('w_log_warning') && $facade !== null) {
             w_log_warning(
                 '[WlsSharedStorage] Session write failed, shared session facade is not healthy. sessionId=' . \substr($sessionId, 0, 8) . '...',
-                ['connected' => $facade->ping()],
+                ['connected' => false, 'fallback_reason' => $this->fallbackReason],
                 'session'
             );
         }
@@ -111,6 +121,9 @@ final class WlsSharedStorage implements SessionStorageInterface
         $facade = $this->sessionFacade();
         if ($facade !== null) {
             $okShared = $facade->destroy($sessionId);
+            if (!$okShared) {
+                $this->markSharedUnavailable('Shared session facade lost health during destroy');
+            }
             $okFile = $this->fallbackStorage()->destroy($sessionId);
             $ok = $okShared && $okFile;
         } else {
@@ -152,11 +165,14 @@ final class WlsSharedStorage implements SessionStorageInterface
 
     public function gc(int $maxLifetime): int
     {
+        // 共享存储 GC 与 var/session 镜像文件 GC 必须同时做：主存储淘汰后镜像可能仍留在磁盘。
+        $fileCleaned = $this->fallbackStorage()->gc($maxLifetime);
         $facade = $this->sessionFacade();
+        if ($facade === null) {
+            return $fileCleaned;
+        }
 
-        return $facade !== null
-            ? $facade->gc($maxLifetime)
-            : $this->fallbackStorage()->gc($maxLifetime);
+        return $facade->gc($maxLifetime) + $fileCleaned;
     }
 
     public function getConfig(): array
@@ -281,6 +297,16 @@ final class WlsSharedStorage implements SessionStorageInterface
                 ['keys' => \count($data), 'ttl' => $ttl],
                 'session'
             );
+        }
+    }
+
+    private function markSharedUnavailable(string $reason): void
+    {
+        $this->sharedUnavailableUntilTs = \time() + $this->retryIntervalSec;
+        $this->fallbackReason = $reason;
+        if ($this->sessionFacade !== null) {
+            $this->sessionFacade->disconnect();
+            $this->sessionFacade = null;
         }
     }
 }
