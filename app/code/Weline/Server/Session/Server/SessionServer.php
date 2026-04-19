@@ -19,6 +19,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Session\Server;
 
+use Weline\Framework\Session\Storage\FileStorage;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\SharedStateServiceRegistry;
 
@@ -657,6 +658,7 @@ final class SessionServer
         $now = \time();
         if ($now - $this->lastGcTime >= $this->gcInterval) {
             $this->store->gc();
+            $this->pruneFallbackSessionMirrorFiles();
             $this->lastGcTime = $now;
         }
 
@@ -670,6 +672,29 @@ final class SessionServer
         $this->refreshConnectedConsumerLeases();
         $this->pruneExpiredConsumerLeases();
         $this->syncIdleShutdownWindow();
+    }
+
+    /**
+     * WLS 共享 Session 写入成功时会在 var/session/ 落镜像；内存 GC 不会删除这些文件，此处按 mtime 定期清理过期镜像。
+     */
+    private function pruneFallbackSessionMirrorFiles(): void
+    {
+        $maxLifetime = (int) ($this->config['session_ttl'] ?? 3600);
+        if ($maxLifetime <= 0) {
+            return;
+        }
+        try {
+            $fileStorage = new FileStorage([
+                'lifetime' => $maxLifetime,
+                'path' => 'var/session/',
+            ]);
+            $pruned = $fileStorage->gc($maxLifetime);
+            if ($pruned > 0) {
+                $this->log("Pruned {$pruned} expired var/session mirror file(s)");
+            }
+        } catch (\Throwable $throwable) {
+            $this->log('Fallback session file GC failed: ' . $throwable->getMessage());
+        }
     }
 
     /**
