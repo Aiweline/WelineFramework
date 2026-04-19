@@ -10,7 +10,7 @@ use Weline\Server\Console\Server\WlsErrorScanner as WlsErrorScannerCommand;
  * WLS 错误扫描定时任务
  *
  * 每分钟扫描 var/log/wls 下的关键错误日志，检测 Fatal/ParseError/TypeError 等，
- * 去重后写入 wls_monitor.log 并触发 CursorSupervisor 自动修复任务。
+ * 去重后写入 var/log/wls/wls_monitor.log 并触发 CursorSupervisor 自动修复任务。
  */
 class WlsErrorScanner implements CronTaskInterface
 {
