@@ -65,7 +65,7 @@ final class WlsSharedStorageTest extends TestCase
             ->method('read')
             ->with('shared-session')
             ->willReturn(['foo' => 'bar']);
-        $facade->expects($this->once())
+        $facade->expects($this->atLeastOnce())
             ->method('ping')
             ->willReturn(true);
         $facade->expects($this->once())
@@ -115,6 +115,98 @@ final class WlsSharedStorageTest extends TestCase
 
         $data = $storage->read('split-brain-session');
         self::assertSame(['WF_BACKEND_USER_ID' => 1], $data);
-        self::assertSame([], $file->read('split-brain-session'));
+        self::assertSame(['WF_BACKEND_USER_ID' => 1], $file->read('split-brain-session'));
+    }
+
+    public function testWriteFallsBackAndEntersCooldownWhenFacadeLosesHealth(): void
+    {
+        $facade = $this->getMockBuilder(SessionStateFacade::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['read', 'write', 'destroy', 'exists', 'touch', 'gc', 'getStats', 'ping', 'list', 'disconnect'])
+            ->getMock();
+
+        $facade->expects($this->once())
+            ->method('write')
+            ->with('fallback-after-write', ['foo' => 'bar'], 3600)
+            ->willReturn(false);
+        $facade->expects($this->atLeastOnce())
+            ->method('disconnect');
+
+        $storage = new WlsSharedStorage(
+            ['path' => $this->testPath, 'lifetime' => 3600, 'fallback_retry_interval_sec' => 5],
+            static fn(): SessionStateFacade => $facade,
+            new FileStorage(['path' => $this->testPath, 'lifetime' => 3600])
+        );
+
+        self::assertTrue($storage->write('fallback-after-write', ['foo' => 'bar'], 3600));
+        self::assertSame(['foo' => 'bar'], $storage->read('fallback-after-write'));
+
+        $stats = $storage->getStats();
+        self::assertSame('file_fallback', $stats['mode'] ?? null);
+        self::assertSame('Shared session facade is not healthy after write', $stats['fallback_reason'] ?? null);
+        self::assertFalse($storage->ping());
+    }
+
+    public function testReadRepairFallsBackWhenFacadeCannotBeRehydrated(): void
+    {
+        $file = new FileStorage(['path' => $this->testPath, 'lifetime' => 3600]);
+        $file->write('repair-fallback-session', ['WF_BACKEND_USER_ID' => 2], 3600);
+
+        $facade = $this->getMockBuilder(SessionStateFacade::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['read', 'write', 'destroy', 'exists', 'touch', 'gc', 'getStats', 'ping', 'list', 'disconnect'])
+            ->getMock();
+
+        $facade->expects($this->once())
+            ->method('read')
+            ->with('repair-fallback-session')
+            ->willReturn([]);
+        $facade->expects($this->once())
+            ->method('write')
+            ->with('repair-fallback-session', ['WF_BACKEND_USER_ID' => 2], 3600)
+            ->willReturn(false);
+        $facade->expects($this->atLeastOnce())
+            ->method('disconnect');
+
+        $storage = new WlsSharedStorage(
+            ['path' => $this->testPath, 'lifetime' => 3600, 'fallback_retry_interval_sec' => 5],
+            static fn(): SessionStateFacade => $facade,
+            $file
+        );
+
+        $data = $storage->read('repair-fallback-session');
+        self::assertSame(['WF_BACKEND_USER_ID' => 2], $data);
+
+        $stats = $storage->getStats();
+        self::assertSame('file_fallback', $stats['mode'] ?? null);
+        self::assertSame('Shared session facade lost health during read repair', $stats['fallback_reason'] ?? null);
+    }
+
+    /**
+     * 共享侧 GC 与 var/session 镜像 GC 需同时执行，返回值为两者清理数量之和。
+     */
+    public function testGcRunsSharedAndFallbackFiles(): void
+    {
+        $file = new FileStorage(['path' => $this->testPath, 'lifetime' => 3600]);
+        $hex = 'b2c3d4e5f6789012345678abcdef0123';
+        $file->write($hex, ['k' => 1], 3600);
+        $path = BP . \str_replace('/', DS, $this->testPath) . $hex;
+        \touch($path, \time() - 7200);
+
+        $facade = $this->getMockBuilder(SessionStateFacade::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['read', 'write', 'destroy', 'exists', 'touch', 'gc', 'getStats', 'ping', 'list'])
+            ->getMock();
+        $facade->method('ping')->willReturn(true);
+        $facade->expects($this->once())->method('gc')->with(3600)->willReturn(2);
+
+        $storage = new WlsSharedStorage(
+            ['path' => $this->testPath, 'lifetime' => 3600],
+            static fn(): SessionStateFacade => $facade,
+            $file
+        );
+
+        self::assertSame(3, $storage->gc(3600));
+        self::assertFileDoesNotExist($path);
     }
 }
