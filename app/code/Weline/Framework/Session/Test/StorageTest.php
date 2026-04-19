@@ -129,6 +129,30 @@ class StorageTest extends TestCase
         $this->storage->destroy($sessionId);
     }
 
+    public function testGcSkipsInfrastructureFiles(): void
+    {
+        $dir = BP . \str_replace('/', DS, $this->testPath);
+        $oldTs = \time() - 7200;
+        $sessionFile = $dir . 'a1b2c3d4e5f6789012345678abcdef01';
+        $tokenFile = $dir . 'session_server.token';
+        $datFile = $dir . 'wls_session_store.dat';
+        \file_put_contents($sessionFile, 'x');
+        \file_put_contents($tokenFile, 'token');
+        \file_put_contents($datFile, 'dat');
+        \touch($sessionFile, $oldTs);
+        \touch($tokenFile, $oldTs);
+        \touch($datFile, $oldTs);
+
+        $cleaned = $this->storage->gc(3600);
+
+        $this->assertSame(1, $cleaned);
+        $this->assertFileDoesNotExist($sessionFile);
+        $this->assertFileExists($tokenFile);
+        $this->assertFileExists($datFile);
+        @\unlink($tokenFile);
+        @\unlink($datFile);
+    }
+
     public function testGetConfig(): void
     {
         $config = $this->storage->getConfig();
