@@ -1940,6 +1940,8 @@ SCRIPT;
                     'confirmed_at' => (string)($scope['virtual_theme_plan']['confirmed_at'] ?? ''),
                     'plan_signature' => (string)($virtualThemePlan['signature'] ?? ''),
                 ],
+                'task_plan_markdown' => $markdown,
+                'task_plan_generated_at' => \date('Y-m-d H:i:s'),
                 'task_plan_structured' => $structured,
                 'task_plan_directory_tree' => $taskPlanDirectoryTree,
                 'task_plan_summary' => [
@@ -3618,6 +3620,8 @@ SCRIPT;
                     'last_target_scope' => $targetScope,
                     'last_round' => $round,
                 ],
+                'task_plan_markdown' => $markdown,
+                'task_plan_generated_at' => \date('Y-m-d H:i:s'),
                 'task_plan_structured' => $structured,
                 'task_plan_directory_tree' => $taskPlanDirectoryTree,
                 'task_plan_summary' => [
@@ -4107,13 +4111,15 @@ SCRIPT;
                     'queue_id' => (int)($queueRow['queue_id'] ?? 0),
                 ]);
                 $sse->sendEvent('info', [
-                    'message' => (string)__('已根据当前会话自动补建队列任务，将继续同步进度。'),
+                    'message' => (string)__('已根据当前会话自动补建队列任务，进度将异步刷新。'),
+                    'operation' => $operation,
                     'queue_id' => (int)($queueRow['queue_id'] ?? 0),
+                    'observer_detail' => true,
                 ]);
             }
 
             $sse->sendEvent('warning', [
-                'message' => (string)__('操作已进入系统队列，当前 SSE 仅观察队列状态与工作区进度。'),
+                'message' => (string)__('操作已进入系统队列，工作区进度将自动刷新。'),
                 'operation' => $operation,
                 'observer_mode' => true,
                 'background_mode' => true,
@@ -4121,7 +4127,14 @@ SCRIPT;
                 'queue_status' => (string)($queueRow['status'] ?? ''),
                 'biz_key' => (string)($queueRow['biz_key'] ?? ''),
             ]);
-            $observed = $this->observeDuplicateOperationStream($sse, $session, $adminId, $operation, $executionToken);
+            $observed = $this->observeDuplicateOperationStream(
+                $sse,
+                $session,
+                $adminId,
+                $operation,
+                $executionToken,
+                true
+            );
             if (!(bool)($observed['success'] ?? true)) {
                 $sse->sendError(
                     (string)($observed['message'] ?? 'Operation failed.'),
@@ -4134,6 +4147,7 @@ SCRIPT;
                 'operation' => $operation,
                 'data' => \is_array($observed['data'] ?? null) ? $observed['data'] : [],
                 'state' => \is_array($observed['state'] ?? null) ? $observed['state'] : [],
+                'deferred_queue_progress' => (bool)($observed['deferred_queue_progress'] ?? false),
             ]);
             return;
         }
@@ -4259,14 +4273,15 @@ SCRIPT;
      * original executor is still running. Keep the duplicate connection in observer
      * mode so the UI continues receiving the remaining progress instead of ending early.
      *
-     * @return array{success: bool, message: string, data: array<string, mixed>, state: array<string, mixed>, http_code: int}
+     * @return array{success: bool, message: string, data: array<string, mixed>, state: array<string, mixed>, http_code: int, deferred_queue_progress?: bool}
      */
     private function observeDuplicateOperationStream(
         SseWriter $sse,
         AiSiteAgentSession $session,
         int $adminId,
         string $operation,
-        string $executionToken
+        string $executionToken,
+        bool $queueCheckpointOnly = false
     ): array {
         // 增加超时时间以支持长时间的AI生成任务
         // 从240秒增加到600秒（10分钟），适应大型页面生成场景
@@ -4291,13 +4306,36 @@ SCRIPT;
         );
         $lastEventId = $this->forwardObservedOperationEvents($sse, $session, $adminId, $recentEvents, $lastEventId);
         $initialQueueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId);
-        [$lastQueueProcess, $lastQueueResultLength] = $this->forwardObservedQueueSignals(
+        if (\is_array($initialQueueRow) && $initialQueueRow !== [] && $sse->isAlive()) {
+            $this->emitQueueObserverQueueDetailEvents($sse, $initialQueueRow, $operation);
+        }
+        $lastQueueStatus = '';
+        $lastQueuePid = 0;
+        [$lastQueueProcess, $lastQueueResultLength, $lastQueueStatus, $lastQueuePid] = $this->forwardObservedQueueSignals(
             $sse,
             $initialQueueRow,
             $operation,
             $lastQueueProcess,
-            $lastQueueResultLength
+            $lastQueueResultLength,
+            $lastQueueStatus,
+            $lastQueuePid
         );
+
+        if ($queueCheckpointOnly) {
+            $freshCheckpoint = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $stateCheckpoint = $this->buildWorkspaceEventStatePayload(
+                $this->buildWorkspaceState($freshCheckpoint, $adminId, 80, true)
+            );
+
+            return [
+                'success' => true,
+                'message' => (string)__('队列任务已提交，进度将异步刷新，无需保持本连接。'),
+                'data' => $this->buildObservedOperationResultData($operation, $stateCheckpoint),
+                'state' => $stateCheckpoint,
+                'http_code' => 200,
+                'deferred_queue_progress' => true,
+            ];
+        }
 
         $timedOut = false;
         while ($sse->isAlive()) {
@@ -4320,12 +4358,14 @@ SCRIPT;
             $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
             $queueId = (int)($activeOperation['queue_id'] ?? $queueId);
             $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId);
-            [$lastQueueProcess, $lastQueueResultLength] = $this->forwardObservedQueueSignals(
+            [$lastQueueProcess, $lastQueueResultLength, $lastQueueStatus, $lastQueuePid] = $this->forwardObservedQueueSignals(
                 $sse,
                 $queueRow,
                 $operation,
                 $lastQueueProcess,
-                $lastQueueResultLength
+                $lastQueueResultLength,
+                $lastQueueStatus,
+                $lastQueuePid
             );
             if (!$this->isObservedOperationStillRunning($activeOperation, $operation, $executionToken, $queueRow)) {
                 break;
@@ -4409,21 +4449,152 @@ SCRIPT;
     }
 
     /**
-     * @return array{0:string,1:int}
+     * 供观察模式 SSE 输出的队列行快照（不含完整 content/result，避免泄露敏感字段）。
+     *
+     * @param array<string, mixed> $queueRow
+     *
+     * @return array<string, mixed>
+     */
+    private function buildQueueObserverPublicSnapshot(array $queueRow): array
+    {
+        $queueId = (int)($queueRow['queue_id'] ?? 0);
+        $name = \trim((string)($queueRow['name'] ?? ''));
+        $module = \trim((string)($queueRow['module'] ?? ''));
+        $bizKey = \trim((string)($queueRow['biz_key'] ?? ''));
+        $status = \trim((string)($queueRow['status'] ?? ''));
+        $pid = (int)($queueRow['pid'] ?? 0);
+        $typeId = (int)($queueRow['type_id'] ?? 0);
+        $finished = (int)($queueRow['finished'] ?? 0);
+        $startAt = \trim((string)($queueRow['start_at'] ?? ''));
+        $endAt = \trim((string)($queueRow['end_at'] ?? ''));
+
+        $publicIdHint = '';
+        $contentRaw = (string)($queueRow['content'] ?? '');
+        if ($contentRaw !== '') {
+            $decoded = \json_decode($contentRaw, true);
+            if (\is_array($decoded)) {
+                $pidStr = \trim((string)($decoded['public_id'] ?? ''));
+                if ($pidStr !== '') {
+                    if (\defined('DEV') && DEV) {
+                        $publicIdHint = $pidStr;
+                    } else {
+                        $len = \strlen($pidStr);
+                        $publicIdHint = $len > 12 ? \substr($pidStr, 0, 6) . '…' . \substr($pidStr, -4) : $pidStr;
+                    }
+                }
+            }
+        }
+
+        return [
+            'queue_id' => $queueId,
+            'name' => $name,
+            'module' => $module,
+            'biz_key' => $bizKey,
+            'status' => $status,
+            'pid' => $pid,
+            'type_id' => $typeId,
+            'finished' => $finished,
+            'start_at' => $startAt,
+            'end_at' => $endAt,
+            'public_id_hint' => $publicIdHint,
+        ];
+    }
+
+    /**
+     * 队列创建/连接观察流后，向前台打印可读的队列元数据（多行 detail_lines + 结构化快照）。
+     *
+     * @param array<string, mixed> $queueRow
+     */
+    private function emitQueueObserverQueueDetailEvents(SseWriter $sse, array $queueRow, string $operation): void
+    {
+        if (!$sse->isAlive()) {
+            return;
+        }
+        $snap = $this->buildQueueObserverPublicSnapshot($queueRow);
+        $lines = [
+            (string)__('【队列】任务已就绪，以下为队列快照（进度请在工作区自动刷新）。'),
+            (string)__('队列编号：%{id}', ['id' => (string)$snap['queue_id']]),
+            (string)__('业务键 biz_key：%{k}', ['k' => ($snap['biz_key'] !== '' ? (string)$snap['biz_key'] : '-')]),
+            (string)__('任务：%{name}（模块 %{module}）', [
+                'name' => ($snap['name'] !== '' ? (string)$snap['name'] : '-'),
+                'module' => ($snap['module'] !== '' ? (string)$snap['module'] : '-'),
+            ]),
+            (string)__('状态：%{status}；调度 PID：%{pid}', [
+                'status' => (string)$snap['status'],
+                'pid' => (string)$snap['pid'],
+            ]),
+            (string)__('类型 ID：%{tid}；完成标记：%{fin}', [
+                'tid' => (string)$snap['type_id'],
+                'fin' => (string)$snap['finished'],
+            ]),
+        ];
+        if (($snap['start_at'] ?? '') !== '' || ($snap['end_at'] ?? '') !== '') {
+            $lines[] = (string)__('开始/结束：%{s} / %{e}', [
+                's' => ($snap['start_at'] !== '' ? (string)$snap['start_at'] : '-'),
+                'e' => ($snap['end_at'] !== '' ? (string)$snap['end_at'] : '-'),
+            ]);
+        }
+        if (($snap['public_id_hint'] ?? '') !== '') {
+            $lines[] = (\defined('DEV') && DEV)
+                ? (string)__('会话 public_id：%{h}', ['h' => (string)$snap['public_id_hint']])
+                : (string)__('会话 public_id（脱敏）：%{h}', ['h' => (string)$snap['public_id_hint']]);
+        }
+
+        $sse->sendEvent('info', [
+            'message' => (string)($lines[0] ?? ''),
+            'detail_lines' => $lines,
+            'queue_snapshot' => $snap,
+            'operation' => $operation,
+            'queue_id' => (int)$snap['queue_id'],
+            'queue_status' => (string)$snap['status'],
+            'observer_detail' => true,
+        ]);
+    }
+
+    /**
+     * @return array{0:string,1:int,2:string,3:int}
      */
     private function forwardObservedQueueSignals(
         SseWriter $sse,
         ?array $queueRow,
         string $operation,
         string $lastQueueProcess,
-        int $lastQueueResultLength
+        int $lastQueueResultLength,
+        string $lastQueueStatus,
+        int $lastQueuePid
     ): array {
         if (!\is_array($queueRow) || $queueRow === []) {
-            return [$lastQueueProcess, $lastQueueResultLength];
+            return [$lastQueueProcess, $lastQueueResultLength, $lastQueueStatus, $lastQueuePid];
         }
 
         $queueId = (int)($queueRow['queue_id'] ?? 0);
         $queueStatus = \trim((string)($queueRow['status'] ?? ''));
+        $queuePid = (int)($queueRow['pid'] ?? 0);
+
+        if ($queueStatus !== '' && $lastQueueStatus !== '' && $queueStatus !== $lastQueueStatus) {
+            $sse->sendEvent('info', [
+                'message' => (string)__('队列状态变更：%{from} → %{to}', [
+                    'from' => $lastQueueStatus,
+                    'to' => $queueStatus,
+                ]),
+                'operation' => $operation,
+                'queue_id' => $queueId,
+                'queue_status' => $queueStatus,
+                'observer_detail' => true,
+            ]);
+        }
+        if ($lastQueuePid === 0 && $queuePid > 0) {
+            $sse->sendEvent('info', [
+                'message' => (string)__('队列已被 worker 领取执行（PID %{pid}）。', ['pid' => (string)$queuePid]),
+                'operation' => $operation,
+                'queue_id' => $queueId,
+                'queue_status' => $queueStatus,
+                'observer_detail' => true,
+            ]);
+        }
+
+        $nextQueueStatus = $queueStatus !== '' ? $queueStatus : $lastQueueStatus;
+
         $process = \trim((string)($queueRow['process'] ?? ''));
         if ($process !== '' && $process !== $lastQueueProcess) {
             $sse->sendEvent('progress', [
@@ -4461,7 +4632,7 @@ SCRIPT;
             $lastQueueResultLength = $resultLength;
         }
 
-        return [$lastQueueProcess, $lastQueueResultLength];
+        return [$lastQueueProcess, $lastQueueResultLength, $nextQueueStatus, $queuePid];
     }
 
     /**
@@ -6011,6 +6182,8 @@ SCRIPT;
             'public_id' => $session->getPublicId(),
             'admin_id' => $adminId,
             'execution_token' => $executionToken,
+            'operation' => $operation,
+            'stage' => $this->resolveAiSiteQueueStage($operation),
         ];
         if ($operation === 'build') {
             $content['scope_patch'] = $scopePatch;
@@ -6038,12 +6211,24 @@ SCRIPT;
      */
     private function buildAiSiteQueueBizKey(int $sessionId, string $operation): string
     {
-        $raw = 'glr_aisite:' . $sessionId . ':' . $operation;
+        $raw = 'glr_aisite:session:' . $sessionId
+            . ':stage:' . $this->resolveAiSiteQueueStage($operation)
+            . ':operation:' . $operation;
         if (\strlen($raw) > 191) {
             return \substr($raw, 0, 191);
         }
 
         return $raw;
+    }
+
+    private function resolveAiSiteQueueStage(string $operation): string
+    {
+        return match ($operation) {
+            'plan' => AiSiteAgentSession::STAGE_PLAN,
+            'task_plan', 'build' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'publish' => AiSiteAgentSession::STAGE_PUBLISH,
+            default => 'workspace',
+        };
     }
 
     /**
