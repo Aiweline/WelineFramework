@@ -20,6 +20,7 @@ use Weline\Queue\Model\Queue\Type;
 #[Table(comment: '任务队列')]
 #[Index(name: 'type_id', columns: ['type_id'])]
 #[Index(name: 'idx_finished', columns: ['finished'])]
+#[Index(name: 'idx_biz_key', columns: ['biz_key'])]
 class Queue extends EavModel
 {
     const entity_code = 'queue';
@@ -54,6 +55,9 @@ class Queue extends EavModel
     public const schema_fields_auto = 'auto';
     #[Col('varchar', 255, nullable: false, comment: '模组')]
     public const schema_fields_module = 'module';
+    /** 业务侧自定义检索键（如会话/幂等标识），可建索引精确定位；留空表示未使用 */
+    #[Col('varchar', 191, nullable: true, comment: '业务检索键')]
+    public const schema_fields_BIZ_KEY = 'biz_key';
     public const status_pending = 'pending';
     public const status_running = 'running';
     public const status_done = 'done';
@@ -117,6 +121,32 @@ public function getTypeId(): int
     public function getModule(): string
     {
         return (string)$this->getData(self::schema_fields_module);
+    }
+
+    public function getBizKey(): string
+    {
+        $v = $this->getData(self::schema_fields_BIZ_KEY);
+
+        return ($v === null || $v === '') ? '' : (string)$v;
+    }
+
+    /**
+     * 设置业务检索键；空字符串会写入 NULL，便于索引稀疏存储
+     */
+    public function setBizKey(?string $bizKey): static
+    {
+        if ($bizKey === null) {
+            return $this->setData(self::schema_fields_BIZ_KEY, null);
+        }
+        $v = \trim($bizKey);
+        if ($v === '') {
+            return $this->setData(self::schema_fields_BIZ_KEY, null);
+        }
+        if (\strlen($v) > 191) {
+            $v = \substr($v, 0, 191);
+        }
+
+        return $this->setData(self::schema_fields_BIZ_KEY, $v);
     }
     public function setStartAt(string $start_at): static
     {
