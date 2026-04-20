@@ -35,9 +35,48 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         $firstBlock = $artifacts['plan_json']['pages']['home_page']['blocks'][0] ?? [];
         self::assertArrayHasKey('content', $firstBlock);
         self::assertArrayHasKey('why', $firstBlock);
+        self::assertStringNotContainsString('围绕', (string)($firstBlock['content'] ?? ''));
+        self::assertStringNotContainsString('阶段一仅给方向', (string)($firstBlock['content'] ?? ''));
+        self::assertNotEmpty($firstBlock['field_plan'][0]['sample'] ?? '');
+        self::assertStringNotContainsString('标题围绕', (string)($firstBlock['field_plan'][0]['sample'] ?? ''));
         self::assertIsArray($artifacts['structured'] ?? null);
         self::assertIsArray($artifacts['execution_blueprint'] ?? null);
         self::assertNotEmpty($artifacts['execution_blueprint']['tasks'] ?? []);
+        self::assertSame('stage1_shared_first_block_plan_v2', (string)($artifacts['execution_blueprint']['build_method'] ?? ''));
+        self::assertIsArray($artifacts['execution_blueprint']['theme_context_snapshot'] ?? null);
+        self::assertNotSame('', (string)($artifacts['execution_blueprint']['theme_context_snapshot']['context_hash'] ?? ''));
+        self::assertIsArray($artifacts['execution_blueprint']['shared_prompt_context'] ?? null);
+        self::assertIsArray($artifacts['structured']['shared_plan']['shared_prompt_context'] ?? null);
+        self::assertIsArray($artifacts['structured']['page_plans']['home_page'] ?? null);
+        self::assertSame(
+            (string)($artifacts['execution_blueprint']['shared_prompt_context']['context_hash'] ?? ''),
+            (string)($artifacts['structured']['page_plans']['home_page']['shared_context_hash'] ?? '')
+        );
+        self::assertIsArray($artifacts['structured']['block_index']['flat'] ?? null);
+        self::assertArrayHasKey('shared:header', $artifacts['structured']['block_index']['flat']);
+        self::assertIsArray($artifacts['plan_workbench']['stage1']['page_tabs_state'] ?? null);
+        self::assertNotSame('', (string)($artifacts['structured']['page_plans']['home_page']['page_context_hash'] ?? ''));
+        self::assertSame(
+            (string)($artifacts['structured']['page_plans']['home_page']['page_context_hash'] ?? ''),
+            (string)($artifacts['plan_workbench']['stage1']['page_tabs_state'][0]['page_context_hash'] ?? '')
+        );
+        self::assertIsArray($artifacts['plan_workbench']['stage1']['interaction_state'] ?? null);
+        self::assertSame('home_page', (string)($artifacts['plan_workbench']['stage1']['interaction_state']['active_page_key'] ?? ''));
+        self::assertSame(
+            ['refine', 'rebuild', 'delete'],
+            $artifacts['plan_workbench']['stage1']['interaction_state']['block_actions']['shared:header'] ?? []
+        );
+        self::assertSame(
+            ['refine_page', 'rebuild_page', 'create_block'],
+            $artifacts['plan_workbench']['stage1']['interaction_state']['page_actions']['home_page'] ?? []
+        );
+        self::assertIsArray($artifacts['plan_workbench']['confirmed']['block_index'] ?? null);
+        $sharedTask = $artifacts['execution_blueprint']['tasks'][0] ?? [];
+        self::assertArrayHasKey('implementation_detail', $sharedTask);
+        self::assertArrayHasKey('realtime_content', $sharedTask);
+        $pageTask = $artifacts['execution_blueprint']['tasks'][2] ?? [];
+        self::assertArrayHasKey('implementation_detail', $pageTask['block'] ?? []);
+        self::assertArrayHasKey('realtime_content', $pageTask['block'] ?? []);
     }
 
     public function testRefineDraftPlanAddsChangeScopeReport(): void
@@ -97,6 +136,38 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertIsArray($artifacts['plan_json'] ?? null);
     }
 
+    public function testBuildPlanArtifactsByAiStreamFallsBackToDeterministicInFakeMode(): void
+    {
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::never())->method('generateStream');
+
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $aiService
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Fake Mode Plan',
+            'brief_description' => 'Use deterministic plan generation for fake mode.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+            'fake_mode' => 1,
+        ], [
+            'site_title' => 'Fake Mode Plan',
+            'brief_description' => 'Use deterministic plan generation for fake mode.',
+        ], [
+            'instruction' => 'Refine only the homepage hero.',
+            'target_scope' => 'page:home_page:block:hero',
+        ]);
+
+        self::assertSame(0, (int)($artifacts['ai_generated'] ?? -1));
+        self::assertSame(1, (int)($artifacts['ai_fallback'] ?? 0));
+        self::assertSame('deterministic', (string)($artifacts['generation_source'] ?? ''));
+        self::assertNotSame('', (string)($artifacts['markdown'] ?? ''));
+        self::assertIsArray($artifacts['plan_json'] ?? null);
+        self::assertNotEmpty($artifacts['plan_json']['pages']['home_page']['blocks'] ?? []);
+    }
+
     public function testBuildPlanArtifactsOnlyUsesSelectedPageTypes(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
@@ -145,6 +216,74 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         );
     }
 
+    public function testReorderDraftPlanBlocksUpdatesPlanJsonAndExecutionBlueprintOrder(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $artifacts = $service->buildPlanArtifacts([
+            'site_title' => 'Sortable Plan Test',
+            'brief_description' => 'Need multiple sections that can be reordered.',
+            'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'Sortable Plan Test',
+            'brief_description' => 'Need multiple sections that can be reordered.',
+        ]);
+
+        $pageType = '';
+        $originalKeys = [];
+        foreach (($artifacts['plan_json']['pages'] ?? []) as $candidatePageType => $page) {
+            $candidateBlocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+            $candidateKeys = \array_values(\array_filter(\array_map(
+                static fn(array $block): string => \trim((string)($block['block_key'] ?? '')),
+                $candidateBlocks
+            )));
+            if (\count($candidateKeys) >= 2) {
+                $pageType = (string)$candidatePageType;
+                $originalKeys = $candidateKeys;
+                break;
+            }
+        }
+
+        self::assertNotSame('', $pageType);
+        self::assertGreaterThanOrEqual(2, \count($originalKeys));
+
+        $orderedKeys = \array_values(\array_reverse($originalKeys));
+        $scope = [
+            'plan_json' => $artifacts['plan_json'],
+            'plan_markdown' => $artifacts['markdown'],
+            'plan_structured' => $artifacts['structured'],
+            'plan_workbench' => $artifacts['plan_workbench'],
+            'execution_blueprint_draft' => $artifacts['execution_blueprint'],
+        ];
+
+        $reordered = $service->reorderDraftPlanBlocks($scope, $pageType, $orderedKeys);
+
+        self::assertSame(
+            $orderedKeys,
+            \array_values(\array_map(
+                static fn(array $block): string => (string)($block['block_key'] ?? ''),
+                $reordered['plan_json']['pages'][$pageType]['blocks'] ?? []
+            ))
+        );
+        self::assertSame(
+            $orderedKeys,
+            \array_values(\array_map(
+                static fn(array $block): string => (string)($block['block_key'] ?? ''),
+                $reordered['structured']['page_plans'][$pageType]['blocks'] ?? []
+            ))
+        );
+
+        $pageTaskBlockKeys = \array_values(\array_map(
+            static fn(array $task): string => (string)($task['block']['block_key'] ?? ''),
+            \array_values(\array_filter(
+                \is_array($reordered['execution_blueprint']['tasks'] ?? null) ? $reordered['execution_blueprint']['tasks'] : [],
+                static fn(array $task): bool => (string)($task['page_type'] ?? '') === $pageType
+                    && \trim((string)($task['block']['block_key'] ?? '')) !== ''
+            ))
+        ));
+        self::assertSame($orderedKeys, $pageTaskBlockKeys);
+    }
+
     public function testBuildAiPlanPromptContainsStageOneMustConstraints(): void
     {
         $capturedPrompt = null;
@@ -177,12 +316,83 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         ]);
 
         self::assertIsString($capturedPrompt);
-        self::assertStringContainsString('第一阶段只输出 plan，不允许出现 build started / executing / task running / log stream / percent complete 等执行态措辞。', $capturedPrompt);
-        self::assertStringContainsString('必须输出 stage2_task_hints，并显式说明每个页面/区块将如何进入第二阶段任务拆分。', $capturedPrompt);
+        self::assertStringContainsString('The plan must contain final-ready content samples, not writing instructions.', $capturedPrompt);
+        self::assertStringContainsString('Never write blueprint guidance such as "围绕...说明"', $capturedPrompt);
+        self::assertStringContainsString('Never write process wording such as "标题围绕核心价值展开"', $capturedPrompt);
+        self::assertStringContainsString('field_plan.sample must be direct content', $capturedPrompt);
         self::assertStringContainsString('Selected page coverage hints (must all be represented in the final plan):', $capturedPrompt);
         self::assertStringContainsString('- home_page: must include page goal, conversion rhythm, block why, field plan, execution script, SEO structure, CTA usage, responsive guidance.', $capturedPrompt);
         self::assertStringContainsString('baseline_execution_blueprint:', $capturedPrompt);
         self::assertStringContainsString('"default_locale": "en_US"', $capturedPrompt);
+        self::assertStringNotContainsString('????????', $capturedPrompt);
+    }
+
+    public function testBuildPlanArtifactsByAiStreamCapsMaxTokensBelowProviderLimit(): void
+    {
+        $capturedParams = null;
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generateStream')
+            ->willReturnCallback(function (
+                string $prompt,
+                callable $callback,
+                $modelCode,
+                string $scenarioCode,
+                $locale,
+                array $params
+            ) use (&$capturedParams): void {
+                $capturedParams = $params;
+                $callback($this->buildValidAiPlanResponse());
+            });
+
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $aiService
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Token Limit Test',
+            'brief_description' => 'Keep stream token budget below the provider cap.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'Token Limit Test',
+            'brief_description' => 'Keep stream token budget below the provider cap.',
+        ]);
+
+        self::assertIsArray($capturedParams);
+        self::assertLessThanOrEqual(8192, (int)($capturedParams['max_tokens'] ?? 0));
+        self::assertLessThan(8192, (int)($capturedParams['max_tokens'] ?? 0));
+        self::assertSame(['type' => 'json_object'], $capturedParams['response_format'] ?? null);
+        self::assertSame('ai', (string)($artifacts['generation_source'] ?? 'ai'));
+    }
+
+    public function testBuildPlanArtifactsByAiStreamSanitizesPromptLikePlanCopy(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildPromptLikeAiPlanResponse())
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+            'default_locale' => 'en_US',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+
+        $hero = $artifacts['plan_json']['pages']['home_page']['blocks'][0] ?? [];
+        self::assertIsArray($hero);
+        self::assertStringNotContainsString('write the title around', (string)($hero['content'] ?? ''));
+        self::assertStringNotContainsString('标题围绕', (string)($hero['field_plan'][0]['sample'] ?? ''));
+        self::assertStringNotContainsString('List 2-4', (string)(($hero['execution_script']['feature_points'][0] ?? '')));
+        self::assertStringNotContainsString('Do not describe', (string)($hero['execution_script']['core_copy'] ?? ''));
+        self::assertStringContainsString('Plan Service Test', (string)($hero['content'] ?? ''));
     }
 
     private function createStreamingAiServiceStub(string $response): AiService
@@ -247,9 +457,9 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                                 'block_key' => 'hero',
                                 'goal' => 'Explain value',
                                 'keywords' => ['hero keyword'],
-                                'content' => 'Hero content direction',
+                                'content' => 'Welcome to Plan Service Test. Start with a clear value statement, a short proof line, and one CTA that leads visitors forward.',
                                 'field_plan' => [
-                                    ['field' => 'title', 'sample' => 'Hero title', 'reason' => 'Explain value quickly'],
+                                    ['field' => 'title', 'sample' => 'Welcome to Plan Service Test', 'reason' => 'Explain value quickly'],
                                 ],
                                 'execution_script' => [
                                     'feature_points' => ['Primary CTA'],
@@ -273,9 +483,9 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                                 'block_key' => 'hero',
                                 'goal' => 'Introduce brand',
                                 'keywords' => ['brand keyword'],
-                                'content' => 'About content direction',
+                                'content' => 'Learn how Plan Service Test works, why the team is credible, and what visitors can expect after getting in touch.',
                                 'field_plan' => [
-                                    ['field' => 'title', 'sample' => 'About title', 'reason' => 'State the brand clearly'],
+                                    ['field' => 'title', 'sample' => 'Why visitors trust Plan Service Test', 'reason' => 'State the brand clearly'],
                                 ],
                                 'execution_script' => [
                                     'feature_points' => ['Brand proof'],
@@ -299,5 +509,21 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                 ],
             ],
         ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    private function buildPromptLikeAiPlanResponse(): string
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        if (!\is_array($decoded)) {
+            return '{}';
+        }
+
+        $decoded['plan_json']['site_strategy']['summary'] = 'Explain the core value with concise readable paragraphs.';
+        $decoded['plan_json']['pages']['home_page']['blocks'][0]['content'] = 'Write the title around the core value, then explain the main highlights and next CTA.';
+        $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'][0]['sample'] = '标题围绕核心价值展开';
+        $decoded['plan_json']['pages']['home_page']['blocks'][0]['execution_script']['feature_points'] = ['List 2-4 value points'];
+        $decoded['plan_json']['pages']['home_page']['blocks'][0]['execution_script']['core_copy'] = 'Do not describe what should be written.';
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }
 }

@@ -20,7 +20,8 @@ final class SupervisorChildClient implements ChildControlClientInterface
     private bool $receivedShutdown = false;
     private bool $verboseLog = false;
     private string $selfTag = 'SupervisorChild';
-    private bool $isReady = false;
+    private bool $readyDesired = false;
+    private bool $readyConfirmed = false;
     private int $reconnectFailCount = 0;
     private float $lastReconnectAt = 0.0;
     private float $reconnectIntervalSec = 2.0;
@@ -70,6 +71,7 @@ final class SupervisorChildClient implements ChildControlClientInterface
         $this->readBuffer = '';
         $this->writeBuffer = '';
         $this->receivedShutdown = false;
+        $this->readyConfirmed = false;
         $this->reconnectFailCount = 0;
 
         return true;
@@ -97,7 +99,7 @@ final class SupervisorChildClient implements ChildControlClientInterface
 
     public function isReadyStateConfirmed(): bool
     {
-        return $this->isReady;
+        return $this->readyConfirmed;
     }
 
     public function onMessage(callable $handler): void
@@ -151,13 +153,14 @@ final class SupervisorChildClient implements ChildControlClientInterface
             return false;
         }
 
-        $response = $this->waitForResponse('lease_assign', 2.0);
+        $response = $this->waitForResponse(SupervisorMessage::TYPE_LEASE_ASSIGN, 2.0);
         if (!\is_array($response)) {
             return false;
         }
 
         $this->leaseId = (string)($response['lease_id'] ?? '');
         $this->generation = (int)($response['generation'] ?? 0);
+        $this->readyConfirmed = false;
 
         return $this->leaseId !== '' && $this->generation > 0;
     }
@@ -190,7 +193,10 @@ final class SupervisorChildClient implements ChildControlClientInterface
 
     public function markReadyState(bool $isReady = true): void
     {
-        $this->isReady = $isReady;
+        $this->readyDesired = $isReady;
+        if (!$isReady) {
+            $this->readyConfirmed = false;
+        }
     }
 
     public function sendReady(
@@ -222,15 +228,18 @@ final class SupervisorChildClient implements ChildControlClientInterface
             channel: $this->channelId,
         );
         if (!$this->sendRaw($ready)) {
+            $this->readyConfirmed = false;
             return false;
         }
 
-        $response = $this->waitForResponse('ready_ack', 2.0);
+        $response = $this->waitForResponse(SupervisorMessage::TYPE_READY_ACK, 2.0);
         if (!\is_array($response) || !($response['accepted'] ?? false)) {
+            $this->readyConfirmed = false;
             return false;
         }
 
-        $this->isReady = true;
+        $this->readyDesired = true;
+        $this->readyConfirmed = true;
         $this->poolSnapshotVersion = (int)($response['pool_snapshot_version'] ?? 0);
 
         return true;
@@ -344,7 +353,7 @@ final class SupervisorChildClient implements ChildControlClientInterface
             if (!$registered) {
                 return false;
             }
-            if ($this->isReady) {
+            if ($this->readyDesired) {
                 return $this->sendReady();
             }
         }
@@ -360,6 +369,7 @@ final class SupervisorChildClient implements ChildControlClientInterface
         $this->socket = null;
         $this->readBuffer = '';
         $this->writeBuffer = '';
+        $this->readyConfirmed = false;
     }
 
     private function buildSlotId(string $role, int $workerId): string
@@ -412,14 +422,17 @@ final class SupervisorChildClient implements ChildControlClientInterface
                 continue;
             }
             if (($decoded['type'] ?? '') === SupervisorMessage::TYPE_CHANNEL_REJECT) {
+                $this->readyConfirmed = false;
                 $this->close();
                 continue;
             }
             if (($decoded['type'] ?? '') === SupervisorMessage::TYPE_LEASE_ASSIGN) {
                 $this->leaseId = (string)($decoded['lease_id'] ?? '');
                 $this->generation = (int)($decoded['generation'] ?? 0);
+                $this->readyConfirmed = false;
             }
             if (($decoded['type'] ?? '') === SupervisorMessage::TYPE_READY_ACK) {
+                $this->readyConfirmed = (bool)($decoded['accepted'] ?? false);
                 $this->poolSnapshotVersion = (int)($decoded['pool_snapshot_version'] ?? $this->poolSnapshotVersion);
             }
             if ($this->messageHandler !== null) {

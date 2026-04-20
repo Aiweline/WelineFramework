@@ -105,6 +105,10 @@ if (@\socket_listen($socket, 1024) === false) {
 if ($controlPort <= 0) {
     $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 6);
 }
+$supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
+$supervisorEnabled = $supervisorEnabledRaw !== false
+    && $supervisorEnabledRaw !== ''
+    && \in_array(\strtolower((string) $supervisorEnabledRaw), ['1', 'true', 'yes', 'on'], true);
 
 // 定义前端模式常量
 if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
@@ -208,7 +212,9 @@ unset($_dispatcherDevMode);
 WlsLogger::info_("Dispatcher 启动，监听 tcp://{$host}:{$port}，预计 Worker 数: {$workerCount}（实际端口由 Master 动态通知）");
 
 // 连接 IPC 控制通道
-$dispatcher->connectIpc($controlPort);
+if ($controlPort > 0 || $supervisorEnabled) {
+    $dispatcher->connectIpc($controlPort);
+}
 
 // 传入 Master PID 用于孤儿检测
 if ($masterPid > 0) {

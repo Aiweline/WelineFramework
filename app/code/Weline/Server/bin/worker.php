@@ -2150,6 +2150,27 @@ function wlsHttpEnqueueSseWriteAndAwaitDrain(
         return false;
     }
 
+    $currentBuffered = \strlen($writeBuffers[$connId] ?? '');
+    $appendLen = \strlen($data);
+    if (\Weline\Server\Service\WorkerResponseMemoryGuard::sseWriteBufferWouldExceed($currentBuffered, $appendLen)) {
+        WlsLogger::warning_(
+            'SSE 写缓冲超限，关闭连接 (connId: ' . $connId
+            . ', buffered=' . $currentBuffered . ', append=' . $appendLen . ')'
+        );
+        @\fclose($conn);
+        unset(
+            $connections[$connId],
+            $requestBuffers[$connId],
+            $connectionLastActivity[$connId],
+            $requestLogged[$connId],
+            $writeBuffers[$connId],
+            $writableConnections[$connId],
+            $pendingClose[$connId]
+        );
+
+        return false;
+    }
+
     $writeBuffers[$connId] = ($writeBuffers[$connId] ?? '') . $data;
     $writableConnections[$connId] = $conn;
     $connectionLastActivity[$connId] = \time();
@@ -3007,17 +3028,18 @@ function handleRequest(
                 . "Content-Type: text/plain; charset=UTF-8\r\n"
                 . "Connection: close\r\n"
                 . "Content-Length: 110\r\n\r\n"
-                . "Legacy domain format is no longer supported. Please use the standard format: p[hash].weline.local";
+                . "Legacy domain format is no longer supported. Please use: p[hash].weline.test or p[hash].weline.localhost";
         }
 
-        // 允许标准格式域名 p[hash].weline.local
-        $isStandardDomain = \preg_match('/^p[0-9a-f]{8}\.weline\.local$/i', $domain);
+        // 允许标准格式域名 p[hash].weline.test / p[hash].weline.localhost
+        $isStandardDomain = \Weline\Server\Service\LocalDomainPolicy::isStandardProjectHost($domain);
         // 允许本地开发域名
         $isLocalDomain = \in_array($domain, ['127.0.0.1', 'localhost', '::1'], true);
+        $isManagedLocalDomain = \Weline\Server\Service\LocalDomainPolicy::isManagedSingleLabelSubdomain($domain);
 
         // 检查是否为 env 配置的自定义域名
         $isConfiguredDomain = false;
-        if (!$isStandardDomain && !$isLocalDomain) {
+        if (!$isStandardDomain && !$isLocalDomain && !$isManagedLocalDomain) {
             $env = [];
             if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php')) {
                 $env = @include BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php';
@@ -3052,7 +3074,7 @@ function handleRequest(
         }
 
         // 拒绝未知域名
-        if (!$isStandardDomain && !$isLocalDomain && !$isConfiguredDomain) {
+        if (!$isStandardDomain && !$isLocalDomain && !$isManagedLocalDomain && !$isConfiguredDomain) {
             return "HTTP/1.1 403 Forbidden\r\n"
                 . "Content-Type: text/plain; charset=UTF-8\r\n"
                 . "Connection: close\r\n"

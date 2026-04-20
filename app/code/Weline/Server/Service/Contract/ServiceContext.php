@@ -37,7 +37,7 @@ class ServiceContext
         public readonly int|string|null $workerCount = null,
         public readonly ?int $workerBasePort = null,
         public readonly ?int $workerPort = null,
-        /** 浏览器/对外展示的访问主机名（可与实际 bind 的 host 不同，例如 bind 127.0.0.1 而展示 *.weline.local） */
+        /** 浏览器/对外展示的访问主机名（可与实际 bind 的 host 不同，例如 bind 127.0.0.1 而展示 *.weline.test） */
         public readonly ?string $publicHost = null,
     ) {}
 
@@ -50,6 +50,32 @@ class ServiceContext
             instanceName: $this->instanceName,
             epoch: $epoch,
             controlPort: $this->controlPort,
+            masterPid: $this->masterPid,
+            host: $this->host,
+            mainPort: $this->mainPort,
+            sslEnabled: $this->sslEnabled,
+            sslCert: $this->sslCert,
+            sslKey: $this->sslKey,
+            mode: $this->mode,
+            daemon: $this->daemon,
+            debug: $this->debug,
+            frontend: $this->frontend,
+            envConfig: $this->envConfig,
+            httpRedirectPort: $this->httpRedirectPort,
+            dispatcherEnabled: $this->dispatcherEnabled,
+            workerCount: $this->workerCount,
+            workerBasePort: $this->workerBasePort,
+            workerPort: $this->workerPort,
+            publicHost: $this->publicHost,
+        );
+    }
+
+    public function withControlPort(int $controlPort): self
+    {
+        return new self(
+            instanceName: $this->instanceName,
+            epoch: $this->epoch,
+            controlPort: $controlPort,
             masterPid: $this->masterPid,
             host: $this->host,
             mainPort: $this->mainPort,
