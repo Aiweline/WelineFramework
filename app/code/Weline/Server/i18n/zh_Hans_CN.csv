@@ -161,17 +161,18 @@ P99：%{1},P99：%{1}
 "📦 %{1}","📦 %{1}"
 文件：%{1},文件：%{1}
 显示性能优化文档链接,显示性能优化文档链接
-"当前 system.env=%{1} 下禁止执行 hosts 写入","当前 system.env=%{1} 下禁止执行 hosts 写入"
+"当前 system.env=%{1} 禁止执行 hosts 写入","当前 system.env=%{1} 禁止执行 hosts 写入"
 "无效的 IP：%{1}","无效的 IP：%{1}"
 可选：--ip=127.0.0.1（默认）,可选：--ip=127.0.0.1（默认）
-"仅允许以 .local 结尾且非 localhost 的域名（与 WLS server:start 规则一致）","仅允许以 .local 结尾且非 localhost 的域名（与 WLS server:start 规则一致）"
+"域名 %{1} 使用 .localhost 回环后缀，无需写入 hosts","域名 %{1} 使用 .localhost 回环后缀，无需写入 hosts"
+"仅允许写入单标签的 *.weline.test 本地域名；*.weline.localhost 无需 hosts","仅允许写入单标签的 *.weline.test 本地域名；*.weline.localhost 无需 hosts"
 需要提升权限,需要提升权限
 "写入 hosts 失败","写入 hosts 失败"
-"向本机 hosts 添加 .local 域名（开发/测试；计划 w_query 入口）","向本机 hosts 添加 .local 域名（开发/测试；计划 w_query 入口）"
+"向本机 hosts 添加需要显式解析的本地域名（当前仅 *.weline.test）","向本机 hosts 添加需要显式解析的本地域名（当前仅 *.weline.test）"
 用法,用法
 示例,示例
 说明,说明
-"与 server:start 使用的 HostsFileManager 相同；仅 system.env 为 local/dev/test 时可用","与 server:start 使用的 HostsFileManager 相同；仅 system.env 为 local/dev/test 时可用"
+"与 server:start 使用同一套 HostsFileManager；仅 system.env 为 local/dev/test 时可用","与 server:start 使用同一套 HostsFileManager；仅 system.env 为 local/dev/test 时可用"
 "即将结束系统中所有 PHP 进程（含 WLS、CLI 服务器等）","即将结束系统中所有 PHP 进程（含 WLS、CLI 服务器等）"
 正在执行…,正在执行…
 "已结束所有 php.exe 进程","已结束所有 php.exe 进程"
@@ -470,6 +471,7 @@ P99：%{1},P99：%{1}
 "2. 或先停止实例 [%{1}]：","2. 或先停止实例 [%{1}]："
 "3. 查看所有运行中的实例：","3. 查看所有运行中的实例："
 "端口 %{1} 已被 PHP 内置服务器占用，正在停止...","端口 %{1} 已被 PHP 内置服务器占用，正在停止..."
+"检测到旧实例仅残留 HTTP Redirect 子进程，先执行本地快速清场...","检测到旧实例仅残留 HTTP Redirect 子进程，先执行本地快速清场..."
 "检测到服务器已运行，-f 直接切换（不等待）...","检测到服务器已运行，-f 直接切换（不等待）..."
 "注意：-f 强制切换属于停机型更新，不会自动等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。","注意：-f 强制切换属于停机型更新，不会自动等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。"
 检测到服务器已运行，平滑重启：先开启维护模式，通过健康检查等待请求处理完成...,检测到服务器已运行，平滑重启：先开启维护模式，通过健康检查等待请求处理完成...
@@ -501,7 +503,11 @@ P99：%{1},P99：%{1}
 "提示：当前为独立端口模式，%{1} 个 Worker 分别监听端口 %{2}-%{3}。","提示：当前为独立端口模式，%{1} 个 Worker 分别监听端口 %{2}-%{3}。"
 "提示：当前为 SO_REUSEPORT 直连模式，多 Worker 复用同一端口 %{1}。","提示：当前为 SO_REUSEPORT 直连模式，多 Worker 复用同一端口 %{1}。"
 维护模式已关闭（端口检查未通过）。,维护模式已关闭（端口检查未通过）。
-未知进程,未知进程
+"HTTP Redirect 端口 %{1} 已被实例 [%{2}] 占用: %{3}","HTTP Redirect 端口 %{1} 已被实例 [%{2}] 占用: %{3}"
+"请先停止实例 [%{1}]，或改用非 443 主端口启动。","请先停止实例 [%{1}]，或改用非 443 主端口启动。"
+"HTTP Redirect port %{1} is occupied by %{2}","HTTP Redirect port %{1} is occupied by %{2}"
+"HTTP Redirect port %{1} could not be released; HTTP to HTTPS redirect will be disabled.","HTTP Redirect port %{1} could not be released; HTTP to HTTPS redirect will be disabled."
+"Tip: start on a non-443 main port to run without a dedicated HTTP redirect worker.","Tip: start on a non-443 main port to run without a dedicated HTTP redirect worker."
 "HTTP Redirect 端口 %{1} 被占用: %{2}","HTTP Redirect 端口 %{1} 被占用: %{2}"
 是否强制停用该进程以释放端口？[y/N]:,是否强制停用该进程以释放端口？[y/N]:
 "已取消。HTTP Redirect 端口 %{1} 无法使用，将不启用 HTTP→HTTPS 重定向。","已取消。HTTP Redirect 端口 %{1} 无法使用，将不启用 HTTP→HTTPS 重定向。"
@@ -641,6 +647,9 @@ env.wls,env.wls
 "端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），不执行杀进程","端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），不执行杀进程"
 "端口 %{1} 被非框架进程占用，不予杀死","端口 %{1} 被非框架进程占用，不予杀死"
 "端口经 %{1} 轮仍占用，按 Master 前缀清理逃逸进程...","端口经 %{1} 轮仍占用，按 Master 前缀清理逃逸进程..."
+"WLS 进程（实例 %{1}）","WLS 进程（实例 %{1}）"
+"PID %{1}","PID %{1}"
+未知进程,未知进程
 "├─ Worker #%{1} (%{2} 端口: %{3}) - 启动成功","├─ Worker #%{1} (%{2} 端口: %{3}) - 启动成功"
 "├─ Worker #%{1} (端口: %{2}) - 启动失败","├─ Worker #%{1} (端口: %{2}) - 启动失败"
 "启动 Dispatcher 进程...","启动 Dispatcher 进程..."
@@ -817,6 +826,8 @@ disabled,disabled
 查看所有实例,查看所有实例
 查看指定实例,查看指定实例
 "实时监控（watch 模式）","实时监控（watch 模式）"
+"另一个 server:stop 任务正在处理中，请稍后再试。","另一个 server:stop 任务正在处理中，请稍后再试。"
+若锁文件长期存在，请确认停止任务是否已结束后再重试。,若锁文件长期存在，请确认停止任务是否已结束后再重试。
 "检测到端口 %{1} 被 WLS 进程占用 (PID: %{2})，正在结束…","检测到端口 %{1} 被 WLS 进程占用 (PID: %{2})，正在结束…"
 "已在实例文件缺失场景下安全清理 %{1} 个受管 WLS 进程","已在实例文件缺失场景下安全清理 %{1} 个受管 WLS 进程"
 "使用 server:listing 查看所有实例","使用 server:listing 查看所有实例"
@@ -834,12 +845,17 @@ disabled,disabled
 清理残留进程...,清理残留进程...
 "清理了 %{1} 个进程 ✓","清理了 %{1} 个进程 ✓"
 无残留进程,无残留进程
+"已清理 %1 个残留进程","已清理 %1 个残留进程"
+重试次数：%1,重试次数：%1
+"残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}","残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}"
+"已清理 %1 个残留进程（复核结束）","已清理 %1 个残留进程（复核结束）"
 "已处理 %{1} 个进程","已处理 %{1} 个进程"
 "启动锁已释放 ✓","启动锁已释放 ✓"
 没有正在运行的实例,没有正在运行的实例
 停止所有服务器实例,停止所有服务器实例
 "发现 %{1} 个 Weline Server 实例","发现 %{1} 个 Weline Server 实例"
 "正在停止实例 [%{1}]...","正在停止实例 [%{1}]..."
+"实例 [%{1}] 正在被其他 stop 任务处理，已跳过。","实例 [%{1}] 正在被其他 stop 任务处理，已跳过。"
 "所有 Weline Server 实例已停止","所有 Weline Server 实例已停止"
 "正在停止 PHP 内置服务器 (cli-server)...","正在停止 PHP 内置服务器 (cli-server)..."
 "PHP 内置服务器已停止","PHP 内置服务器已停止"
@@ -1179,6 +1195,7 @@ WLS错误扫描,WLS错误扫描
 "Only local/dev/test environment may write hosts entries","Only local/dev/test environment may write hosts entries"
 "Domain is required","Domain is required"
 "Only managed local WLS domains may be injected into local hosts","Only managed local WLS domains may be injected into local hosts"
+"The requested .localhost domain resolves to loopback and does not require a hosts entry","The requested .localhost domain resolves to loopback and does not require a hosts entry"
 "The requested domain is not a valid local hostname","The requested domain is not a valid local hostname"
 "Only managed local wildcard domains are allowed for local wildcard certificate issuance","Only managed local wildcard domains are allowed for local wildcard certificate issuance"
 "Failed to ensure the managed local wildcard certificate","Failed to ensure the managed local wildcard certificate"
@@ -1263,8 +1280,8 @@ DDoS攻击,DDoS攻击
 "Master 正在关闭，通知所有子进程...","Master 正在关闭，通知所有子进程..."
 "Master PID %{1} 已注册到索引","Master PID %{1} 已注册到索引"
 "Master PID 索引已移除","Master PID 索引已移除"
-"实例文件已清理: %{1}","实例文件已清理: %{1}"
-"清理孤儿实例文件: %{1}（已过期 %{2} 秒）","清理孤儿实例文件: %{1}（已过期 %{2} 秒）"
+"检测到 Master 退出后仍有子进程存活，已保留实例记录供后续恢复控制","检测到 Master 退出后仍有子进程存活，已保留实例记录供后续恢复控制"
+实例记录已完成清理,实例记录已完成清理
 "共清理 %{1} 个孤儿实例文件","共清理 %{1} 个孤儿实例文件"
 "孤儿实例清理过程出错: %{1}","孤儿实例清理过程出错: %{1}"
 "收到 SIGTERM 信号，开始统一停机流程...","收到 SIGTERM 信号，开始统一停机流程..."
@@ -1417,9 +1434,34 @@ DDoS攻击,DDoS攻击
 "子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接使用泛域证书","子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接使用泛域证书"
 "HTTPS 已在此域名禁用","HTTPS 已在此域名禁用"
 使用已有证书,使用已有证书
+"Failed to generate local CA private key","Failed to generate local CA private key"
+"Failed to generate local CA CSR","Failed to generate local CA CSR"
+"Failed to sign local CA certificate","Failed to sign local CA certificate"
+"Failed to export local CA private key","Failed to export local CA private key"
+"Failed to persist local CA certificate","Failed to persist local CA certificate"
+"Failed to persist local CA private key","Failed to persist local CA private key"
+"Local CA certificate file is missing: %{1}","Local CA certificate file is missing: %{1}"
+"Local CA is already trusted by the current Windows user","Local CA is already trusted by the current Windows user"
+"Failed to find certutil.exe; import %{1} into Current User > Trusted Root Certification Authorities manually","Failed to find certutil.exe; import %{1} into Current User > Trusted Root Certification Authorities manually"
+"Local CA imported into Current User Root store","Local CA imported into Current User Root store"
+"Local CA imported into machine Root store","Local CA imported into machine Root store"
+"Local CA was generated, but automatic trust import failed. Import %{1} into Current User > Trusted Root Certification Authorities manually","Local CA was generated, but automatic trust import failed. Import %{1} into Current User > Trusted Root Certification Authorities manually"
+"Local CA was generated. Trust it manually in your OS/browser with %{1}","Local CA was generated. Trust it manually in your OS/browser with %{1}"
+"Domain cannot be empty","Domain cannot be empty"
+"Failed to generate local leaf private key","Failed to generate local leaf private key"
+"Failed to generate local leaf CSR","Failed to generate local leaf CSR"
+"Failed to load local CA certificate or private key","Failed to load local CA certificate or private key"
+"Failed to sign local certificate with local CA","Failed to sign local certificate with local CA"
+"Failed to export local certificate private key","Failed to export local certificate private key"
+"Failed to persist local fullchain certificate","Failed to persist local fullchain certificate"
+"Failed to persist local certificate private key","Failed to persist local certificate private key"
+"Local certificate files were generated, but saving the certificate record failed","Local certificate files were generated, but saving the certificate record failed"
+"Local CA-signed certificate generated and trusted successfully","Local CA-signed certificate generated and trusted successfully"
+"Local CA-signed certificate generated successfully","Local CA-signed certificate generated successfully"
 "[SslCertificateService] 库中的 %{1} 通配证书已过期，将重新签发","[SslCertificateService] 库中的 %{1} 通配证书已过期，将重新签发"
 "[SslCertificateService] 复用 %{1} 通配证书时写回磁盘失败，将尝试重新签发","[SslCertificateService] 复用 %{1} 通配证书时写回磁盘失败，将尝试重新签发"
-"已复用现有本地通配证书，跳过重复签发","已复用现有本地通配证书，跳过重复签发"
+已复用现有本地通配证书，跳过重复签发,已复用现有本地通配证书，跳过重复签发
+"已复用现有 %{1} 通配证书，跳过重复签发","已复用现有 %{1} 通配证书，跳过重复签发"
 生成私钥失败,生成私钥失败
 "生成 CSR 失败","生成 CSR 失败"
 签发证书失败,签发证书失败

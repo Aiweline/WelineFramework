@@ -80,7 +80,12 @@ if ($socket === false) {
     \fwrite(STDERR, "[Dispatcher] socket_create failed: ({$errorCode}) {$errorMsg}\n");
     exit(1);
 }
-\socket_set_option($socket, SOL_SOCKET, SO_REUSEADDR, 1);
+$reuseResult = \Weline\Server\Socket\ListenSocketOptions::applyRawListenSocketReuseOption($socket);
+if (!$reuseResult['success']) {
+    \fwrite(STDERR, "[Dispatcher] socket_set_option {$reuseResult['label']} failed: ({$reuseResult['errno']}) {$reuseResult['error']}\n");
+    \socket_close($socket);
+    exit(1);
+}
 if (!@\socket_bind($socket, $host, $port)) {
     $errorCode = \socket_last_error($socket);
     $errorMsg = \socket_strerror($errorCode);

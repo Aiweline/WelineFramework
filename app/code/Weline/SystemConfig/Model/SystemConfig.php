@@ -202,34 +202,47 @@ class SystemConfig extends \Weline\Framework\Database\Model
     /**
      * @return array<int, array<string, mixed>>
      */
+    private function toArrayFromIterator(iterable $iterator): array
+    {
+        $rows = [];
+        foreach ($iterator as $row) {
+            $row = is_array($row) ? $row : (method_exists($row, 'getData') ? $row->getData() : []);
+            if ($row !== []) {
+                $rows[] = $row;
+            }
+        }
+        return $rows;
+    }
+
     protected function loadConfigRowsByModule(string $module, string $area): array
     {
-        return $this->clear()
-            ->reset()
-            ->where([
-                [self::schema_fields_AREA, $area],
-                [self::schema_fields_MODULE, $module],
-            ])
-            ->select()
-            ->fetchArray();
+        return $this->toArrayFromIterator(
+            $this->clear()
+                ->reset()
+                ->where([
+                    [self::schema_fields_AREA, $area],
+                    [self::schema_fields_MODULE, $module],
+                ])
+                ->select()
+                ->fetchIterator()
+        );
     }
 
     protected function loadSingleConfigValue(string $key, string $module, string $area): mixed
     {
-        $configRows = $this->clear()
-            ->reset()
-            ->where([
-                [self::schema_fields_KEY, $key],
-                [self::schema_fields_AREA, $area],
-                [self::schema_fields_MODULE, $module],
-            ])
-            ->select()
-            ->fetchArray();
-
-        $configValue = is_array($configRows) ? ($configRows[0] ?? null) : null;
-
-        if (is_array($configValue) && array_key_exists(self::schema_fields_VALUE, $configValue)) {
-            return $configValue[self::schema_fields_VALUE];
+        foreach ($this->clear()
+                     ->reset()
+                     ->where([
+                         [self::schema_fields_KEY, $key],
+                         [self::schema_fields_AREA, $area],
+                         [self::schema_fields_MODULE, $module],
+                     ])
+                     ->limit(1)
+                     ->select()
+                     ->fetchIterator() as $configValue) {
+            if (is_array($configValue) && array_key_exists(self::schema_fields_VALUE, $configValue)) {
+                return $configValue[self::schema_fields_VALUE];
+            }
         }
 
         return null;

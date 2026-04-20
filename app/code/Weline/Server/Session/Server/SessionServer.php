@@ -21,6 +21,7 @@ namespace Weline\Server\Session\Server;
 
 use Weline\Framework\Session\Storage\FileStorage;
 use Weline\Server\Log\WlsLogger;
+use Weline\Server\Socket\ListenSocketOptions;
 use Weline\Server\Service\SharedStateServiceRegistry;
 
 final class SessionServer
@@ -166,7 +167,9 @@ final class SessionServer
         $errno = 0;
         $errstr = '';
 
-        $ctx = \stream_context_create(['socket' => ['so_reuseaddr' => true]]);
+        $ctx = \stream_context_create([
+            'socket' => ListenSocketOptions::streamContextOptions([]),
+        ]);
         $this->serverSocket = @\stream_socket_server(
             "tcp://{$this->host}:{$this->port}",
             $errno,

@@ -62,7 +62,7 @@ foreach ($argv as $arg) {
         $logInstanceName = $normalizeArgValue((string)\substr($arg, 20));
     } elseif ($arg === '--shared-service=1' || $arg === '--shared-service' || $arg === '-shared-service') {
         $sharedService = true;
-    } elseif ($arg === '--frontend' || $arg === '-f') {
+    } elseif ($arg === '--frontend' || $arg === '-frontend' || $arg === '-f') {
         $isFrontend = true;
     }
 
@@ -164,7 +164,7 @@ if ($bootstrapInstance !== '') {
     WlsLogger::info_("Bootstrap requester instance: {$bootstrapInstance}");
 }
 if ($sharedService) {
-    WlsLogger::info_('Shared service mode: independent');
+    WlsLogger::info_('Shared service mode: shared endpoint');
 }
 WlsLogger::info_("DEV=" . ($isDev ? 'ON' : 'OFF') . ", Frontend=" . ($isFrontend ? 'ON' : 'OFF'));
 WlsLogger::info_("Config: max_sessions=" . ($sessionConfig['max_sessions'] ?? 50000) .
@@ -178,30 +178,35 @@ WlsLogger::info_("Persist file: " . ($sessionConfig['persist_file_name'] ?? 'wls
  */
 $updateServicePortInInstanceJson = static function (string $serviceRole, int $servicePort) use ($instanceName): void {
     $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
-    $dir = \dirname($instanceFile);
-    if (!\is_dir($dir)) {
-        @\mkdir($dir, 0755, true);
+    if (!\is_file($instanceFile)) {
+        WlsLogger::warning_("[SharedState] Instance file missing, skip persisting {$serviceRole} port: {$servicePort}");
+        return;
     }
 
     // 读取现有数据并合并
-    $existingData = [];
-    if (\is_file($instanceFile)) {
-        $content = @\file_get_contents($instanceFile);
-        if ($content !== false) {
-            $existingData = \json_decode($content, true) ?: [];
-        }
+    $content = @\file_get_contents($instanceFile);
+    $existingData = \is_string($content) ? (\json_decode($content, true) ?: []) : [];
+    if (!\is_array($existingData)
+        || (!isset($existingData['name']) && !isset($existingData['host']) && !\array_key_exists('ssl_enabled', $existingData))) {
+        WlsLogger::warning_("[SharedState] Instance file incomplete, skip persisting {$serviceRole} port: {$servicePort}");
+        return;
     }
 
     // 根据不同的角色，更新对应的字段
-    if ($serviceRole === 'session_server') {
-        $existingData['session_port'] = $servicePort;
-        $existingData['session_service_updated_at'] = \time();
-    } elseif ($serviceRole === 'memory_server') {
-        $existingData['memory_port'] = $servicePort;
-        $existingData['memory_service_updated_at'] = \time();
-    }
+    \Weline\Server\Service\ServerInstanceManager::atomicUpdateJsonStatic(
+        $instanceFile,
+        static function (array $data) use ($serviceRole, $servicePort): array {
+            if ($serviceRole === 'session_server') {
+                $data['session_port'] = $servicePort;
+                $data['session_service_updated_at'] = \time();
+            } elseif ($serviceRole === 'memory_server') {
+                $data['memory_port'] = $servicePort;
+                $data['memory_service_updated_at'] = \time();
+            }
 
-    @\file_put_contents($instanceFile, \json_encode($existingData, JSON_PRETTY_PRINT));
+            return $data;
+        }
+    );
 };
 
 $ipcReceivedShutdown = false;
@@ -246,7 +251,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         // 更新实例 JSON 中的服务端口信息，供 Worker 启动时发现
         $updateServicePortInInstanceJson($role, $port);
         WlsLogger::info_("Service port {$role}={$port} registered to instance JSON");
-        if (\Weline\Server\Log\LogConfig::isDevMode()) {
+        if (\Weline\Server\Log\LogConfig::isDevMode() || $isFrontend) {
             $client = $kernel->getClient();
             if ($client !== null) {
                 WlsLogger::getInstance()->setIpcLogSink(static function (string $line, string $level, string $tag) use ($client): void {
@@ -294,7 +299,7 @@ while ($server->isRunning()) {
     if ($kernel !== null && !$kernel->isConnected() && !$ipcReceivedShutdown) {
         $kernel->reconnect();
     }
-    if (!$sharedService && $orphanGuard->shouldExit(
+    if ($orphanGuard->shouldExit(
         $masterPid,
         $kernel !== null && $kernel->isConnected(),
         $ipcReceivedShutdown,

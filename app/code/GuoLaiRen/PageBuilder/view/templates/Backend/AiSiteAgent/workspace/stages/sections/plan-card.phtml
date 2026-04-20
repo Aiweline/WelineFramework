@@ -79,6 +79,8 @@
         </div>
         <?php endif; ?>
 
+        <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-head.phtml', \get_defined_vars()) ?>
+
         <div class="d-flex flex-wrap gap-2 mt-4 pb-ai-primary-action-row">
             <button type="button" class="btn btn-primary pb-ai-run-virtual-theme" id="pb-ai-run-virtual-theme">
                 <i class="mdi mdi-creation-outline me-1"></i><?= htmlspecialchars((string)__('确认&更新方案'), ENT_QUOTES, 'UTF-8') ?>
@@ -87,7 +89,7 @@
         </div>
 
         <?php if ($pbAiRenderInlinePanelInsideCard): ?>
-            <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel.phtml', \get_defined_vars()) ?>
+            <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-body.phtml', \get_defined_vars()) ?>
         <?php endif; ?>
     </div>
 </div>

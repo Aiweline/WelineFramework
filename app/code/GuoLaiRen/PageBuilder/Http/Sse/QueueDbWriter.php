@@ -34,6 +34,11 @@ class QueueDbWriter extends SseWriter
     ) {
     }
 
+    public function getQueueId(): int
+    {
+        return $this->queueId;
+    }
+
     public function start(): static
     {
         return $this;
@@ -198,6 +203,7 @@ class QueueDbWriter extends SseWriter
             'queue_id' => $this->queueId,
             'patch' => $patch,
         ]);
+        $this->mirrorToCli($line);
 
         try {
             /** @var AiSiteAgentSessionService $sessionService */
@@ -335,6 +341,10 @@ class QueueDbWriter extends SseWriter
             'queue_id' => $this->queueId,
             'patch' => $patch,
         ]);
+        // queue:run 等 CLI 场景：除 AI_STREAM 外，progress/log/error 等也应实时出现在终端（与落库 result 一致）。
+        if ($line !== '') {
+            $this->mirrorToCli($line);
+        }
     }
 
     /**
@@ -368,5 +378,17 @@ class QueueDbWriter extends SseWriter
         }
 
         return '[' . \date('H:i:s') . '] ' . \strtoupper($event) . ' ' . $summary;
+    }
+
+    private function mirrorToCli(string $line): void
+    {
+        if ($line === '' || \PHP_SAPI !== 'cli') {
+            return;
+        }
+
+        echo $line . \PHP_EOL;
+        if (\function_exists('flush')) {
+            \flush();
+        }
     }
 }

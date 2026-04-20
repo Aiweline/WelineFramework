@@ -43,11 +43,19 @@ class AiSiteTaskPlanQueue implements QueueInterface
 
     public function execute(Queue &$queue): string
     {
-        $args = $queue->getArgs();
         $content = \json_decode((string)$queue->getContent(), true);
         $publicId = \trim((string)($content['public_id'] ?? ''));
         $adminId = (int)($content['admin_id'] ?? 0);
         $executionToken = \trim((string)($content['execution_token'] ?? ''));
+        $forceRebuild = (int)($content['_force_rebuild'] ?? 0) === 1;
+        $effectiveExecutionToken = $executionToken;
+        if ($forceRebuild) {
+            $effectiveExecutionToken = \sprintf(
+                '%s-force-%s',
+                $executionToken !== '' ? $executionToken : 'queue',
+                \substr(\sha1((string)\microtime(true) . ':' . (string)\mt_rand()), 0, 10)
+            );
+        }
         $queueId = (int)$queue->getId();
 
         $sse = null;
@@ -64,6 +72,10 @@ class AiSiteTaskPlanQueue implements QueueInterface
                 throw new \RuntimeException('会话不存在或无权访问。');
             }
             $this->appendQueueLifecycleLine($queue, '已加载会话 session_id=' . (int)$session->getId());
+            if ($forceRebuild) {
+                $session = $this->applyForceTaskPlanRebuildPreset($sessionService, $scopeService, $session, $adminId);
+                $this->appendQueueLifecycleLine($queue, '检测到 _force_rebuild=1，已切换为 rebuild_task_plan 强制重建，execution_token=' . \substr($effectiveExecutionToken, 0, 20) . '…');
+            }
 
             $session = $this->ensureQueuedActiveOperation(
                 $sessionService,
@@ -72,9 +84,9 @@ class AiSiteTaskPlanQueue implements QueueInterface
                 $adminId,
                 $queueId,
                 'task_plan',
-                $executionToken
+                $effectiveExecutionToken
             );
-            $this->appendQueueLifecycleLine($queue, '已同步 active_operation=queued operation=task_plan execution_token=' . \substr($executionToken, 0, 12) . '…');
+            $this->appendQueueLifecycleLine($queue, '已同步 active_operation=queued operation=task_plan execution_token=' . \substr($effectiveExecutionToken, 0, 12) . '…');
 
             $scope = $scopeService->normalizeScope($session->getScopeArray());
             if ((int)($scope['plan_confirmed'] ?? 0) !== 1) {
@@ -93,8 +105,8 @@ class AiSiteTaskPlanQueue implements QueueInterface
 
             /** @var AiSiteAgent $controller */
             $controller = AiSiteAgentForQueue::create();
-            $claim = $this->invokePrivate($controller, 'claimActiveOperationExecution', [$session, $adminId, $executionToken, 'task_plan']);
-            if (!\is_array($claim) || !($claim['ok'] ?? false) || $args['force'] === true) {
+            $claim = $this->invokePrivate($controller, 'claimActiveOperationExecution', [$session, $adminId, $effectiveExecutionToken, 'task_plan']);
+            if (!\is_array($claim) || !($claim['ok'] ?? false)) {
                 if ((string)($claim['reason'] ?? '') === 'duplicate_stream') {
                     $this->queueTrace($sse, '认领跳过：duplicate_stream（重复第二阶段生成）');
 
@@ -108,7 +120,7 @@ class AiSiteTaskPlanQueue implements QueueInterface
             $this->invokePrivate($controller, 'runTaskPlanOperation', [$sse, $session, $adminId]);
             $this->queueTrace($sse, 'runTaskPlanOperation 已返回');
 
-            $this->ensureTaskPlanDraftPersisted($sessionService, $scopeService, $session, $adminId);
+            $this->ensureTaskPlanDraftPersisted($sessionService, $scopeService, $session, $adminId, $sse);
             $this->queueTrace($sse, 'ensureTaskPlanDraftPersisted 已完成（草案已就绪或已补全）');
 
             $this->queueTrace($sse, '队列执行成功：第二阶段任务方案生成完成');
@@ -120,7 +132,7 @@ class AiSiteTaskPlanQueue implements QueueInterface
             } else {
                 $this->appendQueueLifecycleLine($queue, '异常（SSE 未初始化）：' . $throwable->getMessage());
             }
-            $this->updateSessionError($publicId, $adminId, $executionToken, $throwable->getMessage());
+            $this->updateSessionError($publicId, $adminId, $effectiveExecutionToken, $throwable->getMessage());
             throw new \RuntimeException('第二阶段任务方案生成失败：' . $throwable->getMessage(), 0, $throwable);
         } finally {
             if ($sse instanceof QueueDbWriter) {
@@ -195,48 +207,68 @@ class AiSiteTaskPlanQueue implements QueueInterface
         AiSiteAgentSessionService $sessionService,
         AiSiteScopeCompatibilityService $scopeService,
         AiSiteAgentSession $session,
-        int $adminId
+        int $adminId,
+        ?QueueDbWriter $sse = null
     ): void {
+        if ($sse instanceof QueueDbWriter) {
+            $this->queueTrace($sse, '开始校验任务方案草案是否已落库');
+        }
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
         $scope = $scopeService->normalizeScope($fresh->getScopeArray());
         $draft = \is_array($scope['virtual_theme_plan']['draft'] ?? null) ? $scope['virtual_theme_plan']['draft'] : [];
         $draftMarkdown = \trim((string)($scope['virtual_theme_plan']['draft_markdown'] ?? ''));
         if ($draft !== [] && $draftMarkdown !== '') {
+            if ($sse instanceof QueueDbWriter) {
+                $this->queueTrace($sse, '草案校验通过：virtual_theme_plan.draft + draft_markdown 均存在');
+            }
             return;
         }
 
-        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        if ($buildBlueprint === []) {
-            throw new \RuntimeException('第二阶段任务方案生成后缺少 build_blueprint，无法补全草案。');
+        $taskPlanMarkdown = \trim((string)($scope['task_plan_markdown'] ?? ''));
+        $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
+        $hint = 'runTaskPlanOperation 已返回但草案字段缺失：'
+            . 'draft=' . ($draft === [] ? 'empty' : 'ok')
+            . ', draft_markdown=' . ($draftMarkdown === '' ? 'empty' : 'ok')
+            . ', task_plan_markdown=' . ($taskPlanMarkdown === '' ? 'empty' : 'ok')
+            . ', task_plan_structured=' . ($taskPlanStructured === [] ? 'empty' : 'ok');
+        if ($sse instanceof QueueDbWriter) {
+            $this->queueTrace($sse, '草案校验失败：' . $hint);
         }
+        $queueHint = ($sse instanceof QueueDbWriter && $sse->getQueueId() > 0)
+            ? 'queue:run --id=' . $sse->getQueueId() . ' -f'
+            : 'queue:run --id=<队列ID> -f';
+        throw new \RuntimeException(
+            '任务方案草案校验失败，未检测到完整 draft 落库；请重试 '
+            . $queueHint
+            . '，或检查 AiSiteAgent::runTaskPlanOperation 写入链路。（--id 为 weline_queue 主键，非 session_id）('
+            . $hint
+            . ')'
+        );
+    }
 
-        /** @var AiSiteVirtualThemePlanService $planService */
-        $planService = ObjectManager::getInstance(AiSiteVirtualThemePlanService::class);
-        $artifacts = $planService->buildTaskPlanArtifacts($scope, $buildBlueprint);
-        $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
-        $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
-        $markdown = (string)($artifacts['markdown'] ?? '');
-        if ($virtualThemePlan === [] || $markdown === '') {
-            throw new \RuntimeException('第二阶段任务方案未生成有效草案。');
-        }
+    private function applyForceTaskPlanRebuildPreset(
+        AiSiteAgentSessionService $sessionService,
+        AiSiteScopeCompatibilityService $scopeService,
+        AiSiteAgentSession $session,
+        int $adminId
+    ): AiSiteAgentSession {
+        $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+        $scope = $scopeService->normalizeScope($fresh->getScopeArray());
+        $currentReq = \is_array($scope['_task_plan_sse_request'] ?? null) ? $scope['_task_plan_sse_request'] : [];
+        $nextRound = \max(1, (int)($currentReq['round'] ?? 0) + 1);
 
         $sessionService->mergeScope((int)$fresh->getId(), $adminId, [
-            'virtual_theme_plan' => [
-                'draft' => $virtualThemePlan,
-                'draft_markdown' => $markdown,
-                'draft_generated_at' => \date('Y-m-d H:i:s'),
-                'confirmed' => \is_array($scope['virtual_theme_plan']['confirmed'] ?? null) ? $scope['virtual_theme_plan']['confirmed'] : [],
-                'confirmed_markdown' => (string)($scope['virtual_theme_plan']['confirmed_markdown'] ?? ''),
-                'confirmed_at' => (string)($scope['virtual_theme_plan']['confirmed_at'] ?? ''),
-                'confirmed_signature' => (string)($scope['virtual_theme_plan']['confirmed_signature'] ?? ''),
-                'plan_signature' => (string)($virtualThemePlan['signature'] ?? ''),
+            '_task_plan_sse_request' => [
+                'prompt_mode' => 'rebuild_task_plan',
+                'instruction' => '[FORCE] queue:run -f 强制重建第二阶段任务方案',
+                'target_scope' => 'full_task_plan',
+                'round' => $nextRound,
+                'forced_by_queue_run' => 1,
             ],
-            'task_plan_structured' => $structured,
-            'task_plan_markdown' => $markdown,
-            'task_plan_generated_at' => \date('Y-m-d H:i:s'),
             'task_plan_confirmed' => 0,
-            '_task_plan_sse_request' => [],
         ]);
+
+        return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
     }
 
     private function invokePrivate(object $object, string $method, array $arguments = []): mixed
@@ -271,6 +303,7 @@ class AiSiteTaskPlanQueue implements QueueInterface
                 'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
             ],
         ]);
+        $this->mirrorToCli($line);
     }
 
     /**
@@ -287,5 +320,18 @@ class AiSiteTaskPlanQueue implements QueueInterface
             'event_type' => 'queue_lifecycle',
             'level' => 'info',
         ]);
+        $this->mirrorToCli('[' . \date('H:i:s') . '] LOG ' . $message);
+    }
+
+    private function mirrorToCli(string $line): void
+    {
+        if ($line === '' || \PHP_SAPI !== 'cli') {
+            return;
+        }
+
+        echo $line . \PHP_EOL;
+        if (\function_exists('flush')) {
+            \flush();
+        }
     }
 }

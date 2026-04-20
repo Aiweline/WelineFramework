@@ -1,0 +1,139 @@
+<?php
+/**
+ * 第一阶段侧栏「任务进度」内嵌：plan 队列快照 / process / result 刷新逻辑。
+ * 依赖 script-main 已挂载的 window.PbAiWorkspacePreview（postForm、toast、escapeHtml）与 window.hydrateWorkspaceFromState。
+ */
+?>
+<script>
+(function () {
+    'use strict';
+    var bridge = window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview === 'object'
+        ? window.PbAiWorkspacePreview
+        : {};
+    var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var workspaceSnapshotUrl = <?= \json_encode((string)($workspaceSnapshotUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var queueMessages = {
+        empty: <?= \json_encode((string)__('当前没有可展示的第一阶段方案队列记录（尚未入队或队列已清理）。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        refreshed: <?= \json_encode((string)__('队列信息已刷新'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        refreshFailed: <?= \json_encode((string)__('刷新队列信息失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        queueIdLabel: <?= \json_encode((string)__('队列编号'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        queueIdUnknown: <?= \json_encode((string)__('—'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+    };
+
+    function escapeHtml(text) {
+        if (typeof bridge.escapeHtml === 'function') {
+            return bridge.escapeHtml(text);
+        }
+        var div = document.createElement('div');
+        div.textContent = String(text == null ? '' : text);
+        return div.innerHTML;
+    }
+
+    function toast(type, message) {
+        if (typeof bridge.toast === 'function') {
+            bridge.toast(type, message);
+        }
+    }
+
+    function postForm(url, fields) {
+        if (typeof bridge.postForm !== 'function') {
+            return Promise.reject(new Error('postForm unavailable'));
+        }
+        return bridge.postForm(url, fields);
+    }
+
+    function renderPlanQueueInfoPanel(workspaceState) {
+        var metaEl = document.getElementById('pb-ai-plan-queue-info-meta');
+        var procEl = document.getElementById('pb-ai-plan-queue-info-process');
+        var resEl = document.getElementById('pb-ai-plan-queue-info-result');
+        if (!metaEl || !procEl || !resEl) {
+            return;
+        }
+        var info = workspaceState && workspaceState.plan_queue_info && typeof workspaceState.plan_queue_info === 'object'
+            ? workspaceState.plan_queue_info
+            : null;
+        if (!info || !info.snapshot || typeof info.snapshot !== 'object') {
+            metaEl.innerHTML = '<div class="alert alert-light border mb-0 small">' + escapeHtml(queueMessages.empty) + '</div>';
+            procEl.textContent = '';
+            resEl.textContent = '';
+            return;
+        }
+        var snapJson = '';
+        try {
+            snapJson = JSON.stringify(info.snapshot, null, 2);
+        } catch (e) {
+            snapJson = String(info.snapshot);
+        }
+        var qidRaw = info.queue_id != null ? info.queue_id : (info.snapshot && info.snapshot.queue_id != null ? info.snapshot.queue_id : 0);
+        var qid = parseInt(String(qidRaw), 10);
+        if (!qid || qid < 1 || isNaN(qid)) {
+            qid = 0;
+        }
+        var idDisplay = qid > 0 ? String(qid) : queueMessages.queueIdUnknown;
+        var idRow = '<div class="d-flex flex-wrap align-items-center gap-2 mb-2">'
+            + '<span class="text-muted small mb-0">' + escapeHtml(queueMessages.queueIdLabel) + '</span>'
+            + '<code class="small mb-0">' + escapeHtml(idDisplay) + '</code>'
+            + '</div>';
+        metaEl.innerHTML = idRow
+            + '<pre class="small mb-0 border rounded p-2 bg-light text-break" style="white-space:pre-wrap;max-height:min(28vh,14rem);overflow:auto;">'
+            + escapeHtml(snapJson)
+            + '</pre>';
+        procEl.textContent = String(info.process || '').trim() || '—';
+        resEl.textContent = String(info.result_log || '').trim() || '—';
+    }
+
+    function syncFromWorkspaceState(workspaceState) {
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return;
+        }
+        try {
+            window.__pbLastWorkspaceState = workspaceState;
+        } catch (e) {
+            // ignore
+        }
+        renderPlanQueueInfoPanel(workspaceState);
+    }
+
+    function bindPlanQueueInfoRefresh() {
+        var btn = document.getElementById('pb-ai-plan-queue-info-refresh');
+        if (!btn || btn.dataset.pbBound === '1' || !workspaceSnapshotUrl) {
+            return;
+        }
+        btn.dataset.pbBound = '1';
+        btn.addEventListener('click', function () {
+            btn.disabled = true;
+            postForm(workspaceSnapshotUrl, { public_id: publicId }).then(function (data) {
+                btn.disabled = false;
+                if (data && data.success && data.data) {
+                    if (typeof window.hydrateWorkspaceFromState === 'function') {
+                        window.hydrateWorkspaceFromState(data.data);
+                    }
+                    toast('success', queueMessages.refreshed);
+                    return;
+                }
+                toast('error', (data && data.message) ? String(data.message) : queueMessages.refreshFailed);
+            }).catch(function () {
+                btn.disabled = false;
+                toast('error', queueMessages.refreshFailed);
+            });
+        });
+    }
+
+    window.__pbPhase1TaskProgress = {
+        syncFromWorkspaceState: syncFromWorkspaceState,
+        renderPlanQueueInfoPanel: renderPlanQueueInfoPanel,
+        bindPlanQueueInfoRefresh: bindPlanQueueInfoRefresh
+    };
+
+    bindPlanQueueInfoRefresh();
+    var st = null;
+    try {
+        st = window.__pbLastWorkspaceState;
+    } catch (e) {
+        st = null;
+    }
+    if (st && typeof st === 'object') {
+        renderPlanQueueInfoPanel(st);
+    }
+})();
+</script>
