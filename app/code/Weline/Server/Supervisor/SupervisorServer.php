@@ -77,6 +77,36 @@ final class SupervisorServer
         return $this->boundEndpoint;
     }
 
+    public function hasSession(int $sessionId): bool
+    {
+        return isset($this->sessions[$sessionId]);
+    }
+
+    public function closeSessionById(int $sessionId): void
+    {
+        $this->closeSession($sessionId);
+    }
+
+    public function sendToSession(int $sessionId, string $message): bool
+    {
+        if ($message === '' || !isset($this->sessions[$sessionId])) {
+            return false;
+        }
+
+        $this->sessions[$sessionId]->writeBuffer .= $message;
+        $this->flushWrites($this->sessions[$sessionId]);
+
+        return isset($this->sessions[$sessionId]);
+    }
+
+    /**
+     * @return array<int, SupervisorSession>
+     */
+    public function sessions(): array
+    {
+        return $this->sessions;
+    }
+
     /**
      * @return array<int, array<string, int|string|float>>
      */
@@ -89,6 +119,16 @@ final class SupervisorServer
                 'peer' => $session->peer,
                 'pending_writes' => \strlen($session->writeBuffer),
                 'last_activity_at' => $session->lastActivityAt,
+                'instance' => $session->instance,
+                'channel' => $session->channel,
+                'role' => $session->role,
+                'slot_id' => $session->slotId,
+                'worker_id' => $session->workerId,
+                'pid' => $session->pid,
+                'port' => $session->port,
+                'launch_nonce' => $session->launchNonce,
+                'lease_id' => $session->leaseId,
+                'generation' => $session->generation,
             ];
         }
 
@@ -208,6 +248,8 @@ final class SupervisorServer
             if ($decoded === []) {
                 continue;
             }
+            $session = $this->rememberSessionMetadata($session, $decoded);
+            $this->sessions[$session->id] = $session;
             $response = $this->runtime->handle($decoded);
             if (\is_string($response) && $response !== '') {
                 $this->sessions[$session->id]->writeBuffer .= $response;
@@ -238,6 +280,61 @@ final class SupervisorServer
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string, mixed> $decoded
+     */
+    private function rememberSessionMetadata(SupervisorSession $session, array $decoded): SupervisorSession
+    {
+        $type = (string)($decoded['type'] ?? '');
+        if ($type === '') {
+            return $session;
+        }
+
+        $workerId = $session->workerId;
+        $slotId = (string)($decoded['slot_id'] ?? $session->slotId);
+        if ($workerId <= 0 && \preg_match('/#(\d+)$/', $slotId, $matches) === 1) {
+            $workerId = (int)$matches[1];
+        }
+
+        $port = $session->port;
+        $listen = \is_array($decoded['listen'] ?? null) ? $decoded['listen'] : [];
+        if (isset($listen['port'])) {
+            $port = (int)$listen['port'];
+        } elseif (isset($decoded['port'])) {
+            $port = (int)$decoded['port'];
+        }
+
+        $leaseId = $session->leaseId;
+        $generation = $session->generation;
+        if ($type === \Weline\Server\Supervisor\Protocol\SupervisorMessage::TYPE_LEASE_ASSIGN
+            || $type === \Weline\Server\Supervisor\Protocol\SupervisorMessage::TYPE_READY_ACK) {
+            $leaseId = (string)($decoded['lease_id'] ?? $leaseId);
+            $generation = (int)($decoded['generation'] ?? $generation);
+        } elseif (isset($decoded['lease_id']) || isset($decoded['generation'])) {
+            $leaseId = (string)($decoded['lease_id'] ?? $leaseId);
+            $generation = (int)($decoded['generation'] ?? $generation);
+        }
+
+        return new SupervisorSession(
+            id: $session->id,
+            peer: $session->peer,
+            socket: $session->socket,
+            readBuffer: $session->readBuffer,
+            writeBuffer: $session->writeBuffer,
+            lastActivityAt: $session->lastActivityAt,
+            instance: (string)($decoded['instance'] ?? $session->instance),
+            channel: (string)($decoded['channel'] ?? $session->channel),
+            role: (string)($decoded['role'] ?? $session->role),
+            slotId: $slotId,
+            workerId: $workerId,
+            pid: (int)($decoded['pid'] ?? $session->pid),
+            port: $port,
+            launchNonce: (string)($decoded['launch_nonce'] ?? $session->launchNonce),
+            leaseId: $leaseId,
+            generation: $generation,
+        );
     }
 
     private function closeSession(int $sessionId): void

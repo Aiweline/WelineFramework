@@ -4,17 +4,17 @@
 
         <h5 class="card-title mb-1"><?= htmlspecialchars((string)__('可视化编辑'), ENT_QUOTES, 'UTF-8') ?></h5>
 
-        <p class="text-muted mb-0"><?= htmlspecialchars((string)__('页面切换只会更新当前预览页与可视化 URL，不再手填 preview_page_id。'), ENT_QUOTES, 'UTF-8') ?></p>
+        <p class="text-muted mb-0"><?= htmlspecialchars((string)__('切换页面时只会更新当前预览页和可视化 URL，不需要再手动填写 preview_page_id。'), ENT_QUOTES, 'UTF-8') ?></p>
 
     </div>
 
     <div class="card-body p-4">
 
-        <div class="pb-ai-visual-editor-toolbar mb-3" role="toolbar" aria-label="<?= htmlspecialchars((string)__('可视化编辑器工具条'), ENT_QUOTES, 'UTF-8') ?>">
+        <div class="pb-ai-visual-editor-toolbar mb-3" role="toolbar" aria-label="<?= htmlspecialchars((string)__('可视化编辑器工具栏'), ENT_QUOTES, 'UTF-8') ?>">
 
             <div class="pb-ai-visual-toolbar-pages<?= $previewPageOptions === [] ? ' d-none' : '' ?>" id="pb-ai-preview-tabs-wrap">
 
-                <div class="small text-muted mb-1"><?= htmlspecialchars((string)__('当前预览页'), ENT_QUOTES, 'UTF-8') ?></div>
+                <div class="small text-muted mb-1"><?= htmlspecialchars((string)__('当前预览页面'), ENT_QUOTES, 'UTF-8') ?></div>
 
                 <ul class="nav nav-tabs pb-ai-preview-tabs" role="tablist">
 
@@ -70,7 +70,7 @@
 
                     <button type="button" class="btn btn-outline-secondary btn-sm pb-ai-preview-device-btn" data-preview-device="tablet" aria-pressed="false"><?= htmlspecialchars((string)__('iPad'), ENT_QUOTES, 'UTF-8') ?></button>
 
-                    <button type="button" class="btn btn-outline-secondary btn-sm pb-ai-preview-device-btn" data-preview-device="mobile" aria-pressed="false"><?= htmlspecialchars((string)__('Mobile'), ENT_QUOTES, 'UTF-8') ?></button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm pb-ai-preview-device-btn" data-preview-device="mobile" aria-pressed="false"><?= htmlspecialchars((string)__('手机'), ENT_QUOTES, 'UTF-8') ?></button>
 
                 </div>
 
@@ -82,7 +82,7 @@
 
         <div class="border rounded p-3 mb-3">
 
-            <div class="fw-semibold mb-2"><?= htmlspecialchars((string)__('已物化页面'), ENT_QUOTES, 'UTF-8') ?></div>
+            <div class="fw-semibold mb-2"><?= htmlspecialchars((string)__('已生成页面'), ENT_QUOTES, 'UTF-8') ?></div>
 
             <div class="d-flex flex-wrap gap-2">
 
@@ -98,9 +98,7 @@
 
         <?php endif; ?>
 
-        <div class="alert alert-info mb-0<?= $embeddedVisualUrl !== '' ? ' d-none' : '' ?>" id="pb-ai-visual-edit-empty-state"><?= htmlspecialchars((string)__('当前还没有可用的可视化预览地址，请先完成虚拟主题编排。'), ENT_QUOTES, 'UTF-8') ?></div>
-
-
+        <div class="alert alert-info mb-0<?= $embeddedVisualUrl !== '' ? ' d-none' : '' ?>" id="pb-ai-visual-edit-empty-state"><?= htmlspecialchars((string)__('当前还没有可用的可视化预览地址，请先完成虚拟主题构建。'), ENT_QUOTES, 'UTF-8') ?></div>
 
         <?php if (!empty($guidedUi)): ?>
 
@@ -138,7 +136,7 @@
 
                         <?php else: ?>
 
-                            <div class="alert alert-info mb-0 pb-ai-preview-host-empty m-3"><?= htmlspecialchars((string)__('完成虚拟主题编排后，这里会直接显示真实的 PageBuilder 可视化预览。'), ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="alert alert-info mb-0 pb-ai-preview-host-empty m-3"><?= htmlspecialchars((string)__('完成虚拟主题构建后，这里会直接显示真实的 PageBuilder 可视化预览。'), ENT_QUOTES, 'UTF-8') ?></div>
 
                         <?php endif; ?>
 
@@ -155,4 +153,3 @@
     </div>
 
 </div>
-

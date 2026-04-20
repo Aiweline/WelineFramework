@@ -46,12 +46,26 @@ final class ServerQueryProviderHostsAddTest extends TestCase
         $provider = $this->createProvider();
 
         $result = $provider->execute('hostsAdd', [
-            'domain' => 'weline.local',
+            'domain' => 'weline.test',
         ]);
 
         self::assertIsArray($result);
         self::assertFalse((bool)($result['success'] ?? true));
-        self::assertSame('weline.local', $result['domain'] ?? null);
+        self::assertSame('weline.test', $result['domain'] ?? null);
+    }
+
+    public function testHostsAddSkipsManagedLoopbackDomain(): void
+    {
+        $provider = $this->createProvider();
+
+        $result = $provider->execute('hostsAdd', [
+            'domain' => 'demo.weline.localhost',
+        ]);
+
+        self::assertIsArray($result);
+        self::assertTrue((bool)($result['success'] ?? false));
+        self::assertTrue((bool)($result['skipped'] ?? false));
+        self::assertSame('demo.weline.localhost', $result['domain'] ?? null);
     }
 
     public function testEnsureLocalWildcardCertificateRejectsNonWildcardTarget(): void
@@ -59,11 +73,11 @@ final class ServerQueryProviderHostsAddTest extends TestCase
         $provider = $this->createProvider();
 
         $result = $provider->execute('ensureLocalWelineWildcardCertificate', [
-            'domain' => 'apk-seo-d4de8e.weline.local',
+            'domain' => 'apk-seo-d4de8e.weline.test',
         ]);
 
         self::assertIsArray($result);
         self::assertFalse((bool)($result['success'] ?? true));
-        self::assertSame('apk-seo-d4de8e.weline.local', $result['domain'] ?? null);
+        self::assertSame('apk-seo-d4de8e.weline.test', $result['domain'] ?? null);
     }
 }

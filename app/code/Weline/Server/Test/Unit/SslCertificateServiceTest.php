@@ -27,6 +27,10 @@ class SslCertificateServiceTest extends TestCase
             SslCertificateService::PROVIDER_SELF_SIGNED,
             $normalize->invoke($service, 'selfsigned')
         );
+        $this->assertSame(
+            SslCertificateService::PROVIDER_LOCAL_CA,
+            $normalize->invoke($service, 'local-ca')
+        );
     }
     
     public function testResolveAcmeDirectoryByProvider(): void
@@ -55,11 +59,14 @@ class SslCertificateServiceTest extends TestCase
         $m = new ReflectionMethod($service, 'isWelineLocalWildcardCandidateDomain');
         $m->setAccessible(true);
 
-        $this->assertTrue($m->invoke($service, '*.weline.local'));
-        $this->assertTrue($m->invoke($service, 'p11005ce4.weline.local'));
-        $this->assertTrue($m->invoke($service, 'shop-1.weline.local'));
+        $this->assertTrue($m->invoke($service, '*.weline.test'));
+        $this->assertTrue($m->invoke($service, 'p11005ce4.weline.test'));
+        $this->assertTrue($m->invoke($service, 'shop-1.weline.test'));
+        $this->assertTrue($m->invoke($service, '*.weline.localhost'));
+        $this->assertTrue($m->invoke($service, 'p11005ce4.weline.localhost'));
 
-        $this->assertFalse($m->invoke($service, 'weline.local'));
+        $this->assertFalse($m->invoke($service, 'weline.test'));
+        $this->assertFalse($m->invoke($service, 'weline.localhost'));
         $this->assertFalse($m->invoke($service, 'example.com'));
         $this->assertFalse($m->invoke($service, ''));
     }
@@ -67,8 +74,8 @@ class SslCertificateServiceTest extends TestCase
     public function testCertificateStorageSegmentForFilesystemPlainDomain(): void
     {
         $this->assertSame(
-            'p11005ce4.weline.local',
-            SslCertificateService::certificateStorageSegmentForFilesystem('p11005ce4.weline.local')
+            'p11005ce4.weline.test',
+            SslCertificateService::certificateStorageSegmentForFilesystem('p11005ce4.weline.test')
         );
     }
 
@@ -76,37 +83,59 @@ class SslCertificateServiceTest extends TestCase
     {
         if (\PHP_OS_FAMILY === 'Windows') {
             $this->assertSame(
-                '_wildcard_.weline.local',
-                SslCertificateService::certificateStorageSegmentForFilesystem('*.weline.local')
+                '_wildcard_.weline.test',
+                SslCertificateService::certificateStorageSegmentForFilesystem('*.weline.test')
             );
         } else {
             $this->assertSame(
-                '*.weline.local',
-                SslCertificateService::certificateStorageSegmentForFilesystem('*.weline.local')
+                '*.weline.test',
+                SslCertificateService::certificateStorageSegmentForFilesystem('*.weline.test')
             );
         }
     }
 
     public function testCertificateStorageSegmentCandidatesForProbeWildcard(): void
     {
-        $c = SslCertificateService::certificateStorageSegmentCandidatesForProbe('*.weline.local');
+        $c = SslCertificateService::certificateStorageSegmentCandidatesForProbe('*.weline.test');
         if (\PHP_OS_FAMILY === 'Windows') {
-            $this->assertContains('_wildcard_.weline.local', $c);
-            $this->assertContains('*.weline.local', $c);
+            $this->assertContains('_wildcard_.weline.test', $c);
+            $this->assertContains('*.weline.test', $c);
         } else {
-            $this->assertSame(['*.weline.local'], $c);
+            $this->assertSame(['*.weline.test'], $c);
         }
     }
 
     public function testLogicalDomainFromStorageSegment(): void
     {
         $this->assertSame(
-            '*.weline.local',
-            SslCertificateService::logicalDomainFromStorageSegment('_wildcard_.weline.local')
+            '*.weline.test',
+            SslCertificateService::logicalDomainFromStorageSegment('_wildcard_.weline.test')
         );
         $this->assertSame(
-            'p1.weline.local',
-            SslCertificateService::logicalDomainFromStorageSegment('p1.weline.local')
+            'p1.weline.test',
+            SslCertificateService::logicalDomainFromStorageSegment('p1.weline.test')
+        );
+    }
+
+    public function testGetIssuerByProviderSupportsLocalCa(): void
+    {
+        $service = new SslCertificateService();
+
+        $this->assertSame(
+            SslCertificateService::ISSUER_LOCAL_CA,
+            $service->getIssuerByProvider(SslCertificateService::PROVIDER_LOCAL_CA)
+        );
+    }
+
+    public function testInferProviderByIssuerRecognizesLocalCaIssuer(): void
+    {
+        $service = new SslCertificateService();
+        $infer = new ReflectionMethod($service, 'inferProviderByIssuer');
+        $infer->setAccessible(true);
+
+        $this->assertSame(
+            SslCertificateService::PROVIDER_LOCAL_CA,
+            $infer->invoke($service, '', SslCertificateService::ISSUER_LOCAL_CA)
         );
     }
 }

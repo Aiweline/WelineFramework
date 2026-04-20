@@ -1,12 +1,11 @@
-﻿<?php
+<?php
 /**
  * @var \Weline\Framework\View\Template $this
- * Guided UI mode (default):
+ * Unified workspace mode:
  *   - 3-step horizontal stepper (用户文案)
  *   - Single main action per step
+ *   - Long-running work is observed through SSE while generation runs in backend queues
  *   - Dev artifacts (指标卡/JSON/Public ID) hidden by default
- * Expert UI mode (?expert=1):
- *   - Full current layout preserved
  */
 
 $session = $this->getData('session');
@@ -15,7 +14,6 @@ $state = \is_array($state) ? $state : [];
 $scope = $this->getData('scope');
 $scope = \is_array($scope) ? $scope : [];
 $scopePreview = (string)($this->getData('scope_preview') ?? '{}');
-$stateJsonUrl = (string)($this->getData('state_json_url') ?? '');
 $mergeScopeUrl = (string)($this->getData('merge_scope_url') ?? '');
 $replaceScopeUrl = (string)($this->getData('replace_scope_url') ?? '');
 $setStageUrl = (string)($this->getData('set_stage_url') ?? '');
@@ -39,8 +37,7 @@ $publishCheckUrl = (string)($this->getData('publish_check_url') ?? '');
 $backUrl = (string)($this->getData('back_url') ?? $this->getBackendUrl('websites/backend/site-builder-agent/index', ['provider' => 'pagebuilder']));
 $stageOptions = $this->getData('stage_options');
 $stageOptions = \is_array($stageOptions) ? $stageOptions : [];
-$guidedUi = (bool)($this->getData('guided_ui') ?? true);
-$expertUrl = (string)($this->getData('workspace_expert_url') ?? '');
+$guidedUi = true;
 $guidedUrl = (string)($this->getData('workspace_guided_url') ?? '');
 $recommendDomainUrl = (string)($this->getData('recommend_domain_url') ?? '');
 $checkDomainUrl = (string)($this->getData('check_domain_url') ?? '');
@@ -301,7 +298,7 @@ foreach ($guidedSteps as $i => $s) {
 <?php
 $pbAiGuidedFakeMode = !empty($scope['fake_mode']);
 $pbAiTargetDomainHelpTitle = $pbAiGuidedFakeMode
-    ? (string)__('留空时由 AI 根据可用供应商自动选择并完成域名购买。当前为本地模拟环境，点击「AI 刷新」将按描述推荐 *.weline.local 子域用于联调。')
+    ? (string)__('留空时由 AI 根据可用供应商自动选择并完成域名购买。当前为本地模拟环境，点击「AI 刷新」将按描述推荐 *.weline.test 子域用于联调。')
     : (string)__('留空时由 AI 根据可用供应商自动选择并完成域名购买。可点击「AI 刷新」根据站点名称与描述智能推荐域名并填入。');
 $guidedScopeDefaults = [
     'site_title' => $guidedWorkspaceSiteTitle,
@@ -372,4 +369,3 @@ $workspaceRenderStage = \in_array($currentStage, ['plan', 'visual_edit', 'publis
 <?php endif; ?>
 
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-runtime.phtml', $workspaceTplData) ?>
-

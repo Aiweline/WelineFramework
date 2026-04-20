@@ -1,0 +1,163 @@
+{
+  "pageUrl": "https://p11005ce4.weline.local/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/theme/backend/theme-editor/index?theme_id=6&page_type=homepage&editor_area=frontend",
+  "iframeSrc": "https://p11005ce4.weline.local/theme/frontend/theme-preview/content?theme_id=6&page_type=homepage&layout_type=homepage&layout_option=default&editor_mode=1&preview_mode=live&status=draft&editor_area=frontend&preview_area=frontend&frontend_theme_id=6&backend_theme_id=2",
+  "frameInfo": {
+    "url": "https://p11005ce4.weline.local/theme/frontend/theme-preview/content?theme_id=6&page_type=homepage&layout_type=homepage&layout_option=default&editor_mode=1&preview_mode=live&status=draft&editor_area=frontend&preview_area=frontend&frontend_theme_id=6&backend_theme_id=2",
+    "title": "Weline_Theme",
+    "hasBackendSidebar": false,
+    "hasFrontendThemeAsset": false,
+    "hasHomepageSlot": false,
+    "bodyClass": "",
+    "text": ""
+  },
+  "metrics1160": {
+    "bodyScrollWidth": 1160,
+    "docClientWidth": 1160,
+    "hasHorizontalOverflow": false,
+    "toolbar": {
+      "x": 274,
+      "y": 94,
+      "width": 862,
+      "height": 108.5,
+      "right": 1136,
+      "bottom": 202.5,
+      "overflowX": false,
+      "overflowY": false
+    },
+    "main": {
+      "x": 274,
+      "y": 202.5,
+      "width": 862,
+      "height": 659.5,
+      "right": 1136,
+      "bottom": 862,
+      "overflowX": false,
+      "overflowY": false
+    },
+    "config": {
+      "x": 274,
+      "y": 202.5,
+      "width": 260,
+      "height": 659.5,
+      "right": 534,
+      "bottom": 862,
+      "overflowX": false,
+      "overflowY": false
+    },
+    "preview": {
+      "x": 534,
+      "y": 202.5,
+      "width": 322,
+      "height": 659.5,
+      "right": 856,
+      "bottom": 862,
+      "overflowX": false,
+      "overflowY": false
+    },
+    "widget": {
+      "x": 856,
+      "y": 202.5,
+      "width": 280,
+      "height": 659.5,
+      "right": 1136,
+      "bottom": 862,
+      "overflowX": false,
+      "overflowY": false
+    },
+    "iframe": {
+      "x": 547.90625,
+      "y": 372.90625,
+      "width": 294.1875,
+      "height": 475.1875,
+      "right": 842.09375,
+      "bottom": 848.09375,
+      "overflowX": false,
+      "overflowY": false
+    },
+    "previewArea": {
+      "x": 547.90625,
+      "y": 372.90625,
+      "width": 294.1875,
+      "height": 475.1875,
+      "right": 842.09375,
+      "bottom": 848.09375,
+      "overflowX": false,
+      "overflowY": false
+    }
+  },
+  "metrics900": {
+    "bodyScrollWidth": 900,
+    "docClientWidth": 900,
+    "hasHorizontalOverflow": false,
+    "toolbar": {
+      "x": 24,
+      "y": 94,
+      "width": 852,
+      "height": 108.5,
+      "right": 876,
+      "bottom": 202.5,
+      "overflowX": false,
+      "overflowY": false
+    },
+    "main": {
+      "x": 24,
+      "y": 202.5,
+      "width": 852,
+      "height": 659.5,
+      "right": 876,
+      "bottom": 862,
+      "overflowX": false,
+      "overflowY": true
+    },
+    "config": {
+      "x": 24,
+      "y": 202.5,
+      "width": 426,
+      "height": 261.109375,
+      "right": 450,
+      "bottom": 463.609375,
+      "overflowX": false,
+      "overflowY": false
+    },
+    "preview": {
+      "x": 24,
+      "y": 463.609375,
+      "width": 852,
+      "height": 476.15625,
+      "right": 876,
+      "bottom": 939.765625,
+      "overflowX": false,
+      "overflowY": false
+    },
+    "widget": {
+      "x": 450,
+      "y": 202.5,
+      "width": 426,
+      "height": 261.109375,
+      "right": 876,
+      "bottom": 463.609375,
+      "overflowX": false,
+      "overflowY": false
+    },
+    "iframe": {
+      "x": 34.796875,
+      "y": 533.40625,
+      "width": 830.40625,
+      "height": 395.5625,
+      "right": 865.203125,
+      "bottom": 928.96875,
+      "overflowX": false,
+      "overflowY": false
+    },
+    "previewArea": {
+      "x": 34.796875,
+      "y": 533.40625,
+      "width": 830.40625,
+      "height": 395.5625,
+      "right": 865.203125,
+      "bottom": 928.96875,
+      "overflowX": false,
+      "overflowY": false
+    }
+  }
+}

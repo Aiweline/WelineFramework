@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Websites\Service;
 
 use Weline\Server\Service\HostsFileManager;
+use Weline\Server\Service\LocalDomainPolicy;
 
 class LocalWelineHostsSyncService
 {
@@ -22,12 +23,7 @@ class LocalWelineHostsSyncService
 
     public function isEligibleDomain(string $domain): bool
     {
-        $domain = \strtolower(\trim($domain));
-        if ($domain === '' || $domain === 'weline.local') {
-            return false;
-        }
-
-        return (bool)\preg_match('/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.weline\.local$/', $domain);
+        return LocalDomainPolicy::isManagedSingleLabelSubdomain($domain);
     }
 
     /**
@@ -38,11 +34,20 @@ class LocalWelineHostsSyncService
         $domain = \strtolower(\trim($domain));
         $ip = \trim($ip) !== '' ? \trim($ip) : '127.0.0.1';
 
+        if (LocalDomainPolicy::resolvesViaLoopbackSuffix($domain)) {
+            return [
+                'success' => true,
+                'skipped' => true,
+                'message' => (string)__('Domain %{1} uses the .localhost loopback suffix and does not need hosts injection', [$domain]),
+                'domain' => $domain,
+            ];
+        }
+
         if (!$this->isEligibleDomain($domain)) {
             return [
                 'success' => false,
                 'skipped' => true,
-                'message' => (string)__('Only {subdomain}.weline.local is allowed for automatic hosts injection'),
+                'message' => (string)__('Only managed local WLS domains are allowed for automatic hosts injection'),
                 'domain' => $domain,
             ];
         }

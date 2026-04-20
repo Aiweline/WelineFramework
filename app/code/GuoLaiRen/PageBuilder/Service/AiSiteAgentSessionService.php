@@ -469,6 +469,11 @@ class AiSiteAgentSessionService
             if ($m->getId() <= 0) {
                 continue;
             }
+            // 加载 scope 获取 workspace_status 和 active_operation.queue_id
+            $scope = $m->getScopeArray();
+            $activeOp = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+            $activeStatus = \trim((string)($activeOp['status'] ?? ''));
+            $workspaceStatus = \trim((string)($scope['workspace_status'] ?? ''));
             $out[] = [
                 'public_id' => $m->getPublicId(),
                 'stage' => $m->getStage(),
@@ -476,6 +481,9 @@ class AiSiteAgentSessionService
                 'website_id' => $m->getWebsiteId(),
                 'virtual_theme_id' => $m->getVirtualThemeId(),
                 'update_time' => (string) ($row[AiSiteAgentSession::schema_fields_UPDATE_TIME] ?? ''),
+                'workspace_status' => $workspaceStatus,
+                'active_operation_status' => $activeStatus,
+                'active_operation_queue_id' => (int)($activeOp['queue_id'] ?? 0),
             ];
         }
         return $out;

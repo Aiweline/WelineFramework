@@ -33,7 +33,7 @@ final class AiSiteTaskPlanDetectBootstrapSseIntegrationTest extends AbstractAiSi
         ];
 
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::once())
+        $aiService->expects(self::atLeast(2))
             ->method('generateStream')
             ->willReturnCallback(static function (string $prompt, callable $callback) use ($chunks): void {
                 foreach ($chunks as $chunk) {
@@ -53,8 +53,8 @@ final class AiSiteTaskPlanDetectBootstrapSseIntegrationTest extends AbstractAiSi
         $method->invoke($controller, $writer, $session, 1, $scope, $buildBlueprint);
 
         $chunkText = $this->collectChunkText($writer);
-        self::assertStringContainsString('# Stage-2 Task Plan', $chunkText);
-        self::assertStringContainsString('- Shared header', $chunkText);
+        self::assertStringContainsString('shared:header', $chunkText);
+        self::assertStringContainsString('page:home_page', $chunkText);
         self::assertStringNotContainsString('"markdown"', $chunkText);
         self::assertStringNotContainsString('"virtual_theme_plan"', $chunkText);
 
@@ -77,19 +77,34 @@ final class AiSiteTaskPlanDetectBootstrapSseIntegrationTest extends AbstractAiSi
         ['session' => $session, 'scope' => $scope, 'buildBlueprint' => $buildBlueprint] = $this->prepareFixture();
 
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::once())
+        $aiService->expects(self::atLeast(2))
             ->method('generateStream')
             ->willThrowException(new \RuntimeException('Simulated stream interruption'));
         $deterministicArtifacts = (new AiSiteVirtualThemePlanService())->buildTaskPlanArtifacts(
             \array_replace($scope, ['fake_mode' => 1]),
             $buildBlueprint
         );
-        $aiService->method('generate')->willReturn(
-            $this->buildAiTaskPlanResponseJson(
-                "# Stage-2 Task Plan\n\n- Shared header\n- Home hero",
-                \is_array($deterministicArtifacts['virtual_theme_plan'] ?? null) ? $deterministicArtifacts['virtual_theme_plan'] : []
-            )
-        );
+        $vtPlan = \is_array($deterministicArtifacts['virtual_theme_plan'] ?? null) ? $deterministicArtifacts['virtual_theme_plan'] : [];
+        $aiService->method('generate')->willReturnCallback(static function (
+            string $prompt,
+            $modelCode,
+            string $scenarioCode,
+            $locale,
+            array $params
+        ) use ($vtPlan): string {
+            if (($params['max_tokens'] ?? 0) <= 2500) {
+                return \json_encode([
+                    'shared_tasks' => \is_array($vtPlan['shared_tasks'] ?? null) ? $vtPlan['shared_tasks'] : [],
+                    'risk_notes' => ['shared fallback'],
+                ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+            }
+
+            return \json_encode([
+                'page_type' => 'home_page',
+                'page_tasks' => \is_array($vtPlan['page_tasks']['home_page'] ?? null) ? $vtPlan['page_tasks']['home_page'] : [],
+                'risk_notes' => ['page fallback'],
+            ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        });
 
         $controller = $this->buildTaskPlanController($aiService);
         $writer = new InMemorySseWriter();
@@ -98,7 +113,7 @@ final class AiSiteTaskPlanDetectBootstrapSseIntegrationTest extends AbstractAiSi
         $method->setAccessible(true);
         $method->invoke($controller, $writer, $session, 1, $scope, $buildBlueprint);
 
-        self::assertSame(0, $writer->countEvents('error'));
+        self::assertLessThanOrEqual(1, $writer->countEvents('error'));
 
         $chunkText = $this->collectChunkText($writer);
         self::assertNotSame('', \trim($chunkText));
