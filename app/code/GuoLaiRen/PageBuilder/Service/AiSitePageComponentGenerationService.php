@@ -341,6 +341,117 @@ final class AiSitePageComponentGenerationService
     }
 
     /**
+     * @param array<string, array{
+     *   componentCode:string,
+     *   name:string,
+     *   region:string,
+     *   prompt:string,
+     *   defaultConfig:array<string,mixed>,
+     *   renderContext:array<string,mixed>
+     * }> $components
+     * @return \Generator yields
+     *   [componentKey => ['status' => 'fulfilled', 'result' => array<string,mixed>]]
+     *   or
+     *   [componentKey => ['status' => 'rejected', 'error' => \Throwable]]
+     */
+    public function generateComponentEventsConcurrently(array $components): \Generator
+    {
+        if ($components === []) {
+            return;
+        }
+
+        if ($this->isTestEnvironment() || !\class_exists(\Fiber::class)) {
+            foreach ($components as $componentKey => $spec) {
+                try {
+                    yield $componentKey => [
+                        'status' => 'fulfilled',
+                        'result' => $this->generateComponent(
+                            $spec['componentCode'],
+                            $spec['name'],
+                            $spec['region'],
+                            $spec['prompt'],
+                            $spec['defaultConfig'],
+                            $spec['renderContext']
+                        ),
+                    ];
+                } catch (\Throwable $throwable) {
+                    yield $componentKey => [
+                        'status' => 'rejected',
+                        'error' => $throwable,
+                    ];
+                }
+            }
+
+            return;
+        }
+
+        /** @var array<string, \Fiber> $fibers */
+        $fibers = [];
+        foreach ($components as $componentKey => $spec) {
+            $fibers[$componentKey] = new \Fiber(function () use ($spec): array {
+                return $this->generateComponent(
+                    $spec['componentCode'],
+                    $spec['name'],
+                    $spec['region'],
+                    $spec['prompt'],
+                    $spec['defaultConfig'],
+                    $spec['renderContext']
+                );
+            });
+        }
+
+        foreach ($fibers as $fiber) {
+            $fiber->start();
+        }
+
+        $settled = [];
+        while (\count($settled) < \count($fibers)) {
+            $madeProgress = false;
+            foreach ($fibers as $componentKey => $fiber) {
+                if (isset($settled[$componentKey])) {
+                    continue;
+                }
+
+                try {
+                    if ($fiber->isTerminated()) {
+                        $settled[$componentKey] = true;
+                        $madeProgress = true;
+                        yield $componentKey => [
+                            'status' => 'fulfilled',
+                            'result' => $fiber->getReturn(),
+                        ];
+                        continue;
+                    }
+
+                    if ($fiber->isSuspended()) {
+                        $fiber->resume();
+                        $madeProgress = true;
+
+                        if ($fiber->isTerminated()) {
+                            $settled[$componentKey] = true;
+                            yield $componentKey => [
+                                'status' => 'fulfilled',
+                                'result' => $fiber->getReturn(),
+                            ];
+                        }
+                    }
+                } catch (\Throwable $throwable) {
+                    $settled[$componentKey] = true;
+                    $madeProgress = true;
+                    yield $componentKey => [
+                        'status' => 'rejected',
+                        'error' => $throwable,
+                    ];
+                }
+            }
+
+            if (\count($settled) < \count($fibers)) {
+                SchedulerSystem::yieldDelay($madeProgress ? 1 : 5);
+            }
+        }
+    }
+
+    /**
      * 并发生成 header + footer 共享组件
      *
      * @return array{header:array<string,mixed>, footer:array<string,mixed>}
@@ -952,7 +1063,7 @@ final class AiSitePageComponentGenerationService
             [
                 'allow_zero_balance_provider' => true,
                 'temperature' => 0.35,
-                'max_tokens' => 12000,
+                'max_tokens' => 8192,
                 'timeout' => 240,
                 'response_format' => ['type' => 'json_object'],
             ]
@@ -1168,7 +1279,7 @@ final class AiSitePageComponentGenerationService
             null,
             [
                 'temperature' => 0.2,
-                'max_tokens' => 16000,
+                'max_tokens' => 8192,
                 'timeout' => 180,
                 'response_format' => ['type' => 'json_object'],
                 'allow_zero_balance_provider' => true,

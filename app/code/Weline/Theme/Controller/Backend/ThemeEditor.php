@@ -2883,9 +2883,7 @@ HTML;
             $context = $this->getPreviewContextService()->buildContext([
                 'frontend_theme_id' => $frontendThemeId,
                 'backend_theme_id' => (int)($data['backend_theme_id'] ?? $this->request->getParam('backend_theme_id', 0)),
-                'editor_area' => $this->getPreviewContextService()->normalizeArea(
-                    (string)($data['editor_area'] ?? $this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND))
-                ),
+                'editor_area' => PreviewContextService::AREA_FRONTEND,
                 'shell' => PreviewContextService::SHELL_PREVIEW,
                 'preview_mode' => (string)($data['preview_mode'] ?? $this->request->getParam('preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE)),
                 'status' => (string)($data['status'] ?? $this->request->getParam('status', PreviewContextService::DEFAULT_STATUS)),
@@ -3406,14 +3404,15 @@ HTML;
         $editorArea = $this->resolveRequestedEditorArea(
             (string)($overrides['editor_area'] ?? PreviewContextService::AREA_BACKEND)
         );
-        $overrides['editor_area'] = $editorArea;
+        $previewArea = $this->resolveRequestedPreviewArea($editorArea);
+        $overrides['editor_area'] = $previewArea;
 
         // If caller only passed theme_id (common in editor iframe refresh), map it to selected area.
         if ($themeId > 0
             && !isset($overrides['frontend_theme_id'])
             && !isset($overrides['backend_theme_id'])
         ) {
-            if ($editorArea === PreviewContextService::AREA_BACKEND) {
+            if ($previewArea === PreviewContextService::AREA_BACKEND) {
                 $overrides['backend_theme_id'] = $themeId;
             } else {
                 $overrides['frontend_theme_id'] = $themeId;
@@ -3434,6 +3433,16 @@ HTML;
         }
 
         return $previewContextService->normalizeArea($rawEditorArea, $default);
+    }
+
+    private function resolveRequestedPreviewArea(string $default = PreviewContextService::AREA_FRONTEND): string
+    {
+        $rawPreviewArea = (string)$this->request->getParam('preview_area', '');
+        if ($rawPreviewArea === '') {
+            $rawPreviewArea = (string)$this->request->getParam('editor_area', $default);
+        }
+
+        return $this->getPreviewContextService()->normalizeArea($rawPreviewArea, $default);
     }
 
     private function buildFrontendPreviewUrl(array $context, string $pageType): string

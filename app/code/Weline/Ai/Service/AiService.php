@@ -538,6 +538,9 @@ class AiService
         if (isset($params['messages']) && is_array($params['messages']) && $params['messages'] !== []) {
             return $params;
         }
+        if (!empty($params['disable_conversation_history'])) {
+            return $params;
+        }
 
         $service = $this->getConversationSessionService();
         if (!$service->hasSessionId($params)) {
@@ -553,6 +556,9 @@ class AiService
 
     private function persistConversationTurn(array $params, string $prompt, string $response): void
     {
+        if (!empty($params['disable_conversation_persist'])) {
+            return;
+        }
         $service = $this->getConversationSessionService();
         if (!$service->hasSessionId($params)) {
             return;
