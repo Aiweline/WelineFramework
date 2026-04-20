@@ -4,171 +4,100 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 /**
- * Hosts 文件管理服务
- *
- * 自动配置系统 hosts 文件，将项目域名映射到 127.0.0.1
+ * Manage local hosts entries for WLS development domains.
  */
 class HostsFileManager
 {
     private const MARKER_START = '# Weline WLS Auto-Config Start';
     private const MARKER_END = '# Weline WLS Auto-Config End';
 
-    /**
-     * 获取 hosts 文件路径
-     */
     public static function getHostsFilePath(): string
     {
         if (PHP_OS_FAMILY === 'Windows') {
-            return getenv('SystemRoot') . '\System32\drivers\etc\hosts';
+            return (string) getenv('SystemRoot') . '\System32\drivers\etc\hosts';
         }
+
         return '/etc/hosts';
     }
 
-    /**
-     * 检查是否有权限修改 hosts 文件
-     */
     public static function hasPermission(): bool
     {
-        $hostsFile = self::getHostsFilePath();
-        return is_writable($hostsFile);
+        return is_writable(self::getHostsFilePath());
     }
 
     /**
-     * 添加域名到 hosts 文件
-     *
-     * @param string $domain 域名
-     * @param string $ip IP 地址（默认 127.0.0.1）
-     * @return array ['success' => bool, 'message' => string, 'needs_admin' => bool]
+     * @return array{success: bool, message: string, needs_admin?: bool, command?: string, already_exists?: bool, elevated?: bool}
      */
     public static function addDomain(string $domain, string $ip = '127.0.0.1'): array
     {
         $hostsFile = self::getHostsFilePath();
-
-        // 检查文件是否存在
         if (!file_exists($hostsFile)) {
             return [
                 'success' => false,
-                'message' => "Hosts 文件不存在: {$hostsFile}",
+                'message' => "Hosts file not found: {$hostsFile}",
                 'needs_admin' => false,
             ];
         }
 
-        // 检查权限
-        if (!self::hasPermission()) {
-            return [
-                'success' => false,
-                'message' => '需要管理员权限修改 hosts 文件',
-                'needs_admin' => true,
-                'command' => self::getAdminCommand($domain, $ip),
-            ];
-        }
-
-        // 读取现有内容
         $content = file_get_contents($hostsFile);
         if ($content === false) {
             return [
                 'success' => false,
-                'message' => "无法读取 hosts 文件: {$hostsFile}",
+                'message' => "Unable to read hosts file: {$hostsFile}",
                 'needs_admin' => false,
             ];
         }
 
-        // 检查域名是否已存在
         if (self::domainExists($content, $domain)) {
             return [
                 'success' => true,
-                'message' => "域名 {$domain} 已存在于 hosts 文件中",
+                'message' => "Domain {$domain} already exists in hosts file",
                 'needs_admin' => false,
                 'already_exists' => true,
             ];
         }
 
-        // 添加域名
         $newContent = self::addDomainToContent($content, $domain, $ip);
 
-        // 写入文件
+        if (!self::hasPermission()) {
+            $elevated = self::tryAddDomainWithElevation($hostsFile, $newContent, $domain, $ip);
+            if ($elevated !== null) {
+                return $elevated;
+            }
+
+            return [
+                'success' => false,
+                'message' => 'Administrator privileges are required to modify the hosts file',
+                'needs_admin' => true,
+                'command' => self::getAdminCommand($domain, $ip),
+            ];
+        }
+
         if (file_put_contents($hostsFile, $newContent) === false) {
             return [
                 'success' => false,
-                'message' => "无法写入 hosts 文件: {$hostsFile}",
+                'message' => "Unable to write hosts file: {$hostsFile}",
                 'needs_admin' => true,
             ];
         }
 
         return [
             'success' => true,
-            'message' => "已将 {$domain} 添加到 hosts 文件",
+            'message' => "Added {$domain} to hosts file",
             'needs_admin' => false,
         ];
     }
 
     /**
-     * 检查域名是否已存在
-     */
-    private static function domainExists(string $content, string $domain): bool
-    {
-        $lines = explode("\n", $content);
-        foreach ($lines as $line) {
-            $line = trim($line);
-            // 跳过注释和空行
-            if (empty($line) || str_starts_with($line, '#')) {
-                continue;
-            }
-            // 检查是否包含域名
-            if (preg_match('/\s+' . preg_quote($domain, '/') . '(\s|$)/', $line)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 添加域名到内容
-     */
-    private static function addDomainToContent(string $content, string $domain, string $ip): string
-    {
-        // 查找 Weline 标记块
-        if (preg_match('/' . preg_quote(self::MARKER_START, '/') . '(.*?)' . preg_quote(self::MARKER_END, '/') . '/s', $content, $matches)) {
-            // 已有标记块，在块内添加
-            $block = $matches[1];
-            $newBlock = $block . "\n{$ip} {$domain}";
-            $newContent = str_replace($matches[0], self::MARKER_START . $newBlock . "\n" . self::MARKER_END, $content);
-        } else {
-            // 没有标记块，创建新块
-            $block = "\n" . self::MARKER_START . "\n{$ip} {$domain}\n" . self::MARKER_END . "\n";
-            $newContent = $content . $block;
-        }
-
-        return $newContent;
-    }
-
-    /**
-     * 获取管理员命令（用于提示用户手动执行）
-     */
-    private static function getAdminCommand(string $domain, string $ip): string
-    {
-        $hostsFile = self::getHostsFilePath();
-
-        if (PHP_OS_FAMILY === 'Windows') {
-            // Windows: 使用 PowerShell 以管理员身份添加
-            return "Add-Content -Path '{$hostsFile}' -Value '{$ip} {$domain}'";
-        }
-
-        // Linux/Mac: 使用 sudo
-        return "echo '{$ip} {$domain}' | sudo tee -a {$hostsFile}";
-    }
-
-    /**
-     * 移除域名
+     * @return array{success: bool, message: string, needs_admin?: bool, already_removed?: bool}
      */
     public static function removeDomain(string $domain): array
     {
         $hostsFile = self::getHostsFilePath();
-
         if (!self::hasPermission()) {
             return [
                 'success' => false,
-                'message' => '需要管理员权限修改 hosts 文件',
+                'message' => 'Administrator privileges are required to modify the hosts file',
                 'needs_admin' => true,
             ];
         }
@@ -177,19 +106,17 @@ class HostsFileManager
         if ($content === false) {
             return [
                 'success' => false,
-                'message' => "无法读取 hosts 文件: {$hostsFile}",
+                'message' => "Unable to read hosts file: {$hostsFile}",
             ];
         }
 
-        // 移除包含该域名的行
         $lines = explode("\n", $content);
         $newLines = [];
         $removed = false;
-
         foreach ($lines as $line) {
             if (preg_match('/\s+' . preg_quote($domain, '/') . '(\s|$)/', $line)) {
                 $removed = true;
-                continue; // 跳过这一行
+                continue;
             }
             $newLines[] = $line;
         }
@@ -197,23 +124,128 @@ class HostsFileManager
         if (!$removed) {
             return [
                 'success' => true,
-                'message' => "域名 {$domain} 不存在于 hosts 文件中",
+                'message' => "Domain {$domain} was not present in hosts file",
                 'already_removed' => true,
             ];
         }
 
-        $newContent = implode("\n", $newLines);
-
-        if (file_put_contents($hostsFile, $newContent) === false) {
+        if (file_put_contents($hostsFile, implode("\n", $newLines)) === false) {
             return [
                 'success' => false,
-                'message' => "无法写入 hosts 文件: {$hostsFile}",
+                'message' => "Unable to write hosts file: {$hostsFile}",
             ];
         }
 
         return [
             'success' => true,
-            'message' => "已从 hosts 文件移除 {$domain}",
+            'message' => "Removed {$domain} from hosts file",
         ];
+    }
+
+    private static function tryAddDomainWithElevation(string $hostsFile, string $newContent, string $domain, string $ip): ?array
+    {
+        if (PHP_OS_FAMILY !== 'Windows') {
+            return null;
+        }
+
+        $payloadPath = tempnam(sys_get_temp_dir(), 'wls-hosts-');
+        $scriptBase = tempnam(sys_get_temp_dir(), 'wls-hosts-');
+        if ($payloadPath === false || $scriptBase === false) {
+            return null;
+        }
+
+        $scriptPath = $scriptBase . '.ps1';
+        @rename($scriptBase, $scriptPath);
+
+        if (file_put_contents($payloadPath, $newContent) === false) {
+            @unlink($payloadPath);
+            @unlink($scriptPath);
+            return null;
+        }
+
+        $hostsLiteral = str_replace("'", "''", $hostsFile);
+        $payloadLiteral = str_replace("'", "''", $payloadPath);
+        $scriptBody = <<<PS1
+\$hostsFile = '{$hostsLiteral}'
+\$payloadFile = '{$payloadLiteral}'
+\$content = Get-Content -LiteralPath \$payloadFile -Raw
+Set-Content -LiteralPath \$hostsFile -Value \$content -Encoding ASCII
+PS1;
+        if (file_put_contents($scriptPath, $scriptBody) === false) {
+            @unlink($payloadPath);
+            @unlink($scriptPath);
+            return null;
+        }
+
+        $scriptLiteral = str_replace("'", "''", $scriptPath);
+        $command = "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Start-Process -FilePath PowerShell.exe -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','{$scriptLiteral}'\" 2>&1";
+        @shell_exec($command);
+
+        @unlink($scriptPath);
+        @unlink($payloadPath);
+
+        $content = file_get_contents($hostsFile);
+        if ($content !== false && self::domainExists($content, $domain)) {
+            return [
+                'success' => true,
+                'message' => "Added {$domain} to hosts file",
+                'needs_admin' => false,
+                'elevated' => true,
+            ];
+        }
+
+        return [
+            'success' => false,
+            'message' => 'Administrator privileges are required to modify the hosts file',
+            'needs_admin' => true,
+            'command' => self::getAdminCommand($domain, $ip),
+        ];
+    }
+
+    private static function domainExists(string $content, string $domain): bool
+    {
+        foreach (explode("\n", $content) as $line) {
+            $line = trim($line);
+            if ($line === '' || str_starts_with($line, '#')) {
+                continue;
+            }
+            if (preg_match('/\s+' . preg_quote($domain, '/') . '(\s|$)/', $line)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function addDomainToContent(string $content, string $domain, string $ip): string
+    {
+        $pattern = '/' . preg_quote(self::MARKER_START, '/') . '(.*?)' . preg_quote(self::MARKER_END, '/') . '/s';
+        if (preg_match($pattern, $content, $matches)) {
+            $block = rtrim((string) $matches[1], "\r\n");
+            $newBlock = $block === '' ? "{$ip} {$domain}" : $block . "\n{$ip} {$domain}";
+            return (string) str_replace(
+                $matches[0],
+                self::MARKER_START . "\n" . $newBlock . "\n" . self::MARKER_END,
+                $content
+            );
+        }
+
+        $suffix = str_ends_with($content, "\n") ? '' : "\n";
+
+        return $content
+            . $suffix
+            . self::MARKER_START . "\n"
+            . "{$ip} {$domain}\n"
+            . self::MARKER_END . "\n";
+    }
+
+    private static function getAdminCommand(string $domain, string $ip): string
+    {
+        $hostsFile = self::getHostsFilePath();
+        if (PHP_OS_FAMILY === 'Windows') {
+            return "Add-Content -Path '{$hostsFile}' -Value '{$ip} {$domain}'";
+        }
+
+        return "echo '{$ip} {$domain}' | sudo tee -a {$hostsFile}";
     }
 }

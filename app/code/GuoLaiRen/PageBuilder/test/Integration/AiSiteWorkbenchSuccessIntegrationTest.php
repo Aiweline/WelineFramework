@@ -20,11 +20,11 @@ use Weline\Websites\Model\WebsiteDomain;
  *
  * 阶段对应 guided UI：
  * - 阶段 1「说说你的网站」：post-create-session + post-merge-scope（scope_patch 模拟用户填写的站点信息）
- * - 阶段 2「看看效果」：runBuildOperation（内存 SSE）模拟生成虚拟主题与页面；get-state-json 校验预览/编辑 URL
+ * - 阶段 2「看看效果」：runBuildOperation（内存 SSE）模拟生成虚拟主题与页面；buildResult 校验预览/编辑 URL
  * - 阶段 3「准备上线」：post-publish-checklist + runPublishOperation；校验正式页面与后台预览 HTML
  *
- * 前端 workspace.phtml 应使用本控制器 assign 的 URL（与 get-state-json 返回的 visual_* 同源）：
- * state_json_url、merge_scope_url、operation_sse_url、start_publish_url 等，勿写死路径。
+ * 前端 workspace.phtml 应使用本控制器 assign 的 URL（与 buildResult 返回的 visual_* 同源）：
+ * merge_scope_url、operation_sse_url、start_publish_url 等，勿写死路径。
  *
  * @group integration
  * @group pagebuilder_workbench
@@ -117,19 +117,14 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
             self::assertContains($pageType, $generatedPageTypes, 'Each requested page type should emit at least one page_generated event.');
         }
 
-        $buildStatePayload = $this->invokeJsonAction(
-            '/pagebuilder/backend/ai-site-agent/get-state-json',
-            'GET',
-            'getStateJson',
-            ['public_id' => $publicId]
-        );
+        self::assertCount(1, $buildWriter->eventsByName('environment_ready'), 'Should emit exactly one environment_ready event.');
+        $envReadyEvents = $buildWriter->eventsByName('environment_ready');
+        $envReadyData = \is_array($envReadyEvents[0]['data'] ?? null) ? $envReadyEvents[0]['data'] : [];
+        $buildState = \is_array($envReadyData['state'] ?? null) ? $envReadyData['state'] : [];
 
-        self::assertTrue((bool)($buildStatePayload['success'] ?? false), \json_encode($buildStatePayload, \JSON_UNESCAPED_UNICODE));
-        $buildState = \is_array($buildStatePayload['data'] ?? null) ? $buildStatePayload['data'] : [];
-
-        $draftWebsiteId = (int)($buildState['draft_website_id'] ?? 0);
-        $virtualThemeId = (int)($buildState['virtual_theme_id'] ?? 0);
-        $previewPageType = (string)($buildState['preview_page_type'] ?? '');
+        $draftWebsiteId = (int)($buildResult['draft_website_id'] ?? 0);
+        $virtualThemeId = (int)($buildResult['virtual_theme_id'] ?? 0);
+        $previewPageType = (string)($envReadyData['page_type'] ?? '');
         $visualPreviewUrl = (string)($buildState['visual_preview_url'] ?? '');
         $visualEditUrl = (string)($buildState['visual_edit_url'] ?? '');
 
@@ -139,7 +134,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertSame(AiSiteAgentSession::PUBLISH_STATUS_DRAFT, (string)($buildState['publish_status'] ?? ''));
         self::assertSame('can_publish', (string)($buildState['workspace_status'] ?? ''));
         self::assertCount(\count($pageTypes), (array)($buildState['pagebuilder_pages_by_type'] ?? []));
-        self::assertGreaterThan(0, (int)($buildState['preview_page_id'] ?? 0));
+        self::assertGreaterThan(0, (int)($envReadyData['page_id'] ?? 0));
         self::assertCount(\count($pageTypes), (array)($buildState['virtual_pages_by_type'] ?? []));
         $virtualPages = (array)($buildState['virtual_pages_by_type'] ?? []);
         self::assertNotSame(
@@ -193,15 +188,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertIsArray($publishResult['published'] ?? null);
         self::assertGreaterThanOrEqual(2, $publishWriter->countEvents('progress'));
 
-        $publishStatePayload = $this->invokeJsonAction(
-            '/pagebuilder/backend/ai-site-agent/get-state-json',
-            'GET',
-            'getStateJson',
-            ['public_id' => $publicId]
-        );
-
-        self::assertTrue((bool)($publishStatePayload['success'] ?? false), \json_encode($publishStatePayload, \JSON_UNESCAPED_UNICODE));
-        $publishState = \is_array($publishStatePayload['data'] ?? null) ? $publishStatePayload['data'] : [];
+        $publishState = $this->fetchWorkspaceState($publicId);
 
         self::assertSame(AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED, (string)($publishState['publish_status'] ?? ''));
         self::assertSame('published', (string)($publishState['workspace_status'] ?? ''));
@@ -482,7 +469,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertContains(Page::TYPE_ABOUT, $pts, 'about_page should be merged into scope when user switches preview to it');
     }
 
-    public function testStartBuildRequiresConfirmedPlanFirst(): void
+    public function testStartBuildRequiresStagePlansBeforeBuild(): void
     {
         $createPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-create-session',
@@ -527,6 +514,22 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
 
         self::assertFalse((bool)($startBuildPayload['success'] ?? true), \json_encode($startBuildPayload, \JSON_UNESCAPED_UNICODE));
         self::assertSame('PLAN_REQUIRED_BEFORE_BUILD', (string)($startBuildPayload['code'] ?? ''));
+
+        $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
+        self::assertSame(1, (int)($planFlow['confirm_plan']['data']['plan_confirmed'] ?? 0));
+
+        $startBuildWithoutTaskPlanPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-start-build',
+            'POST',
+            'postStartBuild',
+            [],
+            [
+                'public_id' => $publicId,
+                'scope_patch' => $scopePatch,
+            ]
+        );
+        self::assertFalse((bool)($startBuildWithoutTaskPlanPayload['success'] ?? true), \json_encode($startBuildWithoutTaskPlanPayload, \JSON_UNESCAPED_UNICODE));
+        self::assertSame('TASK_PLAN_REQUIRED_BEFORE_BUILD', (string)($startBuildWithoutTaskPlanPayload['code'] ?? ''));
     }
 
     /**
@@ -579,6 +582,8 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
 
         $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
         self::assertSame(1, (int)($planFlow['confirm_plan']['data']['plan_confirmed'] ?? 0));
+        $taskPlanFlow = $this->generateAndConfirmTaskPlan($publicId, $scopePatch);
+        self::assertSame(1, (int)($taskPlanFlow['confirm_task_plan']['data']['task_plan_confirmed'] ?? 0));
 
         $startBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
@@ -602,21 +607,29 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertGreaterThan(0, (int)($buildResult['virtual_theme_id'] ?? 0));
         self::assertGreaterThanOrEqual(\count($pageTypes), $buildWriter->countEvents('progress'));
         self::assertCount(\count($pageTypes), $buildWriter->eventsByName('page_generated'));
+        $parallelBatchEvents = \array_values(\array_filter(
+            $buildWriter->eventsByName('info'),
+            static function (array $event): bool {
+                $payload = \is_array($event['data'] ?? null) ? $event['data'] : [];
+                return (string)($payload['event_type'] ?? '') === 'build_parallel_batch';
+            }
+        ));
+        self::assertNotEmpty($parallelBatchEvents);
+        self::assertContains('started', \array_map(
+            static fn(array $event): string => (string)((\is_array($event['data'] ?? null) ? $event['data'] : [])['batch_state'] ?? ''),
+            $parallelBatchEvents
+        ));
+        self::assertContains('completed', \array_map(
+            static fn(array $event): string => (string)((\is_array($event['data'] ?? null) ? $event['data'] : [])['batch_state'] ?? ''),
+            $parallelBatchEvents
+        ));
         self::assertSame(1, $buildWriter->countEvents('environment_ready'));
         foreach ($buildWriter->eventsByName('page_generated') as $generatedEvent) {
             $payload = \is_array($generatedEvent['data'] ?? null) ? $generatedEvent['data'] : [];
             self::assertGreaterThan(0, (int)($payload['page_id'] ?? 0));
         }
 
-        $buildStatePayload = $this->invokeJsonAction(
-            '/pagebuilder/backend/ai-site-agent/get-state-json',
-            'GET',
-            'getStateJson',
-            ['public_id' => $publicId]
-        );
-
-        self::assertTrue((bool)($buildStatePayload['success'] ?? false), \json_encode($buildStatePayload, \JSON_UNESCAPED_UNICODE));
-        $buildState = \is_array($buildStatePayload['data'] ?? null) ? $buildStatePayload['data'] : [];
+        $buildState = $this->fetchWorkspaceState($publicId);
 
         return [
             'public_id' => $publicId,

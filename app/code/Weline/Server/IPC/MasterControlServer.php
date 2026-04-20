@@ -18,8 +18,9 @@ namespace Weline\Server\IPC;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\LogLevel;
 use Weline\Server\Log\WlsLogger;
+use Weline\Server\Service\Control\ControlPlaneServerInterface;
 
-class MasterControlServer
+class MasterControlServer implements ControlPlaneServerInterface
 {
     /** 当前 Master 允许接入的实例编码 */
     private string $expectedInstanceCode = '';
@@ -99,6 +100,9 @@ class MasterControlServer
 
     /** 单次非阻塞 flush 的最大写入字节数 */
     private int $maxImmediateWriteBytes = 65536;
+
+    /** @var array<string, float> */
+    private array $transientClientLifecycleLoggedAt = [];
 
     /**
      * 设置是否将子进程日志输出到控制台（开发模式）
@@ -410,6 +414,59 @@ class MasterControlServer
         }
     }
 
+    private function normalizeLifecyclePeerHost(string $peerName): string
+    {
+        $peerName = \trim($peerName);
+        if ($peerName === '') {
+            return 'unknown';
+        }
+        if ($peerName[0] === '[') {
+            $closing = \strpos($peerName, ']');
+            if ($closing !== false) {
+                return (string) \substr($peerName, 1, $closing - 1);
+            }
+        }
+
+        $lastColon = \strrpos($peerName, ':');
+        if ($lastColon === false) {
+            return $peerName;
+        }
+
+        $host = (string) \substr($peerName, 0, $lastColon);
+        return $host !== '' ? $host : $peerName;
+    }
+
+    private function shouldSuppressTransientClientLifecycleLog(int $clientId, string $reason): bool
+    {
+        if (!isset($this->clients[$clientId])) {
+            return false;
+        }
+
+        if (!\in_array($reason, ['write_connection_closed', 'peer_eof', 'read_error'], true)) {
+            return false;
+        }
+
+        $role = (string) ($this->clients[$clientId]['role'] ?? '');
+        if ($role !== '' && $role !== self::ROLE_CONTROL) {
+            return false;
+        }
+
+        $peerHost = $this->normalizeLifecyclePeerHost((string) ($this->clients[$clientId]['peer_name'] ?? ''));
+        $key = ($role !== '' ? $role : 'unregistered') . ':' . $reason . ':' . $peerHost;
+        $now = \microtime(true);
+        $last = (float) ($this->transientClientLifecycleLoggedAt[$key] ?? 0.0);
+        if (($now - $last) < 5.0) {
+            return true;
+        }
+
+        $this->transientClientLifecycleLoggedAt[$key] = $now;
+        if (\count($this->transientClientLifecycleLoggedAt) > 256) {
+            $this->transientClientLifecycleLoggedAt = \array_slice($this->transientClientLifecycleLoggedAt, -128, 128, true);
+        }
+
+        return false;
+    }
+
     /**
      * 格式化消息负载为可读字符串（排除 type 字段，避免重复）
      */
@@ -539,7 +596,7 @@ class MasterControlServer
         // - fread='' 且 feof=true: 对端已关闭（TCP FIN）
         // 注意：非阻塞模式下 fread='' 可能只是暂时无数据，不应直接判定断连。
         if ($data === false || ($data === '' && @\feof($socket))) {
-            $this->removeClient($clientId);
+            $this->removeClient($clientId, $data === false ? 'read_error' : 'peer_eof');
             return;
         }
 
@@ -548,7 +605,7 @@ class MasterControlServer
             if (\strlen($buf) + \strlen($data) > $this->maxClientReadBufferSize) {
                 $tag = $this->formatClientTag($clientId);
                 $this->ipcLog("[IPC-Master] READ BUFFER OVERFLOW --> {$tag}, disconnecting");
-                $this->removeClient($clientId);
+                $this->removeClient($clientId, 'read_buffer_overflow');
 
                 return;
             }
@@ -617,7 +674,7 @@ class MasterControlServer
 
         if ($type === ControlMessage::TYPE_EXITED) {
             $this->ipcLog("[IPC-Master] {$tag} 即将退出");
-            $this->removeClient($clientId);
+            $this->removeClient($clientId, 'client_exited');
 
             return;
         }
@@ -672,7 +729,7 @@ class MasterControlServer
             $this->ipcLog(
                 "[IPC-Master] REJECT register from {$peerName}: instance_code={$instanceCode}, expected={$this->expectedInstanceCode}"
             );
-            $this->removeClient($clientId);
+            $this->removeClient($clientId, 'instance_code_mismatch');
             return;
         }
 
@@ -714,7 +771,7 @@ class MasterControlServer
      */
     public function closeClient(int $clientId): void
     {
-        $this->removeClient($clientId);
+        $this->removeClient($clientId, 'server_close_client');
     }
 
     public function clientExists(int $clientId): bool
@@ -725,15 +782,18 @@ class MasterControlServer
     /**
      * 移除客户端连接（断开时）
      */
-    public function removeClient(int $clientId): void
+    public function removeClient(int $clientId, string $reason = 'socket_closed'): void
     {
         if (!isset($this->clients[$clientId])) {
             return;
         }
 
         $clientInfo = $this->clients[$clientId];
-        $tag = $this->formatClientTag($clientId);
-        $this->ipcLog("[IPC-Master] DISCONNECT {$tag} 连接断开");
+        $clientInfo['disconnect_reason'] = $reason;
+        if (!$this->shouldSuppressTransientClientLifecycleLog($clientId, $reason)) {
+            $tag = $this->formatClientTag($clientId);
+            $this->ipcLog("[IPC-Master] DISCONNECT {$tag} 连接断开 reason={$reason}");
+        }
 
         // 关闭 socket
         if (\is_resource($clientInfo['socket'])) {
@@ -773,7 +833,7 @@ class MasterControlServer
 
         if (!$this->enqueueWrite($clientId, $message)) {
             $this->ipcLog("[IPC-Master] SEND FAILED --> {$tag}: type={$type}, reason=write_queue_overflow");
-            $this->removeClient($clientId);
+            $this->removeClient($clientId, 'write_queue_overflow');
             return false;
         }
 
@@ -837,8 +897,10 @@ class MasterControlServer
 
         $tag = $this->formatClientTag($clientId);
         $bufferSize = \strlen((string) ($this->clients[$clientId]['write_buffer'] ?? ''));
-        $this->ipcLog("[IPC-Master] SEND FAILED --> {$tag}: pending_bytes={$bufferSize}, error=connection_closed");
-        $this->removeClient($clientId);
+        if (!$this->shouldSuppressTransientClientLifecycleLog($clientId, 'write_connection_closed')) {
+            $this->ipcLog("[IPC-Master] SEND FAILED --> {$tag}: pending_bytes={$bufferSize}, error=connection_closed");
+        }
+        $this->removeClient($clientId, 'write_connection_closed');
     }
 
     /**

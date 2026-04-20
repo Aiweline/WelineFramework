@@ -11,8 +11,8 @@ final class HostsAddCommandTest extends TestCase
 {
     public function testIsEligibleLocalHostname_acceptsWelineSubdomain(): void
     {
-        $this->assertTrue(Add::isEligibleLocalHostname('p01234567.weline.local'));
-        $this->assertTrue(Add::isEligibleLocalHostname('shop-1.weline.local'));
+        $this->assertTrue(Add::isEligibleLocalHostname('p01234567.weline.test'));
+        $this->assertTrue(Add::isEligibleLocalHostname('shop-1.weline.test'));
     }
 
     public function testIsEligibleLocalHostname_rejectsNonLocal(): void
@@ -25,6 +25,6 @@ final class HostsAddCommandTest extends TestCase
     public function testIsEligibleLocalHostname_rejectsInvalidChars(): void
     {
         $this->assertFalse(Add::isEligibleLocalHostname('bad..x.local'));
-        $this->assertFalse(Add::isEligibleLocalHostname('-bad.weline.local'));
+        $this->assertFalse(Add::isEligibleLocalHostname('-bad.weline.test'));
     }
 }

@@ -348,6 +348,7 @@ class SseWriter
         // 使用带重试的写入方法，避免缓冲区满时阻塞
         $this->writeWithRetry(": {$comment}\n\n");
         $this->lastHeartbeat = \time();
+        $this->yieldAfterSend();
 
         return $this;
     }

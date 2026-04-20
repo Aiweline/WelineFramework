@@ -23,6 +23,7 @@ namespace Weline\Server\Dispatcher;
 
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
+use Weline\Server\IPC\ChildControl\ChildControlClientInterface;
 use Weline\Server\IPC\ControlClient;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Log\WlsLogger;
@@ -32,6 +33,9 @@ use Weline\Server\Service\MainLoopUnblockedLogConfig;
 use Weline\Server\Service\AttackLogService;
 use Weline\Server\Service\AttackSignalFileService;
 use Weline\Server\Service\StatusLogService;
+use Weline\Server\Supervisor\Client\SupervisorChildClient;
+use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
+use Weline\Server\Supervisor\Protocol\SupervisorMessage;
 
 class Dispatcher
 {
@@ -202,6 +206,8 @@ class Dispatcher
      */
     private float $lastAllWorkersUnavailableLogAt = 0.0;
     private int $lastAllWorkersDownReported = 0;
+    /** @var array<string, float> */
+    private array $masterBackendAlertLoggedAt = [];
 
     /**
      * 启动保护：窗口期内未达到最小 READY 阈值时，对外返回 503 而非直接断开。
@@ -218,12 +224,13 @@ class Dispatcher
     /**
      * IPC 控制客户端
      */
-    private ?ControlClient $ipcClient = null;
+    private ?ChildControlClientInterface $ipcClient = null;
     
     /**
      * IPC 控制端口
      */
     private int $controlPort = 0;
+    private int $lastAppliedWorkerPoolSnapshotVersion = 0;
     
     /**
      * 是否收到 shutdown 命令
@@ -498,6 +505,66 @@ class Dispatcher
         $this->log('[MaintenanceFlow] ' . $message, $level);
     }
 
+    private function reportAllWorkersUnavailableToMaster(): void
+    {
+        if ($this->ipcClient === null || !$this->ipcClient->isConnected()) {
+            return;
+        }
+
+        $businessPool = \array_values(\array_map('intval', $this->passthroughCore->getWorkerPorts()));
+        $maintenanceCandidates = \array_values(\array_map('intval', $this->passthroughCore->getMaintenanceWorkerPorts()));
+        \sort($businessPool, SORT_NUMERIC);
+        \sort($maintenanceCandidates, SORT_NUMERIC);
+
+        $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
+        $healthy = (int) ($healthSummary['healthy'] ?? 0);
+        $total = (int) ($healthSummary['total'] ?? 0);
+        $maintenancePort = $this->passthroughCore->getMaintenancePort();
+
+        $signature = 'all_workers_unavailable:'
+            . \implode(',', $businessPool)
+            . '|'
+            . \implode(',', $maintenanceCandidates)
+            . '|'
+            . $maintenancePort
+            . '|'
+            . $healthy
+            . '/'
+            . $total;
+        $now = \microtime(true);
+        $last = (float) ($this->masterBackendAlertLoggedAt[$signature] ?? 0.0);
+        if (($now - $last) < 3.0) {
+            return;
+        }
+        $this->masterBackendAlertLoggedAt[$signature] = $now;
+        if (\count($this->masterBackendAlertLoggedAt) > 128) {
+            $this->masterBackendAlertLoggedAt = \array_slice($this->masterBackendAlertLoggedAt, -64, 64, true);
+        }
+
+        $sent = $this->ipcClient->send(ControlMessage::dispatcherAlert(
+            $this->instanceName,
+            'all_workers_unavailable',
+            [
+                'dispatcher_port' => $this->port,
+                'worker_pool_size' => \count($businessPool),
+                'business_pool' => $businessPool,
+                'maintenance_candidates' => $maintenanceCandidates,
+                'maintenance_port' => $maintenancePort,
+                'healthy' => $healthy,
+                'total' => $total,
+            ],
+            ControlMessage::ROLE_WORKER
+        ));
+        if ($sent) {
+            $this->logMaintenanceOperation(
+                '已向 Master 上报业务/维护 Worker 全不可用，signature=' . $signature,
+                'WARN',
+                'master_backend_alert:' . $signature,
+                3.0
+            );
+        }
+    }
+
     private function updateMaintenanceFallbackState(bool $active, string $reason): void
     {
         $previous = $this->maintenanceFallbackActive;
@@ -552,7 +619,7 @@ class Dispatcher
     {
         $this->controlPort = $controlPort;
         
-        if ($this->controlPort <= 0) {
+        if ($this->controlPort <= 0 && !$this->isSupervisorEnabled()) {
             // 从实例文件读取
             $instanceFile = BP . 'var' . DS . 'server' . DS . 'instances' . DS . $this->instanceName . '.json';
             if (\is_file($instanceFile)) {
@@ -561,11 +628,11 @@ class Dispatcher
             }
         }
         
-        if ($this->controlPort <= 0) {
+        if ($this->controlPort <= 0 && !$this->isSupervisorEnabled()) {
             return;
         }
         
-        $this->ipcClient = new ControlClient();
+        $this->ipcClient = $this->createIpcClient();
         $this->ipcClient->setSelfTag('Dispatcher');
         // DEV 模式下输出详细 IPC SEND/RECV 明细
         $this->ipcClient->setVerboseLog($this->isDevMode);
@@ -581,12 +648,13 @@ class Dispatcher
             $this->instanceName
         );
         $this->ipcClient->markReadyState(true);
-        $this->ipcClient->onMessage(function (array $msg, ControlClient $client) {
+        $this->ipcClient->onMessage(function (array $msg, ChildControlClientInterface $client) {
+            unset($client);
             $this->handleIpcMessage($msg);
         });
         
         // 设置断开处理器
-        $this->ipcClient->onDisconnect(function (bool $receivedShutdown, ControlClient $client) {
+        $this->ipcClient->onDisconnect(function (bool $receivedShutdown, ChildControlClientInterface $client) {
             // 已收到 shutdown 或正在退出，不做任何复活/重连操作
             if ($receivedShutdown || $this->ipcReceivedShutdown || !$this->running) {
                 $this->log('Master 连接断开（已收到 shutdown，不复活）', 'INFO');
@@ -788,6 +856,117 @@ class Dispatcher
         };
     }
 
+    private function isSupervisorEnabled(): bool
+    {
+        $raw = \getenv('WLS_SUPERVISOR_ENABLED');
+        if ($raw !== false && $raw !== '') {
+            return \in_array(\strtolower((string) $raw), ['1', 'true', 'yes', 'on'], true);
+        }
+
+        $instanceFile = BP . 'var' . DS . 'server' . DS . 'instances' . DS . $this->instanceName . '.json';
+        if (!\is_file($instanceFile)) {
+            return false;
+        }
+
+        $raw = @\file_get_contents($instanceFile);
+        if (!\is_string($raw) || $raw === '') {
+            return false;
+        }
+
+        $data = @\json_decode($raw, true);
+        if (!\is_array($data)) {
+            return false;
+        }
+
+        if (isset($data['supervisor_enabled'])) {
+            return (bool) $data['supervisor_enabled'];
+        }
+
+        return (string)($data['control_plane_mode'] ?? '') === 'hybrid';
+    }
+
+    private function createIpcClient(): ChildControlClientInterface
+    {
+        if ($this->isSupervisorEnabled()) {
+            $channelId = (string) (\getenv('WLS_SUPERVISOR_CHANNEL') ?: $this->resolveSupervisorChannelId());
+            $basePath = (string) (\getenv('WLS_SUPERVISOR_BASE_PATH') ?: BP);
+
+            return new SupervisorChildClient(
+                instanceName: $this->instanceName,
+                channelId: $channelId,
+                endpointResolver: new ControlEndpointResolver($basePath),
+            );
+        }
+
+        return new ControlClient();
+    }
+
+    private function resolveSupervisorChannelId(): string
+    {
+        $instanceFile = BP . 'var' . DS . 'server' . DS . 'instances' . DS . $this->instanceName . '.json';
+        if (\is_file($instanceFile)) {
+            $raw = @\file_get_contents($instanceFile);
+            $data = \is_string($raw) ? @\json_decode($raw, true) : null;
+            if (\is_array($data)) {
+                $channelId = (string)($data['supervisor_channel'] ?? '');
+                if ($channelId !== '') {
+                    return $channelId;
+                }
+            }
+        }
+
+        return 'channel-' . $this->instanceName;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $workers
+     */
+    private function applyWorkerPoolSnapshot(array $workers, int $version, string $scope = 'business'): void
+    {
+        if ($scope !== 'business') {
+            return;
+        }
+
+        if ($version <= 0 || $version < $this->lastAppliedWorkerPoolSnapshotVersion) {
+            return;
+        }
+
+        $ports = [];
+        foreach ($workers as $worker) {
+            $state = (string)($worker['state'] ?? '');
+            $port = (int)($worker['port'] ?? 0);
+            if ($state !== 'ready' || $port <= 0) {
+                continue;
+            }
+            $ports[$port] = $port;
+        }
+
+        $normalizedPorts = \array_values($ports);
+        $this->deferredWorkerPoolJobs[] = [
+            'type' => 'set_pool',
+            'ports' => $normalizedPorts,
+            'role' => ControlMessage::ROLE_WORKER,
+            'pool_snapshot_version' => $version,
+            'pool_snapshot_scope' => $scope,
+        ];
+        $this->lastAppliedWorkerPoolSnapshotVersion = $version;
+
+        if ($this->ipcClient !== null && $this->ipcClient->isConnected()) {
+            $ack = ControlMessage::encode([
+                'type' => ControlMessage::TYPE_POOL_SNAPSHOT_ACK,
+                'scope' => $scope,
+                'version' => $version,
+                'accepted' => true,
+            ]);
+            $this->ipcClient->send($ack);
+        }
+
+        $this->log(
+            '鏀跺埌 POOL_SNAPSHOT锛堝凡鍏ラ槦寮傛鍏ユ睜锛夛紝version=' . $version . ', workers=' . \count($normalizedPorts),
+            'INFO'
+        );
+    }
+
     private function finalizeDeferredWorkerPoolFiber(): void
     {
         $fiber = $this->deferredWorkerPoolFiber;
@@ -908,6 +1087,13 @@ class Dispatcher
             return;
         }
         switch ($type) {
+            case SupervisorMessage::TYPE_POOL_SNAPSHOT:
+                $workers = \is_array($msg['workers'] ?? null) ? $msg['workers'] : [];
+                $version = (int)($msg['version'] ?? 0);
+                $scope = (string)($msg['scope'] ?? 'business');
+                $this->applyWorkerPoolSnapshot($workers, $version, $scope);
+                break;
+
             case ControlMessage::TYPE_DRAIN:
                 $ports = $msg['ports'] ?? [];
                 if (!empty($ports)) {
@@ -1576,6 +1762,9 @@ class Dispatcher
             if ($this->passthroughCore->handleNewConnection($clientSocket, $clientIp)) {
                 $this->registerAcceptedClientConnection($clientSocket, $clientIp, $connId);
             } else {
+                if ($this->passthroughCore->lastNewConnectionEndedInAllWorkersDown()) {
+                    $this->reportAllWorkersUnavailableToMaster();
+                }
                 // 业务 Worker 与维护 Worker 均不可用时，立即返回 503（WLS 启动中），不再等待路由重试。
                 if ($this->shouldReturnStartup503Immediately()) {
                     if (!$this->tryRespondWithStartupProtection($clientSocket)) {
