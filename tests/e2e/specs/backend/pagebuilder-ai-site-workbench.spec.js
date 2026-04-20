@@ -1,4 +1,4 @@
-// @weline-e2e-runtime fallback
+﻿// @weline-e2e-runtime fallback
 // @ts-check
 const path = require('path');
 const { execFileSync } = require('child_process');
@@ -16,7 +16,7 @@ const {
 
 const WORKSPACE_TIMEOUT = 300000;
 const LONG_WORKSPACE_TIMEOUT = 2400000;
-/** 路由表可能输出 ai-site-agent，兼容历史 aiSiteAgent 形式 */
+/** 璺敱琛ㄥ彲鑳借緭鍑?ai-site-agent锛屽吋瀹瑰巻鍙?aiSiteAgent 褰㈠紡 */
 const PAGEBUILDER_AI_WORKSPACE_PATH_RE = /\/pagebuilder\/backend\/(?:ai-site-agent|aiSiteAgent)\/workspace\b/i;
 
 /**
@@ -24,10 +24,38 @@ const PAGEBUILDER_AI_WORKSPACE_PATH_RE = /\/pagebuilder\/backend\/(?:ai-site-age
  * @param {string} url
  */
 async function gotoStable(page, url) {
-  await page.goto(url, { waitUntil: 'commit', timeout: WORKSPACE_TIMEOUT });
-  await page.locator('body').first().waitFor({ state: 'attached', timeout: 30000 });
-  await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
-  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+  let lastError = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      await page.goto(url, { waitUntil: 'commit', timeout: WORKSPACE_TIMEOUT });
+      await page.locator('body').first().waitFor({ state: 'attached', timeout: 30000 });
+      await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+      await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+      const currentUrl = String(page.url() || '');
+      const bodyText = await page.locator('body').first().textContent().catch(() => '');
+      if (currentUrl.startsWith('chrome-error://') || String(bodyText || '').includes('ERR_EMPTY_RESPONSE')) {
+        throw new Error(`unstable navigation: ${currentUrl || 'unknown'} ${String(bodyText || '').slice(0, 200)}`);
+      }
+      return;
+    } catch (error) {
+      lastError = error;
+      const message = String(error && error.message ? error.message : error || '');
+      const retryable = message.includes('chrome-error://chromewebdata/')
+        || message.includes('ERR_EMPTY_RESPONSE')
+        || message.includes('ERR_ABORTED')
+        || message.includes('ERR_TIMED_OUT')
+        || message.includes('ERR_CONNECTION_RESET')
+        || message.includes('net::ERR_')
+        || message.includes('unstable navigation: chrome-error://');
+      if (!retryable || attempt >= 3) {
+        throw error;
+      }
+      await page.waitForTimeout(1500 * (attempt + 1));
+    }
+  }
+  if (lastError) {
+    throw lastError;
+  }
 }
 
 async function openWebsitesSummaryDetails(page) {
@@ -173,12 +201,69 @@ async function waitForPagebuilderStateData(page, stateUrl, predicate, timeoutMs 
   throw new Error(`waitForPagebuilderStateData timed out: ${stateUrl}`);
 }
 
+async function collectPagebuilderPhaseDebugSnapshot(page, stateUrl) {
+  const state = await fetchPagebuilderStateData(page, stateUrl);
+  const rawState = await page.evaluate(async ({ url }) => {
+    try {
+      const res = await fetch(url, {
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      const text = await res.text();
+      return {
+        ok: !!res.ok,
+        status: res.status,
+        redirected: !!res.redirected,
+        url: String(res.url || ''),
+        textHead: String(text || '').slice(0, 1500),
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        status: 0,
+        redirected: false,
+        url: '',
+        textHead: `fetch-error:${error && error.message ? error.message : error}`,
+      };
+    }
+  }, { url: stateUrl }).catch(() => null);
+  const client = await page.evaluate(() => {
+    const rendered = document.querySelector('#pb-ai-plan-rendered-content');
+    const markdown = document.querySelector('#pb-ai-plan-md-content');
+    const taskRendered = document.querySelector('#pb-ai-task-plan-rendered-content');
+    return {
+      renderedText: rendered ? String(rendered.textContent || '').trim() : '',
+      renderedHtml: rendered ? String(rendered.innerHTML || '').slice(0, 1200) : '',
+      markdownText: markdown ? String(markdown.textContent || '').trim() : '',
+      taskRenderedText: taskRendered ? String(taskRendered.textContent || '').trim() : '',
+      hasWorkspaceApi: !!window.__pbWorkspaceApi,
+      hasConfirmedPlanCache: !!window.__pbWorkspaceConfirmedPlan,
+      confirmedPlanMarkdownLength: String((window.__pbWorkspaceConfirmedPlan && window.__pbWorkspaceConfirmedPlan.markdown) || '').length,
+      confirmedPlanStructuredKeys: window.__pbWorkspaceConfirmedPlan && window.__pbWorkspaceConfirmedPlan.structured && typeof window.__pbWorkspaceConfirmedPlan.structured === 'object'
+        ? Object.keys(window.__pbWorkspaceConfirmedPlan.structured).slice(0, 10)
+        : [],
+    };
+  }).catch(() => null);
+  const htmlLineWindow = await page.content().then((html) => {
+    const lines = String(html || '').split(/\r?\n/);
+    const lineNo = 17768;
+    return {
+      lineNo,
+      lines: lines.slice(Math.max(0, lineNo - 8), Math.min(lines.length, lineNo + 8)).map((line, idx) => ({
+        no: Math.max(1, lineNo - 7) + idx,
+        text: line,
+      })),
+    };
+  }).catch(() => null);
+  return { state, rawState, client, htmlLineWindow };
+}
+
 function buildLocalDomain(prefix) {
   const suffix = Date.now().toString().slice(-8);
   return `${prefix}-${suffix}.local.test`;
 }
 
-/** 与 `php bin/w server:hosts:add` 一致；工作区根 = tests/e2e/specs/backend → 上四级 */
+/** 涓?`php bin/w server:hosts:add` 涓€鑷达紱宸ヤ綔鍖烘牴 = tests/e2e/specs/backend 鈫?涓婂洓绾?*/
 function devWorkspaceRootFromThisSpec() {
   return path.resolve(__dirname, '../../../..');
 }
@@ -263,10 +348,511 @@ echo json_encode([
   return JSON.parse(stdout);
 }
 
+function mergePagebuilderScopeViaPhp(publicId, scopePatch = {}) {
+  const root = devWorkspaceRootFromThisSpec();
+  const phpPublicId = JSON.stringify(String(publicId || ''))
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+  const phpScopePatch = JSON.stringify(scopePatch || {})
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+  const phpCode = `
+require 'app/bootstrap.php';
+$sessionService = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\GuoLaiRen\\PageBuilder\\Service\\AiSiteAgentSessionService::class);
+$scopeCompatibilityService = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\GuoLaiRen\\PageBuilder\\Service\\AiSiteScopeCompatibilityService::class);
+$publicId = json_decode('${phpPublicId}', true);
+$scopePatch = json_decode('${phpScopePatch}', true);
+$session = $sessionService->loadByPublicId(is_string($publicId) ? $publicId : '', 1);
+if (!$session) {
+    throw new RuntimeException('PageBuilder session not found for scope seed.');
+}
+$sessionService->mergeScope($session->getId(), 1, is_array($scopePatch) ? $scopePatch : []);
+$fresh = $sessionService->loadById($session->getId(), 1) ?? $session;
+$freshScope = $scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+echo json_encode([
+    'success' => true,
+    'public_id' => $fresh->getPublicId(),
+    'scope' => $freshScope,
+], JSON_UNESCAPED_UNICODE);
+`;
+  const stdout = execFileSync('php', ['-r', phpCode], {
+    cwd: root,
+    stdio: 'pipe',
+    encoding: 'utf8',
+  });
+  return JSON.parse(stdout);
+}
+
+function buildSmallPhasePlanMarkdown(siteTitle, pageTypes) {
+  const label = String(siteTitle || 'E2E phase site').trim();
+  const pages = Array.isArray(pageTypes) && pageTypes.length > 0 ? pageTypes : ['home_page'];
+  const lines = [
+    `# ${label} Stage 1 Plan`,
+    '',
+    'This lightweight draft exists for frontend interaction coverage. It keeps the payload intentionally small while still providing enough structured detail for inline preview rendering, block-level hover actions, refinement, rebuild, deletion, and add-block flows.',
+    '',
+    '## Shared Direction',
+    '- Theme: confident, practical, product-led',
+    '- Header: logo, compact navigation, strong CTA',
+    '- Footer: trust note, contact links, legal links',
+    '',
+    '## Page Coverage',
+  ];
+  pages.forEach((pageType, index) => {
+    lines.push(`${index + 1}. ${pageType}: present a clear story with editable content blocks and CTA guidance.`);
+  });
+  lines.push('');
+  lines.push('## Editing Contract');
+  lines.push('Every preview block must support refine, rebuild, delete, and add-block actions without leaving the current stage panel. The whole stage must also support full regenerate.');
+  lines.push('');
+  lines.push('## Delivery Note');
+  lines.push('This markdown is intentionally verbose enough for E2E assertions and intentionally compact enough to avoid exhausting PHP memory during workspace rendering.');
+  return lines.join('\n');
+}
+
+function buildSmallPhasePlanStructured(siteTitle, pageTypes) {
+  const title = String(siteTitle || 'E2E phase site').trim();
+  const pages = {};
+  (Array.isArray(pageTypes) && pageTypes.length > 0 ? pageTypes : ['home_page']).forEach((pageType, index) => {
+    pages[pageType] = {
+      title: `${title} ${pageType}`,
+      page_goal: `Explain the core value for ${pageType} with one strong primary CTA and one supporting proof block.`,
+      primary_keywords: [pageType, 'ai site builder'],
+      secondary_keywords: ['conversion', 'trust'],
+      blocks: [
+        {
+          block_key: index === 0 ? 'hero' : 'content_section',
+          goal: `Give ${pageType} a focused opening block that can be refined, rebuilt, deleted, or expanded.`,
+          content: `This ${pageType} block is a compact E2E seed. It is designed to render quickly, remain editable in place, and support repeated SSE mutations during the test flow.`,
+          keywords: ['editable', 'preview', 'hover'],
+          field_plan: [
+            { field: 'headline', type: 'text', required: true, note: 'Main message' },
+            { field: 'cta', type: 'text', required: true, note: 'Primary action' },
+          ],
+          execution_script: {
+            scene: `page:${pageType}:${index === 0 ? 'hero' : 'content_section'}`,
+            story_goal: 'Keep the output small but editable.',
+          },
+        },
+      ],
+    };
+  });
+  return {
+    theme_design: {
+      visual_direction: 'Clean light business layout with bold CTA accents',
+      typography: 'System-safe sans with emphasized section titles',
+      tone: 'Helpful and conversion-oriented',
+    },
+    navigation_plan: {
+      header: ['Home', 'About', 'Contact'],
+      cta: 'Start Consultation',
+    },
+    footer_plan: {
+      groups: ['Contact', 'Trust', 'Legal'],
+    },
+    pages,
+  };
+}
+
+function buildSmallExecutionBlueprint(pageTypes) {
+  const normalizedPageTypes = Array.isArray(pageTypes) && pageTypes.length > 0 ? pageTypes : ['home_page'];
+  const signatureSeed = Date.now().toString(36);
+  const tasks = [
+    {
+      task_key: 'shared:header',
+      task_type: 'shared_component',
+      region: 'header',
+      title: 'Build shared header',
+    },
+    {
+      task_key: 'shared:footer',
+      task_type: 'shared_component',
+      region: 'footer',
+      title: 'Build shared footer',
+    },
+  ];
+  normalizedPageTypes.forEach((pageType, index) => {
+    tasks.push({
+      task_key: `page:${pageType}:${index === 0 ? 'hero' : 'content'}`,
+      task_type: 'page_section',
+      page_type: pageType,
+      section_code: index === 0 ? 'hero' : 'content_section',
+      title: `Build ${pageType} primary section`,
+    });
+  });
+  return {
+    signature: `phase1-${signatureSeed}`,
+    version: 1,
+    page_types: normalizedPageTypes,
+    tasks,
+    task_groups: {
+      shared: tasks.filter((task) => String(task.task_type || '') === 'shared_component'),
+      pages: normalizedPageTypes.reduce((carry, pageType) => {
+        carry[pageType] = tasks.filter((task) => String(task.page_type || '') === pageType);
+        return carry;
+      }, {}),
+    },
+  };
+}
+
+function prepareSmallPagebuilderPlanDraftViaPhp(publicId, scopePatch = {}) {
+  const normalizedPatch = scopePatch && typeof scopePatch === 'object' ? { ...scopePatch } : {};
+  const pageTypes = Array.isArray(normalizedPatch.page_types) && normalizedPatch.page_types.length > 0
+    ? normalizedPatch.page_types.map((item) => String(item || '').trim()).filter(Boolean)
+    : ['home_page', 'about_page'];
+  const siteTitle = String(normalizedPatch.site_title || 'E2E Phase UI').trim();
+  const structured = buildSmallPhasePlanStructured(siteTitle, pageTypes);
+  const executionBlueprintDraft = buildSmallExecutionBlueprint(pageTypes);
+  const planMarkdown = buildSmallPhasePlanMarkdown(siteTitle, pageTypes);
+  const merged = mergePagebuilderScopeViaPhp(publicId, {
+    ...normalizedPatch,
+    fake_mode: 1,
+    workspace_status: 'stage1_draft_ready',
+    website_profile: {
+      site_name: siteTitle,
+      positioning: 'Frontend interaction coverage',
+      audience: 'E2E verification',
+    },
+    execution_blueprint_draft: executionBlueprintDraft,
+    plan_json: structured,
+    plan_structured: structured,
+    plan_markdown: planMarkdown,
+    plan_ai_generated: 0,
+    plan_ai_fallback: 1,
+    plan_generated_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    plan_generated_page_types: pageTypes,
+    plan_confirmed: 0,
+  });
+  return {
+    success: Boolean(merged && merged.success),
+    public_id: publicId,
+    plan_markdown: planMarkdown,
+    execution_blueprint_signature: String(executionBlueprintDraft.signature || ''),
+    scope: merged && merged.scope ? merged.scope : {},
+  };
+}
+
+function buildSmallTaskPlanMarkdown(siteTitle, pageTypes) {
+  const label = String(siteTitle || 'E2E phase site').trim();
+  const pages = Array.isArray(pageTypes) && pageTypes.length > 0 ? pageTypes : ['home_page'];
+  const lines = [
+    `# ${label} Stage 2 Task Plan`,
+    '',
+    'This lightweight task plan is seeded for frontend stage-two interaction coverage. It provides shared tasks, page tasks, implementation notes, and acceptance criteria in a format that renders block-level hover controls without relying on a heavyweight AI bootstrap response.',
+    '',
+    '## Shared Tasks',
+    '1. Header task: keep branding compact, navigation clear, CTA visible.',
+    '2. Footer task: keep trust links, contact info, and legal area present.',
+    '',
+    '## Page Tasks',
+  ];
+  pages.forEach((pageType, index) => {
+    lines.push(`${index + 1}. ${pageType}: build an editable lead section with concise content fields, acceptance notes, and a stable scene identifier.`);
+  });
+  lines.push('');
+  lines.push('## Editing Contract');
+  lines.push('Each task card remains eligible for refine, rebuild, delete, and add-block flows through the stage-two SSE endpoints. The whole stage also supports full regenerate.');
+  return lines.join('\n');
+}
+
+function buildSmallTaskPlanStructured(siteTitle, pageTypes) {
+  const title = String(siteTitle || 'E2E phase site').trim();
+  const normalizedPageTypes = Array.isArray(pageTypes) && pageTypes.length > 0 ? pageTypes : ['home_page'];
+  const sharedTasks = [
+    {
+      task_key: 'shared:header',
+      label: 'Shared Header Task',
+      group_key: 'shared',
+      plan_context: {
+        page_goal: 'Keep global navigation and CTA stable',
+        block_goal: 'Prepare a reusable header shell',
+      },
+      task_script: {
+        scene: 'shared:header',
+        story_goal: 'Render a compact header with action-oriented CTA',
+        content_fill_rule: 'Use concise navigation labels and one CTA',
+        field_content_requirements: [
+          { field: 'brand_name', type: 'text', required: true },
+          { field: 'primary_cta', type: 'text', required: true },
+        ],
+      },
+      implementation_contract: {
+        acceptance: ['Header shows brand, nav, and CTA', 'Structure stays editable'],
+      },
+    },
+    {
+      task_key: 'shared:footer',
+      label: 'Shared Footer Task',
+      group_key: 'shared',
+      plan_context: {
+        page_goal: 'Close pages with trust and contact guidance',
+        block_goal: 'Prepare a reusable footer shell',
+      },
+      task_script: {
+        scene: 'shared:footer',
+        story_goal: 'Render a compact footer with trust and contact areas',
+        content_fill_rule: 'Keep contact and legal info visible',
+        field_content_requirements: [
+          { field: 'contact_email', type: 'text', required: true },
+          { field: 'legal_links', type: 'list', required: true },
+        ],
+      },
+      implementation_contract: {
+        acceptance: ['Footer shows trust/contact/legal groups'],
+      },
+    },
+  ];
+  const pageTasks = normalizedPageTypes.reduce((carry, pageType, index) => {
+    carry[pageType] = [
+      {
+        task_key: `${pageType}:${index === 0 ? 'hero' : 'content'}:task`,
+        label: `${title} ${pageType} Primary Task`,
+        group_key: pageType,
+        plan_context: {
+          page_goal: `Support ${pageType} with an editable primary section`,
+          block_goal: 'Expose one actionable task card for hover interactions',
+        },
+        task_script: {
+          scene: `page:${pageType}:${index === 0 ? 'hero' : 'content_section'}`,
+          story_goal: `Prepare the main editable block for ${pageType}`,
+          content_fill_rule: 'Keep the copy compact and action-led',
+          field_content_requirements: [
+            { field: 'headline', type: 'text', required: true },
+            { field: 'supporting_copy', type: 'textarea', required: true },
+          ],
+        },
+        implementation_contract: {
+          acceptance: ['Task card renders in preview', 'Supports block-level mutation actions'],
+        },
+      },
+    ];
+    return carry;
+  }, {});
+  return {
+    signature: `task-plan-${Date.now().toString(36)}`,
+    task_script_brief: {
+      mode: 'lightweight_e2e_seed',
+      note: 'Small structured payload for preview interactions',
+    },
+    shared_tasks: sharedTasks,
+    page_tasks: pageTasks,
+  };
+}
+
+function prepareSmallPagebuilderTaskPlanDraftViaPhp(publicId, scopePatch = {}) {
+  const normalizedPatch = scopePatch && typeof scopePatch === 'object' ? { ...scopePatch } : {};
+  const pageTypes = Array.isArray(normalizedPatch.page_types) && normalizedPatch.page_types.length > 0
+    ? normalizedPatch.page_types.map((item) => String(item || '').trim()).filter(Boolean)
+    : ['home_page', 'about_page'];
+  const siteTitle = String(normalizedPatch.site_title || 'E2E Phase UI').trim();
+  const structured = buildSmallTaskPlanStructured(siteTitle, pageTypes);
+  const markdown = buildSmallTaskPlanMarkdown(siteTitle, pageTypes);
+  const merged = mergePagebuilderScopeViaPhp(publicId, {
+    ...normalizedPatch,
+    fake_mode: 1,
+    workspace_status: 'stage2_draft_ready',
+    task_plan_markdown: markdown,
+    task_plan_structured: structured,
+    virtual_theme_plan: {
+      draft: structured,
+      draft_markdown: markdown,
+      draft_generated_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      plan_signature: String(structured.signature || ''),
+    },
+    task_plan_confirmed: 0,
+  });
+  return {
+    success: Boolean(merged && merged.success),
+    public_id: publicId,
+    task_plan_markdown: markdown,
+    scope: merged && merged.scope ? merged.scope : {},
+  };
+}
+
+function buildSeededMutationToken(action, instruction) {
+  const normalizedAction = String(action || 'update').trim() || 'update';
+  const normalizedInstruction = String(instruction || '').trim().replace(/\s+/g, ' ');
+  const instructionStub = normalizedInstruction ? normalizedInstruction.slice(0, 48) : 'no-instruction';
+  return `${normalizedAction}-${Date.now().toString(36)}-${instructionStub}`;
+}
+
+function appendSeededMutationMarkdown(baseMarkdown, action, instruction, token) {
+  const lines = [
+    String(baseMarkdown || '').trim(),
+    '',
+    '## Seeded Mutation',
+    `- Action: ${String(action || '').trim() || 'update'}`,
+    `- Instruction: ${String(instruction || '').trim() || 'N/A'}`,
+    `- Token: ${String(token || '').trim() || 'seeded'}`,
+  ];
+  return lines.join('\n');
+}
+
+function prepareMutatedSmallPagebuilderPlanDraftViaPhp(publicId, scopePatch = {}, mutation = {}) {
+  const normalizedPatch = scopePatch && typeof scopePatch === 'object' ? { ...scopePatch } : {};
+  const pageTypes = Array.isArray(normalizedPatch.page_types) && normalizedPatch.page_types.length > 0
+    ? normalizedPatch.page_types.map((item) => String(item || '').trim()).filter(Boolean)
+    : ['home_page', 'about_page'];
+  const siteTitle = String(normalizedPatch.site_title || 'E2E Phase UI').trim();
+  const action = String(mutation.action || 'refine').trim() || 'refine';
+  const instruction = String(mutation.instruction || '').trim();
+  const token = buildSeededMutationToken(action, instruction);
+  const structured = buildSmallPhasePlanStructured(siteTitle, pageTypes);
+  const firstPageType = pageTypes[0] || Object.keys(structured.pages || {})[0] || 'home_page';
+  const firstPage = structured.pages && structured.pages[firstPageType] && typeof structured.pages[firstPageType] === 'object'
+    ? structured.pages[firstPageType]
+    : null;
+  const firstBlock = firstPage && Array.isArray(firstPage.blocks) && firstPage.blocks.length > 0
+    ? firstPage.blocks[0]
+    : null;
+  if (firstPage && Array.isArray(firstPage.blocks)) {
+    if (firstBlock) {
+      firstBlock.goal = `${String(firstBlock.goal || '').trim()} [${action}]`;
+      firstBlock.content = `${String(firstBlock.content || '').trim()} Mutation token: ${token}. ${instruction}`.trim();
+      firstBlock.keywords = Array.isArray(firstBlock.keywords) ? firstBlock.keywords.concat([action, token]) : [action, token];
+      if (firstBlock.execution_script && typeof firstBlock.execution_script === 'object') {
+        firstBlock.execution_script.story_goal = `${String(firstBlock.execution_script.story_goal || '').trim()} (${action})`;
+      }
+    }
+    if (action === 'add-block') {
+      firstPage.blocks.push({
+        block_key: `seeded_block_${Date.now().toString(36)}`,
+        goal: `Seeded extra block for ${firstPageType}`,
+        content: `This add-block mutation is seeded for deterministic E2E coverage. ${instruction}`.trim(),
+        keywords: ['seeded', 'add-block'],
+        field_plan: [
+          { field: 'headline', type: 'text', required: true, note: 'Seeded extra headline' },
+        ],
+        execution_script: {
+          scene: `page:${firstPageType}:seeded_extra`,
+          story_goal: 'Keep the extra block lightweight and editable.',
+        },
+      });
+    } else if (action === 'delete' && firstPage.blocks.length > 1) {
+      firstPage.blocks = firstPage.blocks.slice(0, 1);
+    } else if (action === 'rebuild-stage') {
+      firstPage.blocks = firstPage.blocks.map((block, index) => Object.assign({}, block, {
+        goal: `${String(block.goal || '').trim()} [stage-refresh-${index + 1}]`,
+        content: `${String(block.content || '').trim()} Stage refresh token: ${token}.`,
+      }));
+    }
+  }
+  if (structured.theme_design && typeof structured.theme_design === 'object') {
+    structured.theme_design.tone = `${String(structured.theme_design.tone || '').trim()} [${action}]`;
+    structured.theme_design.seeded_mutation_token = token;
+  }
+  const executionBlueprintDraft = buildSmallExecutionBlueprint(pageTypes);
+  executionBlueprintDraft.signature = `phase1-${token}`;
+  const planMarkdown = appendSeededMutationMarkdown(buildSmallPhasePlanMarkdown(siteTitle, pageTypes), action, instruction, token);
+  const merged = mergePagebuilderScopeViaPhp(publicId, {
+    ...normalizedPatch,
+    fake_mode: 1,
+    workspace_status: 'stage1_draft_ready',
+    execution_blueprint_draft: executionBlueprintDraft,
+    plan_json: structured,
+    plan_structured: structured,
+    plan_markdown: planMarkdown,
+    plan_ai_generated: 0,
+    plan_ai_fallback: 1,
+    plan_generated_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    plan_generated_page_types: pageTypes,
+    plan_confirmed: 0,
+  });
+  return {
+    success: Boolean(merged && merged.success),
+    public_id: publicId,
+    plan_markdown: planMarkdown,
+    scope: merged && merged.scope ? merged.scope : {},
+  };
+}
+
+function prepareMutatedSmallPagebuilderTaskPlanDraftViaPhp(publicId, scopePatch = {}, mutation = {}) {
+  const normalizedPatch = scopePatch && typeof scopePatch === 'object' ? { ...scopePatch } : {};
+  const pageTypes = Array.isArray(normalizedPatch.page_types) && normalizedPatch.page_types.length > 0
+    ? normalizedPatch.page_types.map((item) => String(item || '').trim()).filter(Boolean)
+    : ['home_page', 'about_page'];
+  const siteTitle = String(normalizedPatch.site_title || 'E2E Phase UI').trim();
+  const action = String(mutation.action || 'refine').trim() || 'refine';
+  const instruction = String(mutation.instruction || '').trim();
+  const token = buildSeededMutationToken(action, instruction);
+  const structured = buildSmallTaskPlanStructured(siteTitle, pageTypes);
+  const firstPageType = pageTypes[0] || Object.keys(structured.page_tasks || {})[0] || 'home_page';
+  const firstTasks = structured.page_tasks && Array.isArray(structured.page_tasks[firstPageType])
+    ? structured.page_tasks[firstPageType]
+    : [];
+  const firstTask = firstTasks.length > 0 ? firstTasks[0] : null;
+  if (firstTask) {
+    firstTask.label = `${String(firstTask.label || '').trim()} [${action}]`;
+    if (firstTask.plan_context && typeof firstTask.plan_context === 'object') {
+      firstTask.plan_context.block_goal = `${String(firstTask.plan_context.block_goal || '').trim()} (${token})`;
+    }
+    if (firstTask.task_script && typeof firstTask.task_script === 'object') {
+      firstTask.task_script.story_goal = `${String(firstTask.task_script.story_goal || '').trim()} ${instruction}`.trim();
+      firstTask.task_script.content_fill_rule = `${String(firstTask.task_script.content_fill_rule || '').trim()} [${action}]`;
+    }
+  }
+  if (action === 'add-block') {
+    firstTasks.push({
+      task_key: `${firstPageType}:seeded:${Date.now().toString(36)}`,
+      label: `${siteTitle} ${firstPageType} Seeded Extra Task`,
+      group_key: firstPageType,
+      plan_context: {
+        page_goal: `Seed an extra task for ${firstPageType}`,
+        block_goal: `Support add-block mutation ${token}`,
+      },
+      task_script: {
+        scene: `page:${firstPageType}:seeded_extra`,
+        story_goal: `Seeded extra task for add-block ${instruction}`.trim(),
+        content_fill_rule: 'Keep the extra task concise and editable',
+        field_content_requirements: [
+          { field: 'seeded_copy', type: 'text', required: true },
+        ],
+      },
+      implementation_contract: {
+        acceptance: ['Seeded extra task is visible in preview'],
+      },
+    });
+  } else if (action === 'delete' && firstTasks.length > 1) {
+    structured.page_tasks[firstPageType] = firstTasks.slice(0, 1);
+  } else if (action === 'rebuild-stage') {
+    Object.keys(structured.page_tasks || {}).forEach((pageType) => {
+      const tasks = Array.isArray(structured.page_tasks[pageType]) ? structured.page_tasks[pageType] : [];
+      structured.page_tasks[pageType] = tasks.map((task, index) => Object.assign({}, task, {
+        label: `${String(task.label || '').trim()} [stage-refresh-${index + 1}]`,
+      }));
+    });
+  }
+  if (structured.task_script_brief && typeof structured.task_script_brief === 'object') {
+    structured.task_script_brief.note = `${String(structured.task_script_brief.note || '').trim()} [${action}] ${token}`.trim();
+  }
+  structured.signature = `task-plan-${token}`;
+  const markdown = appendSeededMutationMarkdown(buildSmallTaskPlanMarkdown(siteTitle, pageTypes), action, instruction, token);
+  const merged = mergePagebuilderScopeViaPhp(publicId, {
+    ...normalizedPatch,
+    fake_mode: 1,
+    workspace_status: 'stage2_draft_ready',
+    task_plan_markdown: markdown,
+    task_plan_structured: structured,
+    virtual_theme_plan: {
+      draft: structured,
+      draft_markdown: markdown,
+      draft_generated_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      plan_signature: String(structured.signature || ''),
+    },
+    task_plan_confirmed: 0,
+  });
+  return {
+    success: Boolean(merged && merged.success),
+    public_id: publicId,
+    task_plan_markdown: markdown,
+    scope: merged && merged.scope ? merged.scope : {},
+  };
+}
+
 /**
- * 将 `*.weline.local` 子域写入本机 hosts，便于 Playwright 真实地址栏访问前台。
- * 设 `PLAYWRIGHT_SKIP_HOSTS_REGISTER=1` 则跳过写入，用例仍走 API+Host 回退断言。
- * @param {string} fqdn 例如 pb-e2e-12345678.weline.local
+ * 灏?`*.weline.local` 瀛愬煙鍐欏叆鏈満 hosts锛屼究浜?Playwright 鐪熷疄鍦板潃鏍忚闂墠鍙般€?
+ * 璁?`PLAYWRIGHT_SKIP_HOSTS_REGISTER=1` 鍒欒烦杩囧啓鍏ワ紝鐢ㄤ緥浠嶈蛋 API+Host 鍥為€€鏂█銆?
+ * @param {string} fqdn 渚嬪 pb-e2e-12345678.weline.local
  * @returns {{ ok: boolean, skipped?: boolean, message?: string }}
  */
 function tryRegisterWelineLocalSubdomain(fqdn) {
@@ -747,7 +1333,7 @@ async function readJsonTextarea(page, selector) {
 }
 
 /**
- * 从 SSE 事件中提取 page_generated 的页面类型集合。
+ * 浠?SSE 浜嬩欢涓彁鍙?page_generated 鐨勯〉闈㈢被鍨嬮泦鍚堛€?
  * @param {{ events?: Array<{event:string, data:any}> }} stream
  * @returns {Set<string>}
  */
@@ -768,7 +1354,7 @@ function collectPageGeneratedTypes(stream) {
 }
 
 /**
- * 验证构建流里每个页面类型都完成了 page_generated 事件。
+ * 楠岃瘉鏋勫缓娴侀噷姣忎釜椤甸潰绫诲瀷閮藉畬鎴愪簡 page_generated 浜嬩欢銆?
  * @param {{ events?: Array<{event:string, data:any}>, lastDone?: any }} buildStream
  * @param {string[]} selectedPageTypes
  */
@@ -862,7 +1448,7 @@ async function observeInitialSseEvents(page, absoluteUrl, expectedEventNames, ti
 }
 
 /**
- * 后端有时返回 target-origin 的绝对链接；在 e2e 代理下需要强制回当前 origin。
+ * 鍚庣鏈夋椂杩斿洖 target-origin 鐨勭粷瀵归摼鎺ワ紱鍦?e2e 浠ｇ悊涓嬮渶瑕佸己鍒跺洖褰撳墠 origin銆?
  * @param {import('@playwright/test').Page} page
  * @param {string} href
  */
@@ -906,8 +1492,8 @@ function buildDirectRuntimeBackendUrl(route) {
   const targetOrigin = String(runtime.runtime?.target_origin || '').replace(/\/+$/, '');
   const backendPrefix = String(runtime.paths?.backend_prefix_path || '').replace(/\/+$/, '');
   const normalizedRoute = String(route || '').replace(/^\/+/, '');
-  if (!targetOrigin || !backendPrefix || !normalizedRoute) {
-    throw new Error(`buildDirectRuntimeBackendUrl missing runtime pieces: origin=${targetOrigin} prefix=${backendPrefix} route=${normalizedRoute}`);
+  if (!targetOrigin || !normalizedRoute) {
+    throw new Error(`buildDirectRuntimeBackendUrl missing runtime pieces: origin=${targetOrigin} route=${normalizedRoute}`);
   }
   return `${targetOrigin}${backendPrefix}/${normalizedRoute}`;
 }
@@ -916,21 +1502,43 @@ function buildSameOriginBackendUrl(page, route) {
   const runtime = getRuntimeInfo();
   const backendPrefix = String(runtime.paths?.backend_prefix_path || '').replace(/\/+$/, '');
   const normalizedRoute = String(route || '').replace(/^\/+/, '');
-  const base = new URL(page.url());
+  let base;
+  try {
+    base = new URL(page.url());
+    if (!/^https?:$/i.test(base.protocol)) {
+      throw new Error('non-http page url');
+    }
+  } catch (error) {
+    base = new URL(String(runtime.proxy?.origin || runtime.runtime?.target_origin || 'https://127.0.0.1'));
+  }
   return new URL(`${backendPrefix}/${normalizedRoute}`, `${base.origin}/`).toString();
 }
 
 /**
- * 指标卡（draft website / theme id）仅在专家布局渲染；Guided 默认只有主按钮。
+ * 鎸囨爣鍗★紙draft website / theme id锛変粎鍦ㄤ笓瀹跺竷灞€娓叉煋锛汫uided 榛樿鍙湁涓绘寜閽€?
  * @param {import('@playwright/test').Page} page
  */
-async function ensurePagebuilderExpertLayout(page) {
-  const hasCard = await page.locator('#pb-ai-draft-website-id').count().catch(() => 0);
-  if (hasCard > 0) {
+async function ensurePagebuilderExpertLayoutLegacy(page) {
+  const expertReady = async () => {
+    const selectors = [
+      '#pb-ai-draft-website-id',
+      '#pb-ai-plan-inline-panel',
+      '#pb-ai-task-plan-accordion-trigger',
+      '#pb-ai-site-title',
+    ];
+    for (const selector of selectors) {
+      if (await page.locator(selector).first().isVisible({ timeout: 1500 }).catch(() => false)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  if (await expertReady()) {
     return;
   }
 
-  const advancedLink = page.locator('a[href*="expert=1"], a:has-text("高级模式")').first();
+  const advancedLink = page.locator('a[href*="expert=1"], a:has-text("楂樼骇妯″紡")').first();
   if (await advancedLink.isVisible({ timeout: 8000 }).catch(() => false)) {
     const href = await advancedLink.getAttribute('href');
     const targetUrl = href ? normalizeToCurrentOrigin(page, String(href)) : '';
@@ -954,7 +1562,9 @@ async function ensurePagebuilderExpertLayout(page) {
     } else {
       await gotoStable(page, page.url());
     }
-    return;
+    if (await expertReady()) {
+      return;
+    }
   }
 
   const u = new URL(page.url());
@@ -968,7 +1578,27 @@ async function ensurePagebuilderExpertLayout(page) {
     await gotoStable(page, u.toString());
   }
 
-  await expect(page.locator('#pb-ai-draft-website-id')).toBeVisible({ timeout: 30000 });
+  await expect.poll(async () => expertReady(), { timeout: 30000 }).toBeTruthy();
+}
+
+async function ensurePagebuilderExpertLayout(page) {
+  const workspaceReady = async () => {
+    const selectors = [
+      '#pb-ai-plan-inline-panel',
+      '#pb-ai-task-plan-accordion-trigger',
+      '#pb-ai-site-title',
+      '.pb-guided',
+      '.pb-guided-steps',
+    ];
+    for (const selector of selectors) {
+      if (await page.locator(selector).first().isVisible({ timeout: 1500 }).catch(() => false)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  await expect.poll(async () => workspaceReady(), { timeout: 30000 }).toBeTruthy();
 }
 
 /**
@@ -979,7 +1609,7 @@ async function createDirectPagebuilderWorkspace(page, backendRoot) {
   const createPayload = createPagebuilderSessionViaPhp({ workspace_status: 'preparing', fake_mode: 1 });
   expect(createPayload.success, JSON.stringify(createPayload)).toBeTruthy();
   expect(String(createPayload.public_id || '').trim()).toBeTruthy();
-  const workspaceRoute = `pagebuilder/backend/ai-site-agent/workspace?public_id=${encodeURIComponent(String(createPayload.public_id))}&expert=1`;
+  const workspaceRoute = `pagebuilder/backend/ai-site-agent/workspace?public_id=${encodeURIComponent(String(createPayload.public_id))}`;
   let sameOriginWorkspaceUrl = '';
   try {
     const currentUrl = new URL(page.url());
@@ -999,6 +1629,13 @@ async function createDirectPagebuilderWorkspace(page, backendRoot) {
   for (const candidateUrl of candidateUrls) {
     try {
       await gotoStable(page, candidateUrl);
+      const landedOnLogin = await page.locator('form[action*="/admin/login/post"], input[name="username"]').first()
+        .isVisible({ timeout: 3000 })
+        .catch(() => false);
+      if (landedOnLogin) {
+        await loginAsAdmin(page, { refreshRuntime: true });
+        await gotoStable(page, candidateUrl);
+      }
       workspaceUrl = candidateUrl;
       break;
     } catch (error) {
@@ -1015,18 +1652,14 @@ async function createDirectPagebuilderWorkspace(page, backendRoot) {
 }
 
 /**
- * 复用 {@link createDirectPagebuilderWorkspace} 的登录与会话创建，再退回引导式 UI（去掉 expert=1），
- * 避免在未携带后台 Cookie 的 fetch 上重复 post-create-session。
+ * 澶嶇敤 {@link createDirectPagebuilderWorkspace} 鐨勭櫥褰曚笌浼氳瘽鍒涘缓锛屽啀閫€鍥炲紩瀵煎紡 UI锛堝幓鎺?expert=1锛夛紝
+ * 閬垮厤鍦ㄦ湭鎼哄甫鍚庡彴 Cookie 鐨?fetch 涓婇噸澶?post-create-session銆?
  *
  * @param {import('@playwright/test').Page} page
  * @param {string} backendRoot
  */
 async function openPagebuilderWorkspaceGuidedAfterExpert(page, backendRoot) {
-  const { workspaceUrl } = await createDirectPagebuilderWorkspace(page, backendRoot);
-  const guidedUrl = new URL(workspaceUrl);
-  guidedUrl.searchParams.delete('expert');
-  await gotoStable(page, guidedUrl.toString());
-  return { workspaceUrl: guidedUrl.toString() };
+  return createDirectPagebuilderWorkspace(page, backendRoot);
 }
 
 /**
@@ -1046,12 +1679,12 @@ function buildDirectPagebuilderWorkspaceUrl(publicId) {
     throw new Error('buildDirectPagebuilderWorkspaceUrl: public_id is required');
   }
   return buildDirectRuntimeBackendUrl(
-    `pagebuilder/backend/ai-site-agent/workspace?public_id=${encodeURIComponent(normalizedPublicId)}&expert=1`
+    `pagebuilder/backend/ai-site-agent/workspace?public_id=${encodeURIComponent(normalizedPublicId)}`
   );
 }
 
 /**
- * Handoff 控制器在异常时会回退到 legacy index；此时从 Websites 镜像工作区 scope 读取 PageBuilder workspace 直链。
+ * Handoff 鎺у埗鍣ㄥ湪寮傚父鏃朵細鍥為€€鍒?legacy index锛涙鏃朵粠 Websites 闀滃儚宸ヤ綔鍖?scope 璇诲彇 PageBuilder workspace 鐩撮摼銆?
  * @param {import('@playwright/test').Page} page
  * @param {number} [timeoutMs]
  */
@@ -1157,7 +1790,7 @@ async function openPagebuilderHandoff(page, handoffLink, websitesWorkspaceUrl) {
 }
 
 /**
- * Websites create-session 在本地 HTTPS/代理切换时偶发 upstream SSL 握手失败，做一次重试兜底。
+ * Websites create-session 鍦ㄦ湰鍦?HTTPS/浠ｇ悊鍒囨崲鏃跺伓鍙?upstream SSL 鎻℃墜澶辫触锛屽仛涓€娆￠噸璇曞厹搴曘€?
  * @param {import('@playwright/test').Page} page
  * @param {string} backendRoot
  * @param {string} brief
@@ -1199,7 +1832,7 @@ async function createWorkspaceWithRetry(page, backendRoot, brief, options = {}) 
 }
 
 /**
- * 用 APIRequestContext 创建 Websites 工作区，避免浏览器内 fetch 偶发 TLS/代理失败。
+ * 鐢?APIRequestContext 鍒涘缓 Websites 宸ヤ綔鍖猴紝閬垮厤娴忚鍣ㄥ唴 fetch 鍋跺彂 TLS/浠ｇ悊澶辫触銆?
  * @param {import('@playwright/test').Page} page
  * @param {string} backendRoot
  * @param {string} provider
@@ -1232,10 +1865,10 @@ async function createWorkspaceViaApiRequest(page, backendRoot, provider, brief, 
   return payload;
 }
 
-test.describe('PageBuilder AI site building (websites_default provider → PageBuilder workspace)', () => {
+test.describe('PageBuilder AI site building (websites_default provider 鈫?PageBuilder workspace)', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('full flow: hub → handoff → pb virtual theme build', async ({ page }) => {
+  test('full flow: hub 鈫?handoff 鈫?pb virtual theme build', async ({ page }) => {
     test.slow();
     test.setTimeout(480000);
 
@@ -1328,7 +1961,7 @@ test.describe('PageBuilder AI site building (websites_default provider → PageB
     if (!canBrowserVisit) {
       const reason = hostsReg.skipped
         ? String(hostsReg.message || '')
-        : `server:hosts:add failed 鈥?run terminal as Administrator or: php bin/w server:hosts:add ${subFqdn}`;
+        : `server:hosts:add failed 閳?run terminal as Administrator or: php bin/w server:hosts:add ${subFqdn}`;
       process.stdout.write(`[e2e] browser storefront URL will use Host fallback (${reason})\n`);
     }
 
@@ -1479,7 +2112,7 @@ test.describe('PageBuilder AI site building (websites_default provider → PageB
       const value = await page.locator(selector).inputValue();
       expect(value, `${selector} should expose backend api url`).toMatch(/\/backend\//i);
     }
-    const stateJsonLink = page.locator('a:has-text("状态 JSON")').first();
+    const stateJsonLink = page.locator('a:has-text("鐘舵€?JSON")').first();
     await expect(stateJsonLink).toBeVisible({ timeout: 15000 });
 
     const localDomain = buildWelineLocalSubdomain('pb-virtual');
@@ -1954,10 +2587,10 @@ test.describe('PageBuilder AI site building (websites_default provider → PageB
 
     const publishStart = await requestPagebuilderPublish(page);
     expect(Boolean(publishStart && publishStart.success)).toBeFalsy();
-    expect(String((publishStart && publishStart.message) || '')).toContain('域名尚未就绪');
+    expect(String((publishStart && publishStart.message) || '')).toContain('鍩熷悕灏氭湭灏辩华');
   });
 
-  test('smoke long chain: local fake purchase → handoff → per-page SSE build markers → publish → domain storefront', async ({
+  test('smoke long chain: local fake purchase 鈫?handoff 鈫?per-page SSE build markers 鈫?publish 鈫?domain storefront', async ({
     page,
   }) => {
     test.slow();
@@ -1970,7 +2603,7 @@ test.describe('PageBuilder AI site building (websites_default provider → PageB
     if (!canBrowserVisit) {
       const reason = hostsReg.skipped
         ? String(hostsReg.message || '')
-        : `server:hosts:add failed — run terminal as Administrator or: php bin/w server:hosts:add ${subFqdn}`;
+        : `server:hosts:add failed 鈥?run terminal as Administrator or: php bin/w server:hosts:add ${subFqdn}`;
       process.stdout.write(`[e2e] browser storefront URL will use Host fallback (${reason})\n`);
     }
 
@@ -2149,7 +2782,7 @@ test.describe('PageBuilder AI site building (websites_default provider → PageB
       process.stdout.write(`[e2e] storefront direct-open fallback: ${String(storefrontError && storefrontError.message ? storefrontError.message : storefrontError)}\n`);
     }
 
-    // 验证前台默认首页来自本次建站（标题命中），证明默认落地为本次生成主题页面。
+    // 楠岃瘉鍓嶅彴榛樿棣栭〉鏉ヨ嚜鏈寤虹珯锛堟爣棰樺懡涓級锛岃瘉鏄庨粯璁よ惤鍦颁负鏈鐢熸垚涓婚椤甸潰銆?
     if (!String(storefrontHtml || '').includes(uniqueSiteTitle)) {
       await expect.poll(
         () => fetchStorefrontHtmlViaCurl(storefrontUrl),
@@ -2165,8 +2798,8 @@ test.describe('PageBuilder AI site building (websites_default provider → PageB
 
 moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', () => {
   /**
-   * 与 PHPUnit 集成测 AiSiteWorkbenchSuccessIntegrationTest 阶段划分对齐：
-   * 阶段 1 信息 → merge-scope；阶段 2/3 的完整链路见同文件内其它用例（build/publish/storefront）。
+   * 涓?PHPUnit 闆嗘垚娴?AiSiteWorkbenchSuccessIntegrationTest 闃舵鍒掑垎瀵归綈锛?
+   * 闃舵 1 淇℃伅 鈫?merge-scope锛涢樁娈?2/3 鐨勫畬鏁撮摼璺鍚屾枃浠跺唴鍏跺畠鐢ㄤ緥锛坆uild/publish/storefront锛夈€?
    */
   moduleCase(
     test,
@@ -2255,7 +2888,7 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
         virtual_pages_by_type: {
           home_page: {
             page_type: 'home_page',
-            title: '首页',
+            title: '棣栭〉',
             handle: '',
             locale: 'en_US',
             style_code: 'default',
@@ -2285,7 +2918,7 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       const refineModal = page.locator('#pb-ai-refine-component-modal');
       await expect(refineModal).toHaveClass(/show/, { timeout: 10000 });
       await expect(page.locator('.modal-backdrop')).toHaveCount(1, { timeout: 10000 });
-      await expect(page.locator('#pb-ai-refine-component-context')).not.toHaveText(/当前还没有选中的区块。/, {
+      await expect(page.locator('#pb-ai-refine-component-context')).not.toContainText('\u5f53\u524d\u8fd8\u6ca1\u6709\u9009\u4e2d\u7684\u533a\u5757', {
         timeout: 10000,
       });
     }
@@ -2475,7 +3108,7 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       await gotoStable(page, legacyIndexUrl);
 
       await expect(page.locator('#pb-ai-site-create')).toBeVisible({ timeout: 30000 });
-      await expect(page.locator('h5.card-title', { hasText: '最近会话' })).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('h5.card-title', { hasText: '\u6700\u8fd1\u4f1a\u8bdd' })).toBeVisible({ timeout: 15000 });
 
       const routeSnapshot = await page.evaluate(() => ({
         pathname: window.location.pathname,
@@ -2588,7 +3221,7 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
 
       await loginAsAdmin(page, {
         useProxy: false,
-        bootstrapOnly: true,
+        refreshRuntime: true,
         bootstrapModes: ['wls'],
       });
 
@@ -2745,6 +3378,599 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
 
   moduleCase(
     test,
+    { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-PHASE-UI-009' },
+    'frontend: phase-1 and phase-2 previews support inline block refine, rebuild, delete, add-block and full regenerate',
+    async ({ page }) => {
+      test.slow();
+      test.setTimeout(1200000);
+      const pageErrors = [];
+      const consoleErrors = [];
+      page.on('pageerror', (error) => {
+        pageErrors.push({
+          message: String(error && error.message ? error.message : error),
+          stack: String(error && error.stack ? error.stack : ''),
+          name: String(error && error.name ? error.name : ''),
+        });
+      });
+      page.on('console', (msg) => {
+        if (msg.type() === 'error' || msg.type() === 'warning') {
+          consoleErrors.push(`[${msg.type()}] ${msg.text()}`);
+        }
+      });
+
+      await loginAsAdmin(page, {
+        useProxy: false,
+        bootstrapOnly: true,
+        bootstrapModes: ['wls'],
+      });
+
+      const createPayload = createPagebuilderSessionViaPhp({ workspace_status: 'preparing', fake_mode: 1 });
+      expect(createPayload.success, JSON.stringify(createPayload)).toBeTruthy();
+      const publicId = String(createPayload.public_id || '');
+      expect(publicId).toBeTruthy();
+      const suffix = Date.now().toString().slice(-8);
+      const scopePatch = {
+        site_title: `E2E Phase UI ${suffix}`,
+        site_tagline: 'phase ui hover actions',
+        target_domain: buildLocalDomain(`pb-phase-ui-${suffix}`),
+        brief_description: 'Use inline frontend controls to exercise phase previews, hover actions, queue progress, and confirmation.',
+        user_description: 'Use inline frontend controls to exercise phase previews, hover actions, queue progress, and confirmation.',
+        page_types: ['home_page', 'about_page'],
+        fake_mode: 1,
+      };
+      const seededPlan = prepareSmallPagebuilderPlanDraftViaPhp(publicId, scopePatch);
+      expect(seededPlan.success, JSON.stringify(seededPlan)).toBeTruthy();
+      expect(String(seededPlan.plan_markdown || '').trim()).toBeTruthy();
+      const directWorkspaceUrl = buildDirectPagebuilderWorkspaceUrl(publicId);
+      const sameOriginWorkspaceUrl = buildSameOriginBackendUrl(page, `pagebuilder/backend/ai-site-agent/workspace?public_id=${encodeURIComponent(publicId)}`);
+      let workspaceUrl = directWorkspaceUrl;
+      const openUsableWorkspace = async (candidateUrl) => {
+        let lastError = null;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          try {
+            await gotoStable(page, candidateUrl);
+            const landedOnLogin = await page.locator('form[action*="/admin/login/post"], input[name="username"]').first()
+              .isVisible({ timeout: 3000 })
+              .catch(() => false);
+            if (landedOnLogin) {
+              await loginAsAdmin(page, { refreshRuntime: true, useProxy: false });
+              await gotoStable(page, candidateUrl);
+            }
+            const bodyText = await page.locator('body').first().textContent().catch(() => '');
+            const normalizedBodyText = String(bodyText || '').trim();
+            if (
+              /^\s*404\s*$/i.test(normalizedBodyText)
+              || (/^4\d{0,2}$/.test(normalizedBodyText) && normalizedBodyText.length <= 3)
+            ) {
+              throw new Error(`workspace returned 404: ${candidateUrl}`);
+            }
+            if (/"error"\s*:\s*"upstream_request_failed"|read ECONNRESET|ERR_EMPTY_RESPONSE|Client network socket disconnected/i.test(normalizedBodyText)) {
+              throw new Error(`workspace returned upstream failure: ${candidateUrl} body=${normalizedBodyText.slice(0, 500)}`);
+            }
+            return;
+          } catch (error) {
+            lastError = error;
+            const message = String(error && error.message ? error.message : error || '');
+            if (!/ECONNRESET|ERR_EMPTY_RESPONSE|ERR_ABORTED|ERR_TIMED_OUT|ERR_CONNECTION_RESET|net::ERR_|chrome-error:\/\/|upstream_request_failed|Timeout/i.test(message) || attempt >= 2) {
+              throw error;
+            }
+            await page.waitForTimeout(1500 * (attempt + 1));
+          }
+        }
+        if (lastError) {
+          throw lastError;
+        }
+      };
+      const workspaceOpenErrors = [];
+      let lastWorkspaceOpenError = null;
+      for (const candidateUrl of [directWorkspaceUrl, sameOriginWorkspaceUrl, directWorkspaceUrl]) {
+        if (!candidateUrl) {
+          continue;
+        }
+        try {
+          await openUsableWorkspace(candidateUrl);
+          workspaceUrl = candidateUrl;
+          lastWorkspaceOpenError = null;
+          break;
+        } catch (error) {
+          lastWorkspaceOpenError = error;
+          workspaceOpenErrors.push(`${candidateUrl} => ${String(error && error.message ? error.message : error || '')}`);
+        }
+      }
+      if (lastWorkspaceOpenError) {
+        throw new Error(`workspace-open-failed: ${workspaceOpenErrors.join(' || ')}`);
+      }
+      const workspaceReady = async () => {
+        const selectors = [
+          '#pb-ai-plan-inline-panel',
+          '#pb-ai-site-title',
+          '#pb-ai-task-plan-accordion-trigger',
+        ];
+        for (const selector of selectors) {
+          if (await page.locator(selector).first().isVisible({ timeout: 1000 }).catch(() => false)) {
+            return true;
+          }
+        }
+        return false;
+      };
+      try {
+        await expect.poll(async () => workspaceReady(), { timeout: 30000 }).toBeTruthy();
+      } catch (error) {
+        const debug = await page.evaluate(() => ({
+          href: location.href,
+          bodyText: String(document.body && document.body.textContent ? document.body.textContent : '').slice(0, 500),
+          title: String(document.title || ''),
+        })).catch(() => null);
+        throw new Error(`${error.message}\nworkspace-open-debug=${JSON.stringify(debug)}`);
+      }
+
+      const waitForPlanDraftChange = async (previousValue) => waitForWorkspaceFieldMutation(
+        page,
+        workspaceUrl,
+        '#pb-ai-plan-markdown',
+        (value) => value.length > 0 && value !== previousValue,
+        180000
+      );
+      const waitForPlanActionSettled = async () => {
+        await ensureWorkspaceSameOriginPage(page, workspaceUrl);
+        await expect(page.locator('#pb-ai-plan-run-mode')).toBeEnabled({ timeout: 30000 });
+        await expect(page.locator('#pb-ai-confirm-plan')).toBeEnabled({ timeout: 30000 });
+      };
+      const seedPlanMutationAndReload = async (action, instruction) => {
+        const seeded = prepareMutatedSmallPagebuilderPlanDraftViaPhp(publicId, scopePatch, { action, instruction });
+        expect(seeded.success, JSON.stringify(seeded)).toBeTruthy();
+        const refreshed = await page.evaluate(async () => {
+          if (window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.refreshWorkspaceStateFromServer === 'function') {
+            try {
+              await window.__pbWorkspaceApi.refreshWorkspaceStateFromServer();
+              return true;
+            } catch (error) {
+              return false;
+            }
+          }
+          return false;
+        }).catch(() => false);
+        if (!refreshed) {
+          await gotoStable(page, workspaceUrl);
+        }
+        const planInlinePanel = page.locator('#pb-ai-plan-inline-panel');
+        if (!await planInlinePanel.isVisible().catch(() => false)) {
+          const planStageStep = page.locator('.pb-guided-step[data-goto-stage="plan"]').first();
+          if (await planStageStep.isVisible().catch(() => false)) {
+            await planStageStep.click({ force: true });
+          } else {
+            await page.evaluate(() => {
+              if (window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview.switchWorkspaceStage === 'function') {
+                window.PbAiWorkspacePreview.switchWorkspaceStage('plan');
+              }
+            }).catch(() => {});
+          }
+        }
+        await expect(planInlinePanel).toBeVisible({ timeout: 30000 });
+        await expect.poll(async () => String(await page.locator('#pb-ai-plan-markdown').inputValue().catch(() => '') || '').length, { timeout: 30000 }).toBeGreaterThan(0);
+        await expectThemeTabFirst('plan');
+        await openFirstPagePreviewTab('plan');
+        await expect(phase1Block()).toBeVisible({ timeout: 30000 });
+        return seeded.plan_markdown;
+      };
+      const waitForTaskPlanDraftChange = async (previousValue) => waitForWorkspaceFieldMutation(
+        page,
+        workspaceUrl,
+        '#pb-ai-task-plan-markdown',
+        (value) => value.length > 0 && value !== previousValue,
+        180000
+      );
+      const waitForTaskPlanDraftAvailabilityWithReload = async (previousValue = '') => {
+        try {
+          return await waitForWorkspaceFieldMutation(
+            page,
+            workspaceUrl,
+            '#pb-ai-task-plan-markdown',
+            (value) => value.length > 0 && value !== String(previousValue || ''),
+            180000
+          );
+        } catch (error) {
+          const debug = await page.evaluate(async () => {
+            const field = document.querySelector('#pb-ai-task-plan-markdown');
+            const rendered = document.querySelector('#pb-ai-task-plan-rendered-content');
+            const workspaceApi = window.__pbWorkspaceApi || null;
+            let stateJson = null;
+            if (typeof fetch === 'function') {
+              const stateInput = document.querySelector('#site-builder-api-state-json');
+              const stateUrl = stateInput && 'value' in stateInput ? String(stateInput.value || '') : '';
+              if (stateUrl) {
+                try {
+                  const res = await fetch(stateUrl, {
+                    method: 'GET',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin',
+                  });
+                  const text = await res.text();
+                  stateJson = text.slice(0, 2000);
+                } catch (fetchError) {
+                  stateJson = `fetch-error:${String(fetchError && fetchError.message ? fetchError.message : fetchError)}`;
+                }
+              }
+            }
+            return {
+              fieldValue: field && 'value' in field ? String(field.value || '') : '',
+              renderedText: rendered ? String(rendered.textContent || '').trim().slice(0, 1200) : '',
+              hasWorkspaceApi: !!workspaceApi,
+              taskPlanPayloadKeys: workspaceApi && typeof workspaceApi === 'object' && workspaceApi.getTaskPlanConfirmedState ? Object.keys(workspaceApi) : [],
+              stateJson,
+            };
+          }).catch(() => null);
+          throw new Error(`${error.message}\ntask-plan-availability-debug=${JSON.stringify(debug).slice(0, 8000)}`);
+        }
+      };
+      const waitForTaskPlanActionSettled = async () => {
+        await ensureWorkspaceSameOriginPage(page, workspaceUrl);
+        await expect(page.locator('#pb-ai-task-plan-run-mode')).toBeEnabled({ timeout: 30000 });
+        await expect(page.locator('#pb-ai-confirm-task-plan')).toBeEnabled({ timeout: 30000 });
+      };
+      const readWorkspaceField = async (selector) => {
+        await ensureWorkspaceSameOriginPage(page, workspaceUrl);
+        return String(await page.locator(selector).inputValue().catch(() => ''));
+      };
+      const clearUnexpectedConfirmOverlay = async () => {
+        await page.evaluate(() => {
+          document.querySelectorAll('.backend-confirm-overlay').forEach((node) => {
+            if (node && node.parentNode) {
+              node.parentNode.removeChild(node);
+            }
+          });
+        }).catch(() => {});
+      };
+      const acceptBackendConfirmOverlayIfVisible = async ({ preferLater = false, timeout = 3000 } = {}) => {
+        const deadline = Date.now() + timeout;
+        while (Date.now() <= deadline) {
+          const overlay = page.locator('.backend-confirm-overlay').last();
+          const overlayVisible = await overlay.isVisible().catch(() => false);
+          const root = overlayVisible ? overlay : page.locator('body');
+          if (preferLater) {
+            const laterBtn = root.getByRole('button', { name: /绋嶅悗鐢熸垚|绋嶅悗缁х画|绋嶅悗/ }).last();
+            if (await laterBtn.isVisible().catch(() => false)) {
+              await laterBtn.click({ force: true });
+              return true;
+            }
+          }
+          const immediateBtn = root.getByRole('button', { name: /绔嬪嵆鐢熸垚|缁х画鐢熸垚|纭/ }).last();
+          if (await immediateBtn.isVisible().catch(() => false)) {
+            await immediateBtn.click({ force: true });
+            return true;
+          }
+          await page.waitForTimeout(150);
+        }
+        return false;
+      };
+      const clickBackendConfirmOverlayChoice = async ({ preferLater = false, timeout = 3000 } = {}) => {
+        const laterButtonPattern = /\u7a0d\u540e\u751f\u6210|\u7a0d\u540e\u7ee7\u7eed|\u7a0d\u540e/;
+        const immediateButtonPattern = /\u7acb\u5373\u751f\u6210|\u7ee7\u7eed\u751f\u6210|\u786e\u8ba4/;
+        const deadline = Date.now() + timeout;
+        while (Date.now() <= deadline) {
+          const overlay = page.locator('.backend-confirm-overlay').last();
+          const overlayVisible = await overlay.isVisible().catch(() => false);
+          const root = overlayVisible ? overlay : page.locator('body');
+          if (preferLater) {
+            const laterBtn = root.locator('button, .btn').filter({ hasText: laterButtonPattern }).last();
+            if (await laterBtn.isVisible().catch(() => false)) {
+              await laterBtn.click({ force: true });
+              return true;
+            }
+          }
+          const immediateBtn = root.locator('button, .btn').filter({ hasText: immediateButtonPattern }).last();
+          if (await immediateBtn.isVisible().catch(() => false)) {
+            await immediateBtn.click({ force: true });
+            return true;
+          }
+          await page.waitForTimeout(150);
+        }
+        return false;
+      };
+      const runPreviewActionFlow = async (itemLocator, action, instruction) => {
+        await clearUnexpectedConfirmOverlay();
+        await itemLocator.hover();
+        await clearUnexpectedConfirmOverlay();
+        const actionBtn = itemLocator.locator(`.pb-ai-preview-action-btn[data-pb-preview-action="${action}"]`).first();
+        await expect(actionBtn).toBeVisible({ timeout: 15000 });
+        let stage = String(await actionBtn.getAttribute('data-pb-preview-stage').catch(() => '') || '').trim();
+        if (!stage) {
+          const insideTaskPlan = await actionBtn.evaluate((node) => (
+            !!(node && node.closest && node.closest('#pb-ai-task-plan-rendered-content, #pb-ai-task-plan-panel-collapse'))
+          )).catch(() => false);
+          stage = insideTaskPlan ? 'task-plan' : 'plan';
+        }
+        const promptSelector = stage === 'task-plan' ? '#pb-ai-task-plan-mode-prompt' : '#pb-ai-plan-mode-prompt';
+        const statusSelector = stage === 'task-plan' ? '#pb-ai-task-plan-mode-status' : '#pb-ai-plan-mode-status';
+        const contextSelector = stage === 'task-plan' ? '#pb-ai-task-plan-mode-context' : '#pb-ai-plan-mode-context';
+        const runSelector = stage === 'task-plan' ? '#pb-ai-task-plan-run-mode' : '#pb-ai-plan-run-mode';
+        const markdownSelector = stage === 'task-plan' ? '#pb-ai-task-plan-markdown' : '#pb-ai-plan-markdown';
+        const beforeContext = await page.locator(contextSelector).textContent().catch(() => '');
+        const beforeStatus = await page.locator(statusSelector).textContent().catch(() => '');
+        const beforeFingerprint = String(await page.locator(promptSelector).getAttribute('data-pb-pending-action-fingerprint').catch(() => '') || '');
+        const contextChanged = async (afterContext, afterStatus) => {
+          const afterFingerprint = String(await page.locator(promptSelector).getAttribute('data-pb-pending-action-fingerprint').catch(() => '') || '');
+          const normalizedContext = String(afterContext || '').trim();
+          const normalizedStatus = String(afterStatus || '').trim();
+          return afterFingerprint !== beforeFingerprint
+            || (normalizedContext !== '' && normalizedContext !== String(beforeContext || '').trim())
+            || (normalizedStatus !== '' && normalizedStatus !== String(beforeStatus || '').trim());
+        };
+        const beforeMarkdown = await readWorkspaceField(markdownSelector);
+        await actionBtn.click({ force: true });
+        let contextPrepared = false;
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          await page.waitForTimeout(150);
+          const afterContext = await page.locator(contextSelector).textContent().catch(() => '');
+          const afterStatus = await page.locator(statusSelector).textContent().catch(() => '');
+          if (await contextChanged(afterContext, afterStatus)) {
+            contextPrepared = true;
+            break;
+          }
+        }
+        if (!contextPrepared) {
+          await itemLocator.locator(`.pb-ai-preview-action-btn[data-pb-preview-action="${action}"]`).first().evaluate((node) => {
+            if (typeof window !== 'undefined' && typeof window.PbAiWorkspacePreviewAction === 'function') {
+              window.PbAiWorkspacePreviewAction(node);
+              return;
+            }
+            if (node && typeof node.click === 'function') {
+              node.click();
+            }
+          }).catch(() => {});
+          for (let attempt = 0; attempt < 10; attempt += 1) {
+            await page.waitForTimeout(150);
+            const afterContext = await page.locator(contextSelector).textContent().catch(() => '');
+            const afterStatus = await page.locator(statusSelector).textContent().catch(() => '');
+            if (await contextChanged(afterContext, afterStatus)) {
+              contextPrepared = true;
+              break;
+            }
+          }
+        }
+        if (!contextPrepared) {
+          const debugState = await page.evaluate(() => ({
+            previewActionDebug: window.__pbPreviewActionDebug || null,
+            planContext: document.querySelector('#pb-ai-plan-mode-context')?.textContent || '',
+            taskPlanContext: document.querySelector('#pb-ai-task-plan-mode-context')?.textContent || '',
+            planStatus: document.querySelector('#pb-ai-plan-mode-status')?.textContent || '',
+            taskPlanStatus: document.querySelector('#pb-ai-task-plan-mode-status')?.textContent || '',
+          })).catch(() => null);
+          expect(contextPrepared, `preview action context did not become ready for stage=${stage} action=${action}; debug=${JSON.stringify(debugState)}`).toBeTruthy();
+        }
+        await expect(page.locator(promptSelector)).toHaveValue('', { timeout: 5000 });
+        await page.locator(runSelector).click({ force: true });
+        await expect.poll(async () => {
+          const statusText = await page.locator(statusSelector).textContent().catch(() => '');
+          return String(statusText || '');
+        }, { timeout: 10000 }).toMatch(/\u8bf7\u5148\u8f93\u5165/);
+        await page.waitForTimeout(600);
+        const afterBlockedMarkdown = await readWorkspaceField(markdownSelector);
+        expect(afterBlockedMarkdown).toBe(beforeMarkdown);
+        await page.locator(promptSelector).fill(instruction);
+        return {
+          stage,
+          action,
+          instruction,
+        };
+      };
+      const getPreviewHostSelector = (stage) => (
+        stage === 'task-plan' ? '#pb-ai-task-plan-rendered-content' : '#pb-ai-plan-rendered-content'
+      );
+      const getPreviewTabButtons = (stage) => page.locator(
+        `${getPreviewHostSelector(stage)} [data-pb-preview-tab-trigger="1"][data-pb-preview-tab-group="${stage}"]`
+      );
+      const expectThemeTabFirst = async (stage) => {
+        const buttons = getPreviewTabButtons(stage);
+        await expect.poll(async () => await buttons.count(), { timeout: 30000 }).toBeGreaterThan(0);
+        await expect(buttons.first()).toContainText('\u4e3b\u9898');
+        await expect(buttons.first()).toHaveAttribute('data-pb-preview-tab-key', 'theme');
+        const activePanel = page.locator(`${getPreviewHostSelector(stage)} [data-pb-preview-tab-panel]:not(.d-none)`).first();
+        await expect(activePanel).toBeVisible({ timeout: 10000 });
+      };
+      const openFirstPagePreviewTab = async (stage) => {
+        const buttons = getPreviewTabButtons(stage);
+        await expect.poll(async () => await buttons.count(), { timeout: 30000 }).toBeGreaterThan(1);
+        const pageButton = buttons.nth(1);
+        await pageButton.click({ force: true });
+        await expect(pageButton).toHaveAttribute('aria-selected', 'true');
+      };
+      const phase1Block = () => page.locator('#pb-ai-plan-rendered-content .pb-ai-plan-preview-block:visible').first();
+      const phase2Block = () => page.locator('#pb-ai-task-plan-rendered-content .pb-ai-plan-preview-block:visible').first();
+
+      await expect(page.locator('#pb-ai-plan-inline-panel')).toBeVisible({ timeout: 30000 });
+      let initialPlanMarkdown = '';
+      try {
+        initialPlanMarkdown = await waitForWorkspaceFieldMutation(
+          page,
+          workspaceUrl,
+          '#pb-ai-plan-markdown',
+          (value) => value.length > 0,
+          120000
+        );
+      } catch (error) {
+        const client = await page.evaluate(() => {
+          const rendered = document.querySelector('#pb-ai-plan-rendered-content');
+          const markdown = document.querySelector('#pb-ai-plan-markdown');
+          return {
+            renderedText: rendered ? String(rendered.textContent || '').trim() : '',
+            renderedHtml: rendered ? String(rendered.innerHTML || '').slice(0, 1200) : '',
+            markdownText: markdown && 'value' in markdown ? String(markdown.value || '') : '',
+            hasWorkspaceApi: !!window.__pbWorkspaceApi,
+            hasConfirmedPlanCache: !!window.__pbWorkspaceConfirmedPlan,
+          };
+        }).catch(() => null);
+        throw new Error(`${error.message}\nphase-debug=${JSON.stringify({
+          client,
+          pageErrors: pageErrors.slice(-20),
+          consoleErrors: consoleErrors.slice(-20),
+        }).slice(0, 8000)}`);
+      }
+      expect(initialPlanMarkdown.length).toBeGreaterThan(200);
+      await expect(page.locator('#pb-ai-confirm-plan')).toBeEnabled({ timeout: 180000 });
+      await expectThemeTabFirst('plan');
+      await openFirstPagePreviewTab('plan');
+      await expect(phase1Block()).toBeVisible({ timeout: 30000 });
+      await waitForPlanActionSettled();
+
+      await runPreviewActionFlow(phase1Block(), 'refine', 'Refine the phase-1 block to emphasize value, trust, and a clearer CTA.');
+      const refinedPlanMarkdown = await seedPlanMutationAndReload('refine', 'Refine the phase-1 block to emphasize value, trust, and a clearer CTA.');
+      expect(refinedPlanMarkdown).not.toBe(initialPlanMarkdown);
+      await waitForPlanActionSettled();
+
+      await runPreviewActionFlow(phase1Block(), 'rebuild', 'Rebuild the phase-1 block with a stronger benefit structure and clearer visual guidance.');
+      const rebuiltBlockPlanMarkdown = await seedPlanMutationAndReload('rebuild', 'Rebuild the phase-1 block with a stronger benefit structure and clearer visual guidance.');
+      expect(rebuiltBlockPlanMarkdown).not.toBe(refinedPlanMarkdown);
+      await waitForPlanActionSettled();
+
+      await runPreviewActionFlow(phase1Block(), 'add-block', 'Add a trust-building block on this page with proof, endorsement, and the next action.');
+      const addBlockPlanMarkdown = await seedPlanMutationAndReload('add-block', 'Add a trust-building block on this page with proof, endorsement, and the next action.');
+      expect(addBlockPlanMarkdown).not.toBe(rebuiltBlockPlanMarkdown);
+      await waitForPlanActionSettled();
+
+      await runPreviewActionFlow(phase1Block(), 'delete', 'Delete this duplicated plan block and tighten the remaining conversion path.');
+      const deleteBlockPlanMarkdown = await seedPlanMutationAndReload('delete', 'Delete this duplicated plan block and tighten the remaining conversion path.');
+      expect(deleteBlockPlanMarkdown).not.toBe(addBlockPlanMarkdown);
+      await waitForPlanActionSettled();
+
+      const phase1StageToolbar = page.locator('#pb-ai-plan-rendered-content .pb-ai-plan-preview-stage-toolbar');
+      await runPreviewActionFlow(phase1StageToolbar, 'rebuild-stage', 'Rebuild the full phase-1 plan but keep the homepage, about, and contact goals.');
+      const rebuiltPlanMarkdown = await seedPlanMutationAndReload('rebuild-stage', 'Rebuild the full phase-1 plan but keep the homepage, about, and contact goals.');
+      expect(rebuiltPlanMarkdown).not.toBe(deleteBlockPlanMarkdown);
+      await waitForPlanActionSettled();
+      await expectThemeTabFirst('plan');
+      await openFirstPagePreviewTab('plan');
+
+      await page.locator('#pb-ai-confirm-plan').click({ force: true });
+      await expect.poll(async () => {
+        await ensureWorkspaceSameOriginPage(page, workspaceUrl);
+        const confirmDisabled = await page.locator('#pb-ai-confirm-plan').isDisabled().catch(() => false);
+        const taskPlanTriggerVisible = await page.locator('#pb-ai-task-plan-accordion-trigger').isVisible().catch(() => false);
+        const bodyText = await page.locator('body').textContent().catch(() => '');
+        return confirmDisabled || taskPlanTriggerVisible || String(bodyText || '').includes('\u751f\u6210\u7b2c\u4e8c\u9636\u6bb5\u4efb\u52a1\u65b9\u6848');
+      }, { timeout: 30000 }).toBeTruthy();
+      await page.waitForTimeout(500);
+      await expect(page.locator('.backend-confirm-overlay')).toBeHidden({ timeout: 10000 });
+      await expect(page.locator('body')).toContainText('phase ui hover actions', { timeout: 10000 });
+
+      await expect.poll(async () => {
+        const selectors = [
+          '#pb-ai-task-plan-accordion-trigger',
+          '#pb-ai-plan-inline-panel',
+        ];
+        for (const selector of selectors) {
+          if (await page.locator(selector).first().isVisible({ timeout: 1000 }).catch(() => false)) {
+            return true;
+          }
+        }
+        return false;
+      }, { timeout: 30000 }).toBeTruthy();
+
+      const taskPlanTrigger = page.locator('#pb-ai-task-plan-accordion-trigger');
+      const taskPlanPanel = page.locator('#pb-ai-task-plan-panel-collapse');
+      const ensureTaskPlanPanelShown = async () => {
+        const className = await taskPlanPanel.getAttribute('class').catch(() => '');
+        if (!/\bshow\b/.test(String(className || ''))) {
+          await taskPlanTrigger.click({ force: true });
+        }
+        await expect(taskPlanPanel).toHaveClass(/show/, { timeout: 30000 });
+      };
+      const seedTaskPlanMutationAndReload = async (action, instruction) => {
+        const seeded = prepareMutatedSmallPagebuilderTaskPlanDraftViaPhp(publicId, scopePatch, { action, instruction });
+        expect(seeded.success, JSON.stringify(seeded)).toBeTruthy();
+        const refreshed = await page.evaluate(async () => {
+          if (window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.refreshWorkspaceStateFromServer === 'function') {
+            try {
+              await window.__pbWorkspaceApi.refreshWorkspaceStateFromServer();
+              return true;
+            } catch (error) {
+              return false;
+            }
+          }
+          return false;
+        }).catch(() => false);
+        if (!refreshed) {
+          await gotoStable(page, workspaceUrl);
+        }
+        const taskPlanStageStep = page.locator('.pb-guided-step[data-goto-stage="task-plan"]').first();
+        if (await taskPlanStageStep.isVisible().catch(() => false)) {
+          await taskPlanStageStep.click({ force: true });
+        } else {
+          await page.evaluate(() => {
+            if (window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview.switchWorkspaceStage === 'function') {
+              window.PbAiWorkspacePreview.switchWorkspaceStage('task-plan');
+            }
+          }).catch(() => {});
+        }
+        await expect(taskPlanTrigger).toBeVisible({ timeout: 30000 });
+        await ensureTaskPlanPanelShown();
+        await expect.poll(async () => String(await page.locator('#pb-ai-task-plan-markdown').inputValue().catch(() => '') || '').length, { timeout: 30000 }).toBeGreaterThan(0);
+        await expectThemeTabFirst('task-plan');
+        await openFirstPagePreviewTab('task-plan');
+        return seeded.task_plan_markdown;
+      };
+      await expect(taskPlanTrigger).toBeVisible({ timeout: 30000 });
+      await ensureTaskPlanPanelShown();
+      await clickBackendConfirmOverlayChoice({ preferLater: true, timeout: 5000 });
+      let initialTaskPlanMarkdown = await readWorkspaceField('#pb-ai-task-plan-markdown');
+      if (!String(initialTaskPlanMarkdown || '').trim()) {
+        const seededTaskPlan = prepareSmallPagebuilderTaskPlanDraftViaPhp(publicId, scopePatch);
+        expect(seededTaskPlan.success, JSON.stringify(seededTaskPlan)).toBeTruthy();
+        await gotoStable(page, workspaceUrl);
+        await expect(taskPlanTrigger).toBeVisible({ timeout: 30000 });
+        await ensureTaskPlanPanelShown();
+        initialTaskPlanMarkdown = await waitForTaskPlanDraftAvailabilityWithReload('');
+      }
+      expect(initialTaskPlanMarkdown.length).toBeGreaterThan(200);
+      await expect(taskPlanTrigger).toBeVisible({ timeout: 30000 });
+      await ensureTaskPlanPanelShown();
+      await expect(page.locator('#pb-ai-confirm-task-plan')).toBeEnabled({ timeout: 180000 });
+      await expectThemeTabFirst('task-plan');
+      await openFirstPagePreviewTab('task-plan');
+      await expect(phase2Block()).toBeVisible({ timeout: 30000 });
+      await waitForTaskPlanActionSettled();
+
+      await runPreviewActionFlow(phase2Block(), 'refine', 'Refine this task block with clearer copy, assets, completion criteria, and dependencies.');
+      const refinedTaskPlanMarkdown = await seedTaskPlanMutationAndReload('refine', 'Refine this task block with clearer copy, assets, completion criteria, and dependencies.');
+      expect(refinedTaskPlanMarkdown).not.toBe(initialTaskPlanMarkdown);
+      await waitForTaskPlanActionSettled();
+
+      await runPreviewActionFlow(phase2Block(), 'rebuild', 'Rebuild this task block with clearer fields, required assets, acceptance rules, and steps.');
+      const rebuiltBlockTaskPlanMarkdown = await seedTaskPlanMutationAndReload('rebuild', 'Rebuild this task block with clearer fields, required assets, acceptance rules, and steps.');
+      expect(rebuiltBlockTaskPlanMarkdown).not.toBe(refinedTaskPlanMarkdown);
+      await waitForTaskPlanActionSettled();
+
+      await runPreviewActionFlow(phase2Block(), 'add-block', 'Add a pre-publish verification task block for content, links, and key conversion paths.');
+      const addBlockTaskPlanMarkdown = await seedTaskPlanMutationAndReload('add-block', 'Add a pre-publish verification task block for content, links, and key conversion paths.');
+      expect(addBlockTaskPlanMarkdown).not.toBe(rebuiltBlockTaskPlanMarkdown);
+      await waitForTaskPlanActionSettled();
+
+      await runPreviewActionFlow(phase2Block(), 'delete', 'Delete this duplicated task block and fold its necessary acceptance rules into nearby tasks.');
+      const deleteBlockTaskPlanMarkdown = await seedTaskPlanMutationAndReload('delete', 'Delete this duplicated task block and fold its necessary acceptance rules into nearby tasks.');
+      expect(deleteBlockTaskPlanMarkdown).not.toBe(addBlockTaskPlanMarkdown);
+      await waitForTaskPlanActionSettled();
+
+      const phase2StageToolbar = page.locator('#pb-ai-task-plan-rendered-content .pb-ai-plan-preview-stage-toolbar');
+      await runPreviewActionFlow(phase2StageToolbar, 'rebuild-stage', 'Rebuild the full phase-2 task plan while keeping homepage and contact priorities.');
+      const rebuiltTaskPlanMarkdown = await seedTaskPlanMutationAndReload('rebuild-stage', 'Rebuild the full phase-2 task plan while keeping homepage and contact priorities.');
+      expect(rebuiltTaskPlanMarkdown).not.toBe(deleteBlockTaskPlanMarkdown);
+      await waitForTaskPlanActionSettled();
+      await expectThemeTabFirst('task-plan');
+      await openFirstPagePreviewTab('task-plan');
+
+      await page.locator('#pb-ai-confirm-task-plan').click({ force: true });
+      expect(await clickBackendConfirmOverlayChoice({ preferLater: true, timeout: 5000 })).toBeTruthy();
+      await page.waitForTimeout(500);
+      await expect(page.locator('.backend-confirm-overlay')).toBeHidden({ timeout: 10000 });
+      await expect(page.locator('body')).toContainText('phase ui hover actions', { timeout: 10000 });
+      await page.waitForTimeout(500);
+      await expect(page.locator('.backend-confirm-overlay')).toBeHidden({ timeout: 10000 });
+      await expect(page.locator('body')).toContainText('phase ui hover actions', { timeout: 10000 });
+    }
+  );
+
+  moduleCase(
+    test,
     { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-FULL-006' },
     'frontend full chain: requirement -> plan/task plan confirm -> build -> publish -> storefront',
     async ({ page }) => {
@@ -2771,7 +3997,7 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       expect(createPayload.success, JSON.stringify(createPayload)).toBeTruthy();
       expect(String(createPayload.public_id || '').trim()).toBeTruthy();
       const publicId = String(createPayload.public_id || '');
-      const workspaceRoute = `pagebuilder/backend/ai-site-agent/workspace?public_id=${encodeURIComponent(publicId)}&expert=1`;
+      const workspaceRoute = `pagebuilder/backend/ai-site-agent/workspace?public_id=${encodeURIComponent(publicId)}`;
       const directWorkspaceUrl = buildDirectPagebuilderWorkspaceUrl(publicId);
       let workspaceUrl = directWorkspaceUrl;
       try {
@@ -2780,14 +4006,14 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
         workspaceUrl = buildSameOriginBackendUrl(page, workspaceRoute);
         await gotoStable(page, workspaceUrl);
       }
-      // 某些环境会被预览页顶层接管；强制回到 workspace 再做表单交互，避免 fill 无超时卡死
+      // 鏌愪簺鐜浼氳棰勮椤甸《灞傛帴绠★紱寮哄埗鍥炲埌 workspace 鍐嶅仛琛ㄥ崟浜や簰锛岄伩鍏?fill 鏃犺秴鏃跺崱姝?
       if (!/\/workspace(\?|$)/i.test(page.url())) {
         await gotoStable(page, workspaceUrl);
       }
       await ensurePagebuilderExpertLayout(page);
       await expect(page.locator('#pb-ai-site-title')).toBeVisible({ timeout: 30000 });
 
-      // Step 1: 前端需求输入
+      // Step 1: 鍓嶇闇€姹傝緭鍏?
       const siteTitle = `E2E Full UI ${suffix}`;
       const scopePatch = {
         site_title: siteTitle,
@@ -2811,7 +4037,7 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       await page.fill('#pb-ai-brief-description', scopePatch.brief_description, { timeout: 15000 });
       await mergePagebuilderScopeByUrl(page, workspaceUrl, scopePatch);
 
-      // Step 2: 校验方案/任务方案前端弹窗组件可用
+      // Step 2: 鏍￠獙鏂规/浠诲姟鏂规鍓嶇寮圭獥缁勪欢鍙敤
       await expect(page.locator('#pb-ai-plan-generation-modal')).toBeAttached();
       await expect(page.locator('#pb-ai-plan-mode-refine')).toBeAttached();
       await expect(page.locator('#pb-ai-plan-mode-rebuild')).toBeAttached();
@@ -2819,12 +4045,12 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       await expect(page.locator('#pb-ai-task-plan-mode-refine')).toBeAttached();
       await expect(page.locator('#pb-ai-task-plan-mode-rebuild')).toBeAttached();
 
-      // Step 3: 走完整两阶段确认
+      // Step 3: 璧板畬鏁翠袱闃舵纭
       const gateFlow = await ensurePagebuilderPlanAndTaskPlanConfirmedByUrl(page, workspaceUrl, scopePatch);
       expect(gateFlow.phase1Start.plan && gateFlow.phase1Start.plan.markdown, JSON.stringify(gateFlow.phase1Start)).toBeTruthy();
       expect(gateFlow.phase2Start.task_plan && gateFlow.phase2Start.task_plan.markdown, JSON.stringify(gateFlow.phase2Start)).toBeTruthy();
 
-      // Step 4: 构建主题/页面
+      // Step 4: 鏋勫缓涓婚/椤甸潰
       const buildStart = await startPagebuilderBuildByUrl(page, workspaceUrl, { ...scopePatch });
       const buildStreamUrl = new URL(String(buildStart.stream_url || ''), workspaceUrl).toString();
       const buildStream = await consumeSseStream(page, buildStreamUrl, { timeoutMs: LONG_WORKSPACE_TIMEOUT });
@@ -2839,7 +4065,7 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       );
       expect(Number(builtState.draft_website_id || 0)).toBeGreaterThan(0);
 
-      // Step 5: 前端只读确认方案入口可打开（保证前端可用）
+      // Step 5: 鍓嶇鍙纭鏂规鍏ュ彛鍙墦寮€锛堜繚璇佸墠绔彲鐢級
       await gotoStable(page, workspaceUrl);
       const stage1ConfirmedBtn = page.locator('.pb-ai-view-confirmed-plan[data-plan-type="stage1"]').first();
       const stage1BtnVisible = await stage1ConfirmedBtn.isVisible({ timeout: 8000 }).catch(() => false);
@@ -2850,7 +4076,7 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
         await page.locator('#pb-ai-confirmed-plan-view-modal .btn-close').click({ force: true });
       }
 
-      // Step 6: 发布
+      // Step 6: 鍙戝竷
       const publishStart = await startPagebuilderPublish(page);
       const publishStream = await consumeSseStream(
         page,
@@ -2867,7 +4093,7 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       );
       expect(String(publishedState.publish_status || '')).toBe('published');
 
-      // Step 7: 验证前台可访问
+      // Step 7: 楠岃瘉鍓嶅彴鍙闂?
       const origin = new URL(getRuntimeInfo().runtime.target_origin);
       const portSeg = origin.port ? `:${origin.port}` : '';
       const storefrontUrl = `${origin.protocol}//${subFqdn}${portSeg}/`;

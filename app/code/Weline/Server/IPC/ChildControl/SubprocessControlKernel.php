@@ -399,11 +399,31 @@ final class SubprocessControlKernel
     private function shouldUseSupervisorTransport(): bool
     {
         $flag = \getenv('WLS_SUPERVISOR_ENABLED');
-        if ($flag === false || $flag === '') {
+        if ($flag !== false && $flag !== '') {
+            return \in_array(\strtolower((string) $flag), ['1', 'true', 'yes', 'on'], true);
+        }
+
+        $instanceCode = $this->instanceCode !== '' ? $this->instanceCode : 'default';
+        $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceCode . '.json';
+        if (!\is_file($instanceFile)) {
             return false;
         }
 
-        return \in_array(\strtolower((string) $flag), ['1', 'true', 'yes', 'on'], true);
+        $raw = @\file_get_contents($instanceFile);
+        if (!\is_string($raw) || $raw === '') {
+            return false;
+        }
+
+        $data = @\json_decode($raw, true);
+        if (!\is_array($data)) {
+            return false;
+        }
+
+        if (isset($data['supervisor_enabled'])) {
+            return (bool) $data['supervisor_enabled'];
+        }
+
+        return (string)($data['control_plane_mode'] ?? '') === 'hybrid';
     }
 
     private function createClient(): ChildControlClientInterface
@@ -416,7 +436,7 @@ final class SubprocessControlKernel
         }
 
         if ($this->shouldUseSupervisorTransport()) {
-            $channelId = (string) (\getenv('WLS_SUPERVISOR_CHANNEL') ?: ('channel-' . ($this->instanceCode !== '' ? $this->instanceCode : 'default')));
+            $channelId = (string) (\getenv('WLS_SUPERVISOR_CHANNEL') ?: $this->resolveSupervisorChannelId());
             $basePath = (string) (\getenv('WLS_SUPERVISOR_BASE_PATH') ?: BP);
 
             return new SupervisorChildClient(
@@ -427,5 +447,23 @@ final class SubprocessControlKernel
         }
 
         return new ControlClient();
+    }
+
+    private function resolveSupervisorChannelId(): string
+    {
+        $instanceCode = $this->instanceCode !== '' ? $this->instanceCode : 'default';
+        $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceCode . '.json';
+        if (\is_file($instanceFile)) {
+            $raw = @\file_get_contents($instanceFile);
+            $data = \is_string($raw) ? @\json_decode($raw, true) : null;
+            if (\is_array($data)) {
+                $channelId = (string)($data['supervisor_channel'] ?? '');
+                if ($channelId !== '') {
+                    return $channelId;
+                }
+            }
+        }
+
+        return 'channel-' . $instanceCode;
     }
 }
