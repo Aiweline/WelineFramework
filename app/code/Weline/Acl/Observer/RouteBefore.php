@@ -188,9 +188,10 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 ->fields('path')
                 ->where('type', \Weline\Acl\Model\WhiteAclSource::type_PC)
                 ->select()
-                ->fetchArray();
+                ->fetchIterator();
             $paths = [];
             foreach ($white_lists as $white_list) {
+                $white_list = \is_array($white_list) ? $white_list : (\method_exists($white_list, 'getData') ? $white_list->getData() : []);
                 $paths[] = $white_list['path'];
             }
             $white_lists = $paths;
@@ -507,9 +508,10 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 ->fields('path')
                 ->where('type', \Weline\Acl\Model\WhiteAclSource::type_API)
                 ->select()
-                ->fetchArray();
+                ->fetchIterator();
             $paths = [];
             foreach ($white_lists as $white_list) {
+                $white_list = \is_array($white_list) ? $white_list : (\method_exists($white_list, 'getData') ? $white_list->getData() : []);
                 $paths[] = $white_list['path'];
             }
             $white_lists = $paths;

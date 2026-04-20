@@ -35,7 +35,7 @@ class Helper
             foreach ($queue_files as $queue_class) {
                 try {
                     $queue_ref = ObjectManager::getReflectionInstance($queue_class);
-                    if (!$queue_ref->isInstantiable()) {
+                    if (!$queue_ref->isInstantiable() || !$queue_ref->implementsInterface(QueueInterface::class)) {
                         continue;
                     }
                     /**@var QueueInterface $queue */

@@ -5307,6 +5307,58 @@ CMD;
     }
 
     /**
+     * 枚举指定前缀下当前仍存活的受管 Weline 进程 PID。
+     *
+     * @return list<int>
+     */
+    public static function getProcessIdsByPrefix(string $prefix): array
+    {
+        if (empty($prefix) || \strpos($prefix, self::WELINE_PROCESS_PREFIX) === false) {
+            return [];
+        }
+
+        $pids = [];
+        $currentPid = \getmypid();
+        $nameIndex = self::readNameIndex();
+        foreach ($nameIndex as $pname => $entries) {
+            $taskName = '';
+            try {
+                $taskName = self::getTaskName($pname);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            if (!\str_starts_with($taskName, $prefix) && !\str_starts_with($pname, '--name=' . $prefix)) {
+                continue;
+            }
+
+            foreach ($entries as $entry) {
+                $pid = (int) ($entry['pid'] ?? 0);
+                if ($pid <= 0 || $pid === $currentPid) {
+                    continue;
+                }
+
+                if (self::isManagedProcessRunning($pid, $taskName !== '' ? $taskName : null, '', $pname)) {
+                    $pids[$pid] = true;
+                }
+            }
+        }
+
+        foreach (self::getDriver()->findProcessesByName($prefix) as $candidatePid) {
+            $candidatePid = (int) $candidatePid;
+            if ($candidatePid <= 0 || $candidatePid === $currentPid) {
+                continue;
+            }
+
+            if (self::isWelineServerProcess($candidatePid)) {
+                $pids[$candidatePid] = true;
+            }
+        }
+
+        return \array_map('intval', \array_keys($pids));
+    }
+
+    /**
      * 按进程名前缀批量杀进程（使用 name_index 查找，仅杀己方进程）
      * 
      * 用途：例如前缀 weline-master-default- 可杀该实例下所有 worker；
