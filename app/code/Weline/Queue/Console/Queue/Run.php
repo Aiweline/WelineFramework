@@ -37,6 +37,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
     public function execute(array $args = [], array $data = []): string
     {
         $id = $args['id'] ?? 0;
+        $force = !empty($args['f']) || !empty($args['force']);
         if ($id == 0) {
             $this->printing->error(__('请输入队列ID。 '));
             $this->printing->success(__('正确示例：php bin/w queue:run --id=1'));
@@ -51,6 +52,19 @@ class Run implements \Weline\Framework\Console\CommandInterface
 
         # 获取执行者
         $type = $queue->getType();
+        if ($force) {
+            $content = \json_decode((string)$queue->getContent(), true);
+            if (\is_array($content)) {
+                $content['_force_rebuild'] = 1;
+                // 强制重跑同一个队列 ID 时先清空历史 result/process，避免旧日志（含历史乱码）干扰本次观察
+                $queue->setContent((string)(\json_encode($content, \JSON_UNESCAPED_UNICODE) ?: (string)$queue->getContent()))
+                    ->setResult('')
+                    ->setProcess('')
+                    ->save();
+                $this->printing->warning(__('已启用强制模式(-f)：本次执行将优先使用队列类中的强制重建逻辑。'));
+                $this->printing->note(__('已清空该队列历史输出，本次仅展示最新执行过程。'));
+            }
+        }
         /**@var QueueInterface $queue_execute */
         $queue_execute = ObjectManager::getInstance($type->getData('class'));
         $validate_result = $queue_execute->validate($queue);
@@ -94,7 +108,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
      */
     public function tip(): string
     {
-        return __('运行队列. ') . 'php bin/w queue:run --id=1';
+        return __('运行队列. ') . 'php bin/w queue:run --id=1 [-f]';
     }
 
     public function help(): array|string
@@ -105,6 +119,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->tip(),
             [
                 '-h, --help' => '显示帮助信息',
+                '-f, --force' => '强制模式：将 _force_rebuild 注入队列内容；PageBuilder 阶段一/二/构建队列会换新 execution_token 并清 result，避免 duplicate_stream 秒跳过',
             ],
             [],
             []

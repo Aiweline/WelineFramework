@@ -238,8 +238,10 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $requestCache->layoutConfigCache[$configCacheKey] = $layoutConfig;
             }
 
-            // 配置来自元数据配置的布局
-            if(isset($layoutConfig[$layoutType]) && $layoutOption !== $layoutConfig[$layoutType]){
+            // 配置来自元数据配置的布局：仅当控制器未显式传入「类型.选项」时才用 theme 的 layoutConfig 同步 option。
+            // 否则会把 default.blank 强行改回 layoutConfig['default']（多为 default），导致 iframe/offcanvas 仍套 default.default。
+            $hadExplicitLayoutSpec = str_contains((string)$originalLayoutType, '.');
+            if (!$hadExplicitLayoutSpec && isset($layoutConfig[$layoutType]) && $layoutOption !== $layoutConfig[$layoutType]) {
                 $layoutOption = $layoutConfig[$layoutType];
             }
 

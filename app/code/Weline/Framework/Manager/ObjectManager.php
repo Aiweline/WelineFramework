@@ -549,6 +549,21 @@ class ObjectManager implements ManagerInterface
         
         return $new_object;
     }
+
+    /**
+     * @DESC          # 向后兼容 create() 调用（对齐 legacy 代码）
+     *
+     * 仅保持兼容：内部转发到 getInstance。
+     * @param string $class
+     * @param array $arguments
+     * @param bool $shared
+     * @param bool $cache
+     * @return mixed
+     */
+    public static function create(string $class = '', array $arguments = [], bool $shared = true, bool $cache = false): mixed
+    {
+        return self::getInstance($class, $arguments, $shared, $cache);
+    }
     
     /**
      * 解析构造函数参数：合并用户参数和依赖注入参数
