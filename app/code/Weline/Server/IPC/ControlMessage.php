@@ -81,6 +81,9 @@ class ControlMessage
     /** 子进程 → Master：上报请求遥测事件 */
     public const TYPE_TELEMETRY = 'telemetry';
 
+    /** Dispatcher → Master：上报后端池全不可用等需自愈异常 */
+    public const TYPE_DISPATCHER_ALERT = 'dispatcher_alert';
+
     /** CLI → Master：CLI 命令 */
     public const TYPE_COMMAND = 'command';
 
@@ -651,6 +654,38 @@ class ControlMessage
             'bytes_out' => $bytesOut,
             'ts' => $ts > 0 ? $ts : \time(),
         ]);
+    }
+
+    /**
+     * 构建 dispatcher_alert 消息
+     *
+     * @param string $instance 实例名
+     * @param string $reason 告警原因
+     * @param array $payload 附加上下文
+     * @param string $subjectRole 需要 Master 优先自愈的角色
+     * @param int $ts 事件时间戳
+     */
+    public static function dispatcherAlert(
+        string $instance,
+        string $reason,
+        array $payload = [],
+        string $subjectRole = '',
+        int $ts = 0
+    ): string {
+        $data = [
+            'type' => self::TYPE_DISPATCHER_ALERT,
+            'instance' => $instance,
+            'reason' => $reason,
+            'ts' => $ts > 0 ? $ts : \time(),
+        ];
+        if ($subjectRole !== '') {
+            $data['subject_role'] = $subjectRole;
+        }
+        foreach ($payload as $key => $value) {
+            $data[$key] = $value;
+        }
+
+        return self::encode($data);
     }
 
     /**

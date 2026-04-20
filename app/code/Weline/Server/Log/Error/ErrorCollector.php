@@ -9,6 +9,18 @@ use Weline\Server\Service\WlsLogService;
 
 class ErrorCollector
 {
+    private const CRASH_CONTEXT_MAX_DEPTH = 8;
+
+    private const CRASH_CONTEXT_MAX_KEYS = 48;
+
+    private const CRASH_CONTEXT_MAX_STRING = 4096;
+
+    /** 疑似大块响应/输出的键名（小写匹配） */
+    private const CRASH_CONTEXT_HEAVY_KEY_HINTS = [
+        'response', 'raw_response', 'body', 'output', 'html', 'payload', 'content',
+        'stdout', 'stderr', 'trace', 'trace_string', 'dump',
+    ];
+
     private const ERROR_TYPE_NAMES = [
         E_ERROR => 'E_ERROR',
         E_WARNING => 'E_WARNING',
@@ -120,10 +132,13 @@ class ErrorCollector
 
     private static function writeCrashLog(array $error): void
     {
+        $rawContext = \is_array($error['context'] ?? null) ? $error['context'] : [];
+        $sanitizedContext = self::sanitizeContextForCrashLog($rawContext);
+
         $crashData = [
             'time' => $error['timestamp'] ?? \date('Y-m-d H:i:s'),
-            'process' => $error['context']['process_tag'] ?? ErrorContext::getProcessTag(),
-            'pid' => $error['context']['pid'] ?? \getmypid(),
+            'process' => $sanitizedContext['process_tag'] ?? ErrorContext::getProcessTag(),
+            'pid' => $sanitizedContext['pid'] ?? \getmypid(),
             'error' => [
                 'type' => $error['type'] ?? 'unknown',
                 'errno_name' => isset($error['errno'])
@@ -134,10 +149,10 @@ class ErrorCollector
                 'line' => $error['line'] ?? null,
             ],
             'memory' => [
-                'usage' => $error['context']['memory_usage'] ?? null,
-                'peak' => $error['context']['memory_peak'] ?? null,
+                'usage' => $rawContext['memory_usage'] ?? null,
+                'peak' => $rawContext['memory_peak'] ?? null,
             ],
-            'context' => $error['context'] ?? [],
+            'context' => $sanitizedContext,
         ];
 
         unset($crashData['context']['memory_usage'], $crashData['context']['memory_peak']);
@@ -145,11 +160,11 @@ class ErrorCollector
         try {
             WlsLogger::getInstance()->writeCrashLog($crashData);
         } catch (\Throwable $e) {
-            $instance = \is_string($error['context']['instance'] ?? null)
-                ? (string)$error['context']['instance']
+            $instance = \is_string($rawContext['instance'] ?? null)
+                ? (string)$rawContext['instance']
                 : null;
-            $processTag = \is_string($error['context']['process_tag'] ?? null)
-                ? (string)$error['context']['process_tag']
+            $processTag = \is_string($rawContext['process_tag'] ?? null)
+                ? (string)$rawContext['process_tag']
                 : null;
             $crashLog = WlsLogService::getCrashLogFile($instance, $processTag);
             $logDir = \dirname($crashLog);
@@ -159,6 +174,119 @@ class ErrorCollector
             $json = \json_encode($crashData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
             @\file_put_contents($crashLog, $json . "\n\n", FILE_APPEND | LOCK_EX);
         }
+    }
+
+    /**
+     * 防止 fatal 落盘时 json_encode 再吃掉大量内存：截断大字符串与深层数组。
+     *
+     * @param array<string|int, mixed> $context
+     * @return array<string|int, mixed>
+     */
+    private static function sanitizeContextForCrashLog(array $context): array
+    {
+        $out = [];
+        $seen = 0;
+        foreach ($context as $k => $v) {
+            if ($seen >= self::CRASH_CONTEXT_MAX_KEYS) {
+                $out['__truncated_keys__'] = \max(0, \count($context) - self::CRASH_CONTEXT_MAX_KEYS);
+                break;
+            }
+            $keyStr = \is_string($k) ? $k : (string) $k;
+            $stringBudget = self::crashContextMaxStringForKey($keyStr);
+            $out[$keyStr] = self::sanitizeCrashValue($v, 0, $stringBudget);
+            $seen++;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<string|int, mixed>
+     */
+    private static function sanitizeCrashArray(array $arr, int $depth): array
+    {
+        if ($depth > self::CRASH_CONTEXT_MAX_DEPTH) {
+            return ['__truncated__' => 'max_depth'];
+        }
+
+        $out = [];
+        $seen = 0;
+        foreach ($arr as $k => $v) {
+            if ($seen >= self::CRASH_CONTEXT_MAX_KEYS) {
+                $out['__truncated_keys__'] = \max(0, \count($arr) - self::CRASH_CONTEXT_MAX_KEYS);
+                break;
+            }
+            $keyStr = \is_string($k) ? $k : (string) $k;
+            $stringBudget = self::crashContextMaxStringForKey($keyStr);
+            $out[$keyStr] = self::sanitizeCrashValue($v, $depth + 1, $stringBudget);
+            $seen++;
+        }
+
+        return $out;
+    }
+
+    private static function sanitizeCrashValue(mixed $value, int $depth, int $stringBudget): mixed
+    {
+        if ($depth > self::CRASH_CONTEXT_MAX_DEPTH) {
+            return '[max_depth]';
+        }
+
+        if ($value === null || \is_bool($value) || \is_int($value) || \is_float($value)) {
+            return $value;
+        }
+
+        if (\is_string($value)) {
+            return self::truncateCrashString($value, $stringBudget);
+        }
+
+        if (\is_array($value)) {
+            return self::sanitizeCrashArray($value, $depth);
+        }
+
+        if (\is_object($value)) {
+            return ['php_object' => \get_class($value)];
+        }
+
+        if (\is_resource($value)) {
+            return ['resource' => \get_resource_type($value)];
+        }
+
+        return '[unsupported_type]';
+    }
+
+    private static function crashContextMaxStringForKey(string $key): int
+    {
+        $lower = \strtolower($key);
+        foreach (self::CRASH_CONTEXT_HEAVY_KEY_HINTS as $hint) {
+            if (\str_contains($lower, $hint)) {
+                return 512;
+            }
+        }
+
+        return self::CRASH_CONTEXT_MAX_STRING;
+    }
+
+    private static function truncateCrashString(string $value, int $maxLen): string
+    {
+        if ($maxLen <= 0) {
+            return '';
+        }
+
+        if (\strlen($value) <= $maxLen) {
+            return $value;
+        }
+
+        $suffix = '…(truncated_bytes=' . \strlen($value) . ')';
+        $budget = $maxLen - \strlen($suffix);
+        if ($budget <= 0) {
+            return $suffix;
+        }
+
+        if (\function_exists('mb_substr')) {
+            return (string) \mb_substr($value, 0, $budget, 'UTF-8') . $suffix;
+        }
+
+        return \substr($value, 0, $budget) . $suffix;
     }
 
     private static function fallbackWrite(array $error): void

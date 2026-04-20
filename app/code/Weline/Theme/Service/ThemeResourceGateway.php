@@ -185,8 +185,8 @@ final class ThemeResourceGateway
         ?WelineTheme $theme = null,
     ): string {
         $area = $this->themeContext->normalizeArea($area);
-        $layoutType = trim($layoutType);
-        $layoutOption = trim($layoutOption);
+        $layoutType = $this->normalizeLayoutType($layoutType);
+        $layoutOption = $this->normalizeLayoutOption($layoutOption);
         $extension = ltrim(trim($extension), '.');
         if ($layoutType === '' || $layoutOption === '' || $extension === '') {
             return '';
@@ -211,6 +211,57 @@ final class ThemeResourceGateway
             . $layoutOption
             . '.'
             . $extension;
+    }
+
+    private function normalizeLayoutType(string $layoutType): string
+    {
+        $normalized = str_replace('\\', '/', trim($layoutType));
+        if ($normalized === '') {
+            return '';
+        }
+
+        $layoutsNeedle = '/layouts/';
+        $layoutsPos = strripos($normalized, $layoutsNeedle);
+        if ($layoutsPos !== false) {
+            $normalized = substr($normalized, $layoutsPos + strlen($layoutsNeedle));
+        }
+
+        $segments = array_values(array_filter(
+            explode('/', trim($normalized, '/')),
+            static fn(string $segment): bool => $segment !== '' && $segment !== '.' && $segment !== '..'
+        ));
+
+        if ($segments === []) {
+            return '';
+        }
+
+        // 布局选项应位于最后一级，布局类型只保留前置目录。
+        if (count($segments) > 1) {
+            array_pop($segments);
+        }
+
+        return implode('/', $segments);
+    }
+
+    private function normalizeLayoutOption(string $layoutOption): string
+    {
+        $normalized = str_replace('\\', '/', trim($layoutOption));
+        if ($normalized === '') {
+            return '';
+        }
+
+        $basename = basename($normalized);
+        $dotPos = strrpos($basename, '.');
+        if ($dotPos !== false) {
+            $basename = substr($basename, 0, $dotPos);
+        }
+
+        $basename = trim($basename);
+        if ($basename === '' || $basename === '.' || $basename === '..') {
+            return '';
+        }
+
+        return $basename;
     }
 
     private function buildStaticUrl(string $publicRelativePath, bool $absolute): string

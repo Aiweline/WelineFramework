@@ -8,6 +8,9 @@ final class WorkerResponseMemoryGuard
     public const LARGE_RESPONSE_BYTES = 262144;
     public const LARGE_BUFFER_BYTES = 524288;
 
+    /** SSE 等长连接写队列上限：客户端读慢时防止无限积压导致 Worker OOM */
+    public const SSE_MAX_PENDING_WRITE_BYTES = 8388608;
+
     public static function shouldForceConnectionClose(
         bool $keepAlive,
         bool $isLongLivedProtocol,
@@ -56,6 +59,15 @@ final class WorkerResponseMemoryGuard
     public static function shouldCompactAfterDrain(int $releasedBytes): bool
     {
         return $releasedBytes >= self::LARGE_RESPONSE_BYTES;
+    }
+
+    public static function sseWriteBufferWouldExceed(int $currentBufferedBytes, int $appendBytes): bool
+    {
+        if ($appendBytes <= 0) {
+            return false;
+        }
+
+        return ($currentBufferedBytes + $appendBytes) > self::SSE_MAX_PENDING_WRITE_BYTES;
     }
 
     /**
