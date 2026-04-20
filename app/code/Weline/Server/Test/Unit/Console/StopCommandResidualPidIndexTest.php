@@ -3,14 +3,22 @@ declare(strict_types=1);
 
 namespace Weline\Server\Test\Unit\Console;
 
+require_once __DIR__ . '/stop_test_bootstrap.php';
+
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Stop;
+use Weline\Server\Service\Contract\ServerInstanceInfo;
 
 final class StopCommandResidualPidIndexTest extends TestCase
 {
-    public function testCollectIndexedResidualPidsFromPidIndexIgnoresHistoricalNameIndexStyleNoise(): void
+    public function testCollectIndexedResidualPidsFromPidIndexFallsBackWithoutJsonPathWhenProcessStillMatchesInstance(): void
     {
-        $stop = new Stop();
+        $stop = new class extends Stop {
+            protected function isResidualIndexedPidStillRunning(int $pid, string $pname, string $taskName): bool
+            {
+                return true;
+            }
+        };
 
         $pids = $this->invokeProtected(
             $stop,
@@ -26,7 +34,46 @@ final class StopCommandResidualPidIndexTest extends TestCase
             202
         );
 
-        self::assertSame([101, 505], $pids);
+        self::assertSame([101, 404, 505], $pids);
+    }
+
+    public function testCollectResidualCleanupCandidatePidsIncludesRecoverableManagedPids(): void
+    {
+        $stop = new class extends Stop {
+            protected function collectBaseResidualPids(string $name, ServerInstanceInfo $info): array
+            {
+                unset($name, $info);
+
+                return [101, 202];
+            }
+
+            protected function collectRecoverableManagedPids(string $name): array
+            {
+                unset($name);
+
+                return [202, 303, 404];
+            }
+        };
+
+        $info = new ServerInstanceInfo(
+            'default',
+            0,
+            0,
+            '127.0.0.1',
+            443,
+            true,
+            false,
+            1,
+            16899,
+            0,
+            '2026-04-20 10:19:17',
+            1776651557,
+            []
+        );
+
+        $pids = $this->invokeProtected($stop, 'collectResidualCleanupCandidatePids', 'default', $info);
+
+        self::assertSame([101, 202, 303, 404], $pids);
     }
 
     private function invokeProtected(object $object, string $method, mixed ...$args): mixed

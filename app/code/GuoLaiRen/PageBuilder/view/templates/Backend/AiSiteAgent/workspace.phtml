@@ -33,6 +33,7 @@ $updateBlockConfigUrl = (string)($this->getData('update_block_config_url') ?? ''
 $startPublishUrl = (string)($this->getData('start_publish_url') ?? '');
 $operationSseUrl = (string)($this->getData('operation_sse_url') ?? '');
 $switchPreviewPageUrl = (string)($this->getData('switch_preview_page_url') ?? '');
+$workspaceSnapshotUrl = (string)($this->getData('workspace_snapshot_url') ?? '');
 $publishCheckUrl = (string)($this->getData('publish_check_url') ?? '');
 $backUrl = (string)($this->getData('back_url') ?? $this->getBackendUrl('websites/backend/site-builder-agent/index', ['provider' => 'pagebuilder']));
 $stageOptions = $this->getData('stage_options');
@@ -361,6 +362,7 @@ $workspaceRenderStage = \in_array($currentStage, ['plan', 'visual_edit', 'publis
 
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-main.phtml', $workspaceTplData) ?>
 <?php if ($workspaceRenderStage === 'plan'): ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-phase1-task-progress.phtml', $workspaceTplData) ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-stage-plan.phtml', $workspaceTplData) ?>
 <?php elseif ($workspaceRenderStage === 'visual_edit'): ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-stage-visual-edit.phtml', $workspaceTplData) ?>

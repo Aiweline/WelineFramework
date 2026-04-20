@@ -105,6 +105,7 @@ final class AiSiteExecutionBlueprintService
                 $pageBlueprint,
                 $pageTypes,
                 $siteDisplayName,
+                $siteSummary,
                 $palette,
                 $themeStyle,
                 $instruction,
@@ -287,7 +288,7 @@ final class AiSiteExecutionBlueprintService
             return $artifacts;
         } catch (\Throwable $throwable) {
             throw new \RuntimeException(
-                'AI plan generation failed: ' . $throwable->getMessage(),
+                $this->normalizeAiPlanGenerationErrorMessage($throwable->getMessage()),
                 (int)$throwable->getCode(),
                 $throwable
             );
@@ -514,7 +515,19 @@ final class AiSiteExecutionBlueprintService
             $contentItems[] = [
                 'title' => (string)$pageType,
                 'goal' => (string)($pagePlan['page_goal'] ?? ''),
-                'blocks' => \is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [],
+                'blocks' => \array_values(\array_filter(\array_map(function ($block) use ($locale) {
+                    if (!\is_array($block)) {
+                        return null;
+                    }
+
+                    return [
+                        'block_key' => (string)($block['block_key'] ?? ''),
+                        'goal' => (string)($block['goal'] ?? ''),
+                        'content' => $this->buildBlockContentSummary($block),
+                        'implementation_note' => $this->buildBlockImplementationFocus($block, $locale),
+                        'field_plan' => $this->normalizeStageOneFieldPlanForCustomerView(\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : []),
+                    ];
+                }, \is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : []))),
             ];
         }
 
@@ -800,7 +813,7 @@ final class AiSiteExecutionBlueprintService
         if ($text === '') {
             return false;
         }
-        return $this->containsAny($text, ['鍒犻櫎', '绉婚櫎', '鍘绘帀', '鍒犳帀', 'remove', 'delete']);
+        return $this->containsAny($text, ['删除', '移除', '去掉', '删掉', 'remove', 'delete']);
     }
 
     private function extractDeleteKeyword(string $instruction): string
@@ -809,7 +822,11 @@ final class AiSiteExecutionBlueprintService
         if ($text === '') {
             return '';
         }
-        if (\preg_match('/(?:鍒犻櫎|绉婚櫎|鍘绘帀|鍒犳帀)\s*(?:涓€涓獆涓€鍧梶涓€娈祙涓??\s*([^锛屻€?.]{1,20})/u', $text, $matches)) {
+        if (\preg_match(
+            '/(?:删除|移除|去掉|删掉)(?:一段|一块|一节|一条)?\s*([^，。、\s]{1,20})/u',
+            $text,
+            $matches
+        )) {
             return \trim((string)($matches[1] ?? ''));
         }
         if (\preg_match('/(?:remove|delete)\s+([a-zA-Z0-9_\-\s]{1,30})/i', $text, $matches)) {
@@ -904,7 +921,7 @@ final class AiSiteExecutionBlueprintService
             // === 角色与意图：放到最前，先“锁定要做什么”，再给 schema ===
             'You are Structured Web Blueprint Engine for a real website builder.',
             'PRIMARY GOAL: Take the user one-line website requirement and EXPAND it into a CONCRETE, READY-TO-BUILD plan. This is NOT a writing tutorial; it is the actual blueprint that Stage-2 will execute.',
-            '中文要求：根据下面的【用户一句话需求】拓写出**真实可落地**的建站方案——给出具体导航、栏目、标题、正文、CTA、字段示例与样例文案，禁止通篇“围绕…/突出…/说明…”这类方向性描述。',
+            '中文要求：根据下面的【用户一句话需求】拓写出**真实可落地**的建站方案——给出具体导航、栏目、标题、正文、CTA、字段示例与落地说明，禁止通篇“围绕…/突出…/说明…”这类方向性描述。',
             '【用户一句话需求】(authoritative, expand from this): ' . $oneLineRequirement,
             '【站点名】: ' . ($siteDisplayName !== '' ? $siteDisplayName : '-'),
             '【站点摘要】: ' . ($siteSummary !== '' ? $siteSummary : '-'),
@@ -931,10 +948,8 @@ final class AiSiteExecutionBlueprintService
             'Return STRICT JSON only. No markdown fence. No prose outside JSON.',
             'The first non-whitespace character must be { and the last non-whitespace character must be }.',
             'Do not echo the schema, prompt rules, GOOD/BAD examples, or writing instructions back into the plan.',
-            'JSON schema:',
+            'JSON schema (return this structured plan object directly as the top-level JSON object):',
             '{',
-            '  "markdown":"string",',
-            '  "plan_json": {',
             '    "i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},',
             '    "site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},',
             '    "theme_style":{"name":"string","visual_tone":"string","font_family":"string"},',
@@ -943,38 +958,43 @@ final class AiSiteExecutionBlueprintService
             '    "footer_plan":{"featured":[],"policies":[]},',
             '    "seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"},',
             '    "page_types":["home_page"],',
-            '    "pages":{"home_page":{"page_goal":"string","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","field_plan":[{"field":"string","sample":"string","reason":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}},',
+            '    "pages":{"home_page":{"page_goal":"string","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}},',
             '    "execution_steps":[{"step":1,"task_key":"string","task_type":"string","status":"pending"}],',
             '    "stage2_task_hints":[{"page":"string","block":"string","task_types":["copywriting","ui_design","frontend_dev"]}]',
-            '  }',
             '}',
             'Hard rules:',
-            '- markdown and all text fields must use locale: ' . $outputLanguage,
+            '- All text fields must use locale: ' . $outputLanguage,
+            '- Do not return markdown.',
+            '- Do not return a separate markdown field.',
+            '- Output only the structured plan object shown in the schema.',
             '- The plan must contain final-ready content samples, not writing instructions.',
             '- Never write process wording such as "标题围绕核心价值展开", "正文说明主要亮点", "CTA 保持单一动作", or "字体与排版指定".',
             '- Never write blueprint guidance such as "围绕...说明", "首页先讲清...", "阶段一仅给方向", "List 2-4 points", or "Specify heading font".',
             '- For each block, content must read like real website copy that can be shown to a client immediately.',
             '- Example for hero: write concrete title, subtitle, description, CTA label, trust points, and support text. Do not describe what should be written.',
             '- field_plan.sample must be direct content, for example "欢迎来到 Teenipiya 棋牌中心" or "立即开始", not "标题围绕核心价值展开".',
+            '- field_plan.implementation_note must be a customer-readable implementation note such as layout handling, editable constraint, delivery requirement, or asset direction; never write abstract design rationale or prompt guidance.',
+            '- For media/image fields, field_plan.sample must be a concrete asset brief the client can review, not a generic instruction like "使用一张主视觉图".',
             '- execution_script.feature_points must be concrete deliverables for this block, not meta-writing advice.',
             '- execution_script.core_copy must summarize the actual content message already written for the block.',
             '- Treat the output as a customer-visible implementation plan: every visible sentence must answer the user brief directly.',
+            '- The hero title/subtitle/description MUST reuse the most concrete nouns from the one-line requirement (market, product type, offer, download/service words) instead of abstract labels like "核心价值" or "下一步动作".',
+            '- If the brief mentions app/APK download, booking, consultation, pricing, trial, or signup, at least one CTA label must reflect that exact action directly.',
             '- page_types can only use selected_page_types.',
             '- If information is missing, you may make reasonable assumptions, but mark them with the prefix "[假设]".',
             '- Even in refine/rebuild/translation mode, you must still output the full plan, not fragments.',
             '- Stage 1 only outputs plan content. Do not include build/executing/log/progress language.',
             '- Every selected page must be covered and ready for stage-2 task extraction.',
             '- Header and footer must be described as concrete shared-site content and navigation.',
-            '- Markdown must be readable by product and implementation teams immediately.',
+            '- The structured plan must be readable by product and implementation teams immediately.',
             '- Minimum concreteness: navigation_plan.header_items MUST be non-empty; each item MUST include concrete label + href (path or /route) tied to selected_page_types; forbid generic placeholders like "Link1" or "Nav item".',
             '- footer_plan.featured and footer_plan.policies MUST list real link titles and destinations users can click, not phrases like "补充政策链接".',
             '- Each non-trivial page block: field_plan SHOULD have at least 3 entries; every sample is final copy or starts with "[假设]" and still contains concrete wording.',
+            '- Every field_plan row should pair the final sample with a short implementation_note that explains how the sample lands on the page, not why the AI chose it.',
             '- blocks[].content MUST be multi-sentence client-ready copy or bullet lines of real sentences; a single meta line such as "突出品牌价值" is invalid.',
             '- Self-check: if any paragraph stays true for an unrelated business, rewrite it using nouns, offers, and proof points from site_display_name + instruction + prompt_input_profile.',
             '- When classifying uncertainty, use inline "[已知]"/"[建议]"/"[假设]" sparingly; never leave a section as pure methodology without named UI strings, colors, or labels.',
             '- Final audit (silently before output): for every block check (a) does it cite at least one concrete noun/number/brand from the user one-line requirement? (b) does field_plan have >=3 entries with real samples? (c) does it avoid verbs like "围绕/突出/说明/突出/完善/优化" used as the only description? If any check fails, REWRITE that block before returning.',
-            'Markdown template (fill with concrete content, never with direction text):',
-            $this->buildPageMarkdownTemplate($pageTypes),
             'Selected page coverage hints (must all be represented in the final plan):',
             $selectedPageCoverageHints,
             'Input context:',
@@ -990,6 +1010,7 @@ final class AiSiteExecutionBlueprintService
             'baseline_execution_blueprint:',
             $baselineExecutionBlueprintText,
         ];
+        w_log('info', \implode("\n", $cleanPrompt), [], 'buildAiPlanPrompt');
 
         return \implode("\n", $cleanPrompt);
     }
@@ -1005,7 +1026,7 @@ final class AiSiteExecutionBlueprintService
             if ($pageType === '') {
                 continue;
             }
-            $lines[] = '- ' . $pageType . ': must include page goal, conversion rhythm, block why, field plan, execution script, SEO structure, CTA usage, responsive guidance.';
+            $lines[] = '- ' . $pageType . ': must include page goal, conversion rhythm, block implementation detail, field plan, execution script, SEO structure, CTA usage, responsive guidance.';
         }
 
         return $lines === [] ? '-' : \implode("\n", $lines);
@@ -1118,6 +1139,68 @@ final class AiSiteExecutionBlueprintService
      * @param array<string, mixed> $decoded
      * @return array<string, mixed>
      */
+    /**
+     * @param array<string, mixed> $decoded
+     * @return array<string, mixed>
+     */
+    private function normalizeAiPlanResponseShape(array $decoded): array
+    {
+        if (\is_array($decoded['plan_json'] ?? null)) {
+            return $decoded;
+        }
+
+        if (!$this->looksLikeAiStageOnePlanJsonPayload($decoded)) {
+            return $decoded;
+        }
+
+        $planJson = $decoded;
+        unset($planJson['markdown']);
+
+        return [
+            'markdown' => \trim((string)($decoded['markdown'] ?? '')),
+            'plan_json' => $planJson,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $candidate
+     */
+    private function looksLikeAiStageOnePlanJsonPayload(array $candidate): bool
+    {
+        foreach (['site_strategy', 'theme_style', 'palette', 'navigation_plan', 'footer_plan', 'seo_strategy', 'pages'] as $sectionKey) {
+            if (!\is_array($candidate[$sectionKey] ?? null)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $decoded
+     */
+    private function describeAiPlanResponseKeys(array $decoded): string
+    {
+        $keys = \array_values(\array_filter(\array_map(
+            static fn($key): string => \is_string($key) ? \trim($key) : '',
+            \array_keys($decoded)
+        )));
+
+        return $keys === [] ? '[none]' : \implode(', ', $keys);
+    }
+
+    private function normalizeAiPlanGenerationErrorMessage(string $message): string
+    {
+        $normalized = \trim($message);
+        if ($normalized === '') {
+            $normalized = 'unknown error.';
+        }
+
+        $normalized = (string)(\preg_replace('/^(?:AI plan generation failed:\s*)+/i', '', $normalized) ?? $normalized);
+
+        return 'AI plan generation failed: ' . $normalized;
+    }
+
     private function mapAiPlanToArtifacts(
         array $scope,
         array $websiteProfile,
@@ -1127,75 +1210,271 @@ final class AiSiteExecutionBlueprintService
         string $instruction,
         string $targetScope
     ): array {
-        $fallback = $this->buildPlanArtifacts($scope, $websiteProfile, [
+        $decoded = $this->normalizeAiPlanResponseShape($decoded);
+        $baseline = $this->buildPlanArtifacts($scope, $websiteProfile, [
             'instruction' => $instruction,
             'target_scope' => $targetScope,
         ]);
-        $isEn = $this->isEnglishLocale($planLocale);
-        $fallbackPlanJson = \is_array($fallback['plan_json'] ?? null) ? $fallback['plan_json'] : [];
         $planJson = \is_array($decoded['plan_json'] ?? null) ? $decoded['plan_json'] : [];
-        $mergedPlanJson = $fallbackPlanJson;
-        if ($planJson !== []) {
-            foreach (['site_strategy', 'theme_style', 'palette', 'navigation_plan', 'footer_plan', 'seo_strategy'] as $sectionKey) {
-                if (!\is_array($planJson[$sectionKey] ?? null)) {
-                    continue;
-                }
-                $mergedPlanJson[$sectionKey] = \array_replace_recursive(
-                    \is_array($mergedPlanJson[$sectionKey] ?? null) ? $mergedPlanJson[$sectionKey] : [],
-                    $planJson[$sectionKey]
-                );
-            }
-            // 椤甸潰涓庡尯鍧楀眰鏄墽琛岃摑鍥炬牳蹇冿紝榛樿浠ユ湰鍦拌鍒掑櫒涓哄噯锛岄伩鍏?AI 鏂囨婕傜Щ鐮村潖浠诲姟濂戠害銆?
-            // 浠呭湪鑻辨枃鏂规涓嬪厑璁?AI 瀵?pages 鍋氬彈鎺ц鐩栵紱涓枃鏂规淇濇寔鏈湴缁撴瀯鍖栧熀绾裤€?
-            if ($isEn && \is_array($planJson['pages'] ?? null)) {
-                $basePages = \is_array($mergedPlanJson['pages'] ?? null) ? $mergedPlanJson['pages'] : [];
-                foreach ($pageTypes as $pageType) {
-                    if (!\is_array($basePages[$pageType] ?? null)) {
-                        continue;
-                    }
-                    if (!\is_array($planJson['pages'][$pageType] ?? null)) {
-                        continue;
-                    }
-                    $basePages[$pageType] = \array_replace_recursive($basePages[$pageType], $planJson['pages'][$pageType]);
-                }
-                $mergedPlanJson['pages'] = $basePages;
-            }
+        if ($planJson === []) {
+            throw new \RuntimeException(
+                'missing plan_json payload. received top-level keys: ' . $this->describeAiPlanResponseKeys($decoded)
+            );
         }
-        $mergedPlanJson['page_types'] = $pageTypes;
-        $mergedPlanJson = $this->enforcePlanJsonBaseline($mergedPlanJson, $fallbackPlanJson, $pageTypes, $isEn);
-        $mergedPlanJson['i18n'] = $this->ensurePlanI18nSection(
-            \is_array($mergedPlanJson['i18n'] ?? null) ? $mergedPlanJson['i18n'] : [],
+
+        $planJson['page_types'] = $pageTypes;
+        $planJson['i18n'] = $this->ensurePlanI18nSection(
+            \is_array($planJson['i18n'] ?? null) ? $planJson['i18n'] : [],
             $planLocale,
-            $isEn
+            $this->isEnglishLocale($planLocale)
         );
-        $mergedPlanJson = $this->sanitizePromptLikePlanJson($mergedPlanJson, $fallbackPlanJson);
+
         $planBlocks = $this->normalizePlanBlocks(\is_array($planJson['plan_blocks'] ?? null) ? $planJson['plan_blocks'] : []);
         if ($planBlocks === []) {
-            $planBlocks = $this->buildPlanBlocksFromPlanJson($mergedPlanJson, $planLocale);
+            $planBlocks = $this->buildPlanBlocksFromPlanJson($planJson, $planLocale);
         }
-        $mergedPlanJson['plan_blocks'] = $planBlocks;
-        $fallback['plan_json'] = $mergedPlanJson;
-        $fallback['structured'] = \array_replace(
-            \is_array($fallback['structured'] ?? null) ? $fallback['structured'] : [],
+        $planJson['plan_blocks'] = $planBlocks;
+
+        $briefDescription = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? ''));
+        $this->assertAiStageOnePlanJsonIsStrict($planJson, $pageTypes, $briefDescription, $planLocale);
+
+        $executionBlueprint = \is_array($baseline['execution_blueprint'] ?? null) ? $baseline['execution_blueprint'] : [];
+        $structured = \array_replace(
+            \is_array($baseline['structured'] ?? null) ? $baseline['structured'] : [],
             [
-                'site_strategy' => \is_array($mergedPlanJson['site_strategy'] ?? null) ? $mergedPlanJson['site_strategy'] : [],
-                'theme_style' => \is_array($mergedPlanJson['theme_style'] ?? null) ? $mergedPlanJson['theme_style'] : [],
-                'palette' => \is_array($mergedPlanJson['palette'] ?? null) ? $mergedPlanJson['palette'] : [],
-                'navigation_plan' => \is_array($mergedPlanJson['navigation_plan'] ?? null) ? $mergedPlanJson['navigation_plan'] : [],
-                'footer_plan' => \is_array($mergedPlanJson['footer_plan'] ?? null) ? $mergedPlanJson['footer_plan'] : [],
-                'seo_strategy' => \is_array($mergedPlanJson['seo_strategy'] ?? null) ? $mergedPlanJson['seo_strategy'] : [],
+                'site_strategy' => \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [],
+                'theme_style' => \is_array($planJson['theme_style'] ?? null) ? $planJson['theme_style'] : [],
+                'palette' => \is_array($planJson['palette'] ?? null) ? $planJson['palette'] : [],
+                'navigation_plan' => \is_array($planJson['navigation_plan'] ?? null) ? $planJson['navigation_plan'] : [],
+                'footer_plan' => \is_array($planJson['footer_plan'] ?? null) ? $planJson['footer_plan'] : [],
+                'seo_strategy' => \is_array($planJson['seo_strategy'] ?? null) ? $planJson['seo_strategy'] : [],
                 'page_types' => $pageTypes,
-                'pages' => \is_array($mergedPlanJson['pages'] ?? null) ? $mergedPlanJson['pages'] : [],
+                'pages' => \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [],
                 'plan_blocks' => $planBlocks,
             ]
         );
 
-        // 缁熶竴鐢辨湰鍦版ā鏉挎寜 plan_locale 娓叉煋 Markdown锛岄伩鍏?AI 杩斿洖涓嫳娣锋帓銆?
-        if (\is_array($fallback['plan_json'] ?? null)) {
-            $fallback['markdown'] = $this->buildMarkdownPlan($fallback['plan_json'], $planLocale);
+        $sharedPromptContext = \is_array($executionBlueprint['shared_prompt_context'] ?? null) ? $executionBlueprint['shared_prompt_context'] : [];
+        $pagePlans = $this->buildStageOnePagePlans(
+            \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [],
+            $sharedPromptContext
+        );
+        $sharedComponents = \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : [];
+        $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
+
+        $tasks = [];
+        foreach (['header', 'footer'] as $sharedKey) {
+            if (\is_array($sharedComponents[$sharedKey] ?? null)) {
+                $tasks[] = $sharedComponents[$sharedKey];
+            }
+        }
+        foreach ($pagePlans as $pageType => $pagePlan) {
+            if (!\is_array($pagePlan)) {
+                continue;
+            }
+            foreach (\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [] as $block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $tasks[] = $this->buildPageTask((string)$pageType, $pagePlan, $block);
+            }
         }
 
-        return $fallback;
+        $structured['page_plans'] = $pagePlans;
+        $structured['block_index'] = $blockIndex;
+        $structured['execution_steps'] = $this->buildExecutionSteps($tasks);
+
+        $executionBlueprint['pages'] = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $executionBlueprint['page_plans'] = $pagePlans;
+        $executionBlueprint['block_index'] = $blockIndex;
+        $executionBlueprint['tasks'] = $tasks;
+        $executionBlueprint['signature'] = $this->buildExecutionBlueprintSignature($executionBlueprint);
+
+        $markdown = $this->buildMarkdownPlan($planJson, $planLocale);
+        $planWorkbench = $this->buildPlanWorkbenchArtifacts($scope, $structured, $executionBlueprint, $planJson, $markdown, $planLocale);
+
+        return \array_replace($baseline, [
+            'plan_json' => $planJson,
+            'structured' => $structured,
+            'execution_blueprint' => $executionBlueprint,
+            'markdown' => $markdown,
+            'plan_workbench' => $planWorkbench,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @param list<string> $pageTypes
+     */
+    private function assertAiStageOnePlanJsonIsStrict(array $planJson, array $pageTypes, string $briefDescription, string $planLocale): void
+    {
+        foreach (['site_strategy', 'theme_style', 'palette', 'navigation_plan', 'footer_plan', 'seo_strategy', 'pages'] as $sectionKey) {
+            if (!\is_array($planJson[$sectionKey] ?? null)) {
+                throw new \RuntimeException('AI stage-1 plan invalid: missing section "' . $sectionKey . '".');
+            }
+        }
+
+        $this->assertAiStageOneLinkList(
+            \is_array($planJson['navigation_plan']['header_items'] ?? null) ? $planJson['navigation_plan']['header_items'] : [],
+            'navigation_plan.header_items'
+        );
+        $this->assertAiStageOneLinkList(
+            \is_array($planJson['footer_plan']['featured'] ?? null) ? $planJson['footer_plan']['featured'] : [],
+            'footer_plan.featured'
+        );
+        $this->assertAiStageOneLinkList(
+            \is_array($planJson['footer_plan']['policies'] ?? null) ? $planJson['footer_plan']['policies'] : [],
+            'footer_plan.policies'
+        );
+
+        $briefSignals = $this->extractStageOneBriefSignalTokens($briefDescription);
+        foreach ($pageTypes as $pageType) {
+            $page = \is_array($planJson['pages'][$pageType] ?? null) ? $planJson['pages'][$pageType] : null;
+            if ($page === null) {
+                throw new \RuntimeException('AI stage-1 plan invalid: missing page "' . $pageType . '".');
+            }
+
+            $pageGoal = \trim((string)($page['page_goal'] ?? ''));
+            if ($pageGoal === '' || $this->isPromptLikeStageOneText($pageGoal, 'page_goal', '', '', $pageType)) {
+                throw new \RuntimeException('AI stage-1 plan invalid: page_goal for "' . $pageType . '" is empty or still instruction-like.');
+            }
+
+            $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+            if ($blocks === []) {
+                throw new \RuntimeException('AI stage-1 plan invalid: page "' . $pageType . '" has no blocks.');
+            }
+
+            foreach ($blocks as $index => $block) {
+                if (!\is_array($block)) {
+                    throw new \RuntimeException('AI stage-1 plan invalid: block #' . $index . ' on "' . $pageType . '" is malformed.');
+                }
+                $blockKey = \trim((string)($block['block_key'] ?? ''));
+                if ($blockKey === '') {
+                    throw new \RuntimeException('AI stage-1 plan invalid: block #' . $index . ' on "' . $pageType . '" is missing block_key.');
+                }
+
+                $content = \trim((string)($block['content'] ?? ''));
+                if ($content === '' || $this->isPromptLikeStageOneText($content, 'content', (string)($block['component_kind'] ?? $block['template'] ?? ''), (string)($block['section_code'] ?? $blockKey), $pageType)) {
+                    throw new \RuntimeException('AI stage-1 plan invalid: block "' . $blockKey . '" on "' . $pageType . '" still contains instruction-like content.');
+                }
+
+                $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
+                if ($fieldPlan === []) {
+                    throw new \RuntimeException('AI stage-1 plan invalid: block "' . $blockKey . '" on "' . $pageType . '" is missing field_plan.');
+                }
+                foreach ($fieldPlan as $fieldIndex => $row) {
+                    if (!\is_array($row)) {
+                        throw new \RuntimeException('AI stage-1 plan invalid: block "' . $blockKey . '" field_plan row #' . $fieldIndex . ' is malformed.');
+                    }
+                    $field = \trim((string)($row['field'] ?? ''));
+                    $sample = \trim((string)($row['sample'] ?? ''));
+                    $implementationNote = $this->resolveStageOneFieldImplementationNote($row);
+                    if ($field === '' || $sample === '') {
+                        throw new \RuntimeException('AI stage-1 plan invalid: block "' . $blockKey . '" has empty field/sample rows.');
+                    }
+                    if ($this->isPromptLikeStageOneText($sample, $field, (string)($block['component_kind'] ?? $block['template'] ?? ''), (string)($block['section_code'] ?? $blockKey), $pageType)) {
+                        throw new \RuntimeException('AI stage-1 plan invalid: block "' . $blockKey . '" field "' . $field . '" is still instruction-like.');
+                    }
+                    if ($implementationNote === '' || $this->isPromptLikeStageOneText($implementationNote, $field, (string)($block['component_kind'] ?? $block['template'] ?? ''), (string)($block['section_code'] ?? $blockKey), $pageType)) {
+                        throw new \RuntimeException('AI stage-1 plan invalid: block "' . $blockKey . '" field "' . $field . '" is missing a concrete implementation_note.');
+                    }
+                }
+
+                $executionScript = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
+                $coreCopy = \trim((string)($executionScript['core_copy'] ?? ''));
+                if ($coreCopy === '' || $this->isPromptLikeStageOneText($coreCopy, 'core_copy', (string)($block['component_kind'] ?? $block['template'] ?? ''), (string)($block['section_code'] ?? $blockKey), $pageType)) {
+                    throw new \RuntimeException('AI stage-1 plan invalid: block "' . $blockKey . '" execution_script.core_copy is empty or instruction-like.');
+                }
+                foreach (\is_array($executionScript['feature_points'] ?? null) ? $executionScript['feature_points'] : [] as $point) {
+                    $text = \is_scalar($point) ? \trim((string)$point) : '';
+                    if ($text !== '' && $this->isPromptLikeStageOneText($text, 'feature_points', (string)($block['component_kind'] ?? $block['template'] ?? ''), (string)($block['section_code'] ?? $blockKey), $pageType)) {
+                        throw new \RuntimeException('AI stage-1 plan invalid: block "' . $blockKey . '" feature_points still contain instruction-like text.');
+                    }
+                }
+            }
+
+            if ($pageType === Page::TYPE_HOME && $briefSignals !== []) {
+                $heroBlock = $this->findStageOneHeroBlock($blocks);
+                if ($heroBlock !== null) {
+                    $heroText = (string)\json_encode($heroBlock, \JSON_UNESCAPED_UNICODE);
+                    $containsBriefSignal = false;
+                    foreach ($briefSignals as $signal) {
+                        if ($signal !== '' && \mb_stripos($heroText, $signal) !== false) {
+                            $containsBriefSignal = true;
+                            break;
+                        }
+                    }
+                    if (!$containsBriefSignal) {
+                        throw new \RuntimeException('AI stage-1 plan invalid: homepage hero does not reuse concrete nouns from the brief.');
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $links
+     */
+    private function assertAiStageOneLinkList(array $links, string $path): void
+    {
+        if ($links === []) {
+            throw new \RuntimeException('AI stage-1 plan invalid: "' . $path . '" must not be empty.');
+        }
+
+        foreach ($links as $index => $link) {
+            if (!\is_array($link)) {
+                throw new \RuntimeException('AI stage-1 plan invalid: "' . $path . '" row #' . $index . ' is malformed.');
+            }
+            $label = \trim((string)($link['label'] ?? ''));
+            $href = \trim((string)($link['href'] ?? ''));
+            if ($label === '' || $href === '') {
+                throw new \RuntimeException('AI stage-1 plan invalid: "' . $path . '" row #' . $index . ' is missing label or href.');
+            }
+        }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $blocks
+     * @return array<string, mixed>|null
+     */
+    private function findStageOneHeroBlock(array $blocks): ?array
+    {
+        foreach ($blocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $blockKey = \mb_strtolower(\trim((string)($block['block_key'] ?? '')));
+            $sectionCode = \mb_strtolower(\trim((string)($block['section_code'] ?? '')));
+            if (\str_contains($blockKey, 'hero') || \str_contains($sectionCode, 'hero')) {
+                return $block;
+            }
+        }
+
+        return isset($blocks[0]) && \is_array($blocks[0]) ? $blocks[0] : null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractStageOneBriefSignalTokens(string $briefDescription): array
+    {
+        $brief = \trim($briefDescription);
+        if ($brief === '') {
+            return [];
+        }
+
+        $signals = [];
+        foreach ([
+            '印度', '棋牌', '下载', 'APK', 'apk', 'teen patti', 'rummy',
+            '预约', '咨询', '批发', '代理', '课程', '下载站',
+            'download', 'booking', 'consulting', 'pricing', 'trial',
+        ] as $candidate) {
+            if ($candidate !== '' && \mb_stripos($brief, $candidate) !== false) {
+                $signals[] = $candidate;
+            }
+        }
+
+        return \array_values(\array_unique($signals));
     }
 
     /**
@@ -1245,8 +1524,10 @@ final class AiSiteExecutionBlueprintService
             '围绕', '说明核心价值', '首页先讲清', '阶段一仅给方向', '蓝图方向', '标题围绕', '指定标题字体',
             '列出 2-4', '字体与排版', '风格语气', '背景方向', '素材建议', 'cta 保持单一动作',
             '待补充', '待撰写', '详见后文', '完善导航', '优化体验', '补充政策链接', '突出品牌价值',
+            '先用一句话讲清', '再把用户带到', '让访客在第一屏', '承接核心关键词', '不能遮挡标题和主 cta',
             'block direction', 'section title', 'supporting subtitle text', 'direction only', 'blueprint direction',
             'list 2-4', 'specify heading font', 'describe the overall visual tone', 'use concise readable paragraphs',
+            'first-screen promise', 'lead visitors to the next step',
             'write the title around', 'explain the core value', 'do not describe what should be written',
         ] as $marker) {
             if ($marker !== '' && \mb_stripos($normalized, $marker) !== false) {
@@ -1445,18 +1726,51 @@ final class AiSiteExecutionBlueprintService
                 }
             }
 
-            $reason = \trim((string)($row['reason'] ?? ''));
-            if ($reason !== '' && $this->isPromptLikeStageOneText($reason, $field, $template, $sectionName, $pageType)) {
-                $fallbackReason = \trim((string)($fallbackRow['reason'] ?? ''));
-                if ($fallbackReason !== '') {
-                    $row['reason'] = $fallbackReason;
+            $implementationNote = $this->resolveStageOneFieldImplementationNote($row);
+            if ($implementationNote === '' || $this->isPromptLikeStageOneText($implementationNote, $field, $template, $sectionName, $pageType)) {
+                $fallbackImplementationNote = $this->resolveStageOneFieldImplementationNote($fallbackRow);
+                if ($fallbackImplementationNote !== '') {
+                    $implementationNote = $fallbackImplementationNote;
                 }
             }
+            $row = $this->syncStageOneFieldImplementationNote($row, $implementationNote);
 
             $fieldPlan[$index] = $row;
         }
 
         return $fieldPlan;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function resolveStageOneFieldImplementationNote(array $row): string
+    {
+        foreach (['implementation_note', 'delivery_note', 'reason'] as $key) {
+            $value = \trim((string)($row[$key] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function syncStageOneFieldImplementationNote(array $row, string $implementationNote): array
+    {
+        $implementationNote = \trim($implementationNote);
+        if ($implementationNote === '') {
+            unset($row['implementation_note']);
+            return $row;
+        }
+
+        $row['implementation_note'] = $implementationNote;
+        $row['reason'] = $implementationNote;
+        return $row;
     }
 
     /**
@@ -1951,6 +2265,7 @@ final class AiSiteExecutionBlueprintService
         array $pageBlueprint,
         array $pageTypes,
         string $siteDisplayName,
+        string $siteSummary,
         array $palette,
         array $themeStyle,
         string $instruction = '',
@@ -1965,7 +2280,17 @@ final class AiSiteExecutionBlueprintService
             if (!\is_array($section)) {
                 continue;
             }
-            $blocks[] = $this->buildBlockPlan($pageType, $pageLabel, $pageGoal, $section, $palette, $themeStyle, $siteDisplayName, $locale);
+            $blocks[] = $this->buildBlockPlan(
+                $pageType,
+                $pageLabel,
+                $pageGoal,
+                $section,
+                $palette,
+                $themeStyle,
+                $siteDisplayName,
+                $siteSummary,
+                $locale
+            );
         }
 
         $appendInstruction = $this->resolveAppendBlockInstruction($instruction, $targetScope, $pageType, $blocks);
@@ -2227,22 +2552,28 @@ final class AiSiteExecutionBlueprintService
                     : '????????????????????????',
                 'headline_direction' => $this->resolveCustomAppendHeadlineDirection($appendInstruction, $locale),
                 'body_direction' => $this->resolveCustomAppendBodyDirection($appendInstruction, $locale),
-                'cta_direction' => $this->resolveCtaDirection([], 'content', 'custom', $pageGoal, $pageLabel, '', $locale),
+                'cta_direction' => $this->resolveCtaDirection([], 'content', 'custom', $pageGoal, $pageLabel, '', '', $locale),
             ],
             'field_plan' => [
                 [
                     'field' => 'title',
                     'sample' => $this->resolveCustomAppendTitleSample($appendInstruction),
+                    'implementation_note' => $this->isEnglishLocale($locale)
+                        ? 'Use the title as the visible section label so the client can confirm the appended block purpose immediately.'
+                        : '标题直接作为新增区块的可见识别名，方便客户确认新增内容的用途。',
                     'reason' => $this->isEnglishLocale($locale)
-                        ? 'Title should make the appended content purpose immediately clear.'
-                        : '??????????????????',
+                        ? 'Use the title as the visible section label so the client can confirm the appended block purpose immediately.'
+                        : '标题直接作为新增区块的可见识别名，方便客户确认新增内容的用途。',
                 ],
                 [
                     'field' => 'description',
                     'sample' => $instructionText !== '' ? $instructionText : ($this->isEnglishLocale($locale) ? 'Add supporting details for this section.' : '???????????????'),
+                    'implementation_note' => $this->isEnglishLocale($locale)
+                        ? 'Fill this area with the actual supporting details that will appear in the block, not with writing guidance.'
+                        : '这里直接写会上屏的补充内容，不写写作提示或方向说明。',
                     'reason' => $this->isEnglishLocale($locale)
-                        ? 'Description should provide the actual supporting details.'
-                        : '?????????????????????',
+                        ? 'Fill this area with the actual supporting details that will appear in the block, not with writing guidance.'
+                        : '这里直接写会上屏的补充内容，不写写作提示或方向说明。',
                 ],
             ],
             'result_ref' => [],
@@ -2255,7 +2586,12 @@ final class AiSiteExecutionBlueprintService
         if ($instruction === '') {
             return '';
         }
-        if (\preg_match('/(?:鍔爘鏂板|娣诲姞)(?:涓€涓獆涓€鍧梶涓€娈祙涓??\\s*([^锛屻€?.\\s]{2,20}(?:鍖簗妯″潡|鏉垮潡|鍖哄煙))/u', $instruction, $matches)) {
+        // 从「新增/添加 … 区块|模块|板块|区域」类指令抽取标题样例（正则须完整闭合）。
+        if (\preg_match(
+            '/(?:新增|添加)(?:一段|一块|一节|一条)?\s*([^，。、\s]{2,20}(?:区块|模块|板块|区域))/u',
+            $instruction,
+            $matches
+        )) {
             return \trim((string)($matches[1] ?? ''));
         }
         return '';
@@ -2626,6 +2962,7 @@ final class AiSiteExecutionBlueprintService
         array $palette,
         array $themeStyle,
         string $siteDisplayName,
+        string $siteSummary,
         string $locale = ''
     ): array {
         $sectionKey = \trim((string)($section['key'] ?? 'block'));
@@ -2633,7 +2970,7 @@ final class AiSiteExecutionBlueprintService
         $template = \trim((string)($section['template'] ?? 'content'));
         $sectionName = \trim((string)($section['name'] ?? $sectionCode));
         $config = \is_array($section['config'] ?? null) ? $section['config'] : [];
-        $fieldPlan = $this->buildFieldPlan($config, $sectionName, $pageGoal, $template, $locale, $siteDisplayName, $pageLabel);
+        $fieldPlan = $this->buildFieldPlan($config, $sectionName, $pageGoal, $template, $locale, $siteDisplayName, $siteSummary, $pageLabel);
 
         return [
             'block_key' => $sectionKey,
@@ -2669,12 +3006,12 @@ final class AiSiteExecutionBlueprintService
             'content_brief' => [
                 'goal' => $pageGoal,
                 'why' => $sectionName . ' 要同时服务信息理解和下一步动作。',
-                'headline_direction' => $this->resolveHeadlineDirection($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $locale),
-                'body_direction' => $this->resolveBodyDirection($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $locale),
-                'cta_direction' => $this->resolveCtaDirection($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $locale),
+                'headline_direction' => $this->resolveHeadlineDirection($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $siteSummary, $locale),
+                'body_direction' => $this->resolveBodyDirection($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $siteSummary, $locale),
+                'cta_direction' => $this->resolveCtaDirection($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $siteSummary, $locale),
             ],
             'field_plan' => $fieldPlan,
-            'realtime_content' => $this->buildBlockRealtimeContent($config, $sectionName, $pageGoal, $template, $pageLabel, $siteDisplayName, $locale),
+            'realtime_content' => $this->buildBlockRealtimeContent($config, $sectionName, $pageGoal, $template, $pageLabel, $siteDisplayName, $siteSummary, $locale),
             'editable_fields' => $this->extractEditableFieldsFromFieldPlan($fieldPlan),
             'content_source' => ['safe_inference', 'editable_field', 'media_manager'],
             'style_direction' => (string)($themeStyle['visual_tone'] ?? ''),
@@ -2682,7 +3019,7 @@ final class AiSiteExecutionBlueprintService
             'completion_rule' => $this->isEnglishLocale($locale)
                 ? 'Block is complete when content fields, CTA, media slot, and responsive behavior are all defined for implementation.'
                 : '当内容字段、CTA、素材位和响应式行为都明确后，该区块才算完整。',
-            'execution_script' => $this->buildBlockExecutionScript($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $locale),
+            'execution_script' => $this->buildBlockExecutionScript($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $siteSummary, $locale),
             'result_ref' => [],
         ];
 
@@ -3340,13 +3677,14 @@ final class AiSiteExecutionBlueprintService
                     'block_key' => (string)($block['block_key'] ?? $block['section_code'] ?? 'block'),
                     'content' => $this->buildBlockContentSummary($block),
                     'why' => \trim((string)($block['why'] ?? '')),
+                    'implementation_note' => $this->buildBlockImplementationFocus($block, (string)($structured['i18n']['locale'] ?? '')),
                     'keywords' => \array_values(\array_filter(\array_map(
                         static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
                         \is_array($block['keywords'] ?? null)
                             ? $block['keywords']
                             : (\is_array($block['seo_brief']['keywords'] ?? null) ? $block['seo_brief']['keywords'] : [])
                     ), static fn(string $value): bool => $value !== '')),
-                    'field_plan' => \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [],
+                    'field_plan' => $this->normalizeStageOneFieldPlanForCustomerView(\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : []),
                     'execution_script' => \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [],
                 ];
             }
@@ -3387,6 +3725,53 @@ final class AiSiteExecutionBlueprintService
             ], (string)($structured['i18n']['locale'] ?? '')),
             'execution_steps' => \is_array($structured['execution_steps'] ?? null) ? $structured['execution_steps'] : [],
         ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $fieldPlan
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeStageOneFieldPlanForCustomerView(array $fieldPlan): array
+    {
+        foreach ($fieldPlan as $index => $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $fieldPlan[$index] = $this->syncStageOneFieldImplementationNote($row, $this->resolveStageOneFieldImplementationNote($row));
+        }
+
+        return $fieldPlan;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function buildBlockImplementationFocus(array $block, string $locale = ''): string
+    {
+        $implementationDetail = \trim((string)($block['implementation_note'] ?? $block['implementation_detail'] ?? ''));
+        if ($implementationDetail !== '') {
+            return $implementationDetail;
+        }
+
+        $layoutRule = \trim((string)($block['style_brief']['layout_rule'] ?? $block['responsive_rule'] ?? ''));
+        if ($layoutRule !== '') {
+            return $layoutRule;
+        }
+
+        $completionRule = \trim((string)($block['completion_rule'] ?? ''));
+        if ($completionRule !== '') {
+            return $completionRule;
+        }
+
+        $featurePoints = \array_values(\array_filter(\array_map(
+            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+            \is_array($block['execution_script']['feature_points'] ?? null) ? $block['execution_script']['feature_points'] : []
+        ), static fn(string $value): bool => $value !== ''));
+        if ($featurePoints !== []) {
+            return \implode($this->isEnglishLocale($locale) ? '; ' : '；', \array_slice($featurePoints, 0, 3));
+        }
+
+        return \trim((string)($block['why'] ?? ''));
     }
 
     /**
@@ -3458,7 +3843,10 @@ final class AiSiteExecutionBlueprintService
                 $blockTitle = \trim((string)($block['section_code'] ?? $block['block_key'] ?? 'block'));
                 $lines[] = '#### ' . $blockTitle;
                 $lines[] = '- ' . ($isEn ? 'Goal' : '区块目标') . ': ' . \trim((string)($block['goal'] ?? ''));
-                $lines[] = '- ' . ($isEn ? 'Why' : '区块作用') . ': ' . \trim((string)($block['why'] ?? ''));
+                $blockImplementationFocus = $this->buildBlockImplementationFocus($block, $locale);
+                if ($blockImplementationFocus !== '') {
+                    $lines[] = '- ' . ($isEn ? 'Implementation Focus' : '落地重点') . ': ' . $blockImplementationFocus;
+                }
                 $lines[] = '- ' . ($isEn ? 'Content' : '区块内容') . ': ' . $this->buildBlockContentSummary($block);
 
                 $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
@@ -3543,7 +3931,10 @@ final class AiSiteExecutionBlueprintService
                 $blockTitle = \trim((string)($block['section_code'] ?? $block['block_key'] ?? 'block'));
                 $lines[] = '#### ' . $blockTitle;
                 $lines[] = '- ' . ($isEn ? 'Goal' : '??') . ': ' . \trim((string)($block['goal'] ?? ''));
-                $lines[] = '- ' . ($isEn ? 'Why' : '??') . ': ' . \trim((string)($block['why'] ?? ''));
+                $blockImplementationFocus = $this->buildBlockImplementationFocus($block, $locale);
+                if ($blockImplementationFocus !== '') {
+                    $lines[] = '- ' . ($isEn ? 'Implementation Focus' : '??') . ': ' . $blockImplementationFocus;
+                }
                 $lines[] = '- ' . ($isEn ? 'Content' : '??') . ': ' . $this->buildBlockContentSummary($block);
 
                 $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
@@ -4085,36 +4476,63 @@ final class AiSiteExecutionBlueprintService
     /**
      * @param array<string, mixed> $config
      */
-    private function resolveHeadlineDirection(array $config, string $template, string $sectionName, string $pageGoal, string $pageLabel, string $siteDisplayName, string $locale = ''): string
+    private function resolveHeadlineDirection(
+        array $config,
+        string $template,
+        string $sectionName,
+        string $pageGoal,
+        string $pageLabel,
+        string $siteDisplayName,
+        string $siteSummary,
+        string $locale = ''
+    ): string
     {
-        return $this->resolveConcreteFieldValue('title', $config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $locale);
+        return $this->resolveConcreteFieldValue('title', $config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $siteSummary, $locale);
     }
 
     /**
      * @param array<string, mixed> $config
      */
-    private function resolveBodyDirection(array $config, string $template, string $sectionName, string $pageGoal, string $pageLabel, string $siteDisplayName, string $locale = ''): string
+    private function resolveBodyDirection(
+        array $config,
+        string $template,
+        string $sectionName,
+        string $pageGoal,
+        string $pageLabel,
+        string $siteDisplayName,
+        string $siteSummary,
+        string $locale = ''
+    ): string
     {
-        $subtitle = $this->resolveConcreteFieldValue('subtitle', $config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $locale);
-        $description = $this->resolveConcreteFieldValue('description', $config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $locale);
+        $subtitle = $this->resolveConcreteFieldValue('subtitle', $config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $siteSummary, $locale);
+        $description = $this->resolveConcreteFieldValue('description', $config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $siteSummary, $locale);
         $parts = \array_values(\array_filter([$subtitle, $description], static fn(string $value): bool => \trim($value) !== ''));
 
         return $parts !== [] ? \implode(' ', $parts) : $description;
     }
 
-    private function resolveCtaDirection(array $config, string $template, string $sectionName, string $pageGoal, string $pageLabel, string $siteDisplayName, string $locale = ''): string
+    private function resolveCtaDirection(
+        array $config,
+        string $template,
+        string $sectionName,
+        string $pageGoal,
+        string $pageLabel,
+        string $siteDisplayName,
+        string $siteSummary,
+        string $locale = ''
+    ): string
     {
         $preset = $this->inferBlockPreset($template, $sectionName, $pageLabel);
         if (!\array_key_exists('button_text', $config) && !\in_array($preset, ['hero', 'cta', 'contact_form'], true)) {
             return '';
         }
 
-        $label = $this->resolveConcreteFieldValue('button_text', $config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $locale);
+        $label = $this->resolveConcreteFieldValue('button_text', $config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $siteSummary, $locale);
         if ($label === '') {
             return '';
         }
 
-        $target = $this->resolveConcreteFieldValue('button_link', $config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $locale);
+        $target = $this->resolveConcreteFieldValue('button_link', $config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $siteSummary, $locale);
         if ($target === '') {
             $target = $preset === 'contact_form' ? '#contact' : '#start';
         }
@@ -4124,7 +4542,16 @@ final class AiSiteExecutionBlueprintService
             : ('主 CTA：' . $label . '（跳转 ' . $target . '）');
     }
 
-    private function buildFieldPlan(array $config, string $sectionName, string $pageGoal, string $template, string $locale = '', string $siteDisplayName = '', string $pageLabel = ''): array
+    private function buildFieldPlan(
+        array $config,
+        string $sectionName,
+        string $pageGoal,
+        string $template,
+        string $locale = '',
+        string $siteDisplayName = '',
+        string $siteSummary = '',
+        string $pageLabel = ''
+    ): array
     {
         $fields = [];
         $requiredFields = $this->resolveRequiredFieldNames($template, $sectionName, $pageLabel);
@@ -4132,24 +4559,69 @@ final class AiSiteExecutionBlueprintService
             if (!\in_array($field, $requiredFields, true) && !\array_key_exists($field, $config)) {
                 continue;
             }
+            $implementationNote = $this->resolveFieldImplementationNote($field, $template, $sectionName, $pageGoal, $pageLabel, $locale);
             $fields[] = [
                 'field' => $field,
-                'sample' => $this->resolveConcreteFieldValue($field, $config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $locale),
-                'reason' => $this->isEnglishLocale($locale)
-                    ? ($sectionName . ' needs this field to support goal "' . $pageGoal . '".')
-                    : ($sectionName . ' 需要该字段来承接“' . $pageGoal . '”这个页面目标。'),
+                'sample' => $this->resolveConcreteFieldValue($field, $config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $siteSummary, $locale),
+                'implementation_note' => $implementationNote,
+                'reason' => $implementationNote,
             ];
         }
 
         return $fields;
     }
 
+    private function resolveFieldImplementationNote(
+        string $field,
+        string $template,
+        string $sectionName,
+        string $pageGoal,
+        string $pageLabel,
+        string $locale = ''
+    ): string {
+        $preset = $this->inferBlockPreset($template, $sectionName, $pageLabel);
+        if ($this->isEnglishLocale($locale)) {
+            return match ($field) {
+                'title' => 'Use this as the visible heading for the block; keep it immediately understandable on first read.',
+                'subtitle' => 'Place this below the title to continue the message in one concise supporting line.',
+                'description' => 'Use 1-2 sentences to clarify scenario, benefit, or trust proof without drifting into generic copy.',
+                'button_text' => 'Keep the CTA verb-led and aligned with the next action the page should drive.',
+                'button_link' => 'Pair this target directly with the CTA label so it can be implemented without guessing.',
+                'image' => $preset === 'hero'
+                    ? 'Describe the hero visual concretely so design can produce it while keeping the headline and primary CTA visible together.'
+                    : 'Describe the exact visual content or replacement slot the design team should prepare for this field.',
+                default => $sectionName . ' needs this field to support goal "' . $pageGoal . '".',
+            };
+        }
+
+        return match ($field) {
+            'title' => '作为区块主标题直接上屏，优先让客户一眼看懂这块要传达什么。',
+            'subtitle' => '放在标题下方补充关键信息，建议保持 1 行到 2 行的可读长度。',
+            'description' => '用 1 到 2 句补充场景、收益或信任信息，避免空泛口号。',
+            'button_text' => '按钮文案用动作词开头，并与本区块承接的下一步行为保持一致。',
+            'button_link' => '链接目标与按钮文案一一对应，可直接作为锚点或跳转地址实施。',
+            'image' => $preset === 'hero'
+                ? '主视觉需要描述清楚画面内容，方便设计出图时同时保留标题和主 CTA 的可见区域。'
+                : '这里直接写要呈现的画面内容或替换位要求，方便后续设计与素材执行。',
+            default => $sectionName . ' 需要该字段来承接“' . $pageGoal . '”这个页面目标。',
+        };
+    }
+
     /**
      * @return array<string, mixed>
      */
-    private function buildBlockExecutionScript(array $config, string $template, string $sectionName, string $pageGoal, string $pageLabel, string $siteDisplayName, string $locale = ''): array
+    private function buildBlockExecutionScript(
+        array $config,
+        string $template,
+        string $sectionName,
+        string $pageGoal,
+        string $pageLabel,
+        string $siteDisplayName,
+        string $siteSummary,
+        string $locale = ''
+    ): array
     {
-        $fieldPlan = $this->buildFieldPlan($config, $sectionName, $pageGoal, $template, $locale, $siteDisplayName, $pageLabel);
+        $fieldPlan = $this->buildFieldPlan($config, $sectionName, $pageGoal, $template, $locale, $siteDisplayName, $siteSummary, $pageLabel);
         $fieldLookup = $this->buildFieldPlanLookup($fieldPlan);
         $preset = $this->inferBlockPreset($template, $sectionName, $pageLabel);
         $title = \trim((string)($fieldLookup['title'] ?? ''));
@@ -4158,7 +4630,7 @@ final class AiSiteExecutionBlueprintService
         $ctaLabel = \trim((string)($fieldLookup['button_text'] ?? ''));
 
         return [
-            'feature_points' => $this->buildExecutionFeaturePoints($preset, $locale),
+            'feature_points' => $this->buildConcreteExecutionFeaturePoints($preset, $title, $description, $ctaLabel, $locale),
             'core_copy' => $this->buildExecutionCoreCopy($title, $subtitle, $description, $ctaLabel, $locale),
             'typography' => $this->resolveExecutionTypography($preset, $locale),
             'style_tone' => $this->resolveExecutionStyleTone($preset, $locale),
@@ -4171,9 +4643,18 @@ final class AiSiteExecutionBlueprintService
      * @param array<string, mixed> $config
      * @return array<string, mixed>
      */
-    private function buildBlockRealtimeContent(array $config, string $sectionName, string $pageGoal, string $template, string $pageLabel, string $siteDisplayName, string $locale = ''): array
+    private function buildBlockRealtimeContent(
+        array $config,
+        string $sectionName,
+        string $pageGoal,
+        string $template,
+        string $pageLabel,
+        string $siteDisplayName,
+        string $siteSummary,
+        string $locale = ''
+    ): array
     {
-        $fieldPlan = $this->buildFieldPlan($config, $sectionName, $pageGoal, $template, $locale, $siteDisplayName, $pageLabel);
+        $fieldPlan = $this->buildFieldPlan($config, $sectionName, $pageGoal, $template, $locale, $siteDisplayName, $siteSummary, $pageLabel);
         $fieldLookup = $this->buildFieldPlanLookup($fieldPlan);
         $headline = \trim((string)($fieldLookup['title'] ?? ''));
         $subtitle = \trim((string)($fieldLookup['subtitle'] ?? ''));
@@ -4227,18 +4708,27 @@ final class AiSiteExecutionBlueprintService
         return \array_values(\array_unique($fields));
     }
 
-    private function resolveFieldSample(string $field, string $template, string $sectionName, string $pageGoal, string $siteDisplayName, string $locale = '', string $pageLabel = ''): string
+    private function resolveFieldSample(
+        string $field,
+        string $template,
+        string $sectionName,
+        string $pageGoal,
+        string $siteDisplayName,
+        string $siteSummary = '',
+        string $locale = '',
+        string $pageLabel = ''
+    ): string
     {
         $siteName = $siteDisplayName !== '' ? $siteDisplayName : ($this->isEnglishLocale($locale) ? 'your brand' : '??');
         $preset = $this->inferBlockPreset($template, $sectionName, $pageLabel);
 
         return match ($field) {
-            'title' => $this->resolveDefaultTitleSample($preset, $sectionName, $pageGoal, $pageLabel, $siteName, $locale),
-            'subtitle' => $this->resolveDefaultSubtitleSample($preset, $sectionName, $pageGoal, $pageLabel, $siteName, $locale),
-            'description' => $this->resolveDefaultDescriptionSample($preset, $sectionName, $pageGoal, $pageLabel, $siteName, $locale),
-            'button_text' => $this->resolveDefaultButtonText($preset, $pageGoal, $locale),
+            'title' => $this->resolveDefaultTitleSample($preset, $sectionName, $pageGoal, $pageLabel, $siteName, $siteSummary, $locale),
+            'subtitle' => $this->resolveDefaultSubtitleSample($preset, $sectionName, $pageGoal, $pageLabel, $siteName, $siteSummary, $locale),
+            'description' => $this->resolveDefaultDescriptionSample($preset, $sectionName, $pageGoal, $pageLabel, $siteName, $siteSummary, $locale),
+            'button_text' => $this->resolveDefaultButtonText($preset, $pageGoal, $siteSummary, $locale),
             'button_link' => $preset === 'contact_form' ? '#contact' : '#start',
-            'image' => $this->resolveDefaultImageRule($preset, $pageLabel, $siteName, $locale),
+            'image' => $this->resolveDefaultImageRule($preset, $pageLabel, $siteName, $siteSummary, $locale),
             default => '',
         };
     }
@@ -4257,6 +4747,7 @@ final class AiSiteExecutionBlueprintService
         string $pageGoal,
         string $pageLabel,
         string $siteDisplayName,
+        string $siteSummary,
         string $locale = ''
     ): string {
         $raw = \trim((string)($config[$field] ?? ''));
@@ -4264,7 +4755,7 @@ final class AiSiteExecutionBlueprintService
             return $raw;
         }
 
-        return $this->resolveFieldSample($field, $template, $sectionName, $pageGoal, $siteDisplayName, $locale, $pageLabel);
+        return $this->resolveFieldSample($field, $template, $sectionName, $pageGoal, $siteDisplayName, $siteSummary, $locale, $pageLabel);
     }
 
     /**
@@ -4342,6 +4833,7 @@ final class AiSiteExecutionBlueprintService
             '围绕', '说明核心价值', '首页先讲清', '阶段一仅给方向', '列出 2-4', '标题围绕', '指定标题字体',
             'block direction', 'section title', 'supporting subtitle text',
             'list 2-4', 'specify heading font', 'describe the overall visual tone', 'use concise readable paragraphs',
+            'first-screen promise', 'lead visitors to the next step',
             'keep cta', 'home hero', 'page hero',
         ] as $marker) {
             if ($marker !== '' && \mb_stripos($normalized, $marker) !== false) {
@@ -4363,14 +4855,23 @@ final class AiSiteExecutionBlueprintService
         return false;
     }
 
-    private function resolveDefaultTitleSample(string $preset, string $sectionName, string $pageGoal, string $pageLabel, string $siteName, string $locale = ''): string
+    private function resolveDefaultTitleSample(
+        string $preset,
+        string $sectionName,
+        string $pageGoal,
+        string $pageLabel,
+        string $siteName,
+        string $siteSummary = '',
+        string $locale = ''
+    ): string
     {
+        $summaryCue = $this->buildBriefDrivenSnippet($siteSummary, $siteName, $locale, 18, 42);
         if (!$this->isEnglishLocale($locale)) {
             return match ($preset) {
-                'hero' => '欢迎来到 ' . $siteName,
-                'features' => '为什么用户会继续选择 ' . $siteName,
-                'process' => '三步快速开始',
-                'cta' => '准备好进入下一步了吗？',
+                'hero' => $summaryCue !== '' ? ($siteName . '：' . $summaryCue) : ('欢迎来到 ' . $siteName),
+                'features' => $summaryCue !== '' ? ('热门内容：' . $summaryCue) : ('为什么用户会继续选择 ' . $siteName),
+                'process' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === '立即下载' ? '三步完成下载' : '三步快速开始',
+                'cta' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === '立即下载' ? '准备开始下载了吗？' : '准备好进入下一步了吗？',
                 'brand' => '认识一下 ' . $siteName,
                 'trust' => '为什么可以放心了解 ' . $siteName,
                 'contact_form' => '告诉我们你的需求',
@@ -4381,10 +4882,10 @@ final class AiSiteExecutionBlueprintService
 
         if ($this->isEnglishLocale($locale)) {
             return match ($preset) {
-                'hero' => 'Welcome to ' . $siteName,
-                'features' => 'Why visitors choose ' . $siteName,
-                'process' => 'Start in three simple steps',
-                'cta' => 'Ready to take the next step?',
+                'hero' => $summaryCue !== '' ? ($siteName . ': ' . $summaryCue) : ('Welcome to ' . $siteName),
+                'features' => $summaryCue !== '' ? ('Featured: ' . $summaryCue) : ('Why visitors choose ' . $siteName),
+                'process' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === 'Download Now' ? 'Start in three download steps' : 'Start in three simple steps',
+                'cta' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === 'Download Now' ? 'Ready to download now?' : 'Ready to take the next step?',
                 'brand' => 'Get to know ' . $siteName,
                 'trust' => 'Reasons to trust ' . $siteName,
                 'contact_form' => 'Tell us what you need',
@@ -4406,22 +4907,35 @@ final class AiSiteExecutionBlueprintService
         };
     }
 
-    private function resolveDefaultSubtitleSample(string $preset, string $sectionName, string $pageGoal, string $pageLabel, string $siteName, string $locale = ''): string
+    private function resolveDefaultSubtitleSample(
+        string $preset,
+        string $sectionName,
+        string $pageGoal,
+        string $pageLabel,
+        string $siteName,
+        string $siteSummary = '',
+        string $locale = ''
+    ): string
     {
+        $summaryLine = $this->buildBriefDrivenSnippet($siteSummary, $siteName, $locale, 42, 96);
         if (!$this->isEnglishLocale($locale)) {
             return match ($preset) {
-                'hero' => '先用一句话讲清价值，再把用户带到最重要的下一步。',
-                'features' => '用更容易扫读的方式说明核心亮点与差异点。',
-                'process' => '让第一次进入的用户也能快速理解流程。',
+                'hero' => $summaryLine !== '' ? $summaryLine : ('欢迎来到 ' . $siteName),
+                'features' => $summaryLine !== '' ? ('重点包括：' . $summaryLine) : ('这里整理最值得先看的核心亮点与入口。'),
+                'process' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === '立即下载'
+                    ? '选择游戏、查看说明、完成下载，流程一页看清。'
+                    : '浏览重点内容、确认入口、完成下一步动作，流程一页看清。',
                 default => '',
             };
         }
 
         if ($this->isEnglishLocale($locale)) {
             return match ($preset) {
-                'hero' => 'Learn the value quickly and move to the next action without friction.',
-                'features' => 'Scan the core highlights before deciding where to go next.',
-                'process' => 'Keep the first experience simple, clear, and easy to follow.',
+                'hero' => $summaryLine !== '' ? $summaryLine : ('Welcome to ' . $siteName),
+                'features' => $summaryLine !== '' ? ('Key focus: ' . $summaryLine) : ('See the main highlights and entry points first.'),
+                'process' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === 'Download Now'
+                    ? 'Choose the title, review the notes, and complete the download in one clear flow.'
+                    : 'Review the highlights, pick the right entry, and move to the next action in one clear flow.',
                 default => '',
             };
         }
@@ -4434,15 +4948,34 @@ final class AiSiteExecutionBlueprintService
         };
     }
 
-    private function resolveDefaultDescriptionSample(string $preset, string $sectionName, string $pageGoal, string $pageLabel, string $siteName, string $locale = ''): string
+    private function resolveDefaultDescriptionSample(
+        string $preset,
+        string $sectionName,
+        string $pageGoal,
+        string $pageLabel,
+        string $siteName,
+        string $siteSummary = '',
+        string $locale = ''
+    ): string
     {
+        $summaryLine = $this->buildBriefDrivenSnippet($siteSummary, $siteName, $locale, 64, 140);
         if (!$this->isEnglishLocale($locale)) {
             return match ($preset) {
-                'hero' => '欢迎来到 ' . $siteName . '。这里会先讲清核心价值、主要亮点和下一步动作，让访客在第一屏就知道为什么值得继续浏览。',
-                'features' => '把主要能力、核心亮点和用户最关心的收益拆成可快速浏览的内容卡片，让信息更容易理解。',
-                'process' => '用简洁的步骤说明用户如何开始、如何继续以及完成后能得到什么结果，减少首次使用门槛。',
-                'cta' => '聚焦一个最重要的动作，并用一句话解释点击之后会发生什么，让用户更容易继续前进。',
-                'brand', 'trust' => '通过品牌背景、支持方式、服务说明和信任细节，帮助访客更安心地继续了解。',
+                'hero' => $summaryLine !== ''
+                    ? ($siteName . ' 聚焦 ' . $summaryLine . '，让访客一进首页就能看到重点内容与可执行入口。')
+                    : ('欢迎来到 ' . $siteName . '，这里会先展示最值得了解的内容和清晰的下一步入口。'),
+                'features' => $summaryLine !== ''
+                    ? ('围绕 ' . $summaryLine . '，这里会把热门内容、核心亮点和常见关心点整理成易读卡片。')
+                    : '这里会把热门内容、核心亮点和常见关心点整理成易读卡片，方便快速比较。',
+                'process' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === '立即下载'
+                    ? '先看推荐内容，再确认版本与说明，最后直接进入下载入口，减少首次操作的犹豫。'
+                    : '先看重点内容，再确认适合自己的入口，最后进入咨询、联系或继续了解的下一步。',
+                'cta' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === '立即下载'
+                    ? '点击后可直接进入下载入口，同时保留必要说明，方便用户马上开始。'
+                    : '点击后直接进入当前页面最重要的下一步，避免用户在多个入口之间反复选择。',
+                'brand', 'trust' => $summaryLine !== ''
+                    ? ($siteName . ' 围绕 ' . $summaryLine . ' 持续组织内容与服务，让首次访问也能更快建立信任。')
+                    : ('通过品牌背景、支持方式、服务说明和信任细节，帮助访客更安心地继续了解。'),
                 'contact_form' => '只收集必要联系信息与需求说明，让用户可以更快发起沟通。',
                 'legal' => '把关键政策信息拆成可读的小节，方便用户快速找到相关规则。',
                 default => '把页面目标转成访客可以直接看到的实际内容：' . $pageGoal,
@@ -4451,11 +4984,21 @@ final class AiSiteExecutionBlueprintService
 
         if ($this->isEnglishLocale($locale)) {
             return match ($preset) {
-                'hero' => 'Use the first screen to explain the core value, show the main highlight, and guide visitors to one clear next action.',
-                'features' => 'Break the main strengths into scannable cards so visitors can quickly understand benefits, usage, and differences.',
-                'process' => 'Explain how to begin step by step so first-time visitors can move forward with less hesitation.',
-                'cta' => 'Focus attention on one clear action and explain what visitors get after clicking.',
-                'brand', 'trust' => 'Build trust with brand background, support approach, and reassuring details that make visitors comfortable continuing.',
+                'hero' => $summaryLine !== ''
+                    ? ($siteName . ' focuses on ' . $summaryLine . ', so visitors can see the main offer and the next action as soon as the page opens.')
+                    : ('Welcome to ' . $siteName . ', where visitors can see the main offer and the next action right away.'),
+                'features' => $summaryLine !== ''
+                    ? ('This section turns ' . $summaryLine . ' into scannable highlights, core entry points, and quick-read benefit cards.')
+                    : 'This section turns the main offer into scannable highlights, core entry points, and quick-read benefit cards.',
+                'process' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === 'Download Now'
+                    ? 'Review the recommendation, confirm the notes, and move straight into the download flow with less hesitation.'
+                    : 'Review the highlights, choose the right entry, and move into the next action with less hesitation.',
+                'cta' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === 'Download Now'
+                    ? 'After clicking, visitors move straight to the download entry with the key supporting notes still visible.'
+                    : 'After clicking, visitors move straight into the main next step without guessing which action matters most.',
+                'brand', 'trust' => $summaryLine !== ''
+                    ? ($siteName . ' keeps the focus on ' . $summaryLine . ' so first-time visitors can build trust more quickly.')
+                    : 'Build trust with brand background, support approach, and reassuring details that make visitors comfortable continuing.',
                 'contact_form' => 'Collect only the key contact details and request notes so visitors can start a conversation quickly.',
                 'legal' => 'Present the key policy information in readable sections so visitors can find the rule they need without guessing.',
                 default => 'Turn the page goal into clear on-screen content that visitors can read and act on right away: ' . $pageGoal,
@@ -4474,20 +5017,21 @@ final class AiSiteExecutionBlueprintService
         };
     }
 
-    private function resolveDefaultButtonText(string $preset, string $pageGoal, string $locale = ''): string
+    private function resolveDefaultButtonText(string $preset, string $pageGoal, string $siteSummary = '', string $locale = ''): string
     {
+        $primaryAction = $this->inferPrimaryActionFromSummary($siteSummary, $locale);
         if (!$this->isEnglishLocale($locale)) {
             return match ($preset) {
-                'hero' => '立即开始',
-                'cta', 'contact_form' => '立即咨询',
+                'hero' => $primaryAction !== '' ? $primaryAction : '立即开始',
+                'cta', 'contact_form' => $primaryAction !== '' ? $primaryAction : '立即咨询',
                 default => '了解更多',
             };
         }
 
         if ($this->isEnglishLocale($locale)) {
             return match ($preset) {
-                'hero' => 'Start Now',
-                'cta', 'contact_form' => 'Contact Us',
+                'hero' => $primaryAction !== '' ? $primaryAction : 'Start Now',
+                'cta', 'contact_form' => $primaryAction !== '' ? $primaryAction : 'Contact Us',
                 default => 'Learn More',
             };
         }
@@ -4499,20 +5043,21 @@ final class AiSiteExecutionBlueprintService
         };
     }
 
-    private function resolveDefaultImageRule(string $preset, string $pageLabel, string $siteName, string $locale = ''): string
+    private function resolveDefaultImageRule(string $preset, string $pageLabel, string $siteName, string $siteSummary = '', string $locale = ''): string
     {
+        $summaryCue = $this->buildBriefDrivenSnippet($siteSummary, $siteName, $locale, 28, 72);
         if (!$this->isEnglishLocale($locale)) {
             return match ($preset) {
-                'hero' => '使用一张能承接首屏承诺的主视觉，不能遮挡标题和主 CTA。',
-                'brand', 'trust' => '使用人物、产品、团队或信任标识素材，增强可信度。',
+                'hero' => '首屏主视觉建议：展示“' . ($summaryCue !== '' ? $summaryCue : $siteName) . '”相关场景、界面或核心内容，并确保标题与主 CTA 同屏可见。',
+                'brand', 'trust' => '信任素材建议：展示“' . ($summaryCue !== '' ? $summaryCue : $siteName) . '”相关团队、产品界面、合作标识或服务现场，并预留可替换物料位。',
                 default => '',
             };
         }
 
         if ($this->isEnglishLocale($locale)) {
             return match ($preset) {
-                'hero' => 'Use one main visual that supports the first-screen promise without hiding the CTA.',
-                'brand', 'trust' => 'Use people, product, or brand-support visuals that increase trust.',
+                'hero' => 'Hero visual brief: show "' . ($summaryCue !== '' ? $summaryCue : $siteName) . '" through a scene, interface, or offer-focused visual while keeping the headline and primary CTA visible together.',
+                'brand', 'trust' => 'Trust visual brief: show team, product evidence, partner marks, or service proof tied to "' . ($summaryCue !== '' ? $summaryCue : $siteName) . '" with replaceable asset slots.',
                 default => '',
             };
         }
@@ -4522,6 +5067,50 @@ final class AiSiteExecutionBlueprintService
             'brand', 'trust' => '??????????????????????',
             default => '',
         };
+    }
+
+    private function buildBriefDrivenSnippet(string $siteSummary, string $siteName, string $locale = '', int $zhLimit = 24, int $enLimit = 72): string
+    {
+        $summary = \trim(\preg_replace('/\s+/u', ' ', $siteSummary) ?? '');
+        if ($summary === '' || $this->looksLikeBlueprintInstruction($summary)) {
+            return '';
+        }
+
+        $summary = \trim($summary, " \t\n\r\0\x0B,.;:!?，。；：！？");
+        if ($summary === '') {
+            return '';
+        }
+
+        if ($siteName !== '' && \mb_stripos($summary, $siteName) !== false) {
+            $summary = \trim(\str_replace($siteName, '', $summary));
+            $summary = \trim($summary, " \t\n\r\0\x0B,.;:!?，。；：！？");
+        }
+
+        if ($summary === '') {
+            return '';
+        }
+
+        return $this->clipText($summary, $this->isEnglishLocale($locale) ? $enLimit : $zhLimit);
+    }
+
+    private function inferPrimaryActionFromSummary(string $siteSummary, string $locale = ''): string
+    {
+        $summary = \mb_strtolower(\trim($siteSummary));
+        if ($summary === '') {
+            return '';
+        }
+
+        if ($this->containsAny($summary, ['apk', '下载', 'download', 'install', '安装'])) {
+            return $this->isEnglishLocale($locale) ? 'Download Now' : '立即下载';
+        }
+        if ($this->containsAny($summary, ['预约', '预订', 'booking', 'reserve'])) {
+            return $this->isEnglishLocale($locale) ? 'Book Now' : '立即预约';
+        }
+        if ($this->containsAny($summary, ['咨询', '联系', '合作', '代理', '服务', 'solution', 'service', 'contact'])) {
+            return $this->isEnglishLocale($locale) ? 'Contact Us' : '立即咨询';
+        }
+
+        return '';
     }
 
     private function buildExecutionFeaturePoints(string $preset, string $locale = ''): array
@@ -4553,6 +5142,31 @@ final class AiSiteExecutionBlueprintService
             'cta' => ['???????', '????????'],
             default => ['??????', '??????', '????????'],
         };
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function buildConcreteExecutionFeaturePoints(string $preset, string $title, string $description, string $ctaLabel, string $locale = ''): array
+    {
+        $points = [];
+        if ($title !== '') {
+            $points[] = $this->isEnglishLocale($locale)
+                ? ('Visible headline: ' . $this->clipText($title, 80))
+                : ('上屏标题：' . $this->clipText($title, 28));
+        }
+        if ($description !== '') {
+            $points[] = $this->isEnglishLocale($locale)
+                ? ('Support copy: ' . $this->clipText($description, 120))
+                : ('补充文案：' . $this->clipText($description, 44));
+        }
+        if ($ctaLabel !== '') {
+            $points[] = $this->isEnglishLocale($locale)
+                ? ('Primary CTA label: ' . $ctaLabel)
+                : ('主 CTA 文案：' . $ctaLabel);
+        }
+
+        return $points !== [] ? $points : $this->buildExecutionFeaturePoints($preset, $locale);
     }
 
     private function buildExecutionCoreCopy(string $title, string $subtitle, string $description, string $ctaLabel, string $locale = ''): string
@@ -4982,16 +5596,6 @@ final class AiSiteExecutionBlueprintService
             if (!$found) {
                 $missingSections[] = $sectionKey;
             }
-        }
-
-        // 棰濆璀﹀憡妫€鏌?
-        if (\mb_stripos($markdown, '为什么这样设计') === false
-            && \mb_stripos($markdown, 'why') === false
-            && \mb_stripos($markdown, 'reason') === false
-        ) {
-            $warnings[] = $isEn
-                ? 'Warning: Design rationale (why) not found in plan.'
-                : '警告：方案中未找到设计理由（为什么这样设计）。';
         }
 
         // 妫€鏌ユ槸鍚﹀寘鍚〉闈㈣鐩栨竻鍗?

@@ -1,0 +1,23 @@
+<?php
+/**
+ * 阶段一内联面板：顶部说明、队列提示、方案预览/调整 Tab（与可滚动预览区分离，避免预览内滚动时整块被卷走）。
+ */
+?>
+<div class="pb-ai-plan-inline-panel-head border rounded shadow-sm bg-body mt-4">
+    <div class="px-4 py-3 border-bottom bg-light rounded-top">
+        <div class="small text-muted mb-0"><?= htmlspecialchars((string)__('第一阶段方案会直接显示在当前页面。悬停页面或区块即可微调、重建、删除或新增区块，确认后再进入第二阶段。'), ENT_QUOTES, 'UTF-8') ?></div>
+    </div>
+    <div class="alert alert-info border-0 rounded-0 mb-0">
+        <i class="mdi mdi-information-outline me-1"></i>
+        <?= htmlspecialchars((string)__('长耗时 AI 任务统一在后台队列执行，这里和 SSE 终端负责展示草稿进度与就绪状态。'), ENT_QUOTES, 'UTF-8') ?>
+    </div>
+    <div class="px-4 py-3 border-bottom">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 pb-ai-plan-primary-toolbar">
+            <span class="small text-muted fw-semibold"><?= htmlspecialchars((string)__('第一阶段方案'), ENT_QUOTES, 'UTF-8') ?></span>
+            <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="<?= htmlspecialchars((string)__('方案预览与调整切换'), ENT_QUOTES, 'UTF-8') ?>">
+                <button type="button" class="btn btn-outline-secondary active" id="pb-ai-plan-primary-tab-preview" data-pb-plan-primary-pane="preview" aria-selected="true"><?= htmlspecialchars((string)__('方案预览'), ENT_QUOTES, 'UTF-8') ?></button>
+                <button type="button" class="btn btn-outline-secondary" id="pb-ai-plan-primary-tab-controls" data-pb-plan-primary-pane="controls" aria-selected="false"><?= htmlspecialchars((string)__('调整与执行'), ENT_QUOTES, 'UTF-8') ?></button>
+            </div>
+        </div>
+    </div>
+</div>

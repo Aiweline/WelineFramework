@@ -822,6 +822,7 @@ class ServerInstanceManager
     private function buildInstanceInfo(string $name, array $rawData): ServerInstanceInfo
     {
         $services = $this->parseServices($rawData);
+        $httpRedirectPort = $this->resolveHttpRedirectPort($rawData, $services);
 
         return new ServerInstanceInfo(
             name: $name,
@@ -833,7 +834,7 @@ class ServerInstanceManager
             dispatcherEnabled: (bool) ($rawData['dispatcher_enabled'] ?? false),
             workerCount: (int) ($rawData['count'] ?? 0),
             workerBasePort: (int) ($rawData['worker_port'] ?? $rawData['port'] ?? 0),
-            httpRedirectPort: (int) ($rawData['http_redirect_port'] ?? 0),
+            httpRedirectPort: $httpRedirectPort,
             startedAt: (string) ($rawData['started_at'] ?? ''),
             startedTimestamp: (int) ($rawData['started_timestamp'] ?? 0),
             services: $services,
@@ -931,7 +932,7 @@ class ServerInstanceManager
         }
 
         // HTTP Redirect
-        $redirectPort = (int) ($rawData['http_redirect_port'] ?? 0);
+        $redirectPort = $this->resolveHttpRedirectPort($rawData);
         if ($redirectPort > 0) {
             $redirectPid = (int) ($rawData['redirect_pid'] ?? 0);
             $services[] = new ServiceInfo(
@@ -988,6 +989,7 @@ class ServerInstanceManager
     {
         $workerPids = [];
         $workerPorts = [];
+        $hasRedirectService = false;
 
         foreach ($services as $service) {
             switch ($service->role) {
@@ -1011,7 +1013,9 @@ class ServerInstanceManager
                     break;
 
                 case 'redirect':
+                    $hasRedirectService = true;
                     $data['redirect_pid'] = $service->pid;
+                    $data['http_redirect_port'] = (int) ($service->port ?? 0);
                     break;
             }
         }
@@ -1021,6 +1025,10 @@ class ServerInstanceManager
         }
         if (!empty($workerPorts)) {
             $data['worker_ports'] = $workerPorts;
+        }
+        if (!$hasRedirectService) {
+            $data['redirect_pid'] = 0;
+            $data['http_redirect_port'] = 0;
         }
     }
 
@@ -1042,8 +1050,37 @@ class ServerInstanceManager
 
             case 'redirect':
                 $data['redirect_pid'] = $service->pid;
+                $data['http_redirect_port'] = (int) ($service->port ?? 0);
                 break;
         }
+    }
+
+    /**
+     * @param ServiceInfo[] $services
+     */
+    private function resolveHttpRedirectPort(array $rawData, array $services = []): int
+    {
+        $httpRedirectPort = (int) ($rawData['http_redirect_port'] ?? 0);
+        if ($httpRedirectPort > 0) {
+            return $httpRedirectPort;
+        }
+
+        foreach ($services as $service) {
+            if ($service->role !== 'redirect') {
+                continue;
+            }
+            if ($service->port !== null && $service->port > 0) {
+                return (int) $service->port;
+            }
+        }
+
+        $mainPort = (int) ($rawData['port'] ?? 0);
+        $sslEnabled = (bool) ($rawData['ssl_enabled'] ?? $mainPort === 443);
+        if ($sslEnabled && $mainPort === 443) {
+            return 80;
+        }
+
+        return 0;
     }
 
     /**
