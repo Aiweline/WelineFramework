@@ -116,7 +116,7 @@ final class QueryDelegator
         }
         $model->setQueryData($query_data);
 
-        if ($method === 'fetchArray') {
+        if (in_array($method, ['fetchArray', 'fetchIterator', 'fetchSmart'], true)) {
             return $query_data;
         }
         if ($is_fetch) {

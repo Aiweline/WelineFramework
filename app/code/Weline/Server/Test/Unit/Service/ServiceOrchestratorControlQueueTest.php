@@ -200,6 +200,94 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
         self::assertSame('STOP rejected: missing explicit stop intent', $server->sent[0]['message']['message'] ?? '');
     }
 
+    public function testImperialCommandClearsQueueAndClaimsExclusiveControlImmediately(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $server = new class extends MasterControlServer {
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = [
+                    'clientId' => $clientId,
+                    'message' => ControlMessage::decode(\rtrim($message, "\n")),
+                ];
+
+                return true;
+            }
+        };
+
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+        $this->writePrivate($orchestrator, 'activeControlOperation', [
+            'id' => 'ctrl_op_active',
+            'action' => ControlMessage::ACTION_CACHE_CLEAR,
+            'clientId' => 5,
+            'payload' => ['action' => ControlMessage::ACTION_CACHE_CLEAR],
+            'state' => 'running',
+            'queuedAt' => \microtime(true),
+            'startedAt' => \microtime(true),
+        ]);
+        $this->writePrivate($orchestrator, 'pendingControlOperations', [[
+            'id' => 'ctrl_op_waiting',
+            'action' => ControlMessage::ACTION_SECURITY_UNBLOCK,
+            'clientId' => 6,
+            'payload' => ['action' => ControlMessage::ACTION_SECURITY_UNBLOCK],
+            'state' => 'queued',
+            'queuedAt' => \microtime(true),
+            'startedAt' => null,
+        ]]);
+
+        $this->invokePrivate($orchestrator, 'handleCommand', [[
+            'action' => ControlMessage::ACTION_RELOAD_WAIT,
+            'reload_type' => ControlMessage::RELOAD_TYPE_CODE,
+        ], 11]);
+
+        $pending = $this->readPrivate($orchestrator, 'pendingControlOperations');
+        self::assertCount(1, $pending);
+        self::assertSame(ControlMessage::ACTION_RELOAD_WAIT, $pending[0]['action']);
+        self::assertSame(11, $pending[0]['clientId']);
+        self::assertSame('aborting', $this->readPrivate($orchestrator, 'activeControlOperation')['state']);
+        self::assertSame(ControlMessage::ACTION_RELOAD_WAIT, $this->readPrivate($orchestrator, 'ipcExclusiveCommand'));
+        self::assertSame(11, $this->readPrivate($orchestrator, 'ipcExclusiveClientId'));
+
+        self::assertCount(2, $server->sent);
+        self::assertFalse((bool)$server->sent[0]['message']['success']);
+        self::assertSame('cancelled', $server->sent[0]['message']['data']['state'] ?? null);
+        self::assertTrue((bool)$server->sent[1]['message']['success']);
+        self::assertSame('queued', $server->sent[1]['message']['data']['state'] ?? null);
+    }
+
+    public function testQueuedControlOperationWaitsBehindExclusiveImperialCommand(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            public array $reloadCalls = [];
+
+            public function reloadAll(string $type = 'code', ?int $imperialEpochSnap = null): void
+            {
+                $this->reloadCalls[] = [$type, $imperialEpochSnap];
+            }
+        };
+
+        $this->writePrivate($orchestrator, 'ipcExclusiveCommand', ControlMessage::ACTION_STOP);
+        $this->writePrivate($orchestrator, 'ipcExclusiveClientId', 9);
+        $this->writePrivate($orchestrator, 'pendingControlOperations', [[
+            'id' => 'ctrl_op_normal',
+            'action' => ControlMessage::ACTION_RELOAD,
+            'clientId' => 7,
+            'payload' => ['action' => ControlMessage::ACTION_RELOAD],
+            'state' => 'queued',
+            'queuedAt' => \microtime(true),
+            'startedAt' => null,
+        ]]);
+
+        $processed = $this->invokePrivate($orchestrator, 'processNextQueuedControlOperation');
+
+        self::assertFalse($processed);
+        self::assertSame([], $orchestrator->reloadCalls);
+        self::assertCount(1, $this->readPrivate($orchestrator, 'pendingControlOperations'));
+        self::assertNull($this->readPrivate($orchestrator, 'activeControlOperation'));
+    }
+
     public function testMaintenanceEnableDuplicateCommandIsDeduplicated(): void
     {
         $orchestrator = new ServiceOrchestrator();

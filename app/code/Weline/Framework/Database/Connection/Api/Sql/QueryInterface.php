@@ -421,6 +421,17 @@ interface QueryInterface
     public function fetch(string $model_class = ''): mixed;
 
     /**
+     * 閮ㄥ垎杩唬鏌ヨ锛屾瘮杈规垨娴佸紡杩唬锛屽崗鍙?
+     * 鑱?fetch 涓煇浜ゆ槸杩涜 select 缃戝簳鍑芥暟锛屽鏋滀负浠ユ柟娉曠被鍨嬶紝浼氬叆 limit 鍚鍒板悗鍑虹┖鍔ㄨ兘鎯呭喌
+     *
+     * @param int $threshold
+     * @param string $model_class
+     * @param int $iteratorBatchSize
+     * @return array|\Generator
+     */
+    public function fetchSmart(int $threshold = 0, string $model_class = '', int $iteratorBatchSize = 1): array|\Generator;
+
+    /**
      * @DESC          | 查询原始最终的结果
      *
      * @AUTH    秋枫雁飞

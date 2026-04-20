@@ -36,7 +36,7 @@ class MasterControlServerSocket
         }
 
         // 设置 SO_REUSEADDR
-        if (!@\socket_set_option($this->serverSocket, SOL_SOCKET, SO_REUSEADDR, 1)) {
+        if (!\Weline\Server\Socket\ListenSocketOptions::applyRawListenSocketReuseOption($this->serverSocket)['success']) {
             $errorCode = \socket_last_error($this->serverSocket);
             WlsLogger::error_("[IPC-Master] socket_set_option SO_REUSEADDR failed: ({$errorCode}) " . \socket_strerror($errorCode));
             @\socket_close($this->serverSocket);

@@ -503,7 +503,14 @@ class DetectWebsite implements ObserverInterface
             self::CACHE_KEY_WEBSITE_ROWS,
             function () use ($websiteModel): array {
                 try {
-                    return $websiteModel->reset()->clearQuery()->select()->fetchArray();
+                    $rows = [];
+                    foreach ($websiteModel->reset()->clearQuery()->select()->fetchIterator() as $row) {
+                        if (\is_array($row)) {
+                            $rows[] = $row;
+                        }
+                    }
+
+                    return $rows;
                 } catch (\PDOException $e) {
                     $code = $e->getCode();
                     $message = $e->getMessage();
@@ -528,10 +535,19 @@ class DetectWebsite implements ObserverInterface
                 try {
                     /** @var WebsiteDomain $domainModel */
                     $domainModel = w_obj(WebsiteDomain::class);
-                    return $domainModel->clearQuery()
-                        ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
-                        ->select()
-                        ->fetchArray();
+                    $rows = [];
+                    foreach (
+                        $domainModel->clearQuery()
+                            ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
+                            ->select()
+                            ->fetchIterator() as $row
+                    ) {
+                        if (\is_array($row)) {
+                            $rows[] = $row;
+                        }
+                    }
+
+                    return $rows;
                 } catch (\Throwable $e) {
                     return [];
                 }

@@ -45,6 +45,8 @@ class Dispatcher
     private const CLIENT_TCP_KEEPALIVE_IDLE_SEC = 20;
     private const CLIENT_TCP_KEEPALIVE_INTERVAL_SEC = 8;
     private const CLIENT_TCP_KEEPALIVE_PROBES = 3;
+    private const MASTER_PID_CHECK_INTERVAL_SEC = 5;
+    private const MASTER_PID_DEAD_THRESHOLD = 1;
 
     /**
      * 服务器 socket
@@ -359,11 +361,31 @@ class Dispatcher
     private function detectHttpsEnabled(string $instanceName): bool
     {
         $instanceFile = BP . 'var' . DS . 'server' . DS . 'instances' . DS . $instanceName . '.json';
-        if (!\is_file($instanceFile)) {
+        if (\is_file($instanceFile)) {
+            $instData = @\json_decode((string)\file_get_contents($instanceFile), true);
+            if (\is_array($instData) && \array_key_exists('ssl_enabled', $instData)) {
+                return !empty($instData['ssl_enabled']);
+            }
+        }
+
+        $configFile = BP . 'var' . DS . 'server' . DS . 'config' . DS . $instanceName . '.json';
+        if (!\is_file($configFile)) {
             return false;
         }
-        $instData = @\json_decode((string)\file_get_contents($instanceFile), true);
-        return \is_array($instData) && !empty($instData['ssl_enabled']);
+
+        $configData = @\json_decode((string)\file_get_contents($configFile), true);
+        if (!\is_array($configData)) {
+            return false;
+        }
+
+        if (\array_key_exists('ssl_enabled', $configData)) {
+            return !empty($configData['ssl_enabled']);
+        }
+
+        $sslCert = \trim((string) ($configData['ssl_cert'] ?? ''));
+        $sslKey = \trim((string) ($configData['ssl_key'] ?? ''));
+
+        return $sslCert !== '' || $sslKey !== '';
     }
     
     /**
@@ -1400,7 +1422,7 @@ class Dispatcher
             return;
         }
         $now = \time();
-        if (($now - $this->lastMasterPidCheck) < 30) {  // 增加到 30 秒，减少阻塞频率
+        if (($now - $this->lastMasterPidCheck) < self::MASTER_PID_CHECK_INTERVAL_SEC) {
             return;
         }
         $this->lastMasterPidCheck = $now;
@@ -1441,8 +1463,11 @@ class Dispatcher
         }
 
         $this->masterDeadCount++;
-        $this->log("Master PID {$this->masterPid} 不可达且 IPC 断开 ({$this->masterDeadCount}/3)", 'WARN');
-        if ($this->masterDeadCount >= 3) {
+        $this->log(
+            "Master PID {$this->masterPid} 不可达且 IPC 断开 ({$this->masterDeadCount}/" . self::MASTER_PID_DEAD_THRESHOLD . ")",
+            'WARN'
+        );
+        if ($this->masterDeadCount >= self::MASTER_PID_DEAD_THRESHOLD) {
             $this->log("Master PID {$this->masterPid} 已死亡，Dispatcher 自行退出（孤儿保护）", 'ERROR');
             $this->running = false;
         }
