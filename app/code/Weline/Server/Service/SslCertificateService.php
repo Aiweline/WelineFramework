@@ -2123,13 +2123,14 @@ CNF;
             ->where(SslCertificate::schema_fields_STATUS, SslCertificate::STATUS_ACTIVE)
             ->where(SslCertificate::schema_fields_HTTPS_ENABLED, 1)
             ->select()
-            ->fetchArray();
+            ->fetchIterator();
         
         $map = [];
         $missingCerts = [];  // 记录证书文件缺失的域名
         $expiredCerts = [];  // 记录已过期的证书
         
         foreach ($certificates as $cert) {
+            $cert = \is_array($cert) ? $cert : (\method_exists($cert, 'getData') ? $cert->getData() : []);
             $domain = (string)($cert[SslCertificate::schema_fields_DOMAIN] ?? '');
 
             // 0.0.0.0 只是"监听所有网卡"的绑定地址，不是真实域名，跳过
@@ -2347,9 +2348,10 @@ CNF;
                 ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, $rootDomain)
                 ->where(\Weline\Websites\Model\DomainPool::schema_fields_STATUS, \Weline\Websites\Model\DomainPool::STATUS_ACTIVE)
                 ->select()
-                ->fetchArray();
+                ->fetchIterator();
 
             foreach ($subdomains as $row) {
+                $row = \is_array($row) ? $row : (\method_exists($row, 'getData') ? $row->getData() : []);
                 $subdomain = (string) ($row[\Weline\Websites\Model\DomainPool::schema_fields_DOMAIN] ?? '');
                 if ($subdomain !== '' && !isset($map[$subdomain])) {
                     $map[$subdomain] = $certData;
@@ -2610,9 +2612,10 @@ CNF;
             ->where(SslCertificate::schema_fields_STATUS, SslCertificate::STATUS_ACTIVE)
             ->where(SslCertificate::schema_fields_HTTPS_ENABLED, 1)
             ->select()
-            ->fetchArray();
+            ->fetchIterator();
 
         foreach ($certificates as $row) {
+            $row = \is_array($row) ? $row : (\method_exists($row, 'getData') ? $row->getData() : []);
             $domain = (string)($row[SslCertificate::schema_fields_DOMAIN] ?? '');
             $sourceCert = (string)($row[SslCertificate::schema_fields_CERT_PATH] ?? '');
             $sourceKey = (string)($row[SslCertificate::schema_fields_KEY_PATH] ?? '');
@@ -3121,12 +3124,13 @@ CNF;
             ->where(SslCertificate::schema_fields_CERT_TYPE, SslCertificate::CERT_TYPE_EXACT)
             ->where(SslCertificate::schema_fields_STATUS, SslCertificate::STATUS_ACTIVE)
             ->select()
-            ->fetchArray();
+            ->fetchIterator();
 
         $now = \date('Y-m-d H:i:s');
         $synced = 0;
 
         foreach ($subCerts as $row) {
+            $row = \is_array($row) ? $row : (\method_exists($row, 'getData') ? $row->getData() : []);
             $subDomain = (string) ($row[SslCertificate::schema_fields_DOMAIN] ?? '');
             if ($subDomain === '' || !\str_ends_with($subDomain, '.' . $rootDomain)) {
                 continue;
@@ -4361,6 +4365,8 @@ CNF;
             'dns' => \array_values(\array_unique($dns)),
             'ip' => \array_values(\array_unique($ip)),
         ];
+
+        return $result;
     }
 
     protected function hostMatchesCertificateName(string $host, string $name): bool
@@ -4744,16 +4750,13 @@ CNF;
                 );
         }
 
-        $certificates = $query->select()->fetchArray();
-        if ($certificates === []) {
-            $result['errors'][] = $domain
-                ? (string) __('未找到域名 %{1} 的证书记录', [$domain])
-                : (string) __('证书管理中没有可重载的证书记录');
-            return $result;
-        }
+        $certificates = $query->select()->fetchIterator();
 
         $expiredCerts = [];
+        $foundCertificate = false;
         foreach ($certificates as $cert) {
+            $cert = \is_array($cert) ? $cert : (\method_exists($cert, 'getData') ? $cert->getData() : []);
+            $foundCertificate = true;
             $result['processed']++;
             $certDomain = \strtolower(\trim((string) ($cert[SslCertificate::schema_fields_DOMAIN] ?? '')));
             if ($certDomain === '') {
@@ -4797,6 +4800,13 @@ CNF;
                     $result['errors'][] = (string) __('域名 %{1} 的证书文件恢复失败（使用 --clear 可清除并重置）', [$certDomain]);
                 }
             }
+        }
+
+        if (!$foundCertificate) {
+            $result['errors'][] = $domain
+                ? (string) __('未找到域名 %{1} 的证书记录', [$domain])
+                : (string) __('证书管理中没有可重载的证书记录');
+            return $result;
         }
 
         if ($expiredCerts !== []) {

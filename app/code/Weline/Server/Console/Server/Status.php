@@ -458,7 +458,7 @@ class Status extends CommandAbstract
      */
     protected function filterVisibleServices(array $services): array
     {
-        return \array_values(\array_filter($services, fn(ServiceInfo $service): bool => !$this->isSharedDependencyService($service)));
+        return \array_values($services);
     }
 
     protected function isSharedDependencyService(ServiceInfo $service): bool

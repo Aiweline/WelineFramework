@@ -553,7 +553,7 @@ if ($useReusePort && $supportsReusePort && \function_exists('socket_create')) {
             WlsLogger::error_("socket_create 失败: {$lastErrstr}");
             break;
         }
-        if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEADDR, 1)) {
+        if (!\Weline\Server\Socket\ListenSocketOptions::applyRawListenSocketReuseOption($rawSocket)['success']) {
             WlsLogger::warning_("设置 SO_REUSEADDR 失败");
         }
         if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEPORT, 1)) {
@@ -603,10 +603,9 @@ if ($useReusePort && $supportsReusePort && \function_exists('socket_create')) {
     
 } else {
     // 方案2：标准 stream_socket_server 方式
-    $socketOptions = [
+    $socketOptions = \Weline\Server\Socket\ListenSocketOptions::streamContextOptions([
         'backlog' => 102400,
-        'so_reuseaddr' => true,
-    ];
+    ]);
     
     // Linux 下尝试启用 SO_REUSEPORT（通过 stream context）
     if ($supportsReusePort && !$useReusePort) {
@@ -903,7 +902,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                 : "已上报就绪状态，控制面已同步确认 READY"
         );
         $readySentTime = \microtime(true);
-        if (\Weline\Server\Log\LogConfig::isDevMode() && $ipcClient !== null) {
+        if ((\Weline\Server\Log\LogConfig::isDevMode() || $isFrontend) && $ipcClient !== null) {
             WlsLogger::getInstance()->setIpcLogSink(static function (string $line, string $level, string $tag) use ($ipcClient): void {
                 if ($ipcClient->isConnected()) {
                     $ipcClient->sendLogLine($line, $level, $tag);

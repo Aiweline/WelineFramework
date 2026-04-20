@@ -303,7 +303,7 @@ class Env extends DataObject
         try {
             $this->reload();
         } catch (Exception $e) {
-            throw new Exception(__('系统加载错误：%{1}', $e->getMessage()));
+            throw new Exception(__('Env 配置重载失败：%{1}', $e->getMessage()));
         }
     }
 
@@ -312,7 +312,7 @@ class Env extends DataObject
         $current_user = Env::user();
         if (empty(Env::get('user'))) {
             $etc = str_replace(BP, '', Env::path_ENV_FILE);
-            $msg = '[' . PHP_OS . ']' . __('运行失败： 非站点运行用户禁止执行！请前往 %{1} 配置user键指定网站运行用户。示例\'user\'=>\'www\'。', $etc);
+            $msg = '[' . PHP_OS . ']' . __('env.php 缺少 user 配置，请在 %{1} 中添加 \'user\' => \'www\'。', $etc);
             if (CLI) {
                 /** @var Printing $printing */
                 $printing = ObjectManager::getInstance(Printing::class);
@@ -326,13 +326,13 @@ class Env extends DataObject
             if (CLI) {
                 /** @var Printing $printing */
                 $printing = ObjectManager::getInstance(Printing::class);
-                $msg = '[' . PHP_OS . ']' . __('运行失败： 非站点运行用户禁止执行！请检查当前用户：%{1} 是否与站点运行用户：%{2} 相同！', [
+                $msg = '[' . PHP_OS . ']' . __('当前系统用户与 env.php 配置 user 不一致：当前=%{1}，配置=%{2}。', [
                         $current_user, Env::get('user'),
                     ]);
                 $printing->error($msg);
                 exit(1);
             } else {
-                die('[' . PHP_OS . ']' . __('运行失败： 非站点运行用户禁止执行！请检查当前用户：%{1} 是否与站点运行用户：%{2} 相同！', [
+                die('[' . PHP_OS . ']' . __('当前系统用户与 env.php 配置 user 不一致：当前=%{1}，配置=%{2}。', [
                         $current_user, Env::get('user'),
                     ]));
             }
@@ -344,7 +344,7 @@ class Env extends DataObject
         if (self::$user) {
             return self::$user;
         }
-        // 读取当前脚本运行用户
+        // 缓存当前系统用户，避免重复调用系统接口
         self::$user = get_current_user();
         return self::$user;
     }
@@ -516,8 +516,8 @@ class Env extends DataObject
             $logEntry = "[{$timestamp}] [{$level}] {$sourceFile}:{$sourceLine} - {$content}\n";
         } else {
             // Verbose format for backward compatibility
-            $header_line = '-------------------------' . $timestamp . ' ' . __('开始') . '------------------' . "\n";
-            $end_line = '-------------------------' . $timestamp . ' ' . __('结束') . '------------------' . "\n";
+            $header_line = '-------------------------' . $timestamp . ' ' . __('start') . '------------------' . "\n";
+            $end_line = '-------------------------' . $timestamp . ' ' . __('end') . '------------------' . "\n";
             
             $backtrace = debug_backtrace();
             $caller = $backtrace[$debug_level];
@@ -853,19 +853,19 @@ class Env extends DataObject
         }
         $merging = true;
         try {
+            $status = $cacheConfig['status'] ?? [];
+            $hasRows = false;
             /** @var \Weline\CacheManager\Model\Cache $cacheModel */
             $cacheModel = ObjectManager::getInstance(\Weline\CacheManager\Model\Cache::class);
-            $collection = $cacheModel->select()->fetch();
-            $items = $collection ? $collection->getItems() : [];
-            if (!$collection || !$items) {
-                return $cacheConfig;
-            }
-            $status = $cacheConfig['status'] ?? [];
-            foreach ($items as $item) {
-                $identity = $item->getData('identity');
+            foreach ($cacheModel->select()->fetchIterator() as $item) {
+                $hasRows = true;
+                $identity = is_array($item) ? ($item['identity'] ?? null) : $item->getData('identity');
                 if ($identity !== null && $identity !== '') {
-                    $status[$identity] = (int)$item->getData('status');
+                    $status[$identity] = (int)(is_array($item) ? ($item['status'] ?? 0) : $item->getData('status'));
                 }
+            }
+            if (!$hasRows) {
+                return $cacheConfig;
             }
             $cacheConfig['status'] = $status;
         } catch (\Throwable $e) {
@@ -1120,9 +1120,9 @@ class Env extends DataObject
         if (!is_readable(Env::path_MODULES_FILE)) {
             $error = error_get_last();
             throw new \Weline\Framework\Exception\Core(
-                __('无法读取模块配置文件：%{1}。错误：%{2}。请检查文件权限或是否被其他程序占用。', [
+                __('模块列表文件不可读：%{1}，系统错误：%{2}', [
                     Env::path_MODULES_FILE,
-                    $error['message'] ?? 'Permission denied (errno=13)'
+                    $error['message'] ?? 'Permission denied (errno=13)',
                 ])
             );
         }
@@ -1134,8 +1134,8 @@ class Env extends DataObject
             if (strpos($e->getMessage(), 'Permission denied') !== false || 
                 strpos($e->getMessage(), 'errno=13') !== false) {
                 throw new \Weline\Framework\Exception\Core(
-                    __('模块配置文件读取权限被拒绝：%{1}。\n\n可能的原因：\n1. 文件被其他程序（编辑器、杀毒软件等）锁定\n2. Web服务器进程没有读取权限\n3. 文件系统权限设置不正确\n\n解决方案：\n1. 关闭可能锁定该文件的程序\n2. 检查文件权限，确保Web服务器进程有读取权限\n3. 以管理员身份运行Web服务器', [
-                        Env::path_MODULES_FILE
+                    __('读取模块列表失败：%{1}。请检查文件权限，并确认 Web 与 CLI 运行用户一致。', [
+                        Env::path_MODULES_FILE,
                     ])
                 );
             }

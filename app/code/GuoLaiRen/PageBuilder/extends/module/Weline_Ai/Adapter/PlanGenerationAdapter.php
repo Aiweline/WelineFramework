@@ -15,18 +15,17 @@ class PlanGenerationAdapter implements ScenarioAdapterInterface
 
     public function getName(): string
     {
-        return '页面构建器方案生成适配器';
+        return 'PageBuilder Stage-1 Plan Adapter';
     }
 
     public function getDescription(): string
     {
-        return 'PageBuilder 阶段一建站方案生成专用适配器。'
-            . '用于约束 AI 输出结构化 JSON，减少方案流式生成阶段的格式漂移。';
+        return 'Constrains stage-1 plan generation to a single structured JSON object.';
     }
 
     public function getVersion(): string
     {
-        return '1.0.0';
+        return '1.0.2';
     }
 
     public function getSupportedModelTypes(): array
@@ -48,10 +47,11 @@ class PlanGenerationAdapter implements ScenarioAdapterInterface
         }
 
         return $normalized . "\n\n"
-            . "输出约束：\n"
-            . "1. 必须输出合法 JSON 对象。\n"
-            . "2. 不要输出 markdown 代码块标记（如 ```json）。\n"
-            . "3. 不要输出 JSON 之外的解释文字。\n";
+            . "Output constraints:\n"
+            . "1. Return one valid JSON object only.\n"
+            . "2. Do not return markdown fences such as ```json.\n"
+            . "3. Do not return a separate markdown field.\n"
+            . "4. Do not return any prose outside JSON.\n";
     }
 
     public function processResponse(string $response, array $params = []): string
@@ -84,7 +84,7 @@ class PlanGenerationAdapter implements ScenarioAdapterInterface
     public function getParamTemplate(): array
     {
         return [
-            'description' => '阶段一建站方案生成参数',
+            'description' => 'Stage-1 site plan generation parameters',
             'fields' => [],
         ];
     }
@@ -93,9 +93,9 @@ class PlanGenerationAdapter implements ScenarioAdapterInterface
     {
         return [
             [
-                'title' => '生成阶段一方案',
-                'description' => '根据站点信息输出完整建站方案 JSON',
-                'input' => '生成一个用于印度市场游戏站点的阶段一方案',
+                'title' => 'Generate a stage-1 plan',
+                'description' => 'Return a concrete implementation plan as one JSON object.',
+                'input' => 'Generate a stage-1 plan for an India market card game site.',
                 'expected_output' => '{"site_strategy":{},"pages":{},"execution_steps":[]}',
             ],
         ];
@@ -106,4 +106,3 @@ class PlanGenerationAdapter implements ScenarioAdapterInterface
         return true;
     }
 }
-

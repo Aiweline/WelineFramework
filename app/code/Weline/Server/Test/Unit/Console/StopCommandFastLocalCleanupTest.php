@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Test\Unit\Console;
 
+require_once __DIR__ . '/stop_test_bootstrap.php';
+
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Stop;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
@@ -26,6 +28,13 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 unset($strict);
 
                 return $instanceName === 'default' ? $this->info : null;
+            }
+
+            public function getRawInstanceData(string $instanceName): ?array
+            {
+                unset($instanceName);
+
+                return null;
             }
 
             public function deleteInstance(string $instanceName): bool
@@ -67,6 +76,17 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 unset($success, $message);
             }
 
+            protected function acquireStopLock(string $instanceName, int $timeout = 5): bool
+            {
+                unset($instanceName, $timeout);
+
+                return true;
+            }
+
+            protected function releaseStopLock(): void
+            {
+            }
+
             protected function getInstanceManager(): ServerInstanceManager
             {
                 return $this->manager;
@@ -93,7 +113,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return true;
             }
 
-            protected function runResidualCleanupPair(string $name, ServerInstanceInfo $info): void
+            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info): void
             {
                 unset($info);
                 $this->calls[] = 'residual:' . $name;
@@ -143,7 +163,6 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 'release:default',
                 'pid:default',
                 'unlock:default',
-                'cleanup:default',
             ],
             $stop->calls
         );

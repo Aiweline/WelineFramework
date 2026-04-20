@@ -387,6 +387,118 @@ class RouteBeforeTest extends TestCase
         }
     }
 
+    public function testExecuteAllowsBackendLoginRouteWhenRequestUriStillContainsBackendPrefix(): void
+    {
+        $backendPrefix = (string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? '');
+        self::assertNotSame('', $backendPrefix);
+
+        $request = new class($backendPrefix) extends Request {
+            public function __construct(private readonly string $backendPrefix)
+            {
+            }
+
+            public function isBackend(): bool
+            {
+                return true;
+            }
+
+            public function isApiBackend(): bool
+            {
+                return false;
+            }
+
+            public function isApiFrontend(): bool
+            {
+                return false;
+            }
+
+            public function getMethod(): string
+            {
+                return 'GET';
+            }
+
+            public function getServer(string $key = ''): string|array
+            {
+                $server = [
+                    'REQUEST_URI' => '/' . $this->backendPrefix . '/admin/login',
+                    'WELINE_AREA_ROUTE' => $this->backendPrefix,
+                    'HTTP_REFERER' => '',
+                ];
+
+                if ($key === '') {
+                    return $server;
+                }
+
+                return $server[$key] ?? '';
+            }
+
+            public function getReferer(): string
+            {
+                return '';
+            }
+        };
+
+        $whiteAclSource = new class extends WhiteAclSource {
+            public function __construct()
+            {
+            }
+
+            public function fields($columns = '*', string|bool $sequence = ''): static
+            {
+                unset($columns, $sequence);
+                return $this;
+            }
+
+            public function where(...$args): static
+            {
+                unset($args);
+                return $this;
+            }
+
+            public function select(...$args): static
+            {
+                unset($args);
+                return $this;
+            }
+
+            public function fetchArray(): array
+            {
+                return [
+                    ['path' => 'admin/login'],
+                ];
+            }
+        };
+
+        $aclService = $this->createMock(AclService::class);
+        $aclService->expects(self::never())->method('isRouteProtected');
+
+        $rememberLoginService = $this->createMock(BackendRememberLoginService::class);
+        $rememberLoginService->expects(self::never())->method('restoreIfNeeded');
+
+        $observer = new RouteBefore(
+            $whiteAclSource,
+            $aclService,
+            new PublicApiAuthRouteMatcher(),
+            $rememberLoginService
+        );
+
+        $route = new class($request) {
+            public function __construct(private readonly Request $request)
+            {
+            }
+
+            public function getRequest(): Request
+            {
+                return $this->request;
+            }
+        };
+
+        $event = new Event(['route' => $route]);
+        $observer->execute($event);
+
+        self::assertTrue(true);
+    }
+
     private function setSessionFactorySingleton(?SessionFactory $instance): void
     {
         $reflection = new \ReflectionProperty(SessionFactory::class, 'instance');

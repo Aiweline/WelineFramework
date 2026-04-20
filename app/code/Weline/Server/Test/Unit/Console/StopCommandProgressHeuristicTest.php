@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Test\Unit\Console;
 
+require_once __DIR__ . '/stop_test_bootstrap.php';
+
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Stop;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
