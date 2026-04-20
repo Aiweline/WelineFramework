@@ -9,6 +9,7 @@ use Weline\Server\IPC\ChildControl\ChildProcessIdentity;
 use Weline\Server\IPC\ChildControl\MasterOrphanGuard;
 use Weline\Server\IPC\ChildControl\RoleControlHandlerInterface;
 use Weline\Server\IPC\ChildControl\SubprocessControlKernel;
+use Weline\Server\IPC\ChildControl\Handler\SessionServerControlHandler;
 use Weline\Server\Supervisor\Client\SupervisorChildClient;
 use Weline\Server\Supervisor\Endpoint\ControlEndpoint;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
@@ -265,6 +266,51 @@ final class SubprocessControlKernelTest extends TestCase
         }
     }
 
+    public function testKernelChoosesSupervisorClientWhenInstanceRuntimeMetadataEnablesIt(): void
+    {
+        $instanceName = 'ut-instance-runtime-supervisor';
+        $instanceDir = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances';
+        $instanceFile = $instanceDir . DIRECTORY_SEPARATOR . $instanceName . '.json';
+        if (!\is_dir($instanceDir)) {
+            @\mkdir($instanceDir, 0777, true);
+        }
+
+        \file_put_contents($instanceFile, \json_encode([
+            'control_plane_mode' => 'hybrid',
+            'supervisor_enabled' => true,
+            'supervisor_channel' => 'channel-' . $instanceName,
+        ]));
+
+        $identity = new ChildProcessIdentity(
+            ControlMessage::ROLE_WORKER,
+            \getmypid(),
+            19091,
+            1,
+            7,
+            'ut-supervisor-instance-file'
+        );
+        $handler = new class implements RoleControlHandlerInterface {
+            public function onMessage(array $message, SubprocessControlKernel $kernel): void
+            {
+            }
+
+            public function onDisconnect(bool $receivedShutdown, SubprocessControlKernel $kernel): void
+            {
+            }
+        };
+
+        try {
+            $kernel = new SubprocessControlKernel($identity, $handler, 'UT-Kernel', false, $instanceName);
+            $reflection = new \ReflectionMethod($kernel, 'createClient');
+            $reflection->setAccessible(true);
+            $client = $reflection->invoke($kernel);
+
+            self::assertInstanceOf(SupervisorChildClient::class, $client);
+        } finally {
+            @\unlink($instanceFile);
+        }
+    }
+
     public function testChildEntryScriptsLoadFrameworkBootstrapBeforeResolvingControlPort(): void
     {
         $scripts = [
@@ -324,6 +370,126 @@ final class SubprocessControlKernelTest extends TestCase
             self::assertStringContainsString('if ($controlPort > 0 || $supervisorEnabled)', $source);
             self::assertStringContainsString('new \\Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel(', $source);
         }
+    }
+
+    public function testSessionServerControlHandlerDoesNotForceShutdownOnUnexpectedDisconnect(): void
+    {
+        $shutdownCalls = 0;
+        $handler = new SessionServerControlHandler(
+            static function (): void {},
+            static function () use (&$shutdownCalls): void {
+                $shutdownCalls++;
+            },
+            static function (): void {}
+        );
+
+        $kernel = new SubprocessControlKernel(
+            new ChildProcessIdentity(ControlMessage::ROLE_SESSION_SERVER, 12345, 19970),
+            new class implements RoleControlHandlerInterface {
+                public function onMessage(array $message, SubprocessControlKernel $kernel): void
+                {
+                }
+
+                public function onDisconnect(bool $receivedShutdown, SubprocessControlKernel $kernel): void
+                {
+                }
+            },
+            'UT-SessionServer',
+            false,
+            'ut-instance',
+            static function (): ChildControlClientInterface {
+                return new class implements ChildControlClientInterface {
+                    public function connect(string $host, int $port): bool { return false; }
+                    public function isConnected(): bool { return false; }
+                    public function getSocket() { return null; }
+                    public function hasPendingWrites(): bool { return false; }
+                    public function hasReceivedShutdown(): bool { return false; }
+                    public function isReadyStateConfirmed(): bool { return false; }
+                    public function onMessage(callable $handler): void {}
+                    public function onDisconnect(callable $handler): void {}
+                    public function setVerboseLog(bool $verbose): void {}
+                    public function setSelfTag(string $tag): void {}
+                    public function register(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): bool { return false; }
+                    public function rememberRegistration(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): void {}
+                    public function markReadyState(bool $isReady = true): void {}
+                    public function sendReady(string $role = '', int $workerId = 0, int $port = 0, int $epoch = 0, string $launchId = '', string $msgId = ''): bool { return false; }
+                    public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool { return false; }
+                    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool { return false; }
+                    public function sendStatusReport(int $connections, int $memory, int $requests): bool { return false; }
+                    public function sendLogLine(string $line, string $level, string $processTag): bool { return false; }
+                    public function send(string $message, bool $disconnectOnWriteOverflow = true): bool { return false; }
+                    public function flushPendingWrites(float $timeBudgetSec = 0.0): bool { return false; }
+                    public function handleReadable(): array { return []; }
+                    public function handleWritable(): bool { return false; }
+                    public function tryReconnect(): bool { return false; }
+                    public function close(): void {}
+                };
+            }
+        );
+
+        $handler->onDisconnect(false, $kernel);
+
+        self::assertSame(0, $shutdownCalls);
+    }
+
+    public function testSessionServerControlHandlerStillStopsOnShutdownDisconnect(): void
+    {
+        $shutdownCalls = 0;
+        $handler = new SessionServerControlHandler(
+            static function (): void {},
+            static function () use (&$shutdownCalls): void {
+                $shutdownCalls++;
+            },
+            static function (): void {}
+        );
+
+        $kernel = new SubprocessControlKernel(
+            new ChildProcessIdentity(ControlMessage::ROLE_SESSION_SERVER, 12345, 19970),
+            new class implements RoleControlHandlerInterface {
+                public function onMessage(array $message, SubprocessControlKernel $kernel): void
+                {
+                }
+
+                public function onDisconnect(bool $receivedShutdown, SubprocessControlKernel $kernel): void
+                {
+                }
+            },
+            'UT-SessionServer',
+            false,
+            'ut-instance',
+            static function (): ChildControlClientInterface {
+                return new class implements ChildControlClientInterface {
+                    public function connect(string $host, int $port): bool { return false; }
+                    public function isConnected(): bool { return false; }
+                    public function getSocket() { return null; }
+                    public function hasPendingWrites(): bool { return false; }
+                    public function hasReceivedShutdown(): bool { return true; }
+                    public function isReadyStateConfirmed(): bool { return false; }
+                    public function onMessage(callable $handler): void {}
+                    public function onDisconnect(callable $handler): void {}
+                    public function setVerboseLog(bool $verbose): void {}
+                    public function setSelfTag(string $tag): void {}
+                    public function register(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): bool { return false; }
+                    public function rememberRegistration(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): void {}
+                    public function markReadyState(bool $isReady = true): void {}
+                    public function sendReady(string $role = '', int $workerId = 0, int $port = 0, int $epoch = 0, string $launchId = '', string $msgId = ''): bool { return false; }
+                    public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool { return false; }
+                    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool { return false; }
+                    public function sendStatusReport(int $connections, int $memory, int $requests): bool { return false; }
+                    public function sendLogLine(string $line, string $level, string $processTag): bool { return false; }
+                    public function send(string $message, bool $disconnectOnWriteOverflow = true): bool { return false; }
+                    public function flushPendingWrites(float $timeBudgetSec = 0.0): bool { return false; }
+                    public function handleReadable(): array { return []; }
+                    public function handleWritable(): bool { return false; }
+                    public function tryReconnect(): bool { return false; }
+                    public function close(): void {}
+                };
+            }
+        );
+
+        $handler->onDisconnect(true, $kernel);
+
+        self::assertSame(1, $shutdownCalls);
     }
 
     public function testWorkerEntrypointsAllowSupervisorModeAndRespectSyncReadyConfirmation(): void

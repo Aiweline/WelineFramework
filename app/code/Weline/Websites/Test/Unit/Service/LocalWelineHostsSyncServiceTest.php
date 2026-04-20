@@ -12,11 +12,12 @@ final class LocalWelineHostsSyncServiceTest extends TestCase
     {
         $service = new LocalWelineHostsSyncService();
 
-        self::assertTrue($service->isEligibleDomain('apk-seo-d4de8e.weline.local'));
-        self::assertTrue($service->isEligibleDomain('DEMO-123.weline.local'));
+        self::assertTrue($service->isEligibleDomain('apk-seo-d4de8e.weline.test'));
+        self::assertTrue($service->isEligibleDomain('DEMO-123.weline.test'));
+        self::assertTrue($service->isEligibleDomain('demo-123.weline.localhost'));
 
-        self::assertFalse($service->isEligibleDomain('weline.local'));
-        self::assertFalse($service->isEligibleDomain('foo.bar.weline.local'));
+        self::assertFalse($service->isEligibleDomain('weline.test'));
+        self::assertFalse($service->isEligibleDomain('foo.bar.weline.test'));
         self::assertFalse($service->isEligibleDomain('apk-seo.local'));
         self::assertFalse($service->isEligibleDomain('apk-seo.example.com'));
         self::assertFalse($service->isEligibleDomain('localhost'));
@@ -32,12 +33,18 @@ final class LocalWelineHostsSyncServiceTest extends TestCase
             }
         );
 
-        $ok = $service->ensureHostsInjected('apk-seo-d4de8e.weline.local');
+        $ok = $service->ensureHostsInjected('apk-seo-d4de8e.weline.test');
         self::assertTrue((bool)($ok['success'] ?? false));
         self::assertCount(1, $calls);
         self::assertSame('server', $calls[0][0]);
         self::assertSame('hostsAdd', $calls[0][1]);
-        self::assertSame('apk-seo-d4de8e.weline.local', $calls[0][2]['domain']);
+        self::assertSame('apk-seo-d4de8e.weline.test', $calls[0][2]['domain']);
+
+        $calls = [];
+        $loopback = $service->ensureHostsInjected('demo-123.weline.localhost');
+        self::assertTrue((bool)($loopback['success'] ?? false));
+        self::assertTrue((bool)($loopback['skipped'] ?? false));
+        self::assertCount(0, $calls);
 
         $calls = [];
         $skipped = $service->ensureHostsInjected('apk-seo.example.com');

@@ -38,7 +38,7 @@ class Component extends BackendController
         $theme = clone $this->welineTheme;
         $theme->clearData()->clearQuery()->load($themeId);
         if (!$theme->getId()) {
-            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?)));
+            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?')));
         }
 
         $availableComponents = $this->themeResourceCatalog->getComponents($area, $theme);
@@ -51,7 +51,7 @@ class Component extends BackendController
         }
 
         if (!$componentExists) {
-            return $this->fetchJson($this->error(__('缁勪欢涓嶅瓨鍦?)));
+            return $this->fetchJson($this->error(__('缁勪欢涓嶅瓨鍦')));
         }
 
         ThemeData::setCurrentTheme($theme);

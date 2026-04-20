@@ -55,12 +55,30 @@ final class MasterControlServerCommandClientTest extends TestCase
 
             self::assertIsArray($disconnectInfo);
             self::assertSame('control', $disconnectInfo['role'] ?? null);
+            self::assertSame('peer_eof', $disconnectInfo['disconnect_reason'] ?? null);
         } finally {
             if (\is_resource($client)) {
                 @\fclose($client);
             }
             $server->close();
         }
+    }
+
+    public function testTransientControlLifecycleLogsAreThrottledByHost(): void
+    {
+        $server = new MasterControlServer();
+        $this->writePrivate($server, 'clients', [
+            101 => ['role' => 'control', 'peer_name' => '127.0.0.1:50001'],
+            102 => ['role' => 'control', 'peer_name' => '127.0.0.1:50002'],
+            201 => ['role' => 'worker', 'peer_name' => '127.0.0.1:50003'],
+        ]);
+
+        $method = new \ReflectionMethod(MasterControlServer::class, 'shouldSuppressTransientClientLifecycleLog');
+        $method->setAccessible(true);
+
+        self::assertFalse($method->invoke($server, 101, 'write_connection_closed'));
+        self::assertTrue($method->invoke($server, 102, 'write_connection_closed'));
+        self::assertFalse($method->invoke($server, 201, 'write_connection_closed'));
     }
 
     /**
@@ -98,5 +116,12 @@ final class MasterControlServerCommandClientTest extends TestCase
         }
 
         self::fail('Condition was not satisfied before timeout.');
+    }
+
+    private function writePrivate(object $object, string $property, mixed $value): void
+    {
+        $reflection = new \ReflectionProperty($object, $property);
+        $reflection->setAccessible(true);
+        $reflection->setValue($object, $value);
     }
 }

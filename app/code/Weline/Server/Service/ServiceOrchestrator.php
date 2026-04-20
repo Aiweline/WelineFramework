@@ -18,6 +18,8 @@ use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\Contract\ServiceProviderInterface;
+use Weline\Server\Service\Control\ControlPlaneServerInterface;
+use Weline\Server\Service\Control\HybridControlPlaneServer;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Telemetry\InMemoryMetricsAggregator;
 use Weline\Server\Service\Telemetry\IpcTelemetryGateway;
@@ -25,6 +27,7 @@ use Weline\Server\Service\Provider\MemoryServerProvider;
 use Weline\Server\Service\Provider\SessionServerProvider;
 use Weline\Server\Service\Provider\WorkerProvider;
 use Weline\Server\Shared\Client\SharedStateClient;
+use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
 
 /**
  * 服务编排器
@@ -54,7 +57,7 @@ class ServiceOrchestrator
     private const CONTROL_OPERATION_STATE_CANCELLED = 'cancelled';
 
     private ServiceRegistry $registry;
-    private ?MasterControlServer $controlServer = null;
+    private ?ControlPlaneServerInterface $controlServer = null;
     private ?ServiceContext $context = null;
 
     private bool $running = false;
@@ -315,6 +318,7 @@ class ServiceOrchestrator
 
     /** Worker 不齐时遥测 5xx 触发的补齐节流（仅进程已挂/缺槽时生效） */
     private array $telemetryWorkerRecoveryAt = [];
+    private array $dispatcherAlertRecoveryAt = [];
     private ?IpcTelemetryGateway $telemetryGateway = null;
     private ?InMemoryMetricsAggregator $metricsAggregator = null;
     /** @var array<string, true> */
@@ -386,14 +390,27 @@ class ServiceOrchestrator
     /**
      * 获取 IPC 控制服务器
      */
-    public function getControlServer(): ?MasterControlServer
+    public function getControlServer(): ?ControlPlaneServerInterface
     {
         return $this->controlServer;
     }
 
-    protected function createControlServer(): MasterControlServer
+    protected function createControlServer(): ControlPlaneServerInterface
     {
-        return new MasterControlServer();
+        $supervisorEnabledEnvRaw = \getenv('WLS_SUPERVISOR_ENABLED');
+        $supervisorEnabledEnv = $supervisorEnabledEnvRaw !== false
+            && $supervisorEnabledEnvRaw !== ''
+            && \in_array(\strtolower((string) $supervisorEnabledEnvRaw), ['1', 'true', 'yes', 'on'], true);
+        $supervisorEnabled = (bool) ($this->context?->getConfig('wls.supervisor.enabled', $supervisorEnabledEnv) ?? $supervisorEnabledEnv);
+        $channelId = (string) ($this->context?->getConfig('wls.supervisor.channel', \getenv('WLS_SUPERVISOR_CHANNEL') ?: '') ?? '');
+        $basePath = (string) ($this->context?->getConfig('wls.supervisor.base_path', \getenv('WLS_SUPERVISOR_BASE_PATH') ?: BP) ?? BP);
+
+        return new HybridControlPlaneServer(
+            legacyServer: new MasterControlServer(),
+            endpointResolver: new ControlEndpointResolver($basePath),
+            supervisorEnabled: $supervisorEnabled,
+            channelId: $channelId !== '' ? $channelId : null,
+        );
     }
 
     public function describeLifecycleState(): string
@@ -833,6 +850,109 @@ class ServiceOrchestrator
         }
 
         return \max(0, \min($defaultUsec, (int) \floor($nextDelay * 1000000)));
+    }
+
+    private function getMainLoopTaskAgeSec(string $key, float $now): ?float
+    {
+        if (!isset($this->mainLoopTasks[$key])) {
+            return null;
+        }
+
+        $startedAt = (float) ($this->mainLoopTasks[$key]['startedAt'] ?? 0.0);
+        if ($startedAt <= 0.0) {
+            return null;
+        }
+
+        return \max(0.0, $now - $startedAt);
+    }
+
+    private function cancelMainLoopTask(string $key, string $reason): bool
+    {
+        $task = $this->mainLoopTasks[$key] ?? null;
+        if ($task === null) {
+            return false;
+        }
+
+        $fiber = $task['fiber'] ?? null;
+        if ($fiber instanceof \Fiber) {
+            $this->mainLoopFiberScheduler?->cancelTimersForFiber($fiber);
+        }
+
+        $this->mainLoopFiberScheduler?->unregisterFiber();
+        unset($this->mainLoopTasks[$key]);
+
+        $label = (string) ($task['label'] ?? $key);
+        WlsLogger::warning_("[Orchestrator] 主循环任务 {$label} 卡住，已取消：{$reason}");
+
+        return true;
+    }
+
+    private function guardResurrectQueueTasks(float $now): void
+    {
+        if ($this->resurrectQueue === []) {
+            return;
+        }
+
+        $queueTaskStallSec = 15.0;
+        $launchTaskStallSec = \max(30.0, $queueTaskStallSec * 2.0);
+        if ($this->context !== null) {
+            $queueTaskStallSec = (float) $this->context->getConfig(
+                'wls.orchestrator.resurrect_queue_task_stall_sec',
+                $queueTaskStallSec
+            );
+            if ($queueTaskStallSec < 3.0) {
+                $queueTaskStallSec = 3.0;
+            }
+
+            $launchTaskStallSec = (float) $this->context->getConfig(
+                'wls.orchestrator.resurrect_launch_task_stall_sec',
+                \max(30.0, $queueTaskStallSec * 2.0)
+            );
+        }
+        if ($launchTaskStallSec < $queueTaskStallSec) {
+            $launchTaskStallSec = $queueTaskStallSec;
+        }
+
+        $resurrectQueueTaskAge = $this->getMainLoopTaskAgeSec('periodic:resurrect_queue', $now);
+        if ($resurrectQueueTaskAge !== null && $resurrectQueueTaskAge >= $queueTaskStallSec) {
+            $this->cancelMainLoopTask(
+                'periodic:resurrect_queue',
+                'resurrect queue stalled for ' . \sprintf('%.1f', $resurrectQueueTaskAge) . 's'
+            );
+        }
+
+        foreach ($this->resurrectQueue as $key => $entry) {
+            if (($entry['launching'] ?? false) !== true) {
+                continue;
+            }
+
+            $taskKey = "resurrect_launch:{$key}";
+            $taskAge = $this->getMainLoopTaskAgeSec($taskKey, $now);
+            $launchingAt = (float) ($entry['launchingAt'] ?? 0.0);
+            $launchAge = null;
+            if ($launchingAt > 0.0) {
+                $launchAge = \max(0.0, $now - $launchingAt);
+            } elseif ($taskAge !== null) {
+                $launchAge = $taskAge;
+            } elseif (!isset($this->mainLoopTasks[$taskKey])) {
+                $launchAge = $launchTaskStallSec;
+            }
+
+            if ($launchAge === null || $launchAge < $launchTaskStallSec) {
+                continue;
+            }
+
+            $this->cancelMainLoopTask(
+                $taskKey,
+                'resurrect launch stalled for ' . $key . ' (' . \sprintf('%.1f', $launchAge) . 's)'
+            );
+            unset($entry['launching'], $entry['launchingAt']);
+            $entry['restartDelay'] = 1.0;
+            $entry['scheduledAt'] = $now + 1.0;
+            $entry['delayed'] = false;
+            $this->resurrectQueue[$key] = $entry;
+            WlsLogger::warning_("[Orchestrator] 复活任务 {$key} 卡住，已重新入队等待 1.0s 后重试");
+        }
     }
 
     private function scheduleMainLoopTask(string $key, string $label, callable $task): bool
@@ -1369,6 +1489,7 @@ class ServiceOrchestrator
         $this->lastMasterSelfAuditAt = 0.0;
         $this->telemetryAnomalyLoggedAt = [];
         $this->telemetryWorkerRecoveryAt = [];
+        $this->dispatcherAlertRecoveryAt = [];
         $providersForCritical = $this->registry->getAllProviders();
         $defaultCriticalRoles = [];
         foreach ($providersForCritical as $provider) {
@@ -1413,6 +1534,9 @@ class ServiceOrchestrator
             );
         }
         $this->controlServer->setExpectedInstanceCode($context->instanceName);
+        if ($context->controlPort !== $this->controlServer->getPort()) {
+            $this->context = $context->withControlPort($this->controlServer->getPort());
+        }
         WlsLogger::info_("[Orchestrator] IPC 控制服务器已启动，端口: " . $this->controlServer->getPort());
         WlsLogger::info_(
             '[Orchestrator] IPC control transport='
@@ -2961,7 +3085,8 @@ class ServiceOrchestrator
                     . "ipc_alive=" . ($slotOccupancy['ipcAlive'] ? '1' : '0')
                     . ", pid=" . $slotOccupancy['trackedPid']
                     . ", pid_alive=" . ($slotOccupancy['pidAlive'] ? '1' : '0')
-                    . ", fresh_startup=" . ($slotOccupancy['freshStartupWindow'] ? '1' : '0') . '）'
+                    . ", fresh_startup=" . ($slotOccupancy['freshStartupWindow'] ? '1' : '0')
+                    . ', port_weline=' . ($slotOccupancy['portHeldByWeline'] ? '1' : '0') . '）'
                 );
                 continue;
             }
@@ -2984,6 +3109,7 @@ class ServiceOrchestrator
      *     startupWindowSec:float,
      *     ageSec:float,
      *     freshStartupWindow:bool,
+     *     portHeldByWeline:bool,
      *     occupied:bool
      * }
      */
@@ -3010,6 +3136,11 @@ class ServiceOrchestrator
             && \in_array($previousState, [ServiceInstance::STATE_STARTING, ServiceInstance::STATE_REGISTERED], true)
             && $ageSec < $startupWindowSec;
 
+        // 端口上仍有 Weline 监听时，即使 IPC 未连上或 PID 探测失败，也必须视为槽位占用，
+        // 否则 reconcile/复活路径会在同端口再拉起第二个子进程（典型“逃逸/重复进程”）。
+        $port = (int) ($instance->port ?? 0);
+        $portHeldByWeline = $port > 0 && Processer::isPortUsedByWeline($port);
+
         return [
             'trackedPid' => $trackedPid,
             'ipcAlive' => $ipcAlive,
@@ -3018,7 +3149,8 @@ class ServiceOrchestrator
             'startupWindowSec' => $startupWindowSec,
             'ageSec' => $ageSec,
             'freshStartupWindow' => $freshStartupWindow,
-            'occupied' => $ipcAlive || $pidAlive || ($trackedPid <= 0 && $freshStartupWindow),
+            'portHeldByWeline' => $portHeldByWeline,
+            'occupied' => $ipcAlive || $pidAlive || ($trackedPid <= 0 && $freshStartupWindow) || $portHeldByWeline,
         ];
     }
     
@@ -4987,7 +5119,7 @@ class ServiceOrchestrator
 
             // WlsLogger::info_('[Orchestrator] 主循环开始 运行时间:getMainLoopPollTimeoutUsec ' . $this->getMainLoopPollTimeoutUsec(100000) . 'us');
             // 每隔一段时间点答应一个循环数字，表示主循环未被阻塞
-            if ($pollCount % 10000 === 0 && $pollCount > 0) {
+            if ($pollCount % 100000 === 0 && $pollCount > 0) {
                 WlsLogger::info_('[Orchestrator] 主循环未被阻塞 #' . $pollCount);
             }
             // Poll IPC 消息（可能触发 stopAll 导致 shuttingDown=true）
@@ -5139,6 +5271,7 @@ class ServiceOrchestrator
 
             // 处理复活队列 - 即使启动验收未完成也应该处理（进程逃逸不能等待）
             // 复活队列是防止进程逃逸的关键机制，不应被 startupAcceptanceComplete 阻塞
+            $this->guardResurrectQueueTasks($now);
             if (!$this->hasMainLoopTask('periodic:resurrect_queue')) {
                 if ($this->scheduleMainLoopTask('periodic:resurrect_queue', 'resurrect_queue', function (): void {
                     $this->processResurrectQueue();
@@ -6214,6 +6347,17 @@ class ServiceOrchestrator
                 $instance = $this->registry->getInstance($role, $slot);
                 if ($instance === null || $instance->state === ServiceInstance::STATE_STOPPED || $instance->state === ServiceInstance::STATE_FAILED) {
                     WlsLogger::warning_("[Orchestrator] 收敛补齐实例 {$role}#{$slot}");
+                    $portForSlot = (int) ($instance?->port ?? 0);
+                    if ($portForSlot <= 0) {
+                        $declaredPort = $provider->getPort($slot, $this->context);
+                        $portForSlot = $declaredPort !== null ? (int) $declaredPort : 0;
+                    }
+                    if ($portForSlot > 0 && !$this->ensurePortReleasedForResurrection($portForSlot)) {
+                        WlsLogger::warning_(
+                            "[Orchestrator] 收敛补齐 {$role}#{$slot} 推迟：端口 {$portForSlot} 仍被占用且未释放（可能存在僵尸子进程或 Master 与监听进程脱节）"
+                        );
+                        continue;
+                    }
                     $this->registry->removeInstance($role, $slot);
                     $this->startInstance($provider, $slot, $this->context);
                     continue;
@@ -6660,7 +6804,7 @@ class ServiceOrchestrator
     /**
      * 处理 IPC 消息
      */
-    public function handleIpcMessage(array $msg, int $clientId, MasterControlServer $server): void
+    public function handleIpcMessage(array $msg, int $clientId, ControlPlaneServerInterface $server): void
     {
         $type = $msg['type'] ?? '';
 
@@ -6704,6 +6848,10 @@ class ServiceOrchestrator
 
             case ControlMessage::TYPE_TELEMETRY:
                 $this->handleTelemetry($msg);
+                return;
+
+            case ControlMessage::TYPE_DISPATCHER_ALERT:
+                $this->handleDispatcherAlert($msg, $clientId);
                 return;
 
             case ControlMessage::TYPE_STATUS_REPORT:
@@ -7351,21 +7499,19 @@ class ServiceOrchestrator
                 $this->startInstance($provider, $slot, $this->context);
             }
         }
+        // 与 Master 自检同源：READY 但 IPC/PID 已失效的占槽僵尸，不依赖 20s 自检周期即可收敛
+        $this->reconcileRoleSlotGaps('worker');
     }
 
     /**
      * Worker 存活审计：死 PID 摘 IPC、僵尸注册表复活、零存活紧急拉起
      */
-    private function runWorkerLivenessAudit(): void
+    private function queueStaleWorkerRecoveries(): void
     {
         if ($this->context === null || $this->controlServer === null || !$this->running || $this->isRecoverySuspended()) {
             return;
         }
         if ($this->childServicesBootstrapInProgress) {
-            return;
-        }
-        $desired = (int) ($this->desiredState['worker'] ?? 0);
-        if ($desired <= 0) {
             return;
         }
 
@@ -7431,8 +7577,25 @@ class ServiceOrchestrator
                 $this->scheduleResurrectionWithDelay($inst, 0.5);
             }
         }
+    }
+
+    private function runWorkerLivenessAudit(): void
+    {
+        if ($this->context === null || $this->controlServer === null || !$this->running || $this->isRecoverySuspended()) {
+            return;
+        }
+        if ($this->childServicesBootstrapInProgress) {
+            return;
+        }
+        $desired = (int) ($this->desiredState['worker'] ?? 0);
+        if ($desired <= 0) {
+            return;
+        }
+
+        $this->queueStaleWorkerRecoveries();
 
         $alive = 0;
+        $lastYieldAt = \microtime(true);
         if ($this->controlServer !== null) {
             foreach ($this->registry->getInstancesByRole('worker') as $w) {
                 $this->cooperativeYieldIfNeeded($lastYieldAt);
@@ -7493,11 +7656,13 @@ class ServiceOrchestrator
         }
         $desired = (int) ($this->desiredState['worker'] ?? 0);
         $this->killKnownWorkerProcessesForEmergencyRestart();
-        if (!IS_WIN) {
-            // 非 Windows 场景保留前缀兜底清理，避免遗留孤儿进程。
-            $prefix = WorkerProvider::PROCESS_NAME_PREFIX . '-' . $this->context->instanceName . '-';
-            Processer::killByProcessNamePrefix($prefix);
-        }
+        // 按实例作用域前缀清理 name_index / 系统可解析的 Worker，避免仅 kill 注册表 PID 后仍有逃逸子进程。
+        // 使用 buildScopedProcessName 与 Worker 实际 --name 一致（含实例名规范化）。
+        $scopedPrefix = MasterProcess::buildScopedProcessName(
+            WorkerProvider::PROCESS_NAME_PREFIX,
+            $this->context->instanceName
+        ) . '-';
+        Processer::killByProcessNamePrefix($scopedPrefix);
         if (!$this->sleepInterruptiblyForPeriodicWork(600000)) {
             return;
         }
@@ -8160,6 +8325,137 @@ class ServiceOrchestrator
             'bytes_out' => $bytesOut,
             'ts' => (int) ($msg['ts'] ?? \time()),
         ]);
+    }
+
+    private function handleDispatcherAlert(array $msg, int $clientId): void
+    {
+        $dispatcher = $this->registry->getInstanceByIpcClient($clientId);
+        if ($dispatcher === null || $dispatcher->role !== ControlMessage::ROLE_DISPATCHER) {
+            $this->logTelemetryAnomalyThrottled(
+                'dispatcher_alert_untrusted_' . $clientId,
+                "[Master自检] 忽略非 Dispatcher 的 dispatcher_alert: client_id={$clientId}"
+            );
+
+            return;
+        }
+
+        $reason = (string) ($msg['reason'] ?? '');
+        if ($reason === '') {
+            $this->logTelemetryAnomalyThrottled(
+                'dispatcher_alert_missing_reason_' . $clientId,
+                "[Master自检] 忽略缺少 reason 的 dispatcher_alert: dispatcher#{$dispatcher->instanceId}"
+            );
+
+            return;
+        }
+
+        $instance = (string) ($msg['instance'] ?? ($this->context?->instanceName ?? 'default'));
+        $subjectRole = (string) ($msg['subject_role'] ?? ControlMessage::ROLE_WORKER);
+        $decision = $this->recoverFromDispatcherAlert($instance, $subjectRole, $reason, $msg);
+        if (!$decision['recovery_dispatched']) {
+            return;
+        }
+
+        $businessPool = \array_values(\array_map('intval', (array) ($msg['business_pool'] ?? [])));
+        $maintenanceCandidates = \array_values(\array_map('intval', (array) ($msg['maintenance_candidates'] ?? [])));
+        \sort($businessPool, SORT_NUMERIC);
+        \sort($maintenanceCandidates, SORT_NUMERIC);
+        $maintenancePort = (int) ($msg['maintenance_port'] ?? 0);
+        $healthy = (int) ($msg['healthy'] ?? 0);
+        $total = (int) ($msg['total'] ?? 0);
+
+        WlsLogger::warning_(
+            '[Master自检] 收到 Dispatcher 后端不可用告警，触发自愈: dispatcher#'
+            . $dispatcher->instanceId
+            . ', subject_role='
+            . $subjectRole
+            . ", reason={$reason}, business_pool="
+            . ($businessPool !== [] ? \implode(',', $businessPool) : '(empty)')
+            . ', maintenance_candidates='
+            . ($maintenanceCandidates !== [] ? \implode(',', $maintenanceCandidates) : '(none)')
+            . ', maintenance_port='
+            . ($maintenancePort > 0 ? (string) $maintenancePort : '(none)')
+            . ", health={$healthy}/{$total}"
+        );
+    }
+
+    /**
+     * @return array{
+     *     eligible: bool,
+     *     subject_role: string,
+     *     recovery_dispatched: bool,
+     *     reason: string
+     * }
+     */
+    private function recoverFromDispatcherAlert(
+        string $instance,
+        string $subjectRole,
+        string $reason,
+        array $payload = []
+    ): array {
+        $subjectRole = $subjectRole !== '' ? $subjectRole : ControlMessage::ROLE_WORKER;
+        $decision = [
+            'eligible' => false,
+            'subject_role' => $subjectRole,
+            'recovery_dispatched' => false,
+            'reason' => 'orchestrator_inactive',
+        ];
+
+        if ($this->context === null || !$this->running || $this->shuttingDown || $this->masterShutdownIntent) {
+            return $decision;
+        }
+        if ($this->childServicesBootstrapInProgress) {
+            $decision['reason'] = 'child_services_bootstrap';
+
+            return $decision;
+        }
+
+        $businessPool = \array_values(\array_map('intval', (array) ($payload['business_pool'] ?? [])));
+        $maintenanceCandidates = \array_values(\array_map('intval', (array) ($payload['maintenance_candidates'] ?? [])));
+        \sort($businessPool, SORT_NUMERIC);
+        \sort($maintenanceCandidates, SORT_NUMERIC);
+        $maintenancePort = (int) ($payload['maintenance_port'] ?? 0);
+
+        $cooldown = (float) ($this->context->getConfig(
+            'wls.orchestrator.dispatcher_alert_recovery_cooldown_sec',
+            3.0
+        ) ?? 3.0);
+        if ($cooldown < 1.0) {
+            $cooldown = 1.0;
+        }
+        $decision['eligible'] = true;
+        $key = $instance
+            . ':'
+            . $subjectRole
+            . ':'
+            . $reason
+            . ':'
+            . \implode(',', $businessPool)
+            . '|'
+            . \implode(',', $maintenanceCandidates)
+            . '|'
+            . $maintenancePort;
+        $now = \microtime(true);
+        $last = (float) ($this->dispatcherAlertRecoveryAt[$key] ?? 0.0);
+        if (($now - $last) < $cooldown) {
+            $decision['reason'] = 'dispatcher_alert_cooldown';
+
+            return $decision;
+        }
+        $this->dispatcherAlertRecoveryAt[$key] = $now;
+        if (\count($this->dispatcherAlertRecoveryAt) > 128) {
+            $this->dispatcherAlertRecoveryAt = \array_slice($this->dispatcherAlertRecoveryAt, -64, 64, true);
+        }
+
+        $this->syncDispatcherFullWorkerPoolFromRegistry();
+        if ($subjectRole === ControlMessage::ROLE_WORKER) {
+            $this->queueStaleWorkerRecoveries();
+        }
+        $this->reconcileRoleSlotGaps($subjectRole);
+        $decision['recovery_dispatched'] = true;
+        $decision['reason'] = 'dispatcher_alert_recovery';
+
+        return $decision;
     }
 
     private function logTelemetryAnomalyThrottled(string $key, string $message): void
@@ -9662,7 +9958,7 @@ class ServiceOrchestrator
     /**
      * 处理 IPC 断开
      */
-    public function handleIpcDisconnect(int $clientId, array $clientInfo, MasterControlServer $server): void
+    public function handleIpcDisconnect(int $clientId, array $clientInfo, ControlPlaneServerInterface $server): void
     {
         $instance = $this->registry->getInstanceByIpcClient($clientId);
         if ($instance === null) {
@@ -9677,9 +9973,10 @@ class ServiceOrchestrator
         $peer = (string) ($clientInfo['address'] ?? 'unknown');
         $clientState = (string) ($clientInfo['state'] ?? '');
         $clientRole = (string) ($clientInfo['role'] ?? '');
+        $disconnectReason = (string) ($clientInfo['disconnect_reason'] ?? 'unknown');
         WlsLogger::warning_(
             "[Orchestrator] IPC 断开: {$instance->role}#{$instance->instanceId} "
-            . "(pid={$instance->pid}, client_id={$clientId}, peer={$peer}, client_state={$clientState}, client_role={$clientRole}), "
+            . "(pid={$instance->pid}, client_id={$clientId}, peer={$peer}, client_state={$clientState}, client_role={$clientRole}, reason={$disconnectReason}), "
             . $this->formatInstanceDebugContext($instance)
         );
 
