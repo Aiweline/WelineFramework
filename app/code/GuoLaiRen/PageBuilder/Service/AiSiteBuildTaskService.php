@@ -49,6 +49,24 @@ class AiSiteBuildTaskService
     }
 
     /**
+     * 将当前 build_blueprint 下所有任务状态重置为 pending（用于 queue:run -f 强制重跑构建，否则会因任务已 done 而秒结束且不调 AI）。
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function resetBuildTasksToPendingForRebuild(array $scope): array
+    {
+        $blueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
+        $tasks = \is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [];
+        if ($tasks === []) {
+            return $scope;
+        }
+        $scope['build_tasks'] = $this->buildDefaultTaskState($blueprint);
+
+        return $scope;
+    }
+
+    /**
      * @param list<string> $pageTypes
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile

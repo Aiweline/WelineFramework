@@ -36,7 +36,8 @@ class DnsCdnAutoSwitch
             $deferredRows = $domainModel->clearQuery()
                 ->where(Domain::schema_fields_DNS_SWITCH_DEFERRED, 1)
                 ->select()
-                ->fetchArray();
+                ->fetchIterator();
+            $deferredRows = \iterator_to_array($deferredRows, false);
             foreach ($deferredRows as $row) {
                 $d = clone $domainModel;
                 $d->setData($row);
@@ -65,7 +66,8 @@ class DnsCdnAutoSwitch
             $rows = $domainModel->clearQuery()
                 ->where(Domain::schema_fields_DNS_SWITCH_PENDING, 1)
                 ->select()
-                ->fetchArray();
+                ->fetchIterator();
+            $rows = \iterator_to_array($rows, false);
             if (WebsitesCronTestContext::getDomainFilter() !== null) {
                 $rows = \array_values(\array_filter(
                     $rows,
