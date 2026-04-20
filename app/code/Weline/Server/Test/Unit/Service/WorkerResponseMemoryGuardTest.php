@@ -80,4 +80,21 @@ final class WorkerResponseMemoryGuardTest extends TestCase
 
         self::assertStringContainsString("\r\nConnection: close\r\n\r\nOK", $rewritten);
     }
+
+    public function testSseWriteBufferWouldExceedWhenOverLimit(): void
+    {
+        $max = WorkerResponseMemoryGuard::SSE_MAX_PENDING_WRITE_BYTES;
+        self::assertTrue(WorkerResponseMemoryGuard::sseWriteBufferWouldExceed($max, 1));
+    }
+
+    public function testSseWriteBufferWouldNotExceedWhenWithinLimit(): void
+    {
+        $max = WorkerResponseMemoryGuard::SSE_MAX_PENDING_WRITE_BYTES;
+        self::assertFalse(WorkerResponseMemoryGuard::sseWriteBufferWouldExceed($max - 100, 50));
+    }
+
+    public function testSseWriteBufferIgnoresZeroAppend(): void
+    {
+        self::assertFalse(WorkerResponseMemoryGuard::sseWriteBufferWouldExceed(999999999, 0));
+    }
 }

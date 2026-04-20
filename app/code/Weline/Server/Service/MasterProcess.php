@@ -27,6 +27,7 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Log\LogConfig;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Contract\ServiceContext;
+use Weline\Server\Service\Control\HybridControlPlaneServer;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\LongRunningPhpRuntime;
 
@@ -359,6 +360,7 @@ class MasterProcess
 
             // 先拉起控制面并落盘 Master 信息，让后台启动确认不再被子服务启动阶段阻塞
             $this->orchestrator->bootstrapControlPlane($this->context);
+            $this->controlPort = $this->context?->controlPort ?? $this->controlPort;
             $this->log(__('Master 启动阶段：控制面已启动'));
             $this->logger->flush(true);
             $this->saveMasterInfo('bootstrapping');
@@ -377,13 +379,11 @@ class MasterProcess
             WlsLogger::error_('[Master] 启动异常: ' . $e->getMessage(), ['exception' => $e]);
             throw $e;
         } finally {
-            // 终止阶段清理：注销 Master PID 并清理子进程
-            $this->unregisterMasterPid();
-            
             // 尝试优雅关闭 Orchestrator（停止所有子进程）
             try {
                 if ($this->orchestrator !== null && $this->orchestrator->isRunning()) {
                     $this->log(__('Master 正在关闭，通知所有子进程...'));
+                    $this->saveMasterInfo('stopping');
                     $this->orchestrator->stopAll('master_shutdown', null);
                 }
             } catch (\Throwable $shutdownError) {
@@ -404,6 +404,19 @@ class MasterProcess
             } catch (\Throwable $ipcError) {
                 WlsLogger::debug_('[Master] IPC 关闭过程中出现错误: ' . $ipcError->getMessage());
             }
+
+            // 最后再注销 Master PID，并根据剩余子进程决定保留还是删除实例记录。
+            try {
+                $this->unregisterMasterPid();
+            } catch (\Throwable $indexCleanupError) {
+                WlsLogger::debug_('[Master] 注销 Master PID 索引失败: ' . $indexCleanupError->getMessage());
+            }
+
+            try {
+                $this->finalizeInstanceRuntimeAfterMasterExit($masterPid);
+            } catch (\Throwable $instanceCleanupError) {
+                WlsLogger::warning_('[Master] 整理实例运行记录失败: ' . $instanceCleanupError->getMessage());
+            }
         }
     }
     
@@ -423,20 +436,36 @@ class MasterProcess
     }
 
     /**
-     * 从进程索引移除 Master PID 并清理实例 JSON 文件
+     * 从进程索引移除 Master PID
      */
     private function unregisterMasterPid(): void
     {
         $masterName = '--name=' . self::getMasterProcessName($this->instanceName);
         Processer::removePidFile($masterName);
         $this->log(__('Master PID 索引已移除'));
-        
-        // 清理实例 JSON 文件（正常关闭时删除）
-        $instanceFile = $this->getInstanceFile();
-        if (\is_file($instanceFile)) {
-            @\unlink($instanceFile);
-            $this->log(__('实例文件已清理: %{1}', [$instanceFile]));
+    }
+
+    /**
+     * Master 退出后整理实例运行记录。
+     *
+     * 若子进程仍存活，则保留 instance.json，避免 stop/status 失去恢复线索。
+     * 若所有受管进程都已退出，则直接删除实例记录。
+     */
+    private function finalizeInstanceRuntimeAfterMasterExit(int $masterPid): void
+    {
+        if ($this->instanceName === '') {
+            return;
         }
+
+        $manager = new ServerInstanceManager();
+        $retained = $manager->finalizeAfterMasterExit($this->instanceName, $masterPid);
+
+        if ($retained) {
+            $this->log(__('检测到 Master 退出后仍有子进程存活，已保留实例记录供后续恢复控制'));
+            return;
+        }
+
+        $this->log(__('实例记录已完成清理'));
     }
 
     /**
@@ -447,42 +476,8 @@ class MasterProcess
      */
     private function cleanupStaleInstanceFiles(): void
     {
-        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
-        if (!\is_dir($instanceDir)) {
-            return;
-        }
-
-        $now = \time();
-        $staleThreshold = 60;  // 60 秒未更新即为陈旧
-        $cleaned = 0;
-
         try {
-            $files = @\glob($instanceDir . '*.json') ?: [];
-            foreach ($files as $file) {
-                if (!\is_file($file)) {
-                    continue;
-                }
-
-                $data = @\json_decode((string)@\file_get_contents($file), true);
-                if (!\is_array($data)) {
-                    continue;
-                }
-
-                // 检查 updated_at 时间戳
-                $updatedAt = (int)($data['updated_at'] ?? 0);
-                if ($updatedAt <= 0) {
-                    continue;  // 没有时间戳，不清理
-                }
-
-                $age = $now - $updatedAt;
-                if ($age > $staleThreshold) {
-                    @\unlink($file);
-                    $cleaned++;
-                    $instanceName = (string)($data['instance_name'] ?? \basename($file, '.json'));
-                    $this->log(__('  清理孤儿实例文件: %{1}（已过期 %{2} 秒）', [$instanceName, $age]));
-                }
-            }
-
+            $cleaned = (new ServerInstanceManager())->cleanupStaleInstances();
             if ($cleaned > 0) {
                 $this->log(__('共清理 %{1} 个孤儿实例文件', [$cleaned]));
             }
@@ -861,6 +856,14 @@ class MasterProcess
         ];
 
         // 合并：保留现有配置（如 worker_port、count、ssl_enabled 等）并更新 Master 状态
+        $controlServer = $this->orchestrator?->getControlServer();
+        if ($controlServer instanceof HybridControlPlaneServer) {
+            $masterData['control_plane_mode'] = $controlServer->isSupervisorEnabled() ? 'hybrid' : 'legacy';
+            $masterData['supervisor_enabled'] = $controlServer->isSupervisorEnabled();
+            $masterData['supervisor_channel'] = $controlServer->supervisorChannelId();
+            $masterData['supervisor_endpoint'] = $controlServer->supervisorEndpointUri();
+        }
+
         $data = \array_merge($existingData, $masterData);
 
         // 使用原子写入确保与Start.php的并发写入不产生竞态条件

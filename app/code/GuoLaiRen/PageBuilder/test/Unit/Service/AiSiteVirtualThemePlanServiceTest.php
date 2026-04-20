@@ -63,12 +63,30 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             'execution_blueprint_confirmed_signature' => 'phase-one-signature',
             'plan_markdown' => "# Stage 1 Plan\n\n## Home\n- Hero focuses on first-screen conversion",
             'plan_structured' => [
+                'theme_context_snapshot' => [
+                    'context_hash' => 'stage1-theme-hash',
+                    'site_positioning' => 'Shared-first positioning',
+                ],
                 'site_strategy' => ['site_display_name' => 'Task Plan Test', 'summary' => 'Summary'],
                 'palette' => ['name' => 'Ocean Slate'],
                 'theme_style' => ['name' => 'Plan-Driven Hybrid', 'responsive_rule' => 'Single column first'],
                 'seo_strategy' => ['core_intent' => 'intent'],
                 'navigation_plan' => ['header_items' => [['label' => 'Home', 'href' => '/']]],
                 'footer_plan' => ['featured' => [['label' => 'About', 'href' => '/about']], 'policies' => [['label' => 'Privacy', 'href' => '/privacy']]],
+            ],
+            'plan_workbench' => [
+                'stage1' => [
+                    'theme_context_snapshot' => [
+                        'context_hash' => 'stage1-theme-hash',
+                        'site_positioning' => 'Shared-first positioning',
+                    ],
+                ],
+                'confirmed' => [
+                    'shared_prompt_context' => [
+                        'context_hash' => 'stage1-shared-hash',
+                        'generation_rule' => 'shared first',
+                    ],
+                ],
             ],
         ];
 
@@ -85,6 +103,25 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertSame('content/home-page-hero', (string)($artifacts['structured']['page_tasks']['home_page'][0]['plan_context']['section_code'] ?? ''));
         self::assertIsArray($artifacts['structured']['stage1_task_cues']['pages']['page:home_page:content/home-page-hero'] ?? null);
         self::assertSame('Build a reusable header with primary navigation.', (string)($artifacts['structured']['stage1_task_cues']['shared']['shared:header']['stage1_goal'] ?? ''));
+        self::assertIsArray($artifacts['structured']['stage2_context_snapshot'] ?? null);
+        self::assertSame('stage1-theme-hash', (string)($artifacts['structured']['stage2_context_snapshot']['theme_context_snapshot']['context_hash'] ?? ''));
+        self::assertSame('stage1-shared-hash', (string)($artifacts['structured']['stage2_context_snapshot']['shared_prompt_context']['context_hash'] ?? ''));
+        self::assertIsArray($artifacts['structured']['stage2_context_snapshot']['shared_task_summary']['shared:header'] ?? null);
+        self::assertIsArray($artifacts['structured']['stage2_context_snapshot']['page_content_tone']['home_page'] ?? null);
+        self::assertSame('stage2-block-task-plan-v2', (string)($artifacts['structured']['stage2_context_snapshot']['prompt_version'] ?? ''));
+        self::assertNotSame('', (string)($artifacts['structured']['stage2_context_snapshot']['context_hash'] ?? ''));
+        self::assertSame(
+            (string)($artifacts['structured']['stage2_context_snapshot']['context_hash'] ?? ''),
+            (string)($artifacts['structured']['page_tasks']['home_page'][0]['runtime_context']['stage2_context_hash'] ?? '')
+        );
+        self::assertSame(
+            (string)($artifacts['structured']['stage2_context_snapshot']['context_hash'] ?? ''),
+            (string)($artifacts['structured']['execution_blueprint']['tasks'][2]['runtime_context']['stage2_context_hash'] ?? '')
+        );
+        self::assertSame(
+            (string)($artifacts['structured']['stage2_context_snapshot']['context_hash'] ?? ''),
+            (string)($artifacts['virtual_theme_plan']['page_tasks']['home_page'][0]['runtime_context']['stage2_context_hash'] ?? '')
+        );
     }
 
     public function testBuildTaskPlanArtifactsFallsBackDeterministicallyWhenFakeModeIsEnabled(): void
@@ -96,7 +133,8 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         $buildBlueprint = [
             'tasks' => [
                 ['task_key' => 'shared:header', 'group_key' => 'shared', 'page_type' => '', 'label' => 'Header', 'sort_order' => 10],
-                ['task_key' => 'page:home_page:hero', 'group_key' => 'home_page', 'page_type' => 'home_page', 'label' => 'Hero', 'sort_order' => 100],
+                ['task_key' => 'shared:footer', 'group_key' => 'shared', 'page_type' => '', 'label' => 'Footer', 'sort_order' => 20],
+                ['task_key' => 'page:home_page:content/home-page-hero', 'group_key' => 'home_page', 'page_type' => 'home_page', 'label' => 'Hero', 'section_code' => 'content/home-page-hero', 'sort_order' => 100],
             ],
         ];
         $scope = [
@@ -135,40 +173,50 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertNotSame('', (string)($artifacts['markdown'] ?? ''));
         self::assertIsArray($artifacts['virtual_theme_plan']['page_tasks']['home_page'] ?? null);
         $pageTask = $artifacts['virtual_theme_plan']['page_tasks']['home_page'][0] ?? [];
-        self::assertSame('Open with a clear value proposition.', (string)($pageTask['task_script']['story_goal'] ?? ''));
+        self::assertStringContainsString('Hero', (string)($pageTask['task_script']['story_goal'] ?? ''));
+        self::assertStringNotContainsString('围绕', (string)($pageTask['task_script']['story_goal'] ?? ''));
+        self::assertStringNotContainsString('阶段一仅给方向', (string)($pageTask['task_script']['content_fill_rule'] ?? ''));
         self::assertNotEmpty($pageTask['task_script']['field_content_requirements'] ?? []);
+        self::assertNotEmpty($pageTask['task_script']['field_content_requirements'][0]['sample'] ?? '');
         self::assertNotEmpty($pageTask['implementation_contract']['acceptance'] ?? []);
     }
 
     public function testBuildTaskPlanArtifactsPassesStageOneTaskCuesIntoAiPrompt(): void
     {
-        $capturedPrompt = null;
+        $capturedPrompts = [];
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::once())
+        $aiService->expects(self::exactly(2))
             ->method('generate')
-            ->willReturnCallback(function (string $prompt) use (&$capturedPrompt): string {
-                $capturedPrompt = $prompt;
+            ->willReturnCallback(function (string $prompt) use (&$capturedPrompts): string {
+                $capturedPrompts[] = $prompt;
                 return $this->buildTaskPlanResponse();
             });
         $service = new AiSiteVirtualThemePlanService($aiService);
 
         $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
 
-        self::assertIsString($capturedPrompt);
-        self::assertStringContainsString('Extracted stage-1 task cues:', $capturedPrompt);
-        self::assertStringContainsString('page:home_page:content\\/home-page-hero', $capturedPrompt);
-        self::assertStringContainsString('Build a reusable header with primary navigation.', $capturedPrompt);
-        self::assertStringContainsString('Hero should translate the main value into first-screen conversion intent.', $capturedPrompt);
-        self::assertStringContainsString('This is the confirmed virtual-theme task plan for stage 2: output must be directly usable for virtual_theme_plan.confirmed persistence after user confirmation.', $capturedPrompt);
-        self::assertStringContainsString('The task plan must make shared -> home -> other page execution explicit and explain why shared tasks block later tasks.', $capturedPrompt);
+        self::assertCount(2, $capturedPrompts);
+        $allPrompts = \implode("\n---batch---\n", $capturedPrompts);
+        self::assertStringContainsString('Batch type: shared', $allPrompts);
+        self::assertStringContainsString('Batch type: page', $allPrompts);
+        self::assertStringContainsString('Relevant stage-1 shared cues:', $allPrompts);
+        self::assertStringContainsString('Relevant stage-1 page cues:', $allPrompts);
+        self::assertStringContainsString('page:home_page:content\\/home-page-hero', $allPrompts);
+        self::assertStringContainsString('Build a reusable header with primary navigation.', $allPrompts);
+        self::assertStringContainsString('Hero should translate the main value into first-screen conversion intent.', $allPrompts);
+        self::assertStringContainsString('Treat this as a customer-visible implementation plan', $allPrompts);
+        self::assertStringContainsString('Stage-1 compact context summary:', $allPrompts);
+        self::assertStringNotContainsString('Stage-1 plan_json:', $allPrompts);
+        self::assertStringNotContainsString('Baseline virtual_theme_plan compatibility snapshot:', $allPrompts);
+        self::assertStringNotContainsString("# Stage 1 Plan\n\n## Home\n- Hero focuses on first-screen conversion", $allPrompts);
     }
 
     public function testBuildTaskPlanArtifactsStreamEnforcesTimeoutAndFallsBackToJsonGenerateWhenStreamResponseIsInvalid(): void
     {
-        $capturedStreamParams = null;
-        $capturedGenerateParams = null;
+        $capturedStreamParams = [];
+        $capturedGenerateParams = [];
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::once())
+        $aiService->expects(self::any())
             ->method('generateStream')
             ->willReturnCallback(function (
                 string $prompt,
@@ -178,10 +226,10 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 $locale,
                 array $params
             ) use (&$capturedStreamParams): void {
-                $capturedStreamParams = $params;
+                $capturedStreamParams[] = $params;
                 $callback('not-json');
             });
-        $aiService->expects(self::once())
+        $aiService->expects(self::exactly(2))
             ->method('generate')
             ->willReturnCallback(function (
                 string $prompt,
@@ -190,7 +238,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 $locale,
                 array $params
             ) use (&$capturedGenerateParams): string {
-                $capturedGenerateParams = $params;
+                $capturedGenerateParams[] = $params;
                 return $this->buildTaskPlanResponse();
             });
 
@@ -203,22 +251,56 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         );
 
         self::assertSame('ai', (string)($artifacts['generation_source'] ?? ''));
-        self::assertIsArray($capturedStreamParams);
-        self::assertFalse((bool)($capturedStreamParams['enforce_timeout_in_stream'] ?? true));
-        self::assertSame(0, (int)($capturedStreamParams['timeout'] ?? -1));
-        self::assertLessThanOrEqual(8192, (int)($capturedStreamParams['max_tokens'] ?? 0));
-        self::assertSame(['type' => 'json_object'], $capturedStreamParams['response_format'] ?? null);
-        self::assertIsArray($capturedGenerateParams);
-        self::assertLessThanOrEqual(8192, (int)($capturedGenerateParams['max_tokens'] ?? 0));
-        self::assertSame(['type' => 'json_object'], $capturedGenerateParams['response_format'] ?? null);
+        self::assertGreaterThanOrEqual(2, \count($capturedStreamParams));
+        foreach ($capturedStreamParams as $params) {
+            self::assertFalse((bool)($params['enforce_timeout_in_stream'] ?? true));
+            self::assertSame(0, (int)($params['timeout'] ?? -1));
+            self::assertLessThanOrEqual(8192, (int)($params['max_tokens'] ?? 0));
+            self::assertSame(['type' => 'json_object'], $params['response_format'] ?? null);
+            self::assertTrue((bool)($params['disable_conversation_history'] ?? false));
+            self::assertTrue((bool)($params['disable_conversation_persist'] ?? false));
+        }
+        self::assertGreaterThanOrEqual(2, \count($capturedGenerateParams));
+        foreach ($capturedGenerateParams as $params) {
+            self::assertLessThanOrEqual(8192, (int)($params['max_tokens'] ?? 0));
+            self::assertSame(['type' => 'json_object'], $params['response_format'] ?? null);
+            self::assertTrue((bool)($params['disable_conversation_history'] ?? false));
+            self::assertTrue((bool)($params['disable_conversation_persist'] ?? false));
+        }
+    }
+
+    public function testBuildTaskPlanArtifactsSanitizesPromptLikeTaskCopy(): void
+    {
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::exactly(2))
+            ->method('generate')
+            ->willReturnCallback(function (string $prompt): string {
+                return $this->buildPromptLikeTaskPlanBatchResponse($prompt);
+            });
+        $service = new AiSiteVirtualThemePlanService($aiService);
+
+        $artifacts = $service->buildTaskPlanArtifacts(
+            $this->buildPromptScope(),
+            $this->buildPromptBlueprint()
+        );
+
+        $sharedTask = $artifacts['structured']['shared_tasks'][0] ?? [];
+        $pageTask = $artifacts['structured']['page_tasks']['home_page'][0] ?? [];
+        self::assertIsArray($sharedTask);
+        self::assertIsArray($pageTask);
+        self::assertStringNotContainsString('阶段一仅给方向', (string)($sharedTask['task_script']['story_goal'] ?? ''));
+        self::assertStringNotContainsString('标题围绕', (string)($sharedTask['task_script']['field_content_requirements'][0]['sample'] ?? ''));
+        self::assertStringNotContainsString('围绕', (string)($pageTask['task_script']['content_fill_rule'] ?? ''));
+        self::assertStringNotContainsString('标题围绕', (string)($pageTask['task_script']['field_content_requirements'][0]['sample'] ?? ''));
+        self::assertNotEmpty($sharedTask['task_script']['field_content_requirements'][0]['sample'] ?? '');
     }
 
     public function testBuildTaskPlanArtifactsStreamPassesHeartbeatCallbackToProvider(): void
     {
-        $capturedStreamParams = null;
+        $capturedStreamParams = [];
         $heartbeatCount = 0;
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::once())
+        $aiService->expects(self::any())
             ->method('generateStream')
             ->willReturnCallback(function (
                 string $prompt,
@@ -228,7 +310,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 $locale,
                 array $params
             ) use (&$capturedStreamParams, &$heartbeatCount): void {
-                $capturedStreamParams = $params;
+                $capturedStreamParams[] = $params;
                 self::assertIsCallable($params['on_heartbeat'] ?? null);
                 ($params['on_heartbeat'])();
                 $callback($this->buildTaskPlanResponse());
@@ -247,9 +329,69 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         );
 
         self::assertSame('ai', (string)($artifacts['generation_source'] ?? ''));
-        self::assertIsArray($capturedStreamParams);
-        self::assertLessThanOrEqual(8192, (int)($capturedStreamParams['max_tokens'] ?? 0));
-        self::assertIsCallable($capturedStreamParams['on_heartbeat'] ?? null);
+        self::assertGreaterThanOrEqual(2, \count($capturedStreamParams));
+        self::assertGreaterThanOrEqual(2, $heartbeatCount);
+        foreach ($capturedStreamParams as $params) {
+            self::assertLessThanOrEqual(8192, (int)($params['max_tokens'] ?? 0));
+            self::assertIsCallable($params['on_heartbeat'] ?? null);
+            self::assertTrue((bool)($params['disable_conversation_history'] ?? false));
+            self::assertTrue((bool)($params['disable_conversation_persist'] ?? false));
+        }
+    }
+
+    public function testBuildTaskPlanArtifactsAcceptsWrappedJsonGenerateResponses(): void
+    {
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::exactly(2))
+            ->method('generate')
+            ->willReturnCallback(function (string $prompt): string {
+                return $this->buildWrappedTaskPlanBatchResponse($prompt);
+            });
+        $service = new AiSiteVirtualThemePlanService($aiService);
+
+        $artifacts = $service->buildTaskPlanArtifacts(
+            $this->buildPromptScope(),
+            $this->buildPromptBlueprint()
+        );
+
+        self::assertSame('ai', (string)($artifacts['generation_source'] ?? ''));
+        self::assertNotEmpty($artifacts['structured']['shared_tasks'] ?? []);
+        self::assertNotEmpty($artifacts['structured']['page_tasks']['home_page'] ?? []);
+        self::assertSame('Header', (string)($artifacts['structured']['shared_tasks'][0]['label'] ?? ''));
+    }
+
+    public function testBuildTaskPlanArtifactsStreamAcceptsWrappedJsonStreamResponses(): void
+    {
+        $forwarded = '';
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::exactly(2))
+            ->method('generateStream')
+            ->willReturnCallback(function (
+                string $prompt,
+                callable $callback
+            ): void {
+                foreach (\str_split($this->buildWrappedTaskPlanBatchResponse($prompt), 31) as $chunk) {
+                    if ($chunk === '') {
+                        continue;
+                    }
+                    $callback($chunk);
+                }
+            });
+        $aiService->expects(self::never())->method('generate');
+        $service = new AiSiteVirtualThemePlanService($aiService);
+
+        $artifacts = $service->buildTaskPlanArtifactsStream(
+            $this->buildPromptScope(),
+            $this->buildPromptBlueprint(),
+            static function (string $chunk) use (&$forwarded): void {
+                $forwarded .= $chunk;
+            }
+        );
+
+        self::assertStringContainsString('```json', $forwarded);
+        self::assertSame('ai', (string)($artifacts['generation_source'] ?? ''));
+        self::assertNotEmpty($artifacts['structured']['shared_tasks'] ?? []);
+        self::assertNotEmpty($artifacts['structured']['page_tasks']['home_page'] ?? []);
     }
 
     public function testRefineDraftTaskPlanAddsChangeScopeReport(): void
@@ -280,6 +422,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         $buildBlueprint = [
             'tasks' => [
                 ['task_key' => 'shared:header', 'group_key' => 'shared', 'page_type' => '', 'label' => 'Header', 'sort_order' => 10],
+                ['task_key' => 'shared:footer', 'group_key' => 'shared', 'page_type' => '', 'label' => 'Footer', 'sort_order' => 20],
                 ['task_key' => 'page:home_page:hero', 'group_key' => 'home_page', 'page_type' => 'home_page', 'label' => 'Hero', 'sort_order' => 100],
             ],
         ];
@@ -370,7 +513,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             [],
             [
                 'instruction' => 'Only refine the home hero section.',
-                'target_scope' => 'page:home_page:hero',
+                'target_scope' => 'page:home_page:content/home-page-hero',
                 'round' => 2,
             ],
             null,
@@ -379,9 +522,11 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             }
         );
 
-        self::assertSame(1, $heartbeatCount);
+        self::assertGreaterThanOrEqual(1, $heartbeatCount);
         self::assertIsArray($capturedStreamParams);
         self::assertSame(['type' => 'json_object'], $capturedStreamParams['response_format'] ?? null);
+        self::assertTrue((bool)($capturedStreamParams['disable_conversation_history'] ?? false));
+        self::assertTrue((bool)($capturedStreamParams['disable_conversation_persist'] ?? false));
         self::assertSame('ai', (string)($result['generation_source'] ?? ''));
         self::assertNotSame('', (string)($result['markdown'] ?? ''));
     }
@@ -414,7 +559,8 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         $buildBlueprint = [
             'tasks' => [
                 ['task_key' => 'shared:header', 'group_key' => 'shared', 'page_type' => '', 'label' => 'Header', 'sort_order' => 10],
-                ['task_key' => 'page:home_page:hero', 'group_key' => 'home_page', 'page_type' => 'home_page', 'label' => 'Hero', 'sort_order' => 100],
+                ['task_key' => 'shared:footer', 'group_key' => 'shared', 'page_type' => '', 'label' => 'Footer', 'sort_order' => 20],
+                ['task_key' => 'page:home_page:content/home-page-hero', 'group_key' => 'home_page', 'page_type' => 'home_page', 'label' => 'Hero', 'section_code' => 'content/home-page-hero', 'sort_order' => 100],
             ],
         ];
 
@@ -425,9 +571,80 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
 
         self::assertNotSame('', (string)($result['markdown'] ?? ''));
         self::assertIsArray($result['rebuild_summary'] ?? null);
-        self::assertSame(2, (int)($result['rebuild_summary']['task_count'] ?? 0));
+        self::assertSame(3, (int)($result['rebuild_summary']['task_count'] ?? 0));
         self::assertSame(3, (int)($result['rebuild_summary']['round'] ?? 0));
         self::assertIsArray($result['virtual_theme_plan']['rebuild_summary'] ?? null);
+    }
+
+    public function testReorderDraftTaskPlanTasksUpdatesPageTasksAndExecutionOrder(): void
+    {
+        $service = new AiSiteVirtualThemePlanService(
+            $this->createAiServiceStub($this->buildTaskPlanResponse())
+        );
+
+        $structured = [
+            'shared_tasks' => [
+                ['task_key' => 'shared:header', 'group_key' => 'shared', 'page_type' => '', 'label' => 'Header', 'sort_order' => 10],
+                ['task_key' => 'shared:footer', 'group_key' => 'shared', 'page_type' => '', 'label' => 'Footer', 'sort_order' => 20],
+            ],
+            'page_tasks' => [
+                'home_page' => [
+                    ['task_key' => 'page:home_page:content/home-page-hero', 'group_key' => 'home_page', 'page_type' => 'home_page', 'label' => 'Hero', 'section_code' => 'content/home-page-hero', 'sort_order' => 100],
+                    ['task_key' => 'page:home_page:content/home-page-proof', 'group_key' => 'home_page', 'page_type' => 'home_page', 'label' => 'Proof', 'section_code' => 'content/home-page-proof', 'sort_order' => 110],
+                ],
+            ],
+            'execution_order' => [
+                ['task_key' => 'shared:header', 'group_key' => 'shared', 'page_type' => '', 'sort_order' => 10],
+                ['task_key' => 'shared:footer', 'group_key' => 'shared', 'page_type' => '', 'sort_order' => 20],
+                ['task_key' => 'page:home_page:content/home-page-hero', 'group_key' => 'home_page', 'page_type' => 'home_page', 'sort_order' => 100],
+                ['task_key' => 'page:home_page:content/home-page-proof', 'group_key' => 'home_page', 'page_type' => 'home_page', 'sort_order' => 110],
+            ],
+            'task_tree' => [
+                'task_key' => 'site:virtual_theme',
+                'children' => [],
+            ],
+            'risk_notes' => ['Shared tasks must stay ahead of page tasks.'],
+        ];
+        $scope = [
+            'execution_blueprint' => [
+                'page_types' => ['home_page'],
+            ],
+            'virtual_theme_plan' => [
+                'draft' => $structured,
+                'draft_markdown' => '# Task Plan',
+                'plan_signature' => 'before-reorder',
+            ],
+            'task_plan_structured' => $structured,
+            'task_plan_markdown' => '# Task Plan',
+        ];
+
+        $orderedTaskKeys = [
+            'page:home_page:content/home-page-proof',
+            'page:home_page:content/home-page-hero',
+        ];
+        $result = $service->reorderDraftTaskPlanTasks($scope, 'page', $orderedTaskKeys, 'home_page');
+
+        self::assertSame(
+            $orderedTaskKeys,
+            \array_values(\array_map(
+                static fn(array $task): string => (string)($task['task_key'] ?? ''),
+                $result['structured']['page_tasks']['home_page'] ?? []
+            ))
+        );
+        self::assertSame(
+            $orderedTaskKeys,
+            \array_values(\array_map(
+                static fn(array $task): string => (string)($task['task_key'] ?? ''),
+                $result['virtual_theme_plan']['page_tasks']['home_page'] ?? []
+            ))
+        );
+        self::assertSame(
+            ['shared:header', 'shared:footer', 'page:home_page:content/home-page-proof', 'page:home_page:content/home-page-hero'],
+            \array_values(\array_map(
+                static fn(array $task): string => (string)($task['task_key'] ?? ''),
+                $result['structured']['execution_order'] ?? []
+            ))
+        );
     }
 
     public function testRebuildDraftTaskPlanStreamsAiChunksWhenCallbackProvided(): void
@@ -435,7 +652,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         $chunks = \str_split($this->buildTaskPlanResponse(), 64);
         $forwarded = '';
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::once())
+        $aiService->expects(self::any())
             ->method('generateStream')
             ->willReturnCallback(static function (
                 string $prompt,
@@ -474,10 +691,10 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
 
     public function testRebuildDraftTaskPlanFallsBackToJsonGenerateWhenHeartbeatStreamReturnsInvalidJson(): void
     {
-        $capturedGenerateParams = null;
+        $capturedGenerateParams = [];
         $heartbeatCount = 0;
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::once())
+        $aiService->expects(self::any())
             ->method('generateStream')
             ->willReturnCallback(function (
                 string $prompt,
@@ -491,7 +708,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 ($params['on_heartbeat'])();
                 $callback('not-json');
             });
-        $aiService->expects(self::once())
+        $aiService->expects(self::exactly(2))
             ->method('generate')
             ->willReturnCallback(function (
                 string $prompt,
@@ -500,8 +717,18 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 $locale,
                 array $params
             ) use (&$capturedGenerateParams): string {
-                $capturedGenerateParams = $params;
-                return $this->buildTaskPlanResponse();
+                $capturedGenerateParams[] = $params;
+                if (($params['max_tokens'] ?? 0) <= 2500) {
+                    return \json_encode([
+                        'shared_tasks' => \json_decode($this->buildTaskPlanResponse(), true)['virtual_theme_plan']['shared_tasks'] ?? [],
+                        'risk_notes' => ['Shared batch fallback'],
+                    ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+                }
+                return \json_encode([
+                    'page_type' => 'home_page',
+                    'page_tasks' => \json_decode($this->buildTaskPlanResponse(), true)['virtual_theme_plan']['page_tasks']['home_page'] ?? [],
+                    'risk_notes' => ['Page batch fallback'],
+                ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
             });
         $service = new AiSiteVirtualThemePlanService($aiService);
 
@@ -518,9 +745,13 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             }
         );
 
-        self::assertSame(1, $heartbeatCount);
-        self::assertIsArray($capturedGenerateParams);
-        self::assertSame(['type' => 'json_object'], $capturedGenerateParams['response_format'] ?? null);
+        self::assertGreaterThanOrEqual(2, $heartbeatCount);
+        self::assertGreaterThanOrEqual(2, \count($capturedGenerateParams));
+        foreach ($capturedGenerateParams as $params) {
+            self::assertSame(['type' => 'json_object'], $params['response_format'] ?? null);
+            self::assertTrue((bool)($params['disable_conversation_history'] ?? false));
+            self::assertTrue((bool)($params['disable_conversation_persist'] ?? false));
+        }
         self::assertSame('ai', (string)($result['generation_source'] ?? ''));
         self::assertNotSame('', (string)($result['markdown'] ?? ''));
     }
@@ -530,6 +761,57 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         $aiService = $this->createMock(AiService::class);
         $aiService->method('generate')->willReturn($response);
         return $aiService;
+    }
+
+    private function buildWrappedTaskPlanBatchResponse(string $prompt): string
+    {
+        $payload = $this->buildTaskPlanBatchPayloadForPrompt($prompt);
+        $schemaExample = isset($payload['shared_tasks'])
+            ? '{"shared_tasks":[],"risk_notes":[]}'
+            : '{"page_type":"home_page","page_tasks":[],"risk_notes":[]}';
+
+        return "\xEF\xBB\xBFSchema example: " . $schemaExample
+            . "\nActual output:\n```json\n"
+            . (\json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PRETTY_PRINT) ?: '{}')
+            . "\n```\nUse this payload only.";
+    }
+
+    private function buildPromptLikeTaskPlanBatchResponse(string $prompt): string
+    {
+        $payload = $this->buildTaskPlanBatchPayloadForPrompt($prompt);
+        if (isset($payload['shared_tasks'][0]['task_script']) && \is_array($payload['shared_tasks'][0]['task_script'])) {
+            $payload['shared_tasks'][0]['task_script']['story_goal'] = '阶段一仅给方向，先围绕 Header 说明要写什么。';
+            $payload['shared_tasks'][0]['task_script']['content_fill_rule'] = '围绕品牌和导航说明核心价值即可。';
+            $payload['shared_tasks'][0]['task_script']['field_content_requirements'][0]['sample'] = '标题围绕核心价值展开';
+        }
+        if (isset($payload['page_tasks'][0]['task_script']) && \is_array($payload['page_tasks'][0]['task_script'])) {
+            $payload['page_tasks'][0]['task_script']['story_goal'] = '阶段一仅给方向，围绕 Hero 说明首屏重点。';
+            $payload['page_tasks'][0]['task_script']['content_fill_rule'] = '围绕区块目标填充内容，并说明 CTA 方向。';
+            $payload['page_tasks'][0]['task_script']['field_content_requirements'][0]['sample'] = '标题围绕核心价值展开';
+        }
+
+        return \json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildTaskPlanBatchPayloadForPrompt(string $prompt): array
+    {
+        $decoded = \json_decode($this->buildTaskPlanResponse(), true);
+        $virtualThemePlan = \is_array($decoded['virtual_theme_plan'] ?? null) ? $decoded['virtual_theme_plan'] : [];
+        if (\str_contains($prompt, 'Batch type: shared')) {
+            return [
+                'shared_tasks' => \is_array($virtualThemePlan['shared_tasks'] ?? null) ? $virtualThemePlan['shared_tasks'] : [],
+                'risk_notes' => ['Shared batch payload'],
+            ];
+        }
+
+        return [
+            'page_type' => 'home_page',
+            'page_tasks' => \is_array($virtualThemePlan['page_tasks']['home_page'] ?? null) ? $virtualThemePlan['page_tasks']['home_page'] : [],
+            'risk_notes' => ['Page batch payload'],
+        ];
     }
 
     private function buildTaskPlanResponse(): string
@@ -563,11 +845,27 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                             ],
                         ],
                     ],
+                    [
+                        'task_key' => 'shared:footer',
+                        'group_key' => 'shared',
+                        'page_type' => '',
+                        'label' => 'Footer',
+                        'sort_order' => 20,
+                        'task_script' => [
+                            'scene' => 'shared:footer',
+                            'story_goal' => 'Build a reusable footer.',
+                            'content_fill_rule' => 'Organize policy, support, and trust links.',
+                            'stage3_directive' => 'Implement the footer component.',
+                            'field_content_requirements' => [
+                                ['field' => 'information_groups', 'sample' => 'Quick links, Policies, Support', 'reason' => 'Make footer navigation useful'],
+                            ],
+                        ],
+                    ],
                 ],
                 'page_tasks' => [
                     'home_page' => [
                         [
-                            'task_key' => 'page:home_page:hero',
+                            'task_key' => 'page:home_page:content/home-page-hero',
                             'group_key' => 'home_page',
                             'page_type' => 'home_page',
                             'label' => 'Hero',

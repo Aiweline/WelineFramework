@@ -30,7 +30,7 @@ class Partials extends BackendController
         $theme = clone $this->welineTheme;
         $theme->clearData()->clearQuery()->load($themeId);
         if (!$theme->getId()) {
-            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?)));
+            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?')));
         }
 
         $frontendPartials = $this->toLegacyPartialMap($this->themeResourceCatalog->getPartials('frontend', $theme));
@@ -60,7 +60,7 @@ class Partials extends BackendController
         $theme = clone $this->welineTheme;
         $theme->clearData()->clearQuery()->load($themeId);
         if (!$theme->getId()) {
-            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?)));
+            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?')));
         }
 
         $frontendPartials = $this->toLegacyPartialMap($this->themeResourceCatalog->getPartials('frontend', $theme));
@@ -96,7 +96,7 @@ class Partials extends BackendController
         $theme = clone $this->welineTheme;
         $theme->clearData()->clearQuery()->load($themeId);
         if (!$theme->getId()) {
-            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?)));
+            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?')));
         }
 
         $availablePartials = $this->toLegacyPartialMap($this->themeResourceCatalog->getPartials($area, $theme));
@@ -123,13 +123,13 @@ class Partials extends BackendController
         $type = \trim((string)$this->request->getParam('type', ''));
 
         if ($themeId <= 0 || $type === '') {
-            return $this->fetchJson($this->error(__('鍙傛暟涓嶅畬鏁?)));
+            return $this->fetchJson($this->error(__('鍙傛暟涓嶅畬鏁')));
         }
 
         $theme = clone $this->welineTheme;
         $theme->clearData()->clearQuery()->load($themeId);
         if (!$theme->getId()) {
-            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?)));
+            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?')));
         }
 
         $partials = $this->toLegacyPartialMap($this->themeResourceCatalog->getPartials($area, $theme));

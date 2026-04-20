@@ -514,27 +514,10 @@ class RoutingCacheService
             return;
         }
         $this->lastCleanup = $now;
-        
-        // 清理过期的 SNI 缓存
-        foreach ($this->sniCache as $sni => $entry) {
-            if ($entry['expires'] <= $now) {
-                unset($this->sniCache[$sni]);
-            }
-        }
-        
-        // 清理过期的 IP 缓存
-        foreach ($this->ipCache as $ip => $entry) {
-            if ($entry['expires'] <= $now) {
-                unset($this->ipCache[$ip]);
-            }
-        }
-        
-        // 清理过期的连接缓存
-        foreach ($this->connectionCache as $connId => $entry) {
-            if ($entry['expires'] <= $now) {
-                unset($this->connectionCache[$connId]);
-            }
-        }
+
+        $this->removeExpiredEntries($this->sniCache, $now);
+        $this->removeExpiredEntries($this->ipCache, $now);
+        $this->removeExpiredEntries($this->connectionCache, $now);
     }
     
     /**
@@ -542,16 +525,13 @@ class RoutingCacheService
      */
     private function evictSniCache(): void
     {
-        // 按过期时间排序，删除最早过期的 20%
-        \uasort($this->sniCache, fn($a, $b) => $a['expires'] <=> $b['expires']);
-        
-        $evictCount = (int) (\count($this->sniCache) * 0.2);
-        $evictCount = \max(1, $evictCount);
-        
-        $keys = \array_keys($this->sniCache);
-        for ($i = 0; $i < $evictCount; $i++) {
-            unset($this->sniCache[$keys[$i]]);
+        /** @var array<string, int> $expiresAt */
+        $expiresAt = [];
+        foreach ($this->sniCache as $sni => $entry) {
+            $expiresAt[$sni] = $entry['expires'];
         }
+
+        $this->evictByPriority($this->sniCache, $expiresAt, \SORT_NUMERIC);
     }
     
     /**
@@ -559,24 +539,13 @@ class RoutingCacheService
      */
     private function evictIpCache(): void
     {
-        // 按过期时间和命中次数综合排序
-        // 优先删除：过期时间早 + 命中次数少
-        \uasort($this->ipCache, function ($a, $b) {
-            // 首先比较命中次数（少的优先删除）
-            if ($a['hits'] !== $b['hits']) {
-                return $a['hits'] <=> $b['hits'];
-            }
-            // 其次比较过期时间（早的优先删除）
-            return $a['expires'] <=> $b['expires'];
-        });
-        
-        $evictCount = (int) (\count($this->ipCache) * 0.2);
-        $evictCount = \max(1, $evictCount);
-        
-        $keys = \array_keys($this->ipCache);
-        for ($i = 0; $i < $evictCount; $i++) {
-            unset($this->ipCache[$keys[$i]]);
+        /** @var array<string, string> $priorities */
+        $priorities = [];
+        foreach ($this->ipCache as $ip => $entry) {
+            $priorities[$ip] = \sprintf('%020d:%020d', $entry['hits'], $entry['expires']);
         }
+
+        $this->evictByPriority($this->ipCache, $priorities, \SORT_STRING);
     }
     
     /**
@@ -584,14 +553,52 @@ class RoutingCacheService
      */
     private function evictConnectionCache(): void
     {
-        \uasort($this->connectionCache, fn($a, $b) => $a['expires'] <=> $b['expires']);
-        
-        $evictCount = (int) (\count($this->connectionCache) * 0.2);
-        $evictCount = \max(1, $evictCount);
-        
-        $keys = \array_keys($this->connectionCache);
-        for ($i = 0; $i < $evictCount; $i++) {
-            unset($this->connectionCache[$keys[$i]]);
+        /** @var array<int, int> $expiresAt */
+        $expiresAt = [];
+        foreach ($this->connectionCache as $connId => $entry) {
+            $expiresAt[$connId] = $entry['expires'];
+        }
+
+        $this->evictByPriority($this->connectionCache, $expiresAt, \SORT_NUMERIC);
+    }
+
+    /**
+     * @param array<array-key, array{expires: int}> $cache
+     */
+    private function removeExpiredEntries(array &$cache, int $now): void
+    {
+        $expiredKeys = [];
+        foreach ($cache as $key => $entry) {
+            if ($entry['expires'] <= $now) {
+                $expiredKeys[] = $key;
+            }
+        }
+
+        foreach ($expiredKeys as $key) {
+            unset($cache[$key]);
+        }
+    }
+
+    /**
+     * @param array<array-key, mixed> $cache
+     * @param array<array-key, int|string> $priorities
+     */
+    private function evictByPriority(array &$cache, array $priorities, int $sortFlag): void
+    {
+        if ($priorities === []) {
+            return;
+        }
+
+        \asort($priorities, $sortFlag);
+
+        $evictCount = \max(1, (int) (\count($cache) * 0.2));
+        $evicted = 0;
+        foreach ($priorities as $key => $_priority) {
+            unset($cache[$key]);
+            $evicted++;
+            if ($evicted >= $evictCount) {
+                break;
+            }
         }
     }
     

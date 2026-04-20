@@ -128,16 +128,10 @@
         const params = Object.assign({
             theme_id: state.themeId || 0,
             page_type: getCurrentPageType(),
-            editor_area: 'backend',
-            preview_area: previewArea,
             status: state.previewStatus || 'draft',
         }, overrides || {});
-
-        // External callers may still pass editor_area for preview switch.
-        if (Object.prototype.hasOwnProperty.call(params, 'editor_area')) {
-            params.preview_area = params.editor_area;
-            params.editor_area = 'backend';
-        }
+        params.editor_area = 'backend';
+        params.preview_area = previewArea;
 
         Object.entries(params).forEach(([key, value]) => {
             if (value === null || value === undefined || value === '') {
@@ -153,7 +147,6 @@
     }
 
     function buildLayoutPreviewUrl(overrides = {}) {
-        const url = new URL(config.apiLayoutPreview, window.location.origin);
         const currentUrl = getCurrentWindowUrl();
         const layoutType = (typeof overrides.layout_type === 'string' && overrides.layout_type)
             ? overrides.layout_type
@@ -167,10 +160,19 @@
         const previewStatus = (typeof overrides.status === 'string' && overrides.status)
             ? overrides.status
             : (state.previewStatus || 'draft');
-        const editorArea = (typeof overrides.editor_area === 'string' && overrides.editor_area)
-            ? overrides.editor_area
-            : (state.editorArea || 'frontend');
+        const requestedPreviewArea = (typeof overrides.preview_area === 'string' && overrides.preview_area)
+            ? overrides.preview_area
+            : (
+                (typeof overrides.editor_area === 'string' && overrides.editor_area)
+                    ? overrides.editor_area
+                    : (state.editorArea || currentUrl.searchParams.get('preview_area') || 'frontend')
+            );
+        const previewArea = requestedPreviewArea === 'backend' ? 'backend' : 'frontend';
         const themeId = overrides.theme_id || state.themeId || 0;
+        const endpoint = previewArea === 'frontend'
+            ? (config.apiFrontendLayoutPreview || '/theme/frontend/theme-preview/content')
+            : config.apiLayoutPreview;
+        const url = new URL(endpoint, window.location.origin);
 
         url.searchParams.set('theme_id', String(themeId));
         url.searchParams.set('page_type', pageType);
@@ -179,7 +181,8 @@
         url.searchParams.set('editor_mode', String(overrides.editor_mode || '1'));
         url.searchParams.set('preview_mode', String(overrides.preview_mode || 'live'));
         url.searchParams.set('status', previewStatus);
-        url.searchParams.set('editor_area', editorArea);
+        url.searchParams.set('editor_area', previewArea);
+        url.searchParams.set('preview_area', previewArea);
 
         ['frontend_theme_id', 'backend_theme_id', 'scope', 'version_id'].forEach((key) => {
             const overrideValue = Object.prototype.hasOwnProperty.call(overrides, key) ? overrides[key] : currentUrl.searchParams.get(key);
@@ -232,6 +235,7 @@
         config.apiWidgetPreview = container.dataset.apiWidgetPreview || `${config.apiBase}/widget-preview`;
         config.apiCompileLayout = container.dataset.apiCompileLayout || `${config.apiBase}/compile-layout`;
         config.apiLayoutPreview = container.dataset.apiLayoutPreview || `${config.apiBase}/layout-preview`;
+        config.apiFrontendLayoutPreview = container.dataset.apiFrontendLayoutPreview || '/theme/frontend/theme-preview/content';
         config.apiParamRenderForm = container.dataset.apiParamRenderForm || '/theme/backend/widget/paramrender/form';
         config.apiSaveCompiledLayout = container.dataset.apiSaveCompiledLayout || `${config.apiBase}/save-compiled-layout`;
         
@@ -6677,7 +6681,11 @@
                 },
                 body: JSON.stringify({
                     theme_id: state.themeId,
+                    frontend_theme_id: getCurrentWindowParam('frontend_theme_id') || state.themeId,
+                    backend_theme_id: getCurrentWindowParam('backend_theme_id') || '',
+                    editor_area: 'frontend',
                     page_type: state.pageType,
+                    status: state.previewStatus || 'draft',
                 }),
             });
 

@@ -206,6 +206,50 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertTrue($server->bridgeEnabled);
     }
 
+    public function testCreateControlServerCanEnableSupervisorFromContextConfig(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            public function createConfiguredControlServer(ServiceContext $context): object
+            {
+                $reflection = new \ReflectionProperty(ServiceOrchestrator::class, 'context');
+                $reflection->setAccessible(true);
+                $reflection->setValue($this, $context);
+
+                return $this->createControlServer();
+            }
+        };
+
+        $context = new ServiceContext(
+            instanceName: 'test',
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: 8080,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: false,
+            envConfig: [
+                'wls' => [
+                    'supervisor' => [
+                        'enabled' => true,
+                        'channel' => 'channel-test',
+                    ],
+                ],
+            ],
+        );
+
+        $server = $orchestrator->createConfiguredControlServer($context);
+
+        self::assertInstanceOf(\Weline\Server\Service\Control\HybridControlPlaneServer::class, $server);
+        self::assertTrue($server->isSupervisorEnabled());
+        self::assertSame('channel-test', $server->supervisorChannelId());
+    }
+
     public function testWaitForStartupAcceptanceConsumesPendingStopRequestImmediately(): void
     {
         $server = new class extends MasterControlServer {
@@ -2647,6 +2691,184 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertNotSame([], $poolMessages);
         $lastPoolMessage = $poolMessages[\array_key_last($poolMessages)];
         self::assertSame([18080], $lastPoolMessage['ports'] ?? []);
+    }
+
+    public function testGuardResurrectQueueTasksCancelsStalledPeriodicResurrectQueueTask(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $this->invokePrivate($orchestrator, 'initializeMainLoopFiberScheduler');
+        $this->writePrivate($orchestrator, 'resurrectQueue', [
+            'worker:1' => [
+                'role' => ControlMessage::ROLE_WORKER,
+                'instanceId' => 1,
+                'maxRestarts' => 10,
+                'restartDelay' => 0.0,
+                'scheduledAt' => \microtime(true) - 1.0,
+                'delayed' => false,
+                'pid' => 0,
+                'port' => 18080,
+            ],
+        ]);
+
+        $scheduled = $this->invokePrivateWithArgs($orchestrator, 'scheduleMainLoopTask', [
+            'periodic:resurrect_queue',
+            'resurrect_queue',
+            static function (): void {
+                \Weline\Server\Scheduler\SchedulerSystem::yieldDelay(60000);
+            },
+        ]);
+        self::assertTrue($scheduled);
+
+        $tasks = $this->readPrivate($orchestrator, 'mainLoopTasks');
+        $tasks['periodic:resurrect_queue']['startedAt'] = \microtime(true) - 30.0;
+        $this->writePrivate($orchestrator, 'mainLoopTasks', $tasks);
+
+        $now = \microtime(true);
+        $this->invokePrivateWithArgs($orchestrator, 'guardResurrectQueueTasks', [$now]);
+
+        $tasks = $this->readPrivate($orchestrator, 'mainLoopTasks');
+        self::assertArrayNotHasKey('periodic:resurrect_queue', $tasks);
+
+        $scheduler = $this->readPrivate($orchestrator, 'mainLoopFiberScheduler');
+        self::assertNotNull($scheduler);
+        self::assertSame(0, $scheduler->getActiveFiberCount());
+        self::assertFalse($scheduler->hasPendingTimers());
+    }
+
+    public function testGuardResurrectQueueTasksRequeuesStalledResurrectLaunchTask(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $this->invokePrivate($orchestrator, 'initializeMainLoopFiberScheduler');
+
+        $now = \microtime(true);
+        $this->writePrivate($orchestrator, 'resurrectQueue', [
+            'worker:1' => [
+                'role' => ControlMessage::ROLE_WORKER,
+                'instanceId' => 1,
+                'maxRestarts' => 10,
+                'restartDelay' => 0.0,
+                'scheduledAt' => $now - 5.0,
+                'delayed' => true,
+                'pid' => 0,
+                'port' => 18080,
+                'launching' => true,
+                'launchingAt' => $now - 40.0,
+            ],
+        ]);
+
+        $scheduled = $this->invokePrivateWithArgs($orchestrator, 'scheduleMainLoopTask', [
+            'resurrect_launch:worker:1',
+            'resurrect_launch',
+            static function (): void {
+                \Weline\Server\Scheduler\SchedulerSystem::yieldDelay(60000);
+            },
+        ]);
+        self::assertTrue($scheduled);
+
+        $tasks = $this->readPrivate($orchestrator, 'mainLoopTasks');
+        $tasks['resurrect_launch:worker:1']['startedAt'] = $now - 40.0;
+        $this->writePrivate($orchestrator, 'mainLoopTasks', $tasks);
+
+        $this->invokePrivateWithArgs($orchestrator, 'guardResurrectQueueTasks', [$now]);
+
+        $tasks = $this->readPrivate($orchestrator, 'mainLoopTasks');
+        self::assertArrayNotHasKey('resurrect_launch:worker:1', $tasks);
+
+        $queue = $this->readPrivate($orchestrator, 'resurrectQueue');
+        self::assertArrayHasKey('worker:1', $queue);
+        self::assertArrayNotHasKey('launching', $queue['worker:1']);
+        self::assertArrayNotHasKey('launchingAt', $queue['worker:1']);
+        self::assertSame(1.0, $queue['worker:1']['restartDelay']);
+        self::assertGreaterThan($now, $queue['worker:1']['scheduledAt']);
+        self::assertFalse((bool) $queue['worker:1']['delayed']);
+
+        $scheduler = $this->readPrivate($orchestrator, 'mainLoopFiberScheduler');
+        self::assertNotNull($scheduler);
+        self::assertSame(0, $scheduler->getActiveFiberCount());
+        self::assertFalse($scheduler->hasPendingTimers());
+    }
+
+    public function testRecoverFromDispatcherAlertQueuesWorkerResurrectionWhenDispatcherReportsAllWorkersUnavailable(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $orchestrator->getRegistry()->registerProvider(new WorkerProvider());
+        $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
+        $this->writePrivate($orchestrator, 'running', true);
+        $this->writePrivate($orchestrator, 'desiredState', [
+            ControlMessage::ROLE_WORKER => 1,
+        ]);
+
+        $controlServer = $this->createMock(\Weline\Server\Service\Control\ControlPlaneServerInterface::class);
+        $controlServer->method('clientExists')->willReturn(false);
+        $this->writePrivate($orchestrator, 'controlServer', $controlServer);
+
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+            pid: 4567,
+            port: 18080,
+            startedAt: \microtime(true) - 60.0,
+            ipcClientId: 321,
+        );
+        $orchestrator->getRegistry()->addInstance($worker);
+
+        $decision = $this->invokePrivateWithArgs($orchestrator, 'recoverFromDispatcherAlert', [
+            'test',
+            ControlMessage::ROLE_WORKER,
+            'all_workers_unavailable',
+            [
+                'business_pool' => [16895, 16896],
+                'maintenance_candidates' => [16995],
+                'maintenance_port' => 0,
+            ],
+        ]);
+
+        self::assertTrue($decision['eligible']);
+        self::assertTrue($decision['recovery_dispatched']);
+        self::assertSame('dispatcher_alert_recovery', $decision['reason']);
+
+        $queue = $this->readPrivate($orchestrator, 'resurrectQueue');
+        self::assertArrayHasKey('worker:1', $queue);
+
+        $worker = $orchestrator->getRegistry()->getInstance(ControlMessage::ROLE_WORKER, 1);
+        self::assertInstanceOf(ServiceInstance::class, $worker);
+        self::assertSame(ServiceInstance::STATE_FAILED, $worker->state);
+        self::assertNull($worker->ipcClientId);
+    }
+
+    public function testRecoverFromDispatcherAlertIsThrottledDuringStorm(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
+        $this->writePrivate($orchestrator, 'running', true);
+
+        $first = $this->invokePrivateWithArgs($orchestrator, 'recoverFromDispatcherAlert', [
+            'test',
+            ControlMessage::ROLE_WORKER,
+            'all_workers_unavailable',
+            [
+                'business_pool' => [16895, 16896],
+                'maintenance_candidates' => [16995],
+                'maintenance_port' => 0,
+            ],
+        ]);
+        $second = $this->invokePrivateWithArgs($orchestrator, 'recoverFromDispatcherAlert', [
+            'test',
+            ControlMessage::ROLE_WORKER,
+            'all_workers_unavailable',
+            [
+                'business_pool' => [16895, 16896],
+                'maintenance_candidates' => [16995],
+                'maintenance_port' => 0,
+            ],
+        ]);
+
+        self::assertTrue($first['eligible']);
+        self::assertTrue($first['recovery_dispatched']);
+        self::assertTrue($second['eligible']);
+        self::assertFalse($second['recovery_dispatched']);
+        self::assertSame('dispatcher_alert_cooldown', $second['reason']);
     }
 
     private function createWorkerInfraContext(): ServiceContext

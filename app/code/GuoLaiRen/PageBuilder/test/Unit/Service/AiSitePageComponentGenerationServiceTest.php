@@ -72,6 +72,51 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         })->call($service);
     }
 
+    public function testGenerateComponentEventsConcurrentlyReportsFulfilledAndRejectedTasks(): void
+    {
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::exactly(4))
+            ->method('generateStream')
+            ->willReturnCallback(static function (string $prompt, callable $callback): void {
+                if (\str_contains($prompt, 'broken-batch-prompt')) {
+                    throw new \RuntimeException('provider temporarily unavailable');
+                }
+
+                $callback('{"html_extra":"<div>ok</div>","css_extra":"","php_variables":"","extra_fields":"","js_content":""}');
+            });
+
+        $service = new AiSitePageComponentGenerationService(
+            frameworkBuilder: new FrameworkBuilder(),
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+            aiService: $aiService,
+        );
+
+        $events = \iterator_to_array($service->generateComponentEventsConcurrently([
+            'header-task' => [
+                'componentCode' => 'header/ai-site-header',
+                'name' => 'AI Site Header',
+                'region' => 'header',
+                'prompt' => 'good-batch-prompt',
+                'defaultConfig' => [],
+                'renderContext' => [],
+            ],
+            'footer-task' => [
+                'componentCode' => 'footer/ai-site-footer',
+                'name' => 'AI Site Footer',
+                'region' => 'footer',
+                'prompt' => 'broken-batch-prompt',
+                'defaultConfig' => [],
+                'renderContext' => [],
+            ],
+        ]), true);
+
+        self::assertSame('fulfilled', $events['header-task']['status'] ?? null);
+        self::assertIsArray($events['header-task']['result'] ?? null);
+        self::assertSame('rejected', $events['footer-task']['status'] ?? null);
+        self::assertInstanceOf(\Throwable::class, $events['footer-task']['error'] ?? null);
+    }
+
     public function testGenerateComponentDoesNotRetryNonRetryableProviderErrors(): void
     {
         $aiService = $this->createMock(AiService::class);

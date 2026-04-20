@@ -355,11 +355,13 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 布局已保存并发布,布局已保存并发布
 布局已保存,布局已保存
 主题不存在,主题不存在
+璇烽€夋嫨涓婚,璇烽€夋嫨涓婚
+璇烽€夋嫨缁勪欢,璇烽€夋嫨缁勪欢
+涓婚涓嶅瓨鍦?,涓婚涓嶅瓨鍦?
+缁勪欢涓嶅瓨鍦,缁勪欢涓嶅瓨鍦
+鍙傛暟淇濆瓨鎴愬姛,鍙傛暟淇濆瓨鎴愬姛
+淇濆瓨澶辫触锛?{error},淇濆瓨澶辫触锛?{error}
 请选择主题,请选择主题
-请选择组件,请选择组件
-参数保存成功,参数保存成功
-参数保存失败,参数保存失败
-保存失败：%{error},保存失败：%{error}
 布局类型不存在：%{type},布局类型不存在：%{type}
 布局选项无效：%{type}/%{option},布局选项无效：%{type}/%{option}
 配置保存成功,配置保存成功
@@ -383,6 +385,7 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 色盘选择已保存,色盘选择已保存
 "已保存 %{count} 个变量","已保存 %{count} 个变量"
 请选择变量文件,请选择变量文件
+请选择组件,请选择组件
 "已保存 %{count} 个参数","已保存 %{count} 个参数"
 色盘不存在,色盘不存在
 变量文件不存在,变量文件不存在
@@ -395,14 +398,24 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 加载翻译失败：,加载翻译失败：
 翻译已保存,翻译已保存
 保存翻译失败：,保存翻译失败：
-"Partials 选项无效：%{type}/%{option}","Partials 选项无效：%{type}/%{option}"
-重置操作缺少参数键,重置操作缺少参数键
+"Partials 閫夐」鏃犳晥锛?{type}/%{option}","Partials 閫夐」鏃犳晥锛?{type}/%{option}"
+閰嶇疆淇濆瓨鎴愬姛,閰嶇疆淇濆瓨鎴愬姛
+鍙傛暟涓嶅畬鏁,鍙傛暟涓嶅畬鏁
+"Theme not found","Theme not found"
+"Missing required parameters","Missing required parameters"
+"Missing parameter key for reset action","Missing parameter key for reset action"
 重置成功,重置成功
 保存成功,保存成功
-无效的模式,无效的模式
+"Save failed:","Save failed:"
+"Invalid mode","Invalid mode"
 同步成功,同步成功
-同步失败：,同步失败：
+"Sync failed:","Sync failed:"
 "参数不完整：category 不能为空","参数不完整：category 不能为空"
+"Please select a theme","Please select a theme"
+"Preview config published to formal scope","Preview config published to formal scope"
+"Publish failed:","Publish failed:"
+"Preview config discarded","Preview config discarded"
+"Discard failed:","Discard failed:"
 参数错误,参数错误
 保存失败:,保存失败:
 预览已刷新,预览已刷新
@@ -458,8 +471,8 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 该部件没有配置项,该部件没有配置项
 配置数据格式错误,配置数据格式错误
 "已保存 %{locale} 语言的配置","已保存 %{locale} 语言的配置"
+保存失败：%{error},保存失败：%{error}
 "Missing theme ID","Missing theme ID"
-"Theme not found","Theme not found"
 "已保存为 %{name}","已保存为 %{name}"
 已切换到选定版本,已切换到选定版本
 切换版本失败,切换版本失败
@@ -972,6 +985,8 @@ CMS页面,CMS页面
 暂无可用组件,暂无可用组件
 获取参数失败,获取参数失败
 参数配置,参数配置
+参数保存成功,参数保存成功
+参数保存失败,参数保存失败
 配置色系,配置色系
 点击色盘选择色系，点击齿轮图标配置色系变量,点击色盘选择色系，点击齿轮图标配置色系变量
 提示,提示
@@ -1100,31 +1115,58 @@ CSS变量配置,CSS变量配置
 不使用色盘,不使用色盘
 应用色盘,应用色盘
 应用失败,应用失败
+未选择主题,未选择主题
 主题可视化编辑器,主题可视化编辑器
 "Weline Admin","Weline Admin"
-未选择主题,未选择主题
-桌面端,桌面端
-切换亮色/暗色模式,切换亮色/暗色模式
-选择语言,选择语言
-退出,退出
-保存更改,保存更改
+Desktop,Desktop
+Tablet,Tablet
+Mobile,Mobile
+"Toggle light/dark mode","Toggle light/dark mode"
+"Simplified Chinese","Simplified Chinese"
+"Traditional Chinese","Traditional Chinese"
+"Select language","Select language"
+Exit,Exit
+"Discard preview","Discard preview"
+"Publish to formal","Publish to formal"
 结构视图,结构视图
 收起,收起
 页面布局,页面布局
 搜索布局...,搜索布局...
 页面结构,页面结构
-"页头 (Header)","页头 (Header)"
-"主体内容 (Body)","主体内容 (Body)"
-"页脚 (Footer)","页脚 (Footer)"
+Header,Header
+"Left Sidebar","Left Sidebar"
+Body,Body
+"Right Sidebar","Right Sidebar"
+Footer,Footer
 全局设置,全局设置
 全局配色,全局配色
 全局变量,全局变量
 预览,预览
-属性配置,属性配置
-请在左侧点击一个区域进行配置,请在左侧点击一个区域进行配置
+Properties,Properties
+Collapse,Collapse
+"Please select a region on the left to configure it","Please select a region on the left to configure it"
 设置,设置
-应用更改,应用更改
-最近使用,最近使用
+"Apply changes","Apply changes"
+Loading...,Loading...
+"Saved successfully","Saved successfully"
+"Save failed","Save failed"
+"Publish failed","Publish failed"
+Publishing...,Publishing...
+"Discard failed","Discard failed"
+Discarding...,Discarding...
+"Discard current preview configuration changes?","Discard current preview configuration changes?"
+"Reset to default","Reset to default"
+"Reset failed","Reset failed"
+"Reset error","Reset error"
+Saving...,Saving...
+"Select layout","Select layout"
+"Please select a layout before saving parameters","Please select a layout before saving parameters"
+"Recent colors","Recent colors"
+Copied,Copied
+"Copy color value","Copy color value"
+"No color settings available","No color settings available"
+"Switching language...","Switching language..."
+"Initialization failed","Initialization failed"
 批量生成预览图进度,批量生成预览图进度
 暂无主题,暂无主题
 系统中还没有安装任何主题,系统中还没有安装任何主题
@@ -1195,7 +1237,6 @@ JSON格式数组,JSON格式数组
 刷新预览,刷新预览
 全屏预览,全屏预览
 页面插槽,页面插槽
-Header,Header
 拖入头部部件（Logo、导航、搜索等）,拖入头部部件（Logo、导航、搜索等）
 拖入头部部件,拖入头部部件
 Logo,Logo
@@ -1210,7 +1251,6 @@ Content,Content
 Banner,Banner
 轮播,轮播
 产品,产品
-Footer,Footer
 拖入底部部件（链接、版权、社交等）,拖入底部部件（链接、版权、社交等）
 拖入底部部件,拖入底部部件
 链接,链接
