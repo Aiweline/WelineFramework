@@ -58,6 +58,17 @@
     border-bottom: 0;
 }
 
+/* 结构化方案预览：外层为 div，按钮行在上、面板在下（与 ul 页签行的横向 flex 区分） */
+div.pb-ai-preview-tabs {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+}
+
+div.pb-ai-preview-tabs > .pb-ai-preview-tab-panel {
+    min-width: 0;
+}
+
 .pb-ai-preview-tabs .nav-item {
     margin-bottom: 0;
 }

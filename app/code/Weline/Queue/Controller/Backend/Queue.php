@@ -22,6 +22,7 @@ use Weline\Eav\Model\EavAttribute;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Database\Exception\ModelException;
 use Weline\Framework\Exception\Core;
+use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Queue\Model\Queue\Type\Attributes;
 use Weline\Queue\QueueInterface;
@@ -103,6 +104,56 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             'error' => $errorCount,
             'stop' => $stopCount,
         ];
+    }
+
+    /**
+     * 统一清洗队列输出文本，避免 ANSI 控制符和编码混杂导致前端显示乱码。
+     */
+    private function normalizeQueueText(string $text): string
+    {
+        if ($text === '') {
+            return '';
+        }
+
+        // 去掉终端 ANSI 转义序列（颜色、光标移动等）
+        $text = (string)\preg_replace('/\x1B\[[0-9;?]*[ -\/]*[@-~]/', '', $text);
+        $text = (string)\preg_replace('/\x1B\][^\x07]*(\x07|\x1B\\\\)/', '', $text);
+
+        // 尝试将常见本地编码统一转为 UTF-8，避免中文“锟斤拷/乱码”
+        if (!\mb_check_encoding($text, 'UTF-8')) {
+            $detected = \mb_detect_encoding($text, ['UTF-8', 'GB18030', 'GBK', 'GB2312', 'BIG5'], true);
+            if (\is_string($detected) && $detected !== '' && strtoupper($detected) !== 'UTF-8') {
+                $converted = @\mb_convert_encoding($text, 'UTF-8', $detected);
+                if (\is_string($converted) && $converted !== '') {
+                    $text = $converted;
+                }
+            }
+        }
+
+        return $text;
+    }
+
+    /**
+     * 队列详情页兜底渲染：模板异常或空输出时，确保页面最少可见文本。
+     */
+    private function renderQueueDetailContent(string $data): string
+    {
+        $normalized = $this->normalizeQueueText($data);
+        $this->assign('data', $normalized);
+        try {
+            $html = (string)$this->fetch('content');
+            if (\trim($html) !== '') {
+                return $html;
+            }
+        } catch (\Throwable) {
+            // ignore and use fallback html
+        }
+
+        $fallbackText = $normalized !== '' ? $normalized : (string)__('暂无内容数据');
+        $escaped = \htmlspecialchars($fallbackText, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        return '<div style="padding:16px;"><pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:Consolas,Monaco,monospace;font-size:13px;line-height:1.6;">'
+            . $escaped .
+            '</pre></div>';
     }
 
     #[Acl('Weline_Queue::form', '编辑或者新增', 'mdi mdi-form-textbox', '编辑或者新增')]
@@ -369,13 +420,13 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
     {
         $id = $this->request->getGet('id');
         if (empty($id)) {
-            $this->getMessageManager()->addWarning(__('请选择要查看的队列'));
+            MessageManager::warning(__('请选择要查看的队列'));
             $this->redirect('/component/offcanvas/error', ['msg' => __('请选择要查看的队列'), 'reload' => 1]);
         }
         $res = $this->queue->joinModel(\Weline\Queue\Model\Queue\Type::class, 't', 'main_table.type_id=t.type_id', 'left')
             ->where('main_table.' . $this->queue::schema_fields_ID, $id)->find()->fetch();
         if (!$this->queue->getId()) {
-            $this->getMessageManager()->addWarning(__('队列不存在'));
+            MessageManager::warning(__('队列不存在'));
             $this->redirect('/component/offcanvas/error', ['msg' => __('队列不存在'), 'reload' => 0]);
         }
         # 加载属性数据
@@ -478,29 +529,41 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
     #[Acl('Weline_Queue::result', '查看结果', 'mdi mdi-table-headers-eye', '查看结果')]
     function getDetailResult()
     {
-        $queue_id = $this->request->getParam('id', 0);
-        if (empty($queue_id)) {
-            $this->getMessageManager()->addWarning(__('请选择要操作的队列'));
-            return $this->fetch('content');
+        $this->layoutType = 'default.blank';
+        $queue_id = (int)$this->request->getGet('id', 0) ?: (int)$this->request->getParam('id', 0);
+        if ($queue_id <= 0) {
+            MessageManager::warning(__('请选择要操作的队列'));
+            return $this->renderQueueDetailContent('');
         }
         $this->queue->load($queue_id);
-        $data = $this->queue->getData($this->queue::schema_fields_result);
-        $this->assign('data', $data);
-        return $this->fetch('content');
+        $data = (string)$this->queue->getData($this->queue::schema_fields_result);
+        if ($data === '') {
+            $process = (string)$this->queue->getProcess(true, false);
+            if ($process !== '') {
+                $data = $process;
+            }
+        }
+        if ($data === '') {
+            $content = (string)$this->queue->getData($this->queue::schema_fields_content);
+            if ($content !== '') {
+                $data = __('执行结果为空，以下展示任务内容：') . PHP_EOL . $content;
+            }
+        }
+        return $this->renderQueueDetailContent($data);
     }
 
     #[Acl('Weline_Queue::content', '查看详情', 'mdi mdi-information', '查看详情')]
     function getDetailContent()
     {
-        $queue_id = $this->request->getParam('id', 0);
-        if (empty($queue_id)) {
+        $this->layoutType = 'default.blank';
+        $queue_id = (int)$this->request->getGet('id', 0) ?: (int)$this->request->getParam('id', 0);
+        if ($queue_id <= 0) {
             $this->getMessageManager()->addWarning(__('请选择要操作的队列'));
-            return $this->fetch('content');
+            return $this->renderQueueDetailContent('');
         }
         $this->queue->load($queue_id);
-        $data = $this->queue->getData($this->queue::schema_fields_content);
-        $this->assign('data', $data);
-        return $this->fetch('content');
+        $data = (string)$this->queue->getData($this->queue::schema_fields_content);
+        return $this->renderQueueDetailContent($data);
     }
 
     #[Acl('Weline_Queue::reset', '重置刊登任务', 'mdi mdi-lock-reset', '重置刊登任务')]

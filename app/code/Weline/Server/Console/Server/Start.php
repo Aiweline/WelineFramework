@@ -344,17 +344,30 @@ class Start extends CommandAbstract
             ObjectManager::getInstance(CliStop::class)->execute(['force' => true, 'f' => true], []);
             SchedulerSystem::sleep(2);
         }
-        // 本实例已运行：未指定 -r 则提示并退出；指定 -r 则平滑重启（先维护模式+等待）或 -f 直接切换
+        // 预探测 HTTPS=443 时的 HTTP Redirect 端口占用归属：
+        // 旧实例可能只残留 Redirect 子进程（80），主端口已释放，此时也应纳入 -r 重启清理路径。
+        $preflightHttpRedirectPort = ($sslEnabled && $port === self::DEFAULT_PORT_HTTPS) ? self::DEFAULT_PORT : 0;
+        $redirectOccupantWls = $preflightHttpRedirectPort > 0
+            ? $mainStop->findWelineServerInstanceNameByPort($preflightHttpRedirectPort)
+            : null;
+
+        // 本实例已运行（含 Redirect 残留）：未指定 -r 则提示并退出；指定 -r 则平滑重启（先维护模式+等待）或 -f 直接切换
         $maintenanceEnabledByUs = false;
         $maintenanceResetAfterForceSwitch = false;
-        if ($occupantWls === $instanceName || $this->isServerRunning($instanceName, $port)) {
+        $instanceRunning = ($occupantWls === $instanceName) || $this->isServerRunning($instanceName, $port);
+        $instanceRedirectResidue = ($redirectOccupantWls === $instanceName) && !$instanceRunning;
+        if ($instanceRunning || $instanceRedirectResidue) {
             if (!$forceRestart) {
                 $this->showAlreadyRunningInfo($instanceName, $port);
                 return;
             }
             // 强制重启：先停旧 Master，其通过 IPC 广播 shutdown，子进程收后不复活
             if ($forceSwitch) {
-                $this->printer->warning(__('检测到服务器已运行，-f 直接切换（不等待）...'));
+                if ($instanceRedirectResidue) {
+                    $this->printer->warning(__('检测到旧实例仅残留 HTTP Redirect 子进程，先执行本地快速清场...'));
+                } else {
+                    $this->printer->warning(__('检测到服务器已运行，-f 直接切换（不等待）...'));
+                }
                 $this->printer->warning(__('注意：-f 强制切换属于停机型更新，不会自动等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。'));
                 $this->stopExistingServer($instanceName, $port, $count, true);
                 // -r -f 是停机型切换：新实例启动后默认恢复到业务流量态，避免残留 system.maintenance 让 WLS 继续 sticky 维护。
@@ -591,10 +604,14 @@ class Start extends CommandAbstract
 
         // HTTP Redirect 端口被非框架进程占用时：报错退出，不自动切换
         // HTTP Redirect 端口也是服务的一部分，自动切换会导致 HTTP 入口不一致
+$httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPort);
+        $httpRedirectOwner = ($sslEnabled && $httpRedirectPort > 0)
+            ? $mainStop->findWelineServerInstanceNameByPort($httpRedirectPort)
+            : null;
         $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPort);
         if ($sslEnabled && $httpRedirectPort > 0
             && ($httpRedirectInspect['in_use'] ?? false)
-            && !($httpRedirectInspect['is_weline'] ?? false)
+            && !$this->isFrameworkOwnedHttpRedirectPortOccupant($httpRedirectInspect, $httpRedirectOwner)
         ) {
             if (($httpRedirectInspect['state'] ?? '') === 'orphan') {
                 $this->printer->error(__('HTTP 重定向端口 %{1} 处于异常占用状态（系统返回的 PID 已失效）', [$httpRedirectPort]));
@@ -668,8 +685,32 @@ class Start extends CommandAbstract
             // HTTP Redirect 端口被占用时，提示用户确认是否强制停用
             if (Processer::isPortInUse($httpRedirectPort)) {
                 $portInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPort);
-                $isWelineProcess = (bool) ($portInspect['is_weline'] ?? false);
-                $processName = $portInspect['process_name'] ?? __('未知进程');
+                $redirectOwner = $mainStop->findWelineServerInstanceNameByPort($httpRedirectPort);
+                $isWelineOccupant = $this->isFrameworkOwnedHttpRedirectPortOccupant($portInspect, $redirectOwner);
+                $shouldAutoRelease = $this->shouldAutoReleaseHttpRedirectPortOccupant($portInspect) || $redirectOwner === $instanceName;
+                $processName = $this->resolvePortOccupantDisplayName($portInspect, $redirectOwner ?? $instanceName);
+
+                // 被其它 WLS 实例占用时不进入“杀进程确认”流程，避免误停其它实例
+                if ($isWelineOccupant && $redirectOwner !== null && $redirectOwner !== $instanceName) {
+                    $this->printer->error(__('HTTP Redirect 端口 %{1} 已被实例 [%{2}] 占用: %{3}', [
+                        $httpRedirectPort,
+                        $redirectOwner,
+                        $processName,
+                    ]));
+                    $this->printer->note(__('请先停止实例 [%{1}]，或改用非 443 主端口启动。', [$redirectOwner]));
+                    return;
+                }
+
+                if ($shouldAutoRelease) {
+                    $this->printer->warning(__('HTTP Redirect port %{1} is occupied by %{2}', [$httpRedirectPort, $processName]));
+                    $this->printer->note(__('Detected framework-owned process on port %{1}; releasing it automatically...', [$httpRedirectPort]));
+                    if (!$this->releaseFrameworkOwnedHttpRedirectPort($host, $httpRedirectPort, $instanceName)) {
+                        $this->printer->note(__('HTTP Redirect port %{1} could not be released; HTTP to HTTPS redirect will be disabled.', [$httpRedirectPort]));
+                        $this->printer->note(__('Tip: start on a non-443 main port to run without a dedicated HTTP redirect worker.'));
+                        $httpRedirectPort = 0;
+                    }
+                    goto wls_http_redirect_conflict_done;
+                }
 
                 // 深橙色警告提示
                 $this->printer->warning(__('HTTP Redirect 端口 %{1} 被占用: %{2}', [$httpRedirectPort, $processName]));
@@ -708,6 +749,7 @@ class Start extends CommandAbstract
         }
         
             // 创建 Worker 脚本路径（Dispatcher 模式下使用非 SSL 脚本）
+            wls_http_redirect_conflict_done:
             $workerScript = $this->ensureWorkerScript($workerSslEnabled);
         
             // 保存实例信息（Master 将从这里读取配置并启动所有进程）
@@ -3389,6 +3431,60 @@ class Start extends CommandAbstract
         $this->printer->error(__('无法释放端口 %{1}', [$stillInUse[0]]));
         $this->printer->note(__('请尝试: php bin/w server:kill-port %{1} -f', [$stillInUse[0]]));
         return false;
+    }
+
+    /**
+     * @param array<string, mixed> $portInspect
+     */
+    protected function shouldAutoReleaseHttpRedirectPortOccupant(array $portInspect): bool
+    {
+        return (bool) ($portInspect['is_weline'] ?? false);
+    }
+
+    /**
+     * @param array<string, mixed> $portInspect
+     */
+    protected function isFrameworkOwnedHttpRedirectPortOccupant(array $portInspect, ?string $resolvedOwner = null): bool
+    {
+        return (bool) ($portInspect['is_weline'] ?? false)
+            || ($resolvedOwner !== null && $resolvedOwner !== '');
+    }
+
+    protected function releaseFrameworkOwnedHttpRedirectPort(string $host, int $port, string $instanceName = 'default'): bool
+    {
+        return $this->checkAndReleasePort($host, $port, true, 'HTTP Redirect', $instanceName);
+    }
+
+    /**
+     * 解析端口占用进程展示名，尽量避免提示“未知进程”。
+     *
+     * @param array<string, mixed> $portInspect
+     */
+    protected function resolvePortOccupantDisplayName(array $portInspect, string $instanceName = 'default'): string
+    {
+        $processName = \trim((string) ($portInspect['process_name'] ?? ''));
+        if ($processName !== '' && $processName !== 'unknown') {
+            return $processName;
+        }
+
+        $pid = (int) ($portInspect['pid'] ?? 0);
+        if ($pid > 0) {
+            $record = Processer::getProcessRecordByPid($pid);
+            $recordName = \trim((string) ($record['process_name'] ?? $record['pname'] ?? ''));
+            if ($recordName !== '' && $recordName !== 'unknown') {
+                return $recordName;
+            }
+        }
+
+        if ((bool) ($portInspect['is_weline'] ?? false)) {
+            return (string) __('WLS 进程（实例 %{1}）', [$instanceName]);
+        }
+
+        if ($pid > 0) {
+            return (string) __('PID %{1}', [$pid]);
+        }
+
+        return (string) __('未知进程');
     }
 
     /**

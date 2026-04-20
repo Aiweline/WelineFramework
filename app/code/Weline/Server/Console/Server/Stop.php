@@ -34,8 +34,16 @@ use Weline\Server\Service\SharedStateServiceManager;
  */
 class Stop extends CommandAbstract
 {
+    private const STOP_LOCK_TIMEOUT = 5;
+
+    private $stopLockHandle = null;
+    private string $stopLockFile = '';
+
     /** IPC 等待超时（秒）- 与 Windows 一致，不长时间等待，超时后强制杀进程 */
     private const IPC_TIMEOUT = 15;
+
+    private const RESIDUAL_CLEANUP_MAX_ATTEMPTS = 3;
+    private const RESIDUAL_CLEANUP_RETRY_USEC = 300000;
 
     /** IPC 硬超时（秒）- 避免进度持续刷新时无限等待 */
     private const IPC_HARD_TIMEOUT_WIN = 45;
@@ -71,7 +79,16 @@ class Stop extends CommandAbstract
             return;
         }
 
-        $this->stopInstance($instanceName, $force, $fastLocal);
+        if (!$this->acquireStopLock($instanceName)) {
+            $this->printer->warning(__('另一个 server:stop 任务正在处理中，请稍后再试。'));
+            $this->printer->note(__('若锁文件长期存在，请确认停止任务是否已结束后再重试。'));
+            return;
+        }
+        try {
+            $this->stopInstance($instanceName, $force, $fastLocal);
+        } finally {
+            $this->releaseStopLock();
+        }
     }
     
     /**
@@ -90,16 +107,68 @@ class Stop extends CommandAbstract
         return $positionalArgs[0] ?? 'default';
     }
 
+    protected function acquireStopLock(string $instanceName, int $timeout = self::STOP_LOCK_TIMEOUT): bool
+    {
+        $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
+        if (!\is_dir($lockDir)) {
+            @\mkdir($lockDir, 0755, true);
+        }
+
+        $this->stopLockFile = $lockDir . 'stop_' . $instanceName . '.lock';
+        $fp = @\fopen($this->stopLockFile, 'c');
+        if ($fp === false) {
+            return false;
+        }
+
+        $startTime = \time();
+        while (\time() - $startTime < $timeout) {
+            if (\flock($fp, \LOCK_EX | \LOCK_NB)) {
+                $this->stopLockHandle = $fp;
+                @\ftruncate($fp, 0);
+                @\fwrite($fp, \json_encode([
+                    'pid' => \getmypid(),
+                    'instance' => $instanceName,
+                    'started_at' => \date('Y-m-d H:i:s'),
+                    'command' => \implode(' ', $_SERVER['argv'] ?? []),
+                ], JSON_PRETTY_PRINT));
+                @\fflush($fp);
+                return true;
+            }
+            SchedulerSystem::usleep(100000);
+        }
+
+        @\fclose($fp);
+        return false;
+    }
+
+    protected function releaseStopLock(): void
+    {
+        if ($this->stopLockHandle !== null) {
+            @\flock($this->stopLockHandle, \LOCK_UN);
+            @\fclose($this->stopLockHandle);
+            $this->stopLockHandle = null;
+        }
+
+        if ($this->stopLockFile !== '' && \is_file($this->stopLockFile)) {
+            @\unlink($this->stopLockFile);
+        }
+    }
+
     /**
      * 按端口查找占用该端口的 Weline Server 实例名
      */
     public function findWelineServerInstanceNameByPort(int $port): ?string
     {
-        $portInspect = Processer::inspectPortOccupantWithHistory($port);
+        $portInspect = $this->inspectPortOccupantWithHistory($port);
         $runningWelineOnPort = (bool) ($portInspect['pid_running'] ?? false)
             && (bool) ($portInspect['is_weline'] ?? false);
         if (!$runningWelineOnPort) {
             return $this->findConfiguredRunningInstanceNameByPort($port);
+        }
+
+        $instanceName = $this->getInstanceManager()->findRunningInstanceNameByPort($port);
+        if ($instanceName !== null) {
+            return $instanceName;
         }
 
         $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
@@ -147,21 +216,39 @@ class Stop extends CommandAbstract
      */
     public function killWlsProcessOnPort(int $port): bool
     {
-        $pid = Processer::getProcessIdByPort($port);
-        if ($pid <= 0 || !Processer::isRunningByPid($pid)) {
+        $pid = $this->getPortProcessId($port);
+        if ($pid <= 0 || !$this->isStopPidRunning($pid)) {
             return false;
         }
-        $pname = Processer::getNameByPid($pid);
-        $cmdLine = Processer::getProcessCommandLine($pid);
-        $isWls = \str_contains($pname, 'weline-wls') || \str_contains($pname, 'weline-master')
+        $pname = $this->getProcessPnameByPid($pid);
+        $cmdLine = $this->getStopProcessCommandLine($pid);
+        $isWls = $this->isStopWelineServerProcess($pid)
+            || \str_contains($pname, 'weline-wls') || \str_contains($pname, 'weline-master')
             || \str_contains($cmdLine, 'weline-wls') || \str_contains($cmdLine, 'weline-master')
             || \str_contains($cmdLine, 'bin/worker') || \str_contains($cmdLine, 'bin/dispatcher');
         if (!$isWls) {
             return false;
         }
+
+        return $this->terminateWlsPortProcess($port, $pid);
+        /*
         $this->printer->note(__('检测到端口 %{1} 被 WLS 进程占用 (PID: %{2})，正在结束…', [$port, $pid]));
-        Processer::killByPid($pid, true);
-        return true;
+        $rootPid = $this->resolveManagedStopRootPid($pid);
+        $killPid = $rootPid > 0 ? $rootPid : $pid;
+        if ($killPid !== $pid) {
+            $this->printer->note(__('  ROOT PID: %{1}', [$killPid]));
+        }
+
+        if ($this->killManagedProcessTreeForStop($killPid)) {
+            return true;
+        }
+
+        if ($killPid !== $pid) {
+            return $this->killManagedProcessTreeForStop($pid);
+        }
+
+        return false;
+        */
     }
     
     /**
@@ -187,7 +274,7 @@ class Stop extends CommandAbstract
         
         if ($instanceInfo === null) {
             $this->printer->warning(__('实例 [%{1}] 不存在', [$name]));
-            if ($this->hasRecoverableManagedProcessHint($name)) {
+            if ($this->hasRecoverableManagedProcessHint($name) || $this->hasRecoverableConfiguredPortHint($name)) {
                 $recovered = $this->cleanupRecoverableProcessesWithoutInstanceFile($name);
                 if ($recovered > 0) {
                     $this->printer->success(__('已在实例文件缺失场景下安全清理 %{1} 个受管 WLS 进程', [$recovered]));
@@ -196,7 +283,6 @@ class Stop extends CommandAbstract
                 $this->printer->note(__('使用 server:listing 查看所有实例'));
             }
             // 清理可能残留的启动锁（如上次 server:start 崩溃遗留），便于后续启动
-            $this->releaseStartLock($name);
             return;
         }
         
@@ -212,7 +298,7 @@ class Stop extends CommandAbstract
             $this->printer->warning(__('Master 进程不存在 (PID: %{1})', [$masterPid]));
             $this->showInstanceInfo($instanceInfo);
             // 清理可能残留的进程和文件（含按 PID 与按名前缀，确保 Worker/Dispatcher 等全部退出）
-            $this->runResidualCleanupPair($name, $instanceInfo);
+            $this->runResidualCleanupPairWithRetry($name, $instanceInfo);
             $this->releaseSharedStateConsumersForInstance($name);
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
@@ -234,7 +320,7 @@ class Stop extends CommandAbstract
                 Processer::killProcessTreeByPid($masterPid, true);
                 SchedulerSystem::usleep(500000);
             }
-            $this->runResidualCleanupPair($name, $instanceInfo);
+            $this->runResidualCleanupPairWithRetry($name, $instanceInfo);
             $this->releaseSharedStateConsumersForInstance($name);
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
@@ -262,6 +348,7 @@ class Stop extends CommandAbstract
                 Processer::killProcessTreeByPid($masterPid, true);
                 SchedulerSystem::usleep(500000);
             }
+            $this->runResidualCleanupPairWithRetry($name, $instanceInfo);
             $this->releaseSharedStateConsumersForInstance($name);
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
@@ -283,7 +370,7 @@ class Stop extends CommandAbstract
             Processer::killByPid($masterPid, true);
             SchedulerSystem::usleep(500000);
             
-            $this->runResidualCleanupPair($name, $instanceInfo);
+            $this->runResidualCleanupPairWithRetry($name, $instanceInfo);
         }
         
         // 从共享 Session/Memory 注册表移除本实例消费者，避免误导其它工具
@@ -453,16 +540,13 @@ class Stop extends CommandAbstract
         $this->printer->note(__('清理残留进程...'));
 
         // 1) 先按已知 PID（实例信息 + PID 索引）直接终止
-        $pids = \array_merge(
-            $this->collectResidualPidsByInfo($info),
-            $this->collectIndexedResidualPids($name)
-        );
+        $pids = $this->collectResidualCleanupCandidatePids($name, $info);
         $killedByPid = $this->terminateResidualProcesses($pids, true);
         $remainingByPid = $this->collectRunningResidualPids($pids);
 
         $killedByPrefix = 0;
         // 2) 仅在按 PID 后仍有存活，或压根拿不到 PID 时，再执行按前缀兜底（Windows 上可显著减少慢扫描）
-        if (!empty($remainingByPid) || empty($pids)) {
+        if (!empty($remainingByPid) || empty($pids) || $this->hasResidualCleanupPrefixMatch($name)) {
             $prefixes = [
                 MasterProcess::getMasterProcessName($name),
                 MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name),
@@ -475,7 +559,9 @@ class Stop extends CommandAbstract
                 'weline-wls-dispatcher-' . $name,
                 'weline-wls-session-' . $name,
                 'weline-wls-memory-' . $name,
+                'weline-wls-maintenance-' . $name . '-',
                 MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
+                'weline-master-' . $name . '-maintenance-',
                 'weline-master-' . $name . '-redirect-',
                 'weline-wls-worker-' . $name . '-',
                 'weline-master-' . $name . '-worker-',
@@ -504,12 +590,330 @@ class Stop extends CommandAbstract
      * @param bool $quiet 为 true 时不打印，仅返回终止/尝试数（供 runResidualCleanupPair 合并输出）
      * @return int 已发送终止信号的 PID 数（quiet）或同上；非 quiet 时与原先展示一致
      */
+    protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info): void
+    {
+        $this->printer->note(__('清理残留进程...'));
+
+        $attempt = 0;
+        $totalKilled = 0;
+        $remainingPorts = [];
+        $remainingPids = [];
+
+        while (++$attempt <= self::RESIDUAL_CLEANUP_MAX_ATTEMPTS) {
+            $totalKilled += $this->runResidualCleanupPass($name, $info, $attempt > 1);
+
+            foreach ($this->collectRemainingRecoverableWlsPorts($name, $info) as $port) {
+                if ($this->cleanupRecoverableConfiguredPort($port)) {
+                    $totalKilled++;
+                }
+            }
+
+            $remainingPorts = $this->collectRemainingRecoverableWlsPorts($name, $info);
+            $candidatePids = $this->collectResidualVerificationPids($name, $info, $remainingPorts);
+            $remainingPids = $this->collectRunningResidualPids($candidatePids);
+
+            if (empty($remainingPids) && empty($remainingPorts)) {
+                if ($totalKilled > 0) {
+                    $this->printer->success(__('  已清理 %1 个残留进程', [$totalKilled]));
+                    if ($attempt > 1) {
+                        $this->printer->note(__('  重试次数：%1', [$attempt]));
+                    }
+                } else {
+                    $this->printer->note(__('  无残留进程'));
+                }
+                return;
+            }
+
+            if ($attempt < self::RESIDUAL_CLEANUP_MAX_ATTEMPTS) {
+                SchedulerSystem::usleep(self::RESIDUAL_CLEANUP_RETRY_USEC);
+            }
+        }
+
+        if (!empty($remainingPids) || !empty($remainingPorts)) {
+            $this->printer->warning(
+                __('残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}', [
+                    implode(',', $remainingPids),
+                    implode(',', $remainingPorts),
+                ])
+            );
+            return;
+        }
+
+        if ($totalKilled > 0) {
+            $this->printer->success(__('  已清理 %1 个残留进程（复核结束）', [$totalKilled]));
+        } else {
+            $this->printer->note(__('  无残留进程'));
+        }
+    }
+
+    protected function runResidualCleanupPass(string $name, ServerInstanceInfo $info, bool $quiet = false): int
+    {
+        if (!$quiet) {
+            $this->printer->note(__('清理残留进程...'));
+        }
+
+        $pids = $this->collectResidualCleanupCandidatePids($name, $info);
+        $killedByPid = $this->terminateResidualProcesses($pids, true);
+        $remainingByPid = $this->collectRunningResidualPids($pids);
+
+        $killedByPrefix = 0;
+        if (!empty($remainingByPid) || empty($pids) || $this->hasResidualCleanupPrefixMatch($name)) {
+            foreach ($this->collectResidualCleanupPrefixes($name) as $prefix) {
+                $killedByPrefix += Processer::killByProcessNamePrefix($prefix);
+            }
+        }
+
+        Processer::cleanupStalePidFiles();
+
+        $totalKilled = $killedByPid + $killedByPrefix;
+        if (!$quiet) {
+            if ($totalKilled > 0) {
+                $this->printer->success(__('  已处理 %{1} 个进程', [$totalKilled]));
+            } else {
+                $this->printer->note(__('  无残留进程'));
+            }
+        }
+
+        return $totalKilled;
+    }
+
+    private function hasResidualCleanupPrefixMatch(string $name): bool
+    {
+        return $this->collectResidualPrefixPids($name) !== [];
+    }
+
+    /**
+     * 组合清理时使用的残留进程名前缀列表。
+     *
+     * @return list<string>
+     */
+    private function collectResidualCleanupPrefixes(string $name): array
+    {
+        $prefixes = [
+            MasterProcess::getMasterProcessName($name),
+            MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name),
+            MasterProcess::buildScopedProcessName('weline-wls-worker', $name) . '-',
+            MasterProcess::buildScopedProcessName('weline-wls-maintenance', $name) . '-',
+            MasterProcess::buildScopedProcessName('weline-wls-session', $name),
+            MasterProcess::buildScopedProcessName('weline-wls-memory', $name),
+            MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
+            'weline-wls-maintenance-' . $name . '-',
+            'weline-wls-dispatcher-' . $name,
+            'weline-wls-worker-' . $name . '-',
+            'weline-master-' . $name . '-maintenance-',
+            'weline-wls-session-' . $name,
+            'weline-wls-memory-' . $name,
+            MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
+            'weline-master-' . $name . '-worker-',
+            'weline-master-' . $name . '-redirect-',
+        ];
+
+        return \array_values(\array_unique(\array_merge(
+            $prefixes,
+            $this->getRecoverableManagedProcessPrefixes($name)
+        )));
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function collectRemainingRecoverableWlsPorts(string $name, ServerInstanceInfo $info): array
+    {
+        unset($info);
+
+        $ports = $this->getRecoverableConfiguredPorts($name);
+        $remaining = [];
+
+        foreach ($ports as $port) {
+            $inspect = $this->inspectRecoverablePortOccupant((int) $port);
+            if (!($inspect['in_use'] ?? false)) {
+                continue;
+            }
+
+            $recoverable = (bool) ($inspect['is_weline'] ?? false)
+                || $this->isRecoverableWlsPortResponder((int) $port);
+            if (!$recoverable) {
+                continue;
+            }
+
+            $remaining[] = (int) $port;
+        }
+
+        return \array_values(\array_unique(\array_filter(
+            $remaining,
+            static fn (int $port): bool => $port > 0
+        )));
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function collectBaseResidualPids(string $name, ServerInstanceInfo $info): array
+    {
+        return \array_values(\array_unique(\array_merge(
+            $this->collectResidualPidsByInfo($info),
+            $this->collectIndexedResidualPids($name)
+        )));
+    }
+
+    /**
+     * @param list<int> $pids
+     * @return list<int>
+     */
+    protected function collectManagedStopPids(array $pids): array
+    {
+        $resolved = [];
+        foreach ($pids as $pid) {
+            $pid = (int) $pid;
+            if ($pid <= 0) {
+                continue;
+            }
+
+            $resolved[$pid] = true;
+            $rootPid = $this->resolveManagedStopRootPid($pid);
+            if ($rootPid > 0) {
+                $resolved[$rootPid] = true;
+            }
+        }
+
+        return \array_map('intval', \array_keys($resolved));
+    }
+
+    protected function resolveManagedStopRootPid(int $pid): int
+    {
+        if ($pid <= 0 || !$this->isStopPidRunning($pid)) {
+            return $pid > 0 ? $pid : 0;
+        }
+
+        $currentPid = $pid;
+        $visited = [];
+        for ($depth = 0; $depth < 6; $depth++) {
+            $visited[$currentPid] = true;
+            $parentPid = $this->getStopParentPid($currentPid);
+            if ($parentPid <= 0 || isset($visited[$parentPid]) || !$this->isStopPidRunning($parentPid)) {
+                break;
+            }
+
+            if (!$this->shouldPromoteManagedStopToParent($currentPid, $parentPid)) {
+                break;
+            }
+
+            $currentPid = $parentPid;
+        }
+
+        return $currentPid;
+    }
+
+    protected function shouldPromoteManagedStopToParent(int $currentPid, int $parentPid): bool
+    {
+        unset($currentPid);
+
+        if (!$this->isStopWelineServerProcess($parentPid) && !$this->isStopProcessManagerCreated($parentPid)) {
+            return false;
+        }
+
+        return $this->isManagedStopShellWrapper($parentPid);
+    }
+
+    protected function isManagedStopShellWrapper(int $pid): bool
+    {
+        $cmdLine = \strtolower($this->getStopProcessCommandLine($pid));
+        if ($cmdLine === '') {
+            return false;
+        }
+
+        return \str_contains($cmdLine, 'cmd.exe')
+            || \str_contains($cmdLine, '\\cmd ')
+            || \str_contains($cmdLine, 'powershell')
+            || \str_contains($cmdLine, 'pwsh');
+    }
+
+    /**
+     * 强制 stop / 本地清场阶段要把 recoverable 托管 PID 也纳入候选集合，
+     * 否则仅靠实例文件与 pid_index 时，部分带 --instance-name/--master-pid 的派生进程会逃逸。
+     *
+     * @return list<int>
+     */
+    protected function collectResidualCleanupCandidatePids(string $name, ServerInstanceInfo $info): array
+    {
+        return $this->collectManagedStopPids(\array_merge(
+            $this->collectBaseResidualPids($name, $info),
+            $this->collectRecoverableManagedPids($name)
+        ));
+    }
+
+    /**
+     * @param list<int> $ports
+     * @return list<int>
+     */
+    private function collectRecoverablePortResidualPids(array $ports): array
+    {
+        $pids = [];
+        foreach ($ports as $port) {
+            $inspect = $this->inspectRecoverablePortOccupant((int) $port);
+            if (!($inspect['in_use'] ?? false)) {
+                continue;
+            }
+            $pid = (int) ($inspect['pid'] ?? 0);
+            if ($pid <= 0 || !\is_int($pid)) {
+                continue;
+            }
+
+            if (Processer::isRunningByPid($pid)) {
+                $pids[$pid] = true;
+            }
+        }
+
+        return $this->collectManagedStopPids(\array_map('intval', \array_keys($pids)));
+    }
+
+    /**
+     * 复核阶段必须复用与清理阶段一致的候选来源，否则 prefix-only 的残留 worker
+     * 会在“已处理 N 个进程”后漏出。
+     *
+     * @param list<int> $remainingPorts
+     * @return list<int>
+     */
+    protected function collectResidualVerificationPids(string $name, ServerInstanceInfo $info, array $remainingPorts): array
+    {
+        return $this->collectManagedStopPids(\array_merge(
+            $this->collectResidualCleanupCandidatePids($name, $info),
+            $this->collectRecoverablePortResidualPids($remainingPorts),
+            $this->collectResidualPrefixPids($name)
+        ));
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function collectResidualPrefixPids(string $name): array
+    {
+        $pids = [];
+        foreach ($this->collectResidualCleanupPrefixes($name) as $prefix) {
+            foreach ($this->collectResidualPidsByPrefix($prefix) as $pid) {
+                if ($pid > 0) {
+                    $pids[$pid] = true;
+                }
+            }
+        }
+
+        return \array_map('intval', \array_keys($pids));
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function collectResidualPidsByPrefix(string $prefix): array
+    {
+        return Processer::getProcessIdsByPrefix($prefix);
+    }
+
     protected function cleanupResidualProcessesByInfo(string $name, ServerInstanceInfo $info, bool $quiet = false): int
     {
         if (!$quiet) {
             $this->printer->note(__('清理残留进程...'));
         }
-        $totalKilled = $this->terminateResidualProcesses($this->collectResidualPidsByInfo($info), true);
+        $totalKilled = $this->terminateResidualProcesses($this->collectResidualCleanupCandidatePids($name, $info), true);
         
         if (!$quiet) {
             if ($totalKilled > 0) {
@@ -1050,6 +1454,7 @@ class Stop extends CommandAbstract
     {
         $instanceSuffix = '-' . $instanceName;
         $legacyWorkerPrefix = 'weline-master-' . $instanceName . '-worker-';
+        $legacyMasterPrefix = 'weline-master-' . $instanceName . '-';
         $pids = [];
 
         foreach ($pidIndex as $pid => $record) {
@@ -1058,15 +1463,11 @@ class Stop extends CommandAbstract
                 continue;
             }
 
-            $jsonPath = (string) ($record['jsonPath'] ?? '');
-            if ($jsonPath === '' || !\is_file($jsonPath)) {
-                continue;
-            }
-
             $pname = (string) ($record['pname'] ?? '');
             if ($pname === '') {
                 continue;
             }
+            $jsonPath = (string) ($record['jsonPath'] ?? '');
 
             try {
                 $taskName = Processer::getTaskName($pname);
@@ -1077,13 +1478,39 @@ class Stop extends CommandAbstract
             }
 
             $isCurrentInstance = (\str_starts_with($taskName, 'weline-wls-') && \str_contains($taskName, $instanceSuffix))
+                || \str_starts_with($taskName, $legacyMasterPrefix)
                 || \str_starts_with($taskName, $legacyWorkerPrefix);
-            if ($isCurrentInstance) {
-                $pids[$pid] = true;
+
+            if (!$isCurrentInstance) {
+                continue;
             }
+
+            if ($jsonPath !== '' && \is_file($jsonPath)) {
+                $pids[$pid] = true;
+                continue;
+            }
+
+            if (!$this->isResidualIndexedPidStillRunning($pid, $pname, $taskName)) {
+                continue;
+            }
+
+            $pids[$pid] = true;
         }
 
         return \array_map('intval', \array_keys($pids));
+    }
+
+    protected function isResidualIndexedPidStillRunning(int $pid, string $pname, string $taskName): bool
+    {
+        if (!Processer::isRunningByPid($pid)) {
+            return false;
+        }
+
+        if (Processer::isManagedProcessRunning($pid, $taskName, '', $pname)) {
+            return true;
+        }
+
+        return Processer::isWelineServerProcess($pid);
     }
 
     /**
@@ -1133,7 +1560,7 @@ class Stop extends CommandAbstract
 
             $output = [];
             $returnCode = 0;
-            Processer::execute('taskkill /F ' . $pidArgs, $output, $returnCode);
+            Processer::execute('taskkill /F /T ' . $pidArgs, $output, $returnCode);
 
             SchedulerSystem::usleep(200000);
 
@@ -1150,7 +1577,7 @@ class Stop extends CommandAbstract
             }
 
             foreach ($remaining as $pid) {
-                if (Processer::killByPid($pid, true)) {
+                if ($this->killManagedProcessTreeForStop($pid)) {
                     $processed++;
                 }
             }
@@ -1163,7 +1590,7 @@ class Stop extends CommandAbstract
      * @param array<int> $pids
      * @return array<int>
      */
-    private function collectRunningResidualPids(array $pids): array
+    protected function collectRunningResidualPids(array $pids): array
     {
         $uniquePids = \array_values(\array_unique(\array_filter(
             \array_map('intval', $pids),
@@ -1256,7 +1683,8 @@ class Stop extends CommandAbstract
             }
 
             $instancePort = (int) ($data['port'] ?? 0);
-            if ($instancePort !== $port) {
+            $httpRedirectPort = $this->resolveConfiguredHttpRedirectPort($data);
+            if ($instancePort !== $port && $httpRedirectPort !== $port) {
                 continue;
             }
 
@@ -1291,7 +1719,421 @@ class Stop extends CommandAbstract
             }
         }
 
+        foreach ($this->getRecoverableManagedProcessPrefixes($name) as $prefix) {
+            foreach (Processer::getProcessNamesByPrefix($prefix) as $pname) {
+                $pname = (string) $pname;
+                if ($pname === '') {
+                    continue;
+                }
+
+                $processName = \str_starts_with($pname, '--name=')
+                    ? \substr($pname, 7)
+                    : $pname;
+                $pid = (int) Processer::getData($pname, 'pid');
+                if ($pid > 0 && Processer::isManagedProcessRunning($pid, $processName, '', $pname)) {
+                    return true;
+                }
+            }
+        }
+
+        if ($this->collectRecoverableManagedPids($name) !== []) {
+            return true;
+        }
+
         return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function getRecoverableManagedProcessPrefixes(string $name): array
+    {
+        return [
+            MasterProcess::buildScopedProcessName('weline-wls-worker', $name) . '-',
+            MasterProcess::buildScopedProcessName('weline-wls-maintenance', $name) . '-',
+            'weline-wls-worker-' . $name . '-',
+            'weline-wls-maintenance-' . $name . '-',
+            'weline-master-' . $name . '-worker-',
+            'weline-master-' . $name . '-redirect-',
+            'weline-master-' . $name . '-maintenance-',
+        ];
+    }
+
+    private function hasRecoverableConfiguredPortHint(string $name): bool
+    {
+        foreach ($this->getRecoverableConfiguredPorts($name) as $port) {
+            $inspect = $this->inspectRecoverablePortOccupant($port);
+            $recoverableWlsPort = ((bool) ($inspect['in_use'] ?? false) && (bool) ($inspect['is_weline'] ?? false))
+                || $this->isRecoverableWlsPortResponder($port);
+            if ($recoverableWlsPort) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function getRecoverableConfiguredPorts(string $name): array
+    {
+        $ports = [];
+        $configFile = Env::VAR_DIR . 'server' . DS . 'config' . DS . $name . '.json';
+        if (\is_file($configFile)) {
+            $data = \json_decode((string) @\file_get_contents($configFile), true);
+            if (\is_array($data)) {
+                $mainPort = (int) ($data['port'] ?? 0);
+                if ($mainPort > 0) {
+                    $ports[] = $mainPort;
+                }
+
+                $httpRedirectPort = $this->resolveConfiguredHttpRedirectPort($data);
+                if ($httpRedirectPort > 0) {
+                    $ports[] = $httpRedirectPort;
+                }
+            }
+        }
+
+        $portIndexFile = Env::VAR_DIR . 'process' . DS . 'pid' . DS . 'port_index.json';
+        if (\is_file($portIndexFile)) {
+            $portIndex = \json_decode((string) @\file_get_contents($portIndexFile), true);
+            if (\is_array($portIndex)) {
+                $needle = '-' . $name . '-';
+                $needleSuffix = '-' . $name;
+                foreach ($portIndex as $portKey => $processName) {
+                    $port = (int) $portKey;
+                    if ($port <= 0 || !\is_string($processName)) {
+                        continue;
+                    }
+                    if (!\str_contains($processName, 'weline-wls-') && !\str_contains($processName, 'weline-master-')) {
+                        continue;
+                    }
+                    if (!\str_contains($processName, $needle) && !\str_ends_with($processName, $needleSuffix)) {
+                        continue;
+                    }
+
+                    $ports[] = $port;
+                }
+            }
+        }
+
+        $ports = \array_values(\array_unique(\array_filter($ports, static fn (int $port): bool => $port > 0)));
+        \sort($ports);
+
+        return $ports;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    protected function resolveConfiguredHttpRedirectPort(array $data): int
+    {
+        $httpRedirectPort = (int) ($data['http_redirect_port'] ?? 0);
+        if ($httpRedirectPort > 0) {
+            return $httpRedirectPort;
+        }
+
+        $mainPort = (int) ($data['port'] ?? 0);
+        $sslEnabled = (bool) ($data['ssl_enabled'] ?? $mainPort === 443);
+        if ($sslEnabled && $mainPort === 443) {
+            return 80;
+        }
+
+        return 0;
+    }
+
+    /**
+     * @return array{
+     *   in_use:bool,
+     *   pid:int,
+     *   pid_running:bool,
+     *   is_weline:bool,
+     *   state:string
+     * }
+     */
+    protected function inspectRecoverablePortOccupant(int $port): array
+    {
+        return Processer::inspectPortOccupantWithHistory($port);
+    }
+
+    /**
+     * @return array{
+     *   in_use?:bool,
+     *   pid?:int,
+     *   pid_running?:bool,
+     *   is_weline?:bool,
+     *   state?:string
+     * }
+     */
+    protected function inspectPortOccupantWithHistory(int $port): array
+    {
+        return Processer::inspectPortOccupantWithHistory($port);
+    }
+
+    protected function terminateWlsPortProcess(int $port, int $pid): bool
+    {
+        $rootPid = $this->resolveManagedStopRootPid($pid);
+        $killPid = $rootPid > 0 ? $rootPid : $pid;
+        $this->logWlsPortTermination($port, $pid, $killPid);
+
+        if ($this->killManagedProcessTreeForStop($killPid)) {
+            return true;
+        }
+
+        if ($killPid !== $pid) {
+            return $this->killManagedProcessTreeForStop($pid);
+        }
+
+        return false;
+    }
+
+    protected function logWlsPortTermination(int $port, int $pid, int $killPid): void
+    {
+        $this->printer->note($this->translateStopMessage(
+            '检测到端口 %{1} 被 WLS 进程占用 (PID: %{2})，正在结束…',
+            [$port, $pid]
+        ));
+
+        if ($killPid !== $pid) {
+            $this->printer->note($this->translateStopMessage('  ROOT PID: %{1}', [$killPid]));
+        }
+    }
+
+    protected function translateStopMessage(string $message, array $args = []): string
+    {
+        $translator = __NAMESPACE__ . '\\__';
+        if (\function_exists($translator)) {
+            return $translator($message, $args);
+        }
+
+        $translated = $message;
+        foreach (\array_values($args) as $index => $value) {
+            $translated = \str_replace('%{' . ($index + 1) . '}', (string)$value, $translated);
+        }
+
+        return $translated;
+    }
+
+    protected function getPortProcessId(int $port): int
+    {
+        return Processer::getProcessIdByPort($port);
+    }
+
+    protected function isStopPidRunning(int $pid): bool
+    {
+        return Processer::isRunningByPid($pid);
+    }
+
+    protected function getProcessPnameByPid(int $pid): string
+    {
+        return Processer::getNameByPid($pid);
+    }
+
+    protected function getStopProcessCommandLine(int $pid): string
+    {
+        return Processer::getProcessCommandLine($pid);
+    }
+
+    protected function isStopWelineServerProcess(int $pid): bool
+    {
+        return Processer::isWelineServerProcess($pid);
+    }
+
+    protected function isStopProcessManagerCreated(int $pid): bool
+    {
+        return Processer::isProcessManagerCreated($pid);
+    }
+
+    protected function getStopParentPid(int $pid): int
+    {
+        return Processer::getParentPidByPid($pid);
+    }
+
+    protected function killManagedProcessTreeForStop(int $pid): bool
+    {
+        return Processer::killProcessTreeByPid($pid, true);
+    }
+
+    protected function isRecoverableWlsPortResponder(int $port): bool
+    {
+        $transports = $port === 80 ? ['tcp'] : ['ssl', 'tcp'];
+        foreach ($transports as $transport) {
+            $headers = $this->readRecoverablePortHeaders($port, $transport);
+            if ($headers === '') {
+                continue;
+            }
+
+            $headersLower = \strtolower($headers);
+            if (\str_contains($headersLower, 'server: weline-server')
+                || \str_contains($headersLower, 'x-powered-by: wls/')
+                || \str_contains($headersLower, 'x-weline-route-hint:')
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function isRecoverablePortInUse(int $port): bool
+    {
+        return Processer::isPortInUse($port);
+    }
+
+    protected function cleanupStaleRecoverableProcessPidFiles(): void
+    {
+        Processer::cleanupStalePidFiles();
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function collectRecoverableManagedPids(string $name): array
+    {
+        $pidDir = Env::VAR_DIR . 'process' . DS . 'pid' . DS;
+        if (!\is_dir($pidDir)) {
+            return [];
+        }
+
+        $instanceSuffix = '-' . $name;
+        $legacyWorkerPrefix = 'weline-master-' . $name . '-worker-';
+        $pids = [];
+
+        foreach (\glob($pidDir . '*-pid.json') ?: [] as $file) {
+            $record = \json_decode((string) @\file_get_contents($file), true);
+            if (!\is_array($record)) {
+                continue;
+            }
+
+            $taskName = \trim((string) ($record['task_name'] ?? $record['process_name'] ?? ''));
+            $pname = (string) ($record['pname'] ?? '');
+            if ($taskName === '' && $pname !== '') {
+                try {
+                    $taskName = Processer::getTaskName($pname);
+                } catch (\Throwable) {
+                    $taskName = \str_starts_with($pname, '--name=')
+                        ? \substr($pname, 7)
+                        : $pname;
+                }
+            }
+
+            $isCurrentInstance = (\str_starts_with($taskName, 'weline-wls-') && \str_contains($taskName, $instanceSuffix))
+                || \str_starts_with($taskName, $legacyWorkerPrefix)
+                || ($pname !== '' && (\str_contains($pname, '"' . $name . '"') || \str_contains($pname, '--instance-name=' . $name)));
+            if (!$isCurrentInstance) {
+                continue;
+            }
+
+            $pid = (int) ($record['pid'] ?? 0);
+            if ($pid > 0) {
+                $pids[$pid] = true;
+            }
+
+            if ($pname !== '' && \preg_match('/--master-pid=(\d+)/', $pname, $matches) === 1) {
+                $masterPid = (int) ($matches[1] ?? 0);
+                if ($masterPid > 0) {
+                    $pids[$masterPid] = true;
+                }
+            }
+        }
+
+        return \array_map('intval', \array_keys($pids));
+    }
+
+    /**
+     * @param list<int> $pids
+     */
+    protected function terminateRecoverableProcessIds(array $pids): int
+    {
+        return $this->terminateResidualProcesses($this->collectManagedStopPids($pids), true);
+    }
+
+    protected function killRecoverableProcessPrefix(string $prefix): int
+    {
+        return Processer::killByProcessNamePrefix($prefix);
+    }
+
+    protected function cleanupRecoverableConfiguredPort(int $port): bool
+    {
+        $inspect = $this->inspectRecoverablePortOccupant($port);
+        $recoverableWlsPort = ((bool) ($inspect['in_use'] ?? false) && (bool) ($inspect['is_weline'] ?? false))
+            || $this->isRecoverableWlsPortResponder($port);
+        if (!$recoverableWlsPort) {
+            return false;
+        }
+
+        if ($this->killWlsProcessOnPort($port)) {
+            SchedulerSystem::usleep(500000);
+
+            return !$this->isRecoverablePortInUse($port);
+        }
+
+        $pid = (int) ($inspect['pid'] ?? 0);
+        if ($pid <= 0 || !Processer::isRunningByPid($pid)) {
+            return false;
+        }
+
+        $killPid = $this->resolveManagedStopRootPid($pid);
+        if ($killPid <= 0) {
+            $killPid = $pid;
+        }
+
+        $this->killManagedProcessTreeForStop($killPid);
+        SchedulerSystem::usleep(500000);
+
+        return !$this->isRecoverablePortInUse($port);
+    }
+
+    protected function readRecoverablePortHeaders(int $port, string $transport): string
+    {
+        $scheme = $transport === 'ssl' ? 'ssl' : 'tcp';
+        $contextOptions = [];
+        if ($scheme === 'ssl') {
+            $contextOptions['ssl'] = [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+                'allow_self_signed' => true,
+                'SNI_enabled' => true,
+            ];
+        }
+
+        $context = \stream_context_create($contextOptions);
+        $socket = @\stream_socket_client(
+            "{$scheme}://127.0.0.1:{$port}",
+            $errno,
+            $errstr,
+            1.0,
+            STREAM_CLIENT_CONNECT,
+            $context
+        );
+        unset($errno, $errstr);
+        if (!\is_resource($socket)) {
+            return '';
+        }
+
+        @\stream_set_timeout($socket, 1);
+        @\fwrite($socket, "HEAD / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+
+        $headers = '';
+        while (!\feof($socket) && \strlen($headers) < 4096) {
+            $chunk = (string) @\fgets($socket, 512);
+            if ($chunk === '') {
+                $meta = @\stream_get_meta_data($socket);
+                if (($meta['timed_out'] ?? false) === true) {
+                    break;
+                }
+            }
+
+            $headers .= $chunk;
+            if (\str_contains($headers, "\r\n\r\n")) {
+                break;
+            }
+        }
+
+        @\fclose($socket);
+
+        return $headers;
     }
 
     private function cleanupRecoverableProcessesWithoutInstanceFile(string $name, bool $dryRun = false): int
@@ -1312,19 +2154,37 @@ class Stop extends CommandAbstract
             MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
         ];
 
+        $recoverablePids = \array_values(\array_unique(\array_filter(
+            $this->collectRecoverableManagedPids($name),
+            static fn (int $pid): bool => $pid > 0
+        )));
         $recoverable = 0;
         foreach ($prefixes as $prefix) {
             if ($dryRun) {
-                if ($this->hasRecoverableManagedProcessHint($name)) {
+                if (
+                    $this->hasRecoverableManagedProcessHint($name)
+                    || $this->hasRecoverableConfiguredPortHint($name)
+                    || $recoverablePids !== []
+                ) {
                     return 1;
                 }
                 continue;
             }
-            $recoverable += Processer::killByProcessNamePrefix($prefix);
+            $recoverable += $this->killRecoverableProcessPrefix($prefix);
         }
 
         if (!$dryRun) {
-            Processer::cleanupStalePidFiles();
+            if ($recoverablePids !== []) {
+                $recoverable += $this->terminateRecoverableProcessIds($recoverablePids);
+            }
+
+            foreach ($this->getRecoverableConfiguredPorts($name) as $port) {
+                if ($this->cleanupRecoverableConfiguredPort($port)) {
+                    $recoverable++;
+                }
+            }
+
+            $this->cleanupStaleRecoverableProcessPidFiles();
         }
 
         return $recoverable;
@@ -1355,7 +2215,15 @@ class Stop extends CommandAbstract
             foreach ($instances as $instanceFile) {
                 $name = \basename($instanceFile, '.json');
                 $this->printer->note(__('正在停止实例 [%{1}]...', [$name]));
-                $this->stopInstance($name, $force);
+                if (!$this->acquireStopLock($name)) {
+                    $this->printer->warning(__('实例 [%{1}] 正在被其他 stop 任务处理，已跳过。', [$name]));
+                    continue;
+                }
+                try {
+                    $this->stopInstance($name, $force);
+                } finally {
+                    $this->releaseStopLock();
+                }
                 echo "\n";
             }
             $this->printer->success(__('所有 Weline Server 实例已停止'));

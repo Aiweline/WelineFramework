@@ -782,17 +782,131 @@ final class AiSiteVirtualThemePlanService
 
     private function decodeJsonObjectCandidate(string $raw): mixed
     {
-        $decoded = \json_decode($raw, true);
-        if (\is_array($decoded)) {
-            return $decoded;
+        foreach ($this->buildJsonDecodeRepairCandidates($raw) as $candidate) {
+            $decoded = \json_decode($candidate, true);
+            if (\is_array($decoded)) {
+                return $decoded;
+            }
         }
 
-        $fixed = $this->escapeControlCharsInsideJsonStrings($raw);
-        if ($fixed === $raw) {
-            return null;
+        return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function buildJsonDecodeRepairCandidates(string $raw): array
+    {
+        $candidates = [];
+        $append = static function (string $candidate) use (&$candidates): void {
+            $candidate = \trim($candidate);
+            if ($candidate === '') {
+                return;
+            }
+            foreach ($candidates as $existing) {
+                if ($existing === $candidate) {
+                    return;
+                }
+            }
+            $candidates[] = $candidate;
+        };
+
+        $append($raw);
+
+        $fixedControl = $this->escapeControlCharsInsideJsonStrings($raw);
+        $append($fixedControl);
+
+        $append($this->removeTrailingCommasBeforeClosers($raw));
+        if ($fixedControl !== $raw) {
+            $append($this->removeTrailingCommasBeforeClosers($fixedControl));
         }
-        $decoded = \json_decode($fixed, true);
-        return \is_array($decoded) ? $decoded : null;
+
+        $repairedTruncated = $this->repairLikelyTruncatedJsonObject($raw);
+        $append($repairedTruncated);
+        $append($this->removeTrailingCommasBeforeClosers($repairedTruncated));
+
+        if ($fixedControl !== $raw) {
+            $repairedFromFixed = $this->repairLikelyTruncatedJsonObject($fixedControl);
+            $append($repairedFromFixed);
+            $append($this->removeTrailingCommasBeforeClosers($repairedFromFixed));
+        }
+
+        return $candidates;
+    }
+
+    private function removeTrailingCommasBeforeClosers(string $raw): string
+    {
+        return (string)(\preg_replace('/,\s*([\}\]])/u', '$1', $raw) ?? $raw);
+    }
+
+    private function repairLikelyTruncatedJsonObject(string $raw): string
+    {
+        $json = \trim($raw);
+        if ($json === '') {
+            return $json;
+        }
+        $firstBrace = \strpos($json, '{');
+        if ($firstBrace === false) {
+            return $json;
+        }
+        if ($firstBrace > 0) {
+            $json = \substr($json, $firstBrace);
+        }
+
+        $inString = false;
+        $escaped = false;
+        $braceDepth = 0;
+        $bracketDepth = 0;
+        $length = \strlen($json);
+
+        for ($index = 0; $index < $length; $index++) {
+            $char = $json[$index];
+            if ($inString) {
+                if ($escaped) {
+                    $escaped = false;
+                    continue;
+                }
+                if ($char === '\\') {
+                    $escaped = true;
+                    continue;
+                }
+                if ($char === '"') {
+                    $inString = false;
+                }
+                continue;
+            }
+            if ($char === '"') {
+                $inString = true;
+                continue;
+            }
+            if ($char === '{') {
+                $braceDepth++;
+                continue;
+            }
+            if ($char === '}') {
+                $braceDepth = \max(0, $braceDepth - 1);
+                continue;
+            }
+            if ($char === '[') {
+                $bracketDepth++;
+                continue;
+            }
+            if ($char === ']') {
+                $bracketDepth = \max(0, $bracketDepth - 1);
+            }
+        }
+
+        if ($inString) {
+            $json .= '"';
+        }
+        if ($bracketDepth > 0) {
+            $json .= \str_repeat(']', $bracketDepth);
+        }
+        if ($braceDepth > 0) {
+            $json .= \str_repeat('}', $braceDepth);
+        }
+
+        return $json;
     }
 
     private function looksLikeTaskPlanJsonPayload(array $payload): bool

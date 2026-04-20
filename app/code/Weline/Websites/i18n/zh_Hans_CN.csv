@@ -1515,8 +1515,8 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "健康检查同步根域/池失败 domain_id=%{1}：%{2}","健康检查同步根域/池失败 domain_id=%{1}：%{2}"
 访问正常,访问正常
 "HTTPS/TLS 探测失败，HTTP 可访问（站点 HTTPS 是否启用以 SSL 证书管理为准）","HTTPS/TLS 探测失败，HTTP 可访问（站点 HTTPS 是否启用以 SSL 证书管理为准）"
+"Domain %{1} uses the .localhost loopback suffix and does not need hosts injection","Domain %{1} uses the .localhost loopback suffix and does not need hosts injection"
 "Only managed local WLS domains are allowed for automatic hosts injection","Only managed local WLS domains are allowed for automatic hosts injection"
-"Only managed local WLS subdomains use the shared local wildcard certificate","Only managed local WLS subdomains use the shared local wildcard certificate"
 "Reusing existing %{1} wildcard certificate","Reusing existing %{1} wildcard certificate"
 "Failed to ensure %{1} wildcard certificate","Failed to ensure %{1} wildcard certificate"
 "Websites 配置查询不支持的操作：%{1}","Websites 配置查询不支持的操作：%{1}"
@@ -1571,15 +1571,6 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "Build finished in local simulation mode","Build finished in local simulation mode"
 "Build finished with shared %{2} wildcard certificate: %{1}","Build finished with shared %{2} wildcard certificate: %{1}"
 "Build finished in local simulation mode: %{1}","Build finished in local simulation mode: %{1}"
-"鏈湴鍩熷悕 %{1} 璺宠繃鍩熷悕鍟嗘祦绋嬶紝浣嗘硾鍩熷悕璇佷功灏氭湭灏辩华","鏈湴鍩熷悕 %{1} 璺宠繃鍩熷悕鍟嗘祦绋嬶紝浣嗘硾鍩熷悕璇佷功灏氭湭灏辩华"
-"Build finished with shared %{1} wildcard certificate","Build finished with shared %{1} wildcard certificate"
-寤虹珯瀹屾垚锛堟湰鍦版ā鎷燂級,寤虹珯瀹屾垚锛堟湰鍦版ā鎷燂級
-"Build finished with shared %{2} wildcard certificate: %{1}","Build finished with shared %{2} wildcard certificate: %{1}"
-寤虹珯瀹屾垚锛堟湰鍦版ā鎷燂級锛?{1},寤虹珯瀹屾垚锛堟湰鍦版ā鎷燂級锛?{1}
-"本地域名 %{1} 跳过域名商流程，直接模拟建站成功","本地域名 %{1} 跳过域名商流程，直接模拟建站成功"
-建站完成（本地模拟）,建站完成（本地模拟）
-建站完成（本地模拟）：%{1},建站完成（本地模拟）：%{1}
-正在购买域名...,正在购买域名...
 已根据描述设置站点名称,已根据描述设置站点名称
 "正在检查 DNS 解析状态...","正在检查 DNS 解析状态..."
 "正在申请 HTTPS 证书...","正在申请 HTTPS 证书..."
