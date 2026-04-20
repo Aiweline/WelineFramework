@@ -63,9 +63,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     public function fetch(string $model_class = ''): mixed
     {
-        $traceOperation = $this->fetch_type ?: 'query';
-        $traceTable = $this->table !== '' ? $this->table : 'unknown';
-        $dbTraceLabel = 'db::' . $traceOperation . '::' . $traceTable;
         $dbTraceStart = 0.0;
         $dbTraceSql = '';
         if (RequestLifecycleTrace::isEnabled()) {
@@ -113,19 +110,11 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
             Debug::target('pre_fetch', $msg);
         }
-        // 防御：fetch_type 为空但 sql 已有时，根据 SQL 推断操作类型（避免链式操作中 query 被 reset/clear 后丢失类型）
-        if ($this->fetch_type === '' && trim($this->sql) !== '') {
-            $sqlUpper = strtoupper(ltrim(trim($this->sql)));
-            if (str_starts_with($sqlUpper, 'INSERT')) {
-                $this->fetch_type = 'insert';
-            } elseif (str_starts_with($sqlUpper, 'SELECT')) {
-                $this->fetch_type = 'select';
-            } elseif (str_starts_with($sqlUpper, 'UPDATE')) {
-                $this->fetch_type = 'update';
-            } elseif (str_starts_with($sqlUpper, 'DELETE')) {
-                $this->fetch_type = 'delete';
-            }
-        }
+        $this->resolveFetchTypeFromSql();
+        $traceOperation = $this->fetch_type ?: 'query';
+        $traceTable = $this->table !== '' ? $this->table : 'unknown';
+        $dbTraceLabel = 'db::' . $traceOperation . '::' . $traceTable;
+        $this->guardUnboundedSelectFetch($this->getFetchRowLimit());
         if ($this->batch and $this->fetch_type == 'insert') {
             // 使用重试机制执行批量插入
             $origin_data = $this->executeWithRetry(function() {
@@ -295,7 +284,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
             $msg .= __('查询结果:') . (is_string($result) ? $result : json_encode($result)) . PHP_EOL;
             Debug::target('fetch', $msg);
-            exit(1);
         }
         //        $this->clear();
         $this->clearQuery();

@@ -168,11 +168,33 @@ class Request extends Request\RequestAbstract implements RequestInterface
         if (!$this->isBackend() and !$this->isApiBackend()) {
             return $path;
         }
-        $areaRouter = $this->getAreaRouter();
-        if ($areaRouter !== '' && $areaRouter !== null) {
-            $path = str_replace($areaRouter . '/', '', $path);
+        $path = trim($path, '/');
+        $path = $this->stripRoutePrefix($path, (string)($this->getServer('WELINE_AREA_ROUTE') ?? ''));
+        $path = $this->stripRoutePrefix(
+            $path,
+            (string)(Env::getAreaRoutePrefix($this->isApiBackend() ? 'rest_backend' : 'backend') ?? '')
+        );
+        return $path;
+    }
+
+    private function stripRoutePrefix(string $path, string $prefix): string
+    {
+        $path = trim($path, '/');
+        $prefix = trim($prefix, '/');
+
+        if ($path === '' || $prefix === '') {
+            return $path;
         }
-        return ltrim($path, '/');
+
+        if ($path === $prefix) {
+            return '';
+        }
+
+        if (str_starts_with($path, $prefix . '/')) {
+            return (string)substr($path, strlen($prefix) + 1);
+        }
+
+        return $path;
     }
 
     /**
