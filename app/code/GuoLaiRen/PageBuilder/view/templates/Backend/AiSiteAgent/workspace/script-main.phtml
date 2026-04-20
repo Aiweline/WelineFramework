@@ -5,54 +5,54 @@
     var PB_SSE_CONNECT_DELAY_MS = 5000;
 
     var isGuidedUi = <?= $guidedUi ? 'true' : 'false' ?>;
-    var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var pageTypeLabelMap = <?= \json_encode($pageTypeLabels, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var currentStageCode = <?= \json_encode($currentStage, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var initialWorkspaceState = <?= \json_encode($state, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var hasGeneratedPages = <?= \json_encode($displayPagesByType !== [], \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var isOperationRunning = <?= \json_encode(\in_array($activeOperationStatus, ['queued', 'running'], true), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var currentActiveOperationState = <?= \json_encode($activeOperation, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    /** 褰撳墠鏃犻〉闈㈢被鍨嬪閫夋鏃讹紙濡傚揩閫熸ā寮忋€屽噯澶囦笂绾裤€嶆楠わ級锛屽脊绐楃敤鏈嶅姟绔凡淇濆瓨绫诲瀷浣滀负鍒濆鍕鹃€?*/
-    var serverPageTypesFallback = <?= \json_encode(\array_values(\is_array($selectedPageTypesSafe) ? $selectedPageTypesSafe : []), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var pageTypesUserCustomized = <?= \json_encode($pageTypesUserCustomized, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var mergeScopeUrl = <?= \json_encode($mergeScopeUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var replaceScopeUrl = <?= \json_encode($replaceScopeUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var setStageUrl = <?= \json_encode($setStageUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var startPlanUrl = <?= \json_encode($startPlanUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var confirmPlanUrl = <?= \json_encode($confirmPlanUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var planSseUrl = <?= \json_encode($planSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var startTaskPlanUrl = <?= \json_encode($startTaskPlanUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var confirmTaskPlanUrl = <?= \json_encode($confirmTaskPlanUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var taskPlanSseUrl = <?= \json_encode($taskPlanSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var sortPlanBlocksUrl = <?= \json_encode((string)($sortPlanBlocksUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var sortTaskPlanTasksUrl = <?= \json_encode((string)($sortTaskPlanTasksUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var resumeBuildUrl = <?= \json_encode($resumeBuildUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var runVirtualThemeUrl = <?= \json_encode($runVirtualThemeUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var startRegeneratePageUrl = <?= \json_encode($startRegeneratePageUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var startRefineComponentUrl = <?= \json_encode($startRefineComponentUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var startBlockRefineSseUrl = <?= \json_encode($startBlockRefineSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var startBlockRegenerateSseUrl = <?= \json_encode($startBlockRegenerateSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var updateBlockConfigUrl = <?= \json_encode($updateBlockConfigUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var switchPreviewPageUrl = <?= \json_encode($switchPreviewPageUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var publishCheckUrl = <?= \json_encode($publishCheckUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var guidedUrl = <?= \json_encode($guidedUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var previewFullUrl = <?= \json_encode($previewFullUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var visualPreviewUrl = <?= \json_encode($visualPreviewUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var visualEditBaseUrl = <?= \json_encode((string)($visualEditUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var currentEmbeddedVisualUrl = <?= \json_encode($embeddedVisualUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var currentPreviewPageType = <?= \json_encode($previewPageType, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var currentPreviewPageId = <?= \json_encode($previewPageId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var pageTypeLabelMap = <?= \json_encode($pageTypeLabels, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var currentStageCode = <?= \json_encode($currentStage, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var initialWorkspaceState = <?= \json_encode($state, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var hasGeneratedPages = <?= \json_encode($displayPagesByType !== [], \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var isOperationRunning = <?= \json_encode(\in_array($activeOperationStatus, ['queued', 'running'], true), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var currentActiveOperationState = <?= \json_encode($activeOperation, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    /** 鐟滅増鎸告晶鐘诲籍閻樻眹鈧妫冮姀銏ｎ潶闁搞劌顑呴ˇ鏌ユ焻婢跺鏀遍柡鍐啇缁辨瑦淇婇崒姘渐闂侇偆鍠愯啯鐎殿喖绻堥埀顒€鑻崳顖涘緞閸ワ妇鐟愮紒鎹愶骏閳ь剙绉甸鐐搭殽閵堝繒绀嗛柨娑樿嫰閼村﹦绮ｅΔ鍐╂殢闁哄牆绉存慨鐔虹博椤栨艾鍤掑ǎ鍥ㄧ箓閻°劎鐚剧拠鑼偓閿嬫媴濠娾偓鐠愮喖宕氬┑鍡╂綏闁告洟绠栭埀?*/
+    var serverPageTypesFallback = <?= \json_encode(\array_values(\is_array($selectedPageTypesSafe) ? $selectedPageTypesSafe : []), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var pageTypesUserCustomized = <?= \json_encode($pageTypesUserCustomized, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var mergeScopeUrl = <?= \json_encode($mergeScopeUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var replaceScopeUrl = <?= \json_encode($replaceScopeUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var setStageUrl = <?= \json_encode($setStageUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var startPlanUrl = <?= \json_encode($startPlanUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var confirmPlanUrl = <?= \json_encode($confirmPlanUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var planSseUrl = <?= \json_encode($planSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var startTaskPlanUrl = <?= \json_encode($startTaskPlanUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var confirmTaskPlanUrl = <?= \json_encode($confirmTaskPlanUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var taskPlanSseUrl = <?= \json_encode($taskPlanSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var sortPlanBlocksUrl = <?= \json_encode((string)($sortPlanBlocksUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var sortTaskPlanTasksUrl = <?= \json_encode((string)($sortTaskPlanTasksUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var resumeBuildUrl = <?= \json_encode($resumeBuildUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var runVirtualThemeUrl = <?= \json_encode($runVirtualThemeUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var startRegeneratePageUrl = <?= \json_encode($startRegeneratePageUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var startRefineComponentUrl = <?= \json_encode($startRefineComponentUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var startBlockRefineSseUrl = <?= \json_encode($startBlockRefineSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var startBlockRegenerateSseUrl = <?= \json_encode($startBlockRegenerateSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var updateBlockConfigUrl = <?= \json_encode($updateBlockConfigUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var switchPreviewPageUrl = <?= \json_encode($switchPreviewPageUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var publishCheckUrl = <?= \json_encode($publishCheckUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var guidedUrl = <?= \json_encode($guidedUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var previewFullUrl = <?= \json_encode($previewFullUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var visualPreviewUrl = <?= \json_encode($visualPreviewUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var visualEditBaseUrl = <?= \json_encode((string)($visualEditUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var currentEmbeddedVisualUrl = <?= \json_encode($embeddedVisualUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var currentPreviewPageType = <?= \json_encode($previewPageType, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var currentPreviewPageId = <?= \json_encode($previewPageId, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var currentPreviewDevice = 'desktop';
-    var currentWorkspaceStage = <?= \json_encode($currentStage, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var planConfirmedState = <?= \json_encode((bool)($state['plan_confirmed'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var hasVirtualThemePlanState = <?= \json_encode((bool)($state['has_virtual_theme_plan'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var taskPlanConfirmedState = <?= \json_encode((bool)($state['task_plan_confirmed'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var hasExecutionBlueprintState = <?= \json_encode((bool)($state['has_execution_blueprint'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var hasPendingBuildTasksState = <?= \json_encode((bool)($state['has_pending_build_tasks'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    /** 涓?PHP $pbAiPhaseOnePlanPresent 瀵归綈锛沨ydrate 鍚庢洿鏂帮紝鐢ㄤ簬绗簩闃舵銆岀敓鎴愮粏鑺備换鍔¤鍒掓柟妗堛€嶆寜閽?*/
-    var lastPhaseOnePlanPresent = <?= \json_encode((bool)($pbAiPhaseOnePlanPresent), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var currentWorkspaceStage = <?= \json_encode($currentStage, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var planConfirmedState = <?= \json_encode((bool)($state['plan_confirmed'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var hasVirtualThemePlanState = <?= \json_encode((bool)($state['has_virtual_theme_plan'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var taskPlanConfirmedState = <?= \json_encode((bool)($state['task_plan_confirmed'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var hasExecutionBlueprintState = <?= \json_encode((bool)($state['has_execution_blueprint'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var hasPendingBuildTasksState = <?= \json_encode((bool)($state['has_pending_build_tasks'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    /** 濞?PHP $pbAiPhaseOnePlanPresent 閻庨潧缍婄紞鍫ユ晬濞屸杺drate 闁告艾瀛╁ú鍧楀棘鐢喚绀夐柣顫妺缁剛绮璺ㄧ檶闂傚啳鍩栭宀勫Υ瀹€鈧弫鎾诲箣閹邦喚鐭庨柤鍝勫€烽幑銏ゅ礉闄囬～澶愬礆閹烘挻鐓欐俊妤€鐗勯埀顒€绉电€垫粓鏌?*/
+    var lastPhaseOnePlanPresent = <?= \json_encode((bool)($pbAiPhaseOnePlanPresent), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var globalRunVirtualThemeDisabled = false;
-    window.__pbTaskSummary = <?= \json_encode($buildTaskSummary, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    window.__pbTaskSummary = <?= \json_encode($buildTaskSummary, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var buildNavigationGuardActive = false;
     var buildStartupPending = false;
     if (typeof window.__pbWorkspaceStreamPaused === 'undefined') {
@@ -62,9 +62,9 @@
         pageType: '',
         componentCode: '',
         componentLabel: '',
-        refineStreaming: <?= \json_encode((string)__('已开始区块微调'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        regenerateStreaming: <?= \json_encode((string)__('已开始区块重建'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        blockSseUnavailable: <?= \json_encode((string)__('区块生成流终端尚未就绪'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        refineStreaming: <?= \json_encode((string)__('已开始区块微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        regenerateStreaming: <?= \json_encode((string)__('已开始区块重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseUnavailable: <?= \json_encode((string)__('区块生成流终端尚未就绪'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
     };
     var blockEditorState = {
         pageType: '',
@@ -74,7 +74,7 @@
         blockConfig: {},
         fieldSchema: {}
     };
-    // 鐢ㄤ簬鍖哄潡绾?SSE 鍒锋柊鐘舵€侊紙缁熶竴鎸傚埌 window锛岄伩鍏嶅 script 浣滅敤鍩熶涪澶憋級
+    // 闁活潿鍔嬬花顒勫礌閸濆嫭鍋ョ紒?SSE 闁告帡鏀遍弻濠囨偐閼哥鍋撴笟濠勭缂備胶鍠嶇粩鎾箰閸屾艾鐓?window闁挎稑鐭傛导鈺呭礂瀹ュ拋妯?script 濞达絾绮庨弫銈夊春閻旇埖涓㈠鑸靛敾缁?
     function getSharedBlockRefreshState() {
         if (!window.__pbBlockRefreshState || typeof window.__pbBlockRefreshState !== 'object') {
             window.__pbBlockRefreshState = {
@@ -87,7 +87,7 @@
     }
     var blockRefreshState = getSharedBlockRefreshState();
     var pendingBlockSseResult = null;
-    var virtualPagesByTypeState = <?= \json_encode($initialVirtualPagesByTypeState, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var virtualPagesByTypeState = <?= \json_encode($initialVirtualPagesByTypeState, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
 
     function resolvePreviewBridge() {
         return window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview === 'object'
@@ -113,7 +113,7 @@
         }
         return normalized.replace('/post-plan-sse', '/plan-sse');
     }
-    // 闃叉鍦ㄥ嚱鏁板皻鏈祴鍊煎墠琚叾瀹冭剼鏈洿鎺ヨ皟鐢ㄥ鑷?ReferenceError
+    // 闂傚啫寮堕娑㈠捶閵娿儱姣愰柡浣规緲閻ㄥ寮甸鍥┿偞闁稿﹦鍘ф晶鐘垫偖椤愩垹寰撻悗鐟板暢閸撳ジ寮甸鍌涚函闁规亽鍎撮惃鐔兼偨閵娿儺鍤ら柤?ReferenceError
     if (typeof window.updateTaskSummaryFromState !== 'function') {
         window.updateTaskSummaryFromState = function () {};
     }
@@ -124,7 +124,7 @@
     }
 
     /**
-     * 鏄惁涓?workspace.phtml 涓?$pbAiPhaseOnePlanPresent 涓€鑷达細浼氳瘽閲屾槸鍚﹀凡鏈夐樁娈典竴寤虹珯鏂规鍐呭銆?     */
+     * 闁哄嫷鍨伴幆浣圭▔?workspace.phtml 濞?$pbAiPhaseOnePlanPresent 濞戞挴鍋撻柤鐤彧缁辩増瀵煎宕囨▓闂佹彃鏈Σ鎼佸触閿曗偓閸戯繝寮垫径鎰枆婵炲牆鍚€缁旀潙顕欓搹鍦讲闁哄倽顫夐、宥夊礃閸涱収鍟囬柕?     */
     function phaseOnePlanPresentFromWorkspaceState(workspaceState) {
         if (!workspaceState || typeof workspaceState !== 'object') {
             return false;
@@ -217,18 +217,18 @@
         setText('.pb-guided > .card.bg-soft-info .small.fw-semibold.text-primary', '阶段 2 工作区轨道');
         var trackBadges = guidedRoot.querySelectorAll('.pb-guided > .card.bg-soft-info .badge');
         if (trackBadges[0]) {
-            trackBadges[0].textContent = <?= \json_encode($workspaceTrack === \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS ? '当前：HTML 区块轨道' : '当前：虚拟主题轨道', \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            trackBadges[0].textContent = <?= \json_encode($workspaceTrack === \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS ? '当前：HTML 区块轨道' : '当前：虚拟主题轨道', \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
         }
         if (trackBadges[1]) {
-            trackBadges[1].textContent = <?= \json_encode($siteReadyFlag !== 1 ? '域名未就绪：仅可草稿，发布将被阻止' : '域名已就绪', \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            trackBadges[1].textContent = <?= \json_encode($siteReadyFlag !== 1 ? '域名未就绪：仅可草稿，发布将被阻止' : '域名已就绪', \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
         }
         var trackButtons = guidedRoot.querySelectorAll('.pb-ai-workspace-track-btn');
         trackButtons.forEach(function (btn) {
-            if (String(btn.getAttribute('data-track') || '') === <?= \json_encode(\GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>) {
+            if (String(btn.getAttribute('data-track') || '') === <?= \json_encode(\GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>) {
                 btn.textContent = '虚拟主题轨道';
                 return;
             }
-            if (String(btn.getAttribute('data-track') || '') === <?= \json_encode(\GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>) {
+            if (String(btn.getAttribute('data-track') || '') === <?= \json_encode(\GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>) {
                 btn.textContent = 'HTML 区块轨道';
             }
         });
@@ -261,7 +261,7 @@
                 : '<i class="mdi mdi-refresh me-1"></i>确认&更新方案';
         });
         setText('.pb-ai-primary-action-hint', '表单会自动保存。第一阶段生成在后台队列中执行，这里会持续显示状态与草稿更新。');
-        setText('.pb-guided-sidebar .mdi-format-list-checks.text-primary + *', '任务进度');
+        setText('#pb-ai-task-progress-heading', '任务进度');
         setText('#pb-ai-task-running-indicator', '进行中...');
         var taskMetricTitles = guidedRoot.querySelectorAll('.pb-guided-sidebar .row.g-2.small.mb-3 .text-muted');
         if (taskMetricTitles[0]) {
@@ -277,9 +277,6 @@
             taskMetricTitles[3].textContent = '进行中';
         }
         var sidebarHeaders = guidedRoot.querySelectorAll('.pb-guided-sidebar h6.fw-semibold');
-        if (sidebarHeaders[0]) {
-            sidebarHeaders[0].childNodes[sidebarHeaders[0].childNodes.length - 1].textContent = '任务进度';
-        }
         if (sidebarHeaders[1]) {
             sidebarHeaders[1].childNodes[sidebarHeaders[1].childNodes.length - 1].textContent = '阶段状态';
         }
@@ -306,7 +303,7 @@
         setText('#pb-ai-stage-status-task-plan-message', '等待第一阶段确认后生成任务方案。');
         setText('#pb-ai-stage-status-build-message', '等待第二阶段确认后进入构建。');
         setText('label[for="pb-ai-registrar-account_trigger"]', '注册商账户');
-        setText('#pb-ai-registrar-help', <?= \json_encode($recommendedRegistrarLabel !== '' ? 'AI 推荐：' . $recommendedRegistrarLabel : '如果没有选择注册商账户，AI 会使用默认可用账户。', \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+        setText('#pb-ai-registrar-help', <?= \json_encode($recommendedRegistrarLabel !== '' ? 'AI 推荐：' . $recommendedRegistrarLabel : '如果没有选择注册商账户，AI 会使用默认可用账户。', \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
         setText('.pb-guided-domain-sidebar .fw-semibold.mt-2.small', '购买域名');
         setText('#pb-ai-recommend-domain-btn', '推荐域名');
         setText('#pb-ai-purchase-domain-btn', '购买域名');
@@ -371,7 +368,7 @@
         if (!workspaceState || typeof workspaceState !== 'object') {
             return;
         }
-        // 渚涢瑙堝唴閾炬帴閲嶅啓鍣ㄤ笌鍘嗗彶纭鏂规鍙棰勮澶嶇敤
+        // 濞撴碍鐩。鈺冩喆閸繂鏁堕梺鍓у亾鐢挳鏌屽鍛櫢闁革絻鍔嬬粭宀勫储閸℃钑夌痪顓у枦椤撳寮憴鍕垫敵闁告瑯浜ｉ鐗堬紣閸曨噮娼斿璺虹Ф閺?
         if (workspaceState.pagebuilder_pages_by_type && typeof workspaceState.pagebuilder_pages_by_type === 'object') {
             window.__pbWorkspacePagesByType = workspaceState.pagebuilder_pages_by_type;
         }
@@ -504,10 +501,19 @@
         if (typeof applyRunVirtualThemeButtonsDisabledState === 'function') {
             applyRunVirtualThemeButtonsDisabledState();
         }
+        if (window.__pbPhase1TaskProgress && typeof window.__pbPhase1TaskProgress.syncFromWorkspaceState === 'function') {
+            window.__pbPhase1TaskProgress.syncFromWorkspaceState(workspaceState);
+        } else {
+            try {
+                window.__pbLastWorkspaceState = workspaceState;
+            } catch (e) {
+                // ignore
+            }
+        }
         normalizeGuidedStaticLabels();
         syncConfirmPlanButtonEnabled();
     }
-    // 缁熶竴瀵瑰 API锛氳法 script 璋冪敤缁熶竴璧?window.__pbWorkspaceApi
+    // 缂備胶鍠嶇粩瀵糕偓鐢垫嚀椤?API闁挎稒淇哄▔?script 閻犲鍟伴弫銈囩磼閻斿墎顏遍悹?window.__pbWorkspaceApi
     var workspaceApi = window.__pbWorkspaceApi;
     if (!workspaceApi || typeof workspaceApi !== 'object') {
         workspaceApi = {};
@@ -528,7 +534,7 @@
     workspaceApi.getHasPendingBuildTasksState = function () {
         return !!hasPendingBuildTasksState;
     };
-    // 鏆撮湶鏂规娓叉煋鍑芥暟缁?stream/runtime 鑴氭湰锛岀‘淇?SSE chunk 鍒拌揪鏃?Markdown 涓庨瑙堝悓姝ュ埛鏂?
+    // 闁哄棙鎸冲﹢鍫曞棘鐟欏嫷鏀虫繛鎾冲级閻撳宕欓懞銉︽缂?stream/runtime 闁煎瓨纰嶅﹢浼存晬瀹€鈧垾妯荤┍?SSE chunk 闁告帗濯介幓顏堝籍?Markdown 濞戞挸閰ｉ。鈺冩喆閸繃鍊辨慨婵勫劚閸╂盯寮?
     workspaceApi.updatePlanModalContent = function (markdown) {
         return updatePlanModalContent(markdown);
     };
@@ -591,7 +597,7 @@
         confirmBtn.disabled = !hasCurrentPhaseOnePlanDraft();
     }
     /**
-     * 宸ヤ綔鍖?stream-sse 鍦ㄩ樁娈典竴 plan_generated 绛変簨浠跺悗鍥炶皟锛氳嚜鍔ㄤ繚瀛?scope 骞惰В閿併€岀‘璁ら樁娈典竴鏂规銆嶃€?     */
+     * 鐎规悶鍎扮紞鏃堝礌?stream-sse 闁革负鍔戝Ο浣糕枔閸忓摜顏?plan_generated 缂佹稑顦花銊︾鐠虹儤鍊甸柛銉у仩閻ㄧ喖鏁嶅鍐叉闁告柣鍔嬬换姘扁偓?scope 妤犵偞鍎艰闂佸じ闄嶉埀顒€鐬奸垾妯兼媼閵堝鈻夋繛鍫濆悁缁旀挳寮憴鍕垫敵闁靛棗绉查埀?     */
     workspaceApi.applyPlanGenerationCompletionFromWorkspaceStream = function (serverState) {
         try {
             planSseRunning = false;
@@ -636,11 +642,11 @@
         }
     };
     window.__pbWorkspaceApi = workspaceApi;
-    // 鍚戝悗鍏煎鏃ц皟鐢ㄥ叆鍙?
+    // 闁告碍鍨甸幃妤呭礂閻撳寒鍟囬柡鍐勫棛娈堕柣顫妼閸欏棝宕?
     window.hydrateWorkspaceFromState = function (workspaceState) {
         return window.__pbWorkspaceApi.hydrateWorkspaceFromState(workspaceState);
     };
-    // 鍏煎鍘嗗彶鐩存帴璋冪敤 window.updatePlanModalContent 鐨勯€昏緫
+    // 闁稿繒鍘ч鎰板储閸℃钑夐柣鈺佺摠鐢鎷崘顏呮殢 window.updatePlanModalContent 闁汇劌瀚伴埀顒佹缁?
     window.updatePlanModalContent = function (markdown) {
         return updatePlanModalContent(markdown);
     };
@@ -661,124 +667,124 @@
         virtualPagesByTypeState = merged;
     }
     var messages = {
-        networkError: <?= \json_encode((string)__('网络错误，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        saveSuccess: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        saveFailed: <?= \json_encode((string)__('自动保存失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        orchestrated: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        switched: <?= \json_encode((string)__('预览页已切换'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        visualPreviewUnreachable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        visualPreviewFrameTitle: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        noPageType: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        briefRequired: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        siteTitleRequired: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        domainRequiredForBuild: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planStartUnavailable: <?= \json_encode((string)__('第一阶段方案入口暂不可用，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planSaving: <?= \json_encode((string)__('正在保存第一阶段草稿...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planGenerating: <?= \json_encode((string)__('正在生成第一阶段建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planRegeneratingByPageTypes: <?= \json_encode((string)__('正在根据当前页面类型重新生成第一阶段建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planRegeneratingByLocale: <?= \json_encode((string)__('正在根据当前方案语言重新生成第一阶段建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planRegeneratingByPageTypesAndLocale: <?= \json_encode((string)__('正在根据当前页面类型和方案语言重新生成第一阶段建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planGenerated: <?= \json_encode((string)__('第一阶段建站方案已生成。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planConfirmRequired: <?= \json_encode((string)__('请先确认第一阶段方案，再进入第二阶段。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        phaseOnePlanMissingForTaskPlan: <?= \json_encode((string)__('请先完成并确认第一阶段建站方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planConfirmSaved: <?= \json_encode((string)__('第一阶段方案已确认。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planConfirmStartBuildQuestion: <?= \json_encode((string)__('阶段一方案已保存，是否进入阶段二任务计划确认？'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planDeferred: <?= \json_encode((string)__('已保留当前第一阶段草稿，稍后可以继续。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planDraftSaved: <?= \json_encode((string)__('第一阶段草稿已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planDraftSaveFailed: <?= \json_encode((string)__('第一阶段草稿保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planSortSaved: <?= \json_encode((string)__('第一阶段方案块顺序已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planSortSaveFailed: <?= \json_encode((string)__('第一阶段方案块顺序保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planSortUnavailable: <?= \json_encode((string)__('第一阶段排序接口暂不可用。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planModeRefine: <?= \json_encode((string)__('微调方案'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planModeRebuild: <?= \json_encode((string)__('重建方案'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planModeReady: <?= \json_encode((string)__('可以继续微调或重建第一阶段建站方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planModeUnavailable: <?= \json_encode((string)__('第一阶段模式当前不可用，请检查生成流配置。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planModeRunning: <?= \json_encode((string)__('正在执行第一阶段局部调整...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planModeDone: <?= \json_encode((string)__('第一阶段局部调整已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planModeInstructionHint: <?= \json_encode((string)__('未选择局部操作时，这里可选填写整体调整说明。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planActionPrepared: <?= \json_encode((string)__('已选中第一阶段局部操作，请先填写你的具体调整要求，再执行当前模式。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planActionPromptRequired: <?= \json_encode((string)__('请先输入本次第一阶段局部调整要求，再执行当前模式。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planFriendlyInvalidAiJson: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planStructuredPreviewTitle: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planStructuredPreviewEmpty: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planStructuredPreviewNote: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanStartUnavailable: <?= \json_encode((string)__('第二阶段任务方案入口暂不可用，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanGenerating: <?= \json_encode((string)__('正在准备第二阶段任务方案...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanDetecting: <?= \json_encode((string)__('正在检查并生成第二阶段任务方案...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanGenerated: <?= \json_encode((string)__('第二阶段任务方案已生成。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanConfirmRequired: <?= \json_encode((string)__('请先确认第二阶段任务方案，再开始构建。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanConfirmSaved: <?= \json_encode((string)__('第二阶段任务方案已确认。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanConfirmStartBuildQuestion: <?= \json_encode((string)__('阶段二任务计划已保存，是否立即开始构建？'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        continueGenerateNow: <?= \json_encode((string)__('继续生成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        continueGenerateLater: <?= \json_encode((string)__('稍后继续'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        immediateGenerate: <?= \json_encode((string)__('立即生成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        laterGenerate: <?= \json_encode((string)__('稍后生成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanDeferred: <?= \json_encode((string)__('已保留当前第二阶段草稿，稍后可以继续。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanRequiredByBuild: <?= \json_encode((string)__('请先生成并确认第二阶段任务方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanDetailRequiredBeforeAiGenerate: <?= \json_encode((string)__('请先完成并确认第二阶段任务方案，再生成页面。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanModeRefine: <?= \json_encode((string)__('微调任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanModeRebuild: <?= \json_encode((string)__('重建任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanModeReady: <?= \json_encode((string)__('可以继续微调或重建任务方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanModeUnavailable: <?= \json_encode((string)__('第二阶段模式当前不可用，请检查生成流配置。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanModeRunning: <?= \json_encode((string)__('正在执行第二阶段局部调整...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanModeDone: <?= \json_encode((string)__('第二阶段局部调整已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanModeInstructionHint: <?= \json_encode((string)__('未选择局部操作时，这里可选填写整体任务调整说明。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanActionPrepared: <?= \json_encode((string)__('已选中第二阶段局部操作，请先填写你的具体任务调整要求，再执行当前模式。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanActionPromptRequired: <?= \json_encode((string)__('请先输入本次第二阶段局部任务调整要求，再执行当前模式。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanModeBootstrapRequired: <?= \json_encode((string)__('正在补齐第二阶段草稿后再继续当前局部操作...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanModeBootstrapFailed: <?= \json_encode((string)__('第二阶段草稿初始化失败，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanGenerateConfirmTitle: <?= \json_encode((string)__('生成第二阶段任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanGenerateConfirmMessage: <?= \json_encode((string)__('将基于第一阶段确认方案生成第二阶段任务方案，是否立即开始？'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanGenerateCancelled: <?= \json_encode((string)__('已取消生成第二阶段任务方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanDraftSaved: <?= \json_encode((string)__('第二阶段草稿已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanDraftSaveFailed: <?= \json_encode((string)__('第二阶段草稿保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanSortSaved: <?= \json_encode((string)__('第二阶段任务块顺序已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanSortSaveFailed: <?= \json_encode((string)__('第二阶段任务块顺序保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanSortUnavailable: <?= \json_encode((string)__('第二阶段排序接口暂不可用。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanRunningMutationWarningTitle: <?= \json_encode((string)__('检测到任务正在运行'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanRunningMutationWarningMessage: <?= \json_encode((string)__('检测到仍有任务在运行，继续保存可能覆盖当前中间态，是否继续？'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        resumePromptTitle: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        resumeRunningPrompt: <?= \json_encode((string)__('检测到有正在执行的工作区操作，是否继续观察执行流？'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        resumePendingPrompt: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        resumeDeferred: <?= \json_encode((string)__('已保留当前任务，稍后可以继续。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        resumeStarted: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        operationStreamMissing: <?= \json_encode((string)__('后台已接受任务，但未返回可观察的进度流。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        missingRunVirtualTheme: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        autoGenerateNeeded: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        generating: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        waiting: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        generated: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        focusEmbeddedPreview: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        refineInstructionRequired: <?= \json_encode((string)__('请先输入区块微调要求'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        refineUnavailable: <?= \json_encode((string)__('当前区块暂时无法发起 AI 微调'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        refineQueued: <?= \json_encode((string)__('已提交区块微调，正在重新生成当前页面'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        refineContextFallback: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        editUnavailable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        editSaved: <?= \json_encode((string)__('区块字段已更新，已刷新当前块'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        blockSseDoneConfirm: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        blockSseNoResult: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        blockSseApplied: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        buildPreparing: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        buildReady: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        operationDuplicateStream: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        leaveDuringBuild: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        domainNeedBrief: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        domainNeedRegistrar: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        domainRecommendLoading: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        domainRecommendEmpty: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        domainCheckNeedRegistrar: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        domainConfirmCheckFailed: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        domainPurchaseFailed: <?= \json_encode((string)__('购买域名失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        domainPurchaseDialogLoadFailed: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        domainPurchaseQueued: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        domainPurchased: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        publishStartUnavailable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        publishChecking: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        publishRunning: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        publishPreviewUnavailable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planPreviewFullscreenTitle: <?= \json_encode((string)__('阶段一建站方案全屏查看'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanPreviewFullscreenTitle: <?= \json_encode((string)__('第二阶段任务方案全屏查看'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        planPreviewFullscreenClose: <?= \json_encode((string)__('关闭'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        networkError: <?= \json_encode((string)__('网络错误，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        saveSuccess: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        saveFailed: <?= \json_encode((string)__('自动保存失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        orchestrated: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        switched: <?= \json_encode((string)__('预览页已切换'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        visualPreviewUnreachable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        visualPreviewFrameTitle: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        noPageType: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        briefRequired: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        siteTitleRequired: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainRequiredForBuild: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planStartUnavailable: <?= \json_encode((string)__('第一阶段方案入口暂不可用，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planSaving: <?= \json_encode((string)__('正在保存第一阶段草稿...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planGenerating: <?= \json_encode((string)__('正在生成第一阶段建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planRegeneratingByPageTypes: <?= \json_encode((string)__('正在根据当前页面类型重新生成第一阶段建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planRegeneratingByLocale: <?= \json_encode((string)__('正在根据当前方案语言重新生成第一阶段建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planRegeneratingByPageTypesAndLocale: <?= \json_encode((string)__('正在根据当前页面类型和方案语言重新生成第一阶段建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planGenerated: <?= \json_encode((string)__('第一阶段建站方案已生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planConfirmRequired: <?= \json_encode((string)__('请先确认第一阶段方案，再进入第二阶段。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        phaseOnePlanMissingForTaskPlan: <?= \json_encode((string)__('请先完成并确认第一阶段建站方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planConfirmSaved: <?= \json_encode((string)__('第一阶段方案已确认。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planConfirmStartBuildQuestion: <?= \json_encode((string)__('阶段一方案已保存，是否进入阶段二任务计划确认？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planDeferred: <?= \json_encode((string)__('已保留当前第一阶段草稿，稍后可以继续。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planDraftSaved: <?= \json_encode((string)__('第一阶段草稿已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planDraftSaveFailed: <?= \json_encode((string)__('第一阶段草稿保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planSortSaved: <?= \json_encode((string)__('第一阶段方案块顺序已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planSortSaveFailed: <?= \json_encode((string)__('第一阶段方案块顺序保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planSortUnavailable: <?= \json_encode((string)__('第一阶段排序接口暂不可用。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planModeRefine: <?= \json_encode((string)__('微调方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planModeRebuild: <?= \json_encode((string)__('重建方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planModeReady: <?= \json_encode((string)__('可以继续微调或重建第一阶段建站方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planModeUnavailable: <?= \json_encode((string)__('第一阶段模式当前不可用，请检查生成流配置。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planModeRunning: <?= \json_encode((string)__('正在执行第一阶段局部调整...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planModeDone: <?= \json_encode((string)__('第一阶段局部调整已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planModeInstructionHint: <?= \json_encode((string)__('未选择局部操作时，这里可选填写整体调整说明。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planActionPrepared: <?= \json_encode((string)__('已选中第一阶段局部操作，请先填写你的具体调整要求，再执行当前模式。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planActionPromptRequired: <?= \json_encode((string)__('请先输入本次第一阶段局部调整要求，再执行当前模式。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planFriendlyInvalidAiJson: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planStructuredPreviewTitle: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planStructuredPreviewEmpty: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planStructuredPreviewNote: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanStartUnavailable: <?= \json_encode((string)__('第二阶段任务方案入口暂不可用，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanGenerating: <?= \json_encode((string)__('正在准备第二阶段任务方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanDetecting: <?= \json_encode((string)__('正在检查并生成第二阶段任务方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanGenerated: <?= \json_encode((string)__('第二阶段任务方案已生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanConfirmRequired: <?= \json_encode((string)__('请先确认第二阶段任务方案，再开始构建。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanConfirmSaved: <?= \json_encode((string)__('第二阶段任务方案已确认。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanConfirmStartBuildQuestion: <?= \json_encode((string)__('阶段二任务计划已保存，是否立即开始构建？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        continueGenerateNow: <?= \json_encode((string)__('继续生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        continueGenerateLater: <?= \json_encode((string)__('稍后继续'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        immediateGenerate: <?= \json_encode((string)__('立即生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        laterGenerate: <?= \json_encode((string)__('稍后生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanDeferred: <?= \json_encode((string)__('已保留当前第二阶段草稿，稍后可以继续。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanRequiredByBuild: <?= \json_encode((string)__('请先生成并确认第二阶段任务方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanDetailRequiredBeforeAiGenerate: <?= \json_encode((string)__('请先完成并确认第二阶段任务方案，再生成页面。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanModeRefine: <?= \json_encode((string)__('微调任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanModeRebuild: <?= \json_encode((string)__('重建任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanModeReady: <?= \json_encode((string)__('可以继续微调或重建任务方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanModeUnavailable: <?= \json_encode((string)__('第二阶段模式当前不可用，请检查生成流配置。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanModeRunning: <?= \json_encode((string)__('正在执行第二阶段局部调整...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanModeDone: <?= \json_encode((string)__('第二阶段局部调整已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanModeInstructionHint: <?= \json_encode((string)__('未选择局部操作时，这里可选填写整体任务调整说明。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanActionPrepared: <?= \json_encode((string)__('已选中第二阶段局部操作，请先填写你的具体任务调整要求，再执行当前模式。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanActionPromptRequired: <?= \json_encode((string)__('请先输入本次第二阶段局部任务调整要求，再执行当前模式。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanModeBootstrapRequired: <?= \json_encode((string)__('正在补齐第二阶段草稿后再继续当前局部操作...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanModeBootstrapFailed: <?= \json_encode((string)__('第二阶段草稿初始化失败，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanGenerateConfirmTitle: <?= \json_encode((string)__('生成第二阶段任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanGenerateConfirmMessage: <?= \json_encode((string)__('将基于第一阶段确认方案生成第二阶段任务方案，是否立即开始？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanGenerateCancelled: <?= \json_encode((string)__('已取消生成第二阶段任务方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanDraftSaved: <?= \json_encode((string)__('第二阶段草稿已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanDraftSaveFailed: <?= \json_encode((string)__('第二阶段草稿保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanSortSaved: <?= \json_encode((string)__('第二阶段任务块顺序已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanSortSaveFailed: <?= \json_encode((string)__('第二阶段任务块顺序保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanSortUnavailable: <?= \json_encode((string)__('第二阶段排序接口暂不可用。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanRunningMutationWarningTitle: <?= \json_encode((string)__('检测到任务正在运行'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanRunningMutationWarningMessage: <?= \json_encode((string)__('检测到仍有任务在运行，继续保存可能覆盖当前中间态，是否继续？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        resumePromptTitle: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        resumeRunningPrompt: <?= \json_encode((string)__('检测到有正在执行的工作区操作，是否继续观察执行流？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        resumePendingPrompt: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        resumeDeferred: <?= \json_encode((string)__('已保留当前任务，稍后可以继续。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        resumeStarted: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        operationStreamMissing: <?= \json_encode((string)__('后台已接受任务，但未返回可观察的进度流。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        missingRunVirtualTheme: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        autoGenerateNeeded: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        generating: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        waiting: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        generated: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        focusEmbeddedPreview: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        refineInstructionRequired: <?= \json_encode((string)__('请先输入区块微调要求'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        refineUnavailable: <?= \json_encode((string)__('当前区块暂时无法发起 AI 微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        refineQueued: <?= \json_encode((string)__('已提交区块微调，正在重新生成当前页面'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        refineContextFallback: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        editUnavailable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        editSaved: <?= \json_encode((string)__('区块字段已更新，已刷新当前块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseDoneConfirm: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseNoResult: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseApplied: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        buildPreparing: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        buildReady: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        operationDuplicateStream: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        leaveDuringBuild: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainNeedBrief: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainNeedRegistrar: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainRecommendLoading: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainRecommendEmpty: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainCheckNeedRegistrar: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainConfirmCheckFailed: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainPurchaseFailed: <?= \json_encode((string)__('购买域名失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainPurchaseDialogLoadFailed: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainPurchaseQueued: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainPurchased: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStartUnavailable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishChecking: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishRunning: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishPreviewUnavailable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planPreviewFullscreenTitle: <?= \json_encode((string)__('阶段一建站方案全屏查看'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanPreviewFullscreenTitle: <?= \json_encode((string)__('第二阶段任务方案全屏查看'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planPreviewFullscreenClose: <?= \json_encode((string)__('关闭'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
     };
     var planPreviewFullscreenEscapeHandler = null;
     var currentPreviewTabKeyByStage = {
@@ -786,49 +792,49 @@
         'task-plan': 'theme'
     };
     var previewLabels = {
-        visualPreviewEmpty: <?= \json_encode((string)__('暂无可预览页面，请先完成页面生成或选择预览页。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        field: <?= \json_encode((string)__('字段'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        sample: <?= \json_encode((string)__('示例'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        reason: <?= \json_encode((string)__('原因'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        featurePoints: <?= \json_encode((string)__('执行要点'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        mediaAssets: <?= \json_encode((string)__('素材建议'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        palette: <?= \json_encode((string)__('色系'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        styleTone: <?= \json_encode((string)__('风格'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        typography: <?= \json_encode((string)__('字体与排版'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        themeSummary: <?= \json_encode((string)__('主题规划'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        themeTab: <?= \json_encode((string)__('主题'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        themeTabEmpty: <?= \json_encode((string)__('当前方案暂未写入主题级全局信息，请先生成或微调方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        stageToolbarHint: <?= \json_encode((string)__('悬停后可直接微调、重建、删除或新增块；拖动排序后会自动保存；也可以对整个阶段重新生成。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        refineAction: <?= \json_encode((string)__('微调'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        rebuildAction: <?= \json_encode((string)__('重建'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        deleteAction: <?= \json_encode((string)__('删除'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        addBlockAction: <?= \json_encode((string)__('新增块'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        sortHandle: <?= \json_encode((string)__('拖动排序'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        editAction: <?= \json_encode((string)__('编辑'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        aiRefineAction: <?= \json_encode((string)__('AI 微调'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        aiRebuildAction: <?= \json_encode((string)__('AI 重建'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        editBlockAction: <?= \json_encode((string)__('编辑块'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        refineStage: <?= \json_encode((string)__('整体微调'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        rebuildStage: <?= \json_encode((string)__('完全重新生成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        primaryKeywords: <?= \json_encode((string)__('主关键词'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        secondaryKeywords: <?= \json_encode((string)__('次关键词'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        noBlocks: <?= \json_encode((string)__('暂无块规划'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        pageGoal: <?= \json_encode((string)__('页面目标'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        blockGoal: <?= \json_encode((string)__('块目标'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        scriptScene: <?= \json_encode((string)__('脚本场景'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        scriptGoal: <?= \json_encode((string)__('脚本目标'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        fillRule: <?= \json_encode((string)__('内容填充规则'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        acceptance: <?= \json_encode((string)__('验收标准'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        stage3Directive: <?= \json_encode((string)__('第三阶段执行指令'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskScriptBrief: <?= \json_encode((string)__('任务脚本概览'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        sharedTasks: <?= \json_encode((string)__('共享任务'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        tasksUnit: <?= \json_encode((string)__('项任务'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        riskNotes: <?= \json_encode((string)__('风险提示'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskPlanHint: <?= \json_encode((string)__('以下为第二阶段块任务预览，可直接拖动排序，并对单块或整阶段进行操作。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        headerPlan: <?= \json_encode((string)__('页头规划'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        footerPlan: <?= \json_encode((string)__('页脚规划'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        publishCheckPassed: <?= \json_encode((string)__('发布检查通过'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        publishCheckFailed: <?= \json_encode((string)__('发布检查未通过，请先处理阻塞项。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+        visualPreviewEmpty: <?= \json_encode((string)__('暂无可预览页面，请先完成页面生成或选择预览页。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        field: <?= \json_encode((string)__('字段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        sample: <?= \json_encode((string)__('示例'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        reason: <?= \json_encode((string)__('原因'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        featurePoints: <?= \json_encode((string)__('执行要点'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        mediaAssets: <?= \json_encode((string)__('素材建议'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        palette: <?= \json_encode((string)__('色系'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        styleTone: <?= \json_encode((string)__('风格'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        typography: <?= \json_encode((string)__('字体与排版'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        themeSummary: <?= \json_encode((string)__('主题规划'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        themeTab: <?= \json_encode((string)__('主题'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        themeTabEmpty: <?= \json_encode((string)__('当前方案暂未写入主题级全局信息，请先生成或微调方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        stageToolbarHint: <?= \json_encode((string)__('悬停后可直接微调、重建、删除或新增块；拖动排序后会自动保存；也可以对整个阶段重新生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        refineAction: <?= \json_encode((string)__('微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        rebuildAction: <?= \json_encode((string)__('重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        deleteAction: <?= \json_encode((string)__('删除'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        addBlockAction: <?= \json_encode((string)__('新增块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        sortHandle: <?= \json_encode((string)__('拖动排序'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        editAction: <?= \json_encode((string)__('编辑'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        aiRefineAction: <?= \json_encode((string)__('AI 微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        aiRebuildAction: <?= \json_encode((string)__('AI 重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        editBlockAction: <?= \json_encode((string)__('编辑块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        refineStage: <?= \json_encode((string)__('整体微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        rebuildStage: <?= \json_encode((string)__('完全重新生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        primaryKeywords: <?= \json_encode((string)__('主关键词'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        secondaryKeywords: <?= \json_encode((string)__('次关键词'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        noBlocks: <?= \json_encode((string)__('暂无块规划'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        pageGoal: <?= \json_encode((string)__('页面目标'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockGoal: <?= \json_encode((string)__('块目标'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        scriptScene: <?= \json_encode((string)__('脚本场景'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        scriptGoal: <?= \json_encode((string)__('脚本目标'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        fillRule: <?= \json_encode((string)__('内容填充规则'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        acceptance: <?= \json_encode((string)__('验收标准'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        stage3Directive: <?= \json_encode((string)__('第三阶段执行指令'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskScriptBrief: <?= \json_encode((string)__('任务脚本概览'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        sharedTasks: <?= \json_encode((string)__('共享任务'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        tasksUnit: <?= \json_encode((string)__('项任务'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        riskNotes: <?= \json_encode((string)__('风险提示'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanHint: <?= \json_encode((string)__('以下为第二阶段块任务预览，可直接拖动排序，并对单块或整阶段进行操作。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        headerPlan: <?= \json_encode((string)__('页头规划'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        footerPlan: <?= \json_encode((string)__('页脚规划'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishCheckPassed: <?= \json_encode((string)__('发布检查通过'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishCheckFailed: <?= \json_encode((string)__('发布检查未通过，请先处理阻塞项。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
     };
 
     var lastToastByKey = {};
@@ -836,15 +842,15 @@
         var text = String(message || '');
         var lower = text.toLowerCase();
         if (lower.indexOf('insufficient balance') >= 0 || lower.indexOf('http 402') >= 0) {
-            return <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            return <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
         }
         if (lower.indexOf('ai component generation failed') >= 0) {
-            return <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            return <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
         }
         return text;
     }
 
-    // 鍏煎鍘嗗彶鎷煎啓锛坣ormalizetoastMessage锛夛紝閬垮厤鏃ч棴鍖?缂撳瓨鑴氭湰瑙﹀彂 ReferenceError
+    // 闁稿繒鍘ч鎰板储閸℃钑夐柟椋庡帶閸熸捇鏁嶉崸顤祌malizetoastMessage闁挎稑顧€缁辨繈鏌嗛崹顔煎赋闁哄唲鍥紨闁?缂傚倹鎸搁悺銊╂嚇濮橆厽鎷遍悷娆欑畱瑜?ReferenceError
     function normalizetoastMessage(message) {
         return normalizeToastMessage(message);
     }
@@ -878,14 +884,14 @@
         }).then(function (response) {
             if (!response.ok) {
                 return response.text().then(function (text) {
-                    var errMsg = '缃戠粶閿欒: ' + response.status + ' ' + response.statusText;
+                    var errMsg = '缂傚啯鍨圭划鍫曟煥濞嗘帩鍤? ' + response.status + ' ' + response.statusText;
                     try {
                         var j = JSON.parse(text);
                         if (j && (j.message || j.error)) {
                             errMsg = String(j.message || j.error);
                         }
                     } catch (e) {
-                        // 濡傛灉涓嶆槸 JSON锛屼娇鐢ㄥ師濮嬮敊璇俊鎭?
+                        // 濠碘€冲€归悘澶嬬▔瀹ュ棙笑 JSON闁挎稑濂旀繛鍥偨閵娿儱鏂у┑顔碱儔閺佸﹦鎷犻娆庣箚闁?
                     }
                     throw new Error(errMsg);
                 });
@@ -901,9 +907,9 @@
                 } catch (error) {
                     var isLikelyHtml = rawText.indexOf('<!DOCTYPE') === 0 || rawText.indexOf('<html') === 0 || rawText.indexOf('<') === 0;
                     if (isLikelyHtml) {
-                        throw new Error(<?= \json_encode((string)__('接口返回了 HTML，而不是 JSON。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                        throw new Error(<?= \json_encode((string)__('接口返回了 HTML，而不是 JSON。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
                     }
-                    throw new Error(<?= \json_encode((string)__('接口返回了非 JSON 响应。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                    throw new Error(<?= \json_encode((string)__('接口返回了非 JSON 响应。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
                 }
             });
         }).catch(function (error) {
@@ -921,7 +927,7 @@
     }
 
     function showBuildGuard(message, detail) {
-        // 鎸変骇鍝佽姹傜Щ闄ゆ瀯寤洪伄缃╁脊绐楁樉绀猴紱淇濈暀璋冪敤鐐归伩鍏嶅奖鍝嶇幇鏈夋祦绋嬨€?        void message;
+        // 闁圭顦鍥传娴ｇ瓔娲ｆ慨鐟板€讳簺闂傚嫨鍊栭悗顖氼嚈濞差亙绱曠紓鍐ｆ櫅閼村﹦绮ｅΔ浣光枖缂佲偓閻氬骞㈠ǎ鍥ㄧ箘閺嗏偓閻犲鍟伴弫銈夋倷瑜版帊缂夐柛蹇撶Т婵傛牠宕鍥х疀闁哄牆顦扮粊锔剧矙鐎ｃ劉鍋?        void message;
         void detail;
         hideBuildGuard();
     }
@@ -1170,7 +1176,7 @@
         if (!wrapper) {
             return null;
         }
-        var list = wrapper.querySelector('.pb-ai-preview-tabs');
+        var list = wrapper.querySelector('ul.pb-ai-preview-tabs');
         if (!list) {
             list = document.createElement('ul');
             list.className = 'nav nav-tabs pb-ai-preview-tabs';
@@ -1194,7 +1200,7 @@
         card = document.createElement('div');
         card.className = 'border rounded p-3 d-none';
         card.id = 'pb-ai-materialized-pages-card';
-        card.innerHTML = '<div class="fw-semibold mb-2">宸茬墿鍖栭〉闈?/div><div class="d-flex flex-wrap gap-2" id="pb-ai-materialized-pages-list"></div>';
+        card.innerHTML = '<div class="fw-semibold mb-2">鐎规瓕灏欐晶鍧楀礌閺嶎厹鈧妫?/div><div class="d-flex flex-wrap gap-2" id="pb-ai-materialized-pages-list"></div>';
         container.insertBefore(card, anchor || null);
         return card;
     }
@@ -1254,7 +1260,7 @@
             previewLink.id = 'pb-ai-open-preview-full-link';
             previewLink.target = '_blank';
             previewLink.rel = 'noopener';
-            previewLink.textContent = <?= \json_encode((string)__('打开普通预览'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            previewLink.textContent = <?= \json_encode((string)__('打开普通预览'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
             actionBar.appendChild(previewLink);
         }
         actionBar.classList.toggle('d-none', visualUrl === '' && previewUrl === '');
@@ -1271,7 +1277,7 @@
         if (!buildNavigationGuardActive) {
             return;
         }
-        var message = messages.leaveDuringBuild || <?= \json_encode((string)__('页面仍在生成中，离开后会中断当前生成。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+        var message = messages.leaveDuringBuild || <?= \json_encode((string)__('页面仍在生成中，离开后会中断当前生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
         event.preventDefault();
         event.returnValue = message;
         return message;
@@ -1281,7 +1287,7 @@
         return document.querySelectorAll('.pb-ai-target-domain-sync');
     }
 
-    /** 浼樺厛 #pb-ai-target-domain锛堟楠?1 涓昏緭鍏ワ級锛屽惁鍒欐憳瑕佸尯 #pb-ai-target-domain-summary锛屼繚璇佷笌 scope.target_domain 鍚屾簮 */
+    /** 濞村吋锚閸?#pb-ai-target-domain闁挎稑鐗婇鐐搭殽?1 濞戞挻妲掔欢顓㈠礂閵夘垳绀嗛柨娑樿嫰閹線宕氬▎鎰枀閻熸洑绀佺亸?#pb-ai-target-domain-summary闁挎稑濂旂换姘辨嫚娴ｉ鐟?scope.target_domain 闁告艾鏈花?*/
     function getTargetDomainTrimmed() {
         var primary = document.getElementById('pb-ai-target-domain');
         if (primary && typeof primary.value === 'string') {
@@ -1353,7 +1359,7 @@
         var idNode = document.getElementById(elementId);
         pushNode(idNode);
 
-        // 鍏煎閮ㄥ垎 i18n 缁勪欢浼氭覆鏌?hidden/input 浣滀负鐪熷疄鍊煎鍣?
+        // 闁稿繒鍘ч鎰版焾閵娿儱鐎?i18n 缂備礁瀚▎銏″濮橆叀顩柡?hidden/input 濞达絾绮堢拹鐔兼儑閻旈鏉介柛濠勫帶椤旀劙宕?
         [
             elementId + '_value',
             elementId + '-value',
@@ -1433,13 +1439,13 @@
     var recommendDomainUrl = document.getElementById('site-builder-api-recommend-domain') ? document.getElementById('site-builder-api-recommend-domain').value : '';
     var checkDomainUrl = document.getElementById('site-builder-api-check-domain') ? document.getElementById('site-builder-api-check-domain').value : '';
     var startDomainPurchaseUrl = document.getElementById('site-builder-api-start-domain-purchase') ? document.getElementById('site-builder-api-start-domain-purchase').value : '';
-    var domainPurchaseSseBaseUrl = <?= \json_encode($domainPurchaseSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var linkedWorkbenchPublicId = <?= \json_encode((string)($this->getData('linked_workbench_public_id') ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var domainPurchaseSseBaseUrl = <?= \json_encode($domainPurchaseSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var linkedWorkbenchPublicId = <?= \json_encode((string)($this->getData('linked_workbench_public_id') ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var briefInputEl = document.getElementById('pb-ai-brief-description');
     var titleInputEl = document.getElementById('pb-ai-site-title');
     var recommendationBoxEl = document.getElementById('pb-ai-domain-recommendation');
     var recommendationListEl = document.getElementById('pb-ai-recommended-domain-list');
-    var domainPurchaseState = <?= \json_encode($domainPurchaseState, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var domainPurchaseState = <?= \json_encode($domainPurchaseState, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var domainPurchaseSource = null;
     var domainPurchaseSourceStartTimer = null;
 
@@ -1523,7 +1529,7 @@
                     : (domainPurchaseState.status === 'failed' ? 'bg-soft-danger text-danger'
                         : ((domainPurchaseState.status === 'queued' || domainPurchaseState.status === 'running') ? 'bg-soft-info text-info' : 'bg-soft-secondary text-muted'))
             );
-            badge.textContent = String(domainPurchaseState.status_label || <?= \json_encode((string)__('待启动'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            badge.textContent = String(domainPurchaseState.status_label || <?= \json_encode((string)__('待启动'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
         }
         if (messageEl) {
             messageEl.textContent = String(domainPurchaseState.message || '');
@@ -1532,11 +1538,11 @@
             domainEl.textContent = String(domainPurchaseState.domain || getTargetDomainTrimmed());
         }
         if (stageEl) {
-            stageEl.textContent = String(domainPurchaseState.stage_label || '璐拱鍩熷悕');
+            stageEl.textContent = String(domainPurchaseState.stage_label || '閻犳劦鍘洪幏閬嶅春閻旈攱鍊?);
         }
         if (orderEl) {
             var orderId = parseInt(String(domainPurchaseState.order_id || 0), 10) || parseInt(String(domainPurchaseState.purchase_order_id || 0), 10) || 0;
-            orderEl.textContent = orderId > 0 ? String(orderId) : '绛夊緟鐢熸垚';
+            orderEl.textContent = orderId > 0 ? String(orderId) : '缂佹稑顦欢鐔兼偨閻旂鐏?;
         }
         if (buttonEl) {
             buttonEl.disabled = ['queued', 'running'].indexOf(String(domainPurchaseState.status || 'idle')) !== -1;
@@ -1568,7 +1574,7 @@
             requestUrl.searchParams.set('public_id', linkedPublicId);
             requestUrl.searchParams.set('execution_token', executionToken);
         } catch (error) {
-            toast('error', <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            toast('error', <?= \json_encode((string)__('复制失败，请手动复制'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
             return false;
         }
         domainPurchaseSourceStartTimer = window.setTimeout(function () {
@@ -1576,7 +1582,7 @@
             try {
                 domainPurchaseSource = new EventSource(requestUrl.toString());
             } catch (error) {
-                toast('error', <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                toast('error', <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
                 return;
             }
 
@@ -1607,7 +1613,7 @@
                 if (currentStatus === 'queued' || currentStatus === 'running') {
                     syncDomainPurchaseCard({
                         status: currentStatus,
-                        message: <?= \json_encode((string)__('连接重试中，域名任务可能仍在后台执行...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                        message: <?= \json_encode((string)__('连接重试中，域名任务可能仍在后台执行...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
                     });
                 }
             });
@@ -1719,24 +1725,24 @@
         ensurePurchaseDialogLoaded().then(function (dialog) {
             return dialog.open({
                 labels: {
-                    title: <?= \json_encode((string)__('Purchase Domain'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    description: <?= \json_encode((string)__('After confirming the purchase, the system will continue DNS, CDN, resolve, and follow-up lifecycle handling.'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    dnsChoice: <?= \json_encode((string)__('DNS Mode'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    dnsFollowRegistrar: <?= \json_encode((string)__('Follow Registrar'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    dnsCustomNameservers: <?= \json_encode((string)__('Custom Nameserver'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    dnsNameservers: <?= \json_encode((string)__('Nameserver List'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    dnsNameserversPlaceholder: <?= \json_encode((string)__('ns1.example.com, ns2.example.com'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    cdnChoice: <?= \json_encode((string)__('CDN Mode'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    cdnFollowRegistrar: <?= \json_encode((string)__('Follow Registrar'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    cdnNone: <?= \json_encode((string)__('No CDN'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    resolveToLocal: <?= \json_encode((string)__('Resolve to Local Deployment'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    resolveHint: <?= \json_encode((string)__('Support @ and www host records when mapping the purchased domain to the current local deployment.'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    subdomains: <?= \json_encode((string)__('Host Records'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    subdomainsPlaceholder: <?= \json_encode((string)__('@,www'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    startLifecycle: <?= \json_encode((string)__('Start Domain Lifecycle'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    startLifecycleHint: <?= \json_encode((string)__('After the purchase starts, the system can continue DNS and HTTPS related follow-up processing.'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    confirm: <?= \json_encode((string)__('Confirm Purchase'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    cancel: <?= \json_encode((string)__('Cancel'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    title: <?= \json_encode((string)__('Purchase Domain'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    description: <?= \json_encode((string)__('After confirming the purchase, the system will continue DNS, CDN, resolve, and follow-up lifecycle handling.'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    dnsChoice: <?= \json_encode((string)__('DNS Mode'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    dnsFollowRegistrar: <?= \json_encode((string)__('Follow Registrar'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    dnsCustomNameservers: <?= \json_encode((string)__('Custom Nameserver'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    dnsNameservers: <?= \json_encode((string)__('Nameserver List'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    dnsNameserversPlaceholder: <?= \json_encode((string)__('ns1.example.com, ns2.example.com'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    cdnChoice: <?= \json_encode((string)__('CDN Mode'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    cdnFollowRegistrar: <?= \json_encode((string)__('Follow Registrar'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    cdnNone: <?= \json_encode((string)__('No CDN'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    resolveToLocal: <?= \json_encode((string)__('Resolve to Local Deployment'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    resolveHint: <?= \json_encode((string)__('Support @ and www host records when mapping the purchased domain to the current local deployment.'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    subdomains: <?= \json_encode((string)__('Host Records'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    subdomainsPlaceholder: <?= \json_encode((string)__('@,www'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    startLifecycle: <?= \json_encode((string)__('Start Domain Lifecycle'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    startLifecycleHint: <?= \json_encode((string)__('After the purchase starts, the system can continue DNS and HTTPS related follow-up processing.'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    confirm: <?= \json_encode((string)__('Confirm Purchase'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+                    cancel: <?= \json_encode((string)__('Cancel'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
                 },
                 defaults: {
                     dnsChoice: 'follow_registrar',
@@ -1784,7 +1790,7 @@
         });
     }
 
-    // 绂佹椤甸潰鍔犺浇鏃惰嚜鍔ㄦ仮澶嶅煙鍚嶈喘涔?SSE锛岀粺涓€鏀逛负鐢ㄦ埛鏄惧紡瑙﹀彂銆?
+    // 缂佸倷鐒﹂娑欍亜閻㈠憡妗ㄩ柛鏃傚Ь濞村洭寮幆鏉挎闁告柣鍔嶆禒顔藉緞瀹ュ懐鍘甸柛姘Х閸犳ɑ绋?SSE闁挎稑鐬肩划鐑樼▔閳ь剟寮ㄩ柅娑滅闁活潿鍔嶉崺娑㈠及閹呯閻熸瑱绠戣ぐ鍌炲Υ?
     document.querySelectorAll('.pb-ai-workspace-track-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
             var track = btn.getAttribute('data-track');
@@ -1838,7 +1844,7 @@
         });
     }
 
-    // T36: 鏌ョ湅鍘嗗彶纭鏂规寮圭獥
+    // T36: 闁哄被鍎冲﹢鍛村储閸℃钑夌痪顓у枦椤撳寮憴鍕垫敵鐎殿喖婀遍悰?
     function showConfirmedPlanModal(planType) {
         var modalEl = document.getElementById('pb-ai-confirmed-plan-view-modal');
         if (!modalEl) {
@@ -1858,14 +1864,14 @@
         var typeLabel = '';
 
         if (planType === 'stage1') {
-            typeLabel = <?= \json_encode((string)__('阶段一方案'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            typeLabel = <?= \json_encode((string)__('阶段一方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
             planData = window.__pbWorkspaceConfirmedPlan || {};
             markdown = planData.markdown || planData.markdown_content || '';
             confirmedAt = planData.confirmed_at || '';
             signature = planData.signature || planData.execution_blueprint_signature || '';
             locale = planData.plan_locale || '';
         } else if (planType === 'stage2') {
-            typeLabel = <?= \json_encode((string)__('阶段二任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            typeLabel = <?= \json_encode((string)__('阶段一方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
             planData = window.__pbWorkspaceConfirmedTaskPlan || {};
             markdown = planData.markdown || planData.confirmed_markdown || '';
             confirmedAt = planData.confirmed_at || planData.task_plan_confirmed_at || '';
@@ -1895,10 +1901,10 @@
         if (planSignature) planSignature.textContent = signature || '-';
         if (planLocale) planLocale.textContent = locale || '-';
 
-        // 瀛樺偍褰撳墠鏁版嵁渚涘鍒朵娇鐢?
+        // 閻庢稒锚閸嬪秷銇愰幘鍐差枀闁轰胶澧楀畵浣圭瑹濞戞﹩妲婚柛鎺撴构婵炲洭鎮?
         window.__pbCurrentConfirmedPlanData = planData;
 
-        // 鏄剧ず Modal
+        // 闁哄嫬澧介妵?Modal
         var modal = window.bootstrap && window.bootstrap.Modal ? new window.bootstrap.Modal(modalEl) : null;
         if (modal) {
             modal.show();
@@ -1907,18 +1913,18 @@
         }
     }
 
-    // T36: 澶嶅埗纭鏂规 JSON
+    // T36: 濠㈣泛绉撮崺妤冩兜椤旀鍚囬柡鍌濐潐椤?JSON
     function copyConfirmedPlanJson() {
         var data = window.__pbCurrentConfirmedPlanData || {};
         var json = JSON.stringify(data, null, 2);
         if (!json || json === '{}') {
-            toast('warning', <?= \json_encode((string)__('没有可复制的内容'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            toast('warning', <?= \json_encode((string)__('没有可复制的内容'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
             return;
         }
         navigator.clipboard.writeText(json).then(function () {
-            toast('success', <?= \json_encode((string)__('结构化数据已复制到剪贴板'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            toast('success', <?= \json_encode((string)__('结构化数据已复制到剪贴板'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
         }).catch(function () {
-            toast('error', <?= \json_encode((string)__('复制失败，请手动复制'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            toast('error', <?= \json_encode((string)__('复制失败，请手动复制'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
         });
     }
 
@@ -1926,15 +1932,16 @@
         bindPlanPreviewFullscreenClick();
         bindTaskPlanPreviewFullscreenClick();
         bindPlanModalViewSwitchers();
+        bindPlanPrimaryPaneSwitchers();
         setPlanViewMode('pb-ai-plan-preview-content');
-        // 缁戝畾鏌ョ湅鍘嗗彶鏂规鎸夐挳
+        // 缂備焦鍨甸悾楣冨蓟閵壯勭畽闁告ê妫楄ぐ鍫曞棘鐟欏嫷鏀抽柟绋款樀閹?
         document.querySelectorAll('.pb-ai-view-confirmed-plan').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 var planType = btn.getAttribute('data-plan-type') || 'stage1';
                 showConfirmedPlanModal(planType);
             });
         });
-        // 缁戝畾澶嶅埗鎸夐挳
+        // 缂備焦鍨甸悾鐐緞瀹ュ懎鐓戦柟绋款樀閹?
         var copyJsonBtn = document.getElementById('pb-ai-copy-plan-json');
         if (copyJsonBtn) copyJsonBtn.addEventListener('click', copyConfirmedPlanJson);
     });
@@ -2246,14 +2253,14 @@
             extra_page_types_panel_open: extraPageTypesPanelOpen,
             site_profile_manual: Object.assign({}, siteProfileManual)
         };
-        // SSE 鏂规娴佸畬鎴愬悗锛屾妸鐢熸垚鐨勬柟妗堝唴瀹瑰悎骞惰繘 scope patch锛岃Е鍙戣嚜鍔ㄤ繚瀛?
+        // SSE 闁哄倽顫夐、宥吤规担鍝ユ殮闁瑰瓨鍔曢幃妤呮晬鐏炴儳惟闁汇垻鍠愰崹姘舵儍閸曨剚鐓欐俊妤€鐗嗛崬瀵糕偓鍦嚀閹酣鐛幆鎵 scope patch闁挎稑鐭佽闁告瑦鍨奸崵婊堝礉閵娿倗绠介悗?
         var draftMarkdown = currentPlanPayload && typeof currentPlanPayload === 'object'
             ? String(currentPlanPayload.markdown || '').trim()
             : '';
         if (draftMarkdown !== '') {
             patch.plan_markdown = draftMarkdown;
-            // 閬垮厤鍦ㄢ€滃紑濮嬫瀯寤?闃舵浜屾搷浣溾€濇椂璇妸宸茬‘璁ょ殑闃舵涓€鐘舵€佹墦鍥炴湭纭銆?
-            // 浠呭湪褰撳墠浼氳瘽鏈氨鏈‘璁ら樁娈典竴鏃讹紝鎵嶆樉寮忎繚鎸?0銆?
+            // 闂侇剙鐏濋崢銈夊捶閵娾懇鍋撳鍐；濠殿喖顑嗛悗顖氼嚈?闂傚啳鍩栭灞剧鐏炵偓鎯欏ù锝嗗閳ь剚绻冨鍌滄嫚椤栨稑惟鐎规瓕灏欓垾妯兼媼閵堝洦鐣遍梻鍐煐椤斿本绋夐埀顒勬偐閼哥鍋撴担鐟扳叺闁搞儳鍋炲﹢顓犳兜椤旀鍚囬柕?
+            // 濞寸姴鎳庡﹢顏囥亹閹惧啿顤呭ù鍏间亢閻︿粙寮甸鈧銊╁嫉椤忓棌鈧鎷嬮妶澶嬧枆婵炲牆鍚€缁旀挳寮拋鍦闁归潧绉靛Ο澶婎嚕韫囧海绠介柟?0闁?
             if (!planConfirmedState) {
                 patch.plan_confirmed = 0;
             }
@@ -2296,7 +2303,7 @@
         return true;
     }
 
-    /** 闃舵浜屽叆鍙ｏ細鏄惁宸插叿澶囬樁娈典竴寤虹珯鏂规锛堜笌鐩爣鍩熷悕鏃犲叧锛?*/
+    /** 闂傚啳鍩栭灞剧鐏炶棄寮抽柛娆欑秶缁变即寮伴姘剨鐎瑰憡褰冮崣鎸庡緞閸ヮ剚鈻夋繛鍫濆悁缁旀潙顕欓搹鍦讲闁哄倽顫夐、宥夋晬閸粎鐟㈤柣鈺婂枟閻栵綁宕洪悢閿嬪€抽柡鍐Т閸櫻囨晬?*/
     function hasPhaseOnePlanPresent() {
         var md = String((currentPlanPayload && currentPlanPayload.markdown) || '').trim();
         if (md !== '') {
@@ -2401,7 +2408,8 @@
 
     var tabClickLocked = false;
     function getPreviewTabContainers() {
-        var containers = Array.from(document.querySelectorAll('.pb-ai-preview-tabs'));
+        // 娴?ul閿涙碍鏌熷鍫ヮ暕鐟欏牓鍣?div.pb-ai-preview-tabs 娑撳秷鍏?append li閿涘苯鎯侀崚娆庣窗閹炬垶鍨氱粩鏍ㄦ蒋鐢啫鐪?
+        var containers = Array.from(document.querySelectorAll('ul.pb-ai-preview-tabs'));
         if (containers.length > 0) {
             return containers;
         }
@@ -2423,7 +2431,7 @@
         if (match && match[1] && match[1].trim()) {
             normalized = match[1].trim();
         }
-        normalized = normalized.replace(/^[\s(（\[【]+|[\s)）\]】]+$/g, '').trim();
+        normalized = normalized.replace(/^[\s(閿涘溄[閵嗘€?|[\s)閿涘　]閵嗘叜+$/g, '').trim();
         return normalized || fallback || String(pageType || '');
     }
 
@@ -2453,16 +2461,16 @@
             var sep = s.indexOf('?') >= 0 ? '&' : '?';
             frame.setAttribute('src', s + sep + '_pb_pv=' + encodeURIComponent(String(Date.now())));
         }
-        // T31: 璁剧疆 iframe 鍔犺浇瀹屾垚鍚庨噸鍐欏唴閮ㄩ摼鎺?
+        // T31: 閻犱礁澧介悿?iframe 闁告梻濮惧ù鍥┾偓鐟版湰閸ㄦ岸宕ユ惔銊ユ闁告劖鐟ラ崬鎾焾閵娾晜鎳犻柟?
         frame.onload = function () {
             applyPreviewLinkRewrite(frame);
         };
     }
 
     /**
-     * T31: 棰勮鍐呴摼鎺ラ噸鍐欏櫒
-     * 鎷︽埅 iframe 鍐呯殑鍐呴儴椤甸潰绫诲瀷閾炬帴锛岄噸鍐欏埌鍙鍖栫紪杈戜笂涓嬫枃
-     * 澶栭儴閾炬帴淇濇寔鍘熻涔変笉鍙?     */
+     * T31: 濡澘瀚～宥夊礃閸涘瓨鎳犻柟鎭掑劦閸ｆ悂宕樺▎蹇旂彜
+     * 闁瑰嚖闄勯崺?iframe 闁告劕鎳愬▓鎴﹀礃閸涙潙鍔ュ銈囨暬濞兼壆鐚剧拠鑼偓鐑芥煣閻愵剙澶嶉柨娑樼焸閸ｆ悂宕樺▎蹇撶厒闁告瑯鍨甸～瀣礌閺嶎偆妞介弶鍫熷灣缁楀倹绋夌€ｎ偅鐎?
+     * 濠㈣埖鐗犻崕鎾煣閻愵剙澶嶅ǎ鍥ㄧ箖鐎垫棃宕㈤悢娲诲殧濞戞柨顦粭澶愬矗?     */
     function applyPreviewLinkRewrite(frame) {
         if (!frame || !frame.contentWindow || !frame.contentDocument) {
             return;
@@ -2486,7 +2494,7 @@
                 if (!href) {
                     return;
                 }
-                // 璺宠繃绌洪敋鐐广€丣avaScript 鍗忚
+                // 閻犲搫鐤囩换鍐矚濞差亝鏅柣鎰畭閳ь兛绂廰vaScript 闁告绻楅?
                 if (href.trim() === '' || href.trim().startsWith('#') || href.trim().startsWith('javascript:')) {
                     return;
                 }
@@ -2495,18 +2503,18 @@
                     var linkUrl = new URL(href, currentBaseUrl);
                     fullHref = linkUrl.href;
                 } catch (e) {
-                    // 鐩稿璺緞锛屼繚鎸佸師鍊?
+                    // 闁烩晝顭堥顔炬崉椤栨氨绐為柨娑樺缁绘岸骞愭担绋挎枾闁?
                 }
-                // 妫€鏌ユ槸鍚︽槸澶栭儴閾炬帴锛堜笉鍚屽煙鍚嶏級
+                // 婵☆偀鍋撻柡灞诲劜濡叉悂宕ラ敂鑺バ﹀鑸电墵閸庢挳鏌ч悙顒€澶嶉柨娑樼墔缁楀宕ョ仦鐣屽幍闁告艾绋勭槐?
                 if (currentHost !== '' && !fullHref.startsWith(currentHost)) {
-                    // 澶栭儴閾炬帴锛氭爣璁颁负鏂扮獥鍙ｆ墦寮€锛屼繚鎸佸師璇箟
+                    // 濠㈣埖鐗犻崕鎾煣閻愵剙澶嶉柨娑欑閻栵絿鎷嬫０浣界闁哄倹澹嗛悰銉╁矗閿濆棗鈪电€殿喒鍋撻柨娑樺缁绘岸骞愭担绋挎枾閻犲浂鍘虹粻?
                     link.setAttribute('target', '_blank');
                     link.setAttribute('rel', 'noopener noreferrer');
                     return;
                 }
-                // 鍐呴儴閾炬帴锛氳В鏋愰〉闈㈢被鍨嬪苟閲嶅啓涓哄彲瑙嗗寲缂栬緫涓婁笅鏂?
+                // 闁告劕鎳橀崕鎾煣閻愵剙澶嶉柨娑欎亢琚欓柡瀣姍閵嗗妫冮姀銏ｎ潶闁搞劌顑呴懟鐔兼煂瀹ュ懎鏅稿☉鎾虫惈瑜拌尙鎲撮崱妤€顕х紓鍌涚墳缁额偅绋夋繝浣虹憮闁?
                 var internalPath = fullHref.replace(currentHost, '');
-                // 鎻愬彇璺緞涓殑椤甸潰绫诲瀷鏍囪瘑锛堝 /about/, /contact/, /products/锛?
+                // 闁圭粯鍔曡ぐ鍥╂崉椤栨氨绐炲☉鎿冨幘濞堟垶銇勯悽鍛婃〃缂侇偉顕ч悗鐑藉冀閸ヮ亞妲曢柨娑樼墕椤?/about/, /contact/, /products/闁?
                 var pageType = detectPageTypeFromPath(internalPath);
                 if (pageType && typeof rewriteInternalLinkToVisualEdit === 'function') {
                     var rewrittenUrl = rewriteInternalLinkToVisualEdit(pageType, fullHref);
@@ -2517,20 +2525,20 @@
                 }
             });
         } catch (e) {
-            // 璺ㄥ煙璁块棶鎴?iframe 鏈畬鍏ㄥ姞杞芥椂闈欓粯蹇界暐
+            // 閻犳亽鍔岄悡娆戞媼閸ф锛栭柟?iframe 闁哄牜浜滈悾顒勫礂閵娿儱顫ｉ弶鐐跺Г濡炲倿妫冨▎鎾跺笡闊洨鏅弳?
         }
     }
 
     /**
-     * T31: 浠?URL 璺緞妫€娴嬮〉闈㈢被鍨?     * @param {string} path URL 璺緞
-     * @returns {string|null} 椤甸潰绫诲瀷鏍囪瘑绗?     */
+     * T31: 濞?URL 閻犱警鍨扮欢鐐参涢埀顒€霉鐎ｎ喓鈧妫冮姀銏ｎ潶闁?     * @param {string} path URL 閻犱警鍨扮欢?
+     * @returns {string|null} 濡炪倗鏁诲鎵尵鐠囪尙鈧兘寮介崶顏嗘缂?     */
     function detectPageTypeFromPath(path) {
         if (!path) {
             return null;
         }
-        // 瑙勮寖鍖栬矾寰?
+        // 閻熸瑥瀚€垫牠宕犻弽顒傜唴鐎?
         path = path.split('?')[0].split('#')[0].replace(/\/+$/, '').toLowerCase();
-        // 甯歌椤甸潰绫诲瀷璺緞鏄犲皠
+        // 閻㈩垱鐡曢～鍡樸亜閻㈠憡妗ㄧ紒顐ヮ嚙閻庨鎹勯姘辩獮闁哄嫮濮撮惃?
         var pageTypePatterns = {
             'home_page': ['', '/', '/index', '/index.html', '/home'],
             'about_page': ['/about', '/about-us', '/aboutus', '/guanyu'],
@@ -2556,12 +2564,12 @@
     }
 
     /**
-     * T31: 灏嗗唴閮ㄩ〉闈㈢被鍨嬮摼鎺ラ噸鍐欎负鍙鍖栫紪杈戜笂涓嬫枃
-     * @param {string} pageType 椤甸潰绫诲瀷鏍囪瘑绗?     * @param {string} originalUrl 鍘熷閾炬帴
-     * @returns {string|null} 閲嶅啓鍚庣殑 URL
+     * T31: 閻忓繐妫楅崬鎾焾閵娾斂鈧妫冮姀銏ｎ潶闁搞劌顑夐幗濂稿箳閵夆晛娅㈤柛鎰懁鐠愮喖宕ｉ婵愭綊闁告牗鐗滅槐顏呮綇閹存粎鐟愬☉鎾愁儐閺?
+     * @param {string} pageType 濡炪倗鏁诲鎵尵鐠囪尙鈧兘寮介崶顏嗘缂?     * @param {string} originalUrl 闁告鍠庨～鎰版煣閻愵剙澶?
+     * @returns {string|null} 闂佹彃绉撮崯鎾诲触鎼达絾鐣?URL
      */
     function rewriteInternalLinkToVisualEdit(pageType, originalUrl) {
-        // 浼樺厛浣跨敤褰撳墠椤甸潰鐨?page_id 杩涜缂栬緫
+        // 濞村吋锚閸樻稒鎷呯捄銊︽殢鐟滅増鎸告晶鐘炽亜閻㈠憡妗ㄩ柣?page_id 閺夆晜绋栭、鎴犵磽閺嶎剛甯?
         var pageId = getPageIdByType(pageType);
         if (pageId && visualEditBaseUrl) {
             try {
@@ -2573,7 +2581,7 @@
                 // Fallback
             }
         }
-        // 濡傛灉娌℃湁 page_id锛屽皾璇曚娇鐢ㄩ〉闈㈢被鍨嬪弬鏁?
+        // 濠碘€冲€归悘澶娾柦閳╁啯绠?page_id闁挎稑鑻惃鍓ф嫚閺囨艾鈻忛柣顫姂閵嗗妫冮姀銏ｎ潶闁搞劌顑呭顒勫极?
         if (visualEditBaseUrl) {
             try {
                 var typeUrl = new URL(visualEditBaseUrl, window.location.href);
@@ -2584,13 +2592,13 @@
                 // Fallback to original
             }
         }
-        // 鏃犳硶閲嶅啓鏃惰繑鍥炲師濮嬮摼鎺?
+        // 闁哄啰濮电涵鍫曟煂瀹ュ懎鏅搁柡鍐╁劶缁绘垿宕堕悙鎻掓枾濠殿喖顑夐幗濂稿箳?
         return originalUrl;
     }
 
     /**
-     * T31: 鏍规嵁椤甸潰绫诲瀷鑾峰彇 page_id
-     * @param {string} pageType 椤甸潰绫诲瀷鏍囪瘑绗?     * @returns {number|string|null} page_id
+     * T31: 闁哄秷顫夊畵浣广亜閻㈠憡妗ㄧ紒顐ヮ嚙閻庣兘鎳㈠畡鏉跨悼 page_id
+     * @param {string} pageType 濡炪倗鏁诲鎵尵鐠囪尙鈧兘寮介崶顏嗘缂?     * @returns {number|string|null} page_id
      */
     function getPageIdByType(pageType) {
         if (!pageType || !window.__pbWorkspacePagesByType) {
@@ -2716,12 +2724,12 @@
         var suffix = statusText;
         if (suffix.length > 14) {
             suffix = status === 'done'
-                ? <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                ? <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
                 : (status === 'ready'
-                    ? <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                    : <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                    ? <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+                    : <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
         }
-        tab.textContent = suffix !== '' ? (baseLabel + ' 路 ' + suffix) : baseLabel;
+        tab.textContent = suffix !== '' ? (baseLabel + ' 鐠?' + suffix) : baseLabel;
         tab.classList.toggle('text-success', status === 'done');
         tab.classList.toggle('text-warning', status === 'running' || status === 'ready');
     }
@@ -2740,7 +2748,7 @@
         return map;
     }
 
-    // 浠诲姟杩涘害缁熶竴鍦ㄤ晶杈规爮闈㈡澘灞曠ず锛涗繚鐣欑┖瀹炵幇渚?runtime 鍥炶皟鍏煎銆?
+    // 濞寸姾顕ф慨鐔告交濞戞ê顔婄紓浣哄枍缁旀挳宕烽妸銈嗘珷閺夊牐顫夐悥顕€妫冮姀鈩冪凡閻忕偞娲滈妵姘舵晬濞戞绠介柣锝嗙懅閳规牜鈧湱鍋熼獮鍥ㄧ瑹?runtime 闁搞儳鍋犻惃鐔煎礂閻撳寒鍟囬柕?
     function markPageGenerationStatus(pageType, status, text) {
         var normalizedPageType = String(pageType || '').trim();
         if (!normalizedPageType) {
@@ -2759,7 +2767,7 @@
         });
     }
 
-    // 鍏煎鍘嗗彶璋冪敤鏂癸細鏃у懡鍚?queueGenerationStatus 宸茶澶栭儴鑴氭湰寮曠敤銆?
+    // 闁稿繒鍘ч鎰板储閸℃钑夐悹瀣暟閺併倝寮惂鍝ョ獥闁哄唲鍐╁殥闁?queueGenerationStatus 鐎规瓕灏～锔藉緞閺嶎厼鍔ラ柤瀛樼濠€鏉款嚕閺囩姵鏆忛柕?
     function queueGenerationStatus(pageType, status, text) {
         return markPageGenerationStatus(pageType, status, text);
     }
@@ -2843,11 +2851,11 @@
         var region = String(payload.region || '');
         var componentCode = String(payload.component || '');
         var regionLabelMap = {
-            header: '页头',
-            content: '内容',
-            footer: '页脚'
+            header: '妞ら潧銇?,
+            content: '閸愬懎顔?,
+            footer: '妞や絻鍓?
         };
-        var regionLabel = regionLabelMap[region] || '区块';
+        var regionLabel = regionLabelMap[region] || '閸栧搫娼?;
         var shortCode = componentCode;
         if (shortCode.indexOf('/') >= 0) {
             shortCode = shortCode.split('/').pop() || shortCode;
@@ -3062,16 +3070,16 @@
                     input.rows = 5;
                     if (field.format === 'nav-items') {
                         hintEl.classList.remove('d-none');
-                        hintEl.textContent = <?= \json_encode((string)__('导航项格式：标题|链接，每行一项'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+                        hintEl.textContent = <?= \json_encode((string)__('导航项格式：标题|链接，每行一项'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
                     } else if (field.format === 'nav-lines') {
                         hintEl.classList.remove('d-none');
-                        hintEl.textContent = <?= \json_encode((string)__('导航项格式：标题=>链接，每行一项'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+                        hintEl.textContent = <?= \json_encode((string)__('导航项格式：标题|链接，每行一项'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
                     } else if (field.format === 'card-items') {
                         hintEl.classList.remove('d-none');
-                        hintEl.textContent = <?= \json_encode((string)__('卡片格式：上方标签|标题|描述，每行一项'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+                        hintEl.textContent = <?= \json_encode((string)__('导航项格式：标题|链接，每行一项'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
                     } else if (field.format === 'lines') {
                         hintEl.classList.remove('d-none');
-                        hintEl.textContent = <?= \json_encode((string)__('列表格式：每行一项'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+                        hintEl.textContent = <?= \json_encode((string)__('导航项格式：标题|链接，每行一项'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
                     }
                 } else if (fieldType === 'select' && Array.isArray(field.options) && field.options.length > 0) {
                     input = document.createElement('select');
@@ -3169,7 +3177,7 @@
         }
 
         if (titleEl) {
-            titleEl.textContent = String(title || '区块生成流');
+            titleEl.textContent = String(title || '閸栧搫娼￠悽鐔稿灇濞?);
         }
         if (contextEl) {
             contextEl.textContent = String(contextText || '');
@@ -3332,7 +3340,7 @@
         refineComponentState.pageType = pageType;
         refineComponentState.componentCode = componentCode;
         refineComponentState.componentLabel = buildComponentLabel(payload);
-        contextEl.textContent = (normalizePageTypeLabel(pageType) || pageType) + ' 路 ' + (refineComponentState.componentLabel || messages.refineContextFallback);
+        contextEl.textContent = (normalizePageTypeLabel(pageType) || pageType) + ' 鐠?' + (refineComponentState.componentLabel || messages.refineContextFallback);
         instructionEl.value = '';
         var modalInstance = resolveBootstrapModalInstance(modalEl);
         if (!modalInstance || typeof modalInstance.show !== 'function') {
@@ -3367,7 +3375,7 @@
         blockEditorState.blockLabel = buildComponentLabel(payload);
         blockEditorState.blockConfig = cloneJson(block.config || {});
         blockEditorState.fieldSchema = cloneJson(block.field_schema || {});
-        contextEl.textContent = (normalizePageTypeLabel(pageType) || pageType) + ' 路 ' + blockEditorState.blockLabel;
+        contextEl.textContent = (normalizePageTypeLabel(pageType) || pageType) + ' 鐠?' + blockEditorState.blockLabel;
         renderBlockEditorFields(blockEditorState.fieldSchema, blockEditorState.blockConfig);
 
         var modalInstance = resolveBootstrapModalInstance(modalEl);
@@ -4025,7 +4033,7 @@
     var currentPlanMode = 'refine';
     var currentPlanModeTargetScope = '';
     var currentPlanModeActionContext = null;
-    var rebuildPlanDefaultPrompt = <?= \json_encode((string)__('请完整重建当前阶段一方案，保持目标页类型覆盖，但允许重写结构与表达。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var rebuildPlanDefaultPrompt = <?= \json_encode((string)__('请完整重建当前阶段一方案，保持目标页类型覆盖，但允许重写结构与表达。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var planSseHandlersBound = false;
     var planSseRunning = false;
     var planModeLastSuccessNotifyFingerprint = '';
@@ -4131,8 +4139,8 @@
         if (!text) {
             return false;
         }
-        return /闃舵|鏂规|鍖哄潡|椤甸潰|鍐呭|绔欑偣|鏍囬|鍙|鍏ㄧ珯|璁″垝|瀛楁|璇存槑|鏈懡|澶撮儴|灏鹃儴/.test(text)
-            || /銆\?|锛\?|鏈/.test(text);
+        return /闂傚啳鍩栭瀵嶉柡鍌濐潐椤㈠尘闁告牕鎼顢傚銈囨暬濞肩殬闁告劕鎳庨鎭风紒鏃€鐟ч崑顥傞柡宥呮喘椤ｇ荡闁告瑯鍨甸～濯╅柛蹇嬪妿閻濈槃閻犱讲鈧啿鐏妡閻庢稒顨嗛瀵嶉悹鍥х摠濡叉啋闁哄牜浜滈幊顢傚鑸垫尦閸庣！閻忓繘绠栭崕?.test(text)
+            || /闁靛摫?|闁挎矐?|闁哄牜浜?.test(text);
     }
 
     function humanizePreviewKey(key) {
@@ -4142,70 +4150,71 @@
         }
         var normalized = text.toLowerCase().replace(/[\s-]+/g, '_');
         var known = {
-            theme: '主题',
-            shared: '主题',
-            global: '主题',
-            shared_theme: '主题',
-            home_page: '首页',
-            about_page: '关于我们',
-            contact_page: '联系我们',
-            privacy_policy: '隐私政策',
-            terms_of_service: '服务条款',
-            refund_policy: '退款政策',
-            shipping_policy: '配送政策',
-            cookie_policy: 'Cookie 政策',
-            blog_post: '博客文章',
-            blog_category: '博客分类',
-            blog_list: '博客列表',
-            custom_page: '自定义页面',
-            hero: '首屏主视觉',
-            intro: '简介区块',
-            features: '功能亮点',
-            feature: '功能亮点',
-            benefit: '价值优势',
-            benefits: '价值优势',
-            testimonial: '用户评价',
-            testimonials: '用户评价',
-            faq: '常见问题',
-            cta: '行动引导',
-            contact: '联系入口',
-            partner: '合作伙伴',
-            partners: '合作伙伴',
-            header: '页头',
-            footer: '页脚',
-            title: '标题',
-            subtitle: '副标题',
-            description: '描述',
-            content: '内容',
-            button_text: '按钮文字',
-            button_label: '按钮文字',
-            button_link: '按钮链接',
-            image: '图片',
-            images: '图片',
-            icon: '图标',
-            background: '背景',
-            background_direction: '背景方向',
-            core_copy: '核心文案',
-            typography: '字体与排版',
-            style_tone: '风格语气',
-            visual_style: '视觉风格',
-            color_palette: '配色方案',
-            theme_palette: '主题配色',
-            primary: '主色',
-            secondary: '辅助色',
-            accent: '强调色',
-            surface: '背景色',
-            text: '文字色',
-            reason: '原因',
-            page_goal: '页面目标',
-            block_goal: '区块目标',
-            content_fill_rule: '内容填充规则',
-            stage3_directive: '第三阶段执行指令',
-            media_assets: '素材建议',
-            task: '任务',
-            task_key: '任务键',
-            field: '字段',
-            fields: '字段'
+            theme: '娑撳顣?,
+            shared: '娑撳顣?,
+            global: '娑撳顣?,
+            shared_theme: '娑撳顣?,
+            home_page: '妫ｆ牠銆?,
+            about_page: '閸忓厖绨幋鎴滄粦',
+            contact_page: '閼辨梻閮撮幋鎴滄粦',
+            privacy_policy: '闂呮劗顫嗛弨璺ㄧ摜',
+            terms_of_service: '閺堝秴濮熼弶鈩冾儥',
+            refund_policy: '闁偓濞嗙偓鏂傜粵?,
+            shipping_policy: '闁板秹鈧焦鏂傜粵?,
+            cookie_policy: 'Cookie 閺€璺ㄧ摜',
+            blog_post: '閸楁艾顓归弬鍥╃彿',
+            blog_category: '閸楁艾顓归崚鍡欒',
+            blog_list: '閸楁艾顓归崚妤勩€?,
+            custom_page: '閼奉亜鐣炬稊澶愩€夐棃?,
+            hero: '妫ｆ牕鐫嗘稉鏄忣潒鐟?,
+            intro: '缁犫偓娴犲灏崸?,
+            features: '閸旂喕鍏樻禍顔惧仯',
+            feature: '閸旂喕鍏樻禍顔惧仯',
+            benefit: '娴犲嘲鈧棿绱崝?,
+            benefits: '娴犲嘲鈧棿绱崝?,
+            testimonial: '閻劍鍩涚拠鍕幆',
+            testimonials: '閻劍鍩涚拠鍕幆',
+            faq: '鐢瓕顫嗛梻顕€顣?,
+            cta: '鐞涘苯濮╁鏇烆嚤',
+            contact: '閼辨梻閮撮崗銉ュ經',
+            partner: '閸氬牅缍旀导娆庡嵆',
+            partners: '閸氬牅缍旀导娆庡嵆',
+            header: '妞ら潧銇?,
+            footer: '妞や絻鍓?,
+            title: '閺嶅洭顣?,
+            subtitle: '閸擃垱鐖ｆ０?,
+            description: '閹诲繗鍫?,
+            content: '閸愬懎顔?,
+            button_text: '閹稿鎸抽弬鍥х摟',
+            button_label: '閹稿鎸抽弬鍥х摟',
+            button_link: '閹稿鎸抽柧鐐复',
+            image: '閸ュ墽澧?,
+            images: '閸ュ墽澧?,
+            icon: '閸ョ偓鐖?,
+            background: '閼冲本娅?,
+            background_direction: '閼冲本娅欓弬鐟版倻',
+            core_copy: '閺嶇绺鹃弬鍥攳',
+            typography: '鐎涙ぞ缍嬫稉搴㈠笓閻?,
+            style_tone: '妞嬪孩鐗哥拠顓熺毜',
+            visual_style: '鐟欏棜顫庢搴㈢壐',
+            color_palette: '闁板秷澹婇弬瑙勵攳',
+            theme_palette: '娑撳顣介柊宥堝',
+            primary: '娑撴槒澹?,
+            secondary: '鏉堝懎濮懝?,
+            accent: '瀵缚鐨熼懝?,
+            surface: '閼冲本娅欓懝?,
+            text: '閺傚洤鐡ч懝?,
+            implementation_note: '閽€钘夋勾鐠囧瓨妲?,
+            reason: '閽€钘夋勾鐠囧瓨妲?,
+            page_goal: '妞ょ敻娼伴惄顔界垼',
+            block_goal: '閸栧搫娼￠惄顔界垼',
+            content_fill_rule: '閸愬懎顔愭繅顐㈠帠鐟欏嫬鍨?,
+            stage3_directive: '缁楊兛绗侀梼鑸殿唽閹笛嗩攽閹稿洣鎶?,
+            media_assets: '缁辩姵娼楀楦款唴',
+            task: '娴犺濮?,
+            task_key: '娴犺濮熼柨?,
+            field: '鐎涙顔?,
+            fields: '鐎涙顔?
         };
         if (Object.prototype.hasOwnProperty.call(known, normalized)) {
             return known[normalized];
@@ -4224,64 +4233,99 @@
         return text;
     }
 
+    function looksLikePreviewMetaInstruction(value) {
+        var text = String(value || '').trim().toLowerCase();
+        if (!text) {
+            return false;
+        }
+        return [
+            '閸ュ绮?,
+            '鐠囧瓨妲戦弽绋跨妇娴犲嘲鈧?,
+            '妫ｆ牠銆夐崗鍫ｎ唹濞?,
+            '闂冭埖顔屾稉鈧禒鍛舶閺傜懓鎮?,
+            '閺嶅洭顣介崶瀵哥搏',
+            '閸忓牏鏁ゆ稉鈧崣銉ㄧ樈鐠佸弶绔?,
+            '閸愬秵濡搁悽銊﹀煕鐢箑鍩?,
+            '鐠佲晞顔栫€广垹婀粭顑跨鐏?,
+            '閹垫寧甯撮弽绋跨妇閸忔娊鏁拠?,
+            '娑撳秷鍏橀柆顔藉皡閺嶅洭顣介崪灞煎瘜 cta',
+            'block direction',
+            'direction only',
+            'first-screen promise',
+            'lead visitors to the next step',
+            'write the title around',
+            'explain the core value',
+            'do not describe what should be written'
+        ].some(function (marker) {
+            return marker && text.indexOf(marker) !== -1;
+        });
+    }
+
     function fallbackPageLabel(pageType, rawLabel) {
         var label = sanitizePreviewText(rawLabel, '');
         if (label) {
             return label;
         }
-        return String(pageTypeLabelMap[pageType] || humanizePreviewKey(pageType) || pageType || '页面');
+        return String(pageTypeLabelMap[pageType] || humanizePreviewKey(pageType) || pageType || '妞ょ敻娼?);
     }
 
     function fallbackBlockLabel(blockKey) {
         var key = String(blockKey || '').trim().toLowerCase();
         var known = {
-            hero: '首屏主视觉',
-            intro: '简介区块',
-            features: '功能亮点',
-            benefit: '价值优势',
-            benefits: '价值优势',
-            testimonial: '用户评价',
-            testimonials: '用户评价',
-            faq: '常见问题',
-            cta: '转化行动区块',
-            contact: '联系入口',
-            partner: '合作伙伴',
-            about_intro: '关于我们',
-            why_choose_us: '为什么选择我们'
+            hero: '妫ｆ牕鐫嗘稉鏄忣潒鐟?,
+            intro: '缁犫偓娴犲灏崸?,
+            features: '閸旂喕鍏樻禍顔惧仯',
+            benefit: '娴犲嘲鈧棿绱崝?,
+            benefits: '娴犲嘲鈧棿绱崝?,
+            testimonial: '閻劍鍩涚拠鍕幆',
+            testimonials: '閻劍鍩涚拠鍕幆',
+            faq: '鐢瓕顫嗛梻顕€顣?,
+            cta: '鏉烆剙瀵茬悰灞藉З閸栧搫娼?,
+            contact: '閼辨梻閮撮崗銉ュ經',
+            partner: '閸氬牅缍旀导娆庡嵆',
+            about_intro: '閸忓厖绨幋鎴滄粦',
+            why_choose_us: '娑撹桨绮堟稊鍫モ偓澶嬪閹存垳婊?
         };
-        return String(known[key] || humanizePreviewKey(key) || '内容区块');
+        return String(known[key] || humanizePreviewKey(key) || '閸愬懎顔愰崠鍝勬健');
     }
 
     function fallbackPlanPageGoal(pageType, pageLabel) {
-        return String(pageLabel || fallbackPageLabel(pageType, '')) + '页面需要承接核心搜索意图，并把主要转化动作放在清晰位置。';
+        return String(pageLabel || fallbackPageLabel(pageType, '')) + '妞ょ敻娼伴棁鈧憰浣瑰閹恒儲鐗宠箛鍐╂偝缁便垺鍓伴崶鎾呯礉楠炶埖濡告稉鏄忣洣鏉烆剙瀵查崝銊ょ稊閺€鎯ф躬濞撳懏娅氭担宥囩枂閵?;
     }
 
     function fallbackPlanBlockGoal(pageType, pageLabel, blockKey) {
-        return '围绕“' + String(pageLabel || fallbackPageLabel(pageType, '')) + '”中的“' + fallbackBlockLabel(blockKey) + '”组织信息、信任点和下一步 CTA。';
+        return '閸ュ绮垾? + String(pageLabel || fallbackPageLabel(pageType, '')) + '閳ユ繀鑵戦惃鍕ㄢ偓? + fallbackBlockLabel(blockKey) + '閳ユ繄绮嶇紒鍥︿繆閹垬鈧椒淇婃禒鑽ゅ仯閸滃奔绗呮稉鈧?CTA閵?;
     }
 
     function fallbackPlanBlockContent(pageType, pageLabel, blockKey) {
-        return '这个区块用于补齐“' + String(pageLabel || fallbackPageLabel(pageType, '')) + '”的' + fallbackBlockLabel(blockKey) + '表达，帮助用户快速理解价值并继续浏览。';
+        return '鏉╂瑤閲滈崠鍝勬健閻劋绨悰銉╃秷閳? + String(pageLabel || fallbackPageLabel(pageType, '')) + '閳ユ繄娈? + fallbackBlockLabel(blockKey) + '鐞涖劏鎻敍灞藉簻閸斺晝鏁ら幋宄版彥闁喓鎮婄憴锝勭幆閸婄厧鑻熺紒褏鐢诲ù蹇氼潔閵?;
     }
 
     function fallbackFieldReason(field) {
-        var label = humanizePreviewKey(field) || '该字段';
-        return '保留“' + label + '”作为可编辑字段，方便后续继续补充内容和微调表达。';
+        var label = humanizePreviewKey(field) || '鐠囥儱鐡у▓?;
+        return '閳? + label + '閳ユ繀绻氶幐浣疯礋閸欘垳绱潏鎴ｆ儰閸︽澘鐡у▓纰夌礉绾喛顓婚崥搴″讲閻╁瓨甯存禍銈囩舶閺傚洦顢嶉妴浣筋啎鐠佲剝鍨ㄩ崜宥囶伂缂佈呯敾鐎圭偞鏌﹂妴?;
+    }
+
+    function resolveFieldPlanImplementationNote(row) {
+        if (!row || typeof row !== 'object') {
+            return '';
+        }
+        return sanitizePreviewText(row.implementation_note || row.delivery_note || row.reason || '', '');
     }
 
     function fallbackExecutionValue(key, pageLabel, blockKey) {
         var blockLabel = fallbackBlockLabel(blockKey);
         if (key === 'core_copy') {
-            return '围绕“' + String(pageLabel || '当前页面') + '”的' + blockLabel + '总结核心卖点，并把 CTA 放在明确位置。';
+            return '閸ュ绮垾? + String(pageLabel || '瑜版挸澧犳い鐢告桨') + '閳ユ繄娈? + blockLabel + '閹崵绮ㄩ弽绋跨妇閸楁牜鍋ｉ敍灞借嫙閹?CTA 閺€鎯ф躬閺勫海鈥樻担宥囩枂閵?;
         }
         if (key === 'typography') {
-            return '标题层级清晰，正文保持短句与可扫读结构。';
+            return '閺嶅洭顣界仦鍌滈獓濞撳懏娅氶敍灞绢劀閺傚洣绻氶幐浣虹叚閸欍儰绗岄崣顖涘鐠囪崵绮ㄩ弸鍕┾偓?;
         }
         if (key === 'style_tone') {
-            return '整体保持可信、清晰、可继续迭代的方案表达。';
+            return '閺佺繝缍嬫穱婵囧瘮閸欘垯淇婇妴浣圭閺呰埇鈧礁褰茬紒褏鐢绘潻顓濆敩閻ㄥ嫭鏌熷鍫ｃ€冩潏淇扁偓?;
         }
         if (key === 'background_direction') {
-            return '背景与主题风格保持一致，不抢占主内容信息层级。';
+            return '閼冲本娅欐稉搴濆瘜妫版﹢顥撻弽闂寸箽閹镐椒绔撮懛杈剧礉娑撳秵濮犻崡鐘卞瘜閸愬懎顔愭穱鈩冧紖鐏炲倻楠囬妴?;
         }
         return '';
     }
@@ -4313,8 +4357,16 @@
             }
             var fieldRaw = String(row.field || '').trim();
             var field = escapeHtml(humanizePreviewKey(fieldRaw) || fieldRaw);
-            var sample = escapeHtml(sanitizePreviewText(row.sample, '')).replace(/\n/g, '<br>');
-            var reason = escapeHtml(sanitizePreviewText(row.reason, fallbackFieldReason(fieldRaw))).replace(/\n/g, '<br>');
+            var sampleText = sanitizePreviewText(row.sample, '');
+            if (looksLikePreviewMetaInstruction(sampleText)) {
+                sampleText = '';
+            }
+            var sample = escapeHtml(sampleText).replace(/\n/g, '<br>');
+            var noteText = resolveFieldPlanImplementationNote(row);
+            if (looksLikePreviewMetaInstruction(noteText)) {
+                noteText = '';
+            }
+            var reason = escapeHtml(noteText || fallbackFieldReason(fieldRaw)).replace(/\n/g, '<br>');
             if (!field && !sample && !reason) {
                 return '';
             }
@@ -4399,7 +4451,7 @@
                 if (text === '') {
                     return keyLabel;
                 }
-                return keyLabel + '：' + text;
+                return keyLabel + '閿? + text;
             }).filter(Boolean);
         }
         var single = sanitizePreviewText(value, '');
@@ -4430,22 +4482,36 @@
             + '</div>';
     }
 
+    function omitPreviewMetaKeys(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            return value;
+        }
+        var filtered = {};
+        Object.keys(value).forEach(function (key) {
+            if (key === 'reason' || key === 'why' || key === 'decision_reason') {
+                return;
+            }
+            filtered[key] = value[key];
+        });
+        return filtered;
+    }
+
     function renderThemeSummarySection(planRoot) {
         if (!planRoot || typeof planRoot !== 'object') {
             return '';
         }
-        var palette = planRoot.palette || planRoot.color_palette || planRoot.theme_palette || null;
-        var styleTone = planRoot.style_tone || planRoot.visual_style || planRoot.theme_style || null;
-        var typography = planRoot.typography || planRoot.font_plan || null;
+        var palette = omitPreviewMetaKeys(planRoot.palette || planRoot.color_palette || planRoot.theme_palette || null);
+        var styleTone = omitPreviewMetaKeys(planRoot.style_tone || planRoot.visual_style || planRoot.theme_style || null);
+        var typography = omitPreviewMetaKeys(planRoot.typography || planRoot.font_plan || null);
         var parts = [];
 
         if (palette && typeof palette === 'object' && !Array.isArray(palette)) {
             var paletteRows = Object.keys(palette).map(function (key) {
-                var value = sanitizePreviewText(palette[key], key === 'reason' ? '保持配色统一并保证关键信息与 CTA 的对比度。' : '');
+                var value = sanitizePreviewText(palette[key], '');
                 if (!value) {
                     return '';
                 }
-                return '<li class="small"><span class="text-muted">' + escapeHtml(humanizePreviewKey(key) || String(key)) + '</span>：'
+                return '<li class="small"><span class="text-muted">' + escapeHtml(humanizePreviewKey(key) || String(key)) + '</span>閿?
                     + '<code>' + escapeHtml(value) + '</code></li>';
             }).filter(Boolean).join('');
             if (paletteRows) {
@@ -4553,7 +4619,7 @@
     function resolvePreviewTabPageLabel(pageType, rawLabel) {
         var normalized = String(pageType || '').trim().toLowerCase();
         if (normalized === 'theme' || normalized === 'shared' || normalized === 'global' || normalized === 'shared_theme') {
-            return String(previewLabels.themeTab || '主题');
+            return String(previewLabels.themeTab || '娑撳顣?);
         }
         return fallbackPageLabel(pageType, rawLabel);
     }
@@ -4585,7 +4651,7 @@
         var buttonsHtml = normalizedTabs.map(function (tab, idx) {
             var rawKey = String(Object.prototype.hasOwnProperty.call(tab, 'key') ? tab.key : ('tab_' + (idx + 1))).trim() || ('tab_' + (idx + 1));
             var tabId = buildPreviewTabId(normalizedStage, rawKey);
-            var label = sanitizePreviewText(tab.label, humanizePreviewKey(rawKey) || ('分组 ' + (idx + 1)));
+            var label = sanitizePreviewText(tab.label, humanizePreviewKey(rawKey) || ('閸掑棛绮?' + (idx + 1)));
             var active = rawKey === activeKey;
             return ''
                 + '<button type="button" class="btn btn-sm ' + escapeHtml(active ? 'btn-primary active' : 'btn-outline-secondary') + ' pb-ai-preview-tab-btn"'
@@ -4729,19 +4795,19 @@
         }
         var rawTitle = String(task.label || task.task_key || ('task_' + (idx + 1)));
         var safePageLabel = resolvePreviewTabPageLabel(pageType || 'shared', '');
-        var title = escapeHtml(sanitizePreviewText(rawTitle, humanizePreviewKey(rawTitle) || ('任务 ' + (idx + 1))));
+        var title = escapeHtml(sanitizePreviewText(rawTitle, humanizePreviewKey(rawTitle) || ('娴犺濮?' + (idx + 1))));
         var rawTaskKey = String(task.task_key || '');
         var taskKey = escapeHtml(rawTaskKey);
         var groupKey = escapeHtml(String(task.group_key || pageType || 'shared'));
         var planContext = (task.plan_context && typeof task.plan_context === 'object') ? task.plan_context : {};
         var taskScript = (task.task_script && typeof task.task_script === 'object') ? task.task_script : {};
         var implementationContract = (task.implementation_contract && typeof task.implementation_contract === 'object') ? task.implementation_contract : {};
-        var pageGoal = escapeHtml(sanitizePreviewText(planContext.page_goal || '', safePageLabel + ' 页面任务要围绕当前页面目标和转化动作继续细化。')).replace(/\n/g, '<br>');
-        var blockGoal = escapeHtml(sanitizePreviewText(planContext.block_goal || '', '这个任务块需要把内容、素材和交付要求拆解清楚。')).replace(/\n/g, '<br>');
+        var pageGoal = escapeHtml(sanitizePreviewText(planContext.page_goal || '', safePageLabel + ' 妞ょ敻娼版禒璇插鐟曚礁娲跨紒鏇炵秼閸撳秹銆夐棃銏㈡窗閺嶅洤鎷版潪顒€瀵查崝銊ょ稊缂佈呯敾缂佸棗瀵查妴?)).replace(/\n/g, '<br>');
+        var blockGoal = escapeHtml(sanitizePreviewText(planContext.block_goal || '', '鏉╂瑤閲滄禒璇插閸ф娓剁憰浣瑰Ω閸愬懎顔愰妴浣虹閺夋劕鎷版禍銈勭帛鐟曚焦鐪伴幏鍡毿掑〒鍛殶閵?)).replace(/\n/g, '<br>');
         var scene = escapeHtml(sanitizePreviewText(taskScript.scene || '', rawTaskKey || safePageLabel)).replace(/\n/g, '<br>');
-        var storyGoal = escapeHtml(sanitizePreviewText(taskScript.story_goal || '', '明确这个任务块的目标、依赖和完成标准。')).replace(/\n/g, '<br>');
-        var fillRule = escapeHtml(sanitizePreviewText(taskScript.content_fill_rule || '', '按字段填充内容，保持结构清晰并支持后续继续编辑。')).replace(/\n/g, '<br>');
-        var stage3Directive = escapeHtml(sanitizePreviewText(taskScript.stage3_directive || '', '确认字段、素材位与约束后再进入实际构建。')).replace(/\n/g, '<br>');
+        var storyGoal = escapeHtml(sanitizePreviewText(taskScript.story_goal || '', '閺勫海鈥樻潻娆庨嚋娴犺濮熼崸妤冩畱閻╊喗鐖ｉ妴浣风贩鐠ф牕鎷扮€瑰本鍨氶弽鍥у櫙閵?)).replace(/\n/g, '<br>');
+        var fillRule = escapeHtml(sanitizePreviewText(taskScript.content_fill_rule || '', '閹稿鐡у▓闈涳綖閸忓懎鍞寸€圭櫢绱濇穱婵囧瘮缂佹挻鐎〒鍛珰楠炶埖鏁幐浣告倵缂侇厾鎴风紒顓犵椽鏉堟垯鈧?)).replace(/\n/g, '<br>');
+        var stage3Directive = escapeHtml(sanitizePreviewText(taskScript.stage3_directive || '', '绾喛顓荤€涙顔岄妴浣虹閺夋劒缍呮稉搴ｅ閺夌喎鎮楅崘宥堢箻閸忋儱鐤勯梽鍛€鎭掆偓?)).replace(/\n/g, '<br>');
         var acceptance = normalizeStructuredItems(implementationContract.acceptance || []);
         var fieldRequirements = Array.isArray(taskScript.field_content_requirements) ? taskScript.field_content_requirements : [];
         var fieldTable = renderFieldPlanTable(fieldRequirements);
@@ -5166,7 +5232,7 @@
 
         var pages = planRoot.pages && typeof planRoot.pages === 'object' ? planRoot.pages : null;
         if (!pages) {
-            // 鍏煎锛歱lan_json 鐩存帴浠?page_type 涓?key锛堟棤 pages 鍖呰９锛?
+            // 闁稿繒鍘ч鎰版晬濮濈湋an_json 闁烩晛鐡ㄧ敮瀛樼?page_type 濞?key闁挎稑鐗婂Λ?pages 闁告牕鎳撻敍娆撴晬?
             var reservedKeys = {
                 pages: true,
                 page_types: true,
@@ -5265,28 +5331,28 @@
             structuredRoot = coerceStructuredPlanRootFromParsedJson(parsedFromMd);
         }
 
-        // 涓ら樁娈垫柟妗堝墠绔粺涓€浠呭睍绀虹粨鏋勫寲鏂规棰勮銆?
+        // 濞戞挶鍊濆Ο浣糕枔閸偅鐓欐俊妤€鐗嗘晶鐘电博椤栨粎鍩犲☉鎾亾濞寸姴鎳庨惈宥囩矆閾忓湱娉㈤柡瀣鐎垫煡寮憴鍕垫敵濡澘瀚～宥夊Υ?
         return renderPlanStructuredPreviewHtml(structuredRoot);
     }
 
     function getPreviewActionLabel(action) {
         var normalized = String(action || '').trim();
         if (normalized === 'rebuild-stage') {
-            return String(previewLabels.rebuildStage || previewLabels.rebuildAction || '完全重新生成');
+            return String(previewLabels.rebuildStage || previewLabels.rebuildAction || '鐎瑰苯鍙忛柌宥嗘煀閻㈢喐鍨?);
         }
         if (normalized === 'refine-stage') {
-            return String(previewLabels.refineStage || previewLabels.refineAction || '整体微调');
+            return String(previewLabels.refineStage || previewLabels.refineAction || '閺佺繝缍嬪顔跨殶');
         }
         if (normalized === 'rebuild') {
-            return String(previewLabels.rebuildAction || '重建');
+            return String(previewLabels.rebuildAction || '闁插秴缂?);
         }
         if (normalized === 'delete') {
-            return String(previewLabels.deleteAction || '删除');
+            return String(previewLabels.deleteAction || '閸掔娀娅?);
         }
         if (normalized === 'add-block') {
-            return String(previewLabels.addBlockAction || '新增块');
+            return String(previewLabels.addBlockAction || '閺傛澘顤冮崸?);
         }
-        return String(previewLabels.refineAction || '微调');
+        return String(previewLabels.refineAction || '瀵邦喛鐨?);
     }
 
     function getPreviewActionContextFingerprint(context) {
@@ -5368,61 +5434,61 @@
         if (stage === 'task-plan') {
             if (scope === 'stage') {
                 if (action === 'rebuild-stage') {
-                    return '请说明第二阶段整份任务方案需要如何重建，例如哪些页面优先、哪些任务要增删、哪些依赖要重新梳理。';
+                    return '鐠囩柉顕╅弰搴ｎ儑娴滃矂妯佸▓鍨殻娴犳垝鎹㈤崝鈩冩煙濡楀牓娓剁憰浣割洤娴ｆ洟鍣稿鐚寸礉娓氬顩ч崫顏冪昂妞ょ敻娼版导妯哄帥閵嗕礁鎽㈡禍娑楁崲閸斅ゎ洣婢х偛鍨归妴浣告憿娴滄稐绶风挧鏍洣闁插秵鏌婂宕囨倞閵?;
                 }
-                return '请说明第二阶段整份任务方案需要如何整体微调，例如要优先优化哪些页面任务、依赖或交付标准。';
+                return '鐠囩柉顕╅弰搴ｎ儑娴滃矂妯佸▓鍨殻娴犳垝鎹㈤崝鈩冩煙濡楀牓娓剁憰浣割洤娴ｆ洘鏆ｆ担鎾充簳鐠嬪喛绱濇笟瀣洤鐟曚椒绱崗鍫滅喘閸栨牕鎽㈡禍娑€夐棃顫崲閸斅扳偓浣风贩鐠ф牗鍨ㄦ禍銈勭帛閺嶅洤鍣妴?;
             }
             if (scope === 'page') {
                 if (action === 'delete') {
-                    return '请说明为什么要删除页面“' + (pageText || '当前页面') + '”的任务规划，以及删除后剩余任务需要怎样补位。';
+                    return '鐠囩柉顕╅弰搴濊礋娴犫偓娑斿牐顩﹂崚鐘绘珟妞ょ敻娼伴垾? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繄娈戞禒璇插鐟欏嫬鍨濋敍灞间簰閸欏﹤鍨归梽銈呮倵閸撯晙缍戞禒璇插闂団偓鐟曚焦鈧孩鐗辩悰銉ょ秴閵?;
                 }
                 if (action === 'add-block') {
-                    return '请说明要为页面“' + (pageText || '当前页面') + '”新增什么任务块，需要补足什么任务类型、依赖或交付。';
+                    return '鐠囩柉顕╅弰搴ゎ洣娑撴椽銆夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繃鏌婃晶鐐扮矆娑斿牅鎹㈤崝鈥虫健閿涘矂娓剁憰浣剿夌搾鍏呯矆娑斿牅鎹㈤崝锛勮閸ㄥ鈧椒绶风挧鏍ㄥ灗娴溿倓绮妴?;
                 }
                 if (action === 'rebuild') {
-                    return '请说明页面“' + (pageText || '当前页面') + '”的任务规划要如何重建，例如重新划分任务块、依赖顺序或完成标准。';
+                    return '鐠囩柉顕╅弰搴ㄣ€夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繄娈戞禒璇插鐟欏嫬鍨濈憰浣割洤娴ｆ洟鍣稿鐚寸礉娓氬顩ч柌宥嗘煀閸掓帒鍨庢禒璇插閸фぜ鈧椒绶风挧鏍€庢惔蹇斿灗鐎瑰本鍨氶弽鍥у櫙閵?;
                 }
-                return '请说明页面“' + (pageText || '当前页面') + '”的任务规划需要如何微调，例如优化哪些任务拆解、依赖或执行顺序。';
+                return '鐠囩柉顕╅弰搴ㄣ€夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繄娈戞禒璇插鐟欏嫬鍨濋棁鈧憰浣割洤娴ｆ洖浜曠拫鍐跨礉娓氬顩ф导妯哄閸濐亙绨烘禒璇插閹峰棜袙閵嗕椒绶风挧鏍ㄥ灗閹笛嗩攽妞ゅ搫绨妴?;
             }
             if (action === 'delete') {
-                return '请说明为什么要删除页面“' + (pageText || '当前页面') + '”中的任务块“' + (blockText || '当前任务块') + '”，以及删除后其余任务如何承接。';
+                return '鐠囩柉顕╅弰搴濊礋娴犫偓娑斿牐顩﹂崚鐘绘珟妞ょ敻娼伴垾? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繀鑵戦惃鍕崲閸斺€虫健閳? + (blockText || '瑜版挸澧犳禒璇插閸?) + '閳ユ繐绱濇禒銉ュ挤閸掔娀娅庨崥搴″従娴ｆ瑤鎹㈤崝鈥愁洤娴ｆ洘澹欓幒銉ｂ偓?;
             }
             if (action === 'add-block') {
-                return '请说明要为页面“' + (pageText || '当前页面') + '”新增什么任务块，需要补足哪些执行任务、素材要求或完成标准。';
+                return '鐠囩柉顕╅弰搴ゎ洣娑撴椽銆夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繃鏌婃晶鐐扮矆娑斿牅鎹㈤崝鈥虫健閿涘矂娓剁憰浣剿夌搾鍐叉憿娴滄稒澧界悰灞兼崲閸斅扳偓浣虹閺夋劘顩﹀Ч鍌涘灗鐎瑰本鍨氶弽鍥у櫙閵?;
             }
             if (action === 'rebuild') {
-                return '请说明任务块“' + (blockText || '当前任务块') + '”要如何重建，例如任务拆解、素材要求和完成标准怎么改。';
+                return '鐠囩柉顕╅弰搴濇崲閸斺€虫健閳? + (blockText || '瑜版挸澧犳禒璇插閸?) + '閳ユ繆顩︽俊鍌欑秿闁插秴缂撻敍灞肩伐婵″倷鎹㈤崝鈩冨鐟欙絻鈧胶绀岄弶鎰洣濮瑰倸鎷扮€瑰本鍨氶弽鍥у櫙閹簼绠為弨骞库偓?;
             }
-            return '请说明任务块“' + (blockText || '当前任务块') + '”需要如何微调，例如调整哪些任务描述、依赖或交付要求。';
+            return '鐠囩柉顕╅弰搴濇崲閸斺€虫健閳? + (blockText || '瑜版挸澧犳禒璇插閸?) + '閳ユ繈娓剁憰浣割洤娴ｆ洖浜曠拫鍐跨礉娓氬顩х拫鍐╂殻閸濐亙绨烘禒璇插閹诲繗鍫妴浣风贩鐠ф牗鍨ㄦ禍銈勭帛鐟曚焦鐪伴妴?;
         }
         if (scope === 'stage') {
             if (action === 'rebuild-stage') {
-                return '请说明第一阶段整份方案要如何完全重建，例如保留哪些页面目标、哪些内容结构要重写。';
+                return '鐠囩柉顕╅弰搴ｎ儑娑撯偓闂冭埖顔岄弫缈犲敜閺傝顢嶇憰浣割洤娴ｆ洖鐣崗銊╁櫢瀵ょ尨绱濇笟瀣洤娣囨繄鏆€閸濐亙绨烘い鐢告桨閻╊喗鐖ｉ妴浣告憿娴滄稑鍞寸€瑰湱绮ㄩ弸鍕洣闁插秴鍟撻妴?;
             }
-            return '请说明第一阶段整份方案要如何整体微调，例如优先优化哪些页面结构、文案或区块划分。';
+            return '鐠囩柉顕╅弰搴ｎ儑娑撯偓闂冭埖顔岄弫缈犲敜閺傝顢嶇憰浣割洤娴ｆ洘鏆ｆ担鎾充簳鐠嬪喛绱濇笟瀣洤娴兼ê鍘涙导妯哄閸濐亙绨烘い鐢告桨缂佹挻鐎妴浣规瀮濡楀牊鍨ㄩ崠鍝勬健閸掓帒鍨庨妴?;
         }
         if (scope === 'page') {
             if (action === 'delete') {
-                return '请说明为什么要删除页面“' + (pageText || '当前页面') + '”的方案规划，以及删掉后其余页面和导航如何调整。';
+                return '鐠囩柉顕╅弰搴濊礋娴犫偓娑斿牐顩﹂崚鐘绘珟妞ょ敻娼伴垾? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繄娈戦弬瑙勵攳鐟欏嫬鍨濋敍灞间簰閸欏﹤鍨归幒澶婃倵閸忔湹缍戞い鐢告桨閸滃苯顕遍懜顏勵洤娴ｆ洝鐨熼弫娣偓?;
             }
             if (action === 'add-block') {
-                return '请说明要为页面“' + (pageText || '当前页面') + '”新增什么方案块，需要补足什么内容目标或转化动作。';
+                return '鐠囩柉顕╅弰搴ゎ洣娑撴椽銆夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繃鏌婃晶鐐扮矆娑斿牊鏌熷鍫濇健閿涘矂娓剁憰浣剿夌搾鍏呯矆娑斿牆鍞寸€瑰湱娲伴弽鍥ㄥ灗鏉烆剙瀵查崝銊ょ稊閵?;
             }
             if (action === 'rebuild') {
-                return '请说明页面“' + (pageText || '当前页面') + '”的方案要如何重建，例如区块结构、文案节奏或设计方向怎么改。';
+                return '鐠囩柉顕╅弰搴ㄣ€夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繄娈戦弬瑙勵攳鐟曚礁顩ф担鏇㈠櫢瀵ょ尨绱濇笟瀣洤閸栧搫娼＄紒鎾寸€妴浣规瀮濡楀牐濡總蹇斿灗鐠佹崘顓搁弬鐟版倻閹簼绠為弨骞库偓?;
             }
-            return '请说明页面“' + (pageText || '当前页面') + '”的方案要如何微调，例如优化哪些区块结构、文案或说明。';
+            return '鐠囩柉顕╅弰搴ㄣ€夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繄娈戦弬瑙勵攳鐟曚礁顩ф担鏇炰簳鐠嬪喛绱濇笟瀣洤娴兼ê瀵查崫顏冪昂閸栧搫娼＄紒鎾寸€妴浣规瀮濡楀牊鍨ㄧ拠瀛樻閵?;
         }
         if (action === 'delete') {
-            return '请说明为什么要删除页面“' + (pageText || '当前页面') + '”中的方案块“' + (blockText || '当前块') + '”，以及删掉后剩余结构如何重组。';
+            return '鐠囩柉顕╅弰搴濊礋娴犫偓娑斿牐顩﹂崚鐘绘珟妞ょ敻娼伴垾? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繀鑵戦惃鍕煙濡楀牆娼￠垾? + (blockText || '瑜版挸澧犻崸?) + '閳ユ繐绱濇禒銉ュ挤閸掔姵甯€閸氬骸澧挎担娆戠波閺嬪嫬顩ф担鏇㈠櫢缂佸嫨鈧?;
         }
         if (action === 'add-block') {
-            return '请说明要为页面“' + (pageText || '当前页面') + '”新增什么方案块，需要补足什么内容结构、转化动作或说明。';
+            return '鐠囩柉顕╅弰搴ゎ洣娑撴椽銆夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繃鏌婃晶鐐扮矆娑斿牊鏌熷鍫濇健閿涘矂娓剁憰浣剿夌搾鍏呯矆娑斿牆鍞寸€瑰湱绮ㄩ弸鍕┾偓浣芥祮閸栨牕濮╂担婊勫灗鐠囧瓨妲戦妴?;
         }
         if (action === 'rebuild') {
-            return '请说明方案块“' + (blockText || '当前块') + '”要如何重建，例如这块的内容、结构和设计说明该怎么改。';
+            return '鐠囩柉顕╅弰搴㈡煙濡楀牆娼￠垾? + (blockText || '瑜版挸澧犻崸?) + '閳ユ繆顩︽俊鍌欑秿闁插秴缂撻敍灞肩伐婵″倽绻栭崸妤冩畱閸愬懎顔愰妴浣虹波閺嬪嫬鎷扮拋鎹愵吀鐠囧瓨妲戠拠銉︹偓搴濈疄閺€骞库偓?;
         }
-        return '请说明方案块“' + (blockText || '当前块') + '”需要如何微调，例如调整这一块的表达、结构和设计说明。';
+        return '鐠囩柉顕╅弰搴㈡煙濡楀牆娼￠垾? + (blockText || '瑜版挸澧犻崸?) + '閳ユ繈娓剁憰浣割洤娴ｆ洖浜曠拫鍐跨礉娓氬顩х拫鍐╂殻鏉╂瑤绔撮崸妤冩畱鐞涖劏鎻妴浣虹波閺嬪嫬鎷扮拋鎹愵吀鐠囧瓨妲戦妴?;
     }
 
     function buildPreviewActionContext(stage, action, scopeKind, pageLabel, blockLabel, targetScope) {
@@ -5434,14 +5500,14 @@
         var subject = '';
         if (normalizedScopeKind === 'stage') {
             subject = normalizedStage === 'task-plan'
-                ? '第二阶段整份任务方案'
-                : '第一阶段整份建站方案';
+                ? '缁楊兛绨╅梼鑸殿唽閺佺繝鍞ゆ禒璇插閺傝顢?
+                : '缁楊兛绔撮梼鑸殿唽閺佺繝鍞ゅ铏圭彲閺傝顢?;
         } else if (normalizedScopeKind === 'page') {
-            subject = '页面“' + (pageText || '当前页面') + '”';
+            subject = '妞ょ敻娼伴垾? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳?;
         } else {
-            subject = '页面“' + (pageText || '当前页面') + '”中的'
-                + (normalizedStage === 'task-plan' ? '任务块' : '方案块')
-                + '“' + (blockText || (normalizedStage === 'task-plan' ? '当前任务块' : '当前块')) + '”';
+            subject = '妞ょ敻娼伴垾? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繀鑵戦惃?
+                + (normalizedStage === 'task-plan' ? '娴犺濮熼崸? : '閺傝顢嶉崸?)
+                + '閳? + (blockText || (normalizedStage === 'task-plan' ? '瑜版挸澧犳禒璇插閸? : '瑜版挸澧犻崸?)) + '閳?;
         }
         return {
             stage: normalizedStage,
@@ -5451,7 +5517,7 @@
             pageLabel: pageText,
             blockLabel: blockText,
             promptHint: buildPreviewActionPrompt(normalizedStage, action, normalizedScopeKind, pageText, blockText),
-            summary: '已选择“' + actionLabel + '”：' + subject + '。请先输入你的调整要求，再点击“执行当前模式”。'
+            summary: '瀹告煡鈧瀚ㄩ垾? + actionLabel + '閳ユ繐绱? + subject + '閵嗗倽顕崗鍫ｇ翻閸忋儰缍橀惃鍕殶閺佺顩﹀Ч鍌︾礉閸愬秶鍋ｉ崙鐑┾偓婊勫⒔鐞涘苯缍嬮崜宥喣佸蹇娾偓婵勨偓?
         };
     }
 
@@ -5596,11 +5662,13 @@
 
     function showPlanPreviewActionFlow(mode, actionContext) {
         bindPlanModalViewSwitchers();
+        bindPlanPrimaryPaneSwitchers();
         bindPlanModeSwitchers();
         setPlanMode(mode);
         preparePlanPreviewActionContext(actionContext);
         updatePlanModalContent(String((currentPlanPayload && currentPlanPayload.markdown) || ''));
         setPlanViewMode('pb-ai-plan-preview-content');
+        setPlanPrimaryPane('controls');
         scrollIntoPlanInlinePanel();
         var promptInput = document.getElementById('pb-ai-plan-mode-prompt');
         if (promptInput && typeof promptInput.focus === 'function') {
@@ -5770,7 +5838,7 @@
         var mdBtn = document.getElementById('pb-ai-plan-md-view');
         var previewBtn = document.getElementById('pb-ai-plan-preview-view');
         var showPreview = targetId === 'pb-ai-plan-preview-content';
-        /* 与 Bootstrap .d-none（!important）协同：用 class 切换，勿仅改 style，否则 Markdown 永远无法显示 */
+        /* 娑?Bootstrap .d-none閿?important閿涘宕楅崥宀嬬窗閻?class 閸掑洦宕查敍灞藉瑏娴犲懏鏁?style閿涘苯鎯侀崚?Markdown 濮樻瓕绻欓弮鐘崇《閺勫墽銇?*/
         if (markdownView) {
             markdownView.style.removeProperty('display');
             markdownView.classList.toggle('d-none', !!showPreview);
@@ -5793,15 +5861,61 @@
         if (mdBtn && mdBtn.dataset.pbBound !== '1') {
             mdBtn.dataset.pbBound = '1';
             mdBtn.addEventListener('click', function () {
+                setPlanPrimaryPane('preview');
                 setPlanViewMode('pb-ai-plan-md-content');
             });
         }
         if (previewBtn && previewBtn.dataset.pbBound !== '1') {
             previewBtn.dataset.pbBound = '1';
             previewBtn.addEventListener('click', function () {
+                setPlanPrimaryPane('preview');
                 setPlanViewMode('pb-ai-plan-preview-content');
             });
         }
+    }
+
+    /**
+     * 闂冭埖顔屾稉鈧崘鍛颁粓闂堛垺婢橀敍姘煙濡楀牓顣╃憴?/ 鐠嬪啯鏆ｆ稉搴㈠⒔鐞?妞よ泛鐪伴崚鍥ㄥ床閵?
+     */
+    function setPlanPrimaryPane(which) {
+        var normalized = String(which || 'preview').trim().toLowerCase();
+        var showControls = normalized === 'controls';
+        var previewPane = document.getElementById('pb-ai-plan-primary-pane-preview');
+        var controlsPane = document.getElementById('pb-ai-plan-primary-pane-controls');
+        var previewTab = document.getElementById('pb-ai-plan-primary-tab-preview');
+        var controlsTab = document.getElementById('pb-ai-plan-primary-tab-controls');
+        if (previewPane) {
+            previewPane.classList.toggle('d-none', showControls);
+        }
+        if (controlsPane) {
+            controlsPane.classList.toggle('d-none', !showControls);
+        }
+        if (previewTab) {
+            previewTab.classList.toggle('active', !showControls);
+            previewTab.setAttribute('aria-selected', !showControls ? 'true' : 'false');
+        }
+        if (controlsTab) {
+            controlsTab.classList.toggle('active', showControls);
+            controlsTab.setAttribute('aria-selected', showControls ? 'true' : 'false');
+        }
+    }
+
+    function bindPlanPrimaryPaneSwitchers() {
+        var previewTab = document.getElementById('pb-ai-plan-primary-tab-preview');
+        var controlsTab = document.getElementById('pb-ai-plan-primary-tab-controls');
+        if (!previewTab || !controlsTab) {
+            return;
+        }
+        if (previewTab.dataset.pbPrimaryBound === '1') {
+            return;
+        }
+        previewTab.dataset.pbPrimaryBound = '1';
+        previewTab.addEventListener('click', function () {
+            setPlanPrimaryPane('preview');
+        });
+        controlsTab.addEventListener('click', function () {
+            setPlanPrimaryPane('controls');
+        });
     }
 
     function ensurePlanPreviewFullscreenOverlay() {
@@ -6004,7 +6118,7 @@
         if (!text) {
             return '';
         }
-        // 闃叉鎶?AI JSON 鍘熸枃鐩存帴娓叉煋鍒伴瑙堬細浼樺厛鎻愬彇 markdown 瀛楁銆?
+        // 闂傚啫寮堕娑㈠箮?AI JSON 闁告鍠愰弸鍐儎鐎涙ê澶嶆繛鎾冲级閻撳宕氭导鎼殨閻熸瑥鐗炵槐鐗堝濡搫甯ラ柟缁樺姇瑜?markdown 閻庢稒顨嗛宀勫Υ?
         if (text.charAt(0) === '{' || text.charAt(0) === '[') {
             try {
                 var parsed = JSON.parse(text);
@@ -6012,7 +6126,7 @@
                     if (typeof parsed.markdown === 'string' && String(parsed.markdown || '').trim() !== '') {
                         return String(parsed.markdown || '').trim();
                     }
-                    // 绾粨鏋勫寲 JSON锛堝惈 pages/plan_json 绛夛級涓嶅簲浣滀负 Markdown 鍘熸枃灞曠ず
+                    // 缂佺虎鍨崇划銊╁几閸曨偄顕?JSON闁挎稑鐗嗛幆?pages/plan_json 缂佹稑顧€缁辨碍绋夊鍛畨濞达絾绮堢拹?Markdown 闁告鍠愰弸鍐沪閺囩姰浠?
                     if (coerceStructuredPlanRootFromParsedJson(parsed)) {
                         return '';
                     }
@@ -6137,14 +6251,14 @@
                 runBtn.dataset.originalText = String(runBtn.textContent || '');
             }
             runBtn.disabled = true;
-            runBtn.textContent = <?= \json_encode((string)__('处理中...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            runBtn.textContent = <?= \json_encode((string)__('处理中...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
             return;
         }
         runBtn.disabled = false;
         runBtn.textContent = String(
             runBtn.dataset.originalText
             || runBtn.textContent
-            || <?= \json_encode((string)__('执行当前模式'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+            || <?= \json_encode((string)__('执行当前模式'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
         );
     }
 
@@ -6255,7 +6369,7 @@
         function markPlanTerminalConnected() {
             var statusEl = document.getElementById('pb-ai-plan-sse-terminal_status');
             if (statusEl) {
-                statusEl.textContent = <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+                statusEl.textContent = <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
             }
         }
         if (planSseHandlersBound) {
@@ -6275,7 +6389,7 @@
             var payload = parsePlanTerminalPayload(event);
             if (payload && payload.message) {
                 var progressMsg = String(payload.message);
-                var isAiHintOnly = /AI\s*正在生成阶段一方案内容/.test(progressMsg);
+                var isAiHintOnly = /AI\s*濮濓絽婀悽鐔稿灇闂冭埖顔屾稉鈧弬瑙勵攳閸愬懎顔?.test(progressMsg);
                 setPlanModeStatus(progressMsg);
                 setPlanModalProgress(progressMsg, parseInt(String(payload.progress_percent || 60), 10) || 60, false);
                 if (!isAiHintOnly && typeof terminal.log === 'function') {
@@ -6340,7 +6454,7 @@
             if (typeof terminal.stop === 'function') {
                 terminal.stop({ suppressTransportError: true });
             }
-            // SSE 鏂规娴佸畬鎴愬悗锛岀珛鍗宠Е鍙戣嚜鍔ㄤ繚瀛橈紝灏嗘柟妗堝唴瀹规寔涔呭寲鍒板悗绔?            autoSaveScope();
+            // SSE 闁哄倽顫夐、宥吤规担鍝ユ殮闁瑰瓨鍔曢幃妤呮晬瀹€鈧悵娑㈠础鐎圭姌鏇㈠矗閹达絽娈伴柛鏂诲妺缁绘氨鈧稒锕槐婵堜焊閸℃ɑ鐓欐俊妤€鐗嗛崬瀵糕偓纭咁潐鐎垫梹绋婇崨顓烆嚙闁告帗婢橀幃妤冪博?            autoSaveScope();
         });
         terminal.on('error', function (event) {
             planSseRunning = false;
@@ -6479,14 +6593,14 @@
                 runBtn.dataset.originalText = String(runBtn.textContent || '');
             }
             runBtn.disabled = true;
-            runBtn.textContent = <?= \json_encode((string)__('处理中...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            runBtn.textContent = <?= \json_encode((string)__('处理中...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
             return;
         }
         runBtn.disabled = false;
         runBtn.textContent = String(
             runBtn.dataset.originalText
             || runBtn.textContent
-            || <?= \json_encode((string)__('执行当前模式'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+            || <?= \json_encode((string)__('执行当前模式'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
         );
     }
 
@@ -6869,8 +6983,8 @@
                 }
             }
             clearTaskPlanPreviewActionContext({ restoreStatus: false });
-            // 涓庨樁娈典竴鏂规娴佷竴鑷达細蹇呴』涓诲姩 stop锛屽惁鍒欐湇鍔＄缁撴潫杩炴帴鍚庡師鐢?EventSource 浼氶噸杩炲悓涓€ URL锛?
-            // detect_bootstrap 绛夐暱浠诲姟浼氳〃鐜颁负銆屽崱浣忓悗鍙堥噸澶嶅彂璧?post-task-plan-sse銆嶃€?
+            // 濞戞挸閰ｅΟ浣糕枔閸忓摜顏遍柡鍌濐潐椤㈠秴霉娴ｉ顏遍柤鐤彧缁辨媽绠涢崨娣偓蹇旂▔鐠囨彃袟 stop闁挎稑鑻幆渚€宕氬▎鎰疀闁告棑绱曢顒傜磼閹惧瓨灏嗛弶鈺冨仦鐢挳宕ユ惔鈥虫枾闁?EventSource 濞村吋宀搁崳鍛婃交閻愬弶鍊卞☉鎾亾 URL闁?
+            // detect_bootstrap 缂佹稑顦甸弳杈ㄧ鐠囨彃顫ゅù鍏间亢閵嗗啴鎮虫０浣界闁靛棗鑻畷杈ㄦ媴韫囨挻鍊甸柛娆忕墦閸ｅ憡寰勫鍛岛閻?post-task-plan-sse闁靛棗绉查埀?
             if (typeof terminal.stop === 'function') {
                 terminal.stop({ suppressTransportError: true });
             }
@@ -6901,7 +7015,7 @@
     }
 
     /**
-     * 闃舵浜屼换鍔℃柟妗?SSE锛欵ventSource 浠?GET銆?     * 鍥哄畾锛歱ublic_id銆乸rompt_mode锛涘井璋?閲嶅缓鏃惰嫢鏈夋枃妗堝垯杩藉姞 instruction锛堟煡璇覆锛夈€?     */
+     * 闂傚啳鍩栭灞剧鐏炲吋宕查柛鏂哄墲閺岀喎顩?SSE闁挎稒顑恦entSource 濞?GET闁?     * 闁搞儱鎼悾楣冩晬濮濈湝blic_id闁靛棔鍨ompt_mode闁挎稒绋戞禍鏇犳嫬?闂佹彃绉寸紓鎾诲籍閹澘顏熼柡鍫濐槹閺嬪啫顩奸崼婵嗙仧閺夆晞妫勬慨?instruction闁挎稑鐗婇悡锛勬嫚椤叀顩柨娑橆槶閳?     */
     function buildTaskPlanSseGetUrl(streamUrl, promptMode, instructionText, targetScope) {
         var base = String(streamUrl || '').trim();
         var mode = String(promptMode || '').trim();
@@ -6941,7 +7055,7 @@
     }
 
     /**
-     * 鎵嬮鐞村睍寮€锛歋SE detect_bootstrap 鈥?宸叉湁鏂规鍒欐祦寮忓洖濉紝鍚﹀垯鐢熸垚骞惰惤搴撳悗鍐嶈緭鍑恒€?     */
+     * 闁归潧顑夐ˉ鎾绘偠閺夋垹娼旂€殿喒鍋撻柨娑欑摂SE detect_bootstrap 闁?鐎圭寮跺﹢渚€寮憴鍕垫敵闁告帗鐟︾粊锕€顕ｈ箛鎾寸濠靛鍋撶槐婵嬪触閿曗偓閸垶鎮介悢绋跨亣妤犵偞鍎奸幆銈嗘償閹捐櫕鍊甸柛鎰Х缁额參宕欓幁鎺嗗亾?     */
     function startTaskPlanDetectBootstrapSse(options) {
         var opts = options && typeof options === 'object' ? options : {};
         if (taskPlanSseRunning || (!opts.ignoreStartRequestGuard && taskPlanStartRequestInFlight)) {
@@ -7118,7 +7232,7 @@
     }
 
     /**
-     * 绗簩闃舵浠诲姟鏂规锛氭墜椋庣惔灞曞紑鏃舵寜闇€鎷夊彇棣栫増锛涙敹璧锋椂鍋滄 SSE銆?     */
+     * 缂佹鍏涚花鈺呮⒓閼告鍞藉ù鐘侯嚙婵喖寮憴鍕垫敵闁挎稒纰嶆晶婊勵槹鎼达絾鍎熼悘鐐存礀缁辨垿寮懜闈涚樆闂傚洠鍋撻柟宄邦槸瑜板洦锛冮弽顐㈩暭闁挎稒绋掗弫鍦導闁垮顦ч柛瀣矋椤?SSE闁?     */
     function hasPhaseOnePlanReadyForTaskPlan() {
         if (lastPhaseOnePlanPresent || (typeof hasCurrentPhaseOnePlanDraft === 'function' && hasCurrentPhaseOnePlanDraft())) {
             return true;
@@ -7163,7 +7277,7 @@
                 }
                 Promise.resolve(hasPhaseOnePlanReadyForTaskPlan()).then(function (ready) {
                     if (!ready) {
-                        toast('warning', messages.phaseOneRequiredForTaskPlan || <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                        toast('warning', messages.phaseOneRequiredForTaskPlan || <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
                         return;
                     }
                     if (typeof bootstrap === 'undefined' || !bootstrap.Collapse) {
@@ -7369,6 +7483,7 @@
 
     function proceedToShowPlanModalAndRequestStart(previousPlanMarkdown) {
         bindPlanModalViewSwitchers();
+        bindPlanPrimaryPaneSwitchers();
         bindPlanModeSwitchers();
         clearPlanPreviewActionContext({ preserveValue: false, restoreStatus: false });
         setPlanMode(currentPlanMode);
@@ -7377,6 +7492,7 @@
             persistField: previousPlanMarkdown !== ''
         });
         setPlanViewMode('pb-ai-plan-preview-content');
+        setPlanPrimaryPane('preview');
         setPlanModeStatus(messages.planSaving);
         setPlanModalProgress(messages.planSaving, 20, false);
         setPlanRetryButtonVisible(false);
@@ -7582,7 +7698,7 @@
                 taskPlanConfirmedState = true;
                 hideTaskPlanGenerationModal();
                 toast('success', messages.taskPlanConfirmSaved);
-                // T26: 鏂规宸蹭繚瀛橈紝璇㈤棶鐢ㄦ埛鏄惁绔嬪嵆鐢熸垚锛堥粯璁や笉鑷姩寮€璺戯級
+                // T26: 闁哄倽顫夐、宥咁啅闊厾绠介悗娑欙公缁辨繄鎷犻姀銈嗭紪闁活潿鍔嶉崺娑㈠及椤栨碍鍎婄紒鏂款儏瀹撳棝鎮介悢绋跨亣闁挎稑鐗撶划顖滄媼閵堝嫮鐟濋柤濂変簻婵晛顕ｉ埀顒傛崉閹搭垳绀?
                 if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
                     window.BackendConfirm.show(messages.taskPlanConfirmStartBuildQuestion, {
                         title: messages.taskPlanConfirmSaved,
@@ -7598,7 +7714,7 @@
                         toast('info', messages.taskPlanDeferred);
                     });
                 } else {
-                    // Fallback: 涓嶈嚜鍔ㄥ紑璺戯紝鎻愮ず鐢ㄦ埛绋嶅悗鎵嬪姩寮€濮?                    toast('info', messages.taskPlanDeferred);
+                    // Fallback: 濞戞挸绉烽崵婊堝礉閵娿儳纾婚悹鐑樺煀缁辨繈骞撻幇顔轰粵闁活潿鍔嶉崺娑氱矙瀹ュ懏鍊甸柟闈涱儏婵晛顕ｉ埀顒佹叏?                    toast('info', messages.taskPlanDeferred);
                 }
                 return true;
             }).catch(function (error) {
@@ -7634,7 +7750,7 @@
     }
 
     /**
-     * 宓屽叆棰勮 iframe锛堥瑙堝崰浣嶉〉锛夐€氳繃 postMessage 璇锋眰鍦ㄥ伐浣滃尯鍚姩 AI 椤甸潰鐢熸垚銆?     */
+     * 鐎规挸鑻崣鍡橈紣閸曨噮娼?iframe闁挎稑鐗撻。鈺冩喆閸繂绐楀ù锝呯Ч閵嗗鏁嶆径鎰ㄥ亾濮樺磭绠?postMessage 閻犲洭鏀遍惇浼村捶閵娿儰绱ｅù锝嗙矊鐏忣垶宕ラ姘?AI 濡炪倗鏁诲浼存偨閻旂鐏囬柕?     */
     function handleEmbeddedPreviewGenerateRequest(pageType) {
         var pt = String(pageType || '').trim();
         if (pt !== '' && window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview.switchPreviewByType === 'function') {
@@ -7670,7 +7786,7 @@
             }
             hidePlanGenerationModal();
             toast('success', (data && data.message) ? String(data.message) : messages.planConfirmSaved);
-            // 寮曞寮忓竷灞€鎸夋湇鍔＄闃舵鍒嗙墖娓叉煋锛岀‘璁ゅ悗宸茬敱鎺ュ彛 setStage(visual_edit)锛岄渶鏁撮〉杩涘叆绗簩闃舵 DOM銆?
+            // 鐎殿喗娲栭鍗烆嚕韫囨挾顏撮悘鐐╁亾闁圭顦板﹢鍥礉閿涘嫷浼傞梻鍐煐椤斿矂宕氶崱娆忣暬婵炴挸寮堕悡瀣晬瀹€鈧垾妯兼媼閵堝懏鍊电€规瓕灏欓弫閬嶅箳閵夈儱缍?setStage(visual_edit)闁挎稑鐭傚〒鍫曞极閹绢喓鈧娼诲☉妯哄汲缂佹鍏涚花鈺呮⒓閼告鍞?DOM闁?
             var guidedHref = typeof guidedUrl === 'string' ? guidedUrl.trim() : '';
             if (guidedHref !== '') {
                 window.location.href = guidedHref;
@@ -7782,14 +7898,14 @@
     function buildVisualEditResumePromptMessage(summary, runningOperation) {
         var progressPercent = summary.total > 0 ? Math.round((summary.done / summary.total) * 100) : 0;
         var header = runningOperation ? messages.resumeRunningPrompt : messages.resumePendingPrompt;
-        var progressLine = <?= \json_encode((string)__('当前进度'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+        var progressLine = <?= \json_encode((string)__('当前进度'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
             + ': ' + progressPercent + '% [' + renderTaskProgressBarText(progressPercent) + ']';
-        var countLine = <?= \json_encode((string)__('任务统计'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+        var countLine = <?= \json_encode((string)__('任务统计'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
             + ': '
-            + <?= \json_encode((string)__('总计'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.total + '，'
-            + <?= \json_encode((string)__('已完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.done + '，'
-            + <?= \json_encode((string)__('进行中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.running + '，'
-            + <?= \json_encode((string)__('待处理'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.pending;
+            + <?= \json_encode((string)__('总计'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.total + '，'
+            + <?= \json_encode((string)__('已完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.done + '，'
+            + <?= \json_encode((string)__('进行中'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.running + '，'
+            + <?= \json_encode((string)__('待处理'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.pending;
         return header + '\n\n' + progressLine + '\n' + countLine;
     }
 
@@ -7885,14 +8001,14 @@
                 showBuildGuard(messages.buildPreparing);
                 setBuildNavigationGuard(true);
 
-                // 鍚屾鍥炴簮閫夋嫨鍣?                syncDomPageTypeChecks(selectedTypes);
+                // 闁告艾鏈鐐哄炊閻愬鐖遍梺顐㈩槹鐎氥劑宕?                syncDomPageTypeChecks(selectedTypes);
 
                 setRunVirtualThemeButtonsDisabled(true);
                 if (confirmBtn) {
                     confirmBtn.disabled = true;
                 }
 
-                // 鍚姩 SSE 娴佸紡鐢熸垚
+                // 闁告凹鍨版慨?SSE 婵炵繝绀佺槐锟犳偨閻旂鐏?
                 postForm(runVirtualThemeUrl, {
                     public_id: publicId,
                     scope_patch: JSON.stringify(buildVirtualThemePatch())
@@ -7927,7 +8043,7 @@
                         if (window.PbAiOperationRunner.startFromResponse(resumePayload, String(data.operation || 'build'))) {
                             toast('warning', (data && data.message)
                                 ? String(data.message)
-                                : (messages.operationResumed || <?= \json_encode((string)__('检测到已有操作，已自动接管任务流。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>));
+                                : (messages.operationResumed || <?= \json_encode((string)__('检测到已有操作，已自动接管任务流。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>));
                             return;
                         }
                     }
@@ -7943,7 +8059,7 @@
                 }
                 toast('success', messages.orchestrated);
 
-                // 鍚姩 SSE 娴佸紡鐩戝惉
+                // 闁告凹鍨版慨?SSE 婵炵繝绀佺槐锟犳儎閹存繃鍎?
                 if (window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function') {
                     if (window.PbAiOperationRunner.startFromResponse(data)) {
                         return;
@@ -7975,6 +8091,8 @@
         isGuidedUi: isGuidedUi,
         messages: messages,
         toast: toast,
+        postForm: postForm,
+        escapeHtml: escapeHtml,
         validateVirtualThemeInputs: validateVirtualThemeInputs,
         ensureTargetDomainOkBeforeBuild: ensureTargetDomainOkBeforeBuild,
         setTargetDomainFieldInvalid: setTargetDomainFieldInvalid,
@@ -8056,8 +8174,8 @@
                         publishOutput.style.display = 'block';
                         var passed = data.data && data.data.passed;
                         toast(passed ? 'success' : 'warning', passed
-                            ? <?= \json_encode((string)__('鍙戝竷妫€鏌ラ€氳繃'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                            : <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                            ? <?= \json_encode((string)__('鍙戝竷妫€鏌ラ€氳繃'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+                            : <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
                         );
                     } else {
                         toast('error', (data && data.message) ? String(data.message) : messages.networkError);

@@ -35,10 +35,13 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         $firstBlock = $artifacts['plan_json']['pages']['home_page']['blocks'][0] ?? [];
         self::assertArrayHasKey('content', $firstBlock);
         self::assertArrayHasKey('why', $firstBlock);
+        self::assertArrayHasKey('implementation_note', $firstBlock);
         self::assertStringNotContainsString('围绕', (string)($firstBlock['content'] ?? ''));
         self::assertStringNotContainsString('阶段一仅给方向', (string)($firstBlock['content'] ?? ''));
         self::assertNotEmpty($firstBlock['field_plan'][0]['sample'] ?? '');
+        self::assertNotEmpty($firstBlock['field_plan'][0]['implementation_note'] ?? '');
         self::assertStringNotContainsString('标题围绕', (string)($firstBlock['field_plan'][0]['sample'] ?? ''));
+        self::assertStringNotContainsString('Why:', (string)($artifacts['markdown'] ?? ''));
         self::assertIsArray($artifacts['structured'] ?? null);
         self::assertIsArray($artifacts['execution_blueprint'] ?? null);
         self::assertNotEmpty($artifacts['execution_blueprint']['tasks'] ?? []);
@@ -190,7 +193,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
     {
         $service = new AiSiteExecutionBlueprintService(
             new AiSitePageBlueprintService(),
-            $this->createStreamingAiServiceStub($this->buildValidAiPlanResponse())
+            $this->createStreamingAiServiceStub($this->buildPartnerAiPlanResponse())
         );
 
         $artifacts = $service->refineDraftPlan([
@@ -317,13 +320,20 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
 
         self::assertIsString($capturedPrompt);
         self::assertStringContainsString('The plan must contain final-ready content samples, not writing instructions.', $capturedPrompt);
+        self::assertStringContainsString('Do not return markdown.', $capturedPrompt);
+        self::assertStringContainsString('Do not return a separate markdown field.', $capturedPrompt);
+        self::assertStringContainsString('Output only the structured plan object shown in the schema.', $capturedPrompt);
         self::assertStringContainsString('Never write blueprint guidance such as "围绕...说明"', $capturedPrompt);
         self::assertStringContainsString('Never write process wording such as "标题围绕核心价值展开"', $capturedPrompt);
         self::assertStringContainsString('field_plan.sample must be direct content', $capturedPrompt);
+        self::assertStringContainsString('field_plan.implementation_note must be a customer-readable implementation note', $capturedPrompt);
         self::assertStringContainsString('Selected page coverage hints (must all be represented in the final plan):', $capturedPrompt);
-        self::assertStringContainsString('- home_page: must include page goal, conversion rhythm, block why, field plan, execution script, SEO structure, CTA usage, responsive guidance.', $capturedPrompt);
+        self::assertStringContainsString('- home_page: must include page goal, conversion rhythm, block implementation detail, field plan, execution script, SEO structure, CTA usage, responsive guidance.', $capturedPrompt);
         self::assertStringContainsString('baseline_execution_blueprint:', $capturedPrompt);
         self::assertStringContainsString('"default_locale": "en_US"', $capturedPrompt);
+        self::assertStringNotContainsString('"markdown":"string"', $capturedPrompt);
+        self::assertStringNotContainsString('Markdown template (fill with concrete content, never with direction text):', $capturedPrompt);
+        self::assertStringNotContainsString('"reason":"string"', $capturedPrompt);
         self::assertStringNotContainsString('????????', $capturedPrompt);
     }
 
@@ -367,14 +377,61 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertSame('ai', (string)($artifacts['generation_source'] ?? 'ai'));
     }
 
-    public function testBuildPlanArtifactsByAiStreamSanitizesPromptLikePlanCopy(): void
+    public function testBuildPlanArtifactsByAiStreamAcceptsTopLevelPlanObjectShape(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildTopLevelAiPlanResponse())
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+
+        self::assertSame(1, (int)($artifacts['ai_generated'] ?? 0));
+        self::assertSame(0, (int)($artifacts['ai_fallback'] ?? -1));
+        self::assertIsArray($artifacts['plan_json'] ?? null);
+        self::assertNotEmpty($artifacts['plan_json']['pages']['home_page']['blocks'] ?? []);
+    }
+
+    public function testBuildPlanArtifactsByAiStreamReportsMissingPlanJsonOnlyOnce(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub(\json_encode(['markdown' => '# Invalid'], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}')
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('AI plan generation failed: missing plan_json payload. received top-level keys: markdown');
+
+        $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+    }
+
+    public function testBuildPlanArtifactsByAiStreamRejectsPromptLikePlanCopy(): void
     {
         $service = new AiSiteExecutionBlueprintService(
             new AiSitePageBlueprintService(),
             $this->createStreamingAiServiceStub($this->buildPromptLikeAiPlanResponse())
         );
 
-        $artifacts = $service->buildPlanArtifactsByAiStream([
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('instruction-like');
+
+        $service->buildPlanArtifactsByAiStream([
             'site_title' => 'Plan Service Test',
             'brief_description' => 'Need home and about pages with strong CTA.',
             'page_types' => ['home_page', 'about_page'],
@@ -385,14 +442,52 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             'site_title' => 'Plan Service Test',
             'brief_description' => 'Need home and about pages with strong CTA.',
         ]);
+    }
 
-        $hero = $artifacts['plan_json']['pages']['home_page']['blocks'][0] ?? [];
-        self::assertIsArray($hero);
-        self::assertStringNotContainsString('write the title around', (string)($hero['content'] ?? ''));
-        self::assertStringNotContainsString('标题围绕', (string)($hero['field_plan'][0]['sample'] ?? ''));
-        self::assertStringNotContainsString('List 2-4', (string)(($hero['execution_script']['feature_points'][0] ?? '')));
-        self::assertStringNotContainsString('Do not describe', (string)($hero['execution_script']['core_copy'] ?? ''));
-        self::assertStringContainsString('Plan Service Test', (string)($hero['content'] ?? ''));
+    public function testBuildPlanArtifactsByAiStreamRejectsPromptLikeHeroInsteadOfSilentFallback(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildPromptLikeAiPlanResponse())
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('instruction-like');
+
+        $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Teenipiya websiteProfile',
+            'brief_description' => '面向印度市场的棋牌游戏网站，推广热门棋牌游戏 APK 下载与玩法内容。',
+            'page_types' => ['home_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'zh_Hans_CN',
+            'default_locale' => 'zh_Hans_CN',
+        ], [
+            'site_title' => 'Teenipiya websiteProfile',
+            'brief_description' => '面向印度市场的棋牌游戏网站，推广热门棋牌游戏 APK 下载与玩法内容。',
+        ]);
+    }
+
+    public function testBuildPlanArtifactsByAiStreamRejectsHomepageHeroThatIgnoresBriefSignals(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildGenericAiPlanResponse())
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('homepage hero does not reuse concrete nouns from the brief');
+
+        $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Teenipiya websiteProfile',
+            'brief_description' => '面向印度市场的棋牌游戏网站，推广热门棋牌游戏 APK 下载与玩法内容。',
+            'page_types' => ['home_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'zh_Hans_CN',
+            'default_locale' => 'zh_Hans_CN',
+        ], [
+            'site_title' => 'Teenipiya websiteProfile',
+            'brief_description' => '面向印度市场的棋牌游戏网站，推广热门棋牌游戏 APK 下载与玩法内容。',
+        ]);
     }
 
     private function createStreamingAiServiceStub(string $response): AiService
@@ -432,11 +527,18 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                     'text' => '#0f172a',
                 ],
                 'navigation_plan' => [
-                    'header_items' => [],
+                    'header_items' => [
+                        ['label' => 'Home', 'href' => '/'],
+                        ['label' => 'About', 'href' => '/about'],
+                    ],
                 ],
                 'footer_plan' => [
-                    'featured' => [],
-                    'policies' => [],
+                    'featured' => [
+                        ['label' => 'Contact', 'href' => '/contact'],
+                    ],
+                    'policies' => [
+                        ['label' => 'Privacy Policy', 'href' => '/privacy-policy'],
+                    ],
                 ],
                 'seo_strategy' => [
                     'core_intent' => 'brand site',
@@ -459,7 +561,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                                 'keywords' => ['hero keyword'],
                                 'content' => 'Welcome to Plan Service Test. Start with a clear value statement, a short proof line, and one CTA that leads visitors forward.',
                                 'field_plan' => [
-                                    ['field' => 'title', 'sample' => 'Welcome to Plan Service Test', 'reason' => 'Explain value quickly'],
+                                    ['field' => 'title', 'sample' => 'Welcome to Plan Service Test', 'implementation_note' => 'Use this as the visible hero headline so the client can approve the promise immediately.', 'reason' => 'Use this as the visible hero headline so the client can approve the promise immediately.'],
                                 ],
                                 'execution_script' => [
                                     'feature_points' => ['Primary CTA'],
@@ -485,7 +587,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                                 'keywords' => ['brand keyword'],
                                 'content' => 'Learn how Plan Service Test works, why the team is credible, and what visitors can expect after getting in touch.',
                                 'field_plan' => [
-                                    ['field' => 'title', 'sample' => 'Why visitors trust Plan Service Test', 'reason' => 'State the brand clearly'],
+                                    ['field' => 'title', 'sample' => 'Why visitors trust Plan Service Test', 'implementation_note' => 'Use this heading to frame the trust section in visible client-facing language.', 'reason' => 'Use this heading to frame the trust section in visible client-facing language.'],
                                 ],
                                 'execution_script' => [
                                     'feature_points' => ['Brand proof'],
@@ -511,6 +613,27 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }
 
+    private function buildTopLevelAiPlanResponse(): string
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        if (!\is_array($decoded)) {
+            return '{}';
+        }
+
+        $planJson = \is_array($decoded['plan_json'] ?? null) ? $decoded['plan_json'] : [];
+        if ($planJson === []) {
+            return '{}';
+        }
+
+        return \json_encode(
+            \array_merge(
+                ['markdown' => (string)($decoded['markdown'] ?? '# Site Blueprint')],
+                $planJson
+            ),
+            \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
+        ) ?: '{}';
+    }
+
     private function buildPromptLikeAiPlanResponse(): string
     {
         $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
@@ -521,8 +644,60 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         $decoded['plan_json']['site_strategy']['summary'] = 'Explain the core value with concise readable paragraphs.';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['content'] = 'Write the title around the core value, then explain the main highlights and next CTA.';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'][0]['sample'] = '标题围绕核心价值展开';
+        $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'][0]['implementation_note'] = 'Keep the first-screen promise concise and lead visitors to the next step.';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['execution_script']['feature_points'] = ['List 2-4 value points'];
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['execution_script']['core_copy'] = 'Do not describe what should be written.';
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    private function buildPartnerAiPlanResponse(): string
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        if (!\is_array($decoded)) {
+            return '{}';
+        }
+
+        $decoded['plan_json']['pages']['home_page']['blocks'][] = [
+            'block_key' => 'partner',
+            'goal' => 'Show partner proof',
+            'keywords' => ['partner logos'],
+            'content' => 'Trusted by partner brands that appear across the onboarding and trust journey.',
+            'field_plan' => [
+                ['field' => 'title', 'sample' => '合作品牌', 'implementation_note' => 'Use this as the visible section heading.'],
+                ['field' => 'description', 'sample' => '展示合作品牌、合作方向与可信背书。', 'implementation_note' => 'Use this as the supporting copy for the logo wall.'],
+            ],
+            'execution_script' => [
+                'feature_points' => ['Visible headline: 合作品牌', 'Support copy: 展示合作品牌、合作方向与可信背书。'],
+                'core_copy' => '合作品牌与信任背书在同一区块展示，方便快速建立可信度。',
+                'typography' => 'Readable',
+                'style_tone' => 'Trustworthy',
+                'background_direction' => 'Neutral',
+                'media_assets' => ['partner-logos.png'],
+            ],
+            'reusable' => 'yes',
+            'seo_impact' => 'medium',
+        ];
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    private function buildGenericAiPlanResponse(): string
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        if (!\is_array($decoded)) {
+            return '{}';
+        }
+
+        $decoded['plan_json']['pages']['home_page']['blocks'][0]['content'] = '欢迎来到 Teenipiya websiteProfile。这里会展示重点内容，并提供一个清晰的下一步入口。';
+        $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'] = [
+            ['field' => 'title', 'sample' => '欢迎来到 Teenipiya websiteProfile', 'implementation_note' => '作为区块主标题直接上屏。'],
+            ['field' => 'subtitle', 'sample' => '这里会展示重点内容', 'implementation_note' => '放在标题下方补充信息。'],
+            ['field' => 'description', 'sample' => '浏览重点内容后即可进入下一步入口。', 'implementation_note' => '补充简短说明。'],
+            ['field' => 'button_text', 'sample' => '立即开始', 'implementation_note' => '按钮文本。'],
+        ];
+        $decoded['plan_json']['pages']['home_page']['blocks'][0]['execution_script']['core_copy'] = '欢迎来到 Teenipiya websiteProfile，这里会展示重点内容并提供下一步入口。';
+        $decoded['plan_json']['pages']['home_page']['blocks'][0]['execution_script']['feature_points'] = ['Visible headline', 'Primary CTA'];
 
         return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }

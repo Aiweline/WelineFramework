@@ -102,4 +102,24 @@ final class PreparedContentStoreTest extends TestCase
         self::assertFalse(PreparedContentStore::has($key));
         self::assertSame('missing', PreparedContentStore::get($key, 'missing'));
     }
+
+    public function testResolveLayoutContentSkipsEmptyMetaContentString(): void
+    {
+        $called = 0;
+        $html = PreparedContentStore::resolveLayoutContent(
+            null,
+            null,
+            ['content' => ''],
+            null,
+            'Weline_Queue::templates/Backend/Queue/content.phtml',
+            static function (string $contentTemplate) use (&$called): string {
+                $called++;
+                self::assertNotSame('', $contentTemplate);
+
+                return '<main>rendered</main>';
+            }
+        );
+        self::assertSame('<main>rendered</main>', $html);
+        self::assertSame(1, $called);
+    }
 }

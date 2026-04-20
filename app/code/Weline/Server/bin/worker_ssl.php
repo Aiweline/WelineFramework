@@ -1092,7 +1092,7 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
         WlsLogger::error_("socket_create 失败: " . \socket_strerror(\socket_last_error()));
         exit(1);
     }
-    if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEADDR, 1)) {
+    if (!\Weline\Server\Socket\ListenSocketOptions::applyRawListenSocketReuseOption($rawSocket)['success']) {
         WlsLogger::warning_("设置 SO_REUSEADDR 失败");
     }
     if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEPORT, 1)) {
@@ -1133,7 +1133,7 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
     }
     
     // 设置 SO_REUSEADDR
-    if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEADDR, 1)) {
+    if (!\Weline\Server\Socket\ListenSocketOptions::applyRawListenSocketReuseOption($rawSocket)['success']) {
         WlsLogger::warning_("设置 SO_REUSEADDR 失败");
     }
     
@@ -1213,7 +1213,7 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
             WlsLogger::error_("Socket 创建失败 (defer-ssl): {$lastErrstr} (errno: {$lastErrno})");
             break;
         }
-        if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEADDR, 1)) {
+        if (!\Weline\Server\Socket\ListenSocketOptions::applyRawListenSocketReuseOption($rawSocket)['success']) {
             WlsLogger::warning_("设置 SO_REUSEADDR 失败");
         }
         if (\defined('SO_REUSEPORT') && !@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEPORT, 1)) {
@@ -1259,8 +1259,9 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
     // Windows 下可能出现 TLS reset（cURL 35），与延迟 SSL 无关，属 PHP stream+OpenSSL 兼容性。
     $socketOptions = [
         'backlog' => 102400,
-        'so_reuseaddr' => true,
     ];
+
+    $socketOptions = \Weline\Server\Socket\ListenSocketOptions::streamContextOptions($socketOptions);
 
     $context = \stream_context_create([
         'socket' => $socketOptions,
@@ -1286,8 +1287,9 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
     // 方案2：标准 stream_socket_server 方式
     $socketOptions = [
         'backlog' => 102400,  // 增大 backlog 提高并发
-        'so_reuseaddr' => true,
     ];
+
+    $socketOptions = \Weline\Server\Socket\ListenSocketOptions::streamContextOptions($socketOptions);
 
     // Linux 下尝试启用 SO_REUSEPORT（通过 stream context，可能不被支持）
     if ($supportsReusePort && !$useReusePort) {
@@ -1629,7 +1631,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                 : "已上报就绪状态，控制面已同步确认 READY"
         );
         $readySentTime = \microtime(true);
-        if (\Weline\Server\Log\LogConfig::isDevMode() && $ipcClient !== null) {
+        if ((\Weline\Server\Log\LogConfig::isDevMode() || $isFrontend) && $ipcClient !== null) {
             WlsLogger::getInstance()->setIpcLogSink(static function (string $line, string $level, string $tag) use ($ipcClient): void {
                 if ($ipcClient->isConnected()) {
                     $ipcClient->sendLogLine($line, $level, $tag);
