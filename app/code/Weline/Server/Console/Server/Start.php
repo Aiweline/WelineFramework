@@ -21,6 +21,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Console\Console\Server\Stop as CliStop;
 use Weline\Server\Console\Server\Stop as MainStop;
 use Weline\Server\Service\CliServerService;
+use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Server\Service\SslCertificateService;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\SharedSidecarInspector;
@@ -308,6 +309,11 @@ class Start extends CommandAbstract
             if (!empty($sslResult['expires_at'])) {
                 $this->printer->note(__('证书有效期至：%{1}', [$sslResult['expires_at']]));
             }
+
+            // 证书就绪后再生成 SNI 映射（getServerConfig 阶段生成的 map 可能早于 ensureSslCertificate，曾导致「有证但 map 未含主机名」）
+            /** @var SslCertificateService $sslMapSync */
+            $sslMapSync = ObjectManager::getInstance(SslCertificateService::class);
+            $sslMapSync->regenerateCertificateMap();
         }
         
         // 检查是否强制重启（-r）及是否强制直接切换（-f：不等待 worker 空闲，直接停再启）
@@ -752,7 +758,7 @@ class Start extends CommandAbstract
         // 将 .local 域名转换为 127.0.0.1 用于实际监听
         // 域名仅用于 SSL 证书，实际监听使用 IP 避免 PHP DNS 解析问题
         $listenHost = $host;
-        if (str_ends_with($host, '.local')) {
+        if ($host === 'localhost' || LocalDomainPolicy::isManagedLocalDomain($host)) {
             $listenHost = '127.0.0.1';
         }
 
@@ -789,7 +795,7 @@ class Start extends CommandAbstract
             @\flush();
         }
 
-        // 前台模式也使用 listenHost；对外展示的访问域名保留为项目 host（如 *.weline.local）
+        // 前台模式也使用 listenHost；对外展示的访问域名保留为项目 host（如 *.weline.test / *.weline.localhost）
         $config['public_host'] = $host;
         $config['host'] = $listenHost;
 
@@ -2349,7 +2355,7 @@ class Start extends CommandAbstract
      * 获取默认监听地址
      *
      * 为避免多项目 SSL 证书冲突，使用项目唯一的本地域名。
-     * 格式：p{项目哈希前8位}.weline.local
+     * 格式：p{项目哈希前8位}.weline.test 或 p{项目哈希前8位}.weline.localhost
      *
      * @return string
      */
@@ -2361,7 +2367,7 @@ class Start extends CommandAbstract
         $shortHash = \substr($hash, 0, 8);
 
         // 生成项目唯一域名（子域名格式更符合 DNS 规范）
-        return "p{$shortHash}.weline.local";
+        return LocalDomainPolicy::buildProjectHost($shortHash);
     }
 
     /**
@@ -2372,7 +2378,7 @@ class Start extends CommandAbstract
     protected function ensureHostsFileConfigured(string $host): void
     {
         // 只处理 .local 域名
-        if (!str_ends_with($host, '.local')) {
+        if (!LocalDomainPolicy::requiresHostsEntry($host)) {
             return;
         }
 
@@ -2423,7 +2429,10 @@ class Start extends CommandAbstract
             if ($sslService->isCertificateValid($certPath)) {
                 continue;
             }
-            $result = $sslService->generateSelfSignedCertificate($localDomain);
+            $result = $sslService->generateLocalCaSignedCertificate($localDomain);
+            if (!(bool) ($result['success'] ?? false)) {
+                $result = $sslService->generateSelfSignedCertificate($localDomain);
+            }
             if ($result['success'] ?? false) {
                 $this->printer->note(__('已为 %{1} 生成自签证书', [$localDomain]));
             }
@@ -5285,6 +5294,9 @@ PHP;
             }
             $sslCert = $sslResult['cert_path'];
             $sslKey = $sslResult['key_path'];
+            /** @var SslCertificateService $sslMapSyncStrategy */
+            $sslMapSyncStrategy = ObjectManager::getInstance(SslCertificateService::class);
+            $sslMapSyncStrategy->regenerateCertificateMap();
         }
         
         // 创建配置对象

@@ -27,12 +27,12 @@ class WebsiteAgentServiceTest extends TestCase
 
         $result = $service->buildFromDescription(
             'Local Site',
-            'weline-dev.local',
+            'weline-dev.weline.test',
             0
         );
 
         $this->assertTrue($result['success']);
-        $this->assertSame('weline-dev.local', $result['domain'] ?? '');
+        $this->assertSame('weline-dev.weline.test', $result['domain'] ?? '');
         $this->assertSame(0, $result['order_id'] ?? -1);
     }
 
@@ -162,7 +162,7 @@ class WebsiteAgentServiceTest extends TestCase
         $this->assertTrue($result['success']);
         $domain = (string)($result['domain'] ?? '');
         $this->assertNotSame('', $domain);
-        $this->assertTrue(\str_ends_with($domain, '.weline.local'));
+        $this->assertTrue(\str_ends_with($domain, '.weline.test'));
         $this->assertSame([$domain], $result['candidate_domains'] ?? []);
         $this->assertSame([], $result['checked_results'] ?? null);
         $this->assertTrue(!empty($result['availability_deferred']));

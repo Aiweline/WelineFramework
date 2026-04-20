@@ -29,6 +29,8 @@ class DevToolPanelObserver implements ObserverInterface
     private const PERSISTENT_MAX_RESPONSE_BYTES = 262144;
     private const MAX_TRACE_SPANS = 300;
     private const MAX_TRACE_META_FIELD_BYTES = 2048;
+    /** 内联注入页面的 trace JSON 默认上限（字节），防止超大 JSON 撑爆 Worker 内存 */
+    private const DEFAULT_MAX_TRACE_JSON_BYTES = 524288;
 
     private Request $request;
 
@@ -189,7 +191,7 @@ class DevToolPanelObserver implements ObserverInterface
 
     private function injectTraceScript(string $result, array $traceSpans): string
     {
-        $traceScript = '<script>window.__WELINE_REQUEST_TRACE__=' . json_encode($traceSpans) . ';</script>';
+        $traceScript = '<script>window.__WELINE_REQUEST_TRACE__=' . $this->buildTraceInlineJson($traceSpans) . ';</script>';
         if (stripos($result, 'window.__WELINE_REQUEST_TRACE__=') !== false) {
             $count = 0;
             $updated = preg_replace(
@@ -212,6 +214,46 @@ class DevToolPanelObserver implements ObserverInterface
         }
 
         return $result . $traceScript;
+    }
+
+    /**
+     * 将 trace 序列化为可嵌入 HTML 的 JSON；超长时降级为占位 span，避免 json_encode 与字符串拼接 OOM。
+     *
+     * @param array<int, array<string, mixed>> $traceSpans
+     */
+    private function buildTraceInlineJson(array $traceSpans): string
+    {
+        $flags = JSON_UNESCAPED_UNICODE;
+        if (\defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+            $flags |= \JSON_INVALID_UTF8_SUBSTITUTE;
+        }
+
+        $encoded = \json_encode($traceSpans, $flags);
+        if (!\is_string($encoded)) {
+            $encoded = '[]';
+        }
+
+        $maxBytes = (int)Env::get('dev_tool.max_trace_json_bytes', self::DEFAULT_MAX_TRACE_JSON_BYTES);
+        if ($maxBytes > 0 && \strlen($encoded) > $maxBytes) {
+            $stub = [
+                [
+                    'name' => 'dev_tool_trace_json_truncated',
+                    'duration_ms' => 0.0,
+                    'category' => 'framework',
+                    'meta' => [
+                        'bytes' => \strlen($encoded),
+                        'limit' => $maxBytes,
+                        'hint' => 'dev_tool.max_trace_json_bytes',
+                    ],
+                ],
+            ];
+            $encoded = \json_encode($stub, $flags);
+            if (!\is_string($encoded)) {
+                $encoded = '[]';
+            }
+        }
+
+        return $encoded;
     }
 
     private function appendPanelHtml(string $result, string $panelHtml): string
@@ -379,28 +421,53 @@ class DevToolPanelObserver implements ObserverInterface
             return [];
         }
 
-        $limited = \array_slice($traceSpans, -self::MAX_TRACE_SPANS);
+        $limit = $this->maxTraceSpansForPayload();
+        $limited = \array_slice($traceSpans, -$limit);
+        $maxMetaField = $this->maxTraceMetaFieldBytesForPayload();
         foreach ($limited as &$span) {
             if (!\is_array($span)) {
                 continue;
             }
 
-            if (isset($span['meta']) && \is_array($span['meta'])) {
+            if ($maxMetaField > 0 && isset($span['meta']) && \is_array($span['meta'])) {
                 foreach ($span['meta'] as $key => $value) {
                     if (!\is_scalar($value) && $value !== null) {
                         continue;
                     }
                     $stringValue = (string)$value;
-                    if (\strlen($stringValue) <= self::MAX_TRACE_META_FIELD_BYTES) {
+                    if (\strlen($stringValue) <= $maxMetaField) {
                         continue;
                     }
-                    $span['meta'][$key] = \substr($stringValue, 0, self::MAX_TRACE_META_FIELD_BYTES) . '...(truncated)';
+                    $span['meta'][$key] = \substr($stringValue, 0, $maxMetaField) . '...(truncated)';
                 }
             }
         }
         unset($span);
 
         return $limited;
+    }
+
+    private function maxTraceSpansForPayload(): int
+    {
+        $v = (int)Env::get('dev_tool.max_trace_spans', self::MAX_TRACE_SPANS);
+        if ($v <= 0) {
+            return self::MAX_TRACE_SPANS;
+        }
+
+        return \min($v, 5000);
+    }
+
+    /**
+     * 0 表示不截断 meta（便于复制完整 SQL）；>0 为单字段最大字节；<0 回退为 MAX_TRACE_META_FIELD_BYTES。
+     */
+    private function maxTraceMetaFieldBytesForPayload(): int
+    {
+        $v = (int)Env::get('dev_tool.max_trace_meta_field_bytes', 0);
+        if ($v < 0) {
+            return self::MAX_TRACE_META_FIELD_BYTES;
+        }
+
+        return $v;
     }
 
     /**

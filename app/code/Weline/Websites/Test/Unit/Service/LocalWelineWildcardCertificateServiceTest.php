@@ -12,12 +12,13 @@ final class LocalWelineWildcardCertificateServiceTest extends TestCase
     {
         $service = new LocalWelineWildcardCertificateService();
 
-        self::assertTrue($service->isEligibleDomain('apk-seo-d4de8e.weline.local'));
-        self::assertTrue($service->isEligibleDomain('demo-123.weline.local'));
+        self::assertTrue($service->isEligibleDomain('apk-seo-d4de8e.weline.test'));
+        self::assertTrue($service->isEligibleDomain('demo-123.weline.test'));
+        self::assertTrue($service->isEligibleDomain('demo-123.weline.localhost'));
 
-        self::assertFalse($service->isEligibleDomain('weline.local'));
-        self::assertFalse($service->isEligibleDomain('*.weline.local'));
-        self::assertFalse($service->isEligibleDomain('foo.bar.weline.local'));
+        self::assertFalse($service->isEligibleDomain('weline.test'));
+        self::assertFalse($service->isEligibleDomain('*.weline.test'));
+        self::assertFalse($service->isEligibleDomain('foo.bar.weline.test'));
         self::assertFalse($service->isEligibleDomain('foo.local'));
         self::assertFalse($service->isEligibleDomain('foo.example.com'));
     }
@@ -40,7 +41,7 @@ final class LocalWelineWildcardCertificateServiceTest extends TestCase
             }
         );
 
-        $result = $service->ensureWildcardCertificateForDomain('apk-seo-d4de8e.weline.local', 88);
+        $result = $service->ensureWildcardCertificateForDomain('apk-seo-d4de8e.weline.test', 88);
 
         self::assertTrue((bool)($result['success'] ?? false));
         self::assertTrue((bool)($result['reused'] ?? false));
@@ -66,7 +67,7 @@ final class LocalWelineWildcardCertificateServiceTest extends TestCase
             }
         );
 
-        $result = $service->ensureWildcardCertificateForDomain('apk-seo-d4de8e.weline.local', 77);
+        $result = $service->ensureWildcardCertificateForDomain('apk-seo-d4de8e.weline.test', 77);
 
         self::assertTrue((bool)($result['success'] ?? false));
         self::assertSame(LocalWelineWildcardCertificateService::WILDCARD_DOMAIN, $result['wildcard_domain'] ?? null);
@@ -74,5 +75,31 @@ final class LocalWelineWildcardCertificateServiceTest extends TestCase
         self::assertSame('ensureLocalWelineWildcardCertificate', $calls[1][1]);
         self::assertSame(77, $calls[1][2]['website_id']);
         self::assertSame(LocalWelineWildcardCertificateService::WILDCARD_DOMAIN, $calls[1][2]['domain']);
+    }
+
+    public function testEnsureWildcardCertificateUsesLoopbackWildcardForLocalhostDomains(): void
+    {
+        $calls = [];
+        $service = new LocalWelineWildcardCertificateService(
+            static function (string $provider, string $operation, array $params) use (&$calls): array {
+                $calls[] = [$provider, $operation, $params];
+                if ($operation === 'resolveManagedCertificate') {
+                    return [];
+                }
+                if ($operation === 'ensureLocalWelineWildcardCertificate') {
+                    return ['success' => true, 'message' => 'issued'];
+                }
+
+                return [];
+            }
+        );
+
+        $result = $service->ensureWildcardCertificateForDomain('demo-123.weline.localhost', 55);
+
+        self::assertTrue((bool)($result['success'] ?? false));
+        self::assertSame('*.weline.localhost', $result['wildcard_domain'] ?? null);
+        self::assertCount(2, $calls);
+        self::assertSame('*.weline.localhost', $calls[0][2]['hostname']);
+        self::assertSame('*.weline.localhost', $calls[1][2]['domain']);
     }
 }

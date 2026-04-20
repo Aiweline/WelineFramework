@@ -198,6 +198,61 @@ class RoutingCacheServiceTest extends TestCase
         $this->assertTrue(true, 'purgeAll 应成功执行');
     }
 
+    public function testCacheEvictionKeepsEntryCountWithinConfiguredLimit(): void
+    {
+        $this->service->configure([
+            'max_sni_entries' => 5,
+            'max_ip_entries' => 5,
+            'max_connection_entries' => 5,
+            'cleanup_interval' => 3600,
+        ]);
+
+        for ($i = 0; $i < 6; $i++) {
+            $this->service->cacheSniRoute("site{$i}.example.com", 16000 + $i, 3600);
+            $this->service->cacheIpRoute("10.0.0.{$i}", 17000 + $i, "site{$i}.example.com", 3600);
+            $this->service->cacheConnectionRoute($i + 1, 18000 + $i, "site{$i}.example.com");
+        }
+
+        $stats = $this->service->getStats();
+        $this->assertLessThanOrEqual(5, $stats['sni_cache_size']);
+        $this->assertLessThanOrEqual(5, $stats['ip_cache_size']);
+        $this->assertLessThanOrEqual(5, $stats['connection_cache_size']);
+    }
+
+    public function testMaybeCleanupRemovesExpiredEntriesAcrossAllCaches(): void
+    {
+        $this->service->configure([
+            'cleanup_interval' => 0,
+            'max_sni_entries' => 100,
+            'max_ip_entries' => 100,
+            'max_connection_entries' => 100,
+        ]);
+
+        $this->service->cacheSniRoute('expired.example.com', 16895, -1);
+        $this->service->cacheIpRoute('10.0.1.1', 16896, 'expired.example.com', -1);
+        $this->service->cacheConnectionRoute(99, 16897, 'expired.example.com');
+
+        $connectionCache = new \ReflectionProperty($this->service, 'connectionCache');
+        $connectionCache->setAccessible(true);
+        /** @var array<int, array{port: int, sni: string, expires: int}> $connections */
+        $connections = $connectionCache->getValue($this->service);
+        $connections[99]['expires'] = \time() - 1;
+        $connectionCache->setValue($this->service, $connections);
+
+        $lastCleanup = new \ReflectionProperty($this->service, 'lastCleanup');
+        $lastCleanup->setAccessible(true);
+        $lastCleanup->setValue($this->service, 0);
+
+        $this->service->cacheSniRoute('fresh.example.com', 16900, 3600);
+
+        $stats = $this->service->getStats();
+        $this->assertSame(1, $stats['sni_cache_size']);
+        $this->assertSame(0, $stats['ip_cache_size']);
+        $this->assertSame(0, $stats['connection_cache_size']);
+        $this->assertSame(16900, $this->service->getRouteBySni('fresh.example.com'));
+        $this->assertNull($this->service->getRouteBySni('expired.example.com'));
+    }
+
     /**
      * 测试：边界情况 - 空响应
      */

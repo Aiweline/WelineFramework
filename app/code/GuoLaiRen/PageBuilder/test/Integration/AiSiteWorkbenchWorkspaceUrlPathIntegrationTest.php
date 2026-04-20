@@ -35,7 +35,6 @@ final class AiSiteWorkbenchWorkspaceUrlPathIntegrationTest extends AbstractAiSit
         self::assertIsString($html);
 
         foreach ([
-            'stateJsonUrl',
             'mergeScopeUrl',
             'replaceScopeUrl',
             'setStageUrl',

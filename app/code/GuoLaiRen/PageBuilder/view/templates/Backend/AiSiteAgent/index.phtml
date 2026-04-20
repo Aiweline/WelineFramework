@@ -28,8 +28,8 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
     </div>
 </div>
 
-<div class="row">
-    <div class="col-lg-6">
+<div class="row mt-2">
+    <div class="col-lg-4">
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
@@ -43,30 +43,8 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
                 </p>
             </div>
         </div>
-    </div>
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="mdi mdi-plus-circle-outline me-1"></i>
-                    <lang>新建会话</lang>
-                </h5>
-            </div>
-            <div class="card-body">
-                <p class="text-muted small mb-3"><lang>创建后将跳转到工作台，可在后续迭代中接入简报、域名与虚拟主题步骤。</lang></p>
-                <button type="button" class="btn btn-primary" id="pb-ai-site-create">
-                    <i class="mdi mdi-creation me-1"></i>
-                    <lang>创建会话</lang>
-                </button>
-                <div id="pb-ai-site-msg" class="alert alert-danger mt-3 mb-0 d-none" role="alert"></div>
-            </div>
-        </div>
-    </div>
-</div>
 
-<div class="row mt-3">
-    <div class="col-lg-6">
-        <div class="card">
+        <div class="card mt-3">
             <div class="card-header">
                 <h5 class="card-title mb-0">
                     <i class="mdi mdi-key-variant me-1"></i>
@@ -90,14 +68,36 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
             </div>
         </div>
     </div>
-    <div class="col-lg-6">
+
+    <div class="col-lg-8">
         <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="mdi mdi-plus-circle-outline me-1"></i>
+                    <lang>新建会话</lang>
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3"><lang>创建后将跳转到工作台，可在后续迭代中接入简报、域名与虚拟主题步骤。</lang></p>
+                <button type="button" class="btn btn-primary" id="pb-ai-site-create">
+                    <i class="mdi mdi-creation me-1"></i>
+                    <lang>创建会话</lang>
+                </button>
+                <div id="pb-ai-site-msg" class="alert alert-danger mt-3 mb-0 d-none" role="alert"></div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
             <div class="card-header d-flex align-items-center justify-content-between gap-2">
                 <h5 class="card-title mb-0">
                     <i class="mdi mdi-history me-1"></i>
                     <lang>最近会话</lang>
                 </h5>
                 <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-info" id="pb-ai-session-show-all-plan">
+                        <i class="mdi mdi-view-grid-plus-outline me-1"></i>
+                        <lang>全部显示（二期规划）</lang>
+                    </button>
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="pb-ai-session-select-all">
                         <lang>全选</lang>
                     </button>
@@ -120,6 +120,7 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
                                 </th>
                                 <th><lang>令牌</lang></th>
                                 <th><lang>阶段</lang></th>
+                                <th><lang>状态</lang></th>
                                 <th><lang>更新</lang></th>
                                 <th></th>
                             </tr>
@@ -128,6 +129,22 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
                             <?php foreach ($recent_sessions as $row) {
                                 $pid = (string) ($row['public_id'] ?? '');
                                 $ws = $this->getBackendUrl('*/backend/ai-site-agent/workspace', ['public_id' => $pid]);
+                                $wsBackend = $this->getBackendUrl('*/backend/ai-site-agent/workspace', ['public_id' => $pid]);
+                                $wsPreview = $this->getBackendUrl('*/backend/ai-site-agent/workspace-preview', ['public_id' => $pid]);
+                                $wsPublish = $this->getBackendUrl('*/backend/ai-site-agent/workspace', ['public_id' => $pid, 'stage' => 'publish']);
+                                $stage = (string)($row['stage'] ?? '');
+                                $publishStatus = (string)($row['publish_status'] ?? '');
+                                $isSiteReady = (int)($row['website_id'] ?? 0) > 0 && (int)($row['virtual_theme_id'] ?? 0) > 0;
+                                $isWaitingPublish = $stage === \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession::STAGE_PUBLISH
+                                    && $publishStatus === \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession::PUBLISH_STATUS_DRAFT;
+                                $canUseReadyActions = $isSiteReady && $isWaitingPublish;
+                                $disabledReason = !$isSiteReady
+                                    ? (string)__('站点尚未就绪，请等待系统完成站点准备后再操作。')
+                                    : (string)__('当前会话尚未进入“等待发布”状态，请先完成前置阶段。');
+                                $backendModeGateMessage = $disabledReason . "\n\n" . (string)__('后台模式：第一阶段、第二阶段（方案和任务生成）全部走后端 cron 定时任务执行。跑完后会显示「快速审核」（可查看站点预览和阶段性方案），确认后即可发布。');
+                                $quickReviewGateMessage = $disabledReason . "\n\n" . (string)__('快速审核：可查看站点预览和阶段性方案，确认无误后即可进入发布。');
+                                $previewGateMessage = $disabledReason . "\n\n" . (string)__('预览：用于预览站点当前效果。');
+                                $publishGateMessage = $disabledReason . "\n\n" . (string)__('发布：请先完成快速审核并确认，再执行发布。');
                                 ?>
                                 <tr>
                                     <td>
@@ -135,10 +152,111 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
                                     </td>
                                     <td class="font-monospace small"><?= htmlspecialchars(\substr($pid, 0, 12) . '…', ENT_QUOTES, 'UTF-8') ?></td>
                                     <td><code><?= htmlspecialchars((string) ($row['stage'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code></td>
+                                    <td>
+                                        <?php
+                                        $activeStatus = (string)($row['active_operation_status'] ?? '');
+                                        $workspaceStatus = (string)($row['workspace_status'] ?? '');
+                                        $isQueueRunning = \in_array($activeStatus, ['queued', 'running'], true);
+                                        $isQueueError = $activeStatus === 'error';
+                                        $isCanPublish = $workspaceStatus === \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+                                        if ($isQueueRunning) {
+                                            echo '<span class="badge bg-warning text-dark" title="队列正在运行中，请等待完成。"><i class="mdi mdi-loading mdi-spin me-1"></i>队列中</span>';
+                                        } elseif ($isQueueError) {
+                                            echo '<span class="badge bg-danger" title="队列执行出错。"><i class="mdi mdi-alert-circle me-1"></i>队列失败</span>';
+                                        } elseif ($isCanPublish) {
+                                            echo '<span class="badge bg-success" title="构建已完成，可以发布。"><i class="mdi mdi-check-circle me-1"></i>可发布</span>';
+                                        } else {
+                                            echo '<span class="badge bg-secondary">空闲</span>';
+                                        }
+                                        ?>
+                                    </td>
                                     <td class="small text-muted"><?= htmlspecialchars((string) ($row['update_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                                     <td class="text-end">
-                                        <div class="btn-group btn-group-sm" role="group">
-                                            <a class="btn btn-soft-primary" href="<?= htmlspecialchars($ws, ENT_QUOTES, 'UTF-8') ?>"><lang>打开</lang></a>
+                                        <div class="d-flex flex-wrap justify-content-end gap-1">
+                                            <?php
+                                            $isSiteReady = (int)($row['website_id'] ?? 0) > 0 && (int)($row['virtual_theme_id'] ?? 0) > 0;
+                                            $isQueueRunningBtn = \in_array($activeStatus, ['queued', 'running'], true);
+                                            ?>
+                                            <a class="btn btn-sm btn-outline-primary"
+                                               href="<?= htmlspecialchars($ws, ENT_QUOTES, 'UTF-8') ?>"
+                                               title="打开会话工作区，查看和继续建站流程。">
+                                                <i class="mdi mdi-arrow-right-bold me-1"></i><?= htmlspecialchars(__('打开会话'), ENT_QUOTES, 'UTF-8') ?>
+                                            </a>
+                                            <?php if ($isSiteReady && !$isQueueRunningBtn) { ?>
+                                                <a class="btn btn-sm btn-soft-info"
+                                                   href="<?= htmlspecialchars($ws, ENT_QUOTES, 'UTF-8') ?>"
+                                                   title="前往可视化编辑器，直接编辑网站内容。">
+                                                    <i class="mdi mdi-pencil-outline me-1"></i>编辑网站
+                                                </a>
+                                            <?php } elseif ($isQueueRunningBtn) { ?>
+                                                <span class="btn btn-sm btn-outline-secondary opacity-50" title="队列运行中，请等待完成后编辑。" disabled>
+                                                    <i class="mdi mdi-pencil-outline me-1"></i>编辑网站
+                                                </span>
+                                            <?php }
+                                            if ($canUseReadyActions) { ?>
+                                                <a class="btn btn-sm btn-soft-primary"
+                                                   href="<?= htmlspecialchars($wsBackend, ENT_QUOTES, 'UTF-8') ?>"
+                                                   title="<?= htmlspecialchars(__('后台模式：阶段一与阶段二由后端 cron 自动执行，完成后可快速审核并发布。'), ENT_QUOTES, 'UTF-8') ?>">
+                                                    <lang>后台模式</lang>
+                                                </a>
+                                            <?php } else { ?>
+                                                <button type="button"
+                                                        class="btn btn-sm btn-soft-primary opacity-75 pb-ai-gated-action"
+                                                        data-gate-message="<?= htmlspecialchars($backendModeGateMessage, ENT_QUOTES, 'UTF-8') ?>"
+                                                        aria-disabled="true"
+                                                        title="<?= htmlspecialchars($disabledReason, ENT_QUOTES, 'UTF-8') ?>">
+                                                    <lang>后台模式</lang>
+                                                </button>
+                                            <?php } ?>
+
+                                            <?php if ($canUseReadyActions) { ?>
+                                                <a class="btn btn-sm btn-outline-primary"
+                                                   href="<?= htmlspecialchars($ws, ENT_QUOTES, 'UTF-8') ?>"
+                                                   title="<?= htmlspecialchars(__('快速审核：查看站点预览与阶段性方案，确认后即可进入发布。'), ENT_QUOTES, 'UTF-8') ?>">
+                                                    <lang>快速审核</lang>
+                                                </a>
+                                            <?php } else { ?>
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-primary opacity-75 pb-ai-gated-action"
+                                                        data-gate-message="<?= htmlspecialchars($quickReviewGateMessage, ENT_QUOTES, 'UTF-8') ?>"
+                                                        aria-disabled="true"
+                                                        title="<?= htmlspecialchars($disabledReason, ENT_QUOTES, 'UTF-8') ?>">
+                                                    <lang>快速审核</lang>
+                                                </button>
+                                            <?php } ?>
+
+                                            <?php if ($canUseReadyActions) { ?>
+                                                <a class="btn btn-sm btn-outline-secondary"
+                                                   href="<?= htmlspecialchars($wsPreview, ENT_QUOTES, 'UTF-8') ?>"
+                                                   title="<?= htmlspecialchars(__('预览：用于查看当前站点效果。'), ENT_QUOTES, 'UTF-8') ?>">
+                                                    <lang>预览</lang>
+                                                </a>
+                                            <?php } else { ?>
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-secondary opacity-75 pb-ai-gated-action"
+                                                        data-gate-message="<?= htmlspecialchars($previewGateMessage, ENT_QUOTES, 'UTF-8') ?>"
+                                                        aria-disabled="true"
+                                                        title="<?= htmlspecialchars($disabledReason, ENT_QUOTES, 'UTF-8') ?>">
+                                                    <lang>预览</lang>
+                                                </button>
+                                            <?php } ?>
+
+                                            <?php if ($canUseReadyActions) { ?>
+                                                <a class="btn btn-sm btn-outline-success"
+                                                   href="<?= htmlspecialchars($wsPublish, ENT_QUOTES, 'UTF-8') ?>"
+                                                   title="<?= htmlspecialchars(__('发布：完成快速审核后即可执行发布。'), ENT_QUOTES, 'UTF-8') ?>">
+                                                    <lang>发布</lang>
+                                                </a>
+                                            <?php } else { ?>
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-success opacity-75 pb-ai-gated-action"
+                                                        data-gate-message="<?= htmlspecialchars($publishGateMessage, ENT_QUOTES, 'UTF-8') ?>"
+                                                        aria-disabled="true"
+                                                        title="<?= htmlspecialchars($disabledReason, ENT_QUOTES, 'UTF-8') ?>">
+                                                    <lang>发布</lang>
+                                                </button>
+                                            <?php } ?>
+
                                             <a class="btn btn-outline-danger"
                                                href="<?= htmlspecialchars($deleteSessionUrl, ENT_QUOTES, 'UTF-8') ?>"
                                                w-delete="true"
@@ -167,6 +285,7 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
     var createBtn = document.getElementById('pb-ai-site-create');
     var msgBox = document.getElementById('pb-ai-site-msg');
     var selectAllBtn = document.getElementById('pb-ai-session-select-all');
+    var showAllPlanBtn = document.getElementById('pb-ai-session-show-all-plan');
     var checkAllEl = document.getElementById('pb-ai-session-check-all');
     var batchDeleteBtn = document.getElementById('pb-ai-session-batch-delete');
 
@@ -179,9 +298,34 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
         }
     }
 
+    if (showAllPlanBtn) {
+        showAllPlanBtn.addEventListener('click', function () {
+            var msg = <?= json_encode(__('二期规划中：后续将支持完整状态视图（含全量阶段、详细任务、审核结论、发布结果）的一键展示。当前请先使用“后台模式 → 快速审核 → 发布”流程。'), JSON_THROW_ON_ERROR) ?>;
+            if (window.BackendToast && typeof window.BackendToast.info === 'function') {
+                window.BackendToast.info(msg);
+                return;
+            }
+            showSuccess(msg);
+        });
+    }
+
     function showSuccess(msg) {
         if (window.BackendToast && typeof window.BackendToast.success === 'function') {
             window.BackendToast.success(msg);
+        }
+    }
+
+    function showFriendlyGateMessage(msg) {
+        var text = String(msg || '').trim();
+        if (!text) {
+            return;
+        }
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            window.BackendConfirm.show(text);
+            return;
+        }
+        if (window.BackendToast && typeof window.BackendToast.info === 'function') {
+            window.BackendToast.info(text);
         }
     }
 
@@ -271,6 +415,20 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
             return;
         }
         syncBatchButtons();
+    });
+
+    document.addEventListener('click', function (event) {
+        var target = event.target;
+        if (!(target instanceof Element)) {
+            return;
+        }
+        var gatedBtn = target.closest('.pb-ai-gated-action');
+        if (!(gatedBtn instanceof HTMLButtonElement)) {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        showFriendlyGateMessage(gatedBtn.getAttribute('data-gate-message') || <?= json_encode(__('当前操作暂不可用，请先等待站点就绪并进入等待发布状态。'), JSON_THROW_ON_ERROR) ?>);
     });
 
     if (batchDeleteBtn) {

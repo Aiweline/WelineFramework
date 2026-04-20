@@ -7,9 +7,9 @@
     margin-bottom: 12px;
 }
 .pb-ai-preview-device-bar .btn.active {
-    background: #0f172a;
-    border-color: #0f172a;
-    color: #fff;
+    background: var(--backend-color-primary);
+    border-color: var(--backend-color-primary);
+    color: var(--backend-color-text-light, #fff);
 }
 .pb-ai-preview-device-stage {
     display: flex;
@@ -19,9 +19,9 @@
     padding: 16px;
     width: 100%;
     box-sizing: border-box;
-    background: linear-gradient(180deg, #eef2f7 0%, #e2e8f0 100%);
+    background: linear-gradient(180deg, var(--backend-color-bg-secondary, #eef2f7) 0%, var(--backend-color-bg-tertiary, #e2e8f0) 100%);
 }
-/* 横向 flex 下默认 flex:0 1 auto 会让「iframe width:100%」按收缩宽度解析，PC 模式看起来像手机窄条 */
+/* 妯悜 flex 涓嬮粯璁?flex:0 1 auto 浼氳銆宨frame width:100%銆嶆寜鏀剁缉瀹藉害瑙ｆ瀽锛孭C 妯″紡鐪嬭捣鏉ュ儚鎵嬫満绐勬潯 */
 #pb-ai-visual-preview-host {
     flex: 1 1 auto;
     width: 100%;
@@ -33,7 +33,7 @@
     display: block;
     margin: 0 auto;
     transition: width .2s ease, min-height .2s ease, box-shadow .2s ease;
-    box-shadow: 0 18px 50px rgba(15, 23, 42, 0.18);
+    box-shadow: var(--backend-shadow-lg, 0 18px 50px rgba(15, 23, 42, 0.18));
 }
 .pb-ai-preview-device-stage.is-desktop iframe {
     width: 100%;
@@ -65,8 +65,8 @@
 .pb-ai-preview-tabs .nav-link {
     border: 1px solid var(--backend-color-border-default, #dbe2ea);
     border-radius: 10px;
-    background: #fff;
-    color: #334155;
+    background: var(--backend-color-card-bg, #fff);
+    color: var(--backend-color-text-secondary, #334155);
     font-size: 14px;
     line-height: 1.25;
     padding: 8px 14px;
@@ -74,14 +74,14 @@
 }
 
 .pb-ai-preview-tabs .nav-link:hover {
-    border-color: #94a3b8;
-    color: #0f172a;
+    border-color: var(--backend-color-border-dark, #94a3b8);
+    color: var(--backend-color-text-primary, #0f172a);
 }
 
 .pb-ai-preview-tabs .nav-link.active {
-    background: #eff6ff;
-    border-color: #60a5fa;
-    color: #1d4ed8;
+    background: var(--backend-color-primary-bg-subtle, #eff6ff);
+    border-color: var(--backend-color-input-focus-border, #60a5fa);
+    color: var(--backend-color-primary, #1d4ed8);
     font-weight: 600;
 }
 
@@ -89,7 +89,7 @@
     margin-bottom: 0;
 }
 
-/* 可视化编辑：页签 + 设备 + 操作，同一工具条（快速模式 / 专家模式左栏） */
+/* 鍙鍖栫紪杈戯細椤电 + 璁惧 + 鎿嶄綔锛屽悓涓€宸ュ叿鏉★紙蹇€熸ā寮?/ 涓撳妯″紡宸︽爮锛?*/
 .pb-ai-visual-editor-toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -98,7 +98,7 @@
     padding: 12px 14px;
     border: 1px solid var(--backend-color-border-default, #e5e7eb);
     border-radius: 14px;
-    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    background: linear-gradient(180deg, var(--backend-color-card-header-bg, #f8fafc) 0%, var(--backend-color-card-bg, #f1f5f9) 100%);
 }
 
 .pb-ai-visual-toolbar-pages {
@@ -130,7 +130,7 @@
 
 .pb-ai-visual-preview-shell {
     min-height: 420px;
-    background: linear-gradient(180deg, #eef2f7 0%, #e2e8f0 100%);
+    background: linear-gradient(180deg, var(--backend-color-bg-secondary, #eef2f7) 0%, var(--backend-color-bg-tertiary, #e2e8f0) 100%);
 }
 
 .pb-ai-visual-preview-watermark {
@@ -144,7 +144,7 @@
     font-size: 1.35rem;
     font-weight: 600;
     letter-spacing: 0.04em;
-    color: #94a3b8;
+    color: var(--backend-color-text-tertiary, #94a3b8);
     opacity: 0.22;
     user-select: none;
 }
@@ -156,8 +156,8 @@
     top: 0;
     z-index: 3;
     padding: 10px 14px;
-    background: rgba(254, 242, 242, 0.96);
-    border-bottom: 1px solid rgba(248, 113, 113, 0.35);
+    background: var(--backend-color-alert-danger-bg, rgba(254, 242, 242, 0.96));
+    border-bottom: 1px solid var(--backend-color-alert-danger-border, rgba(248, 113, 113, 0.35));
     pointer-events: none;
 }
 
@@ -192,3 +192,4 @@
     }
 }
 </style>
+

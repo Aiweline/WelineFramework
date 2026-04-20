@@ -15,7 +15,7 @@ final class SharedStateRuntimeResolverTest extends TestCase
 
         $runtime = $resolver->resolve(
             [
-                'host' => 'p11005ce4.weline.local',
+                'host' => 'p11005ce4.weline.test',
                 'port' => 9524,
             ],
             [
@@ -25,11 +25,11 @@ final class SharedStateRuntimeResolverTest extends TestCase
                 ],
                 'wls' => [
                     'session' => [
-                        'host' => 'p11005ce4.weline.local',
+                        'host' => 'p11005ce4.weline.test',
                         'port' => 9524,
                         'token_file_name' => 'session.main-port.token',
                         'wls_server' => [
-                            'host' => 'p11005ce4.weline.local',
+                            'host' => 'p11005ce4.weline.test',
                             'port' => 9524,
                         ],
                     ],
