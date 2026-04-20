@@ -122,19 +122,19 @@ $hasTheme = $themeIdValue > 0;
         
         <div class="toolbar-center">
             <div class="device-switcher btn-group btn-group-sm">
-                <button type="button" class="btn btn-outline-secondary active" data-device="desktop" title="<?= __('桌面端') ?>">
+                <button type="button" class="btn btn-outline-secondary active" data-device="desktop" title="<?= __('Desktop') ?>">
                     <i class="mdi mdi-monitor"></i>
                 </button>
-                <button type="button" class="btn btn-outline-secondary" data-device="tablet" title="<?= __('平板') ?>">
+                <button type="button" class="btn btn-outline-secondary" data-device="tablet" title="<?= __('Tablet') ?>">
                     <i class="mdi mdi-tablet"></i>
                 </button>
-                <button type="button" class="btn btn-outline-secondary" data-device="mobile" title="<?= __('手机') ?>">
+                <button type="button" class="btn btn-outline-secondary" data-device="mobile" title="<?= __('Mobile') ?>">
                     <i class="mdi mdi-cellphone"></i>
                 </button>
             </div>
             
             <div class="theme-mode-switcher ms-3">
-                 <button type="button" class="btn btn-sm btn-outline-secondary" id="theme-mode-toggle" title="<?= __('切换亮色/暗色模式') ?>">
+                 <button type="button" class="btn btn-sm btn-outline-secondary" id="theme-mode-toggle" title="<?= __('Toggle light/dark mode') ?>">
                     <i class="mdi mdi-weather-sunny"></i>
                 </button>
             </div>
@@ -142,14 +142,14 @@ $hasTheme = $themeIdValue > 0;
             <?php 
             // Get available locales
             $locales = [
-                'zh_Hans_CN' => '简体中文',
+                'zh_Hans_CN' => __('Simplified Chinese'),
                 'en_US' => 'English',
-                'zh_Hant_TW' => '繁體中文'
+                'zh_Hant_TW' => __('Traditional Chinese')
             ];
             $currentLocale = \Weline\Framework\App\Env::getInstance()->getLocale();
             ?>
             <div class="locale-switcher ms-3">
-                <select class="form-select form-select-sm" id="locale-selector" title="<?= __('选择语言') ?>">
+                <select class="form-select form-select-sm" id="locale-selector" title="<?= __('Select language') ?>">
                     <?php foreach ($locales as $code => $name): ?>
                         <option value="<?= $code ?>" <?= $code === $currentLocale ? 'selected' : '' ?>><?= $name ?></option>
                     <?php endforeach; ?>
@@ -159,13 +159,13 @@ $hasTheme = $themeIdValue > 0;
         
         <div class="toolbar-right">
             <a href="<?= $this->getUrl('theme/backend/index') ?>" class="btn btn-sm btn-outline-secondary me-2">
-                <?= __('退出') ?>
+                <?= __('Exit') ?>
             </a>
             <button type="button" class="btn btn-sm btn-outline-warning me-2" id="discard-preview-btn">
-                <i class="mdi mdi-restore"></i> <?= __('鏀惧純棰勮') ?>
+                <i class="mdi mdi-restore"></i> <?= __('Discard preview') ?>
             </button>
             <button type="button" class="btn btn-sm btn-primary" id="global-save-btn">
-                <i class="mdi mdi-content-save"></i> <?= __('保存更改') ?>
+                <i class="mdi mdi-content-save"></i> <?= __('Publish to formal') ?>
             </button>
         </div>
     </header>
@@ -210,23 +210,23 @@ $hasTheme = $themeIdValue > 0;
                         <div class="structure-map" id="structure-map">
                             <!-- Structure zones will be rendered here by JS -->
                             <div class="zone-wrapper zone-header" data-zone="header" data-type="partials" data-category="header">
-                                <div class="zone-label"><?= __('页头 (Header)') ?></div>
+                                <div class="zone-label"><?= __('Header') ?></div>
                             </div>
                             
                             <div class="middle-section">
                                 <div class="zone-wrapper zone-sidebar-left" data-zone="sidebar_left" data-type="partials" data-category="sidebar">
-                                     <div class="zone-label"><?= __('左侧栏') ?></div>
+                                     <div class="zone-label"><?= __('Left Sidebar') ?></div>
                                 </div>
                                 <div class="zone-wrapper zone-body" data-zone="content" data-type="layouts" data-category="default">
-                                    <div class="zone-label"><?= __('主体内容 (Body)') ?></div>
+                                    <div class="zone-label"><?= __('Body') ?></div>
                                 </div>
                                  <div class="zone-wrapper zone-sidebar-right" data-zone="sidebar_right" data-type="partials" data-category="sidebar_right">
-                                     <div class="zone-label"><?= __('右侧栏') ?></div>
+                                     <div class="zone-label"><?= __('Right Sidebar') ?></div>
                                 </div>
                             </div>
                             
                             <div class="zone-wrapper zone-footer" data-zone="footer" data-type="partials" data-category="footer">
-                                <div class="zone-label"><?= __('页脚 (Footer)') ?></div>
+                                <div class="zone-label"><?= __('Footer') ?></div>
                             </div>
                         </div>
                     </div>
@@ -274,9 +274,9 @@ $hasTheme = $themeIdValue > 0;
         <!-- Right Panel: Properties -->
         <aside class="properties-panel" id="properties-panel">
             <div class="panel-header">
-                <h5 id="properties-title"><?= __('属性配置') ?></h5>
+                <h5 id="properties-title"><?= __('Properties') ?></h5>
                 <div class="d-flex align-items-center gap-2">
-                    <button type="button" class="btn btn-sm btn-icon panel-toggle-btn" id="collapse-right-btn" title="<?= __('收起') ?>">
+                    <button type="button" class="btn btn-sm btn-icon panel-toggle-btn" id="collapse-right-btn" title="<?= __('Collapse') ?>">
                         <i class="mdi mdi-chevron-right"></i>
                     </button>
                     <button type="button" class="btn-close" aria-label="Close" id="close-properties"></button>
@@ -286,7 +286,7 @@ $hasTheme = $themeIdValue > 0;
             <div class="panel-content custom-scrollbar py-3">
                 <div class="empty-state text-center py-5" id="properties-empty">
                     <i class="mdi mdi-cursor-default-click fs-1 text-muted"></i>
-                    <p class="text-muted mt-2"><?= __('请在左侧点击一个区域进行配置') ?></p>
+                    <p class="text-muted mt-2"><?= __('Please select a region on the left to configure it') ?></p>
                 </div>
                 
                 <div class="properties-content" id="properties-content" style="display: none;">
@@ -319,11 +319,9 @@ $hasTheme = $themeIdValue > 0;
                         </div>
                     </div>
                 </div>
-            </div>
-            
             <div class="panel-footer" id="properties-footer" style="display: none;">
                 <button type="button" class="btn btn-primary w-100" id="save-properties-btn">
-                    <?= __('应用更改') ?>
+                    <?= __('Apply changes') ?>
                 </button>
             </div>
 
@@ -354,12 +352,28 @@ $hasTheme = $themeIdValue > 0;
             syncThemeMode: '<?= $this->getUrl('theme/backend/config/themeConfig/syncThemeMode') ?>'
         },
         translations: {
-            loading: '<?= __('加载中...') ?>',
-            saveSuccess: '<?= __('保存成功') ?>',
-            saveFailed: '<?= __('保存失败') ?>',
-            selectLayout: '<?= __('选择布局') ?>',
-            recentColors: '<?= __('最近使用') ?>',
-            copySuccess: '<?= __('已复制') ?>'
+            loading: '<?= __('Loading...') ?>',
+            saveSuccess: '<?= __('Saved successfully') ?>',
+            saveFailed: '<?= __('Save failed') ?>',
+            publishSuccess: '<?= __('Preview config published to formal scope') ?>',
+            publishFailed: '<?= __('Publish failed') ?>',
+            publishProgress: '<?= __('Publishing...') ?>',
+            discardSuccess: '<?= __('Preview config discarded') ?>',
+            discardFailed: '<?= __('Discard failed') ?>',
+            discardProgress: '<?= __('Discarding...') ?>',
+            discardConfirm: '<?= __('Discard current preview configuration changes?') ?>',
+            resetSuccess: '<?= __('Reset to default') ?>',
+            resetFailed: '<?= __('Reset failed') ?>',
+            resetError: '<?= __('Reset error') ?>',
+            saveProgress: '<?= __('Saving...') ?>',
+            selectLayout: '<?= __('Select layout') ?>',
+            selectLayoutBeforeSave: '<?= __('Please select a layout before saving parameters') ?>',
+            recentColors: '<?= __('Recent colors') ?>',
+            copySuccess: '<?= __('Copied') ?>',
+            copyColorValue: '<?= __('Copy color value') ?>',
+            noColorSettings: '<?= __('No color settings available') ?>',
+            switchingLocale: '<?= __('Switching language...') ?>',
+            initFailed: '<?= __('Initialization failed') ?>'
         },
         themeMode: '<?= $themeMode ?? 'light' ?>'
     };

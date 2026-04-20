@@ -6,7 +6,10 @@ namespace Weline\Server\Test\Unit\Dispatcher;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Dispatcher\Dispatcher;
 use Weline\Server\Dispatcher\PassthroughCore;
+use Weline\Server\IPC\ChildControl\ChildControlClientInterface;
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Supervisor\Client\SupervisorChildClient;
+use Weline\Server\Supervisor\Protocol\SupervisorMessage;
 
 class DispatcherDeferredWorkerJobsTest extends TestCase
 {
@@ -150,6 +153,176 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $method->invoke($dispatcher);
 
         self::assertFalse((bool) $this->getProperty($dispatcher, 'maintenanceFallbackActive'));
+    }
+
+    public function testPoolSnapshotQueuesVersionedBusinessSetPoolAndAcknowledges(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->getMockBuilder(PassthroughCore::class)
+            ->disableOriginalConstructor()
+            ->getMock();
+
+        $client = new class implements ChildControlClientInterface {
+            public array $sent = [];
+
+            public function connect(string $host, int $port): bool { return true; }
+            public function isConnected(): bool { return true; }
+            public function getSocket() { return null; }
+            public function hasPendingWrites(): bool { return false; }
+            public function hasReceivedShutdown(): bool { return false; }
+            public function isReadyStateConfirmed(): bool { return true; }
+            public function onMessage(callable $handler): void {}
+            public function onDisconnect(callable $handler): void {}
+            public function setVerboseLog(bool $verbose): void {}
+            public function setSelfTag(string $tag): void {}
+            public function register(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): bool { return true; }
+            public function rememberRegistration(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): void {}
+            public function markReadyState(bool $isReady = true): void {}
+            public function sendReady(string $role = '', int $workerId = 0, int $port = 0, int $epoch = 0, string $launchId = '', string $msgId = ''): bool { return true; }
+            public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool { return true; }
+            public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool { return true; }
+            public function sendStatusReport(int $connections, int $memory, int $requests): bool { return true; }
+            public function sendLogLine(string $line, string $level, string $processTag): bool { return true; }
+            public function send(string $message, bool $disconnectOnWriteOverflow = true): bool { $this->sent[] = $message; return true; }
+            public function flushPendingWrites(float $timeBudgetSec = 0.0): bool { return true; }
+            public function handleReadable(): array { return []; }
+            public function handleWritable(): bool { return true; }
+            public function tryReconnect(): bool { return true; }
+            public function close(): void {}
+        };
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'ipcClient', $client);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', []);
+        $this->setProperty($dispatcher, 'lastAppliedWorkerPoolSnapshotVersion', 0);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'handleIpcMessage');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher, [
+            'type' => SupervisorMessage::TYPE_POOL_SNAPSHOT,
+            'scope' => 'business',
+            'version' => 9,
+            'workers' => [
+                ['slot_id' => 'worker#2', 'port' => 18082, 'state' => 'ready'],
+                ['slot_id' => 'worker#1', 'port' => 18081, 'state' => 'ready'],
+                ['slot_id' => 'worker#3', 'port' => 0, 'state' => 'ready'],
+                ['slot_id' => 'worker#4', 'port' => 18084, 'state' => 'leased'],
+            ],
+        ]);
+
+        self::assertSame([
+            [
+                'type' => 'set_pool',
+                'ports' => [18082, 18081],
+                'role' => ControlMessage::ROLE_WORKER,
+                'pool_snapshot_version' => 9,
+                'pool_snapshot_scope' => 'business',
+            ],
+        ], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
+        self::assertSame(9, $this->getProperty($dispatcher, 'lastAppliedWorkerPoolSnapshotVersion'));
+        self::assertCount(1, $client->sent);
+        $ack = \json_decode(\trim($client->sent[0]), true);
+        self::assertSame(ControlMessage::TYPE_POOL_SNAPSHOT_ACK, $ack['type'] ?? null);
+        self::assertSame(9, $ack['version'] ?? null);
+        self::assertSame('business', $ack['scope'] ?? null);
+        self::assertTrue($ack['accepted'] ?? false);
+    }
+
+    public function testStalePoolSnapshotVersionIsIgnored(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->getMockBuilder(PassthroughCore::class)
+            ->disableOriginalConstructor()
+            ->getMock();
+
+        $client = new class implements ChildControlClientInterface {
+            public array $sent = [];
+
+            public function connect(string $host, int $port): bool { return true; }
+            public function isConnected(): bool { return true; }
+            public function getSocket() { return null; }
+            public function hasPendingWrites(): bool { return false; }
+            public function hasReceivedShutdown(): bool { return false; }
+            public function isReadyStateConfirmed(): bool { return true; }
+            public function onMessage(callable $handler): void {}
+            public function onDisconnect(callable $handler): void {}
+            public function setVerboseLog(bool $verbose): void {}
+            public function setSelfTag(string $tag): void {}
+            public function register(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): bool { return true; }
+            public function rememberRegistration(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): void {}
+            public function markReadyState(bool $isReady = true): void {}
+            public function sendReady(string $role = '', int $workerId = 0, int $port = 0, int $epoch = 0, string $launchId = '', string $msgId = ''): bool { return true; }
+            public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool { return true; }
+            public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool { return true; }
+            public function sendStatusReport(int $connections, int $memory, int $requests): bool { return true; }
+            public function sendLogLine(string $line, string $level, string $processTag): bool { return true; }
+            public function send(string $message, bool $disconnectOnWriteOverflow = true): bool { $this->sent[] = $message; return true; }
+            public function flushPendingWrites(float $timeBudgetSec = 0.0): bool { return true; }
+            public function handleReadable(): array { return []; }
+            public function handleWritable(): bool { return true; }
+            public function tryReconnect(): bool { return true; }
+            public function close(): void {}
+        };
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'ipcClient', $client);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', []);
+        $this->setProperty($dispatcher, 'lastAppliedWorkerPoolSnapshotVersion', 9);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'handleIpcMessage');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher, [
+            'type' => SupervisorMessage::TYPE_POOL_SNAPSHOT,
+            'scope' => 'business',
+            'version' => 8,
+            'workers' => [
+                ['slot_id' => 'worker#1', 'port' => 18081, 'state' => 'ready'],
+            ],
+        ]);
+
+        self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
+        self::assertSame(9, $this->getProperty($dispatcher, 'lastAppliedWorkerPoolSnapshotVersion'));
+        self::assertSame([], $client->sent);
+    }
+
+    public function testDispatcherEntrypointAllowsSupervisorModeWithoutLegacyControlPort(): void
+    {
+        $path = BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Weline'
+            . DIRECTORY_SEPARATOR . 'Server' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'dispatcher.php';
+        $source = \file_get_contents($path);
+
+        self::assertNotFalse($source, 'failed to read dispatcher.php');
+        self::assertStringContainsString("\$supervisorEnabledRaw = \\getenv('WLS_SUPERVISOR_ENABLED');", $source);
+        self::assertStringContainsString('if ($controlPort > 0 || $supervisorEnabled)', $source);
+    }
+
+    public function testDispatcherUsesSupervisorClientWhenInstanceRuntimeMetadataEnablesIt(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $instanceName = 'ut-dispatcher-runtime-supervisor';
+        $instanceDir = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances';
+        $instanceFile = $instanceDir . DIRECTORY_SEPARATOR . $instanceName . '.json';
+        if (!\is_dir($instanceDir)) {
+            @\mkdir($instanceDir, 0777, true);
+        }
+
+        \file_put_contents($instanceFile, \json_encode([
+            'control_plane_mode' => 'hybrid',
+            'supervisor_enabled' => true,
+            'supervisor_channel' => 'channel-' . $instanceName,
+        ]));
+
+        $this->setProperty($dispatcher, 'instanceName', $instanceName);
+
+        try {
+            $method = new \ReflectionMethod(Dispatcher::class, 'createIpcClient');
+            $method->setAccessible(true);
+            $client = $method->invoke($dispatcher);
+
+            self::assertInstanceOf(SupervisorChildClient::class, $client);
+        } finally {
+            @\unlink($instanceFile);
+        }
     }
 
     private function newDispatcherWithoutConstructor(): Dispatcher

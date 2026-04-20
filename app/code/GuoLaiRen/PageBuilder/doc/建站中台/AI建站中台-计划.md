@@ -9,6 +9,7 @@
 - 统一 AI 建站工作台执行口径为“两阶段”：
   - 阶段一：方案生成与确认（plan-first）
   - 阶段二：按确认方案执行构建（build-by-blueprint）
+- 统一 AI 生成执行口径：阶段一 AI 方案生成、阶段二 AI 任务方案生成、虚拟主题 AI 构建全部在后台队列执行；SSE 只承担各阶段进度同步与结果就绪通知。
 - 统一重入策略：从默认自动续跑改为显式“继续/稍后再说”。
 - 统一真相源：`build_tasks[*].status` 是任务完成真相，`build_checkpoint` 仅恢复索引。
 - PageBuilder 侧聚焦：工作台、SSE、执行蓝图、双轨构建、物化与发布门禁。
@@ -17,777 +18,151 @@
 
 > 本节为实现与评审强约束。若与其他章节冲突，以本节为准。
 
-### 第一阶段（方案）MUST
-
-- MUST 只处理方案流事件：`start/progress/chunk/done/error`。
-- MUST 使用独立 `PbAiPlanRunner` 与方案弹窗。
-- MUST 在方案弹窗右侧提供 AI SSE 实时交流窗口（仅服务第一阶段方案对话，不承载第二阶段任务日志）。
-- MUST NOT 复用工作台右侧 build 日志终端。
-- MUST NOT 显示 build guard。
-- MUST NOT 更新块级任务进度。
-- MUST NOT 参与页面预览切换。
-- MUST 令 `chunk` 仅执行 Markdown 追加与实时预览刷新。
-- MUST 提供方案交互模式切换：`微调当前方案` / `重建新方案`。
-- MUST 在发送用户补充要求时显式携带当前模式，后端据此执行：
-  - `微调当前方案`：在当前 `draft` 基础上按用户描述的位置做定点重写，保留 round 上下文；
-  - `重建新方案`：基于当前用户输入重新生成整份方案与整份执行蓝图，不复用旧草案内容。
-
-### 第一阶段实时交流窗口（新增细节）
-
-- MUST 支持用户在方案阶段持续输入修改要求（可指定章节/位置），并通过 SSE 实时看到 AI 回复流。
-- MUST 在窗口中展示当前模式状态（微调/重建）与本轮生成状态（进行中/完成/失败）。
-- MUST 在 `重建` 成功后刷新完整方案预览与任务蓝图草案，不沿用旧草案残留内容。
-- MUST 在 `微调` 成功后仅更新用户指定位置对应的章节与任务蓝图差异，并保留可读变更上下文。
-- MUST 允许用户在任意一轮完成后再次切换模式并发起下一轮方案交互。
-
-### 方案弹窗右侧 Tab 交互（补充细节）
-
-- MUST 在方案弹窗右侧提供固定 Tab：
-  - `微调` Tab
-  - `重建` Tab
-- MUST 将 Tab 选中态与 `prompt_mode` 强绑定：
-  - 选中 `微调` => `prompt_mode=refine`
-  - 选中 `重建` => `prompt_mode=rebuild`
-- MUST 在每个 Tab 内提供独立的实时输入区与发送按钮，发送后走对应模式的 SSE 会话。
-- MUST 在 Tab 内展示该模式最近一轮输入与流式输出，避免两种模式消息混流。
-- MUST 在用户切换 Tab 时保留各自未发送草稿输入（避免丢字）。
-- MUST 在正在流式生成时限制跨模式并发提交（禁止同时开启 refine/rebuild 两条方案流）。
-- MUST 在流式结束后允许继续同模式发起下一轮修改/重建，或切换到另一模式发起新一轮。
-- MUST 在 UI 上明确标识当前生效模式，防止用户误把“重建”当“微调”提交。
-
-### 微调/重建按钮与图标规范（新增）
-
-- MUST 采用以下默认按钮语义（首版基线）：
-  - 微调按钮：
-    - 文案：`微调方案`
-    - 图标：`mdi-tune-variant`（可回退 `mdi-tune`）
-    - 语义色：信息/中性色
-  - 重建按钮：
-    - 文案：`重建方案`
-    - 图标：`mdi-refresh`（可回退 `mdi-autorenew`）
-    - 语义色：警示色（用于提示整案覆盖风险）
-  - 确认进入第二阶段主按钮：
-    - 文案：`确认方案并开始生成`
-    - 图标：`mdi-check-circle-outline`
-    - 语义色：主品牌色
-- MUST 在右侧 Tab 使用一致命名与图标：
-  - `微调` + `mdi-tune-variant`
-  - `重建` + `mdi-refresh`
-- MUST 显示“当前模式”标识，避免误操作。
-- MUST 在 `重建方案` 前提供二次确认提示（文案示例：`将重建整份方案，是否继续？`）。
-- MUST 在某一模式流式生成中禁用另一模式提交按钮，避免并发冲突。
-- MUST 在输入区上方显示模式提示：
-  - 微调：`仅修改指定位置`
-  - 重建：`重新生成整份方案`
-
-### Tab 手风琴说明区（新增）
-
-- MUST 在右侧每个模式 Tab（微调/重建）顶部提供“说明”手风琴区域。
-- MUST 默认收起手风琴，避免占用输入区空间。
-- MUST 在首次进入该 Tab 时可见“查看模式说明”入口，用户手动展开查看细节。
-- MUST 为两种模式提供友好提示文案：
-  - 微调模式说明：`将根据你指定的位置做定点优化，只改必要联动内容。`
-  - 重建模式说明：`将重新生成整份方案与任务蓝图，适合方向变化较大时使用。`
-- MUST 在手风琴展开内容中明确“何时用微调 / 何时用重建”的建议，帮助用户快速决策。
-- MUST 在流式生成期间保持手风琴可读但不抢焦点，不自动弹开/收起。
-
-### 方案弹窗关闭行为约束（新增）
-
-- MUST 禁止通过以下方式关闭方案弹窗：
-  - 点击遮罩层（backdrop click）
-  - 鼠标移出弹窗区域
-  - 外部 hover/blur 导致失焦自动关闭
-- MUST 仅允许通过显式操作关闭：
-  - 点击右上角关闭按钮
-  - 点击底部“取消/关闭”按钮
-- MUST 在流式生成进行中关闭弹窗时进行二次确认，防止误中断方案生成。
-- MUST 在用户取消关闭时保留当前输入与会话状态，不得清空。
-- MUST 默认禁用 `Esc` 直接关闭（或等价走二次确认流程）。
-
-### 确认方案后的页面切换与会话持久化（新增）
-
-- MUST 在用户点击“确认方案并开始生成”后先执行会话持久化，再进入第二阶段。
-- MUST 持久化内容至少包含：
-  - `plan_workbench.confirmed.markdown`
-  - `plan_workbench.confirmed.execution_blueprint`
-  - `plan_workbench.confirmed.structured`
-  - `plan_workbench.confirmed.derived_scope_patch`
-  - `build_tasks`（由 confirmed blueprint 派生）
-  - `build_checkpoint` 初始化状态
-- MUST 在持久化成功后刷新当前网页（同一 workspace URL），以统一进入第二阶段视图与状态。
-- MUST 在刷新后进入第二阶段上下文（可见任务清单、恢复状态、第二阶段操作入口）。
-- MUST 在持久化失败时留在第一阶段弹窗，并给出可操作错误提示，禁止假刷新进入第二阶段。
-
-### 第二阶段进入与虚拟主题任务方案生成（老板细节强制版）
-
-> 本节为第二阶段核心执行细节，必须完全按本节实现，不得降级。
-
-#### 进入第二阶段即时行为（MUST）
-
-- MUST 在第二阶段页面加载完成后立即建立 `operation-sse` 连接（进入观察/执行通道）。
-- MUST 在 SSE 建立后立即执行“虚拟主题任务方案检测”。
-- MUST 若检测到“尚未建立虚拟主题任务方案”，立即根据第一阶段已确认方案生成虚拟主题任务方案。
-- MUST 若已存在有效虚拟主题任务方案，则直接进入任务执行/恢复流程。
-
-#### 虚拟主题任务方案生成触发条件（MUST）
-
-- MUST 读取并依赖第一阶段 `plan_workbench.confirmed.*`：
-  - `confirmed.markdown`
-  - `confirmed.structured`
-  - `confirmed.execution_blueprint`
-  - `confirmed.derived_scope_patch`
-- MUST 以“用户确认方案”为唯一来源，不得用运行期临时口述需求覆盖已确认方案。
-- MUST 在 `confirmed` 缺失时阻断第二阶段执行，并返回明确错误（要求先完成第一阶段确认）。
-
-#### 任务方案生成目标（MUST）
-
-- MUST 将第一阶段全部关键信息转化为“虚拟主题建站任务方案”：
-  - 页面类型与页面级规划
-  - Header/Footer 风格与导航/链接规划
-  - 色系、风格、内容方向
-  - SEO 意图与关键词结构
-  - 响应式策略
-  - 可变内容与 meta 字段规划
-- MUST 生成“超详细任务计划方案”，粒度到每个共享区块/页面区块可直接执行。
-- MUST 让任务内容体现“为什么这样设计”，不是仅给任务标题。
-
-#### 虚拟主题任务方案结构（MUST）
-
-- MUST 在第二阶段建立并持久化 `virtual_theme_plan`（可放入 scope_json 或等价结构），至少包含：
-  - `plan_signature`（对应 confirmed 方案签名）
-  - `virtual_theme_strategy`（整体主题构建策略）
-  - `shared_tasks`（header/footer 及共享模块任务）
-  - `page_tasks`（按页面类型分组的区块任务）
-  - `meta_field_matrix`（可变内容、meta 字段、默认值与来源）
-  - `style_tokens`（颜色、字号、间距、语义色、可覆盖项）
-  - `content_rules`（文案方向、CTA、内链、SEO 约束）
-  - `responsive_rules`（断点策略与关键布局规则）
-  - `execution_order`（严格执行顺序）
-  - `risk_notes`（潜在冲突与回退建议）
-- MUST 让 `build_tasks` 从该详细虚拟主题任务方案派生，保持字段契约一致。
-
-#### 共享任务与页面任务细节（MUST）
-
-- MUST 为 `shared:header` 生成具体任务内容：
-  - 视觉风格、导航结构、品牌位、CTA 位、可变字段与默认值、响应式折叠规则、SEO/内链作用说明。
-- MUST 为 `shared:footer` 生成具体任务内容：
-  - 信息分组、政策链接、信任区块、社媒/联系位、可变字段与默认值、SEO/爬取友好说明。
-- MUST 为每个页面类型生成具体区块任务：
-  - 区块顺序、区块目标、设计理由、内容字段、可变 meta、CTA 方向、内链策略、SEO 关键词与锚点。
-
-#### 第二阶段 SSE 与任务方案联动（MUST）
-
-- MUST 在建立/重建虚拟主题任务方案时通过 SSE 输出明确阶段事件（如 `plan_detected`、`virtual_theme_plan_generated`）。
-- MUST 在虚拟主题任务方案持久化完成后再发“可执行”事件，禁止先播报后落库。
-- MUST 在任务执行时持续引用该虚拟主题任务方案，不得退回弱蓝图推断。
-
-#### 第二阶段生成顺序细节（新增）
-
-- MUST 按规划任务顺序执行，默认顺序固定为：
-  1. 先生成共享任务：`shared:header`、`shared:footer`
-  2. 再生成首页相关任务（`page:home_*`）
-  3. 最后生成其他页面任务（按页面类型与块顺序依次执行）
-- MUST 在任务清单构建时显式写入该顺序（通过 `execution_order` 或等价排序字段）。
-- MUST 在恢复执行时保持同一顺序规则，不因重连改变任务先后。
-- MUST 若发现前置共享任务未完成，禁止推进首页和其他页面任务。
-
-#### 任务进度与恢复语义（超级重要，新增）
-
-- MUST 以“任务单元（块组件）”作为最小进度单位。
-- MUST 每当一个任务单元执行成功，即立即将进度推进到该单元并持久化为 `done`。
-- MUST 在当前任务单元失败时保留已成功单元的完成状态，不得回滚。
-- MUST 在下一次继续执行时按顺序跳过所有已成功单元（`status=done`）。
-- MUST 从“按顺序遇到的第一个未成功单元（pending/failed/paused）”继续执行。
-- MUST 保证“失败不影响已完成单元”这一语义在重连、刷新、恢复入口下都一致。
-
-#### 页面实时可视化产出（新增重要细节）
-
-- MUST 在每个页面类型完成其当轮可渲染任务后，立即产出该页面的实时可视化编辑页面。
-- MUST 在页面产出后立即刷新页面类型 Tab 状态，使该页面 Tab 可点击并可进入编辑。
-- MUST 让用户在生成过程即可查看已完成页面，不必等待全站任务全部完成。
-- MUST 在 SSE 中输出“页面已可视化可编辑”的事件信号，驱动前端即时更新 Tab 与预览区域。
-- MUST 在恢复执行时保留已可视化页面可访问状态，不因后续任务失败而隐藏已完成页面 Tab。
-
-#### 组件级编辑与再生成能力（新增重要细节）
-
-- MUST 在每个页面的可视化编辑中，为每个组件提供三类操作入口：
-  - `微调组件`（定点优化当前组件）
-  - `重建组件`（重写当前组件内容与结构）
-  - `编辑组件文本`（打开编辑面板直接改组件内文案）
-- MUST 支持“AI 再次生成内容”入口，用于在组件级快速重写文案/内容块。
-- MUST 组件级操作复用并对齐现有 PageBuilder 可视化编辑能力（以当前可用交互作为实现参考，不另起一套心智模型）。
-- MUST 在组件编辑面板中读取并利用组件 `meta` 信息作为生成与编辑上下文参考（字段说明、默认值、可变项、约束）。
-- MUST 在组件级微调/重建后即时刷新当前页面预览，并保留可撤回/继续编辑入口。
-- MUST 将组件级改动写回对应任务与产物映射（`result_ref` / 组件配置），保证恢复后状态一致。
-- MUST 在组件级失败时不影响其他已完成组件可编辑状态，允许用户跳过或稍后重试。
-
-#### Header/Footer 媒体资源选择约束（新增重要细节）
-
-- MUST 在 Header/Footer 设计包含 logo 或图片地址时，统一通过框架本地媒体管理器选择文件。
-- MUST NOT 让用户直接手填不受控的图片 URL 作为正式资源来源。
-- MUST 为 logo 选择器设置默认目录：PageBuilder 站点 logo 目录（可配置），进入媒体管理器时默认定位到该目录。
-- MUST 在任务蓝图与组件 meta 中记录媒体资源来源路径，保证恢复与二次编辑一致。
-- MUST 在资源缺失或路径失效时给出可操作提示，并允许重新打开媒体管理器选择。
-
-#### 主语言优先生成约束（新增）
-
-- MUST 在组件编辑面板的 AI 生成（微调/重建/再生成）中优先使用会话主语言（`default_locale`）作为内容生成语言。
-- MUST 在组件级 AI 请求上下文中显式携带主语言参数，避免模型按界面语言或历史上下文漂移。
-- MUST 在虚拟主题生成阶段同样遵守主语言优先策略，包含：
-  - 共享任务（header/footer）
-  - 页面级区块任务
-  - SEO/meta 文案生成
-- MUST 在非主语言页面需要内容时采用“主语言基线 -> locale 映射/翻译”流程，不得直接跳过主语言基线。
-- MUST 在任务产物中记录语言来源与目标语言（如 `source_locale` / `target_locale`），便于恢复与审计。
-
-#### 方案语言（Plan Locale）统一约束（新增）
-
-- MUST 在第一阶段提供“方案语言”设置项（`plan_locale`），用于控制方案书与方案交流的输出语言。
-- MUST 在第一阶段所有方案流输出中使用 `plan_locale`（Markdown 方案、右侧 SSE 交流、微调/重建结果说明）。
-- MUST 在用户确认第一阶段方案时持久化 `plan_locale`，并作为第二阶段默认语言基线之一。
-- MUST 在第二阶段任务方案生成与确认弹窗中沿用 `plan_locale` 作为说明文档语言（任务 Markdown、友好提示、差异说明）。
-- MUST 将 `plan_locale` 与会话主语言（`default_locale`）区分管理：
-  - `plan_locale`：方案与任务计划说明语言
-  - `default_locale`：页面内容主生成语言
-- MUST 在两阶段上下文与提示词构造中显式携带 `plan_locale` 与 `default_locale`，避免语言混用。
-- MUST 在只读历史预览中显示语言标识（如“方案语言：xx-XX”），便于用户确认当前查看语言。
-
-#### 任务拆分细节规则（新增）
-
-- MUST 在第二阶段确认前完成“全量任务拆分”，不允许执行时临时补拆。
-- MUST 使用统一任务键规范，至少包含层级信息：
-  - `shared:{section}`（如 `shared:header`、`shared:footer`）
-  - `page:{page_type}:{block_key}`（页面块任务）
-- MUST 为每个任务写入：
-  - `task_key`
-  - `order_index`（全局顺序）
-  - `group_key`（shared/page 分组）
-  - `dependencies`（前置任务）
-  - `retry_count` / `max_retry`（重试计数与上限）
-  - `status`（`pending|running|done|failed|paused|skipped`）
-  - `started_at` / `finished_at`
-  - `error_code` / `error_message`（失败时）
-- MUST 显式区分三类拆分结果：
-  - 共享任务（header/footer）
-  - 首页任务（home 优先）
-  - 其他页面任务（按页面与块顺序）
-- MUST 在任务拆分阶段输出“任务总览摘要”，包含总数、分组数、依赖关系简述。
-
-#### 任务进展状态实时更新规则（新增）
-
-- MUST 以任务状态机驱动进展更新，最小单位为任务单元（块组件）。
-- MUST 状态流转满足：
-  - `pending -> running -> done`
-  - `running -> failed`
-  - `running -> paused`
-  - `failed/paused -> running`（恢复后）
-- MUST 每次状态变化都立即：
-  1) 持久化任务状态与时间戳
-  2) 更新 `build_checkpoint` 聚合计数
-  3) 发送对应 SSE 事件
-- MUST SSE 事件至少包含：
-  - `task_key`
-  - `prev_status`
-  - `next_status`
-  - `completed_count`
-  - `total_count`
-  - `progress_percent`
-  - `updated_at`
-- MUST 前端在收到 SSE 后实时刷新：
-  - 总进度条
-  - 任务列表状态标签
-  - 当前执行任务高亮
-  - 页面类型 Tab 完成态
-- MUST 在断线重连后通过服务端快照对齐状态，防止前端显示回退或跳变。
-
-#### 预览内链接与可视化编辑跳转（新增重要细节）
-
-- MUST 在页面预览（未发布可视化编辑态）中处理内部 `a` 标签跳转。
-- MUST 将站内页面类型链接映射为对应页面类型的“可视化编辑预览链接”，点击后仍留在可视化编辑上下文。
-- MUST 在未发布状态下优先使用预览链接而非正式发布链接，避免跳出编辑链路。
-- MUST 支持从当前页面内直接跳转到对应类型页面的可视化编辑（例如从首页跳到 about/contact 的编辑预览）。
-- MUST 保留外部链接原语义（新开/离开）与站内编辑跳转语义分离，避免误重写外链。
-- MUST 在页面类型 Tab 与预览内链接之间保持一致路由规则，确保两种跳转方式到达同一编辑目标页。
-
-#### 第二阶段任务方案确认弹窗（新增强制细节）
-
-- MUST 在“虚拟主题任务方案生成完成后、正式执行前”弹出第二阶段确认弹窗。
-- MUST 使用 Markdown 作为任务方案展示格式（原文 + 预览双视图）。
-- MUST 在该弹窗右侧提供 AI SSE 实时交流区，并支持模式切换：
-  - `微调任务方案`（定点修改）
-  - `重建任务方案`（全量重建）
-- MUST 为两种模式提供友好提示文案：
-  - 微调：`仅调整你指定的任务位置，适合局部优化。`
-  - 重建：`重新生成整份任务方案，适合方向变化较大场景。`
-- MUST 令第二阶段弹窗交互规则与第一阶段一致：
-  - 右侧 Tab 模式切换
-  - 默认收起手风琴说明
-  - 禁止误触关闭（仅显式关闭）
-  - 生成中跨模式并发禁用
-- MUST 将帮助信息放在手风琴区域，默认保持收起；用户不操作时不自动展开、不打断输入流程。
-- MUST 允许用户按需点击展开查看帮助，关闭后保持收起状态，避免频繁打扰。
-- MUST 在用户确认第二阶段任务方案后，才允许进入真实任务执行。
-- MUST 在用户未确认前，禁止推进 `build_tasks` 执行。
-
-#### 第二阶段任务方案微调/重建语义（新增）
-
-- 微调任务方案：
-  - MUST 基于用户指定页面/区块/共享任务位置做定点修订；
-  - MUST 保留其余已确认任务不变；
-  - MUST 输出任务差异清单（变化任务键、变化字段、变化原因）。
-- 重建任务方案：
-  - MUST 重新生成完整虚拟主题任务方案 Markdown 与结构化任务清单；
-  - MUST 使上一版未确认任务方案失效；
-  - MUST 输出新旧版本摘要差异（任务总量、关键任务变化）。
-
-#### 第二阶段微调/重建提示词设计（新增）
-
-- MUST 与第一阶段一致，按模式分离提示词模板，不得混用：
-  - `prompt_mode=refine_task_plan`
-  - `prompt_mode=rebuild_task_plan`
-- MUST 在生成代码实现时设计并固化两套提示词构造器，按语义路由调用。
-
-##### 第二阶段微调提示词（`refine_task_plan`）MUST
-
-- MUST 目标：仅调整用户指定的任务位置（页面/区块/shared/meta 字段）及必要联动项。
-- MUST 禁止：重写无关任务、重排全量执行顺序、覆盖全部任务描述。
-- MUST 输出：
-  - `task_plan_markdown_patch`（更新后的完整 Markdown，但仅目标范围变化）
-  - `task_blueprint_patch`（受影响任务字段差异）
-  - `change_scope_report`（任务键级别改动清单与原因）
-
-##### 第二阶段重建提示词（`rebuild_task_plan`）MUST
-
-- MUST 目标：重新生成完整虚拟主题任务方案（Markdown + 全量任务清单）。
-- MUST 禁止：默认继承上一版未确认任务方案的局部结果。
-- MUST 输出：
-  - `task_plan_markdown_full`
-  - `task_blueprint_full`
-  - `rebuild_summary`（任务总量、共享任务变化、页面任务变化、风险提示）
-
-##### 第二阶段提示词输入上下文（MUST）
-
-- MUST 包含：
-  - 第一阶段 `confirmed.*` 全量信息
-  - 当前第二阶段任务方案草稿（若为微调）
-  - 用户最新要求
-  - 模式参数（微调/重建）
-  - 微调目标位置（`target_scope`）
-  - 不可变约束（任务契约、执行顺序、恢复语义）
-
-##### 第二阶段提示词落点函数（MUST）
-
-- MUST 在代码中提供：
-  - `buildTaskPlanPromptCommonContext(...)`
-  - `buildTaskPlanRefinePrompt(...)`
-  - `buildTaskPlanRebuildPrompt(...)`
-  - `resolveTaskPlanPromptByMode(...)`
-- MUST 将提示词快照与模式写入会话记录，支持审计和复现。
-
-#### 第二阶段确认后的持久化（新增）
-
-- MUST 将第二阶段确认结果写入独立确认区（如 `virtual_theme_plan.confirmed` 或等价结构）。
-- MUST 以“第二阶段已确认任务方案”作为 `build_tasks` 派生唯一来源。
-- MUST 在确认成功后刷新当前工作台页面并进入执行态；失败则停留弹窗并提示可操作错误。
-
-#### 已确认方案的只读预览与复制（新增）
-
-- MUST 在第二阶段任务方案确认后，将“确认版任务方案”持久化为只读快照（含 Markdown 与结构化数据）。
-- MUST 在工作台提供“历史确认方案预览入口”（位置可在侧栏、详情抽屉或专用弹窗）。
-- MUST 在该预览中只允许查看与复制，不允许编辑或再次微调该确认快照。
-- MUST 提供复制能力：
-  - 复制第二阶段确认版任务方案 Markdown
-  - 复制第二阶段确认版结构化任务数据（JSON）
-- MUST 同步展示第一阶段确认版方案（`plan_workbench.confirmed.markdown`）并支持复制。
-- MUST 对两个阶段的确认版内容加只读标识（例如“已确认，只读”），避免误解为可继续编辑。
-- MUST 若用户需要变更，必须走“新一轮微调/重建 -> 再确认”的流程，而不是直接修改历史确认快照。
-
-#### 第二阶段确认后的友好提示与启动选择（新增）
-
-- MUST 在用户点击“确认第二阶段任务方案”且保存成功后，弹出友好提示框。
-- MUST 提示用户：方案已保存，并询问是否立即进行 AI 生成。
-- MUST 提供两个明确按钮：
-  - `立即生成`
-  - `稍后生成`
-- MUST 在用户选择 `立即生成` 后才启动第二阶段执行入口并连接执行 SSE。
-- MUST 在用户选择 `稍后生成` 后保持当前页面与进度状态，不自动触发生成。
-- MUST 在提示框中明确“稍后仍可从工作台继续生成”，降低用户焦虑。
-- MUST 默认不自动开跑（即使保存成功，也需用户明确选择 `立即生成`）。
-
-#### 执行一致性与恢复（MUST）
-
-- MUST 以任务边界推进并保存，与第一阶段确认方案保持签名一致。
-- MUST 若 `confirmed` 方案签名变化，则判定旧虚拟主题任务方案失效并触发重建。
-- MUST 在恢复时优先校验“当前任务方案签名 = confirmed 签名”；不一致时先重建任务方案再恢复执行。
-
-### 右侧 Tab + SSE 事件处理约束（补充细节）
-
-- MUST 将右侧 Tab 的输入事件与 `PbAiPlanRunner` 的模式路由对齐，不得复用第二阶段 `PbAiOperationRunner`。
-- MUST 在 SSE 连接参数中携带：`public_id`、`prompt_mode`、`round`、`target_scope`（微调目标位置）。
-- MUST 在 `chunk` 到达时：
-  - 左侧方案区更新 Markdown/预览；
-  - 右侧当前 Tab 更新该轮 AI 流输出；
-  - 非当前 Tab 不做内容写入。
-- MUST 在 `done/error` 时将状态回写当前 Tab，会话可追踪“最后一次微调/重建结果”。
-
-### 微调与重建语义细化（新增）
-
-- 微调（定点重写）：
-  - MUST 基于用户明确描述的目标位置执行修改（如页面、区块、SEO 段、Header/Footer、配色段）。
-  - MUST 仅改目标位置及其必需联动字段，不得无关改写整份方案。
-  - MUST 输出“本轮修改范围”清单，便于用户确认微调边界。
-- 重建（整案重生）：
-  - MUST 视为重新为用户生成一份新方案（`draft.plan_json` + `draft.execution_blueprint` 全量重写，Markdown 由 JSON 派生）。
-  - MUST 清空旧草案的局部增量上下文，不把旧方案内容作为默认继承项。
-  - MUST 输出新的方案摘要与任务总量，便于与上一版对比是否满足预期。
-
-### 微调/重建提示词设计（新增）
-
-- MUST 在第一阶段按模式生成不同提示词模板：`prompt_mode=refine|rebuild`。
-- MUST 以“模式语义”决定提示词目标与约束，不允许同一提示词同时混用两种目标。
-
-#### 提示词输入上下文（通用）
-
-- MUST 输入：站点基础信息、当前 round、用户最新补充要求、当前方案草稿（如有）、当前蓝图草稿（如有）。
-- MUST 输入：用户声明的目标修改位置（页面/区块/SEO/Header/Footer/配色等）。
-- MUST 输入：不可变约束（两阶段边界、任务字段契约、先落库后发 SSE、显式继续策略）。
-
-#### 微调提示词（refine）MUST
-
-- MUST 明确目标：仅修改用户指定位置与必要联动项。
-- MUST 明确禁止：不得重写无关章节、不得重建整份方案。
-- MUST 要求输出：
-  - 更新后的 `draft.plan_json`（仅目标范围对应内容发生变化）
-  - 更新后的 `draft.execution_blueprint`（仅受影响任务变化）
-  - `change_scope`（本轮改动位置清单）
-  - `change_reason`（每处修改与用户要求的对应关系）
-
-#### 重建提示词（rebuild）MUST
-
-- MUST 明确目标：重新为用户生成整份方案与整份蓝图。
-- MUST 明确禁止：不得沿用旧方案局部内容作为默认继承。
-- MUST 要求输出：
-  - 全量新 `draft.plan_json`
-  - 全量新 `draft.execution_blueprint`
-  - `rebuild_summary`（新方案摘要、任务总量、关键差异点）
-
-#### 提示词模板落地点（实现约束）
-
-- MUST 在计划中预留并实施两套提示词构造入口：
-  - `buildPlanRefinePrompt(...)`
-  - `buildPlanRebuildPrompt(...)`
-- MUST 由模式开关显式路由到对应入口，禁止在单入口中用 if/else 拼接成弱区分提示词。
-
-#### 提示词结果校验（生成后）
-
-- 微调模式下 MUST 校验：改动范围不超出 `change_scope` 及必要联动字段。
-- 重建模式下 MUST 校验：输出为完整新方案，不依赖旧草案残片。
-- 任一模式下 MUST 校验：`execution_blueprint.tasks[]` 字段契约完整，缺字段则判失败并返回可读错误。
-
-### 方案生成提示词模板（实现细节，新增）
-
-> 目标：提示词由系统设计并固化模板，严格承载老板定义的业务要求，不依赖临场自由发挥。
-
-#### 第一阶段提示词优化目标
-
-- MUST 第一阶段提示词在输入层显式携带：
-  - `plan_locale`（方案书语言）
-  - `default_locale`（页面内容主语言）
-  - 当前模式（`refine` / `rebuild`）
-  - 用户最新补充要求
-  - 当前草案 `draft.plan_json` 与 `draft.execution_blueprint`
-  - 页面覆盖清单（必须与已选页面严格一致）
-- MUST 第一阶段提示词在输出层强制返回：
-  - 完整 Markdown 方案书
-  - `draft.plan_json`
-  - `draft.execution_blueprint`
-  - `page_coverage_report`
-  - `change_scope_report` 或 `rebuild_summary`
-- MUST 第一阶段 Markdown 明确包含“决策结论 + 理由备注”，对风格、色盘、Header/Footer、页面块、SEO、响应式分别给出理由。
-- MUST 第一阶段微调模式只改动用户指定位置及必要联动项，禁止补丁式追加说明，必须返回替换后的完整方案。
-- MUST 第一阶段重建模式重新生成整份方案，禁止默认继承旧草案局部内容。
-- MUST 第一阶段提示词明确禁止：
-  - 输出未选择页面
-  - 只补充说明不回写原位置
-  - 混入第二阶段执行日志或任务状态
-
-#### A. 通用系统提示词骨架（两模式共享）
-
-- 角色定义（System）MUST 包含：
-  - 你是 PageBuilder AI 建站方案架构师，只产出“第一阶段方案书 + 第二阶段任务蓝图草案”。
-  - 你不得执行第二阶段任务，不得输出执行日志，不得触发 build 行为。
-  - 输出必须是可渲染 Markdown 方案与结构化蓝图数据，且两者一致。
-- 不可违背约束（System）MUST 包含：
-  - 两阶段边界约束
-  - 任务字段契约约束
-  - Header/Footer 显式任务约束
-  - “先完整规划后执行”约束
-
-#### B. 第一阶段模式化提示词设计
-
-- MUST 使用两套入口：
-  - `buildPlanRefinePrompt(...)`
-  - `buildPlanRebuildPrompt(...)`
-- MUST 通过 `resolvePlanPromptByMode(...)` 按模式路由，禁止单入口拼接弱区分提示词。
-- MUST 第一阶段 `rebuild` 模式强调：
-  - 基于当前用户需求重新生成完整方案，不继承旧草案局部结论。
-  - 方案必须使用 Markdown，并包含固定章节（风格、色系、Header/Footer、页面类型块级设计、执行顺序）。
-  - 每个页面类型下每个块必须写“怎么设计 + 为什么这样设计”。
-  - 同步生成完整 `draft.execution_blueprint.tasks[]`（含 shared 和页面块任务）。
-- MUST 第一阶段 `refine` 模式强调：
-  - 仅修改用户指定位置（`target_scope`）及必要联动项。
-  - 禁止全局重写，不得改动无关页面/区块结论。
-  - 仍需保证 Markdown 章节结构完整，不得破坏文档可读性。
-  - 同步输出受影响任务的蓝图差异。
-- MUST 第一阶段两种模式都要输出页面覆盖校验：
-  - `page_coverage_report`
-  - `change_scope_report` 或 `rebuild_summary`
-
-#### C. 第二阶段提示词设计：以第一阶段确认方案为输入源
-
-- MUST 第二阶段提示词必须直接把第一阶段 `confirmed.*` 放入上下文内。
-- MUST 第二阶段不再依赖口述需求直接拆任务，而是拆解第一阶段确认文档。
-- MUST 先把第一阶段确认 Markdown / JSON 拆为结构化任务树，再由任务树组装 `execution_blueprint.tasks[]`。
-- MUST 任务树至少分三层：
-  - 站点/全局层（风格、SEO、语言、响应式、媒体规范）
-  - 页面层（home/about/contact/...）
-  - 区块/组件层（header/footer/hero/cta/content blocks）
-- MUST 任务树输出每个节点的：
-  - `node_key`
-  - `parent_key`
-  - `task_key`
-  - `node_type`
-  - `dependencies`
-  - `status`
-  - `field_plan`
-  - `result_ref`
-  - `completion_rule`
-- MUST 第二阶段任务蓝图由任务树派生，且任务状态直接驱动执行与恢复。
-- MUST 支持“先生成任务树，再生成执行清单”的两段式第二阶段提示词流程。
-- MUST 第二阶段输出格式建议分两步：
-  1) `TASK_TREE_PLAN`：结构化任务树
-  2) `EXECUTION_BLUEPRINT`：可执行任务清单 + 顺序 + 依赖
-
-#### D. 第二阶段任务树与任务清单的设计约束
-
-- MUST 任务树节点表达的是“要做什么、为什么、完成标准是什么”。
-- MUST 任务清单表达的是“按什么顺序执行、依赖谁、结果落哪、状态怎么变”。
-- MUST 每个任务单元都能独立 SSE 执行，并可被并发执行时隔离上下文。
-- MUST 页面级任务完成后可立即物化该页面，并触发页面级可视化编辑入口。
-- MUST 组件级任务可以继续拆成并发子任务，用于虚拟主题/单页/组件的并行生成。
-- MUST 任务状态机统一约束为：
-  - `pending -> running -> done`
-  - `running -> failed`
-  - `running -> paused`
-  - `failed/paused -> running`
-- MUST 任务树与执行清单都显式记录 `prompt_mode`、`round`、`source_signature`、`task_group`。
-
-#### E. 会话隔离与并发 SSE 约束
-
-- MUST AI 模块支持会话级隔离：每个 SSE 连接必须有独立会话上下文，互不串流。
-- MUST 同一份提示词可以并发投喂给多个任务，但每个任务必须拥有独立的上下文、进度、chunk 缓冲与结果落库位置。
-- MUST 并发任务之间只共享第一阶段确认方案，不共享运行态缓存。
-- MUST 智能体可同时开启多个 SSE 链接到虚拟主题生成的不同页面/任务。
-- MUST 前端同时展示总进度与各任务独立进度，允许展开查看单任务实现状态。
-- MUST 任务级并发时，单任务完成可立即触发页面物化，不必等待全站完成。
-- MUST 某页面级任务完成后，允许立即进入该页面的可视化编辑 SSE 流（组件级并发也是独立会话）。
-
-#### F. 并发提示词输入上下文
-
-- MUST 每个并发任务提示词都携带：
-  - `session_id`
-  - `task_key`
-  - `parent_task_key`
-  - `prompt_mode`
-  - `round`
-  - `source_signature`
-  - `target_scope`
-  - `page_type`
-  - `component_kind`
-- MUST 第二阶段提示词必须引用第一阶段确认方案中的：
-  - 页面覆盖清单
-  - 风格/色盘结论
-  - Header/Footer 规则
-  - SEO/响应式/语言约束
-  - 任务边界与完成标准
-- MUST 对每个任务明确定义“完成后输出什么、写回哪里、如何判定 done”。
-- 微调输出格式 MUST 为三段：
-  - `MARKDOWN_PLAN_PATCH`：更新后的完整 Markdown（但仅指定位置发生变化）
-  - `BLUEPRINT_PATCH`：受影响任务列表与字段变更
-  - `CHANGE_SCOPE_REPORT`：本轮改动范围与原因映射
-
-#### D. 提示词参数化变量（构造器输入）
-
-- `site_profile`: 站点基础信息、行业、受众、语言区域
-- `page_types`: 页面类型清单
-- `workspace_track`: 轨道偏好
-- `user_requirements`: 用户最新补充要求
-- `target_scope`: 微调目标位置（重建时为空）
-- `current_markdown`: 当前草案 Markdown（重建可仅作参考，不继承）
-- `current_blueprint`: 当前草案蓝图
-- `hard_constraints`: MUST 约束清单（本计划提炼）
-
-#### E. 提示词实例文本（计划固化稿）
-
-```text
-[SYSTEM]
-你是 PageBuilder AI 建站方案架构师。你的职责仅限第一阶段：生成方案书与任务蓝图草案。
-严禁触发第二阶段执行行为。输出必须是 Markdown 方案 + 结构化蓝图，且内容一致。
-方案必须清晰解释“为什么这样设计”。
-
-[MODE]
-当前模式：{prompt_mode}
-- refine: 仅修改 target_scope 指定位置与必要联动，不得全局重写。
-- rebuild: 重新生成完整方案，不继承旧草案局部内容。
-
-[INPUT]
-站点信息：{site_profile}
-页面类型：{page_types}
-用户最新要求：{user_requirements}
-微调目标：{target_scope}
-当前草案Markdown：{current_markdown}
-当前草案蓝图：{current_blueprint}
-硬约束：{hard_constraints}
-
-[OUTPUT REQUIREMENTS]
-1) 方案必须为 Markdown，包含：
-- 风格总览
-- 颜色色系与选型原因
-- Header 设计
-- Footer 设计
-- 页面类型设计总览
-- 分页面块级设计（逐块说明设计目标与理由）
-- 执行顺序与任务蓝图摘要
-2) 同步输出 execution_blueprint.tasks[]，覆盖 shared:header/shared:footer 与每页每块任务。
-3) 每个任务必须包含字段：task_key/page_type/region/block_key/component_kind/dependencies/status/field_plan/style_brief/palette_usage/content_brief/seo_brief/result_ref。
-4) refine 模式必须附带 change_scope_report；rebuild 模式必须附带 rebuild_summary。
-5) 风格与色盘章节必须写“选型原因”：
-- 风格示例：`Plan-Driven Hybrid`，需解释为何匹配当前站点目标与页面结构。
-- 色盘示例：`Midnight Ember`，需解释为何匹配品牌调性、可读性与转化按钮识别。
-6) 页面范围必须严格等于 page_types 输入：
-- 只规划用户已选择页面类型；
-- 禁止输出未选择页面（例如未选博客时不得规划博客页）。
-7) 任何决策项都必须紧跟理由备注（适用于风格决策、色系决策、Header/Footer 决策、各页面块内容决策、任务排序决策）。
-```
-
-#### F. 提示词构造与调用落点
-
-- MUST 在后端实现：
-  - `buildPlanPromptCommonContext(...)`
-  - `buildPlanRebuildPrompt(...)`
-  - `buildPlanRefinePrompt(...)`
-- MUST 由模式路由器统一调度：
-  - `resolvePlanPromptByMode(prompt_mode, context)`
-- MUST 将最终提示词快照写入 `plan_workbench.conversation`，用于审计与复现。
-
-### 第一阶段输出物 MUST
-
-- MUST 产出 `draft.plan_json`（第一阶段方案 JSON，作为唯一持久化真相源）。
-- MUST 令前端基于 `draft.plan_json` 实时解析并渲染 Markdown 预览；Markdown 为展示层派生物，不作为持久化真相源。
-- MUST 产出 `draft.execution_blueprint`（第二阶段任务蓝图草案）。
-- MUST 使用 Markdown 作为方案展示格式（左侧原文 + 实时预览一致来源于同一 Markdown 文本）。
-- MUST 覆盖用户所选的全部页面类型（第一阶段方案必须囊括所有选中页面，不得遗漏）。
-- MUST 让方案书包含：
-  - 色系与选型原因
-  - 整体主题风格
-  - Header / Footer 风格与导航/link 规划
-  - 首页与其他页面 SEO 结构和内容布局
-  - 响应式策略
-  - 第二阶段完整执行顺序
-  - 每个页面块级规划
-- MUST 在“风格总览”中明确写出本轮选定风格（如 `Plan-Driven Hybrid`）及选型原因（业务目标、信息架构适配、实现与维护成本、可扩展性）。
-- MUST 在“颜色色系与选型原因”中明确写出本轮主色盘（如 `Midnight Ember`）及选型原因（品牌调性、可读性对比、CTA 识别度、跨端一致性）。
-
-### 方案 Markdown 展示结构 MUST（补充细节）
-
-- MUST 对“任何决策性内容”执行统一输出规则：先给出“决策结论”，紧接“理由备注”，不得只给结论不解释原因。
-- MUST 将“理由备注”写在对应决策内容之后（同段或紧邻段落），禁止散落到文末汇总导致语义脱节。
-- MUST 让理由至少覆盖：目标匹配、约束匹配、用户价值/转化价值、实现与维护影响（可按场景裁剪，不得为空）。
-- MUST 在方案 Markdown 中包含以下固定章节（允许扩展，不允许缺失）：
-  - `风格总览`
-  - `颜色色系与选型原因`
-  - `Header 设计`
-  - `Footer 设计`
-  - `页面类型设计总览`
-  - `分页面块级设计`
-  - `执行顺序与任务蓝图摘要`
-- MUST 在“分页面块级设计”中按页面类型展开（如：首页、关于页、联系页、政策页等）。
-- MUST 仅按“用户已选择的页面类型”展开，不得规划未选择页面（例如未选博客时不得输出博客页规划）。
-- MUST 在 `draft.plan_json.pages[*].blocks[*]` 仅存最小决策字段：
-  - `content`（区块内容决策）
-  - `why`（该内容决策理由）
-- MUST 对每个页面类型写清：
-  - 块列表（按顺序）
-  - 每个块的设计目标
-  - 每个块的设计理由（为什么这样设计）
-  - 关键内容方向（文案/CTA/SEO/内链）
-- MUST 在每个页面块“内容决策”后追加“理由备注”，明确该内容安排为何有利于当前页面目标与用户路径。
-- MUST 对 Header/Footer 单独说明：
-  - 视觉风格定位
-  - 导航/链接信息架构
-  - 与主体页面风格的一致性关系
-- MUST 在 Header/Footer 的关键决策（导航层级、入口优先级、CTA 位置）后追加“理由备注”。
-- MUST 让“为什么这样设计”成为必填说明，不得只给块名称而无理由。
-- MUST 在方案中提供“页面覆盖清单”（selected pages checklist），明确标注每个已选页面均有对应设计计划。
-- MUST 在“页面覆盖清单”中同时校验“无越界页面”：若出现未选择页面（如博客）则判定方案校验失败。
-
-### 第一阶段到第二阶段页面映射约束（新增）
-
-- MUST 以第一阶段已确认方案中的“全页面覆盖清单”作为第二阶段任务计划的唯一页面来源。
-- MUST 让第二阶段任务方案严格按这些页面生成任务，不允许临时增删页面范围。
-- MUST 若页面覆盖清单与任务计划页面集合不一致，阻断第二阶段确认并提示修正。
-- MUST 若任务计划包含任何未选择页面类型（例如博客未被选择却出现 `blog_page` 任务），直接阻断并返回 `PAGE_SCOPE_MISMATCH`。
-
-### 方案确认后执行门禁 MUST
-
-- MUST 在确认时一次性生成并持久化完整 `execution_blueprint.tasks[]`。
-- MUST 覆盖 `shared:header`、`shared:footer`、每页每块任务。
-- MUST 让第二阶段 build 只消费 `plan_workbench.confirmed.execution_blueprint.tasks`。
-- MUST NOT 允许边执行边临时拆任务。
-
-### 任务结构 MUST（最低字段）
-
-- MUST 包含：`task_key/page_type/region/block_key/component_kind/dependencies/status`。
-- MUST 包含：`field_plan/style_brief/palette_usage/content_brief/seo_brief/result_ref`。
-- MUST 让 `field_plan[*]` 至少具备 `field/generation_mode/instruction`，且 `generation_mode` 支持 `ai|fixed|derived`。
-
-### 持久化模型 MUST
-
-- MUST 使用并维护 `scope_json.plan_workbench`：
-  - `status/round/source_signature/conversation/draft/confirmed`
-- MUST 使用并维护 `scope_json.build_checkpoint`：
-  - `plan_signature/status/current_task_key/last_completed_task_key/next_task_key/completed_count/total_count/updated_at`
-- MUST 以 `build_tasks[*].status` 为任务完成真相。
-- MUST NOT 以 `build_checkpoint` 覆盖任务完成真相。
-
-### 第二阶段执行与恢复 MUST
-
-- MUST 固定执行顺序：读取任务 -> 找首个未完成 -> 标记 running -> 执行 -> 保存产物 -> 标记 done -> 更新 checkpoint -> 发 SSE -> 下一任务。
-- MUST 遵守“先落库，后发 SSE”。
-- MUST 在“任务间断线”时从下一未完成任务继续。
-- MUST 在“任务内断线”时从该任务重跑。
-- MUST NOT 做块内半成品续写恢复。
-- MUST 在 lease/连接失效后停止启动新任务；可安全收尾则收尾并将 `build_checkpoint.status` 置为 `paused`。
-
-### API 语义 MUST
-
-- MUST 提供：`post-start-plan`、`post-confirm-plan`、`post-resume-build`。
-- MUST 让 `post-resume-build` 仅做续跑，不重置任务。
-- MUST 让 `post-start-build` 在无 confirmed 方案时返回 `PLAN_REQUIRED_BEFORE_BUILD`。
-- MUST 让 `post-start-build` 在同 `plan_signature` 存在未完成任务时默认拒绝重置，并提示使用恢复入口。
-
-### 工作台重入交互 MUST
-
-- MUST 移除默认自动续跑。
-- MUST 在“有 confirmed 方案 + 有 pending/running/paused 任务”时弹继续提示。
-- MUST 固定按钮为：`继续` / `稍后再说`。
-- MUST 使用两类文案：
-  - 有活跃 build：`检测到上次生成仍在进行，是否立即继续查看并接管进度？`
-  - 无活跃但有未完成：`检测到上次未完成的生成任务，是否从上次进度继续？`
-- MUST 在点击 `继续` 后：
-  - 旧执行 `queued/running`：直接重连旧 `execution_token` 的 `operation-sse`。
-  - 旧执行已停但有未完成：调用 `post-resume-build` 后连接新 `operation-sse`。
-- MUST 在点击 `稍后再说` 后不自动执行 build，并保留当前进度与已有结果可见。
+### 第一阶段：块化方案生成工作台（老板最新口径）
+
+- MUST 第一阶段不再使用方案弹窗；方案工作台直接写在第一阶段主区域下方，包含共享区、页面 Tab、总进度区、队列状态区、AI 操作区。
+- MUST 第一阶段的“方案”本身就是块树，而不是先写一篇自由 Markdown 再二次拆块；最小规划单位固定为 `shared block` 与 `page block`。
+- MUST 用户一句话需求先进入 `需求扩展队列`，先生成 `theme_design`、`shared:header`、`shared:footer` 三类共享规划，再派发页面类型方案任务。
+- MUST Header/Footer 与主题设计先完成并持久化，页面类型方案任务才允许开始；页面任务粒度固定为“一次请求 = 一个页面类型”，允许并发。
+- MUST 页面任务请求必须强制携带：主题设计、Header 规划、Footer 规划、站点定位、页面目标、反写死约束、当前页面类型上下文，保证主题连续性。
+- MUST 每个块在第一阶段就补齐：实施方式、实际规划内容、设计理由、完成判定、可编辑字段、内容来源、样式方向、响应式规则。
+- MUST 共享块与页面块生成完后组装为统一的 `plan_book.markdown + plan_book.structured + block_index`，供第二阶段直接按块拆任务。
+- MUST 页面方案一旦完成就立即插入对应页面 Tab，允许先看先改，不等待全站方案完成。
+- MUST 整个第一阶段完整生成都走后台队列；SSE 只负责读取进度、推送页面就绪/块就绪/装配完成状态；轻量微调与局部重建才允许使用短时 SSE 流式返回。
+
+#### 第一阶段的生成顺序与并发规则（MUST）
+
+- MUST 后台任务图固定为：`stage1.requirement_expand` -> `stage1.shared.theme_design` -> `stage1.shared.header_footer` -> `stage1.page_plan:*` -> `stage1.plan_assemble`。
+- MUST `stage1.shared.theme_design` 输出统一的 `theme_context_snapshot`，至少包含：站点定位、视觉方向、共享导航策略、共享 CTA、共享内容语气、SEO 总策略、禁止写死字段。
+- MUST `stage1.shared.header_footer` 基于 `theme_context_snapshot` 生成共享块，并输出给页面任务复用的 `shared_prompt_context`。
+- MUST 页面类型任务在共享规划完成后并发执行，默认一个页面一个队列任务；同一页面内块可顺序或小批并发生成，但页面级任务必须保留共享上下文哈希。
+- MUST 若共享规划被微调或重建，所有尚未完成的页面任务必须重新比对 `shared_context_hash`；不一致则标记 `stale` 并等待重建。
+- MUST 页面级任务完成后立即触发 `stage1.plan_assemble` 增量装配，把新页面并入总方案与页面 Tab。
+
+#### 第一阶段的内联工作台与块级交互（MUST）
+
+- MUST 第一阶段展示三层视图：
+  - 全站总览：一句话需求、共享规划进度、页面完成度、总任务进度；
+  - 共享规划区：主题设计、Header、Footer 三个共享块卡片；
+  - 页面 Tab 区：每个页面类型一个 Tab，进入后展示该页面的块列表。
+- MUST 页面 Tab 顶部提供页面级 AI 操作：`微调当前页面`、`重建当前页面`、`新增块`。
+- MUST 每个块 hover 时显示块级操作：`微调块`、`局部重建`、`删除块`；块列表底部提供 `新增块` 按钮。
+- MUST 块级操作直接作用于块数据结构，不允许只改 Markdown 字符串而不改结构化数据。
+- MUST 用户在页面之间切换 Tab 时保留未提交输入草稿与当前选中块状态。
+- MUST 页面块编辑后立即触发该页面局部装配，更新当前页面预览与总方案书对应章节。
+
+#### 第一阶段的提示词分层（MUST）
+
+- MUST 把第一阶段提示词拆为两类：
+  - `buildStageOneSharedPlanPrompt(...)`：专门负责主题设计 + Header/Footer + 共享规则；
+  - `buildStageOnePagePlanPrompt(...)`：专门负责单页面类型方案，输入必须包含 `theme_context_snapshot + shared_prompt_context + page_type_request`。
+- MUST `buildStageOneSharedPlanPrompt(...)` 输出必须包含：主题定位、共享视觉规则、Header 规划、Footer 规划、共享 CTA、共享字段、共享设计理由。
+- MUST `buildStageOnePagePlanPrompt(...)` 输出必须包含：页面目标、块顺序、每块实施方式、每块实时内容、每块理由、每块完成判定。
+- MUST 第一阶段所有提示词都遵守“不能写死未提供事实”的反写死校验，并在输出中区分 `已知事实 / 合理建议 / 待确认变量`。
+
+#### 第一阶段：提示词具体性契约（MUST，与实现对齐）
+
+> 目的：杜绝“方向性描述”（如通篇“围绕…/突出…/说明…/完善导航/优化体验”），保证阶段一产出**可直接进入阶段二拆解**的落地文案与结构化字段样例。与代码侧提示词条款一致，便于评审对照。
+
+- MUST 实现参考（整站/聚合方案提示词）：`GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService::buildAiPlanPrompt()`、`buildPageMarkdownTemplate()`；与上文 `buildStageOneSharedPlanPrompt(...)` / `buildStageOnePagePlanPrompt(...)` 的拆分目标一致——**无论拆分为几条提示词，每条都必须遵守本节契约**。
+- MUST 将「用户一句话需求」置于提示词靠前位置，作为拓写权威来源；模型输出的是**客户可见的标题、正文、CTA、导航项、字段示例**，不是“教别人怎么写”的元说明。
+- MUST 满足 **CONCRETENESS CONTRACT（五条）**：
+  1. 每个块包含真实页面级字符串：导航标签、页标题、主副标题、正文句、CTA 文案、链接目标、表单字段、信任点等（按块类型取舍，但不得只剩方法论句）。
+  2. 若某段话换任意无关行业仍成立，必须用站点名、用户一句话需求、已知事实中的专有名词/数字/优惠/证据点改写。
+  3. 使用具体名词、数字、卖点、品牌语气；禁止整段只有“突出价值/说明亮点/完善导航”等空洞动词短语。
+  4. 事实不确定时允许 `[假设]` 前缀，但**仍须给出可展示的示例值**，禁止“待补充”“详见后文”等占位。
+  5. `navigation_plan.header_items`、`footer_plan.featured`、`footer_plan.policies` 须为非空、可点击的真实 `{label, href}`（或等价结构），禁止 `Link1`/`Nav item`/“补充政策链接”式占位。
+- MUST 在提示词或评审中提供 **GOOD vs BAD 对照锚点**（模型不得照抄示例句，但须学会：BAD=方向性/meta，GOOD=可落地字符串与字段样例）。示例维度至少覆盖：`field_plan.sample`、`blocks[].content`、`execution_script.core_copy`、`navigation_plan.header_items`。
+- MUST 在模型侧执行 **Final audit（返回前静默自检）**：逐块检查 (a) 是否引用用户一句话需求中的具体名词/数字/品牌；(b) 非平凡块的 `field_plan` 是否具备足够条目与具体 `sample`；(c) 是否避免仅用「围绕/突出/说明/完善/优化」充当内容；任一项不通过则重写该块后再输出。
+
+#### 第一阶段确认进入第二阶段（MUST）
+
+- MUST 用户点击“确认第一阶段方案”时，先持久化：
+  - `plan_workbench.stage1.request_summary`
+  - `plan_workbench.stage1.theme_context_snapshot`
+  - `plan_workbench.stage1.shared_plan`
+  - `plan_workbench.stage1.page_plans`
+  - `plan_workbench.confirmed.plan_book_markdown`
+  - `plan_workbench.confirmed.structured_plan`
+  - `plan_workbench.confirmed.block_index`
+  - `plan_workbench.confirmed.shared_prompt_context`
+- MUST 第一阶段确认成功后，第二阶段默认读取上述确认版数据，不允许再从“临时 Markdown 文本”反推块结构。
+- MUST 第一阶段确认失败时留在当前内联工作台，并清晰提示是哪类持久化失败，不得假切换到第二阶段。
+
+### 第二阶段：块任务细化与虚拟主题生成工作台（老板最新口径）
+
+- MUST 第二阶段不是重新写一份大方案，而是基于第一阶段已确认块树，细化每个共享块/页面块的任务资料、字段配置、素材位、内容补充说明。
+- MUST 第二阶段的最小执行单元固定为 `block task`；例如 Header 的 logo 配置、导航项、CTA 配置、移动端折叠规则都属于 Header block task 的细化内容。
+- MUST 第二阶段先细化共享块任务，再细化页面块任务；页面块任务可以并发，但每个任务都必须携带同一个 `theme_context_snapshot` 与 `stage2_context_snapshot`，保证主题延续。
+- MUST 第二阶段完成后要先组装为每页可阅读的《块任务方案》，用户可继续按页面 Tab 查看、微调、删除、增加块任务。
+- MUST 第二阶段确认后，才允许进入“后台生成虚拟主题”；虚拟主题必须严格按照已确认块树与块任务生成页面结构。
+- MUST 第二阶段完整生成同样走后台队列；SSE 只负责进度、轻量微调、局部重建与页面就绪通知。
+
+#### 第二阶段的生成顺序与并发规则（MUST）
+
+- MUST 后台任务图固定为：`stage2.confirmed_plan_parse` -> `stage2.shared_task_plan` -> `stage2.page_task_plan:*` -> `stage2.plan_assemble` -> `virtual_theme.tree_build` -> `virtual_theme.page_build:*` -> `virtual_theme.publish_ready_check`。
+- MUST `stage2.shared_task_plan` 产出共享块任务细化包，至少包含：字段矩阵、素材位、默认值、编辑约束、共享组件依赖。
+- MUST 页面块任务并发前，先生成只读 `stage2_context_snapshot`，其中包含：主题上下文、共享块任务摘要、页面级内容语气、统一提示词版本、统一反写死约束。
+- MUST 页面块任务执行时若发现 `stage2_context_hash` 变化，必须中止并重新排队，禁止用旧上下文继续生成。
+- MUST 每个页面的块任务完成后立即触发该页面任务方案装配，并刷新该页面 Tab 的块任务视图。
+
+#### 第二阶段的内联工作台与块任务交互（MUST）
+
+- MUST 第二阶段同样以内联工作台展示，不使用确认弹窗作为主编辑容器。
+- MUST 页面 Tab 内展示“设计块任务卡片”，每张卡片至少显示：块名称、任务目标、补充字段、素材要求、依赖、当前状态。
+- MUST 页面级 AI 操作提供：`微调当前页面任务`、`重建当前页面任务`、`新增块任务`。
+- MUST 块任务 hover 操作提供：`微调任务`、`局部重建`、`删除任务`；页面底部允许 `新增块任务`。
+- MUST 第二阶段微调/删除/新增的结果同时更新：结构化块任务、页面装配结果、虚拟主题待生成树。
+
+#### 第二阶段：提示词具体性契约（MUST，与实现对齐）
+
+> 目的：阶段二不是“再写一份教程”，而是把阶段一已确认意图细化为**可执行块任务**（字段键、默认值、示例文案、路由/内链、素材位、完成判定）。与代码侧提示词条款一致。
+
+- MUST 实现参考（任务方案总提示词）：`GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemePlanService::buildTaskPlanPromptBase()`；分批生成时另有 `buildTaskPlanGenerationBatchPrompt()`，**分批与整包须遵守同一契约**。
+- MUST 将「用户一句话需求」（及阶段一已确认摘要）置于提示词靠前位置；`task_script.story_goal` 描述**访客在页面上读到的可见结果**（“访客看到/读到 ___”），禁止等同于“撰写文案说明 ___”式元指令。
+- MUST 满足 **CONCRETENESS CONTRACT（阶段二六条）**：
+  1. 每条任务含真实字符串：导航标签、标题、正文、CTA、链接目标、表单标签、信任点等（按任务类型取舍）。
+  2. `task_script.content_fill_rule` 须**枚举待填字段**，且每个关键字段至少给一条**可照抄或略改的示例值/取值范围**。
+  3. `field_content_requirements[].sample` 为定稿文案或 `[假设]` + 仍具体的文案；禁止“待补充”“突出卖点”“详见后文”“围绕主题展开”等。
+  4. 复用或强化阶段一已出现的具体导航/Hero/页脚链接文案，不得用抽象描述替换。
+  5. `shared:header` / `shared:footer` 须写明信息分组与**用户可见的链接标题 + 目标**（`page_type` 或 `href`），禁止 `nav TBD`。
+  6. `execution_order`、`task_tree`、Markdown 任务书须能指导实施者**不经猜测**完成主题/HTML 配置。
+- MUST 提供 **GOOD vs BAD** 对照锚点（至少覆盖：`story_goal`、`content_fill_rule`、字段 `sample`、导航项）。
+- MUST **Final audit**：逐任务检查 story_goal 可见性、content_fill_rule 与样例具体性、链接/导航是否具名；不通过则重写后再输出。
+
+#### 虚拟主题生成与发布前链路（MUST）
+
+- MUST 第二阶段确认后先生成 `virtual_theme_build_tree`，树结构至少覆盖：site -> shared -> page -> block -> component -> slot。
+- MUST `virtual_theme_build_tree` 必须可直接驱动后台页面生成任务；页面生成仍按“一页面一任务”并发，页面内组件按块树顺序组装。
+- MUST 页面生成完成即立即可预览、可进入可视化编辑，不必等待全站完成。
+- MUST 最终发布前必须通过：共享块完成、必需页面完成、关键页面可访问、虚拟主题树无阻塞节点。
+
+#### 全流程后台队列、SSE 与轮询（MUST）
+
+- MUST 阶段一、阶段二、虚拟主题生成全部由后台队列执行；前端不直接承担长耗时 AI 生成。
+- MUST SSE 只负责：进度推送、页面就绪通知、块就绪通知、轻量微调结果、局部重建结果。
+- MUST 各阶段进度展示必须分阶段绑定：`stage1-progress-sse` 只更新第一阶段方案进度区，`stage2-progress-sse` 只更新第二阶段任务方案进度区，`virtual-theme-progress-sse` 只更新虚拟主题构建进度区，禁止跨阶段串写进度显示。
+- MUST 后端完成任一 AI 子任务时，必须先持久化当前阶段状态、阶段产物与任务进度，再通过对应阶段 SSE/轮询把进度刷新到该阶段 UI。
+- MUST 前端同时支持 `status polling`，即便 SSE 断开也能通过轮询恢复当前任务图、当前完成度、已完成页面。
+- MUST 后端状态必须支持按 `session_public_id` 或 `website_public_id` 查询，不强依赖单一浏览器会话。
+
+#### 块级 API 与操作范围（MUST）
+
+- MUST 提供统一块级 API，支持以下动作：`refine`、`rebuild`、`create`、`delete`、`move`、`status`。
+- MUST 所有块级 API 都同时支持：
+  - `session_public_id`
+  - `website_public_id`
+  - `stage=stage1|stage2|virtual_theme`
+  - `page_key`
+  - `block_key`
+- MUST `refine/rebuild` 默认只影响目标块；若需要联动共享块或关联页面，必须把影响范围写入返回值与进度事件。
+- MUST `create/delete/move` 完成后更新块树版本号与装配版本号，避免前端展示旧数据。
+
+#### 发布前最终门禁（MUST）
+
+- MUST 只有在用户确认“虚拟主题效果无问题”后，才允许进入正式发布网站。
+- MUST 发布前至少校验：虚拟主题树完成度、关键页面可视化可访问、共享块未丢失、站点域名/供应商门禁通过。
+- MUST 若发布门禁失败，必须回到第二阶段或虚拟主题阶段继续微调，不得绕过门禁强制发布。
 
 ## 2. 完整需求意图
 
@@ -824,44 +199,132 @@
 
 ## 4. 两阶段执行模型（核心）
 
-### 4.1 阶段一：方案（Plan）
+### 4.1 阶段一：共享优先的块化方案生成
 
-- 事件流固定：`start/progress/chunk/done/error`。
-- `chunk` 仅用于 Markdown 方案追加和预览刷新。
-- 阶段一不触发 build，不更新构建任务状态。
+- 输入：一句话需求、页面类型、语言/站点事实、用户补充说明。
+- 顺序：先扩展需求 -> 生成主题设计与共享块 -> 并发生成单页面块化方案 -> 增量装配总方案。
+- 产出：
+  - `theme_context_snapshot`
+  - `shared_plan`
+  - `page_plans[*].blocks`
+  - `plan_book.markdown`
+  - `structured_plan`
+  - `block_index`
+- 文案与结构化字段须满足 **§1A「第一阶段：提示词具体性契约」**（禁止整段方向性描述；导航/页脚/字段样例必须可落地）。
+- 前端工作形态：内联工作台 + 页面 Tab + 块 hover 操作 + 进度区。
+- 运行方式：第一阶段 AI 方案生成在后台队列执行，SSE/轮询只把队列进度同步到第一阶段进度区；轻量微调与局部重建可短时流式返回。
 
-### 4.2 阶段二：执行（Build）
+### 4.2 阶段二：块任务细化与虚拟主题生成
 
-- 仅消费 `plan_workbench.confirmed.execution_blueprint.tasks[]`。
-- 无 confirmed plan 时，`post-start-build` 返回 `PLAN_REQUIRED_BEFORE_BUILD`。
-- 任务按边界落库与播报，顺序固定为“先落库，再发 SSE”。
+- 输入：第一阶段确认版块树、共享上下文、页面块方案、共享提示词上下文。
+- 顺序：先细化共享块任务 -> 再并发细化页面块任务 -> 装配每页任务方案 -> 确认后生成虚拟主题树 -> 并发生成页面。
+- 产出：
+  - `stage2_context_snapshot`
+  - `shared_block_tasks`
+  - `page_block_tasks`
+  - `task_plan_book.markdown`
+  - `virtual_theme_build_tree`
+  - `execution_blueprint`
+- 块任务文案与 `task_script`/`field_content_requirements` 须满足 **§1A「第二阶段：提示词具体性契约」**（任务级可执行，非元说明）。
+- 前端工作形态：内联任务工作台 + 页面 Tab + 任务卡片 + 块任务微调/删除/新增。
+- 运行方式：第二阶段 AI 任务方案生成、虚拟主题建树与页面构建均在后台队列执行，SSE/轮询分别同步第二阶段任务进度与虚拟主题构建进度；最终通过虚拟主题确认后再发布。
 
 ## 5. 数据契约
 
-### 5.1 scope 持久化
+### 5.1 第一阶段 scope 持久化
 
-- `scope_json.plan_workbench`
-  - `draft`：方案草稿
-  - `preview`：预览快照
-  - `confirmed`：确认版方案与 `execution_blueprint`
-- `scope_json.build_checkpoint`
-  - `cursor`：恢复索引
-  - `last_task_id`：最近任务
-  - `reason`：暂停原因
-  - `resume_hint`：恢复提示信息
+- `scope_json.plan_workbench.stage1.request_summary`
+  - `raw_requirement`
+  - `explicit_facts`
+  - `safe_inferences`
+  - `pending_variables`
+- `scope_json.plan_workbench.stage1.theme_context_snapshot`
+  - `theme_context_id`
+  - `site_positioning`
+  - `visual_direction`
+  - `content_tone`
+  - `shared_navigation_strategy`
+  - `shared_cta_strategy`
+  - `seo_strategy`
+  - `anti_hardcode_rules`
+  - `context_hash`
+- `scope_json.plan_workbench.stage1.shared_plan`
+  - `theme_design`
+  - `header_block`
+  - `footer_block`
+  - `shared_prompt_context`
+- `scope_json.plan_workbench.stage1.page_plans[]`
+  - `page_key`
+  - `page_status`
+  - `page_goal`
+  - `page_context_hash`
+  - `blocks[]`
+  - `assembly_version`
+- `scope_json.plan_workbench.confirmed`
+  - `plan_book_markdown`
+  - `structured_plan`
+  - `block_index`
+  - `shared_prompt_context`
+  - `confirmed_signature`
 
-### 5.2 执行蓝图任务字段（最低要求）
+### 5.2 第二阶段与虚拟主题持久化
 
-- `task_id`
-- `task_type`（含 `shared:header`、`shared:footer`）
+- `scope_json.plan_workbench.stage2.context_snapshot`
+  - `source_confirmed_signature`
+  - `theme_context_snapshot`
+  - `shared_task_context`
+  - `prompt_version`
+  - `context_hash`
+- `scope_json.plan_workbench.stage2.shared_block_tasks[]`
+- `scope_json.plan_workbench.stage2.page_block_tasks[]`
+  - `page_key`
+  - `task_status`
+  - `blocks[]`
+  - `context_hash`
+- `scope_json.virtual_theme_build`
+  - `tree_signature`
+  - `build_tree`
+  - `page_jobs[]`
+  - `page_render_status[]`
+  - `publish_gate`
+
+### 5.3 块级公共字段（阶段一/阶段二共用）
+
+- `block_key`
+- `block_type`（`shared:header` / `shared:footer` / `page:content:*`）
+- `page_key`
 - `title`
-- `workspace_track`
-- `page_type` / `locale` / `block_id`
-- `field_plan`
-- `style_brief`
-- `palette_usage`
-- `content_brief`
-- `seo_brief`
+- `goal`
+- `implementation_detail`
+- `realtime_content`
+- `editable_fields`
+- `content_source`
+- `style_direction`
+- `responsive_rule`
+- `seo_role`
+- `reason`
+- `completion_rule`
+- `dependencies`
+- `prompt_context_hash`
+- `version`
+
+### 5.4 队列任务与进度模型
+
+- `job_key`
+- `job_type`
+- `stage`
+- `session_public_id`
+- `website_public_id`
+- `page_key`
+- `block_key`
+- `depends_on[]`
+- `status`（`pending|queued|running|stale|done|failed|cancelled`）
+- `progress_percent`
+- `result_ref`
+- `context_hash`
+- `retry_count`
+- `last_error`
+- `updated_at`
 
 ## 6. 双轨策略（站点级二选一）
 
@@ -871,18 +334,62 @@
 
 ## 7. 接口与交互
 
-### 7.1 关键接口
+### 7.1 第一阶段接口
 
-- `post-start-plan`
-- `post-confirm-plan`
-- `post-resume-build`
-- `post-start-build`（需 confirmed plan 前置校验）
+- `post-start-stage1-plan`
+  - 输入：`session_public_id`、一句话需求、`page_types[]`、`plan_locale`
+  - 行为：创建阶段一主任务与共享任务，不直接同步生成。
+- `get-stage1-plan-status`
+  - 输入：`session_public_id|website_public_id`
+  - 输出：共享进度、页面进度、已完成页面、总进度、当前上下文版本。
+- `post-stage1-page-refine`
+- `post-stage1-page-rebuild`
+- `post-stage1-block-refine`
+- `post-stage1-block-rebuild`
+- `post-stage1-block-create`
+- `post-stage1-block-delete`
+- `post-confirm-stage1-plan`
 
-### 7.2 重入交互（禁止默认自动续跑）
+### 7.2 第二阶段接口
 
-- 检测到 running：提示“继续观察执行流”。
-- 检测到未完成任务：提示“继续执行剩余任务”。
+- `post-start-stage2-plan`
+  - 输入：`session_public_id|website_public_id`
+  - 行为：读取第一阶段确认版，创建共享块任务与页面块任务。
+- `get-stage2-plan-status`
+- `post-stage2-page-refine`
+- `post-stage2-page-rebuild`
+- `post-stage2-block-task-refine`
+- `post-stage2-block-task-rebuild`
+- `post-stage2-block-task-create`
+- `post-stage2-block-task-delete`
+- `post-confirm-stage2-plan`
+
+### 7.3 虚拟主题与发布接口
+
+- `post-start-virtual-theme-build`
+- `get-virtual-theme-build-status`
+- `post-virtual-theme-block-rebuild`
+- `post-virtual-theme-page-rebuild`
+- `post-confirm-virtual-theme-and-publish`
+
+### 7.4 SSE 与轮询交互
+
+- `stage1-progress-sse`
+- `stage2-progress-sse`
+- `virtual-theme-progress-sse`
+- `get-build-status-polling`
+- SSE 只推送：`queued`、`progress`、`shared_ready`、`page_ready`、`block_ready`、`assembled`、`done`、`error`。
+- `stage1-progress-sse` 只消费/展示第一阶段后台 AI 方案生成进度。
+- `stage2-progress-sse` 只消费/展示第二阶段后台 AI 任务方案生成进度。
+- `virtual-theme-progress-sse` 只消费/展示虚拟主题后台建树、页面生成与发布前检查进度。
+- 轻量微调/局部重建允许使用短连接 SSE 事件：`start/progress/chunk/done/error`。
+
+### 7.5 重入交互（禁止默认自动续跑）
+
+- 检测到运行中队列：提示“继续观察当前生成进度”。
+- 检测到未完成块任务：提示“继续执行剩余块任务”。
 - 统一按钮：`继续` / `稍后再说`。
+- 重入后默认恢复到上次所在阶段、上次所在页面 Tab、上次选中块。
 
 ## 8. 当前已落地与待完成
 
@@ -913,6 +420,7 @@
 
 ### Summary
 
+- 方案书与任务书文案须满足 **§1A 两阶段「提示词具体性契约」**：产出为可落地的标题/正文/CTA/导航/字段样例，禁止通篇方向性描述或元写作说明（与 `AiSiteExecutionBlueprintService` / `AiSiteVirtualThemePlanService` 提示词条款一致）。
 - 第一阶段先生成“建站方案书”，SSE 组件只负责流式传输方案内容并实时预览，不承担任何第二阶段执行职责。
 - 第一阶段 `微调` 的语义是“按用户要求修改当前方案”，必须返回修订后的完整方案并替换当前草案，不是把补充说明追加到方案底部。
 - 用户确认方案后，先一次性把第二阶段所有块级任务规划完整并持久化，再进入生成主题；第二阶段只能执行已确认方案，不允许再按一句话需求临时拆任务。
@@ -1389,76 +897,69 @@
 
 ### 12.1 任务清单（执行拆分，细化版）
 
-> 状态标记（写在每条任务最前面）：
+> 状态标记：
 > - `- [x]` = done（已完成）
-> - `- [~]` = processing（处理中）
-> - `- [ ]` = pending（待处理）
+> - `- [~]` = in_progress（进行中）
+> - `- [ ]` = todo（待开始）
+>
+> 本轮基线说明：当前仅完成“计划重写与架构定稿”，其余研发任务尚未进入代码实现，故统一保留为 `todo`。
 
-#### 第一阶段：方案（Plan）
+#### A. 本轮计划与架构基线
 
-- [ ] T1 方案弹窗基础（打开/关闭保护/Markdown 原文+预览布局）
-- [ ] T2 右侧模式 Tab（微调/重建）与提示文案/手风琴说明（默认收起）
-- [ ] T3 方案右侧 SSE 交流窗口（仅 plan SSE：start/progress/chunk/done/error，不混入 build）
-- [ ] T4 `plan_locale` 设置与落库（方案语言）+ 与 `default_locale` 语义分离
-- [ ] T5 方案 Markdown 结构与章节完整性校验器（缺失章节判失败）
-- [ ] T6 页面覆盖清单生成与校验（用户所选全部页面必须在方案内）
-- [ ] T7 第一阶段提示词构造器：重建（`buildPlanRebuildPrompt`）+ 输出校验
-- [ ] T8 第一阶段提示词构造器：微调（`buildPlanRefinePrompt`，含 target_scope）+ 输出校验
-- [ ] T9 第一阶段方案微调（定点重写）SSE 流与 change_scope_report 落库
-- [ ] T10 第一阶段方案重建（整案重生）SSE 流与 rebuild_summary 落库
-- [ ] T11 第一阶段确认接口（post-confirm-plan）：写 confirmed.* + 初始化 build_tasks/build_checkpoint + 刷新进入第二阶段
+- [x] T00 重写第一阶段/第二阶段方案与虚拟主题链路计划（status=done, progress=100%, owner=architecture, note=2026-04-17 已按老板最新要求完成文档重构与任务拆分）
 
-#### 第一阶段：域名选择（标签区）
+#### B. 第一阶段：共享优先的块化方案生成
 
-- [ ] T12 域名选择标签区 UI（独立区域，不与方案输入混杂）
-- [ ] T13 可选域名筛选（可建站但未建站域名列表）
-- [ ] T14 AI 推荐域名弹窗（正式环境）+ 供应商绑定选择
-- [ ] T15 推荐域名可用性检测（按供应商策略）+ 本地供应商简化校验
-- [ ] T16 域名选择结果落 scope（域名+供应商），供后续阶段使用
+- [ ] T01 第一阶段主队列编排器（status=todo, progress=0%, owner=backend-ai, note=创建 stage1 主任务图与共享前置依赖）
+- [ ] T02 `buildStageOneSharedPlanPrompt(...)` 与共享规划校验器（status=todo, progress=0%, owner=prompt-engineering, note=输出主题设计 + Header/Footer + shared_prompt_context；须遵守 §1A/§13.2.6 具体性契约；当前整站参考实现见 `AiSiteExecutionBlueprintService::buildAiPlanPrompt`）
+- [ ] T03 共享规划持久化与上下文哈希管理（status=todo, progress=0%, owner=backend, note=保存 theme_context_snapshot/shared_context_hash）
+- [ ] T04 `buildStageOnePagePlanPrompt(...)` 与页面任务输入装配器（status=todo, progress=0%, owner=prompt-engineering, note=注入主题设计与共享规划保证主题连续性；须遵守 §1A/§13.2.6；字段样例须可落地非方向性）
+- [ ] T05 页面类型并发队列与冲突控制（status=todo, progress=0%, owner=backend-queue, note=固定一页面一任务，控制共享上下文版本）
+- [ ] T06 第一阶段块树装配器（status=todo, progress=0%, owner=backend, note=增量生成 plan_book.markdown + structured_plan + block_index）
+- [ ] T07 第一阶段内联工作台 UI（status=todo, progress=0%, owner=frontend, note=共享区/页面 Tab/总进度/队列状态）
+- [ ] T08 第一阶段页面级 AI 操作（status=todo, progress=0%, owner=frontend+backend, note=微调页面/重建页面/新增块）
+- [ ] T09 第一阶段块级操作 API（status=todo, progress=0%, owner=backend-api, note=块 refine/rebuild/create/delete/move）
+- [ ] T10 第一阶段块 hover 交互与即时重装配（status=todo, progress=0%, owner=frontend, note=hover 菜单、局部刷新、保留草稿输入）
+- [ ] T11 第一阶段 SSE + 轮询状态面板（status=todo, progress=0%, owner=sse-runtime, note=只读进度，页面完成即点亮 Tab）
+- [ ] T12 第一阶段确认持久化（status=todo, progress=0%, owner=backend, note=写 confirmed plan + block_index + shared_prompt_context）
 
-#### 第二阶段：虚拟主题任务方案（Task Plan）
+#### C. 第二阶段：块任务细化与任务方案装配
 
-- [ ] T17 第二阶段进入即连 SSE + 检测是否已存在虚拟主题任务方案
-- [ ] T18 虚拟主题任务方案生成器（由第一阶段 confirmed.* 派生超详细任务方案）
-- [ ] T19 任务拆分与排序器（shared->home->other；dependencies/order_index/group_key）
-- [ ] T20 第二阶段任务方案确认弹窗（Markdown 原文+预览 + 关闭保护）
-- [ ] T21 第二阶段右侧模式 Tab（微调/重建）+ 手风琴说明（默认收起）
-- [ ] T22 第二阶段任务方案 SSE 交流窗口（refine_task_plan/rebuild_task_plan，不混流）
-- [ ] T23 第二阶段提示词构造器：重建任务方案（`buildTaskPlanRebuildPrompt`）+ 输出校验
-- [ ] T24 第二阶段提示词构造器：微调任务方案（`buildTaskPlanRefinePrompt`，含 target_scope）+ 输出校验
-- [ ] T25 第二阶段确认保存（virtual_theme_plan.confirmed）+ 刷新页面 + 弹“已保存，是否立即生成”
-- [ ] T26 “立即生成/稍后生成”提示框与行为（默认不自动开跑）
+- [ ] T13 第二阶段 confirmed plan 解析器（status=todo, progress=0%, owner=backend, note=从第一阶段确认版恢复共享块与页面块）
+- [ ] T14 `buildStageTwoSharedTaskPrompt(...)` 与共享块任务细化器（status=todo, progress=0%, owner=prompt-engineering, note=先补齐 Header/Footer/共享素材与字段；须遵守 §1A/§13.3.6；参考 `AiSiteVirtualThemePlanService::buildTaskPlanPromptBase` 契约）
+- [ ] T15 `buildStageTwoPageTaskPrompt(...)` 与页面块任务细化器（status=todo, progress=0%, owner=prompt-engineering, note=并发前统一注入 stage2_context_snapshot；story_goal/content_fill_rule/样例须可执行非元指令；分批见 `buildTaskPlanGenerationBatchPrompt`）
+- [ ] T16 第二阶段上下文快照版本控制（status=todo, progress=0%, owner=backend, note=context_hash 变化时让旧页面任务失效重排）
+- [ ] T17 第二阶段块任务装配器（status=todo, progress=0%, owner=backend, note=生成每页块任务方案 + 任务卡片视图数据）
+- [ ] T18 第二阶段内联工作台 UI（status=todo, progress=0%, owner=frontend, note=页面 Tab、任务卡片、依赖与状态）
+- [ ] T19 第二阶段页面级 AI 操作（status=todo, progress=0%, owner=frontend+backend, note=微调页面任务/重建页面任务/新增块任务）
+- [ ] T20 第二阶段块任务 API（status=todo, progress=0%, owner=backend-api, note=任务 refine/rebuild/create/delete/move）
+- [ ] T21 第二阶段确认持久化（status=todo, progress=0%, owner=backend, note=写 stage2 confirmed plan + execution_blueprint）
 
-#### 第二阶段：执行器、进度、恢复
+#### D. 虚拟主题生成与页面可视化
 
-- [ ] T27 执行器任务循环（先落库后 SSE；result_ref 回写；按任务单元推进）
-- [ ] T28 任务状态机与 SSE 进度事件（prev/next/completed/total/percent/updated_at）
-- [ ] T29 断点恢复引擎（跳过 done；从首个未成功继续；任务内失败重跑该任务）
-- [ ] T30 页面完成即实时可视化渲染 + 页面类型 Tab 即时可编辑（SSE 事件驱动）
+- [ ] T22 `virtual_theme_build_tree` 派生器（status=todo, progress=0%, owner=backend, note=从 stage2 confirmed block tree 生成 site->page->block->component 树）
+- [ ] T23 虚拟主题页面并发生成器（status=todo, progress=0%, owner=backend-queue, note=一页面一任务并发生成）
+- [ ] T24 页面完成即预览/可视化编辑接入（status=todo, progress=0%, owner=frontend+pagebuilder, note=页面 ready 即开放预览与编辑）
+- [ ] T25 虚拟主题块级重建接口（status=todo, progress=0%, owner=backend-api, note=支持页面或块局部重建）
+- [ ] T26 最终发布门禁与确认流程（status=todo, progress=0%, owner=backend+product, note=虚拟主题确认后才允许发布）
 
-#### 页面内跳转与组件级能力
+#### E. 通用契约、状态与质量保障
 
-- [ ] T31 预览内链接重写器（仅站内页面类型链接 -> 可视化编辑预览路由）
-- [ ] T32 组件级操作入口（微调/重建/文本编辑/AI 再生成）与 meta 上下文注入
-- [ ] T33 组件级改动持久化与即时预览刷新（失败不影响其它组件）
-
-#### 共享组件媒体资源（Header/Footer）
-
-- [ ] T34 Header/Footer 媒体管理器接入（logo/图片选择）+ 默认 PageBuilder 站点 logo 目录定位
-- [ ] T35 媒体资源路径落库与恢复一致性（组件 meta/任务蓝图）+ 失效重选提示
-
-#### 历史预览、最终落库、验收
-
-- [ ] T36 历史确认方案只读预览中心（第一阶段+第二阶段同屏展示与复制）
-- [ ] T37 最终创建站点阶段展示（预览地址/正式地址/PageBuilder 页面管理入口）
-- [ ] T38 最终落库门禁（正式环境域名联通性未通过禁止建站）
-- [ ] T39 E2E 用例补齐与收官门禁（含 E2E-13：域名可访问站点）
+- [ ] T27 scope_json/schema 升级与兼容层（status=todo, progress=0%, owner=backend, note=新增 stage1/stage2/virtual_theme 持久化字段）
+- [ ] T28 队列 job envelope 与恢复引擎（status=todo, progress=0%, owner=backend-queue, note=任务状态、依赖、stale 检测、失败续跑）
+- [ ] T29 SSE/轮询统一状态协议（status=todo, progress=0%, owner=sse-runtime, note=三阶段统一 status payload）
+- [ ] T30 `session_public_id|website_public_id` 双路由 API 支持（status=todo, progress=0%, owner=backend-api, note=所有状态与块操作均可双标识访问）
+- [ ] T31 反写死/覆盖率/示例泄漏校验器（status=todo, progress=0%, owner=validation, note=阶段一阶段二统一阻断非法输出）
+- [ ] T32 第一阶段单测/集成测试（status=todo, progress=0%, owner=qa, note=共享优先 + 页面并发 + 装配校验）
+- [ ] T33 第二阶段单测/集成测试（status=todo, progress=0%, owner=qa, note=共享块任务优先 + 上下文一致性校验）
+- [ ] T34 虚拟主题/恢复/E2E 验证（status=todo, progress=0%, owner=qa, note=页面 ready、块操作、发布门禁全链路覆盖）
 
 ### 12.1C 任务-细节对齐规则（新增）
 
 - MUST 任何新增计划细节都在 12.1/12.1B 追加至少一条可执行任务，不允许“有细节无任务”。
 - MUST 任务标题可直接映射到代码改动点与验收用例，不使用抽象空任务。
 - MUST 在任务状态更新前，先检查该任务是否覆盖对应细节条款；未覆盖不得标记完成。
+- MUST 提示词相关任务（T02/T04/T14/T15 等）完成定义须与 **§1A、§13.2.6、§13.3.6** 可逐条对照；交付物含可评审的 GOOD/BAD 维度或等价自动化校验（与 `AiSiteExecutionBlueprintService` / `AiSiteVirtualThemePlanService` 行为一致）。
 
 ### 12.2 任务状态字段（统一）
 
@@ -1539,218 +1040,388 @@
 - MUST 在域名未通过可用性检测时阻断“用于正式建站”流程，并提示用户更换域名或供应商。
 - MUST 在域名通过后将选中域名与供应商信息写入会话 scope，供后续两阶段与最终落库使用。
 
-## 13. 提示词与任务树编排优化（本轮新增）
+## 13. 两阶段块化方案与虚拟主题工作流定版（2026-04-17）
 
-> 本节用于把“第一阶段方案生成 -> 第二阶段任务树拆解 -> 并发执行与物化”的链路固化为可编码实现。若与旧条款冲突，以本节为准。
+> 本节按老板最新口径重写第一阶段方案生成、第二阶段块任务细化、虚拟主题后台生成、API/队列/SSE/进度/数据结构。若与旧描述冲突，以本节为准。
 
-### 13.1 第一阶段提示词优化（Plan Generation v2）
+### 13.1 本轮重构要解决的核心问题
 
-- MUST 第一阶段提示词采用“三段式构造”：`System Contract` + `Input Context` + `Output Contract`。
-- MUST 第一阶段输出采用“Markdown + JSON 双产物同源”：
-  - Markdown 给用户阅读；
-  - JSON 给第二阶段拆解；
-  - 两者语义必须一致。
-- MUST 将“理由”设为每个决策对象的强制字段，不允许仅输出结论。
+- 旧方案把第一阶段当成“先出一篇方案文案”，导致后续还要二次拆块，任务边界不稳定。
+- 旧方案把阶段一/二的长生成过度绑定 SSE，会造成串流、超时、页面切换困难。
+- 旧方案没有把共享主题、Header、Footer 作为所有页面的前置事实源，导致并发页面生成时主题连续性差。
+- 旧方案没有为块级微调/删除/新增建立统一结构化数据与接口，后续难以按块拆任务、按块生成页面。
 
-#### 13.1.1 第一阶段输入上下文（最小完整集）
+### 13.2 第一阶段定版：一句话需求 -> 共享优先的块化方案书
 
-- `session_id`
-- `site_profile`（行业/受众/品牌语气/地域）
-- `page_types`（用户已选页面类型）
-- `workspace_track`
-- `default_locale`
-- `plan_locale`
-- `prompt_mode`（`refine|rebuild`）
-- `target_scope`（refine 必填，rebuild 为空）
-- `previous_plan_structured`（可空）
-- `previous_execution_blueprint`（可空）
-- `user_requirement_latest`
-- `hard_constraints`
+#### 13.2.1 阶段一目标
 
-#### 13.1.2 第一阶段结构化输出契约（MUST）
+- 把一句话需求扩展成一份可确认的块化方案书。
+- 方案书的最小单元不是段落，而是 `shared block` 与 `page block`。
+- 每个块在第一阶段就必须写清：
+  - 这个块要做什么；
+  - 页面上真实显示什么；
+  - 为什么这样设计；
+  - 第二阶段要补哪些资料；
+  - 后续可编辑哪些字段。
 
-- MUST 返回对象：`PLAN_STAGE_OUTPUT`
-- MUST 包含字段：
-  - `markdown`
-  - `structured_plan`
-  - `execution_blueprint_draft`
-  - `coverage_report`
-  - `decision_reason_index`
-  - `change_scope_report`（refine）
-  - `rebuild_summary`（rebuild）
+#### 13.2.2 阶段一 6 层生成架构
 
-```json
-{
-  "stage": "plan",
-  "prompt_mode": "refine|rebuild",
-  "source_signature": "sha1(...)",
-  "markdown": "...",
-  "structured_plan": {
-    "style_strategy": {"decision": "", "reason": ""},
-    "palette_strategy": {"decision": "", "reason": ""},
-    "shared_strategy": {
-      "header": {"decision": "", "reason": ""},
-      "footer": {"decision": "", "reason": ""}
-    },
-    "pages": []
-  },
-  "execution_blueprint_draft": {"tasks": []},
-  "coverage_report": {
-    "selected_pages": [],
-    "planned_pages": [],
-    "is_exact_match": true,
-    "missing_pages": [],
-    "overflow_pages": []
-  },
-  "decision_reason_index": [],
-  "change_scope_report": [],
-  "rebuild_summary": {}
-}
-```
+1. `requirement_expand`
+   - 解析一句话需求，沉淀 `explicit_facts / safe_inferences / pending_variables`。
+2. `theme_design`
+   - 定义站点定位、品牌语气、视觉方向、CTA 方向、SEO 总策略。
+3. `shared_plan`
+   - 生成 Header/Footer/共享 CTA/共享信任位，产出 `shared_prompt_context`。
+4. `page_plan_fanout`
+   - 按页面类型并发生成单页块化方案；一页面一个任务。
+5. `plan_assemble`
+   - 把共享块 + 页面块装配成统一方案书与结构化块树。
+6. `inline_edit`
+   - 用户在页面 Tab 与块级操作上继续微调、重建、删除、新增块。
 
-#### 13.1.3 第一阶段提示词核心优化点（MUST）
+#### 13.2.3 阶段一共享提示词（必须独立）
 
-- MUST 显式要求“页面集合严格等于 `page_types`”。
-- MUST 显式要求“每个页面块输出 `what + why + completion_hint`”。
-- MUST 显式要求“shared header/footer 作为独立任务域输出，不得隐式处理”。
-- MUST 对 `refine` 增加“最大改动边界”约束：非 `target_scope` 内容默认只读。
-- MUST 对 `rebuild` 增加“禁止继承旧稿局部结论”约束：仅允许继承输入事实，不继承旧结论。
+建议固定函数：
 
-### 13.2 第二阶段提示词：基于第一阶段确认方案拆任务树
+- `buildStageOneSharedPlanPrompt(...)`
+- `buildStageOnePagePlanPrompt(...)`
+- `validateStageOneSharedPlan(...)`
+- `validateStageOnePagePlan(...)`
 
-- MUST 第二阶段提示词输入源只读引用第一阶段 `confirmed.*`，不直接吃用户口述作为主源。
-- MUST 采用两步生成：
-  1) 先生成 `TASK_TREE_PLAN`
-  2) 再生成 `EXECUTION_BLUEPRINT`
-- MUST 任务树与任务清单分别承担“语义层”和“执行层”，禁止混写。
+`buildStageOneSharedPlanPrompt(...)` 必须输入：
 
-#### 13.2.1 TASK_TREE_PLAN 结构（语义层）
+- 一句话需求原文
+- 页面类型集合
+- 已知站点事实
+- 语言/locale
+- 反写死规则
+- 示例格式（仅结构，不可抄内容）
 
-- 节点类型：`site|shared|page|block|component|content_resource`
-- 每个节点 MUST 包含：
-  - `node_key`
-  - `parent_key`
-  - `node_type`
-  - `goal`
-  - `reason`
-  - `inputs`
-  - `outputs`
-  - `completion_rule`
-  - `resource_plan`（内容规划/素材/SEO/字段来源）
-  - `parallel_group`
-  - `depends_on`
+`buildStageOneSharedPlanPrompt(...)` 必须输出：
+
+- `theme_design`
+- `header_block`
+- `footer_block`
+- `shared_fields`
+- `shared_navigation_strategy`
+- `shared_cta_strategy`
+- `shared_prompt_context`
+- `reason_summary`
+
+#### 13.2.4 阶段一页面提示词（必须独立）
+
+`buildStageOnePagePlanPrompt(...)` 必须输入：
+
+- `theme_context_snapshot`
+- `shared_prompt_context`
+- `page_type`
+- `page_goal`
+- `locale`
+- `anti_hardcode_rules`
+- 当前页面已有块（微调/重建时）
+
+`buildStageOnePagePlanPrompt(...)` 必须输出：
+
+- `page_key`
+- `page_goal`
+- `blocks[]`
+- `page_reason_summary`
+- `page_context_hash`
+
+其中每个 `block` 至少包含：
 
 ```json
 {
-  "task_tree_plan": {
-    "source_signature": "from_plan_confirmed_signature",
-    "root": "site:root",
-    "nodes": []
-  }
+  "block_key": "home.hero",
+  "block_type": "content",
+  "title": "首屏 Hero",
+  "goal": "5 秒内说明网站价值并引导点击 CTA",
+  "implementation_detail": "左文右图 + 双 CTA + 3 条信任短句",
+  "realtime_content": {
+    "headline": "把发票、收入、税务一次理清（示例：须替换为站点专属一句价值）",
+    "supporting_copy": ["报税前不再翻三天收据；导入银行流水与发票后自动归类。"],
+    "cta": [{"label": "免费试用 30 天", "target": "form:lead"}],
+    "media": [{"kind": "illustration", "rule": "抽象流程图，不写死真实截图"}],
+    "editable_slots": ["headline", "subheadline", "cta", "hero_visual"]
+  },
+  "content_source": ["safe_inference", "editable_field"],
+  "style_direction": "大标题 + 强 CTA + 主题主色",
+  "responsive_rule": "移动端改纵向堆叠",
+  "seo_role": "首页主关键词承接",
+  "reason": "首屏承担定位与首个转化动作",
+  "completion_rule": "标题/说明/CTA/主视觉均可视化可编辑"
 }
 ```
 
-#### 13.2.2 EXECUTION_BLUEPRINT 结构（执行层）
+#### 13.2.5 阶段一装配规则
 
-- MUST 由任务树自动派生，不允许手写绕过。
-- MUST 每个执行任务包含：
-  - `task_key`
-  - `from_node_key`
-  - `task_group`（shared/home/other/component/content）
-  - `order_index`
-  - `dependencies`
-  - `status`
-  - `prompt_template_key`
-  - `prompt_variables`
-  - `result_ref`
-  - `materialize_policy`（`none|page|component`）
-  - `progress_weight`
+- 共享块先生成，页面块后生成。
+- 页面块完成一个就装配一个，不等待全部页面。
+- 装配结果同时维护：
+  - 用户阅读版 Markdown；
+  - 机器消费版 `structured_plan`；
+  - 块级索引 `block_index`；
+  - 页面 Tab 数据源 `page_tabs_state`。
+- 装配逻辑必须是结构化优先，Markdown 只作为展示结果，不是事实源。
 
-#### 13.2.3 任务树组装为任务清单规则（MUST）
+#### 13.2.6 阶段一提示词：具体性契约与 GOOD/BAD（与代码对齐）
 
-- 规则 R1：`shared` 永远先于 `page`。
-- 规则 R2：`home` 任务组优先于 `other pages`。
-- 规则 R3：同页面内按区块拓扑顺序，区块内组件可并发。
-- 规则 R4：`content_resource` 节点可并发，但必须在消费方任务前完成。
-- 规则 R5：任何任务的 `done` 判定必须依赖 `completion_rule`，不能仅凭 SSE 完成事件。
+- **代码锚点**：`AiSiteExecutionBlueprintService::buildAiPlanPrompt()`、`buildPageMarkdownTemplate()`（整站/聚合方案；共享/单页拆分实现时须逐条继承本节）。
+- **CONCRETENESS CONTRACT（五条）**：同 **§1A「第一阶段：提示词具体性契约」** 中五条枚举（此处不重复展开，避免双源漂移）。
+- **GOOD vs BAD 维度（评审用）**：
+  - `field_plan.sample`：BAD「标题围绕核心价值展开」→ GOOD「30 分钟上手的轻量记账工具，给独立创作者用」（须与真实站点一致，示例仅说明风格）。
+  - `blocks[].content`：BAD 单句「突出品牌价值」→ GOOD 多句可给客户读的文案，含具体 CTA 与信任点。
+  - `navigation_plan.header_items`：BAD 空数组或 `Link1` → GOOD 非空 `{label,href}` 且与选中页面类型一致。
+- **Final audit**：返回前逐块自检；不通过则重写（见 §1A）。
 
-### 13.3 并发执行设计（会话隔离 + 多 SSE）
+### 13.3 第二阶段定版：确认块树 -> 块任务细化 -> 任务方案书
 
-- MUST 每个任务运行时拥有独立 `task_session_id`，并与 `session_id` 形成父子关系。
-- MUST 同一提示词模板可并发复用，但每个任务实例必须携带独立变量与独立输出落点。
-- MUST 隔离运行态缓存：
-  - 禁止共享 chunk buffer
-  - 禁止共享 round 计数
-  - 禁止共享任务级 memory state
-- MUST 共享只读上下文仅限：
-  - 第一阶段 `confirmed.*`
-  - 只读素材索引
-  - 只读风格 token
+#### 13.3.1 阶段二目标
 
-#### 13.3.1 并发 SSE 通道规范
+- 把第一阶段确认块树进一步细化为“每个块具体要补齐哪些资料、字段、素材、配置”的任务方案书。
+- 第二阶段仍以块为最小单元，但强调“可执行的任务资料”，不是重复写第一阶段的布局结论。
+- 第二阶段完成后，必须得到可直接驱动虚拟主题生成的块任务树。
 
-- 主通道：`operation-sse`（聚合态，展示总进度和任务摘要）
-- 子通道：`task-sse:{task_key}`（任务细粒度流）
-- 页面通道：`page-sse:{page_type}`（页面物化与编辑态事件）
-- 组件通道：`component-sse:{page_type}:{component_id}`（组件并发微调/重建）
+#### 13.3.2 阶段二 5 层生成架构
 
-- MUST 前端支持：
-  - 总览视图（总进度 + 任务列表）
-  - 展开视图（单任务 chunk/progress/log）
-  - 多任务并发状态同时可见
+1. `confirmed_plan_parse`
+   - 读取第一阶段确认版 shared/page blocks。
+2. `shared_task_refine`
+   - 先细化 Header/Footer/共享组件的字段、素材、导航、CTA、logo、可编辑配置。
+3. `page_task_fanout`
+   - 按页面并发细化块任务；同页内块可小批并发，但必须共享同一上下文快照。
+4. `task_plan_assemble`
+   - 组装为每页可阅读任务方案书与 `page_block_tasks`。
+5. `task_inline_edit`
+   - 用户继续按页面/按块任务微调、重建、删除、新增。
 
-#### 13.3.2 并发数与调度策略（建议默认）
+#### 13.3.3 阶段二共享上下文一致性规则
 
-- 默认并发 `max_parallel_tasks=3`（可配置）。
-- 调度策略：
-  - `shared` 阶段并发=1（避免公共布局冲突）
-  - `page` 阶段并发<=2
-  - `component/content` 阶段并发<=3
-- MUST 加入“冲突资源锁”（如同一 `page_type` 同时写入）以避免覆盖。
+- 阶段二并发前必须冻结 `stage2_context_snapshot`。
+- 快照至少包含：
+  - `theme_context_snapshot`
+  - `shared_block_tasks_summary`
+  - `content_tone`
+  - `visual_direction`
+  - `global_field_matrix`
+  - `prompt_version`
+  - `anti_hardcode_rules`
+- 所有页面块任务并发时都必须带 `stage2_context_hash`。
+- 若共享块任务或主题上下文被修改，则未完成页面任务必须重排，防止主题风格漂移。
 
-### 13.4 状态驱动的任务接续（接你/续跑语义）
+#### 13.3.4 阶段二块任务数据结构
 
-- MUST 续跑仅基于状态机，不基于临时内存。
-- MUST 状态定义：`pending|queued|running|done|failed|paused|cancelled|blocked`
-- MUST 接续规则：
-  - `done`：永不重跑（除非用户显式重建）
-  - `failed|paused|blocked`：可重试进入 `running`
-  - `running`：重连观察，不重复启动
-  - `queued`：等待调度器拉起
+```json
+{
+  "task_key": "home.hero.copy_and_assets",
+  "page_key": "home",
+  "block_key": "home.hero",
+  "task_goal": "补齐 Hero 文案、视觉素材位、CTA 配置与可编辑字段",
+  "implementation_steps": [
+    "补齐主标题、副标题、CTA 及跳转",
+    "定义主视觉素材位与默认约束",
+    "输出表单锚点、SEO 承接与移动端差异"
+  ],
+  "realtime_output": "首页 Hero 出现可视化标题、双按钮、主视觉、信任短句",
+  "editable_meta": {
+    "fields": ["headline", "subheadline", "cta_primary", "cta_secondary", "hero_visual"]
+  },
+  "dependencies": ["shared:header", "shared:footer"],
+  "materialize_policy": "page",
+  "reason": "Hero 是首页第一个必须可见且可编辑的高权重模块",
+  "completion_rule": "字段完整、素材位完整、预览可见且可编辑",
+  "context_hash": "stage2:..."
+}
+```
 
-- MUST 在 `build_checkpoint` 增加：
-  - `active_parallel_tasks[]`
-  - `queue_snapshot[]`
-  - `last_materialized_pages[]`
+#### 13.3.5 阶段二提示词分层
 
-### 13.5 页面物化与组件级并发编辑
+建议固定函数：
 
-- MUST 某页面任务组达到页面完成条件后立即触发 `materialize_policy=page`：
-  - 立即生成该页面可视化产物；
-  - 立即开放该页面编辑入口；
-  - 不等待全站任务完成。
-- MUST 页面物化后允许组件级并发 SSE 微调/重建。
-- MUST 组件级任务同样走任务状态机并写回统一任务体系（可挂 `parent_task_key=page:*`）。
-- MUST 在发布门禁处校验：
-  - 全站发布：所有 `required_for_publish=true` 任务为 `done`；
-  - 页面即时编辑：仅要求该页面任务组达到 `page_materialize_ready=true`。
+- `buildStageTwoSharedTaskPrompt(...)`
+- `buildStageTwoPageTaskPrompt(...)`
+- `validateStageTwoSharedTasks(...)`
+- `validateStageTwoPageTasks(...)`
 
-### 13.6 建议新增后端函数落点（实现约束）
+`buildStageTwoSharedTaskPrompt(...)` 负责补齐：
 
-- `buildPlanPromptV2CommonContext(...)`
-- `buildPlanPromptV2Refine(...)`
-- `buildPlanPromptV2Rebuild(...)`
-- `buildTaskTreePromptFromConfirmedPlan(...)`
-- `buildExecutionBlueprintFromTaskTree(...)`
-- `deriveParallelExecutionBatches(...)`
-- `openTaskSseChannel(...)`
-- `materializePageWhenReady(...)`
-- `resumeTasksByStateMachine(...)`
+- Header logo/config/navigation/CTA/mobile behavior
+- Footer 信息分组、政策链接、信任区块、联系位、社媒位
+- 共享字段矩阵与默认值
 
-### 13.7 验收补充（本轮新增）
+`buildStageTwoPageTaskPrompt(...)` 负责补齐：
 
-- 验收 H1：第二阶段必须可展示 `TASK_TREE_PLAN` 结构化结果。
-- 验收 H2：任务树变更后，执行清单自动重算且保留签名链路。
-- 验收 H3：并发执行时任一任务失败不影响其他独立任务继续推进。
-- 验收 H4：页面完成即物化可编辑；组件并发 SSE 可用且状态可追踪。
-- 验收 H5：会话隔离验证通过（多任务同模板并发无串流、无错写、无状态污染）。
+- 每个页面块需要的文案字段
+- 每个块需要的素材位
+- 每个块的 CTA 与内链
+- SEO/响应式/组件配置
+- 第二阶段完成后页面实际可见内容
+
+#### 13.3.6 阶段二提示词：具体性契约与 GOOD/BAD（与代码对齐）
+
+- **代码锚点**：`AiSiteVirtualThemePlanService::buildTaskPlanPromptBase()`；若启用分批：`buildTaskPlanGenerationBatchPrompt()`（分批与整包契约一致）。
+- **CONCRETENESS CONTRACT（六条）**：同 **§1A「第二阶段：提示词具体性契约」** 中六条枚举。
+- **GOOD vs BAD 维度（评审用）**：
+  - `task_script.story_goal`：BAD「撰写首页 Hero 文案，突出产品价值」→ GOOD「访客在 5 秒内看到一句话价值并点击 [免费试用 30 天]」（须与真实方案一致）。
+  - `task_script.content_fill_rule`：BAD「按品牌语气补充正文」→ GOOD 枚举字段并给出每关键字段示例句或取值范围。
+  - `field_content_requirements[].sample`：BAD「突出卖点」→ GOOD 含数字或场景的具体一句。
+  - 共享导航项：BAD「导航1」→ GOOD `{label, page_type|href}` 具名可点。
+- **Final audit**：返回前逐任务自检（见 §1A）。
+
+### 13.4 虚拟主题后台生成定版
+
+#### 13.4.1 输入来源
+
+- 只允许使用第二阶段确认版 `page_block_tasks + shared_block_tasks + build_tree_seed`。
+- 不允许绕过第二阶段确认版直接用运行时口述需求建树。
+
+#### 13.4.2 建树规则
+
+- 树节点固定为：`site -> shared -> page -> block -> component -> slot`。
+- `shared` 节点必须先建，再建 `page` 节点。
+- `page` 节点下块顺序必须与第二阶段确认版一致。
+- `component` 与 `slot` 节点必须能映射到 PageBuilder 可视化编辑目标。
+
+#### 13.4.3 页面生成规则
+
+- 一个页面一个后台任务，允许并发。
+- 页面内块按树顺序装配，必要时块内组件再串行。
+- 页面达到“可预览”条件就立即开放页面预览与编辑，不等待全站完成。
+- 页面重建时只重排当前页树与受影响共享节点，不全站回滚。
+
+### 13.5 队列、SSE、轮询、恢复协议
+
+#### 13.5.1 队列任务类型
+
+- `stage1.requirement_expand`
+- `stage1.shared.theme_design`
+- `stage1.shared.header_footer`
+- `stage1.page_plan.generate`
+- `stage1.plan.assemble`
+- `stage1.block.refine`
+- `stage1.block.rebuild`
+- `stage2.shared.tasks`
+- `stage2.page.tasks`
+- `stage2.plan.assemble`
+- `stage2.block.refine`
+- `stage2.block.rebuild`
+- `virtual_theme.tree.build`
+- `virtual_theme.page.build`
+- `virtual_theme.page.rebuild`
+
+#### 13.5.2 进度事件协议
+
+建议统一事件体：
+
+```json
+{
+  "stage": "stage1|stage2|virtual_theme",
+  "job_key": "...",
+  "job_type": "...",
+  "status": "queued|running|done|failed|stale",
+  "progress_percent": 45,
+  "session_public_id": "...",
+  "website_public_id": "...",
+  "page_key": "home",
+  "block_key": "home.hero",
+  "message": "首页方案已完成并装配",
+  "context_hash": "...",
+  "updated_at": "..."
+}
+```
+
+- 长流程使用 SSE/轮询同步上述状态体，不推长篇 AI 原始文本。
+- 轻量微调/局部重建可以附加短时 `chunk` 文本，但最终仍要落结构化结果。
+
+#### 13.5.3 恢复语义
+
+- `done` 块/任务永不自动重跑。
+- `stale` 表示上下文版本过期，需重排。
+- `failed` 保留已完成前置块，允许局部重试。
+- 恢复时从“第一个非 done 且非 cancelled 的节点”继续。
+- 页面已 ready 的预览状态在恢复后必须保留。
+
+### 13.6 API 契约建议（按网站或会话统一寻址）
+
+所有写接口统一支持：
+
+```json
+{
+  "session_public_id": "optional",
+  "website_public_id": "optional",
+  "stage": "stage1|stage2|virtual_theme",
+  "page_key": "optional",
+  "block_key": "optional",
+  "action": "refine|rebuild|create|delete|move|confirm",
+  "user_prompt": "optional",
+  "payload": {}
+}
+```
+
+建议最少实现：
+
+- `startStageOnePlan(...)`
+- `getStageOneStatus(...)`
+- `operateStageOneBlock(...)`
+- `confirmStageOnePlan(...)`
+- `startStageTwoPlan(...)`
+- `getStageTwoStatus(...)`
+- `operateStageTwoBlockTask(...)`
+- `confirmStageTwoPlan(...)`
+- `startVirtualThemeBuild(...)`
+- `getVirtualThemeStatus(...)`
+- `operateVirtualThemeBlock(...)`
+- `publishVirtualThemeSite(...)`
+
+### 13.7 自动校验与门禁
+
+#### 13.7.1 第一阶段校验
+
+- 页面覆盖必须与用户选中的页面类型一致。
+- 所有共享块与页面块必须有 `implementation_detail + realtime_content + reason + completion_rule`。
+- 未提供事实不得写死。
+- 页面任务若缺失 `shared_context_hash`，直接视为非法输出。
+- **反方向性（与提示词/实现一致）**：若 `plan_json` / Markdown 中大量出现仅含「围绕/突出/说明/完善/优化/待补充」而无具体导航文案、字段样例、可点链接，或 `navigation_plan.header_items` 为空/占位，视为不合格，须重生成或拒收（与 `AiSiteExecutionBlueprintService` 侧校验策略对齐）。
+
+#### 13.7.2 第二阶段校验
+
+- 所有块任务必须可追溯到第一阶段 `block_key`。
+- 所有块任务必须带 `stage2_context_hash`。
+- 不允许新增未确认正式页面/正式块；新增建议只能以 `suggested_block` 形式存在，需用户确认后入树。
+- **反元指令（与提示词/实现一致）**：若 `story_goal` 仅描述写作动作而非可见结果、`content_fill_rule` 未枚举字段与示例、或字段样例为「待补充/突出卖点/详见后文」，视为不合格（与 `AiSiteVirtualThemePlanService` 侧校验策略对齐）。
+
+#### 13.7.3 虚拟主题校验
+
+- 树节点必须完整映射 shared/page/block/component/slot。
+- 页面生成顺序与块顺序必须匹配确认版任务树。
+- 页面 ready 时必须生成对应的编辑入口与预览入口。
+
+### 13.8 本轮实施落点（建议函数/服务）
+
+- **已实现/对齐中的提示词入口（评审对照）**：`AiSiteExecutionBlueprintService`（阶段一聚合方案：`buildAiPlanPrompt` 等）、`AiSiteVirtualThemePlanService`（阶段二任务方案：`buildTaskPlanPromptBase`、`buildTaskPlanGenerationBatchPrompt` 等）。拆分式 `buildStageOneSharedPlanPrompt` / `buildStageOnePagePlanPrompt` 落地后须继承 **§13.2.6 / §1A** 与 **§13.3.6 / §1A** 契约。
+- `StageOnePlanQueueOrchestrator`
+- `StageOneSharedPlanPromptBuilder`
+- `StageOnePagePlanPromptBuilder`
+- `StageOnePlanAssembler`
+- `StageOneBlockOperationService`
+- `StageTwoTaskQueueOrchestrator`
+- `StageTwoSharedTaskPromptBuilder`
+- `StageTwoPageTaskPromptBuilder`
+- `StageTwoTaskAssembler`
+- `StageTwoBlockTaskOperationService`
+- `VirtualThemeBuildTreeBuilder`
+- `VirtualThemePageBuildOrchestrator`
+- `AiSiteProgressStreamService`
+- `AiSiteStatusPollingService`
+- `AiSiteBlockOperationController`
+
+### 13.9 验收标准（覆盖本次重写要求）
+
+- 验收 A：第一阶段必须先生成主题设计与 Header/Footer，再生成页面类型方案；页面类型任务支持并发且共享同一主题上下文。
+- 验收 B：第一阶段方案本身是块树；每个块都能 hover 微调/删除，页面可新增块。
+- 验收 C：第一阶段不再依赖方案弹窗，方案直接以内联工作台展示在第一阶段下面。
+- 验收 D：第二阶段按块任务细化资料，所有并发块任务使用统一上下文快照，主题连续性不漂移。
+- 验收 E：第二阶段页面 Tab 内可微调/删除/新增块任务，确认后再进入虚拟主题后台生成。
+- 验收 F：所有长流程都走后台队列；SSE 只负责进度与轻量局部重建；状态可通过轮询恢复。
+- 验收 G：所有块操作 API 都支持 `session_public_id|website_public_id` 双寻址。
+- 验收 H：虚拟主题按块树生成页面，页面完成即可预览与编辑，最终确认无误后才允许发布。

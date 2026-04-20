@@ -12,6 +12,7 @@ use Weline\Server\Service\Control\BackendStatusService;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\HostsFileManager;
+use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Server\Service\OptimizationGuideService;
 use Weline\Server\Service\SslCertificateService;
 use Weline\Server\Service\Control\SharedStateAdminService;
@@ -578,8 +579,17 @@ class ServerQueryProvider implements QueryProviderInterface
         if (!$this->isEligibleWelineLocalHostDomain($domain)) {
             return [
                 'success' => false,
-                'message' => (string)__('Only {subdomain}.weline.local may be injected into local hosts'),
+                'message' => (string)__('Only managed local WLS domains may be injected into local hosts'),
                 'domain' => $domain,
+            ];
+        }
+        if (!LocalDomainPolicy::requiresHostsEntry($domain)) {
+            return [
+                'success' => true,
+                'skipped' => true,
+                'message' => (string)__('The requested .localhost domain resolves to loopback and does not require a hosts entry'),
+                'domain' => $domain,
+                'ip' => $ip,
             ];
         }
         if (!HostsAddCommand::isEligibleLocalHostname($domain)) {
@@ -599,24 +609,24 @@ class ServerQueryProvider implements QueryProviderInterface
     private function ensureLocalWelineWildcardCertificate(array $params): array
     {
         $websiteId = (int)($params['website_id'] ?? 0);
-        $domain = (string)($params['domain'] ?? '*.weline.local');
-        if (\strtolower(\trim($domain)) !== '*.weline.local') {
+        $domain = \strtolower(\trim((string)($params['domain'] ?? LocalDomainPolicy::currentWildcardDomain())));
+        if (!LocalDomainPolicy::isManagedWildcardDomain($domain)) {
             return [
                 'success' => false,
-                'message' => (string)__('Only *.weline.local is allowed for local wildcard certificate issuance'),
+                'message' => (string)__('Only managed local wildcard domains are allowed for local wildcard certificate issuance'),
                 'domain' => $domain,
             ];
         }
 
-        $result = $this->sslCertificateService->ensureCertificate('*.weline.local', '', '', $websiteId);
+        $result = $this->sslCertificateService->ensureCertificate($domain, '', '', $websiteId);
         if (\is_array($result)) {
-            $result['domain'] = '*.weline.local';
+            $result['domain'] = $domain;
         }
 
         return \is_array($result) ? $result : [
             'success' => false,
-            'message' => (string)__('Failed to ensure *.weline.local wildcard certificate'),
-            'domain' => '*.weline.local',
+            'message' => (string)__('Failed to ensure the managed local wildcard certificate'),
+            'domain' => $domain,
         ];
     }
 
@@ -991,6 +1001,6 @@ class ServerQueryProvider implements QueryProviderInterface
 
     private function isEligibleWelineLocalHostDomain(string $domain): bool
     {
-        return (bool)\preg_match('/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.weline\.local$/', $domain);
+        return LocalDomainPolicy::isManagedSingleLabelSubdomain($domain);
     }
 }

@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', function () {
         settingsForm: document.getElementById('properties-form'),
         saveBtn: document.getElementById('save-properties-btn'),
         globalSaveBtn: document.getElementById('global-save-btn'),
+        discardPreviewBtn: document.getElementById('discard-preview-btn'),
         layoutSwitcherContainer: document.getElementById('layout-switcher-container'),
         deviceButtons: document.querySelectorAll('[data-device]'),
         zoneWrappers: document.querySelectorAll('.zone-wrapper'),
@@ -77,9 +78,9 @@ document.addEventListener('DOMContentLoaded', function () {
             // Apply theme mode
             applyThemeMode();
 
-            // 初始化iframe加载事件处理（确保初始加载时也能隐藏loading）
+            // 初始化iframe加载事件处理（确保初始加载时也能隐藏loading�?
             if (elements.iframe && elements.loading) {
-                // 显示初始加载状态
+                // 显示初始加载状�?
                 elements.loading.classList.add('show');
                 
                 // 处理iframe初始加载完成
@@ -101,7 +102,7 @@ document.addEventListener('DOMContentLoaded', function () {
             console.log('Visual Editor initialized successfully');
         } catch (e) {
             console.error('Initialization error:', e);
-            showToast('初始化失败: ' + e.message, 'error');
+            showToast((config.translations.initFailed || 'Initialization failed') + ': ' + e.message, 'error');
         }
     }
 
@@ -295,11 +296,9 @@ document.addEventListener('DOMContentLoaded', function () {
         // Save Properties
         elements.saveBtn.addEventListener('click', saveCurrentProperties);
 
-        // Global Save (reload page or similar)
-        elements.globalSaveBtn.addEventListener('click', () => {
-            // Simple reload for now to ensure everything is synced
-            window.location.reload();
-        });
+        // Publish isolated preview-scope changes into the formal scope
+        elements.globalSaveBtn?.addEventListener('click', publishPreviewScope);
+        elements.discardPreviewBtn?.addEventListener('click', discardPreviewScope);
 
         // Locale Selector
         const localeSelector = document.getElementById('locale-selector');
@@ -310,7 +309,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const url = new URL(window.location.href);
                 // Assuming URL pattern includes locale, or we add as query param
                 url.searchParams.set('locale', newLocale);
-                showToast(`正在切换到 ${config.availableLocales[newLocale] || newLocale}...`, 'info');
+                showToast(`${config.translations.switchingLocale || 'Switching language...'} ${config.availableLocales[newLocale] || newLocale}`, 'info');
                 setTimeout(() => {
                     window.location.href = url.toString();
                 }, 500);
@@ -434,7 +433,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Render editable color variables grid
     function renderColorVariablesGrid(colors) {
         if (!colors || colors.length === 0) {
-            elements.layoutContainer.innerHTML = '<div class="text-muted text-center py-3">没有可用的颜色配置</div>';
+            elements.layoutContainer.innerHTML = '<div class="text-muted text-center py-3">No color settings available</div>';
             elements.settingsForm.innerHTML = '';
             return;
         }
@@ -461,7 +460,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             <div class="color-name" title="${varName}">${varLabel}</div>
                             <div class="color-value">${varValue}</div>
                         </div>
-                        <button type="button" class="color-copy-btn btn-sm" title="点击复制颜色码">
+                        <button type="button" class="color-copy-btn btn-sm" title="Copy color value">
                             <i class="mdi mdi-content-copy"></i>
                         </button>
                     </div>
@@ -688,7 +687,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     <label for="${inputId}">${param.name || key}</label>
                     <div class="param-actions">
                         ${isI18n ? `<span class="locale-badge" title="多语言字段">${config.locale || 'I18N'}</span>` : ''}
-                        <button type="button" class="btn-reset-param" data-key="${key}" title="重置为默认值">
+                        <button type="button" class="btn-reset-param" data-key="${key}" title="重置为默认�?>
                             <i class="mdi mdi-refresh"></i>
                         </button>
                     </div>
@@ -706,14 +705,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     <div class="color-picker-main">
                         <input type="color" class="form-control-color" id="${colorId}" name="${inputName}" value="${value}">
                         <input type="text" class="form-control" id="${textId}" value="${value}">
-                        <button type="button" class="color-copy-btn" title="点击复制颜色码">
+                        <button type="button" class="color-copy-btn" title="Copy color value">
                             <i class="mdi mdi-content-copy"></i>
                         </button>
                     </div>
                     <div class="color-presets">${presetsHtml}</div>
                     ${recentHtml ? `
                     <div class="color-recent">
-                        <div class="color-recent-label">${config.translations.recentColors || '最近使用'}</div>
+                        <div class="color-recent-label">${config.translations.recentColors || 'Recent colors'}</div>
                         <div class="color-recent-list">${recentHtml}</div>
                     </div>` : ''}
                 </div>`;
@@ -947,7 +946,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const currentVal = state.configData[config.area][state.activeType][state.activeCategory];
         if (!currentVal) {
-            showToast('未选择布局，无法保存参数', 'warning');
+            showToast(config.translations.selectLayoutBeforeSave || 'Please select a layout before saving parameters', 'warning');
             return;
         }
 
@@ -970,7 +969,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const btn = elements.saveBtn;
         const originalText = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 保存中...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 保存�?..';
 
         try {
             const response = await fetch(config.urls.saveFileParams, {
@@ -1013,14 +1012,90 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             const result = await response.json();
             if (result.code === 200) {
-                showToast('已重置为默认值', 'success');
+                showToast(config.translations.resetSuccess || 'Reset to default', 'success');
                 loadParams(state.activeType, state.activeCategory, currentVal);
                 refreshPreview();
             } else {
-                showToast(result.msg || '重置失败', 'error');
+                showToast(result.msg || config.translations.resetFailed || 'Reset failed', 'error');
             }
         } catch (error) {
-            showToast('重置错误: ' + error.message, 'error');
+            showToast((config.translations.resetError || 'Reset error') + ': ' + error.message, 'error');
+        }
+    }
+
+    async function publishPreviewScope() {
+        const formData = new FormData();
+        formData.append('theme_id', config.themeId);
+        formData.append('area', config.area);
+        formData.append('scope', config.scope);
+
+        const btn = elements.globalSaveBtn;
+        const originalHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ������...';
+        }
+
+        try {
+            const response = await fetch(config.urls.publishPreviewScope, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            if (result.code === 200) {
+                showToast(config.translations.publishSuccess || result.msg || 'Published successfully', 'success');
+                await loadOptions(config.area);
+                refreshPreview();
+            } else {
+                showToast(result.msg || config.translations.publishFailed || 'Publish failed', 'error');
+            }
+        } catch (error) {
+            showToast((config.translations.publishFailed || 'Publish failed') + ': ' + error.message, 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+    }
+
+    async function discardPreviewScope() {
+        if (!window.confirm(config.translations.discardConfirm || 'Discard current preview configuration changes?')) {
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('theme_id', config.themeId);
+        formData.append('area', config.area);
+        formData.append('scope', config.scope);
+
+        const btn = elements.discardPreviewBtn;
+        const originalHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ������...';
+        }
+
+        try {
+            const response = await fetch(config.urls.discardPreviewScope, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            if (result.code === 200) {
+                showToast(config.translations.discardSuccess || result.msg || 'Preview config discarded', 'success');
+                await loadOptions(config.area);
+                refreshPreview();
+            } else {
+                showToast(result.msg || config.translations.discardFailed || 'Discard failed', 'error');
+            }
+        } catch (error) {
+            showToast((config.translations.discardFailed || 'Discard failed') + ': ' + error.message, 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
         }
     }
 
@@ -1033,7 +1108,7 @@ document.addEventListener('DOMContentLoaded', function () {
         elements.loading.classList.add('show');
         const currentSrc = elements.iframe.src;
         
-        // 使用 addEventListener 而不是直接赋值 onload，避免覆盖其他监听器
+        // 使用 addEventListener 而不是直接赋�?onload，避免覆盖其他监听器
         const handleLoad = () => {
             setTimeout(() => {
                 elements.loading.classList.remove('show');

@@ -44,7 +44,7 @@ use Weline\Websites\Model\Website;
 class AiSiteWorkbenchPhpunitSimulationIntegrationTest extends AbstractAiSiteWorkbenchIntegrationHarness
 {
     private const SIM_SITE_TITLE_PREFIX = '[PT-SIM] PHPUnit AI Site ';
-    private const LOCAL_FIXED_TEST_DOMAIN = 'demo.weline.local';
+    private const LOCAL_FIXED_TEST_DOMAIN = 'demo.weline.test';
 
     protected function setUp(): void
     {
@@ -93,6 +93,8 @@ class AiSiteWorkbenchPhpunitSimulationIntegrationTest extends AbstractAiSiteWork
 
         $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
         self::assertSame(1, (int)($planFlow['confirm_plan']['data']['plan_confirmed'] ?? 0));
+        $taskPlanFlow = $this->generateAndConfirmTaskPlan($publicId, $scopePatch);
+        self::assertSame(1, (int)($taskPlanFlow['confirm_task_plan']['data']['task_plan_confirmed'] ?? 0));
 
         $startBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
@@ -136,15 +138,11 @@ class AiSiteWorkbenchPhpunitSimulationIntegrationTest extends AbstractAiSiteWork
         $draftWebsiteId = (int)($buildResult['draft_website_id'] ?? 0);
         $virtualThemeId = (int)($buildResult['virtual_theme_id'] ?? 0);
 
-        $buildStatePayload = $this->invokeJsonAction(
-            '/pagebuilder/backend/ai-site-agent/get-state-json',
-            'GET',
-            'getStateJson',
-            ['public_id' => $publicId]
-        );
-        self::assertTrue((bool)($buildStatePayload['success'] ?? false), \json_encode($buildStatePayload, \JSON_UNESCAPED_UNICODE));
-        $buildState = \is_array($buildStatePayload['data'] ?? null) ? $buildStatePayload['data'] : [];
-        self::assertGreaterThan(0, (int)($buildState['virtual_theme_id'] ?? 0), 'Virtual theme build should be produced in full workflow.');
+        $envReadyEvents = $buildWriter->eventsByName('environment_ready');
+        self::assertNotEmpty($envReadyEvents, 'Should emit environment_ready event after build.');
+        $envReadyData = \is_array($envReadyEvents[0]['data'] ?? null) ? $envReadyEvents[0]['data'] : [];
+        $buildState = \is_array($envReadyData['state'] ?? null) ? $envReadyData['state'] : [];
+        self::assertGreaterThan(0, $virtualThemeId, 'Virtual theme build should be produced in full workflow.');
         self::assertNotSame('', (string)($buildState['visual_preview_url'] ?? ''));
         self::assertNotSame('', (string)($buildState['visual_edit_url'] ?? ''));
 
@@ -171,14 +169,7 @@ class AiSiteWorkbenchPhpunitSimulationIntegrationTest extends AbstractAiSiteWork
         $publishResult = $this->invokePrivateOperation('runPublishOperation', $publishWriter, $publicId);
         self::assertIsArray($publishResult['published'] ?? null);
 
-        $publishStatePayload = $this->invokeJsonAction(
-            '/pagebuilder/backend/ai-site-agent/get-state-json',
-            'GET',
-            'getStateJson',
-            ['public_id' => $publicId]
-        );
-        self::assertTrue((bool)($publishStatePayload['success'] ?? false), \json_encode($publishStatePayload, \JSON_UNESCAPED_UNICODE));
-        $publishState = \is_array($publishStatePayload['data'] ?? null) ? $publishStatePayload['data'] : [];
+        $publishState = $this->fetchWorkspaceState($publicId);
         self::assertSame(AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED, (string)($publishState['publish_status'] ?? ''));
 
         $publishedPages = (array)($publishState['pagebuilder_pages_by_type'] ?? []);
@@ -388,7 +379,7 @@ class AiSiteWorkbenchPhpunitSimulationIntegrationTest extends AbstractAiSiteWork
         self::assertTrue((bool)($decoded['success'] ?? false), \json_encode($decoded, \JSON_UNESCAPED_UNICODE));
         $recommended = \strtolower(\trim((string)($decoded['domain'] ?? '')));
         self::assertNotSame('', $recommended, 'Recommend domain should return non-empty domain.');
-        self::assertStringEndsWith('.weline.local', $recommended, 'Fake mode should return *.weline.local domain.');
+        self::assertStringEndsWith('.weline.test', $recommended, 'Fake mode should return *.weline.test domain.');
 
         // ?????????????????????????? hosts?
         return self::LOCAL_FIXED_TEST_DOMAIN;

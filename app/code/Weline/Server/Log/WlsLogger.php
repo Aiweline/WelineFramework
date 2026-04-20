@@ -640,7 +640,25 @@ class WlsLogger
         }
 
         $crashLog = $this->logDir . 'crash-' . \date('Y-m-d') . '.log';
-        $json = \json_encode($crashData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        $flags = JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT;
+        if (\defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+            $flags |= (int) \constant('JSON_INVALID_UTF8_SUBSTITUTE');
+        }
+        $json = \json_encode($crashData, $flags);
+        if ($json === false) {
+            $json = \json_encode([
+                'time' => $crashData['time'] ?? \date('Y-m-d H:i:s'),
+                'process' => $crashData['process'] ?? $this->processTag,
+                'pid' => $crashData['pid'] ?? \getmypid(),
+                'error' => ['message' => 'crash_json_encode_failed', 'detail' => \json_last_error_msg()],
+            ], $flags) ?: '{"error":"crash_json_encode_failed"}';
+        }
+        $maxCrashJsonBytes = 524288;
+        $jsonLen = \strlen($json);
+        if ($jsonLen > $maxCrashJsonBytes) {
+            $json = \substr($json, 0, $maxCrashJsonBytes)
+                . "\n…crash_json_truncated_total_len={$jsonLen}…\n";
+        }
         // 移除 LOCK_EX 避免锁竞争
         @\file_put_contents($crashLog, $json . "\n\n", FILE_APPEND);
     }

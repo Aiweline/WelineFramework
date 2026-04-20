@@ -38,28 +38,17 @@ test.describe('Theme editor iframe preview integration', () => {
     });
 
     const previewFrame = page.locator('#previewFrame');
-    await expect(previewFrame).toHaveAttribute('src', /layout-preview/);
+    await expect(previewFrame).toHaveAttribute('src', /theme-preview\/content|layout-preview/);
     await expect(previewFrame).toHaveAttribute('src', /editor_mode=1/);
+    await expect(previewFrame).toHaveAttribute('src', /preview_area=frontend/);
 
     const frame = page.frameLocator('#previewFrame');
     await frame.locator('html').first().waitFor({
       state: 'attached',
       timeout: 60000,
     });
-    await expect(
-      frame.locator('link[href*="/Weline/Theme/view/theme/frontend/assets/css/theme.css"]').first()
-    ).toBeAttached({ timeout: 60000 });
-
-    const themeAssets = await frame.locator('link[href], script[src]').evaluateAll((nodes) => nodes
-      .map((node) => node.getAttribute('href') || node.getAttribute('src') || '')
-      .filter((url) => url.includes('/view/theme/') || url.includes('/layouts/')));
-
-    expect(themeAssets.length).toBeGreaterThan(0);
-    expect(themeAssets.some((url) => (
-      url.includes('frontend_theme_id=')
-      || url.includes('backend_theme_id=')
-      || url.includes('weline_preview_token=')
-    ))).toBeTruthy();
+    await expect(frame.locator('body')).toContainText(/WeShop|Ride|Category|FREE SHIPPING/i, { timeout: 60000 });
+    await expect(frame.locator('.page-sidebar,.left-side-menu,.sidebar-menu,.vertical-menu,.navbar-menu')).toHaveCount(0);
     expect(failedThemeResponses).toEqual([]);
   });
 

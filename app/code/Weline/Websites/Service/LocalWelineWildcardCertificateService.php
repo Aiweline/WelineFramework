@@ -3,9 +3,11 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service;
 
+use Weline\Server\Service\LocalDomainPolicy;
+
 class LocalWelineWildcardCertificateService
 {
-    public const WILDCARD_DOMAIN = '*.weline.local';
+    public const WILDCARD_DOMAIN = LocalDomainPolicy::TEST_WILDCARD_DOMAIN;
 
     /**
      * @var null|\Closure(string, string, array<string, mixed>): mixed
@@ -22,12 +24,7 @@ class LocalWelineWildcardCertificateService
 
     public function isEligibleDomain(string $domain): bool
     {
-        $domain = \strtolower(\trim($domain));
-        if ($domain === '' || $domain === 'weline.local' || $domain === self::WILDCARD_DOMAIN) {
-            return false;
-        }
-
-        return (bool)\preg_match('/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.weline\.local$/', $domain);
+        return LocalDomainPolicy::isManagedSingleLabelSubdomain($domain);
     }
 
     /**
@@ -36,49 +33,55 @@ class LocalWelineWildcardCertificateService
     public function ensureWildcardCertificateForDomain(string $domain, int $websiteId = 0): array
     {
         $domain = \strtolower(\trim($domain));
+        $wildcardDomain = $this->resolveWildcardDomain($domain) ?? LocalDomainPolicy::currentWildcardDomain();
         if (!$this->isEligibleDomain($domain)) {
             return [
                 'success' => false,
                 'skipped' => true,
-                'message' => (string)__('Only {subdomain}.weline.local uses the shared *.weline.local wildcard certificate'),
+                'message' => (string)__('Only managed local WLS subdomains use the shared local wildcard certificate'),
                 'domain' => $domain,
-                'wildcard_domain' => self::WILDCARD_DOMAIN,
+                'wildcard_domain' => $wildcardDomain,
             ];
         }
 
         $resolved = $this->query('server', 'resolveManagedCertificate', [
-            'hostname' => self::WILDCARD_DOMAIN,
+            'hostname' => $wildcardDomain,
             'preferred_cert_id' => null,
         ]);
         if (\is_array($resolved) && (string)($resolved['status'] ?? '') === 'active' && !($resolved['is_expired'] ?? true)) {
             return [
                 'success' => true,
-                'message' => (string)__('Reusing existing *.weline.local wildcard certificate'),
+                'message' => (string)__('Reusing existing %{1} wildcard certificate', [$wildcardDomain]),
                 'domain' => $domain,
-                'wildcard_domain' => self::WILDCARD_DOMAIN,
+                'wildcard_domain' => $wildcardDomain,
                 'certificate' => $resolved,
                 'reused' => true,
             ];
         }
 
         $result = $this->query('server', 'ensureLocalWelineWildcardCertificate', [
-            'domain' => self::WILDCARD_DOMAIN,
+            'domain' => $wildcardDomain,
             'website_id' => \max(0, $websiteId),
         ]);
 
         if (\is_array($result)) {
             return $result + [
                 'domain' => $domain,
-                'wildcard_domain' => self::WILDCARD_DOMAIN,
+                'wildcard_domain' => $wildcardDomain,
             ];
         }
 
         return [
             'success' => false,
-            'message' => (string)__('Failed to ensure *.weline.local wildcard certificate'),
+            'message' => (string)__('Failed to ensure %{1} wildcard certificate', [$wildcardDomain]),
             'domain' => $domain,
-            'wildcard_domain' => self::WILDCARD_DOMAIN,
+            'wildcard_domain' => $wildcardDomain,
         ];
+    }
+
+    public function resolveWildcardDomain(string $domain): ?string
+    {
+        return LocalDomainPolicy::resolveWildcardDomain($domain);
     }
 
     /**

@@ -15,6 +15,7 @@ namespace Weline\Websites\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\FrameworkQueryService;
+use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\Website;
@@ -22,7 +23,7 @@ use Weline\Websites\Service\LocalWelineWildcardCertificateService;
 
 class WebsiteAgentService
 {
-    private const DEV_SIM_DOMAIN = 'weline-dev.local';
+    private const DEV_SIM_DOMAIN = 'weline-dev.weline.test';
     private const RECOMMENDATION_MIN_LABEL_LENGTH = 10;
 
     public function __construct(
@@ -102,94 +103,39 @@ class WebsiteAgentService
             $wildcardResult = $this->getLocalWelineWildcardCertificateService()
                 ->ensureWildcardCertificateForDomain($domain, 0);
             $httpsOk = (bool)($wildcardResult['success'] ?? false);
+            $wildcardDomain = (string)($wildcardResult['wildcard_domain'] ?? LocalDomainPolicy::currentWildcardDomain());
             $emit('progress', [
                 'message' => $httpsOk
-                    ? __('Local domain %{1} is now covered by the shared *.weline.local wildcard certificate', [$domain])
-                    : __('Local domain %{1} skipped registrar purchase, but the shared *.weline.local wildcard certificate is not ready yet', [$domain]),
+                    ? __('Local domain %{1} is now covered by the shared %{2} wildcard certificate', [$domain, $wildcardDomain])
+                    : __('Local domain %{1} skipped registrar purchase, but the shared %{2} wildcard certificate is not ready yet', [$domain, $wildcardDomain]),
                 'progress' => 90,
                 'simulated' => true,
-                'wildcard_domain' => LocalWelineWildcardCertificateService::WILDCARD_DOMAIN,
+                'wildcard_domain' => $wildcardDomain,
                 'https_ok' => $httpsOk,
             ]);
             $emit('done', [
                 'message' => $httpsOk
-                    ? __('Build finished with shared *.weline.local wildcard certificate')
+                    ? __('Build finished with shared %{1} wildcard certificate', [$wildcardDomain])
                     : __('Build finished in local simulation mode'),
                 'domain' => $domain,
                 'website_id' => 0,
                 'order_id' => 0,
                 'https_ok' => $httpsOk,
                 'simulated' => true,
-                'wildcard_domain' => LocalWelineWildcardCertificateService::WILDCARD_DOMAIN,
+                'wildcard_domain' => $wildcardDomain,
             ]);
             return [
                 'success' => true,
                 'message' => $httpsOk
-                    ? __('Build finished with shared *.weline.local wildcard certificate: %{1}', [$domain])
+                    ? __('Build finished with shared %{2} wildcard certificate: %{1}', [$domain, $wildcardDomain])
                     : __('Build finished in local simulation mode: %{1}', [$domain]),
                 'domain' => $domain,
                 'website_id' => 0,
                 'order_id' => 0,
                 'https_ok' => $httpsOk,
-                'wildcard_domain' => LocalWelineWildcardCertificateService::WILDCARD_DOMAIN,
+                'wildcard_domain' => $wildcardDomain,
             ];
         }
-        /*
-            $wildcardResult = $this->getLocalWelineWildcardCertificateService()
-                ->ensureWildcardCertificateForDomain($domain, 0);
-            $httpsOk = (bool)($wildcardResult['success'] ?? false);
-            $emit('progress', [
-                'message' => $httpsOk
-                    ? __('鏈湴鍩熷悕 %{1} 宸茬‘璁?*.weline.local 娉涘煙鍚嶈瘉涔?, [$domain])
-                    : __('鏈湴鍩熷悕 %{1} 璺宠繃鍩熷悕鍟嗘祦绋嬶紝浣嗘硾鍩熷悕璇佷功灏氭湭灏辩华', [$domain]),
-                'progress' => 90,
-                'simulated' => true,
-                'wildcard_domain' => LocalWelineWildcardCertificateService::WILDCARD_DOMAIN,
-                'https_ok' => $httpsOk,
-            ]);
-            $emit('done', [
-                'message' => $httpsOk
-                    ? __('寤虹珯瀹屾垚锛堟湰鍦板凡浣跨敤 *.weline.local 娉涘煙鍚嶈瘉涔︼級')
-                    : __('寤虹珯瀹屾垚锛堟湰鍦版ā鎷燂級'),
-                'domain' => $domain,
-                'website_id' => 0,
-                'order_id' => 0,
-                'https_ok' => $httpsOk,
-                'simulated' => true,
-                'wildcard_domain' => LocalWelineWildcardCertificateService::WILDCARD_DOMAIN,
-            ]);
-            return [
-                'success' => true,
-                'message' => $httpsOk
-                    ? __('寤虹珯瀹屾垚锛堟湰鍦板凡浣跨敤 *.weline.local 娉涘煙鍚嶈瘉涔︼級锛?{1}', [$domain])
-                    : __('寤虹珯瀹屾垚锛堟湰鍦版ā鎷燂級锛?{1}', [$domain]),
-                'domain' => $domain,
-                'website_id' => 0,
-                'order_id' => 0,
-                'https_ok' => $httpsOk,
-                'wildcard_domain' => LocalWelineWildcardCertificateService::WILDCARD_DOMAIN,
-            ];
-            $emit('progress', ['message' => __('本地域名 %{1} 跳过域名商流程，直接模拟建站成功', [$domain]), 'progress' => 90, 'simulated' => true]);
-            $emit('done', [
-                'message' => __('建站完成（本地模拟）'),
-                'domain' => $domain,
-                'website_id' => 0,
-                'order_id' => 0,
-                'https_ok' => false,
-                'simulated' => true,
-            ]);
-            return [
-                'success' => true,
-                'message' => __('建站完成（本地模拟）：%{1}', [$domain]),
-                'domain' => $domain,
-                'website_id' => 0,
-                'order_id' => 0,
-            ];
-        }
-
-        // 2. 购买域名（含自动解析、自动建站）
-        $emit('progress', ['message' => __('正在购买域名...'), 'progress' => 20]);
-        */
         $items = [
             \array_merge([
                 'domain' => $domain,
@@ -874,7 +820,7 @@ class WebsiteAgentService
         }
         $suffix = \substr(\md5($base . '-' . \microtime(true)), 0, 6);
 
-        return $base . '-' . $suffix . '.weline.local';
+        return $base . '-' . $suffix . '.' . LocalDomainPolicy::currentRootDomain();
     }
 
     private function isDevSimulationDomain(string $domain): bool
@@ -889,7 +835,7 @@ class WebsiteAgentService
         if ($domain === 'localhost') {
             return true;
         }
-        return \str_ends_with($domain, '.local') || \str_ends_with($domain, '.localhost');
+        return LocalDomainPolicy::isManagedLocalDomain($domain);
     }
 
     private function getLocalWelineWildcardCertificateService(): LocalWelineWildcardCertificateService

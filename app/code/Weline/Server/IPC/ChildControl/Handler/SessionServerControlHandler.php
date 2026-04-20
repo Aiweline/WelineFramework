@@ -15,13 +15,11 @@ final class SessionServerControlHandler implements RoleControlHandlerInterface
      * @param callable():void $onDrain
      * @param callable():void $onShutdown
      * @param callable():void $onCacheClear
-     * @param callable():void $onOrphanDisconnect
      */
     public function __construct(
         private readonly mixed $onDrain,
         private readonly mixed $onShutdown,
         private readonly mixed $onCacheClear,
-        private readonly mixed $onOrphanDisconnect
     ) {
     }
 
@@ -58,8 +56,7 @@ final class SessionServerControlHandler implements RoleControlHandlerInterface
             return;
         }
 
-        WlsLogger::warning_('Master 连接异常，Session Server 进入孤儿保护退出流程');
-        ($this->onOrphanDisconnect)();
+        WlsLogger::warning_('Master 连接异常，Session Server 保持运行并等待 IPC 重连 / 孤儿保护判定');
     }
 }
 

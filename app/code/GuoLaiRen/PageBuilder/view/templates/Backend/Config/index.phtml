@@ -14,10 +14,10 @@ $aiEnabled = $ai_enabled ?? '0';
 $i18nEnabled = $i18n_enabled ?? '0';
 $aiSiteDebugSiteTitle = (string)($ai_site_agent_debug_site_title ?? '');
 $aiSiteDebugBrief = (string)($ai_site_agent_debug_brief_description ?? '');
-$aiSiteDebugDefaultLocale = (string)($ai_site_agent_debug_default_locale ?? 'en_US');
+$aiSiteDebugDefaultLocale = (string)($ai_site_agent_debug_default_locale ?? 'zh_Hans_CN');
 $pbAiConfigLocaleOptions = [
     'zh_Hans_CN' => (string)__('简体中文'),
-    'en_US' => (string)__('English'),
+    'en_US' => (string)__('英语（美国）'),
     'zh_Hant_TW' => (string)__('繁體中文'),
     'ja_JP' => (string)__('日本語'),
     'ko_KR' => (string)__('한국어'),
@@ -174,7 +174,7 @@ $pbAiConfigLocaleOptions = [
                     <div class="mb-4">
                         <h6 class="mb-3"><i class="mdi mdi-bug-outline me-2"></i><lang>AI 建站工作台 · 调试预填</lang></h6>
                         <p class="pagebuilder-config-description mb-3">
-                            <lang>仅在「站点名称」「需求描述」「主语言」在会话中未设置时，作为表单默认值（快速模式与高级模式均生效）。从未保存过本配置时使用内置默认值（主语言为英语）；站点名称与描述若清空并保存则关闭对应预填。</lang>
+                                <lang>仅在「站点名称」「需求描述」「主语言」在会话中未设置时，作为表单默认值（快速模式生效）。从未保存过本配置时使用内置默认值（主语言为英语）；站点名称与描述若清空并保存则关闭对应预填。</lang>
                         </p>
                         <div class="mb-3">
                             <label class="form-label" for="pagebuilder_ai_site_debug_site_title"><lang>默认站点名称</lang></label>
@@ -273,7 +273,7 @@ $pbAiConfigLocaleOptions = [
         alertEl.className = 'alert alert-' + alertType + ' alert-dismissible fade show';
         alertEl.setAttribute('role', 'alert');
         alertEl.innerHTML = '<span>' + message + '</span>' +
-            '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+            '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="关闭"></button>';
         container.appendChild(alertEl);
         setTimeout(function() {
             try {

@@ -60,23 +60,26 @@ final class AppRequestRuntimeContextTest extends TestCase
                 'uri' => '/pagebuilder/backend/ai-site-agent/index?legacy=1',
                 'origin_request_uri' => '/pagebuilder/backend/ai-site-agent/index?legacy=1',
                 'scheme' => 'https',
-                'host' => 'p11005ce4.weline.local',
+                'host' => 'p11005ce4.weline.test',
             ],
         ]));
 
         $_SERVER = [
             'REQUEST_URI' => '/pagebuilder/backend/ai-site-agent/index?legacy=1',
             'REQUEST_SCHEME' => 'https',
-            'HTTP_HOST' => 'p11005ce4.weline.local',
+            'HTTP_HOST' => 'p11005ce4.weline.test',
             'SERVER_PORT' => '443',
         ];
 
         App::init();
 
-        self::assertSame('/pagebuilder/backend/ai-site-agent/index?legacy=1', $_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? null);
         self::assertSame(
-            'https://p11005ce4.weline.local/pagebuilder/backend/ai-site-agent/index?legacy=1',
-            $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null
+            '/pagebuilder/backend/ai-site-agent/index?legacy=1',
+            Context::current()?->get('input.server.WELINE_ORIGIN_REQUEST_URI')
+        );
+        self::assertSame(
+            'https://p11005ce4.weline.test/pagebuilder/backend/ai-site-agent/index?legacy=1',
+            Context::current()?->get('input.server.WELINE_FULL_REQUEST_URI')
         );
     }
 }

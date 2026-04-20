@@ -14,8 +14,8 @@ final class AiSiteAgentWorkspaceDebugDefaults
 
     public const BRIEF_DESCRIPTION = '我想做一个印度市场的棋牌网站，推广棋牌apk下载的seo网站';
 
-    /** 会话未带主语言时，与后台「AI 建站工作台 · 调试预填」中的默认主语言一致，内置为英语 */
-    public const DEFAULT_LOCALE = 'en_US';
+    /** 会话未带主语言时，与后台「AI 建站工作台 · 调试预填」中的默认主语言一致，内置为简体中文 */
+    public const DEFAULT_LOCALE = 'zh_Hans_CN';
 
     /**
      * @param non-empty-list<string> $allowed

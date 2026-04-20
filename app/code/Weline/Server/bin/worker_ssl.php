@@ -267,22 +267,23 @@ function _getDomainPolicy(string $domain): array
 }
 
 /**
- * 开发域：子域目录无证书时，复用磁盘上 `*.weline.local` 通配一盘（目录名与 SslCertificateService 一致，Windows 为 _wildcard_.weline.local）。
- * 仅匹配「单标签主机名」如 p11005ce4.weline.local（标准 *.weline.local 覆盖范围）。
+ * 本地托管域名在子域目录无证书时，可复用磁盘上的共享通配证书。
+ * 支持 `*.weline.test` 与 `*.weline.localhost` 两种本地后缀。
  *
  * @return array{local_cert: string, local_pk: string}|null
  */
 function _resolveWelineLocalWildcardCertFromDisk(string $host): ?array
 {
     $host = \strtolower(\trim($host));
-    if ($host === '' || $host === 'weline.local' || !\str_ends_with($host, '.weline.local')) {
+    if (!\Weline\Server\Service\LocalDomainPolicy::isManagedSingleLabelSubdomain($host)) {
         return null;
     }
-    if (\count(\explode('.', $host)) !== 3) {
+    $wildcardDomain = \Weline\Server\Service\LocalDomainPolicy::resolveWildcardDomain($host);
+    if ($wildcardDomain === null) {
         return null;
     }
 
-    $segment = \Weline\Server\Service\SslCertificateService::certificateStorageSegmentForFilesystem('*.weline.local');
+    $segment = \Weline\Server\Service\SslCertificateService::certificateStorageSegmentForFilesystem($wildcardDomain);
     $certDir = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR . $segment . DIRECTORY_SEPARATOR;
     $certFile = $certDir . 'fullchain.pem';
     $keyFile = $certDir . 'privkey.pem';
@@ -300,7 +301,7 @@ function _resolveWelineLocalWildcardCertFromDisk(string $host): ?array
  *  1. 进程内存缓存（$sniServerCerts，由 IPC ssl_cert_reload 维护）
  *  2. 磁盘证书目录（app/etc/ssl/{domain}/fullchain.pem + privkey.pem）
  *  3. 数据库回退：从证书管理表查询并恢复完整文件到磁盘
- *  4. 开发域 weline.local：仅有通配一盘时，子域复用 *.weline.local 目录
+ *  4. 托管本地域名：仅有共享通配目录时，子域复用对应的本地通配证书目录
  *
  * 命中后自动写入内存缓存，后续同域名请求零开销。
  *
@@ -339,7 +340,7 @@ function _resolveSniCert(string $domain, array &$cache): ?array
         }
     }
 
-    // 4. 仅有 *.weline.local 通配一盘、未写入各子域目录时的兜底（map 未列全子域亦可握手）
+    // 4. 仅有托管本地通配目录、未写入各子域目录时的兜底（map 未列全子域亦可握手）
     $wildcardEntry = _resolveWelineLocalWildcardCertFromDisk($domain);
     if ($wildcardEntry !== null) {
         $cache[$domain] = $wildcardEntry;
@@ -410,63 +411,209 @@ function _restoreCertFromDb(string $domain): bool
  */
 function _parseSniHostFromClientHello(string $data): ?string
 {
-    $len = \strlen($data);
-    // TLS record: ContentType(1) + Version(2) + Length(2) + Handshake
-    // Handshake: HandshakeType(1) + Length(3) + ClientVersion(2) + Random(32) = 43 bytes minimum
-    if ($len < 43 || \ord($data[0]) !== 0x16) {
-        return null; // Not a TLS handshake
-    }
-    // Handshake type: ClientHello = 0x01
-    if (\ord($data[5]) !== 0x01) {
+    // 与 Dispatcher\SniParser 对齐，避免两套解析不一致导致 SNI 取不到、选错默认证书进而触发 unrecognized_name
+    $sni = \Weline\Server\Dispatcher\SniParser::extractSNI($data);
+    if ($sni === null || $sni === '') {
         return null;
     }
-    $pos = 43; // skip: record header(5) + handshake header(4) + client version(2) + random(32)
-    if ($pos >= $len) {
-        return null;
+
+    return $sni;
+}
+
+/**
+ * defer-ssl：在不从内核移除字节的前提下偷看 TCP 首包（ClientHello）。
+ * Windows 上部分 PHP 版本对 accept 后的 stream 仅 stream_socket_recvfrom 不可靠，故增加 socket_import_stream+MSG_PEEK 兜底。
+ */
+function wlsSslPeekTcpPrefixNoConsume($conn): string
+{
+    if (!\is_resource($conn)) {
+        return '';
     }
-    // Session ID
-    $sessionIdLen = \ord($data[$pos]);
-    $pos += 1 + $sessionIdLen;
-    if ($pos + 2 > $len) {
-        return null;
+    $peeked = @\stream_socket_recvfrom($conn, 65536, \STREAM_PEEK);
+    if (\is_string($peeked) && $peeked !== '') {
+        return $peeked;
     }
-    // Cipher Suites
-    $cipherSuitesLen = (\ord($data[$pos]) << 8) | \ord($data[$pos + 1]);
-    $pos += 2 + $cipherSuitesLen;
-    if ($pos + 1 > $len) {
-        return null;
+    if (!\function_exists('socket_import_stream')) {
+        return '';
     }
-    // Compression Methods
-    $compressionLen = \ord($data[$pos]);
-    $pos += 1 + $compressionLen;
-    if ($pos + 2 > $len) {
-        return null;
+    $sock = @\socket_import_stream($conn);
+    if ($sock === false) {
+        return '';
     }
-    // Extensions total length
-    $extensionsLen = (\ord($data[$pos]) << 8) | \ord($data[$pos + 1]);
-    $pos += 2;
-    $extensionsEnd = $pos + $extensionsLen;
-    if ($extensionsEnd > $len) {
-        $extensionsEnd = $len;
+    $buf = '';
+    $flags = \defined('MSG_PEEK') ? \MSG_PEEK : 2;
+    $n = @\socket_recv($sock, $buf, 65536, $flags);
+    if ($n !== false && $n > 0 && \is_string($buf)) {
+        return $buf;
     }
-    while ($pos + 4 <= $extensionsEnd) {
-        $extType = (\ord($data[$pos]) << 8) | \ord($data[$pos + 1]);
-        $extLen = (\ord($data[$pos + 2]) << 8) | \ord($data[$pos + 3]);
-        $pos += 4;
-        if ($extType === 0x0000) { // SNI extension
-            // Server Name List Length(2) + Name Type(1) + Name Length(2) + Name
-            if ($pos + 5 <= $extensionsEnd && $pos + $extLen <= $extensionsEnd) {
-                $nameType = \ord($data[$pos + 2]);
-                $nameLen = (\ord($data[$pos + 3]) << 8) | \ord($data[$pos + 4]);
-                if ($nameType === 0 && $pos + 5 + $nameLen <= $extensionsEnd) {
-                    return \substr($data, $pos + 5, $nameLen);
+
+    return '';
+}
+
+/**
+ * 将当前 SNI 映射写回 defer-ssl 选项与监听 socket 的 ssl 上下文。
+ * 仅替换 $sniServerCerts 数组不会更新已拷贝到 $deferSslOptions 的映射，会导致 IPC/磁盘更新后握手仍用旧 SNI。
+ */
+function wlsSslApplySniOptionsToContexts(
+    ?array &$deferSslOptions,
+    $listenSocket,
+    array $sniServerCerts,
+    string $sslCert,
+    string $sslKey,
+    int $cryptoMethod
+): void {
+    if ($deferSslOptions !== null) {
+        $deferSslOptions['SNI_enabled'] = !empty($sniServerCerts);
+        $deferSslOptions['SNI_server_certs'] = $sniServerCerts;
+        $deferSslOptions['local_cert'] = $sslCert;
+        $deferSslOptions['local_pk'] = $sslKey;
+        $deferSslOptions['crypto_method'] = $cryptoMethod;
+    }
+    if ($listenSocket && \is_resource($listenSocket)) {
+        @\stream_context_set_option($listenSocket, 'ssl', 'SNI_enabled', !empty($sniServerCerts));
+        @\stream_context_set_option($listenSocket, 'ssl', 'SNI_server_certs', $sniServerCerts);
+        @\stream_context_set_option($listenSocket, 'ssl', 'local_cert', $sslCert);
+        @\stream_context_set_option($listenSocket, 'ssl', 'local_pk', $sslKey);
+    }
+}
+
+/**
+ * 非空 SNI 映射时 OpenSSL 要求 ClientHello 的 SNI 必须在映射中有精确键或通配模式，否则返回 unrecognized_name。
+ *
+ * 兜底：扫描 app/etc/ssl/ 下所有证书目录、解析 CN/SAN，把所有可握手的主机名（含托管本地通配模式）补进映射；
+ * 另外把当前 Worker 的默认 PEM、实例 host 也补进去。
+ * 这样即便 ssl_certificate_map.json（基于 DB）暂未同步，磁盘上有的证书都能直接握手。
+ */
+function wlsSslMergeDefaultListenerHostnamesIntoSniMap(
+    array &$sniServerCerts,
+    string $sslCert,
+    string $sslKey,
+    string $instanceName
+): void {
+    $add = static function (string $h, string $cert, string $key) use (&$sniServerCerts): void {
+        $h = \strtolower(\trim($h));
+        if ($h === '' || \filter_var($h, FILTER_VALIDATE_IP)) {
+            return;
+        }
+        if (isset($sniServerCerts[$h])) {
+            return;
+        }
+        if ($cert === '' || $key === '' || !\is_file($cert) || !\is_file($key)) {
+            return;
+        }
+        $sniServerCerts[$h] = ['local_cert' => $cert, 'local_pk' => $key];
+    };
+    $extractHostnames = static function (string $certFile): array {
+        $names = [];
+        $pem = (string) @\file_get_contents($certFile);
+        if ($pem === '' || !\preg_match('/-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----/s', $pem, $m)) {
+            return $names;
+        }
+        $res = @\openssl_x509_read($m[0]);
+        if ($res === false) {
+            return $names;
+        }
+        $parsed = @\openssl_x509_parse($res, false);
+        if (!\is_array($parsed)) {
+            return $names;
+        }
+        $cn = $parsed['subject']['CN'] ?? '';
+        if (\is_string($cn) && $cn !== '') {
+            $names[] = \strtolower($cn);
+        }
+        $sanRaw = $parsed['extensions']['subjectAltName'] ?? '';
+        if (\is_string($sanRaw) && $sanRaw !== '') {
+            foreach (\preg_split('/,\s*/', $sanRaw) as $seg) {
+                $seg = \trim($seg);
+                if (\str_starts_with($seg, 'DNS:')) {
+                    $names[] = \strtolower(\substr($seg, 4));
                 }
             }
-            return null;
         }
-        $pos += $extLen;
+        return \array_values(\array_unique($names));
+    };
+
+    $instanceHost = '';
+    $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
+    if (\is_file($instanceFile)) {
+        $inst = \json_decode((string) @\file_get_contents($instanceFile), true);
+        if (\is_array($inst)) {
+            foreach (['host', 'ssl_domain', 'public_host'] as $k) {
+                $h = isset($inst[$k]) ? \trim((string) $inst[$k]) : '';
+                if ($h !== '' && !\filter_var($h, FILTER_VALIDATE_IP)) {
+                    $instanceHost = \strtolower($h);
+                    break;
+                }
+            }
+        }
     }
-    return null;
+
+    if ($sslCert !== '' && $sslKey !== '' && \is_file($sslCert) && \is_file($sslKey)) {
+        if ($instanceHost !== '') {
+            $add($instanceHost, $sslCert, $sslKey);
+        }
+        foreach ($extractHostnames($sslCert) as $name) {
+            $add($name, $sslCert, $sslKey);
+        }
+    }
+
+    $sslDir = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR;
+    if (\is_dir($sslDir)) {
+        $entries = @\scandir($sslDir) ?: [];
+        foreach ($entries as $segment) {
+            if ($segment === '.' || $segment === '..') {
+                continue;
+            }
+            $dir = $sslDir . $segment . DIRECTORY_SEPARATOR;
+            if (!\is_dir($dir)) {
+                continue;
+            }
+            $certFile = $dir . 'fullchain.pem';
+            $keyFile = $dir . 'privkey.pem';
+            if (!\is_file($certFile) || !\is_file($keyFile)) {
+                continue;
+            }
+            $logical = \Weline\Server\Service\SslCertificateService::logicalDomainFromStorageSegment($segment);
+            $add($logical, $certFile, $keyFile);
+            foreach ($extractHostnames($certFile) as $name) {
+                $add($name, $certFile, $keyFile);
+                if (\str_starts_with($name, '*.') && $instanceHost !== '') {
+                    $root = \substr($name, 2);
+                    if ($root !== '' && \str_ends_with($instanceHost, '.' . $root)) {
+                        $add($instanceHost, $certFile, $keyFile);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 若 var/server/ssl_certificate_map.json 在磁盘上被更新，立即重载并应用到本进程 SSL 上下文（无需等 IPC）。
+ */
+function wlsSslReloadSniMapIfFileChanged(
+    string $mapFile,
+    float &$sniMapFileMtime,
+    array &$sniServerCerts,
+    ?array &$deferSslOptions,
+    $listenSocket,
+    string $sslCert,
+    string $sslKey,
+    int $cryptoMethod,
+    string $instanceName
+): void {
+    if (!\is_file($mapFile)) {
+        return;
+    }
+    \clearstatcache(true, $mapFile);
+    $mtime = (float) (@\filemtime($mapFile) ?: 0);
+    if ($mtime <= $sniMapFileMtime && $sniMapFileMtime > 0.0) {
+        return;
+    }
+    $sniMapFileMtime = $mtime;
+    $sniServerCerts = _loadSniCertsFromMap();
+    wlsSslMergeDefaultListenerHostnamesIntoSniMap($sniServerCerts, $sslCert, $sslKey, $instanceName);
+    wlsSslApplySniOptionsToContexts($deferSslOptions, $listenSocket, $sniServerCerts, $sslCert, $sslKey, $cryptoMethod);
 }
 
 // 域名策略缓存（force_https / force_root_to_www），由 _loadSniCertsFromMap() 填充
@@ -479,6 +626,10 @@ $_wlsRestoreAttempted = [];
 // 读取 SNI 证书映射（var/server/ssl_certificate_map.json）
 // 使用 _loadSniCertsFromMap() 函数加载，后续收到 ssl_cert_reload IPC 命令时可热更新
 $sniServerCerts = _loadSniCertsFromMap();
+wlsSslMergeDefaultListenerHostnamesIntoSniMap($sniServerCerts, $sslCert, $sslKey, $instanceName);
+WlsLogger::info_('[SSL] 初始化 SNI 映射，共 ' . \count($sniServerCerts) . ' 项：' . \implode(', ', \array_keys($sniServerCerts)));
+$sniMapFilePath = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
+$sniMapFileMtime = \is_file($sniMapFilePath) ? (float) @\filemtime($sniMapFilePath) : 0.0;
 
 // ========== 日志系统：直接使用 WlsLogger ==========
 // 检测模式（只检测一次）
@@ -905,6 +1056,7 @@ if ($useReusePort && !$supportsReusePort) {
 $socket = null;
 
 // 延迟 SSL 时共用：accept 后根据首包判断 HTTP 重定向或启用 SSL（同端口 http→https）
+$deferSslOptions = null;
 if ($deferSsl) {
     $deferSslOptions = [
         'local_cert' => $sslCert,
@@ -1241,7 +1393,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $orchestratorLaunchId
     );
     $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerSslControlHandler(
-        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$pendingMaintDrainReqId, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, $isMaintenanceWorker, &$activeFibers, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port): void {
+        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$pendingMaintDrainReqId, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, $isMaintenanceWorker, &$activeFibers, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port, &$deferSslOptions, $sslCert, $sslKey, $cryptoMethod, &$sniMapFileMtime, $sniMapFilePath, $instanceName): void {
             $type = $msg['type'] ?? '';
             // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR）
             if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
@@ -1332,10 +1484,13 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     $newSniCerts = _loadSniCertsFromMap();
                     // 合并：新 map 为主，手动清除的域名若已在磁盘则会被 map 重新加入
                     $sniServerCerts = $newSniCerts;
+                    wlsSslMergeDefaultListenerHostnamesIntoSniMap($sniServerCerts, $sslCert, $sslKey, $instanceName);
                     $newCount = \count($sniServerCerts);
                     $domainsStr = $newCount > 0 ? \implode(', ', \array_keys($sniServerCerts)) : '(空)';
                     $targetStr = empty($reloadDomains) ? '全量重载' : ('域名：' . \implode(', ', $reloadDomains));
                     WlsLogger::info_("收到 ssl_cert_reload（{$targetStr}），已热更新 SNI 证书映射（{$oldCount} → {$newCount}）：{$domainsStr}");
+                    $sniMapFileMtime = \is_file($sniMapFilePath) ? (float) @\filemtime($sniMapFilePath) : 0.0;
+                    wlsSslApplySniOptionsToContexts($deferSslOptions, $socket, $sniServerCerts, $sslCert, $sslKey, $cryptoMethod);
                     break;
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_ROUTING_POLICY:
@@ -1511,6 +1666,25 @@ $pendingPeekStartTimes = [];
 $pendingHandshakes = [];
 $pendingClose = [];
 $handshakeStartTimes = [];
+/** defer-ssl：_resolveSniCert 磁盘/DB 回退用的进程级缓存 */
+$sniDeferResolveCache = [];
+/** SNI 解析失败或为空时，用实例文件中的域名再选证（避免默认 PEM 与浏览器访问主机不一致） */
+$deferSslPreferredHost = '';
+if (\defined('BP')) {
+    $deferInstFile = BP . 'var' . \DIRECTORY_SEPARATOR . 'server' . \DIRECTORY_SEPARATOR . 'instances' . \DIRECTORY_SEPARATOR . $instanceName . '.json';
+    if (\is_file($deferInstFile)) {
+        $deferInst = \json_decode((string) @\file_get_contents($deferInstFile), true);
+        if (\is_array($deferInst)) {
+            foreach (['ssl_domain', 'public_host', 'host'] as $deferK) {
+                $deferH = isset($deferInst[$deferK]) ? \trim((string) $deferInst[$deferK]) : '';
+                if ($deferH !== '' && !\filter_var($deferH, \FILTER_VALIDATE_IP)) {
+                    $deferSslPreferredHost = $deferH;
+                    break;
+                }
+            }
+        }
+    }
+}
 $startTime = \time(); // 记录启动时间
 
 // Keep-Alive 连接超时配置（秒）
@@ -2171,6 +2345,18 @@ while (true) {
         $isDev
     );
 
+    wlsSslReloadSniMapIfFileChanged(
+        $sniMapFilePath,
+        $sniMapFileMtime,
+        $sniServerCerts,
+        $deferSslOptions,
+        $socket,
+        $sslCert,
+        $sslKey,
+        $cryptoMethod,
+        $instanceName
+    );
+
     wlsSslAdvancePeekState(
         $pendingPeek,
         $pendingPeekStartTimes,
@@ -2180,9 +2366,15 @@ while (true) {
         $requestBuffers,
         $connectionLastActivity,
         $read,
-        $deferSslOptions,
+        $deferSsl ? $deferSslOptions : null,
         $cryptoMethod,
-        $isDev
+        $isDev,
+        $sniServerCerts,
+        $sslCert,
+        $sslKey,
+        $sniDeferResolveCache,
+        $port,
+        $deferSslPreferredHost
     );
 
     wlsSslAdvanceHandshakeState(
@@ -2774,7 +2966,94 @@ function wlsSslAcceptNewConnections(
 }
 
 /**
- * Step-2: defer-ssl peek 状态推进（直接尝试握手，失败进入 pendingHandshakes 重试）。
+ * defer-ssl：按 ClientHello 中的 SNI 选择证书（映射 / 通配 / 磁盘 / 默认 PEM）。
+ *
+ * @param array<string, array{local_cert: string, local_pk: string}> $sniServerCerts
+ * @param array<string, mixed> $resolveCache
+ * @return array{local_cert: string, local_pk: string}
+ */
+function wlsSslPickCertificatePairForDeferSni(
+    ?string $sniHost,
+    array $sniServerCerts,
+    string $defaultCert,
+    string $defaultKey,
+    array &$resolveCache
+): array {
+    $fallback = ['local_cert' => $defaultCert, 'local_pk' => $defaultKey];
+    if ($defaultCert === '' || $defaultKey === '' || !\is_file($defaultCert) || !\is_file($defaultKey)) {
+        return $fallback;
+    }
+    $h = $sniHost !== null ? \strtolower(\trim($sniHost)) : '';
+    if ($h === '' || \filter_var($h, \FILTER_VALIDATE_IP)) {
+        return $fallback;
+    }
+    if (isset($sniServerCerts[$h])) {
+        $p = $sniServerCerts[$h];
+        if (($p['local_cert'] ?? '') !== '' && \is_file((string) $p['local_cert'])
+            && ($p['local_pk'] ?? '') !== '' && \is_file((string) $p['local_pk'])) {
+            return $p;
+        }
+    }
+    foreach ($sniServerCerts as $mappedName => $pair) {
+        if (!\is_string($mappedName) || !\str_starts_with($mappedName, '*.')) {
+            continue;
+        }
+        $root = \substr($mappedName, 2);
+        if ($root !== '' && \str_ends_with($h, '.' . $root)) {
+            if (($pair['local_cert'] ?? '') !== '' && \is_file((string) $pair['local_cert'])
+                && ($pair['local_pk'] ?? '') !== '' && \is_file((string) $pair['local_pk'])) {
+                return $pair;
+            }
+        }
+    }
+    $fromDisk = _resolveSniCert($h, $resolveCache);
+    if ($fromDisk !== null) {
+        return $fromDisk;
+    }
+
+    return $fallback;
+}
+
+/**
+ * defer-ssl accept 连接：对单流设置「单证书」SSL 上下文。
+ * PHP 在 stream_socket_enable_crypto 上对 SNI_server_certs 多映射支持不可靠，会触发 unrecognized_name；
+ * 此处关闭 SNI 多域映射，改用与本连接 ClientHello SNI 匹配的一对 PEM。
+ *
+ * @param array<string, mixed>|null $deferSslOptionsTemplate
+ */
+function wlsSslApplyPerConnectionSslForDeferHandshake(
+    $conn,
+    array $pair,
+    ?array $deferSslOptionsTemplate,
+    int $cryptoMethod
+): void {
+    $cipherSuite = \is_array($deferSslOptionsTemplate)
+        ? (string) ($deferSslOptionsTemplate['ciphers'] ?? '')
+        : '';
+    if ($cipherSuite === '') {
+        $cipherSuite = 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:HIGH:!aNULL:!MD5:!RC4';
+    }
+    $opts = [
+        'local_cert' => $pair['local_cert'],
+        'local_pk' => $pair['local_pk'],
+        'verify_peer' => false,
+        'verify_peer_name' => false,
+        'allow_self_signed' => true,
+        'disable_compression' => true,
+        'crypto_method' => $cryptoMethod,
+        'ciphers' => $cipherSuite,
+        'single_dh_use' => true,
+        'honor_cipher_order' => true,
+        'SNI_enabled' => false,
+    ];
+    foreach ($opts as $k => $v) {
+        @\stream_context_set_option($conn, 'ssl', (string) $k, $v);
+    }
+    @\stream_context_set_option($conn, 'ssl', 'SNI_server_certs', []);
+}
+
+/**
+ * Step-2: defer-ssl peek 状态推进（STREAM_PEEK 解析 SNI → 单连接证书 → 握手，失败进入 pendingHandshakes 重试）。
  *
  * @param array<int, array{conn: resource, peerName: string, buffer: string}> $pendingPeek
  * @param array<int, float> $pendingPeekStartTimes
@@ -2783,7 +3062,8 @@ function wlsSslAcceptNewConnections(
  * @param array<int, resource> $connections
  * @param array<int, string> $requestBuffers
  * @param array<int, int> $connectionLastActivity
- * @param array<string, mixed> $deferSslOptions
+ * @param array<string, array{local_cert: string, local_pk: string}> $sniServerCerts
+ * @param array<string, mixed> $sniDeferResolveCache
  */
 function wlsSslAdvancePeekState(
     array &$pendingPeek,
@@ -2794,11 +3074,20 @@ function wlsSslAdvancePeekState(
     array &$requestBuffers,
     array &$connectionLastActivity,
     array $read,
-    array $deferSslOptions,
+    ?array $deferSslOptions,
     int $cryptoMethod,
-    bool $isDev
+    bool $isDev,
+    array $sniServerCerts,
+    string $sslCert,
+    string $sslKey,
+    array &$sniDeferResolveCache,
+    int $publicTcpPort,
+    string $deferSslPreferredHost = ''
 ): void {
     if ($pendingPeek === []) {
+        return;
+    }
+    if ($deferSslOptions === null) {
         return;
     }
 
@@ -2817,8 +3106,77 @@ function wlsSslAdvancePeekState(
             continue;
         }
 
-        foreach ($deferSslOptions as $optName => $optValue) {
-            \stream_context_set_option($conn, 'ssl', $optName, $optValue);
+        $peeked = wlsSslPeekTcpPrefixNoConsume($conn);
+        if ($peeked === '') {
+            continue;
+        }
+
+        // 同端口 HTTP→HTTPS：首包非 TLS 时发 301（不解 peek，数据仍留给对端关闭后重试）
+        if (\ord($peeked[0]) !== 0x16) {
+            if (\preg_match('/^[A-Z][A-Z0-9-]*\s/', $peeked) === 1) {
+                $_host = '127.0.0.1';
+                if (\preg_match('/\r\nHost:\s*([^\r\n]+)/i', $peeked, $_hm)) {
+                    $_host = \strtolower(\trim(\explode(':', $_hm[1], 2)[0]));
+                }
+                $_loc = 'https://' . $_host;
+                if ($publicTcpPort !== 443) {
+                    $_loc .= ':' . $publicTcpPort;
+                }
+                $_path = '/';
+                if (\preg_match('/^[A-Z][A-Z0-9-]*\s+(\S+)/', $peeked, $_pm)) {
+                    $_pu = \parse_url($_pm[1], \PHP_URL_PATH);
+                    if (\is_string($_pu) && $_pu !== '') {
+                        $_path = $_pu;
+                    }
+                }
+                $_loc .= $_path;
+                $_resp = 'HTTP/1.1 301 Moved Permanently' . "\r\n"
+                    . 'Location: ' . $_loc . "\r\n"
+                    . 'Content-Length: 0' . "\r\n"
+                    . 'Connection: close' . "\r\n\r\n";
+                @\fwrite($conn, $_resp);
+            }
+            safeCloseStream($conn);
+            $completedPeeks[] = $connId;
+            continue;
+        }
+
+        if (\strlen($peeked) < 5) {
+            continue;
+        }
+        $tlsPayloadLen = (\ord($peeked[3]) << 8) | \ord($peeked[4]);
+        $recordNeed = 5 + $tlsPayloadLen;
+        if ($recordNeed > 65536 || $tlsPayloadLen < 0) {
+            $failedPeeks[] = $connId;
+            WlsLogger::warning_("Peek TLS 记录长度异常: {$peerName} (connId: {$connId})");
+            continue;
+        }
+        if (\strlen($peeked) < $recordNeed) {
+            continue;
+        }
+
+        $sniRaw = _parseSniHostFromClientHello($peeked);
+        $sniHostNorm = $sniRaw !== null && $sniRaw !== '' ? \strtolower(\trim((string) $sniRaw)) : null;
+        $effectiveHost = $sniHostNorm;
+        if ($effectiveHost === null || $effectiveHost === '') {
+            $ph = \strtolower(\trim($deferSslPreferredHost));
+            if ($ph !== '' && !\filter_var($ph, \FILTER_VALIDATE_IP)) {
+                $effectiveHost = $ph;
+            }
+        }
+        $pair = wlsSslPickCertificatePairForDeferSni(
+            $effectiveHost,
+            $sniServerCerts,
+            $sslCert,
+            $sslKey,
+            $sniDeferResolveCache
+        );
+        wlsSslApplyPerConnectionSslForDeferHandshake($conn, $pair, $deferSslOptions, $cryptoMethod);
+
+        if ($isDev) {
+            $sniLog = $sniHostNorm ?? '(none)';
+            $effLog = $effectiveHost ?? '(none)';
+            WlsLogger::info_("[SSL defer] ClientHello SNI={$sniLog} effective={$effLog} cert=" . $pair['local_cert']);
         }
 
         $cryptoResult = @\stream_socket_enable_crypto($conn, true, $cryptoMethod);
@@ -3224,6 +3582,7 @@ function safeCloseStream(mixed $conn): void
  */
 function logSslHandshakeFailure(string $peerName, int $connId, string $errorMsg): void
 {
+    // Scope: server-side inbound TLS handshakes only; Dispatcher/PassthroughCore TLS failures are outbound backend probes.
     $classification = \Weline\Server\Service\SslHandshakeFailureClassifier::classify($peerName, $connId, $errorMsg);
     if ($classification['level'] === 'info') {
         WlsLogger::info_($classification['message']);
@@ -3372,37 +3731,30 @@ function enqueueSseWriteAndAwaitDrain(
         return false;
     }
 
+    $currentBuffered = \strlen($writeBuffers[$connId] ?? '');
+    $appendLen = \strlen($data);
+    if (\Weline\Server\Service\WorkerResponseMemoryGuard::sseWriteBufferWouldExceed($currentBuffered, $appendLen)) {
+        WlsLogger::warning_(
+            'SSE 写缓冲超限，关闭连接 (connId: ' . $connId
+            . ', buffered=' . $currentBuffered . ', append=' . $appendLen . ')'
+        );
+        safeCloseStream($conn);
+        unset(
+            $connections[$connId],
+            $requestBuffers[$connId],
+            $connectionLastActivity[$connId],
+            $requestLogged[$connId],
+            $writeBuffers[$connId],
+            $writableConnections[$connId],
+            $pendingClose[$connId]
+        );
+
+        return false;
+    }
+
     $writeBuffers[$connId] = ($writeBuffers[$connId] ?? '') . $data;
     $writableConnections[$connId] = $conn;
     $connectionLastActivity[$connId] = \time();
-    return true;
-
-    $maxWaitSpins = 2000;
-    $spins = 0;
-    while (isset($connections[$connId]) && isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '') {
-        $spins++;
-        $streamStillOpen = \is_resource($conn) && \in_array(\get_resource_type($conn), ['stream', 'Socket'], true);
-        if (!$streamStillOpen) {
-            unset(
-                $connections[$connId],
-                $requestBuffers[$connId],
-                $connectionLastActivity[$connId],
-                $requestLogged[$connId],
-                $writeBuffers[$connId],
-                $writableConnections[$connId],
-                $pendingClose[$connId]
-            );
-            return false;
-        }
-
-        $connectionLastActivity[$connId] = \time();
-        if ($spins >= $maxWaitSpins) {
-            // 等待排空采用分片预算，避免单个长连接 Fiber 在此处长期驻留。
-            break;
-        }
-        \Weline\Framework\Runtime\SchedulerSystem::yield();
-    }
-
     return true;
 }
 
