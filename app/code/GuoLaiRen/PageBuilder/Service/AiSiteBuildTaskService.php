@@ -28,7 +28,10 @@ class AiSiteBuildTaskService
     public function ensureTaskScope(array $scope, array $websiteProfile, string $workspaceTrack): array
     {
         $pageTypes = \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : \array_keys(Page::getPageTypes());
-        $blueprint = $this->buildBlueprint($pageTypes, $scope, $websiteProfile, $workspaceTrack);
+        $blueprint = $this->buildBlueprintFromConfirmedTaskPlan($scope, $pageTypes, $workspaceTrack);
+        if ($blueprint === []) {
+            $blueprint = $this->buildBlueprint($pageTypes, $scope, $websiteProfile, $workspaceTrack);
+        }
         $existingBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
         $existingTasks = \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [];
         $signature = (string)($blueprint['signature'] ?? '');
@@ -127,6 +130,131 @@ class AiSiteBuildTaskService
     }
 
     /**
+     * 第二阶段确认后，后续构建必须严格吃 confirmed task plan 拆好的 execution_blueprint.tasks，
+     * 不再回退到按页面 section 重新推导任务。
+     *
+     * @param array<string, mixed> $scope
+     * @param list<string> $fallbackPageTypes
+     * @return array<string, mixed>
+     */
+    private function buildBlueprintFromConfirmedTaskPlan(array $scope, array $fallbackPageTypes, string $workspaceTrack): array
+    {
+        if ((int)($scope['task_plan_confirmed'] ?? 0) !== 1) {
+            return [];
+        }
+
+        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
+        $confirmedPlan = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
+        $executionBlueprint = \is_array($confirmedPlan['execution_blueprint'] ?? null) ? $confirmedPlan['execution_blueprint'] : [];
+        $executionTasks = \is_array($executionBlueprint['tasks'] ?? null) ? $executionBlueprint['tasks'] : [];
+        if ($executionTasks === []) {
+            return [];
+        }
+
+        $sharedTaskLookup = $this->buildTaskLookup(
+            \is_array($confirmedPlan['shared_tasks'] ?? null) ? $confirmedPlan['shared_tasks'] : []
+        );
+        $pageTaskLookup = $this->buildPageTaskLookup(
+            \is_array($confirmedPlan['page_tasks'] ?? null) ? $confirmedPlan['page_tasks'] : []
+        );
+
+        $pageTypeMap = [];
+        $tasks = [];
+        foreach ($executionTasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+
+            $pageType = \trim((string)($task['page_type'] ?? ''));
+            if ($pageType !== '') {
+                $pageTypeMap[$pageType] = $pageType;
+            }
+
+            $meta = $pageType === ''
+                ? (\is_array($sharedTaskLookup[$taskKey] ?? null) ? $sharedTaskLookup[$taskKey] : [])
+                : (\is_array($pageTaskLookup[$taskKey] ?? null) ? $pageTaskLookup[$taskKey] : []);
+
+            $region = $pageType === ''
+                ? $this->resolveSharedRegionFromTask($taskKey, $meta)
+                : 'content';
+            $sectionCode = $pageType === ''
+                ? ''
+                : $this->resolveSectionCodeFromTask($taskKey, $meta);
+            $label = \trim((string)($meta['label'] ?? $task['label'] ?? ''));
+            if ($label === '') {
+                $label = $pageType === ''
+                    ? \ucfirst($region !== '' ? $region : 'shared')
+                    : ($sectionCode !== '' ? $sectionCode : $taskKey);
+            }
+
+            $tasks[] = [
+                'task_key' => $taskKey,
+                'task_type' => $pageType === '' ? 'shared_component' : 'page_section',
+                'scope_key' => $this->resolveScopeKeyForTask($pageType, $region, $sectionCode, $meta),
+                'group_key' => \trim((string)($task['group_key'] ?? $meta['group_key'] ?? ($pageType === '' ? 'shared' : $pageType))),
+                'page_type' => $pageType,
+                'region' => $region,
+                'section_code' => $sectionCode,
+                'section_key' => (string)($meta['section_key'] ?? $sectionCode),
+                'label' => $label,
+                'sort_order' => (int)($task['sort_order'] ?? $meta['sort_order'] ?? 0),
+                'dependencies' => \array_values(\array_filter(\array_map(
+                    'strval',
+                    \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []
+                ))),
+                'can_parallel' => (bool)($task['can_parallel'] ?? true),
+                'materialize_after_done' => (bool)($task['materialize_after_done'] ?? ($pageType !== '')),
+                'materialize_policy' => \trim((string)($task['materialize_policy'] ?? ($pageType === '' ? 'none' : 'page'))),
+                'prompt_template_key' => \trim((string)($task['prompt_template_key'] ?? 'stage2_task_execute')),
+                'prompt_variables' => \is_array($task['prompt_variables'] ?? null) ? $task['prompt_variables'] : [],
+                'progress_weight' => (float)($task['progress_weight'] ?? 1.0),
+                'result_ref' => \is_array($task['result_ref'] ?? null)
+                    ? $task['result_ref']
+                    : (\is_array($meta['result_ref'] ?? null) ? $meta['result_ref'] : []),
+                'runtime_context' => \is_array($task['runtime_context'] ?? null)
+                    ? $task['runtime_context']
+                    : (\is_array($meta['runtime_context'] ?? null) ? $meta['runtime_context'] : []),
+            ];
+        }
+
+        if ($tasks === []) {
+            return [];
+        }
+
+        \usort($tasks, static fn(array $left, array $right): int => ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0)));
+        $pageTypes = \array_values($pageTypeMap);
+        if ($pageTypes === []) {
+            $pageTypes = \array_values(\array_filter(\array_map(
+                static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+                $fallbackPageTypes
+            ), static fn(string $value): bool => $value !== ''));
+        }
+
+        $confirmedSignature = \trim((string)($confirmedPlan['signature'] ?? $virtualThemePlan['confirmed_signature'] ?? ''));
+        return [
+            'version' => self::BLUEPRINT_VERSION,
+            'source' => 'stage2_confirmed_task_plan',
+            'workspace_track' => $workspaceTrack,
+            'page_types' => $pageTypes,
+            'page_blueprints' => [],
+            'task_plan_signature' => $confirmedSignature,
+            'tasks' => $tasks,
+            'signature' => \sha1((string)\json_encode([
+                'version' => self::BLUEPRINT_VERSION,
+                'source' => 'stage2_confirmed_task_plan',
+                'workspace_track' => $workspaceTrack,
+                'task_plan_signature' => $confirmedSignature,
+                'page_types' => $pageTypes,
+                'tasks' => $tasks,
+            ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $scope
      * @return list<array<string, mixed>>
      */
@@ -141,7 +269,8 @@ class AiSiteBuildTaskService
                 continue;
             }
             $state = \is_array($taskState[$taskKey] ?? null) ? $taskState[$taskKey] : [];
-            if ((string)($state['status'] ?? self::TASK_STATUS_PENDING) === self::TASK_STATUS_DONE) {
+            $status = $this->normalizeTaskStatus((string)($state['status'] ?? self::TASK_STATUS_PENDING));
+            if (\in_array($status, [self::TASK_STATUS_DONE, self::TASK_STATUS_CANCELLED], true)) {
                 continue;
             }
             $pending[] = \array_replace($task, $state);
@@ -149,6 +278,76 @@ class AiSiteBuildTaskService
         \usort($pending, static fn(array $left, array $right): int => ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0)));
 
         return $pending;
+    }
+
+    /**
+     * 按依赖与页面分布挑选一批可并发调度的任务：
+     * - shared 未完成前，仅调度 shared 任务
+     * - shared 完成后，优先按 page_type 打散（每页先取 1 个），再补齐窗口
+     *
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    public function pickConcurrentTasks(array $scope, int $maxConcurrent = 3): array
+    {
+        $maxConcurrent = \max(1, $maxConcurrent);
+        $pending = $this->listPendingTasks($scope);
+        if ($pending === []) {
+            return [];
+        }
+        $sharedDone = $this->isTaskDispatchSatisfied($scope, 'shared:header') && $this->isTaskDispatchSatisfied($scope, 'shared:footer');
+        if (!$sharedDone) {
+            $sharedOnly = \array_values(\array_filter($pending, static fn(array $task): bool => (string)($task['task_type'] ?? '') === 'shared_component'));
+            return \array_slice($sharedOnly, 0, $maxConcurrent);
+        }
+
+        $nonParallelTasks = \array_values(\array_filter(
+            $pending,
+            static fn(array $task): bool =>
+                (string)($task['task_type'] ?? '') === 'page_section'
+                && !(bool)($task['can_parallel'] ?? true)
+        ));
+        if ($nonParallelTasks !== []) {
+            return [$nonParallelTasks[0]];
+        }
+
+        $pageBuckets = [];
+        $selected = [];
+        foreach ($pending as $task) {
+            $taskType = (string)($task['task_type'] ?? '');
+            if ($taskType !== 'page_section') {
+                continue;
+            }
+            $pageType = \trim((string)($task['page_type'] ?? ''));
+            if ($pageType === '') {
+                continue;
+            }
+            $pageBuckets[$pageType] ??= [];
+            $pageBuckets[$pageType][] = $task;
+        }
+
+        // 第一轮：每个 page_type 先取 1 个，尽量并发分布到不同页面。
+        foreach ($pageBuckets as $pageType => $tasks) {
+            if ($tasks === []) {
+                continue;
+            }
+            $selected[] = $tasks[0];
+            \array_shift($pageBuckets[$pageType]);
+            if (\count($selected) >= $maxConcurrent) {
+                return $selected;
+            }
+        }
+        // 第二轮：补齐并发窗口。
+        foreach ($pageBuckets as $tasks) {
+            foreach ($tasks as $task) {
+                $selected[] = $task;
+                if (\count($selected) >= $maxConcurrent) {
+                    return $selected;
+                }
+            }
+        }
+
+        return $selected;
     }
 
     /**
@@ -297,6 +496,7 @@ class AiSiteBuildTaskService
             'pending' => 0,
             'running' => 0,
             'failed' => 0,
+            'cancelled' => 0,
             'groups' => [],
         ];
 
@@ -307,16 +507,10 @@ class AiSiteBuildTaskService
             }
             $groupKey = (string)($task['group_key'] ?? 'shared');
             $pageType = (string)($task['page_type'] ?? '');
-            $status = (string)(($taskState[$taskKey]['status'] ?? self::TASK_STATUS_PENDING));
-            $status = \in_array($status, [
-                self::TASK_STATUS_DONE,
-                self::TASK_STATUS_RUNNING,
-                self::TASK_STATUS_FAILED,
-                self::TASK_STATUS_CANCELLED,
-            ], true) ? $status : self::TASK_STATUS_PENDING;
+            $status = $this->normalizeTaskStatus((string)($taskState[$taskKey]['status'] ?? self::TASK_STATUS_PENDING));
 
             $summary['total']++;
-            $summary[$status === self::TASK_STATUS_CANCELLED ? 'pending' : $status]++;
+            $summary[$status]++;
             if (!isset($summary['groups'][$groupKey])) {
                 $summary['groups'][$groupKey] = [
                     'page_type' => $pageType,
@@ -325,10 +519,26 @@ class AiSiteBuildTaskService
                     'pending' => 0,
                     'running' => 0,
                     'failed' => 0,
+                    'cancelled' => 0,
+                    'tasks' => [],
                 ];
             }
             $summary['groups'][$groupKey]['total']++;
-            $summary['groups'][$groupKey][$status === self::TASK_STATUS_CANCELLED ? 'pending' : $status]++;
+            $summary['groups'][$groupKey][$status]++;
+            $summary['groups'][$groupKey]['tasks'][] = [
+                'task_key' => $taskKey,
+                'label' => (string)($task['label'] ?? $taskKey),
+                'section_code' => (string)($task['section_code'] ?? ''),
+                'component' => (string)($task['component'] ?? ''),
+                'task_type' => (string)($task['task_type'] ?? ''),
+                'page_type' => $pageType,
+                'group_key' => $groupKey,
+                'status' => $status,
+                'attempt_no' => (int)($taskState[$taskKey]['attempt_no'] ?? 0),
+                'message' => (string)($taskState[$taskKey]['message'] ?? ''),
+                'updated_at' => (string)($taskState[$taskKey]['updated_at'] ?? ''),
+                'finished_at' => (string)($taskState[$taskKey]['finished_at'] ?? ''),
+            ];
         }
 
         return $summary;
@@ -340,14 +550,27 @@ class AiSiteBuildTaskService
      */
     public function hasPendingTasks(array $scope): bool
     {
-        foreach ($this->listPendingTasks($scope) as $task) {
-            $status = (string)($task['status'] ?? self::TASK_STATUS_PENDING);
-            if ($status !== self::TASK_STATUS_DONE) {
-                return true;
-            }
-        }
+        return $this->listPendingTasks($scope) !== [];
+    }
 
-        return false;
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function isTaskDone(array $scope, string $taskKey): bool
+    {
+        $taskState = $this->extractTaskState($scope);
+        return (string)($taskState[$taskKey]['status'] ?? self::TASK_STATUS_PENDING) === self::TASK_STATUS_DONE;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function isTaskDispatchSatisfied(array $scope, string $taskKey): bool
+    {
+        $taskState = $this->extractTaskState($scope);
+        $status = $this->normalizeTaskStatus((string)($taskState[$taskKey]['status'] ?? self::TASK_STATUS_PENDING));
+
+        return \in_array($status, [self::TASK_STATUS_DONE, self::TASK_STATUS_CANCELLED], true);
     }
 
     /**
@@ -391,6 +614,16 @@ class AiSiteBuildTaskService
             $taskState[$taskKey] = [
                 'task_key' => $taskKey,
                 'task_type' => (string)($task['task_type'] ?? ''),
+                'group_key' => (string)($task['group_key'] ?? ''),
+                'page_type' => (string)($task['page_type'] ?? ''),
+                'section_code' => (string)($task['section_code'] ?? ''),
+                'dependencies' => \array_values(\array_filter(\array_map(
+                    'strval',
+                    \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []
+                ))),
+                'can_parallel' => (bool)($task['can_parallel'] ?? true),
+                'progress_weight' => (float)($task['progress_weight'] ?? 1.0),
+                'runtime_context' => \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [],
                 'status' => self::TASK_STATUS_PENDING,
                 'attempt_no' => 0,
                 'message' => '',
@@ -441,5 +674,114 @@ class AiSiteBuildTaskService
         $scope['build_tasks'] = $tasks;
 
         return $scope;
+    }
+
+    private function normalizeTaskStatus(string $status): string
+    {
+        return \in_array($status, [
+            self::TASK_STATUS_PENDING,
+            self::TASK_STATUS_RUNNING,
+            self::TASK_STATUS_DONE,
+            self::TASK_STATUS_FAILED,
+            self::TASK_STATUS_CANCELLED,
+        ], true) ? $status : self::TASK_STATUS_PENDING;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $tasks
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildTaskLookup(array $tasks): array
+    {
+        $lookup = [];
+        foreach ($tasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+            $lookup[$taskKey] = $task;
+        }
+
+        return $lookup;
+    }
+
+    /**
+     * @param array<string, list<array<string, mixed>>> $pageTasks
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildPageTaskLookup(array $pageTasks): array
+    {
+        $lookup = [];
+        foreach ($pageTasks as $tasks) {
+            if (!\is_array($tasks)) {
+                continue;
+            }
+            foreach ($tasks as $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $taskKey = \trim((string)($task['task_key'] ?? ''));
+                if ($taskKey === '') {
+                    continue;
+                }
+                $lookup[$taskKey] = $task;
+            }
+        }
+
+        return $lookup;
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function resolveSharedRegionFromTask(string $taskKey, array $meta): string
+    {
+        $region = \trim((string)($meta['region'] ?? ''));
+        if ($region !== '') {
+            return $region;
+        }
+        if (\str_starts_with($taskKey, 'shared:')) {
+            return \trim(\substr($taskKey, 7));
+        }
+
+        return 'shared';
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function resolveSectionCodeFromTask(string $taskKey, array $meta): string
+    {
+        $sectionCode = \trim((string)($meta['section_code'] ?? ''));
+        if ($sectionCode !== '') {
+            return $sectionCode;
+        }
+        if (\preg_match('/^[^:]+:[^:]+:(.+)$/', $taskKey, $matches) === 1) {
+            return \trim((string)($matches[1] ?? ''));
+        }
+
+        return \trim((string)($meta['block_key'] ?? ''));
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function resolveScopeKeyForTask(string $pageType, string $region, string $sectionCode, array $meta): string
+    {
+        $scopeKey = \trim((string)($meta['scope_key'] ?? ''));
+        if ($scopeKey !== '') {
+            return $scopeKey;
+        }
+        if ($pageType === '') {
+            return 'shared_components.' . ($region !== '' ? $region : 'shared');
+        }
+        if ($sectionCode !== '') {
+            return 'page_sections.' . $pageType . '.' . $sectionCode;
+        }
+
+        return 'page_sections.' . $pageType;
     }
 }

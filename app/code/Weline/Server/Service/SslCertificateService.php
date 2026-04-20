@@ -33,6 +33,7 @@ class SslCertificateService
      * 证书颁发者标识
      */
     public const ISSUER_SELF_SIGNED = 'Weline Self-Signed';
+    public const ISSUER_LOCAL_CA = 'Weline Local Development CA';
     public const ISSUER_LETS_ENCRYPT = "Let's Encrypt";
     public const ISSUER_LITESSL = 'Sectigo';
     public const ISSUER_UNKNOWN = 'Unknown';
@@ -43,6 +44,12 @@ class SslCertificateService
     public const PROVIDER_LETS_ENCRYPT = 'letsencrypt';
     public const PROVIDER_LITESSL = 'litessl';
     public const PROVIDER_SELF_SIGNED = 'self_signed';
+    public const PROVIDER_LOCAL_CA = 'local_ca';
+
+    private const LOCAL_CA_DIRNAME = '_local_ca';
+    private const LOCAL_CA_CERT_FILENAME = 'rootCA.pem';
+    private const LOCAL_CA_KEY_FILENAME = 'rootCA.key';
+    private const LOCAL_CA_SERIAL_FILENAME = 'serial.txt';
 
     /**
      * ACME 申请进行中锁文件（位于 app/etc/ssl/{domain}/），用于避免颁发过程中 sync/页面同步覆盖证书记录
@@ -235,6 +242,7 @@ class SslCertificateService
             'letsencrypt', 'let\'s encrypt', 'le' => self::PROVIDER_LETS_ENCRYPT,
             'litessl', 'lite-ssl', 'lite_ssl' => self::PROVIDER_LITESSL,
             'self-signed', 'self_signed', 'selfsigned' => self::PROVIDER_SELF_SIGNED,
+            'local-ca', 'local_ca', 'localca', 'dev-ca', 'dev_ca' => self::PROVIDER_LOCAL_CA,
             default => $provider,
         };
     }
@@ -244,7 +252,19 @@ class SslCertificateService
      */
     protected function isSupportedProvider(string $provider): bool
     {
-        return \in_array($provider, [self::PROVIDER_LETS_ENCRYPT, self::PROVIDER_LITESSL, self::PROVIDER_SELF_SIGNED], true);
+        return \in_array($provider, [
+            self::PROVIDER_LETS_ENCRYPT,
+            self::PROVIDER_LITESSL,
+            self::PROVIDER_SELF_SIGNED,
+            self::PROVIDER_LOCAL_CA,
+        ], true);
+    }
+
+    protected function isLocalManagedProvider(string $provider): bool
+    {
+        $provider = $this->normalizeAcmeProvider($provider);
+
+        return \in_array($provider, [self::PROVIDER_SELF_SIGNED, self::PROVIDER_LOCAL_CA], true);
     }
     
     /**
@@ -439,6 +459,11 @@ class SslCertificateService
             return null;
         }
 
+        if ($this->shouldUseTrustedLocalCertificateAuthority($domain)
+            && $this->normalizeAcmeProvider((string) $wildcardCert->getProvider()) !== self::PROVIDER_LOCAL_CA) {
+            return null;
+        }
+
         $certPem  = $wildcardCert->getCertPem();
         $keyPem   = $wildcardCert->getKeyPem();
         if ($certPem === '' || $keyPem === '') {
@@ -489,6 +514,8 @@ class SslCertificateService
             '[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请',
             [$domain, $rootDomain]
         ));
+
+        $this->regenerateCertificateMap();
 
         return [
             'success'     => true,
@@ -551,6 +578,7 @@ class SslCertificateService
         // 1. 检查本地证书文件是否存在且未过期，若有则入库后直接使用（避免每次重新申请）
         if ($this->isCertificateValid($certPath) && \is_file($keyPath)) {
             $this->syncCertificateRecordFromFiles($domain, $certPath, $keyPath, $websiteId, true);
+            $this->regenerateCertificateMap();
             $certInfo = $this->parseCertificate($certPath);
             return [
                 'success' => true,
@@ -567,11 +595,15 @@ class SslCertificateService
         // 2. 判断使用自签证书还是 ACME（Let's Encrypt / LiteSSL）
         // 只看域名本身：本地域名/IP、或解析到回环地址 → 自签
         // 线上域名即使在 dev 环境也用 ACME 申请真证书
-        $useSelfsigned = $this->isLocalDomain($domain) 
-            || $this->resolvesToLoopback($domain);
+        $useSelfsigned = $this->shouldUseTrustedLocalCertificateAuthority($domain);
         
         if ($useSelfsigned) {
             // 开发环境、本地域名、或解析到本地地址：生成自签证书
+            $localCaResult = $this->generateLocalCaSignedCertificate($domain, $websiteId);
+            if ($localCaResult['success'] ?? false) {
+                return $localCaResult;
+            }
+
             return $this->generateSelfSignedCertificate($domain, $websiteId);
         } else {
             // 生产环境且域名解析到公网 IP：申请 Let's Encrypt 证书
@@ -726,6 +758,396 @@ CNF;
         }
         
         return $config;
+    }
+
+    protected function shouldUseTrustedLocalCertificateAuthority(string $domain): bool
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return false;
+        }
+
+        return $this->isLocalDomain($domain) || $this->resolvesToLoopback($domain);
+    }
+
+    protected function getLocalCaDir(): string
+    {
+        $dir = Env::VAR_DIR . 'server' . DS . self::LOCAL_CA_DIRNAME . DS;
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0700, true);
+        }
+
+        return $dir;
+    }
+
+    protected function getLocalCaCertPath(): string
+    {
+        return $this->getLocalCaDir() . self::LOCAL_CA_CERT_FILENAME;
+    }
+
+    protected function getLocalCaKeyPath(): string
+    {
+        return $this->getLocalCaDir() . self::LOCAL_CA_KEY_FILENAME;
+    }
+
+    protected function getLocalCaSerialPath(): string
+    {
+        return $this->getLocalCaDir() . self::LOCAL_CA_SERIAL_FILENAME;
+    }
+
+    protected function buildLocalCaOpenSslConfig(): string
+    {
+        return <<<CNF
+[ req ]
+default_bits = 2048
+default_md = sha256
+distinguished_name = dn
+x509_extensions = v3_ca
+
+[ dn ]
+CN = Weline Local Development CA
+
+[ v3_ca ]
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer
+basicConstraints = critical, CA:true
+keyUsage = critical, digitalSignature, cRLSign, keyCertSign
+CNF;
+    }
+
+    protected function buildServerLeafOpenSslConfig(string $domain, array $sanEntries): string
+    {
+        $altNames = [];
+        $dnsIndex = 1;
+        foreach ($sanEntries['dns'] as $dns) {
+            $altNames[] = "DNS.{$dnsIndex} = {$dns}";
+            $dnsIndex++;
+        }
+
+        $ipIndex = 1;
+        foreach ($sanEntries['ip'] as $ipAddr) {
+            $altNames[] = "IP.{$ipIndex} = {$ipAddr}";
+            $ipIndex++;
+        }
+
+        $altNamesStr = \implode("\n", $altNames);
+
+        return <<<CNF
+[ req ]
+default_bits = 2048
+default_md = sha256
+distinguished_name = dn
+req_extensions = v3_req
+x509_extensions = v3_leaf
+
+[ dn ]
+CN = {$domain}
+
+[ v3_req ]
+subjectAltName = @alt_names
+
+[ v3_leaf ]
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid,issuer
+basicConstraints = critical, CA:false
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[ alt_names ]
+{$altNamesStr}
+CNF;
+    }
+
+    protected function getOpensslConfigForLocalCaLeaf(string $domain): array
+    {
+        $opensslConfig = $this->getOpensslConfig();
+        $sanEntries = $this->collectSanEntries($domain);
+        if (empty($sanEntries['dns']) && empty($sanEntries['ip'])) {
+            return $opensslConfig;
+        }
+
+        $configHash = \md5('local-ca-leaf:' . $domain . \serialize($sanEntries));
+        $configPath = $this->getLocalCaDir() . "openssl_leaf_{$configHash}.cnf";
+        @\file_put_contents($configPath, $this->buildServerLeafOpenSslConfig($domain, $sanEntries));
+        if (\is_file($configPath)) {
+            $opensslConfig['config'] = $configPath;
+        }
+
+        return $opensslConfig;
+    }
+
+    protected function ensureLocalCertificateAuthority(): array
+    {
+        $certPath = $this->getLocalCaCertPath();
+        $keyPath = $this->getLocalCaKeyPath();
+        if ($this->isCertificateValid($certPath) && \is_file($keyPath)) {
+            return [
+                'success' => true,
+                'cert_path' => $certPath,
+                'key_path' => $keyPath,
+                'is_new' => false,
+            ];
+        }
+
+        $opensslConfig = $this->getOpensslConfig();
+        $configPath = $this->getLocalCaDir() . 'openssl_local_ca.cnf';
+        @\file_put_contents($configPath, $this->buildLocalCaOpenSslConfig());
+        if (\is_file($configPath)) {
+            $opensslConfig['config'] = $configPath;
+        }
+
+        $privateKey = \openssl_pkey_new($opensslConfig);
+        if (!$privateKey) {
+            return ['success' => false, 'message' => __('Failed to generate local CA private key')];
+        }
+
+        $dn = [
+            'countryName' => 'CN',
+            'stateOrProvinceName' => 'Development',
+            'localityName' => 'Local',
+            'organizationName' => 'Weline Framework',
+            'organizationalUnitName' => 'Development',
+            'commonName' => self::ISSUER_LOCAL_CA,
+            'emailAddress' => 'dev@weline.localhost',
+        ];
+
+        $csr = \openssl_csr_new($dn, $privateKey, $opensslConfig);
+        if (!$csr) {
+            return ['success' => false, 'message' => __('Failed to generate local CA CSR')];
+        }
+
+        $cert = \openssl_csr_sign($csr, null, $privateKey, 3650, $opensslConfig, 1);
+        if (!$cert) {
+            return ['success' => false, 'message' => __('Failed to sign local CA certificate')];
+        }
+
+        \openssl_x509_export($cert, $certPem);
+        if (!\openssl_pkey_export($privateKey, $keyPem, null, isset($opensslConfig['config']) ? ['config' => $opensslConfig['config']] : [])) {
+            return ['success' => false, 'message' => __('Failed to export local CA private key')];
+        }
+
+        if (!$certPem || @\file_put_contents($certPath, $certPem) === false) {
+            return ['success' => false, 'message' => __('Failed to persist local CA certificate')];
+        }
+        if (!$keyPem || @\file_put_contents($keyPath, $keyPem) === false) {
+            return ['success' => false, 'message' => __('Failed to persist local CA private key')];
+        }
+
+        @\chmod($certPath, 0644);
+        @\chmod($keyPath, 0600);
+
+        return [
+            'success' => true,
+            'cert_path' => $certPath,
+            'key_path' => $keyPath,
+            'is_new' => true,
+        ];
+    }
+
+    protected function normalizeCertificateFingerprint(string $value): string
+    {
+        return \strtoupper((string) \preg_replace('/[^A-F0-9]/i', '', $value));
+    }
+
+    protected function isLocalCertificateAuthorityTrustedOnWindows(string $caCertPath): bool
+    {
+        if (!\is_file($caCertPath) || !\function_exists('openssl_x509_fingerprint')) {
+            return false;
+        }
+
+        $certPem = (string) @\file_get_contents($caCertPath);
+        if ($certPem === '') {
+            return false;
+        }
+
+        $fingerprint = \openssl_x509_fingerprint($certPem, 'sha1');
+        if (!\is_string($fingerprint) || $fingerprint === '') {
+            return false;
+        }
+
+        $storeOutput = (string) @\shell_exec('certutil -user -store Root 2>&1');
+        if ($storeOutput === '') {
+            return false;
+        }
+
+        return \str_contains(
+            $this->normalizeCertificateFingerprint($storeOutput),
+            $this->normalizeCertificateFingerprint($fingerprint)
+        );
+    }
+
+    protected function trustLocalCertificateAuthority(string $caCertPath): array
+    {
+        if (!\is_file($caCertPath)) {
+            return ['success' => false, 'trusted' => false, 'message' => __('Local CA certificate file is missing: %{1}', [$caCertPath])];
+        }
+
+        if (\PHP_OS_FAMILY === 'Windows') {
+            if ($this->isLocalCertificateAuthorityTrustedOnWindows($caCertPath)) {
+                return ['success' => true, 'trusted' => true, 'message' => __('Local CA is already trusted by the current Windows user')];
+            }
+
+            $whereOutput = (string) @\shell_exec('where certutil.exe 2>NUL');
+            if (\trim($whereOutput) === '') {
+                return [
+                    'success' => false,
+                    'trusted' => false,
+                    'message' => __('Failed to find certutil.exe; import %{1} into Current User > Trusted Root Certification Authorities manually', [$caCertPath]),
+                ];
+            }
+
+            @\shell_exec('certutil -user -addstore Root ' . \escapeshellarg($caCertPath) . ' 2>&1');
+            if ($this->isLocalCertificateAuthorityTrustedOnWindows($caCertPath)) {
+                return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into Current User Root store')];
+            }
+
+            return [
+                'success' => false,
+                'trusted' => false,
+                'message' => __('Local CA was generated, but automatic trust import failed. Import %{1} into Current User > Trusted Root Certification Authorities manually', [$caCertPath]),
+            ];
+        }
+
+        return [
+            'success' => true,
+            'trusted' => false,
+            'message' => __('Local CA was generated. Trust it manually in your OS/browser with %{1}', [$caCertPath]),
+        ];
+    }
+
+    protected function nextLocalCaSerial(): int
+    {
+        $serialPath = $this->getLocalCaSerialPath();
+        $current = 1000;
+        if (\is_file($serialPath)) {
+            $stored = (int) \trim((string) @\file_get_contents($serialPath));
+            if ($stored > 0) {
+                $current = $stored;
+            }
+        }
+
+        $next = $current + 1;
+        @\file_put_contents($serialPath, (string) $next);
+
+        return $current;
+    }
+
+    public function generateLocalCaSignedCertificate(string $domain, int $websiteId = 0, int $validDays = 825): array
+    {
+        try {
+            $domain = \strtolower(\trim($domain));
+            if ($domain === '') {
+                return ['success' => false, 'message' => __('Domain cannot be empty')];
+            }
+
+            $ca = $this->ensureLocalCertificateAuthority();
+            if (!($ca['success'] ?? false)) {
+                return $ca;
+            }
+
+            $trust = $this->trustLocalCertificateAuthority((string) $ca['cert_path']);
+
+            $certDir = $this->getCertificateDir($domain);
+            $certPath = $certDir . 'fullchain.pem';
+            $keyPath = $certDir . 'privkey.pem';
+            $chainPath = $certDir . 'chain.pem';
+
+            $opensslConfig = $this->getOpensslConfigForLocalCaLeaf($domain);
+            $privateKey = \openssl_pkey_new($opensslConfig);
+            if (!$privateKey) {
+                return ['success' => false, 'message' => __('Failed to generate local leaf private key')];
+            }
+
+            $dn = [
+                'countryName' => 'CN',
+                'stateOrProvinceName' => 'Development',
+                'localityName' => 'Local',
+                'organizationName' => 'Weline Framework',
+                'organizationalUnitName' => 'Development',
+                'commonName' => $domain,
+                'emailAddress' => 'dev@' . $domain,
+            ];
+
+            $csr = \openssl_csr_new($dn, $privateKey, $opensslConfig);
+            if (!$csr) {
+                return ['success' => false, 'message' => __('Failed to generate local leaf CSR')];
+            }
+
+            $caCertPem = (string) @\file_get_contents((string) $ca['cert_path']);
+            $caKeyPem = (string) @\file_get_contents((string) $ca['key_path']);
+            $caCert = \openssl_x509_read($caCertPem);
+            $caKey = \openssl_pkey_get_private($caKeyPem);
+            if (!$caCert || !$caKey) {
+                return ['success' => false, 'message' => __('Failed to load local CA certificate or private key')];
+            }
+
+            $leafCert = \openssl_csr_sign(
+                $csr,
+                $caCert,
+                $caKey,
+                $validDays,
+                $opensslConfig,
+                $this->nextLocalCaSerial()
+            );
+            if (!$leafCert) {
+                return ['success' => false, 'message' => __('Failed to sign local certificate with local CA')];
+            }
+
+            \openssl_x509_export($leafCert, $leafCertPem);
+            if (!\openssl_pkey_export($privateKey, $keyPem, null, isset($opensslConfig['config']) ? ['config' => $opensslConfig['config']] : [])) {
+                return ['success' => false, 'message' => __('Failed to export local certificate private key')];
+            }
+
+            $fullchainPem = \rtrim($leafCertPem) . "\n" . \rtrim($caCertPem) . "\n";
+            if (!$fullchainPem || @\file_put_contents($certPath, $fullchainPem) === false) {
+                return ['success' => false, 'message' => __('Failed to persist local fullchain certificate')];
+            }
+            if (!$keyPem || @\file_put_contents($keyPath, $keyPem) === false) {
+                return ['success' => false, 'message' => __('Failed to persist local certificate private key')];
+            }
+            @\file_put_contents($certDir . 'cert.pem', $leafCertPem);
+            @\file_put_contents($chainPath, $caCertPem);
+            @\file_put_contents($certDir . 'domain.key', $keyPem);
+            $csrPem = '';
+            if (\openssl_csr_export($csr, $csrPem)) {
+                @\file_put_contents($certDir . 'csr.pem', $csrPem);
+            }
+
+            @\chmod($certPath, 0644);
+            @\chmod($keyPath, 0600);
+
+            $saved = $this->updateCertificateRecord(
+                $domain,
+                $certPath,
+                $keyPath,
+                self::ISSUER_LOCAL_CA,
+                $validDays,
+                $websiteId,
+                self::PROVIDER_LOCAL_CA
+            );
+            if (!$saved) {
+                return ['success' => false, 'message' => __('Local certificate files were generated, but saving the certificate record failed')];
+            }
+
+            $message = $trust['trusted'] ?? false
+                ? __('Local CA-signed certificate generated and trusted successfully')
+                : (($trust['message'] ?? '') !== '' ? (string) $trust['message'] : __('Local CA-signed certificate generated successfully'));
+
+            return [
+                'success' => true,
+                'message' => $message,
+                'cert_path' => $certPath,
+                'key_path' => $keyPath,
+                'issuer' => self::ISSUER_LOCAL_CA,
+                'expires_at' => \date('Y-m-d H:i:s', \strtotime("+{$validDays} days")),
+                'is_new' => true,
+                'ssl_enabled' => true,
+                'trusted' => (bool) ($trust['trusted'] ?? false),
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
     }
     
     /**
@@ -893,26 +1315,16 @@ CNF;
     }
     
     /**
-     * 是否为 weline.local 开发通配相关域名（*.weline.local 或至少三段的 *.weline.local 子域，不含裸 weline.local）
+     * 是否为框架托管的本地通配相关域名（*.weline.test / *.weline.localhost 及其单标签子域）
      */
     protected function isWelineLocalWildcardCandidateDomain(string $domain): bool
     {
-        $domain = \strtolower(\trim($domain));
-        if ($domain === '' || !\str_ends_with($domain, '.weline.local')) {
-            return false;
-        }
-        if ($domain === '*.weline.local') {
-            return true;
-        }
-        if ($domain === 'weline.local') {
-            return false;
-        }
-
-        return \count(\explode('.', $domain)) >= 3;
+        return LocalDomainPolicy::isManagedWildcardDomain($domain)
+            || LocalDomainPolicy::isManagedSingleLabelSubdomain($domain);
     }
 
     /**
-     * 自签签发前：若证书管理中已有有效 *.weline.local 泛域 PEM，则复用（避免重复生成通配或子域证书）。
+     * 自签签发前：若证书管理中已有有效的托管本地通配证书，则复用。
      *
      * @return array|null ensureCertificate / generateSelfSignedCertificate 兼容结构，null 表示继续生成
      */
@@ -923,14 +1335,19 @@ CNF;
         }
 
         $domainLower = \strtolower(\trim($domain));
+        $wildcardDomain = LocalDomainPolicy::resolveWildcardDomain($domainLower);
+        $rootDomain = LocalDomainPolicy::resolveRootDomain($domainLower);
+        if ($wildcardDomain === null || $rootDomain === null) {
+            return null;
+        }
 
-        // 子域：与 ensureCertificate 一致，优先套用库中 *.weline.local
-        if ($domainLower !== '*.weline.local') {
+        // 子域：与 ensureCertificate 一致，优先套用库中的本地通配证书
+        if ($domainLower !== $wildcardDomain) {
             return $this->applyWildcardToSubdomainIfExists($domain, $websiteId);
         }
 
         $wildcardCert = ObjectManager::getInstance(SslCertificate::class, [], false)
-            ->findWildcardByRoot('weline.local');
+            ->findWildcardByRoot($rootDomain);
         if ($wildcardCert === null) {
             return null;
         }
@@ -943,12 +1360,12 @@ CNF;
 
         $expiresAt = $wildcardCert->getExpiresAt();
         if ($expiresAt !== '' && \strtotime($expiresAt) < \time()) {
-            w_log_info(__('[SslCertificateService] 库中 *.weline.local 通配证书已过期，将重新签发'));
+            w_log_info(__('[SslCertificateService] 库中的 %{1} 通配证书已过期，将重新签发', [$wildcardDomain]));
             return null;
         }
 
         if (!$this->restoreCertificateFilesFromData($wildcardCert->getData())) {
-            w_log_info(__('[SslCertificateService] 复用 *.weline.local 通配证书时写回磁盘失败，将尝试重新签发'));
+            w_log_info(__('[SslCertificateService] 复用 %{1} 通配证书时写回磁盘失败，将尝试重新签发', [$wildcardDomain]));
             return null;
         }
 
@@ -961,9 +1378,9 @@ CNF;
 
         $certInfo = $this->parseCertificate($certPath);
 
-        return [
+        $result = [
             'success'     => true,
-            'message'     => __('已复用现有 *.weline.local 通配证书，跳过重复签发'),
+            'message'     => __('已复用现有本地通配证书，跳过重复签发'),
             'cert_path'   => $certPath,
             'key_path'    => $keyPath,
             'issuer'      => $wildcardCert->getIssuer() ?: ($certInfo['issuer'] ?? self::ISSUER_SELF_SIGNED),
@@ -971,6 +1388,9 @@ CNF;
             'is_new'      => false,
             'ssl_enabled' => true,
         ];
+        $result['message'] = __('已复用现有 %{1} 通配证书，跳过重复签发', [$wildcardDomain]);
+
+        return $result;
     }
 
     /**
@@ -1133,6 +1553,8 @@ CNF;
             $chainPath = \dirname($certPath) . DS . 'chain.pem';
             $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
 
+            $isLocalManaged = $this->isLocalManagedProvider($provider);
+
             $cert->setDomain($domain)
                 ->setWebsiteId($websiteId)
                 ->setCertPath($certPath)
@@ -1149,7 +1571,7 @@ CNF;
                 ->setExpiresAt($expiresAt)
                 ->setStatus(SslCertificate::STATUS_ACTIVE)
                 ->setHttpsEnabled(true)
-                ->setAutoRenew($provider !== self::PROVIDER_SELF_SIGNED);
+                ->setAutoRenew(!$isLocalManaged);
 
             // 避免 uk_domain 冲突：若该域名已被其他行占用，合并到该行并更新该行
             $cert = $this->resolveDuplicateDomainCert($cert);
@@ -1180,6 +1602,10 @@ CNF;
             if ($certType === SslCertificate::CERT_TYPE_WILDCARD) {
                 $this->syncWildcardToSubdomains($domain);
             }
+
+            // 自签 / 本地 CA 签发路径必须刷新 SNI 映射，否则 Worker 仍用旧的 ssl_certificate_map.json，易出现 unrecognized_name
+            $this->regenerateCertificateMap();
+
             return true;
             
         } catch (\Throwable $e) {
@@ -1543,7 +1969,7 @@ CNF;
                 $provider !== '' ? $provider : (string)$cert->getProvider(),
                 $issuer
             );
-            $isSelfSigned = ($provider === self::PROVIDER_SELF_SIGNED);
+            $isLocalManaged = $this->isLocalManagedProvider($provider);
 
             $certType = \str_starts_with($domain, '*.')
                 ? SslCertificate::CERT_TYPE_WILDCARD
@@ -1570,11 +1996,11 @@ CNF;
                 ->setCertPem($certContents['cert_pem'])
                 ->setKeyPem($certContents['key_pem'])
                 ->setChainPem($certContents['chain_pem'])
-                ->setIssuer($isSelfSigned ? self::ISSUER_SELF_SIGNED : ($issuer !== '' ? $issuer : $this->getIssuerByProvider($provider)))
+                ->setIssuer($issuer !== '' ? $issuer : $this->getIssuerByProvider($provider))
                 ->setProvider($provider)
                 ->setStatus($status)
                 ->setHttpsEnabled($httpsEnabled)
-                ->setAutoRenew(!$isSelfSigned);
+                ->setAutoRenew(!$isLocalManaged);
 
             if ($issuedAt !== '') {
                 $cert->setIssuedAt($issuedAt);
@@ -1633,6 +2059,7 @@ CNF;
             self::PROVIDER_LETS_ENCRYPT => self::ISSUER_LETS_ENCRYPT,
             self::PROVIDER_LITESSL => self::ISSUER_LITESSL,
             self::PROVIDER_SELF_SIGNED => self::ISSUER_SELF_SIGNED,
+            self::PROVIDER_LOCAL_CA => self::ISSUER_LOCAL_CA,
             default => self::ISSUER_UNKNOWN,
         };
     }
@@ -1648,6 +2075,9 @@ CNF;
         $issuerLower = \strtolower(\trim($issuer));
 
         if ($issuerLower !== '') {
+            if (\str_contains($issuerLower, \strtolower(self::ISSUER_LOCAL_CA))) {
+                return self::PROVIDER_LOCAL_CA;
+            }
             if (\str_contains($issuerLower, 'self') || \str_contains($issuerLower, 'weline')) {
                 return self::PROVIDER_SELF_SIGNED;
             }
@@ -2364,6 +2794,12 @@ CNF;
             }
 
             $provider = $this->normalizeAcmeProvider($provider);
+            if ($provider === self::PROVIDER_LOCAL_CA) {
+                return $this->generateLocalCaSignedCertificate($domain, $websiteId);
+            }
+            if ($provider === self::PROVIDER_SELF_SIGNED) {
+                return $this->generateSelfSignedCertificate($domain, $websiteId);
+            }
             if (!\in_array($provider, [self::PROVIDER_LETS_ENCRYPT, self::PROVIDER_LITESSL], true)) {
                 return ['success' => false, 'message' => __('不支持的证书提供商：%{provider}', ['provider' => $provider]), 'cert' => null];
             }
@@ -3831,6 +4267,23 @@ CNF;
         }
         
         $cn = \strtolower(\trim($cert['subject']['CN'] ?? ''));
+        if ($this->hostMatchesCertificateName($host, $cn)) {
+            return $this->certMatchCache[$cacheKey] = true;
+        }
+
+        $sanEntries = $this->extractCertificateSubjectAltNames((string)($cert['extensions']['subjectAltName'] ?? ''));
+        foreach ($sanEntries['dns'] as $dnsName) {
+            if ($this->hostMatchesCertificateName($host, $dnsName)) {
+                return $this->certMatchCache[$cacheKey] = true;
+            }
+        }
+        foreach ($sanEntries['ip'] as $ipName) {
+            if ($this->hostMatchesCertificateName($host, $ipName)) {
+                return $this->certMatchCache[$cacheKey] = true;
+            }
+        }
+
+        return $this->certMatchCache[$cacheKey] = false;
         $san = $cert['extensions']['subjectAltName'] ?? '';
         
         // 1. 直接匹配 CN
@@ -3874,6 +4327,78 @@ CNF;
     /**
      * 检查 host 是否为本地或内网地址（需要自签证书）
      */
+    /**
+     * @return array{dns: list<string>, ip: list<string>}
+     */
+    protected function extractCertificateSubjectAltNames(string $subjectAltName): array
+    {
+        $dns = [];
+        $ip = [];
+
+        foreach (\explode(',', $subjectAltName) as $entry) {
+            $entry = \trim($entry);
+            if ($entry === '' || !\str_contains($entry, ':')) {
+                continue;
+            }
+
+            [$type, $value] = \explode(':', $entry, 2);
+            $type = \strtolower(\trim($type));
+            $value = \strtolower(\trim($value));
+            if ($value === '') {
+                continue;
+            }
+
+            if ($type === 'dns') {
+                $dns[] = $value;
+                continue;
+            }
+            if ($type === 'ip address' || $type === 'ip') {
+                $ip[] = $value;
+            }
+        }
+
+        $result = [
+            'dns' => \array_values(\array_unique($dns)),
+            'ip' => \array_values(\array_unique($ip)),
+        ];
+    }
+
+    protected function hostMatchesCertificateName(string $host, string $name): bool
+    {
+        $host = \strtolower(\trim($host));
+        $name = \strtolower(\trim($name));
+        if ($host === '' || $name === '') {
+            return false;
+        }
+
+        $localhostEquivalents = ['localhost', '127.0.0.1', '::1'];
+        if (\in_array($host, $localhostEquivalents, true) && \in_array($name, $localhostEquivalents, true)) {
+            return true;
+        }
+
+        if (\filter_var($host, FILTER_VALIDATE_IP) || \filter_var($name, FILTER_VALIDATE_IP)) {
+            return $host === $name;
+        }
+
+        if ($host === $name) {
+            return true;
+        }
+
+        if (!\str_starts_with($name, '*.')) {
+            return false;
+        }
+
+        $wildcardRoot = \substr($name, 2);
+        if ($wildcardRoot === '' || $host === $wildcardRoot) {
+            return false;
+        }
+        if (!\str_ends_with($host, '.' . $wildcardRoot)) {
+            return false;
+        }
+
+        return \count(\explode('.', $host)) === \count(\explode('.', $wildcardRoot)) + 1;
+    }
+
     public function needsSelfSignedCertificate(string $host): bool
     {
         $host = \strtolower(\trim($host));

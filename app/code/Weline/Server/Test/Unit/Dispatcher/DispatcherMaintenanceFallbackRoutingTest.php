@@ -6,6 +6,8 @@ namespace Weline\Server\Test\Unit\Dispatcher;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Dispatcher\Dispatcher;
 use Weline\Server\Dispatcher\PassthroughCore;
+use Weline\Server\IPC\ChildControl\ChildControlClientInterface;
+use Weline\Server\IPC\ControlMessage;
 
 class DispatcherMaintenanceFallbackRoutingTest extends TestCase
 {
@@ -284,6 +286,70 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $method->invoke($dispatcher, true, 'SET_WORKER_POOL accepted=0, rejected=0');
 
         self::assertTrue((bool) $this->getProperty($dispatcher, 'maintenanceFallbackActive'));
+    }
+
+    public function testReportAllWorkersUnavailableToMasterIsThrottledAndCarriesPoolContext(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->createMock(PassthroughCore::class);
+        $core->method('getWorkerPorts')->willReturn([16896, 16895]);
+        $core->method('getMaintenanceWorkerPorts')->willReturn([16995]);
+        $core->method('getMaintenancePort')->willReturn(0);
+        $core->method('getWorkerHealthSummary')->willReturn([
+            'healthy' => 0,
+            'total' => 2,
+        ]);
+
+        $client = new class implements ChildControlClientInterface {
+            public array $sent = [];
+
+            public function connect(string $host, int $port): bool { return true; }
+            public function isConnected(): bool { return true; }
+            public function getSocket() { return null; }
+            public function hasPendingWrites(): bool { return false; }
+            public function hasReceivedShutdown(): bool { return false; }
+            public function isReadyStateConfirmed(): bool { return true; }
+            public function onMessage(callable $handler): void {}
+            public function onDisconnect(callable $handler): void {}
+            public function setVerboseLog(bool $verbose): void {}
+            public function setSelfTag(string $tag): void {}
+            public function register(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): bool { return true; }
+            public function rememberRegistration(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): void {}
+            public function markReadyState(bool $isReady = true): void {}
+            public function sendReady(string $role = '', int $workerId = 0, int $port = 0, int $epoch = 0, string $launchId = '', string $msgId = ''): bool { return true; }
+            public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool { return true; }
+            public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool { return true; }
+            public function sendStatusReport(int $connections, int $memory, int $requests): bool { return true; }
+            public function sendLogLine(string $line, string $level, string $processTag): bool { return true; }
+            public function send(string $message, bool $disconnectOnWriteOverflow = true): bool { $this->sent[] = $message; return true; }
+            public function flushPendingWrites(float $timeBudgetSec = 0.0): bool { return true; }
+            public function handleReadable(): array { return []; }
+            public function handleWritable(): bool { return true; }
+            public function tryReconnect(): bool { return true; }
+            public function close(): void {}
+        };
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'ipcClient', $client);
+        $this->setProperty($dispatcher, 'instanceName', 'default');
+        $this->setProperty($dispatcher, 'port', 9580);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'reportAllWorkersUnavailableToMaster');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher);
+        $method->invoke($dispatcher);
+
+        self::assertCount(1, $client->sent);
+        $alert = \json_decode(\trim($client->sent[0]), true);
+        self::assertSame(ControlMessage::TYPE_DISPATCHER_ALERT, $alert['type'] ?? null);
+        self::assertSame('default', $alert['instance'] ?? null);
+        self::assertSame('all_workers_unavailable', $alert['reason'] ?? null);
+        self::assertSame(ControlMessage::ROLE_WORKER, $alert['subject_role'] ?? null);
+        self::assertSame([16895, 16896], $alert['business_pool'] ?? null);
+        self::assertSame([16995], $alert['maintenance_candidates'] ?? null);
+        self::assertSame(0, $alert['maintenance_port'] ?? null);
+        self::assertSame(0, $alert['healthy'] ?? null);
+        self::assertSame(2, $alert['total'] ?? null);
     }
 
     private function newDispatcherWithoutConstructor(): Dispatcher

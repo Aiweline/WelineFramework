@@ -42,8 +42,10 @@ class ServerInstanceManagerRunningStatsTest extends TestCase
                     'instances' => [
                         [
                             'instance_id' => 1,
-                            'pid' => 999999,
-                            'port' => 19982,
+                            // 无真实进程：countRunningWorkers/hasRunningWorkers 走实时 isRunning()，
+                            // pid=0 且无端口时回退到持久化 READY，避免单测机无 999999 进程导致误报 0
+                            'pid' => 0,
+                            'port' => null,
                             'state' => ServiceInstance::STATE_READY,
                         ],
                         [
@@ -76,7 +78,7 @@ class ServerInstanceManagerRunningStatsTest extends TestCase
         $this->assertSame(1, $stats['instances']);
         $this->assertSame(1, $stats['workers']);
         $this->assertSame(1, $stats['dispatchers']);
-        $this->assertSame([19982], $stats['ports']);
+        $this->assertSame([], $stats['ports']);
         $this->assertTrue($manager->hasRunningWorkers());
         $this->assertSame(1, $manager->countRunningWorkers('default'));
         $this->assertTrue($manager->isInstanceRunning('default'));

@@ -232,9 +232,6 @@ if ($controlPort > 0 || $supervisorEnabled) {
         },
         static function () use ($server): void {
             $server->getStore()->forcePersist();
-        },
-        static function () use ($server): void {
-            $server->setRunning(false);
         }
     );
     $kernel = new \Weline\Server\IPC\ChildControl\SubprocessControlKernel(
