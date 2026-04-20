@@ -12,25 +12,6 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
 
 /** @var \Weline\Framework\View\Template $this */
-// #region agent log
-try {
-    $debugLogFile = dirname(__DIR__, 7) . DIRECTORY_SEPARATOR . 'debug-27e05e.log';
-    $debugPayload = [
-        'sessionId' => '27e05e',
-        'runId' => 'run1',
-        'hypothesisId' => 'H6',
-        'location' => 'Weline/I18n/view/hooks/header-language-switcher.phtml',
-        'message' => 'server-render-hook-switcher',
-        'data' => [
-            'path' => __FILE__,
-            'requestUri' => $_SERVER['REQUEST_URI'] ?? '',
-        ],
-        'timestamp' => (int)(microtime(true) * 1000),
-    ];
-    file_put_contents($debugLogFile, json_encode($debugPayload, JSON_UNESCAPED_UNICODE) . PHP_EOL, FILE_APPEND);
-} catch (\Throwable) {
-}
-// #endregion
 
 // 获取当前语言
 $currentLang = State::getLang();

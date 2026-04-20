@@ -59,6 +59,7 @@ alwaysApply: false
 | 事件、dispatch、event.xml、Hook、Extends | extension-points | `dev/ai/skills/extension-points/SKILL.md` |
 | menu.xml、ACL、`#[Acl]` | acl-permission-system | `dev/ai/skills/acl-permission-system/SKILL.md` |
 | 缓存、CacheFactory | cache-usage | `dev/ai/skills/cache-usage/SKILL.md` |
+| 队列、QueueInterface、queue:run、enqueue、async、异步任务 | queue-usage | `.cursor/skills/queue-usage/SKILL.md` |
 
 ### 测试/质量
 

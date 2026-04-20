@@ -142,7 +142,7 @@ php bin/w server:status
 ### 功能测试
 
 ```bash
-curl -k https://p11005ce4.weline.local:8443/ -I
+curl -k https://p11005ce4.weline.test:8443/ -I
 ```
 
 返回：

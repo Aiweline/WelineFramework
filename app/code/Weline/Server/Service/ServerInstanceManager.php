@@ -427,6 +427,63 @@ class ServerInstanceManager
     }
 
     /**
+     * Master 退出后整理实例记录：
+     * - 清空 master_pid / pid 等主控信息
+     * - 若仍有受管子进程存活，则保留实例文件，供 stop/status 继续恢复控制
+     * - 若已无存活进程，则清理实例记录及其痕迹
+     *
+     * @return bool true 表示实例记录被保留；false 表示实例已不存在或已被清理
+     */
+    public function finalizeAfterMasterExit(string $name, int $masterPid): bool
+    {
+        $file = $this->getInstanceFile($name);
+        if (!\is_file($file)) {
+            return false;
+        }
+
+        $exitTimestamp = \time();
+        $exitAt = \date('Y-m-d H:i:s', $exitTimestamp);
+
+        $this->atomicUpdateJson($file, static function (array $data) use ($masterPid, $exitTimestamp, $exitAt): array {
+            $data['pid'] = 0;
+            $data['master_pid'] = 0;
+            $data['master_enabled'] = false;
+            $data['startup_phase'] = 'master_exited';
+            $data['lifecycle_state'] = 'master_exited';
+            $data['master_exited_pid'] = $masterPid;
+            $data['master_exited_at'] = $exitAt;
+            $data['master_exited_timestamp'] = $exitTimestamp;
+            $data['updated_at'] = $exitTimestamp;
+
+            return $data;
+        });
+
+        $rawData = $this->getRawInstanceData($name);
+        if ($rawData === null) {
+            return false;
+        }
+
+        $runningPids = $this->collectRunningTrackedPids($name, $rawData, [$masterPid]);
+        if ($runningPids === []) {
+            $this->cleanupStaleInstanceArtifacts($name, $rawData);
+            return false;
+        }
+
+        $this->atomicUpdateJson($file, static function (array $data) use ($runningPids, $exitTimestamp, $exitAt): array {
+            $data['lifecycle_state'] = 'master_exited_children_retained';
+            $data['retained_pids'] = $runningPids;
+            $data['retained_pid_count'] = \count($runningPids);
+            $data['retained_at'] = $exitAt;
+            $data['retained_timestamp'] = $exitTimestamp;
+            $data['updated_at'] = $exitTimestamp;
+
+            return $data;
+        });
+
+        return true;
+    }
+
+    /**
      * 获取原始实例数据（不解析为对象）
      */
     public function getRawInstanceData(string $name): ?array
@@ -507,6 +564,37 @@ class ServerInstanceManager
         }
 
         return false;
+    }
+
+    /**
+     * 收集当前仍存活的受管 PID。
+     *
+     * @param int[] $ignoredPids
+     * @return int[]
+     */
+    private function collectRunningTrackedPids(string $name, array $rawData, array $ignoredPids = []): array
+    {
+        $ignored = [];
+        foreach ($ignoredPids as $ignoredPid) {
+            $ignoredPid = (int) $ignoredPid;
+            if ($ignoredPid > 0) {
+                $ignored[$ignoredPid] = true;
+            }
+        }
+
+        $running = [];
+        foreach ($this->collectTrackedPids($name, $rawData) as $pid) {
+            $pid = (int) $pid;
+            if ($pid <= 0 || isset($ignored[$pid])) {
+                continue;
+            }
+
+            if (Processer::processExists($pid)) {
+                $running[$pid] = true;
+            }
+        }
+
+        return \array_map('intval', \array_keys($running));
     }
 
     /**
@@ -1091,6 +1179,9 @@ class ServerInstanceManager
 
     /**
      * 统计实例中真正运行的 Worker 数量
+     *
+     * 使用实时校验（PID/端口），避免实例 JSON 中 state=READY 但进程已退出时仍误判为「有 Worker」，
+     * 导致 server:reload 等命令跳过发送控制指令。
      */
     public function countRunningWorkers(string $name): int
     {
@@ -1098,11 +1189,14 @@ class ServerInstanceManager
         if ($info === null) {
             return 0;
         }
-        return $this->collectRuntimeStatsForInstance($info, false)['workers'];
+        return $this->collectRuntimeStatsForInstance($info, true)['workers'];
     }
 
     /**
      * 是否有任意运行中的 WLS Worker
+     *
+     * 仍走持久化快路径（避免 Observer/配置刷新场景反复触发系统进程探测）。
+     * 需要精确进程存活判断时请用 {@see countRunningWorkers}（按实例、实时校验）。
      */
     public function hasRunningWorkers(): bool
     {

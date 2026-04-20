@@ -387,9 +387,7 @@ test.describe('AI Site Workbench', () => {
     const pagebuilderWorkspaceUrl = String(websitesScopeAfterHandoff.pagebuilder_workspace_url || '');
     expect(pagebuilderWorkspaceUrl).toMatch(PAGEBUILDER_AI_WORKSPACE_PATH_RE);
 
-    // 专家模式 (?expert=1) 下才渲染 #pb-ai-draft-website-id / #pb-ai-scope-full 等元素
-    const pbExpertUrl = pagebuilderWorkspaceUrl + (pagebuilderWorkspaceUrl.includes('?') ? '&expert=1' : '?expert=1');
-    await gotoStable(page, new URL(pbExpertUrl, page.url()).toString());
+    await gotoStable(page, new URL(pagebuilderWorkspaceUrl, page.url()).toString());
 
     const landedOnLogin = await page.locator('form[action*="/admin/login/post"], input[name="username"]').first()
       .isVisible({ timeout: 3000 })

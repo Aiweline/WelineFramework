@@ -15,8 +15,6 @@ namespace Weline\Queue\Console\Queue;
 
 use Weline\Framework\Console\CommandInterface;
 
-use Weline\Cron\Helper\Process;
-use Weline\Framework\App\System;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Queue\Model\Queue;
@@ -55,21 +53,30 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $type = $queue->getType();
         /**@var QueueInterface $queue_execute */
         $queue_execute = ObjectManager::getInstance($type->getData('class'));
-        $validate_result = $queue_execute->vaLidate($queue);
+        $validate_result = $queue_execute->validate($queue);
         if (is_bool($validate_result) and $validate_result) {
             $queue->setStatus($queue::status_running)
                 ->setResult($queue->getResult() . PHP_EOL . __('正在执行...'))
                 ->save();
             try {
+                $queue->setArgs($args); # 记录执行参数
                 $result = $queue_execute->execute($queue);
+                // execute() 内常通过 w_query 等直接更新库里的 result；此处必须重新 load，否则会用过期内存覆盖掉过程日志
+                $queue = $this->queue->load($id);
                 $queue->setStatus($queue::status_done)
-                    ->setResult($queue->getResult() . PHP_EOL . $result)
+                    ->setResult(\trim($queue->getResult() . PHP_EOL . $result))
                     ->save();
+                $this->printing->title(__('队列执行详情') . ' queue_id=' . $id);
+                $this->printing->note($queue->getResult());
             } catch (\Throwable $e) {
                 $result = $e->getMessage();
+                $queue = $this->queue->load($id);
                 $queue->setStatus($queue::status_error)
-                    ->setResult($queue->getResult() . PHP_EOL . $result)
+                    ->setResult(\trim($queue->getResult() . PHP_EOL . $result))
                     ->save();
+                $this->printing->title(__('队列执行详情（失败）') . ' queue_id=' . $id);
+                $this->printing->note($queue->getResult());
+                $this->printing->error($result);
                 throw $e;
             }
         } else {

@@ -11,6 +11,7 @@ use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Websites\Model\AiSiteBuilderEvent;
 use Weline\Websites\Model\AiSiteBuilderSession;
 use Weline\Websites\Model\DomainRegistrarAccount;
@@ -3365,8 +3366,7 @@ class SiteBuilderAgent extends BackendController
 
     private function isLocalWelineSubdomain(string $domain): bool
     {
-        $domain = \strtolower(\trim($domain));
-        return $domain !== '' && \str_ends_with($domain, '.weline.local');
+        return LocalDomainPolicy::isManagedSingleLabelSubdomain($domain);
     }
 
     private function isTruthyFlag(mixed $value): bool
@@ -3395,7 +3395,7 @@ class SiteBuilderAgent extends BackendController
     }
 
     /**
-     * 本地 fake / 演示模式：生成若干 *.weline.local 候选，便于联调与 E2E（无需真实注册商可用性）。
+     * 本地 fake / 演示模式：生成若干托管本地域名候选，便于联调与 E2E（无需真实注册商可用性）。
      *
      * @return list<string>
      */
@@ -3414,10 +3414,11 @@ class SiteBuilderAgent extends BackendController
         }
         $digits = \preg_replace('/\D/', '', (string)\microtime(true)) ?? '';
         $ts = \substr($digits !== '' ? $digits : (string)\random_int(10000000, 99999999), -8);
+        $rootDomain = LocalDomainPolicy::currentRootDomain();
         $out = [];
         for ($i = 0; $i < \max(1, $count); $i += 1) {
             $suffix = $i === 0 ? $ts : $ts . '-' . $i;
-            $out[] = $base . '-' . $suffix . '.weline.local';
+            $out[] = $base . '-' . $suffix . '.' . $rootDomain;
         }
 
         return $out;

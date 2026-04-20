@@ -27,14 +27,12 @@
     var operationSseBaseUrl = <?= \json_encode($operationSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var activeOperation = <?= \json_encode($activeOperation, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var pageTypeLabelMap = <?= \json_encode($pageTypeLabels, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var stateJsonUrl = <?= \json_encode($stateJsonUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var workspaceTerminal = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
     var runningSource = null;
     var runningSourceStartTimer = null;
     var runningOperationKey = '';
     var runningOperationType = '';
     var runningStartAtByOperationKey = Object.create(null);
-    var observerStatePollTimer = null;
     var observerSyncStatusPulseTimer = null;
     var observerSyncDotPhase = 0;
     var lastOperationTerminalFingerprint = '';
@@ -87,20 +85,6 @@
         }
         tick();
         observerSyncStatusPulseTimer = window.setInterval(tick, 750);
-    }
-
-    function pollWorkspaceStateForObserver() {
-        return refreshWorkspaceStateFromServer().then(function (state) {
-            if (state && typeof state === 'object') {
-                updateTaskSummaryFromState(state);
-                var ao = state.active_operation;
-                var st = ao && typeof ao === 'object' ? String(ao.status || '').toLowerCase() : '';
-                if (!ao || st === 'done' || st === 'error' || st === 'cancelled') {
-                    stopObserverSyncTerminalPulse();
-                }
-            }
-            return state;
-        });
     }
     function hydrateWorkspaceFromState(workspaceState) {
         var api = resolveWorkspaceApi();
@@ -233,6 +217,94 @@
             if (data.active_operation && typeof data.active_operation === 'object') {
                 activeOperation = data.active_operation;
             }
+        });
+        workspaceTerminal.on('log', function (event) {
+            var data = parsePayload(event);
+            if (!data || typeof data !== 'object') {
+                return;
+            }
+            mirrorWorkspaceLogToQueuedStageUi(data);
+        });
+    }
+
+    function normalizeQueuedStageWorkspaceLogEntry(entry) {
+        if (!entry || typeof entry !== 'object') {
+            return null;
+        }
+        var payload = entry.payload && typeof entry.payload === 'object'
+            ? Object.assign({}, entry.payload)
+            : {};
+        if (!payload.message && entry.message) {
+            payload.message = String(entry.message);
+        }
+        if (!payload.operation && activeOperation && typeof activeOperation === 'object') {
+            payload.operation = String(activeOperation.operation || '');
+        }
+        var eventType = String(entry.event_type || '').trim().toLowerCase();
+        var mirroredKind = '';
+        switch (eventType) {
+            case 'info':
+                mirroredKind = 'info';
+                break;
+            case 'warning':
+                mirroredKind = 'warning';
+                break;
+            case 'progress':
+            case 'operation_progress':
+                mirroredKind = 'progress';
+                break;
+            case 'chunk':
+            case 'ai_chunk':
+            case 'ai_raw_chunk':
+            case 'plan_chunk':
+                mirroredKind = 'chunk';
+                break;
+            case 'start':
+            case 'operation_started':
+                mirroredKind = 'start';
+                break;
+            case 'plan_saved':
+            case 'plan_generated':
+            case 'plan_refined':
+            case 'plan_rebuilt':
+            case 'task_plan_generated':
+            case 'task_plan_refined':
+            case 'task_plan_rebuilt':
+                mirroredKind = 'info';
+                break;
+            case 'error':
+            case 'operation_failed':
+                mirroredKind = 'error';
+                break;
+            default:
+                return null;
+        }
+        var operation = resolveOperationForQueuedMirror(payload);
+        if (operation !== 'plan' && operation !== 'task_plan') {
+            return null;
+        }
+        return {
+            operation: operation,
+            kind: mirroredKind,
+            payload: payload
+        };
+    }
+
+    function mirrorWorkspaceLogToQueuedStageUi(entry) {
+        var normalized = normalizeQueuedStageWorkspaceLogEntry(entry);
+        if (!normalized) {
+            return;
+        }
+        if (normalized.payload && normalized.payload.state && typeof normalized.payload.state === 'object') {
+            hydrateWorkspaceFromState(normalized.payload.state);
+            updateTaskSummaryFromState(normalized.payload.state);
+        }
+        syncQueuedStageUi(normalized.operation, normalized.kind, normalized.payload, {
+            level: normalized.kind === 'error'
+                ? 'error'
+                : (normalized.kind === 'warning'
+                    ? 'warning'
+                    : (normalized.kind === 'progress' ? 'progress' : 'info'))
         });
     }
 
@@ -464,9 +536,13 @@
         if (binding.terminal && typeof binding.terminal.log === 'function') {
             var level = opts.level || (eventKind === 'error' ? 'error' : (eventKind === 'done' ? 'done' : (eventKind === 'progress' ? 'progress' : (eventKind === 'warning' ? 'warning' : 'info'))));
             if (eventKind === 'chunk') {
-                var chunkText = String((payload && (payload.content || payload.chunk || payload.message)) || '').trim();
+                var chunkText = String((payload && (payload.content || payload.chunk || payload.message)) || '');
                 if (chunkText !== '') {
-                    binding.terminal.log(chunkText, 'chunk', payload || {});
+                    if (typeof binding.terminal.writeChunk === 'function') {
+                        binding.terminal.writeChunk(chunkText, payload || {});
+                    } else {
+                        binding.terminal.log(chunkText, 'chunk', payload || {});
+                    }
                 }
             } else if (eventKind === 'info' && payload && Array.isArray(payload.detail_lines) && payload.detail_lines.length > 0) {
                 for (var ii = 0; ii < payload.detail_lines.length; ii++) {
@@ -587,10 +663,7 @@
 
     function closeOperationSource(source) {
         stopObserverSyncTerminalPulse();
-        if (observerStatePollTimer) {
-            window.clearInterval(observerStatePollTimer);
-            observerStatePollTimer = null;
-        }
+
         if (runningSourceStartTimer) {
             window.clearTimeout(runningSourceStartTimer);
             runningSourceStartTimer = null;
@@ -633,27 +706,24 @@
         }
     }
 
-    function finishOperation(payload) {
+        function finishOperation(payload) {
         var operation = payload && payload.operation ? String(payload.operation) : '';
         if (operation === 'plan' || operation === 'task_plan') {
-            var hydratedFromPayload = false;
+            var nextState = null;
             if (payload && payload.state && typeof payload.state === 'object') {
-                hydrateWorkspaceFromState(payload.state);
-                hydratedFromPayload = true;
+                nextState = payload.state;
+            } else if (payload && payload.data && payload.data.state && typeof payload.data.state === 'object') {
+                nextState = payload.data.state;
             }
-            refreshWorkspaceStateFromServer().then(function (state) {
-                if (state && typeof state === 'object') {
-                    hydrateWorkspaceFromState(state);
-                    return;
+            if (nextState) {
+                hydrateWorkspaceFromState(nextState);
+                updateTaskSummaryFromState(nextState);
+                if (nextState.virtual_pages_by_type && typeof nextState.virtual_pages_by_type === 'object') {
+                    if (typeof previewBridge.setVirtualPagesByType === 'function') {
+                        previewBridge.setVirtualPagesByType(nextState.virtual_pages_by_type);
+                    }
                 }
-                if (!hydratedFromPayload) {
-                    window.location.reload();
-                }
-            }).catch(function () {
-                if (!hydratedFromPayload) {
-                    window.location.reload();
-                }
-            });
+            }
             return;
         }
         var redirectUrl = '';
@@ -1094,7 +1164,6 @@
     var workspaceApiRef = window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object' ? window.__pbWorkspaceApi : {};
     workspaceApiRef.updateTaskSummaryFromState = updateTaskSummaryFromState;
     workspaceApiRef.updateStageStatusSummary = updateStageStatusSummary;
-    workspaceApiRef.refreshWorkspaceStateFromServer = refreshWorkspaceStateFromServer;
     window.__pbWorkspaceApi = workspaceApiRef;
     window.updateTaskSummaryFromState = updateTaskSummaryFromState;
     window.updateStageStatusSummary = updateStageStatusSummary;
@@ -1106,43 +1175,6 @@
         has_virtual_theme_plan: getWorkspaceFlagState('getHasVirtualThemePlanState', false),
         workspace_status: ''
     });
-
-    function refreshWorkspaceStateFromServer() {
-        if (!stateJsonUrl || typeof fetch !== 'function') {
-            return Promise.resolve(null);
-        }
-
-        return fetch(stateJsonUrl, {
-            method: 'GET',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin'
-        }).then(function (response) {
-            return response.text().then(function (text) {
-                var payload = null;
-                try {
-                    payload = JSON.parse(text);
-                } catch (error) {
-                    return null;
-                }
-                if (!payload || !payload.success || !payload.data || typeof payload.data !== 'object') {
-                    return null;
-                }
-                hydrateWorkspaceFromState(payload.data);
-                if (payload.data.virtual_pages_by_type && typeof payload.data.virtual_pages_by_type === 'object') {
-                    if (typeof previewBridge.setVirtualPagesByType === 'function') {
-                        previewBridge.setVirtualPagesByType(payload.data.virtual_pages_by_type);
-                    }
-                }
-                if (payload.data.active_operation && typeof payload.data.active_operation === 'object') {
-                    activeOperation = payload.data.active_operation;
-                }
-                return payload.data;
-            });
-        }).catch(function () {
-            return null;
-        });
-    }
-
     function startOperationStream(streamUrl, operation, executionToken, sourceTag) {
         if (!streamUrl) {
             return false;
@@ -1197,14 +1229,7 @@
         var settled = false;
         var lastServerError = '';
         var source = null;
-        function startObserverStatePolling() {
-            if (observerStatePollTimer) {
-                return;
-            }
-            observerStatePollTimer = window.setInterval(function () {
-                pollWorkspaceStateForObserver();
-            }, 2000);
-        }
+
         runningSourceStartTimer = window.setTimeout(function () {
             runningSourceStartTimer = null;
             try {
@@ -1228,9 +1253,9 @@
                 if (!payload || typeof payload !== 'object') {
                     return;
                 }
-                if (observerStatePollTimer) {
-                    window.clearInterval(observerStatePollTimer);
-                    observerStatePollTimer = null;
+                if (payload.state && typeof payload.state === 'object') {
+                    hydrateWorkspaceFromState(payload.state);
+                    updateTaskSummaryFromState(payload.state);
                 }
                 logOperationToWorkspaceTerminal('info', payload, 'info', String(payload.message || ''));
             });
@@ -1253,12 +1278,7 @@
                     hydrateWorkspaceFromState(payload.state);
                     updateTaskSummaryFromState(payload.state);
                 }
-                // Only start polling as absolute fallback when SSE has not delivered any event yet
-                // (runningSource is set immediately after new EventSource(), before events arrive).
-                // Once any event is received, the progress listener will stop the poll timer.
-                if (payload && (payload.observer_mode || payload.background_mode) && !runningSource) {
-                    startObserverStatePolling();
-                }
+
                 var wmsg = normalizeToastMessage((payload && payload.message) ? String(payload.message) : (messages.operationDuplicateStream || ''));
                 if (wmsg) {
                     logOperationToWorkspaceTerminal('warning', payload, 'warning', wmsg);
@@ -1292,10 +1312,6 @@
             }
             stopObserverSyncTerminalPulse();
             // SSE is alive and delivering events — stop the polling timer immediately
-            if (observerStatePollTimer) {
-                window.clearInterval(observerStatePollTimer);
-                observerStatePollTimer = null;
-            }
             if (payload.state && typeof payload.state === 'object') {
                 hydrateWorkspaceFromState(payload.state);
                 updateTaskSummaryFromState(payload.state);
@@ -1533,11 +1549,7 @@
                 if (deferredTerminal) {
                     startObserverSyncTerminalPulse(deferredTerminal);
                 }
-                if (!observerStatePollTimer) {
-                    observerStatePollTimer = window.setInterval(function () {
-                        pollWorkspaceStateForObserver();
-                    }, 2000);
-                }
+
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
                 }

@@ -671,14 +671,21 @@ class OpenAiProvider implements ProviderInterface
      * 解析 max_tokens：
      * - 调用方显式传参时，以调用方为准（业务侧可按场景提升预算）
      * - 未传参时，回落模型/配置默认值
+     * - 最终值不超过模型支持的 max_tokens 上限
      */
     private function capMaxTokens(AiModel $model, array $config, array $params): int
     {
+        $modelMaxTokens = (int)($model->getData(AiModel::schema_fields_MAX_TOKENS) ?? 0);
+
         if (\array_key_exists('max_tokens', $params)) {
-            return \max(1, (int)$params['max_tokens']);
+            $requested = \max(1, (int)$params['max_tokens']);
+            if ($modelMaxTokens > 0) {
+                return \min($requested, $modelMaxTokens);
+            }
+            return $requested;
         }
 
-        $fallback = (int)($model->getData(AiModel::schema_fields_MAX_TOKENS) ?? $config['max_tokens'] ?? 2000);
+        $fallback = (int)($modelMaxTokens ?: ($config['max_tokens'] ?? 2000));
         return \max(1, $fallback);
     }
 

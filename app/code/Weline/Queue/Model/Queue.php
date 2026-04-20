@@ -104,6 +104,9 @@ public function getTypeId(): int
     }
     public function setTypeId(int $type_id): static
     {
+        if ($this->getTypeId() !== $type_id) {
+            $this->type = null;
+        }
         return $this->setData(self::schema_fields_type_id, $type_id);
     }
     public function setPid(int $process_id): static
@@ -240,7 +243,7 @@ public function getTypeId(): int
     }
     public function getType(): Type
     {
-        if (!$this->type) {
+        if (!$this->type || $this->type->getTypeId() !== $this->getTypeId()) {
             /**@var Type $type */
             $type = ObjectManager::getInstance(Type::class, []);
             $type->load($this->getTypeId());

@@ -3,8 +3,9 @@
 declare(strict_types=1);
 
 /**
- * 将开发用 .local 域名写入本机 hosts（与 server:start 内自动配置同源：HostsFileManager）。
- * AI 建站 / E2E 计划中的 w_query：首版以此命令为正式入口（另可与 Playwright globalSetup 双轨）。
+ * Write managed local WLS domains into the local hosts file when required.
+ * `.weline.test` needs a hosts entry during local/dev/test usage, while
+ * `.weline.localhost` resolves to loopback automatically and is skipped.
  */
 
 namespace Weline\Server\Console\Server\Hosts;
@@ -12,17 +13,15 @@ namespace Weline\Server\Console\Server\Hosts;
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Server\Service\HostsFileManager;
+use Weline\Server\Service\LocalDomainPolicy;
 
-/**
- * server:hosts:add — 添加 .local 域名到本机 hosts
- */
-class Add extends CommandAbstract
+final class Add extends CommandAbstract
 {
     public function execute(array $args = [], array $data = []): void
     {
         $envType = (string) Env::getInstance()->getConfig('system.env', 'local');
         if (!\in_array($envType, ['local', 'dev', 'test'], true)) {
-            $this->printer->error(__('当前 system.env=%{1} 下禁止执行 hosts 写入', [$envType]));
+            $this->printer->error(__('当前 system.env=%{1} 禁止执行 hosts 写入', [$envType]));
             return;
         }
 
@@ -42,13 +41,18 @@ class Add extends CommandAbstract
 
         $domain = \trim((string) ($args['domain'] ?? $positional[0] ?? ''));
         if ($domain === '') {
-            $this->printer->error(__('请指定域名，例如：php bin/w server:hosts:add shop123.weline.local'));
+            $this->printer->error(__('请指定域名，例如：php bin/w server:hosts:add shop123.weline.test'));
             $this->printer->note(__('可选：--ip=127.0.0.1（默认）'));
             return;
         }
 
+        if (LocalDomainPolicy::resolvesViaLoopbackSuffix($domain)) {
+            $this->printer->note(__('域名 %{1} 使用 .localhost 回环后缀，无需写入 hosts', [$domain]));
+            return;
+        }
+
         if (!self::isEligibleLocalHostname($domain)) {
-            $this->printer->error(__('仅允许以 .local 结尾且非 localhost 的域名（与 WLS server:start 规则一致）'));
+            $this->printer->error(__('仅允许写入单标签的 *.weline.test 本地域名；*.weline.localhost 无需 hosts'));
             return;
         }
 
@@ -77,13 +81,8 @@ class Add extends CommandAbstract
         if ($domain === '' || $domain === 'localhost') {
             return false;
         }
-        if (!\str_ends_with($domain, '.local')) {
-            return false;
-        }
-        if (\strlen($domain) > 253) {
-            return false;
-        }
-        return (bool) \preg_match('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/', $domain);
+        return LocalDomainPolicy::requiresHostsEntry($domain)
+            && LocalDomainPolicy::isManagedSingleLabelSubdomain($domain);
     }
 
     private static function isValidIp(string $ip): bool
@@ -93,15 +92,15 @@ class Add extends CommandAbstract
 
     public function tip(): string
     {
-        return __('向本机 hosts 添加 .local 域名（开发/测试；计划 w_query 入口）');
+        return __('向本机 hosts 添加需要显式解析的本地域名（当前仅 *.weline.test）');
     }
 
     public function help(): array|string
     {
         return [
             __('用法') => 'php bin/w server:hosts:add <域名> [--ip=127.0.0.1]',
-            __('示例') => 'php bin/w server:hosts:add myshop.weline.local',
-            __('说明') => __('与 server:start 使用的 HostsFileManager 相同；仅 system.env 为 local/dev/test 时可用'),
+            __('示例') => 'php bin/w server:hosts:add myshop.weline.test',
+            __('说明') => __('与 server:start 使用同一套 HostsFileManager；仅 system.env 为 local/dev/test 时可用'),
         ];
     }
 }
