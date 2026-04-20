@@ -107,6 +107,48 @@ final class StatusCommandTest extends TestCase
         );
     }
 
+    public function testFilterVisibleServicesKeepsSharedStateProcessesVisible(): void
+    {
+        $status = new class extends Status {
+            /**
+             * @param ServiceInfo[] $services
+             * @return ServiceInfo[]
+             */
+            public function visible(array $services): array
+            {
+                return $this->filterVisibleServices($services);
+            }
+        };
+
+        $services = [
+            new ServiceInfo(
+                role: 'worker',
+                displayName: 'HTTP Worker',
+                instanceId: 1,
+                pid: 1001,
+                port: 19982,
+                state: ServiceInstance::STATE_READY
+            ),
+            new ServiceInfo(
+                role: 'session_server',
+                displayName: 'Session Server',
+                instanceId: 1,
+                pid: 2001,
+                port: 19970,
+                state: ServiceInstance::STATE_READY,
+                metadata: ['shared_external' => true]
+            ),
+        ];
+
+        $visible = $status->visible($services);
+
+        self::assertCount(2, $visible);
+        self::assertSame(['worker', 'session_server'], \array_map(
+            static fn(ServiceInfo $service): string => $service->role,
+            $visible
+        ));
+    }
+
     public function testShowInstanceStatusUsesValidatedLookupForStaleCleanup(): void
     {
         $manager = new class extends \Weline\Server\Service\ServerInstanceManager {

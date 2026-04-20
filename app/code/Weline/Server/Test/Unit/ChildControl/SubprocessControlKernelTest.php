@@ -50,6 +50,27 @@ final class SubprocessControlKernelTest extends TestCase
         $this->assertFalse($guard->shouldExit(1234, false, true, 'UT'));
     }
 
+    public function testMasterOrphanProtectionUsesFastExitThresholds(): void
+    {
+        $guardSource = \file_get_contents(
+            BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Weline'
+            . DIRECTORY_SEPARATOR . 'Server' . DIRECTORY_SEPARATOR . 'IPC' . DIRECTORY_SEPARATOR . 'ChildControl'
+            . DIRECTORY_SEPARATOR . 'MasterOrphanGuard.php'
+        );
+        $dispatcherSource = \file_get_contents(
+            BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Weline'
+            . DIRECTORY_SEPARATOR . 'Server' . DIRECTORY_SEPARATOR . 'Dispatcher' . DIRECTORY_SEPARATOR . 'Dispatcher.php'
+        );
+
+        self::assertNotFalse($guardSource);
+        self::assertNotFalse($dispatcherSource);
+        self::assertStringContainsString('int $checkIntervalSec = 5', $guardSource);
+        self::assertStringContainsString('int $deadThreshold = 1', $guardSource);
+        self::assertStringContainsString('int $unknownMasterDisconnectThreshold = 4', $guardSource);
+        self::assertStringContainsString('private const MASTER_PID_CHECK_INTERVAL_SEC = 5;', $dispatcherSource);
+        self::assertStringContainsString('private const MASTER_PID_DEAD_THRESHOLD = 1;', $dispatcherSource);
+    }
+
     public function testResolveReadyDelayMillisecondsUsesRoleSpecificEnv(): void
     {
         \putenv('WLS_E2E_WORKER_READY_DELAY_MS=4500');
@@ -370,6 +391,24 @@ final class SubprocessControlKernelTest extends TestCase
             self::assertStringContainsString('if ($controlPort > 0 || $supervisorEnabled)', $source);
             self::assertStringContainsString('new \\Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel(', $source);
         }
+
+        $sessionSource = \file_get_contents(
+            BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Weline'
+            . DIRECTORY_SEPARATOR . 'Server' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'session_server.php'
+        );
+        $redirectSource = \file_get_contents(
+            BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Weline'
+            . DIRECTORY_SEPARATOR . 'Server' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'http_redirect_worker.php'
+        );
+
+        self::assertNotFalse($sessionSource);
+        self::assertNotFalse($redirectSource);
+        self::assertStringContainsString("\$arg === '--frontend' || \$arg === '-frontend' || \$arg === '-f'", $sessionSource);
+        self::assertStringContainsString('LogConfig::isDevMode() || $isFrontend', $sessionSource);
+        self::assertStringNotContainsString('!$sharedService && $orphanGuard->shouldExit(', $sessionSource);
+        self::assertStringContainsString('$orphanGuard->shouldExit(', $sessionSource);
+        self::assertStringContainsString("\\in_array('--frontend', \$argv, true) || \\in_array('-frontend', \$argv, true)", $redirectSource);
+        self::assertStringContainsString('if ($isDev || $isFrontend)', $redirectSource);
     }
 
     public function testSessionServerControlHandlerDoesNotForceShutdownOnUnexpectedDisconnect(): void
@@ -504,6 +543,7 @@ final class SubprocessControlKernelTest extends TestCase
             self::assertStringContainsString('if ($controlPort > 0 || $supervisorEnabled)', $source);
             self::assertStringContainsString("case \\Weline\\Server\\IPC\\ControlMessage::TYPE_READY_ACK:", $source);
             self::assertStringContainsString("\$waitingForAck = !(\$ipcClient?->isReadyStateConfirmed() ?? false);", $source);
+            self::assertStringContainsString('LogConfig::isDevMode() || $isFrontend', $source);
         }
     }
 }

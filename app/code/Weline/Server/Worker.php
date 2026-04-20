@@ -16,6 +16,7 @@ use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Connection\TcpConnection;
 use Weline\Server\Event\EventInterface;
+use Weline\Server\Socket\ListenSocketOptions;
 
 /**
  * Worker - 服务器核心类
@@ -923,7 +924,9 @@ class Worker
             }
         }
         
-        stream_context_set_option($context, 'socket', 'so_reuseaddr', true);
+        if (!ListenSocketOptions::isWindows()) {
+            stream_context_set_option($context, 'socket', 'so_reuseaddr', true);
+        }
         stream_context_set_option($context, 'socket', 'backlog', 102400);
     }
     

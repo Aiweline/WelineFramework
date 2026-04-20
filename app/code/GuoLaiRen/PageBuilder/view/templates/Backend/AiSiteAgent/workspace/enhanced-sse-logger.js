@@ -1,6 +1,6 @@
 /**
  * P0 可观测性增强：SSE连接追踪与日志
- * 
+ *
  * 提供详细的SSE连接状态追踪，帮助诊断重复订阅、连接泄露等问题
  */
 
@@ -25,7 +25,7 @@ class EnhancedSseLogger {
         };
         this.activeConnections = new Map();
         this.eventIdTracking = new Set();
-        
+
         this.initializeLogging();
     }
 
@@ -80,7 +80,7 @@ class EnhancedSseLogger {
                 stats: this.connectionStats,
                 ...context
             };
-            
+
             if (Object.keys(logContext).length > 0) {
                 consoleMethod(logMessage, logContext);
             } else {
@@ -114,7 +114,7 @@ class EnhancedSseLogger {
                         context,
                         timestamp: new Date().toISOString()
                     };
-                    
+
                     if (navigator.sendBeacon) {
                         navigator.sendBeacon('/api/sse-logs', JSON.stringify(logData));
                     }
@@ -129,7 +129,7 @@ class EnhancedSseLogger {
     logConnectionAttempt(url, params = {}) {
         this.connectionStats.connectAttempts++;
         this.connectionStats.lastActivityTime = Date.now();
-        
+
         this.log('info', 'SSE连接尝试', {
             event: 'connection_attempt',
             url: this.sanitizeUrl(url),
@@ -141,7 +141,7 @@ class EnhancedSseLogger {
     logConnectionSuccess(url, eventSource) {
         this.connectionStats.successfulConnections++;
         this.connectionStats.lastActivityTime = Date.now();
-        
+
         const connectionId = this.generateConnectionId();
         this.activeConnections.set(connectionId, {
             eventSource,
@@ -163,7 +163,7 @@ class EnhancedSseLogger {
     logConnectionError(url, error, readyState) {
         this.connectionStats.failedConnections++;
         this.connectionStats.lastActivityTime = Date.now();
-        
+
         this.log('error', 'SSE连接错误', {
             event: 'connection_error',
             url: this.sanitizeUrl(url),
@@ -177,9 +177,9 @@ class EnhancedSseLogger {
         if (connectionId && this.activeConnections.has(connectionId)) {
             const connection = this.activeConnections.get(connectionId);
             const duration = Date.now() - connection.startTime;
-            
+
             this.activeConnections.delete(connectionId);
-            
+
             this.log('info', 'SSE连接关闭', {
                 event: 'connection_closed',
                 connectionId,
@@ -195,7 +195,7 @@ class EnhancedSseLogger {
     logMessageReceived(connectionId, eventType, data, eventId = null) {
         this.connectionStats.messagesReceived++;
         this.connectionStats.lastActivityTime = Date.now();
-        
+
         if (eventId) {
             this.eventIdTracking.add(eventId);
         }
@@ -207,7 +207,7 @@ class EnhancedSseLogger {
 
         // 检测重复消息
         const isDuplicate = this.checkDuplicateMessage(eventType, data, eventId);
-        
+
         this.log('debug', 'SSE消息接收', {
             event: 'message_received',
             connectionId,
@@ -221,7 +221,7 @@ class EnhancedSseLogger {
 
     logDuplicateConnectionDetected(url, existingConnectionId) {
         this.connectionStats.duplicateConnections++;
-        
+
         this.log('warn', '检测到重复SSE连接', {
             event: 'duplicate_connection',
             url: this.sanitizeUrl(url),
@@ -233,7 +233,7 @@ class EnhancedSseLogger {
 
     logReconnectionAttempt(url, attemptNumber, delay) {
         this.connectionStats.reconnections++;
-        
+
         this.log('info', 'SSE重连尝试', {
             event: 'reconnection_attempt',
             url: this.sanitizeUrl(url),
@@ -280,17 +280,17 @@ class EnhancedSseLogger {
             }
             this.recentMessageFingerprints = this.recentMessageFingerprints || new Set();
             this.recentMessageFingerprints.add(fingerprint);
-            
+
             // 清理旧指纹
             setTimeout(() => {
                 if (this.recentMessageFingerprints) {
                     this.recentMessageFingerprints.delete(fingerprint);
                 }
             }, 5000);
-            
+
             return false;
         }
-        
+
         return this.eventIdTracking.has(eventId);
     }
 
@@ -350,7 +350,7 @@ class EnhancedSseLogger {
         });
         this.activeConnections.clear();
         this.eventIdTracking.clear();
-        
+
         this.log('info', 'SSE日志器清理完成', {
             event: 'cleanup_completed',
             finalStats: this.getStats()
@@ -375,10 +375,10 @@ class GlobalSseConnectionManager {
             componentId,
             ...options
         });
-        
+
         this.loggers.set(componentId, logger);
         this.globalStats.totalLoggers++;
-        
+
         return logger;
     }
 
@@ -391,7 +391,7 @@ class GlobalSseConnectionManager {
         if (logger) {
             logger.cleanup();
             this.loggers.delete(componentId);
-            
+
             // 更新全局统计
             this.globalStats.totalConnections -= logger.connectionStats.successfulConnections;
             this.globalStats.totalMessages -= logger.connectionStats.messagesReceived;
@@ -401,7 +401,7 @@ class GlobalSseConnectionManager {
     getGlobalStats() {
         const activeConnections = Array.from(this.loggers.values())
             .reduce((sum, logger) => sum + logger.activeConnections.size, 0);
-            
+
         return {
             ...this.globalStats,
             activeLoggers: this.loggers.size,
@@ -428,7 +428,7 @@ class GlobalSseConnectionManager {
         this.loggers.forEach((logger, componentId) => {
             this.removeLogger(componentId);
         });
-        
+
         this.loggers.clear();
         this.globalStats = {
             totalLoggers: 0,

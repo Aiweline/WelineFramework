@@ -934,18 +934,7 @@ abstract class QueryAst implements QueryInterface
             Debug::target('pre_fetch', $msg);
         }
         // 防御：fetch_type 为空但 sql 已有时，根据 SQL 推断操作类型（避免链式操作中 query 被 reset/clear 后丢失类型）
-        if ($this->fetch_type === '' && trim($this->sql ?? '') !== '') {
-            $sqlUpper = strtoupper(ltrim(trim($this->sql)));
-            if (str_starts_with($sqlUpper, 'INSERT')) {
-                $this->fetch_type = 'insert';
-            } elseif (str_starts_with($sqlUpper, 'SELECT')) {
-                $this->fetch_type = 'select';
-            } elseif (str_starts_with($sqlUpper, 'UPDATE')) {
-                $this->fetch_type = 'update';
-            } elseif (str_starts_with($sqlUpper, 'DELETE')) {
-                $this->fetch_type = 'delete';
-            }
-        }
+        $this->resolveFetchTypeFromSql();
         if (RequestLifecycleTrace::isEnabled()) {
             $dbTraceStart = microtime(true);
         }
@@ -957,6 +946,7 @@ abstract class QueryAst implements QueryInterface
                 $dbTraceSql = $this->sql;
             }
         }
+        $this->guardUnboundedSelectFetch($this->getFetchRowLimit());
         if ($this->batch and $this->fetch_type == 'insert') {
             // 检查 SQL 是否包含 RETURNING 子句（PostgreSQL）
             $hasReturning = stripos($this->sql, 'RETURNING') !== false;
@@ -1147,14 +1137,134 @@ abstract class QueryAst implements QueryInterface
      */
     public function fetchIterator(string $model_class = '', int $batchSize = 1): \Generator
     {
-        $rows = $this->fetchArray();
         if ($batchSize <= 1) {
-            foreach ($rows as $row) {
-                yield $row;
+            $batchSize = 1;
+        }
+
+        $this->resolveFetchTypeFromSql();
+
+        if (!$this->isSelectStyleFetch()) {
+            $rows = $this->fetchArray();
+            if ($batchSize <= 1) {
+                foreach ($rows as $row) {
+                    yield $row;
+                }
+            } else {
+                foreach (array_chunk($rows, $batchSize) as $batch) {
+                    yield $batch;
+                }
+            }
+            return;
+        }
+
+        if ($this->PDOStatement === null) {
+            $this->PDOStatement = $this->getConnectionInterface()->prepare($this->sql);
+            if (!$this->PDOStatement) {
+                throw new Exception(__('Failed to prepare SQL for fetchIterator: {1}', [$this->sql]));
+            }
+        }
+
+        $this->PDOStatement->execute($this->bound_values);
+        $batch = [];
+        if ($batchSize === 1) {
+            while (($row = $this->PDOStatement->fetch(PDO::FETCH_ASSOC)) !== false) {
+                if ($model_class) {
+                    yield ObjectManager::make($model_class, ['data' => $row], '__construct');
+                } else {
+                    yield $row;
+                }
             }
         } else {
-            foreach (array_chunk($rows, $batchSize) as $batch) {
+            while (($row = $this->PDOStatement->fetch(PDO::FETCH_ASSOC)) !== false) {
+                if ($model_class) {
+                    $batch[] = ObjectManager::make($model_class, ['data' => $row], '__construct');
+                } else {
+                    $batch[] = $row;
+                }
+                if (count($batch) >= $batchSize) {
+                    yield $batch;
+                    $batch = [];
+                }
+            }
+            if (!empty($batch)) {
                 yield $batch;
+            }
+        }
+        $this->batch = false;
+        $this->fetch_type = '';
+        $this->clearQuery();
+        if ($this->table_alias !== 'main_table') {
+            $this->alias('main_table');
+        }
+    }
+
+    public function fetchSmart(int $threshold = 0, string $model_class = '', int $iteratorBatchSize = 1): array|\Generator
+    {
+        $limit = $threshold > 0 ? $threshold : $this->getFetchRowLimit();
+        $this->guardUnboundedSelectFetch($limit);
+        $this->resolveFetchTypeFromSql();
+        if ($this->isSelectStyleFetch()) {
+            return $this->fetchIterator($model_class, $iteratorBatchSize);
+        }
+        $result = $this->fetch($model_class);
+        return is_array($result) ? $result : [];
+    }
+
+    protected function getFetchRowLimit(): int
+    {
+        $limit = (int)Env::get('database.fetch.max_rows', 10000);
+        return max(0, $limit);
+    }
+
+    protected function hasExplicitLimit(): bool
+    {
+        if (trim((string)$this->limit) !== '') {
+            return true;
+        }
+        if (!$this->sql) {
+            return false;
+        }
+        return (bool)preg_match('/\bLIMIT\s+\d+/i', $this->sql);
+    }
+
+    protected function isSelectStyleFetch(): bool
+    {
+        if (in_array($this->fetch_type, ['select', 'query'], true)) {
+            return true;
+        }
+        if (!$this->sql) {
+            return false;
+        }
+        $sql = strtoupper(ltrim((string)$this->sql));
+        return str_starts_with($sql, 'SELECT') || str_starts_with($sql, 'WITH');
+    }
+
+    protected function guardUnboundedSelectFetch(int $threshold = 0): void
+    {
+        if ($threshold <= 0) {
+            return;
+        }
+        if (!$this->isSelectStyleFetch()) {
+            return;
+        }
+        if ($this->hasExplicitLimit()) {
+            return;
+        }
+        throw new DbException(__('Unbounded SELECT detected. Add LIMIT or use fetchIterator()/fetchSmart() for stream-safe processing. Current threshold: {1}', [$threshold]));
+    }
+
+    protected function resolveFetchTypeFromSql(): void
+    {
+        if ($this->fetch_type === '' && trim((string)$this->sql) !== '') {
+            $sqlUpper = strtoupper(ltrim(trim($this->sql)));
+            if (str_starts_with($sqlUpper, 'INSERT')) {
+                $this->fetch_type = 'insert';
+            } elseif (str_starts_with($sqlUpper, 'SELECT') || str_starts_with($sqlUpper, 'WITH')) {
+                $this->fetch_type = 'select';
+            } elseif (str_starts_with($sqlUpper, 'UPDATE')) {
+                $this->fetch_type = 'update';
+            } elseif (str_starts_with($sqlUpper, 'DELETE')) {
+                $this->fetch_type = 'delete';
             }
         }
     }

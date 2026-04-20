@@ -59,7 +59,7 @@ if ($controlPort <= 0) {
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
 
 // 解析 --frontend 参数
-$isFrontend = \in_array('--frontend', $argv, true);
+$isFrontend = \in_array('--frontend', $argv, true) || \in_array('-frontend', $argv, true);
 
 // 初始化 WLS 统一错误捕获系统（Layer 1-3）
 use Weline\Server\Log\Error\ErrorBootstrap;
@@ -114,10 +114,9 @@ $supervisorEnabled = $supervisorEnabledRaw !== false
 
 
 $context = \stream_context_create([
-    'socket' => [
+    'socket' => \Weline\Server\Socket\ListenSocketOptions::streamContextOptions([
         'backlog' => 256,
-        'so_reuseaddr' => true,
-    ]
+    ]),
 ]);
 
 $socket = @\stream_socket_server(
@@ -167,7 +166,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $instanceName
     );
     if ($kernel->connectAndRegister($controlPort)) {
-        if ($isDev) {
+        if ($isDev || $isFrontend) {
             $client = $kernel->getClient();
             if ($client !== null) {
                 WlsLogger::getInstance()->setIpcLogSink(static function (string $line, string $level, string $tag) use ($client): void {

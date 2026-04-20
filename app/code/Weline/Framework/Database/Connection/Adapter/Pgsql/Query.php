@@ -1883,8 +1883,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     /** 单次 select/query 最大加载行数，防止大结果集耗尽内存 */
     /** 单次 fetch 最大行数，避免 128M 等小内存下 OOM；超量请用 fetchIterator() 或 limit() */
-    private const MAX_FETCH_ROWS = 50_000;
-
     /**
      * 为表达式中未加引号的保留字加双引号，避免 syntax error
      * 匹配形如 CONCAT(a,b,order,c) 中作为标识符的 order
@@ -2227,6 +2225,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 $dbTraceSql = $this->sql;
             }
         }
+        $this->resolveFetchTypeFromSql();
+        $this->guardUnboundedSelectFetch($this->getFetchRowLimit());
         try {
             try {
         // 在执行前检查是否包含多个 SQL 命令
@@ -2843,14 +2843,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         } else {
             while (($row = $this->PDOStatement->fetch(PDO::FETCH_ASSOC)) !== false) {
                 $data[] = $row;
-                if (count($data) >= self::MAX_FETCH_ROWS) {
-                    $this->PDOStatement->closeCursor();
-                    $this->PDOStatement = null;
-                    $this->batch = false;
-                    throw new DbException(
-                        __('结果集超过 %{1} 行，为避免内存耗尽请使用 limit() 或 fetchIterator() 流式读取。', [self::MAX_FETCH_ROWS])
-                    );
-                }
             }
         }
         $this->PDOStatement->closeCursor();
@@ -2976,24 +2968,16 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             Debug::target('fetch', $msg);
         }
         
-        $this->reset();
+        $this->clearQuery();
+        if ($this->table_alias !== 'main_table') {
+            $this->alias('main_table');
+        }
         return $result;
     }
 
     /**
      * 从 limit 子句解析出数值（LIMIT n 或 LIMIT n OFFSET m）
      */
-    protected function getLimitValue(): ?int
-    {
-        if ($this->limit === '') {
-            return null;
-        }
-        if (preg_match('/\bLIMIT\s+(\d+)/i', $this->limit, $m)) {
-            return (int) $m[1];
-        }
-        return null;
-    }
-
     /**
      * 智能获取结果：小结果集用 fetch 返回数组，大结果集用 fetchIterator 流式迭代
      * 根据是否设置 LIMIT 及与阈值比较自动选择，调用方统一 foreach 即可。
@@ -3005,15 +2989,17 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
      * @return array<int, array|object>|\Generator<int, array|object, mixed, void>
      */
     public function fetchSmart(
-        int $threshold = 5000,
+        int $threshold = 0,
         string $model_class = '',
         int $iteratorBatchSize = 1
     ): array|\Generator {
-        $limit = $this->getLimitValue();
-        if ($limit !== null && $limit <= $threshold) {
-            return $this->fetch($model_class) ?: [];
+        $limit = $threshold > 0 ? $threshold : $this->getFetchRowLimit();
+        $this->guardUnboundedSelectFetch($limit);
+        $this->resolveFetchTypeFromSql();
+        if ($this->isSelectStyleFetch()) {
+            return $this->fetchIterator($model_class, $iteratorBatchSize);
         }
-        return $this->fetchIterator($model_class, $iteratorBatchSize);
+        return $this->fetch($model_class) ?: [];
     }
 
     /**
@@ -3026,6 +3012,25 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
      */
     public function fetchIterator(string $model_class = '', int $batchSize = 1): \Generator
     {
+        if ($batchSize <= 1) {
+            $batchSize = 1;
+        }
+
+        $this->resolveFetchTypeFromSql();
+        if (!$this->isSelectStyleFetch()) {
+            $rows = $this->fetchArray();
+            if ($batchSize <= 1) {
+                foreach ($rows as $row) {
+                    yield $row;
+                }
+            } else {
+                foreach (array_chunk($rows, $batchSize) as $batch) {
+                    yield $batch;
+                }
+            }
+            return;
+        }
+
         $stmt = $this->PDOStatement;
         $needExecute = ($stmt === null && !empty($this->sql));
         if ($needExecute) {
@@ -3048,30 +3053,42 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             return;
         }
         try {
-            $batch = [];
-            while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
-                if ($model_class && is_array($row)) {
-                    $row = ObjectManager::make($model_class, ['data' => $row], '__construct');
+            if ($batchSize === 1) {
+                while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+                    if ($model_class && is_array($row)) {
+                        yield ObjectManager::make($model_class, ['data' => $row], '__construct');
+                    } else {
+                        yield $row;
+                    }
                 }
-                if ($batchSize <= 1) {
-                    yield $row;
-                } else {
-                    $batch[] = $row;
+            } else {
+                $batch = [];
+                while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+                    if ($model_class && is_array($row)) {
+                        $batch[] = ObjectManager::make($model_class, ['data' => $row], '__construct');
+                    } else {
+                        $batch[] = $row;
+                    }
                     if (count($batch) >= $batchSize) {
                         yield $batch;
                         $batch = [];
                     }
                 }
-            }
-            if ($batchSize > 1 && !empty($batch)) {
-                yield $batch;
+                if (!empty($batch)) {
+                    yield $batch;
+                }
             }
         } finally {
             if ($this->PDOStatement !== null) {
                 $this->PDOStatement->closeCursor();
                 $this->PDOStatement = null;
             }
+            $this->fetch_type = '';
             $this->batch = false;
+            $this->clearQuery();
+            if ($this->table_alias !== 'main_table') {
+                $this->alias('main_table');
+            }
         }
     }
     
