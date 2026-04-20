@@ -46,6 +46,9 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
                 ];
 
                 $result = $this->healthResults[$port] ?? true;
+                if (\is_array($result) && \array_is_list($result)) {
+                    $result = \array_shift($this->healthResults[$port]);
+                }
                 if ($result === true) {
                     return ['success' => true, 'error' => '', 'status_line' => 'HTTP/1.1 200 OK', 'elapsed' => 0.01];
                 }
@@ -74,6 +77,9 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
                 ];
 
                 $result = $this->homepageResults[$port] ?? true;
+                if (\is_array($result) && \array_is_list($result)) {
+                    $result = \array_shift($this->homepageResults[$port]);
+                }
                 if ($result === true) {
                     return ['success' => true, 'error' => ''];
                 }
@@ -456,6 +462,25 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertSame('', $result['error']);
         self::assertCount(1, $core->healthCalls);
         self::assertCount(1, $core->homepageCalls);
+    }
+
+    public function testTrustingMasterReadyWarmupExtendsRetriesForTransientEarlyCloses(): void
+    {
+        $core = $this->createTrustingMasterReadyWarmupCore([
+            19982 => [
+                'health connection closed before response after 0.05s',
+                'health connection closed before response after 0.05s',
+                'health connection closed before response after 0.05s',
+                ['success' => true, 'error' => '', 'status_line' => 'HTTP/1.1 200 OK', 'elapsed' => 0.08],
+            ],
+        ]);
+
+        $result = $core->runTrustingMasterReadyWarmup(19982);
+
+        self::assertTrue($result['success']);
+        self::assertSame('', $result['error']);
+        self::assertCount(4, $core->healthCalls);
+        self::assertSame([], $core->homepageCalls);
     }
 
     public function testWarmupWaitSliceFallsBackOutsideFiberEvenWhenCallbackIsRegistered(): void

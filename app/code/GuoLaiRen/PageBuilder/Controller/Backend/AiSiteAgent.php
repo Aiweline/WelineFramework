@@ -238,6 +238,7 @@ class AiSiteAgent extends BaseController
         $this->assign('start_publish_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-publish'));
         $this->assign('operation_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/operation-sse', ['public_id' => $publicId]));
         $this->assign('switch_preview_page_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-switch-preview-page'));
+        $this->assign('workspace_snapshot_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-workspace-snapshot'));
         $this->assign('publish_check_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-publish-checklist'));
         $this->assign('delete_workspace_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-delete-workspace'));
         $this->assign('recommend_domain_url', $this->url->getBackendUrlPath('websites/backend/site-builder-agent/recommend-domain'));
@@ -642,6 +643,12 @@ SCRIPT;
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '切换当前预览页', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postSwitchPreviewPage(): string { return $this->handleSwitchPreviewPage(); }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '拉取工作区快照（含阶段一队列信息）', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postWorkspaceSnapshot(): string
+    {
+        return $this->handleWorkspaceSnapshot();
+    }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '发布前检查', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postPublishChecklist(): string { return $this->handlePublishChecklist(); }
@@ -1985,6 +1992,9 @@ SCRIPT;
                 'message' => $errorMessage,
                 'prompt_mode' => $promptMode,
             ]);
+            if ($sse instanceof QueueDbWriter) {
+                throw $throwable;
+            }
         }
     }
 
@@ -2717,6 +2727,28 @@ SCRIPT;
         ]);
     }
 
+    /**
+     * 只读：返回当前 buildWorkspaceState，用于前端刷新队列信息等，不写 scope、不写事件。
+     */
+    private function handleWorkspaceSnapshot(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
+        if ($adminId <= 0 || $publicId === '') {
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
+        }
+        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+        }
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+
+        return $this->fetchJson([
+            'success' => true,
+            'data' => $this->buildWorkspaceState($fresh, $adminId, 24, false),
+        ]);
+    }
+
     private function handleSwitchPreviewPage(): string
     {
         $adminId = (int)$this->getLoginUserId();
@@ -3098,7 +3130,13 @@ SCRIPT;
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
         $progressPercent = (int)($activeOperation['progress_percent'] ?? 0);
         $allowResumeStuckRunning = ($activeStatus === 'running' && $progressPercent <= 0);
-        if ($activeStatus !== 'queued' && !$allowResumeStuckRunning) {
+        // 队列消费：claim 已将状态置为 running，且可能携带上次残留的 progress_percent>0；不得静默 return，否则 queue:run 无输出且不落库。
+        $queueDbMode = $sse instanceof QueueDbWriter;
+        if ($queueDbMode) {
+            if (!\in_array($activeStatus, ['queued', 'running'], true)) {
+                return;
+            }
+        } elseif ($activeStatus !== 'queued' && !$allowResumeStuckRunning) {
             return;
         }
 
@@ -3383,6 +3421,9 @@ SCRIPT;
                 'created_at' => \date('Y-m-d H:i:s'),
             ]);
             $sse->sendError($throwable->getMessage(), $this->inferThrowableHttpCode($throwable));
+            if ($sse instanceof QueueDbWriter) {
+                throw $throwable;
+            }
         }
     }
 
@@ -3677,6 +3718,10 @@ SCRIPT;
                 'message' => $throwable->getMessage(),
                 'prompt_mode' => $promptMode,
             ]);
+            // 队列消费（QueueDbWriter）必须向上抛错，否则 execute 会误判成功、草案校验报“字段全空”。
+            if ($sse instanceof QueueDbWriter) {
+                throw $throwable;
+            }
         }
     }
 
@@ -4486,6 +4531,39 @@ SCRIPT;
     }
 
     /**
+     * 阶段一 plan 对应 weline_queue 行：queue_id + 快照 + process + result 尾部，供侧栏「任务进度」内嵌展示。
+     *
+     * @param array<string, mixed> $activeOperation
+     *
+     * @return array<string, mixed>|null
+     */
+    private function buildPlanStageQueueInfoPayload(AiSiteAgentSession $session, array $activeOperation): ?array
+    {
+        $queueId = 0;
+        if (\trim((string)($activeOperation['operation'] ?? '')) === 'plan') {
+            $queueId = (int)($activeOperation['queue_id'] ?? 0);
+        }
+        $queueRow = $this->findAiSiteOperationQueueRow($session, 'plan', $queueId);
+        if (!\is_array($queueRow) || $queueRow === []) {
+            return null;
+        }
+        $snap = $this->buildQueueObserverPublicSnapshot($queueRow);
+        $process = \trim((string)($queueRow['process'] ?? ''));
+        $result = (string)($queueRow['result'] ?? '');
+        $max = 24000;
+        if (\strlen($result) > $max) {
+            $result = (string)__('…（以下仅显示末尾约 %{n} 字符）', ['n' => (string)$max]) . "\n" . \substr($result, -$max);
+        }
+
+        return [
+            'queue_id' => (int)($snap['queue_id'] ?? 0),
+            'snapshot' => $snap,
+            'process' => $process,
+            'result_log' => $result,
+        ];
+    }
+
+    /**
      * 队列创建/连接观察流后，向前台打印可读的队列元数据（多行 detail_lines + 结构化快照）。
      *
      * @param array<string, mixed> $queueRow
@@ -5153,6 +5231,7 @@ SCRIPT;
      *   visual_edit_url:string,
      *   pre_publish_visual_urls:array<string, string>,
      *   active_operation:array<string, mixed>,
+     *   plan_queue_info:array<string, mixed>|null,
      *   build_summary:array<string, mixed>,
      *   top_logs:list<array<string, mixed>>,
      *   scope:array<string, mixed>,
@@ -5424,6 +5503,7 @@ SCRIPT;
             'visual_edit_url' => (string)($normalized['visual_edit_url'] ?? ''),
             'pre_publish_visual_urls' => \is_array($normalized['pre_publish_visual_urls'] ?? null) ? $normalized['pre_publish_visual_urls'] : $prePublishVisualUrls,
             'active_operation' => $activeOperation,
+            'plan_queue_info' => $this->buildPlanStageQueueInfoPayload($session, $activeOperation),
             'build_summary' => \is_array($normalized['build_summary'] ?? null) ? $normalized['build_summary'] : [],
             'top_logs' => $topLogs,
             'scope' => $clientScope,
@@ -5502,6 +5582,7 @@ SCRIPT;
             'visual_edit_url' => (string)($state['visual_edit_url'] ?? ''),
             'pre_publish_visual_urls' => \is_array($state['pre_publish_visual_urls'] ?? null) ? $state['pre_publish_visual_urls'] : [],
             'active_operation' => \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [],
+            'plan_queue_info' => \is_array($state['plan_queue_info'] ?? null) ? $state['plan_queue_info'] : null,
             'build_task_summary' => \is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : [],
             'build_summary' => \is_array($state['build_summary'] ?? null) ? $state['build_summary'] : [],
             'pending_generation_page_types' => \is_array($state['pending_generation_page_types'] ?? null) ? $state['pending_generation_page_types'] : [],
@@ -7224,6 +7305,7 @@ SCRIPT;
             \is_array($scope['website_profile']) ? $scope['website_profile'] : [],
             AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS
         );
+        $queueForcedAiRebuild = (int)($scope['_queue_force_build']['active'] ?? 0) === 1;
         $pageTypeLabels = Page::getPageTypes();
         $dispatchWindow = 3;
         $initialPendingTasks = $this->buildTaskService->listPendingTasks($scope);
@@ -7285,7 +7367,13 @@ SCRIPT;
                     $region === 'header' ? __('Generating shared header') : __('Generating shared footer'),
                     $progressPercent
                 );
-                $component = $pageComponentGenerationService->generateSharedComponent($region, $scope['website_profile'], $scope);
+                $component = $pageComponentGenerationService->generateSharedComponent(
+                    $region,
+                    $scope['website_profile'],
+                    $scope,
+                    '',
+                    $queueForcedAiRebuild
+                );
                 $sharedComponents[$region] = $component;
                 $scope['shared_components'] = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
                 $scope['shared_components'][$region] = $component;
@@ -7856,6 +7944,16 @@ SCRIPT;
     private function runBuildOperation(SseWriter $sse, AiSiteAgentSession $session, int $adminId): array
     {
         $this->assertActiveStreamLeaseAlive($session, $adminId);
+        // 队列/CLI 下首条可见进度：后续虚拟主题路径会先跑 profile 生成，可能耗时较长，避免认领后长时间无 SSE。
+        $this->sendOperationProgress(
+            $sse,
+            $session,
+            $adminId,
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'build',
+            (string)__('正在执行，请稍候...'),
+            1
+        );
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
         $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
         if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
@@ -8862,6 +8960,8 @@ SCRIPT;
             \is_array($scope['website_profile']) ? $scope['website_profile'] : [],
             AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
         );
+        // queue:run -f：_queue_force_build.active=1 时强制走 AI，并绕过共享 Header/Footer 的进程内静态缓存。
+        $queueForcedAiRebuild = (int)($scope['_queue_force_build']['active'] ?? 0) === 1;
         $pageTypeLabels = Page::getPageTypes();
         $dispatchWindow = 3;
         $initialPendingTasks = $this->buildTaskService->listPendingTasks($scope);
@@ -8927,7 +9027,13 @@ SCRIPT;
                     $region === 'header' ? __('Generating shared header') : __('Generating shared footer'),
                     $progressPercent
                 );
-                $component = $pageComponentGenerationService->generateSharedComponent($region, $scope['website_profile'], $scope);
+                $component = $pageComponentGenerationService->generateSharedComponent(
+                    $region,
+                    $scope['website_profile'],
+                    $scope,
+                    '',
+                    $queueForcedAiRebuild
+                );
                 $sharedComponents[$region] = $component;
                 $scope['shared_components'] = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
                 $scope['shared_components'][$region] = $component;

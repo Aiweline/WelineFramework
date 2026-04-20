@@ -60,17 +60,69 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertSame('/tmp/test-key.pem', (string)($config['ssl_key'] ?? ''));
     }
 
-    private function createProbe(): StartConfigProbe
+    public function testLegacyManagedLocalHostFallsBackToGeneratedProjectHost(): void
+    {
+        $start = $this->createProbe(
+            ['host' => 'p11005ce4.weline.local', 'ssl_domain' => 'p11005ce4.weline.local']
+        );
+        $config = $start->resolveConfig('default', []);
+
+        self::assertSame('unit-test.weline.test', (string)($config['host'] ?? ''));
+        self::assertArrayNotHasKey('ssl_domain', $config);
+    }
+
+    public function testMissingHostAlsoFallsBackToGeneratedProjectHost(): void
+    {
+        $start = $this->createProbe(['host' => '', 'ssl_domain' => 'localhost']);
+        $config = $start->resolveConfig('default', []);
+
+        self::assertSame('unit-test.weline.test', (string)($config['host'] ?? ''));
+        self::assertArrayNotHasKey('ssl_domain', $config);
+    }
+
+    public function testCustomHostIsPreservedWhenPresent(): void
+    {
+        $start = $this->createProbe(['host' => 'custom.example.test']);
+        $config = $start->resolveConfig('default', []);
+
+        self::assertSame('custom.example.test', (string)($config['host'] ?? ''));
+    }
+
+    public function testEnvCustomHostOverridesSavedLegacyHost(): void
+    {
+        $start = $this->createProbe(
+            ['host' => 'p11005ce4.weline.local'],
+            ['wls' => ['host' => 'demo.internal.example']]
+        );
+        $config = $start->resolveConfig('default', []);
+
+        self::assertSame('demo.internal.example', (string)($config['host'] ?? ''));
+    }
+
+    public function testBaseGetEnvConfigReturnsArray(): void
+    {
+        $start = new StartBaseEnvConfigProbe();
+
+        self::assertIsArray($start->readEnvConfig());
+    }
+
+    private function createProbe(?array $savedConfig = null, array $envConfig = []): StartConfigProbe
     {
         $sslServiceMock = $this->createMock(SslCertificateService::class);
         ObjectManager::setInstance(SslCertificateService::class, $sslServiceMock);
 
-        return new StartConfigProbe();
+        return new StartConfigProbe($savedConfig, $envConfig);
     }
 }
 
 final class StartConfigProbe extends Start
 {
+    public function __construct(
+        private readonly ?array $savedConfig = null,
+        private readonly array $envConfig = []
+    ) {
+    }
+
     public function resolveConfig(string $instanceName, array $args): array
     {
         return $this->getServerConfig($instanceName, $args);
@@ -78,14 +130,63 @@ final class StartConfigProbe extends Start
 
     protected function getDefaultHost(): string
     {
-        return 'unit-test.local';
+        return 'unit-test.weline.test';
     }
 
     protected function loadSavedInstanceConfig(string $instanceName): ?array
     {
         unset($instanceName);
 
+        return $this->savedConfig;
+    }
+
+    protected function getEnvConfig(): array
+    {
+        return $this->envConfig;
+    }
+
+    protected function restoreManagedCertificateForConfig(array &$config, SslCertificateService $sslService, string $host): bool
+    {
+        unset($config, $sslService, $host);
+
+        return false;
+    }
+
+    protected function autoDetectSslCertificates(): ?array
+    {
         return null;
+    }
+
+    protected function ensureHostsFileConfigured(string $host): void
+    {
+        unset($host);
+    }
+
+    protected function ensureLocalSelfSignedCertificates(): void
+    {
+    }
+
+    protected function generateCertificateMap(): void
+    {
+    }
+
+    protected function calculateWorkerCount($workerCount, string $mode): int
+    {
+        unset($mode);
+
+        if ($workerCount === 'auto' || $workerCount === null || $workerCount === '') {
+            return 4;
+        }
+
+        return (int)$workerCount;
+    }
+}
+
+final class StartBaseEnvConfigProbe extends Start
+{
+    public function readEnvConfig(): array
+    {
+        return $this->getEnvConfig();
     }
 
     protected function restoreManagedCertificateForConfig(array &$config, SslCertificateService $sslService, string $host): bool

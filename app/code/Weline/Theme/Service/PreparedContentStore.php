@@ -141,16 +141,24 @@ class PreparedContentStore
 
     private static function resolveDirectContent(mixed $content, mixed $meta, mixed $childHtml): ?string
     {
-        if (is_string($content)) {
+        // 仅非空字符串视为“已注入的直接内容”。空串常见于布局 @param.content 默认值，
+        // 若直接返回 '' 会短路掉 PreparedContentStore / 子模板回退，导致主内容区空白。
+        if (is_string($content) && $content !== '') {
             return $content;
         }
 
         if (is_array($meta) && array_key_exists('content', $meta) && is_string($meta['content'])) {
-            return $meta['content'];
+            $metaContent = $meta['content'];
+            if ($metaContent !== '') {
+                return $metaContent;
+            }
         }
 
         if (is_array($childHtml) && array_key_exists('content', $childHtml) && is_string($childHtml['content'])) {
-            return $childHtml['content'];
+            $childContent = $childHtml['content'];
+            if ($childContent !== '') {
+                return $childContent;
+            }
         }
 
         return null;

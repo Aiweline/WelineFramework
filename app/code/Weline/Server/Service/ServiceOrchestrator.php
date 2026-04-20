@@ -582,11 +582,15 @@ class ServiceOrchestrator
         ], true);
     }
 
-    private function isDeduplicableQueuedControlCommand(string $action): bool
+    private function isImperialControlCommand(string $action): bool
     {
         return \in_array($action, [
+            ControlMessage::ACTION_STOP,
+            ControlMessage::ACTION_RELOAD,
+            ControlMessage::ACTION_RELOAD_WAIT,
             ControlMessage::ACTION_MAINTENANCE_ENABLE,
             ControlMessage::ACTION_MAINTENANCE_DISABLE,
+            ControlMessage::ACTION_ROLLING_RESTART,
         ], true);
     }
 
@@ -689,7 +693,7 @@ class ServiceOrchestrator
      */
     private function getControlOperationQueuePosition(array $operation): int
     {
-        $position = $this->activeControlOperation === null ? 0 : 1;
+        $position = $this->getBlockingControlOperationQueueBase();
         foreach ($this->pendingControlOperations as $index => $queuedOperation) {
             if ($queuedOperation['id'] === $operation['id']) {
                 return $position + $index + 1;
@@ -705,7 +709,7 @@ class ServiceOrchestrator
             return 1;
         }
 
-        $position = $this->activeControlOperation === null ? 0 : 1;
+        $position = $this->getBlockingControlOperationQueueBase();
         foreach ($this->pendingControlOperations as $index => $queuedOperation) {
             if (($queuedOperation['id'] ?? '') === $operationId) {
                 return $position + $index + 1;
@@ -741,7 +745,23 @@ class ServiceOrchestrator
             ];
         }
 
+        if ($this->ipcExclusiveCommand !== null) {
+            return [
+                'id' => 'exclusive_' . $this->ipcExclusiveCommand,
+                'action' => $this->ipcExclusiveCommand,
+            ];
+        }
+
         return null;
+    }
+
+    private function getBlockingControlOperationQueueBase(): int
+    {
+        if ($this->activeControlOperation !== null) {
+            return 1;
+        }
+
+        return $this->ipcExclusiveCommand === null ? 0 : 1;
     }
 
     /**
@@ -1065,7 +1085,7 @@ class ServiceOrchestrator
         $this->pendingControlOperations = [];
     }
 
-    private function preemptActiveControlOperationForStop(): void
+    private function preemptActiveControlOperationForImperial(string $incomingAction): void
     {
         if ($this->activeControlOperation === null) {
             return;
@@ -1073,14 +1093,32 @@ class ServiceOrchestrator
 
         $this->activeControlOperation['state'] = self::CONTROL_OPERATION_STATE_ABORTING;
         WlsLogger::warning_(
-            "[Orchestrator] stop 请求到达，标记活跃控制操作中止 id={$this->activeControlOperation['id']} action={$this->activeControlOperation['action']}"
+            "[Orchestrator] 帝王指令={$incomingAction} 请求到达，标记活跃控制操作中止 id={$this->activeControlOperation['id']} action={$this->activeControlOperation['action']}"
         );
+    }
+
+    /**
+     * @param array{id:string,action:string,clientId:int,payload:array<string,mixed>,state:string,queuedAt:float,startedAt:?float} $operation
+     */
+    private function isOperationExclusiveHolder(array $operation): bool
+    {
+        return $this->ipcExclusiveCommand !== null
+            && $operation['action'] === $this->ipcExclusiveCommand
+            && $this->ipcExclusiveClientId !== null
+            && $operation['clientId'] === $this->ipcExclusiveClientId;
     }
 
     private function processNextQueuedControlOperation(): bool
     {
         if ($this->activeControlOperation !== null || $this->pendingControlOperations === []) {
             return false;
+        }
+
+        if ($this->ipcExclusiveCommand !== null) {
+            $firstOperation = $this->pendingControlOperations[0] ?? null;
+            if ($firstOperation === null || !$this->isOperationExclusiveHolder($firstOperation)) {
+                return false;
+            }
         }
 
         /** @var array{id:string,action:string,clientId:int,payload:array<string,mixed>,state:string,queuedAt:float,startedAt:?float} $operation */
@@ -5338,6 +5376,7 @@ class ServiceOrchestrator
         }
 
         $shouldYield = $this->activeControlOperation !== null
+            || ($this->activeControlOperation === null && $this->ipcExclusiveCommand !== null)
             || $this->pendingControlOperations !== []
             || $this->fullRestartRequested
             || $this->childProcessStopInProgress;
@@ -8094,10 +8133,48 @@ class ServiceOrchestrator
                     "[Orchestrator] 接收 STOP 命令: client={$clientId}, source={$stopSource}, trace={$stopTraceId}"
                 );
                 $this->clearPendingControlOperations('Control operation cancelled by stop');
-                $this->preemptActiveControlOperationForStop();
+                $this->preemptActiveControlOperationForImperial($action);
                 $this->requestStop('command', $clientId, true);
 
                 return;
+            }
+
+            if ($this->isImperialControlCommand($action)) {
+                $existingImperialOperation = $this->findEquivalentQueuedOrActiveOperation($action);
+                if ($this->ipcExclusiveCommand === $action && $existingImperialOperation !== null) {
+                    WlsLogger::info_(
+                        "[Orchestrator] 帝王指令复用已有控制操作 action={$action} client={$clientId} -> existing={$existingImperialOperation['id']}"
+                    );
+                    $this->sendDeduplicatedControlOperationAck($clientId, [
+                        'id' => (string)$existingImperialOperation['id'],
+                        'action' => (string)$existingImperialOperation['action'],
+                        'state' => (string)$existingImperialOperation['state'],
+                    ]);
+
+                    return;
+                }
+
+                $this->clearPendingControlOperations("Control operation cancelled by imperial {$action}");
+                $this->preemptActiveControlOperationForImperial($action);
+                $this->ipcClearFieldForNewImperial($clientId, $action);
+
+                if ($this->isMaintenanceControlAction($action) && $this->isMaintenanceActionAlreadySatisfied($action)) {
+                    $message = $action === ControlMessage::ACTION_MAINTENANCE_ENABLE
+                        ? 'Maintenance already enabled'
+                        : 'Maintenance already disabled';
+                    $this->ipcReleaseExclusive();
+                    $this->controlServer?->sendTo(
+                        $clientId,
+                        ControlMessage::commandResult(true, [
+                            'async' => false,
+                            'accepted' => true,
+                            'operation_id' => null,
+                            'state' => self::CONTROL_OPERATION_STATE_COMPLETED,
+                        ], $message)
+                    );
+
+                    return;
+                }
             }
 
             if ($this->isMaintenanceControlAction($action)) {
@@ -8128,22 +8205,6 @@ class ServiceOrchestrator
                             "[Orchestrator] 维护指令队列收敛：移除 {$removed} 个 {$oppositeAction}，incoming={$action}, client={$clientId}"
                         );
                     }
-                }
-            }
-
-            if ($this->isDeduplicableQueuedControlCommand($action)) {
-                $existingOperation = $this->findEquivalentQueuedOrActiveOperation($action);
-                if ($existingOperation !== null) {
-                    WlsLogger::info_(
-                        "[Orchestrator] 控制操作去重 action={$action} client={$clientId} -> existing={$existingOperation['id']}"
-                    );
-                    $this->sendDeduplicatedControlOperationAck($clientId, [
-                        'id' => (string)$existingOperation['id'],
-                        'action' => (string)$existingOperation['action'],
-                        'state' => (string)$existingOperation['state'],
-                    ]);
-
-                    return;
                 }
             }
 
