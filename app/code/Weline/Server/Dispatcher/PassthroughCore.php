@@ -61,7 +61,9 @@ class PassthroughCore
     private const IPC_READY_WARMUP_CONNECT_MIN = 1.0;
     private const IPC_READY_WARMUP_CONNECT_MAX = 2.5;
     private const IPC_READY_WARMUP_RESPONSE_SEC = 8.0;
-    private const IPC_READY_WARMUP_RETRIES = 3;
+    private const IPC_READY_WARMUP_MIN_ATTEMPTS = 3;
+    private const IPC_READY_WARMUP_MAX_ATTEMPTS = 30;
+    private const IPC_READY_WARMUP_RETRY_GRACE_SEC = 3.0;
     private const IPC_READY_WARMUP_RETRY_DELAY_USEC = 100000;
     /**
      * 首页预热仅用于“提前点燃”应用栈，不参与入池成败判定；因此采用更短预算，避免拖慢维护接流。
@@ -299,6 +301,11 @@ class PassthroughCore
     private float $lastEmptyWorkerPortsStderrAt = 0.0;
     /** @var array<string, float> */
     private array $maintenanceDecisionLoggedAt = [];
+    /** @var array<int, int> */
+    private array $requestIngressLogCountByConn = [];
+    /** @var array<int, string> */
+    private array $lastLoggedHttpRequestLineByConn = [];
+    private int $requestIngressLogMaxPerConnection = 3;
     private $spinWaitTickCallback = null;
 
     /**
@@ -1389,7 +1396,7 @@ class PassthroughCore
      */
     protected function warmupWorkerTrustingMasterReady(int $port): array
     {
-        $maxRetries = self::IPC_READY_WARMUP_RETRIES;
+        $maxRetries = self::IPC_READY_WARMUP_MAX_ATTEMPTS;
         $retryDelay = self::IPC_READY_WARMUP_RETRY_DELAY_USEC;
         $lastError = 'warmup failed';
         $configured = (float) $this->connectTimeout;
@@ -1398,6 +1405,7 @@ class PassthroughCore
             \min($configured > 0 ? $configured : self::IPC_READY_WARMUP_CONNECT_MAX, self::IPC_READY_WARMUP_CONNECT_MAX)
         );
         $responseTimeout = self::IPC_READY_WARMUP_RESPONSE_SEC;
+        $startedAt = \microtime(true);
 
         $this->logWarmup(
             "IPC 入池探活 Worker:{$port} path=" . self::WORKER_HEALTH_PATH
@@ -1447,17 +1455,34 @@ class PassthroughCore
 
             $lastError = (string)($probe['error'] ?? $lastError);
             $elapsed = $probe['elapsed'] ?? 0.0;
+            $shouldRetry = $this->shouldContinueTrustingMasterReadyWarmup($attempt, $startedAt);
             $this->logWarmup(
                 "Worker:{$port} IPC 入池探活失败 (尝试 {$attempt}/{$maxRetries}, 耗时 {$elapsed}s): {$lastError}",
                 $attempt === $maxRetries ? 'ERROR' : 'WARNING'
             );
-            if ($attempt < $maxRetries) {
+            if ($shouldRetry) {
                 $this->warmupYield();
                 $this->warmupDelayUsec($retryDelay);
+                continue;
             }
+
+            break;
         }
 
         return ['success' => false, 'error' => $lastError];
+    }
+
+    private function shouldContinueTrustingMasterReadyWarmup(int $attempt, float $startedAt): bool
+    {
+        if ($attempt < self::IPC_READY_WARMUP_MIN_ATTEMPTS) {
+            return true;
+        }
+
+        if ($attempt >= self::IPC_READY_WARMUP_MAX_ATTEMPTS) {
+            return false;
+        }
+
+        return (\microtime(true) - $startedAt) < self::IPC_READY_WARMUP_RETRY_GRACE_SEC;
     }
 
     private function buildWorkerHomepageWarmupRequest(): string
@@ -1907,6 +1932,7 @@ class PassthroughCore
             }
 
             $response = '';
+            $closedWithoutResponse = false;
             $readDeadline = \microtime(true) + \max(0.5, $responseTimeout);
             while (!\feof($conn) && \strlen($response) < 512 && \microtime(true) < $readDeadline) {
                 $this->warmupYield();
@@ -1919,6 +1945,7 @@ class PassthroughCore
                     continue;
                 }
                 if (\feof($conn)) {
+                    $closedWithoutResponse = ($response === '');
                     break;
                 }
                 $ready = $this->waitForStreamReady($conn, true, false, $readDeadline);
@@ -1938,7 +1965,9 @@ class PassthroughCore
             if ($response === '') {
                 return [
                     'success' => false,
-                    'error' => "health response timeout after {$elapsed}s",
+                    'error' => $closedWithoutResponse
+                        ? "health connection closed before response after {$elapsed}s"
+                        : "health response timeout after {$elapsed}s",
                     'elapsed' => $elapsed,
                 ];
             }
@@ -2438,6 +2467,7 @@ class PassthroughCore
         
         $length = \strlen($data);
         $this->stats['bytes_in'] += $length;
+        $this->logIncomingRequestIngress($connId, $data);
         
         // 转发到 Worker（完整写入循环，处理部分写入）
         $totalWritten = 0;
@@ -2656,7 +2686,74 @@ class PassthroughCore
         }
 
         $this->connections[$connId]['worker_responded'] = true;
+        $requestSentAt = (float)($this->connections[$connId]['request_sent_at'] ?? 0.0);
+        $ttfbMs = $requestSentAt > 0.0 ? \round((\microtime(true) - $requestSentAt) * 1000, 1) : null;
+        $clientIp = (string)($this->connections[$connId]['clientIp'] ?? '');
+        $message = "Worker 开始响应请求: conn={$connId}, client={$clientIp}, worker={$workerPort}";
+        if ($ttfbMs !== null) {
+            $message .= ", ttfb_ms={$ttfbMs}";
+        }
+        $this->logWarmup($message, 'INFO');
         $this->recordWorkerSuccess($workerPort);
+    }
+
+    private function logIncomingRequestIngress(int $connId, string $data): void
+    {
+        if (!isset($this->connections[$connId])) {
+            return;
+        }
+
+        $loggedCount = (int)($this->requestIngressLogCountByConn[$connId] ?? 0);
+        if ($loggedCount >= $this->requestIngressLogMaxPerConnection) {
+            return;
+        }
+
+        $requestLine = $this->extractHttpRequestLine($data);
+        $isFirstIngressLog = $loggedCount === 0;
+        if (!$isFirstIngressLog && $requestLine === '') {
+            return;
+        }
+
+        $lastRequestLine = (string)($this->lastLoggedHttpRequestLineByConn[$connId] ?? '');
+        if (!$isFirstIngressLog && $requestLine !== '' && $requestLine === $lastRequestLine) {
+            return;
+        }
+
+        $this->requestIngressLogCountByConn[$connId] = $loggedCount + 1;
+        if ($requestLine !== '') {
+            $this->lastLoggedHttpRequestLineByConn[$connId] = $requestLine;
+        }
+
+        $conn = $this->connections[$connId];
+        $workerPort = (int)($conn['port'] ?? 0);
+        $clientIp = (string)($conn['clientIp'] ?? '');
+        $message = "收到客户端请求数据: conn={$connId}, client={$clientIp}, worker={$workerPort}, bytes=" . \strlen($data);
+        if ($requestLine !== '') {
+            $message .= ", request=\"{$requestLine}\"";
+        } else {
+            $message .= ', request=opaque';
+        }
+        $this->logWarmup($message, 'INFO');
+    }
+
+    private function extractHttpRequestLine(string $data): string
+    {
+        $lineEnd = \strpos($data, "\r\n");
+        if ($lineEnd === false) {
+            $lineEnd = \strpos($data, "\n");
+        }
+
+        $firstLine = $lineEnd === false ? $data : \substr($data, 0, $lineEnd);
+        $firstLine = (string)\preg_replace('/\s+/', ' ', \trim($firstLine));
+        if ($firstLine === '' || \strlen($firstLine) > 512) {
+            return '';
+        }
+
+        if (!\preg_match('/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|CONNECT)\s+\S+\s+HTTP\/1\.[01]$/i', $firstLine)) {
+            return '';
+        }
+
+        return \substr($firstLine, 0, 200);
     }
 
     /**
@@ -2844,6 +2941,8 @@ class PassthroughCore
             unset($this->workerClosed[$connId]);
             unset($this->connectionTerminalReasons[$connId]);
             unset($this->clientInputClosed[$connId]);
+            unset($this->requestIngressLogCountByConn[$connId]);
+            unset($this->lastLoggedHttpRequestLineByConn[$connId]);
             return;
         }
         
@@ -2871,6 +2970,8 @@ class PassthroughCore
         unset($this->workerClosed[$connId]);
         unset($this->connectionTerminalReasons[$connId]);
         unset($this->clientInputClosed[$connId]);
+        unset($this->requestIngressLogCountByConn[$connId]);
+        unset($this->lastLoggedHttpRequestLineByConn[$connId]);
         
         // 移除连接缓存
         $this->routingCache->removeConnection($connId);
@@ -2890,6 +2991,8 @@ class PassthroughCore
         
         $this->connections = [];
         $this->clientInputClosed = [];
+        $this->requestIngressLogCountByConn = [];
+        $this->lastLoggedHttpRequestLineByConn = [];
         $this->stats['active_connections'] = 0;
         $this->closeAllIdleWorkerSockets();
     }
