@@ -414,11 +414,27 @@ class Reload extends CommandAbstract
         $attempted = \is_array($result['attempted'] ?? null) ? $result['attempted'] : [];
         $succeeded = \is_array($result['succeeded'] ?? null) ? $result['succeeded'] : [];
         $failedByInstance = \is_array($result['failed_by_instance'] ?? null) ? $result['failed_by_instance'] : [];
+        $resultsByInstance = \is_array($result['results_by_instance'] ?? null) ? $result['results_by_instance'] : [];
 
         $this->printer->note(
             'IPC dispatch: attempted=' . (\implode(',', \array_map('strval', $attempted)) ?: '(none)')
             . ', succeeded=' . (\implode(',', \array_map('strval', $succeeded)) ?: '(none)')
         );
+        foreach ($resultsByInstance as $targetInstance => $ipcResult) {
+            if (!\is_array($ipcResult)) {
+                continue;
+            }
+            $message = (string)($ipcResult['message'] ?? '');
+            $data = \is_array($ipcResult['data'] ?? null) ? $ipcResult['data'] : [];
+            $dataJson = $data !== []
+                ? \json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                : '{}';
+            $this->printer->note(
+                'IPC response[' . (string)$targetInstance . ']: success=' . (!empty($ipcResult['success']) ? '1' : '0')
+                . ', message=' . ($message !== '' ? $message : '(empty)')
+                . ', data=' . ($dataJson !== false ? $dataJson : '{}')
+            );
+        }
         if ($failedByInstance !== []) {
             foreach ($failedByInstance as $failedInstance => $reason) {
                 $this->printer->warning('IPC dispatch failed: ' . $failedInstance . ' => ' . (string) $reason);
