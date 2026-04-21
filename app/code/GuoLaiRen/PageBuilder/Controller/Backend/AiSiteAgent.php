@@ -10020,6 +10020,87 @@ SCRIPT;
         return $this->fetchJson(['success' => true, 'data' => $this->buildWorkspaceState($fresh, $adminId, 80, true)]);
     }
 
+    private function handleRefinePlanPage(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
+        $pageType = \trim((string)$this->getRequestBodyValue('page_type', ''));
+        $instruction = \trim((string)$this->getRequestBodyValue('instruction', ''));
+        if ($adminId <= 0 || $publicId === '' || $pageType === '' || $instruction === '') {
+            return $this->jsonError('INVALID_PARAMS', 'Missing required params.', self::PARAMS_REFINE_PLAN_PAGE);
+        }
+
+        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            return $this->jsonError('SESSION_NOT_FOUND', 'Session not found.', self::PARAMS_PUBLIC_ID);
+        }
+
+        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        if (!\is_array($planJson['pages'][$pageType] ?? null)) {
+            return $this->jsonError('PAGE_PLAN_NOT_FOUND', 'Stage-1 page plan not found.', ['public_id', 'page_type']);
+        }
+
+        $round = \max(1, (int)$this->getRequestBodyValue('round', ((int)($scope['plan_last_round'] ?? 0)) + 1));
+        $targetScope = \trim((string)$this->getRequestBodyValue('target_scope', ''));
+        $websiteProfile = $this->profileGenerationService->generate($scope, false);
+        try {
+            $artifacts = $this->executionBlueprintService->refineDraftPlanPage(
+                $scope,
+                \is_array($websiteProfile) ? $websiteProfile : [],
+                $pageType,
+                [
+                    'instruction' => $instruction,
+                    'target_scope' => $targetScope !== '' ? $targetScope : ('pages.' . $pageType),
+                    'round' => $round,
+                ]
+            );
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
+        }
+
+        $executionBlueprint = \is_array($artifacts['execution_blueprint'] ?? null) ? $artifacts['execution_blueprint'] : [];
+        $saved = $this->sessionService->mergeScope($session->getId(), $adminId, [
+            'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
+            'execution_blueprint_draft' => $executionBlueprint,
+            'plan_json' => \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [],
+            'plan_markdown' => (string)($artifacts['markdown'] ?? ''),
+            'plan_structured' => \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [],
+            'plan_workbench' => \is_array($artifacts['plan_workbench'] ?? null) ? $artifacts['plan_workbench'] : [],
+            'plan_last_prompt_mode' => 'refine_page',
+            'plan_last_target_scope' => $targetScope !== '' ? $targetScope : ('pages.' . $pageType),
+            'plan_last_round' => $round,
+            'plan_confirmed' => (int)($scope['plan_confirmed'] ?? 0),
+            'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? $scope['execution_blueprint_signature'] ?? ''),
+            'plan_change_scope_report' => \is_array($artifacts['page_refine_summary'] ?? null) ? $artifacts['page_refine_summary'] : [],
+        ]);
+        if (!$saved) {
+            return $this->fetchJson(['success' => false, 'message' => 'Failed to persist page refine result.']);
+        }
+
+        $this->appendWorkspaceEvent(
+            $session->getId(),
+            $adminId,
+            $this->scopeCompatibilityService->normalizeStage($session->getStage()),
+            'plan_page_refined',
+            'Stage-1 current page plan blocks refined.',
+            [
+                'operation' => 'refine_plan_page',
+                'page_type' => $pageType,
+                'details' => \is_array($artifacts['page_refine_summary'] ?? null) ? $artifacts['page_refine_summary'] : [],
+            ]
+        );
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+
+        return $this->fetchJson([
+            'success' => true,
+            'message' => 'Stage-1 current page plan blocks refined.',
+            'page_type' => $pageType,
+            'summary' => \is_array($artifacts['page_refine_summary'] ?? null) ? $artifacts['page_refine_summary'] : [],
+            'data' => $this->buildWorkspaceState($fresh, $adminId, 80, true),
+        ]);
+    }
+
     private function handleSortPlanBlocks(): string
     {
         $adminId = (int)$this->getLoginUserId();
