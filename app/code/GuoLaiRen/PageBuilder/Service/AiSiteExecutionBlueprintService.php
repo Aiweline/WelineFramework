@@ -4429,6 +4429,22 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param mixed $values
+     * @return list<string>
+     */
+    private function normalizeStringList(mixed $values): array
+    {
+        if (!\is_array($values)) {
+            return [];
+        }
+
+        return \array_values(\array_unique(\array_filter(\array_map(
+            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+            $values
+        ), static fn(string $value): bool => $value !== '')));
+    }
+
+    /**
      * @param array<string, mixed> $block
      * @return array<string, mixed>
      */
@@ -6403,31 +6419,6 @@ final class AiSiteExecutionBlueprintService
             $fields[] = $field;
         }
         return \array_values(\array_unique($fields));
-    }
-
-    /**
-     * @param mixed $items
-     * @return list<string>
-     */
-    private function normalizeStringList(mixed $items): array
-    {
-        if (!\is_array($items)) {
-            return [];
-        }
-
-        $normalized = [];
-        foreach ($items as $item) {
-            if (!\is_scalar($item)) {
-                continue;
-            }
-            $text = \trim((string)$item);
-            if ($text === '') {
-                continue;
-            }
-            $normalized[] = $text;
-        }
-
-        return \array_values(\array_unique($normalized));
     }
 
     /**
