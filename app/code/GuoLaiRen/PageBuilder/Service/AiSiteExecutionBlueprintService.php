@@ -5754,6 +5754,131 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param array<string, mixed> $sharedComponents
+     * @return array<string, array<string, mixed>>
+     */
+    private function normalizeStageOneSharedComponents(array $sharedComponents): array
+    {
+        $normalized = [];
+        foreach ($sharedComponents as $region => $componentPlan) {
+            if (!\is_array($componentPlan)) {
+                continue;
+            }
+            $component = \trim((string)($componentPlan['component'] ?? $region));
+            if ($component === '') {
+                $taskKey = \trim((string)($componentPlan['task_key'] ?? ''));
+                $component = \str_starts_with($taskKey, 'shared:') ? \substr($taskKey, \strlen('shared:')) : '';
+            }
+            $component = \trim($component);
+            if ($component === '') {
+                $component = 'shared_' . (string)(\count($normalized) + 1);
+            }
+
+            $componentPlan['component'] = $component;
+            $componentPlan['task_key'] = \trim((string)($componentPlan['task_key'] ?? '')) !== ''
+                ? \trim((string)$componentPlan['task_key'])
+                : ('shared:' . $component);
+            $componentPlan['task_type'] = \trim((string)($componentPlan['task_type'] ?? '')) !== ''
+                ? \trim((string)$componentPlan['task_type'])
+                : 'shared_component';
+            $componentPlan['sort_order'] = (int)($componentPlan['sort_order'] ?? $this->defaultStageOneSharedSortOrder($component, \count($normalized)));
+            $normalized[$component] = $componentPlan;
+        }
+
+        \uasort($normalized, static function (array $left, array $right): int {
+            $sortCompare = ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0));
+            if ($sortCompare !== 0) {
+                return $sortCompare;
+            }
+
+            return \strcmp((string)($left['component'] ?? ''), (string)($right['component'] ?? ''));
+        });
+
+        return $normalized;
+    }
+
+    private function defaultStageOneSharedSortOrder(string $component, int $fallbackIndex): int
+    {
+        return match ($component) {
+            'header' => 10,
+            'footer' => 20,
+            default => ($fallbackIndex + 1) * 10,
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $structured
+     * @param array<string, mixed> $executionBlueprint
+     * @return array<string, array<string, mixed>>
+     */
+    private function resolveStageOneSharedComponents(array $structured, array $executionBlueprint): array
+    {
+        if (\is_array($executionBlueprint['shared_components'] ?? null) && $executionBlueprint['shared_components'] !== []) {
+            return $this->normalizeStageOneSharedComponents($executionBlueprint['shared_components']);
+        }
+        if (\is_array($structured['shared_components'] ?? null) && $structured['shared_components'] !== []) {
+            return $this->normalizeStageOneSharedComponents($structured['shared_components']);
+        }
+
+        $sharedPlan = \is_array($structured['shared_plan'] ?? null) ? $structured['shared_plan'] : [];
+        $sharedComponents = [];
+        if (\is_array($sharedPlan['header_block'] ?? null) && $sharedPlan['header_block'] !== []) {
+            $sharedComponents['header'] = $sharedPlan['header_block'];
+        }
+        if (\is_array($sharedPlan['footer_block'] ?? null) && $sharedPlan['footer_block'] !== []) {
+            $sharedComponents['footer'] = $sharedPlan['footer_block'];
+        }
+
+        return $this->normalizeStageOneSharedComponents($sharedComponents);
+    }
+
+    /**
+     * @param array<string, mixed> $sharedComponents
+     * @return list<array<string, mixed>>
+     */
+    private function buildStageOneSharedBlocksPlanJson(array $sharedComponents): array
+    {
+        $rows = [];
+        foreach ($this->normalizeStageOneSharedComponents($sharedComponents) as $component => $componentPlan) {
+            $blockKey = \trim((string)($componentPlan['task_key'] ?? ('shared:' . $component)));
+            $rows[] = [
+                'block_key' => $blockKey !== '' ? $blockKey : ('shared:' . $component),
+                'component' => (string)$component,
+                'label' => \ucfirst((string)$component),
+                'sort_order' => (int)($componentPlan['sort_order'] ?? 0),
+                'goal' => \trim((string)($componentPlan['goal'] ?? '')),
+                'content' => $this->buildBlockContentSummary($componentPlan),
+                'implementation_note' => $this->buildBlockImplementationFocus($componentPlan, ''),
+                'editable_fields' => \array_values(\array_filter(\array_map(
+                    static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+                    \is_array($componentPlan['editable_fields'] ?? null) ? $componentPlan['editable_fields'] : []
+                ), static fn(string $value): bool => $value !== '')),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $sharedBlocks
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeStageOneSharedBlockRows(array $sharedBlocks): array
+    {
+        $rows = \array_values(\array_filter($sharedBlocks, static fn($row): bool => \is_array($row)));
+        \usort($rows, static function (array $left, array $right): int {
+            $sortCompare = ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0));
+            if ($sortCompare !== 0) {
+                return $sortCompare;
+            }
+
+            return \strcmp((string)($left['block_key'] ?? ''), (string)($right['block_key'] ?? ''));
+        });
+
+        return $rows;
+    }
+
+    /**
      * @param array<string, mixed> $scope
      * @param list<string> $orderedBlockKeys
      * @return array{
