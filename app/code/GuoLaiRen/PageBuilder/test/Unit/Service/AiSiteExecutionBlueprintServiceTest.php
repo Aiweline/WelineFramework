@@ -38,6 +38,14 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             (string)($artifacts['plan_json']['theme_design']['selection_reason'] ?? ''),
             (string)($artifacts['structured']['shared_plan']['theme_design']['selection_reason'] ?? '')
         );
+        self::assertStringContainsString(
+            'shared_prompt_context',
+            (string)($artifacts['plan_json']['pages']['home_page']['theme_alignment_summary'] ?? '')
+        );
+        self::assertStringContainsString(
+            'shared_prompt_context',
+            (string)($artifacts['structured']['page_plans']['home_page']['theme_alignment_summary'] ?? '')
+        );
         self::assertNotEmpty($artifacts['plan_json']['pages']['home_page']['blocks'] ?? []);
         $firstBlock = $artifacts['plan_json']['pages']['home_page']['blocks'][0] ?? [];
         self::assertArrayHasKey('content', $firstBlock);
@@ -490,6 +498,10 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('never output it as abstract direction', $capturedPrompt);
         self::assertStringContainsString('theme_design.color_scheme must provide ready-to-apply hex colors', $capturedPrompt);
         self::assertStringContainsString('theme_design MUST be a concrete shared theme plan', $capturedPrompt);
+        self::assertStringContainsString('STAGE-1 PAGE THEME ALIGNMENT CONTRACT (pages must satisfy ALL):', $capturedPrompt);
+        self::assertStringContainsString('Every page prompt MUST treat theme_design + shared_prompt_context as non-negotiable constraints', $capturedPrompt);
+        self::assertStringContainsString('"theme_alignment_summary":"string explaining how this page obeys theme_design/shared_prompt_context"', $capturedPrompt);
+        self::assertStringContainsString('Every pages.*.theme_alignment_summary MUST explicitly name the shared theme purpose', $capturedPrompt);
         self::assertStringContainsString('Do not return markdown.', $capturedPrompt);
         self::assertStringContainsString('Do not return a separate markdown field.', $capturedPrompt);
         self::assertStringContainsString('Output only the structured plan object shown in the schema.', $capturedPrompt);
@@ -503,7 +515,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('field_plan.sample must be direct content', $capturedPrompt);
         self::assertStringContainsString('field_plan.implementation_note must be a customer-readable implementation note', $capturedPrompt);
         self::assertStringContainsString('Selected page coverage hints (must all be represented in the final plan):', $capturedPrompt);
-        self::assertStringContainsString('- home_page: must include page goal, conversion rhythm, block implementation detail, field plan, execution script, SEO structure, CTA usage, responsive guidance.', $capturedPrompt);
+        self::assertStringContainsString('- home_page: must include page goal, theme_alignment_summary, conversion rhythm, block implementation detail, field plan, execution script, SEO structure, CTA usage, responsive guidance.', $capturedPrompt);
         self::assertStringContainsString('baseline_execution_blueprint:', $capturedPrompt);
         self::assertStringContainsString('"default_locale": "en_US"', $capturedPrompt);
         self::assertStringNotContainsString('"markdown":"string"', $capturedPrompt);
