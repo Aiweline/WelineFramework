@@ -2010,6 +2010,55 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertGreaterThanOrEqual(1, $setPoolMessages);
     }
 
+    public function testUnmatchedWorkerRegisterReceivesSelfTerminateReject(): void
+    {
+        $mockControl = new class extends MasterControlServer {
+            /** @var list<array{clientId:int, message:string}> */
+            public array $sent = [];
+            /** @var list<int> */
+            public array $closed = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = ['clientId' => $clientId, 'message' => $message];
+
+                return true;
+            }
+
+            public function closeClient(int $clientId): void
+            {
+                $this->closed[] = $clientId;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $context = $this->createWorkerInfraContext();
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $mockControl);
+        $this->writePrivate($orchestrator, 'running', true);
+
+        $this->invokePrivateWithArgs($orchestrator, 'handleRegister', [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'pid' => 0,
+            'port' => 28099,
+            'worker_id' => 9,
+            'epoch' => $context->epoch,
+            'launch_id' => 'stray-worker-launch',
+            'msg_id' => 'stray-ready',
+        ], 909]);
+
+        self::assertSame([909], $mockControl->closed);
+        self::assertCount(1, $mockControl->sent);
+        $decoded = \json_decode(\rtrim($mockControl->sent[0]['message'], "\n"), true);
+        self::assertIsArray($decoded);
+        self::assertSame(ControlMessage::TYPE_READY_ACK, $decoded['type'] ?? null);
+        self::assertFalse((bool)($decoded['accepted'] ?? true));
+        self::assertSame('no_matching_slot', $decoded['reason'] ?? null);
+        self::assertSame(9, $decoded['worker_id'] ?? null);
+        self::assertSame(28099, $decoded['port'] ?? null);
+        self::assertSame('stray-ready', $decoded['msg_id'] ?? null);
+    }
+
     public function testAutoStartMaintenanceModeUsesRuntimeWorkerCount(): void
     {
         $orchestrator = new ServiceOrchestrator();

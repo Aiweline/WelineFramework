@@ -1422,6 +1422,24 @@ if ($controlPort > 0 || $supervisorEnabled) {
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_ACK_READY:
                 case \Weline\Server\IPC\ControlMessage::TYPE_READY_ACK:
+                    $accepted = !\array_key_exists('accepted', $msg) || (bool)($msg['accepted'] ?? false);
+                    if (!$accepted) {
+                        $reason = (string)($msg['reason'] ?? 'ready_rejected');
+                        $waitingForAck = false;
+                        $shouldExit = true;
+                        $ipcDraining = true;
+                        $maxDrainTime = 1;
+                        $drainStartTime = \time() - $maxDrainTime;
+                        if ($socket && \is_resource($socket)) {
+                            @\fclose($socket);
+                            $socket = null;
+                        }
+                        if ($ipcClient !== null && $ipcClient->isConnected()) {
+                            $ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason('master_rejected_ready:' . $reason, 0));
+                        }
+                        WlsLogger::warning_("Master 拒绝 READY/槽位信任（reason={$reason}），SSL Worker 自毁退出");
+                        break;
+                    }
                     $waitingForAck = false;
                     $ackWorkerId = $msg['worker_id'] ?? 0;
                     $dispatcherConfirmed = (bool)($msg['dispatcher_confirmed'] ?? false);
