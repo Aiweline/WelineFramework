@@ -23,6 +23,10 @@ class ServiceRegistry
     /** @var array<int, ServiceInstance> [pid => Instance] 快速查找 */
     private array $pidIndex = [];
 
+    private array $rootPidIndex = [];
+
+    private array $launcherPidIndex = [];
+
     /** @var array<int, ServiceInstance> [port => Instance] 快速查找 */
     private array $portIndex = [];
 
@@ -99,8 +103,16 @@ class ServiceRegistry
      */
     private function updateIndexes(ServiceInstance $instance): void
     {
-        if ($instance->pid > 0) {
-            $this->pidIndex[$instance->pid] = $instance;
+        foreach ($instance->getManagedPids() as $pid) {
+            if ($pid === $instance->pid) {
+                $this->pidIndex[$pid] = $instance;
+            }
+            if ($pid === $instance->getRootPid()) {
+                $this->rootPidIndex[$pid] = $instance;
+            }
+            if ($pid === $instance->getLauncherPid()) {
+                $this->launcherPidIndex[$pid] = $instance;
+            }
         }
         if ($instance->port !== null) {
             $this->portIndex[$instance->port] = $instance;
@@ -149,7 +161,25 @@ class ServiceRegistry
      */
     public function getInstanceByPid(int $pid): ?ServiceInstance
     {
-        return $this->pidIndex[$pid] ?? null;
+        return $this->pidIndex[$pid]
+            ?? $this->rootPidIndex[$pid]
+            ?? $this->launcherPidIndex[$pid]
+            ?? null;
+    }
+
+    public function getInstanceByRootPid(int $pid): ?ServiceInstance
+    {
+        return $this->rootPidIndex[$pid] ?? null;
+    }
+
+    public function getInstanceByLauncherPid(int $pid): ?ServiceInstance
+    {
+        return $this->launcherPidIndex[$pid] ?? null;
+    }
+
+    public function getInstanceByManagedPid(int $pid): ?ServiceInstance
+    {
+        return $this->getInstanceByPid($pid);
     }
 
     /**
@@ -188,6 +218,16 @@ class ServiceRegistry
                 unset($this->pidIndex[$pid]);
             }
         }
+        foreach ($this->rootPidIndex as $pid => $inst) {
+            if ($inst->role === $instance->role && $inst->instanceId === $instance->instanceId) {
+                unset($this->rootPidIndex[$pid]);
+            }
+        }
+        foreach ($this->launcherPidIndex as $pid => $inst) {
+            if ($inst->role === $instance->role && $inst->instanceId === $instance->instanceId) {
+                unset($this->launcherPidIndex[$pid]);
+            }
+        }
         foreach ($this->portIndex as $port => $inst) {
             if ($inst->role === $instance->role && $inst->instanceId === $instance->instanceId) {
                 unset($this->portIndex[$port]);
@@ -210,8 +250,8 @@ class ServiceRegistry
             return;
         }
 
-        if ($instance->pid > 0 && isset($this->pidIndex[$instance->pid])) {
-            unset($this->pidIndex[$instance->pid]);
+        foreach ($instance->getManagedPids() as $pid) {
+            unset($this->pidIndex[$pid], $this->rootPidIndex[$pid], $this->launcherPidIndex[$pid]);
         }
         if ($instance->port !== null && isset($this->portIndex[$instance->port])) {
             unset($this->portIndex[$instance->port]);
@@ -301,6 +341,8 @@ class ServiceRegistry
     {
         $this->instances = [];
         $this->pidIndex = [];
+        $this->rootPidIndex = [];
+        $this->launcherPidIndex = [];
         $this->portIndex = [];
         $this->ipcClientIndex = [];
     }
