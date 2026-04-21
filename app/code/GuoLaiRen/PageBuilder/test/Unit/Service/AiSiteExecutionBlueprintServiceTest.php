@@ -509,44 +509,107 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
     public function testPageBlockReorderWritesStructuredSortOrderMarkdownAndStageTwoSplitOrder(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
-        $artifacts = $service->buildPlanArtifacts([
-            'site_title' => 'Page Block Sort Writeback Test',
-            'brief_description' => 'Need page blocks whose sort order can drive downstream task splitting.',
-            'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT],
+        $pageType = Page::TYPE_HOME;
+        $originalKeys = ['hero', 'proof', 'cta'];
+        $orderedKeys = ['cta', 'proof', 'hero'];
+        $pagePlan = [
+            'page_label' => 'Home',
+            'page_goal' => 'Explain value and convert visitors.',
+            'primary_keywords' => ['value'],
+            'secondary_keywords' => ['proof'],
+            'blocks' => [
+                [
+                    'block_key' => 'hero',
+                    'section_code' => 'hero',
+                    'order' => 10,
+                    'goal' => 'Lead with the core promise.',
+                    'content_brief' => ['headline_direction' => 'Hero headline'],
+                    'field_plan' => [['field' => 'headline', 'sample' => 'Build faster', 'reason' => 'Primary value']],
+                    'result_ref' => [],
+                ],
+                [
+                    'block_key' => 'proof',
+                    'section_code' => 'proof',
+                    'order' => 20,
+                    'goal' => 'Show trust evidence.',
+                    'content_brief' => ['headline_direction' => 'Proof headline'],
+                    'field_plan' => [['field' => 'proof_point', 'sample' => 'Trusted by teams', 'reason' => 'Trust cue']],
+                    'result_ref' => [],
+                ],
+                [
+                    'block_key' => 'cta',
+                    'section_code' => 'cta',
+                    'order' => 30,
+                    'goal' => 'Invite the next action.',
+                    'content_brief' => ['headline_direction' => 'CTA headline'],
+                    'field_plan' => [['field' => 'button_label', 'sample' => 'Start now', 'reason' => 'Conversion cue']],
+                    'result_ref' => [],
+                ],
+            ],
+        ];
+        $sharedComponents = [
+            'header' => ['task_key' => 'shared:header', 'task_type' => 'shared_component', 'component' => 'header', 'sort_order' => 10, 'goal' => 'Header'],
+            'footer' => ['task_key' => 'shared:footer', 'task_type' => 'shared_component', 'component' => 'footer', 'sort_order' => 20, 'goal' => 'Footer'],
+        ];
+        $sharedPromptContext = ['context_hash' => 'shared-context', 'theme_context_hash' => 'theme-context'];
+        $structured = [
+            'i18n' => ['locale' => 'en_US'],
+            'site_strategy' => ['site_display_name' => 'Page Block Sort Writeback Test', 'summary' => 'Summary'],
+            'palette' => ['name' => 'Ocean Slate'],
+            'theme_style' => ['name' => 'Plan-Driven Hybrid'],
+            'seo_strategy' => ['core_intent' => 'intent'],
+            'navigation_plan' => ['header_items' => []],
+            'footer_plan' => ['featured' => [], 'policies' => []],
+            'page_types' => [$pageType],
+            'shared_components' => $sharedComponents,
+            'shared_plan' => [
+                'theme_design' => ['theme_purpose' => 'Test purpose'],
+                'shared_prompt_context' => $sharedPromptContext,
+            ],
+            'pages' => [$pageType => $pagePlan],
+        ];
+        $executionBlueprint = [
             'workspace_track' => 'virtual_theme',
-            'plan_locale' => 'en_US',
-        ], [
-            'site_title' => 'Page Block Sort Writeback Test',
-            'brief_description' => 'Need page blocks whose sort order can drive downstream task splitting.',
-        ]);
-
-        $pageType = '';
-        $originalKeys = [];
-        foreach (($artifacts['plan_json']['pages'] ?? []) as $candidatePageType => $page) {
-            $candidateBlocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
-            $candidateKeys = \array_values(\array_filter(\array_map(
-                static fn(array $block): string => \trim((string)($block['block_key'] ?? '')),
-                $candidateBlocks
-            )));
-            if (\count($candidateKeys) >= 2) {
-                $pageType = (string)$candidatePageType;
-                $originalKeys = $candidateKeys;
-                break;
-            }
-        }
-
-        self::assertNotSame('', $pageType);
-        self::assertGreaterThanOrEqual(2, \count($originalKeys));
-
-        $orderedKeys = \array_values(\array_reverse($originalKeys));
+            'page_types' => [$pageType],
+            'shared_prompt_context' => $sharedPromptContext,
+            'shared_components' => $sharedComponents,
+            'pages' => [$pageType => $pagePlan],
+            'tasks' => \array_merge(
+                \array_values($sharedComponents),
+                \array_map(
+                    static fn(array $block): array => [
+                        'task_key' => 'page:' . $pageType . ':' . (string)$block['block_key'],
+                        'task_type' => 'page_block',
+                        'page_type' => $pageType,
+                        'page_label' => 'Home',
+                        'sort_order' => (int)($block['order'] ?? 0),
+                        'block' => $block,
+                        'status' => 'pending',
+                    ],
+                    $pagePlan['blocks']
+                )
+            ),
+        ];
+        $planJson = [
+            'i18n' => ['locale' => 'en_US'],
+            'site_strategy' => $structured['site_strategy'],
+            'palette' => $structured['palette'],
+            'theme_style' => $structured['theme_style'],
+            'seo_strategy' => $structured['seo_strategy'],
+            'navigation_plan' => $structured['navigation_plan'],
+            'footer_plan' => $structured['footer_plan'],
+            'page_types' => [$pageType],
+            'pages' => [$pageType => $pagePlan],
+        ];
         $scope = [
             'site_title' => 'Page Block Sort Writeback Test',
             'workspace_track' => 'virtual_theme',
-            'plan_json' => $artifacts['plan_json'],
-            'plan_markdown' => $artifacts['markdown'],
-            'plan_structured' => $artifacts['structured'],
-            'plan_workbench' => $artifacts['plan_workbench'],
-            'execution_blueprint_draft' => $artifacts['execution_blueprint'],
+            'plan_locale' => 'en_US',
+            'plan_json' => $planJson,
+            'plan_markdown' => '',
+            'plan_structured' => $structured,
+            'plan_workbench' => [],
+            'execution_blueprint_draft' => $executionBlueprint,
         ];
 
         $reordered = $service->reorderDraftPlanBlocks($scope, $pageType, $orderedKeys);
