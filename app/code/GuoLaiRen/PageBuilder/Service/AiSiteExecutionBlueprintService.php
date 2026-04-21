@@ -4474,48 +4474,6 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * @param array<string, mixed> $block
-     * @param array<string, mixed> $realtimeContent
-     * @return list<string>
-     */
-    private function deriveStageOneEditableFields(array $block, array $realtimeContent): array
-    {
-        $fields = [];
-        foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $row) {
-            if (\is_array($row)) {
-                $field = \trim((string)($row['field'] ?? ''));
-                if ($field !== '') {
-                    $fields[] = $field;
-                }
-            }
-        }
-        foreach (\is_array($realtimeContent['editable_slots'] ?? null) ? $realtimeContent['editable_slots'] : [] as $slot) {
-            if (\is_scalar($slot)) {
-                $fields[] = (string)$slot;
-            }
-        }
-        if ($fields === []) {
-            $fields = ['headline', 'supporting_copy', 'cta', 'media'];
-        }
-
-        return $this->normalizeStringList($fields);
-    }
-
-    /**
-     * @param array<string, mixed> $block
-     */
-    private function buildStageOneBlockContextHash(string $pageType, array $block): string
-    {
-        $hashSource = $block;
-        unset($hashSource['context_hash']);
-
-        return \sha1((string)\json_encode([
-            'page_key' => $pageType,
-            'block' => $hashSource,
-        ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
-    }
-
-    /**
      * @param list<array<string, mixed>> $blocks
      * @param array<string, mixed> $sharedPromptContext
      */
