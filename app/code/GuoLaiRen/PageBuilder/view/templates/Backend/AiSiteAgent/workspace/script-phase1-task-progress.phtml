@@ -82,6 +82,140 @@
         resEl.textContent = String(info.result_log || '').trim() || '—';
     }
 
+    function getLastWorkspaceState() {
+        try {
+            return window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object'
+                ? window.__pbLastWorkspaceState
+                : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function rememberPlanQueueInfo(info) {
+        var state = Object.assign({}, getLastWorkspaceState());
+        state.plan_queue_info = info;
+        try {
+            window.__pbLastWorkspaceState = state;
+        } catch (e) {
+            // ignore
+        }
+        return state;
+    }
+
+    function normalizeQueueId(value) {
+        var qid = parseInt(String(value == null ? '' : value), 10);
+        return qid > 0 && !isNaN(qid) ? qid : 0;
+    }
+
+    function appendQueueResultLog(current, delta) {
+        var text = String(current || '');
+        var piece = String(delta || '');
+        if (piece === '') {
+            return text;
+        }
+        if (text !== '' && text.slice(-1) !== '\n' && piece.charAt(0) !== '\n') {
+            text += '\n';
+        }
+        text += piece;
+        var max = 24000;
+        if (text.length > max) {
+            text = '…（以下仅显示末尾约 ' + max + ' 字符）\n' + text.slice(-max);
+        }
+        return text;
+    }
+
+    function mergePlanQueueInfoFromSsePayload(payload, eventKind) {
+        if (!payload || typeof payload !== 'object') {
+            return null;
+        }
+        if (payload.state && payload.state.plan_queue_info && typeof payload.state.plan_queue_info === 'object') {
+            return payload.state.plan_queue_info;
+        }
+        if (payload.queue_info && typeof payload.queue_info === 'object') {
+            return payload.queue_info;
+        }
+
+        var hasQueueSignal = !!(
+            (payload.queue_snapshot && typeof payload.queue_snapshot === 'object')
+            || Object.prototype.hasOwnProperty.call(payload, 'queue_id')
+            || Object.prototype.hasOwnProperty.call(payload, 'queue_status')
+            || Object.prototype.hasOwnProperty.call(payload, 'queue_process')
+            || Object.prototype.hasOwnProperty.call(payload, 'queue_result_log')
+            || Object.prototype.hasOwnProperty.call(payload, 'queue_result_delta')
+        );
+        if (!hasQueueSignal) {
+            return null;
+        }
+
+        var state = getLastWorkspaceState();
+        var existing = state.plan_queue_info && typeof state.plan_queue_info === 'object'
+            ? state.plan_queue_info
+            : {};
+        var existingSnapshot = existing.snapshot && typeof existing.snapshot === 'object' ? existing.snapshot : {};
+        var snapshot = Object.assign({}, existingSnapshot);
+        if (payload.queue_snapshot && typeof payload.queue_snapshot === 'object') {
+            snapshot = Object.assign(snapshot, payload.queue_snapshot);
+        }
+
+        var payloadQueueId = normalizeQueueId(payload.queue_id);
+        if (payloadQueueId > 0) {
+            snapshot.queue_id = payloadQueueId;
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'queue_status')) {
+            snapshot.status = String(payload.queue_status || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'queue_pid')) {
+            snapshot.pid = normalizeQueueId(payload.queue_pid);
+        }
+
+        var process = String(existing.process || '');
+        if (Object.prototype.hasOwnProperty.call(payload, 'queue_process')) {
+            process = String(payload.queue_process || '');
+        } else if (String(eventKind || '') === 'progress' && payloadQueueId > 0 && payload.message) {
+            process = String(payload.message || '');
+        }
+
+        var resultLog = String(existing.result_log || '');
+        if (Object.prototype.hasOwnProperty.call(payload, 'queue_result_log')) {
+            resultLog = String(payload.queue_result_log || '');
+        } else {
+            var delta = '';
+            if (Object.prototype.hasOwnProperty.call(payload, 'queue_result_delta')) {
+                delta = String(payload.queue_result_delta || '');
+            } else if (String(eventKind || '') === 'chunk' && payloadQueueId > 0) {
+                delta = String(payload.chunk || payload.content || payload.message || '');
+                if (delta !== '' && delta.slice(-1) !== '\n') {
+                    delta += '\n';
+                }
+            }
+            resultLog = appendQueueResultLog(resultLog, delta);
+        }
+
+        var queueId = normalizeQueueId(existing.queue_id || snapshot.queue_id || payloadQueueId);
+        if (Object.keys(snapshot).length === 0 && queueId <= 0 && process === '' && resultLog === '') {
+            return null;
+        }
+
+        return {
+            queue_id: queueId,
+            snapshot: snapshot,
+            process: process,
+            result_log: resultLog
+        };
+    }
+
+    function syncFromSsePayload(operation, payload, eventKind) {
+        if (String(operation || '').toLowerCase() !== 'plan') {
+            return;
+        }
+        var info = mergePlanQueueInfoFromSsePayload(payload, eventKind);
+        if (!info || typeof info !== 'object') {
+            return;
+        }
+        renderPlanQueueInfoPanel(rememberPlanQueueInfo(info));
+    }
+
     function syncFromWorkspaceState(workspaceState) {
         if (!workspaceState || typeof workspaceState !== 'object') {
             return;
@@ -121,6 +255,7 @@
 
     window.__pbPhase1TaskProgress = {
         syncFromWorkspaceState: syncFromWorkspaceState,
+        syncFromSsePayload: syncFromSsePayload,
         renderPlanQueueInfoPanel: renderPlanQueueInfoPanel,
         bindPlanQueueInfoRefresh: bindPlanQueueInfoRefresh
     };

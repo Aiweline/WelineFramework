@@ -26,8 +26,16 @@ class TableNameStrategyTest extends TestCase
         $formatter = new PgsqlIdentifierFormatter();
         $strategy = new PgsqlTableNameStrategy($formatter, 'wl_', 'public');
 
-        $this->assertSame('public."wl_demo"', $strategy->resolve('demo'));
-        $this->assertSame('analytics."wl_demo"', $strategy->resolve('analytics.demo'));
+        $this->assertSame('"public"."wl_demo"', $strategy->resolve('demo'));
+        $this->assertSame('"public"."wl_demo"', $strategy->resolve('analytics.demo'));
+    }
+
+    public function testPgsqlStrategyKeepsQuotedPrefixedTableOnce(): void
+    {
+        $formatter = new PgsqlIdentifierFormatter();
+        $strategy = new PgsqlTableNameStrategy($formatter, 'm_', 'public');
+
+        $this->assertSame('"public"."m_acl"', $strategy->resolve('"public"."m_acl"'));
     }
 }
 
