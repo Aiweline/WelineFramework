@@ -2689,7 +2689,7 @@ final class AiSiteExecutionBlueprintService
         }
 
         return \sprintf(
-            '%s 遵守 %s 与%s：%s 围绕“%s”展开，延续共享 CTA 与信任表达，并从 Header 导航自然承接到 Footer 的补充背书。',
+            '%s 遵守 shared_prompt_context（%s 与 %s）：%s 围绕“%s”展开，延续共享 CTA 与信任表达，并从 Header 导航自然承接到 Footer 的补充背书。',
             $pageLabel !== '' ? $pageLabel : '本页面',
             $paletteLabel,
             $toneLabel,
