@@ -193,9 +193,43 @@ class Start extends CommandAbstract
         
         // 获取启动锁，防止并发启动同一实例
         if (!$this->acquireStartLock($instanceName)) {
+            $lockFile = Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'start_' . $instanceName . '.lock';
+            $lockInfo = [];
+            if (\is_file($lockFile)) {
+                $lockData = \json_decode((string) @\file_get_contents($lockFile), true);
+                $lockInfo = \is_array($lockData) ? $lockData : [];
+            }
+            $ownerPid = (int) ($lockInfo['pid'] ?? 0);
+
             $this->printer->error(__('无法启动：实例 [%{1}] 正在被另一个进程启动中', [$instanceName]));
-            $this->printer->note(__('请稍后重试，或检查是否有其他终端正在启动服务器'));
-            return;
+            if ($ownerPid > 0) {
+                $this->printer->note(__('锁持有进程 PID：%{1}', [$ownerPid]));
+            }
+            if (!\defined('STDIN')) {
+                $this->printer->note(__('请稍后重试，或在交互式终端中确认是否强制启动。'));
+                return;
+            }
+            $this->printer->warning(__('是否直接强制启动并终止另一个启动进程？[y/N]: '));
+            echo '  > ';
+            $input = \trim((string) @\fgets(STDIN));
+            if (!\in_array(\strtolower($input), ['y', 'yes', '是'], true)) {
+                $this->printer->note(__('已取消强制启动。请稍后重试，或检查是否有其他终端正在启动服务器'));
+                return;
+            }
+
+            $this->printer->warning(__('正在强制终止另一个启动进程并清理实例 [%{1}] 的启动残留...', [$instanceName]));
+            if ($ownerPid > 0 && $ownerPid !== \getmypid()) {
+                Processer::killProcessTreeByPid($ownerPid, true) || Processer::killByPid($ownerPid, true);
+            }
+            $this->cleanupFailedStartupProcesses($instanceName, 16);
+            if (\is_file($lockFile)) {
+                @\unlink($lockFile);
+            }
+            if ($this->acquireStartLock($instanceName, 2)) {
+                $this->printer->success(__('已强制接管启动锁，继续启动实例 [%{1}]', [$instanceName]));
+            } else {
+                $this->printer->warning(__('强制清理后仍未获取启动锁，将按用户确认继续启动实例 [%{1}]。', [$instanceName]));
+            }
         }
         
         // 注册关闭时释放锁；fatal / 未交接时按实例前缀清理可能残留的 WLS 子进程
@@ -263,7 +297,7 @@ class Start extends CommandAbstract
         $host = $config['host'];
         $port = $config['port'];
         $count = $config['worker_count'];
-        // 运行模式只由 --no-daemon 控制；--frontend 仅启用前端资源/日志模式，不能把 Master 绑回当前终端。
+        // -frontend/--frontend 要让 Master 保持在当前前台终端，子进程也按前台模式启动。
         $daemon = $this->resolveDaemonMode($config, $frontend);
         
         // --no-ssl 时仅 HTTP（端口保持 80）；否则默认启用 HTTPS
@@ -1399,15 +1433,17 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
     }
 
     /**
-     * --frontend is a feature/runtime flag, not a foreground-control flag.
-     * Keeping this centralized prevents future changes from re-coupling WLS to
-     * the launcher process and causing the service tree to die with the shell.
+     * -frontend/--frontend keeps the Master in the foreground. The Master owns
+     * child process startup, so this is the only place that decides whether the
+     * current command returns after launching a background Master.
      *
      * @param array<string, mixed> $config
      */
     protected function resolveDaemonMode(array $config, bool $frontend): bool
     {
-        unset($frontend);
+        if ($frontend) {
+            return false;
+        }
 
         return (bool) ($config['daemon'] ?? true);
     }
@@ -3186,7 +3222,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         }
         return false;
     }
-    
+
     /**
      * Linux/macOS 下检测 socket 绑定权限。
      * 
@@ -5744,7 +5780,7 @@ PHP;
         @\fclose($fp);
         return false;
     }
-    
+
     /**
      * PHP 进程异常结束（fatal / 未捕获错误）时：若曾尝试拉起本实例 WLS 且未完成交接，则清理残留子进程。
      */
