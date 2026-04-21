@@ -154,6 +154,20 @@ class SharedStateRuntimeOptionsTest extends TestCase
                         'port' => 23002,
                         'token_file_name' => 'memory.runtime.token',
                     ],
+                    'shared_state' => [
+                        'runtime' => [
+                            'session' => [
+                                'host' => '127.0.0.7',
+                                'port' => 23001,
+                                'token_file_name' => 'session.runtime.token',
+                            ],
+                            'memory' => [
+                                'host' => '127.0.0.8',
+                                'port' => 23002,
+                                'token_file_name' => 'memory.runtime.token',
+                            ],
+                        ],
+                    ],
                 ],
             ],
             $options->toEnvOverrides()
