@@ -638,8 +638,8 @@ final class AiSiteVirtualThemePlanService
         $lines[] = 'Hard rules:';
         $lines[] = '- Every returned page_tasks[] entry must include block_task with required fields: task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order.';
         $lines[] = '- block_task.task_goal is the visible block outcome; block_task.meta_fields is the exact editable field list; block_task.content_plan and block_task.style_plan are concrete arrays; block_task.planning_reason explains the stage-1 rationale; block_task.sort_order mirrors the task sort_order.';
-        $lines[] = '- Every block_task.meta_fields[] item MUST be an object with field, type, default, sample, reason. Use type values such as string, text, rich_text, image, url, number, boolean, list, object, cta, or link.';
-        $lines[] = '- block_task.meta_fields[].default and block_task.meta_fields[].sample must be concrete stage-3-ready values, not placeholders; sample may refine default but both must be usable if copied into the block config.';
+        $lines[] = '- block_task.content_plan MUST include concrete arrays content_copy, cta_plan, link_plan, and asset_plan. content_copy lists final on-page strings by field; cta_plan gives each real CTA label plus href/page_type target; link_plan gives every internal/external link label plus href/page_type and purpose; asset_plan gives each image/icon/logo/video slot, concrete asset description, alt_text, and source/use rule.';
+        $lines[] = '- Do not put content_plan placeholders such as "write copy later", "CTA TBD", "link TBD", or "asset TBD"; if stage-1 lacks a value, provide a concrete [assumption] value that fits the confirmed user brief.';
         $lines[] = '- Every returned task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, and completion_rule-compatible detail.';
         $lines[] = '- Keep task_key, group_key, page_type, and sort_order compatible with the provided skeleton.';
         $lines[] = '- Do not drop any task from this batch.';
@@ -3991,6 +3991,13 @@ final class AiSiteVirtualThemePlanService
         $contentPlan['field_content_requirements'] = \is_array($contentPlan['field_content_requirements'] ?? null)
             ? $contentPlan['field_content_requirements']
             : $metaFields;
+        $contentPlan = $this->ensureConcreteBlockContentPlan(
+            $contentPlan,
+            $metaFields,
+            $planContext,
+            $taskScript,
+            $task
+        );
 
         $stylePlan = \is_array($existing['style_plan'] ?? null) ? $existing['style_plan'] : [];
         $stylePlan['style_direction'] = $this->firstNonEmptyString([
@@ -4025,6 +4032,163 @@ final class AiSiteVirtualThemePlanService
         ];
 
         return $task;
+    }
+
+
+    /**
+     * @param array<string, mixed> $contentPlan
+     * @param list<array<string, mixed>> $metaFields
+     * @param array<string, mixed> $planContext
+     * @param array<string, mixed> $taskScript
+     * @param array<string, mixed> $task
+     * @return array<string, mixed>
+     */
+    private function ensureConcreteBlockContentPlan(
+        array $contentPlan,
+        array $metaFields,
+        array $planContext,
+        array $taskScript,
+        array $task
+    ): array {
+        if (!\is_array($contentPlan['content_copy'] ?? null) || $contentPlan['content_copy'] === []) {
+            $contentCopy = [];
+            foreach ($metaFields as $field) {
+                $fieldName = $this->firstNonEmptyString([$field['field'] ?? null, $field['name'] ?? null]);
+                $sample = $this->firstNonEmptyString([$field['sample'] ?? null, $field['default'] ?? null]);
+                if ($fieldName === '' || $sample === '') {
+                    continue;
+                }
+                $contentCopy[] = [
+                    'field' => $fieldName,
+                    'copy' => $sample,
+                    'usage' => $this->firstNonEmptyString([$field['reason'] ?? null, 'Use as final on-page copy for this block field.']),
+                ];
+            }
+            if ($contentCopy === []) {
+                $contentCopy[] = [
+                    'field' => 'body',
+                    'copy' => $this->firstNonEmptyString([$taskScript['story_goal'] ?? null, $planContext['block_goal'] ?? null, $task['label'] ?? null, 'Concrete block content sample']),
+                    'usage' => 'Use as the primary visible copy seed for this block.',
+                ];
+            }
+            $contentPlan['content_copy'] = $contentCopy;
+        }
+
+        if (!\is_array($contentPlan['cta_plan'] ?? null) || $contentPlan['cta_plan'] === []) {
+            $ctaPlan = [];
+            foreach ($metaFields as $field) {
+                $fieldName = $this->firstNonEmptyString([$field['field'] ?? null, $field['name'] ?? null]);
+                if ($fieldName === '' || !\preg_match('/(cta|button|action)/i', $fieldName)) {
+                    continue;
+                }
+                $ctaPlan[] = [
+                    'label' => $this->firstNonEmptyString([$field['sample'] ?? null, $field['default'] ?? null, 'Start now']),
+                    'target' => $this->firstNonEmptyString([$field['href'] ?? null, $field['url'] ?? null, $field['target'] ?? null, '#contact']),
+                    'source_field' => $fieldName,
+                ];
+            }
+            if ($ctaPlan === []) {
+                $ctaPlan[] = [
+                    'label' => $this->extractBracketedLabel((string)($taskScript['story_goal'] ?? '')) ?: 'Start now',
+                    'target' => $this->firstNonEmptyString([$planContext['content_brief']['cta_target'] ?? null, $planContext['cta_target'] ?? null, '#contact']),
+                    'source_field' => 'primary_cta',
+                ];
+            }
+            $contentPlan['cta_plan'] = $ctaPlan;
+        }
+
+        if (!\is_array($contentPlan['link_plan'] ?? null) || $contentPlan['link_plan'] === []) {
+            $links = [];
+            $internalLinks = \is_array($planContext['seo_brief']['internal_links'] ?? null) ? $planContext['seo_brief']['internal_links'] : [];
+            foreach ($internalLinks as $index => $link) {
+                if (\is_array($link)) {
+                    $href = $this->firstNonEmptyString([$link['href'] ?? null, $link['url'] ?? null, $link['target'] ?? null]);
+                    $label = $this->firstNonEmptyString([$link['label'] ?? null, $link['title'] ?? null, $href]);
+                } else {
+                    $href = $this->firstNonEmptyString([$link]);
+                    $label = $href;
+                }
+                if ($href === '') {
+                    continue;
+                }
+                $links[] = [
+                    'label' => $label !== '' ? $label : ('Internal link ' . ((int)$index + 1)),
+                    'href' => $href,
+                    'purpose' => 'Support the stage-1 internal-link/SEO path for this block.',
+                ];
+            }
+            foreach ($contentPlan['cta_plan'] as $cta) {
+                if (!\is_array($cta)) {
+                    continue;
+                }
+                $target = $this->firstNonEmptyString([$cta['href'] ?? null, $cta['url'] ?? null, $cta['target'] ?? null]);
+                if ($target === '') {
+                    continue;
+                }
+                $links[] = [
+                    'label' => $this->firstNonEmptyString([$cta['label'] ?? null, 'Primary CTA']),
+                    'href' => $target,
+                    'purpose' => 'CTA destination for this block.',
+                ];
+            }
+            if ($links === []) {
+                $links[] = [
+                    'label' => 'Contact',
+                    'href' => '#contact',
+                    'purpose' => 'Default conversion path when stage-1 does not provide a more specific link.',
+                ];
+            }
+            $contentPlan['link_plan'] = $links;
+        }
+
+        if (!\is_array($contentPlan['asset_plan'] ?? null) || $contentPlan['asset_plan'] === []) {
+            $assets = [];
+            foreach (['asset_plan', 'assets', 'media_assets', 'visual_assets'] as $key) {
+                if (!\is_array($planContext[$key] ?? null)) {
+                    continue;
+                }
+                foreach ($planContext[$key] as $index => $asset) {
+                    if (\is_array($asset)) {
+                        $description = $this->firstNonEmptyString([$asset['description'] ?? null, $asset['asset'] ?? null, $asset['prompt'] ?? null, $asset['alt_text'] ?? null]);
+                        $slot = $this->firstNonEmptyString([$asset['slot'] ?? null, $asset['field'] ?? null, 'asset_' . ((int)$index + 1)]);
+                        $altText = $this->firstNonEmptyString([$asset['alt_text'] ?? null, $description]);
+                    } else {
+                        $description = $this->firstNonEmptyString([$asset]);
+                        $slot = 'asset_' . ((int)$index + 1);
+                        $altText = $description;
+                    }
+                    if ($description === '') {
+                        continue;
+                    }
+                    $assets[] = [
+                        'slot' => $slot,
+                        'description' => $description,
+                        'alt_text' => $altText !== '' ? $altText : $description,
+                        'source_rule' => 'Use a licensed, brand-compatible asset that matches the confirmed stage-1 plan.',
+                    ];
+                }
+            }
+            if ($assets === []) {
+                $label = $this->firstNonEmptyString([$task['label'] ?? null, $planContext['block_code'] ?? null, 'block']);
+                $assets[] = [
+                    'slot' => 'primary_visual',
+                    'description' => $label . ' visual that illustrates the block promise without adding unstated requirements.',
+                    'alt_text' => $label . ' visual for ' . $this->firstNonEmptyString([$planContext['page_goal'] ?? null, $planContext['block_goal'] ?? null, 'the page']),
+                    'source_rule' => 'Use an existing brand asset or generate a licensed illustration/photo consistent with stage-1 style.',
+                ];
+            }
+            $contentPlan['asset_plan'] = $assets;
+        }
+
+        return $contentPlan;
+    }
+
+    private function extractBracketedLabel(string $text): string
+    {
+        if (\preg_match('/\[([^\]]{2,80})\]/u', $text, $matches) !== 1) {
+            return '';
+        }
+        return \trim((string)($matches[1] ?? ''));
     }
 
     /**
@@ -5100,7 +5264,8 @@ final class AiSiteVirtualThemePlanService
             '- Do not invent unselected pages or omit selected pages.',
             '- Every task must include enough content detail for direct implementation in stage 3: a builder must produce theme/HTML without guessing; reuse or improve concrete CTA labels, nav labels, hero strings, and footer link titles from stage-1—always spell them out again here.',
             '- Every page_tasks[] item MUST include block_task with required fields task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order; this block_task is the minimum structured source of truth for one stage-2 block task.',
-            '- Every block_task.meta_fields[] item MUST include field, type, default, sample, reason. Type must be a usable editor/input type (string, text, rich_text, image, url, number, boolean, list, object, cta, link). Default and sample must be concrete stage-3-ready values, not placeholders.',
+            '- block_task.content_plan MUST include concrete arrays content_copy, cta_plan, link_plan, and asset_plan. content_copy lists final on-page copy by field; cta_plan gives each real CTA label plus href/page_type target; link_plan gives every visible link label plus href/page_type and purpose; asset_plan gives each image/icon/logo/video slot, concrete asset description, alt_text, and source/use rule.',
+            '- content_plan is not prose guidance: no "write copy later", "CTA TBD", "link TBD", or "asset TBD". If stage-1 does not name an exact value, output a concrete [assumption] value that still fits the confirmed user brief.',
             '- Every task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, completion_rule.',
             '- The markdown must explain concrete execution steps by shared tasks, page tasks, and task tree order; every section MUST name real labels, routes, field keys, and example copy—never-only phrases like "完善导航" or "优化体验" without specifics.',
             '- The stage-2 document must include page coverage, task tree, execution order, and risk notes.',
