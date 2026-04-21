@@ -3541,6 +3541,7 @@ final class AiSiteExecutionBlueprintService
                 'shared_context_hash' => $sharedContextHash,
                 'theme_context_hash' => (string)($pagePlan['theme_context_hash'] ?? ''),
             ],
+            'sort_order' => (int)($block['sort_order'] ?? $block['order'] ?? 0),
             'prompt_context' => $pagePromptContext,
             'implementation_detail' => (string)($block['implementation_detail'] ?? $block['style_brief']['layout_rule'] ?? ''),
             'realtime_content' => \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [],
@@ -4372,7 +4373,7 @@ final class AiSiteExecutionBlueprintService
                     'source_block_key' => $rawBlockKey,
                     'title' => (string)($block['section_code'] ?? $rawBlockKey),
                     'goal' => (string)($block['goal'] ?? ''),
-                    'sort_order' => $this->resolveStageOnePageBlockSortOrder($block, (int)$offset),
+                    'sort_order' => (int)($block['sort_order'] ?? $block['order'] ?? 0),
                     'status' => 'done',
                     'implementation_detail' => (string)($block['implementation_detail'] ?? $block['style_brief']['layout_rule'] ?? ''),
                     'reason' => (string)($block['why'] ?? ''),
@@ -4912,7 +4913,7 @@ final class AiSiteExecutionBlueprintService
                 }
                 $blockRows[] = [
                     'block_key' => (string)($block['block_key'] ?? $block['section_code'] ?? 'block'),
-                    'sort_order' => $this->resolveStageOnePageBlockSortOrder($block, \count($blockRows)),
+                    'sort_order' => (int)($block['sort_order'] ?? $block['order'] ?? 0),
                     'content' => $this->buildBlockContentSummary($block),
                     'why' => \trim((string)($block['why'] ?? '')),
                     'implementation_note' => $this->buildBlockImplementationFocus($block, (string)($structured['i18n']['locale'] ?? '')),
@@ -7040,14 +7041,16 @@ final class AiSiteExecutionBlueprintService
             return ((int)$left['index']) <=> ((int)$right['index']);
         });
 
-        return \array_values(\array_map(static function (array $row, int $offset): array {
-            $block = $row['block'];
+        $result = [];
+        foreach ($wrapped as $offset => $row) {
+            $block = \is_array($row['block'] ?? null) ? $row['block'] : [];
             $sortOrder = ($offset + 1) * 10;
             $block['sort_order'] = $sortOrder;
             $block['order'] = $sortOrder;
+            $result[] = $block;
+        }
 
-            return $block;
-        }, $wrapped, \array_keys($wrapped)));
+        return $result;
     }
 
     /**
@@ -7091,6 +7094,15 @@ final class AiSiteExecutionBlueprintService
         });
 
         $reorderedTargetTasks = \array_values(\array_map(static fn(array $row): array => $row['task'], $targetTasks));
+        foreach ($reorderedTargetTasks as $offset => $task) {
+            $sortOrder = ($offset + 1) * 10;
+            $task['sort_order'] = $sortOrder;
+            if (\is_array($task['block'] ?? null)) {
+                $task['block']['sort_order'] = $sortOrder;
+                $task['block']['order'] = $sortOrder;
+            }
+            $reorderedTargetTasks[$offset] = $task;
+        }
         $cursor = 0;
         $result = [];
         foreach ($tasks as $task) {
