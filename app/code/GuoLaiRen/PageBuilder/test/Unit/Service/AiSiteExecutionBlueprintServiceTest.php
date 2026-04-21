@@ -205,6 +205,60 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         );
     }
 
+    public function testStageOneThemePlanningFieldsAreCompleteAcrossArtifacts(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+
+        $artifacts = $service->buildPlanArtifacts([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+
+        $planThemeDesign = $artifacts['plan_json']['theme_design'] ?? null;
+        self::assertStageOneThemeDesignSchema($planThemeDesign);
+        $expectedThemeDesignCore = self::stageOneThemeDesignCore($planThemeDesign);
+        $themeDesignJob = self::findQueueJobByType($artifacts['execution_blueprint']['queue_jobs'] ?? [], 'stage1.shared.theme_design');
+        self::assertIsArray($themeDesignJob);
+        foreach ([
+            'structured.shared_plan.theme_design' => $artifacts['structured']['shared_plan']['theme_design'] ?? null,
+            'execution_blueprint.theme_context_snapshot' => $artifacts['execution_blueprint']['theme_context_snapshot'] ?? null,
+            'execution_blueprint.shared_prompt_context.theme_design' => $artifacts['execution_blueprint']['shared_prompt_context']['theme_design'] ?? null,
+            'plan_workbench.stage1.theme_context_snapshot' => $artifacts['plan_workbench']['stage1']['theme_context_snapshot'] ?? null,
+            'execution_blueprint.queue_jobs.stage1.shared.theme_design.theme_context_snapshot' => $themeDesignJob['theme_context_snapshot'] ?? null,
+        ] as $path => $themeDesign) {
+            self::assertStageOneThemeDesignSchema($themeDesign);
+            self::assertSame($expectedThemeDesignCore, self::stageOneThemeDesignCore($themeDesign), $path . ' must mirror plan_json.theme_design core planning fields.');
+        }
+
+        $selectionReason = (string)($planThemeDesign['selection_reason'] ?? '');
+        self::assertStringContainsString('strong CTA', $selectionReason);
+
+        $sharedPromptContext = $artifacts['execution_blueprint']['shared_prompt_context'] ?? null;
+        self::assertIsArray($sharedPromptContext);
+        self::assertSame($planThemeDesign, $sharedPromptContext['theme_design'] ?? null);
+        self::assertNotSame('', (string)($sharedPromptContext['context_hash'] ?? ''));
+        self::assertIsArray($sharedPromptContext['header_plan'] ?? null);
+        self::assertIsArray($sharedPromptContext['footer_plan'] ?? null);
+
+        foreach (['home_page', 'about_page'] as $pageType) {
+            $summary = (string)($artifacts['plan_json']['pages'][$pageType]['theme_alignment_summary'] ?? '');
+            self::assertNotSame('', $summary, $pageType . ' theme_alignment_summary must be present.');
+            foreach (['Ocean Slate', 'CTA', 'Header', 'Footer'] as $requiredToken) {
+                self::assertStringContainsString($requiredToken, $summary, $pageType . ' theme_alignment_summary must prove shared-theme alignment.');
+            }
+            self::assertSame(
+                $summary,
+                (string)($artifacts['structured']['page_plans'][$pageType]['theme_alignment_summary'] ?? ''),
+                $pageType . ' structured page plan must mirror the customer-visible theme alignment summary.'
+            );
+        }
+    }
+
     public function testPageTaskMissingSharedContextHashIsRejected(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
@@ -1389,15 +1443,28 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         ] as $field) {
             self::assertArrayHasKey($field, $themeDesign);
         }
+        foreach (['theme_purpose', 'tone_of_voice', 'cta_tone', 'selection_reason'] as $field) {
+            self::assertNotSame('', \trim((string)$themeDesign[$field]), 'theme_design.' . $field . ' must not be empty.');
+        }
 
         self::assertIsArray($themeDesign['color_scheme']);
         foreach (['name', 'primary', 'secondary', 'accent', 'background', 'body', 'button'] as $field) {
             self::assertArrayHasKey($field, $themeDesign['color_scheme']);
+            self::assertNotSame('', \trim((string)$themeDesign['color_scheme'][$field]), 'theme_design.color_scheme.' . $field . ' must not be empty.');
         }
 
         self::assertIsArray($themeDesign['typography_spacing_radius']);
         foreach (['font_family', 'heading_scale', 'body_scale', 'spacing_scale', 'radius_scale'] as $field) {
             self::assertArrayHasKey($field, $themeDesign['typography_spacing_radius']);
+            self::assertNotSame('', \trim((string)$themeDesign['typography_spacing_radius'][$field]), 'theme_design.typography_spacing_radius.' . $field . ' must not be empty.');
+        }
+
+        foreach (['visual_keywords', 'forbidden_styles'] as $field) {
+            self::assertIsArray($themeDesign[$field]);
+            self::assertNotEmpty($themeDesign[$field], 'theme_design.' . $field . ' must contain at least one reusable planning constraint.');
+            foreach ($themeDesign[$field] as $index => $value) {
+                self::assertNotSame('', \trim((string)$value), 'theme_design.' . $field . '[' . $index . '] must not be empty.');
+            }
         }
     }
 
@@ -1413,6 +1480,39 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         }
 
         return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function stageOneThemeDesignCore(mixed $themeDesign): array
+    {
+        self::assertStageOneThemeDesignSchema($themeDesign);
+
+        return [
+            'theme_purpose' => $themeDesign['theme_purpose'],
+            'color_scheme' => [
+                'name' => $themeDesign['color_scheme']['name'],
+                'primary' => $themeDesign['color_scheme']['primary'],
+                'secondary' => $themeDesign['color_scheme']['secondary'],
+                'accent' => $themeDesign['color_scheme']['accent'],
+                'background' => $themeDesign['color_scheme']['background'],
+                'body' => $themeDesign['color_scheme']['body'],
+                'button' => $themeDesign['color_scheme']['button'],
+            ],
+            'typography_spacing_radius' => [
+                'font_family' => $themeDesign['typography_spacing_radius']['font_family'],
+                'heading_scale' => $themeDesign['typography_spacing_radius']['heading_scale'],
+                'body_scale' => $themeDesign['typography_spacing_radius']['body_scale'],
+                'spacing_scale' => $themeDesign['typography_spacing_radius']['spacing_scale'],
+                'radius_scale' => $themeDesign['typography_spacing_radius']['radius_scale'],
+            ],
+            'visual_keywords' => $themeDesign['visual_keywords'],
+            'tone_of_voice' => $themeDesign['tone_of_voice'],
+            'cta_tone' => $themeDesign['cta_tone'],
+            'forbidden_styles' => $themeDesign['forbidden_styles'],
+            'selection_reason' => $themeDesign['selection_reason'],
+        ];
     }
 
     private function createStreamingAiServiceStub(string $response): AiService
