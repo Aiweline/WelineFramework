@@ -221,6 +221,113 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringNotContainsString('stale_markdown_only', \json_encode($artifacts['structured']['page_tasks'], \JSON_UNESCAPED_UNICODE));
     }
 
+    public function testBuildTaskPlanArtifactsAiPromptUsesConfirmedPlanBookInsteadOfPlanMarkdown(): void
+    {
+        $capturedPrompts = [];
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::exactly(2))
+            ->method('generate')
+            ->willReturnCallback(function (string $prompt) use (&$capturedPrompts): string {
+                $capturedPrompts[] = $prompt;
+                if (\str_contains($prompt, 'Batch type: shared')) {
+                    return \json_encode([
+                        'shared_tasks' => [
+                            [
+                                'task_key' => 'shared:header',
+                                'group_key' => 'shared',
+                                'page_type' => '',
+                                'label' => 'Header',
+                                'sort_order' => 10,
+                                'task_script' => [
+                                    'story_goal' => 'Visitors can use the confirmed header navigation immediately.',
+                                    'content_fill_rule' => 'Use confirmed nav labels and keep the brand slot visible.',
+                                    'stage3_directive' => 'Implement the confirmed shared header.',
+                                    'field_content_requirements' => [
+                                        ['field' => 'title', 'sample' => 'Confirmed Header', 'reason' => 'Identify the shared header.'],
+                                    ],
+                                ],
+                            ],
+                        ],
+                        'risk_notes' => [],
+                    ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+                }
+
+                return \json_encode([
+                    'page_type' => 'home_page',
+                    'page_tasks' => [
+                        [
+                            'task_key' => 'page:home_page:confirmed_hero',
+                            'group_key' => 'home_page',
+                            'page_type' => 'home_page',
+                            'label' => 'Confirmed Hero',
+                            'sort_order' => 30,
+                            'task_script' => [
+                                'story_goal' => 'Visitors see the confirmed hero headline and understand the offer.',
+                                'content_fill_rule' => 'headline example: Confirmed hero headline; CTA example: Start now.',
+                                'stage3_directive' => 'Implement the confirmed hero block.',
+                                'field_content_requirements' => [
+                                    ['field' => 'title', 'sample' => 'Confirmed hero headline', 'reason' => 'Use the confirmed stage-1 headline.'],
+                                ],
+                            ],
+                        ],
+                    ],
+                    'risk_notes' => [],
+                ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+            });
+
+        $service = new AiSiteVirtualThemePlanService($aiService);
+        $scope = $this->buildPromptScope();
+        $scope['plan_markdown'] = "# Stale Markdown\n\n- stale_markdown_only";
+        $scope['plan_workbench']['confirmed']['plan_book']['structured'] = [
+            'source' => 'stage1.block_tree',
+            'source_signature' => 'confirmed-block-tree-signature',
+            'context_hash' => 'confirmed-plan-book-hash',
+            'shared_blocks' => [
+                [
+                    'task_key' => 'shared:header',
+                    'block_key' => 'shared:header',
+                    'component' => 'header',
+                    'sort_order' => 10,
+                    'title' => 'Header',
+                    'goal' => 'Confirmed header goal from block tree.',
+                    'context_hash' => 'confirmed-header-hash',
+                ],
+            ],
+            'pages' => [
+                'home_page' => [
+                    'page_key' => 'home_page',
+                    'page_label' => 'Home',
+                    'page_goal' => 'Confirmed home page goal from block tree.',
+                    'blocks' => [
+                        [
+                            'task_key' => 'page:home_page:confirmed_hero',
+                            'block_key' => 'page:home_page:confirmed_hero',
+                            'source_block_key' => 'confirmed_hero',
+                            'component_kind' => 'content/confirmed-hero',
+                            'sort_order' => 30,
+                            'title' => 'Confirmed Hero',
+                            'goal' => 'Confirmed hero goal from block tree.',
+                            'implementation_detail' => 'Render confirmed hero from the block tree.',
+                            'realtime_content' => ['headline' => 'Confirmed hero headline'],
+                            'reason' => 'Confirmed reason from stage one.',
+                            'editable_fields' => ['title'],
+                            'context_hash' => 'confirmed-hero-hash',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $service->buildTaskPlanArtifacts($scope, $this->buildPromptBlueprint());
+
+        $allPrompts = \implode("\n---batch---\n", $capturedPrompts);
+        self::assertStringContainsString('confirmed_block_tree_source', $allPrompts);
+        self::assertStringContainsString('plan_workbench.confirmed.plan_book.structured', $allPrompts);
+        self::assertStringContainsString('Confirmed hero goal from block tree.', $allPrompts);
+        self::assertStringContainsString('confirmed-hero-hash', $allPrompts);
+        self::assertStringNotContainsString('stale_markdown_only', $allPrompts);
+    }
+
     public function testBuildTaskPlanArtifactsFallsBackDeterministicallyWhenFakeModeIsEnabled(): void
     {
         $aiService = $this->createMock(AiService::class);
