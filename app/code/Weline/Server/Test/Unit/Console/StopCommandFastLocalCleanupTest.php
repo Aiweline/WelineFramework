@@ -648,6 +648,14 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 $this->calls[] = 'show';
             }
 
+            protected function sendStopViaIpcAndWait(string $instanceName, int $controlPort, int $masterPid, bool $force): bool
+            {
+                unset($controlPort, $masterPid);
+                $this->calls[] = 'ipc:' . $instanceName . ':' . ($force ? 'force' : 'normal');
+
+                return true;
+            }
+
             protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
             {
                 unset($info);
