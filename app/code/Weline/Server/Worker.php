@@ -971,40 +971,39 @@ class Worker
     
     /**
      * 监控 Worker 进程
+     *
+     * 使用非阻塞轮询替代阻塞 wait，避免与 Master 进程的 SIGCHLD handler 冲突
      */
     protected static function monitorWorkers(): void
     {
         static::$status = static::STATUS_RUNNING;
-        
+
         while (true) {
-            // 处理信号
+            // 处理待处理的信号
             pcntl_signal_dispatch();
-            
-            // 等待子进程退出
+
+            // 非阻塞等待子进程退出（替代阻塞 pcntl_wait）
             $status = 0;
-            $pid = pcntl_wait($status, WUNTRACED);
-            
-            // 处理信号
-            pcntl_signal_dispatch();
-            
+            $pid = pcntl_waitpid(-1, $status, WNOHANG);
+
             // 有子进程退出
             if ($pid > 0) {
                 // 获取 Worker ID
                 $workerId = static::$idMap[$pid] ?? null;
-                
+
                 if ($workerId !== null) {
                     // 从映射中删除
                     unset(static::$pidMap[$workerId][$pid]);
                     unset(static::$idMap[$pid]);
-                    
+
                     // 如果不是关闭状态，重新 fork
                     if (static::$status !== static::STATUS_SHUTDOWN) {
                         $worker = static::$workers[$workerId] ?? null;
-                        
+
                         if ($worker) {
                             $exitCode = pcntl_wexitstatus($status);
                             static::log(\__('Worker [%{1}] 退出，退出码：%{2}，正在重启...', [$worker->name, $exitCode]));
-                            
+
                             // 等待一小段时间再重启
                             SchedulerSystem::usleep(100000);
                             static::forkOneWorker($worker);
@@ -1012,22 +1011,26 @@ class Worker
                     }
                 }
             }
-            
+
             // 检查是否所有子进程都退出了
             if (static::$status === static::STATUS_SHUTDOWN) {
                 $allExited = true;
-                
+
                 foreach (static::$pidMap as $pids) {
                     if (!empty($pids)) {
                         $allExited = false;
                         break;
                     }
                 }
-                
+
                 if ($allExited) {
                     static::exitAndCleanup();
                 }
             }
+
+            // 短暂休眠避免 CPU 空转（10ms）
+            // 这允许 SIGCHLD 信号被处理，同时不会过多增加延迟
+            usleep(10000);
         }
     }
     

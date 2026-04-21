@@ -1865,9 +1865,9 @@ class Processer
     
     /**
      * 通过 PID 杀死进程树（包括所有子进程）
-     * 
+     *
      * 安全策略：杀前校验 isProcessManagerCreated($pid)，非己方进程拒绝杀并返回 false。
-     * 
+     *
      * @param int $pid 进程 ID
      * @param bool $skipCheck 是否跳过己方进程校验（内部调用时可跳过，默认 false）
      * @return bool 是否成功
@@ -1877,37 +1877,64 @@ class Processer
         if ($pid <= 0) {
             return false;
         }
-        
+
         // 己方进程校验：非己方进程拒绝杀
         if (!$skipCheck && !self::isProcessManagerCreated($pid)) {
             return false;
         }
-        
+
         $pname = self::getNameByPid($pid);
         $logfile = '';
         if ($pname && $pname !== 'unknown') {
             $logfile = self::getLogFile($pname);
         }
-        
+
+        // 记录杀进程日志（先记录，失败时补充失败原因）
+        $killAttemptLog = 'kill_tree_attempt';
+
         // 使用驱动执行 killProcessTree 操作
         $result = self::getDriver()->killProcessTree($pid);
-        
-        // 如果 killProcessTree 失败，尝试使用 killProcess（单进程杀死）作为回退
+
+        // 如果 killProcessTree 失败，添加重试机制（特别是 Windows 上 taskkill 可能因权限问题首次失败）
         if (!$result) {
-            // 回退：使用 killProcess（单进程杀死）
-            $result = self::getDriver()->killProcess($pid);
+            for ($retry = 0; $retry < 3; $retry++) {
+                // 等待 500ms 后重试
+                usleep(500000);
+                $result = self::getDriver()->killProcessTree($pid);
+                if ($result) {
+                    $killAttemptLog = 'kill_tree_retry_success';
+                    break;
+                }
+            }
         }
-        
+
+        // 如果 killProcessTree 仍然失败，尝试使用 killProcess（单进程杀死）作为回退
+        if (!$result) {
+            for ($retry = 0; $retry < 3; $retry++) {
+                $result = self::getDriver()->killProcess($pid);
+                if ($result) {
+                    $killAttemptLog = 'kill_single_retry_success';
+                    break;
+                }
+                usleep(500000);
+            }
+        }
+
         // 从受信任缓存移除（防止 PID 复用时误信任）
         self::untrustPid($pid);
 
-        if ($pname && $pname !== 'unknown' && $result) {
-            // 记录杀进程日志
-            self::logLifecycleEvent('kill', $pname, $pid, 'killed process tree');
-            # 卸载pid文件
-            self::removePidFile($pname);
-            # 卸载日志文件
-            self::removeLogFile($pname);
+        if ($pname && $pname !== 'unknown') {
+            if ($result) {
+                // 记录杀进程日志
+                self::logLifecycleEvent('kill', $pname, $pid, $killAttemptLog);
+                # 卸载pid文件
+                self::removePidFile($pname);
+                # 卸载日志文件
+                self::removeLogFile($pname);
+            } else {
+                // 记录杀进程失败日志
+                self::logLifecycleEvent('kill_failed', $pname, $pid, 'kill_tree_failed_after_retries');
+            }
         }
         return $result;
     }
