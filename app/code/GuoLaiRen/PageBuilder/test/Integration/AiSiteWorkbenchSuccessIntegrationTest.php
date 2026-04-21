@@ -376,6 +376,139 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         );
     }
 
+    public function testUpdateBlockConfigOnlyMutatesCurrentPageBlockStructuredData(): void
+    {
+        $createPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-create-session',
+            'POST',
+            'postCreateSession'
+        );
+        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
+        $publicId = (string)($createPayload['public_id'] ?? '');
+        self::assertNotSame('', $publicId);
+
+        $homeHeader = [
+            'block_id' => 'home-site-header',
+            'type' => 'site_header',
+            'html' => '<header>Home header before</header>',
+            'config' => [
+                'site_title' => 'Home header before',
+                'site_tagline' => 'Home tagline before',
+                'current_page_label' => 'Home',
+                'nav_items' => [],
+            ],
+            'field_schema' => [],
+        ];
+        $homeHero = [
+            'block_id' => 'home-hero',
+            'type' => 'hero',
+            'html' => '<section>Home hero before</section>',
+            'config' => [
+                'eyebrow' => 'Before',
+                'headline' => 'Home hero before',
+                'description' => 'Do not change this block.',
+                'chips' => ['stable'],
+                'primary_cta' => 'Start',
+                'secondary_note' => '',
+            ],
+            'field_schema' => [],
+        ];
+        $aboutHeader = [
+            'block_id' => 'about-site-header',
+            'type' => 'site_header',
+            'html' => '<header>About header before</header>',
+            'config' => [
+                'site_title' => 'About header before',
+                'site_tagline' => 'About tagline before',
+                'current_page_label' => 'About',
+                'nav_items' => [],
+            ],
+            'field_schema' => [],
+        ];
+
+        $scopePatch = [
+            'site_title' => 'Block API scope test',
+            'site_tagline' => 'Current block only',
+            'target_domain' => 'block-api-scope.local.test',
+            'brief_description' => 'Verify block config updates are scoped to the selected page block.',
+            'user_description' => 'Verify block config updates are scoped to the selected page block.',
+            'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT],
+            'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS,
+            'website_profile' => [
+                'site_title' => 'Block API scope test',
+                'site_tagline' => 'Current block only',
+                'target_domain' => 'block-api-scope.local.test',
+                'default_locale' => 'en_US',
+            ],
+            'virtual_pages_by_type' => [
+                Page::TYPE_HOME => [
+                    'title' => 'Home',
+                    'handle' => Page::getDefaultHandleForType(Page::TYPE_HOME),
+                    'locale' => 'en_US',
+                    'blocks' => [$homeHeader, $homeHero],
+                ],
+                Page::TYPE_ABOUT => [
+                    'title' => 'About',
+                    'handle' => Page::getDefaultHandleForType(Page::TYPE_ABOUT),
+                    'locale' => 'en_US',
+                    'blocks' => [$aboutHeader],
+                ],
+            ],
+        ];
+
+        $mergePayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-merge-scope',
+            'POST',
+            'postMergeScope',
+            [],
+            [
+                'public_id' => $publicId,
+                'scope_patch' => $scopePatch,
+            ]
+        );
+        self::assertTrue((bool)($mergePayload['success'] ?? false), \json_encode($mergePayload, \JSON_UNESCAPED_UNICODE));
+
+        $payload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-update-block-config',
+            'POST',
+            'postUpdateBlockConfig',
+            [],
+            [
+                'public_id' => $publicId,
+                'page_type' => Page::TYPE_HOME,
+                'block_id' => 'home-site-header',
+                'block_config' => \json_encode([
+                    'site_title' => 'Home header tuned',
+                    'site_tagline' => 'Home tagline tuned',
+                    'current_page_label' => 'Home',
+                    'nav_items' => [],
+                ], \JSON_UNESCAPED_UNICODE),
+            ]
+        );
+
+        self::assertTrue((bool)($payload['success'] ?? false), \json_encode($payload, \JSON_UNESCAPED_UNICODE));
+        self::assertSame('home-site-header', (string)($payload['block']['block_id'] ?? ''));
+        self::assertSame('Home header tuned', (string)($payload['block']['config']['site_title'] ?? ''));
+        self::assertStringContainsString('Home header tuned', (string)($payload['block']['html'] ?? ''));
+
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+        $scope = $session->getScopeArray();
+        $virtualPages = (array)($scope['virtual_pages_by_type'] ?? []);
+        $homeBlocks = (array)($virtualPages[Page::TYPE_HOME]['blocks'] ?? []);
+        $aboutBlocks = (array)($virtualPages[Page::TYPE_ABOUT]['blocks'] ?? []);
+
+        $homeHeaderAfter = $this->findBlockById($homeBlocks, 'home-site-header');
+        $homeHeroAfter = $this->findBlockById($homeBlocks, 'home-hero');
+        $aboutHeaderAfter = $this->findBlockById($aboutBlocks, 'about-site-header');
+
+        self::assertSame('Home header tuned', (string)($homeHeaderAfter['config']['site_title'] ?? ''));
+        self::assertStringContainsString('Home header tuned', (string)($homeHeaderAfter['html'] ?? ''));
+        self::assertSame($homeHero['config'], (array)($homeHeroAfter['config'] ?? []));
+        self::assertSame('About header before', (string)($aboutHeaderAfter['config']['site_title'] ?? ''));
+        self::assertSame('<header>About header before</header>', (string)($aboutHeaderAfter['html'] ?? ''));
+    }
+
     public function testStartPublishShowsFriendlyMessageWhenDomainNotReady(): void
     {
         $buildFlow = $this->createAndBuildWorkbenchSession();
