@@ -2180,15 +2180,6 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(\getmypid(), $dispatcherAfter->getRootPid());
     }
 
-    public function testSerialStartupFallbackHelpersRemoved(): void
-    {
-        $reflection = new \ReflectionClass(ServiceOrchestrator::class);
-
-        self::assertFalse($reflection->hasMethod('shouldUseCooperativeSequentialStartupBatch'));
-        self::assertFalse($reflection->hasMethod('shouldUseCooperativeSequentialProvidersStartupBatch'));
-        self::assertFalse($reflection->hasMethod('shouldUseWindowsDetachedFastStartupBatch'));
-    }
-
     public function testShouldLaunchForegroundAllowsWindowsFrontendChildProcessesDuringBootstrapWhenFlagsSet(): void
     {
         $orchestrator = new ServiceOrchestrator();

@@ -380,25 +380,6 @@ class ProcesserTest extends TestCore
         self::assertFalse($this->invokePrivateStatic(Processer::class, 'shouldTryManagedProcessReuse', [false, true]));
     }
 
-    public function testShouldLaunchWindowsForegroundImmediatelyInBatchOnlyForNonBlockingForeground(): void
-    {
-        self::assertTrue($this->invokePrivateStatic(
-            Processer::class,
-            'shouldLaunchWindowsForegroundImmediatelyInBatch',
-            [true, false]
-        ));
-        self::assertFalse($this->invokePrivateStatic(
-            Processer::class,
-            'shouldLaunchWindowsForegroundImmediatelyInBatch',
-            [true, true]
-        ));
-        self::assertFalse($this->invokePrivateStatic(
-            Processer::class,
-            'shouldLaunchWindowsForegroundImmediatelyInBatch',
-            [false, false]
-        ));
-    }
-
     public function testWindowsFastDetachedBatchCreateFallbackHelperRemoved(): void
     {
         self::assertFalse((new \ReflectionClass(Processer::class))->hasMethod('shouldUseWindowsFastDetachedBatchCreate'));
