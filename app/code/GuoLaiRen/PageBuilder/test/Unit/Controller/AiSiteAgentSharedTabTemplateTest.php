@@ -39,4 +39,27 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertStringContainsString('reasonItems: collectPreviewReasonItems(headerPlan)', $script);
         self::assertStringContainsString('reasonItems: collectPreviewReasonItems(footerPlan)', $script);
     }
+
+    public function testCurrentPageRefineUsesDedicatedPageApi(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 3);
+        $controller = \file_get_contents($moduleRoot . '/Controller/Backend/AiSiteAgent.php');
+        $workspace = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace.phtml');
+        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+
+        self::assertIsString($controller);
+        self::assertIsString($workspace);
+        self::assertIsString($script);
+        self::assertStringContainsString('refine_plan_page_url', $controller);
+        self::assertStringContainsString('public function postRefinePlanPage(): string', $controller);
+        self::assertStringContainsString('return $this->handleRefinePlanPage();', $controller);
+        self::assertStringContainsString('$refinePlanPageUrl', $workspace);
+        self::assertStringContainsString('var refinePlanPageUrl', $script);
+        self::assertStringContainsString('function shouldUsePlanPageRefineApi(mode, actionContext)', $script);
+        self::assertStringContainsString("String(context.scopeKind || '').trim() === 'page'", $script);
+        self::assertStringContainsString('function startPlanPageRefineRequest(promptText, targetScope, actionContext)', $script);
+        self::assertStringContainsString('postForm(refinePlanPageUrl', $script);
+        self::assertStringContainsString('page_type: pageType', $script);
+        self::assertStringContainsString('instruction: instruction', $script);
+    }
 }
