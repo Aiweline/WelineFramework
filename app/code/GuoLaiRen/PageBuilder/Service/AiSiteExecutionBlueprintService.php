@@ -1419,6 +1419,7 @@ final class AiSiteExecutionBlueprintService
             $planLocale,
             $this->isEnglishLocale($planLocale)
         );
+        $planJson = $this->repairAiStageOnePlanJsonBeforeValidation($planJson, $pageTypes, $planLocale);
 
         $planBlocks = $this->normalizePlanBlocks(\is_array($planJson['plan_blocks'] ?? null) ? $planJson['plan_blocks'] : []);
         if ($planBlocks === []) {
@@ -1967,6 +1968,7 @@ final class AiSiteExecutionBlueprintService
             'block direction', 'section title', 'supporting subtitle text', 'direction only', 'blueprint direction',
             'list 2-4', 'specify heading font', 'describe the overall visual tone', 'use concise readable paragraphs',
             'first-screen promise', 'lead visitors to the next step',
+            'string explaining how this page obeys', 'how this page and every block obey theme_design',
             'write the title around', 'explain the core value', 'do not describe what should be written',
         ] as $marker) {
             if ($marker !== '' && \mb_stripos($normalized, $marker) !== false) {
@@ -1975,6 +1977,126 @@ final class AiSiteExecutionBlueprintService
         }
 
         return $this->looksLikeBlueprintInstruction($text, $field, $template, $sectionName, $pageLabel);
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @param list<string> $pageTypes
+     * @return array<string, mixed>
+     */
+    private function repairAiStageOnePlanJsonBeforeValidation(
+        array $planJson,
+        array $pageTypes,
+        string $planLocale
+    ): array {
+        $normalized = $planJson;
+        if (!\is_array($normalized['pages'] ?? null)) {
+            $normalized['pages'] = [];
+        }
+
+        foreach ($pageTypes as $pageType) {
+            $originalPage = \is_array($planJson['pages'][$pageType] ?? null) ? $planJson['pages'][$pageType] : [];
+            if (!\is_array($normalized['pages'][$pageType] ?? null)) {
+                continue;
+            }
+
+            $page = $normalized['pages'][$pageType];
+            $themeAlignmentSummary = \trim((string)($page['theme_alignment_summary'] ?? ''));
+            $originalThemeAlignmentSummary = \trim((string)($originalPage['theme_alignment_summary'] ?? ''));
+            if (
+                $themeAlignmentSummary === ''
+                || $originalThemeAlignmentSummary === ''
+                || $this->isPromptLikeStageOneText($themeAlignmentSummary, 'theme_alignment_summary', '', '', (string)$pageType)
+                || $this->isPromptLikeStageOneText($originalThemeAlignmentSummary, 'theme_alignment_summary', '', '', (string)$pageType)
+            ) {
+                $page['theme_alignment_summary'] = $this->buildStageOneThemeAlignmentSummaryFromPlanJson(
+                    (string)$pageType,
+                    $page,
+                    $normalized,
+                    $planLocale
+                );
+            }
+
+            $normalized['pages'][$pageType] = $page;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     * @param array<string, mixed> $planJson
+     */
+    private function buildStageOneThemeAlignmentSummaryFromPlanJson(
+        string $pageType,
+        array $page,
+        array $planJson,
+        string $planLocale
+    ): string {
+        $isEn = $this->isEnglishLocale($planLocale);
+        $themeDesign = \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : [];
+        $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+        $typography = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
+        $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+        $blockKeys = \array_values(\array_filter(\array_map(
+            static fn($block): string => \is_array($block) ? \trim((string)($block['block_key'] ?? $block['section_code'] ?? '')) : '',
+            $blocks
+        ), static fn(string $value): bool => $value !== ''));
+
+        $pageLabel = \trim((string)($page['page_label'] ?? $page['page_title'] ?? (Page::getPageTypes()[$pageType] ?? $pageType)));
+        $pageGoal = \trim((string)($page['page_goal'] ?? ''));
+        $themePurpose = \trim((string)($themeDesign['theme_purpose'] ?? $planJson['site_strategy']['core_goal'] ?? ''));
+        $paletteName = \trim((string)($colorScheme['name'] ?? $planJson['palette']['name'] ?? ''));
+        $primary = \trim((string)($colorScheme['primary'] ?? $planJson['palette']['primary'] ?? ''));
+        $accent = \trim((string)($colorScheme['accent'] ?? $planJson['palette']['accent'] ?? ''));
+        $typeRule = \trim((string)($typography['font_family'] ?? $typography['heading_scale'] ?? ''));
+        $spacingRule = \trim((string)($typography['spacing_scale'] ?? $typography['radius_scale'] ?? ''));
+        $tone = \trim((string)($themeDesign['tone_of_voice'] ?? $planJson['theme_style']['visual_tone'] ?? ''));
+        $ctaTone = \trim((string)($themeDesign['cta_tone'] ?? ''));
+        $forbiddenStyles = \is_array($themeDesign['forbidden_styles'] ?? null) ? $themeDesign['forbidden_styles'] : [];
+        $forbidden = \trim((string)($forbiddenStyles[0] ?? ''));
+
+        $pageLabel = $pageLabel !== '' ? $pageLabel : $pageType;
+        $pageGoal = $pageGoal !== '' ? $pageGoal : ($isEn ? 'the selected page goal' : '当前页面目标');
+        $themePurpose = $themePurpose !== '' ? $themePurpose : ($isEn ? 'the shared conversion promise' : '共享转化目标');
+        $colorUse = $paletteName !== '' ? $paletteName : \trim($primary . ($accent !== '' ? ' / ' . $accent : ''));
+        $colorUse = $colorUse !== '' ? $colorUse : ($isEn ? 'the shared color scheme' : '共享色彩体系');
+        $typeSpacing = \trim($typeRule . ($spacingRule !== '' ? ' / ' . $spacingRule : ''));
+        $typeSpacing = $typeSpacing !== '' ? $typeSpacing : ($isEn ? 'the shared type, spacing, and radius rules' : '共享字体、间距和圆角规则');
+        $tone = $tone !== '' ? $tone : ($isEn ? 'the shared voice' : '共享语气');
+        $ctaTone = $ctaTone !== '' ? $ctaTone : ($isEn ? 'the shared CTA tone' : '共享 CTA 语气');
+        $forbidden = $forbidden !== '' ? $forbidden : ($isEn ? 'off-theme visual styles' : '偏离主题的视觉风格');
+        $blockSummary = $blockKeys !== []
+            ? \implode($isEn ? ', ' : '、', \array_slice($blockKeys, 0, 4))
+            : ($isEn ? 'all page blocks' : '全部页面区块');
+
+        if ($isEn) {
+            return \sprintf(
+                '%s keeps the shared theme purpose "%s" while %s support "%s"; it applies %s, follows %s, keeps the %s voice and %s CTA rhythm, avoids %s, and preserves the Header/Footer handoff.',
+                $pageLabel,
+                $themePurpose,
+                $blockSummary,
+                $pageGoal,
+                $colorUse,
+                $typeSpacing,
+                $tone,
+                $ctaTone,
+                $forbidden
+            );
+        }
+
+        return \sprintf(
+            '%s 继承共享主题目标“%s”，%s 围绕“%s”展开；页面沿用 %s，遵守 %s，保持 %s 与 %s，并避免 %s，同时延续 Header/Footer 的承接关系。',
+            $pageLabel,
+            $themePurpose,
+            $blockSummary,
+            $pageGoal,
+            $colorUse,
+            $typeSpacing,
+            $tone,
+            $ctaTone,
+            $forbidden
+        );
     }
 
     /**
@@ -6630,6 +6752,7 @@ final class AiSiteExecutionBlueprintService
             'block direction', 'section title', 'supporting subtitle text',
             'list 2-4', 'specify heading font', 'describe the overall visual tone', 'use concise readable paragraphs',
             'first-screen promise', 'lead visitors to the next step',
+            'string explaining how this page obeys', 'how this page and every block obey theme_design',
             'keep cta', 'home hero', 'page hero',
         ] as $marker) {
             if ($marker !== '' && \mb_stripos($normalized, $marker) !== false) {
