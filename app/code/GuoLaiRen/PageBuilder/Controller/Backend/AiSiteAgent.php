@@ -50,6 +50,7 @@ class AiSiteAgent extends BaseController
     private const PARAMS_PUBLIC_ID = ['public_id'];
     private const PARAMS_OPERATION_SSE = ['public_id', 'execution_token'];
     private const PARAMS_REGENERATE = ['public_id', 'page_type'];
+    private const PARAMS_REFINE_PLAN_PAGE = ['public_id', 'page_type', 'instruction'];
     private const PARAMS_REFINE_COMPONENT = ['public_id', 'page_type', 'component_code', 'instruction'];
     private const PARAMS_UPDATE_BLOCK = ['public_id', 'page_type', 'block_id', 'block_config'];
     private const PARAMS_MUTATE_PLAN_BLOCK = ['public_id', 'page_type', 'action', 'block_key', 'block_config'];
@@ -223,7 +224,7 @@ class AiSiteAgent extends BaseController
         $this->assign('start_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-plan'));
         $this->assign('confirm_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-confirm-plan'));
         $this->assign('sort_plan_blocks_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-sort-plan-blocks'));
-        $this->assign('mutate_plan_block_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-mutate-plan-block'));
+        $this->assign('refine_plan_page_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-refine-plan-page'));
         $this->assign('plan_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/plan-sse'));
         $this->assign('start_task_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-task-plan'));
         $this->assign('confirm_task_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-confirm-task-plan'));
