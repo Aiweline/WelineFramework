@@ -5067,7 +5067,7 @@ final class AiSiteExecutionBlueprintService
                 }
                 $blockRows[] = [
                     'block_key' => (string)($block['block_key'] ?? $block['section_code'] ?? 'block'),
-                    'sort_order' => $this->resolveStageOnePlanBookBlockSortOrder($block, (int)$offset),
+                    'sort_order' => (int)($block['sort_order'] ?? $block['order'] ?? 0),
                     'content' => $this->buildBlockContentSummary($block),
                     'why' => \trim((string)($block['why'] ?? '')),
                     'implementation_note' => $this->buildBlockImplementationFocus($block, (string)($structured['i18n']['locale'] ?? '')),
