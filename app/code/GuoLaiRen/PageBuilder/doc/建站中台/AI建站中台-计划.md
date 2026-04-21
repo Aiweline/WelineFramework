@@ -1125,7 +1125,7 @@ Atomic Task ID:
 #### F. 通用队列、token、SSE/polling 与测试
 
 - [ ] A46 AI 队列记录 input/output/total tokens（status=todo, owner=backend-queue, covers=§5.4/§13.5, output=token_usage）
-- [ ] A47 队列信息列表展示 token 用量（status=todo, owner=frontend, covers=§5.4, output=token columns）
+- [x] A47 队列信息列表展示 token 用量（status=done, owner=worker-2, covers=§5.4, output=token columns, evidence=AiSiteAgentSseMarkerTest queue info token columns）
 - [ ] A48 SSE payload 增加 `token_usage` 与 `progress_kind`（status=todo, owner=sse-runtime, covers=§13.5.2, output=统一事件体）
 - [ ] A49 polling payload 与 SSE payload 对齐（status=todo, owner=backend-api, covers=§13.5, output=同一状态真相源）
 - [ ] A50 `done/error/cancelled` 后关闭 SSE 流（status=todo, owner=sse-runtime, covers=§7.4, output=无连接泄漏）
