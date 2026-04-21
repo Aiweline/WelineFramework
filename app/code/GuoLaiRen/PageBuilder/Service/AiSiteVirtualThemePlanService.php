@@ -62,21 +62,15 @@ final class AiSiteVirtualThemePlanService
         $totalBatches = \count($effectiveBatches);
         $completedBatches = 0;
 
+        $fanoutBatches = [];
         foreach ($effectiveBatches as $batchIndex => $batch) {
-            $batchId = $this->buildTaskPlanBatchId($batch);
-            if ($progressCallback !== null) {
-                $progressCallback([
-                    'status' => 'batch_begin',
-                    'batch_id' => $batchId,
-                    'batch_type' => (string)($batch['type'] ?? ''),
-                    'batch_key' => (string)($batch['key'] ?? ''),
-                    'batch_index' => $batchIndex + 1,
-                    'total_batches' => $totalBatches,
-                    'completed_batches' => $completedBatches,
-                    'remaining_batches' => \max(0, $totalBatches - $completedBatches),
-                    'task_keys_count' => \count(\is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : []),
-                ]);
+            if (($batch['type'] ?? '') !== 'shared') {
+                $fanoutBatches[] = ['batch' => $batch, 'batch_index' => $batchIndex];
+                continue;
             }
+
+            $batchId = $this->buildTaskPlanBatchId($batch);
+            $this->emitTaskPlanBatchProgress($progressCallback, 'batch_begin', $batch, $batchIndex, $totalBatches, $completedBatches);
             if ($heartbeatCallback !== null) {
                 $heartbeatCallback();
             }
@@ -98,20 +92,9 @@ final class AiSiteVirtualThemePlanService
                     $heartbeatCallback
                 );
             } catch (\Throwable $batchThrowable) {
-                if ($progressCallback !== null) {
-                    $progressCallback([
-                        'status' => 'batch_failed',
-                        'batch_id' => $batchId,
-                        'batch_type' => (string)($batch['type'] ?? ''),
-                        'batch_key' => (string)($batch['key'] ?? ''),
-                        'batch_index' => $batchIndex + 1,
-                        'total_batches' => $totalBatches,
-                        'completed_batches' => $completedBatches,
-                        'remaining_batches' => \max(0, $totalBatches - $completedBatches),
-                        'task_keys_count' => \count(\is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : []),
-                        'error_message' => $batchThrowable->getMessage(),
-                    ]);
-                }
+                $this->emitTaskPlanBatchProgress($progressCallback, 'batch_failed', $batch, $batchIndex, $totalBatches, $completedBatches, [
+                    'error_message' => $batchThrowable->getMessage(),
+                ]);
                 throw $batchThrowable;
             }
 
@@ -127,21 +110,50 @@ final class AiSiteVirtualThemePlanService
                 $heartbeatCallback();
             }
             $completedBatches++;
-            if ($progressCallback !== null) {
-                $progressCallback([
-                    'status' => 'batch_done',
-                    'batch_id' => $batchId,
-                    'batch_type' => (string)($batch['type'] ?? ''),
-                    'batch_key' => (string)($batch['key'] ?? ''),
-                    'batch_index' => $batchIndex + 1,
-                    'total_batches' => $totalBatches,
-                    'completed_batches' => $completedBatches,
-                    'remaining_batches' => \max(0, $totalBatches - $completedBatches),
-                    'task_keys_count' => \count(\is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : []),
-                ]);
-            }
+            $this->emitTaskPlanBatchProgress($progressCallback, 'batch_done', $batch, $batchIndex, $totalBatches, $completedBatches);
             if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent()) {
                 SchedulerSystem::yieldDelay(1);
+            }
+        }
+
+        if ($fanoutBatches !== []) {
+            $decodedByBatchId = $this->requestTaskPlanFanoutBatchesConcurrently(
+                $scope,
+                $buildBlueprint,
+                $assembledStructured,
+                $assembledVirtualThemePlan,
+                $fanoutBatches,
+                $mode,
+                $instruction,
+                $targetScope,
+                $chunkCallback,
+                $heartbeatCallback,
+                $progressCallback,
+                $totalBatches,
+                $completedBatches
+            );
+
+            foreach ($fanoutBatches as $fanoutBatch) {
+                $batch = \is_array($fanoutBatch['batch'] ?? null) ? $fanoutBatch['batch'] : [];
+                $batchIndex = (int)($fanoutBatch['batch_index'] ?? 0);
+                $batchId = $this->buildTaskPlanBatchId($batch);
+                $decoded = \is_array($decodedByBatchId[$batchId] ?? null) ? $decodedByBatchId[$batchId] : [];
+                ['structured' => $assembledStructured, 'virtual_theme_plan' => $assembledVirtualThemePlan, 'risk_notes' => $riskNotes] =
+                    $this->mergeTaskPlanGenerationBatch(
+                        $assembledStructured,
+                        $assembledVirtualThemePlan,
+                        $riskNotes,
+                        $batch,
+                        $decoded
+                    );
+                if ($heartbeatCallback !== null) {
+                    $heartbeatCallback();
+                }
+                $completedBatches++;
+                $this->emitTaskPlanBatchProgress($progressCallback, 'batch_done', $batch, $batchIndex, $totalBatches, $completedBatches);
+                if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent()) {
+                    SchedulerSystem::yieldDelay(1);
+                }
             }
         }
 
@@ -172,6 +184,191 @@ final class AiSiteVirtualThemePlanService
             'structured' => $assembledStructured,
             'virtual_theme_plan' => $assembledVirtualThemePlan,
         ];
+    }
+
+    /**
+     * @param callable|null $progressCallback
+     * @param array<string, mixed> $batch
+     * @param array<string, mixed> $extra
+     */
+    private function emitTaskPlanBatchProgress(
+        ?callable $progressCallback,
+        string $status,
+        array $batch,
+        int $batchIndex,
+        int $totalBatches,
+        int $completedBatches,
+        array $extra = []
+    ): void {
+        if ($progressCallback === null) {
+            return;
+        }
+
+        $progressCallback(
+            \array_replace([
+                'status' => $status,
+                'batch_id' => $this->buildTaskPlanBatchId($batch),
+                'batch_type' => (string)($batch['type'] ?? ''),
+                'batch_key' => (string)($batch['key'] ?? ''),
+                'block_key' => (string)($batch['block_key'] ?? ''),
+                'batch_index' => $batchIndex + 1,
+                'total_batches' => $totalBatches,
+                'completed_batches' => $completedBatches,
+                'remaining_batches' => \max(0, $totalBatches - $completedBatches),
+                'task_keys_count' => \count(\is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : []),
+            ], $extra)
+        );
+    }
+
+    /**
+     * @param list<array{batch:array<string,mixed>,batch_index:int}> $fanoutBatches
+     * @return array<string, array<string, mixed>>
+     */
+    private function requestTaskPlanFanoutBatchesConcurrently(
+        array $scope,
+        array $buildBlueprint,
+        array $assembledStructured,
+        array $assembledVirtualThemePlan,
+        array $fanoutBatches,
+        string $mode,
+        string $instruction,
+        string $targetScope,
+        ?callable $chunkCallback,
+        ?callable $heartbeatCallback,
+        ?callable $progressCallback,
+        int $totalBatches,
+        int $completedBatches
+    ): array {
+        foreach ($fanoutBatches as $fanoutBatch) {
+            $batch = \is_array($fanoutBatch['batch'] ?? null) ? $fanoutBatch['batch'] : [];
+            $batchIndex = (int)($fanoutBatch['batch_index'] ?? 0);
+            $this->emitTaskPlanBatchProgress($progressCallback, 'batch_begin', $batch, $batchIndex, $totalBatches, $completedBatches);
+        }
+        if ($heartbeatCallback !== null) {
+            $heartbeatCallback();
+        }
+
+        if (\count($fanoutBatches) <= 1 || !\class_exists(\Fiber::class)) {
+            $decodedByBatchId = [];
+            foreach ($fanoutBatches as $fanoutBatch) {
+                $batch = \is_array($fanoutBatch['batch'] ?? null) ? $fanoutBatch['batch'] : [];
+                $batchIndex = (int)($fanoutBatch['batch_index'] ?? 0);
+                try {
+                    $decodedByBatchId[$this->buildTaskPlanBatchId($batch)] = $this->requestTaskPlanJsonFromAi(
+                        $scope,
+                        $this->buildTaskPlanGenerationBatchPrompt(
+                            $scope,
+                            $buildBlueprint,
+                            $assembledStructured,
+                            $assembledVirtualThemePlan,
+                            $batch,
+                            $mode,
+                            $instruction,
+                            $targetScope
+                        ),
+                        $this->resolveTaskPlanBatchMaxTokens($batch),
+                        $chunkCallback,
+                        $heartbeatCallback
+                    );
+                } catch (\Throwable $batchThrowable) {
+                    $this->emitTaskPlanBatchProgress($progressCallback, 'batch_failed', $batch, $batchIndex, $totalBatches, $completedBatches, [
+                        'error_message' => $batchThrowable->getMessage(),
+                    ]);
+                    throw $batchThrowable;
+                }
+            }
+            return $decodedByBatchId;
+        }
+
+        /** @var array<string, \Fiber> $fibers */
+        $fibers = [];
+        $batchById = [];
+        $batchIndexById = [];
+        foreach ($fanoutBatches as $fanoutBatch) {
+            $batch = \is_array($fanoutBatch['batch'] ?? null) ? $fanoutBatch['batch'] : [];
+            $batchIndex = (int)($fanoutBatch['batch_index'] ?? 0);
+            $batchId = $this->buildTaskPlanBatchId($batch);
+            $batchById[$batchId] = $batch;
+            $batchIndexById[$batchId] = $batchIndex;
+            $prompt = $this->buildTaskPlanGenerationBatchPrompt(
+                $scope,
+                $buildBlueprint,
+                $assembledStructured,
+                $assembledVirtualThemePlan,
+                $batch,
+                $mode,
+                $instruction,
+                $targetScope
+            );
+            $maxTokens = $this->resolveTaskPlanBatchMaxTokens($batch);
+            $fibers[$batchId] = new \Fiber(function () use ($scope, $prompt, $maxTokens, $chunkCallback, $heartbeatCallback): array {
+                return $this->requestTaskPlanJsonFromAi(
+                    $scope,
+                    $prompt,
+                    $maxTokens,
+                    $chunkCallback,
+                    $heartbeatCallback
+                );
+            });
+        }
+
+        $decodedByBatchId = [];
+        $errors = [];
+        foreach ($fibers as $batchId => $fiber) {
+            try {
+                $fiber->start();
+            } catch (\Throwable $throwable) {
+                $errors[$batchId] = $throwable;
+            }
+        }
+
+        while (\count($decodedByBatchId) + \count($errors) < \count($fibers)) {
+            $madeProgress = false;
+            foreach ($fibers as $batchId => $fiber) {
+                if (isset($decodedByBatchId[$batchId]) || isset($errors[$batchId])) {
+                    continue;
+                }
+
+                try {
+                    if ($fiber->isTerminated()) {
+                        $decodedByBatchId[$batchId] = $fiber->getReturn();
+                        $madeProgress = true;
+                        continue;
+                    }
+                    if ($fiber->isSuspended()) {
+                        $fiber->resume();
+                        $madeProgress = true;
+                    }
+                } catch (\Throwable $throwable) {
+                    $errors[$batchId] = $throwable;
+                    $madeProgress = true;
+                }
+            }
+
+            if (!$madeProgress && \count($decodedByBatchId) + \count($errors) < \count($fibers)) {
+                \usleep(1000);
+            }
+        }
+
+        if ($errors !== []) {
+            foreach ($errors as $batchId => $throwable) {
+                $this->emitTaskPlanBatchProgress(
+                    $progressCallback,
+                    'batch_failed',
+                    \is_array($batchById[$batchId] ?? null) ? $batchById[$batchId] : [],
+                    (int)($batchIndexById[$batchId] ?? 0),
+                    $totalBatches,
+                    $completedBatches,
+                    ['error_message' => $throwable->getMessage()]
+                );
+            }
+            $firstError = \reset($errors);
+            if ($firstError instanceof \Throwable) {
+                throw $firstError;
+            }
+        }
+
+        return $decodedByBatchId;
     }
 
     /**
