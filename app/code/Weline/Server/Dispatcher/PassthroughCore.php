@@ -1219,6 +1219,55 @@ class PassthroughCore
         return $recovered;
     }
 
+    /**
+     * Periodically verify every active business worker in the dispatcher pool.
+     *
+     * This is intentionally stronger than the transient blacklist path: a
+     * worker that cannot pass its own health endpoint should leave the
+     * dispatcher pool so Master can recycle the slot instead of letting a bad
+     * process keep occupying capacity.
+     *
+     * @return array{healthy: int[], failed: array<int, string>}
+     */
+    public function auditWorkerApplicationHealth(): array
+    {
+        $healthy = [];
+        $failed = [];
+        $connectTimeout = \max(0.3, \min((float)$this->connectTimeout, 0.8));
+
+        foreach ($this->workerPorts as $port) {
+            $port = (int)$port;
+            if ($port <= 0 || $this->isWorkerManuallyBlacklisted($port)) {
+                continue;
+            }
+
+            $probe = $this->requestWorkerHealth($port, $connectTimeout, 0.5);
+            if (!empty($probe['success'])) {
+                $this->recordWorkerSuccess($port);
+                $healthy[] = $port;
+                continue;
+            }
+
+            $this->recordWorkerFailure($port);
+            $failed[$port] = (string)($probe['error'] ?? 'health probe failed');
+        }
+
+        return [
+            'healthy' => $healthy,
+            'failed' => $failed,
+        ];
+    }
+
+    private function isWorkerManuallyBlacklisted(int $port): bool
+    {
+        $blacklistedAt = (float)($this->workerHealth[$port]['blacklisted_at'] ?? 0.0);
+        if ($blacklistedAt <= 0.0) {
+            return false;
+        }
+
+        return $blacklistedAt > (\microtime(true) + self::WORKER_BLACKLIST_RECOVERY_SECONDS);
+    }
+
     private function probeWorkerApplicationHealth(int $port): bool
     {
         $timeout = \max(0.3, \min((float)$this->connectTimeout, 0.8));

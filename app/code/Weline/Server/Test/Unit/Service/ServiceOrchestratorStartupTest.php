@@ -3183,6 +3183,73 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertNull($worker->ipcClientId);
     }
 
+    public function testRecoverFromDispatcherAlertQueuesSpecificFailedWorkerPortEvenWhenIpcIsAlive(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $orchestrator->getRegistry()->registerProvider(new WorkerProvider());
+        $context = $this->createWorkerInfraContext();
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'running', true);
+        $this->writePrivate($orchestrator, 'desiredState', [
+            ControlMessage::ROLE_WORKER => 2,
+        ]);
+        $this->writePrivate($orchestrator, 'lastDispatcherWorkerPoolSignature', '18080,18081');
+
+        $controlServer = $this->createMock(\Weline\Server\Service\Control\ControlPlaneServerInterface::class);
+        $controlServer->method('clientExists')->willReturn(true);
+        $controlServer->expects(self::once())->method('closeClient')->with(321);
+        $this->writePrivate($orchestrator, 'controlServer', $controlServer);
+
+        $failedWorker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'worker-health-failed',
+            state: ServiceInstance::STATE_READY,
+            pid: 0,
+            port: 18080,
+            startedAt: \microtime(true) - 60.0,
+            ipcClientId: 321,
+        );
+        $orchestrator->getRegistry()->addInstance($failedWorker);
+        $orchestrator->getRegistry()->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 2,
+            epoch: $context->epoch,
+            launchId: 'worker-health-ok',
+            state: ServiceInstance::STATE_READY,
+            pid: 0,
+            port: 18081,
+            startedAt: \microtime(true) - 60.0,
+            ipcClientId: 322,
+        ));
+
+        $decision = $this->invokePrivateWithArgs($orchestrator, 'recoverFromDispatcherAlert', [
+            'test',
+            ControlMessage::ROLE_WORKER,
+            'worker_health_probe_failed',
+            [
+                'business_pool' => [18081],
+                'failed_ports' => [18080],
+                'failed_reasons' => [18080 => 'HTTP/1.1 503 Service Unavailable'],
+            ],
+        ]);
+
+        self::assertTrue($decision['eligible']);
+        self::assertTrue($decision['recovery_dispatched']);
+
+        $queue = $this->readPrivate($orchestrator, 'resurrectQueue');
+        self::assertArrayHasKey('worker:1', $queue);
+        self::assertArrayNotHasKey('worker:2', $queue);
+        self::assertSame('', $this->readPrivate($orchestrator, 'lastDispatcherWorkerPoolSignature'));
+
+        $worker = $orchestrator->getRegistry()->getInstance(ControlMessage::ROLE_WORKER, 1);
+        self::assertInstanceOf(ServiceInstance::class, $worker);
+        self::assertSame(ServiceInstance::STATE_FAILED, $worker->state);
+        self::assertNull($worker->ipcClientId);
+        self::assertSame('HTTP/1.1 503 Service Unavailable', $worker->getMeta('dispatcher_health_failed_reason'));
+    }
+
     public function testRecoverFromDispatcherAlertIsThrottledDuringStorm(): void
     {
         $orchestrator = new ServiceOrchestrator();
