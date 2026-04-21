@@ -1246,6 +1246,21 @@ class Dispatcher
                             }
                         }
                     } else {
+                        $currentWorkerPorts = $this->passthroughCore->getWorkerPorts();
+                        $duplicatePorts = \array_values(\array_intersect($norm, $currentWorkerPorts));
+                        if ($duplicatePorts !== []) {
+                            $this->log(
+                                '收到额外 Worker READY/ADD_WORKER，端口已在负载池中，立即触发池校正与健康检查: '
+                                . \implode(',', $duplicatePorts),
+                                'WARN'
+                            );
+                            $this->sendWorkerPoolAckForPorts($duplicatePorts);
+                            $this->deferredWorkerPoolJobs[] = ['type' => 'audit_worker_health'];
+                            $norm = \array_values(\array_diff($norm, $duplicatePorts));
+                        }
+                        if ($norm === []) {
+                            break;
+                        }
                         // 业务 Worker 注册（原有逻辑）
                         $this->deferredWorkerPoolJobs[] = ['type' => 'add_workers', 'ports' => $norm];
                     }
