@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 declare(strict_types=1);
 
@@ -53,16 +53,16 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             (string)($artifacts['plan_json']['pages']['home_page']['theme_alignment_summary'] ?? ''),
             (string)($artifacts['structured']['page_plans']['home_page']['theme_alignment_summary'] ?? '')
         );
-        self::assertStringContainsString('主题遵守说明', (string)($artifacts['markdown'] ?? ''));
+        self::assertStringContainsString('涓婚閬靛畧璇存槑', (string)($artifacts['markdown'] ?? ''));
         $firstBlock = $artifacts['plan_json']['pages']['home_page']['blocks'][0] ?? [];
         self::assertArrayHasKey('content', $firstBlock);
         self::assertArrayHasKey('why', $firstBlock);
         self::assertArrayHasKey('implementation_note', $firstBlock);
-        self::assertStringNotContainsString('围绕', (string)($firstBlock['content'] ?? ''));
-        self::assertStringNotContainsString('阶段一仅给方向', (string)($firstBlock['content'] ?? ''));
+        self::assertStringNotContainsString('鍥寸粫', (string)($firstBlock['content'] ?? ''));
+        self::assertStringNotContainsString('闃舵涓€浠呯粰鏂瑰悜', (string)($firstBlock['content'] ?? ''));
         self::assertNotEmpty($firstBlock['field_plan'][0]['sample'] ?? '');
         self::assertNotEmpty($firstBlock['field_plan'][0]['implementation_note'] ?? '');
-        self::assertStringNotContainsString('标题围绕', (string)($firstBlock['field_plan'][0]['sample'] ?? ''));
+        self::assertStringNotContainsString('鏍囬鍥寸粫', (string)($firstBlock['field_plan'][0]['sample'] ?? ''));
         self::assertStringNotContainsString('Why:', (string)($artifacts['markdown'] ?? ''));
         self::assertIsArray($artifacts['structured'] ?? null);
         self::assertIsArray($artifacts['execution_blueprint'] ?? null);
@@ -619,58 +619,84 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
     public function testPlanBookMarkdownIsGeneratedFromSortedBlockTree(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
-        $artifacts = $service->buildPlanArtifacts([
-            'site_title' => 'Sorted Markdown Test',
-            'brief_description' => 'Need a plan book whose markdown follows block tree sorting, not a free markdown string.',
-            'page_types' => [Page::TYPE_HOME],
-            'workspace_track' => 'virtual_theme',
-            'plan_locale' => 'en_US',
-        ], [
-            'site_title' => 'Sorted Markdown Test',
-            'brief_description' => 'Need a plan book whose markdown follows block tree sorting, not a free markdown string.',
-        ]);
-
         $pageType = Page::TYPE_HOME;
-        $blocks = \is_array($artifacts['structured']['pages'][$pageType]['blocks'] ?? null)
-            ? $artifacts['structured']['pages'][$pageType]['blocks']
-            : [];
-        self::assertGreaterThanOrEqual(2, \count($blocks));
-
-        $laterBlock = $blocks[0];
-        $earlierBlock = $blocks[1];
-        $laterBlock['sort_order'] = 20;
-        $laterBlock['order'] = 20;
-        $earlierBlock['sort_order'] = 10;
-        $earlierBlock['order'] = 10;
-        $artifacts['structured']['pages'][$pageType]['blocks'] = [$laterBlock, $earlierBlock];
-        $artifacts['structured']['page_types'] = [$pageType];
+        $laterBlock = [
+            'block_key' => 'later_block',
+            'section_code' => 'Later Block',
+            'sort_order' => 20,
+            'order' => 20,
+            'goal' => 'Render after the earlier block.',
+            'realtime_content' => [
+                'headline' => 'Later headline',
+                'supporting_copy' => ['Later copy'],
+                'cta' => [['label' => 'Later CTA']],
+            ],
+            'field_plan' => [
+                ['field' => 'title', 'sample' => 'Later headline'],
+            ],
+        ];
+        $earlierBlock = [
+            'block_key' => 'earlier_block',
+            'section_code' => 'Earlier Block',
+            'sort_order' => 10,
+            'order' => 10,
+            'goal' => 'Render before the later block.',
+            'realtime_content' => [
+                'headline' => 'Earlier headline',
+                'supporting_copy' => ['Earlier copy'],
+                'cta' => [['label' => 'Earlier CTA']],
+            ],
+            'field_plan' => [
+                ['field' => 'title', 'sample' => 'Earlier headline'],
+            ],
+        ];
+        $structured = [
+            'i18n' => ['locale' => 'en_US'],
+            'site_strategy' => [
+                'site_display_name' => 'Sorted Markdown Test',
+                'summary' => 'The markdown reader must be assembled from sorted blocks.',
+            ],
+            'theme_style' => ['name' => 'Sorted Theme'],
+            'palette' => ['name' => 'Sorted Palette'],
+            'navigation_plan' => ['header_items' => [['label' => 'Home', 'href' => '/']]],
+            'footer_plan' => ['featured' => [], 'policies' => []],
+            'seo_strategy' => ['core_intent' => 'sorted markdown'],
+            'page_types' => [$pageType],
+            'pages' => [
+                $pageType => [
+                    'page_label' => 'Home',
+                    'page_goal' => 'Prove sorted markdown assembly.',
+                    'theme_alignment_summary' => 'Home follows the shared sorted plan.',
+                    'primary_keywords' => ['sorted markdown'],
+                    'secondary_keywords' => ['block tree'],
+                    'blocks' => [$laterBlock, $earlierBlock],
+                ],
+            ],
+        ];
 
         $buildPlanJson = new \ReflectionMethod($service, 'buildPlanJson');
         $buildPlanJson->setAccessible(true);
-        $planJson = $buildPlanJson->invoke($service, $artifacts['structured']);
+        $planJson = $buildPlanJson->invoke($service, $structured);
         self::assertIsArray($planJson);
 
         $blockKeys = \array_values(\array_map(
             static fn(array $block): string => (string)($block['block_key'] ?? ''),
             $planJson['pages'][$pageType]['blocks'] ?? []
         ));
-        self::assertSame([
-            (string)($earlierBlock['block_key'] ?? ''),
-            (string)($laterBlock['block_key'] ?? ''),
-        ], \array_slice($blockKeys, 0, 2));
+        self::assertSame(['earlier_block', 'later_block'], \array_slice($blockKeys, 0, 2));
 
         $planJson['markdown'] = 'FREE MARKDOWN SENTINEL THAT MUST NOT BE REUSED';
         $buildMarkdownPlan = new \ReflectionMethod($service, 'buildMarkdownPlan');
         $buildMarkdownPlan->setAccessible(true);
         $markdown = (string)$buildMarkdownPlan->invoke($service, $planJson, 'en_US');
 
-        $earlierTitle = (string)($earlierBlock['section_code'] ?? $earlierBlock['block_key'] ?? 'block');
-        $laterTitle = (string)($laterBlock['section_code'] ?? $laterBlock['block_key'] ?? 'block');
-        $earlierPosition = \strpos($markdown, '#### ' . $earlierTitle);
-        $laterPosition = \strpos($markdown, '#### ' . $laterTitle);
+        $earlierPosition = \strpos($markdown, '#### earlier_block');
+        $laterPosition = \strpos($markdown, '#### later_block');
         self::assertIsInt($earlierPosition);
         self::assertIsInt($laterPosition);
         self::assertLessThan($laterPosition, $earlierPosition);
+        self::assertStringContainsString('Earlier headline', $markdown);
+        self::assertStringContainsString('Later headline', $markdown);
         self::assertStringNotContainsString('FREE MARKDOWN SENTINEL', $markdown);
     }
 
@@ -725,8 +751,8 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('theme_style.selection_reason and palette.selection_reason are REQUIRED', $capturedPrompt);
         self::assertStringContainsString('why the color system, font family, and voice/tone were selected', $capturedPrompt);
         self::assertStringContainsString('selection_reason must connect the color/font/tone choices to the user one-line requirement', $capturedPrompt);
-        self::assertStringContainsString('Never write blueprint guidance such as "围绕...说明"', $capturedPrompt);
-        self::assertStringContainsString('Never write process wording such as "标题围绕核心价值展开"', $capturedPrompt);
+        self::assertStringContainsString('Never write blueprint guidance such as "鍥寸粫...璇存槑"', $capturedPrompt);
+        self::assertStringContainsString('Never write process wording such as "鏍囬鍥寸粫鏍稿績浠峰€煎睍寮€"', $capturedPrompt);
         self::assertStringContainsString('field_plan.sample must be direct content', $capturedPrompt);
         self::assertStringContainsString('field_plan.implementation_note must be a customer-readable implementation note', $capturedPrompt);
         self::assertStringContainsString('Each pages.<page>.theme_alignment_summary is REQUIRED', $capturedPrompt);
@@ -933,14 +959,14 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
 
         $service->buildPlanArtifactsByAiStream([
             'site_title' => 'Teenipiya websiteProfile',
-            'brief_description' => '面向印度市场的棋牌游戏网站，推广热门棋牌游戏 APK 下载与玩法内容。',
+            'brief_description' => '闈㈠悜鍗板害甯傚満鐨勬鐗屾父鎴忕綉绔欙紝鎺ㄥ箍鐑棬妫嬬墝娓告垙 APK 涓嬭浇涓庣帺娉曞唴瀹广€?,
             'page_types' => ['home_page'],
             'workspace_track' => 'virtual_theme',
             'plan_locale' => 'zh_Hans_CN',
             'default_locale' => 'zh_Hans_CN',
         ], [
             'site_title' => 'Teenipiya websiteProfile',
-            'brief_description' => '面向印度市场的棋牌游戏网站，推广热门棋牌游戏 APK 下载与玩法内容。',
+            'brief_description' => '闈㈠悜鍗板害甯傚満鐨勬鐗屾父鎴忕綉绔欙紝鎺ㄥ箍鐑棬妫嬬墝娓告垙 APK 涓嬭浇涓庣帺娉曞唴瀹广€?,
         ]);
     }
 
@@ -956,14 +982,14 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
 
         $service->buildPlanArtifactsByAiStream([
             'site_title' => 'Teenipiya websiteProfile',
-            'brief_description' => '面向印度市场的棋牌游戏网站，推广热门棋牌游戏 APK 下载与玩法内容。',
+            'brief_description' => '闈㈠悜鍗板害甯傚満鐨勬鐗屾父鎴忕綉绔欙紝鎺ㄥ箍鐑棬妫嬬墝娓告垙 APK 涓嬭浇涓庣帺娉曞唴瀹广€?,
             'page_types' => ['home_page'],
             'workspace_track' => 'virtual_theme',
             'plan_locale' => 'zh_Hans_CN',
             'default_locale' => 'zh_Hans_CN',
         ], [
             'site_title' => 'Teenipiya websiteProfile',
-            'brief_description' => '面向印度市场的棋牌游戏网站，推广热门棋牌游戏 APK 下载与玩法内容。',
+            'brief_description' => '闈㈠悜鍗板害甯傚満鐨勬鐗屾父鎴忕綉绔欙紝鎺ㄥ箍鐑棬妫嬬墝娓告垙 APK 涓嬭浇涓庣帺娉曞唴瀹广€?,
         ]);
     }
 
@@ -1219,7 +1245,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         $decoded['plan_json']['site_strategy']['summary'] = 'Explain the core value with concise readable paragraphs.';
         $decoded['plan_json']['theme_design']['selection_reason'] = 'The strong CTA and APK download requirement needs a concrete trust-first visual system before this prompt-like payload is rejected.';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['content'] = 'Write the title around the core value, then explain the main highlights and next CTA.';
-        $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'][0]['sample'] = '标题围绕核心价值展开';
+        $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'][0]['sample'] = '鏍囬鍥寸粫鏍稿績浠峰€煎睍寮€';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'][0]['implementation_note'] = 'Keep the first-screen promise concise and lead visitors to the next step.';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['execution_script']['feature_points'] = ['List 2-4 value points'];
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['execution_script']['core_copy'] = 'Do not describe what should be written.';
@@ -1240,12 +1266,12 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             'keywords' => ['partner logos'],
             'content' => 'Trusted by partner brands that appear across the onboarding and trust journey.',
             'field_plan' => [
-                ['field' => 'title', 'sample' => '合作品牌', 'implementation_note' => 'Use this as the visible section heading.'],
-                ['field' => 'description', 'sample' => '展示合作品牌、合作方向与可信背书。', 'implementation_note' => 'Use this as the supporting copy for the logo wall.'],
+                ['field' => 'title', 'sample' => '鍚堜綔鍝佺墝', 'implementation_note' => 'Use this as the visible section heading.'],
+                ['field' => 'description', 'sample' => '灞曠ず鍚堜綔鍝佺墝銆佸悎浣滄柟鍚戜笌鍙俊鑳屼功銆?, 'implementation_note' => 'Use this as the supporting copy for the logo wall.'],
             ],
             'execution_script' => [
-                'feature_points' => ['Visible headline: 合作品牌', 'Support copy: 展示合作品牌、合作方向与可信背书。'],
-                'core_copy' => '合作品牌与信任背书在同一区块展示，方便快速建立可信度。',
+                'feature_points' => ['Visible headline: 鍚堜綔鍝佺墝', 'Support copy: 灞曠ず鍚堜綔鍝佺墝銆佸悎浣滄柟鍚戜笌鍙俊鑳屼功銆?],
+                'core_copy' => '鍚堜綔鍝佺墝涓庝俊浠昏儗涔﹀湪鍚屼竴鍖哄潡灞曠ず锛屾柟渚垮揩閫熷缓绔嬪彲淇″害銆?,
                 'typography' => 'Readable',
                 'style_tone' => 'Trustworthy',
                 'background_direction' => 'Neutral',
@@ -1266,16 +1292,17 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         }
 
         $decoded['plan_json']['theme_design']['selection_reason'] = 'The Teenipiya APK download requirement needs a concrete trust-first visual system for rummy players.';
-        $decoded['plan_json']['pages']['home_page']['blocks'][0]['content'] = '欢迎来到 Teenipiya websiteProfile。这里会展示重点内容，并提供一个清晰的下一步入口。';
+        $decoded['plan_json']['pages']['home_page']['blocks'][0]['content'] = '娆㈣繋鏉ュ埌 Teenipiya websiteProfile銆傝繖閲屼細灞曠ず閲嶇偣鍐呭锛屽苟鎻愪緵涓€涓竻鏅扮殑涓嬩竴姝ュ叆鍙ｃ€?;
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'] = [
-            ['field' => 'title', 'sample' => '欢迎来到 Teenipiya websiteProfile', 'implementation_note' => '作为区块主标题直接上屏。'],
-            ['field' => 'subtitle', 'sample' => '这里会展示重点内容', 'implementation_note' => '放在标题下方补充信息。'],
-            ['field' => 'description', 'sample' => '浏览重点内容后即可进入下一步入口。', 'implementation_note' => '补充简短说明。'],
-            ['field' => 'button_text', 'sample' => '立即开始', 'implementation_note' => '按钮文本。'],
+            ['field' => 'title', 'sample' => '娆㈣繋鏉ュ埌 Teenipiya websiteProfile', 'implementation_note' => '浣滀负鍖哄潡涓绘爣棰樼洿鎺ヤ笂灞忋€?],
+            ['field' => 'subtitle', 'sample' => '杩欓噷浼氬睍绀洪噸鐐瑰唴瀹?, 'implementation_note' => '鏀惧湪鏍囬涓嬫柟琛ュ厖淇℃伅銆?],
+            ['field' => 'description', 'sample' => '娴忚閲嶇偣鍐呭鍚庡嵆鍙繘鍏ヤ笅涓€姝ュ叆鍙ｃ€?, 'implementation_note' => '琛ュ厖绠€鐭鏄庛€?],
+            ['field' => 'button_text', 'sample' => '绔嬪嵆寮€濮?, 'implementation_note' => '鎸夐挳鏂囨湰銆?],
         ];
-        $decoded['plan_json']['pages']['home_page']['blocks'][0]['execution_script']['core_copy'] = '欢迎来到 Teenipiya websiteProfile，这里会展示重点内容并提供下一步入口。';
+        $decoded['plan_json']['pages']['home_page']['blocks'][0]['execution_script']['core_copy'] = '娆㈣繋鏉ュ埌 Teenipiya websiteProfile锛岃繖閲屼細灞曠ず閲嶇偣鍐呭骞舵彁渚涗笅涓€姝ュ叆鍙ｃ€?;
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['execution_script']['feature_points'] = ['Visible headline', 'Primary CTA'];
 
         return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }
 }
+
