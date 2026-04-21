@@ -7,6 +7,7 @@ namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
+use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemePlanService;
 use PHPUnit\Framework\TestCase;
 use Weline\Ai\Service\AiService;
 
