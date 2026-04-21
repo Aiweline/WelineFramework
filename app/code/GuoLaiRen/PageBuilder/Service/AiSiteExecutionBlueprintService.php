@@ -8131,28 +8131,6 @@ final class AiSiteExecutionBlueprintService
         return $this->aiService ?? ObjectManager::getInstance(AiService::class);
     }
 
-    /**
-     * @param mixed $items
-     * @return list<string>
-     */
-    private function normalizeStringList(mixed $items): array
-    {
-        if (!\is_array($items)) {
-            return [];
-        }
-
-        $normalized = [];
-        foreach ($items as $item) {
-            $text = \trim((string)$item);
-            if ($text === '') {
-                continue;
-            }
-            $normalized[] = $text;
-        }
-
-        return $normalized;
-    }
-
     private function isEnglishLocale(string $locale): bool
     {
         $locale = \strtolower(\trim($locale));
