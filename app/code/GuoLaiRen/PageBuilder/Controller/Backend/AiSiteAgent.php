@@ -5866,7 +5866,21 @@ SCRIPT;
             'response_event_count' => \count($events),
         ]);
 
-        return $result;
+        return $this->decorateWorkspaceStateWithPollingPayload($result);
+    }
+
+    /**
+     * Polling responses keep the full workspace state for existing UI hydration,
+     * but expose the same compact status-envelope fields that SSE state payloads
+     * carry. This keeps SSE and `post-workspace-snapshot` aligned to one truth
+     * source without replacing the legacy polling response shape.
+     *
+     * @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    private function decorateWorkspaceStateWithPollingPayload(array $state): array
+    {
+        return \array_replace($state, $this->buildWorkspaceStatusEnvelope($state, 'poller'));
     }
 
     /**
@@ -5909,7 +5923,7 @@ SCRIPT;
     private function buildWorkspaceSseStatePayload(array $state, array $pageTypes, bool $workspaceStream): array
     {
         $resolvedPageTypes = $this->normalizeWorkspaceSsePageTypes($pageTypes, (string)($state['preview_page_type'] ?? ''));
-        $payload = [
+        $payload = \array_replace([
             'public_id' => (string)($state['public_id'] ?? ''),
             'stage' => (string)($state['stage'] ?? ''),
             'stage_label' => (string)($state['stage_label'] ?? ''),
@@ -5936,7 +5950,7 @@ SCRIPT;
             'build_task_summary' => \is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : [],
             'build_summary' => \is_array($state['build_summary'] ?? null) ? $state['build_summary'] : [],
             'pending_generation_page_types' => \is_array($state['pending_generation_page_types'] ?? null) ? $state['pending_generation_page_types'] : [],
-        ];
+        ], $this->buildWorkspaceStatusEnvelope($state, 'queue'));
 
         if ($workspaceStream) {
             $payload['auto_start_build_after_stream'] = !empty($state['auto_start_build_after_stream']);
@@ -5951,6 +5965,238 @@ SCRIPT;
         }
 
         return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array{
+     *   job_key:string,
+     *   job_type:string,
+     *   status:string,
+     *   event_id:int,
+     *   seq_no:int,
+     *   cursor:string,
+     *   source:string,
+     *   progress_percent:int,
+     *   session_public_id:string,
+     *   context_hash:string,
+     *   state_fingerprint:string,
+     *   token_usage:array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string,mixed>|null},
+     *   progress_kind:string,
+     *   updated_at:string
+     * }
+     */
+    private function buildWorkspaceStatusEnvelope(array $state, string $source): array
+    {
+        $activeOperation = \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [];
+        $scope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
+        $queueInfo = $this->selectWorkspaceStatusQueueInfo($state, (string)($activeOperation['operation'] ?? ''));
+        $queueSnapshot = \is_array($queueInfo['snapshot'] ?? null) ? $queueInfo['snapshot'] : [];
+        $lastEventId = $this->resolveWorkspaceLastEventId(\is_array($state['events'] ?? null) ? $state['events'] : []);
+        $status = $this->normalizeWorkspaceEnvelopeStatus(
+            (string)(
+                $queueSnapshot['job_status']
+                ?? $queueSnapshot['status']
+                ?? $activeOperation['status']
+                ?? $state['workspace_status']
+                ?? ''
+            )
+        );
+        $progressPercent = $this->resolveWorkspaceEnvelopeProgressPercent($state, $activeOperation, $status);
+        $stateFingerprint = $this->buildWorkspaceStateFingerprint($state);
+        $contextHash = \trim((string)(
+            $state['context_hash']
+            ?? $scope['context_hash']
+            ?? $scope['plan_workbench']['confirmed']['context_hash']
+            ?? $scope['execution_blueprint_confirmed_signature']
+            ?? $stateFingerprint
+        ));
+
+        return [
+            'job_key' => (string)($queueSnapshot['job_key'] ?? $activeOperation['job_key'] ?? ''),
+            'job_type' => (string)($queueSnapshot['job_type'] ?? $activeOperation['job_type'] ?? $this->resolveAiSiteQueueJobType((string)($activeOperation['operation'] ?? ''))),
+            'status' => $status,
+            'event_id' => $lastEventId,
+            'seq_no' => $lastEventId,
+            'cursor' => $this->resolveWorkspaceEnvelopeCursor($state, $activeOperation),
+            'source' => $source === 'poller' ? 'poller' : 'queue',
+            'progress_percent' => $progressPercent,
+            'session_public_id' => (string)($state['public_id'] ?? ''),
+            'context_hash' => $contextHash,
+            'state_fingerprint' => $stateFingerprint,
+            'token_usage' => $this->resolveWorkspaceEnvelopeTokenUsage($queueSnapshot, $queueInfo, $activeOperation),
+            'progress_kind' => $this->resolveWorkspaceProgressKind($state, $activeOperation),
+            'updated_at' => $this->resolveWorkspaceEnvelopeUpdatedAt($state, $activeOperation, $queueSnapshot),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    private function selectWorkspaceStatusQueueInfo(array $state, string $operation): array
+    {
+        $key = match (\trim($operation)) {
+            'plan' => 'plan_queue_info',
+            'task_plan' => 'task_plan_queue_info',
+            'build', 'regenerate_page' => 'build_queue_info',
+            default => '',
+        };
+        if ($key !== '' && \is_array($state[$key] ?? null)) {
+            return $state[$key];
+        }
+
+        foreach (['plan_queue_info', 'task_plan_queue_info', 'build_queue_info'] as $fallbackKey) {
+            if (\is_array($state[$fallbackKey] ?? null)) {
+                return $state[$fallbackKey];
+            }
+        }
+
+        return [];
+    }
+
+    private function normalizeWorkspaceEnvelopeStatus(string $status): string
+    {
+        $status = \strtolower(\trim($status));
+        return match ($status) {
+            'error', 'failed' => 'failed',
+            'stop', 'stopped', 'cancelled', 'canceled' => 'cancelled',
+            'done', 'complete', 'completed', 'published', 'ready' => 'done',
+            'queued', 'pending' => 'queued',
+            'running', 'processing', 'building' => 'running',
+            'stale' => 'stale',
+            default => $status,
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @param array<string, mixed> $activeOperation
+     */
+    private function resolveWorkspaceEnvelopeProgressPercent(array $state, array $activeOperation, string $status): int
+    {
+        if (\array_key_exists('progress_percent', $activeOperation)) {
+            return \max(0, \min(100, (int)$activeOperation['progress_percent']));
+        }
+
+        $taskSummary = \is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : [];
+        $total = (int)($taskSummary['total'] ?? 0);
+        if ($total > 0) {
+            $completed = (int)(
+                $taskSummary['completed']
+                ?? $taskSummary['done']
+                ?? $taskSummary['success']
+                ?? 0
+            );
+            return \max(0, \min(100, (int)\round(($completed / $total) * 100)));
+        }
+
+        if ($status === 'done' || !empty($state['can_publish'])) {
+            return 100;
+        }
+
+        return 0;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @param array<string, mixed> $activeOperation
+     */
+    private function resolveWorkspaceEnvelopeCursor(array $state, array $activeOperation): string
+    {
+        $operation = \trim((string)($activeOperation['operation'] ?? ''));
+        $pageType = \trim((string)($activeOperation['page_type'] ?? $state['preview_page_type'] ?? ''));
+        return \implode('/', \array_values(\array_filter([
+            (string)($state['stage'] ?? ''),
+            $operation,
+            $pageType,
+        ], static fn(string $part): bool => $part !== '')));
+    }
+
+    /**
+     * @param array<string, mixed> $queueSnapshot
+     * @param array<string, mixed> $queueInfo
+     * @param array<string, mixed> $activeOperation
+     * @return array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string,mixed>|null}
+     */
+    private function resolveWorkspaceEnvelopeTokenUsage(array $queueSnapshot, array $queueInfo, array $activeOperation): array
+    {
+        $tokenUsage = $this->normalizeAiSiteQueueTokenUsage($queueSnapshot);
+        foreach ([$queueInfo, $activeOperation] as $source) {
+            $candidate = $this->normalizeAiSiteQueueTokenUsage(\is_array($source) ? $source : []);
+            foreach (['input_tokens', 'output_tokens', 'total_tokens'] as $tokenKey) {
+                if ($tokenUsage[$tokenKey] === null && $candidate[$tokenKey] !== null) {
+                    $tokenUsage[$tokenKey] = $candidate[$tokenKey];
+                }
+            }
+            if (!\is_array($tokenUsage['token_cost_meta'] ?? null) && \is_array($candidate['token_cost_meta'] ?? null)) {
+                $tokenUsage['token_cost_meta'] = $candidate['token_cost_meta'];
+            }
+        }
+
+        return $tokenUsage;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @param array<string, mixed> $activeOperation
+     */
+    private function resolveWorkspaceProgressKind(array $state, array $activeOperation): string
+    {
+        $operation = \trim((string)($activeOperation['operation'] ?? ''));
+        if ((int)($state['task_plan_confirmed'] ?? 0) === 1 && $operation !== 'plan') {
+            return 'task_progress';
+        }
+
+        return 'queue_info';
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @param array<string, mixed> $activeOperation
+     * @param array<string, mixed> $queueSnapshot
+     */
+    private function resolveWorkspaceEnvelopeUpdatedAt(array $state, array $activeOperation, array $queueSnapshot): string
+    {
+        foreach ([
+            $activeOperation['updated_at'] ?? null,
+            $queueSnapshot['end_at'] ?? null,
+            $queueSnapshot['start_at'] ?? null,
+            $state['updated_at'] ?? null,
+        ] as $value) {
+            $updatedAt = \trim((string)$value);
+            if ($updatedAt !== '') {
+                return $updatedAt;
+            }
+        }
+
+        return \date('Y-m-d H:i:s');
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    private function buildWorkspaceStateFingerprint(array $state): string
+    {
+        $scope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
+        $fingerprintSource = [
+            'public_id' => (string)($state['public_id'] ?? ''),
+            'stage' => (string)($state['stage'] ?? ''),
+            'workspace_status' => (string)($state['workspace_status'] ?? ''),
+            'publish_status' => (string)($state['publish_status'] ?? ''),
+            'active_operation' => \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [],
+            'plan_confirmed' => (int)($state['plan_confirmed'] ?? ($scope['plan_confirmed'] ?? 0)),
+            'task_plan_confirmed' => (int)($state['task_plan_confirmed'] ?? ($scope['task_plan_confirmed'] ?? 0)),
+            'virtual_theme_id' => (int)($state['virtual_theme_id'] ?? 0),
+            'build_task_summary' => \is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : [],
+            'queue_snapshots' => [
+                'plan' => \is_array($state['plan_queue_info']['snapshot'] ?? null) ? $state['plan_queue_info']['snapshot'] : [],
+                'task_plan' => \is_array($state['task_plan_queue_info']['snapshot'] ?? null) ? $state['task_plan_queue_info']['snapshot'] : [],
+                'build' => \is_array($state['build_queue_info']['snapshot'] ?? null) ? $state['build_queue_info']['snapshot'] : [],
+            ],
+        ];
+
+        return \sha1((string)\json_encode($fingerprintSource, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
     }
 
     /**
