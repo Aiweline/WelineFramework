@@ -3296,7 +3296,48 @@ SCRIPT;
                         SchedulerSystem::yieldDelay(500);
                     }
 
-                    if ($requestedPromptMode === 'refine' && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
+                    if ($requestedPromptMode === 'mutate_plan_block') {
+                        $mutation = \is_array($planSseRequest['mutation'] ?? null) ? $planSseRequest['mutation'] : [];
+                        $mutationAction = \strtolower(\trim((string)($mutation['action'] ?? '')));
+                        $mutationPageType = \trim((string)($mutation['page_type'] ?? ''));
+                        $mutationBlockKey = \trim((string)($mutation['block_key'] ?? ''));
+                        $mutationBlockConfig = \is_array($mutation['block_config'] ?? null) ? $mutation['block_config'] : [];
+                        if ($mutationPageType === '' || !\in_array($mutationAction, ['create', 'delete', 'rebuild'], true)) {
+                            throw new \RuntimeException('Invalid stage-1 block mutation request.');
+                        }
+                        $mutationMessage = (string)__('正在后台更新阶段一页面块');
+                        $sse->sendEvent('progress', [
+                            'message' => $mutationMessage,
+                            'operation' => 'plan',
+                            'progress_percent' => 45,
+                            'mutation_action' => $mutationAction,
+                            'page_type' => $mutationPageType,
+                            'block_key' => $mutationBlockKey,
+                        ]);
+                        $sse->sendEvent('log', [
+                            'event_type' => 'plan_block_mutation',
+                            'stage_code' => 'plan',
+                            'message' => $mutationMessage,
+                            'payload' => [
+                                'operation' => 'plan',
+                                'mutation_action' => $mutationAction,
+                                'page_type' => $mutationPageType,
+                                'block_key' => $mutationBlockKey,
+                            ],
+                            'level' => 'info',
+                            'event_id' => 0,
+                            'created_at' => \date('Y-m-d H:i:s'),
+                        ]);
+                        $artifacts = $this->executionBlueprintService->mutateDraftPlanBlock(
+                            $scope,
+                            $mutationPageType,
+                            $mutationAction,
+                            $mutationBlockKey,
+                            $mutationBlockConfig
+                        );
+                        $artifacts['ai_generated'] = 1;
+                        $artifacts['ai_fallback'] = (int)($scope['plan_ai_fallback'] ?? 0);
+                    } elseif ($requestedPromptMode === 'refine' && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
                         $refineInstruction = $requestedInstruction;
                         $refineTargetScope = $requestedTargetScope;
                         if ($planLocaleChanged && !$pageTypesChanged) {
@@ -3414,6 +3455,29 @@ SCRIPT;
                     ],
                 ]
             );
+            if ($requestedPromptMode === 'mutate_plan_block') {
+                $mutationSummary = \is_array($artifacts['mutation_summary'] ?? null) ? $artifacts['mutation_summary'] : [];
+                $this->appendWorkspaceEvent(
+                    $fresh->getId(),
+                    $adminId,
+                    'plan',
+                    'plan_block_mutated',
+                    'Stage-1 plan block updated.',
+                    [
+                        'operation' => 'plan',
+                        'details' => $mutationSummary,
+                    ]
+                );
+                $sse->sendEvent('log', [
+                    'event_type' => 'plan_block_mutated',
+                    'stage_code' => 'plan',
+                    'message' => 'Stage-1 plan block updated.',
+                    'payload' => ['operation' => 'plan', 'details' => $mutationSummary],
+                    'level' => 'done',
+                    'event_id' => 0,
+                    'created_at' => \date('Y-m-d H:i:s'),
+                ]);
+            }
             $sse->sendEvent('log', [
                 'event_type' => 'plan_generated',
                 'stage_code' => 'plan',
@@ -4703,23 +4767,85 @@ SCRIPT;
     }
 
     /**
-     * 阶段一 plan 对应 weline_queue 行：queue_id + 快照 + process + result 尾部，供侧栏「任务进度」内嵌展示。
+     * PageBuilder operation 对应 weline_queue 行：queue_id + 快照 + process + result 尾部，供侧栏进度区展示。
      *
+     * @param array<string, mixed> $activeOperation
+     *
+     * @return array<string, mixed>|null
+     */
+    private function buildOperationStageQueueInfoPayload(
+        AiSiteAgentSession $session,
+        array $activeOperation,
+        string $operation
+    ): ?array {
+        $operation = \trim($operation);
+        if ($operation === '') {
+            return null;
+        }
+        $queueId = 0;
+        if (\trim((string)($activeOperation['operation'] ?? '')) === $operation) {
+            $queueId = (int)($activeOperation['queue_id'] ?? 0);
+        }
+        $queueRow = $this->findAiSiteOperationQueueRow($session, $operation, $queueId);
+        if (!\is_array($queueRow) || $queueRow === []) {
+            return null;
+        }
+        return $this->buildQueueObserverPanelPayload($queueRow);
+    }
+
+    /**
      * @param array<string, mixed> $activeOperation
      *
      * @return array<string, mixed>|null
      */
     private function buildPlanStageQueueInfoPayload(AiSiteAgentSession $session, array $activeOperation): ?array
     {
-        $queueId = 0;
-        if (\trim((string)($activeOperation['operation'] ?? '')) === 'plan') {
-            $queueId = (int)($activeOperation['queue_id'] ?? 0);
+        return $this->buildOperationStageQueueInfoPayload($session, $activeOperation, 'plan');
+    }
+
+    /**
+     * @param array<string, mixed> $activeOperation
+     * @param array<string, mixed>|null $queueInfo
+     *
+     * @return array<string, mixed>
+     */
+    private function reconcileActiveOperationWithQueueInfo(
+        array $activeOperation,
+        ?array $queueInfo,
+        string $operation
+    ): array {
+        if (
+            \trim((string)($activeOperation['operation'] ?? '')) !== $operation
+            || !\in_array(\trim((string)($activeOperation['status'] ?? '')), ['queued', 'running'], true)
+            || !\is_array($queueInfo['snapshot'] ?? null)
+        ) {
+            return $activeOperation;
         }
-        $queueRow = $this->findAiSiteOperationQueueRow($session, 'plan', $queueId);
-        if (!\is_array($queueRow) || $queueRow === []) {
-            return null;
+
+        $queueStatus = \trim((string)($queueInfo['snapshot']['status'] ?? ''));
+        if ($queueStatus === 'error') {
+            $queueProcess = \trim((string)($queueInfo['process'] ?? ''));
+            $queueResult = \trim((string)($queueInfo['result_log'] ?? ''));
+            $activeOperation['status'] = 'error';
+            $activeOperation['message'] = $queueProcess !== ''
+                ? $queueProcess
+                : ($queueResult !== ''
+                    ? (string)__('队列执行失败，请查看队列日志并重试。')
+                    : (string)__('队列执行失败，请重试。'));
+            $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
+        } elseif (\in_array($queueStatus, ['done', 'stop', 'cancelled'], true)) {
+            $activeOperation['status'] = 'done';
+            if (\trim((string)($activeOperation['message'] ?? '')) === '') {
+                $activeOperation['message'] = match ($operation) {
+                    'task_plan' => (string)__('第二阶段任务方案队列已完成。'),
+                    'build' => (string)__('生成主题队列已完成。'),
+                    default => (string)__('阶段一方案队列已完成。'),
+                };
+            }
+            $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
         }
-        return $this->buildQueueObserverPanelPayload($queueRow);
+
+        return $activeOperation;
     }
 
     /**
@@ -5437,6 +5563,8 @@ SCRIPT;
      *   pre_publish_visual_urls:array<string, string>,
      *   active_operation:array<string, mixed>,
      *   plan_queue_info:array<string, mixed>|null,
+     *   task_plan_queue_info:array<string, mixed>|null,
+     *   build_queue_info:array<string, mixed>|null,
      *   build_summary:array<string, mixed>,
      *   top_logs:list<array<string, mixed>>,
      *   scope:array<string, mixed>,
@@ -5552,32 +5680,16 @@ SCRIPT;
         $stage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
         $activeOperation = \is_array($normalized['active_operation'] ?? null) ? $normalized['active_operation'] : [];
         $planQueueInfo = $this->buildPlanStageQueueInfoPayload($session, $activeOperation);
-        if (
-            \trim((string)($activeOperation['operation'] ?? '')) === 'plan'
-            && \in_array(\trim((string)($activeOperation['status'] ?? '')), ['queued', 'running'], true)
-            && \is_array($planQueueInfo['snapshot'] ?? null)
-        ) {
-            $queueStatus = \trim((string)($planQueueInfo['snapshot']['status'] ?? ''));
-            if ($queueStatus === 'error') {
-                $queueProcess = \trim((string)($planQueueInfo['process'] ?? ''));
-                $queueResult = \trim((string)($planQueueInfo['result_log'] ?? ''));
-                $activeOperation['status'] = 'error';
-                $activeOperation['message'] = $queueProcess !== ''
-                    ? $queueProcess
-                    : ($queueResult !== ''
-                        ? (string)__('阶段一方案队列执行失败，请查看队列日志并重试。')
-                        : (string)__('阶段一方案队列执行失败，请重试。'));
-                $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
-                $normalized['active_operation'] = $activeOperation;
-            } elseif (\in_array($queueStatus, ['done', 'stop', 'cancelled'], true)) {
-                $activeOperation['status'] = 'done';
-                if (\trim((string)($activeOperation['message'] ?? '')) === '') {
-                    $activeOperation['message'] = (string)__('阶段一方案队列已完成。');
-                }
-                $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
-                $normalized['active_operation'] = $activeOperation;
-            }
+        $taskPlanQueueInfo = $this->buildOperationStageQueueInfoPayload($session, $activeOperation, 'task_plan');
+        $buildQueueInfo = $this->buildOperationStageQueueInfoPayload($session, $activeOperation, 'build');
+        foreach ([
+            'plan' => $planQueueInfo,
+            'task_plan' => $taskPlanQueueInfo,
+            'build' => $buildQueueInfo,
+        ] as $queueOperation => $queueInfo) {
+            $activeOperation = $this->reconcileActiveOperationWithQueueInfo($activeOperation, $queueInfo, $queueOperation);
         }
+        $normalized['active_operation'] = $activeOperation;
         $siteReady = (int)($normalized['site_ready'] ?? 1) === 1;
         $titleOk = \trim((string)($normalized['website_profile']['site_title'] ?? '')) !== '';
         $taskReady = $this->taskSummaryIndicatesCompleted($taskSummary);
@@ -5738,6 +5850,8 @@ SCRIPT;
             'pre_publish_visual_urls' => \is_array($normalized['pre_publish_visual_urls'] ?? null) ? $normalized['pre_publish_visual_urls'] : $prePublishVisualUrls,
             'active_operation' => $activeOperation,
             'plan_queue_info' => $planQueueInfo,
+            'task_plan_queue_info' => $taskPlanQueueInfo,
+            'build_queue_info' => $buildQueueInfo,
             'build_summary' => \is_array($normalized['build_summary'] ?? null) ? $normalized['build_summary'] : [],
             'top_logs' => $topLogs,
             'scope' => $clientScope,
@@ -5817,6 +5931,8 @@ SCRIPT;
             'pre_publish_visual_urls' => \is_array($state['pre_publish_visual_urls'] ?? null) ? $state['pre_publish_visual_urls'] : [],
             'active_operation' => \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [],
             'plan_queue_info' => \is_array($state['plan_queue_info'] ?? null) ? $state['plan_queue_info'] : null,
+            'task_plan_queue_info' => \is_array($state['task_plan_queue_info'] ?? null) ? $state['task_plan_queue_info'] : null,
+            'build_queue_info' => \is_array($state['build_queue_info'] ?? null) ? $state['build_queue_info'] : null,
             'build_task_summary' => \is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : [],
             'build_summary' => \is_array($state['build_summary'] ?? null) ? $state['build_summary'] : [],
             'pending_generation_page_types' => \is_array($state['pending_generation_page_types'] ?? null) ? $state['pending_generation_page_types'] : [],
@@ -10408,43 +10524,35 @@ SCRIPT;
         }
 
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
-        try {
-            $artifacts = $this->executionBlueprintService->mutateDraftPlanBlock($scope, $pageType, $action, $blockKey, $blockConfig);
-        } catch (\Throwable $throwable) {
-            return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
-        }
+        $round = \max(1, (int)$this->getRequestBodyValue('round', ((int)($scope['plan_last_round'] ?? 0)) + 1));
+        $scopePatch = [
+            'plan_confirmed' => 0,
+            'plan_last_prompt_mode' => 'mutate_plan_block',
+            'plan_last_target_scope' => 'pages.' . $pageType . '.blocks.' . ($blockKey !== '' ? $blockKey : 'new'),
+            'plan_last_round' => $round,
+            '_plan_sse_request' => [
+                'prompt_mode' => 'mutate_plan_block',
+                'instruction' => $instruction,
+                'target_scope' => 'pages.' . $pageType . '.blocks.' . ($blockKey !== '' ? $blockKey : 'new'),
+                'round' => $round,
+                'mutation' => [
+                    'action' => $action,
+                    'page_type' => $pageType,
+                    'block_key' => $blockKey,
+                    'block_config' => $blockConfig,
+                ],
+            ],
+        ];
 
-        $executionBlueprint = \is_array($artifacts['execution_blueprint'] ?? null) ? $artifacts['execution_blueprint'] : [];
-        $saved = $this->sessionService->mergeScope($session->getId(), $adminId, [
-            'execution_blueprint_draft' => $executionBlueprint,
-            'plan_json' => \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [],
-            'plan_markdown' => (string)($artifacts['markdown'] ?? ''),
-            'plan_structured' => \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [],
-            'plan_workbench' => \is_array($artifacts['plan_workbench'] ?? null) ? $artifacts['plan_workbench'] : [],
-            'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? $scope['execution_blueprint_signature'] ?? ''),
-        ]);
-        if (!$saved) {
-            return $this->fetchJson(['success' => false, 'message' => 'Failed to persist plan block mutation.']);
-        }
-
-        $summary = \is_array($artifacts['mutation_summary'] ?? null) ? $artifacts['mutation_summary'] : [];
-        $this->appendWorkspaceEvent(
-            $session->getId(),
+        return $this->fetchJson($this->startOperation(
+            $session,
             $adminId,
-            $this->scopeCompatibilityService->normalizeStage($session->getStage()),
-            'plan_block_mutated',
-            'Stage-1 plan block updated.',
-            ['details' => $summary]
-        );
-        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-
-        return $this->fetchJson([
-            'success' => true,
-            'message' => 'Stage-1 plan block updated.',
-            'mutation' => $summary,
-            'block' => \is_array($artifacts['block'] ?? null) ? $artifacts['block'] : null,
-            'data' => $this->buildWorkspaceState($fresh, $adminId, 80, true),
-        ]);
+            'plan',
+            AiSiteAgentSession::STAGE_PLAN,
+            $scopePatch,
+            $pageType,
+            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING
+        ));
     }
 
     private function handleSortTaskPlanTasks(): string
