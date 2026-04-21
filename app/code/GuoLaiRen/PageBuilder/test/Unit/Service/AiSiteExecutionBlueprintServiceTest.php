@@ -327,6 +327,11 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
 
         self::assertIsString($capturedPrompt);
         self::assertStringContainsString('The plan must contain final-ready content samples, not writing instructions.', $capturedPrompt);
+        self::assertStringContainsString('STAGE-1 SHARED THEME PLAN CONTRACT (theme_design must satisfy ALL):', $capturedPrompt);
+        self::assertStringContainsString('theme_design is the concrete shared plan for Header/Footer and later page prompts', $capturedPrompt);
+        self::assertStringContainsString('never output it as abstract direction', $capturedPrompt);
+        self::assertStringContainsString('theme_design.color_scheme must provide ready-to-apply hex colors', $capturedPrompt);
+        self::assertStringContainsString('theme_design MUST be a concrete shared theme plan', $capturedPrompt);
         self::assertStringContainsString('Do not return markdown.', $capturedPrompt);
         self::assertStringContainsString('Do not return a separate markdown field.', $capturedPrompt);
         self::assertStringContainsString('Output only the structured plan object shown in the schema.', $capturedPrompt);
