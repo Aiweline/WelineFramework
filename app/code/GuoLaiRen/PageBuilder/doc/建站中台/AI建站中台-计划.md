@@ -1116,11 +1116,11 @@ Atomic Task ID:
 - [x] A38 第二阶段任务卡片展示 meta 字段、字段示例、内容计划、配色字体（status=done, owner=worker-4, covers=§1A, output=任务卡片详情, evidence=php-l+node-check+render assertion）
 - [x] A39 第二阶段任务卡片展示 `?` 原因说明（status=done, owner=worker-5, covers=§1A, output=展开 planning_reason, evidence=php-l+node-check+AiSiteVirtualThemePlanServiceTest）
 - [x] A40 第二阶段支持任务排序并写回 `page_block_tasks[].sort_order`（status=done, owner=worker-6, covers=§13.3, output=排序影响虚拟主题树, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
-- [ ] A41 第二阶段支持编辑字段内容（status=todo, owner=frontend+backend, covers=§1A, output=字段内容改动写结构化任务）
-- [ ] A42 第二阶段支持任务微调/局部重建/删除/新增（status=todo, owner=backend-api, covers=§1A, output=结构化任务同步更新）
-- [ ] A43 第二阶段确认后切换到任务进度视图（status=todo, owner=frontend, covers=§1A/§13.5, output=`progress_kind=task_progress`）
-- [ ] A44 第二阶段任务进度实时显示 todo/queued/running/done/failed/stale/cancelled（status=todo, owner=frontend+sse, covers=§13.5, output=已确认任务进度）
-- [ ] A45 第一阶段只展示队列信息不展示“已确认任务进度”（status=todo, owner=frontend, covers=§13.5, output=`progress_kind=queue_info`）
+- [x] A41 第二阶段支持编辑字段内容（status=done, owner=worker-2, covers=§1A, output=字段内容改动写结构化任务, evidence=AiSiteAgent task-plan structured payload tests）
+- [x] A42 第二阶段支持任务微调/局部重建/删除/新增（status=done, owner=worker-3, covers=§1A, output=结构化任务同步更新, evidence=AiSiteAgent/AiSiteVirtualThemePlanService tests）
+- [x] A43 第二阶段确认后切换到任务进度视图（status=done, owner=worker-4, covers=§1A/§13.5, output=`progress_kind=task_progress`, evidence=template/JS assertions）
+- [x] A44 第二阶段任务进度实时显示 todo/queued/running/done/failed/stale/cancelled（status=done, owner=worker-5, covers=§13.5, output=已确认任务进度, evidence=task-progress guard tests）
+- [x] A45 第一阶段只展示队列信息不展示“已确认任务进度”（status=done, owner=worker-6, covers=§13.5, output=`progress_kind=queue_info`, evidence=phase1 queue info UI tests）
 
 #### F. 通用队列、token、SSE/polling 与测试
 
