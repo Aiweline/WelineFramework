@@ -5473,9 +5473,13 @@ final class AiSiteVirtualThemePlanService
         $mergedStructured = \array_replace_recursive($structured, $mergedVirtualThemePlan);
         $mergedStructured = $this->sanitizePromptLikeTaskPlanStructured($mergedStructured);
         $mergedStructured = $this->ensureTaskDirectoryHierarchy($mergedStructured);
+        $mergedStructured = $this->syncStageTwoTaskSortArtifacts($mergedStructured);
         $mergedVirtualThemePlan = \array_replace_recursive($mergedVirtualThemePlan, [
             'task_directory_tree' => $mergedStructured['task_directory_tree'] ?? [],
             'task_tree' => $mergedStructured['task_tree'] ?? [],
+            'shared_block_tasks' => $mergedStructured['shared_block_tasks'] ?? [],
+            'page_block_tasks' => $mergedStructured['page_block_tasks'] ?? [],
+            'virtual_theme_build_tree' => $mergedStructured['virtual_theme_build_tree'] ?? [],
         ]);
         $this->assertAiTaskPlanIsContentful($mergedStructured);
         $mergedVirtualThemePlan['signature'] = $this->buildSignature($mergedStructured);
@@ -5823,6 +5827,7 @@ final class AiSiteVirtualThemePlanService
         $pageTypes = \array_values(\array_filter(\array_map('strval', $pageTypes), static fn(string $pageType): bool => \trim($pageType) !== ''));
 
         $sharedBlockTasks = [];
+        $jobSortOrders = [];
         foreach ($sharedTasks as $task) {
             if (!\is_array($task)) {
                 continue;
@@ -5850,6 +5855,13 @@ final class AiSiteVirtualThemePlanService
                 }
                 $alias = $this->buildStageTwoBlockTaskAlias($task, $pageType);
                 $pageBlockTasks[] = $alias;
+                $fanoutJobKey = $this->firstNonEmptyString([
+                    $task['fanout_job_key'] ?? null,
+                    \is_array($task['runtime_context'] ?? null) ? ($task['runtime_context']['fanout_job_key'] ?? null) : null,
+                ]);
+                if ($fanoutJobKey !== '') {
+                    $jobSortOrders[$fanoutJobKey] = (int)($alias['sort_order'] ?? 0);
+                }
                 $pageBlocks[] = [
                     'node_key' => (string)($alias['task_key'] ?? ''),
                     'node_type' => 'block',
@@ -5895,6 +5907,24 @@ final class AiSiteVirtualThemePlanService
             ],
             'pages' => $buildTreePages,
         ];
+
+        if ($jobSortOrders !== [] && \is_array($structured['stage2_queue']['jobs'] ?? null)) {
+            foreach ($structured['stage2_queue']['jobs'] as $jobKey => $job) {
+                if (!\is_array($job) || !isset($jobSortOrders[(string)$jobKey])) {
+                    continue;
+                }
+                $structured['stage2_queue']['jobs'][$jobKey]['sort_order'] = $jobSortOrders[(string)$jobKey];
+            }
+            $sequence = \is_array($structured['stage2_queue']['sequence'] ?? null)
+                ? \array_values(\array_filter(\array_map('strval', $structured['stage2_queue']['sequence'])))
+                : [];
+            if ($sequence !== []) {
+                \usort($sequence, static function (string $left, string $right) use ($jobSortOrders): int {
+                    return ($jobSortOrders[$left] ?? \PHP_INT_MAX) <=> ($jobSortOrders[$right] ?? \PHP_INT_MAX);
+                });
+                $structured['stage2_queue']['sequence'] = $sequence;
+            }
+        }
 
         return $structured;
     }
