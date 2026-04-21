@@ -1,4 +1,4 @@
-﻿# AI建站中台-计划（PageBuilder唯一版）
+# AI建站中台-计划（PageBuilder唯一版）
 
 > 模块：`GuoLaiRen_PageBuilder`  
 > 状态：`in_progress_replanned`  
@@ -1885,4 +1885,3 @@ Atomic Task ID:
 - 结构化块树可追溯到 PageBuilder 组件/slot/字段；
 - 语言策略、域名门禁、预览/正式 URL 分离均通过 E2E 验证；
 - AI 场景适配器、提示词版本、输入/输出 hash 可审计。
-
