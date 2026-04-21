@@ -759,9 +759,9 @@ class Stop extends CommandAbstract
         return $totalKilled;
     }
 
-    protected function terminateCurrentInstanceProcessPrefixes(string $name): int
+    protected function terminateCurrentInstanceProcessPrefixes(string $name, bool $includeSharedState = false): int
     {
-        return Processer::killByProcessNamePrefixes($this->collectResidualCleanupPrefixes($name));
+        return Processer::killByProcessNamePrefixes($this->collectResidualCleanupPrefixes($name, $includeSharedState));
     }
 
     /**
@@ -769,7 +769,7 @@ class Stop extends CommandAbstract
      *
      * @return list<string>
      */
-    private function collectResidualCleanupPrefixes(string $name): array
+    private function collectResidualCleanupPrefixes(string $name, bool $includeSharedState = false): array
     {
         $scopedInstance = MasterProcess::getScopedInstanceName($name);
         $prefixes = [
@@ -783,6 +783,12 @@ class Stop extends CommandAbstract
             'weline-wls-maintenance-http-' . $scopedInstance . '-',
             'weline-wls-maintenance-ssl-' . $scopedInstance . '-',
         ];
+        if ($includeSharedState) {
+            $prefixes[] = MasterProcess::buildScopedProcessName('weline-wls-session', $name);
+            $prefixes[] = MasterProcess::buildScopedProcessName('weline-wls-memory', $name);
+            $prefixes[] = 'weline-wls-session-' . $name;
+            $prefixes[] = 'weline-wls-memory-' . $name;
+        }
 
         return \array_values(\array_unique(\array_merge(
             $prefixes,
@@ -924,7 +930,7 @@ class Stop extends CommandAbstract
 
     protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
     {
-        return $this->terminateCurrentInstanceProcessPrefixes($info->name);
+        return $this->terminateCurrentInstanceProcessPrefixes($info->name, true);
     }
 
     /**
@@ -937,6 +943,8 @@ class Stop extends CommandAbstract
                 'intval',
                 \array_merge(
                     $this->collectBaseResidualPids($info->name, $info),
+                    $this->collectResidualPidsByInfo($info, true),
+                    $this->collectIndexedResidualPids($info->name, true),
                     $this->collectRecoverableManagedPids($info->name)
                 )
             ),
@@ -1637,7 +1645,7 @@ class Stop extends CommandAbstract
      *
      * @return array<int>
      */
-    private function collectResidualPidsByInfo(ServerInstanceInfo $info): array
+    private function collectResidualPidsByInfo(ServerInstanceInfo $info, bool $includeSharedState = false): array
     {
         $pids = [];
 
@@ -1646,7 +1654,8 @@ class Stop extends CommandAbstract
         }
 
         foreach ($info->services as $service) {
-            if ((bool) ($service->metadata['shared_external'] ?? false) || $this->isSharedStateServiceInfo($service)) {
+            if ((bool) ($service->metadata['shared_external'] ?? false)
+                || (!$includeSharedState && $this->isSharedStateServiceInfo($service))) {
                 continue;
             }
             $pid = (int) ($service->pid ?? 0);
@@ -1731,21 +1740,26 @@ class Stop extends CommandAbstract
      *
      * @return array<int>
      */
-    private function collectIndexedResidualPids(string $instanceName): array
+    private function collectIndexedResidualPids(string $instanceName, bool $includeSharedState = false): array
     {
         $pidIndex = Processer::readPidIndex();
         if (empty($pidIndex)) {
             return [];
         }
 
-        return $this->collectIndexedResidualPidsFromPidIndex($pidIndex, $instanceName, \getmypid());
+        return $this->collectIndexedResidualPidsFromPidIndex($pidIndex, $instanceName, \getmypid(), $includeSharedState);
     }
 
     /**
      * @param array<int, array{pname: string, jsonPath: string}> $pidIndex
      * @return array<int>
      */
-    private function collectIndexedResidualPidsFromPidIndex(array $pidIndex, string $instanceName, int $currentPid): array
+    private function collectIndexedResidualPidsFromPidIndex(
+        array $pidIndex,
+        string $instanceName,
+        int $currentPid,
+        bool $includeSharedState = false
+    ): array
     {
         $scopedInstanceSuffix = '-' . MasterProcess::getScopedInstanceName($instanceName);
         $legacyWorkerPrefix = 'weline-master-' . $instanceName . '-worker-';
@@ -1780,7 +1794,7 @@ class Stop extends CommandAbstract
                     ? \substr($pname, 7)
                     : $pname;
             }
-            if ($this->isSharedStateProcessName($taskName)) {
+            if (!$includeSharedState && $this->isSharedStateProcessName($taskName)) {
                 continue;
             }
 
