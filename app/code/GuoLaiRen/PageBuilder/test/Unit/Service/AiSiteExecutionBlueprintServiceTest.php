@@ -1085,6 +1085,8 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertIsArray($capturedParams);
         self::assertLessThanOrEqual(8192, (int)($capturedParams['max_tokens'] ?? 0));
         self::assertLessThan(8192, (int)($capturedParams['max_tokens'] ?? 0));
+        self::assertSame(240, (int)($capturedParams['timeout'] ?? 0));
+        self::assertTrue((bool)($capturedParams['enforce_timeout_in_stream'] ?? false));
         self::assertSame(['type' => 'json_object'], $capturedParams['response_format'] ?? null);
         self::assertSame('ai', (string)($artifacts['generation_source'] ?? 'ai'));
         self::assertStringContainsString('strong CTA', (string)($artifacts['plan_json']['theme_style']['selection_reason'] ?? ''));
