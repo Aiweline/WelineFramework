@@ -157,7 +157,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return true;
             }
 
-            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info): void
+            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): void
             {
                 unset($info);
                 $this->calls[] = 'residual:' . $name;
@@ -179,7 +179,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
 
             protected function hasKnownRecoverablePortsInUse(string $name, ServerInstanceInfo $info): bool
             {
-                unset($name, $info);
+                unset($name, $info, $includeSharedState);
 
                 return true;
             }
@@ -350,14 +350,14 @@ final class StopCommandFastLocalCleanupTest extends TestCase
 
             protected function hasKnownRecoverablePortsInUse(string $name, ServerInstanceInfo $info): bool
             {
-                unset($name, $info);
+                unset($name, $info, $includeSharedState);
 
                 return false;
             }
 
-            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info): void
+            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): void
             {
-                unset($name, $info);
+                unset($name, $info, $includeSharedState);
                 $this->calls[] = 'residual';
             }
 
@@ -520,9 +520,9 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return [];
             }
 
-            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info): void
+            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): void
             {
-                unset($name, $info);
+                unset($name, $info, $includeSharedState);
                 $this->calls[] = 'residual';
             }
 
@@ -721,7 +721,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return $pids;
             }
 
-            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info): void
+            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): void
             {
                 unset($info);
                 $this->calls[] = 'residual:' . $name;
@@ -734,7 +734,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
 
             protected function cleanupPidFiles(string $name, ServerInstanceInfo $info): void
             {
-                unset($name, $info);
+                unset($name, $info, $includeSharedState);
                 $this->calls[] = 'pid';
             }
         };
@@ -854,7 +854,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return true;
             }
 
-            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info): void
+            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): void
             {
                 unset($info);
                 $this->calls[] = 'residual:' . $name;
