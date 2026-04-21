@@ -4312,7 +4312,10 @@ SCRIPT;
             'build' => $this->runBuildOperation($sse, $session, $adminId),
             'regenerate_page' => $this->runRegeneratePageOperation($sse, $session, $adminId, (string)($activeOperation['page_type'] ?? '')),
             'publish' => $this->runPublishOperation($sse, $session, $adminId),
-            default => throw new \RuntimeException((string)__('未知操作')),
+            default => throw new \RuntimeException((string)__('未知操作：%{operation}（允许：%{allowed}）', [
+                'operation' => $operation !== '' ? $operation : '(empty)',
+                'allowed' => 'plan, build, regenerate_page, publish',
+            ])),
         };
     }
 

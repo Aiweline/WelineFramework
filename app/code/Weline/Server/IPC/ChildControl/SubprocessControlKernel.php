@@ -174,8 +174,13 @@ final class SubprocessControlKernel
             if ($instanceInfoGateway !== null) {
                 $latestControlPort = $instanceInfoGateway->getLatestControlPort($controlPort);
                 if ($latestControlPort > 0 && $latestControlPort !== $controlPort) {
-                    $this->log("检测到 Master control_port 更新: {$controlPort} -> {$latestControlPort}");
-                    $controlPort = $latestControlPort;
+                    // 端口更新后，先探测新端口是否已进入 LISTEN，避免切换到“尚未就绪端口”导致持续拒绝连接
+                    if (self::isTcpPortReachable('127.0.0.1', $latestControlPort, 180)) {
+                        $this->log("检测到 Master control_port 更新: {$controlPort} -> {$latestControlPort}");
+                        $controlPort = $latestControlPort;
+                    } else {
+                        $this->log("检测到 Master control_port 更新候选: {$controlPort} -> {$latestControlPort}，但新端口未就绪，暂继续使用旧端口");
+                    }
                 }
             }
             $client = $this->createClient();
@@ -286,6 +291,27 @@ final class SubprocessControlKernel
 
         $this->log("启动时重连 Master 失败，次数上限已达 {$maxStartupRetries}，{$lastError}");
         return false;
+    }
+
+    private static function isTcpPortReachable(string $host, int $port, int $timeoutMs = 150): bool
+    {
+        if ($port <= 0) {
+            return false;
+        }
+        $errno = 0;
+        $errstr = '';
+        $timeoutSec = \max(0.05, $timeoutMs / 1000);
+        $socket = @\stream_socket_client(
+            "tcp://{$host}:{$port}",
+            $errno,
+            $errstr,
+            $timeoutSec
+        );
+        if (!\is_resource($socket)) {
+            return false;
+        }
+        @\fclose($socket);
+        return true;
     }
 
     private function applyE2EReadyDelayIfNeeded(): void
