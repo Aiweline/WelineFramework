@@ -5978,6 +5978,8 @@
             var action = String(button.getAttribute('data-pb-preview-action') || '').trim();
             var scopeKind = String(button.getAttribute('data-pb-scope-kind') || '').trim();
             var targetScope = String(button.getAttribute('data-target-scope') || '').trim();
+            var pageType = String(button.getAttribute('data-page-type') || '').trim();
+            var blockKey = String(button.getAttribute('data-block-key') || '').trim();
             var pageLabel = String(button.getAttribute('data-page-label') || button.getAttribute('data-page-type') || '').trim();
             var blockLabel = String(button.getAttribute('data-block-label') || button.getAttribute('data-block-key') || button.getAttribute('data-task-key') || '').trim();
             var actionContext = buildPreviewActionContext(stage, action, scopeKind, pageLabel, blockLabel, targetScope);
@@ -6004,6 +6006,10 @@
             if (action === 'refine-stage' || action === 'rebuild-stage') {
                 actionContext.targetScope = '';
             }
+            if (handlePlanBlockMutationAction(action, scopeKind, pageType, blockKey, blockLabel, actionContext)) {
+                window.__pbPreviewActionDebug.mode = 'block-mutation';
+                return true;
+            }
             window.__pbPreviewActionDebug.mode = planMode;
             showPlanPreviewActionFlow(planMode, actionContext);
             return true;
@@ -6020,6 +6026,70 @@
         }
     }
     window.PbAiWorkspacePreviewAction = handlePreviewActionClick;
+
+    function handlePlanBlockMutationAction(action, scopeKind, pageType, blockKey, blockLabel, actionContext) {
+        var normalizedAction = String(action || '').trim();
+        if (['add-block', 'delete', 'rebuild'].indexOf(normalizedAction) === -1) {
+            return false;
+        }
+        if (!String(mutatePlanBlockUrl || '').trim() || !pageType) {
+            return false;
+        }
+        if ((normalizedAction === 'delete' || normalizedAction === 'rebuild') && (!blockKey || scopeKind !== 'block')) {
+            return false;
+        }
+
+        var mutationAction = normalizedAction === 'add-block' ? 'create' : (normalizedAction === 'delete' ? 'delete' : 'rebuild');
+        if (mutationAction === 'delete' && typeof window.confirm === 'function') {
+            var label = blockLabel || blockKey;
+            if (!window.confirm('Delete this plan block: ' + label + '?')) {
+                return true;
+            }
+        }
+
+        var blockConfig = {};
+        if (mutationAction === 'create') {
+            var title = '';
+            if (typeof window.prompt === 'function') {
+                title = String(window.prompt(previewLabels.addBlockAction || 'Add block', blockLabel || '') || '').trim();
+            }
+            if (!title) {
+                title = blockLabel ? (blockLabel + ' follow-up') : 'New plan block';
+            }
+            blockConfig = {
+                title: title,
+                goal: title,
+                instruction: actionContext && actionContext.summary ? String(actionContext.summary) : title
+            };
+            if (blockKey) {
+                blockConfig.after_block_key = blockKey;
+            }
+        } else if (mutationAction === 'rebuild') {
+            blockConfig = {
+                mutation_note: actionContext && actionContext.summary ? String(actionContext.summary) : 'Local stage-one block rebuild requested.',
+                reason: actionContext && actionContext.summary ? String(actionContext.summary) : 'Local stage-one block rebuild requested.'
+            };
+        }
+
+        postForm(mutatePlanBlockUrl, {
+            public_id: publicId,
+            page_type: pageType,
+            action: mutationAction,
+            block_key: blockKey,
+            block_config: JSON.stringify(blockConfig)
+        }).then(function (data) {
+            if (data && data.success && data.data && typeof data.data === 'object') {
+                hydrateWorkspaceFromState(data.data);
+                toast('success', data.message ? String(data.message) : 'Stage-1 plan block updated.');
+                return;
+            }
+            toast('warning', data && data.message ? String(data.message) : messages.networkError);
+        }).catch(function (error) {
+            toast('error', (error && error.message) ? String(error.message) : messages.networkError);
+        });
+
+        return true;
+    }
 
     function bindPreviewActionButtons(container) {
         var root = typeof container === 'string' ? document.getElementById(container) : container;
