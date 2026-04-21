@@ -1334,18 +1334,14 @@ final class AiSiteExecutionBlueprintService
             \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [],
             $sharedPromptContext
         );
-        $stageOneQueue = $this->buildStageOneHeaderFooterQueueEnvelope(
-            $scope,
-            $websiteProfile,
-            $themeContextSnapshot,
-            $sharedComponents,
-            $sharedPromptContext,
-            $pagePlans,
-            $pageTypes,
-            $planLocale
-        );
-        $structured['stage1_queue'] = $stageOneQueue;
-        $executionBlueprint['stage1_queue'] = $stageOneQueue;
+        foreach ($pagePlans as $pageType => $pagePlan) {
+            if (!\is_array($pagePlan) || !\is_array($planJson['pages'][$pageType] ?? null)) {
+                continue;
+            }
+            if (\trim((string)($planJson['pages'][$pageType]['theme_alignment_summary'] ?? '')) === '') {
+                $planJson['pages'][$pageType]['theme_alignment_summary'] = (string)($pagePlan['theme_alignment_summary'] ?? '');
+            }
+        }
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
 
         $tasks = [];
@@ -4427,11 +4423,13 @@ final class AiSiteExecutionBlueprintService
     private function buildPlanJson(array $structured): array
     {
         $pages = \is_array($structured['pages'] ?? null) ? $structured['pages'] : [];
+        $stageOnePagePlans = \is_array($structured['page_plans'] ?? null) ? $structured['page_plans'] : [];
         $pageBlocks = [];
         foreach ($pages as $pageType => $pagePlan) {
             if (!\is_array($pagePlan)) {
                 continue;
             }
+            $stageOnePagePlan = \is_array($stageOnePagePlans[$pageType] ?? null) ? $stageOnePagePlans[$pageType] : [];
             $blockRows = [];
             foreach (\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [] as $block) {
                 if (!\is_array($block)) {
@@ -4454,7 +4452,7 @@ final class AiSiteExecutionBlueprintService
             }
             $pageBlocks[(string)$pageType] = [
                 'page_goal' => \trim((string)($pagePlan['page_goal'] ?? '')),
-                'theme_alignment_summary' => \trim((string)($pagePlan['theme_alignment_summary'] ?? '')),
+                'theme_alignment_summary' => \trim((string)($pagePlan['theme_alignment_summary'] ?? $stageOnePagePlan['theme_alignment_summary'] ?? '')),
                 'why' => \trim((string)($pagePlan['why'] ?? '')),
                 'primary_keywords' => \array_values(\array_filter(\array_map(
                     static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
