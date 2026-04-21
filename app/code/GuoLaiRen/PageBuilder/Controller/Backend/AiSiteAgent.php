@@ -556,10 +556,10 @@ SCRIPT;
         return $this->handleSortPlanBlocks();
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '新增/删除/重建阶段一方案块', 'GuoLaiRen_PageBuilder::ai_site_agent')]
-    public function postMutatePlanBlock(): string
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI Site Agent API', 'mdi-api', 'Refine current stage-1 page plan blocks', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postRefinePlanPage(): string
     {
-        return $this->handleMutatePlanBlock();
+        return $this->handleRefinePlanPage();
     }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '排序阶段二任务块', 'GuoLaiRen_PageBuilder::ai_site_agent')]
@@ -5560,6 +5560,7 @@ SCRIPT;
             'has_execution_blueprint' => \is_array($normalized['execution_blueprint'] ?? null) && $normalized['execution_blueprint'] !== [],
             'plan_confirmed_at' => (string)($normalized['plan_confirmed_at'] ?? ''),
             'plan_sse_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/plan-sse'),
+            'refine_plan_page_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-refine-plan-page'),
             // T36: 历史确认方案数据
             'confirmed_plan_markdown' => (string)($normalized['plan_markdown'] ?? ''),
             'confirmed_plan_signature' => (string)($normalized['execution_blueprint_confirmed_signature'] ?? ''),
