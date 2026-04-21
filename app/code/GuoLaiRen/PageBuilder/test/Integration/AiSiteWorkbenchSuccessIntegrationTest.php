@@ -9,6 +9,7 @@ use GuoLaiRen\PageBuilder\Controller\Backend\Preview as PreviewController;
 use GuoLaiRen\PageBuilder\Controller\Frontend\Page as FrontendPageController;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Data\WebsiteData;
