@@ -319,6 +319,49 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertSame($orderedKeys, $pageTaskBlockKeys);
     }
 
+    public function testReorderDraftPlanBlocksSupportsSharedBlocksSortOrder(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $artifacts = $service->buildPlanArtifacts([
+            'site_title' => 'Shared Sort Test',
+            'brief_description' => 'Need global header and footer blocks that can be reordered.',
+            'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+        ], [
+            'site_title' => 'Shared Sort Test',
+            'brief_description' => 'Need global header and footer blocks that can be reordered.',
+        ]);
+
+        $scope = [
+            'plan_json' => $artifacts['plan_json'],
+            'plan_markdown' => $artifacts['markdown'],
+            'plan_structured' => $artifacts['structured'],
+            'plan_workbench' => $artifacts['plan_workbench'],
+            'execution_blueprint_draft' => $artifacts['execution_blueprint'],
+        ];
+
+        $reordered = $service->reorderDraftPlanBlocks($scope, 'shared', ['shared:footer', 'shared:header']);
+
+        self::assertSame(
+            ['shared:footer', 'shared:header'],
+            \array_values(\array_map(
+                static fn(array $block): string => (string)($block['block_key'] ?? ''),
+                $reordered['plan_json']['shared_blocks'] ?? []
+            ))
+        );
+        self::assertSame(10, (int)($reordered['structured']['shared_components']['footer']['sort_order'] ?? 0));
+        self::assertSame(20, (int)($reordered['structured']['shared_components']['header']['sort_order'] ?? 0));
+
+        $sharedIndexKeys = \array_keys(\is_array($reordered['structured']['block_index']['shared'] ?? null) ? $reordered['structured']['block_index']['shared'] : []);
+        self::assertSame(['shared:footer', 'shared:header'], $sharedIndexKeys);
+        $footerMarkdownPosition = \strpos((string)$reordered['markdown'], 'Shared Block #10: Footer');
+        $headerMarkdownPosition = \strpos((string)$reordered['markdown'], 'Shared Block #20: Header');
+        self::assertIsInt($footerMarkdownPosition);
+        self::assertIsInt($headerMarkdownPosition);
+        self::assertLessThan($headerMarkdownPosition, $footerMarkdownPosition);
+    }
+
     public function testBuildAiPlanPromptContainsStageOneMustConstraints(): void
     {
         $capturedPrompt = null;
