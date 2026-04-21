@@ -241,7 +241,10 @@
     function renderQueueSummaryItem(key, label, value, codeLike) {
         var display = String(value == null || value === '' ? queueMessages.queueIdUnknown : value);
         var valueTag = codeLike ? 'code' : 'strong';
-        return '<div class="col-6" role="listitem" data-queue-info-field="' + escapeHtml(key) + '">'
+        var tokenUsageAttr = (key === 'input_tokens' || key === 'output_tokens' || key === 'total_tokens')
+            ? ' data-token-usage-field="' + escapeHtml(key) + '"'
+            : '';
+        return '<div class="col-6" role="listitem" data-queue-info-field="' + escapeHtml(key) + '"' + tokenUsageAttr + '>'
             + '<div class="text-muted small">' + escapeHtml(label) + '</div>'
             + '<' + valueTag + ' class="small text-break">' + escapeHtml(display) + '</' + valueTag + '>'
             + '</div>';
