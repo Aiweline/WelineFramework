@@ -1108,7 +1108,7 @@ Atomic Task ID:
 - [x] A33 第二阶段提示词输出 meta 字段类型/默认值/示例内容（status=done, owner=worker-4, covers=§13.3.5, output=meta_fields[], evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 - [x] A34 第二阶段提示词输出内容正文/CTA/链接/素材位（status=done, owner=worker-5, covers=§1A, output=content_plan, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 - [x] A35 第二阶段提示词输出配色/字体/间距/响应式规则（status=done, owner=worker-6, covers=§1A, output=style_plan, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
-- [ ] A36 第二阶段提示词输出 `planning_reason`（status=todo, owner=prompt, covers=§1A, output=为什么这么规划）
+- [x] A36 第二阶段提示词输出 `planning_reason`（status=done, owner=worker-1, covers=§1A, output=shared_tasks[].planning_reason + block_task.planning_reason, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 - [x] A37 第二阶段校验器拒绝缺失 meta/content/style/reason 的任务（status=done, owner=worker-3, covers=§13.7.2, output=不合格重生成, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 
 #### E. 第二阶段工作台、排序、字段编辑与任务进度
