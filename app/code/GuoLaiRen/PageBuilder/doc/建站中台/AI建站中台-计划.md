@@ -1014,13 +1014,13 @@ Atomic Task ID:
 
 #### B. 第一阶段：共享优先的块化方案生成
 
-- [ ] T01 第一阶段主队列编排器（status=todo, progress=0%, owner=backend-ai, note=创建 stage1 主任务图与共享前置依赖）
-- [ ] T02 `buildStageOneSharedPlanPrompt(...)` 与共享规划校验器（status=todo, progress=0%, owner=prompt-engineering, note=输出主题设计 + Header/Footer + shared_prompt_context；须遵守 §1A/§13.2.6 具体性契约；当前整站参考实现见 `AiSiteExecutionBlueprintService::buildAiPlanPrompt`）
-- [ ] T03 共享规划持久化与上下文哈希管理（status=todo, progress=0%, owner=backend, note=保存 theme_context_snapshot/shared_context_hash）
+- [~] T01 第一阶段主队列编排器（status=in_progress, progress=60%, owner=backend-ai, note=A09/A10/A11 已完成：stage1 requirement_expand、shared.theme_design、shared.header_footer envelope 已建立；A12/A13 页面 fanout/并发仍待完成）
+- [x] T02 `buildStageOneSharedPlanPrompt(...)` 与共享规划校验器（status=done, progress=100%, owner=prompt-engineering, note=A01~A05 已完成：输出主题设计 + Header/Footer + shared_prompt_context；已补齐 §1A/§13.2.6 具体性契约、色系校验、selection_reason 引用需求校验；证据见 `AiSiteExecutionBlueprintServiceTest`）
+- [~] T03 共享规划持久化与上下文哈希管理（status=in_progress, progress=70%, owner=backend, note=A10/A11 已完成 theme_context_snapshot/shared_prompt_context 持久化入口；shared_context_hash 变更后的 stale/requeue 仍待 A17/A18 完成）
 - [ ] T04 `buildStageOnePagePlanPrompt(...)` 与页面任务输入装配器（status=todo, progress=0%, owner=prompt-engineering, note=注入主题设计与共享规划保证主题连续性；须遵守 §1A/§13.2.6；字段样例须可落地非方向性）
 - [ ] T05 页面类型并发队列与冲突控制（status=todo, progress=0%, owner=backend-queue, note=固定一页面一任务，控制共享上下文版本）
 - [ ] T06 第一阶段块树装配器（status=todo, progress=0%, owner=backend, note=增量生成 plan_book.markdown + structured_plan + block_index）
-- [ ] T07 第一阶段内联工作台 UI（status=todo, progress=0%, owner=frontend, note=共享区/页面 Tab/总进度/队列状态）
+- [~] T07 第一阶段内联工作台 UI（status=in_progress, progress=55%, owner=frontend, note=A06/A07 已完成共享 Tab 主题字段展示与 reason 入口；队列状态/token 展示仍待 A27 完成）
 - [ ] T08 第一阶段页面级 AI 操作（status=todo, progress=0%, owner=frontend+backend, note=微调页面/重建页面/新增块）
 - [ ] T09 第一阶段块级操作 API（status=todo, progress=0%, owner=backend-api, note=块 refine/rebuild/create/delete/move）
 - [ ] T10 第一阶段块 hover 交互与即时重装配（status=todo, progress=0%, owner=frontend, note=hover 菜单、局部刷新、保留草稿输入）
@@ -1064,19 +1064,19 @@ Atomic Task ID:
 
 #### A. 第一阶段主题规划与共享 Tab
 
-- [ ] A01 定义 `theme_design` 最小 schema（status=todo, owner=backend-schema, covers=§1A/§13.2.3, output=`theme_purpose/color_scheme/typography_spacing_radius/visual_keywords/tone_of_voice/cta_tone/forbidden_styles/selection_reason` 字段定义）
+- [x] A01 定义 `theme_design` 最小 schema（status=done, owner=worker-1, covers=§1A/§13.2.3, output=`theme_purpose/color_scheme/typography_spacing_radius/visual_keywords/tone_of_voice/cta_tone/forbidden_styles/selection_reason` 字段定义, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
 - [x] A02 为 `theme_design.color_scheme` 增加字段校验（status=done, owner=worker-2, covers=§1A, output=主色/辅色/强调色/背景/正文/按钮色均非空, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
-- [ ] A03 为 `selection_reason` 增加“引用用户一句话需求”的校验（status=todo, owner=validation, covers=§1A 具体性契约, output=禁止空泛“现代/高级/简洁”）
-- [ ] A04 修改共享提示词，强制输出具体主题规划而非方向描述（status=todo, owner=prompt, covers=§1A/§13.2.3, output=`buildStageOneSharedPlanPrompt` 条款）
-- [ ] A05 修改共享提示词，要求说明“为什么选择该色系/字体/语气”（status=todo, owner=prompt, covers=§1A, output=`selection_reason`）
-- [ ] A06 共享 Tab UI 展示主题宗旨、色系、风格原因、禁用风格（status=todo, owner=frontend, covers=§1A, output=共享 Tab 卡片字段）
-- [ ] A07 共享 Tab 为主题设计/Header/Footer 增加 `?` 原因说明入口（status=todo, owner=frontend, covers=§1A/§12.0, output=点击展开 reason）
-- [ ] A08 共享 Tab 支持共享块排序并写回 `sort_order`（status=todo, owner=frontend+backend, covers=§1A, output=排序影响 Markdown 和 block_index）
+- [x] A03 为 `selection_reason` 增加“引用用户一句话需求”的校验（status=done, owner=worker-3, covers=§1A 具体性契约, output=禁止空泛“现代/高级/简洁”, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
+- [x] A04 修改共享提示词，强制输出具体主题规划而非方向描述（status=done, owner=worker-1, covers=§1A/§13.2.3, output=`buildStageOneSharedPlanPrompt` 条款, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
+- [x] A05 修改共享提示词，要求说明“为什么选择该色系/字体/语气”（status=done, owner=worker-5, covers=§1A, output=`selection_reason`, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
+- [x] A06 共享 Tab UI 展示主题宗旨、色系、风格原因、禁用风格（status=done, owner=worker-6, covers=§1A, output=共享 Tab 卡片字段, evidence=AiSiteAgentSharedTabTemplateTest）
+- [x] A07 共享 Tab 为主题设计/Header/Footer 增加 `?` 原因说明入口（status=done, owner=worker-2, covers=§1A/§12.0, output=点击展开 reason, evidence=AiSiteAgentSharedTabTemplateTest）
+- [x] A08 共享 Tab 支持共享块排序并写回 `sort_order`（status=done, owner=worker-3, covers=§1A, output=排序影响 Markdown 和 block_index, evidence=template/service tests）
 
 #### B. 第一阶段队列、Fiber 并发与页面提示词
 
-- [ ] A09 建立 `stage1.requirement_expand` 队列任务 envelope（status=todo, owner=backend-queue, covers=§13.5, output=job_key/job_type/status/token 字段）
-- [ ] A10 建立 `stage1.shared.theme_design` 队列任务（status=todo, owner=backend-queue, covers=§1A, output=持久化 theme_context_snapshot）
+- [x] A09 建立 `stage1.requirement_expand` 队列任务 envelope（status=done, owner=worker-4, covers=§13.5, output=job_key/job_type/status/token 字段, evidence=AiSiteExecutionBlueprintServiceTest）
+- [x] A10 建立 `stage1.shared.theme_design` 队列任务（status=done, owner=worker-5, covers=§1A, output=持久化 theme_context_snapshot, evidence=AiSiteExecutionBlueprintServiceTest）
 - [x] A11 建立 `stage1.shared.header_footer` 队列任务（status=done, owner=worker-6, covers=§1A, output=Header/Footer + shared_prompt_context, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
 - [ ] A12 Header/Footer 完成后自动 fanout 页面任务（status=todo, owner=backend-queue, covers=§1A, output=不依赖用户切 Tab）
 - [ ] A13 页面任务 fanout 使用 Fiber/协程并发（status=todo, owner=runtime, covers=§1A/§13.5, output=一页面一任务并发）
