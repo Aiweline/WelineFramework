@@ -10,6 +10,17 @@ use Weline\Framework\Runtime\SchedulerSystem;
 
 final class AiSiteVirtualThemePlanService
 {
+    private const BLOCK_TASK_SCHEMA_VERSION = 'stage2-block-task-v1';
+
+    private const BLOCK_TASK_REQUIRED_FIELDS = [
+        'task_goal',
+        'meta_fields',
+        'content_plan',
+        'style_plan',
+        'planning_reason',
+        'sort_order',
+    ];
+
     public function __construct(
         private readonly ?AiService $aiService = null,
     ) {
@@ -134,10 +145,12 @@ final class AiSiteVirtualThemePlanService
 
         $assembledStructured['risk_notes'] = $riskNotes;
         $assembledVirtualThemePlan['risk_notes'] = $riskNotes;
+        $assembledStructured = $this->sanitizePromptLikeTaskPlanStructured($assembledStructured);
+        $assembledStructured = $this->applyBlockTaskSchemaToStructured($assembledStructured);
         $assembledStructured = $this->ensureTaskDirectoryHierarchy($assembledStructured);
         $assembledStructured = $this->syncStageTwoRuntimeContexts($assembledStructured);
-        $assembledStructured = $this->sanitizePromptLikeTaskPlanStructured($assembledStructured);
         $assembledVirtualThemePlan = \array_replace_recursive($assembledVirtualThemePlan, [
+            'block_task_schema' => $assembledStructured['block_task_schema'] ?? [],
             'task_directory_tree' => $assembledStructured['task_directory_tree'] ?? [],
             'task_tree' => $assembledStructured['task_tree'] ?? [],
             'shared_tasks' => $assembledStructured['shared_tasks'] ?? [],
@@ -354,6 +367,8 @@ final class AiSiteVirtualThemePlanService
             \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT
         ) ?: '{}';
         $lines[] = 'Hard rules:';
+        $lines[] = '- Every returned page_tasks[] entry must include block_task with required fields: task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order.';
+        $lines[] = '- block_task.task_goal is the visible block outcome; block_task.meta_fields is the exact editable field list; block_task.content_plan and block_task.style_plan are concrete arrays; block_task.planning_reason explains the stage-1 rationale; block_task.sort_order mirrors the task sort_order.';
         $lines[] = '- Every returned task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, and completion_rule-compatible detail.';
         $lines[] = '- Keep task_key, group_key, page_type, and sort_order compatible with the provided skeleton.';
         $lines[] = '- Do not drop any task from this batch.';
@@ -1735,6 +1750,7 @@ final class AiSiteVirtualThemePlanService
                 '同一份提示词可以并发复用，但每个 SSE 会话必须具备独立 task_key 与 chunk 缓冲。',
             ],
         ];
+        $structured = $this->applyBlockTaskSchemaToStructured($structured);
 
         $virtualThemePlan = $structured;
         $virtualThemePlan['signature'] = \sha1((string)\json_encode($structured, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
@@ -1742,6 +1758,7 @@ final class AiSiteVirtualThemePlanService
         if ((int)($scope['fake_mode'] ?? 0) === 1) {
             $deterministic = $this->buildDeterministicTaskPlanStructured($structured);
             $deterministic = $this->applyReadableDeterministicTaskPlanContent($deterministic);
+            $deterministic = $this->applyBlockTaskSchemaToStructured($deterministic);
             $deterministic = $this->ensureTaskDirectoryHierarchy($deterministic);
             $deterministic = $this->syncStageTwoRuntimeContexts($deterministic);
             $markdown = $this->buildStageTwoMarkdown(
@@ -1780,10 +1797,12 @@ final class AiSiteVirtualThemePlanService
         $mergedVirtualThemePlan = \array_replace_recursive($virtualThemePlan, $aiVirtualThemePlan);
         $mergedStructured = \array_replace_recursive($structured, $mergedVirtualThemePlan);
         $mergedStructured = $this->sanitizePromptLikeTaskPlanStructured($mergedStructured);
+        $mergedStructured = $this->applyBlockTaskSchemaToStructured($mergedStructured);
         $this->assertAiTaskPlanIsContentful($mergedStructured);
         $mergedStructured = $this->ensureTaskDirectoryHierarchy($mergedStructured);
         $mergedStructured = $this->syncStageTwoRuntimeContexts($mergedStructured);
         $mergedVirtualThemePlan = \array_replace_recursive($mergedVirtualThemePlan, [
+            'block_task_schema' => $mergedStructured['block_task_schema'] ?? [],
             'task_directory_tree' => $mergedStructured['task_directory_tree'] ?? [],
             'task_tree' => $mergedStructured['task_tree'] ?? [],
             'shared_tasks' => $mergedStructured['shared_tasks'] ?? [],
@@ -2934,6 +2953,197 @@ final class AiSiteVirtualThemePlanService
             $synced[] = $task;
         }
         return $synced;
+    }
+
+    /**
+     * Add the stage-2 block-task minimum schema to every page block task.
+     *
+     * @param array<string, mixed> $structured
+     * @return array<string, mixed>
+     */
+    private function applyBlockTaskSchemaToStructured(array $structured): array
+    {
+        $structured['block_task_schema'] = [
+            'schema_version' => self::BLOCK_TASK_SCHEMA_VERSION,
+            'required_fields' => self::BLOCK_TASK_REQUIRED_FIELDS,
+            'field_contract' => [
+                'task_goal' => 'Visible outcome this block must accomplish.',
+                'meta_fields' => 'Editable fields with type/default/sample/reason.',
+                'content_plan' => 'Concrete copy/content instructions for stage-3 execution.',
+                'style_plan' => 'Concrete styling direction derived from the confirmed stage-1 plan.',
+                'planning_reason' => 'Why this block task exists in the confirmed plan.',
+                'sort_order' => 'Integer order matching the stage-2 task order.',
+            ],
+        ];
+
+        $pageTasks = \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [];
+        foreach ($pageTasks as $pageType => $tasks) {
+            if (!\is_array($tasks)) {
+                continue;
+            }
+            foreach ($tasks as $idx => $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $tasks[$idx] = $this->applyBlockTaskSchemaToTask($task, (string)$pageType);
+            }
+            $pageTasks[$pageType] = \array_values($tasks);
+        }
+        $structured['page_tasks'] = $pageTasks;
+
+        return $structured;
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @return array<string, mixed>
+     */
+    private function applyBlockTaskSchemaToTask(array $task, string $pageType): array
+    {
+        $existing = \is_array($task['block_task'] ?? null) ? $task['block_task'] : [];
+        $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
+        $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
+
+        $metaFields = $this->normalizeBlockTaskMetaFields(
+            \is_array($existing['meta_fields'] ?? null)
+                ? $existing['meta_fields']
+                : (\is_array($taskScript['field_content_requirements'] ?? null)
+                    ? $taskScript['field_content_requirements']
+                    : (\is_array($planContext['field_plan'] ?? null) ? $planContext['field_plan'] : []))
+        );
+
+        $taskGoal = $this->firstNonEmptyString([
+            $existing['task_goal'] ?? null,
+            $planContext['block_goal'] ?? null,
+            $taskScript['story_goal'] ?? null,
+            $task['label'] ?? null,
+            $task['task_key'] ?? null,
+        ]);
+        if ($taskGoal === '') {
+            $taskGoal = 'Deliver the ' . ($pageType !== '' ? $pageType . ' ' : '') . 'block output.';
+        }
+
+        $contentPlan = \is_array($existing['content_plan'] ?? null) ? $existing['content_plan'] : [];
+        $contentPlan['story_goal'] = $this->firstNonEmptyString([
+            $contentPlan['story_goal'] ?? null,
+            $taskScript['story_goal'] ?? null,
+            $taskGoal,
+        ]);
+        $contentPlan['content_fill_rule'] = $this->firstNonEmptyString([
+            $contentPlan['content_fill_rule'] ?? null,
+            $taskScript['content_fill_rule'] ?? null,
+            $planContext['content_brief']['goal'] ?? null,
+            'Fill the block fields with concrete copy and CTA content from the confirmed stage-1 plan.',
+        ]);
+        $contentPlan['stage3_directive'] = $this->firstNonEmptyString([
+            $contentPlan['stage3_directive'] ?? null,
+            $taskScript['stage3_directive'] ?? null,
+            'Generate this block directly from the block_task content_plan and meta_fields.',
+        ]);
+        $contentPlan['field_content_requirements'] = \is_array($contentPlan['field_content_requirements'] ?? null)
+            ? $contentPlan['field_content_requirements']
+            : $metaFields;
+
+        $stylePlan = \is_array($existing['style_plan'] ?? null) ? $existing['style_plan'] : [];
+        $stylePlan['style_direction'] = $this->firstNonEmptyString([
+            $stylePlan['style_direction'] ?? null,
+            $planContext['style_direction'] ?? null,
+            $planContext['implementation_detail'] ?? null,
+            $task['style_direction'] ?? null,
+            'Follow the confirmed stage-1 palette, typography, spacing, and responsive direction.',
+        ]);
+        $stylePlan['responsive_rule'] = $this->firstNonEmptyString([
+            $stylePlan['responsive_rule'] ?? null,
+            $planContext['responsive_rule'] ?? null,
+            'Keep the block usable on mobile and desktop breakpoints.',
+        ]);
+
+        $planningReason = $this->firstNonEmptyString([
+            $existing['planning_reason'] ?? null,
+            $planContext['block_why'] ?? null,
+            $planContext['implementation_detail'] ?? null,
+            $planContext['block_goal'] ?? null,
+            'This block task is derived from the confirmed stage-1 block tree.',
+        ]);
+
+        $task['block_task'] = [
+            'schema_version' => self::BLOCK_TASK_SCHEMA_VERSION,
+            'task_goal' => $taskGoal,
+            'meta_fields' => $metaFields,
+            'content_plan' => $contentPlan,
+            'style_plan' => $stylePlan,
+            'planning_reason' => $planningReason,
+            'sort_order' => (int)($existing['sort_order'] ?? $task['sort_order'] ?? 0),
+        ];
+
+        return $task;
+    }
+
+    /**
+     * @param array<int, mixed> $fields
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeBlockTaskMetaFields(array $fields): array
+    {
+        $normalized = [];
+        foreach ($fields as $index => $field) {
+            if (!\is_array($field)) {
+                continue;
+            }
+            $name = $this->firstNonEmptyString([
+                $field['field'] ?? null,
+                $field['name'] ?? null,
+                $field['key'] ?? null,
+            ]);
+            if ($name === '') {
+                continue;
+            }
+            $sample = $this->firstNonEmptyString([
+                $field['sample'] ?? null,
+                $field['example'] ?? null,
+                $field['default'] ?? null,
+            ]);
+            $normalized[] = [
+                'field' => $name,
+                'type' => $this->firstNonEmptyString([$field['type'] ?? null, 'string']),
+                'default' => $field['default'] ?? $sample,
+                'sample' => $sample !== '' ? $sample : ('Sample value for ' . $name),
+                'reason' => $this->firstNonEmptyString([
+                    $field['reason'] ?? null,
+                    $field['description'] ?? null,
+                    'Required by block task schema field #' . ((int)$index + 1) . '.',
+                ]),
+            ];
+        }
+
+        if ($normalized === []) {
+            $normalized[] = [
+                'field' => 'content',
+                'type' => 'string',
+                'default' => '',
+                'sample' => 'Concrete block content sample',
+                'reason' => 'Fallback editable content field required by the block task schema.',
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<int, mixed> $values
+     */
+    private function firstNonEmptyString(array $values): string
+    {
+        foreach ($values as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $text = \trim((string)$value);
+            if ($text !== '') {
+                return $text;
+            }
+        }
+        return '';
     }
 
     /**
@@ -4122,12 +4332,30 @@ final class AiSiteVirtualThemePlanService
                 }
                 $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
                 $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
+                $blockTask = \is_array($task['block_task'] ?? null) ? $task['block_task'] : [];
                 $blockGoal = \trim((string)($planContext['block_goal'] ?? ''));
                 $storyGoal = \trim((string)($taskScript['story_goal'] ?? ''));
                 $contentFillRule = \trim((string)($taskScript['content_fill_rule'] ?? ''));
                 $requirements = \is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [];
                 if ($blockGoal === '' || $storyGoal === '' || $contentFillRule === '' || $requirements === []) {
                     throw new \RuntimeException('AI task plan generation failed: task script content is incomplete.');
+                }
+                foreach (self::BLOCK_TASK_REQUIRED_FIELDS as $requiredField) {
+                    if (!\array_key_exists($requiredField, $blockTask)) {
+                        throw new \RuntimeException('AI task plan generation failed: block_task schema is incomplete.');
+                    }
+                }
+                if (
+                    \trim((string)($blockTask['task_goal'] ?? '')) === ''
+                    || !\is_array($blockTask['meta_fields'] ?? null)
+                    || $blockTask['meta_fields'] === []
+                    || !\is_array($blockTask['content_plan'] ?? null)
+                    || $blockTask['content_plan'] === []
+                    || !\is_array($blockTask['style_plan'] ?? null)
+                    || $blockTask['style_plan'] === []
+                    || \trim((string)($blockTask['planning_reason'] ?? '')) === ''
+                ) {
+                    throw new \RuntimeException('AI task plan generation failed: block_task schema is incomplete.');
                 }
                 $hasSample = false;
                 foreach ($requirements as $requirement) {
