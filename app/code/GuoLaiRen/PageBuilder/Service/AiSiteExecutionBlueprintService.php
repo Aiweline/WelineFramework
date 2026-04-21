@@ -300,6 +300,7 @@ final class AiSiteExecutionBlueprintService
                     // Leave headroom below the provider hard cap to avoid model-specific validation errors.
                     'max_tokens' => self::AI_STREAM_MAX_TOKENS,
                     'timeout' => 240,
+                    'enforce_timeout_in_stream' => true,
                     'response_format' => ['type' => 'json_object'],
                 ]
             );
