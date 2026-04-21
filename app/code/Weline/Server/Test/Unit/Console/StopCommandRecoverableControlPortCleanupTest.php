@@ -13,7 +13,7 @@ use Weline\Server\Service\Contract\ServiceInstance;
 
 final class StopCommandRecoverableControlPortCleanupTest extends TestCase
 {
-    public function testCollectRemainingRecoverablePortsIncludesControlAndServicePortsFromInstance(): void
+    public function testCollectRemainingRecoverablePortsIncludesControlAndNonSharedServicePortsFromInstance(): void
     {
         $info = new ServerInstanceInfo(
             'default',
@@ -66,6 +66,13 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
                         'is_weline' => true,
                         'state' => 'weline',
                     ],
+                    16895 => [
+                        'in_use' => true,
+                        'pid' => 895,
+                        'pid_running' => true,
+                        'is_weline' => true,
+                        'state' => 'weline',
+                    ],
                     26895 => [
                         'in_use' => true,
                         'pid' => 300,
@@ -99,7 +106,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
 
             protected function queryStopPidRunning(int $pid): bool
             {
-                return \in_array($pid, [300, 422, 4430], true);
+                return \in_array($pid, [300, 422, 895, 4430], true);
             }
 
             protected function queryStopWelineServerProcess(int $pid): bool
@@ -117,7 +124,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
 
         $ports = $this->invokeProtected($stop, 'collectRemainingRecoverableWlsPorts', 'default', $info);
 
-        self::assertSame([443, 26422, 26895], $ports);
+        self::assertSame([443, 16895, 26895], $ports);
     }
 
     public function testKillWlsProcessOnPortAcceptsIndexedWlsOwner(): void
@@ -319,6 +326,59 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
         };
 
         self::assertSame([443, 80, 26895, 16895], $stop->collectPorts($info));
+    }
+
+    public function testCollectRecoverablePortsFromInstanceSkipsSharedStateServicePorts(): void
+    {
+        $info = new ServerInstanceInfo(
+            'default',
+            200,
+            26895,
+            '127.0.0.1',
+            443,
+            true,
+            false,
+            1,
+            16895,
+            80,
+            '2026-04-20 10:19:17',
+            1776651557,
+            [
+                new ServiceInfo(
+                    'session_server',
+                    'Session Server',
+                    1,
+                    422,
+                    26422,
+                    ServiceInstance::STATE_READY
+                ),
+                new ServiceInfo(
+                    'memory_server',
+                    'Memory Server',
+                    1,
+                    423,
+                    26424,
+                    ServiceInstance::STATE_READY
+                ),
+                new ServiceInfo(
+                    'maintenance',
+                    'Maintenance Worker',
+                    1,
+                    424,
+                    16896,
+                    ServiceInstance::STATE_READY
+                ),
+            ]
+        );
+
+        $stop = new class extends Stop {
+            public function collectPorts(ServerInstanceInfo $info): array
+            {
+                return $this->collectRecoverablePortsFromInstance($info);
+            }
+        };
+
+        self::assertSame([443, 80, 26895, 16895, 16896], $stop->collectPorts($info));
     }
 
     public function testDirectForceStopCandidatesSkipRootPromotionOnFirstPass(): void
