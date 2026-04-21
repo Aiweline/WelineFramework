@@ -113,12 +113,6 @@ final class AiSiteExecutionBlueprintService
                 $planLocale
             );
             $pages[$pageType] = $pagePlan;
-            foreach ($pagePlan['blocks'] as $block) {
-                if (!\is_array($block)) {
-                    continue;
-                }
-                $tasks[] = $this->buildPageTask($pageType, $pagePlan, $block);
-            }
         }
 
         $sharedComponents = [
@@ -159,6 +153,17 @@ final class AiSiteExecutionBlueprintService
             $planLocale
         );
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
+        foreach ($pagePlans as $pageType => $pagePlan) {
+            if (!\is_array($pagePlan)) {
+                continue;
+            }
+            foreach (\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [] as $block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $tasks[] = $this->buildPageTask((string)$pageType, $pagePlan, $block);
+            }
+        }
 
         $executionBlueprint = [
             'version' => self::VERSION,
@@ -3443,7 +3448,12 @@ final class AiSiteExecutionBlueprintService
     private function buildPageTask(string $pageType, array $pagePlan, array $block): array
     {
         $blockKey = \trim((string)($block['block_key'] ?? 'block'));
-        $pagePromptContext = \is_array($pagePlan['page_prompt_context'] ?? null) ? $pagePlan['page_prompt_context'] : [];
+        $sharedContextHash = \trim((string)($pagePlan['shared_context_hash'] ?? ''));
+        if ($sharedContextHash === '') {
+            throw new \RuntimeException(
+                'Stage-1 page task rejected: missing shared_context_hash for page type "' . $pageType . '" and block "' . $blockKey . '".'
+            );
+        }
 
         return [
             'task_key' => 'page:' . $pageType . ':' . $blockKey,
@@ -3454,8 +3464,7 @@ final class AiSiteExecutionBlueprintService
             'source_ref' => [
                 'page_key' => $pageType,
                 'block_key' => $blockKey,
-                'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? ''),
-                'theme_context_hash' => (string)($pagePlan['theme_context_hash'] ?? ''),
+                'shared_context_hash' => $sharedContextHash,
             ],
             'prompt_context' => $pagePromptContext,
             'implementation_detail' => (string)($block['implementation_detail'] ?? $block['style_brief']['layout_rule'] ?? ''),
