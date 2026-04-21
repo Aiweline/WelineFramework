@@ -1343,12 +1343,24 @@ final class AiSiteExecutionBlueprintService
         $planJson['theme_design'] = $themeDesign;
         $executionBlueprint['theme_context_snapshot'] = $themeContextSnapshot;
         $executionBlueprint['shared_prompt_context'] = $sharedPromptContext;
+        $stageOneQueue = \is_array($structured['stage1_queue'] ?? null)
+            ? $structured['stage1_queue']
+            : (\is_array($executionBlueprint['stage1_queue'] ?? null) ? $executionBlueprint['stage1_queue'] : [
+                'version' => 1,
+                'stage' => 'stage1',
+                'status' => 'done',
+                'sequence' => [],
+                'jobs' => [],
+            ]);
         $structured['stage1_queue'] = $stageOneQueue;
         $executionBlueprint['stage1_queue'] = $stageOneQueue;
         $pagePlans = $this->buildStageOnePagePlansConcurrently(
             \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [],
             $sharedPromptContext
         );
+        $stageOneQueue = $this->buildStageOnePageFanoutQueueEnvelope($stageOneQueue, $pagePlans, $sharedPromptContext, $planLocale);
+        $structured['stage1_queue'] = $stageOneQueue;
+        $executionBlueprint['stage1_queue'] = $stageOneQueue;
         foreach ($pagePlans as $pageType => $pagePlan) {
             if (!\is_array($pagePlan) || !\is_array($planJson['pages'][$pageType] ?? null)) {
                 continue;
