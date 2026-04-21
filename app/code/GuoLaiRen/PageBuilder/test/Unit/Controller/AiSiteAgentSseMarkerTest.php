@@ -71,6 +71,46 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertFalse((bool)$method->invoke($controller, ['fake_mode' => 1], 'deterministic', false));
     }
 
+    public function testWorkspaceStreamTerminalOperationDetection(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $isActive = new ReflectionMethod(AiSiteAgent::class, 'isWorkspaceStreamOperationActive');
+        $isTerminal = new ReflectionMethod(AiSiteAgent::class, 'isWorkspaceStreamOperationTerminal');
+        $buildPayload = new ReflectionMethod(AiSiteAgent::class, 'buildWorkspaceStreamTerminalPayload');
+        $isActive->setAccessible(true);
+        $isTerminal->setAccessible(true);
+        $buildPayload->setAccessible(true);
+
+        self::assertTrue((bool)$isActive->invoke($controller, ['active_operation' => ['status' => 'queued']]));
+        self::assertTrue((bool)$isActive->invoke($controller, ['active_operation' => ['status' => 'running']]));
+        self::assertFalse((bool)$isActive->invoke($controller, ['active_operation' => ['status' => 'done']]));
+
+        foreach (['done', 'error', 'cancelled'] as $status) {
+            self::assertTrue(
+                (bool)$isTerminal->invoke($controller, ['active_operation' => ['status' => $status]]),
+                $status . ' must close the workspace SSE stream once an active operation reaches a terminal state.'
+            );
+        }
+        self::assertFalse((bool)$isTerminal->invoke($controller, ['active_operation' => ['status' => 'running']]));
+
+        $donePayload = $buildPayload->invoke($controller, [
+            'public_id' => 'pb-terminal-test',
+            'active_operation' => ['status' => 'done', 'message' => 'plan done'],
+        ], 42);
+        self::assertSame('done', $donePayload['terminal_status']);
+        self::assertTrue((bool)$donePayload['success']);
+        self::assertSame('plan done', $donePayload['message']);
+        self::assertSame(42, $donePayload['last_event_id']);
+
+        $errorPayload = $buildPayload->invoke($controller, [
+            'public_id' => 'pb-terminal-test',
+            'active_operation' => ['status' => 'error'],
+        ], 43);
+        self::assertSame('error', $errorPayload['terminal_status']);
+        self::assertFalse((bool)$errorPayload['success']);
+        self::assertSame(43, $errorPayload['last_event_id']);
+    }
+
     public function testBlockConfigReplacementOnlyTouchesSelectedPageBlock(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
