@@ -60,6 +60,7 @@ Keep runtime marker contracts stable and non-destructive when overlays are appli
 - When the user provides newer same-thread evidence (for example logs, stack traces, or test output), treat it as the current source of truth, re-evaluate earlier hypotheses against it, and do not anchor on older evidence unless the user reaffirms it.
 - Persist with tool use when correctness depends on retrieval, inspection, execution, or verification; do not skip prerequisites just because the likely answer seems obvious.
 - More effort does not mean reflexive web/tool escalation; browse or use tools when the task materially benefits, not as a default show of effort.
+- Project command approval policy: for this workspace, Codex agents must not ask the user to approve ordinary commands, diagnostics, tests, builds, git status/diff/log/show, OMX runtime status/resume/await/shutdown, or other non-destructive reversible operations. Execute them directly. Escalate only when the platform itself requires approval, when credentials/external authority are missing, or before destructive/irreversible actions such as deleting data, resetting history, killing unrelated processes, force-pushing, or changing system-level settings outside the project.
 <!-- OMX:GUIDANCE:OPERATING:END -->
 </operating_principles>
 
