@@ -968,6 +968,12 @@ final class AiSiteExecutionBlueprintService
             '- theme_design.visual_keywords, tone_of_voice, cta_tone, and forbidden_styles must be specific reusable constraints for page prompts, not vague words like "premium", "clean", or "professional" alone.',
             '- Header/Footer planning must reuse this theme_design directly so shared_prompt_context can carry concrete colors, voice, CTA tone, and forbidden styles to every page.',
             '',
+            'STAGE-1 PAGE THEME ALIGNMENT CONTRACT (pages must satisfy ALL):',
+            '- Every page prompt MUST treat theme_design + shared_prompt_context as non-negotiable constraints, not optional inspiration.',
+            '- Every page object MUST include theme_alignment_summary explaining how that page reuses theme_purpose, color_scheme, typography_spacing_radius, tone_of_voice, cta_tone, and forbidden_styles.',
+            '- Repeat the shared theme decisions inside each page plan: page_goal, blocks, field_plan samples, execution_script, CTA wording, and media assets must visibly obey the same palette, voice, spacing/radius, and forbidden styles.',
+            '- If a page idea conflicts with shared_prompt_context, rewrite the page idea. Never invent a per-page palette, voice, CTA style, or visual direction that diverges from theme_design.',
+            '',
             'GOOD vs BAD examples (do NOT copy verbatim, learn the style):',
             'BAD field_plan.sample : "标题围绕核心价值展开"',
             'GOOD field_plan.sample: "30 分钟上手的轻量记账工具，给独立创作者用"',
@@ -992,7 +998,7 @@ final class AiSiteExecutionBlueprintService
             '    "footer_plan":{"featured":[],"policies":[]},',
             '    "seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"},',
             '    "page_types":["home_page"],',
-            '    "pages":{"home_page":{"page_goal":"string","theme_alignment_summary":"how this page and every block obey theme_design color_scheme, tone_of_voice, cta_tone, trust expression, and Header/Footer handoff","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}},',
+            '    "pages":{"home_page":{"page_goal":"string","theme_alignment_summary":"string explaining how this page obeys theme_design/shared_prompt_context","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}},',
             '    "execution_steps":[{"step":1,"task_key":"string","task_type":"string","status":"pending"}],',
             '    "stage2_task_hints":[{"page":"string","block":"string","task_types":["copywriting","ui_design","frontend_dev"]}]',
             '}',
@@ -1003,6 +1009,8 @@ final class AiSiteExecutionBlueprintService
             '- Output only the structured plan object shown in the schema.',
             '- The plan must contain final-ready content samples, not writing instructions.',
             '- theme_design MUST be a concrete shared theme plan. Reject and rewrite it if it reads like directions about what to design instead of decisions to implement.',
+            '- Every pages.*.theme_alignment_summary MUST explicitly name the shared theme purpose, palette/color use, type/spacing/radius rule, tone/CTA rule, and at least one forbidden style that the page avoids.',
+            '- Every page block must be checked against shared_prompt_context before output; any page-specific color, voice, CTA, layout, or media direction that drifts from theme_design must be rewritten.',
             '- theme_style.selection_reason and palette.selection_reason are REQUIRED customer-readable explanations of why the color system, font family, and voice/tone were selected.',
             '- selection_reason must connect the color/font/tone choices to the user one-line requirement; do not use generic claims like "modern/professional/simple" as the whole reason.',
             '- Never write process wording such as "标题围绕核心价值展开", "正文说明主要亮点", "CTA 保持单一动作", or "字体与排版指定".',
@@ -3965,6 +3973,14 @@ final class AiSiteExecutionBlueprintService
                 'assembly_version' => 1,
                 'generation_method' => 'stage1.page_plan.generate',
             ]);
+            $assembledPagePlan['theme_alignment_summary'] = \trim((string)($assembledPagePlan['theme_alignment_summary'] ?? ''));
+            if ($assembledPagePlan['theme_alignment_summary'] === '') {
+                $assembledPagePlan['theme_alignment_summary'] = $this->buildStageOnePageThemeAlignmentSummary(
+                    (string)$pageType,
+                    $assembledPagePlan,
+                    $sharedPromptContext
+                );
+            }
             $assembledPagePlan['page_context_hash'] = $this->buildStageOnePageContextHash((string)$pageType, $assembledPagePlan);
             $pagePlans[(string)$pageType] = $assembledPagePlan;
         }
@@ -4192,6 +4208,42 @@ final class AiSiteExecutionBlueprintService
         ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)), 0, 12);
 
         return $context;
+    }
+
+    /**
+     * @param array<string, mixed> $pagePlan
+     * @param array<string, mixed> $sharedPromptContext
+     */
+    private function buildStageOnePageThemeAlignmentSummary(string $pageType, array $pagePlan, array $sharedPromptContext): string
+    {
+        $themeDesign = \is_array($sharedPromptContext['theme_design'] ?? null) ? $sharedPromptContext['theme_design'] : [];
+        $themePurpose = \trim((string)($themeDesign['theme_purpose'] ?? 'shared theme purpose'));
+        $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+        $paletteName = \trim((string)($colorScheme['name'] ?? 'shared palette'));
+        $primaryColor = \trim((string)($colorScheme['primary'] ?? 'primary color'));
+        $accentColor = \trim((string)($colorScheme['accent'] ?? 'accent color'));
+        $typographySpacingRadius = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
+        $fontFamily = \trim((string)($typographySpacingRadius['font_family'] ?? 'shared font'));
+        $spacingScale = \trim((string)($typographySpacingRadius['spacing_scale'] ?? 'shared spacing'));
+        $radiusScale = \trim((string)($typographySpacingRadius['radius_scale'] ?? 'shared radius'));
+        $toneOfVoice = \trim((string)($themeDesign['tone_of_voice'] ?? 'shared voice'));
+        $ctaTone = \trim((string)($themeDesign['cta_tone'] ?? 'shared CTA tone'));
+        $forbiddenStyles = \is_array($themeDesign['forbidden_styles'] ?? null)
+            ? \array_values(\array_filter(\array_map(
+                static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+                $themeDesign['forbidden_styles']
+            ), static fn(string $value): bool => $value !== ''))
+            : [];
+        $forbiddenStyle = (string)($forbiddenStyles[0] ?? 'off-theme visual styles');
+        $pageGoal = \trim((string)($pagePlan['page_goal'] ?? $pageType));
+
+        return \implode(' ', [
+            'Page "' . $pageType . '" uses the shared theme purpose "' . $themePurpose . '" to support "' . $pageGoal . '".',
+            'It must keep the "' . $paletteName . '" palette with primary ' . $primaryColor . ' and accent ' . $accentColor . ',',
+            'reuse ' . $fontFamily . ' with ' . $spacingScale . ' spacing and ' . $radiusScale . ' radius,',
+            'write in the shared voice "' . $toneOfVoice . '" with CTA tone "' . $ctaTone . '",',
+            'and avoid "' . $forbiddenStyle . '" so the page stays aligned with shared_prompt_context.',
+        ]);
     }
 
     /**
@@ -4638,6 +4690,7 @@ final class AiSiteExecutionBlueprintService
             }
             $pageBlocks[(string)$pageType] = [
                 'page_goal' => \trim((string)($pagePlan['page_goal'] ?? '')),
+                'theme_alignment_summary' => \trim((string)($pagePlan['theme_alignment_summary'] ?? '')),
                 'why' => \trim((string)($pagePlan['why'] ?? '')),
                 'primary_keywords' => \array_values(\array_filter(\array_map(
                     static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
