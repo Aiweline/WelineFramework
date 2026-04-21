@@ -612,15 +612,28 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                     'text' => '#0f172a',
                 ],
                 'theme_design' => [
-                    'theme_purpose' => 'Build trust quickly and guide visitors toward one clear CTA.',
+                    'theme_purpose' => 'Need home and about pages with strong CTA.',
                     'color_scheme' => [
+                        'name' => 'Ocean Slate',
                         'primary' => '#0f172a',
-                        'secondary' => '#475569',
+                        'secondary' => '#14b8a6',
                         'accent' => '#2563eb',
                         'background' => '#f8fafc',
-                        'text' => '#0f172a',
-                        'button' => '#2563eb',
+                        'body' => '#0f172a',
+                        'button' => '#0f172a',
                     ],
+                    'typography_spacing_radius' => [
+                        'font_family' => 'Sans Serif',
+                        'heading_scale' => 'Hero 40-56px, section titles 28-36px.',
+                        'body_scale' => 'Body 16-18px with readable line-height.',
+                        'spacing_scale' => '8px base spacing with 48-96px section rhythm.',
+                        'radius_scale' => '16-24px cards and rounded CTA buttons.',
+                    ],
+                    'visual_keywords' => ['structured', 'clear', 'conversion-oriented'],
+                    'tone_of_voice' => 'Structured and clear',
+                    'cta_tone' => 'Direct and action-oriented',
+                    'forbidden_styles' => ['Do not use vague modern-only style labels.'],
+                    'selection_reason' => 'References user requirement: Need home and about pages with strong CTA.',
                 ],
                 'navigation_plan' => [
                     'header_items' => [
