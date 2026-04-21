@@ -121,6 +121,7 @@ class Dispatcher
      * 用于快速回收 preconnect/握手失败遗留连接，避免 CLOSE_WAIT 堆积。
      */
     private float $clientHalfClosedIdleTimeoutSec = 5.0;
+    private float $clientHalfClosedRequestIdleTimeoutSec = 30.0;
     
     /**
      * 请求计数
@@ -402,6 +403,12 @@ class Dispatcher
         }
         if (isset($config['client_half_closed_idle_timeout_sec'])) {
             $this->clientHalfClosedIdleTimeoutSec = \max(0.5, (float)$config['client_half_closed_idle_timeout_sec']);
+        }
+        if (isset($config['client_half_closed_request_idle_timeout_sec'])) {
+            $this->clientHalfClosedRequestIdleTimeoutSec = \max(
+                $this->clientHalfClosedIdleTimeoutSec,
+                (float)$config['client_half_closed_request_idle_timeout_sec']
+            );
         }
         if (isset($config['first_response_timeout'])) {
             // <=0 表示关闭该启发式（避免对长处理请求误杀）。
@@ -1641,17 +1648,20 @@ class Dispatcher
                 $closedCount++;
                 continue;
             }
+            if ($hasClientSocket
+                && $clientInputClosed
+                && $inBytes > 0
+                && !$this->passthroughCore->hasBufferedData($this->clientConnections[$connId])
+                && $elapsed > $this->clientHalfClosedRequestIdleTimeoutSec) {
+                $this->logHalfClosedFastCloseIfNeeded($connId, 'request-timeout');
+                $this->closeConnection($connId, 'client_half_closed_after_request_timeout');
+                $closedCount++;
+                continue;
+            }
 
             if ($elapsed > $this->connectionTimeout) {
                 // 客户端上行半关闭后仍可能等待 worker 长处理：
                 // 这里不要简单按 connectionTimeout 直接关闭，改为续约。
-                if ($hasClientSocket && $clientInputClosed) {
-                    if ($inBytes > 0 && $outBytes <= 0) {
-                        $this->connectionLastActivity[$connId] = $nowMicro;
-                        continue;
-                    }
-                }
-                
                 $this->closeConnection($connId, 'connection_timeout');
                 $closedCount++;
             }
@@ -1839,6 +1849,13 @@ class Dispatcher
             $clientIp = '127.0.0.1';
             if (@\socket_getpeername($clientSocket, $addr)) {
                 $clientIp = $addr;
+            }
+            if ($this->shouldLogIngressDiagnostics()) {
+                $this->log(
+                    "[DispatcherIngress] ACCEPT client={$clientIp} connId={$connId} dispatcher_port={$this->port} active="
+                    . \count($this->clientConnections),
+                    'INFO'
+                );
             }
 
             // HTTPS 模式：主端口收到明文 HTTP 时，直接返回 301 到 https://同主机同路径
@@ -2736,7 +2753,7 @@ HTML;
 
     private function logHalfClosedFastCloseIfNeeded(int $connId, string $source): void
     {
-        if (!$this->isDevMode) {
+        if (!$this->shouldLogIngressDiagnostics()) {
             return;
         }
 
@@ -2754,6 +2771,11 @@ HTML;
         }
         $this->halfClosedFastCloseLogThrottle[$clientIp] = $now;
         $this->log("快速回收半关闭空连接: {$clientIp} (connId: {$connId}, source={$source})", 'HEALTH');
+    }
+
+    private function shouldLogIngressDiagnostics(): bool
+    {
+        return $this->isDevMode || (\defined('WLS_FRONTEND_MODE') && WLS_FRONTEND_MODE);
     }
     
     /**
