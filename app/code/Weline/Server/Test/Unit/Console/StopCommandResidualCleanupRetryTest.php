@@ -98,7 +98,7 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
         self::assertNotSame('', trim($output));
     }
 
-    public function testResidualCleanupDefersPrefixFallbackUntilRetry(): void
+    public function testResidualCleanupUsesPrefixFallbackOnEveryAttempt(): void
     {
         $info = new ServerInstanceInfo(
             'default',
@@ -189,10 +189,10 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
             }
         }
 
-        self::assertSame([false, true], $stop->prefixFallbackFlags);
+        self::assertSame([true, true], $stop->prefixFallbackFlags);
     }
 
-    public function testResidualCleanupSkipsPrefixVerificationAfterPidCleanup(): void
+    public function testResidualCleanupKeepsPrefixVerificationAfterPidCleanup(): void
     {
         $info = new ServerInstanceInfo(
             'default',
@@ -275,7 +275,7 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
             }
         }
 
-        self::assertSame([false], $stop->prefixVerificationFlags);
+        self::assertSame([true], $stop->prefixVerificationFlags);
     }
 
     public function testResidualCleanupSkipsPortFallbackWhileKnownPidsStillRun(): void
