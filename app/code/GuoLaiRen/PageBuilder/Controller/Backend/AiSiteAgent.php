@@ -10139,6 +10139,7 @@ SCRIPT;
         if ($siteProfileManual !== []) {
             $payload['site_profile_manual'] = $siteProfileManual;
         }
+        $payload = $this->normalizeTaskPlanStructuredScopePayload($payload);
 
         $saved = $merge ? $this->sessionService->mergeScope($session->getId(), $adminId, $payload) : $this->sessionService->replaceScope($session->getId(), $adminId, $payload);
         if (!$saved) {
@@ -10157,6 +10158,70 @@ SCRIPT;
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
 
         return $this->fetchJson(['success' => true, 'data' => $this->buildWorkspaceState($fresh, $adminId, 80, true)]);
+    }
+
+    /**
+     * Keep manual stage-two field edits structured-first: the frontend sends the edited
+     * task tree in task_plan_structured and mirrors it into virtual_theme_plan.draft.
+     * This normalizer also covers older clients that only send one of those locations.
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function normalizeTaskPlanStructuredScopePayload(array $payload): array
+    {
+        $virtualThemePlan = \is_array($payload['virtual_theme_plan'] ?? null) ? $payload['virtual_theme_plan'] : [];
+        $structured = \is_array($payload['task_plan_structured'] ?? null) ? $payload['task_plan_structured'] : [];
+        $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
+
+        if ($structured === [] && $this->looksLikeStructuredTaskPlanRoot($draft)) {
+            $structured = $draft;
+        }
+        if ($structured === []) {
+            return $payload;
+        }
+
+        $payload['task_plan_structured'] = $structured;
+        $virtualThemePlan['draft'] = $structured;
+        if (!isset($virtualThemePlan['draft_generated_at']) || \trim((string)$virtualThemePlan['draft_generated_at']) === '') {
+            $virtualThemePlan['draft_generated_at'] = \date('Y-m-d H:i:s');
+        }
+        $payload['virtual_theme_plan'] = $virtualThemePlan;
+
+        if (!\array_key_exists('task_plan_directory_tree', $payload)) {
+            $payload['task_plan_directory_tree'] = \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [];
+        }
+
+        $summary = \is_array($payload['task_plan_summary'] ?? null) ? $payload['task_plan_summary'] : [];
+        $summary['signature'] = (string)($summary['signature'] ?? $virtualThemePlan['signature'] ?? $structured['signature'] ?? '');
+        $summary['shared_task_count'] = \count(\is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : []);
+        $summary['page_task_count'] = \array_sum(\array_map(
+            static fn($items): int => \is_array($items) ? \count($items) : 0,
+            \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : []
+        ));
+        if (!isset($summary['generation_source']) || \trim((string)$summary['generation_source']) === '') {
+            $summary['generation_source'] = 'manual_structured_edit';
+        }
+        $payload['task_plan_summary'] = $summary;
+
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $value
+     */
+    private function looksLikeStructuredTaskPlanRoot(array $value): bool
+    {
+        if (\is_array($value['shared_tasks'] ?? null) && $value['shared_tasks'] !== []) {
+            return true;
+        }
+        if (\is_array($value['page_tasks'] ?? null) && $value['page_tasks'] !== []) {
+            return true;
+        }
+        if (\is_array($value['task_script_brief'] ?? null) && $value['task_script_brief'] !== []) {
+            return true;
+        }
+        return false;
     }
 
     private function handleRefinePlanPage(): string
