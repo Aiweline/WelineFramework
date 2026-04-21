@@ -4074,7 +4074,10 @@ final class AiSiteExecutionBlueprintService
                 'assembly_version' => 1,
                 'generation_method' => 'stage1.page_plan.generate',
             ]);
-            if (\trim((string)($assembledPagePlan['theme_alignment_summary'] ?? '')) === '') {
+            if (
+                \trim((string)($assembledPagePlan['theme_alignment_summary'] ?? '')) === ''
+                || !\str_contains((string)($assembledPagePlan['theme_alignment_summary'] ?? ''), 'shared_prompt_context')
+            ) {
                 $assembledPagePlan['theme_alignment_summary'] = $this->buildPageThemeAlignmentSummaryFromSharedContext(
                     (string)($assembledPagePlan['page_label'] ?? $pageType),
                     (string)($assembledPagePlan['page_goal'] ?? ''),
@@ -4118,7 +4121,7 @@ final class AiSiteExecutionBlueprintService
             'visual_tone' => (string)($themeDesign['tone_of_voice'] ?? $sharedPromptContext['content_tone'] ?? ''),
         ];
 
-        return $this->buildPageThemeAlignmentSummary($pageLabel, $pageGoal, $blocks, $palette, $themeStyle);
+        return 'shared_prompt_context: ' . $this->buildPageThemeAlignmentSummary($pageLabel, $pageGoal, $blocks, $palette, $themeStyle);
     }
 
     /**
