@@ -95,8 +95,7 @@ class ProductLayoutSchedule extends Model
             ->where(self::schema_fields_START_TIME, $now, '<=')
             ->order(self::schema_fields_START_TIME, 'ASC')
             ->select()
-            ->fetchIterator()
-            ->getArrayCopy();
+            ->fetchArray();
     }
     public function getExpiredActiveSchedules(): array
     {
@@ -107,8 +106,7 @@ class ProductLayoutSchedule extends Model
             ->where(self::schema_fields_END_TIME, '', '!=')
             ->order(self::schema_fields_END_TIME, 'ASC')
             ->select()
-            ->fetchIterator()
-            ->getArrayCopy();
+            ->fetchArray();
     }
     public function getActiveScheduleByProduct(int $productId, string $layoutType): ?static
     {
