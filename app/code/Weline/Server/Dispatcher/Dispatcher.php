@@ -260,18 +260,18 @@ class Dispatcher
     private bool $maintenanceFallbackActive = false;
 
     /**
-     * SET_WORKER_POOL / ADD_WORKER / 黑名单 Worker 探活统一入队，
+     * SET_WORKER_POOL / ADD_WORKER / Worker health audit unified queue.
      * 由主循环分片 resume Fiber，避免 IPC 回调与健康探活同步阻塞。
      *
-     * @var list<array{type: 'set_pool'|'add_workers'|'probe_blacklisted_workers', ports?: int[]}>
+     * @var list<array{type: 'set_pool'|'add_workers'|'probe_blacklisted_workers'|'audit_worker_health', ports?: int[]}>
      */
     private array $deferredWorkerPoolJobs = [];
 
     private ?\Fiber $deferredWorkerPoolFiber = null;
 
-    /** @var 'set_pool'|'add_workers'|'probe_blacklisted_workers'|null */
+    /** @var 'set_pool'|'add_workers'|'probe_blacklisted_workers'|'audit_worker_health'|null */
     private ?string $deferredWorkerPoolFiberKind = null;
-    /** @var array{type: 'set_pool'|'add_workers'|'probe_blacklisted_workers', ports?: int[], role?: string}|null */
+    /** @var array{type: 'set_pool'|'add_workers'|'probe_blacklisted_workers'|'audit_worker_health', ports?: int[], role?: string}|null */
     private ?array $deferredWorkerPoolFiberJob = null;
     private bool $spinWaitTickInProgress = false;
     private int $maintenanceTakeoverRetryTicks = 3;
@@ -814,7 +814,7 @@ class Dispatcher
     }
 
     /**
-     * @param array{type: 'set_pool'|'add_workers'|'probe_blacklisted_workers', ports?: int[], role?: string} $job
+     * @param array{type: 'set_pool'|'add_workers'|'probe_blacklisted_workers'|'audit_worker_health', ports?: int[], role?: string} $job
      */
     private function createDeferredWorkerPoolFiber(array $job): \Fiber
     {
@@ -851,6 +851,17 @@ class Dispatcher
                     }
 
                     return ['accepted_ports' => $acceptedPorts, 'rejected_parts' => $rejectedParts];
+                } finally {
+                    $this->passthroughCore->setWarmupCooperativeYield(null);
+                }
+            });
+        }
+
+        if ($job['type'] === 'audit_worker_health') {
+            return new \Fiber(function (): array {
+                $this->passthroughCore->setWarmupCooperativeYield($this->createWarmupCooperativeYieldCallback());
+                try {
+                    return $this->passthroughCore->auditWorkerApplicationHealth();
                 } finally {
                     $this->passthroughCore->setWarmupCooperativeYield(null);
                 }
@@ -1068,6 +1079,78 @@ class Dispatcher
                 $this->log("Worker 恢复: 端口 {$ports} 已重新加入负载均衡", 'HEALTH');
             }
         }
+        if ($kind === 'audit_worker_health') {
+            $this->handleWorkerHealthAuditResult(\is_array($payload) ? $payload : []);
+        }
+    }
+
+    /**
+     * @param array{healthy?: int[], failed?: array<int|string, string>} $payload
+     */
+    private function handleWorkerHealthAuditResult(array $payload): void
+    {
+        $failed = \is_array($payload['failed'] ?? null) ? $payload['failed'] : [];
+        if ($failed === []) {
+            return;
+        }
+
+        $failedPorts = [];
+        $failedReasons = [];
+        foreach ($failed as $port => $reason) {
+            $p = (int)$port;
+            if ($p <= 0) {
+                continue;
+            }
+
+            $affectedConnIds = $this->passthroughCore->removeWorkerPort($p);
+            foreach ($affectedConnIds as $connId) {
+                $this->closeConnection((int)$connId, 'worker_health_audit_failed');
+            }
+            $failedPorts[] = $p;
+            $failedReasons[$p] = (string)$reason;
+            $this->log(
+                "Worker health audit failed: removed port {$p}, closed_connections=" . \count($affectedConnIds)
+                . ', reason=' . (string)$reason,
+                'ERROR'
+            );
+        }
+
+        if ($failedPorts !== []) {
+            $this->reportUnhealthyWorkersToMaster($failedPorts, $failedReasons);
+        }
+    }
+
+    /**
+     * @param int[] $failedPorts
+     * @param array<int, string> $failedReasons
+     */
+    private function reportUnhealthyWorkersToMaster(array $failedPorts, array $failedReasons): void
+    {
+        if ($this->ipcClient === null || !$this->ipcClient->isConnected()) {
+            return;
+        }
+
+        $businessPool = \array_values(\array_map('intval', $this->passthroughCore->getWorkerPorts()));
+        $maintenanceCandidates = \array_values(\array_map('intval', $this->passthroughCore->getMaintenanceWorkerPorts()));
+        \sort($businessPool, SORT_NUMERIC);
+        \sort($maintenanceCandidates, SORT_NUMERIC);
+
+        $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
+        $this->ipcClient->send(ControlMessage::dispatcherAlert(
+            $this->instanceName,
+            'worker_health_probe_failed',
+            [
+                'dispatcher_port' => $this->port,
+                'business_pool' => $businessPool,
+                'maintenance_candidates' => $maintenanceCandidates,
+                'maintenance_port' => $this->passthroughCore->getMaintenancePort(),
+                'healthy' => (int)($healthSummary['healthy'] ?? 0),
+                'total' => (int)($healthSummary['total'] ?? 0),
+                'failed_ports' => \array_values(\array_unique(\array_map('intval', $failedPorts))),
+                'failed_reasons' => $failedReasons,
+            ],
+            ControlMessage::ROLE_WORKER
+        ));
     }
 
     /**
@@ -1495,7 +1578,7 @@ class Dispatcher
         }
 
         $this->lastWorkerProbeTime = $now;
-        $this->deferredWorkerPoolJobs[] = ['type' => 'probe_blacklisted_workers'];
+        $this->deferredWorkerPoolJobs[] = ['type' => 'audit_worker_health'];
     }
     
     /**
@@ -1787,8 +1870,14 @@ class Dispatcher
             if ($this->passthroughCore->handleNewConnection($clientSocket, $clientIp)) {
                 $this->registerAcceptedClientConnection($clientSocket, $clientIp, $connId);
             } else {
-                if ($this->passthroughCore->lastNewConnectionEndedInAllWorkersDown()) {
+                $allWorkersUnavailable = $this->passthroughCore->lastNewConnectionEndedInAllWorkersDown();
+                if ($allWorkersUnavailable) {
                     $this->reportAllWorkersUnavailableToMaster();
+                    if (!$this->tryRespondWithStartupProtection($clientSocket, true)) {
+                        @\socket_close($clientSocket);
+                    }
+                    $accepted++;
+                    continue;
                 }
                 // 业务 Worker 与维护 Worker 均不可用时，立即返回 503（WLS 启动中），不再等待路由重试。
                 if ($this->shouldReturnStartup503Immediately()) {
@@ -1854,10 +1943,10 @@ class Dispatcher
                     }
                 }
                 if ($this->shouldServeMaintenanceFallback()) {
-                    if (!$this->tryRespondWithStartupProtection($clientSocket)) {
+                    if (!$this->tryRespondWithStartupProtection($clientSocket, $allWorkersUnavailable)) {
                         @\socket_close($clientSocket);
                     }
-                } elseif (!$this->tryRespondServiceUnavailable($clientSocket)) {
+                } elseif (!$this->tryRespondServiceUnavailable($clientSocket, $allWorkersUnavailable)) {
                     // HTTPS/TLS 原始流无法返回明文 503，只能关闭连接
                     @\socket_close($clientSocket);
                 } else {
@@ -2116,7 +2205,7 @@ skipLegacyImmediateStartup503:
         return false;
     }
 
-    private function buildFriendlyStartupMaintenancePage(): string
+    private function buildFriendlyStartupMaintenancePage(bool $includeAllWorkersUnavailableDevOverlay = false): string
     {
         $body = <<<'HTML'
 <!DOCTYPE html>
@@ -2210,6 +2299,10 @@ skipLegacyImmediateStartup503:
 </html>
 HTML;
 
+        if ($includeAllWorkersUnavailableDevOverlay) {
+            $body = \str_replace('</body>', $this->buildAllWorkersUnavailableDevOverlay() . "\n</body>", $body);
+        }
+
         return "HTTP/1.1 503 Service Unavailable\r\n"
             . "Content-Type: text/html; charset=UTF-8\r\n"
             . "Cache-Control: no-store, no-cache, must-revalidate\r\n"
@@ -2219,12 +2312,31 @@ HTML;
             . $body;
     }
 
+    private function buildAllWorkersUnavailableDevOverlay(): string
+    {
+        return <<<'HTML'
+    <aside class="wls-dev-alert" role="status" aria-live="polite" style="position:fixed;right:18px;bottom:18px;z-index:2147483647;max-width:min(420px,calc(100vw - 36px));padding:14px 16px;border:1px solid #fca5a5;border-left:6px solid #dc2626;border-radius:10px;background:#fee2e2;color:#7f1d1d;box-shadow:0 18px 50px rgba(127,29,29,0.22);text-align:left;font-size:14px;line-height:1.55;">
+        <strong style="display:block;margin-bottom:4px;color:#991b1b;font-size:15px;">DEV: 当前所有 Worker 不可用</strong>
+        <span>Dispatcher 已进入维护页响应。请检查 Worker 自检、IPC 入池、端口占用和 Master 复活队列。</span>
+    </aside>
+HTML;
+    }
+
+    private function resolveFallbackMaintenancePage(bool $allWorkersUnavailable = false): string
+    {
+        if (!$allWorkersUnavailable || !$this->isDevMode) {
+            return $this->fallbackMaintenancePage;
+        }
+
+        return $this->buildFriendlyStartupMaintenancePage(true);
+    }
+
     /**
      * 启动保护响应：在可控窗口内明确返回 503，避免客户端表现为随机断连。
      *
      * @param \Socket|resource $clientSocket
      */
-    private function tryRespondWithStartupProtection($clientSocket): bool
+    private function tryRespondWithStartupProtection($clientSocket, bool $allWorkersUnavailable = false): bool
     {
         $peek = '';
         $peekLen = @\socket_recv($clientSocket, $peek, 8, \MSG_PEEK);
@@ -2236,7 +2348,7 @@ HTML;
             return false;
         }
 
-        @\socket_write($clientSocket, $this->fallbackMaintenancePage);
+        @\socket_write($clientSocket, $this->resolveFallbackMaintenancePage($allWorkersUnavailable));
         @\socket_close($clientSocket);
         return true;
     }
@@ -2246,7 +2358,7 @@ HTML;
      *
      * @param \Socket|resource $clientSocket
      */
-    private function tryRespondServiceUnavailable($clientSocket): bool
+    private function tryRespondServiceUnavailable($clientSocket, bool $allWorkersUnavailable = false): bool
     {
         $peek = '';
         $peekLen = @\socket_recv($clientSocket, $peek, 8, \MSG_PEEK);
@@ -2258,7 +2370,7 @@ HTML;
             return false;
         }
 
-        @\socket_write($clientSocket, $this->fallbackMaintenancePage);
+        @\socket_write($clientSocket, $this->resolveFallbackMaintenancePage($allWorkersUnavailable));
         @\socket_close($clientSocket);
         return true;
     }

@@ -24,7 +24,8 @@ final class PassthroughCoreHealthAccountingTest extends TestCase
         $reader = function (string $propertyName): mixed {
             return $this->{$propertyName};
         };
-        $bound = \Closure::bind($reader, $target, $target);
+        $scope = $target instanceof PassthroughCore ? PassthroughCore::class : $target;
+        $bound = \Closure::bind($reader, $target, $scope);
         self::assertInstanceOf(\Closure::class, $bound);
 
         return $bound($property);
@@ -35,7 +36,8 @@ final class PassthroughCoreHealthAccountingTest extends TestCase
         $writer = function (string $propertyName, mixed $propertyValue): void {
             $this->{$propertyName} = $propertyValue;
         };
-        $bound = \Closure::bind($writer, $target, $target);
+        $scope = $target instanceof PassthroughCore ? PassthroughCore::class : $target;
+        $bound = \Closure::bind($writer, $target, $scope);
         self::assertInstanceOf(\Closure::class, $bound);
 
         $bound($property, $value);
@@ -103,5 +105,46 @@ final class PassthroughCoreHealthAccountingTest extends TestCase
 
         self::assertSame(1, $workerHealthAfterSecondCall[19091]['failures']);
         self::assertSame(2, $workerHealthAfterSecondCall[19091]['total_failures']);
+    }
+
+    public function testAuditWorkerApplicationHealthReportsFailedPoolPorts(): void
+    {
+        $core = new class('127.0.0.1', 19981, 2) extends PassthroughCore {
+            protected function requestWorkerHealth(int $port, float $connectTimeout, float $responseTimeout): array
+            {
+                unset($connectTimeout, $responseTimeout);
+
+                if ($port === 19092) {
+                    return ['success' => false, 'error' => 'HTTP/1.1 503 Service Unavailable'];
+                }
+
+                return ['success' => true, 'error' => '', 'status_line' => 'HTTP/1.1 200 OK', 'elapsed' => 0.01];
+            }
+        };
+        $this->writePrivateProperty($core, 'workerPorts', [19091, 19092]);
+        $this->writePrivateProperty($core, 'workerCount', 2);
+        $this->writePrivateProperty($core, 'workerHealth', [
+            19091 => [
+                'failures' => 1,
+                'blacklisted_at' => 0.0,
+                'last_success' => 0.0,
+                'total_failures' => 1,
+            ],
+            19092 => [
+                'failures' => 2,
+                'blacklisted_at' => 0.0,
+                'last_success' => 0.0,
+                'total_failures' => 2,
+            ],
+        ]);
+
+        $result = $core->auditWorkerApplicationHealth();
+        $workerHealth = $this->readPrivateProperty($core, 'workerHealth');
+
+        self::assertSame([19091], $result['healthy']);
+        self::assertSame([19092 => 'HTTP/1.1 503 Service Unavailable'], $result['failed']);
+        self::assertSame(0, $workerHealth[19091]['failures']);
+        self::assertSame(3, $workerHealth[19092]['failures']);
+        self::assertGreaterThan(0.0, $workerHealth[19092]['blacklisted_at']);
     }
 }
