@@ -671,6 +671,29 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         ]);
     }
 
+    public function testBuildPlanArtifactsByAiStreamRequiresPageThemeAlignmentSummary(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildAiPlanResponseWithoutThemeAlignmentSummary())
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('theme_alignment_summary for "home_page"');
+
+        $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+            'default_locale' => 'en_US',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+    }
+
     public function testBuildPlanArtifactsByAiStreamRejectsPromptLikeHeroInsteadOfSilentFallback(): void
     {
         $service = new AiSiteExecutionBlueprintService(
@@ -848,6 +871,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                 'pages' => [
                     'home_page' => [
                         'page_goal' => 'Explain value and drive conversion.',
+                        'theme_alignment_summary' => 'Home page blocks use the Ocean Slate palette, trustworthy action tone, direct CTA rhythm, and Header-to-Footer trust handoff from the shared theme plan.',
                         'primary_keywords' => ['home keyword'],
                         'secondary_keywords' => ['cta keyword'],
                         'blocks' => [
@@ -874,6 +898,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                     ],
                     'about_page' => [
                         'page_goal' => 'Build trust.',
+                        'theme_alignment_summary' => 'About page blocks keep the Ocean Slate trust palette, brand-proof voice, shared CTA language, and Footer reassurance aligned with the theme plan.',
                         'primary_keywords' => ['about keyword'],
                         'secondary_keywords' => ['trust keyword'],
                         'blocks' => [
@@ -941,6 +966,18 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             $decoded['plan_json']['theme_design'] = [];
         }
         $decoded['plan_json']['theme_design']['selection_reason'] = $selectionReason;
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    private function buildAiPlanResponseWithoutThemeAlignmentSummary(): string
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        if (!\is_array($decoded)) {
+            return '{}';
+        }
+
+        unset($decoded['plan_json']['pages']['home_page']['theme_alignment_summary']);
 
         return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }
