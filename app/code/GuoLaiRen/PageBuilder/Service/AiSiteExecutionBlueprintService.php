@@ -3790,9 +3790,12 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
      * @param array<string, mixed> $themeContextSnapshot
      * @param array<string, mixed> $sharedComponents
      * @param array<string, mixed> $sharedPromptContext
+     * @param array<string, mixed> $pagePlans
      * @param list<string> $pageTypes
      * @return array<string, mixed>
      */
@@ -3839,7 +3842,13 @@ final class AiSiteExecutionBlueprintService
                 'shared_prompt_context',
             ],
         ];
-        $pageFanoutJobs = $this->buildStageOnePageFanoutQueueJobs($scope, $websiteProfile, $pagePlans, $sharedPromptContext, $planLocale);
+        $pageFanoutJobs = $this->buildStageOnePageFanoutQueueJobs(
+            $scope,
+            $websiteProfile,
+            $pagePlans,
+            $sharedPromptContext,
+            $planLocale
+        );
         $jobs = [
             $job['job_key'] => $job,
         ];
