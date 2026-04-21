@@ -238,6 +238,9 @@ class AnthropicProvider implements ProviderInterface
             } else {
                 @set_time_limit(0);
             }
+        } else {
+            // SSE 模式下也需要移除执行时间限制，避免 PHP 默认 180 秒超时
+            @set_time_limit(0);
         }
 
         try {
@@ -714,6 +717,11 @@ class AnthropicProvider implements ProviderInterface
                 if ($elapsedTime >= ($timeLimit - 2)) {
                     return -1;
                 }
+            }
+
+            // 检查 SSE 连接是否已断开，断开时主动退出脚本
+            if (SseContext::isSseEnabled() && (connection_aborted() || connection_status() !== CONNECTION_NORMAL)) {
+                return -1;
             }
 
             if ($onHeartbeat !== null) {
