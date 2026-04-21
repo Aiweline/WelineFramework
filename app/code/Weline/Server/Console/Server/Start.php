@@ -406,7 +406,7 @@ class Start extends CommandAbstract
                     $this->printer->warning(__('检测到服务器已运行，-f 直接切换（不等待）...'));
                 }
                 $this->printer->warning(__('注意：-f 强制切换属于停机型更新，不会自动等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。'));
-                $this->stopExistingServer($instanceName, $port, $count, true);
+                $this->stopExistingServer($instanceName, $port, $count, !$frontend);
                 // -r -f 是停机型切换：新实例启动后默认恢复到业务流量态，避免残留 system.maintenance 让 WLS 继续 sticky 维护。
                 $maintenanceResetAfterForceSwitch = true;
                 // Windows 下端口释放需要更长时间（TIME_WAIT 状态）
