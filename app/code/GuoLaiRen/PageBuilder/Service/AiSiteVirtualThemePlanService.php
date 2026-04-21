@@ -3022,18 +3022,17 @@ final class AiSiteVirtualThemePlanService
         $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
         $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
 
-        $metaFields = $this->normalizeBlockTaskMetaFields(
-            \is_array($existing['meta_fields'] ?? null)
+        $metaFieldSource = \is_array($taskScript['field_content_requirements'] ?? null)
+            ? $taskScript['field_content_requirements']
+            : (\is_array($existing['meta_fields'] ?? null)
                 ? $existing['meta_fields']
-                : (\is_array($taskScript['field_content_requirements'] ?? null)
-                    ? $taskScript['field_content_requirements']
-                    : (\is_array($planContext['field_plan'] ?? null) ? $planContext['field_plan'] : []))
-        );
+                : (\is_array($planContext['field_plan'] ?? null) ? $planContext['field_plan'] : []));
+        $metaFields = $this->normalizeBlockTaskMetaFields($metaFieldSource);
 
         $taskGoal = $this->firstNonEmptyString([
-            $existing['task_goal'] ?? null,
             $planContext['block_goal'] ?? null,
             $taskScript['story_goal'] ?? null,
+            $existing['task_goal'] ?? null,
             $task['label'] ?? null,
             $task['task_key'] ?? null,
         ]);
@@ -3043,13 +3042,13 @@ final class AiSiteVirtualThemePlanService
 
         $contentPlan = \is_array($existing['content_plan'] ?? null) ? $existing['content_plan'] : [];
         $contentPlan['story_goal'] = $this->firstNonEmptyString([
-            $contentPlan['story_goal'] ?? null,
             $taskScript['story_goal'] ?? null,
             $taskGoal,
+            $contentPlan['story_goal'] ?? null,
         ]);
         $contentPlan['content_fill_rule'] = $this->firstNonEmptyString([
-            $contentPlan['content_fill_rule'] ?? null,
             $taskScript['content_fill_rule'] ?? null,
+            $contentPlan['content_fill_rule'] ?? null,
             $planContext['content_brief']['goal'] ?? null,
             'Fill the block fields with concrete copy and CTA content from the confirmed stage-1 plan.',
         ]);
@@ -3077,10 +3076,10 @@ final class AiSiteVirtualThemePlanService
         ]);
 
         $planningReason = $this->firstNonEmptyString([
-            $existing['planning_reason'] ?? null,
             $planContext['block_why'] ?? null,
             $planContext['implementation_detail'] ?? null,
             $planContext['block_goal'] ?? null,
+            $existing['planning_reason'] ?? null,
             'This block task is derived from the confirmed stage-1 block tree.',
         ]);
 
@@ -3091,7 +3090,7 @@ final class AiSiteVirtualThemePlanService
             'content_plan' => $contentPlan,
             'style_plan' => $stylePlan,
             'planning_reason' => $planningReason,
-            'sort_order' => (int)($existing['sort_order'] ?? $task['sort_order'] ?? 0),
+            'sort_order' => (int)($task['sort_order'] ?? $existing['sort_order'] ?? 0),
         ];
 
         return $task;
