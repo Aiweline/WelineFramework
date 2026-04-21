@@ -8013,12 +8013,6 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * @param list<array<string, mixed>> $tasks
-     * @param list<string> $orderedBlockKeys
-     * @return list<array<string, mixed>>
-     */
-
-    /**
      * @return list<array<string, mixed>>
      */
     private function buildStageOnePageBlockTasks(string $pageType, array $pagePlan): array
@@ -8079,6 +8073,11 @@ final class AiSiteExecutionBlueprintService
             || \trim((string)($task['block']['block_key'] ?? $task['block_key'] ?? $task['section_code'] ?? '')) !== '';
     }
 
+    /**
+     * @param list<array<string, mixed>> $tasks
+     * @param list<string> $orderedBlockKeys
+     * @return list<array<string, mixed>>
+     */
     private function rebuildStageOneTaskList(array $tasks, string $pageType, array $orderedBlockKeys): array
     {
         $orderMap = [];
