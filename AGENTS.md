@@ -71,6 +71,7 @@ Keep runtime marker contracts stable and non-destructive when overlays are appli
 - Reuse existing utils and patterns before introducing new abstractions.
 - No new dependencies without explicit request.
 - Keep diffs small, reviewable, and reversible.
+- Encoding rule: all repository content and all agent-written files must be UTF-8. Do not create or rewrite code, docs, config, scripts, or generated task artifacts using GBK, CP936, ANSI, UTF-16, or any other non-UTF-8 encoding. Preserve valid UTF-8 bytes when editing existing files; if encoding is uncertain, inspect bytes first and stop before writing.
 - Run lint, typecheck, tests, and static analysis after changes.
 - Final reports must include changed files, simplifications made, and remaining risks.
 

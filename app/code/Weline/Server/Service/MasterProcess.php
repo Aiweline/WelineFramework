@@ -238,6 +238,8 @@ class MasterProcess
         }
         Runtime::resetModeCache();
 
+        $this->applyProcessTitle();
+
         // 强制刷新日志缓冲区，确保后台模式下日志能写入
         $this->logger->flush(true);
 
@@ -433,6 +435,15 @@ class MasterProcess
         
         Processer::setPid($masterName, $masterPid);
         $this->log(__('Master PID %{1} 已注册到索引', [$masterPid]));
+    }
+
+    private function applyProcessTitle(): void
+    {
+        if (!\function_exists('cli_set_process_title')) {
+            return;
+        }
+
+        @\cli_set_process_title(self::getMasterProcessCliTitle($this->instanceName, $this->frontend));
     }
 
     /**
@@ -885,6 +896,20 @@ class MasterProcess
     public static function getMasterProcessName(string $instanceName): string
     {
         return self::buildScopedProcessName(self::MASTER_PROCESS_NAME_PREFIX, $instanceName);
+    }
+
+    public static function getMasterProcessDisplayName(string $instanceName, bool $frontend = false): string
+    {
+        $name = self::getMasterProcessName($instanceName);
+
+        return $frontend ? $name . '-frontend' : $name;
+    }
+
+    public static function getMasterProcessCliTitle(string $instanceName, bool $frontend = false): string
+    {
+        $title = 'weline-wls-master --name=' . self::getMasterProcessName($instanceName);
+
+        return $frontend ? $title . ' --frontend' : $title;
     }
 
     /**
