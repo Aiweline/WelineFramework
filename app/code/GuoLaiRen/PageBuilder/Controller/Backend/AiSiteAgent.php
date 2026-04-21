@@ -2655,7 +2655,6 @@ SCRIPT;
                 $scope,
                 $blockConfig
             );
-            $blocks[$index] = $updatedBlock;
             break;
         }
 
@@ -2664,9 +2663,13 @@ SCRIPT;
         }
 
         $lastGeneratedAt = \date('Y-m-d H:i:s');
-        $virtualPage['blocks'] = \array_values($blocks);
-        $virtualPage['last_generated_at'] = $lastGeneratedAt;
-        $virtualPages[$pageType] = $virtualPage;
+        $virtualPages = $this->replaceCurrentPageBlockInVirtualPages(
+            $virtualPages,
+            $pageType,
+            $blockId,
+            $updatedBlock,
+            $lastGeneratedAt
+        );
         $scope['virtual_pages_by_type'] = $virtualPages;
         $scope['build_summary'] = \array_replace(
             \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
