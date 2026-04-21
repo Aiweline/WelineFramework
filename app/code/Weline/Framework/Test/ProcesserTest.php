@@ -255,17 +255,15 @@ class ProcesserTest extends TestCore
         ]);
 
         self::assertIsString($script);
-        self::assertStringContainsString("WindowStyle = 'Normal'", $script);
-        self::assertStringContainsString("FilePath = 'cmd.exe'", $script);
-        self::assertStringContainsString("ArgumentList = @('/d','/c','title weline-worker-visible & call \"C:\\temp\\weline-worker-visible.cmd\"')", $script);
+        self::assertStringContainsString('start "weline-worker-visible" /D "C:\repo" cmd.exe /d /c call "C:\temp\weline-worker-visible.cmd"', $script);
         self::assertStringContainsString('weline-worker-visible.cmd', $script);
-        self::assertStringContainsString("FilePath = 'C:\\php\\php.exe'", $script);
-        self::assertStringContainsString("ArgumentList = @('worker.php','--name=weline-worker-hidden')", $script);
+        self::assertStringContainsString('start "" /B /D "C:\repo" "C:\php\php.exe" "worker.php" "--name=weline-worker-hidden"', $script);
         self::assertSame(0, \substr_count($script, 'RedirectStandardOutput'));
         self::assertSame(0, \substr_count($script, 'RedirectStandardError'));
-        self::assertSame(1, \substr_count($script, 'PassThru = $true'));
-        self::assertStringContainsString('$results.Add("worker-foreground`t" + [string]$p.Id)', $script);
-        self::assertStringContainsString('$results.Add("worker-hidden`t0")', $script);
+        self::assertSame(0, \substr_count($script, 'Start-Job'));
+        self::assertSame(0, \substr_count($script, 'Start-Process'));
+        self::assertStringContainsString("echo worker-foreground\t0", $script);
+        self::assertStringContainsString("echo worker-hidden\t0", $script);
     }
 
     public function testBuildWindowsBatchCreateScriptRecordsForegroundLauncherPid(): void
@@ -287,10 +285,9 @@ class ProcesserTest extends TestCore
         ]);
 
         self::assertIsString($script);
-        self::assertStringContainsString('PassThru = $true', $script);
-        self::assertStringContainsString('$p = Start-Process @startArgs', $script);
-        self::assertStringContainsString('$results.Add("worker-foreground`t" + [string]$p.Id)', $script);
-        self::assertStringContainsString("ArgumentList = @('/d','/c','title weline-worker-visible & call \"C:\\temp\\weline-worker-visible.cmd\"')", $script);
+        self::assertStringNotContainsString('Start-Process', $script);
+        self::assertStringContainsString('start "weline-worker-visible" /D "C:\repo" cmd.exe /d /c call "C:\temp\weline-worker-visible.cmd"', $script);
+        self::assertStringContainsString("echo worker-foreground\t0", $script);
     }
 
     public function testBuildWindowsBatchCreateScriptUsesExplicitArgumentArrayForBackgroundProcess(): void
@@ -313,7 +310,7 @@ class ProcesserTest extends TestCore
 
         self::assertIsString($script);
         self::assertStringContainsString(
-            "ArgumentList = @('worker.php','--name=weline-worker-hidden','--launch-id=launch-visible')",
+            'start "" /B /D "C:\repo" "C:\php\php.exe" "worker.php" "--name=weline-worker-hidden" "--launch-id=launch-visible"',
             $script
         );
     }
@@ -338,11 +335,9 @@ class ProcesserTest extends TestCore
         ]);
 
         self::assertIsString($script);
-        self::assertStringContainsString('PassThru = $true', $script);
-        self::assertStringContainsString('RedirectStandardOutput', $script);
-        self::assertStringContainsString('RedirectStandardError', $script);
-        self::assertStringContainsString('$p = Start-Process @startArgs', $script);
-        self::assertStringContainsString('$results.Add("worker-blocking`t" + [string]$p.Id)', $script);
+        self::assertStringNotContainsString('Start-Process', $script);
+        self::assertStringContainsString('start "" /B /D "C:\repo" "C:\php\php.exe" "worker.php" "--name=weline-worker-blocking" "--launch-id=launch-blocking"', $script);
+        self::assertStringContainsString("echo worker-blocking\t0", $script);
     }
 
     public function testTokenizeCommandLineArgumentsPreservesQuotedWindowsScriptPathBackslashes(): void
