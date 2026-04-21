@@ -4264,21 +4264,19 @@ SCRIPT;
         });
 
         try {
-            $result = match ($operation) {
-                'build' => $this->runBuildOperation($sse, $session, $adminId),
-                'regenerate_page' => $this->runRegeneratePageOperation($sse, $session, $adminId, (string)($activeOperation['page_type'] ?? '')),
-                'publish' => $this->runPublishOperation($sse, $session, $adminId),
-                default => throw new \RuntimeException((string)__('未知操作')),
-            };
+            $result = $this->runClaimedOperationSseBranch($sse, $session, $adminId, $operation, $activeOperation);
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $statePayload = \is_array($result['state'] ?? null)
+                ? $result['state']
+                : $this->buildWorkspaceEventStatePayload(
+                    $this->buildWorkspaceState($fresh, $adminId, 80, true)
+                );
             $sse->complete([
                 'success' => true,
                 'message' => (string)($result['message'] ?? __('操作执行完成')),
                 'operation' => $operation,
                 'data' => $result,
-                'state' => $this->buildWorkspaceEventStatePayload(
-                    $this->buildWorkspaceState($fresh, $adminId, 80, true)
-                ),
+                'state' => $statePayload,
             ]);
         } catch (\Throwable $throwable) {
             $failedStatus = $operation === 'publish' ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED : AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
@@ -4295,6 +4293,57 @@ SCRIPT;
             RequestContext::set(RequestContext::SSE_WRITER_KEY, true);
             RequestContext::remove(self::REQUEST_CTX_AI_CHUNK_FORWARDER);
         }
+    }
+
+    /**
+     * @param array<string, mixed> $activeOperation
+     *
+     * @return array<string, mixed>
+     */
+    private function runClaimedOperationSseBranch(
+        SseWriter $sse,
+        AiSiteAgentSession $session,
+        int $adminId,
+        string $operation,
+        array $activeOperation
+    ): array {
+        return match ($operation) {
+            'plan' => $this->runPlanOperationSseBranch($sse, $session, $adminId),
+            'build' => $this->runBuildOperation($sse, $session, $adminId),
+            'regenerate_page' => $this->runRegeneratePageOperation($sse, $session, $adminId, (string)($activeOperation['page_type'] ?? '')),
+            'publish' => $this->runPublishOperation($sse, $session, $adminId),
+            default => throw new \RuntimeException((string)__('未知操作')),
+        };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function runPlanOperationSseBranch(SseWriter $sse, AiSiteAgentSession $session, int $adminId): array
+    {
+        $this->runPlanOperation($sse, $session, $adminId);
+
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $state = $this->buildWorkspaceEventStatePayload(
+            $this->buildWorkspaceState($fresh, $adminId, 80, true)
+        );
+        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $status = \trim((string)($activeOperation['status'] ?? ''));
+        $message = \trim((string)($activeOperation['message'] ?? ''));
+
+        if ($status === 'error') {
+            throw new \RuntimeException($message !== '' ? $message : (string)__('阶段一方案生成失败'));
+        }
+
+        return [
+            'message' => $message !== '' ? $message : (string)__('阶段一方案生成完成'),
+            'state' => $state,
+            'active_operation' => $activeOperation,
+            'plan_markdown' => (string)($scope['plan_markdown'] ?? ''),
+            'plan_json' => \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
+            'execution_blueprint' => \is_array($scope['execution_blueprint_draft'] ?? null) ? $scope['execution_blueprint_draft'] : [],
+        ];
     }
 
     /**
