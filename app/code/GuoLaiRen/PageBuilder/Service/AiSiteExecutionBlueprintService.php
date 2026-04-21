@@ -1294,12 +1294,12 @@ final class AiSiteExecutionBlueprintService
             \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : []
         );
         $sharedPromptContext = $this->buildStageOneSharedPromptContext($themeContextSnapshot, $sharedComponents, $pageTypes, $planLocale);
-        $themeDesignQueueJob = $this->buildStageOneThemeDesignQueueJob($scope, $websiteProfile, $themeContextSnapshot, $planLocale);
-        $stageOneQueueJobs = $this->upsertStageOneQueueJob(
-            \is_array($executionBlueprint['queue_jobs'] ?? null)
-                ? $executionBlueprint['queue_jobs']
-                : (\is_array($structured['queue_jobs'] ?? null) ? $structured['queue_jobs'] : []),
-            $themeDesignQueueJob
+        $stageOneQueue = $this->buildStageOneHeaderFooterQueueEnvelope(
+            $themeContextSnapshot,
+            $sharedComponents,
+            $sharedPromptContext,
+            $pageTypes,
+            $planLocale
         );
         $structured['theme_context_snapshot'] = $themeContextSnapshot;
         $structured['shared_components'] = $sharedComponents;
@@ -1315,7 +1315,8 @@ final class AiSiteExecutionBlueprintService
         $planJson['theme_design'] = $themeDesign;
         $executionBlueprint['theme_context_snapshot'] = $themeContextSnapshot;
         $executionBlueprint['shared_prompt_context'] = $sharedPromptContext;
-        $executionBlueprint['queue_jobs'] = $stageOneQueueJobs;
+        $structured['stage1_queue'] = $stageOneQueue;
+        $executionBlueprint['stage1_queue'] = $stageOneQueue;
         $pagePlans = $this->buildStageOnePagePlans(
             \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [],
             $sharedPromptContext
