@@ -4429,18 +4429,6 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * @param array<mixed> $values
-     * @return list<string>
-     */
-    private function normalizeStringList(array $values): array
-    {
-        return \array_values(\array_filter(\array_map(
-            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-            $values
-        ), static fn(string $value): bool => $value !== ''));
-    }
-
-    /**
      * @param array<string, mixed> $block
      * @return array<string, mixed>
      */
