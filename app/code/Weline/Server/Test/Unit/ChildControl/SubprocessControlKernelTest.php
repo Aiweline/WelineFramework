@@ -42,6 +42,60 @@ final class SubprocessControlKernelTest extends TestCase
         }
     }
 
+    public function testResolveControlPortWaitsForFreshInstanceFileWhenCurrentInfoIsStale(): void
+    {
+        if (!\function_exists('proc_open')) {
+            self::markTestSkipped('proc_open is required for async instance-file refresh');
+        }
+
+        $instanceName = 'ut-kernel-port-refresh-' . \bin2hex(\random_bytes(4));
+        $instanceDir = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances';
+        $instanceFile = $instanceDir . DIRECTORY_SEPARATOR . $instanceName . '.json';
+        if (!\is_dir($instanceDir)) {
+            @\mkdir($instanceDir, 0777, true);
+        }
+
+        \file_put_contents($instanceFile, \json_encode([
+            'control_port' => 19001,
+            'updated_at' => \time() - 120,
+        ]));
+
+        $writer = \tempnam(\sys_get_temp_dir(), 'wls-control-port-refresh-');
+        self::assertNotFalse($writer);
+        $writer .= '.php';
+        \file_put_contents($writer, <<<'PHP'
+<?php
+$path = $argv[1];
+$port = (int) $argv[2];
+usleep(200000);
+file_put_contents($path, json_encode([
+    'control_port' => $port,
+    'updated_at' => time(),
+], JSON_UNESCAPED_SLASHES));
+PHP);
+
+        $cmd = \escapeshellarg(PHP_BINARY) . ' ' . \escapeshellarg($writer)
+            . ' ' . \escapeshellarg($instanceFile)
+            . ' ' . \escapeshellarg('19092');
+        $nullDevice = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
+        $proc = \proc_open($cmd, [
+            0 => ['file', $nullDevice, 'r'],
+            1 => ['file', $nullDevice, 'w'],
+            2 => ['file', $nullDevice, 'w'],
+        ], $pipes);
+        self::assertIsResource($proc);
+
+        try {
+            self::assertSame(19092, SubprocessControlKernel::resolveControlPort($instanceName, 0, 2));
+        } finally {
+            if (\is_resource($proc)) {
+                @\proc_close($proc);
+            }
+            @\unlink($writer);
+            @\unlink($instanceFile);
+        }
+    }
+
     public function testMasterOrphanGuardShortCircuit(): void
     {
         $guard = new MasterOrphanGuard();
@@ -151,8 +205,14 @@ final class SubprocessControlKernelTest extends TestCase
         };
 
         $kernel = new SubprocessControlKernel($identity, $handler, 'UT-Kernel', false, 'ut-instance');
-
-        self::assertFalse($kernel->connectAndRegister($port));
+        \putenv('WLS_STARTUP_CONNECT_RETRIES=1');
+        \putenv('WLS_STARTUP_CONNECT_RETRY_DELAY_MS=50');
+        try {
+            self::assertFalse($kernel->connectAndRegister($port));
+        } finally {
+            \putenv('WLS_STARTUP_CONNECT_RETRIES');
+            \putenv('WLS_STARTUP_CONNECT_RETRY_DELAY_MS');
+        }
         self::assertNotNull($kernel->getClient(), 'kernel should keep client state for later reconnect');
 
         $server = \stream_socket_server("tcp://127.0.0.1:{$port}", $errno, $errstr);

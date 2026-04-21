@@ -95,11 +95,11 @@ require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 
 // IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
 // 优先使用 --control-port= 参数，否则从实例文件自动发现
-// resolveControlPort 会轮询等待 Master 写入实例信息（最多 6 秒）
+// resolveControlPort 会轮询等待 Master 写入实例信息（最多 30 秒）
 if (!isset($controlPort)) {
     $controlPort = 0;
 }
-$controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort, 6);
+$controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort, 30);
 // Master PID（用于孤儿检测）
 if (!isset($masterPid) || $masterPid <= 0) {
     $masterPid = 0;
