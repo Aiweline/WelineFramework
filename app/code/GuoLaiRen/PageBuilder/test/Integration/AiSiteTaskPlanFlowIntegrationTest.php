@@ -8,6 +8,76 @@ use GuoLaiRen\PageBuilder\Model\Page;
 
 final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchIntegrationHarness
 {
+    public function testManualTaskPlanFieldEditPersistsStructuredDraft(): void
+    {
+        $createPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-create-session',
+            'POST',
+            'postCreateSession'
+        );
+        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
+        $publicId = (string)($createPayload['public_id'] ?? '');
+        self::assertNotSame('', $publicId);
+
+        $structured = [
+            'signature' => 'manual-field-edit-test',
+            'shared_tasks' => [],
+            'page_tasks' => [
+                Page::TYPE_HOME => [
+                    [
+                        'task_key' => 'page:home:hero',
+                        'label' => 'Hero copy',
+                        'task_script' => [
+                            'scene' => 'home hero',
+                            'field_content_requirements' => [
+                                [
+                                    'field' => 'hero_title',
+                                    'sample' => 'Edited hero H1 from inline field editor',
+                                    'implementation_note' => 'Persist as structured task data, not markdown only.',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $mergePayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-merge-scope',
+            'POST',
+            'postMergeScope',
+            [],
+            [
+                'public_id' => $publicId,
+                'autosave' => '1',
+                'scope_patch' => [
+                    'virtual_theme_plan' => [
+                        'draft_markdown' => 'Manual field edit draft',
+                    ],
+                    'task_plan_markdown' => 'Manual field edit draft',
+                    'task_plan_structured' => $structured,
+                ],
+            ]
+        );
+        self::assertTrue((bool)($mergePayload['success'] ?? false), \json_encode($mergePayload, \JSON_UNESCAPED_UNICODE));
+
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+        $scope = $session->getScopeArray();
+
+        self::assertSame(
+            'Edited hero H1 from inline field editor',
+            (string)($scope['task_plan_structured']['page_tasks'][Page::TYPE_HOME][0]['task_script']['field_content_requirements'][0]['sample'] ?? '')
+        );
+        self::assertSame(
+            'Edited hero H1 from inline field editor',
+            (string)($scope['virtual_theme_plan']['draft']['page_tasks'][Page::TYPE_HOME][0]['task_script']['field_content_requirements'][0]['sample'] ?? '')
+        );
+        self::assertSame(0, (int)($scope['task_plan_summary']['shared_task_count'] ?? -1));
+        self::assertSame(1, (int)($scope['task_plan_summary']['page_task_count'] ?? 0));
+        self::assertSame('manual_structured_edit', (string)($scope['task_plan_summary']['generation_source'] ?? ''));
+    }
+
     public function testTaskPlanMustBeConfirmedBeforeBuildCanStart(): void
     {
         $createPayload = $this->invokeJsonAction(
