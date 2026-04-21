@@ -5720,6 +5720,364 @@ final class AiSiteVirtualThemePlanService
     }
 
     /**
+     * Mutate the stage-2 draft task plan without breaking the structured aliases used by build/progress views.
+     *
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $taskPatch
+     * @return array{
+     *     markdown:string,
+     *     structured:array<string, mixed>,
+     *     virtual_theme_plan:array<string, mixed>,
+     *     mutation_summary:array<string, mixed>
+     * }
+     */
+    public function mutateDraftTaskPlanTask(
+        array $scope,
+        string $action,
+        string $bucket,
+        string $pageType,
+        string $taskKey,
+        array $taskPatch = [],
+        string $instruction = ''
+    ): array {
+        $normalizedAction = \strtolower(\trim($action));
+        if (!\in_array($normalizedAction, ['refine', 'rebuild', 'delete', 'create'], true)) {
+            throw new \RuntimeException('Unsupported stage-2 task mutation action: ' . $action);
+        }
+
+        $normalizedBucket = \strtolower(\trim($bucket)) === 'shared' ? 'shared' : 'page';
+        $pageType = \trim($pageType);
+        $taskKey = \trim($taskKey);
+        $instruction = \trim($instruction);
+        if ($normalizedAction !== 'create' && $taskKey === '') {
+            throw new \RuntimeException('task_key is required for stage-2 task mutation.');
+        }
+
+        $structured = \is_array($scope['task_plan_structured'] ?? null)
+            ? $scope['task_plan_structured']
+            : (\is_array($scope['virtual_theme_plan']['draft'] ?? null) ? $scope['virtual_theme_plan']['draft'] : []);
+        if ($structured === []) {
+            throw new \RuntimeException('Stage-2 task plan draft is empty.');
+        }
+
+        $virtualThemePlan = \is_array($scope['virtual_theme_plan']['draft'] ?? null)
+            ? $scope['virtual_theme_plan']['draft']
+            : $structured;
+        $sharedTasks = \array_values(\array_filter(
+            \is_array($structured['shared_tasks'] ?? null)
+                ? $structured['shared_tasks']
+                : (\is_array($virtualThemePlan['shared_tasks'] ?? null) ? $virtualThemePlan['shared_tasks'] : []),
+            static fn($task): bool => \is_array($task)
+        ));
+        $pageTasks = \is_array($structured['page_tasks'] ?? null)
+            ? $structured['page_tasks']
+            : (\is_array($virtualThemePlan['page_tasks'] ?? null) ? $virtualThemePlan['page_tasks'] : []);
+
+        if ($normalizedBucket === 'page' && $pageType === '') {
+            $pageType = $this->resolveStageTwoTaskMutationPageType($pageTasks, $taskKey, $taskPatch);
+        }
+        if ($normalizedBucket === 'page' && $pageType === '') {
+            throw new \RuntimeException('page_type is required for stage-2 page task mutation.');
+        }
+
+        $operationId = 'task_plan_' . \substr(\sha1($normalizedAction . '|' . $normalizedBucket . '|' . $pageType . '|' . $taskKey . '|' . \microtime(true)), 0, 12);
+        $updatedAt = \date('Y-m-d H:i:s');
+        $targetTaskKey = $taskKey;
+        $mutationChanged = false;
+
+        if ($normalizedBucket === 'shared') {
+            [$sharedTasks, $targetTaskKey, $mutationChanged] = $this->mutateStageTwoTaskList(
+                $sharedTasks,
+                $normalizedAction,
+                $taskKey,
+                $taskPatch,
+                $instruction,
+                'shared',
+                $operationId,
+                $updatedAt
+            );
+        } else {
+            $pageTaskList = \array_values(\array_filter(
+                \is_array($pageTasks[$pageType] ?? null) ? $pageTasks[$pageType] : [],
+                static fn($task): bool => \is_array($task)
+            ));
+            [$pageTaskList, $targetTaskKey, $mutationChanged] = $this->mutateStageTwoTaskList(
+                $pageTaskList,
+                $normalizedAction,
+                $taskKey,
+                $taskPatch,
+                $instruction,
+                $pageType,
+                $operationId,
+                $updatedAt
+            );
+            $pageTasks[$pageType] = $pageTaskList;
+        }
+
+        if (!$mutationChanged) {
+            throw new \RuntimeException('Stage-2 task was not changed.');
+        }
+
+        $pageTypes = $this->resolveDraftTaskPlanPageTypes($scope, $structured, $pageTasks);
+        if ($normalizedBucket === 'page' && $pageType !== '' && !\in_array($pageType, $pageTypes, true)) {
+            $pageTypes[] = $pageType;
+        }
+
+        $sharedTasks = $this->normalizeStageTwoTaskSortOrderList($sharedTasks, 10);
+        $orderedPageTasks = [];
+        $pageBase = 100;
+        foreach ($pageTypes as $resolvedPageType) {
+            $tasks = \is_array($pageTasks[$resolvedPageType] ?? null) ? $pageTasks[$resolvedPageType] : [];
+            if ($tasks === []) {
+                continue;
+            }
+            $orderedPageTasks[$resolvedPageType] = $this->normalizeStageTwoTaskSortOrderList($tasks, $pageBase);
+            $pageBase += 100;
+        }
+        foreach ($pageTasks as $resolvedPageType => $tasks) {
+            if (isset($orderedPageTasks[$resolvedPageType]) || !\is_array($tasks) || $tasks === []) {
+                continue;
+            }
+            $orderedPageTasks[(string)$resolvedPageType] = $this->normalizeStageTwoTaskSortOrderList($tasks, $pageBase);
+            $pageBase += 100;
+        }
+
+        $previousVersion = \max(
+            (int)($structured['task_plan_version'] ?? 0),
+            (int)($virtualThemePlan['task_plan_version'] ?? 0)
+        );
+        $operationLog = \is_array($structured['task_plan_operation_log'] ?? null)
+            ? $structured['task_plan_operation_log']
+            : (\is_array($virtualThemePlan['task_plan_operation_log'] ?? null) ? $virtualThemePlan['task_plan_operation_log'] : []);
+        $operationEntry = [
+            'operation_id' => $operationId,
+            'action' => $normalizedAction,
+            'bucket' => $normalizedBucket,
+            'page_type' => $normalizedBucket === 'shared' ? '' : $pageType,
+            'task_key' => $targetTaskKey,
+            'instruction' => $instruction,
+            'updated_at' => $updatedAt,
+            'version' => $previousVersion + 1,
+        ];
+        $operationLog[] = $operationEntry;
+
+        $structured = $this->rebuildDraftTaskPlanStructure($structured, $sharedTasks, $orderedPageTasks, $pageTypes);
+        $structured['task_plan_version'] = $previousVersion + 1;
+        $structured['task_plan_operation_log'] = \array_values(\array_filter($operationLog, static fn($entry): bool => \is_array($entry)));
+        $structured['last_task_plan_operation'] = $operationEntry;
+        $structured['signature'] = $this->buildSignature($structured);
+
+        $virtualThemePlan = \array_replace_recursive($virtualThemePlan, [
+            'shared_tasks' => $structured['shared_tasks'],
+            'page_tasks' => $structured['page_tasks'],
+            'shared_block_tasks' => $structured['shared_block_tasks'] ?? [],
+            'page_block_tasks' => $structured['page_block_tasks'] ?? [],
+            'task_tree' => $structured['task_tree'],
+            'virtual_theme_build_tree' => $structured['virtual_theme_build_tree'] ?? [],
+            'execution_blueprint' => $structured['execution_blueprint'],
+            'execution_order' => $structured['execution_order'],
+            'task_directory_tree' => $structured['task_directory_tree'] ?? [],
+            'task_plan_version' => $structured['task_plan_version'],
+            'task_plan_operation_log' => $structured['task_plan_operation_log'],
+            'last_task_plan_operation' => $operationEntry,
+        ]);
+        $virtualThemePlan['signature'] = (string)$structured['signature'];
+
+        $markdown = $this->buildMarkdown($pageTypes, $structured['shared_tasks'], $structured['page_tasks'], $structured);
+
+        return [
+            'markdown' => $markdown,
+            'structured' => $structured,
+            'virtual_theme_plan' => $virtualThemePlan,
+            'mutation_summary' => $operationEntry,
+        ];
+    }
+
+    /**
+     * @param array<string, list<array<string, mixed>>> $pageTasks
+     * @param array<string, mixed> $taskPatch
+     */
+    private function resolveStageTwoTaskMutationPageType(array $pageTasks, string $taskKey, array $taskPatch): string
+    {
+        $patchedPageType = \trim((string)($taskPatch['page_type'] ?? ''));
+        if ($patchedPageType !== '') {
+            return $patchedPageType;
+        }
+        foreach ($pageTasks as $pageType => $tasks) {
+            foreach (\is_array($tasks) ? $tasks : [] as $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                if ((string)($task['task_key'] ?? '') === $taskKey) {
+                    return (string)$pageType;
+                }
+            }
+        }
+        if (\preg_match('/^page:([^:]+):/i', $taskKey, $matches) === 1) {
+            return (string)$matches[1];
+        }
+        return '';
+    }
+
+    /**
+     * @param list<array<string, mixed>> $tasks
+     * @param array<string, mixed> $taskPatch
+     * @return array{0:list<array<string, mixed>>,1:string,2:bool}
+     */
+    private function mutateStageTwoTaskList(
+        array $tasks,
+        string $action,
+        string $taskKey,
+        array $taskPatch,
+        string $instruction,
+        string $scopeKey,
+        string $operationId,
+        string $updatedAt
+    ): array {
+        if ($action === 'create') {
+            $task = $this->buildStageTwoTaskPlanMutationTask($scopeKey, $taskPatch, $instruction, $operationId);
+            $tasks[] = $task;
+            return [\array_values($tasks), (string)($task['task_key'] ?? ''), true];
+        }
+
+        foreach ($tasks as $index => $task) {
+            if (!\is_array($task) || (string)($task['task_key'] ?? '') !== $taskKey) {
+                continue;
+            }
+            if ($action === 'delete') {
+                unset($tasks[$index]);
+                return [\array_values($tasks), $taskKey, true];
+            }
+            $tasks[$index] = $this->applyStageTwoTaskMutationPatch($task, $taskPatch, $action, $instruction, $operationId, $updatedAt);
+            return [\array_values($tasks), $taskKey, true];
+        }
+
+        throw new \RuntimeException('Stage-2 task not found: ' . $taskKey);
+    }
+
+    /**
+     * @param array<string, mixed> $taskPatch
+     * @return array<string, mixed>
+     */
+    private function buildStageTwoTaskPlanMutationTask(string $scopeKey, array $taskPatch, string $instruction, string $operationId): array
+    {
+        $isShared = $scopeKey === 'shared';
+        $pageType = $isShared ? '' : $scopeKey;
+        $label = \trim((string)($taskPatch['label'] ?? $taskPatch['title'] ?? $instruction ?? ''));
+        if ($label === '') {
+            $label = $isShared ? 'Custom shared task' : 'Custom page task';
+        }
+        $sectionCode = \trim((string)($taskPatch['section_code'] ?? $taskPatch['block_key'] ?? ''));
+        if ($sectionCode === '') {
+            $sectionCode = 'custom/' . $this->slugifyTaskPlanMutationPart($label !== '' ? $label : $operationId);
+        }
+        $taskKey = \trim((string)($taskPatch['task_key'] ?? ''));
+        if ($taskKey === '') {
+            $taskKey = $isShared ? ('shared:' . $sectionCode) : ('page:' . $pageType . ':' . $sectionCode);
+        }
+
+        $sortOrder = (int)($taskPatch['sort_order'] ?? 0);
+        $blockTask = \is_array($taskPatch['block_task'] ?? null) ? $taskPatch['block_task'] : [];
+        if ($blockTask === []) {
+            $blockTask = [
+                'schema_version' => 'stage2-block-task-v1',
+                'task_goal' => $instruction !== '' ? $instruction : $label,
+                'meta_fields' => [],
+                'content_plan' => [
+                    'story_goal' => $instruction !== '' ? $instruction : $label,
+                    'content_fill_rule' => 'Use the confirmed stage-2 task requirements for this block.',
+                ],
+                'style_plan' => [],
+                'planning_reason' => 'Manual stage-2 task created from the task-plan workbench.',
+            ];
+        }
+        if ($sortOrder > 0) {
+            $blockTask['sort_order'] = $sortOrder;
+        }
+
+        $task = \array_replace_recursive([
+            'task_key' => $taskKey,
+            'group_key' => $isShared ? 'shared' : $pageType,
+            'page_type' => $pageType,
+            'section_code' => $sectionCode,
+            'label' => $label,
+            'sort_order' => $sortOrder,
+            'status' => 'todo',
+            'plan_context' => [
+                'page_goal' => $isShared ? 'Shared site task' : ('Task for ' . $pageType),
+                'block_goal' => $instruction !== '' ? $instruction : $label,
+            ],
+            'task_script' => [
+                'story_goal' => $instruction !== '' ? $instruction : $label,
+                'content_fill_rule' => 'Follow the manually created stage-2 task requirements.',
+                'stage3_directive' => 'Implement this task from the structured stage-2 task plan.',
+            ],
+            'implementation_contract' => [
+                'acceptance' => ['Structured stage-2 task exists and is synchronized into build artifacts.'],
+            ],
+            'block_task' => $blockTask,
+            'operation_log' => [],
+        ], $taskPatch);
+        $task['task_key'] = $taskKey;
+        $task['group_key'] = $isShared ? 'shared' : $pageType;
+        $task['page_type'] = $pageType;
+        $task['section_code'] = $sectionCode;
+        $task['operation_log'] = \is_array($task['operation_log'] ?? null) ? $task['operation_log'] : [];
+        $task['operation_log'][] = [
+            'operation_id' => $operationId,
+            'action' => 'create',
+            'instruction' => $instruction,
+            'updated_at' => \date('Y-m-d H:i:s'),
+        ];
+
+        return $task;
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @param array<string, mixed> $taskPatch
+     * @return array<string, mixed>
+     */
+    private function applyStageTwoTaskMutationPatch(array $task, array $taskPatch, string $action, string $instruction, string $operationId, string $updatedAt): array
+    {
+        unset($taskPatch['task_key'], $taskPatch['group_key'], $taskPatch['page_type']);
+        $updated = \array_replace_recursive($task, $taskPatch);
+        if ($action === 'rebuild') {
+            $updated['status'] = (string)($taskPatch['status'] ?? 'todo');
+            $updated['rebuild_requested'] = 1;
+        }
+        if ($instruction !== '') {
+            $updated['last_instruction'] = $instruction;
+            $updated['plan_context'] = \array_replace(
+                \is_array($updated['plan_context'] ?? null) ? $updated['plan_context'] : [],
+                ['block_goal' => $instruction]
+            );
+            if (\is_array($updated['block_task'] ?? null)) {
+                $updated['block_task']['task_goal'] = $instruction;
+            }
+        }
+        $updated['updated_at'] = $updatedAt;
+        $updated['last_operation'] = $action;
+        $updated['operation_log'] = \is_array($updated['operation_log'] ?? null) ? $updated['operation_log'] : [];
+        $updated['operation_log'][] = [
+            'operation_id' => $operationId,
+            'action' => $action,
+            'instruction' => $instruction,
+            'updated_at' => $updatedAt,
+        ];
+
+        return $updated;
+    }
+
+    private function slugifyTaskPlanMutationPart(string $value): string
+    {
+        $slug = \strtolower(\trim($value));
+        $slug = (string)\preg_replace('/[^a-z0-9]+/i', '-', $slug);
+        $slug = \trim($slug, '-');
+        return $slug !== '' ? $slug : ('task-' . \substr(\sha1($value), 0, 8));
+    }
+
+    /**
      * @param array<string, mixed> $scope
      * @param list<string> $orderedTaskKeys
      * @return array{
