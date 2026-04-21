@@ -6050,6 +6050,70 @@ final class AiSiteExecutionBlueprintService
         return \array_values(\array_unique($fields));
     }
 
+    /**
+     * @param mixed $items
+     * @return list<string>
+     */
+    private function normalizeStringList(mixed $items): array
+    {
+        if (!\is_array($items)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($items as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $text = \trim((string)$item);
+            if ($text === '') {
+                continue;
+            }
+            $normalized[] = $text;
+        }
+
+        return \array_values(\array_unique($normalized));
+    }
+
+    /**
+     * @param array<string, mixed> $componentPlan
+     * @param array<string, mixed> $realtimeContent
+     * @return list<string>
+     */
+    private function deriveStageOneEditableFields(array $componentPlan, array $realtimeContent): array
+    {
+        $fields = [];
+        foreach (['editable_slots', 'data_slots'] as $slotKey) {
+            $fields = \array_merge($fields, $this->normalizeStringList($realtimeContent[$slotKey] ?? []));
+        }
+        if (\is_array($componentPlan['field_plan'] ?? null)) {
+            $fields = \array_merge($fields, $this->extractEditableFieldsFromFieldPlan($componentPlan['field_plan']));
+        }
+
+        if ($fields === []) {
+            $component = \trim((string)($componentPlan['component'] ?? ''));
+            $fields = $component === 'header'
+                ? ['brand_name', 'navigation_items', 'primary_cta']
+                : ($component === 'footer' ? ['footer_links', 'policy_links', 'contact_fields'] : ['headline', 'supporting_copy', 'primary_cta']);
+        }
+
+        return \array_values(\array_unique($fields));
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function buildStageOneBlockContextHash(string $pageKey, array $payload): string
+    {
+        $hashSource = $payload;
+        unset($hashSource['context_hash']);
+
+        return \sha1((string)\json_encode([
+            'page_key' => $pageKey,
+            'block' => $hashSource,
+        ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+    }
+
     private function resolveFieldSample(
         string $field,
         string $template,
