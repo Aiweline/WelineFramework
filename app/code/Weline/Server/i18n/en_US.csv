@@ -1248,6 +1248,8 @@ DDoS攻击,DDoS攻击
 小时,hour(s)
 天,day(s)
 "Status loaded","Status loaded"
+"启用 Dispatcher 维护分流","启用 Dispatcher 维护分流"
+"禁用 Dispatcher 维护分流","禁用 Dispatcher 维护分流"
 "WLS 实例 %{1} 未运行：%{2}","WLS 实例 %{1} 未运行：%{2}"
 "未发现运行中的 WLS 实例，已跳过 %{1}","未发现运行中的 WLS 实例，已跳过 %{1}"
 "已向 WLS 实例 %{1} 发送 %{2}","已向 WLS 实例 %{1} 发送 %{2}"
