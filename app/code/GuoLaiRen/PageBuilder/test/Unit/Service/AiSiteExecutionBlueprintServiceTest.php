@@ -408,6 +408,27 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertNotEmpty($artifacts['plan_json']['pages']['home_page']['blocks'] ?? []);
     }
 
+    public function testBuildPlanArtifactsByAiStreamRejectsIncompleteThemeDesignColorScheme(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildIncompleteThemeColorSchemeAiPlanResponse())
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('theme_design.color_scheme.button must not be empty');
+
+        $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+    }
+
     public function testBuildPlanArtifactsByAiStreamReportsMissingPlanJsonOnlyOnce(): void
     {
         $service = new AiSiteExecutionBlueprintService(
@@ -563,28 +584,15 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                     'text' => '#0f172a',
                 ],
                 'theme_design' => [
-                    'theme_purpose' => 'Need home and about pages with strong CTA.',
+                    'theme_purpose' => 'Build trust quickly and guide visitors toward one clear CTA.',
                     'color_scheme' => [
-                        'name' => 'Ocean Slate',
                         'primary' => '#0f172a',
-                        'secondary' => '#14b8a6',
+                        'secondary' => '#475569',
                         'accent' => '#2563eb',
                         'background' => '#f8fafc',
-                        'body' => '#0f172a',
-                        'button' => '#0f172a',
+                        'text' => '#0f172a',
+                        'button' => '#2563eb',
                     ],
-                    'typography_spacing_radius' => [
-                        'font_family' => 'Sans Serif',
-                        'heading_scale' => 'Hero 40-56px, section titles 28-36px.',
-                        'body_scale' => 'Body 16-18px with readable line-height.',
-                        'spacing_scale' => '8px base spacing with 48-96px section rhythm.',
-                        'radius_scale' => '16-24px cards and rounded CTA buttons.',
-                    ],
-                    'visual_keywords' => ['structured', 'clear', 'conversion-oriented'],
-                    'tone_of_voice' => 'Structured and clear',
-                    'cta_tone' => 'Direct and action-oriented',
-                    'forbidden_styles' => ['Do not use vague modern-only style labels.'],
-                    'selection_reason' => 'References user requirement: Need home and about pages with strong CTA.',
                 ],
                 'navigation_plan' => [
                     'header_items' => [
@@ -692,6 +700,18 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             ),
             \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
         ) ?: '{}';
+    }
+
+    private function buildIncompleteThemeColorSchemeAiPlanResponse(): string
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        if (!\is_array($decoded)) {
+            return '{}';
+        }
+
+        $decoded['plan_json']['theme_design']['color_scheme']['button'] = '';
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }
 
     private function buildPromptLikeAiPlanResponse(): string
