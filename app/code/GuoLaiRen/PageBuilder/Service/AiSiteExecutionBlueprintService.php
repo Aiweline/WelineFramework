@@ -152,18 +152,6 @@ final class AiSiteExecutionBlueprintService
             $pageTypes,
             $planLocale
         );
-        $pagePlans = $this->buildStageOnePagePlans($pages, $sharedPromptContext);
-        foreach ($pagePlans as $pageType => $pagePlan) {
-            if (!\is_array($pagePlan)) {
-                continue;
-            }
-            foreach (\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [] as $block) {
-                if (!\is_array($block)) {
-                    continue;
-                }
-                $tasks[] = $this->buildPageTask((string)$pageType, $pagePlan, $block);
-            }
-        }
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
         foreach ($pagePlans as $pageType => $pagePlan) {
             if (!\is_array($pagePlan)) {
@@ -1356,14 +1344,18 @@ final class AiSiteExecutionBlueprintService
             \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [],
             $sharedPromptContext
         );
-        foreach ($pagePlans as $pageType => $pagePlan) {
-            if (!\is_array($pagePlan) || !\is_array($planJson['pages'][$pageType] ?? null)) {
-                continue;
-            }
-            if (\trim((string)($planJson['pages'][$pageType]['theme_alignment_summary'] ?? '')) === '') {
-                $planJson['pages'][$pageType]['theme_alignment_summary'] = (string)($pagePlan['theme_alignment_summary'] ?? '');
-            }
-        }
+        $stageOneQueue = $this->buildStageOneHeaderFooterQueueEnvelope(
+            $scope,
+            $websiteProfile,
+            $themeContextSnapshot,
+            $sharedComponents,
+            $sharedPromptContext,
+            $pagePlans,
+            $pageTypes,
+            $planLocale
+        );
+        $structured['stage1_queue'] = $stageOneQueue;
+        $executionBlueprint['stage1_queue'] = $stageOneQueue;
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
 
         $tasks = [];
@@ -4371,6 +4363,7 @@ final class AiSiteExecutionBlueprintService
             'page_plans' => $pagePlans,
             'page_tabs_state' => $this->buildStageOnePageTabsState($pagePlans),
             'interaction_state' => $this->buildStageOneInteractionState($pagePlans, $blockIndex),
+            'queue_jobs' => $stageOneQueueJobs,
             'progress' => $this->buildStageOneProgressSummary(
                 \is_array($structured['shared_plan'] ?? null) ? $structured['shared_plan'] : [],
                 $pagePlans,
