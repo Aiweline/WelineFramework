@@ -143,7 +143,7 @@ final class StopCommandBootstrapCleanupResidualTest extends TestCase
                 return true;
             }
 
-            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info): void
+            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): void
             {
                 unset($info);
                 $this->calls[] = 'residual:' . $name;
