@@ -523,6 +523,13 @@
         ) {
             window.__pbPhase1TaskProgress.syncFromSsePayload(operation, payload || {}, eventKind);
         }
+        if (
+            (String(operation || '').toLowerCase() === 'task_plan' || String(operation || '').toLowerCase() === 'build')
+            && window.__pbPhase2TaskProgress
+            && typeof window.__pbPhase2TaskProgress.syncFromSsePayload === 'function'
+        ) {
+            window.__pbPhase2TaskProgress.syncFromSsePayload(operation, payload || {}, eventKind);
+        }
         var binding = resolveQueuedStageUiBinding(operation);
         if (!binding) {
             return;
@@ -1914,6 +1921,11 @@
             return false;
         }
         var payload = pickOperationResponsePayload(data) || {};
+        if (data.data && typeof data.data === 'object') {
+            hydrateWorkspaceFromState(data.data);
+        } else if (payload.data && typeof payload.data === 'object') {
+            hydrateWorkspaceFromState(payload.data);
+        }
         var normalized = normalizeOperationStreamStartPayload(payload, fallbackOperation);
         var executionToken = normalized.executionToken;
         var operation = normalized.operation;
