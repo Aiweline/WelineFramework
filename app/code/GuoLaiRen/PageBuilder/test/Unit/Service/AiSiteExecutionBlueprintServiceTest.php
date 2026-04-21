@@ -47,6 +47,12 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             (string)($artifacts['structured']['page_plans']['home_page']['theme_alignment_summary'] ?? '')
         );
         self::assertNotEmpty($artifacts['plan_json']['pages']['home_page']['blocks'] ?? []);
+        self::assertNotSame('', (string)($artifacts['plan_json']['pages']['home_page']['theme_alignment_summary'] ?? ''));
+        self::assertSame(
+            (string)($artifacts['plan_json']['pages']['home_page']['theme_alignment_summary'] ?? ''),
+            (string)($artifacts['structured']['page_plans']['home_page']['theme_alignment_summary'] ?? '')
+        );
+        self::assertStringContainsString('主题遵守说明', (string)($artifacts['markdown'] ?? ''));
         $firstBlock = $artifacts['plan_json']['pages']['home_page']['blocks'][0] ?? [];
         self::assertArrayHasKey('content', $firstBlock);
         self::assertArrayHasKey('why', $firstBlock);
@@ -507,6 +513,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('Output only the structured plan object shown in the schema.', $capturedPrompt);
         self::assertStringContainsString('"selection_reason":"why this font family and voice/tone fit the user requirement"', $capturedPrompt);
         self::assertStringContainsString('"selection_reason":"why this color system fits the user requirement"', $capturedPrompt);
+        self::assertStringContainsString('"theme_alignment_summary":"how this page and every block obey theme_design color_scheme, tone_of_voice, cta_tone, trust expression, and Header/Footer handoff"', $capturedPrompt);
         self::assertStringContainsString('theme_style.selection_reason and palette.selection_reason are REQUIRED', $capturedPrompt);
         self::assertStringContainsString('why the color system, font family, and voice/tone were selected', $capturedPrompt);
         self::assertStringContainsString('selection_reason must connect the color/font/tone choices to the user one-line requirement', $capturedPrompt);
@@ -514,6 +521,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('Never write process wording such as "标题围绕核心价值展开"', $capturedPrompt);
         self::assertStringContainsString('field_plan.sample must be direct content', $capturedPrompt);
         self::assertStringContainsString('field_plan.implementation_note must be a customer-readable implementation note', $capturedPrompt);
+        self::assertStringContainsString('Each pages.<page>.theme_alignment_summary is REQUIRED', $capturedPrompt);
         self::assertStringContainsString('Selected page coverage hints (must all be represented in the final plan):', $capturedPrompt);
         self::assertStringContainsString('- home_page: must include page goal, theme_alignment_summary, conversion rhythm, block implementation detail, field plan, execution script, SEO structure, CTA usage, responsive guidance.', $capturedPrompt);
         self::assertStringContainsString('baseline_execution_blueprint:', $capturedPrompt);
