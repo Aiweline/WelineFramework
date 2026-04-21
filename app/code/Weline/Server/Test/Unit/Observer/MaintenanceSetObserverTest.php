@@ -23,8 +23,14 @@ final class MaintenanceSetObserverTest extends TestCase
         $gateway = new class extends IpcControlGateway {
             public array $calls = [];
 
-            public function setMaintenanceMode(string $instanceName, bool $enabled, float $timeout = 6.0): array
+            public function setMaintenanceMode(
+                string $instanceName,
+                bool $enabled,
+                float $timeout = 6.0,
+                bool $dispatcherOnly = false
+            ): array
             {
+                unset($dispatcherOnly);
                 $this->calls[] = [$instanceName, $enabled, $timeout];
 
                 return ['success' => true, 'message' => 'queued', 'data' => ['async' => true]];
