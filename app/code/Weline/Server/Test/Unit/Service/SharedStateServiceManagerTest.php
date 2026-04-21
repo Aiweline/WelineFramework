@@ -539,7 +539,7 @@ final class SharedStateServiceManagerTest extends TestCase
         self::assertSame(1, $manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]['consumer_count'] ?? null);
     }
 
-    public function testReleaseInstanceConsumersStopsSharedServiceWhenLastConsumerLeaves(): void
+    public function testReleaseInstanceConsumersSendsSharedServiceShutdownRequestWhenLastConsumerLeaves(): void
     {
         $env = self::sessionPortEnv();
         $registry = new class extends SharedStateServiceRegistry {
@@ -580,7 +580,7 @@ final class SharedStateServiceManagerTest extends TestCase
                     'pid' => 4321,
                 ],
             ];
-            public array $stopCalls = [];
+            public array $shutdownCalls = [];
 
             public function __construct(
                 private readonly SharedStateServiceRegistry $registry,
@@ -609,37 +609,34 @@ final class SharedStateServiceManagerTest extends TestCase
                 $this->runtimeFiles[$role] = $runtime;
             }
 
-            protected function removeRuntimeFile(string $role): void
-            {
-                unset($this->runtimeFiles[$role]);
-            }
-
             protected function loadEnvConfig(): array
             {
                 return $this->env;
             }
 
-            protected function isPortOccupied(int $port): bool
+            protected function sendSharedServiceConsumerShutdown(string $role, string $consumerCode, array $runtime): bool
             {
-                unset($port);
+                if ($runtime !== []) {
+                    $this->shutdownCalls[] = [$role, $consumerCode, $runtime['pid'] ?? 0];
+                }
 
-                return false;
+                return true;
             }
 
             protected function forceStopReusedService(array $definition, array $runtime): bool
             {
-                $this->stopCalls[] = [$definition['role'], $runtime['pid'] ?? 0];
-                $this->removeRuntimeFile((string) $definition['role']);
-
-                return true;
+                unset($definition, $runtime);
+                \PHPUnit\Framework\Assert::fail('releaseInstanceConsumers must not locally force-stop shared services');
             }
         };
 
         $manager->releaseInstanceConsumers('consumer-a');
 
-        self::assertSame([[ControlMessage::ROLE_SESSION_SERVER, 4321]], $manager->stopCalls);
+        self::assertSame([[ControlMessage::ROLE_SESSION_SERVER, 'consumer-a', 4321]], $manager->shutdownCalls);
         self::assertSame([], $registry->getConsumers(ControlMessage::ROLE_SESSION_SERVER));
-        self::assertSame([], $manager->runtimeFiles);
+        self::assertSame(4321, $manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]['pid'] ?? null);
+        self::assertSame(0, $manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]['consumer_count'] ?? null);
+        self::assertTrue((bool) ($manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]['registered'] ?? false));
     }
 
     public function testReleaseInstanceConsumersKeepsSharedServiceWhenAnotherConsumerStillUsesIt(): void
@@ -684,7 +681,7 @@ final class SharedStateServiceManagerTest extends TestCase
                     'pid' => 4321,
                 ],
             ];
-            public int $stopCalls = 0;
+            public array $shutdownCalls = [];
 
             public function __construct(
                 private readonly SharedStateServiceRegistry $registry,
@@ -713,35 +710,30 @@ final class SharedStateServiceManagerTest extends TestCase
                 $this->runtimeFiles[$role] = $runtime;
             }
 
-            protected function removeRuntimeFile(string $role): void
-            {
-                unset($this->runtimeFiles[$role]);
-            }
-
             protected function loadEnvConfig(): array
             {
                 return $this->env;
             }
 
-            protected function isPortOccupied(int $port): bool
+            protected function sendSharedServiceConsumerShutdown(string $role, string $consumerCode, array $runtime): bool
             {
-                unset($port);
+                if ($runtime !== []) {
+                    $this->shutdownCalls[] = [$role, $consumerCode, $runtime['pid'] ?? 0];
+                }
 
-                return false;
+                return true;
             }
 
             protected function forceStopReusedService(array $definition, array $runtime): bool
             {
                 unset($definition, $runtime);
-                $this->stopCalls++;
-
-                return true;
+                \PHPUnit\Framework\Assert::fail('releaseInstanceConsumers must not locally force-stop shared services');
             }
         };
 
         $manager->releaseInstanceConsumers('consumer-a');
 
-        self::assertSame(0, $manager->stopCalls);
+        self::assertSame([[ControlMessage::ROLE_SESSION_SERVER, 'consumer-a', 4321]], $manager->shutdownCalls);
         self::assertSame(['consumer-b'], \array_keys($registry->getConsumers(ControlMessage::ROLE_SESSION_SERVER)));
         self::assertSame(1, $manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]['consumer_count'] ?? null);
         self::assertTrue((bool) ($manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]['registered'] ?? false));
