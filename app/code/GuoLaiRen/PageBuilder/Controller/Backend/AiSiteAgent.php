@@ -6318,7 +6318,8 @@ SCRIPT;
             'message' => '',
             'process_name' => '',
         ];
-        $scope['active_operation'] = [
+        $operationEnvelope = $this->buildOperationQueueEnvelope($session, $operation, $executionToken, 'queued');
+        $scope['active_operation'] = \array_replace([
             'operation' => $operation,
             'execution_token' => $executionToken,
             'status' => 'queued',
@@ -6326,7 +6327,7 @@ SCRIPT;
             'started_at' => \date('Y-m-d H:i:s'),
             'updated_at' => \date('Y-m-d H:i:s'),
             'message' => (string)__('等待开始'),
-        ];
+        ], $operationEnvelope);
         if ($operation === 'plan') {
             $scope['active_operation']['details'] = [
                 'plan_locale' => (string)($scope['plan_locale'] ?? ''),
@@ -6429,13 +6430,13 @@ SCRIPT;
             return 0;
         }
 
-        $content = [
+        $content = \array_replace($this->buildOperationQueueEnvelope($session, $operation, $executionToken, 'queued'), [
             'public_id' => $session->getPublicId(),
             'admin_id' => $adminId,
             'execution_token' => $executionToken,
             'operation' => $operation,
             'stage' => $this->resolveAiSiteQueueStage($operation),
-        ];
+        ]);
         if ($operation === 'build') {
             $content['scope_patch'] = $scopePatch;
         }
@@ -6466,6 +6467,28 @@ SCRIPT;
         }
 
         return $queueId;
+    }
+
+    /**
+     * @return array{job_key?: string, job_type?: string, status?: string, token?: string}
+     */
+    private function buildOperationQueueEnvelope(
+        AiSiteAgentSession $session,
+        string $operation,
+        string $executionToken,
+        string $status
+    ): array {
+        $jobType = $this->resolveAiSiteQueueJobType($operation);
+        if ($jobType === '') {
+            return [];
+        }
+
+        return [
+            'job_key' => $this->buildAiSiteQueueJobKey((int)$session->getId(), $jobType),
+            'job_type' => $jobType,
+            'status' => $status,
+            'token' => $executionToken,
+        ];
     }
 
     /**
@@ -6871,6 +6894,24 @@ SCRIPT;
         }
 
         return $raw;
+    }
+
+    private function buildAiSiteQueueJobKey(int $sessionId, string $jobType): string
+    {
+        $raw = 'glr_aisite:session:' . $sessionId . ':job:' . $jobType;
+        if (\strlen($raw) > 191) {
+            return \substr($raw, 0, 191);
+        }
+
+        return $raw;
+    }
+
+    private function resolveAiSiteQueueJobType(string $operation): string
+    {
+        return match ($operation) {
+            'plan' => 'stage1.requirement_expand',
+            default => '',
+        };
     }
 
     private function resolveAiSiteQueueStage(string $operation): string
