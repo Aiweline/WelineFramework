@@ -4383,6 +4383,13 @@ final class AiSiteExecutionBlueprintService
     ): array {
         $pagePlans = \is_array($structured['page_plans'] ?? null) ? $structured['page_plans'] : [];
         $blockIndex = \is_array($structured['block_index'] ?? null) ? $structured['block_index'] : [];
+        $stageOneQueueJobs = \is_array($structured['stage1_queue']['jobs'] ?? null)
+            ? $structured['stage1_queue']['jobs']
+            : $this->normalizeStageOneQueueJobs(
+                \is_array($executionBlueprint['queue_jobs'] ?? null)
+                    ? $executionBlueprint['queue_jobs']
+                    : (\is_array($structured['queue_jobs'] ?? null) ? $structured['queue_jobs'] : [])
+            );
         $stage1 = [
             'request_summary' => \is_array($structured['request_summary'] ?? null) ? $structured['request_summary'] : $this->buildStageOneRequestSummary($scope, [], ''),
             'theme_context_snapshot' => \is_array($structured['theme_context_snapshot'] ?? null) ? $structured['theme_context_snapshot'] : [],
@@ -4390,20 +4397,13 @@ final class AiSiteExecutionBlueprintService
             'page_plans' => $pagePlans,
             'page_tabs_state' => $this->buildStageOnePageTabsState($pagePlans),
             'interaction_state' => $this->buildStageOneInteractionState($pagePlans, $blockIndex),
-            'queue_jobs' => $this->normalizeStageOneQueueJobs(
-                \is_array($executionBlueprint['queue_jobs'] ?? null)
-                    ? $executionBlueprint['queue_jobs']
-                    : (\is_array($structured['queue_jobs'] ?? null) ? $structured['queue_jobs'] : [])
-            ),
+            'queue_jobs' => $stageOneQueueJobs,
             'progress' => $this->buildStageOneProgressSummary(
                 \is_array($structured['shared_plan'] ?? null) ? $structured['shared_plan'] : [],
                 $pagePlans,
-                \is_array($executionBlueprint['queue_jobs'] ?? null)
-                    ? $executionBlueprint['queue_jobs']
-                    : (\is_array($structured['queue_jobs'] ?? null) ? $structured['queue_jobs'] : [])
+                $stageOneQueueJobs
             ),
             'block_index' => $blockIndex,
-            'queue_jobs' => \is_array($structured['stage1_queue']['jobs'] ?? null) ? $structured['stage1_queue']['jobs'] : [],
         ];
 
         return [
