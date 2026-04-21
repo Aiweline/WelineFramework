@@ -684,6 +684,13 @@ if ($isMaintenanceWorker) {
     } catch (\Throwable $e) {
         WlsLogger::warning_("设置维护模式失败: " . $e->getMessage());
     }
+} else {
+    try {
+        \Weline\Framework\App\Env::getInstance()->setRuntimeMaintenanceMode(false);
+        WlsLogger::info_("业务 Worker 模式已固定为非维护");
+    } catch (\Throwable $e) {
+        WlsLogger::warning_("设置业务 Worker 非维护模式失败: " . $e->getMessage());
+    }
 }
 
 // 获取控制端口
@@ -839,30 +846,11 @@ if ($controlPort > 0 || $supervisorEnabled) {
                 case \Weline\Server\IPC\ControlMessage::TYPE_SET_MAINTENANCE_MODE:
                     $mEnabled = (bool) ($msg['enabled'] ?? false);
                     $mReqId = (string) ($msg['request_id'] ?? '');
-                    if (!$isMaintenanceWorker) {
-                        // 强约束：业务 Worker 不允许进入维护模式，维护分流由 Dispatcher 池切换负责。
-                        WlsLogger::warning_(
-                            "忽略业务 Worker 维护模式信号 enabled=" . ($mEnabled ? 'true' : 'false')
-                            . " request_id={$mReqId}"
-                        );
-                        if ($mReqId !== '' && $ipcClient !== null && $ipcClient->isConnected()) {
-                            $ipcClient->send(\Weline\Server\IPC\ControlMessage::encode([
-                                'type' => \Weline\Server\IPC\ControlMessage::TYPE_MAINTENANCE_MODE_ACK,
-                                'request_id' => $mReqId,
-                                'worker_id' => $workerId,
-                            ]));
-                        }
-                        break;
-                    }
-                    try {
-                        \Weline\Framework\App\Env::getInstance()->setRuntimeMaintenanceMode($mEnabled);
-                        WlsLogger::info_(
-                            "Maintenance Worker 应用维护信号 enabled=" . ($mEnabled ? 'true' : 'false')
-                            . " request_id={$mReqId}"
-                        );
-                    } catch (\Throwable $e) {
-                        WlsLogger::warning_('IPC 维护信号应用失败: ' . $e->getMessage());
-                    }
+                    WlsLogger::warning_(
+                        "忽略 Worker 维护模式信号 enabled=" . ($mEnabled ? 'true' : 'false')
+                        . " request_id={$mReqId}"
+                        . " pinned_role=" . ($isMaintenanceWorker ? 'maintenance' : 'business')
+                    );
                     if ($mReqId !== '' && $ipcClient !== null && $ipcClient->isConnected()) {
                         $ipcClient->send(\Weline\Server\IPC\ControlMessage::encode([
                             'type' => \Weline\Server\IPC\ControlMessage::TYPE_MAINTENANCE_MODE_ACK,
