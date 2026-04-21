@@ -241,6 +241,32 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         self::assertStringContainsString('业务 Worker 正在初始化', $response);
     }
 
+    public function testAllWorkersUnavailableFloatingAlertIsInjectedOnlyInDevMode(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+
+        $build = new \ReflectionMethod(Dispatcher::class, 'buildFriendlyStartupMaintenancePage');
+        $build->setAccessible(true);
+        $basePage = (string)$build->invoke($dispatcher);
+        self::assertStringNotContainsString('wls-dev-alert', $basePage);
+
+        $this->setProperty($dispatcher, 'fallbackMaintenancePage', $basePage);
+        $this->setProperty($dispatcher, 'isDevMode', false);
+
+        $resolve = new \ReflectionMethod(Dispatcher::class, 'resolveFallbackMaintenancePage');
+        $resolve->setAccessible(true);
+        $nonDevPage = (string)$resolve->invoke($dispatcher, true);
+        self::assertStringNotContainsString('wls-dev-alert', $nonDevPage);
+        self::assertStringNotContainsString('当前所有 Worker 不可用', $nonDevPage);
+
+        $this->setProperty($dispatcher, 'isDevMode', true);
+        $devPage = (string)$resolve->invoke($dispatcher, true);
+
+        self::assertStringContainsString('wls-dev-alert', $devPage);
+        self::assertStringContainsString('当前所有 Worker 不可用', $devPage);
+        self::assertStringContainsString('#dc2626', $devPage);
+    }
+
     public function testFormatMaintenanceRoutingContextIncludesFallbackStateAndCandidates(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
