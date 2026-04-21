@@ -510,6 +510,100 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertSame($orderedKeys, $pageTaskBlockKeys);
     }
 
+    public function testPlanBlockMutationCreateRebuildDeleteUpdatesStageOneAssembly(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $artifacts = $service->buildPlanArtifacts([
+            'site_title' => 'Mutation Plan Test',
+            'brief_description' => 'Need editable stage-one blocks that can be locally mutated.',
+            'page_types' => [Page::TYPE_HOME],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+        ], [
+            'site_title' => 'Mutation Plan Test',
+            'brief_description' => 'Need editable stage-one blocks that can be locally mutated.',
+        ]);
+
+        $pageType = Page::TYPE_HOME;
+        $originalBlocks = \array_values(\is_array($artifacts['structured']['pages'][$pageType]['blocks'] ?? null)
+            ? $artifacts['structured']['pages'][$pageType]['blocks']
+            : []);
+        self::assertNotEmpty($originalBlocks);
+        $firstBlockKey = (string)($originalBlocks[0]['block_key'] ?? '');
+        self::assertNotSame('', $firstBlockKey);
+
+        $scope = [
+            'plan_locale' => 'en_US',
+            'plan_json' => $artifacts['plan_json'],
+            'plan_markdown' => $artifacts['markdown'],
+            'plan_structured' => $artifacts['structured'],
+            'plan_workbench' => $artifacts['plan_workbench'],
+            'execution_blueprint_draft' => $artifacts['execution_blueprint'],
+        ];
+
+        $created = $service->mutateDraftPlanBlock($scope, $pageType, 'create', '', [
+            'title' => 'Guarantee Block',
+            'goal' => 'Show a concrete guarantee before the final CTA.',
+            'after_block_key' => $firstBlockKey,
+        ]);
+
+        $createdBlocks = \array_values(\is_array($created['structured']['pages'][$pageType]['blocks'] ?? null)
+            ? $created['structured']['pages'][$pageType]['blocks']
+            : []);
+        self::assertCount(\count($originalBlocks) + 1, $createdBlocks);
+        self::assertSame('guarantee_block', (string)($created['mutation_summary']['block_key'] ?? ''));
+        self::assertArrayHasKey(
+            'page:' . $pageType . ':guarantee_block',
+            \is_array($created['structured']['block_index']['flat'] ?? null) ? $created['structured']['block_index']['flat'] : []
+        );
+        self::assertStringContainsString('#### guarantee_block', (string)$created['markdown']);
+        self::assertSame(
+            $created['structured']['block_index'],
+            $created['plan_workbench']['confirmed']['block_index'] ?? []
+        );
+
+        $createdScope = [
+            'plan_locale' => 'en_US',
+            'plan_json' => $created['plan_json'],
+            'plan_markdown' => $created['markdown'],
+            'plan_structured' => $created['structured'],
+            'plan_workbench' => $created['plan_workbench'],
+            'execution_blueprint_draft' => $created['execution_blueprint'],
+        ];
+        $rebuilt = $service->mutateDraftPlanBlock($createdScope, $pageType, 'rebuild', 'guarantee_block', [
+            'goal' => 'Updated guarantee block goal.',
+            'field_plan' => [
+                ['field' => 'headline', 'sample' => 'Guaranteed launch clarity', 'reason' => 'Specific guarantee headline'],
+            ],
+        ]);
+        $rebuiltBlock = \array_values(\array_filter(
+            \is_array($rebuilt['structured']['pages'][$pageType]['blocks'] ?? null) ? $rebuilt['structured']['pages'][$pageType]['blocks'] : [],
+            static fn(array $block): bool => (string)($block['block_key'] ?? '') === 'guarantee_block'
+        ))[0] ?? [];
+        self::assertSame('Updated guarantee block goal.', (string)($rebuiltBlock['goal'] ?? ''));
+        self::assertGreaterThanOrEqual(2, (int)($rebuiltBlock['version'] ?? 0));
+        self::assertSame(2, (int)($rebuilt['mutation_summary']['assembly_version'] ?? 0));
+
+        $rebuiltScope = [
+            'plan_locale' => 'en_US',
+            'plan_json' => $rebuilt['plan_json'],
+            'plan_markdown' => $rebuilt['markdown'],
+            'plan_structured' => $rebuilt['structured'],
+            'plan_workbench' => $rebuilt['plan_workbench'],
+            'execution_blueprint_draft' => $rebuilt['execution_blueprint'],
+        ];
+        $deleted = $service->mutateDraftPlanBlock($rebuiltScope, $pageType, 'delete', 'guarantee_block');
+        $deletedBlocks = \array_values(\is_array($deleted['structured']['pages'][$pageType]['blocks'] ?? null)
+            ? $deleted['structured']['pages'][$pageType]['blocks']
+            : []);
+        self::assertCount(\count($originalBlocks), $deletedBlocks);
+        self::assertArrayNotHasKey(
+            'page:' . $pageType . ':guarantee_block',
+            \is_array($deleted['structured']['block_index']['flat'] ?? null) ? $deleted['structured']['block_index']['flat'] : []
+        );
+        self::assertStringNotContainsString('#### guarantee_block', (string)$deleted['markdown']);
+    }
+
     public function testPageBlockReorderWritesStructuredSortOrderMarkdownAndStageTwoSplitOrder(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
