@@ -285,4 +285,31 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('queue_result_delta', $phaseScript);
         self::assertStringContainsString('__pbPhase1TaskProgress.syncFromSsePayload(operation, payload || {}, eventKind)', $runtimeScript);
     }
+
+    public function testStageTwoTaskProgressUiSupportsRealtimeSemanticStatuses(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 3);
+        $layout = ile_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
+        $runtimeScript = ile_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+
+        self::assertIsString($layout);
+        self::assertIsString($runtimeScript);
+
+        foreach (['todo', 'queued', 'running', 'done', 'failed', 'stale', 'cancelled'] as $status) {
+            self::assertStringContainsString("__('{$status}')", $layout);
+            self::assertStringContainsString("'{$status}'", $runtimeScript);
+        }
+
+        self::assertStringContainsString('data-task-progress-summary="stage2"', $layout);
+        self::assertStringContainsString('pb-ai-task-queued', $layout);
+        self::assertStringContainsString('pb-ai-task-failed', $layout);
+        self::assertStringContainsString('pb-ai-task-stale', $layout);
+        self::assertStringContainsString('pb-ai-task-cancelled', $layout);
+        self::assertStringContainsString('TASK_PROGRESS_STATUSES', $runtimeScript);
+        self::assertStringContainsString('normalizeTaskProgressStatus', $runtimeScript);
+        self::assertStringContainsString("String(workspaceState.progress_kind || '') === 'task_progress'", $runtimeScript);
+        self::assertStringContainsString('updateTaskSummaryFromState(payload)', $runtimeScript);
+        self::assertStringContainsString('renderTaskStatusCountBadges(group)', $runtimeScript);
+    }
+
 }
