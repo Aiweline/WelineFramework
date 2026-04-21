@@ -211,6 +211,13 @@ final class AiSiteAgentSseMarkerTest extends TestCase
                 'finished' => 0,
                 'process' => 'AI 流式生成中... (+33 B)',
                 'result' => "QUEUE 开始执行\nLOG AI 生成中\n",
+                'content' => \json_encode([
+                    'token_usage' => [
+                        'input_tokens' => 600,
+                        'output_tokens' => 180,
+                        'total_tokens' => 780,
+                    ],
+                ], \JSON_THROW_ON_ERROR),
             ],
             'plan',
             '',
@@ -230,8 +237,11 @@ final class AiSiteAgentSseMarkerTest extends TestCase
 
         self::assertNotEmpty($infoEvents);
         self::assertIsArray($infoEvents[0]['data']);
+        self::assertSame('queue_info', $infoEvents[0]['data']['progress_kind']);
         self::assertArrayHasKey('queue_info', $infoEvents[0]['data']);
         self::assertSame('running', $infoEvents[0]['data']['queue_info']['snapshot']['status']);
+        self::assertSame(600, $infoEvents[0]['data']['token_usage']['input_tokens']);
+        self::assertSame(180, $infoEvents[0]['data']['queue_info']['snapshot']['token_usage']['output_tokens']);
         $panelUpdateEvents = \array_values(\array_filter(
             $infoEvents,
             static fn(array $event): bool => \is_array($event['data']) && !empty($event['data']['queue_panel_update'])
@@ -244,6 +254,9 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame('QUEUE 开始执行' . PHP_EOL, $chunkEvents[0]['data']['queue_result_delta']);
         self::assertSame('AI 流式生成中... (+33 B)', $chunkEvents[0]['data']['queue_process']);
         self::assertSame(143, $chunkEvents[0]['data']['queue_snapshot']['queue_id']);
+        self::assertSame('queue_info', $chunkEvents[0]['data']['progress_kind']);
+        self::assertSame(780, $chunkEvents[0]['data']['token_usage']['total_tokens']);
+        self::assertSame(780, $chunkEvents[0]['data']['queue_info']['snapshot']['token_usage']['total_tokens']);
     }
 
     public function testOperationSseClaimedDispatcherIncludesPlanBranch(): void
