@@ -10,6 +10,61 @@ use Weline\Ai\Service\AiService;
 
 final class AiSiteVirtualThemePlanServiceTest extends TestCase
 {
+    public function testStageTwoBatchPromptIncludesFrontendDesignSkillReference(): void
+    {
+        $service = new AiSiteVirtualThemePlanService();
+        $method = new \ReflectionMethod($service, 'buildTaskPlanGenerationBatchPrompt');
+        $method->setAccessible(true);
+
+        $prompt = $method->invokeArgs($service, [
+            [
+                'site_title' => 'Frontend Skill Site',
+                'brief_description' => 'Build a distinctive landing page for a premium analytics product.',
+                'plan_structured' => [
+                    'theme_context_snapshot' => ['site_positioning' => 'premium analytics'],
+                    'palette' => ['name' => 'Deep graphite with electric lime'],
+                    'theme_style' => ['name' => 'editorial control room'],
+                ],
+            ],
+            ['tasks' => [['task_key' => 'page:home_page:hero', 'section_code' => 'hero']]],
+            [
+                'page_tasks' => [
+                    'home_page' => [[
+                        'task_key' => 'page:home_page:hero',
+                        'page_type' => 'home_page',
+                        'block_key' => 'hero',
+                        'sort_order' => 10,
+                    ]],
+                ],
+                'stage1_task_cues' => [
+                    'pages' => [
+                        'page:home_page:hero' => [
+                            'block_goal' => 'Make the analytics product memorable in the first viewport.',
+                            'style_direction' => 'editorial dashboard with bold contrast',
+                        ],
+                    ],
+                ],
+            ],
+            ['page_tasks' => ['home_page' => []]],
+            [
+                'type' => 'page',
+                'key' => 'home_page',
+                'block_key' => 'hero',
+                'task_keys' => ['page:home_page:hero'],
+                'fanout_group' => 'stage2.block_task_plan',
+                'queue_job_key' => 'stage2.block_task_plan:home_page:hero',
+            ],
+        ]);
+
+        self::assertIsString($prompt);
+        self::assertStringContainsString('Frontend design skill reference', $prompt);
+        self::assertStringContainsString('Service/AI/prompt_guides/frontend-design/SKILL.md', $prompt);
+        self::assertStringContainsString('https://github.com/anthropics/claude-code/blob/main/plugins/frontend-design/skills/frontend-design/SKILL.md', $prompt);
+        self::assertStringContainsString('Avoid generic AI aesthetics', $prompt);
+        self::assertStringContainsString('block_task.style_plan', $prompt);
+        self::assertStringContainsString('task_script.responsive_contract', $prompt);
+    }
+
     public function testBuildTaskPlanArtifactsProducesStructuredPlan(): void
     {
         $service = new AiSiteVirtualThemePlanService(
@@ -427,7 +482,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     {
         $capturedPrompts = [];
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(3))
+        $aiService->expects(self::exactly(2))
             ->method('generate')
             ->willReturnCallback(function (string $prompt) use (&$capturedPrompts): string {
                 $capturedPrompts[] = $prompt;
@@ -437,12 +492,12 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
 
         $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
 
-        self::assertCount(3, $capturedPrompts);
+        self::assertCount(2, $capturedPrompts);
         $allPrompts = \implode("\n---batch---\n", $capturedPrompts);
         self::assertStringContainsString('Batch type: shared', $allPrompts);
         self::assertStringContainsString('Batch type: page', $allPrompts);
-        self::assertStringContainsString('Relevant stage-1 shared cues:', $allPrompts);
-        self::assertStringContainsString('Relevant stage-1 page cues:', $allPrompts);
+        self::assertStringContainsString('Compact context for this batch only:', $allPrompts);
+        self::assertStringContainsString('"stage1_cues"', $allPrompts);
         self::assertStringContainsString('page:home_page:content\\/home-page-hero', $allPrompts);
         self::assertStringContainsString('Build a reusable header with primary navigation.', $allPrompts);
         self::assertStringContainsString('Hero should translate the main value into first-screen conversion intent.', $allPrompts);
@@ -452,9 +507,10 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order', $allPrompts);
         self::assertStringContainsString('Every planning_reason must be concrete and traceable to stage-1', $allPrompts);
         self::assertStringContainsString('concrete color, font, spacing, and responsive keys', $allPrompts);
-        self::assertStringContainsString('Stage-1 compact context summary:', $allPrompts);
+        self::assertStringNotContainsString('Stage-1 compact context summary:', $allPrompts);
         self::assertStringNotContainsString('Stage-1 plan_json:', $allPrompts);
         self::assertStringNotContainsString('Baseline virtual_theme_plan compatibility snapshot:', $allPrompts);
+        self::assertStringNotContainsString('confirmed_plan_book', $allPrompts);
         self::assertStringNotContainsString("# Stage 1 Plan\n\n## Home\n- Hero focuses on first-screen conversion", $allPrompts);
     }
 
@@ -479,7 +535,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         ]);
 
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(4))
+        $aiService->expects(self::exactly(2))
             ->method('generate')
             ->willReturnCallback(function (string $prompt) use (&$capturedPrompts, $virtualThemePlan, $heroTask, $proofTask): string {
                 $capturedPrompts[] = $prompt;
@@ -490,10 +546,9 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                     ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
                 }
 
-                $task = \str_contains($prompt, 'page:home_page:content/home-page-proof') ? $proofTask : $heroTask;
                 return \json_encode([
                     'page_type' => 'home_page',
-                    'page_tasks' => [$task],
+                    'page_tasks' => [$heroTask, $proofTask],
                     'risk_notes' => ['Block batch payload'],
                 ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
             });
@@ -522,17 +577,15 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
 
         $artifacts = $service->buildTaskPlanArtifacts($scope, $blueprint);
 
-        self::assertCount(4, $capturedPrompts);
+        self::assertCount(2, $capturedPrompts);
         $sharedPrompts = \array_values(\array_filter($capturedPrompts, static fn(string $prompt): bool => \str_contains($prompt, 'Batch type: shared')));
-        self::assertCount(2, $sharedPrompts);
-        self::assertStringContainsString('Task keys in this batch: shared:header', $sharedPrompts[0]);
-        self::assertStringContainsString('Task keys in this batch: shared:footer', $sharedPrompts[1]);
+        self::assertCount(1, $sharedPrompts);
+        self::assertStringContainsString('Task keys in this batch: shared:header, shared:footer', $sharedPrompts[0]);
         $pagePrompts = \array_values(\array_filter($capturedPrompts, static fn(string $prompt): bool => \str_contains($prompt, 'Batch type: page')));
-        self::assertCount(2, $pagePrompts);
-        self::assertStringContainsString('Task keys in this batch: page:home_page:content/home-page-hero', $pagePrompts[0]);
-        self::assertStringContainsString('Task keys in this batch: page:home_page:content/home-page-proof', $pagePrompts[1]);
+        self::assertCount(1, $pagePrompts);
+        self::assertStringContainsString('Task keys in this batch: page:home_page:content/home-page-hero, page:home_page:content/home-page-proof', $pagePrompts[0]);
         self::assertStringContainsString('Fanout group: stage2.block_task_plan', $pagePrompts[0]);
-        self::assertStringContainsString('Dependencies preserved from stage-1 task tree: shared:header', $pagePrompts[1]);
+        self::assertStringContainsString('Dependencies preserved from stage-1 task tree: shared:header', $pagePrompts[0]);
         self::assertSame(
             ['Hero', 'Proof'],
             \array_map(static fn(array $task): string => (string)($task['label'] ?? ''), $artifacts['structured']['page_tasks']['home_page'] ?? [])
@@ -559,7 +612,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 $capturedStreamParams[] = $params;
                 $callback('not-json');
             });
-        $aiService->expects(self::exactly(3))
+        $aiService->expects(self::exactly(2))
             ->method('generate')
             ->willReturnCallback(function (
                 string $prompt,
@@ -602,7 +655,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     public function testBuildTaskPlanArtifactsSanitizesPromptLikeTaskCopy(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(3))
+        $aiService->expects(self::exactly(2))
             ->method('generate')
             ->willReturnCallback(function (string $prompt): string {
                 return $this->buildPromptLikeTaskPlanBatchResponse($prompt);
@@ -672,7 +725,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     public function testBuildTaskPlanArtifactsAcceptsWrappedJsonGenerateResponses(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(3))
+        $aiService->expects(self::exactly(2))
             ->method('generate')
             ->willReturnCallback(function (string $prompt): string {
                 return $this->buildWrappedTaskPlanBatchResponse($prompt);
@@ -694,7 +747,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     {
         $forwarded = '';
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(3))
+        $aiService->expects(self::exactly(2))
             ->method('generateStream')
             ->willReturnCallback(function (
                 string $prompt,
@@ -1174,7 +1227,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 ($params['on_heartbeat'])();
                 $callback('not-json');
             });
-        $aiService->expects(self::exactly(3))
+        $aiService->expects(self::exactly(2))
             ->method('generate')
             ->willReturnCallback(function (
                 string $prompt,
@@ -1184,7 +1237,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 array $params
             ) use (&$capturedGenerateParams): string {
                 $capturedGenerateParams[] = $params;
-                if (($params['max_tokens'] ?? 0) <= 2500) {
+                if (\str_contains($prompt, 'Batch type: shared')) {
                     return \json_encode([
                         'shared_tasks' => \json_decode($this->buildTaskPlanResponse(), true)['virtual_theme_plan']['shared_tasks'] ?? [],
                         'risk_notes' => ['Shared batch fallback'],
