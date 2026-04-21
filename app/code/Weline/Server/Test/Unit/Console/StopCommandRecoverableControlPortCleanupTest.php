@@ -120,7 +120,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
         self::assertSame([443, 26422, 26895], $ports);
     }
 
-    public function testKillWlsProcessOnPortAcceptsProcessManagerCreatedWrapperOwner(): void
+    public function testKillWlsProcessOnPortAcceptsIndexedWlsOwner(): void
     {
         $stop = new class extends Stop {
             public array $killed = [];
@@ -141,7 +141,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
             {
                 unset($pid);
 
-                return 'cmd.exe';
+                return 'weline-wls-wrapper-default';
             }
 
             protected function queryStopProcessCommandLine(int $pid): string
@@ -290,7 +290,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
         }
 
         self::assertSame(3, $processed);
-        self::assertSame([[101, 202, 103]], $stop->terminatedBatches);
+        self::assertSame([[101, 102, 103]], $stop->terminatedBatches);
     }
 
     public function testCollectRecoverablePortsFromInstanceUsesWorkerBasePort(): void
@@ -359,6 +359,11 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
                 return [7704, 16048, 0];
             }
 
+            protected function queryWindowsCmdWindowRowsForStop(): array
+            {
+                return [];
+            }
+
             protected function collectManagedStopPids(array $pids): array
             {
                 $this->fail('first force-stop pass should not promote candidate pids to root wrappers');
@@ -368,7 +373,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
         self::assertSame([33780, 2604, 7704, 16048], $stop->collectCandidates($info));
     }
 
-    public function testForceStopCandidatesIncludePrefixDiscoveredSameInstancePids(): void
+    public function testForceStopCandidatesIncludePrefixPidsOnFirstPass(): void
     {
         if (!\defined('DS')) {
             \define('DS', DIRECTORY_SEPARATOR);
@@ -412,7 +417,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
             {
                 unset($name);
 
-                return [303, 202, 0];
+                return [303, 0];
             }
         };
 

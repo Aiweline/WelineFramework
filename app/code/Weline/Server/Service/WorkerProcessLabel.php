@@ -32,7 +32,8 @@ final class WorkerProcessLabel
     ): string {
         $role = $maintenance ? 'maintenance' : 'worker';
         $transport = $ssl ? 'ssl' : 'http';
+        $scopedInstanceName = MasterProcess::getScopedInstanceName($instanceName);
 
-        return "weline-wls-{$role}-{$transport}-{$instanceName}-{$workerId}-{$port}";
+        return "weline-wls-{$role}-{$transport}-{$scopedInstanceName}-{$workerId}-{$port}";
     }
 }
