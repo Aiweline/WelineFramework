@@ -37,7 +37,9 @@ class AiSitePlanQueue implements QueueInterface
             return false;
         }
 
-        return !empty($content['public_id']) && !empty($content['admin_id']) && !empty($content['execution_token']);
+        $executionToken = \trim((string)($content['execution_token'] ?? $content['token'] ?? ''));
+
+        return !empty($content['public_id']) && !empty($content['admin_id']) && $executionToken !== '';
     }
 
     public function execute(Queue &$queue): string
@@ -45,7 +47,7 @@ class AiSitePlanQueue implements QueueInterface
         $content = \json_decode((string)$queue->getContent(), true);
         $publicId = \trim((string)($content['public_id'] ?? ''));
         $adminId = (int)($content['admin_id'] ?? 0);
-        $executionToken = \trim((string)($content['execution_token'] ?? ''));
+        $executionToken = \trim((string)($content['execution_token'] ?? $content['token'] ?? ''));
         $forceRebuild = (int)($content['_force_rebuild'] ?? 0) === 1;
         $effectiveExecutionToken = $executionToken;
         if ($forceRebuild) {
