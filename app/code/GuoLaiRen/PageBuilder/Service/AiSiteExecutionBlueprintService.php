@@ -271,6 +271,10 @@ final class AiSiteExecutionBlueprintService
             return $artifacts;
         }
 
+        if (!empty($payload['staged_generation'])) {
+            return $this->buildPlanArtifactsByStagedAiStream($scope, $websiteProfile, $payload, $onChunk);
+        }
+
         $pageTypes = $this->expandPageTypes($scope);
         $instruction = \trim((string)($payload['instruction'] ?? ''));
         $targetScope = \trim((string)($payload['target_scope'] ?? ''));
@@ -322,6 +326,375 @@ final class AiSiteExecutionBlueprintService
                 $throwable
             );
         }
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $payload
+     * @param callable(string):void|null $onChunk
+     * @return array<string, mixed>
+     */
+    private function buildPlanArtifactsByStagedAiStream(array $scope, array $websiteProfile, array $payload = [], ?callable $onChunk = null): array
+    {
+        $pageTypes = $this->expandPageTypes($scope);
+        $instruction = \trim((string)($payload['instruction'] ?? ''));
+        $targetScope = \trim((string)($payload['target_scope'] ?? ''));
+        $planLocale = \trim((string)($scope['plan_locale'] ?? $scope['default_language'] ?? $scope['default_locale'] ?? ''));
+        $siteDisplayName = $this->pageBlueprintService->resolveSiteDisplayName($websiteProfile, $scope);
+        $siteSummary = $this->pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope);
+        $baseline = $this->buildPlanArtifacts($scope, $websiteProfile, [
+            'instruction' => $instruction,
+            'target_scope' => $targetScope,
+        ]);
+        $planJson = \is_array($baseline['plan_json'] ?? null) ? $baseline['plan_json'] : [];
+
+        try {
+            $themeDecoded = $this->generateStageOneJsonByAi(
+                $this->buildAiStageOneThemePrompt($scope, $websiteProfile, $pageTypes, $planLocale, $instruction, $siteDisplayName, $siteSummary),
+                'pagebuilder_plan_generation',
+                3072,
+                150,
+                $onChunk
+            );
+            $planJson = $this->mergeStageOneThemeAiPlanJson($planJson, $themeDecoded, $planLocale, $pageTypes);
+            $pagePlans = $this->generateStageOnePagePlansByAi(
+                $scope,
+                $websiteProfile,
+                $planJson,
+                $pageTypes,
+                $planLocale,
+                $instruction,
+                $targetScope,
+                $onChunk
+            );
+            if ($pagePlans !== []) {
+                $planJson['pages'] = \array_replace(\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [], $pagePlans);
+            }
+
+            $artifacts = $this->mapAiPlanToArtifacts($scope, $websiteProfile, ['plan_json' => $planJson], $pageTypes, $planLocale, $instruction, $targetScope);
+            $artifacts['ai_generated'] = 1;
+            $artifacts['ai_fallback'] = 0;
+            $artifacts['generation_source'] = 'ai_staged';
+            return $artifacts;
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                $this->normalizeAiPlanGenerationErrorMessage($throwable->getMessage()),
+                (int)$throwable->getCode(),
+                $throwable
+            );
+        }
+    }
+
+    /**
+     * @param callable(string):void|null $onChunk
+     * @return array<string, mixed>
+     */
+    private function generateStageOneJsonByAi(string $prompt, string $scenarioCode, int $maxTokens, int $timeout, ?callable $onChunk = null): array
+    {
+        $fullContent = '';
+        $this->getAiService()->generateStream(
+            $prompt,
+            static function (string $chunk) use (&$fullContent, $onChunk): bool {
+                $fullContent .= $chunk;
+                if (\is_callable($onChunk) && $chunk !== '') {
+                    $onChunk($chunk);
+                }
+                return true;
+            },
+            null,
+            $scenarioCode,
+            null,
+            [
+                'allow_zero_balance_provider' => true,
+                'temperature' => 0.25,
+                'max_tokens' => $maxTokens,
+                'timeout' => $timeout,
+                'enforce_timeout_in_stream' => true,
+                'response_format' => ['type' => 'json_object'],
+            ]
+        );
+
+        $decoded = $this->getResponseJsonParser()->extractAndDecode($fullContent);
+        if (!\is_array($decoded)) {
+            throw new \RuntimeException('invalid ai json: ' . \substr(\preg_replace('/\s+/', ' ', $fullContent), 0, 200));
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @param array<string, mixed> $decoded
+     * @param list<string> $pageTypes
+     * @return array<string, mixed>
+     */
+    private function mergeStageOneThemeAiPlanJson(array $planJson, array $decoded, string $planLocale, array $pageTypes): array
+    {
+        $decoded = $this->normalizeAiPlanResponseShape($decoded);
+        $source = \is_array($decoded['plan_json'] ?? null) ? $decoded['plan_json'] : $decoded;
+        foreach (['i18n', 'site_strategy', 'theme_style', 'palette', 'theme_design', 'navigation_plan', 'footer_plan', 'seo_strategy'] as $key) {
+            if (\is_array($source[$key] ?? null)) {
+                $planJson[$key] = $source[$key];
+            }
+        }
+        $planJson['page_types'] = $pageTypes;
+        $planJson['i18n'] = $this->ensurePlanI18nSection(
+            \is_array($planJson['i18n'] ?? null) ? $planJson['i18n'] : [],
+            $planLocale,
+            $this->isEnglishLocale($planLocale)
+        );
+
+        return $planJson;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $planJson
+     * @param list<string> $pageTypes
+     * @param callable(string):void|null $onChunk
+     * @return array<string, mixed>
+     */
+    private function generateStageOnePagePlansByAi(
+        array $scope,
+        array $websiteProfile,
+        array $planJson,
+        array $pageTypes,
+        string $planLocale,
+        string $instruction,
+        string $targetScope,
+        ?callable $onChunk = null
+    ): array {
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        if (\count($pageTypes) <= 1 || !\class_exists(\Fiber::class)) {
+            return $this->generateStageOnePagePlansByAiSequential($scope, $websiteProfile, $planJson, $pageTypes, $planLocale, $instruction, $targetScope, $onChunk);
+        }
+
+        /** @var array<string, \Fiber> $fibers */
+        $fibers = [];
+        foreach ($pageTypes as $pageType) {
+            $pageKey = (string)$pageType;
+            $fibers[$pageKey] = new \Fiber(function () use ($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $instruction, $targetScope, $onChunk): array {
+                $decoded = $this->generateStageOneJsonByAi(
+                    $this->buildAiStageOnePagePrompt($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $instruction, $targetScope),
+                    'pagebuilder_plan_generation',
+                    4096,
+                    150,
+                    $onChunk
+                );
+
+                return $this->normalizeStageOneAiPagePlanWithBaseline(
+                    $this->extractStageOneAiPagePlan($decoded, $pageKey),
+                    \is_array($planJson['pages'][$pageKey] ?? null) ? $planJson['pages'][$pageKey] : [],
+                    $pageKey
+                );
+            });
+        }
+
+        $results = [];
+        $errors = [];
+        foreach ($fibers as $pageKey => $fiber) {
+            try {
+                $fiber->start();
+            } catch (\Throwable $throwable) {
+                $errors[$pageKey] = $throwable;
+            }
+        }
+
+        while (\count($results) + \count($errors) < \count($fibers)) {
+            $madeProgress = false;
+            foreach ($fibers as $pageKey => $fiber) {
+                if (isset($results[$pageKey]) || isset($errors[$pageKey])) {
+                    continue;
+                }
+                try {
+                    if ($fiber->isTerminated()) {
+                        $results[$pageKey] = $fiber->getReturn();
+                        $madeProgress = true;
+                    } elseif ($fiber->isSuspended()) {
+                        $fiber->resume();
+                        $madeProgress = true;
+                    }
+                } catch (\Throwable $throwable) {
+                    $errors[$pageKey] = $throwable;
+                    $madeProgress = true;
+                }
+            }
+            if (!$madeProgress && \count($results) + \count($errors) < \count($fibers)) {
+                \usleep(1000);
+            }
+        }
+
+        if ($errors !== []) {
+            $firstError = \reset($errors);
+            if ($firstError instanceof \Throwable) {
+                throw $firstError;
+            }
+        }
+
+        foreach ($pageTypes as $pageType) {
+            $pageKey = (string)$pageType;
+            if (!\is_array($results[$pageKey] ?? null) || $results[$pageKey] === []) {
+                $results[$pageKey] = \is_array($pages[$pageKey] ?? null) ? $pages[$pageKey] : [];
+            }
+            if ($results[$pageKey] === []) {
+                unset($results[$pageKey]);
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     * @param callable(string):void|null $onChunk
+     * @return array<string, mixed>
+     */
+    private function generateStageOnePagePlansByAiSequential(
+        array $scope,
+        array $websiteProfile,
+        array $planJson,
+        array $pageTypes,
+        string $planLocale,
+        string $instruction,
+        string $targetScope,
+        ?callable $onChunk = null
+    ): array {
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $results = [];
+        foreach ($pageTypes as $pageType) {
+            $pageKey = (string)$pageType;
+            $decoded = $this->generateStageOneJsonByAi(
+                $this->buildAiStageOnePagePrompt($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $instruction, $targetScope),
+                'pagebuilder_plan_generation',
+                4096,
+                150,
+                $onChunk
+            );
+            $pagePlan = $this->extractStageOneAiPagePlan($decoded, $pageKey);
+            $pagePlan = $this->normalizeStageOneAiPagePlanWithBaseline(
+                $pagePlan,
+                \is_array($pages[$pageKey] ?? null) ? $pages[$pageKey] : [],
+                $pageKey
+            );
+            if ($pagePlan !== []) {
+                $results[$pageKey] = $pagePlan;
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * @param array<string, mixed> $decoded
+     * @return array<string, mixed>
+     */
+    private function extractStageOneAiPagePlan(array $decoded, string $pageType): array
+    {
+        $decoded = $this->normalizeAiPlanResponseShape($decoded);
+        if (\is_array($decoded['plan_json']['pages'][$pageType] ?? null)) {
+            return $decoded['plan_json']['pages'][$pageType];
+        }
+        if (\is_array($decoded['pages'][$pageType] ?? null)) {
+            return $decoded['pages'][$pageType];
+        }
+        if (\is_array($decoded['page'] ?? null)) {
+            return $decoded['page'];
+        }
+        if (\is_array($decoded['page_plan'] ?? null)) {
+            return $decoded['page_plan'];
+        }
+        if (\is_array($decoded['blocks'] ?? null) && \is_array($decoded['field_plan'] ?? null) === false) {
+            return $decoded;
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $pagePlan
+     * @param array<string, mixed> $baselinePage
+     * @return array<string, mixed>
+     */
+    private function normalizeStageOneAiPagePlanWithBaseline(array $pagePlan, array $baselinePage, string $pageType): array
+    {
+        if ($pagePlan === []) {
+            return $baselinePage;
+        }
+
+        $normalized = \array_replace($baselinePage, $pagePlan);
+        foreach (['page_goal', 'page_label', 'page_title', 'nav_label', 'meta_title', 'meta_description'] as $key) {
+            $candidate = \trim((string)($normalized[$key] ?? ''));
+            if ($candidate === '' || $this->isPromptLikeStageOneText($candidate, $key, '', '', $pageType)) {
+                $fallback = \trim((string)($baselinePage[$key] ?? ''));
+                if ($fallback !== '') {
+                    $normalized[$key] = $fallback;
+                }
+            }
+        }
+
+        if (!\is_array($normalized['blocks'] ?? null) || $normalized['blocks'] === []) {
+            $normalized['blocks'] = \is_array($baselinePage['blocks'] ?? null) ? $baselinePage['blocks'] : [];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     */
+    private function buildAiStageOneThemePrompt(
+        array $scope,
+        array $websiteProfile,
+        array $pageTypes,
+        string $planLocale,
+        string $instruction,
+        string $siteDisplayName,
+        string $siteSummary
+    ): string {
+        $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? $siteSummary));
+        return \implode("\n", [
+            'You are PageBuilder Stage-1 THEME planner.',
+            'Return STRICT JSON only. Do not include page block plans.',
+            'Goal: generate the shared theme/global plan first; page-specific plans are generated in separate fanout calls.',
+            'Locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
+            'Site: ' . ($siteDisplayName !== '' ? $siteDisplayName : '-'),
+            'Brief: ' . ($brief !== '' ? $brief : '-'),
+            'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
+            'Selected page types: ' . \implode(', ', $pageTypes),
+            'Schema:',
+            '{"i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},"site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},"theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"string"},"palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"string"},"theme_design":{"theme_purpose":"string","color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"string"},"navigation_plan":{"header_items":[{"label":"string","href":"string"}]},"footer_plan":{"featured":[{"label":"string","href":"string"}],"policies":[{"label":"string","href":"string"}]},"seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"}}',
+            'Hard rules: theme_design must be concrete implementation decisions; selection_reason must reference the user brief; keep output compact.',
+        ]);
+    }
+
+    private function buildAiStageOnePagePrompt(
+        array $scope,
+        array $websiteProfile,
+        array $planJson,
+        string $pageType,
+        string $planLocale,
+        string $instruction,
+        string $targetScope
+    ): string {
+        $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? ''));
+        $themeDesign = \json_encode($planJson['theme_design'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        $baselinePage = \json_encode($planJson['pages'][$pageType] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        return \implode("\n", [
+            'You are PageBuilder Stage-1 PAGE planner.',
+            'Return STRICT JSON only for exactly one page. Do not return other pages.',
+            'Locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
+            'Page type: ' . $pageType,
+            'Brief: ' . ($brief !== '' ? $brief : '-'),
+            'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
+            'Target scope: ' . ($targetScope !== '' ? $targetScope : '-'),
+            'Shared theme_design (non-negotiable): ' . $themeDesign,
+            'Baseline page shape to improve, keep compatible keys: ' . $baselinePage,
+            'Schema:',
+            '{"page":{"page_goal":"string","theme_alignment_summary":"string","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}}',
+            'Hard rules: output 2-3 blocks only; each block exactly 3 field_plan rows; feature_points max 3; content and core_copy must be final customer-visible implementation content, compact and not instruction-like.',
+        ]);
     }
 
     /**
@@ -2089,7 +2462,7 @@ final class AiSiteExecutionBlueprintService
         }
 
         return \sprintf(
-            '%s 继承共享主题目标“%s”，%s 围绕“%s”展开；页面沿用 %s，遵守 %s，保持 %s 与 %s，并避免 %s，同时延续 Header/Footer 的承接关系。',
+            '%s 继承共享主题目标“%s”；%s 服务页面目标“%s”。页面沿用 %s，遵守 %s，保持 %s 与 %s，并避免 %s，同时延续 Header/Footer 的承接关系。',
             $pageLabel,
             $themePurpose,
             $blockSummary,
@@ -2963,7 +3336,7 @@ final class AiSiteExecutionBlueprintService
         }
 
         return \sprintf(
-            '%s 遵守 shared_prompt_context（%s 与 %s）：%s 围绕“%s”展开，延续共享 CTA 与信任表达，并从 Header 导航自然承接到 Footer 的补充背书。',
+            '%s 遵守 shared_prompt_context（%s 与 %s）：%s 服务“%s”这一页面目标，延续共享 CTA 与信任表达，并从 Header 导航自然承接到 Footer 的补充背书。',
             $pageLabel !== '' ? $pageLabel : '本页面',
             $paletteLabel,
             $toneLabel,
