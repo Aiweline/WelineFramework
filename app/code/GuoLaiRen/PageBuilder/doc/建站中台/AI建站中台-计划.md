@@ -1020,18 +1020,18 @@ Atomic Task ID:
 - [x] T04 `buildStageOnePagePlanPrompt(...)` 与页面任务输入装配器（status=done, progress=100%, owner=prompt-engineering, note=A14/A15/A16 已完成：页面任务输入注入 theme_design 全量硬约束，页面提示词强制主题延续并输出 theme_alignment_summary；证据见 `AiSiteExecutionBlueprintServiceTest`）
 - [x] T05 页面类型并发队列与冲突控制（status=done, progress=100%, owner=backend-queue, note=A13/A17/A18 已完成页面并发队列元数据、shared_context_hash 缺失拒收与共享规划变更 stale 标记；证据见 `AiSiteExecutionBlueprintServiceTest`）
 - [x] T06 第一阶段块树装配器（status=done, progress=100%, owner=backend, note=A20/A21/A22 已完成：plan_book.structured 由块树生成、plan_book.markdown 由排序块树组合、block_index 与排序同步；证据见 `AiSiteExecutionBlueprintServiceTest`）
-- [~] T07 第一阶段内联工作台 UI（status=in_progress, progress=55%, owner=frontend, note=A06/A07 已完成共享 Tab 主题字段展示与 reason 入口；队列状态/token 展示仍待 A27 完成）
-- [ ] T08 第一阶段页面级 AI 操作（status=todo, progress=0%, owner=frontend+backend, note=微调页面/重建页面/新增块）
-- [ ] T09 第一阶段块级操作 API（status=todo, progress=0%, owner=backend-api, note=块 refine/rebuild/create/delete/move）
-- [ ] T10 第一阶段块 hover 交互与即时重装配（status=todo, progress=0%, owner=frontend, note=hover 菜单、局部刷新、保留草稿输入）
-- [ ] T11 第一阶段 SSE + 轮询状态面板（status=todo, progress=0%, owner=sse-runtime, note=只读进度，页面完成即点亮 Tab）
+- [x] T07 第一阶段内联工作台 UI（status=done, progress=100%, owner=frontend, note=A06/A07/A27 已完成共享 Tab 主题字段展示、reason 入口、队列状态与 token 展示；证据见 `AiSiteAgentSharedTabTemplateTest` / `AiSiteAgentSseMarkerTest`）
+- [~] T08 第一阶段页面级 AI 操作（status=in_progress, progress=45%, owner=frontend+backend, note=A24 已完成微调当前页面只改当前页面块树；页面重建/新增块入口仍待补齐）
+- [x] T09 第一阶段块级操作 API（status=done, progress=100%, owner=backend-api, note=A23/A25/A26 已完成块排序写回、块 refine、块 create/delete/local rebuild 并更新装配结果；证据见 `AiSiteExecutionBlueprintServiceTest` / `AiSiteAgentSseMarkerTest`）
+- [~] T10 第一阶段块 hover 交互与即时重装配（status=in_progress, progress=70%, owner=frontend, note=A25/A26 已完成结构化块操作与局部装配；hover 菜单/草稿保留交互仍需 UI 冒烟确认）
+- [x] T11 第一阶段 SSE + 轮询状态面板（status=done, progress=100%, owner=sse-runtime, note=A27 与既有 SSE/polling 同步完成队列状态、token 用量、页面/任务状态面板展示；operation-sse plan 分支未知操作缺陷已修复）
 - [ ] T12 第一阶段确认持久化（status=todo, progress=0%, owner=backend, note=写 confirmed plan + block_index + shared_prompt_context）
 
 #### C. 第二阶段：块任务细化与任务方案装配
 
-- [ ] T13 第二阶段 confirmed plan 解析器（status=todo, progress=0%, owner=backend, note=从第一阶段确认版恢复共享块与页面块）
-- [ ] T14 `buildStageTwoSharedTaskPrompt(...)` 与共享块任务细化器（status=todo, progress=0%, owner=prompt-engineering, note=先补齐 Header/Footer/共享素材与字段；须遵守 §1A/§13.3.6；参考 `AiSiteVirtualThemePlanService::buildTaskPlanPromptBase` 契约）
-- [ ] T15 `buildStageTwoPageTaskPrompt(...)` 与页面块任务细化器（status=todo, progress=0%, owner=prompt-engineering, note=并发前统一注入 stage2_context_snapshot；story_goal/content_fill_rule/样例须可执行非元指令；分批见 `buildTaskPlanGenerationBatchPrompt`）
+- [x] T13 第二阶段 confirmed plan 解析器（status=done, progress=100%, owner=backend, note=A29 已完成从第一阶段 confirmed plan_book/block tree 恢复共享块与页面块，不再从 Markdown 反推；证据见 `AiSiteVirtualThemePlanServiceTest`）
+- [~] T14 `buildStageTwoSharedTaskPrompt(...)` 与共享块任务细化器（status=in_progress, progress=70%, owner=prompt-engineering, note=A28/A33/A34/A35 已完成 block task schema、meta_fields、content_plan、style_plan 约束；A32 继承第一阶段块上下文仍待完成）
+- [~] T15 `buildStageTwoPageTaskPrompt(...)` 与页面块任务细化器（status=in_progress, progress=70%, owner=prompt-engineering, note=A28/A33/A34/A35 已完成任务字段/内容/样式输出约束；A32 引用第一阶段块 goal/realtime_content/style_direction/reason 仍待完成）
 - [ ] T16 第二阶段上下文快照版本控制（status=todo, progress=0%, owner=backend, note=context_hash 变化时让旧页面任务失效重排）
 - [ ] T17 第二阶段块任务装配器（status=todo, progress=0%, owner=backend, note=生成每页块任务方案 + 任务卡片视图数据）
 - [ ] T18 第二阶段内联工作台 UI（status=todo, progress=0%, owner=frontend, note=页面 Tab、任务卡片、依赖与状态）
@@ -1093,21 +1093,21 @@ Atomic Task ID:
 - [x] A21 实现 `plan_book.markdown` 由块树排序组合生成（status=done, owner=worker-4, covers=§1A, output=Markdown 不自由生成, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
 - [x] A22 实现 `block_index` 与块排序同步（status=done, owner=worker-5, covers=§1A, output=sort_order 改变时 index 更新, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
 - [x] A23 页面 Tab 块排序写回结构化数据（status=done, owner=worker-6, covers=§1A, output=排序影响 Markdown/第二阶段拆分, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
-- [ ] A24 页面级 `微调当前页面` API 只改当前页面块树（status=todo, owner=backend-api, covers=§1A, output=不影响其他页面）
+- [x] A24 页面级 `微调当前页面` API 只改当前页面块树（status=done, owner=worker-1, covers=§1A, output=不影响其他页面, evidence=php-l+phpstan+AiSiteExecutionBlueprintServiceTest+AiSiteAgentSharedTabTemplateTest）
 - [x] A25 块级 `微调块` API 只改当前块结构化数据（status=done, owner=worker-2, covers=§1A, output=不只改 Markdown, evidence=php-l+AiSiteAgentSseMarkerTest）
 - [x] A26 块级 `新增/删除/局部重建` API 更新装配结果（status=done, owner=worker-2, covers=§1A, output=当前页面局部装配, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
-- [ ] A27 第一阶段队列信息列表展示 job 状态与 token（status=todo, owner=frontend, covers=§13.5, output=input/output/total tokens）
+- [x] A27 第一阶段队列信息列表展示 job 状态与 token（status=done, owner=worker-3/worker-4, covers=§13.5, output=input/output/total tokens, evidence=php-l+AiSiteAgentSseMarkerTest）
 
 #### D. 第二阶段块任务拆解规划
 
-- [ ] A28 定义 `block task` 最小 schema（status=todo, owner=backend-schema, covers=§1A/§13.3.4, output=task_goal/meta_fields/content_plan/style_plan/planning_reason/sort_order）
+- [x] A28 定义 `block task` 最小 schema（status=done, owner=worker-5, covers=§1A/§13.3.4, output=task_goal/meta_fields/content_plan/style_plan/planning_reason/sort_order, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 - [x] A29 第二阶段从第一阶段确认版块树读取任务输入（status=done, owner=worker-5, covers=§13.3.2, output=不从 Markdown 反推, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
-- [ ] A30 第二阶段每个 block 至少 fanout 一个 `stage2.block_task_plan`（status=todo, owner=backend-queue, covers=§13.3, output=按 block_key 生成任务）
+- [x] A30 第二阶段每个 block 至少 fanout 一个 `stage2.block_task_plan`（status=done, owner=worker-6, covers=§13.3, output=按 block_key 生成任务, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 - [x] A31 第二阶段 block task 通过队列 + Fiber/协程并发生成（status=done, owner=worker-2, covers=§1A/§13.3, output=队列内 shared-first 后按 block task Fiber fanout，保留 sort_order/dependencies, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 - [ ] A32 第二阶段提示词引用第一阶段块的 goal/realtime_content/style_direction/reason（status=todo, owner=prompt, covers=§13.3.3, output=不重新发明任务）
-- [ ] A33 第二阶段提示词输出 meta 字段类型/默认值/示例内容（status=todo, owner=prompt, covers=§13.3.5, output=meta_fields[]）
-- [ ] A34 第二阶段提示词输出内容正文/CTA/链接/素材位（status=todo, owner=prompt, covers=§1A, output=content_plan）
-- [ ] A35 第二阶段提示词输出配色/字体/间距/响应式规则（status=todo, owner=prompt, covers=§1A, output=style_plan）
+- [x] A33 第二阶段提示词输出 meta 字段类型/默认值/示例内容（status=done, owner=worker-4, covers=§13.3.5, output=meta_fields[], evidence=php-l+AiSiteVirtualThemePlanServiceTest）
+- [x] A34 第二阶段提示词输出内容正文/CTA/链接/素材位（status=done, owner=worker-5, covers=§1A, output=content_plan, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
+- [x] A35 第二阶段提示词输出配色/字体/间距/响应式规则（status=done, owner=worker-6, covers=§1A, output=style_plan, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 - [ ] A36 第二阶段提示词输出 `planning_reason`（status=todo, owner=prompt, covers=§1A, output=为什么这么规划）
 - [ ] A37 第二阶段校验器拒绝缺失 meta/content/style/reason 的任务（status=todo, owner=validation, covers=§13.7.2, output=不合格重生成）
 
