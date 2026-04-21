@@ -1334,6 +1334,11 @@ final class AiSiteExecutionBlueprintService
         }
         $this->assertAiStageOneThemeDesignSchema($planJson['theme_design']);
 
+        $themeDesign = \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : [];
+        if ($themeDesign !== []) {
+            $this->assertAiStageOneThemeDesignColorScheme($themeDesign);
+        }
+
         $this->assertAiStageOneLinkList(
             \is_array($planJson['navigation_plan']['header_items'] ?? null) ? $planJson['navigation_plan']['header_items'] : [],
             'navigation_plan.header_items'
@@ -1428,6 +1433,20 @@ final class AiSiteExecutionBlueprintService
                         throw new \RuntimeException('AI stage-1 plan invalid: homepage hero does not reuse concrete nouns from the brief.');
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $themeDesign
+     */
+    private function assertAiStageOneThemeDesignColorScheme(array $themeDesign): void
+    {
+        $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+        foreach (['primary', 'secondary', 'accent', 'background', 'text', 'button'] as $colorKey) {
+            $value = \trim((string)($colorScheme[$colorKey] ?? ''));
+            if ($value === '') {
+                throw new \RuntimeException('AI stage-1 plan invalid: theme_design.color_scheme.' . $colorKey . ' must not be empty.');
             }
         }
     }
