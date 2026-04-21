@@ -1095,7 +1095,7 @@ Atomic Task ID:
 - [x] A23 页面 Tab 块排序写回结构化数据（status=done, owner=worker-6, covers=§1A, output=排序影响 Markdown/第二阶段拆分, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
 - [ ] A24 页面级 `微调当前页面` API 只改当前页面块树（status=todo, owner=backend-api, covers=§1A, output=不影响其他页面）
 - [x] A25 块级 `微调块` API 只改当前块结构化数据（status=done, owner=worker-2, covers=§1A, output=不只改 Markdown, evidence=php-l+AiSiteAgentSseMarkerTest）
-- [ ] A26 块级 `新增/删除/局部重建` API 更新装配结果（status=todo, owner=backend-api, covers=§1A, output=当前页面局部装配）
+- [x] A26 块级 `新增/删除/局部重建` API 更新装配结果（status=done, owner=worker-2, covers=§1A, output=当前页面局部装配, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
 - [ ] A27 第一阶段队列信息列表展示 job 状态与 token（status=todo, owner=frontend, covers=§13.5, output=input/output/total tokens）
 
 #### D. 第二阶段块任务拆解规划
