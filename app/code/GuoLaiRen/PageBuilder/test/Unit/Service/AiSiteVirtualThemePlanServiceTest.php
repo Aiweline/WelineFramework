@@ -168,49 +168,21 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         );
     }
 
-    public function testStageTwoBatchPromptCarriesStageOneBlockCueFields(): void
+    public function testBuildTaskPlanArtifactsRejectsAiPageTasksMissingBlockTaskContract(): void
     {
-        $capturedPrompts = [];
-        $aiService = $this->createMock(AiService::class);
-        $aiService->method('generate')->willReturnCallback(function (
-            string $prompt,
-            $modelCode,
-            string $scenarioCode,
-            $locale,
-            array $params
-        ) use (&$capturedPrompts): string {
-            $capturedPrompts[] = $prompt;
-            return $this->buildTaskPlanResponse();
-        });
-        $service = new AiSiteVirtualThemePlanService($aiService);
-        $scope = $this->buildPromptScope();
-        $scope['execution_blueprint']['pages']['home_page']['blocks'][0]['goal'] = 'Stage-one hero block goal.';
-        $scope['execution_blueprint']['pages']['home_page']['blocks'][0]['why'] = 'Stage-one hero reason.';
-        $scope['execution_blueprint']['pages']['home_page']['blocks'][0]['realtime_content'] = [
-            'headline' => 'Stage-one hero headline',
-            'cta_label' => 'Start from stage one',
-        ];
-        $scope['execution_blueprint']['pages']['home_page']['blocks'][0]['style_direction'] = 'Stage-one hero style direction.';
+        foreach (['meta_fields', 'content_plan', 'style_plan', 'planning_reason'] as $missingField) {
+            $service = new AiSiteVirtualThemePlanService(
+                $this->createAiServiceStub($this->buildTaskPlanResponseMissingBlockTaskField($missingField))
+            );
 
-        $service->buildTaskPlanArtifacts($scope, $this->buildPromptBlueprint());
-
-        $pagePrompt = '';
-        foreach ($capturedPrompts as $prompt) {
-            if (\str_contains($prompt, 'Batch type: page')) {
-                $pagePrompt = $prompt;
-                break;
+            try {
+                $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
+                self::fail('Expected missing block_task field to be rejected: ' . $missingField);
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString('block_task', $exception->getMessage());
+                self::assertStringContainsString($missingField, $exception->getMessage());
             }
         }
-
-        self::assertNotSame('', $pagePrompt);
-        self::assertStringContainsString('block_goal', $pagePrompt);
-        self::assertStringContainsString('Stage-one hero block goal.', $pagePrompt);
-        self::assertStringContainsString('realtime_content', $pagePrompt);
-        self::assertStringContainsString('Stage-one hero headline', $pagePrompt);
-        self::assertStringContainsString('style_direction', $pagePrompt);
-        self::assertStringContainsString('Stage-one hero style direction.', $pagePrompt);
-        self::assertStringContainsString('reason', $pagePrompt);
-        self::assertStringContainsString('Stage-one hero reason.', $pagePrompt);
     }
 
 
@@ -1099,6 +1071,18 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         return $aiService;
     }
 
+    private function buildTaskPlanResponseMissingBlockTaskField(string $field): string
+    {
+        $decoded = \json_decode($this->buildTaskPlanResponse(), true);
+        if (isset($decoded['virtual_theme_plan']['page_tasks']['home_page'][0]['block_task'])
+            && \is_array($decoded['virtual_theme_plan']['page_tasks']['home_page'][0]['block_task'])
+        ) {
+            unset($decoded['virtual_theme_plan']['page_tasks']['home_page'][0]['block_task'][$field]);
+        }
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
     private function buildWrappedTaskPlanBatchResponse(string $prompt): string
     {
         $payload = $this->buildTaskPlanBatchPayloadForPrompt($prompt);
@@ -1221,6 +1205,43 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                                 'field_content_requirements' => [
                                     ['field' => 'title', 'sample' => 'Grow faster with our service', 'reason' => 'Lead with value'],
                                 ],
+                            ],
+                            'block_task' => [
+                                'schema_version' => 'stage2-block-task-v1',
+                                'task_goal' => 'Open with a clear value proposition.',
+                                'meta_fields' => [
+                                    [
+                                        'field' => 'title',
+                                        'type' => 'string',
+                                        'default' => 'Grow faster with our service',
+                                        'sample' => 'Grow faster with our service',
+                                        'reason' => 'Lead with value',
+                                    ],
+                                ],
+                                'content_plan' => [
+                                    'story_goal' => 'Make the hero conversion-ready.',
+                                    'content_fill_rule' => 'Use short headline and one CTA.',
+                                    'content_copy' => [
+                                        ['field' => 'title', 'copy' => 'Hero title'],
+                                    ],
+                                    'cta_plan' => [
+                                        ['label' => 'Start now', 'href' => '#contact'],
+                                    ],
+                                    'link_plan' => [
+                                        ['label' => 'Contact', 'href' => '#contact'],
+                                    ],
+                                    'asset_plan' => [
+                                        ['slot' => 'primary_visual', 'description' => 'Hero visual'],
+                                    ],
+                                ],
+                                'style_plan' => [
+                                    'color' => 'Use Ocean Slate blue accents on CTA and proof highlights.',
+                                    'font' => 'Use the confirmed heading scale with bold hero headline.',
+                                    'spacing' => 'Use generous hero padding and clear CTA gaps.',
+                                    'responsive' => 'Stack hero copy and visual on mobile.',
+                                ],
+                                'planning_reason' => 'Hero should translate the main value into first-screen conversion intent.',
+                                'sort_order' => 100,
                             ],
                         ],
                     ],
