@@ -4234,6 +4234,7 @@
             text: '文本色',
             implementation_note: '实现说明',
             reason: '说明原因',
+            planning_reason: '规划原因',
             page_goal: '页面目标',
             block_goal: '区块目标',
             content_fill_rule: '内容填充规则',
@@ -4709,7 +4710,7 @@
             if (!candidate || typeof candidate !== 'object') {
                 return;
             }
-            ['reason', 'why', 'selection_reason', 'decision_reason', 'rationale', 'explanation'].forEach(function (key) {
+            ['reason', 'why', 'selection_reason', 'decision_reason', 'planning_reason', 'rationale', 'explanation'].forEach(function (key) {
                 if (Object.prototype.hasOwnProperty.call(candidate, key)) {
                     pushReason(candidate[key]);
                 }
@@ -4717,7 +4718,7 @@
             Object.keys(candidate).forEach(function (key) {
                 var normalized = String(key || '').toLowerCase();
                 var child = candidate[key];
-                if (normalized === 'reason' || normalized === 'why' || normalized === 'selection_reason' || normalized === 'decision_reason' || normalized === 'rationale' || normalized === 'explanation') {
+                if (normalized === 'reason' || normalized === 'why' || normalized === 'selection_reason' || normalized === 'decision_reason' || normalized === 'planning_reason' || normalized === 'rationale' || normalized === 'explanation') {
                     return;
                 }
                 if (child && typeof child === 'object') {
@@ -5243,6 +5244,32 @@
         return false;
     }
 
+    function collectTaskPlanPlanningReasonItems(task, blockTask, planContext) {
+        var items = [];
+        var seen = {};
+        function push(raw) {
+            var text = sanitizePreviewText(raw, '');
+            if (!text || looksLikePreviewMetaInstruction(text) || seen[text]) {
+                return;
+            }
+            seen[text] = true;
+            items.push(text);
+        }
+        var taskObj = task && typeof task === 'object' ? task : {};
+        var blockTaskObj = blockTask && typeof blockTask === 'object' ? blockTask : {};
+        var contextObj = planContext && typeof planContext === 'object' ? planContext : {};
+        [
+            blockTaskObj.planning_reason,
+            taskObj.planning_reason,
+            contextObj.planning_reason,
+            contextObj.block_why,
+            taskObj.reason,
+            contextObj.reason,
+            taskObj.decision_reason
+        ].forEach(push);
+        return items;
+    }
+
     function renderTaskPlanTaskCard(task, idx, pageType) {
         if (!task || typeof task !== 'object') {
             return '';
@@ -5257,6 +5284,7 @@
         var taskScript = (task.task_script && typeof task.task_script === 'object') ? task.task_script : {};
         var implementationContract = (task.implementation_contract && typeof task.implementation_contract === 'object') ? task.implementation_contract : {};
         var blockTask = (task.block_task && typeof task.block_task === 'object') ? task.block_task : {};
+        var planningReasonItems = collectTaskPlanPlanningReasonItems(task, blockTask, planContext);
         var pageGoal = escapeHtml(sanitizePreviewText(planContext.page_goal || '', safePageLabel + ' 页面目标：明确本页价值与转化意图。')).replace(/\n/g, '<br>');
         var blockGoal = escapeHtml(sanitizePreviewText(planContext.block_goal || '', '区块目标：说明该区块承担的信息与行动目标。')).replace(/\n/g, '<br>');
         var scene = escapeHtml(sanitizePreviewText(taskScript.scene || '', rawTaskKey || safePageLabel)).replace(/\n/g, '<br>');
@@ -5281,7 +5309,9 @@
             + '<div class="d-flex flex-wrap align-items-start justify-content-between gap-2 pb-ai-plan-preview-block-head">'
             + '<div class="d-flex align-items-start gap-2 min-w-0">'
             + renderPreviewSortHandle()
-            + '<div><div class="fw-semibold">' + title + '</div>'
+            + '<div><div class="d-flex flex-wrap align-items-center gap-1"><div class="fw-semibold">' + title + '</div>'
+            + renderPreviewReasonDisclosure(previewLabels.reason, planningReasonItems)
+            + '</div>'
             + '<div class="text-muted small mt-1">' + taskKey + '</div></div>'
             + '</div>'
             + '<div class="d-flex flex-wrap align-items-center gap-2">'
