@@ -7305,6 +7305,156 @@ final class AiSiteExecutionBlueprintService
 
     /**
      * @param array<string, mixed> $scope
+     * @param array<string, mixed> $blockPatch
+     * @return array{
+     *     plan_json:array<string, mixed>,
+     *     structured:array<string, mixed>,
+     *     execution_blueprint:array<string, mixed>,
+     *     markdown:string,
+     *     plan_workbench:array<string, mixed>,
+     *     mutation_summary:array<string, mixed>,
+     *     block:array<string, mixed>|null
+     * }
+     */
+    public function mutateDraftPlanBlock(
+        array $scope,
+        string $pageType,
+        string $action,
+        string $blockKey = '',
+        array $blockPatch = []
+    ): array {
+        $pageType = \trim($pageType);
+        $action = \strtolower(\trim($action));
+        $blockKey = \trim($blockKey);
+        if ($pageType === '' || !\in_array($action, ['create', 'delete', 'rebuild'], true)) {
+            throw new \RuntimeException('Stage-1 block mutation requires page_type and action=create|delete|rebuild.');
+        }
+        if ($pageType === 'shared') {
+            throw new \RuntimeException('Stage-1 create/delete/rebuild only supports page blocks.');
+        }
+        if ($action !== 'create' && $blockKey === '') {
+            throw new \RuntimeException('Stage-1 block mutation requires block_key for delete/rebuild.');
+        }
+
+        $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+        $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null)
+            ? $scope['execution_blueprint_draft']
+            : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
+        $pages = \is_array($executionBlueprint['pages'] ?? null)
+            ? $executionBlueprint['pages']
+            : (\is_array($structured['pages'] ?? null) ? $structured['pages'] : []);
+        $pagePlan = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
+        if ($pagePlan === []) {
+            throw new \RuntimeException('Stage-1 page plan not found for page type: ' . $pageType);
+        }
+
+        $blocks = \array_values(\array_filter(
+            \is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [],
+            static fn($block): bool => \is_array($block)
+        ));
+        $mutatedBlock = null;
+        $removedBlock = null;
+
+        if ($action === 'delete') {
+            foreach ($blocks as $index => $block) {
+                if ($this->stageOneBlockKeyMatches($block, $blockKey)) {
+                    $removedBlock = $block;
+                    unset($blocks[$index]);
+                    break;
+                }
+            }
+            if ($removedBlock === null) {
+                throw new \RuntimeException('Stage-1 block not found for delete: ' . $blockKey);
+            }
+        } elseif ($action === 'create') {
+            $existingKeys = \array_values(\array_filter(\array_map(
+                static fn(array $block): string => \trim((string)($block['block_key'] ?? $block['section_code'] ?? '')),
+                $blocks
+            ), static fn(string $key): bool => $key !== ''));
+            $mutatedBlock = $this->buildStageOneCreatedBlock($pageType, $pagePlan, $blockPatch, $existingKeys);
+            $inserted = false;
+            $afterBlockKey = \trim((string)($blockPatch['after_block_key'] ?? ''));
+            if ($afterBlockKey !== '') {
+                foreach ($blocks as $index => $block) {
+                    if (!$this->stageOneBlockKeyMatches($block, $afterBlockKey)) {
+                        continue;
+                    }
+                    \array_splice($blocks, $index + 1, 0, [$mutatedBlock]);
+                    $inserted = true;
+                    break;
+                }
+            }
+            if (!$inserted) {
+                $blocks[] = $mutatedBlock;
+            }
+        } else {
+            foreach ($blocks as $index => $block) {
+                if (!$this->stageOneBlockKeyMatches($block, $blockKey)) {
+                    continue;
+                }
+                unset($blockPatch['block_key'], $blockPatch['section_code'], $blockPatch['after_block_key']);
+                $mutatedBlock = \array_replace_recursive($block, $blockPatch);
+                $mutatedBlock['block_key'] = \trim((string)($block['block_key'] ?? $blockKey));
+                $mutatedBlock['section_code'] = \trim((string)($block['section_code'] ?? $mutatedBlock['block_key']));
+                $mutatedBlock['version'] = (int)($block['version'] ?? 1) + 1;
+                $mutatedBlock['mutation_source'] = 'stage1_block_mutation_api';
+                $mutatedBlock['mutated_at'] = \date('c');
+                if (\trim((string)($mutatedBlock['reason'] ?? $mutatedBlock['why'] ?? '')) === '') {
+                    $mutatedBlock['reason'] = 'Block was locally rebuilt from the stage-one block operation API.';
+                    $mutatedBlock['why'] = $mutatedBlock['reason'];
+                }
+                $blocks[$index] = $mutatedBlock;
+                break;
+            }
+            if ($mutatedBlock === null) {
+                throw new \RuntimeException('Stage-1 block not found for rebuild: ' . $blockKey);
+            }
+        }
+
+        $sharedPromptContext = \is_array($executionBlueprint['shared_prompt_context'] ?? null)
+            ? $executionBlueprint['shared_prompt_context']
+            : (\is_array($structured['shared_plan']['shared_prompt_context'] ?? null) ? $structured['shared_plan']['shared_prompt_context'] : []);
+        $blocks = \array_values($blocks);
+        foreach ($blocks as $index => $block) {
+            $block['sort_order'] = ($index + 1) * 10;
+            $block['order'] = ($index + 1) * 10;
+            $blocks[$index] = $this->normalizeStageOnePageBlock($pageType, $pagePlan, $block, $index, $sharedPromptContext);
+        }
+
+        $pagePlan['blocks'] = $blocks;
+        $pagePlan['block_tree_version'] = (int)($pagePlan['block_tree_version'] ?? 1) + 1;
+        $pagePlan['assembly_version'] = (int)($pagePlan['assembly_version'] ?? 1) + 1;
+        $pagePlan['last_block_mutation'] = [
+            'action' => $action,
+            'block_key' => $action === 'create'
+                ? (string)($mutatedBlock['block_key'] ?? '')
+                : ($action === 'delete' ? (string)($removedBlock['block_key'] ?? $blockKey) : (string)($mutatedBlock['block_key'] ?? $blockKey)),
+            'mutated_at' => \date('c'),
+        ];
+        $pages[$pageType] = $pagePlan;
+        $structured['pages'] = $pages;
+        $executionBlueprint['pages'] = $pages;
+
+        $assembled = $this->assembleStageOneDraftArtifacts($scope, $structured, $executionBlueprint);
+        $summary = [
+            'action' => $action,
+            'page_type' => $pageType,
+            'block_key' => (string)($pagePlan['last_block_mutation']['block_key'] ?? $blockKey),
+            'block_count' => \count($blocks),
+            'block_tree_version' => (int)$pagePlan['block_tree_version'],
+            'assembly_version' => (int)$pagePlan['assembly_version'],
+        ];
+        $assembled['mutation_summary'] = $summary;
+        $assembled['block'] = $action === 'delete' ? null : $this->findStageOnePageBlock(
+            \is_array($assembled['structured']['pages'][$pageType]['blocks'] ?? null) ? $assembled['structured']['pages'][$pageType]['blocks'] : [],
+            (string)$summary['block_key']
+        );
+
+        return $assembled;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
      * @param list<string> $orderedBlockKeys
      * @return array{
      *     plan_json:array<string, mixed>,
