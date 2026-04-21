@@ -246,6 +246,21 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame(143, $chunkEvents[0]['data']['queue_snapshot']['queue_id']);
     }
 
+    public function testOperationSseClaimedDispatcherIncludesPlanBranch(): void
+    {
+        $controllerSource = \file_get_contents(
+            \dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php'
+        );
+
+        self::assertIsString($controllerSource);
+        self::assertStringContainsString(
+            "'plan' => $this->runPlanOperationSseBranch",
+            $controllerSource,
+            'operation-sse claimed-operation dispatcher must route operation=plan instead of falling through to unknown operation.'
+        );
+        self::assertStringContainsString('private function runPlanOperationSseBranch', $controllerSource);
+    }
+
     public function testPhaseOneQueuePanelIsSubscribedToOperationSsePayloads(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
