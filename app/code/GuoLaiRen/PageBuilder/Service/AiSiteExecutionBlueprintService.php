@@ -4429,22 +4429,6 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * @param mixed $values
-     * @return list<string>
-     */
-    private function normalizeStringList(mixed $values): array
-    {
-        if (!\is_array($values)) {
-            return [];
-        }
-
-        return \array_values(\array_unique(\array_filter(\array_map(
-            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-            $values
-        ), static fn(string $value): bool => $value !== '')));
-    }
-
-    /**
      * @param array<string, mixed> $block
      * @return array<string, mixed>
      */
@@ -4487,54 +4471,6 @@ final class AiSiteExecutionBlueprintService
             'media' => \is_array($executionScript['media_assets'] ?? null) ? $executionScript['media_assets'] : [],
             'editable_slots' => $this->deriveStageOneEditableFields($block, []),
         ];
-    }
-
-    /**
-     * @param array<string, mixed> $block
-     * @param array<string, mixed> $realtimeContent
-     * @return list<string>
-     */
-    private function deriveStageOneEditableFields(array $block, array $realtimeContent): array
-    {
-        $fields = [];
-        foreach (['editable_slots', 'data_slots'] as $slotKey) {
-            $fields = \array_merge($fields, $this->normalizeStringList($realtimeContent[$slotKey] ?? []));
-        }
-        foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $row) {
-            if (\is_array($row)) {
-                $field = \trim((string)($row['field'] ?? ''));
-                if ($field !== '') {
-                    $fields[] = $field;
-                }
-            }
-        }
-        foreach (\is_array($realtimeContent['editable_slots'] ?? null) ? $realtimeContent['editable_slots'] : [] as $slot) {
-            if (\is_scalar($slot)) {
-                $fields[] = (string)$slot;
-            }
-        }
-        if ($fields === []) {
-            $component = \trim((string)($block['component'] ?? ''));
-            $fields = $component === 'header'
-                ? ['brand_name', 'navigation_items', 'primary_cta']
-                : ($component === 'footer' ? ['footer_links', 'policy_links', 'contact_fields'] : ['headline', 'supporting_copy', 'cta', 'media']);
-        }
-
-        return $this->normalizeStringList($fields);
-    }
-
-    /**
-     * @param array<string, mixed> $block
-     */
-    private function buildStageOneBlockContextHash(string $pageType, array $block): string
-    {
-        $hashSource = $block;
-        unset($hashSource['context_hash']);
-
-        return \sha1((string)\json_encode([
-            'page_key' => $pageType,
-            'block' => $hashSource,
-        ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
     }
 
     /**
