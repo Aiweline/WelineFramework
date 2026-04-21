@@ -3879,6 +3879,7 @@ final class AiSiteVirtualThemePlanService
                 ]);
                 $tasks[$idx] = $task;
 
+                $dependsOn = \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [])));
                 $jobs[$jobKey] = [
                     'job_key' => $jobKey,
                     'job_type' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
@@ -3887,14 +3888,19 @@ final class AiSiteVirtualThemePlanService
                     'task_key' => $taskKey,
                     'page_type' => $pageType,
                     'block_key' => $blockKey,
-                    'depends_on' => \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
+                    'depends_on' => $dependsOn,
+                    'depends_on_task_keys' => $dependsOn,
                     'status' => (string)($task['status'] ?? 'pending'),
                     'prompt_version' => (string)($runtimeContext['prompt_version'] ?? 'stage2-block-task-plan-v2'),
                     'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                    'queue_driver' => 'weline_queue',
+                    'can_parallel_after_dependencies' => true,
                     'concurrency' => [
                         'mode' => 'fiber_coroutine',
                         'group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
                         'task_granularity' => 'one_block_one_task',
+                        'dependency_policy' => 'preserve_task_dependencies_and_sort_order',
+                        'queue_driver' => 'weline_queue',
                     ],
                     'inputs' => [
                         'task_key' => $taskKey,
@@ -3928,6 +3934,9 @@ final class AiSiteVirtualThemePlanService
             'fanout' => [
                 'trigger_after' => 'stage1.confirmed_block_tree',
                 'mode' => 'fiber_coroutine',
+                'queue_driver' => 'weline_queue',
+                'dispatch_policy' => 'shared_first_then_block_fanout',
+                'dependency_policy' => 'preserve_block_sort_order_and_task_dependencies',
                 'task_granularity' => 'one_block_one_task',
                 'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
                 'block_job_count' => \count($blockJobKeys),
