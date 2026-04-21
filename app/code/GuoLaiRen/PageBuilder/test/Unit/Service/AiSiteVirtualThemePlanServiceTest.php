@@ -221,6 +221,80 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringNotContainsString('stale_markdown_only', \json_encode($artifacts['structured']['page_tasks'], \JSON_UNESCAPED_UNICODE));
     }
 
+    public function testBuildTaskPlanArtifactsFansOutOneStageTwoBlockTaskPlanPerConfirmedBlock(): void
+    {
+        $service = new AiSiteVirtualThemePlanService();
+        $scope = $this->buildPromptScope();
+        $scope['fake_mode'] = 1;
+        $scope['execution_blueprint']['page_types'] = ['home_page'];
+        $scope['plan_workbench']['confirmed']['plan_book']['structured'] = [
+            'source' => 'stage1.block_tree',
+            'source_signature' => 'confirmed-block-tree-signature',
+            'context_hash' => 'confirmed-plan-book-hash',
+            'pages' => [
+                'home_page' => [
+                    'page_key' => 'home_page',
+                    'page_goal' => 'Confirmed home page goal.',
+                    'blocks' => [
+                        [
+                            'block_key' => 'hero',
+                            'component_kind' => 'content/hero',
+                            'sort_order' => 30,
+                            'title' => 'Hero',
+                            'goal' => 'Hero must state the offer.',
+                            'reason' => 'Hero is the primary conversion block.',
+                            'editable_fields' => ['title'],
+                            'realtime_content' => ['title' => 'Launch with confidence'],
+                            'context_hash' => 'hero-hash',
+                        ],
+                        [
+                            'block_key' => 'proof',
+                            'component_kind' => 'content/proof',
+                            'sort_order' => 40,
+                            'title' => 'Proof',
+                            'goal' => 'Proof must support the offer.',
+                            'reason' => 'Proof reduces first-screen doubt.',
+                            'editable_fields' => ['title'],
+                            'realtime_content' => ['title' => 'Trusted by growing teams'],
+                            'context_hash' => 'proof-hash',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $artifacts = $service->buildTaskPlanArtifacts($scope, ['tasks' => []]);
+        $pageTasks = $artifacts['structured']['page_tasks']['home_page'] ?? [];
+
+        self::assertCount(2, $pageTasks);
+        self::assertSame(['hero', 'proof'], \array_map(
+            static fn(array $task): string => (string)($task['block_key'] ?? ''),
+            $pageTasks
+        ));
+        foreach ($pageTasks as $task) {
+            self::assertSame('stage2.block_task_plan', (string)($task['fanout_group'] ?? ''));
+            self::assertStringStartsWith('stage2.block_task_plan:home_page:', (string)($task['fanout_job_key'] ?? ''));
+            self::assertSame((string)($task['block_key'] ?? ''), (string)($task['runtime_context']['block_key'] ?? ''));
+        }
+
+        $stage2Queue = $artifacts['structured']['stage2_queue'] ?? [];
+        self::assertSame('stage2.block_task_plan', (string)($stage2Queue['fanout']['fanout_group'] ?? ''));
+        self::assertSame('one_block_one_task', (string)($stage2Queue['fanout']['task_granularity'] ?? ''));
+        self::assertSame(2, (int)($stage2Queue['fanout']['block_job_count'] ?? 0));
+        self::assertSame(
+            ['stage2.block_task_plan:home_page:hero', 'stage2.block_task_plan:home_page:proof'],
+            $stage2Queue['fanout']['block_job_keys'] ?? []
+        );
+        self::assertSame(
+            'stage2.block_task_plan',
+            (string)($stage2Queue['jobs']['stage2.block_task_plan:home_page:hero']['job_type'] ?? '')
+        );
+        self::assertSame(
+            'hero',
+            (string)($stage2Queue['jobs']['stage2.block_task_plan:home_page:hero']['inputs']['block_key'] ?? '')
+        );
+    }
+
     public function testBuildTaskPlanArtifactsFallsBackDeterministicallyWhenFakeModeIsEnabled(): void
     {
         $aiService = $this->createMock(AiService::class);
