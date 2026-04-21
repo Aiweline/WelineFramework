@@ -71,6 +71,64 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertFalse((bool)$method->invoke($controller, ['fake_mode' => 1], 'deterministic', false));
     }
 
+    public function testBlockConfigReplacementOnlyTouchesSelectedPageBlock(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(AiSiteAgent::class, 'replaceCurrentPageBlockInVirtualPages');
+        $method->setAccessible(true);
+
+        $virtualPages = [
+            'home' => [
+                'blocks' => [
+                    [
+                        'block_id' => 'home-site-header',
+                        'type' => 'site_header',
+                        'html' => '<header>Home before</header>',
+                        'config' => ['site_title' => 'Home before'],
+                    ],
+                    [
+                        'block_id' => 'home-hero',
+                        'type' => 'hero',
+                        'html' => '<section>Hero before</section>',
+                        'config' => ['headline' => 'Hero before'],
+                    ],
+                ],
+            ],
+            'about' => [
+                'blocks' => [
+                    [
+                        'block_id' => 'about-site-header',
+                        'type' => 'site_header',
+                        'html' => '<header>About before</header>',
+                        'config' => ['site_title' => 'About before'],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = $method->invoke(
+            $controller,
+            $virtualPages,
+            'home',
+            'home-site-header',
+            [
+                'block_id' => 'home-site-header',
+                'type' => 'site_header',
+                'html' => '<header>Home tuned</header>',
+                'config' => ['site_title' => 'Home tuned'],
+            ],
+            '2026-04-21 15:20:00'
+        );
+
+        self::assertSame('Home tuned', $result['home']['blocks'][0]['config']['site_title']);
+        self::assertSame('<header>Home tuned</header>', $result['home']['blocks'][0]['html']);
+        self::assertSame('Hero before', $result['home']['blocks'][1]['config']['headline']);
+        self::assertSame('About before', $result['about']['blocks'][0]['config']['site_title']);
+        self::assertSame('<header>About before</header>', $result['about']['blocks'][0]['html']);
+        self::assertSame('2026-04-21 15:20:00', $result['home']['last_generated_at']);
+        self::assertArrayNotHasKey('last_generated_at', $result['about']);
+    }
+
     public function testQueueObserverPanelPayloadContainsCurrentQueueDetails(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
