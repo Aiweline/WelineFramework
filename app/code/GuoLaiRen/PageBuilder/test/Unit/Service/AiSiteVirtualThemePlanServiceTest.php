@@ -221,78 +221,111 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringNotContainsString('stale_markdown_only', \json_encode($artifacts['structured']['page_tasks'], \JSON_UNESCAPED_UNICODE));
     }
 
-    public function testBuildTaskPlanArtifactsFansOutOneStageTwoBlockTaskPlanPerConfirmedBlock(): void
+    public function testBuildTaskPlanArtifactsAiPromptUsesConfirmedPlanBookInsteadOfPlanMarkdown(): void
     {
-        $service = new AiSiteVirtualThemePlanService();
+        $capturedPrompts = [];
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::exactly(2))
+            ->method('generate')
+            ->willReturnCallback(function (string $prompt) use (&$capturedPrompts): string {
+                $capturedPrompts[] = $prompt;
+                if (\str_contains($prompt, 'Batch type: shared')) {
+                    return \json_encode([
+                        'shared_tasks' => [
+                            [
+                                'task_key' => 'shared:header',
+                                'group_key' => 'shared',
+                                'page_type' => '',
+                                'label' => 'Header',
+                                'sort_order' => 10,
+                                'task_script' => [
+                                    'story_goal' => 'Visitors can use the confirmed header navigation immediately.',
+                                    'content_fill_rule' => 'Use confirmed nav labels and keep the brand slot visible.',
+                                    'stage3_directive' => 'Implement the confirmed shared header.',
+                                    'field_content_requirements' => [
+                                        ['field' => 'title', 'sample' => 'Confirmed Header', 'reason' => 'Identify the shared header.'],
+                                    ],
+                                ],
+                            ],
+                        ],
+                        'risk_notes' => [],
+                    ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+                }
+
+                return \json_encode([
+                    'page_type' => 'home_page',
+                    'page_tasks' => [
+                        [
+                            'task_key' => 'page:home_page:confirmed_hero',
+                            'group_key' => 'home_page',
+                            'page_type' => 'home_page',
+                            'label' => 'Confirmed Hero',
+                            'sort_order' => 30,
+                            'task_script' => [
+                                'story_goal' => 'Visitors see the confirmed hero headline and understand the offer.',
+                                'content_fill_rule' => 'headline example: Confirmed hero headline; CTA example: Start now.',
+                                'stage3_directive' => 'Implement the confirmed hero block.',
+                                'field_content_requirements' => [
+                                    ['field' => 'title', 'sample' => 'Confirmed hero headline', 'reason' => 'Use the confirmed stage-1 headline.'],
+                                ],
+                            ],
+                        ],
+                    ],
+                    'risk_notes' => [],
+                ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+            });
+
+        $service = new AiSiteVirtualThemePlanService($aiService);
         $scope = $this->buildPromptScope();
-        $scope['fake_mode'] = 1;
-        $scope['execution_blueprint']['page_types'] = ['home_page'];
+        $scope['plan_markdown'] = "# Stale Markdown\n\n- stale_markdown_only";
         $scope['plan_workbench']['confirmed']['plan_book']['structured'] = [
             'source' => 'stage1.block_tree',
             'source_signature' => 'confirmed-block-tree-signature',
             'context_hash' => 'confirmed-plan-book-hash',
+            'shared_blocks' => [
+                [
+                    'task_key' => 'shared:header',
+                    'block_key' => 'shared:header',
+                    'component' => 'header',
+                    'sort_order' => 10,
+                    'title' => 'Header',
+                    'goal' => 'Confirmed header goal from block tree.',
+                    'context_hash' => 'confirmed-header-hash',
+                ],
+            ],
             'pages' => [
                 'home_page' => [
                     'page_key' => 'home_page',
-                    'page_goal' => 'Confirmed home page goal.',
+                    'page_label' => 'Home',
+                    'page_goal' => 'Confirmed home page goal from block tree.',
                     'blocks' => [
                         [
-                            'block_key' => 'hero',
-                            'component_kind' => 'content/hero',
+                            'task_key' => 'page:home_page:confirmed_hero',
+                            'block_key' => 'page:home_page:confirmed_hero',
+                            'source_block_key' => 'confirmed_hero',
+                            'component_kind' => 'content/confirmed-hero',
                             'sort_order' => 30,
-                            'title' => 'Hero',
-                            'goal' => 'Hero must state the offer.',
-                            'reason' => 'Hero is the primary conversion block.',
+                            'title' => 'Confirmed Hero',
+                            'goal' => 'Confirmed hero goal from block tree.',
+                            'implementation_detail' => 'Render confirmed hero from the block tree.',
+                            'realtime_content' => ['headline' => 'Confirmed hero headline'],
+                            'reason' => 'Confirmed reason from stage one.',
                             'editable_fields' => ['title'],
-                            'realtime_content' => ['title' => 'Launch with confidence'],
-                            'context_hash' => 'hero-hash',
-                        ],
-                        [
-                            'block_key' => 'proof',
-                            'component_kind' => 'content/proof',
-                            'sort_order' => 40,
-                            'title' => 'Proof',
-                            'goal' => 'Proof must support the offer.',
-                            'reason' => 'Proof reduces first-screen doubt.',
-                            'editable_fields' => ['title'],
-                            'realtime_content' => ['title' => 'Trusted by growing teams'],
-                            'context_hash' => 'proof-hash',
+                            'context_hash' => 'confirmed-hero-hash',
                         ],
                     ],
                 ],
             ],
         ];
 
-        $artifacts = $service->buildTaskPlanArtifacts($scope, ['tasks' => []]);
-        $pageTasks = $artifacts['structured']['page_tasks']['home_page'] ?? [];
+        $service->buildTaskPlanArtifacts($scope, $this->buildPromptBlueprint());
 
-        self::assertCount(2, $pageTasks);
-        self::assertSame(['hero', 'proof'], \array_map(
-            static fn(array $task): string => (string)($task['block_key'] ?? ''),
-            $pageTasks
-        ));
-        foreach ($pageTasks as $task) {
-            self::assertSame('stage2.block_task_plan', (string)($task['fanout_group'] ?? ''));
-            self::assertStringStartsWith('stage2.block_task_plan:home_page:', (string)($task['fanout_job_key'] ?? ''));
-            self::assertSame((string)($task['block_key'] ?? ''), (string)($task['runtime_context']['block_key'] ?? ''));
-        }
-
-        $stage2Queue = $artifacts['structured']['stage2_queue'] ?? [];
-        self::assertSame('stage2.block_task_plan', (string)($stage2Queue['fanout']['fanout_group'] ?? ''));
-        self::assertSame('one_block_one_task', (string)($stage2Queue['fanout']['task_granularity'] ?? ''));
-        self::assertSame(2, (int)($stage2Queue['fanout']['block_job_count'] ?? 0));
-        self::assertSame(
-            ['stage2.block_task_plan:home_page:hero', 'stage2.block_task_plan:home_page:proof'],
-            $stage2Queue['fanout']['block_job_keys'] ?? []
-        );
-        self::assertSame(
-            'stage2.block_task_plan',
-            (string)($stage2Queue['jobs']['stage2.block_task_plan:home_page:hero']['job_type'] ?? '')
-        );
-        self::assertSame(
-            'hero',
-            (string)($stage2Queue['jobs']['stage2.block_task_plan:home_page:hero']['inputs']['block_key'] ?? '')
-        );
+        $allPrompts = \implode("\n---batch---\n", $capturedPrompts);
+        self::assertStringContainsString('confirmed_block_tree_source', $allPrompts);
+        self::assertStringContainsString('plan_workbench.confirmed.plan_book.structured', $allPrompts);
+        self::assertStringContainsString('Confirmed hero goal from block tree.', $allPrompts);
+        self::assertStringContainsString('confirmed-hero-hash', $allPrompts);
+        self::assertStringNotContainsString('stale_markdown_only', $allPrompts);
     }
 
     public function testBuildTaskPlanArtifactsFallsBackDeterministicallyWhenFakeModeIsEnabled(): void
