@@ -144,6 +144,13 @@ final class AiSiteExecutionBlueprintService
             $pageTypes,
             $planLocale
         );
+        $stageOneQueue = $this->buildStageOneHeaderFooterQueueEnvelope(
+            $themeContextSnapshot,
+            $sharedComponents,
+            $sharedPromptContext,
+            $pageTypes,
+            $planLocale
+        );
         $pagePlans = $this->buildStageOnePagePlans($pages, $sharedPromptContext);
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
 
@@ -155,6 +162,7 @@ final class AiSiteExecutionBlueprintService
             'page_blueprints' => $pageBlueprints,
             'theme_context_snapshot' => $themeContextSnapshot,
             'shared_prompt_context' => $sharedPromptContext,
+            'stage1_queue' => $stageOneQueue,
             'shared_components' => $sharedComponents,
             'pages' => $pages,
             'page_plans' => $pagePlans,
@@ -188,6 +196,7 @@ final class AiSiteExecutionBlueprintService
                 'footer_block' => $sharedComponents['footer'],
                 'shared_prompt_context' => $sharedPromptContext,
             ],
+            'stage1_queue' => $stageOneQueue,
             'page_types' => $pageTypes,
             'pages' => $pages,
             'page_plans' => $pagePlans,
@@ -1266,6 +1275,13 @@ final class AiSiteExecutionBlueprintService
         );
         $sharedComponents = \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : [];
         $sharedPromptContext = $this->buildStageOneSharedPromptContext($themeContextSnapshot, $sharedComponents, $pageTypes, $planLocale);
+        $stageOneQueue = $this->buildStageOneHeaderFooterQueueEnvelope(
+            $themeContextSnapshot,
+            $sharedComponents,
+            $sharedPromptContext,
+            $pageTypes,
+            $planLocale
+        );
         $structured['theme_context_snapshot'] = $themeContextSnapshot;
         $structured['shared_plan'] = \array_replace(
             \is_array($structured['shared_plan'] ?? null) ? $structured['shared_plan'] : [],
@@ -1277,6 +1293,8 @@ final class AiSiteExecutionBlueprintService
         $planJson['theme_design'] = $themeDesign;
         $executionBlueprint['theme_context_snapshot'] = $themeContextSnapshot;
         $executionBlueprint['shared_prompt_context'] = $sharedPromptContext;
+        $structured['stage1_queue'] = $stageOneQueue;
+        $executionBlueprint['stage1_queue'] = $stageOneQueue;
         $pagePlans = $this->buildStageOnePagePlans(
             \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [],
             $sharedPromptContext
@@ -3664,6 +3682,65 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param array<string, mixed> $themeContextSnapshot
+     * @param array<string, mixed> $sharedComponents
+     * @param array<string, mixed> $sharedPromptContext
+     * @param list<string> $pageTypes
+     * @return array<string, mixed>
+     */
+    private function buildStageOneHeaderFooterQueueEnvelope(
+        array $themeContextSnapshot,
+        array $sharedComponents,
+        array $sharedPromptContext,
+        array $pageTypes,
+        string $planLocale
+    ): array {
+        $headerBlock = \is_array($sharedComponents['header'] ?? null) ? $sharedComponents['header'] : [];
+        $footerBlock = \is_array($sharedComponents['footer'] ?? null) ? $sharedComponents['footer'] : [];
+        $themeContextHash = \trim((string)($themeContextSnapshot['context_hash'] ?? ''));
+        $sharedContextHash = \trim((string)($sharedPromptContext['context_hash'] ?? ''));
+        $job = [
+            'job_key' => 'stage1.shared.header_footer',
+            'job_type' => 'stage1.shared.header_footer',
+            'stage' => 'stage1_shared',
+            'status' => 'done',
+            'depends_on' => ['stage1.shared.theme_design'],
+            'token' => \sha1((string)\json_encode([
+                'job_key' => 'stage1.shared.header_footer',
+                'theme_context_hash' => $themeContextHash,
+                'shared_context_hash' => $sharedContextHash,
+                'page_types' => $pageTypes,
+            ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
+            'inputs' => [
+                'theme_context_hash' => $themeContextHash,
+                'theme_context_snapshot' => $themeContextSnapshot,
+                'page_types' => $pageTypes,
+                'plan_locale' => $planLocale,
+            ],
+            'outputs' => [
+                'header_block' => $headerBlock,
+                'footer_block' => $footerBlock,
+                'shared_prompt_context' => $sharedPromptContext,
+            ],
+            'output_refs' => [
+                'shared:header',
+                'shared:footer',
+                'shared_prompt_context',
+            ],
+        ];
+
+        return [
+            'version' => 1,
+            'stage' => 'stage1',
+            'status' => 'done',
+            'sequence' => [$job['job_key']],
+            'jobs' => [
+                $job['job_key'] => $job,
+            ],
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $pages
      * @return array<string, mixed>
      */
@@ -3836,6 +3913,7 @@ final class AiSiteExecutionBlueprintService
             'interaction_state' => $this->buildStageOneInteractionState($pagePlans, $blockIndex),
             'progress' => $this->buildStageOneProgressSummary(\is_array($structured['shared_plan'] ?? null) ? $structured['shared_plan'] : [], $pagePlans),
             'block_index' => $blockIndex,
+            'queue_jobs' => \is_array($structured['stage1_queue']['jobs'] ?? null) ? $structured['stage1_queue']['jobs'] : [],
         ];
 
         return [
