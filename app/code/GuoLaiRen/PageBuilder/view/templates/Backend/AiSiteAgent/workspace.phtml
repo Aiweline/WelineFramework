@@ -369,6 +369,7 @@ $workspaceRenderStage = \in_array($currentStage, ['plan', 'visual_edit', 'publis
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-phase1-task-progress.phtml', $workspaceTplData) ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-stage-plan.phtml', $workspaceTplData) ?>
 <?php elseif ($workspaceRenderStage === 'visual_edit'): ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-phase2-queue-progress.phtml', $workspaceTplData) ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-stage-visual-edit.phtml', $workspaceTplData) ?>
 <?php else: ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-stage-publish.phtml', $workspaceTplData) ?>
