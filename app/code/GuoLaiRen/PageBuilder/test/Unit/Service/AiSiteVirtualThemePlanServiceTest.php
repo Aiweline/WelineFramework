@@ -106,8 +106,8 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             $artifacts['structured']['block_task_schema']['required_fields'] ?? []
         );
         self::assertSame(
-            ['color', 'font', 'spacing', 'responsive'],
-            $artifacts['structured']['block_task_schema']['style_plan_required_keys'] ?? []
+            ['field', 'type', 'default', 'sample', 'reason'],
+            $artifacts['structured']['block_task_schema']['meta_field_required_fields'] ?? []
         );
         $blockTask = $artifacts['structured']['page_tasks']['home_page'][0]['block_task'] ?? [];
         self::assertSame('stage2-block-task-v1', (string)($blockTask['schema_version'] ?? ''));
@@ -394,7 +394,8 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('Treat this as a customer-visible implementation plan', $allPrompts);
         self::assertStringContainsString('block_task', $allPrompts);
         self::assertStringContainsString('task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order', $allPrompts);
-        self::assertStringContainsString('concrete color, font, spacing, and responsive keys', $allPrompts);
+        self::assertStringContainsString('Every block_task.meta_fields[] item MUST be an object with field, type, default, sample, reason', $allPrompts);
+        self::assertStringContainsString('block_task.meta_fields[].default and block_task.meta_fields[].sample must be concrete stage-3-ready values', $allPrompts);
         self::assertStringContainsString('Stage-1 compact context summary:', $allPrompts);
         self::assertStringNotContainsString('Stage-1 plan_json:', $allPrompts);
         self::assertStringNotContainsString('Baseline virtual_theme_plan compatibility snapshot:', $allPrompts);
