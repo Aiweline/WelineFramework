@@ -111,6 +111,9 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             $artifacts['structured']['block_task_schema']['style_plan_required_keys'] ?? []
         );
         $blockTask = $artifacts['structured']['page_tasks']['home_page'][0]['block_task'] ?? [];
+        self::assertSame('done', (string)($artifacts['structured']['page_tasks']['home_page'][0]['status'] ?? ''));
+        self::assertSame('done', (string)($artifacts['structured']['page_tasks']['home_page'][0]['task_status'] ?? ''));
+        self::assertSame(1, (int)($artifacts['structured']['page_tasks']['home_page'][0]['attempt_no'] ?? 0));
         self::assertSame('stage2-block-task-v1', (string)($blockTask['schema_version'] ?? ''));
         self::assertSame('Open with a clear value proposition.', (string)($blockTask['task_goal'] ?? ''));
         self::assertSame(100, (int)($blockTask['sort_order'] ?? 0));
