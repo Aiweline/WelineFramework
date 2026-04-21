@@ -400,6 +400,55 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertNotEmpty($artifacts['plan_json']['pages']['home_page']['blocks'] ?? []);
     }
 
+    public function testBuildPlanArtifactsByAiStreamAcceptsThemeSelectionReasonThatReferencesRequirement(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildAiPlanResponseWithThemeSelectionReason(
+                'The strong CTA requirement calls for a clear conversion-focused visual system that keeps Home and About visitors moving toward contact.'
+            ))
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+
+        self::assertSame(1, (int)($artifacts['ai_generated'] ?? 0));
+        self::assertSame(
+            'The strong CTA requirement calls for a clear conversion-focused visual system that keeps Home and About visitors moving toward contact.',
+            (string)($artifacts['plan_json']['theme_design']['selection_reason'] ?? '')
+        );
+    }
+
+    public function testBuildPlanArtifactsByAiStreamRejectsThemeSelectionReasonThatIgnoresRequirement(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildAiPlanResponseWithThemeSelectionReason(
+                'Modern, premium, clean, and simple.'
+            ))
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('theme_design.selection_reason must reference the user one-line requirement');
+
+        $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Teenipiya',
+            'brief_description' => 'Build an APK download landing page for Teenipiya rummy players in India.',
+            'page_types' => ['home_page'],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'Teenipiya',
+            'brief_description' => 'Build an APK download landing page for Teenipiya rummy players in India.',
+        ]);
+    }
+
     public function testBuildPlanArtifactsByAiStreamReportsMissingPlanJsonOnlyOnce(): void
     {
         $service = new AiSiteExecutionBlueprintService(
@@ -632,6 +681,20 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             ),
             \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
         ) ?: '{}';
+    }
+
+    private function buildAiPlanResponseWithThemeSelectionReason(string $selectionReason): string
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        if (!\is_array($decoded)) {
+            return '{}';
+        }
+
+        $decoded['plan_json']['theme_design'] = [
+            'selection_reason' => $selectionReason,
+        ];
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }
 
     private function buildPromptLikeAiPlanResponse(): string
