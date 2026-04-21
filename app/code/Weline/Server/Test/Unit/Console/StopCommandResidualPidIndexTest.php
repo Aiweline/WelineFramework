@@ -53,6 +53,11 @@ final class StopCommandResidualPidIndexTest extends TestCase
 
                 return [202, 303, 404];
             }
+
+            protected function queryWindowsCmdWindowRowsForStop(): array
+            {
+                return [];
+            }
         };
 
         $info = new ServerInstanceInfo(

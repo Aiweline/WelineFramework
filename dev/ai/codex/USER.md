@@ -1,0 +1,75 @@
+# Codex User Profile for This Workspace
+
+This file captures durable user preferences for future Codex agents in
+`E:\WelineFramework\DEV-workspace`.
+
+## Communication
+
+- The user often writes Chinese and may paste mojibake console output.
+- Preserve exact error strings, paths, commands, and timestamps.
+- Explain using concrete call chains, files, runtime state, and visible output.
+- Avoid generic advice when a local command or source inspection can answer the
+  question.
+- Keep progress updates short and factual.
+- Final reports should include changed files, verification evidence, and known
+  risks.
+
+## Execution Style
+
+- Work autonomously on clear, reversible, non-destructive tasks.
+- Run safe local reproduction and diagnostic commands yourself.
+- Do not ask the user to run ordinary commands that you can run in the
+  workspace.
+- Iterate after each failure until the next concrete blocker is identified.
+- Treat newer logs or stack traces from the user as the current source of truth.
+- Preserve unrelated dirty worktree changes.
+
+## WLS Preferences
+
+For Weline Server / WLS work:
+
+- Start from runtime metadata, process lifecycle, IPC, ports, and logs.
+- Use exact WLS command output and stack traces as evidence.
+- `php bin/w s:start -r -f -frontend` is a recurring reproduction command when
+  the user asks to diagnose WLS start behavior.
+- Imperial cleanup commands are exclusive control-plane operations: let cleanup
+  finish before layering other runtime actions.
+- Child/shared-service processes should self-stop if the master dies.
+- In `-frontend` mode, shared IPC services should be visible and helper-process
+  logs should be mirrored to the console.
+- If `curl -k` succeeds but browser/plain curl fails, separate app reachability
+  from Windows Schannel/certificate trust.
+
+## PageBuilder Preferences
+
+For `app/code/GuoLaiRen/PageBuilder`:
+
+- The backend owns AI generation execution.
+- Queue state and SSE logs should model lifecycle and progress.
+- Do not create bespoke background runners when queue/query APIs already
+  represent the workflow.
+- Stage outputs should be customer-visible website implementation plans, not
+  prompt examples, blueprint-direction prose, or generic suggestions.
+- If OpenAI errors mention huge context sizes such as `requested 222515 tokens`,
+  inspect request-body bloat and conversation-history reattachment before
+  tuning output token limits.
+
+## Safety Boundaries
+
+- Avoid notification-capable stock monitor flows unless explicitly requested.
+- For encoding/mojibake fixes, inspect bytes and current working-tree logic
+  before patching.
+- Do not broadly revert files. Rebuild from clean `HEAD` only when necessary and
+  reapply intentional changes explicitly.
+- For WLS tests, prefer isolated test instances and targeted PHPUnit. Stop any
+  test WLS instance after use.
+
+## Repo Workflow Preferences
+
+- For substantial implementation tasks, create/update task workspaces under
+  `dev/ai/codex/tasks/YYYY-MM-DD/...`.
+- After live verification, update durable memory under `memory/YYYY-MM-DD.md`
+  when the result should survive future sessions.
+- Keep reports out of the repository root unless the user explicitly asks for
+  root-level artifacts.
+

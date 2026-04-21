@@ -2400,12 +2400,11 @@ class Processer
         }
 
         foreach ($foregroundImmediateLaunchItems as $item) {
-            $windowTitle = (string) ($item['process_name'] ?? $item['key'] ?? 'weline-process');
-            if ($windowTitle === '') {
-                $windowTitle = 'weline-process';
-            }
+            $windowTitle = self::normalizeWindowsForegroundWindowTitle(
+                (string) ($item['process_name'] ?? $item['key'] ?? 'weline-process')
+            );
 
-            self::launchWindowsForegroundImmediately(
+            $pid = self::launchWindowsForegroundImmediately(
                 (string) $item['command'],
                 (string) ($item['foreground_script'] ?? ''),
                 (string) ($item['cwd'] ?? BP),
@@ -2414,6 +2413,9 @@ class Processer
                 $procOpenAvailable,
                 $execAvailable
             );
+            if ($pid > 0) {
+                $results[$item['key']] = self::setPid((string) $item['command'], $pid);
+            }
         }
 
         if ($batchLaunchItems !== []) {
@@ -2503,20 +2505,34 @@ class Processer
         bool $enableLog,
         bool $procOpenAvailable,
         bool $execAvailable
-    ): bool {
+    ): int {
         if ($scriptPath === '') {
             if ($enableLog) {
                 self::setOutput($processCommand, "[ERROR] batchCreate foreground launch script is empty" . PHP_EOL, true);
             }
 
-            return false;
+            return 0;
+        }
+
+        if ($procOpenAvailable) {
+            $result = self::launchWindowsForegroundWrapperProcess($scriptPath, $workingDir, $windowTitle);
+            $pid = (int) ($result['pid'] ?? 0);
+            if ($pid > 0) {
+                return $pid;
+            }
+            $lastError = (string) ($result['error'] ?? '');
+            if ($enableLog && $lastError !== '') {
+                self::setOutput($processCommand, "[WARN] foreground wrapper pid unavailable: {$lastError}" . PHP_EOL, true);
+            }
         }
 
         $launchCommand = self::buildWindowsForegroundStartCommand($scriptPath, $workingDir, $windowTitle);
         $lastError = null;
         $launched = false;
+        $disabledFunctions = \array_map('trim', \explode(',', \ini_get('disable_functions') ?: ''));
+        $popenAvailable = \function_exists('popen') && !\in_array('popen', $disabledFunctions, true);
 
-        if ($procOpenAvailable) {
+        if ($popenAvailable) {
             \set_error_handler(function ($type, $msg) use (&$lastError) {
                 $lastError = $msg;
                 return true;
@@ -2552,10 +2568,10 @@ class Processer
             if ($enableLog && $lastError !== null) {
                 self::setOutput($processCommand, "[ERROR] batchCreate foreground launch failed: {$lastError}" . PHP_EOL, true);
             }
-            return false;
+            return 0;
         }
 
-        return true;
+        return 0;
     }
 
     /**
@@ -2799,9 +2815,13 @@ class Processer
      */
     private static function createWindowsForeground(string $pname, bool $enableLog, array $availableFunctions): int
     {
-        if (empty($availableFunctions['popen']) && empty($availableFunctions['exec'])) {
+        if (
+            empty($availableFunctions['proc_open'])
+            && empty($availableFunctions['popen'])
+            && empty($availableFunctions['exec'])
+        ) {
             if ($enableLog) {
-                self::setOutput($pname, "[ERROR] windows foreground launch requires popen or exec" . PHP_EOL, true);
+                self::setOutput($pname, "[ERROR] windows foreground launch requires proc_open, popen, or exec" . PHP_EOL, true);
             }
 
             return 0;
@@ -2812,6 +2832,7 @@ class Processer
         if ($windowTitle === '') {
             $windowTitle = self::generateProcessName($pname);
         }
+        $windowTitle = self::normalizeWindowsForegroundWindowTitle($windowTitle);
         $scriptPath = self::writeWindowsForegroundLauncherScript($phpBinary, $arguments, BP, $windowTitle);
         if ($scriptPath === null) {
             if ($enableLog) {
@@ -2820,6 +2841,17 @@ class Processer
 
             return 0;
         }
+        if (!empty($availableFunctions['proc_open'])) {
+            $result = self::launchWindowsForegroundWrapperProcess($scriptPath, BP, $windowTitle);
+            $pid = (int) ($result['pid'] ?? 0);
+            if ($pid > 0) {
+                return self::setPid($pname, $pid);
+            }
+            if ($enableLog && (string) ($result['error'] ?? '') !== '') {
+                self::setOutput($pname, "[WARN] foreground wrapper pid unavailable: " . (string) $result['error'] . PHP_EOL, true);
+            }
+        }
+
         $launchCommand = self::buildWindowsForegroundStartCommand($scriptPath, BP, $windowTitle);
         $lastError = null;
         $launched = false;
@@ -3017,10 +3049,7 @@ POWERSHELL;
     ): ?string
     {
         $arguments = self::normalizeWindowsForegroundArguments($arguments);
-        $windowTitle = \trim($windowTitle);
-        if ($windowTitle === '') {
-            $windowTitle = 'weline-process';
-        }
+        $windowTitle = self::normalizeWindowsForegroundWindowTitle($windowTitle);
         $template = <<<'CMD'
 @echo off
 setlocal DisableDelayedExpansion
@@ -3059,19 +3088,185 @@ CMD;
         return $scriptPath;
     }
 
+    private static function writeWindowsForegroundStartScript(
+        string $scriptPath,
+        string $workingDir,
+        string $windowTitle = ''
+    ): ?string
+    {
+        $cmdLine = self::buildWindowsForegroundCmdLine($scriptPath, $windowTitle);
+        $template = <<<'POWERSHELL'
+$ErrorActionPreference = 'Stop'
+$scriptPath = __SCRIPT__
+$wd = __WD__
+$cmdLine = __CMD_LINE__
+try {
+    Set-Location -LiteralPath $wd -ErrorAction Stop
+} catch {
+    [Console]::Error.WriteLine("Failed to set working directory: $($_.Exception.Message)")
+    exit 1
+}
+$startArgs = @{
+    FilePath = 'cmd.exe'
+    WorkingDirectory = $wd
+    WindowStyle = 'Normal'
+    PassThru = $true
+    ErrorAction = 'Stop'
+    ArgumentList = @('/d','/c', $cmdLine)
+}
+try {
+    $p = Start-Process @startArgs
+    [Console]::Out.WriteLine([string]$p.Id)
+} catch {
+    [Console]::Error.WriteLine($_.Exception.Message)
+    exit 1
+}
+POWERSHELL;
+
+        $script = \str_replace(
+            ['__SCRIPT__', '__WD__', '__CMD_LINE__'],
+            [
+                self::toPowerShellSingleQuoted($scriptPath),
+                self::toPowerShellSingleQuoted($workingDir),
+                self::toPowerShellSingleQuoted($cmdLine),
+            ],
+            $template
+        );
+
+        $tmpBase = \tempnam(\sys_get_temp_dir(), 'weline-foreground-start-');
+        if ($tmpBase === false || $tmpBase === '') {
+            return null;
+        }
+
+        $startScriptPath = $tmpBase . '.ps1';
+        @\unlink($tmpBase);
+
+        if (@\file_put_contents($startScriptPath, self::WINDOWS_PS1_UTF8_BOM . $script) === false) {
+            @\unlink($startScriptPath);
+            return null;
+        }
+
+        return $startScriptPath;
+    }
+
+    /**
+     * @return array{pid:int,error:string}
+     */
+    private static function launchWindowsForegroundWrapperProcess(
+        string $scriptPath,
+        string $workingDir,
+        string $windowTitle = ''
+    ): array
+    {
+        $startScriptPath = self::writeWindowsForegroundStartScript($scriptPath, $workingDir, $windowTitle);
+        if ($startScriptPath === null) {
+            return ['pid' => 0, 'error' => 'failed to prepare foreground start script'];
+        }
+
+        $descriptorspec = [
+            0 => ['file', 'NUL', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $lastError = null;
+        \set_error_handler(static function ($type, $msg) use (&$lastError): bool {
+            $lastError = $msg;
+
+            return true;
+        });
+        try {
+            $psProcess = \proc_open(
+                self::buildWindowsPowerShellProcOpenCommand($startScriptPath),
+                $descriptorspec,
+                $psPipes,
+                $workingDir,
+                null,
+                ['bypass_shell' => true]
+            );
+        } finally {
+            \restore_error_handler();
+        }
+
+        $pid = 0;
+        $output = '';
+        $stderr = '';
+        if (\is_resource($psProcess)) {
+            if (isset($psPipes[1])) {
+                @\stream_set_blocking($psPipes[1], false);
+            }
+            if (isset($psPipes[2])) {
+                @\stream_set_blocking($psPipes[2], false);
+            }
+
+            $deadline = \microtime(true) + 0.5;
+            while (\microtime(true) < $deadline) {
+                if (isset($psPipes[1])) {
+                    $chunk = @\fread($psPipes[1], 512);
+                    if (\is_string($chunk) && $chunk !== '') {
+                        $output .= $chunk;
+                    }
+                }
+                if (isset($psPipes[2])) {
+                    $chunkErr = @\fread($psPipes[2], 512);
+                    if (\is_string($chunkErr) && $chunkErr !== '') {
+                        $stderr .= $chunkErr;
+                    }
+                }
+                if (\str_contains($output, "\n")) {
+                    break;
+                }
+                $status = @\proc_get_status($psProcess);
+                if (($status['running'] ?? false) !== true) {
+                    break;
+                }
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
+            }
+
+            $output = \trim(self::normalizeWindowsPowerShellPipeOutput($output));
+            $output = \preg_replace('/^\xEF\xBB\xBF/', '', $output) ?? $output;
+            $stderr = \trim(self::normalizeWindowsPowerShellPipeOutput($stderr));
+            foreach (\preg_split('/\r\n|\r|\n/', $output) ?: [] as $line) {
+                $line = \trim((string) $line);
+                if ($line !== '' && \ctype_digit($line) && (int) $line > 0) {
+                    $pid = (int) $line;
+                    break;
+                }
+            }
+
+            if (isset($psPipes[1])) {
+                @\fclose($psPipes[1]);
+            }
+            if (isset($psPipes[2])) {
+                @\fclose($psPipes[2]);
+            }
+            $status = @\proc_get_status($psProcess);
+            self::finishWindowsDetachedHelperProcess($psProcess, $status);
+        }
+
+        @\unlink($startScriptPath);
+
+        $error = $stderr;
+        if ($error === '' && $lastError !== null) {
+            $error = $lastError;
+        }
+        if ($error === '' && $pid <= 0) {
+            $error = 'no pid returned';
+        }
+
+        return ['pid' => $pid, 'error' => $error];
+    }
+
     private static function buildWindowsForegroundStartCommand(string $scriptPath, string $workingDir, string $windowTitle): string
     {
-        $windowTitle = \trim(\str_replace('"', '', $windowTitle));
-        if ($windowTitle === '') {
-            $windowTitle = 'weline-process';
-        }
+        $windowTitle = self::normalizeWindowsForegroundWindowTitle($windowTitle);
 
         return 'start "'
             . $windowTitle
             . '" /D '
             . \escapeshellarg($workingDir)
             . ' cmd.exe /d /c '
-            . \escapeshellarg($scriptPath);
+            . \escapeshellarg(self::buildWindowsForegroundCmdLine($scriptPath, $windowTitle));
     }
 
     private static function waitForManagedProcessLaunch(string $pname, float $timeoutSeconds = 5.0): int
@@ -3140,6 +3335,27 @@ CMD;
         );
     }
 
+    private static function normalizeWindowsForegroundWindowTitle(string $windowTitle): string
+    {
+        $windowTitle = \trim(\str_replace(["\r", "\n"], ' ', $windowTitle));
+        if ($windowTitle === '') {
+            return 'weline-process';
+        }
+
+        $windowTitle = (string) \preg_replace('/[^A-Za-z0-9._-]+/', '-', $windowTitle);
+        $windowTitle = \trim($windowTitle, '-');
+
+        return $windowTitle !== '' ? $windowTitle : 'weline-process';
+    }
+
+    private static function buildWindowsForegroundCmdLine(string $scriptPath, string $windowTitle): string
+    {
+        $title = self::normalizeWindowsForegroundWindowTitle($windowTitle);
+        $scriptPath = \str_replace('"', '""', $scriptPath);
+
+        return 'title ' . $title . ' & call "' . $scriptPath . '"';
+    }
+
     private static function escapePowerShellLiteral(string $value): string
     {
         return \str_replace("'", "''", $value);
@@ -3206,13 +3422,17 @@ CMD;
             }
             $lines[] = '    }';
             if ($foreground) {
-                $windowTitle = \trim((string) ($item['process_name'] ?? $item['key'] ?? 'weline-process'));
-                if ($windowTitle === '') {
-                    $windowTitle = 'weline-process';
-                }
-                $lines[] = "    \$startArgs.ArgumentList = @('/d','/c','" . self::escapePowerShellLiteral('"' . (string) ($item['foreground_script'] ?? '') . '"') . "')";
-                $lines[] = '    Start-Process @startArgs | Out-Null';
-                $lines[] = "    \$results.Add(\"{$key}`t0\") | Out-Null";
+                $windowTitle = self::normalizeWindowsForegroundWindowTitle(
+                    (string) ($item['process_name'] ?? $item['key'] ?? 'weline-process')
+                );
+                $cmdLine = self::buildWindowsForegroundCmdLine(
+                    (string) ($item['foreground_script'] ?? ''),
+                    $windowTitle
+                );
+                $lines[] = '        PassThru = $true';
+                $lines[] = "    \$startArgs.ArgumentList = @('/d','/c'," . self::toPowerShellSingleQuoted($cmdLine) . ")";
+                $lines[] = '    $p = Start-Process @startArgs';
+                $lines[] = "    \$results.Add(\"{$key}`t\" + [string]\$p.Id) | Out-Null";
             } else {
                 if ($block) {
                     $lines[] = "    \$startArgs.RedirectStandardOutput = '{$stdoutPath}'";
@@ -5521,80 +5741,88 @@ CMD;
      */
     public static function killByProcessNamePrefix(string $prefix): int
     {
+        return self::killByProcessNamePrefixes([$prefix]);
+    }
+
+    /**
+     * 按多个进程名前缀一次性批量杀进程树。
+     *
+     * @param list<string> $prefixes
+     * @return int 成功杀死的进程数
+     */
+    public static function killByProcessNamePrefixes(array $prefixes): int
+    {
+        $prefixes = \array_values(\array_unique(\array_filter(
+            \array_map('strval', $prefixes),
+            static fn (string $prefix): bool => $prefix !== ''
+                && \strpos($prefix, self::WELINE_PROCESS_PREFIX) !== false
+        )));
         // 安全校验：prefix 必须包含 weline-
-        if (empty($prefix) || \strpos($prefix, self::WELINE_PROCESS_PREFIX) === false) {
+        if ($prefixes === []) {
             return 0;
         }
         
-        $killed = 0;
-        $killedPids = [];
+        $targetPids = [];
         $currentPid = \getmypid();
         
         // 1. 从 name_index 读取所有进程
         $nameIndex = self::readNameIndex();
-        $pidsToKill = [];
         
         // 2. 按前缀匹配收集所有 PID（一对多）
         foreach ($nameIndex as $pname => $entries) {
             $taskName = '';
             try {
                 $taskName = self::getTaskName($pname);
-            } catch (\Exception $e) {
-                continue;
+            } catch (\Throwable) {
+                $taskName = \str_starts_with($pname, '--name=')
+                    ? \substr($pname, 7)
+                    : $pname;
             }
-            
-            if (\str_starts_with($taskName, $prefix) || \str_starts_with($pname, '--name=' . $prefix)) {
+
+            foreach ($prefixes as $prefix) {
+                if (!\str_starts_with($taskName, $prefix) && !\str_starts_with($pname, '--name=' . $prefix)) {
+                    continue;
+                }
+
                 foreach ($entries as $entry) {
                     $pid = (int) ($entry['pid'] ?? 0);
-                    if ($pid > 0) {
-                        $pidsToKill[$pid] = $pname;
+                    if ($pid <= 0 || $pid === $currentPid) {
+                        continue;
                     }
+                    if (!self::isManagedProcessRunning($pid, $taskName !== '' ? $taskName : null, '', $pname)) {
+                        continue;
+                    }
+                    $targetPids[$pid] = true;
                 }
+
+                break;
             }
         }
         
         // 3. 批量杀死 name_index 中的进程
-        foreach ($pidsToKill as $pid => $pname) {
-            if ($pid === $currentPid || !self::isProcessManagerCreated($pid)) {
-                continue;
-            }
-            $taskName = '';
-            try {
-                $taskName = self::getTaskName($pname);
-            } catch (\Throwable) {
-            }
-            $result = self::killManagedProcess(
-                $pid,
-                $taskName !== '' ? $taskName : null,
-                '',
-                $pname
-            );
-            if ($result) {
-                $killed++;
-                $killedPids[$pid] = true;
-                self::logLifecycleEvent('kill', $pname, $pid, 'killed by prefix: ' . $prefix);
-            }
-        }
-        
         // 4. 系统级兜底：通过 pgrep/ps 搜索命令行中含 --name={prefix} 的进程
         //    解决 osascript/nohup 等启动方式导致 name_index 缺失 PID 的问题
-        $sysPids = self::getDriver()->findProcessesByName($prefix);
-        foreach ($sysPids as $pid) {
-            if ($pid <= 0 || $pid === $currentPid || isset($killedPids[$pid])) {
-                continue;
-            }
-            if (!self::isWelineServerProcess($pid)) {
-                continue;
-            }
-            $result = self::killByPid($pid);
-            if ($result) {
-                $killed++;
-                $killedPids[$pid] = true;
-                self::logLifecycleEvent('kill', '--name=' . $prefix . '(sys)', $pid, 'killed by system search, prefix: ' . $prefix);
+        foreach ($prefixes as $prefix) {
+            $sysPids = self::getDriver()->findProcessesByName($prefix);
+            foreach ($sysPids as $pid) {
+                $pid = (int) $pid;
+                if ($pid <= 0 || $pid === $currentPid || isset($targetPids[$pid])) {
+                    continue;
+                }
+                if (!self::isWelineServerProcess($pid)) {
+                    continue;
+                }
+                $targetPids[$pid] = true;
             }
         }
+
+        if ($targetPids === []) {
+            return 0;
+        }
+
+        $result = self::batchKillProcessTrees(\array_map('intval', \array_keys($targetPids)), true);
         
-        return $killed;
+        return (int) ($result['killed'] ?? 0);
     }
     
     /**

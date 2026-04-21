@@ -503,6 +503,13 @@
     }
 
     function syncQueuedStageUi(operation, eventKind, payload, options) {
+        if (
+            String(operation || '').toLowerCase() === 'plan'
+            && window.__pbPhase1TaskProgress
+            && typeof window.__pbPhase1TaskProgress.syncFromSsePayload === 'function'
+        ) {
+            window.__pbPhase1TaskProgress.syncFromSsePayload(operation, payload || {}, eventKind);
+        }
         var binding = resolveQueuedStageUiBinding(operation);
         if (!binding) {
             return;
