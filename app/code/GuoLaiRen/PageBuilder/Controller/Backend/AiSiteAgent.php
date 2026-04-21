@@ -1562,8 +1562,10 @@ SCRIPT;
                 if (\trim($chunk) === '') {
                     return;
                 }
-                if ($sse instanceof QueueDbWriter) {
-                    $sse->recordRawAiStreamChunk($chunk);
+                $queueMode = $sse instanceof QueueDbWriter;
+                if ($queueMode) {
+                    // Queue mode persists structured batch progress; avoid filling queue.result with raw AI JSON tokens.
+                    return;
                 }
                 $rawChunkInfoBuffer .= $chunk;
                 while (\mb_strlen($rawChunkInfoBuffer, 'UTF-8') >= 360) {
@@ -1593,16 +1595,17 @@ SCRIPT;
                     ]);
                 }
             };
+            $progressCallback = $this->buildTaskPlanGenerationProgressCallback($sse, $session, $adminId, $promptMode);
             $result = $promptMode === 'rebuild_task_plan'
                 ? $this->virtualThemePlanService->rebuildDraftTaskPlan($scope, $buildBlueprint, [
                     'instruction' => $instruction,
                     'round' => $round,
-                ], null, $taskPlanStreamHeartbeat)
+                ], null, $taskPlanStreamHeartbeat, $progressCallback)
                 : $this->virtualThemePlanService->refineDraftTaskPlan($scope, $buildBlueprint, $draftPlan, [
                     'instruction' => $instruction,
                     'target_scope' => $targetScope,
                     'round' => $round,
-                ], null, $taskPlanStreamHeartbeat);
+                ], null, $taskPlanStreamHeartbeat, $progressCallback);
 
             if ($rawChunkInfoBuffer !== '' && $sse->isAlive()) {
                 $sse->sendEvent('info', [
@@ -1803,9 +1806,6 @@ SCRIPT;
                     return;
                 }
                 $queueMode = $sse instanceof QueueDbWriter;
-                if ($sse instanceof QueueDbWriter) {
-                    $sse->recordRawAiStreamChunk($chunk);
-                }
                 if (!$queueMode) {
                     $rawChunkInfoBuffer .= $chunk;
                     while (\mb_strlen($rawChunkInfoBuffer, 'UTF-8') >= 360) {
@@ -1840,7 +1840,8 @@ SCRIPT;
                 $scope,
                 $buildBlueprint,
                 $chunkCallback,
-                $taskPlanStreamHeartbeat
+                $taskPlanStreamHeartbeat,
+                $this->buildTaskPlanGenerationProgressCallback($sse, $session, $adminId, $promptMode)
             );
             if ($rawChunkInfoBuffer !== '' && !($sse instanceof QueueDbWriter) && $sse->isAlive()) {
                 $sse->sendEvent('info', [
@@ -3704,9 +3705,6 @@ SCRIPT;
                     return;
                 }
                 $queueMode = $sse instanceof QueueDbWriter;
-                if ($queueMode) {
-                    $sse->recordRawAiStreamChunk($chunk);
-                }
                 if (!$queueMode) {
                     $rawChunkInfoBuffer .= $chunk;
                     while (\mb_strlen($rawChunkInfoBuffer, 'UTF-8') >= 360) {
@@ -3737,16 +3735,17 @@ SCRIPT;
                     ]);
                 }
             };
+            $progressCallback = $this->buildTaskPlanGenerationProgressCallback($sse, $session, $adminId, $promptMode);
             $result = $promptMode === 'rebuild_task_plan'
                 ? $this->virtualThemePlanService->rebuildDraftTaskPlan($scope, $buildBlueprint, [
                     'instruction' => $instruction,
                     'round' => $round,
-                ], $chunkCallback, $taskPlanStreamHeartbeat)
+                ], $chunkCallback, $taskPlanStreamHeartbeat, $progressCallback)
                 : $this->virtualThemePlanService->refineDraftTaskPlan($scope, $buildBlueprint, $draftPlan, [
                     'instruction' => $instruction,
                     'target_scope' => $targetScope,
                     'round' => $round,
-                ], $chunkCallback, $taskPlanStreamHeartbeat);
+                ], $chunkCallback, $taskPlanStreamHeartbeat, $progressCallback);
 
             if ($rawChunkInfoBuffer !== '' && !($sse instanceof QueueDbWriter) && $sse->isAlive()) {
                 $sse->sendEvent('info', [
@@ -3909,6 +3908,122 @@ SCRIPT;
                 throw $throwable;
             }
         }
+    }
+
+    private function buildTaskPlanGenerationProgressCallback(
+        SseWriter $sse,
+        AiSiteAgentSession $session,
+        int $adminId,
+        string $promptMode
+    ): callable {
+        return function (array $progress) use ($sse, $session, $adminId, $promptMode): void {
+            $status = \trim((string)($progress['status'] ?? ''));
+            $batchId = \trim((string)($progress['batch_id'] ?? ''));
+            if ($status === '' || $batchId === '') {
+                return;
+            }
+
+            $total = \max(1, (int)($progress['total_batches'] ?? 1));
+            $completed = \max(0, (int)($progress['completed_batches'] ?? 0));
+            $batchIndex = \max(0, (int)($progress['batch_index'] ?? 0));
+            $attemptNo = \max(1, (int)($progress['attempt_no'] ?? ($status === 'batch_failed' ? 3 : 1)));
+            $errorMessage = \trim((string)($progress['error_message'] ?? ''));
+            $message = match ($status) {
+                'batch_begin' => (string)__('正在生成第二阶段任务：%{task}', ['task' => $batchId]),
+                'batch_done' => (string)__('第二阶段任务已生成：%{task}', ['task' => $batchId]),
+                'batch_failed' => (string)__('第二阶段任务生成失败：%{task}', ['task' => $batchId]),
+                default => (string)__('第二阶段任务生成进度：%{task}', ['task' => $batchId]),
+            };
+            $progressPercent = \min(94, \max(35, (int)\floor(35 + (($completed + ($status === 'batch_begin' ? 0 : 1)) / $total) * 55)));
+            $batchProgress = [
+                'batch_id' => $batchId,
+                'status' => $status,
+                'batch_type' => (string)($progress['batch_type'] ?? ''),
+                'batch_key' => (string)($progress['batch_key'] ?? ''),
+                'block_key' => (string)($progress['block_key'] ?? ''),
+                'task_keys' => \array_values(\array_filter(\array_map('strval', \is_array($progress['task_keys'] ?? null) ? $progress['task_keys'] : []))),
+                'attempt_no' => $attemptNo,
+                'error_message' => $errorMessage,
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ];
+
+            try {
+                $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+                $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+                $generationProgress = \is_array($scope['task_plan_generation_progress'] ?? null)
+                    ? $scope['task_plan_generation_progress']
+                    : [];
+                $generationProgress[$batchId] = \array_replace(
+                    \is_array($generationProgress[$batchId] ?? null) ? $generationProgress[$batchId] : [],
+                    $batchProgress
+                );
+
+                $patch = [
+                    'task_plan_generation_progress' => $generationProgress,
+                    'task_plan_generation_summary' => [
+                        'total_batches' => $total,
+                        'completed_batches' => $completed + ($status === 'batch_done' ? 1 : 0),
+                        'failed_batches' => \count(\array_filter($generationProgress, static fn($item): bool => \is_array($item) && (string)($item['status'] ?? '') === 'batch_failed')),
+                        'prompt_mode' => $promptMode,
+                        'updated_at' => \date('Y-m-d H:i:s'),
+                    ],
+                ];
+
+                if ($status === 'batch_done' && \is_array($progress['structured'] ?? null) && \is_array($progress['virtual_theme_plan'] ?? null)) {
+                    $structured = $progress['structured'];
+                    $virtualThemePlan = $progress['virtual_theme_plan'];
+                    $patch['task_plan_structured'] = $structured;
+                    $patch['virtual_theme_plan'] = \array_replace(
+                        \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [],
+                        [
+                            'draft' => $virtualThemePlan,
+                            'draft_generated_at' => \date('Y-m-d H:i:s'),
+                            'confirmed' => \is_array($scope['virtual_theme_plan']['confirmed'] ?? null) ? $scope['virtual_theme_plan']['confirmed'] : [],
+                            'confirmed_markdown' => (string)($scope['virtual_theme_plan']['confirmed_markdown'] ?? ''),
+                            'confirmed_at' => (string)($scope['virtual_theme_plan']['confirmed_at'] ?? ''),
+                            'confirmed_signature' => (string)($scope['virtual_theme_plan']['confirmed_signature'] ?? ''),
+                            'plan_signature' => (string)($virtualThemePlan['signature'] ?? ($scope['virtual_theme_plan']['plan_signature'] ?? '')),
+                            'last_prompt_mode' => $promptMode,
+                        ]
+                    );
+                    $patch['task_plan_confirmed'] = 0;
+                }
+
+                if ($status === 'batch_failed') {
+                    $patch['task_plan_generation_last_error'] = [
+                        'batch_id' => $batchId,
+                        'attempt_no' => $attemptNo,
+                        'message' => $errorMessage,
+                        'failed_at' => \date('Y-m-d H:i:s'),
+                    ];
+                }
+
+                $this->sessionService->mergeScope($fresh->getId(), $adminId, $patch);
+                $this->appendWorkspaceEvent(
+                    $fresh->getId(),
+                    $adminId,
+                    AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                    $status === 'batch_failed' ? 'task_plan_batch_failed' : ($status === 'batch_done' ? 'task_plan_batch_done' : 'task_plan_batch_started'),
+                    $status === 'batch_failed' && $errorMessage !== '' ? $message . '：' . $errorMessage : $message,
+                    ['operation' => 'task_plan', 'details' => $batchProgress],
+                    $status === 'batch_failed' ? AiSiteAgentSessionEvent::LEVEL_ERROR : AiSiteAgentSessionEvent::LEVEL_INFO
+                );
+            } catch (\Throwable) {
+                // Progress persistence should not interrupt the AI task-plan batch.
+            }
+
+            if ($sse->isAlive()) {
+                $payload = [
+                    'message' => $status === 'batch_failed' && $errorMessage !== '' ? $message . '：' . $errorMessage : $message,
+                    'operation' => 'task_plan',
+                    'prompt_mode' => $promptMode,
+                    'progress_percent' => $progressPercent,
+                    'progress_kind' => 'task_plan_batch',
+                    'task_plan_batch' => $batchProgress,
+                ];
+                $sse->sendEvent($status === 'batch_failed' ? 'warning' : 'progress', $payload);
+            }
+        };
     }
 
     private function clipIncompleteUtf8Suffix(string $text): string
@@ -5943,6 +6058,9 @@ SCRIPT;
                 : ($taskPlanDraftStructured !== [] ? $taskPlanDraftStructured : $taskPlanConfirmedStructured),
             'task_plan_confirmed' => (int)($normalized['task_plan_confirmed'] ?? 0),
             'task_plan_confirmed_at' => $taskPlanConfirmedAt,
+            'task_plan_generation_progress' => \is_array($normalized['task_plan_generation_progress'] ?? null) ? $normalized['task_plan_generation_progress'] : [],
+            'task_plan_generation_summary' => \is_array($normalized['task_plan_generation_summary'] ?? null) ? $normalized['task_plan_generation_summary'] : [],
+            'task_plan_generation_last_error' => \is_array($normalized['task_plan_generation_last_error'] ?? null) ? $normalized['task_plan_generation_last_error'] : [],
             'has_virtual_theme_plan' => $hasVirtualThemePlan,
             'has_pending_build_tasks' => (int)($taskSummary['pending'] ?? 0) > 0,
             'task_plan_sse_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-task-plan-sse'),
@@ -6057,6 +6175,9 @@ SCRIPT;
             'build_task_summary' => \is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : [],
             'build_summary' => \is_array($state['build_summary'] ?? null) ? $state['build_summary'] : [],
             'pending_generation_page_types' => \is_array($state['pending_generation_page_types'] ?? null) ? $state['pending_generation_page_types'] : [],
+            'task_plan_generation_progress' => \is_array($state['task_plan_generation_progress'] ?? null) ? $state['task_plan_generation_progress'] : [],
+            'task_plan_generation_summary' => \is_array($state['task_plan_generation_summary'] ?? null) ? $state['task_plan_generation_summary'] : [],
+            'task_plan_generation_last_error' => \is_array($state['task_plan_generation_last_error'] ?? null) ? $state['task_plan_generation_last_error'] : [],
         ], $this->buildWorkspaceStatusEnvelope($state, 'queue'));
 
         if ($workspaceStream) {
