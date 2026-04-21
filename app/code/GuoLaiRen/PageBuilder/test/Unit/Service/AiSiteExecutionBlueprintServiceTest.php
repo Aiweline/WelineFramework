@@ -327,6 +327,11 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
 
         self::assertIsString($capturedPrompt);
         self::assertStringContainsString('The plan must contain final-ready content samples, not writing instructions.', $capturedPrompt);
+        self::assertStringContainsString('STAGE-1 SHARED THEME PLAN CONTRACT (theme_design must satisfy ALL):', $capturedPrompt);
+        self::assertStringContainsString('theme_design is the concrete shared plan for Header/Footer and later page prompts', $capturedPrompt);
+        self::assertStringContainsString('never output it as abstract direction', $capturedPrompt);
+        self::assertStringContainsString('theme_design.color_scheme must provide ready-to-apply hex colors', $capturedPrompt);
+        self::assertStringContainsString('theme_design MUST be a concrete shared theme plan', $capturedPrompt);
         self::assertStringContainsString('Do not return markdown.', $capturedPrompt);
         self::assertStringContainsString('Do not return a separate markdown field.', $capturedPrompt);
         self::assertStringContainsString('Output only the structured plan object shown in the schema.', $capturedPrompt);
@@ -622,13 +627,27 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                 'theme_design' => [
                     'theme_purpose' => 'Build trust quickly and guide visitors toward one clear CTA.',
                     'color_scheme' => [
+                        'name' => 'Ocean Slate',
                         'primary' => '#0f172a',
                         'secondary' => '#475569',
                         'accent' => '#2563eb',
                         'background' => '#f8fafc',
+                        'body' => '#0f172a',
                         'text' => '#0f172a',
                         'button' => '#2563eb',
                     ],
+                    'typography_spacing_radius' => [
+                        'font_family' => 'Sans Serif',
+                        'heading_scale' => 'Hero 40-56px, section headings 28-36px.',
+                        'body_scale' => 'Body copy 16-18px with readable line height.',
+                        'spacing_scale' => 'Use 8px spacing units with generous section rhythm.',
+                        'radius_scale' => 'Cards use 16px radius and CTA buttons use pill radius.',
+                    ],
+                    'visual_keywords' => ['clear trust', 'conversion focus'],
+                    'tone_of_voice' => 'Trustworthy and action-oriented',
+                    'cta_tone' => 'Direct CTA labels that move strong CTA visitors forward.',
+                    'forbidden_styles' => ['Do not use vague premium-only descriptions.'],
+                    'selection_reason' => 'The strong CTA, trust, and conversion requirement needs a concrete trust-first visual system for home and about visitors.',
                 ],
                 'navigation_plan' => [
                     'header_items' => [
@@ -745,9 +764,10 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             return '{}';
         }
 
-        $decoded['plan_json']['theme_design'] = [
-            'selection_reason' => $selectionReason,
-        ];
+        if (!\is_array($decoded['plan_json']['theme_design'] ?? null)) {
+            $decoded['plan_json']['theme_design'] = [];
+        }
+        $decoded['plan_json']['theme_design']['selection_reason'] = $selectionReason;
 
         return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }
@@ -760,6 +780,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         }
 
         $decoded['plan_json']['site_strategy']['summary'] = 'Explain the core value with concise readable paragraphs.';
+        $decoded['plan_json']['theme_design']['selection_reason'] = 'The strong CTA and APK download requirement needs a concrete trust-first visual system before this prompt-like payload is rejected.';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['content'] = 'Write the title around the core value, then explain the main highlights and next CTA.';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'][0]['sample'] = '标题围绕核心价值展开';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'][0]['implementation_note'] = 'Keep the first-screen promise concise and lead visitors to the next step.';
@@ -807,6 +828,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             return '{}';
         }
 
+        $decoded['plan_json']['theme_design']['selection_reason'] = 'The Teenipiya APK download requirement needs a concrete trust-first visual system for rummy players.';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['content'] = '欢迎来到 Teenipiya websiteProfile。这里会展示重点内容，并提供一个清晰的下一步入口。';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'] = [
             ['field' => 'title', 'sample' => '欢迎来到 Teenipiya websiteProfile', 'implementation_note' => '作为区块主标题直接上屏。'],
