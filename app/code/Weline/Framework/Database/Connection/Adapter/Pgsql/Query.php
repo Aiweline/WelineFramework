@@ -2226,7 +2226,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             }
         }
         $this->resolveFetchTypeFromSql();
-        $this->guardUnboundedSelectFetch($this->getFetchRowLimit());
         try {
             try {
         // 在执行前检查是否包含多个 SQL 命令
@@ -2834,6 +2833,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             return false;
         }
 
+        $fetchRowLimit = $this->shouldEnforceFetchedRowLimit($this->getFetchRowLimit())
+            ? $this->getFetchRowLimit()
+            : 0;
         $data = [];
         if ($this->fetch_type === 'find') {
             $row = $this->PDOStatement->fetch(PDO::FETCH_ASSOC);
@@ -2841,9 +2843,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 $data[] = $row;
             }
         } else {
-            while (($row = $this->PDOStatement->fetch(PDO::FETCH_ASSOC)) !== false) {
-                $data[] = $row;
-            }
+            $data = $this->collectStatementResultSets($this->PDOStatement, $fetchRowLimit);
         }
         $this->PDOStatement->closeCursor();
         $this->PDOStatement = null;
@@ -2994,12 +2994,15 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         int $iteratorBatchSize = 1
     ): array|\Generator {
         $limit = $threshold > 0 ? $threshold : $this->getFetchRowLimit();
-        $this->guardUnboundedSelectFetch($limit);
         $this->resolveFetchTypeFromSql();
-        if ($this->isSelectStyleFetch()) {
-            return $this->fetchIterator($model_class, $iteratorBatchSize);
+        if (!$this->isSelectStyleFetch()) {
+            return $this->fetch($model_class) ?: [];
         }
-        return $this->fetch($model_class) ?: [];
+        $explicitLimit = $this->getLimitValue();
+        if ($explicitLimit !== null && ($limit <= 0 || $explicitLimit <= $limit)) {
+            return $this->fetch($model_class) ?: [];
+        }
+        return $this->fetchIterator($model_class, $iteratorBatchSize);
     }
 
     /**

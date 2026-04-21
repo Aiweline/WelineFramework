@@ -114,7 +114,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $traceOperation = $this->fetch_type ?: 'query';
         $traceTable = $this->table !== '' ? $this->table : 'unknown';
         $dbTraceLabel = 'db::' . $traceOperation . '::' . $traceTable;
-        $this->guardUnboundedSelectFetch($this->getFetchRowLimit());
+        $fetchRowLimit = $this->getFetchRowLimit();
+        $enforceFetchedRowLimit = $this->shouldEnforceFetchedRowLimit($fetchRowLimit);
         if ($this->batch and $this->fetch_type == 'insert') {
             // 使用重试机制执行批量插入
             $origin_data = $this->executeWithRetry(function() {
@@ -133,7 +134,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             
             if (count($statements) == 1) {
                 // 使用重试机制执行单条语句
-                $origin_data = $this->executeWithRetry(function() {
+                $origin_data = $this->executeWithRetry(function() use ($enforceFetchedRowLimit, $fetchRowLimit) {
                     $stmt = $this->getLink()->prepare($this->sql);
                     if ($stmt === false) {
                         $errorInfo = $this->getLink()->errorInfo();
@@ -157,6 +158,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     }
                     $this->PDOStatement = $stmt;
                     $this->PDOStatement->execute($this->bound_values);
+                    if ($enforceFetchedRowLimit) {
+                        return $this->collectStatementResultSets($this->PDOStatement, $fetchRowLimit);
+                    }
                     return $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
                 });
             } else {

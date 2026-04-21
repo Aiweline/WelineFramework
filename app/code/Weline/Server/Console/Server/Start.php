@@ -263,8 +263,8 @@ class Start extends CommandAbstract
         $host = $config['host'];
         $port = $config['port'];
         $count = $config['worker_count'];
-        // 如果指定了 --frontend，强制前台运行
-        $daemon = $frontend ? false : $config['daemon'];
+        // 运行模式只由 --no-daemon 控制；--frontend 仅启用前端资源/日志模式，不能把 Master 绑回当前终端。
+        $daemon = $this->resolveDaemonMode($config, $frontend);
         
         // --no-ssl 时仅 HTTP（端口保持 80）；否则默认启用 HTTPS
         $noSsl = !empty($config['no_ssl']);
@@ -295,6 +295,9 @@ class Start extends CommandAbstract
             $sslCert = $sslResult['cert_path'] ?? '';
             $sslKey = $sslResult['key_path'] ?? '';
             $sslEnabled = (bool) ($sslResult['ssl_enabled'] ?? true);
+            $config['ssl_cert'] = $sslCert;
+            $config['ssl_key'] = $sslKey;
+            $config['ssl_domain'] = $host;
             // 默认 80 且启用 HTTPS 时使用 443
             if ($port === self::DEFAULT_PORT) {
                 $port = self::DEFAULT_PORT_HTTPS;
@@ -840,6 +843,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         // 前台模式也使用 listenHost；对外展示的访问域名保留为项目 host（如 *.weline.test / *.weline.localhost）
         $config['public_host'] = $host;
         $config['host'] = $listenHost;
+        $this->warnWindowsLocalDomainProxyRisk($host);
 
         // Master 负责启动所有进程（不再传递 workerPids，由 Master 自己启动）
         $this->wlsChildProcessesMayExist = true;
@@ -865,6 +869,153 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         }
 
         return $this->findAvailableMainPort($port + 1);
+    }
+
+    protected function warnWindowsLocalDomainProxyRisk(string $host): void
+    {
+        if (!IS_WIN || $this->isLoopbackLikeHost($host)) {
+            return;
+        }
+
+        $settings = $this->readWindowsInternetSettings();
+        if (!$this->isWindowsProxyLikelyToInterceptHost($host, $settings)) {
+            return;
+        }
+
+        $proxyServer = (string)($settings['proxy_server'] ?? '');
+        $suggestedRule = $this->buildSuggestedWindowsProxyBypassRule($host);
+        $this->printer->warning(__('检测到 Windows 系统代理 %{1} 已启用，浏览器访问 %{2} 可能被代理截流并报 ERR_CONNECTION_CLOSED', [$proxyServer, $host]));
+        $this->printer->note(__('建议将 %{1} 加入系统代理绕过名单（ProxyOverride）后再访问本地 WLS 域名', [$suggestedRule]));
+    }
+
+    /**
+     * @return array{proxy_enabled: bool, proxy_server: string, proxy_override: string}
+     */
+    protected function readWindowsInternetSettings(): array
+    {
+        $proxyEnable = $this->readWindowsInternetSettingValue('ProxyEnable');
+        $proxyServer = $this->readWindowsInternetSettingValue('ProxyServer');
+        $proxyOverride = $this->readWindowsInternetSettingValue('ProxyOverride');
+
+        return [
+            'proxy_enabled' => $this->parseWindowsProxyEnableValue($proxyEnable),
+            'proxy_server' => $proxyServer,
+            'proxy_override' => $proxyOverride,
+        ];
+    }
+
+    protected function readWindowsInternetSettingValue(string $valueName): string
+    {
+        $command = \sprintf('reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v %s 2>NUL', $valueName);
+        $output = @\shell_exec($command);
+        if (!\is_string($output) || $output === '') {
+            return '';
+        }
+
+        if (\preg_match('/^\s*' . \preg_quote($valueName, '/') . '\s+REG_\w+\s+(.+)$/mi', $output, $matches)) {
+            return \trim($matches[1]);
+        }
+
+        return '';
+    }
+
+    protected function parseWindowsProxyEnableValue(string $value): bool
+    {
+        $normalized = \strtolower(\trim($value));
+        if ($normalized === '') {
+            return false;
+        }
+
+        if (\str_starts_with($normalized, '0x')) {
+            return \hexdec(\substr($normalized, 2)) > 0;
+        }
+
+        return (int)$normalized > 0;
+    }
+
+    /**
+     * @param array{proxy_enabled?: bool, proxy_server?: string, proxy_override?: string} $settings
+     */
+    protected function isWindowsProxyLikelyToInterceptHost(string $host, array $settings): bool
+    {
+        if (!($settings['proxy_enabled'] ?? false)) {
+            return false;
+        }
+
+        $proxyServer = \trim((string)($settings['proxy_server'] ?? ''));
+        if ($proxyServer === '') {
+            return false;
+        }
+
+        return !$this->hostMatchesWindowsProxyOverride($host, (string)($settings['proxy_override'] ?? ''));
+    }
+
+    protected function hostMatchesWindowsProxyOverride(string $host, string $proxyOverride): bool
+    {
+        $host = \strtolower(\trim($host));
+        if ($host === '') {
+            return false;
+        }
+
+        $rules = \preg_split('/\s*;\s*/', \trim($proxyOverride)) ?: [];
+        foreach ($rules as $rule) {
+            $rule = \strtolower(\trim($rule));
+            if ($rule === '') {
+                continue;
+            }
+
+            if ($rule === '<local>' && \strpos($host, '.') === false) {
+                return true;
+            }
+
+            if ($rule === $host) {
+                return true;
+            }
+
+            if ($this->windowsProxyRuleMatchesHost($rule, $host)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function windowsProxyRuleMatchesHost(string $rule, string $host): bool
+    {
+        if ($rule === '') {
+            return false;
+        }
+
+        $quoted = \preg_quote($rule, '/');
+        $pattern = '/^' . \str_replace(['\*', '\?'], ['.*', '.'], $quoted) . '$/i';
+
+        return (bool)\preg_match($pattern, $host);
+    }
+
+    protected function buildSuggestedWindowsProxyBypassRule(string $host): string
+    {
+        $host = \strtolower(\trim($host));
+        if (\str_ends_with($host, '.weline.test')) {
+            return '*.weline.test;weline.test';
+        }
+
+        if (\str_ends_with($host, '.weline.localhost')) {
+            return '*.weline.localhost;weline.localhost';
+        }
+
+        return $host;
+    }
+
+    protected function isLoopbackLikeHost(string $host): bool
+    {
+        $host = \strtolower(\trim($host));
+
+        return $host === ''
+            || $host === 'localhost'
+            || $host === '::1'
+            || $host === '0.0.0.0'
+            || $host === '127.0.0.1'
+            || (bool)\preg_match('/^127\.\d+\.\d+\.\d+$/', $host);
     }
 
     /**
@@ -1187,6 +1338,20 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
     protected function getEnvironmentValue(string $path, mixed $default = null): mixed
     {
         return Env::get($path, $default);
+    }
+
+    /**
+     * --frontend is a feature/runtime flag, not a foreground-control flag.
+     * Keeping this centralized prevents future changes from re-coupling WLS to
+     * the launcher process and causing the service tree to die with the shell.
+     *
+     * @param array<string, mixed> $config
+     */
+    protected function resolveDaemonMode(array $config, bool $frontend): bool
+    {
+        unset($frontend);
+
+        return (bool) ($config['daemon'] ?? true);
     }
 
     /**
@@ -2225,8 +2390,11 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
                 }
             }
             if (\is_file($certPath) && \is_file($keyPath)) {
+                if (!$sslService->canReuseConfiguredCertificate($certPath, $keyPath)) {
+                    $config['ssl_cert'] = '';
+                    $config['ssl_key'] = '';
                 // 本地/内网环境：仅使用适用于当前 host 的证书，否则触发自动签发
-                if ($needsLocalCert && !$sslService->certificateMatchesHost($certPath, $host)) {
+                } elseif ($needsLocalCert && !$sslService->certificateMatchesHost($certPath, $host)) {
                     $config['ssl_cert'] = '';
                     $config['ssl_key'] = '';
                 } else {

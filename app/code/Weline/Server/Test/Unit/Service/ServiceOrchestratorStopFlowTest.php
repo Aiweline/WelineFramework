@@ -8,6 +8,7 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\MasterControlServer;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Contract\ServiceInstance;
+use Weline\Server\Service\Contract\ServiceProviderInterface;
 use Weline\Server\Service\Provider\DispatcherProvider;
 use Weline\Server\Service\ServiceOrchestrator;
 
@@ -15,6 +16,9 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
 {
     protected function setUp(): void
     {
+        if (!\defined('IS_WIN')) {
+            \define('IS_WIN', true);
+        }
         WlsLogger::reset();
         WlsLogger::getInstance()
             ->setStdoutEnabled(false)
@@ -47,6 +51,29 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         self::assertSame([[202]], $orchestrator->batchSignalCalls);
     }
 
+    public function testTerminateAllAfterDrainUsesRootPidForDisconnectedWrapperProcess(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            public array $batchSignalCalls = [];
+
+            protected function sendStopBatchTerminationSignals(array $pids): array
+            {
+                $this->batchSignalCalls[] = \array_values($pids);
+                return \array_fill_keys($pids, true);
+            }
+        };
+
+        $worker = new ServiceInstance(role: 'worker', instanceId: 1, pid: 202);
+        $worker->setProcessTreePids(202, 1202, 1202);
+
+        $registry = $orchestrator->getRegistry();
+        $registry->addInstance($worker);
+
+        $this->invokePrivate($orchestrator, 'terminateAllAfterDrain');
+
+        self::assertSame([[1202]], $orchestrator->batchSignalCalls);
+    }
+
     public function testWaitForServiceIpcDisconnectAfterShutdownExitsWhenNoServiceClients(): void
     {
         $server = $this->createMock(MasterControlServer::class);
@@ -65,7 +92,7 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         $server->expects(self::atLeastOnce())->method('countServiceClients')->willReturn(0);
         $server->expects(self::never())->method('sendTo');
         $server->expects(self::once())->method('flushPendingWrites');
-        $server->expects(self::once())->method('close');
+        $server->expects(self::atLeastOnce())->method('close');
 
         $orchestrator = new class extends ServiceOrchestrator {
             public ?int $forcedExitCode = null;
@@ -90,6 +117,61 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
 
         $orchestrator->forceTerminateMasterAndChildren('repeat_signal:Ctrl+C (Windows)');
 
+        self::assertSame(2, $orchestrator->forcedExitCode);
+    }
+
+    public function testForceTerminateMasterAndChildrenUsesTrackingTreeKillAndOnlySendsShutdownHint(): void
+    {
+        $provider = $this->createMock(ServiceProviderInterface::class);
+        $provider->method('getRole')->willReturn(ControlMessage::ROLE_WORKER);
+        $provider->method('supportsShutdown')->willReturn(true);
+        $provider->method('supportsDrain')->willReturn(true);
+
+        $server = $this->createMock(MasterControlServer::class);
+        $server->expects(self::atLeastOnce())->method('countServiceClients')->willReturn(1);
+        $server->expects(self::once())
+            ->method('sendTo')
+            ->with(11, ControlMessage::shutdown());
+        $server->expects(self::exactly(2))->method('flushPendingWrites');
+        $server->expects(self::atLeastOnce())->method('close');
+
+        $orchestrator = new class extends ServiceOrchestrator {
+            public array $forceStopCalls = [];
+            public ?int $forcedExitCode = null;
+
+            protected function forceStopRemainingProcesses(array $pids): array
+            {
+                $this->forceStopCalls[] = \array_values($pids);
+
+                return [
+                    'killed' => \count($pids),
+                    'failed' => 0,
+                    'remaining' => [],
+                ];
+            }
+
+            protected function finalizeForceTerminateMasterExit(int $exitCode): void
+            {
+                $this->forcedExitCode = $exitCode;
+            }
+        };
+
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            pid: 202,
+            ipcClientId: 11,
+            state: ServiceInstance::STATE_READY
+        );
+        $worker->setProcessTreePids(202, 1202, 1202);
+
+        $orchestrator->getRegistry()->registerProvider($provider);
+        $orchestrator->getRegistry()->addInstance($worker);
+        $this->setProperty($orchestrator, 'controlServer', $server);
+
+        $orchestrator->forceTerminateMasterAndChildren('command');
+
+        self::assertSame([[1202]], $orchestrator->forceStopCalls);
         self::assertSame(2, $orchestrator->forcedExitCode);
     }
 
@@ -149,6 +231,62 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         self::assertInstanceOf(ServiceInstance::class, $dispatcher);
         self::assertInstanceOf(ServiceInstance::class, $worker);
         self::assertSame(ServiceInstance::STATE_STOPPED, $dispatcher->state);
+        self::assertSame(ServiceInstance::STATE_STOPPED, $worker->state);
+    }
+
+    public function testVerifyAndKillRemainingProcessesTracksRootPidForResidualWrapperTree(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            public array $runningByPid = [];
+            public array $forceKillCalls = [];
+            public array $closedClientIds = [];
+
+            protected function batchCheckStopFlowRunning(array $pids): array
+            {
+                $status = [];
+                foreach ($pids as $pid) {
+                    $status[$pid] = $this->runningByPid[$pid] ?? false;
+                }
+
+                return $status;
+            }
+
+            protected function getStopVerificationTimeout(): float
+            {
+                return 0.0;
+            }
+
+            protected function forceStopRemainingProcesses(array $pids): array
+            {
+                $this->forceKillCalls[] = \array_values($pids);
+
+                return [
+                    'killed' => \count($pids),
+                    'failed' => 0,
+                    'remaining' => [],
+                ];
+            }
+
+            protected function closeStopFlowClient(int $clientId): void
+            {
+                $this->closedClientIds[] = $clientId;
+            }
+        };
+
+        $worker = new ServiceInstance(role: 'worker', instanceId: 1, pid: 202, ipcClientId: 22, state: ServiceInstance::STATE_READY);
+        $worker->setProcessTreePids(202, 1202, 1202);
+
+        $registry = $orchestrator->getRegistry();
+        $registry->addInstance($worker);
+        $orchestrator->runningByPid = [1202 => true];
+
+        $this->invokePrivate($orchestrator, 'verifyAndKillRemainingProcesses');
+
+        self::assertSame([[1202]], $orchestrator->forceKillCalls);
+        self::assertSame([22], $orchestrator->closedClientIds);
+
+        $worker = $registry->getInstance('worker', 1);
+        self::assertInstanceOf(ServiceInstance::class, $worker);
         self::assertSame(ServiceInstance::STATE_STOPPED, $worker->state);
     }
 
@@ -271,6 +409,42 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
             'reason' => 'command',
             'progressClientId' => 77,
         ]], $orchestrator->stopAllCalls);
+    }
+
+    public function testRequestStopCanScheduleForceTerminateFlowImmediately(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            public array $forcedReasons = [];
+
+            public function stopAll(string $reason = 'shutdown', ?int $progressClientId = null): void
+            {
+                unset($reason, $progressClientId);
+                \PHPUnit\Framework\Assert::fail('force stop should not run graceful stopAll');
+            }
+
+            public function forceTerminateMasterAndChildren(string $reason = 'force'): void
+            {
+                $this->forcedReasons[] = $reason;
+            }
+        };
+
+        self::assertTrue($orchestrator->requestStop('command', 77, true, true));
+        $this->invokePrivate($orchestrator, 'consumePendingStopRequest', []);
+        $prop = $this->findPropertyRecursive($orchestrator, 'mainLoopTasks');
+        $prop->setAccessible(true);
+        /** @var array<string, array{fiber:\Fiber}> $tasks */
+        $tasks = $prop->getValue($orchestrator);
+        foreach ($tasks as $entry) {
+            $fiber = $entry['fiber'] ?? null;
+            if ($fiber instanceof \Fiber && $fiber->isSuspended()) {
+                $fiber->resume();
+            }
+        }
+        for ($i = 0; $i < 16; $i++) {
+            $this->invokePrivate($orchestrator, 'tickMainLoopTasks', []);
+        }
+
+        self::assertSame(['force_stop:command'], $orchestrator->forcedReasons);
     }
 
     public function testVerifyAndKillRemainingProcessesSkipsExternallyManagedSharedSidecar(): void
