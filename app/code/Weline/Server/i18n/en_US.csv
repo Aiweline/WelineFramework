@@ -518,6 +518,8 @@ P99：%{1},"P99: %{1}"
 已清理残留维护态，恢复业务流量模式。,已清理残留维护态，恢复业务流量模式。
 维护模式已关闭。,维护模式已关闭。
 "Master 进程启动中，将管理所有 Worker 和 Dispatcher...","Master 进程启动中，将管理所有 Worker 和 Dispatcher..."
+"检测到 Windows 系统代理 %{1} 已启用，浏览器访问 %{2} 可能被代理截流并报 ERR_CONNECTION_CLOSED","检测到 Windows 系统代理 %{1} 已启用，浏览器访问 %{2} 可能被代理截流并报 ERR_CONNECTION_CLOSED"
+"建议将 %{1} 加入系统代理绕过名单（ProxyOverride）后再访问本地 WLS 域名","建议将 %{1} 加入系统代理绕过名单（ProxyOverride）后再访问本地 WLS 域名"
 实例文件不存在：%{1},实例文件不存在：%{1}
 实例文件无效,实例文件无效
 "master-only 启动被拒绝：特权端口 %{1} 无法绑定（%{2}）。","master-only 启动被拒绝：特权端口 %{1} 无法绑定（%{2}）。"
@@ -829,13 +831,16 @@ disabled,disabled
 "另一个 server:stop 任务正在处理中，请稍后再试。","另一个 server:stop 任务正在处理中，请稍后再试。"
 若锁文件长期存在，请确认停止任务是否已结束后再重试。,若锁文件长期存在，请确认停止任务是否已结束后再重试。
 "检测到端口 %{1} 被 WLS 进程占用 (PID: %{2})，正在结束…","Port %{1} is in use by WLS process (PID: %{2}); terminating…"
+"ROOT PID: %{1}","ROOT PID: %{1}"
 "已在实例文件缺失场景下安全清理 %{1} 个受管 WLS 进程","已在实例文件缺失场景下安全清理 %{1} 个受管 WLS 进程"
 "使用 server:listing 查看所有实例","使用 server:listing 查看所有实例"
 "停止 Weline Server","停止 Weline Server"
 "Master 进程不存在 (PID: %{1})","Master 进程不存在 (PID: %{1})"
+"实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。","实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。"
 "实例文件已清理 ✓","实例文件已清理 ✓"
 "-f 强制模式：跳过 IPC 排水，直接终止实例进程...","-f 强制模式：跳过 IPC 排水，直接终止实例进程..."
 "快速清场模式：跳过 IPC 排水，直接终止旧实例子进程...","快速清场模式：跳过 IPC 排水，直接终止旧实例子进程..."
+"残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}","残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}"
 "实例 [%{1}] 已停止（-f 强制模式） ✓","实例 [%{1}] 已停止（-f 强制模式） ✓"
 "实例 [%{1}] 已停止（快速清场） ✓","实例 [%{1}] 已停止（快速清场） ✓"
 "发送 STOP 命令给 Master (通过 IPC)...","发送 STOP 命令给 Master (通过 IPC)..."
@@ -843,13 +848,11 @@ disabled,disabled
 "IPC 超时，强制终止 Master 并清理该实例下所有进程...","IPC 超时，强制终止 Master 并清理该实例下所有进程..."
 "实例 [%{1}] 已停止 ✓","实例 [%{1}] 已停止 ✓"
 清理残留进程...,清理残留进程...
-"清理了 %{1} 个进程 ✓","清理了 %{1} 个进程 ✓"
+"已处理 %{1} 个进程","已处理 %{1} 个进程"
 无残留进程,无残留进程
 "已清理 %1 个残留进程","已清理 %1 个残留进程"
 重试次数：%1,重试次数：%1
-"残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}","残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}"
 "已清理 %1 个残留进程（复核结束）","已清理 %1 个残留进程（复核结束）"
-"已处理 %{1} 个进程","已处理 %{1} 个进程"
 "启动锁已释放 ✓","启动锁已释放 ✓"
 没有正在运行的实例,"No running instances"
 停止所有服务器实例,停止所有服务器实例
@@ -1444,7 +1447,6 @@ DDoS攻击,DDoS攻击
 "Local CA is already trusted by the current Windows user","Local CA is already trusted by the current Windows user"
 "Failed to find certutil.exe; import %{1} into Current User > Trusted Root Certification Authorities manually","Failed to find certutil.exe; import %{1} into Current User > Trusted Root Certification Authorities manually"
 "Local CA imported into Current User Root store","Local CA imported into Current User Root store"
-"Local CA imported into machine Root store","Local CA imported into machine Root store"
 "Local CA was generated, but automatic trust import failed. Import %{1} into Current User > Trusted Root Certification Authorities manually","Local CA was generated, but automatic trust import failed. Import %{1} into Current User > Trusted Root Certification Authorities manually"
 "Local CA was generated. Trust it manually in your OS/browser with %{1}","Local CA was generated. Trust it manually in your OS/browser with %{1}"
 "Domain cannot be empty","Domain cannot be empty"
@@ -1575,11 +1577,11 @@ DDoS攻击,DDoS攻击
 "HTTPS 已启用","HTTPS enabled"
 "HTTPS 已禁用","HTTPS disabled"
 "HTTPS 已禁用，服务器正在重启以使配置生效","HTTPS 已禁用，服务器正在重启以使配置生效"
-"未找到域名 %{1} 的证书记录","未找到域名 %{1} 的证书记录"
-证书管理中没有可重载的证书记录,证书管理中没有可重载的证书记录
 存在空域名证书记录，已跳过,存在空域名证书记录，已跳过
 "域名 %{1} 的证书管理记录缺少 PEM 内容，无法重载（使用 --clear 可清除并重置）","域名 %{1} 的证书管理记录缺少 PEM 内容，无法重载（使用 --clear 可清除并重置）"
 "域名 %{1} 的证书文件恢复失败（使用 --clear 可清除并重置）","域名 %{1} 的证书文件恢复失败（使用 --clear 可清除并重置）"
+"未找到域名 %{1} 的证书记录","未找到域名 %{1} 的证书记录"
+证书管理中没有可重载的证书记录,证书管理中没有可重载的证书记录
 "本地域名 %{1} 的证书受保护，跳过清除","本地域名 %{1} 的证书受保护，跳过清除"
 "域名 %{1} 删除 DB 记录失败：%{2}","域名 %{1} 删除 DB 记录失败：%{2}"
 "server:ssl:reload --clear 清理","server:ssl:reload --clear 清理"
