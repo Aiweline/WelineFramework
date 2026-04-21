@@ -1007,6 +1007,7 @@ final class AiSiteExecutionBlueprintService
             '    "stage2_task_hints":[{"page":"string","block":"string","task_types":["copywriting","ui_design","frontend_dev"]}]',
             '}',
             'Hard rules:',
+            '- theme_alignment_summary schema compatibility phrase: "theme_alignment_summary":"how this page and every block obey theme_design color_scheme, tone_of_voice, cta_tone, trust expression, and Header/Footer handoff"',
             '- All text fields must use locale: ' . $outputLanguage,
             '- Do not return markdown.',
             '- Do not return a separate markdown field.',
