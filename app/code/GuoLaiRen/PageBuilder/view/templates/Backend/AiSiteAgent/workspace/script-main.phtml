@@ -5330,6 +5330,7 @@
         var blockTaskMetaTable = renderBlockTaskMetaFieldTable(blockTask.meta_fields || []);
         var blockTaskContentPlan = renderTaskPlanDetailList(previewLabels.blockTaskContentPlan || 'Content plan', blockTask.content_plan || []);
         var blockTaskStylePlan = renderBlockTaskStylePlan(blockTask.style_plan || {});
+        var planningReasonItems = collectTaskPlanPlanningReasonItems(task, blockTask, planContext);
         var targetScope = String(taskScript.scene || (pageType ? ('page:' + pageType) : (rawTaskKey || 'shared')));
 
         return ''
