@@ -602,6 +602,9 @@ PHP);
             self::assertStringContainsString("\$supervisorEnabledRaw = \\getenv('WLS_SUPERVISOR_ENABLED');", $source);
             self::assertStringContainsString('if ($controlPort > 0 || $supervisorEnabled)', $source);
             self::assertStringContainsString("case \\Weline\\Server\\IPC\\ControlMessage::TYPE_READY_ACK:", $source);
+            self::assertStringContainsString("!\array_key_exists('accepted', \$msg) || (bool)(\$msg['accepted'] ?? false)", $source);
+            self::assertStringContainsString('master_rejected_ready:', $source);
+            self::assertStringContainsString('Worker 自毁退出', $source);
             self::assertStringContainsString("\$waitingForAck = !(\$ipcClient?->isReadyStateConfirmed() ?? false);", $source);
             self::assertStringContainsString('LogConfig::isDevMode() || $isFrontend', $source);
         }
