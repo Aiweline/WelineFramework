@@ -647,7 +647,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                     'tone_of_voice' => 'Trustworthy and action-oriented',
                     'cta_tone' => 'Direct CTA labels that move strong CTA visitors forward.',
                     'forbidden_styles' => ['Do not use vague premium-only descriptions.'],
-                    'selection_reason' => 'The strong CTA requirement needs a concrete trust-first visual system for home and about visitors.',
+                    'selection_reason' => 'The strong CTA, trust, conversion, Teenipiya APK download requirement needs a concrete trust-first visual system for home and about visitors.',
                 ],
                 'navigation_plan' => [
                     'header_items' => [
