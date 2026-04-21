@@ -4487,7 +4487,7 @@
         return ''
             + '<div class="card border-0 shadow-sm mb-3">'
             + '<div class="card-body">'
-            + '<div class="fw-semibold">' + escapeHtml(String(title || '')) + '</div>'
+            + renderPreviewSectionHeadingWithReason(title, opts.reasonItems || items)
             + '<div class="mt-2">' + body + '</div>'
             + '</div>'
             + '</div>';
@@ -4543,6 +4543,85 @@
             return '';
         }
         return '<div class="mt-2"><div class="fw-semibold small">' + escapeHtml(String(title || '')) + '</div><div class="small">' + escapeHtml(text).replace(/\n/g, '<br>') + '</div></div>';
+    }
+
+    function collectPreviewReasonItems(value) {
+        var reasons = [];
+        var seen = {};
+        function pushReason(raw) {
+            var text = sanitizePreviewText(raw, '');
+            if (!text || seen[text]) {
+                return;
+            }
+            seen[text] = true;
+            reasons.push(text);
+        }
+        function visit(candidate, depth) {
+            if (depth > 3 || candidate === null || typeof candidate === 'undefined') {
+                return;
+            }
+            if (Array.isArray(candidate)) {
+                candidate.forEach(function (item) {
+                    visit(item, depth + 1);
+                });
+                return;
+            }
+            if (!candidate || typeof candidate !== 'object') {
+                return;
+            }
+            ['reason', 'why', 'selection_reason', 'decision_reason', 'rationale', 'explanation'].forEach(function (key) {
+                if (Object.prototype.hasOwnProperty.call(candidate, key)) {
+                    pushReason(candidate[key]);
+                }
+            });
+            Object.keys(candidate).forEach(function (key) {
+                var normalized = String(key || '').toLowerCase();
+                var child = candidate[key];
+                if (normalized === 'reason' || normalized === 'why' || normalized === 'selection_reason' || normalized === 'decision_reason' || normalized === 'rationale' || normalized === 'explanation') {
+                    return;
+                }
+                if (child && typeof child === 'object') {
+                    visit(child, depth + 1);
+                }
+            });
+        }
+        visit(value, 0);
+        return reasons;
+    }
+
+    function renderPreviewReasonDisclosure(label, reasonItems) {
+        var items = [];
+        if (Array.isArray(reasonItems)) {
+            items = reasonItems;
+        } else if (reasonItems && typeof reasonItems === 'object') {
+            items = collectPreviewReasonItems(reasonItems);
+        } else {
+            var single = sanitizePreviewText(reasonItems, '');
+            items = single ? [single] : [];
+        }
+        if (items.length === 0) {
+            return '';
+        }
+        var title = sanitizePreviewText(label, previewLabels.reason);
+        var body = items.length === 1
+            ? '<div class="small">' + escapeHtml(items[0]).replace(/\n/g, '<br>') + '</div>'
+            : '<ul class="mb-0 ps-3">' + items.map(function (item) {
+                return '<li class="small">' + escapeHtml(item).replace(/\n/g, '<br>') + '</li>';
+            }).join('') + '</ul>';
+        return ''
+            + '<details class="pb-ai-reason-disclosure d-inline-block ms-2">'
+            + '<summary class="badge rounded-pill text-bg-light border text-muted" role="button" aria-label="' + escapeHtml(title) + '" title="' + escapeHtml(title) + '">?</summary>'
+            + '<div class="mt-2 p-2 border rounded bg-light text-muted">' + body + '</div>'
+            + '</details>';
+    }
+
+    function renderPreviewSectionHeadingWithReason(title, reasonItems) {
+        var reasonDisclosure = renderPreviewReasonDisclosure(previewLabels.reason, reasonItems);
+        return ''
+            + '<div class="d-flex flex-wrap align-items-center gap-1">'
+            + '<div class="fw-semibold">' + escapeHtml(String(title || '')) + '</div>'
+            + reasonDisclosure
+            + '</div>';
     }
 
     function renderThemeListSection(title, value, options) {
@@ -4684,7 +4763,7 @@
         return ''
             + '<div class="card border-0 shadow-sm mb-3">'
             + '<div class="card-body">'
-            + '<div class="fw-semibold">' + escapeHtml(previewLabels.themeSummary) + '</div>'
+            + renderPreviewSectionHeadingWithReason(previewLabels.themeSummary, selectionReason)
             + parts.join('')
             + '</div>'
             + '</div>';
@@ -5415,8 +5494,14 @@
         var themeSections = [];
         var tabs = [];
         var themeHtml = renderThemeSummarySection(planRoot);
-        var headerHtml = renderStructuredListSection(previewLabels.headerPlan, planRoot.navigation_plan || planRoot.header_plan || planRoot.header || null);
-        var footerHtml = renderStructuredListSection(previewLabels.footerPlan, planRoot.footer_plan || planRoot.footer || null);
+        var headerPlan = planRoot.navigation_plan || planRoot.header_plan || planRoot.header || null;
+        var footerPlan = planRoot.footer_plan || planRoot.footer || null;
+        var headerHtml = renderStructuredListSection(previewLabels.headerPlan, headerPlan, {
+            reasonItems: collectPreviewReasonItems(headerPlan)
+        });
+        var footerHtml = renderStructuredListSection(previewLabels.footerPlan, footerPlan, {
+            reasonItems: collectPreviewReasonItems(footerPlan)
+        });
         if (themeHtml) {
             themeSections.push(themeHtml);
         }
