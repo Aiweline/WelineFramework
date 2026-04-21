@@ -216,6 +216,14 @@
             || Object.prototype.hasOwnProperty.call(payload, 'queue_process')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_result_log')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_result_delta')
+            || Object.prototype.hasOwnProperty.call(payload, 'job_key')
+            || Object.prototype.hasOwnProperty.call(payload, 'job_type')
+            || Object.prototype.hasOwnProperty.call(payload, 'token')
+            || Object.prototype.hasOwnProperty.call(payload, 'execution_token')
+            || Object.prototype.hasOwnProperty.call(payload, 'token_usage')
+            || Object.prototype.hasOwnProperty.call(payload, 'input_tokens')
+            || Object.prototype.hasOwnProperty.call(payload, 'output_tokens')
+            || Object.prototype.hasOwnProperty.call(payload, 'total_tokens')
         );
         if (!hasQueueSignal) {
             return null;
@@ -240,6 +248,18 @@
         }
         if (Object.prototype.hasOwnProperty.call(payload, 'queue_pid')) {
             snapshot.pid = normalizeQueueId(payload.queue_pid);
+        }
+        ['job_key', 'job_type', 'token', 'execution_token', 'input_tokens', 'output_tokens', 'total_tokens'].forEach(function (key) {
+            if (Object.prototype.hasOwnProperty.call(payload, key)) {
+                snapshot[key] = payload[key];
+            }
+        });
+        if (payload.token_usage && typeof payload.token_usage === 'object') {
+            snapshot.token_usage = Object.assign(
+                {},
+                snapshot.token_usage && typeof snapshot.token_usage === 'object' ? snapshot.token_usage : {},
+                payload.token_usage
+            );
         }
 
         var process = String(existing.process || '');
