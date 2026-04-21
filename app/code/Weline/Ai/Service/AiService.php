@@ -948,6 +948,7 @@ class AiService
                 try {
                     $result = $provider->generate($model, $prompt, $params);
                     $usage = $result['usage'] ?? [];
+                    $this->publishTokenUsage($usage, $params, $model, 'chat');
 
                     // 记录使用量（兼容旧系统）
                     $this->logUsage($model, $usage, $params);
@@ -1085,6 +1086,7 @@ class AiService
                 try {
                     $result = $provider->generate($model, $prompt, $params);
                     $usage = $result['usage'] ?? [];
+                    $this->publishTokenUsage($usage, $params, $model, 'chat');
 
                     $this->logUsage($model, $usage, $params);
 
@@ -1258,6 +1260,7 @@ class AiService
                 try {
                     $result = $provider->generateStream($model, $prompt, $wrappedCallback, $params);
                     $usage = $result['usage'] ?? [];
+                    $this->publishTokenUsage($usage, $params, $model, 'stream');
 
                     $this->logUsage($model, $usage, $params);
                     $requestTime = (int)((microtime(true) - $startTime) * 1000);
@@ -1311,7 +1314,43 @@ class AiService
     }
 
     /**
-     * 统一 AI 流式错误文案，避免前端看到“黑盒”或难以行动的信息。
+     * @param array<string, mixed> $usage
+     * @param array<string, mixed> $params
+     */
+    private function publishTokenUsage(array $usage, array $params, AiModel $model, string $requestType): void
+    {
+        if ($usage === []) {
+            return;
+        }
+
+        $meta = [
+            'request_type' => $requestType,
+            'model_code' => $model->getModelCode(),
+            'provider' => $model->getSupplier(),
+            'scenario_code' => \is_string($params['scenario_code'] ?? null) ? $params['scenario_code'] : null,
+        ];
+
+        $callback = $params['token_usage_callback'] ?? null;
+        if (\is_callable($callback)) {
+            try {
+                $callback($usage, $meta);
+            } catch (\Throwable) {
+                // Usage callbacks are telemetry only and must not affect generation.
+            }
+        }
+
+        $writer = RequestContext::get(RequestContext::SSE_WRITER_KEY);
+        if (\is_object($writer) && \method_exists($writer, 'recordTokenUsage')) {
+            try {
+                $writer->recordTokenUsage($usage, $meta);
+            } catch (\Throwable) {
+                // Queue token accounting is best-effort telemetry.
+            }
+        }
+    }
+
+    /**
+     * 缁熶竴 AI 娴佸紡閿欒鏂囨锛岄伩鍏嶅墠绔湅鍒扳€滈粦鐩掆€濇垨闅句互琛屽姩鐨勪俊鎭€?
      */
     private function normalizeStreamErrorMessage(string $message): string
     {
