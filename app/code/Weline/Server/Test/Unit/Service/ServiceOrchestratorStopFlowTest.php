@@ -378,7 +378,7 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
     public function testRequestStopConsumesStopFlowImmediately(): void
     {
         $orchestrator = new class extends ServiceOrchestrator {
-            /** @var array<int, array{reason:string,progressClientId:?int}> */
+            /** @var array<int, array{reason:string,progressClientId:?int,skipDrain:bool}> */
             public array $stopAllCalls = [];
 
             public function stopAll(string $reason = 'shutdown', ?int $progressClientId = null): void
@@ -386,6 +386,7 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
                 $this->stopAllCalls[] = [
                     'reason' => $reason,
                     'progressClientId' => $progressClientId,
+                    'skipDrain' => $this->shouldSkipStopAllDrain(),
                 ];
             }
         };
@@ -408,23 +409,23 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         self::assertSame([[
             'reason' => 'command',
             'progressClientId' => 77,
+            'skipDrain' => false,
         ]], $orchestrator->stopAllCalls);
     }
 
-    public function testRequestStopCanScheduleForceTerminateFlowImmediately(): void
+    public function testRequestStopForceFlagSchedulesSkipDrainStopAll(): void
     {
         $orchestrator = new class extends ServiceOrchestrator {
-            public array $forcedReasons = [];
+            /** @var array<int, array{reason:string,progressClientId:?int,skipDrain:bool}> */
+            public array $stopAllCalls = [];
 
             public function stopAll(string $reason = 'shutdown', ?int $progressClientId = null): void
             {
-                unset($reason, $progressClientId);
-                \PHPUnit\Framework\Assert::fail('force stop should not run graceful stopAll');
-            }
-
-            public function forceTerminateMasterAndChildren(string $reason = 'force'): void
-            {
-                $this->forcedReasons[] = $reason;
+                $this->stopAllCalls[] = [
+                    'reason' => $reason,
+                    'progressClientId' => $progressClientId,
+                    'skipDrain' => $this->shouldSkipStopAllDrain(),
+                ];
             }
         };
 
@@ -444,7 +445,11 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
             $this->invokePrivate($orchestrator, 'tickMainLoopTasks', []);
         }
 
-        self::assertSame(['force_stop:command'], $orchestrator->forcedReasons);
+        self::assertSame([[
+            'reason' => 'command',
+            'progressClientId' => 77,
+            'skipDrain' => true,
+        ]], $orchestrator->stopAllCalls);
     }
 
     public function testVerifyAndKillRemainingProcessesSkipsExternallyManagedSharedSidecar(): void
