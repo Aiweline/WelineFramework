@@ -5996,6 +5996,181 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param array<string, mixed> $scope
+     * @param list<string> $orderedBlockKeys
+     * @return array{
+     *     plan_json:array<string, mixed>,
+     *     structured:array<string, mixed>,
+     *     execution_blueprint:array<string, mixed>,
+     *     markdown:string,
+     *     plan_workbench:array<string, mixed>,
+     *     reorder_summary:array<string, mixed>
+     * }
+     */
+    private function reorderDraftSharedPlanBlocks(array $scope, array $orderedBlockKeys): array
+    {
+        $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+        $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null)
+            ? $scope['execution_blueprint_draft']
+            : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
+        $sharedComponents = $this->resolveStageOneSharedComponents($structured, $executionBlueprint);
+        if (\count($sharedComponents) < 2) {
+            throw new \RuntimeException('Stage-1 shared block list needs at least two blocks to reorder.');
+        }
+
+        $originalOrder = \array_values(\array_map(
+            static fn($component): string => 'shared:' . (string)$component,
+            \array_keys($sharedComponents)
+        ));
+        $sharedComponents = $this->reorderStageOneSharedComponents($sharedComponents, $orderedBlockKeys);
+        $normalizedOrder = \array_values(\array_map(
+            static fn($component): string => 'shared:' . (string)$component,
+            \array_keys($sharedComponents)
+        ));
+
+        $structured['shared_components'] = $sharedComponents;
+        $structured['shared_plan'] = \array_replace(
+            \is_array($structured['shared_plan'] ?? null) ? $structured['shared_plan'] : [],
+            [
+                'header_block' => \is_array($sharedComponents['header'] ?? null) ? $sharedComponents['header'] : [],
+                'footer_block' => \is_array($sharedComponents['footer'] ?? null) ? $sharedComponents['footer'] : [],
+                'shared_blocks' => $this->buildStageOneSharedBlocksPlanJson($sharedComponents),
+            ]
+        );
+
+        $pageTypes = \is_array($structured['page_types'] ?? null)
+            ? \array_values(\array_map('strval', $structured['page_types']))
+            : (\is_array($executionBlueprint['page_types'] ?? null) ? \array_values(\array_map('strval', $executionBlueprint['page_types'])) : []);
+        $themeContextSnapshot = \is_array($structured['theme_context_snapshot'] ?? null)
+            ? $structured['theme_context_snapshot']
+            : (\is_array($executionBlueprint['theme_context_snapshot'] ?? null) ? $executionBlueprint['theme_context_snapshot'] : []);
+        $planLocale = \trim((string)($scope['plan_locale'] ?? $scope['default_language'] ?? $scope['default_locale'] ?? $structured['i18n']['locale'] ?? ''));
+        $sharedPromptContext = $this->buildStageOneSharedPromptContext($themeContextSnapshot, $sharedComponents, $pageTypes, $planLocale);
+        $structured['shared_plan']['theme_design'] = \is_array($structured['shared_plan']['theme_design'] ?? null)
+            ? $structured['shared_plan']['theme_design']
+            : $themeContextSnapshot;
+        $structured['shared_plan']['shared_prompt_context'] = $sharedPromptContext;
+
+        $pages = \is_array($executionBlueprint['pages'] ?? null)
+            ? $executionBlueprint['pages']
+            : (\is_array($structured['pages'] ?? null) ? $structured['pages'] : []);
+        $pagePlans = $this->buildStageOnePagePlans($pages, $sharedPromptContext);
+        $structured['page_plans'] = $pagePlans;
+        $executionBlueprint['pages'] = $pages;
+        $executionBlueprint['page_plans'] = $pagePlans;
+        $executionBlueprint['shared_components'] = $sharedComponents;
+        $executionBlueprint['shared_prompt_context'] = $sharedPromptContext;
+        $executionBlueprint['theme_context_snapshot'] = $themeContextSnapshot;
+
+        $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
+        $structured['block_index'] = $blockIndex;
+        $executionBlueprint['block_index'] = $blockIndex;
+        $tasks = \is_array($executionBlueprint['tasks'] ?? null) ? $executionBlueprint['tasks'] : [];
+        $executionBlueprint['tasks'] = $this->rebuildStageOneSharedTaskList($tasks, $sharedComponents);
+        $structured['execution_steps'] = $this->buildExecutionSteps($executionBlueprint['tasks']);
+        $executionBlueprint['signature'] = $this->buildExecutionBlueprintSignature($executionBlueprint);
+
+        $planJson = $this->buildPlanJson($structured);
+        $markdown = $this->buildMarkdownPlan($planJson, $planLocale);
+        $planWorkbench = $this->buildPlanWorkbenchArtifacts($scope, $structured, $executionBlueprint, $planJson, $markdown, $planLocale);
+
+        return [
+            'plan_json' => $planJson,
+            'structured' => $structured,
+            'execution_blueprint' => $executionBlueprint,
+            'markdown' => $markdown,
+            'plan_workbench' => $planWorkbench,
+            'reorder_summary' => [
+                'page_type' => 'shared',
+                'original_order' => $originalOrder,
+                'ordered_block_keys' => $normalizedOrder,
+                'block_count' => \count($normalizedOrder),
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $sharedComponents
+     * @param list<string> $orderedBlockKeys
+     * @return array<string, array<string, mixed>>
+     */
+    private function reorderStageOneSharedComponents(array $sharedComponents, array $orderedBlockKeys): array
+    {
+        $orderMap = [];
+        foreach ($orderedBlockKeys as $position => $blockKey) {
+            $blockKey = \trim((string)$blockKey);
+            if (\str_starts_with($blockKey, 'shared:')) {
+                $blockKey = \substr($blockKey, \strlen('shared:'));
+            }
+            if ($blockKey === '' || isset($orderMap[$blockKey])) {
+                continue;
+            }
+            $orderMap[$blockKey] = $position;
+        }
+
+        $wrapped = [];
+        foreach ($this->normalizeStageOneSharedComponents($sharedComponents) as $index => $componentPlan) {
+            if (!\is_array($componentPlan)) {
+                continue;
+            }
+            $component = \trim((string)($componentPlan['component'] ?? $index));
+            $wrapped[] = [
+                'component' => $component,
+                'position' => $orderMap[$component] ?? \PHP_INT_MAX,
+                'previous_sort_order' => (int)($componentPlan['sort_order'] ?? 0),
+                'component_plan' => $componentPlan,
+            ];
+        }
+
+        \usort($wrapped, static function (array $left, array $right): int {
+            $positionCompare = ((int)$left['position']) <=> ((int)$right['position']);
+            if ($positionCompare !== 0) {
+                return $positionCompare;
+            }
+            $sortCompare = ((int)$left['previous_sort_order']) <=> ((int)$right['previous_sort_order']);
+            if ($sortCompare !== 0) {
+                return $sortCompare;
+            }
+
+            return \strcmp((string)$left['component'], (string)$right['component']);
+        });
+
+        $result = [];
+        foreach ($wrapped as $offset => $row) {
+            $componentPlan = \is_array($row['component_plan']) ? $row['component_plan'] : [];
+            $component = \trim((string)($row['component'] ?? $componentPlan['component'] ?? ''));
+            if ($component === '') {
+                continue;
+            }
+            $componentPlan['component'] = $component;
+            $componentPlan['task_key'] = 'shared:' . $component;
+            $componentPlan['sort_order'] = ($offset + 1) * 10;
+            $result[$component] = $componentPlan;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $tasks
+     * @param array<string, array<string, mixed>> $sharedComponents
+     * @return list<array<string, mixed>>
+     */
+    private function rebuildStageOneSharedTaskList(array $tasks, array $sharedComponents): array
+    {
+        $sharedTasks = \array_values($this->normalizeStageOneSharedComponents($sharedComponents));
+        $pageTasks = [];
+        foreach ($tasks as $task) {
+            if (!\is_array($task) || (string)($task['task_type'] ?? '') === 'shared_component') {
+                continue;
+            }
+            $pageTasks[] = $task;
+        }
+
+        return \array_values(\array_merge($sharedTasks, $pageTasks));
+    }
+
+    /**
      * @param list<array<string, mixed>> $blocks
      * @param list<string> $orderedBlockKeys
      * @return list<array<string, mixed>>
