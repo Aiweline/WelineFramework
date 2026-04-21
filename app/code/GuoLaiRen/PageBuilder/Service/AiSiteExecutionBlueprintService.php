@@ -152,6 +152,18 @@ final class AiSiteExecutionBlueprintService
             $pageTypes,
             $planLocale
         );
+        $pagePlans = $this->buildStageOnePagePlans($pages, $sharedPromptContext);
+        foreach ($pagePlans as $pageType => $pagePlan) {
+            if (!\is_array($pagePlan)) {
+                continue;
+            }
+            foreach (\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [] as $block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $tasks[] = $this->buildPageTask((string)$pageType, $pagePlan, $block);
+            }
+        }
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
         foreach ($pagePlans as $pageType => $pagePlan) {
             if (!\is_array($pagePlan)) {
