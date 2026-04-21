@@ -62,58 +62,8 @@ final class AiSiteVirtualThemePlanService
         $totalBatches = \count($effectiveBatches);
         $completedBatches = 0;
 
-        $fanoutBatches = [];
         foreach ($effectiveBatches as $batchIndex => $batch) {
-            if (($batch['type'] ?? '') !== 'shared') {
-                $fanoutBatches[] = ['batch' => $batch, 'batch_index' => $batchIndex];
-                continue;
-            }
-
-            $batchId = $this->buildTaskPlanBatchId($batch);
-            $this->emitTaskPlanBatchProgress($progressCallback, 'batch_begin', $batch, $batchIndex, $totalBatches, $completedBatches);
-            if ($heartbeatCallback !== null) {
-                $heartbeatCallback();
-            }
-            try {
-                $decoded = $this->requestTaskPlanJsonFromAi(
-                    $scope,
-                    $this->buildTaskPlanGenerationBatchPrompt(
-                        $scope,
-                        $buildBlueprint,
-                        $assembledStructured,
-                        $assembledVirtualThemePlan,
-                        $batch,
-                        $mode,
-                        $instruction,
-                        $targetScope
-                    ),
-                    $this->resolveTaskPlanBatchMaxTokens($batch),
-                    $chunkCallback,
-                    $heartbeatCallback
-                );
-            } catch (\Throwable $batchThrowable) {
-                $this->emitTaskPlanBatchProgress($progressCallback, 'batch_failed', $batch, $batchIndex, $totalBatches, $completedBatches, [
-                    'error_message' => $batchThrowable->getMessage(),
-                ]);
-                throw $batchThrowable;
-            }
-
-            ['structured' => $assembledStructured, 'virtual_theme_plan' => $assembledVirtualThemePlan, 'risk_notes' => $riskNotes] =
-                $this->mergeTaskPlanGenerationBatch(
-                    $assembledStructured,
-                    $assembledVirtualThemePlan,
-                    $riskNotes,
-                    $batch,
-                    $decoded
-                );
-            if ($heartbeatCallback !== null) {
-                $heartbeatCallback();
-            }
-            $completedBatches++;
-            $this->emitTaskPlanBatchProgress($progressCallback, 'batch_done', $batch, $batchIndex, $totalBatches, $completedBatches);
-            if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent()) {
-                SchedulerSystem::yieldDelay(1);
-            }
+            $fanoutBatches[] = ['batch' => $batch, 'batch_index' => $batchIndex];
         }
 
         if ($fanoutBatches !== []) {
@@ -387,13 +337,28 @@ final class AiSiteVirtualThemePlanService
     {
         $batches = [];
         $sharedTasks = \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [];
-        $sharedTaskKeys = \array_values(\array_filter(\array_map(static fn(array $task): string => \trim((string)($task['task_key'] ?? '')), $sharedTasks)));
-        if ($sharedTaskKeys !== []) {
+        foreach ($sharedTasks as $task) {
+            if (!\is_array($task) || $this->isStageTwoTaskPlanBatchComplete($task)) {
+                continue;
+            }
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+            $component = \trim((string)($task['component'] ?? $task['region'] ?? ''));
+            if ($component === '' && \str_starts_with($taskKey, 'shared:')) {
+                $component = \trim(\substr($taskKey, 7));
+            }
+            $blockKey = $component !== '' ? $component : $taskKey;
             $batches[] = [
                 'type' => 'shared',
-                'key' => 'shared',
-                'task_keys' => $sharedTaskKeys,
-                'fanout_group' => 'stage2.shared_task_plan',
+                'key' => $component !== '' ? $component : 'shared',
+                'block_key' => $blockKey,
+                'task_keys' => [$taskKey],
+                'sort_order' => (int)($task['sort_order'] ?? 0),
+                'depends_on' => \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
+                'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':shared:' . $this->normalizeTaskPlanBatchIdPart($blockKey),
             ];
         }
 
@@ -404,7 +369,7 @@ final class AiSiteVirtualThemePlanService
             }
             $pageType = (string)$pageType;
             foreach ($tasks as $task) {
-                if (!\is_array($task)) {
+                if (!\is_array($task) || $this->isStageTwoTaskPlanBatchComplete($task)) {
                     continue;
                 }
                 $taskKey = \trim((string)($task['task_key'] ?? ''));
@@ -436,12 +401,28 @@ final class AiSiteVirtualThemePlanService
     }
 
     /**
+     * @param array<string, mixed> $task
+     */
+    private function isStageTwoTaskPlanBatchComplete(array $task): bool
+    {
+        $status = \trim((string)($task['status'] ?? ''));
+        if ($status !== 'done') {
+            return false;
+        }
+
+        return \is_array($task['block_task'] ?? null)
+            || \is_array($task['task_script'] ?? null)
+            || \is_array($task['field_content_requirements'] ?? null);
+    }
+
+    /**
      * @param array<string, mixed> $batch
      */
     private function buildTaskPlanBatchId(array $batch): string
     {
         if (($batch['type'] ?? '') === 'shared') {
-            return 'shared';
+            $blockKey = \trim((string)($batch['block_key'] ?? $batch['key'] ?? ''));
+            return 'shared:' . $this->normalizeTaskPlanBatchIdPart($blockKey !== '' ? $blockKey : 'block');
         }
 
         $pageType = \trim((string)($batch['key'] ?? 'page'));
@@ -481,14 +462,18 @@ final class AiSiteVirtualThemePlanService
             return null;
         }
         if (\str_starts_with($targetScope, 'shared')) {
-            return ['shared'];
+            $sharedBatchIds = [];
+            foreach ($this->buildTaskPlanGenerationBatches($structured) as $batch) {
+                if (($batch['type'] ?? '') === 'shared') {
+                    $sharedBatchIds[] = $this->buildTaskPlanBatchId($batch);
+                }
+            }
+
+            return $sharedBatchIds !== [] ? \array_values(\array_unique($sharedBatchIds)) : null;
         }
 
         $selectedBatchIds = [];
         foreach ($this->buildTaskPlanGenerationBatches($structured) as $batch) {
-            if (($batch['type'] ?? '') === 'shared') {
-                continue;
-            }
             $haystackParts = [
                 (string)($batch['key'] ?? ''),
                 (string)($batch['block_key'] ?? ''),
@@ -514,10 +499,6 @@ final class AiSiteVirtualThemePlanService
     private function resolveTaskPlanBatchMaxTokens(array $batch): int
     {
         // shared/block 批次都可能返回较长 task_script 与字段样例；过低会截断为半截 JSON。
-        if (($batch['type'] ?? '') === 'shared') {
-            return 5200;
-        }
-
         return \count(\is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : []) <= 1 ? 4200 : 6400;
     }
 
@@ -589,14 +570,22 @@ final class AiSiteVirtualThemePlanService
         }
 
         if ($batch['type'] === 'shared') {
+            $sharedTasks = \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [];
+            $sharedTasks = $this->filterTaskPlanTaskListForBatch($sharedTasks, $batch);
+            $sharedCues = [];
+            foreach ($batch['task_keys'] as $taskKey) {
+                if (\is_array($stage1TaskCues['shared'][$taskKey] ?? null)) {
+                    $sharedCues[$taskKey] = $stage1TaskCues['shared'][$taskKey];
+                }
+            }
             $lines[] = 'Output schema: {"shared_tasks":[...],"risk_notes":["string"]}';
             $lines[] = 'Do not output page_tasks or a full virtual_theme_plan wrapper.';
             $lines[] = 'Shared task skeleton:';
-            $lines[] = \json_encode(\is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [], \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
+            $lines[] = \json_encode($sharedTasks, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
             $lines[] = 'Relevant stage-1 shared cues:';
             $lines[] = 'Each returned shared_tasks[] item MUST include planning_reason explaining why this shared block structure, fields, navigation/link choices, style rules, and responsive behavior fit the confirmed stage-1 shared cues.';
             $lines[] = 'Use the matching stage-1 shared cue reason/implementation_detail for shared_tasks[].planning_reason; never leave planning_reason blank or replace it with a generic shared-component rationale.';
-            $lines[] = \json_encode(\is_array($stage1TaskCues['shared'] ?? null) ? $stage1TaskCues['shared'] : [], \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
+            $lines[] = \json_encode($sharedCues, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
             $lines[] = 'Relevant shared rules:';
             $lines[] = \json_encode([
                 'content_rules' => \is_array($structured['content_rules'] ?? null) ? $structured['content_rules'] : [],
@@ -3901,11 +3890,91 @@ final class AiSiteVirtualThemePlanService
      */
     private function applyStageTwoBlockTaskPlanFanoutToStructured(array $structured): array
     {
+        $sharedTasks = \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [];
         $pageTasks = \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [];
         $jobs = \is_array($structured['stage2_queue']['jobs'] ?? null) ? $structured['stage2_queue']['jobs'] : [];
         $sequence = \array_values(\array_filter(\array_map('strval', \is_array($structured['stage2_queue']['sequence'] ?? null) ? $structured['stage2_queue']['sequence'] : [])));
         $taskFanoutMap = [];
         $blockJobKeys = [];
+
+        foreach ($sharedTasks as $idx => $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+            $resultRef = \is_array($task['result_ref'] ?? null) ? $task['result_ref'] : [];
+            $blockKey = $this->firstNonEmptyString([
+                $task['block_key'] ?? null,
+                $task['component'] ?? null,
+                $task['region'] ?? null,
+                \str_starts_with($taskKey, 'shared:') ? \substr($taskKey, 7) : null,
+                $taskKey,
+            ]);
+            $jobKey = self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':shared:' . $blockKey;
+            $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
+            $runtimeContext = \array_replace($runtimeContext, [
+                'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                'fanout_job_key' => $jobKey,
+                'block_key' => $blockKey,
+                'task_granularity' => 'one_block_one_task',
+            ]);
+
+            $task = \array_replace($task, [
+                'block_key' => $blockKey,
+                'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                'fanout_job_key' => $jobKey,
+                'runtime_context' => $runtimeContext,
+            ]);
+            $sharedTasks[$idx] = $task;
+
+            $dependsOn = \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [])));
+            $jobs[$jobKey] = [
+                'job_key' => $jobKey,
+                'job_type' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                'stage' => 'stage2_block_task_plan',
+                'sort_order' => (int)($task['sort_order'] ?? 0),
+                'task_key' => $taskKey,
+                'page_type' => '',
+                'block_key' => $blockKey,
+                'depends_on' => $dependsOn,
+                'depends_on_task_keys' => $dependsOn,
+                'status' => (string)($task['status'] ?? 'pending'),
+                'prompt_version' => (string)($runtimeContext['prompt_version'] ?? 'stage2-block-task-plan-v2'),
+                'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                'queue_driver' => 'weline_queue',
+                'can_parallel_after_dependencies' => true,
+                'concurrency' => [
+                    'mode' => 'fiber_coroutine',
+                    'group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                    'task_granularity' => 'one_block_one_task',
+                    'dependency_policy' => 'preserve_task_dependencies_and_sort_order',
+                    'queue_driver' => 'weline_queue',
+                ],
+                'inputs' => [
+                    'task_key' => $taskKey,
+                    'page_type' => '',
+                    'block_key' => $blockKey,
+                    'context_hash' => (string)($resultRef['context_hash'] ?? $runtimeContext['stage2_context_hash'] ?? ''),
+                ],
+                'outputs' => [
+                    'block_task' => \is_array($task['block_task'] ?? null) ? $task['block_task'] : [],
+                    'result_ref' => $resultRef,
+                ],
+            ];
+            $blockJobKeys[] = $jobKey;
+            if (!\in_array($jobKey, $sequence, true)) {
+                $sequence[] = $jobKey;
+            }
+            $taskFanoutMap[$taskKey] = [
+                'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                'fanout_job_key' => $jobKey,
+                'block_key' => $blockKey,
+                'runtime_context' => $runtimeContext,
+            ];
+        }
 
         foreach ($pageTasks as $pageType => $tasks) {
             if (!\is_array($tasks)) {
@@ -3994,6 +4063,7 @@ final class AiSiteVirtualThemePlanService
             $pageTasks[$pageType] = \array_values($tasks);
         }
 
+        $structured['shared_tasks'] = \array_values($sharedTasks);
         $structured['page_tasks'] = $pageTasks;
         $structured['stage2_queue'] = [
             'sequence' => $sequence,
@@ -4002,7 +4072,7 @@ final class AiSiteVirtualThemePlanService
                 'trigger_after' => 'stage1.confirmed_block_tree',
                 'mode' => 'fiber_coroutine',
                 'queue_driver' => 'weline_queue',
-                'dispatch_policy' => 'shared_first_then_block_fanout',
+                'dispatch_policy' => 'all_blocks_parallel_after_stage1_theme',
                 'dependency_policy' => 'preserve_block_sort_order_and_task_dependencies',
                 'task_granularity' => 'one_block_one_task',
                 'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,

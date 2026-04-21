@@ -3315,6 +3315,7 @@ SCRIPT;
                             $buildPayload['instruction'] = $requestedInstruction;
                         }
                         $buildPayload['round'] = $requestedRound;
+                        $buildPayload['staged_generation'] = true;
                         $artifacts = $this->executionBlueprintService->buildPlanArtifactsByAiStream($scope, \is_array($websiteProfile) ? $websiteProfile : [], $buildPayload, $onChunk);
                     }
 
