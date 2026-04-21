@@ -1207,17 +1207,14 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         ]);
     }
 
-    public function testBuildPlanArtifactsByAiStreamRequiresPageThemeAlignmentSummary(): void
+    public function testBuildPlanArtifactsByAiStreamRepairsMissingPageThemeAlignmentSummary(): void
     {
         $service = new AiSiteExecutionBlueprintService(
             new AiSitePageBlueprintService(),
             $this->createStreamingAiServiceStub($this->buildAiPlanResponseWithoutThemeAlignmentSummary())
         );
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('theme_alignment_summary for "home_page"');
-
-        $service->buildPlanArtifactsByAiStream([
+        $artifacts = $service->buildPlanArtifactsByAiStream([
             'site_title' => 'Plan Service Test',
             'brief_description' => 'Need home and about pages with strong CTA.',
             'page_types' => ['home_page', 'about_page'],
@@ -1228,6 +1225,37 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             'site_title' => 'Plan Service Test',
             'brief_description' => 'Need home and about pages with strong CTA.',
         ]);
+
+        $summary = (string)($artifacts['plan_json']['pages']['home_page']['theme_alignment_summary'] ?? '');
+        self::assertNotSame('', $summary);
+        self::assertStringContainsString('shared theme purpose', $summary);
+        self::assertStringNotContainsString('string explaining how this page obeys', $summary);
+    }
+
+    public function testBuildPlanArtifactsByAiStreamRepairsPromptLikeAboutThemeAlignmentSummary(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildAiPlanResponseWithPromptLikeAboutThemeAlignmentSummary())
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+            'default_locale' => 'en_US',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+
+        $summary = (string)($artifacts['plan_json']['pages']['about_page']['theme_alignment_summary'] ?? '');
+        self::assertNotSame('', $summary);
+        self::assertStringContainsString('shared theme purpose', $summary);
+        self::assertStringContainsString('Ocean Slate', $summary);
+        self::assertStringNotContainsString('string explaining how this page obeys', $summary);
     }
 
     public function testBuildPlanArtifactsByAiStreamRejectsPromptLikeHeroInsteadOfSilentFallback(): void
@@ -1682,6 +1710,18 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         }
 
         unset($decoded['plan_json']['pages']['home_page']['theme_alignment_summary']);
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    private function buildAiPlanResponseWithPromptLikeAboutThemeAlignmentSummary(): string
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        if (!\is_array($decoded)) {
+            return '{}';
+        }
+
+        $decoded['plan_json']['pages']['about_page']['theme_alignment_summary'] = 'string explaining how this page obeys theme_design/shared_prompt_context';
 
         return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }
