@@ -1077,7 +1077,7 @@ Atomic Task ID:
 
 - [ ] A09 建立 `stage1.requirement_expand` 队列任务 envelope（status=todo, owner=backend-queue, covers=§13.5, output=job_key/job_type/status/token 字段）
 - [ ] A10 建立 `stage1.shared.theme_design` 队列任务（status=todo, owner=backend-queue, covers=§1A, output=持久化 theme_context_snapshot）
-- [ ] A11 建立 `stage1.shared.header_footer` 队列任务（status=todo, owner=backend-queue, covers=§1A, output=Header/Footer + shared_prompt_context）
+- [x] A11 建立 `stage1.shared.header_footer` 队列任务（status=done, owner=worker-6, covers=§1A, output=Header/Footer + shared_prompt_context, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
 - [ ] A12 Header/Footer 完成后自动 fanout 页面任务（status=todo, owner=backend-queue, covers=§1A, output=不依赖用户切 Tab）
 - [ ] A13 页面任务 fanout 使用 Fiber/协程并发（status=todo, owner=runtime, covers=§1A/§13.5, output=一页面一任务并发）
 - [ ] A14 页面任务输入强制携带 `theme_design` 全量硬约束（status=todo, owner=backend, covers=§1A, output=色系/宗旨/原因/禁用风格进入 prompt context）
