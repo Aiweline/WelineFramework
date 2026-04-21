@@ -2798,6 +2798,441 @@ final class AiSiteVirtualThemePlanService
      * @param array<string, mixed> $task
      * @return array<string, mixed>
      */
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function resolveConfirmedStageOnePlanBook(array $scope): array
+    {
+        $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
+        $confirmedWorkbench = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
+        $candidates = [
+            $confirmedWorkbench['plan_book']['structured'] ?? null,
+            $scope['confirmed_plan_book']['structured'] ?? null,
+            $scope['plan_book']['structured'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (\is_array($candidate) && $this->looksLikeConfirmedStageOnePlanBook($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $planBook
+     */
+    private function looksLikeConfirmedStageOnePlanBook(array $planBook): bool
+    {
+        return \is_array($planBook['pages'] ?? null)
+            || \is_array($planBook['shared_blocks'] ?? null)
+            || (string)($planBook['source'] ?? '') === 'stage1.block_tree';
+    }
+
+    /**
+     * @param array<string, mixed> $planBook
+     * @return array<string, mixed>
+     */
+    private function compactConfirmedPlanBookForPrompt(array $planBook, string $pageType = ''): array
+    {
+        if ($planBook === []) {
+            return [];
+        }
+
+        $compact = [
+            'source' => (string)($planBook['source'] ?? 'stage1.block_tree'),
+            'source_signature' => (string)($planBook['source_signature'] ?? ''),
+            'context_hash' => (string)($planBook['context_hash'] ?? ''),
+            'plan_locale' => (string)($planBook['plan_locale'] ?? ''),
+            'theme_context_hash' => (string)($planBook['theme_context_hash'] ?? ''),
+            'shared_context_hash' => (string)($planBook['shared_context_hash'] ?? ''),
+            'counts' => \is_array($planBook['counts'] ?? null) ? $planBook['counts'] : [],
+            'shared_blocks' => [],
+            'pages' => [],
+        ];
+
+        foreach (\is_array($planBook['shared_blocks'] ?? null) ? $planBook['shared_blocks'] : [] as $block) {
+            if (\is_array($block)) {
+                $compact['shared_blocks'][] = $this->compactStageOnePlanBookBlock($block, true);
+            }
+        }
+
+        foreach (\is_array($planBook['pages'] ?? null) ? $planBook['pages'] : [] as $key => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $pageKey = (string)($page['page_key'] ?? $key);
+            if ($pageType !== '' && $pageKey !== $pageType) {
+                continue;
+            }
+            $blocks = [];
+            foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $block) {
+                if (\is_array($block)) {
+                    $blocks[] = $this->compactStageOnePlanBookBlock($block, false);
+                }
+            }
+            $compact['pages'][$pageKey] = [
+                'page_key' => $pageKey,
+                'page_label' => (string)($page['page_label'] ?? $pageKey),
+                'page_goal' => (string)($page['page_goal'] ?? ''),
+                'theme_alignment_summary' => (string)($page['theme_alignment_summary'] ?? ''),
+                'shared_context_hash' => (string)($page['shared_context_hash'] ?? ''),
+                'theme_context_hash' => (string)($page['theme_context_hash'] ?? ''),
+                'page_context_hash' => (string)($page['page_context_hash'] ?? ''),
+                'blocks' => $blocks,
+            ];
+        }
+
+        return $compact;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    private function compactStageOnePlanBookBlock(array $block, bool $shared): array
+    {
+        return [
+            'task_key' => (string)($block['task_key'] ?? ''),
+            'block_key' => (string)($block['block_key'] ?? ''),
+            'source_block_key' => (string)($block['source_block_key'] ?? ''),
+            'scope' => $shared ? 'shared' : 'page',
+            'component' => (string)($block['component'] ?? ''),
+            'component_kind' => (string)($block['component_kind'] ?? ''),
+            'sort_order' => (int)($block['sort_order'] ?? 0),
+            'title' => (string)($block['title'] ?? ''),
+            'goal' => (string)($block['goal'] ?? ''),
+            'implementation_detail' => (string)($block['implementation_detail'] ?? ''),
+            'realtime_content' => \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [],
+            'reason' => (string)($block['reason'] ?? ''),
+            'completion_rule' => (string)($block['completion_rule'] ?? ''),
+            'editable_fields' => \array_values(\array_filter(\array_map('strval', \is_array($block['editable_fields'] ?? null) ? $block['editable_fields'] : []))),
+            'style_direction' => (string)($block['style_direction'] ?? ''),
+            'responsive_rule' => (string)($block['responsive_rule'] ?? ''),
+            'context_hash' => (string)($block['context_hash'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param list<string> $fallbackPageTypes
+     * @param array<string, mixed> $planBook
+     * @return list<string>
+     */
+    private function resolveStageTwoPageTypes(array $fallbackPageTypes, array $planBook): array
+    {
+        $pageTypes = [];
+        foreach (\is_array($planBook['pages'] ?? null) ? $planBook['pages'] : [] as $key => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $pageKey = \trim((string)($page['page_key'] ?? $key));
+            if ($pageKey !== '') {
+                $pageTypes[] = $pageKey;
+            }
+        }
+
+        return $pageTypes !== [] ? \array_values(\array_unique($pageTypes)) : $fallbackPageTypes;
+    }
+
+    /**
+     * @param array<string, mixed> $buildBlueprint
+     * @param array<string, mixed> $planBook
+     * @return list<array<string, mixed>>
+     */
+    private function resolveStageTwoBuildTasks(array $buildBlueprint, array $planBook): array
+    {
+        $tasks = [];
+        foreach (\is_array($planBook['shared_blocks'] ?? null) ? $planBook['shared_blocks'] : [] as $block) {
+            if (\is_array($block)) {
+                $tasks[] = $this->buildStageTwoSharedTaskFromPlanBookBlock($block);
+            }
+        }
+        foreach (\is_array($planBook['pages'] ?? null) ? $planBook['pages'] : [] as $pageKey => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $resolvedPageKey = \trim((string)($page['page_key'] ?? $pageKey));
+            foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $block) {
+                if (\is_array($block)) {
+                    $tasks[] = $this->buildStageTwoPageTaskFromPlanBookBlock($resolvedPageKey, $block);
+                }
+            }
+        }
+
+        if ($tasks !== []) {
+            return $tasks;
+        }
+
+        return \array_values(\array_filter(
+            \is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [],
+            static fn($task): bool => \is_array($task)
+        ));
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    private function buildStageTwoSharedTaskFromPlanBookBlock(array $block): array
+    {
+        $component = \trim((string)($block['component'] ?? ''));
+        $taskKey = \trim((string)($block['task_key'] ?? $block['block_key'] ?? ''));
+        if ($taskKey === '') {
+            $taskKey = 'shared:' . ($component !== '' ? $component : 'block');
+        }
+        if ($component === '' && \str_starts_with($taskKey, 'shared:')) {
+            $component = \trim(\substr($taskKey, 7));
+        }
+
+        return [
+            'task_key' => $taskKey,
+            'task_type' => 'shared_component',
+            'scope_key' => 'shared_components.' . ($component !== '' ? $component : $taskKey),
+            'group_key' => 'shared',
+            'page_type' => '',
+            'region' => $component,
+            'label' => (string)($block['title'] ?? ($component !== '' ? $component : $taskKey)),
+            'sort_order' => (int)($block['sort_order'] ?? 0),
+            'dependencies' => [],
+            'result_ref' => [
+                'source' => 'plan_workbench.confirmed.plan_book.structured',
+                'scope_path' => 'shared_blocks.' . $taskKey,
+                'context_hash' => (string)($block['context_hash'] ?? ''),
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    private function buildStageTwoPageTaskFromPlanBookBlock(string $pageKey, array $block): array
+    {
+        $sourceBlockKey = $this->resolvePlanBookSourceBlockKey($block);
+        $taskKey = \trim((string)($block['task_key'] ?? ''));
+        if ($taskKey === '') {
+            $taskKey = 'page:' . $pageKey . ':' . $sourceBlockKey;
+        }
+        $sectionCode = \trim((string)($block['component_kind'] ?? $block['title'] ?? $sourceBlockKey));
+
+        return [
+            'task_key' => $taskKey,
+            'task_type' => 'page_section',
+            'scope_key' => 'page_sections.' . $pageKey . '.' . $sourceBlockKey,
+            'group_key' => $pageKey,
+            'page_type' => $pageKey,
+            'region' => 'content',
+            'section_code' => $sectionCode !== '' ? $sectionCode : $sourceBlockKey,
+            'section_key' => $sourceBlockKey,
+            'block_key' => $sourceBlockKey,
+            'label' => (string)($block['title'] ?? $sourceBlockKey),
+            'sort_order' => (int)($block['sort_order'] ?? 0),
+            'dependencies' => [],
+            'result_ref' => [
+                'source' => 'plan_workbench.confirmed.plan_book.structured',
+                'scope_path' => 'pages.' . $pageKey . '.blocks.' . $sourceBlockKey,
+                'context_hash' => (string)($block['context_hash'] ?? ''),
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $executionBlueprint
+     * @param array<string, mixed> $planBook
+     * @return array<string, array<string, mixed>>
+     */
+    private function resolveStageTwoPagePlans(array $executionBlueprint, array $planBook): array
+    {
+        $pages = [];
+        foreach (\is_array($planBook['pages'] ?? null) ? $planBook['pages'] : [] as $key => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $pageKey = \trim((string)($page['page_key'] ?? $key));
+            if ($pageKey === '') {
+                continue;
+            }
+            $blocks = [];
+            foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $block) {
+                if (\is_array($block)) {
+                    $blocks[] = $this->buildStageTwoPagePlanBlockFromPlanBookBlock($pageKey, $block);
+                }
+            }
+            $pages[$pageKey] = [
+                'page_label' => (string)($page['page_label'] ?? $pageKey),
+                'page_goal' => (string)($page['page_goal'] ?? ''),
+                'page_status' => (string)($page['page_status'] ?? 'done'),
+                'theme_alignment_summary' => (string)($page['theme_alignment_summary'] ?? ''),
+                'shared_context_hash' => (string)($page['shared_context_hash'] ?? $planBook['shared_context_hash'] ?? ''),
+                'theme_context_hash' => (string)($page['theme_context_hash'] ?? $planBook['theme_context_hash'] ?? ''),
+                'page_context_hash' => (string)($page['page_context_hash'] ?? ''),
+                'blocks' => $blocks,
+            ];
+        }
+
+        if ($pages !== []) {
+            return $pages;
+        }
+
+        return \is_array($executionBlueprint['pages'] ?? null) ? $executionBlueprint['pages'] : [];
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    private function buildStageTwoPagePlanBlockFromPlanBookBlock(string $pageKey, array $block): array
+    {
+        $sourceBlockKey = $this->resolvePlanBookSourceBlockKey($block);
+        $sectionCode = \trim((string)($block['component_kind'] ?? $block['title'] ?? $sourceBlockKey));
+        $resultRef = [
+            'source' => 'plan_workbench.confirmed.plan_book.structured',
+            'scope_path' => 'pages.' . $pageKey . '.blocks.' . $sourceBlockKey,
+            'context_hash' => (string)($block['context_hash'] ?? ''),
+        ];
+
+        return [
+            'block_key' => $sourceBlockKey,
+            'section_code' => $sectionCode !== '' ? $sectionCode : $sourceBlockKey,
+            'component_kind' => (string)($block['component_kind'] ?? ''),
+            'sort_order' => (int)($block['sort_order'] ?? 0),
+            'goal' => (string)($block['goal'] ?? ''),
+            'why' => (string)($block['reason'] ?? ''),
+            'implementation_detail' => (string)($block['implementation_detail'] ?? ''),
+            'realtime_content' => \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [],
+            'editable_fields' => \array_values(\array_filter(\array_map('strval', \is_array($block['editable_fields'] ?? null) ? $block['editable_fields'] : []))),
+            'completion_rule' => (string)($block['completion_rule'] ?? ''),
+            'content_brief' => \is_array($block['content_source'] ?? null) ? ['content_source' => $block['content_source']] : [],
+            'field_plan' => $this->buildStageTwoFieldPlanFromPlanBookBlock($block),
+            'result_ref' => $resultRef,
+            'style_direction' => (string)($block['style_direction'] ?? ''),
+            'responsive_rule' => (string)($block['responsive_rule'] ?? ''),
+            'seo_brief' => \is_array($block['seo_brief'] ?? null) ? $block['seo_brief'] : [],
+            'context_hash' => (string)($block['context_hash'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return list<array<string, mixed>>
+     */
+    private function buildStageTwoFieldPlanFromPlanBookBlock(array $block): array
+    {
+        if (\is_array($block['field_plan'] ?? null) && $block['field_plan'] !== []) {
+            return \array_values(\array_filter($block['field_plan'], static fn($row): bool => \is_array($row)));
+        }
+
+        $fields = \array_values(\array_filter(\array_map('strval', \is_array($block['editable_fields'] ?? null) ? $block['editable_fields'] : [])));
+        $realtimeContent = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
+        $fieldPlan = [];
+        foreach ($fields as $field) {
+            $sample = '';
+            if (isset($realtimeContent[$field]) && \is_scalar($realtimeContent[$field])) {
+                $sample = \trim((string)$realtimeContent[$field]);
+            }
+            if ($sample === '' && \in_array($field, ['title', 'heading', 'headline'], true)) {
+                $sample = \trim((string)($realtimeContent['headline'] ?? $block['title'] ?? ''));
+            }
+            $fieldPlan[] = [
+                'field' => $field,
+                'sample' => $sample !== '' ? $sample : (string)($block['title'] ?? $field),
+                'reason' => 'Derived from confirmed stage-1 block tree editable_fields.',
+            ];
+        }
+
+        return $fieldPlan;
+    }
+
+    /**
+     * @param array<string, mixed> $executionBlueprint
+     * @param array<string, mixed> $planBook
+     * @return array<string, array<string, mixed>>
+     */
+    private function resolveStageTwoSharedComponentPlans(array $executionBlueprint, array $planBook): array
+    {
+        $shared = [];
+        foreach (\is_array($planBook['shared_blocks'] ?? null) ? $planBook['shared_blocks'] : [] as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $component = \trim((string)($block['component'] ?? ''));
+            $taskKey = \trim((string)($block['task_key'] ?? $block['block_key'] ?? ''));
+            if ($component === '' && \str_starts_with($taskKey, 'shared:')) {
+                $component = \trim(\substr($taskKey, 7));
+            }
+            if ($component === '') {
+                $component = $taskKey !== '' ? $taskKey : 'shared';
+            }
+            $shared[$component] = [
+                'task_key' => $taskKey !== '' ? $taskKey : 'shared:' . $component,
+                'component' => (string)($block['title'] ?? $component),
+                'goal' => (string)($block['goal'] ?? ''),
+                'sort_order' => (int)($block['sort_order'] ?? 0),
+                'realtime_content' => \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [],
+                'reason' => (string)($block['reason'] ?? ''),
+                'completion_rule' => (string)($block['completion_rule'] ?? ''),
+                'editable_fields' => \is_array($block['editable_fields'] ?? null) ? $block['editable_fields'] : [],
+                'style_direction' => (string)($block['style_direction'] ?? ''),
+                'responsive_rule' => (string)($block['responsive_rule'] ?? ''),
+                'context_hash' => (string)($block['context_hash'] ?? ''),
+            ];
+        }
+
+        if ($shared !== []) {
+            return $shared;
+        }
+
+        return \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : [];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $executionBlueprint
+     * @param array<string, mixed> $planBook
+     */
+    private function resolveStageTwoSourceSignature(array $scope, array $executionBlueprint, array $planBook): string
+    {
+        foreach ([
+            $planBook['source_signature'] ?? null,
+            $scope['execution_blueprint_confirmed_signature'] ?? null,
+            $executionBlueprint['signature'] ?? null,
+            $planBook['context_hash'] ?? null,
+        ] as $candidate) {
+            $signature = \trim((string)$candidate);
+            if ($signature !== '') {
+                return $signature;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function resolvePlanBookSourceBlockKey(array $block): string
+    {
+        foreach (['source_block_key', 'block_key', 'component_kind', 'title'] as $key) {
+            $value = \trim((string)($block[$key] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+            if ($key === 'block_key' && \str_contains($value, ':')) {
+                $parts = \explode(':', $value);
+                $tail = \trim((string)\end($parts));
+                if ($tail !== '') {
+                    return $tail;
+                }
+            }
+            return $value;
+        }
+
+        return 'block';
+    }
+
     private function buildTaskRuntimeContext(array $scope, array $task, string $sessionScope, string $parentTaskKey, string $sseScope, array $stage2ContextSnapshot = []): array
     {
         $taskKey = \trim((string)($task['task_key'] ?? ''));
