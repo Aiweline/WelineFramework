@@ -953,7 +953,8 @@ final class AiSiteExecutionBlueprintService
             '    "i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},',
             '    "site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},',
             '    "theme_style":{"name":"string","visual_tone":"string","font_family":"string"},',
-            '    "palette":{"name":"string","primary":"#hex","accent":"#hex","surface":"#hex","text":"#hex"},',
+            '    "palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex"},',
+            '    "theme_design":{"theme_purpose":"string","color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"string"},',
             '    "navigation_plan":{"header_items":[{"label":"string","href":"string"}]},',
             '    "footer_plan":{"featured":[],"policies":[]},',
             '    "seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"},',
@@ -1254,12 +1255,30 @@ final class AiSiteExecutionBlueprintService
             ]
         );
 
-        $sharedPromptContext = \is_array($executionBlueprint['shared_prompt_context'] ?? null) ? $executionBlueprint['shared_prompt_context'] : [];
+        $themeDesign = \is_array($planJson['theme_design'] ?? null)
+            ? $this->extractStageOneThemeDesign($planJson['theme_design'])
+            : $this->extractStageOneThemeDesign(\is_array($executionBlueprint['theme_context_snapshot'] ?? null) ? $executionBlueprint['theme_context_snapshot'] : []);
+        $themeContextSnapshot = $this->mergeStageOneThemeDesignIntoSnapshot(
+            \is_array($executionBlueprint['theme_context_snapshot'] ?? null) ? $executionBlueprint['theme_context_snapshot'] : [],
+            $themeDesign
+        );
+        $sharedComponents = \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : [];
+        $sharedPromptContext = $this->buildStageOneSharedPromptContext($themeContextSnapshot, $sharedComponents, $pageTypes, $planLocale);
+        $structured['theme_context_snapshot'] = $themeContextSnapshot;
+        $structured['shared_plan'] = \array_replace(
+            \is_array($structured['shared_plan'] ?? null) ? $structured['shared_plan'] : [],
+            [
+                'theme_design' => $themeContextSnapshot,
+                'shared_prompt_context' => $sharedPromptContext,
+            ]
+        );
+        $planJson['theme_design'] = $themeDesign;
+        $executionBlueprint['theme_context_snapshot'] = $themeContextSnapshot;
+        $executionBlueprint['shared_prompt_context'] = $sharedPromptContext;
         $pagePlans = $this->buildStageOnePagePlans(
             \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [],
             $sharedPromptContext
         );
-        $sharedComponents = \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : [];
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
 
         $tasks = [];
@@ -1308,11 +1327,12 @@ final class AiSiteExecutionBlueprintService
      */
     private function assertAiStageOnePlanJsonIsStrict(array $planJson, array $pageTypes, string $briefDescription, string $planLocale): void
     {
-        foreach (['site_strategy', 'theme_style', 'palette', 'navigation_plan', 'footer_plan', 'seo_strategy', 'pages'] as $sectionKey) {
+        foreach (['site_strategy', 'theme_style', 'palette', 'theme_design', 'navigation_plan', 'footer_plan', 'seo_strategy', 'pages'] as $sectionKey) {
             if (!\is_array($planJson[$sectionKey] ?? null)) {
                 throw new \RuntimeException('AI stage-1 plan invalid: missing section "' . $sectionKey . '".');
             }
         }
+        $this->assertAiStageOneThemeDesignSchema($planJson['theme_design']);
 
         $this->assertAiStageOneLinkList(
             \is_array($planJson['navigation_plan']['header_items'] ?? null) ? $planJson['navigation_plan']['header_items'] : [],
@@ -1429,6 +1449,51 @@ final class AiSiteExecutionBlueprintService
             $href = \trim((string)($link['href'] ?? ''));
             if ($label === '' || $href === '') {
                 throw new \RuntimeException('AI stage-1 plan invalid: "' . $path . '" row #' . $index . ' is missing label or href.');
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $themeDesign
+     */
+    private function assertAiStageOneThemeDesignSchema(array $themeDesign): void
+    {
+        foreach ([
+            'theme_purpose',
+            'color_scheme',
+            'typography_spacing_radius',
+            'visual_keywords',
+            'tone_of_voice',
+            'cta_tone',
+            'forbidden_styles',
+            'selection_reason',
+        ] as $field) {
+            if (!\array_key_exists($field, $themeDesign)) {
+                throw new \RuntimeException('AI stage-1 plan invalid: theme_design missing "' . $field . '".');
+            }
+        }
+
+        foreach (['color_scheme', 'typography_spacing_radius'] as $field) {
+            if (!\is_array($themeDesign[$field])) {
+                throw new \RuntimeException('AI stage-1 plan invalid: theme_design.' . $field . ' must be an object.');
+            }
+        }
+
+        foreach (['visual_keywords', 'forbidden_styles'] as $field) {
+            if (!\is_array($themeDesign[$field])) {
+                throw new \RuntimeException('AI stage-1 plan invalid: theme_design.' . $field . ' must be an array.');
+            }
+        }
+
+        foreach (['name', 'primary', 'secondary', 'accent', 'background', 'body', 'button'] as $field) {
+            if (!\array_key_exists($field, $themeDesign['color_scheme'])) {
+                throw new \RuntimeException('AI stage-1 plan invalid: theme_design.color_scheme missing "' . $field . '".');
+            }
+        }
+
+        foreach (['font_family', 'heading_scale', 'body_scale', 'spacing_scale', 'radius_scale'] as $field) {
+            if (!\array_key_exists($field, $themeDesign['typography_spacing_radius'])) {
+                throw new \RuntimeException('AI stage-1 plan invalid: theme_design.typography_spacing_radius missing "' . $field . '".');
             }
         }
     }
@@ -3260,6 +3325,11 @@ final class AiSiteExecutionBlueprintService
             'page_types' => \array_values(\array_map('strval', \is_array($executionBlueprint['page_types'] ?? null) ? $executionBlueprint['page_types'] : [])),
             'theme_style' => $structured['theme_style'] ?? [],
             'palette' => $structured['palette'] ?? [],
+            'theme_design' => $this->extractStageOneThemeDesign(
+                \is_array($structured['shared_plan']['theme_design'] ?? null)
+                    ? $structured['shared_plan']['theme_design']
+                    : (\is_array($structured['theme_context_snapshot'] ?? null) ? $structured['theme_context_snapshot'] : [])
+            ),
             'plan_workbench' => $this->buildPlanWorkbenchArtifacts(
                 $scope,
                 $structured,
@@ -3296,6 +3366,15 @@ final class AiSiteExecutionBlueprintService
         array $pageTypes,
         string $instruction
     ): array {
+        $themeDesign = $this->buildStageOneThemeDesign(
+            $scope,
+            $websiteProfile,
+            $siteDisplayName,
+            $siteSummary,
+            $palette,
+            $themeStyle,
+            $instruction
+        );
         $snapshot = [
             'theme_context_id' => 'stage1-theme-' . \substr(\sha1($siteDisplayName . '|' . \implode(',', $pageTypes)), 0, 12),
             'site_positioning' => $siteSummary,
@@ -3318,9 +3397,113 @@ final class AiSiteExecutionBlueprintService
             ],
             'source_instruction' => $instruction,
         ];
+
+        return $this->mergeStageOneThemeDesignIntoSnapshot($snapshot, $themeDesign);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $palette
+     * @param array<string, mixed> $themeStyle
+     * @return array<string, mixed>
+     */
+    private function buildStageOneThemeDesign(
+        array $scope,
+        array $websiteProfile,
+        string $siteDisplayName,
+        string $siteSummary,
+        array $palette,
+        array $themeStyle,
+        string $instruction
+    ): array {
+        $rawRequirement = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? ''));
+        $requirementReference = $rawRequirement !== ''
+            ? $rawRequirement
+            : ($instruction !== '' ? $instruction : ($siteSummary !== '' ? $siteSummary : $siteDisplayName));
+        $themePurpose = $siteSummary !== ''
+            ? $siteSummary
+            : ($requirementReference !== '' ? $requirementReference : '建立清晰可信、可转化的站点视觉与内容骨架。');
+        $visualTone = \trim((string)($themeStyle['visual_tone'] ?? '专业、清晰、可转化'));
+
+        return [
+            'theme_purpose' => $themePurpose,
+            'color_scheme' => [
+                'name' => (string)($palette['name'] ?? 'Ocean Slate'),
+                'primary' => (string)($palette['primary'] ?? '#0f172a'),
+                'secondary' => (string)($palette['secondary'] ?? $palette['accent'] ?? '#14b8a6'),
+                'accent' => (string)($palette['accent'] ?? '#2563eb'),
+                'background' => (string)($palette['surface'] ?? '#f8fafc'),
+                'body' => (string)($palette['text'] ?? '#0f172a'),
+                'button' => (string)($palette['primary'] ?? $palette['accent'] ?? '#2563eb'),
+            ],
+            'typography_spacing_radius' => [
+                'font_family' => (string)($themeStyle['font_family'] ?? 'Poppins, Inter, sans-serif'),
+                'heading_scale' => '首屏标题 40-56px，二级标题 28-36px，移动端按 0.78 倍收敛。',
+                'body_scale' => '正文 16-18px，行高 1.6，适合长段客户方案说明。',
+                'spacing_scale' => '以 8px 为基础栅格，区块上下留白 48-96px。',
+                'radius_scale' => '卡片 16-24px，按钮 999px 胶囊或 12px 圆角，保持统一。',
+            ],
+            'visual_keywords' => \array_values(\array_filter([
+                $visualTone,
+                (string)($themeStyle['name'] ?? ''),
+                (string)($palette['name'] ?? ''),
+                '结构清晰',
+                'CTA 突出',
+            ], static fn(string $value): bool => \trim($value) !== '')),
+            'tone_of_voice' => $visualTone !== '' ? $visualTone : '可信、清晰、可转化',
+            'cta_tone' => '动作明确、低犹豫成本，优先承接用户需求中的下一步行为。',
+            'forbidden_styles' => [
+                '禁止只写“现代/高级/简洁”等空泛风格标签。',
+                '禁止伪造未提供的品牌事实、资质、客户名、价格或联系方式。',
+                '禁止输出与用户一句话需求无关的通用模板感方案。',
+            ],
+            'selection_reason' => $requirementReference !== ''
+                ? '围绕用户需求“' . $this->clipText($requirementReference, 120) . '”，选择该主题以优先保证可读信息结构、明确 CTA 和可执行内容落地。'
+                : '选择该主题以优先保证可读信息结构、明确 CTA 和可执行内容落地。',
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $snapshot
+     * @param array<string, mixed> $themeDesign
+     * @return array<string, mixed>
+     */
+    private function mergeStageOneThemeDesignIntoSnapshot(array $snapshot, array $themeDesign): array
+    {
+        $themeDesign = $this->extractStageOneThemeDesign($themeDesign);
+        foreach ($themeDesign as $key => $value) {
+            $snapshot[$key] = $value;
+        }
+        $snapshot['theme_design'] = $themeDesign;
+        unset($snapshot['context_hash']);
         $snapshot['context_hash'] = \sha1((string)\json_encode($snapshot, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
 
         return $snapshot;
+    }
+
+    /**
+     * @param array<string, mixed> $candidate
+     * @return array<string, mixed>
+     */
+    private function extractStageOneThemeDesign(array $candidate): array
+    {
+        $themeDesign = \is_array($candidate['theme_design'] ?? null) ? $candidate['theme_design'] : $candidate;
+        $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+        $typography = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
+        $visualKeywords = \is_array($themeDesign['visual_keywords'] ?? null) ? $themeDesign['visual_keywords'] : [];
+        $forbiddenStyles = \is_array($themeDesign['forbidden_styles'] ?? null) ? $themeDesign['forbidden_styles'] : [];
+
+        return [
+            'theme_purpose' => (string)($themeDesign['theme_purpose'] ?? $themeDesign['site_positioning'] ?? ''),
+            'color_scheme' => $colorScheme,
+            'typography_spacing_radius' => $typography,
+            'visual_keywords' => \array_values($visualKeywords),
+            'tone_of_voice' => (string)($themeDesign['tone_of_voice'] ?? $themeDesign['content_tone'] ?? ''),
+            'cta_tone' => (string)($themeDesign['cta_tone'] ?? ''),
+            'forbidden_styles' => \array_values($forbiddenStyles),
+            'selection_reason' => (string)($themeDesign['selection_reason'] ?? ''),
+        ];
     }
 
     /**
@@ -3337,9 +3520,7 @@ final class AiSiteExecutionBlueprintService
             'plan_locale' => $planLocale,
             'page_types' => $pageTypes,
             'theme_design' => [
-                'site_positioning' => (string)($themeContextSnapshot['site_positioning'] ?? ''),
-                'visual_direction' => \is_array($themeContextSnapshot['visual_direction'] ?? null) ? $themeContextSnapshot['visual_direction'] : [],
-                'content_tone' => (string)($themeContextSnapshot['content_tone'] ?? ''),
+                ...$this->extractStageOneThemeDesign($themeContextSnapshot),
             ],
             'header_plan' => \is_array($sharedComponents['header'] ?? null) ? $sharedComponents['header'] : [],
             'footer_plan' => \is_array($sharedComponents['footer'] ?? null) ? $sharedComponents['footer'] : [],
@@ -3708,6 +3889,11 @@ final class AiSiteExecutionBlueprintService
             'site_strategy' => \is_array($structured['site_strategy'] ?? null) ? $structured['site_strategy'] : [],
             'theme_style' => \is_array($structured['theme_style'] ?? null) ? $structured['theme_style'] : [],
             'palette' => \is_array($structured['palette'] ?? null) ? $structured['palette'] : [],
+            'theme_design' => $this->extractStageOneThemeDesign(
+                \is_array($structured['shared_plan']['theme_design'] ?? null)
+                    ? $structured['shared_plan']['theme_design']
+                    : (\is_array($structured['theme_context_snapshot'] ?? null) ? $structured['theme_context_snapshot'] : [])
+            ),
             'navigation_plan' => \is_array($structured['navigation_plan'] ?? null) ? $structured['navigation_plan'] : [],
             'footer_plan' => \is_array($structured['footer_plan'] ?? null) ? $structured['footer_plan'] : [],
             'seo_strategy' => \is_array($structured['seo_strategy'] ?? null) ? $structured['seo_strategy'] : [],
