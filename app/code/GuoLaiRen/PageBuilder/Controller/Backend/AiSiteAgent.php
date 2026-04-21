@@ -200,8 +200,19 @@ class AiSiteAgent extends BaseController
             : (\is_array($viewState['scope']['recommended_domain_list'] ?? null) ? $viewState['scope']['recommended_domain_list'] : []);
         $recommendedRegistrarLabel = \trim((string)($linkedWebsitesScope['recommended_registrar_label'] ?? $viewState['scope']['recommended_registrar_label'] ?? ''));
         $preferredRegistrarAccountId = (int)($linkedWebsitesScope['preferred_registrar_account_id'] ?? $linkedWebsitesScope['registrar_account_id'] ?? $viewState['scope']['preferred_registrar_account_id'] ?? $viewState['scope']['registrar_account_id'] ?? 0);
-        if ($preferredRegistrarAccountId <= 0 && $registrarAccounts !== []) {
-            $preferredRegistrarAccountId = (int)($registrarAccounts[0]['account_id'] ?? 0);
+        $isDevMode = \defined('DEV') && DEV;
+        if ($isDevMode) {
+            $localDemoAccountId = 900001;
+            foreach ($registrarAccounts as $account) {
+                if ((int)($account['account_id'] ?? 0) !== $localDemoAccountId) {
+                    continue;
+                }
+                $preferredRegistrarAccountId = $localDemoAccountId;
+                break;
+            }
+        } elseif ($preferredRegistrarAccountId <= 0) {
+            // 线上默认不预选账号，由用户主动选择。
+            $preferredRegistrarAccountId = 0;
         }
         if ($recommendedRegistrarLabel === '' && $preferredRegistrarAccountId > 0) {
             foreach ($registrarAccounts as $account) {
@@ -10529,23 +10540,24 @@ SCRIPT;
             ];
         }
 
-        if ($options === []) {
-            $options = [
-                [
-                    'account_id' => 900001,
-                    'label' => (string)__('本地演示服务商 - 本地演示主账号'),
-                    'registrar_name' => (string)__('本地演示服务商'),
-                    'registrar_code' => 'local_demo',
-                    'account_name' => (string)__('本地演示主账号'),
-                ],
-                [
-                    'account_id' => 900002,
-                    'label' => (string)__('沙盒域名 - 本地演示备用账号'),
-                    'registrar_name' => (string)__('沙盒域名'),
-                    'registrar_code' => 'sandbox_demo',
-                    'account_name' => (string)__('本地演示备用账号'),
-                ],
+        if (\defined('DEV') && DEV) {
+            $localDemo = [
+                'account_id' => 900001,
+                'label' => (string)__('本地供应商 - 本地默认账号'),
+                'registrar_name' => (string)__('本地供应商'),
+                'registrar_code' => 'local_demo',
+                'account_name' => (string)__('本地默认账号'),
             ];
+            $hasLocalDemo = false;
+            foreach ($options as $option) {
+                if ((int)($option['account_id'] ?? 0) === 900001 || (string)($option['registrar_code'] ?? '') === 'local_demo') {
+                    $hasLocalDemo = true;
+                    break;
+                }
+            }
+            if (!$hasLocalDemo) {
+                \array_unshift($options, $localDemo);
+            }
         }
 
         return $options;
