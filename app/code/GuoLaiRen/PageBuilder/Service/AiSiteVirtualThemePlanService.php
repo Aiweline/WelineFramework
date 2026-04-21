@@ -336,7 +336,11 @@ final class AiSiteVirtualThemePlanService
                         continue;
                     }
                     if ($fiber->isSuspended()) {
-                        $fiber->resume();
+                        if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent()) {
+                            SchedulerSystem::yieldDelay(1);
+                        } else {
+                            $fiber->resume();
+                        }
                         $madeProgress = true;
                     }
                 } catch (\Throwable $throwable) {
