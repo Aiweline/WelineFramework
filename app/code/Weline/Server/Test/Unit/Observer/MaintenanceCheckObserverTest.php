@@ -119,6 +119,10 @@ final class MaintenanceCheckObserverTest extends TestCase
         self::assertStringContainsString("defined('WLS_MODE')", $interceptorSource);
         self::assertStringNotContainsString("PHP_SAPI === 'cli'", $interceptorSource);
         self::assertStringContainsString('sendMaintenanceResponse()', $interceptorSource);
+        self::assertStringContainsString('setRuntimeMaintenanceMode(false)', $workerSource);
+        self::assertStringContainsString('setRuntimeMaintenanceMode(false)', $workerSslSource);
+        self::assertStringNotContainsString('setRuntimeMaintenanceMode($mEnabled)', $workerSource);
+        self::assertStringNotContainsString('setRuntimeMaintenanceMode($mEnabled)', $workerSslSource);
     }
 
     public function testWorkerEntriesAvoidBlockingUsleepInLongLivedSlotWait(): void

@@ -77,13 +77,18 @@ class IpcControlGateway implements IpcControlGatewayInterface
         );
     }
 
-    public function setMaintenanceMode(string $instanceName, bool $enabled, float $timeout = 6.0): array
+    public function setMaintenanceMode(
+        string $instanceName,
+        bool $enabled,
+        float $timeout = 6.0,
+        bool $dispatcherOnly = false
+    ): array
     {
         return $this->commandAsync(
             $instanceName,
             $enabled ? ControlMessage::ACTION_MAINTENANCE_ENABLE : ControlMessage::ACTION_MAINTENANCE_DISABLE,
             '',
-            [],
+            $dispatcherOnly ? ['dispatcher_only' => true] : [],
             $timeout,
             $enabled ? 'Maintenance enable queued' : 'Maintenance disable queued'
         );
