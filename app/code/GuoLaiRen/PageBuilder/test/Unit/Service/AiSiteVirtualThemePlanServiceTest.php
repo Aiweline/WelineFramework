@@ -105,11 +105,18 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             ['task_goal', 'meta_fields', 'content_plan', 'style_plan', 'planning_reason', 'sort_order'],
             $artifacts['structured']['block_task_schema']['required_fields'] ?? []
         );
+        self::assertSame(
+            ['field', 'type', 'default', 'sample', 'reason'],
+            $artifacts['structured']['block_task_schema']['meta_field_required_fields'] ?? []
+        );
         $blockTask = $artifacts['structured']['page_tasks']['home_page'][0]['block_task'] ?? [];
         self::assertSame('stage2-block-task-v1', (string)($blockTask['schema_version'] ?? ''));
         self::assertSame('Open with a clear value proposition.', (string)($blockTask['task_goal'] ?? ''));
         self::assertSame(100, (int)($blockTask['sort_order'] ?? 0));
         self::assertSame('title', (string)($blockTask['meta_fields'][0]['field'] ?? ''));
+        self::assertSame('string', (string)($blockTask['meta_fields'][0]['type'] ?? ''));
+        self::assertSame('Grow faster with our service', (string)($blockTask['meta_fields'][0]['default'] ?? ''));
+        self::assertSame('Grow faster with our service', (string)($blockTask['meta_fields'][0]['sample'] ?? ''));
         self::assertIsArray($blockTask['content_plan'] ?? null);
         self::assertIsArray($blockTask['style_plan'] ?? null);
         self::assertNotSame('', (string)($blockTask['planning_reason'] ?? ''));
@@ -378,6 +385,8 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('Treat this as a customer-visible implementation plan', $allPrompts);
         self::assertStringContainsString('block_task', $allPrompts);
         self::assertStringContainsString('task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order', $allPrompts);
+        self::assertStringContainsString('Every block_task.meta_fields[] item MUST be an object with field, type, default, sample, reason', $allPrompts);
+        self::assertStringContainsString('block_task.meta_fields[].default and block_task.meta_fields[].sample must be concrete stage-3-ready values', $allPrompts);
         self::assertStringContainsString('Stage-1 compact context summary:', $allPrompts);
         self::assertStringNotContainsString('Stage-1 plan_json:', $allPrompts);
         self::assertStringNotContainsString('Baseline virtual_theme_plan compatibility snapshot:', $allPrompts);
