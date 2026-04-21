@@ -4058,6 +4058,10 @@ final class AiSiteExecutionBlueprintService
                 'sort_order' => $sortOrder++,
                 'status' => 'done',
                 'depends_on' => ['stage1.shared.header_footer'],
+                'dispatch_trigger' => 'stage1.shared.header_footer.done',
+                'dispatch_mode' => 'automatic_after_dependency',
+                'requires_user_tab' => false,
+                'fanout_group' => 'stage1.page_fanout',
                 'token' => \sha1((string)\json_encode([
                     'job_key' => $jobKey,
                     'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? $sharedPromptContext['context_hash'] ?? ''),
