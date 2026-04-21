@@ -4882,6 +4882,8 @@ SCRIPT;
             return;
         }
         $snap = $this->buildQueueObserverPublicSnapshot($queueRow);
+        $queueInfo = $this->buildQueueObserverPanelPayload($queueRow);
+        $tokenUsage = \is_array($snap['token_usage'] ?? null) ? $snap['token_usage'] : [];
         $lines = [
             (string)__('【队列】任务已就绪，以下为队列快照（进度请在工作区自动刷新）。'),
             (string)__('队列编号：%{id}', ['id' => (string)$snap['queue_id']]),
@@ -4915,10 +4917,12 @@ SCRIPT;
             'message' => (string)($lines[0] ?? ''),
             'detail_lines' => $lines,
             'queue_snapshot' => $snap,
-            'queue_info' => $this->buildQueueObserverPanelPayload($queueRow),
+            'queue_info' => $queueInfo,
             'operation' => $operation,
             'queue_id' => (int)$snap['queue_id'],
             'queue_status' => (string)$snap['status'],
+            'token_usage' => $tokenUsage,
+            'progress_kind' => 'queue_info',
             'observer_detail' => true,
         ]);
     }
@@ -4944,6 +4948,7 @@ SCRIPT;
         $queuePid = (int)($queueRow['pid'] ?? 0);
         $queueSnapshot = $this->buildQueueObserverPublicSnapshot($queueRow);
         $queuePanelInfo = $this->buildQueueObserverPanelPayload($queueRow);
+        $tokenUsage = \is_array($queueSnapshot['token_usage'] ?? null) ? $queueSnapshot['token_usage'] : [];
 
         if ($queueStatus !== '' && $lastQueueStatus !== '' && $queueStatus !== $lastQueueStatus) {
             $sse->sendEvent('info', [
@@ -4956,6 +4961,8 @@ SCRIPT;
                 'queue_status' => $queueStatus,
                 'queue_snapshot' => $queueSnapshot,
                 'queue_info' => $queuePanelInfo,
+                'token_usage' => $tokenUsage,
+                'progress_kind' => 'queue_info',
                 'observer_detail' => true,
             ]);
         }
@@ -4967,6 +4974,8 @@ SCRIPT;
                 'queue_status' => $queueStatus,
                 'queue_snapshot' => $queueSnapshot,
                 'queue_info' => $queuePanelInfo,
+                'token_usage' => $tokenUsage,
+                'progress_kind' => 'queue_info',
                 'observer_detail' => true,
             ]);
         }
@@ -4982,7 +4991,10 @@ SCRIPT;
                     'queue_id' => $queueId,
                     'queue_status' => $queueStatus,
                     'queue_snapshot' => $queueSnapshot,
+                    'queue_info' => $queuePanelInfo,
                     'queue_process' => $process,
+                    'token_usage' => $tokenUsage,
+                    'progress_kind' => 'queue_info',
                     'observer_detail' => true,
                     'queue_panel_update' => true,
                 ]);
@@ -4994,7 +5006,10 @@ SCRIPT;
                     'queue_id' => $queueId,
                     'queue_status' => $queueStatus,
                     'queue_snapshot' => $queueSnapshot,
+                    'queue_info' => $queuePanelInfo,
                     'queue_process' => $process,
+                    'token_usage' => $tokenUsage,
+                    'progress_kind' => 'queue_info',
                 ]);
             }
             $lastQueueProcess = $process;
@@ -5021,8 +5036,11 @@ SCRIPT;
                     'queue_id' => $queueId,
                     'queue_status' => $queueStatus,
                     'queue_snapshot' => $queueSnapshot,
+                    'queue_info' => $queuePanelInfo,
                     'queue_process' => $process,
                     'queue_result_delta' => $line . PHP_EOL,
+                    'token_usage' => $tokenUsage,
+                    'progress_kind' => 'queue_info',
                 ]);
             }
             $lastQueueResultLength = $resultLength;
