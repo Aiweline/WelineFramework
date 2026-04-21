@@ -425,6 +425,51 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
         self::assertSame([101, 202, 303], $stop->collectCleanupCandidates($info->name, $info));
     }
 
+    public function testForceStopTerminationAlsoDelegatesScopedPrefixesToProcesser(): void
+    {
+        $info = new ServerInstanceInfo(
+            'unit-prefix-terminate-4f7b',
+            101,
+            0,
+            '127.0.0.1',
+            443,
+            true,
+            false,
+            1,
+            16895,
+            0,
+            '2026-04-21 12:48:00',
+            1776746880,
+            []
+        );
+
+        $stop = new class extends Stop {
+            public array $prefixCleanupNames = [];
+
+            public function terminate(ServerInstanceInfo $info): int
+            {
+                return $this->terminateDirectForceStopCandidatePids($info);
+            }
+
+            protected function collectDirectForceStopCandidatePids(ServerInstanceInfo $info): array
+            {
+                unset($info);
+
+                return [];
+            }
+
+            protected function terminateCurrentInstanceProcessPrefixes(string $name): int
+            {
+                $this->prefixCleanupNames[] = $name;
+
+                return 7;
+            }
+        };
+
+        self::assertSame(7, $stop->terminate($info));
+        self::assertSame(['unit-prefix-terminate-4f7b'], $stop->prefixCleanupNames);
+    }
+
     private function invokeProtected(object $object, string $method, mixed ...$args): mixed
     {
         $reflection = new \ReflectionMethod($object, $method);
