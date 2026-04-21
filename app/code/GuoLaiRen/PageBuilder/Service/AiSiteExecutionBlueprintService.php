@@ -952,8 +952,9 @@ final class AiSiteExecutionBlueprintService
             '{',
             '    "i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},',
             '    "site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},',
-            '    "theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"why this font family and voice/tone fit the user requirement"},',
-            '    "palette":{"name":"string","primary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"why this color system fits the user requirement"},',
+            '    "theme_style":{"name":"string","visual_tone":"string","font_family":"string"},',
+            '    "palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex"},',
+            '    "theme_design":{"theme_purpose":"string","color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"string"},',
             '    "navigation_plan":{"header_items":[{"label":"string","href":"string"}]},',
             '    "footer_plan":{"featured":[],"policies":[]},',
             '    "seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"},',
@@ -1334,11 +1335,6 @@ final class AiSiteExecutionBlueprintService
             }
         }
         $this->assertAiStageOneThemeDesignSchema($planJson['theme_design']);
-
-        $themeDesign = \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : [];
-        if ($themeDesign !== []) {
-            $this->assertAiStageOneThemeDesignColorScheme($themeDesign);
-        }
 
         $this->assertAiStageOneLinkList(
             \is_array($planJson['navigation_plan']['header_items'] ?? null) ? $planJson['navigation_plan']['header_items'] : [],
