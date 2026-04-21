@@ -84,6 +84,19 @@
         return {};
     }
 
+    function resolvePayloadProgressKind(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return '';
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'progress_kind')) {
+            return String(payload.progress_kind || '').toLowerCase();
+        }
+        if (payload.state && typeof payload.state === 'object' && Object.prototype.hasOwnProperty.call(payload.state, 'progress_kind')) {
+            return String(payload.state.progress_kind || '').toLowerCase();
+        }
+        return '';
+    }
+
     function pickTokenCount(source, keys) {
         if (!source || typeof source !== 'object') {
             return null;
@@ -340,6 +353,10 @@
 
     function mergePlanQueueInfoFromSsePayload(payload, eventKind) {
         if (!payload || typeof payload !== 'object') {
+            return null;
+        }
+        var progressKind = resolvePayloadProgressKind(payload);
+        if (progressKind !== '' && progressKind !== 'queue_info') {
             return null;
         }
         if (payload.state && payload.state.plan_queue_info && typeof payload.state.plan_queue_info === 'object') {
