@@ -1030,11 +1030,11 @@ Atomic Task ID:
 #### C. 第二阶段：块任务细化与任务方案装配
 
 - [x] T13 第二阶段 confirmed plan 解析器（status=done, progress=100%, owner=backend, note=A29 已完成从第一阶段 confirmed plan_book/block tree 恢复共享块与页面块，不再从 Markdown 反推；证据见 `AiSiteVirtualThemePlanServiceTest`）
-- [~] T14 `buildStageTwoSharedTaskPrompt(...)` 与共享块任务细化器（status=in_progress, progress=70%, owner=prompt-engineering, note=A28/A33/A34/A35 已完成 block task schema、meta_fields、content_plan、style_plan 约束；A32 继承第一阶段块上下文仍待完成）
-- [~] T15 `buildStageTwoPageTaskPrompt(...)` 与页面块任务细化器（status=in_progress, progress=70%, owner=prompt-engineering, note=A28/A33/A34/A35 已完成任务字段/内容/样式输出约束；A32 引用第一阶段块 goal/realtime_content/style_direction/reason 仍待完成）
+- [x] T14 `buildStageTwoSharedTaskPrompt(...)` 与共享块任务细化器（status=done, progress=100%, owner=prompt-engineering, note=A28/A32/A33/A34/A35 已完成 block task schema、继承第一阶段块上下文、meta_fields、content_plan、style_plan 约束；证据见 `AiSiteVirtualThemePlanServiceTest`）
+- [x] T15 `buildStageTwoPageTaskPrompt(...)` 与页面块任务细化器（status=done, progress=100%, owner=prompt-engineering, note=A28/A32/A33/A34/A35 已完成任务字段/内容/样式输出与第一阶段块 goal/realtime_content/style_direction/reason 继承；证据见 `AiSiteVirtualThemePlanServiceTest`）
 - [ ] T16 第二阶段上下文快照版本控制（status=todo, progress=0%, owner=backend, note=context_hash 变化时让旧页面任务失效重排）
 - [ ] T17 第二阶段块任务装配器（status=todo, progress=0%, owner=backend, note=生成每页块任务方案 + 任务卡片视图数据）
-- [ ] T18 第二阶段内联工作台 UI（status=todo, progress=0%, owner=frontend, note=页面 Tab、任务卡片、依赖与状态）
+- [~] T18 第二阶段内联工作台 UI（status=in_progress, progress=45%, owner=frontend, note=A38/A39 已完成任务卡片详情与 planning_reason 展开；任务排序、字段编辑、任务进度切换仍待 A40+ 后续 UI 冒烟）
 - [ ] T19 第二阶段页面级 AI 操作（status=todo, progress=0%, owner=frontend+backend, note=微调页面任务/重建页面任务/新增块任务）
 - [ ] T20 第二阶段块任务 API（status=todo, progress=0%, owner=backend-api, note=任务 refine/rebuild/create/delete/move）
 - [ ] T21 第二阶段确认持久化（status=todo, progress=0%, owner=backend, note=写 stage2 confirmed plan + execution_blueprint）
@@ -1104,18 +1104,18 @@ Atomic Task ID:
 - [x] A29 第二阶段从第一阶段确认版块树读取任务输入（status=done, owner=worker-5, covers=§13.3.2, output=不从 Markdown 反推, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 - [x] A30 第二阶段每个 block 至少 fanout 一个 `stage2.block_task_plan`（status=done, owner=worker-6, covers=§13.3, output=按 block_key 生成任务, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 - [x] A31 第二阶段 block task 通过队列 + Fiber/协程并发生成（status=done, owner=worker-2, covers=§1A/§13.3, output=队列内 shared-first 后按 block task Fiber fanout，保留 sort_order/dependencies, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
-- [ ] A32 第二阶段提示词引用第一阶段块的 goal/realtime_content/style_direction/reason（status=todo, owner=prompt, covers=§13.3.3, output=不重新发明任务）
+- [x] A32 第二阶段提示词引用第一阶段块的 goal/realtime_content/style_direction/reason（status=done, owner=worker-1, covers=§13.3.3, output=不重新发明任务, evidence=php-l+phpstan+AiSiteVirtualThemePlanServiceTest）
 - [x] A33 第二阶段提示词输出 meta 字段类型/默认值/示例内容（status=done, owner=worker-4, covers=§13.3.5, output=meta_fields[], evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 - [x] A34 第二阶段提示词输出内容正文/CTA/链接/素材位（status=done, owner=worker-5, covers=§1A, output=content_plan, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 - [x] A35 第二阶段提示词输出配色/字体/间距/响应式规则（status=done, owner=worker-6, covers=§1A, output=style_plan, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 - [ ] A36 第二阶段提示词输出 `planning_reason`（status=todo, owner=prompt, covers=§1A, output=为什么这么规划）
-- [ ] A37 第二阶段校验器拒绝缺失 meta/content/style/reason 的任务（status=todo, owner=validation, covers=§13.7.2, output=不合格重生成）
+- [x] A37 第二阶段校验器拒绝缺失 meta/content/style/reason 的任务（status=done, owner=worker-3, covers=§13.7.2, output=不合格重生成, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 
 #### E. 第二阶段工作台、排序、字段编辑与任务进度
 
-- [ ] A38 第二阶段任务卡片展示 meta 字段、字段示例、内容计划、配色字体（status=todo, owner=frontend, covers=§1A, output=任务卡片详情）
-- [ ] A39 第二阶段任务卡片展示 `?` 原因说明（status=todo, owner=frontend, covers=§1A, output=展开 planning_reason）
-- [ ] A40 第二阶段支持任务排序并写回 `page_block_tasks[].sort_order`（status=todo, owner=frontend+backend, covers=§13.3, output=排序影响虚拟主题树）
+- [x] A38 第二阶段任务卡片展示 meta 字段、字段示例、内容计划、配色字体（status=done, owner=worker-4, covers=§1A, output=任务卡片详情, evidence=php-l+node-check+render assertion）
+- [x] A39 第二阶段任务卡片展示 `?` 原因说明（status=done, owner=worker-5, covers=§1A, output=展开 planning_reason, evidence=php-l+node-check+AiSiteVirtualThemePlanServiceTest）
+- [x] A40 第二阶段支持任务排序并写回 `page_block_tasks[].sort_order`（status=done, owner=worker-6, covers=§13.3, output=排序影响虚拟主题树, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 - [ ] A41 第二阶段支持编辑字段内容（status=todo, owner=frontend+backend, covers=§1A, output=字段内容改动写结构化任务）
 - [ ] A42 第二阶段支持任务微调/局部重建/删除/新增（status=todo, owner=backend-api, covers=§1A, output=结构化任务同步更新）
 - [ ] A43 第二阶段确认后切换到任务进度视图（status=todo, owner=frontend, covers=§1A/§13.5, output=`progress_kind=task_progress`）
