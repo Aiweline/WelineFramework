@@ -130,6 +130,22 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertNotSame('', (string)($blockTask['style_plan']['responsive'] ?? ''));
         self::assertNotSame('', (string)($blockTask['planning_reason'] ?? ''));
         self::assertIsArray($artifacts['structured']['stage1_task_cues']['pages']['page:home_page:content/home-page-hero'] ?? null);
+        self::assertSame(
+            'Explain value',
+            (string)($artifacts['structured']['stage1_task_cues']['pages']['page:home_page:content/home-page-hero']['block_goal'] ?? '')
+        );
+        self::assertArrayHasKey(
+            'realtime_content',
+            $artifacts['structured']['stage1_task_cues']['pages']['page:home_page:content/home-page-hero'] ?? []
+        );
+        self::assertArrayHasKey(
+            'style_direction',
+            $artifacts['structured']['stage1_task_cues']['pages']['page:home_page:content/home-page-hero'] ?? []
+        );
+        self::assertArrayHasKey(
+            'reason',
+            $artifacts['structured']['stage1_task_cues']['pages']['page:home_page:content/home-page-hero'] ?? []
+        );
         self::assertSame('Build a reusable header with primary navigation.', (string)($artifacts['structured']['stage1_task_cues']['shared']['shared:header']['stage1_goal'] ?? ''));
         self::assertIsArray($artifacts['structured']['stage2_context_snapshot'] ?? null);
         self::assertSame('stage1-theme-hash', (string)($artifacts['structured']['stage2_context_snapshot']['theme_context_snapshot']['context_hash'] ?? ''));
@@ -150,6 +166,51 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             (string)($artifacts['structured']['stage2_context_snapshot']['context_hash'] ?? ''),
             (string)($artifacts['virtual_theme_plan']['page_tasks']['home_page'][0]['runtime_context']['stage2_context_hash'] ?? '')
         );
+    }
+
+    public function testStageTwoBatchPromptCarriesStageOneBlockCueFields(): void
+    {
+        $capturedPrompts = [];
+        $aiService = $this->createMock(AiService::class);
+        $aiService->method('generate')->willReturnCallback(function (
+            string $prompt,
+            $modelCode,
+            string $scenarioCode,
+            $locale,
+            array $params
+        ) use (&$capturedPrompts): string {
+            $capturedPrompts[] = $prompt;
+            return $this->buildTaskPlanResponse();
+        });
+        $service = new AiSiteVirtualThemePlanService($aiService);
+        $scope = $this->buildPromptScope();
+        $scope['execution_blueprint']['pages']['home_page']['blocks'][0]['goal'] = 'Stage-one hero block goal.';
+        $scope['execution_blueprint']['pages']['home_page']['blocks'][0]['why'] = 'Stage-one hero reason.';
+        $scope['execution_blueprint']['pages']['home_page']['blocks'][0]['realtime_content'] = [
+            'headline' => 'Stage-one hero headline',
+            'cta_label' => 'Start from stage one',
+        ];
+        $scope['execution_blueprint']['pages']['home_page']['blocks'][0]['style_direction'] = 'Stage-one hero style direction.';
+
+        $service->buildTaskPlanArtifacts($scope, $this->buildPromptBlueprint());
+
+        $pagePrompt = '';
+        foreach ($capturedPrompts as $prompt) {
+            if (\str_contains($prompt, 'Batch type: page')) {
+                $pagePrompt = $prompt;
+                break;
+            }
+        }
+
+        self::assertNotSame('', $pagePrompt);
+        self::assertStringContainsString('block_goal', $pagePrompt);
+        self::assertStringContainsString('Stage-one hero block goal.', $pagePrompt);
+        self::assertStringContainsString('realtime_content', $pagePrompt);
+        self::assertStringContainsString('Stage-one hero headline', $pagePrompt);
+        self::assertStringContainsString('style_direction', $pagePrompt);
+        self::assertStringContainsString('Stage-one hero style direction.', $pagePrompt);
+        self::assertStringContainsString('reason', $pagePrompt);
+        self::assertStringContainsString('Stage-one hero reason.', $pagePrompt);
     }
 
 
@@ -231,6 +292,12 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertSame('confirmed_hero', (string)($pageTasks[0]['plan_context']['block_code'] ?? ''));
         self::assertSame('content/confirmed-hero', (string)($pageTasks[0]['plan_context']['section_code'] ?? ''));
         self::assertSame('Confirmed hero goal from block tree.', (string)($pageTasks[0]['plan_context']['block_goal'] ?? ''));
+        self::assertSame('Confirmed reason from stage one.', (string)($pageTasks[0]['plan_context']['block_reason'] ?? ''));
+        self::assertSame('Confirmed hero headline', (string)($pageTasks[0]['plan_context']['realtime_content']['headline'] ?? ''));
+        self::assertSame('Use confirmed style direction.', (string)($pageTasks[0]['plan_context']['style_direction'] ?? ''));
+        self::assertSame('Confirmed reason from stage one.', (string)($artifacts['structured']['stage1_task_cues']['pages']['page:home_page:confirmed_hero']['reason'] ?? ''));
+        self::assertSame('Confirmed hero headline', (string)($artifacts['structured']['stage1_task_cues']['pages']['page:home_page:confirmed_hero']['realtime_content']['headline'] ?? ''));
+        self::assertSame('Use confirmed style direction.', (string)($artifacts['structured']['stage1_task_cues']['pages']['page:home_page:confirmed_hero']['style_direction'] ?? ''));
         self::assertSame('confirmed-hero-hash', (string)($pageTasks[0]['plan_context']['result_ref']['context_hash'] ?? ''));
         self::assertSame('plan_workbench.confirmed.plan_book.structured', (string)($artifacts['structured']['stage2_context_snapshot']['confirmed_stage1_source'] ?? ''));
         self::assertSame('confirmed-plan-book-hash', (string)($artifacts['structured']['stage2_context_snapshot']['confirmed_plan_book_context_hash'] ?? ''));
