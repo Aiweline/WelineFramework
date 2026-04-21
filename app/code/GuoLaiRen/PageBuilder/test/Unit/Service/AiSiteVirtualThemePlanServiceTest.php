@@ -977,6 +977,120 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         );
     }
 
+    public function testMutateDraftTaskPlanTaskSyncsStructuredAliasesAndOperationLog(): void
+    {
+        $service = new AiSiteVirtualThemePlanService();
+        /** @var array<string, mixed> $payload */
+        $payload = \json_decode($this->buildTaskPlanResponse(), true, 512, \JSON_THROW_ON_ERROR);
+        $structured = \is_array($payload['virtual_theme_plan'] ?? null) ? $payload['virtual_theme_plan'] : [];
+        $scope = [
+            'execution_blueprint' => ['page_types' => ['home_page']],
+            'task_plan_structured' => $structured,
+            'task_plan_markdown' => '# Task Plan',
+            'virtual_theme_plan' => [
+                'draft' => $structured,
+                'draft_markdown' => '# Task Plan',
+            ],
+        ];
+
+        $created = $service->mutateDraftTaskPlanTask(
+            $scope,
+            'create',
+            'page',
+            'home_page',
+            '',
+            [
+                'label' => 'FAQ block',
+                'section_code' => 'content/home-page-faq',
+                'block_task' => [
+                    'planning_reason' => 'FAQ removes last-mile conversion doubt.',
+                ],
+            ],
+            'Add a conversion FAQ block.'
+        );
+        $createdKey = 'page:home_page:content/home-page-faq';
+        self::assertSame(1, (int)($created['structured']['task_plan_version'] ?? 0));
+        self::assertSame('create', (string)($created['structured']['last_task_plan_operation']['action'] ?? ''));
+        self::assertContains($createdKey, \array_map(
+            static fn(array $task): string => (string)($task['task_key'] ?? ''),
+            $created['structured']['page_tasks']['home_page'] ?? []
+        ));
+        self::assertContains($createdKey, \array_map(
+            static fn(array $task): string => (string)($task['task_key'] ?? ''),
+            $created['structured']['page_block_tasks'] ?? []
+        ));
+        self::assertContains($createdKey, \array_map(
+            static fn(array $task): string => (string)($task['task_key'] ?? ''),
+            $created['virtual_theme_plan']['execution_blueprint']['tasks'] ?? []
+        ));
+
+        $scope = [
+            'execution_blueprint' => ['page_types' => ['home_page']],
+            'task_plan_structured' => $created['structured'],
+            'task_plan_markdown' => $created['markdown'],
+            'virtual_theme_plan' => [
+                'draft' => $created['virtual_theme_plan'],
+                'draft_markdown' => $created['markdown'],
+            ],
+        ];
+        $refined = $service->mutateDraftTaskPlanTask(
+            $scope,
+            'refine',
+            'page',
+            'home_page',
+            $createdKey,
+            ['label' => 'FAQ block refined'],
+            'Tighten FAQ copy around buyer objections.'
+        );
+        $refinedTasks = $refined['structured']['page_tasks']['home_page'] ?? [];
+        $refinedFaq = \current(\array_values(\array_filter(
+            $refinedTasks,
+            static fn(array $task): bool => (string)($task['task_key'] ?? '') === $createdKey
+        )));
+        self::assertIsArray($refinedFaq);
+        self::assertSame('FAQ block refined', (string)($refinedFaq['label'] ?? ''));
+        self::assertSame('Tighten FAQ copy around buyer objections.', (string)($refinedFaq['block_task']['task_goal'] ?? ''));
+        self::assertSame(2, (int)($refined['structured']['task_plan_version'] ?? 0));
+
+        $scope['task_plan_structured'] = $refined['structured'];
+        $scope['task_plan_markdown'] = $refined['markdown'];
+        $scope['virtual_theme_plan']['draft'] = $refined['virtual_theme_plan'];
+        $scope['virtual_theme_plan']['draft_markdown'] = $refined['markdown'];
+        $rebuilt = $service->mutateDraftTaskPlanTask(
+            $scope,
+            'rebuild',
+            'page',
+            'home_page',
+            'page:home_page:content/home-page-hero',
+            [],
+            'Rebuild the hero task from the latest positioning.'
+        );
+        $rebuiltHero = \current(\array_values(\array_filter(
+            $rebuilt['structured']['page_tasks']['home_page'] ?? [],
+            static fn(array $task): bool => (string)($task['task_key'] ?? '') === 'page:home_page:content/home-page-hero'
+        )));
+        self::assertIsArray($rebuiltHero);
+        self::assertSame('todo', (string)($rebuiltHero['status'] ?? ''));
+        self::assertSame(1, (int)($rebuiltHero['rebuild_requested'] ?? 0));
+        self::assertSame(3, (int)($rebuilt['structured']['task_plan_version'] ?? 0));
+
+        $scope['task_plan_structured'] = $rebuilt['structured'];
+        $scope['task_plan_markdown'] = $rebuilt['markdown'];
+        $scope['virtual_theme_plan']['draft'] = $rebuilt['virtual_theme_plan'];
+        $scope['virtual_theme_plan']['draft_markdown'] = $rebuilt['markdown'];
+        $deleted = $service->mutateDraftTaskPlanTask($scope, 'delete', 'shared', '', 'shared:footer');
+        self::assertNotContains('shared:footer', \array_map(
+            static fn(array $task): string => (string)($task['task_key'] ?? ''),
+            $deleted['structured']['shared_tasks'] ?? []
+        ));
+        self::assertNotContains('shared:footer', \array_map(
+            static fn(array $task): string => (string)($task['task_key'] ?? ''),
+            $deleted['structured']['shared_block_tasks'] ?? []
+        ));
+        self::assertSame(4, (int)($deleted['structured']['task_plan_version'] ?? 0));
+        self::assertCount(4, $deleted['structured']['task_plan_operation_log'] ?? []);
+    }
+
     public function testRebuildDraftTaskPlanStreamsAiChunksWhenCallbackProvided(): void
     {
         $chunks = \str_split($this->buildTaskPlanResponse(), 64);
