@@ -2662,49 +2662,10 @@ SCRIPT;
             return $this->fetchJson(['success' => false, 'message' => __('未找到要更新的区块')]);
         }
 
-        $sharedRegion = $this->htmlBlocksBuildService->resolveSharedBlockRegion($updatedBlock);
         $lastGeneratedAt = \date('Y-m-d H:i:s');
-        if ($sharedRegion !== '') {
-            foreach ($virtualPages as $virtualPageType => $virtualPageRow) {
-                if (!\is_string($virtualPageType) || !\is_array($virtualPageRow)) {
-                    continue;
-                }
-                $pageBlocks = $virtualPageType === $pageType
-                    ? $blocks
-                    : (\is_array($virtualPageRow['blocks'] ?? null) ? $virtualPageRow['blocks'] : []);
-                $pageUpdated = false;
-                foreach ($pageBlocks as $blockIndex => $pageBlock) {
-                    if (!\is_array($pageBlock)) {
-                        continue;
-                    }
-                    if ($this->htmlBlocksBuildService->resolveSharedBlockRegion($pageBlock) !== $sharedRegion) {
-                        continue;
-                    }
-                    if ($virtualPageType === $pageType && \trim((string)($pageBlock['block_id'] ?? '')) === $blockId) {
-                        $pageBlocks[$blockIndex] = $updatedBlock;
-                        $pageUpdated = true;
-                        continue;
-                    }
-                    $pageBlocks[$blockIndex] = $this->htmlBlocksBuildService->rebuildBlock(
-                        $pageBlock,
-                        $websiteProfile,
-                        $scope,
-                        $blockConfig
-                    );
-                    $pageUpdated = true;
-                }
-                if (!$pageUpdated) {
-                    continue;
-                }
-                $virtualPageRow['blocks'] = \array_values($pageBlocks);
-                $virtualPageRow['last_generated_at'] = $lastGeneratedAt;
-                $virtualPages[$virtualPageType] = $virtualPageRow;
-            }
-        } else {
-            $virtualPage['blocks'] = \array_values($blocks);
-            $virtualPage['last_generated_at'] = $lastGeneratedAt;
-            $virtualPages[$pageType] = $virtualPage;
-        }
+        $virtualPage['blocks'] = \array_values($blocks);
+        $virtualPage['last_generated_at'] = $lastGeneratedAt;
+        $virtualPages[$pageType] = $virtualPage;
         $scope['virtual_pages_by_type'] = $virtualPages;
         $scope['build_summary'] = \array_replace(
             \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
