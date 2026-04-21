@@ -235,6 +235,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
         $this->setProperty($dispatcher, 'ipcClient', $client);
+        $this->setProperty($dispatcher, 'port', 9443);
         $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', []);
 
         $method = new \ReflectionMethod(Dispatcher::class, 'handleIpcMessage');
@@ -250,6 +251,67 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         self::assertSame(ControlMessage::TYPE_WORKER_POOL_ACK, $ack['type'] ?? null);
         self::assertSame(ControlMessage::ROLE_MAINTENANCE, $ack['role'] ?? null);
         self::assertSame(16999, $ack['port'] ?? null);
+        self::assertTrue((bool) ($ack['in_pool'] ?? false));
+    }
+
+    public function testDuplicateWorkerAddTriggersAuditInsteadOfAddingAgain(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->getMockBuilder(PassthroughCore::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getWorkerPorts'])
+            ->getMock();
+
+        $core->method('getWorkerPorts')->willReturn([19001]);
+
+        $client = new class implements ChildControlClientInterface {
+            public array $sent = [];
+
+            public function connect(string $host, int $port): bool { return true; }
+            public function isConnected(): bool { return true; }
+            public function getSocket() { return null; }
+            public function hasPendingWrites(): bool { return false; }
+            public function hasReceivedShutdown(): bool { return false; }
+            public function isReadyStateConfirmed(): bool { return true; }
+            public function onMessage(callable $handler): void {}
+            public function onDisconnect(callable $handler): void {}
+            public function setVerboseLog(bool $verbose): void {}
+            public function setSelfTag(string $tag): void {}
+            public function register(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): bool { return true; }
+            public function rememberRegistration(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): void {}
+            public function markReadyState(bool $isReady = true): void {}
+            public function sendReady(string $role = '', int $workerId = 0, int $port = 0, int $epoch = 0, string $launchId = '', string $msgId = ''): bool { return true; }
+            public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool { return true; }
+            public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool { return true; }
+            public function sendStatusReport(int $connections, int $memory, int $requests): bool { return true; }
+            public function sendLogLine(string $line, string $level, string $processTag): bool { return true; }
+            public function send(string $message, bool $disconnectOnWriteOverflow = true): bool { $this->sent[] = $message; return true; }
+            public function flushPendingWrites(float $timeBudgetSec = 0.0): bool { return true; }
+            public function handleReadable(): array { return []; }
+            public function handleWritable(): bool { return true; }
+            public function tryReconnect(): bool { return true; }
+            public function close(): void {}
+        };
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'ipcClient', $client);
+        $this->setProperty($dispatcher, 'port', 9443);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', []);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'handleIpcMessage');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher, [
+            'type' => ControlMessage::TYPE_ADD_WORKER,
+            'role' => ControlMessage::ROLE_WORKER,
+            'ports' => [19001],
+        ]);
+
+        self::assertSame([['type' => 'audit_worker_health']], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
+        self::assertCount(1, $client->sent);
+        $ack = \json_decode(\trim($client->sent[0]), true);
+        self::assertSame(ControlMessage::TYPE_WORKER_POOL_ACK, $ack['type'] ?? null);
+        self::assertSame(ControlMessage::ROLE_WORKER, $ack['role'] ?? null);
+        self::assertSame(19001, $ack['port'] ?? null);
         self::assertTrue((bool) ($ack['in_pool'] ?? false));
     }
 
