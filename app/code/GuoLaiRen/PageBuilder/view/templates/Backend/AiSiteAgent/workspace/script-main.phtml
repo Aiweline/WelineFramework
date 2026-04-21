@@ -464,6 +464,9 @@
         if (Object.prototype.hasOwnProperty.call(workspaceState, 'plan_sse_url')) {
             planSseUrl = normalizePlanSseUrl(workspaceState.plan_sse_url || '');
         }
+        if (Object.prototype.hasOwnProperty.call(workspaceState, 'refine_plan_page_url')) {
+            refinePlanPageUrl = String(workspaceState.refine_plan_page_url || '');
+        }
         if (Object.prototype.hasOwnProperty.call(workspaceState, 'has_virtual_theme_plan')) {
             hasVirtualThemePlanState = !!workspaceState.has_virtual_theme_plan;
         }
