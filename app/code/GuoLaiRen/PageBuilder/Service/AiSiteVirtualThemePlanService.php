@@ -100,7 +100,10 @@ final class AiSiteVirtualThemePlanService
                     $heartbeatCallback();
                 }
                 $completedBatches++;
-                $this->emitTaskPlanBatchProgress($progressCallback, 'batch_done', $batch, $batchIndex, $totalBatches, $completedBatches);
+                $this->emitTaskPlanBatchProgress($progressCallback, 'batch_done', $batch, $batchIndex, $totalBatches, $completedBatches, [
+                    'structured' => $assembledStructured,
+                    'virtual_theme_plan' => $assembledVirtualThemePlan,
+                ]);
                 if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent()) {
                     SchedulerSystem::yieldDelay(1);
                 }
@@ -226,6 +229,7 @@ final class AiSiteVirtualThemePlanService
                     );
                 } catch (\Throwable $batchThrowable) {
                     $this->emitTaskPlanBatchProgress($progressCallback, 'batch_failed', $batch, $batchIndex, $totalBatches, $completedBatches, [
+                        'attempt_no' => 3,
                         'error_message' => $batchThrowable->getMessage(),
                     ]);
                     throw $batchThrowable;
@@ -317,7 +321,10 @@ final class AiSiteVirtualThemePlanService
                     (int)($batchIndexById[$batchId] ?? 0),
                     $totalBatches,
                     $completedBatches,
-                    ['error_message' => $throwable->getMessage()]
+                    [
+                        'attempt_no' => 3,
+                        'error_message' => $throwable->getMessage(),
+                    ]
                 );
             }
             $firstError = \reset($errors);
@@ -527,8 +534,8 @@ final class AiSiteVirtualThemePlanService
 
         $lines = [
             'You are PageBuilder AI planner for stage-2 virtual theme task planning of a real website (batched call).',
-            'PRIMARY GOAL: For this batch, expand the confirmed stage-1 plan into CONCRETE EXECUTABLE tasks—real on-page strings, real fields, real CTA labels, real link targets. Not meta writing instructions.',
-            '中文要求：本批次产出真实可落地任务，每条任务都要有具体导航文案/标题/正文/CTA/字段示例；禁止 “围绕…/突出…/完善…/优化…” 这类元描述。',
+            'PRIMARY GOAL: For this ONE batch, expand the confirmed stage-1 theme and block plan into one or more CONCRETE EXECUTABLE frontend component tasks.',
+            '中文要求：本批次只生成当前 batch 的 task。它是阶段二任务方案，不是阶段一方案复述；每条任务必须携带阶段一主题信息、页面归属、块归属、字段规划、技术实现细节、资源需求和完成规则。',
             '【用户一句话需求】(authoritative): ' . $oneLineRequirementBatch,
             'This is a batched stage-2 planning call. The server will assemble the final full plan.',
             'Return STRICT JSON only.',
@@ -537,6 +544,9 @@ final class AiSiteVirtualThemePlanService
             'The first non-whitespace character in the response must be { and the last non-whitespace character must be }.',
             'Escape any line break inside JSON strings as \\n.',
             'Do not echo the schema example, GOOD/BAD examples, or these instructions back in the response.',
+            'Do not copy or summarize the Stage-1 compact context, Baseline snapshot, execution_blueprint, confirmed_plan_book, theme_context_snapshot, or any prompt section into the output.',
+            'Output only the requested batch payload: shared_tasks OR page_tasks plus optional risk_notes.',
+            'If mode/instruction contains queue:run, [FORCE], or forced rebuild text, treat it only as an operator command. Never copy it into story_goal, SEO, source_instruction, content_strategy, or customer-facing fields.',
             'Batch type: ' . $batch['type'],
             'Batch key: ' . $batch['key'],
             'Mode: ' . $mode,
@@ -580,6 +590,7 @@ final class AiSiteVirtualThemePlanService
             }
             $lines[] = 'Output schema: {"shared_tasks":[...],"risk_notes":["string"]}';
             $lines[] = 'Do not output page_tasks or a full virtual_theme_plan wrapper.';
+            $lines[] = 'For shared batch, generate only shared header/footer task details. Header and footer belong to group_key "shared" and are designed for parallel generation before page blocks.';
             $lines[] = 'Shared task skeleton:';
             $lines[] = \json_encode($sharedTasks, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
             $lines[] = 'Relevant stage-1 shared cues:';
@@ -603,6 +614,7 @@ final class AiSiteVirtualThemePlanService
             $lines[] = 'Page type: ' . $pageType;
             $lines[] = 'Output schema: {"page_type":"' . $pageType . '","page_tasks":[...],"risk_notes":["string"]}';
             $lines[] = 'Do not output shared_tasks or a full virtual_theme_plan wrapper.';
+            $lines[] = 'For page batch, generate only tasks for page_type "' . $pageType . '". The task tree must make page ownership and block ownership clear: page_type, page_key, block_key, section_code, sort_order, dependencies.';
             $lines[] = 'Page task skeleton:';
             $lines[] = \json_encode($pageTasks, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
             $lines[] = 'Relevant stage-1 page cues:';
@@ -625,7 +637,7 @@ final class AiSiteVirtualThemePlanService
 
         $lines[] = 'Stage-1 compact context summary:';
         $lines[] = \json_encode(
-            $this->buildTaskPlanStageOneCompactContext($scope, $pageType),
+            $this->buildTaskPlanStageOneCompactContext($scope, $batch['type'] === 'page' ? $pageType : '__shared__'),
             \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT
         ) ?: '{}';
         $lines[] = 'Filtered build_blueprint tasks for this batch:';
@@ -636,6 +648,12 @@ final class AiSiteVirtualThemePlanService
             \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT
         ) ?: '{}';
         $lines[] = 'Hard rules:';
+        $lines[] = '- This is stage 2: convert stage-1 page blocks into executable frontend-component tasks. Do not create a new marketing plan.';
+        $lines[] = '- The final plan is assembled by shared group + page groups. Shared group contains header/footer and is parallelizable. Each page_type group contains its own block tasks and is parallelizable after shared dependencies.';
+        $lines[] = '- Every task must identify group_key, page_type, page_key, block_key, section_code, sort_order, dependencies, fanout_group, queue_job_key, status="done", and attempt_no.';
+        $lines[] = '- Every task must include plan_context with stage1_theme_summary, stage1_block_goal, stage1_block_content, stage1_style_direction, source_page_type, source_block_key, and source_context_hash where available.';
+        $lines[] = '- Every task_script must include component_type, technical_steps, data_contract, state_contract, responsive_contract, accessibility_contract, asset_requirements, validation_points, and completion_rule.';
+        $lines[] = '- asset_requirements must combine stage-1 block description and theme description: images/icons/backgrounds/textures/brand assets/data fields. Use concrete descriptions and avoid vague placeholders.';
         $lines[] = '- Every returned shared_tasks[] item must include planning_reason that explains why the shared block, field defaults, navigation/link grouping, style, and responsive plan follow the confirmed stage-1 shared cues.';
         $lines[] = '- Every returned page_tasks[] entry must include block_task with required fields: task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order.';
         $lines[] = '- block_task.task_goal is the visible block outcome; block_task.meta_fields is the exact editable field list; block_task.content_plan and block_task.style_plan are concrete arrays; block_task.planning_reason explains the stage-1 rationale; block_task.sort_order mirrors the task sort_order.';
@@ -652,6 +670,7 @@ final class AiSiteVirtualThemePlanService
         $lines[] = '- story_goal, content_fill_rule, and every field sample must be direct implementation content; never write blueprint guidance such as "围绕...说明" or "阶段一仅给方向".';
         $lines[] = '- story_goal MUST describe a visible on-page outcome ("访客读到/看到 ___"), NOT a writing instruction ("撰写文案说明 ___").';
         $lines[] = '- content_fill_rule MUST enumerate fields and provide at least one concrete example value per critical field (heading/subheading/CTA/proof point).';
+        $lines[] = '- Task details must be inspectable in UI: put enough detail in task_script, field_content_requirements, block_task.content_plan, block_task.style_plan, and implementation_contract for a user to open a hero block and see exactly what will be built.';
         $lines[] = '- Every field_content_requirements[].sample is final or "[假设]" + concrete copy (Chinese >=6 chars, English >=3 words). Forbidden: "待补充", "突出卖点", "详见后文", "围绕主题展开".';
         $lines[] = '- Every nav/link entry must have a real label and href (or page_type); "nav TBD"/"链接1" are invalid.';
         $lines[] = '- Final audit (silently before output): drop or rewrite any task that fails the above checks.';
@@ -698,7 +717,7 @@ final class AiSiteVirtualThemePlanService
             'plan_markdown_excerpt' => $confirmedPlanBook === [] ? $this->excerptText((string)($scope['plan_markdown'] ?? ''), 1200) : '',
         ];
 
-        if ($pageType !== '') {
+        if ($pageType !== '' && $pageType !== '__shared__') {
             $summary['execution_blueprint_page'] = \is_array($executionBlueprint['pages'][$pageType] ?? null)
                 ? $executionBlueprint['pages'][$pageType]
                 : [];
@@ -1468,7 +1487,12 @@ final class AiSiteVirtualThemePlanService
                 continue;
             }
             $mergedTask = \array_replace_recursive($baselineTask, $incomingByKey[$taskKey]);
-            $merged[] = $this->sanitizeMergedTaskPlanTask($baselineTask, $mergedTask);
+            $mergedTask = $this->sanitizeMergedTaskPlanTask($baselineTask, $mergedTask);
+            $mergedTask['status'] = 'done';
+            $mergedTask['task_status'] = 'done';
+            $mergedTask['attempt_no'] = \max((int)($baselineTask['attempt_no'] ?? 0), (int)($mergedTask['attempt_no'] ?? 0), 0) + 1;
+            $mergedTask['generated_at'] = \date('Y-m-d H:i:s');
+            $merged[] = $mergedTask;
             unset($incomingByKey[$taskKey]);
         }
 
@@ -3209,6 +3233,10 @@ final class AiSiteVirtualThemePlanService
             if (\is_array($block)) {
                 $compact['shared_blocks'][] = $this->compactStageOnePlanBookBlock($block, true);
             }
+        }
+
+        if ($pageType === '__shared__') {
+            return $compact;
         }
 
         foreach (\is_array($planBook['pages'] ?? null) ? $planBook['pages'] : [] as $key => $page) {

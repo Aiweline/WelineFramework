@@ -1249,7 +1249,10 @@ class PassthroughCore
             }
 
             $this->recordWorkerFailure($port);
-            $failed[$port] = (string)($probe['error'] ?? 'health probe failed');
+            $failureCount = (int)($this->workerHealth[$port]['failures'] ?? 0);
+            if ($failureCount >= self::WORKER_FAIL_THRESHOLD) {
+                $failed[$port] = (string)($probe['error'] ?? 'health probe failed');
+            }
         }
 
         return [
