@@ -711,6 +711,9 @@
         planModeInstructionHint: <?= \json_encode((string)__('未选择局部操作时，这里可选填写整体调整说明。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planActionPrepared: <?= \json_encode((string)__('已选中第一阶段局部操作，请先填写你的具体调整要求，再执行当前模式。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planActionPromptRequired: <?= \json_encode((string)__('请先输入本次第一阶段局部调整要求，再执行当前模式。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planPageRefineRunning: <?= \json_encode((string)__('正在微调当前页面块树...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planPageRefineDone: <?= \json_encode((string)__('当前页面块树微调已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planPageRefineUnavailable: <?= \json_encode((string)__('微调当前页面接口暂不可用。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planFriendlyInvalidAiJson: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planStructuredPreviewTitle: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planStructuredPreviewEmpty: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -5692,6 +5695,8 @@
             String(context.action || '').trim(),
             String(context.scopeKind || '').trim(),
             String(context.targetScope || '').trim(),
+            String(context.pageType || '').trim(),
+            String(context.blockKey || '').trim(),
             String(context.pageLabel || '').trim(),
             String(context.blockLabel || '').trim()
         ].join('::');
@@ -5771,7 +5776,7 @@
         return '请在“' + pageText + '”的“' + blockText + '”区块执行“' + actionText + '”，输出可直接发布的内容。';
     }
 
-    function buildPreviewActionContext(stage, action, scopeKind, pageLabel, blockLabel, targetScope) {
+    function buildPreviewActionContext(stage, action, scopeKind, pageLabel, blockLabel, targetScope, pageType, blockKey) {
         var normalizedStage = String(stage || 'plan').trim();
         var normalizedScopeKind = String(scopeKind || 'block').trim();
         var pageText = String(pageLabel || '').trim();
@@ -5792,6 +5797,8 @@
             action: String(action || '').trim(),
             scopeKind: normalizedScopeKind,
             targetScope: String(targetScope || '').trim(),
+            pageType: String(pageType || '').trim(),
+            blockKey: String(blockKey || '').trim(),
             pageLabel: pageText,
             blockLabel: blockText,
             promptHint: buildPreviewActionPrompt(normalizedStage, action, normalizedScopeKind, pageText, blockText),
@@ -5986,7 +5993,7 @@
             var blockKey = String(button.getAttribute('data-block-key') || '').trim();
             var pageLabel = String(button.getAttribute('data-page-label') || button.getAttribute('data-page-type') || '').trim();
             var blockLabel = String(button.getAttribute('data-block-label') || button.getAttribute('data-block-key') || button.getAttribute('data-task-key') || '').trim();
-            var actionContext = buildPreviewActionContext(stage, action, scopeKind, pageLabel, blockLabel, targetScope);
+            var actionContext = buildPreviewActionContext(stage, action, scopeKind, pageLabel, blockLabel, targetScope, pageType, blockKey);
             window.__pbPreviewActionDebug = {
                 ok: true,
                 stage: stage,
@@ -6841,8 +6848,72 @@
         return terminal;
     }
 
+    function shouldUsePlanPageRefineApi(mode, actionContext) {
+        var context = actionContext && typeof actionContext === 'object' ? actionContext : {};
+        return String(mode || '').trim() === 'refine'
+            && String(context.scopeKind || '').trim() === 'page'
+            && String(context.pageType || '').trim() !== '';
+    }
+
+    function startPlanPageRefineRequest(promptText, targetScope, actionContext) {
+        var context = actionContext && typeof actionContext === 'object' ? actionContext : {};
+        var pageType = String(context.pageType || '').trim();
+        var instruction = String(promptText || '').trim();
+        if (!String(refinePlanPageUrl || '').trim() || !pageType) {
+            setPlanModeStatus(messages.planPageRefineUnavailable || messages.planModeUnavailable);
+            toast('warning', messages.planPageRefineUnavailable || messages.planModeUnavailable);
+            return false;
+        }
+        if (instruction === '') {
+            var promptInput = document.getElementById('pb-ai-plan-mode-prompt');
+            setPromptInputInvalidState(promptInput, true);
+            setPlanModeStatus(messages.planActionPromptRequired);
+            toast('warning', messages.planActionPromptRequired);
+            return false;
+        }
+
+        setPlanModeRunButtonLoading(true);
+        setPlanModeStatus(messages.planPageRefineRunning || messages.planModeRunning);
+        setPlanModalProgress(messages.planPageRefineRunning || messages.planModeRunning, 50, false);
+        postForm(refinePlanPageUrl, {
+            public_id: publicId,
+            page_type: pageType,
+            instruction: instruction,
+            target_scope: String(targetScope || context.targetScope || ('pages.' + pageType)).trim()
+        }).then(function (data) {
+            setPlanModeRunButtonLoading(false);
+            if (data && data.success && data.data && typeof data.data === 'object') {
+                hydrateWorkspaceFromState(data.data);
+                setPlanModeStatus((data && data.message) ? String(data.message) : (messages.planPageRefineDone || messages.planModeDone));
+                setPlanModalProgress(messages.planPageRefineDone || messages.planModeDone, 100, !planConfirmedState && hasCurrentPhaseOnePlanDraft());
+                clearPlanPreviewActionContext({ restoreStatus: false });
+                toast('success', (data && data.message) ? String(data.message) : (messages.planPageRefineDone || messages.planModeDone));
+                return;
+            }
+            var message = (data && data.message) ? String(data.message) : messages.networkError;
+            setPlanModeStatus(message);
+            setPlanModalProgress(message, 100, false);
+            toast('warning', message);
+        }).catch(function (error) {
+            setPlanModeRunButtonLoading(false);
+            var message = (error && error.message) ? String(error.message) : messages.networkError;
+            setPlanModeStatus(message);
+            setPlanModalProgress(message, 100, false);
+            toast('error', message);
+        });
+        return true;
+    }
+
     function startPlanModeStream(mode, options) {
         var opts = options && typeof options === 'object' ? options : {};
+        var runBtn = document.getElementById('pb-ai-plan-run-mode');
+        var promptInput = document.getElementById('pb-ai-plan-mode-prompt');
+        var promptText = String(Object.prototype.hasOwnProperty.call(opts, 'promptText') ? opts.promptText : (promptInput ? promptInput.value : '')).trim();
+        var payloadMode = String(mode || currentPlanMode || 'refine');
+        var targetScope = String(Object.prototype.hasOwnProperty.call(opts, 'targetScope') ? opts.targetScope : currentPlanModeTargetScope).trim();
+        if (shouldUsePlanPageRefineApi(payloadMode, currentPlanModeActionContext)) {
+            return startPlanPageRefineRequest(promptText, targetScope, currentPlanModeActionContext);
+        }
         var streamUrl = normalizePlanSseUrl(planSseUrl || '');
         if (!streamUrl) {
             setPlanModeStatus(messages.planModeUnavailable);
@@ -6854,11 +6925,6 @@
             setPlanModeStatus(messages.planModeUnavailable);
             return false;
         }
-        var runBtn = document.getElementById('pb-ai-plan-run-mode');
-        var promptInput = document.getElementById('pb-ai-plan-mode-prompt');
-        var promptText = String(Object.prototype.hasOwnProperty.call(opts, 'promptText') ? opts.promptText : (promptInput ? promptInput.value : '')).trim();
-        var payloadMode = String(mode || currentPlanMode || 'refine');
-        var targetScope = String(Object.prototype.hasOwnProperty.call(opts, 'targetScope') ? opts.targetScope : currentPlanModeTargetScope).trim();
         var formData = new FormData();
         formData.append('public_id', publicId);
         formData.append('scope_patch', JSON.stringify(buildVirtualThemePatch()));
