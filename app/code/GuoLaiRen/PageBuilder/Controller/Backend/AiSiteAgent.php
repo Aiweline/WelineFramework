@@ -3029,6 +3029,7 @@ SCRIPT;
         if ($streamStage !== '') {
             $snapshot = $this->filterWorkspaceSnapshotByStage($snapshot, $streamStage);
         }
+        $streamObservedActiveOperation = $this->isWorkspaceStreamOperationActive($snapshotSource);
         $this->logStreamSse('snapshot_built', [
             'session_id' => $session->getId(),
             'snapshot_bytes' => \strlen((string)(\json_encode($snapshotSource, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '')),
@@ -3058,6 +3059,7 @@ SCRIPT;
         $maxTotalLoops = 86400;  // 最多运行 24 小时（兜底）
         $probeEveryIdleLoops = 60;  // 连续空闲时定期探测连接健康
 
+        $terminalCompletePayload = null;
         while (true) {
             $loopCount++;
             $this->runQueuedPlanOperationFromWorkspaceStream($sse, $session, $adminId);
@@ -3136,19 +3138,106 @@ SCRIPT;
                 }
             }
 
+            // Close this stream after an observed operation reaches a terminal state.
+            $freshForTerminalCheck = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $terminalProbeState = $this->buildWorkspaceStreamOperationState($freshForTerminalCheck);
+            if ($this->isWorkspaceStreamOperationActive($terminalProbeState)) {
+                $streamObservedActiveOperation = true;
+            }
+            if ($streamObservedActiveOperation && $this->isWorkspaceStreamOperationTerminal($terminalProbeState)) {
+                $session = $freshForTerminalCheck;
+                $terminalStateSource = $this->buildWorkspaceState($session, $adminId, 40, self::WORKSPACE_STREAM_SNAPSHOT_PERSIST);
+                $terminalCompletePayload = $this->buildWorkspaceStreamTerminalPayload($terminalStateSource, $lastEventId);
+                if ($streamStage !== '') {
+                    $terminalCompletePayload = $this->filterWorkspaceSnapshotByStage($terminalCompletePayload, $streamStage);
+                }
+                $this->logStreamSse('terminal_operation_detected', [
+                    'session_id' => $session->getId(),
+                    'loop_count' => $loopCount,
+                    'last_event_id' => $lastEventId,
+                    'terminal_status' => (string)($terminalCompletePayload['terminal_status'] ?? ''),
+                ]);
+                break;
+            }
+
             // 使用协程延迟，不阻塞 Worker
             $sse->maybeHeartbeat();
             SchedulerSystem::yieldDelay($pollInterval);
         }
 
-        $sse->complete(['success' => true, 'last_event_id' => $lastEventId]);
+        if (\is_array($terminalCompletePayload)) {
+            $sse->complete($terminalCompletePayload);
+        } else {
+            $sse->complete(['success' => true, 'last_event_id' => $lastEventId]);
+        }
         $this->releaseStreamLeaseState($session, $adminId, $leaseToken);
         $this->logStreamSse('stream_completed', [
             'session_id' => $session->getId(),
             'loop_count' => $loopCount,
             'last_event_id' => $lastEventId,
+            'terminal_status' => \is_array($terminalCompletePayload) ? (string)($terminalCompletePayload['terminal_status'] ?? '') : '',
             'duration_sec' => \max(0, \time() - $startTime),
         ]);
+    }
+
+    /**
+     * @return array{active_operation: array<string, mixed>}
+     */
+    private function buildWorkspaceStreamOperationState(AiSiteAgentSession $session): array
+    {
+        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        return [
+            'active_operation' => \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    private function isWorkspaceStreamOperationActive(array $state): bool
+    {
+        $activeOperation = \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [];
+        $status = \strtolower(\trim((string)($activeOperation['status'] ?? '')));
+
+        return \in_array($status, ['queued', 'running'], true);
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    private function isWorkspaceStreamOperationTerminal(array $state): bool
+    {
+        $activeOperation = \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [];
+        $status = \strtolower(\trim((string)($activeOperation['status'] ?? '')));
+
+        return \in_array($status, ['done', 'error', 'cancelled'], true);
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    private function buildWorkspaceStreamTerminalPayload(array $state, int $lastEventId): array
+    {
+        $payload = $this->buildWorkspaceStreamSnapshotPayload($state);
+        $activeOperation = \is_array($payload['active_operation'] ?? null) ? $payload['active_operation'] : [];
+        $status = \strtolower(\trim((string)($activeOperation['status'] ?? '')));
+        $message = \trim((string)($activeOperation['message'] ?? ''));
+        if ($message === '') {
+            $message = match ($status) {
+                'done' => 'Workspace operation completed; closing the workspace event stream.',
+                'cancelled' => 'Workspace operation was cancelled; closing the workspace event stream.',
+                'error' => 'Workspace operation failed; closing the workspace event stream.',
+                default => 'Workspace event stream closed.',
+            };
+        }
+
+        $payload['success'] = $status === 'done';
+        $payload['message'] = $message;
+        $payload['terminal_status'] = $status;
+        $payload['last_event_id'] = $lastEventId;
+
+        return $payload;
     }
 
     private function runQueuedPlanOperationFromWorkspaceStream(SseWriter $sse, AiSiteAgentSession $session, int $adminId): void
