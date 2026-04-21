@@ -18,10 +18,10 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $dispatcher = $this->newDispatcherWithoutConstructor();
         $core = $this->getMockBuilder(PassthroughCore::class)
             ->disableOriginalConstructor()
-            ->onlyMethods(['probeBlacklistedWorkers'])
+            ->onlyMethods(['auditWorkerApplicationHealth'])
             ->getMock();
 
-        $core->expects(self::never())->method('probeBlacklistedWorkers');
+        $core->expects(self::never())->method('auditWorkerApplicationHealth');
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
         $this->setProperty($dispatcher, 'running', true);
@@ -36,17 +36,17 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $method->invoke($dispatcher);
 
         self::assertSame(
-            [['type' => 'probe_blacklisted_workers']],
+            [['type' => 'audit_worker_health']],
             $this->getProperty($dispatcher, 'deferredWorkerPoolJobs')
         );
     }
 
-    public function testPumpDeferredWorkerPoolJobsProcessesDeferredHealthProbeFiber(): void
+    public function testPumpDeferredWorkerPoolJobsProcessesDeferredHealthAuditFiber(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
         $core = $this->getMockBuilder(PassthroughCore::class)
             ->disableOriginalConstructor()
-            ->onlyMethods(['setWarmupCooperativeYield', 'probeBlacklistedWorkers'])
+            ->onlyMethods(['setWarmupCooperativeYield', 'auditWorkerApplicationHealth'])
             ->getMock();
 
         $yieldCallbacks = [];
@@ -56,11 +56,11 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
                 $yieldCallbacks[] = $yield;
             });
         $core->expects(self::once())
-            ->method('probeBlacklistedWorkers')
-            ->willReturn([19001]);
+            ->method('auditWorkerApplicationHealth')
+            ->willReturn(['healthy' => [19001], 'failed' => []]);
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
-        $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', [['type' => 'probe_blacklisted_workers']]);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', [['type' => 'audit_worker_health']]);
         $this->setProperty($dispatcher, 'deferredWorkerPoolFiber', null);
         $this->setProperty($dispatcher, 'deferredWorkerPoolFiberKind', null);
 
@@ -74,6 +74,85 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         self::assertNull($this->getProperty($dispatcher, 'deferredWorkerPoolFiber'));
         self::assertNull($this->getProperty($dispatcher, 'deferredWorkerPoolFiberKind'));
         self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
+    }
+
+    public function testDeferredHealthAuditRemovesFailedWorkersAndAlertsMaster(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->getMockBuilder(PassthroughCore::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods([
+                'setWarmupCooperativeYield',
+                'auditWorkerApplicationHealth',
+                'removeWorkerPort',
+                'getWorkerPorts',
+                'getMaintenanceWorkerPorts',
+                'getMaintenancePort',
+                'getWorkerHealthSummary',
+            ])
+            ->getMock();
+
+        $core->expects(self::exactly(2))->method('setWarmupCooperativeYield');
+        $core->expects(self::once())
+            ->method('auditWorkerApplicationHealth')
+            ->willReturn(['healthy' => [19002], 'failed' => [19001 => 'health 503']]);
+        $core->expects(self::once())
+            ->method('removeWorkerPort')
+            ->with(19001)
+            ->willReturn([]);
+        $core->method('getWorkerPorts')->willReturn([19002]);
+        $core->method('getMaintenanceWorkerPorts')->willReturn([]);
+        $core->method('getMaintenancePort')->willReturn(0);
+        $core->method('getWorkerHealthSummary')->willReturn(['healthy' => 1, 'total' => 1]);
+
+        $client = new class implements ChildControlClientInterface {
+            public array $sent = [];
+
+            public function connect(string $host, int $port): bool { return true; }
+            public function isConnected(): bool { return true; }
+            public function getSocket() { return null; }
+            public function hasPendingWrites(): bool { return false; }
+            public function hasReceivedShutdown(): bool { return false; }
+            public function isReadyStateConfirmed(): bool { return true; }
+            public function onMessage(callable $handler): void {}
+            public function onDisconnect(callable $handler): void {}
+            public function setVerboseLog(bool $verbose): void {}
+            public function setSelfTag(string $tag): void {}
+            public function register(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): bool { return true; }
+            public function rememberRegistration(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): void {}
+            public function markReadyState(bool $isReady = true): void {}
+            public function sendReady(string $role = '', int $workerId = 0, int $port = 0, int $epoch = 0, string $launchId = '', string $msgId = ''): bool { return true; }
+            public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool { return true; }
+            public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool { return true; }
+            public function sendStatusReport(int $connections, int $memory, int $requests): bool { return true; }
+            public function sendLogLine(string $line, string $level, string $processTag): bool { return true; }
+            public function send(string $message, bool $disconnectOnWriteOverflow = true): bool { $this->sent[] = $message; return true; }
+            public function flushPendingWrites(float $timeBudgetSec = 0.0): bool { return true; }
+            public function handleReadable(): array { return []; }
+            public function handleWritable(): bool { return true; }
+            public function tryReconnect(): bool { return true; }
+            public function close(): void {}
+        };
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'ipcClient', $client);
+        $this->setProperty($dispatcher, 'instanceName', 'ut');
+        $this->setProperty($dispatcher, 'port', 9443);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', [['type' => 'audit_worker_health']]);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolFiber', null);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolFiberKind', null);
+        $this->setProperty($dispatcher, 'clientConnections', []);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'pumpDeferredWorkerPoolJobs');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher);
+
+        self::assertCount(1, $client->sent);
+        $alert = \json_decode(\trim($client->sent[0]), true);
+        self::assertSame(ControlMessage::TYPE_DISPATCHER_ALERT, $alert['type'] ?? null);
+        self::assertSame('worker_health_probe_failed', $alert['reason'] ?? null);
+        self::assertSame([19001], $alert['failed_ports'] ?? null);
+        self::assertSame([19002], $alert['business_pool'] ?? null);
     }
 
     public function testMaintenanceSetWorkerPoolDoesNotQueueBusinessSetPoolJob(): void
