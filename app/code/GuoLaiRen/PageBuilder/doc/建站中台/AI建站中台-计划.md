@@ -1101,7 +1101,7 @@ Atomic Task ID:
 #### D. 第二阶段块任务拆解规划
 
 - [ ] A28 定义 `block task` 最小 schema（status=todo, owner=backend-schema, covers=§1A/§13.3.4, output=task_goal/meta_fields/content_plan/style_plan/planning_reason/sort_order）
-- [ ] A29 第二阶段从第一阶段确认版块树读取任务输入（status=todo, owner=backend, covers=§13.3.2, output=不从 Markdown 反推）
+- [x] A29 第二阶段从第一阶段确认版块树读取任务输入（status=done, owner=worker-5, covers=§13.3.2, output=不从 Markdown 反推, evidence=php-l+AiSiteVirtualThemePlanServiceTest）
 - [ ] A30 第二阶段每个 block 至少 fanout 一个 `stage2.block_task_plan`（status=todo, owner=backend-queue, covers=§13.3, output=按 block_key 生成任务）
 - [ ] A31 第二阶段 block task 通过队列 + Fiber/协程并发生成（status=todo, owner=runtime, covers=§1A/§13.3, output=并发但保留依赖）
 - [ ] A32 第二阶段提示词引用第一阶段块的 goal/realtime_content/style_direction/reason（status=todo, owner=prompt, covers=§13.3.3, output=不重新发明任务）
