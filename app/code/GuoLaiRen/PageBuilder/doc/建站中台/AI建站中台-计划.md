@@ -1088,7 +1088,7 @@ Atomic Task ID:
 
 #### C. 第一阶段块树、Markdown 组合与内联操作
 
-- [ ] A19 定义 `shared block` 与 `page block` 统一字段 schema（status=todo, owner=backend-schema, covers=§1A, output=implementation_detail/realtime_content/reason/completion_rule/editable_fields）
+- [x] A19 定义 `shared block` 与 `page block` 统一字段 schema（status=done, owner=worker-2, covers=§1A, output=implementation_detail/realtime_content/reason/completion_rule/editable_fields, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
 - [ ] A20 实现 `plan_book.structured` 由块树生成（status=todo, owner=backend, covers=§1A, output=结构化真相源）
 - [ ] A21 实现 `plan_book.markdown` 由块树排序组合生成（status=todo, owner=backend, covers=§1A, output=Markdown 不自由生成）
 - [ ] A22 实现 `block_index` 与块排序同步（status=todo, owner=backend, covers=§1A, output=sort_order 改变时 index 更新）

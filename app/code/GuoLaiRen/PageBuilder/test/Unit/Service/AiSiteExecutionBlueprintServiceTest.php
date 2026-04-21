@@ -192,11 +192,13 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         );
         self::assertIsArray($artifacts['plan_workbench']['confirmed']['block_index'] ?? null);
         $sharedTask = $artifacts['execution_blueprint']['tasks'][0] ?? [];
-        self::assertArrayHasKey('implementation_detail', $sharedTask);
-        self::assertArrayHasKey('realtime_content', $sharedTask);
+        foreach (['implementation_detail', 'realtime_content', 'reason', 'completion_rule', 'editable_fields'] as $requiredBlockField) {
+            self::assertArrayHasKey($requiredBlockField, $sharedTask);
+        }
         $pageTask = $artifacts['execution_blueprint']['tasks'][2] ?? [];
-        self::assertArrayHasKey('implementation_detail', $pageTask['block'] ?? []);
-        self::assertArrayHasKey('realtime_content', $pageTask['block'] ?? []);
+        foreach (['implementation_detail', 'realtime_content', 'reason', 'completion_rule', 'editable_fields'] as $requiredBlockField) {
+            self::assertArrayHasKey($requiredBlockField, $pageTask['block'] ?? []);
+        }
         self::assertSame(
             (string)($artifacts['execution_blueprint']['shared_prompt_context']['context_hash'] ?? ''),
             (string)($pageTask['source_ref']['shared_context_hash'] ?? '')
