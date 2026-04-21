@@ -420,6 +420,71 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         );
     }
 
+    public function testRefineDraftPlanPageOnlyReplacesCurrentPageTree(): void
+    {
+        $baselineService = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $baseline = $baselineService->buildPlanArtifacts([
+            'site_title' => 'Page Only Refine Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+        ], [
+            'site_title' => 'Page Only Refine Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+        $scope = [
+            'site_title' => 'Page Only Refine Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+            'plan_json' => $baseline['plan_json'],
+            'plan_markdown' => $baseline['markdown'],
+            'plan_structured' => $baseline['structured'],
+            'plan_workbench' => $baseline['plan_workbench'],
+            'execution_blueprint_draft' => $baseline['execution_blueprint'],
+        ];
+        $originalAboutPage = $baseline['plan_json']['pages'][Page::TYPE_ABOUT] ?? [];
+        $originalSharedBlocks = $baseline['plan_json']['shared_blocks'] ?? [];
+
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildPageOnlyRefineAiPlanResponse())
+        );
+
+        $refined = $service->refineDraftPlanPage($scope, [
+            'site_title' => 'Page Only Refine Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ], Page::TYPE_HOME, [
+            'instruction' => 'Tighten the current home page around a launch offer.',
+            'round' => 2,
+        ]);
+
+        self::assertSame('refine_page', (string)($refined['page_refine_summary']['mode'] ?? ''));
+        self::assertSame(Page::TYPE_HOME, (string)($refined['page_refine_summary']['page_type'] ?? ''));
+        self::assertContains(Page::TYPE_ABOUT, $refined['page_refine_summary']['preserved_page_types'] ?? []);
+        self::assertStringContainsString(
+            'Launch offer headline',
+            (string)\json_encode($refined['plan_json']['pages'][Page::TYPE_HOME]['blocks'] ?? [], \JSON_UNESCAPED_UNICODE)
+        );
+        self::assertStringNotContainsString(
+            'SHOULD_NOT_LEAK_TO_ABOUT_PAGE',
+            (string)\json_encode($refined['plan_json']['pages'][Page::TYPE_ABOUT] ?? [], \JSON_UNESCAPED_UNICODE)
+        );
+        self::assertSame($originalAboutPage, $refined['plan_json']['pages'][Page::TYPE_ABOUT] ?? []);
+        self::assertSame($originalSharedBlocks, $refined['plan_json']['shared_blocks'] ?? []);
+
+        $homeTaskKeys = \array_values(\array_filter(
+            \array_map(
+                static fn(array $task): string => (string)($task['task_key'] ?? ''),
+                \is_array($refined['execution_blueprint']['tasks'] ?? null) ? $refined['execution_blueprint']['tasks'] : []
+            ),
+            static fn(string $taskKey): bool => \str_starts_with($taskKey, 'page:' . Page::TYPE_HOME . ':')
+        ));
+        self::assertContains('page:' . Page::TYPE_HOME . ':launch_offer', $homeTaskKeys);
+    }
+
     public function testReorderDraftPlanBlocksUpdatesPlanJsonAndExecutionBlueprintOrder(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
