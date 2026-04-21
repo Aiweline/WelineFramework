@@ -3524,6 +3524,10 @@ final class AiSiteExecutionBlueprintService
     {
         $blockKey = \trim((string)($block['block_key'] ?? 'block'));
         $pagePromptContext = \is_array($pagePlan['page_prompt_context'] ?? null) ? $pagePlan['page_prompt_context'] : [];
+        $sharedContextHash = \trim((string)($pagePlan['shared_context_hash'] ?? ''));
+        if ($sharedContextHash === '') {
+            throw new \RuntimeException('missing shared_context_hash');
+        }
 
         return [
             'task_key' => 'page:' . $pageType . ':' . $blockKey,
@@ -3534,7 +3538,7 @@ final class AiSiteExecutionBlueprintService
             'source_ref' => [
                 'page_key' => $pageType,
                 'block_key' => $blockKey,
-                'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? ''),
+                'shared_context_hash' => $sharedContextHash,
                 'theme_context_hash' => (string)($pagePlan['theme_context_hash'] ?? ''),
             ],
             'prompt_context' => $pagePromptContext,
@@ -3941,6 +3945,11 @@ final class AiSiteExecutionBlueprintService
                 'dispatch_mode' => 'automatic_after_dependency',
                 'requires_user_tab' => false,
                 'fanout_group' => 'stage1.page_fanout',
+                'concurrency' => [
+                    'mode' => 'fiber_coroutine',
+                    'group' => 'stage1.page_fanout',
+                    'task_granularity' => 'one_page_one_task',
+                ],
                 'inputs' => [
                     'page_key' => $pageKey,
                     'shared_context_hash' => $sharedContextHash,
@@ -3965,6 +3974,85 @@ final class AiSiteExecutionBlueprintService
         }
 
         return $jobs;
+    }
+
+    /**
+     * @param array<string, mixed> $stageOneQueue
+     * @param array<string, mixed> $pagePlans
+     * @param array<string, mixed> $sharedPromptContext
+     * @return array<string, mixed>
+     */
+    private function buildStageOnePageFanoutQueueEnvelope(
+        array $stageOneQueue,
+        array $pagePlans,
+        array $sharedPromptContext,
+        string $planLocale
+    ): array {
+        $existingJobs = \is_array($stageOneQueue['jobs'] ?? null) ? $stageOneQueue['jobs'] : [];
+        $sessionPublicId = '';
+        $websitePublicId = '';
+        foreach ($existingJobs as $existingJob) {
+            if (!\is_array($existingJob)) {
+                continue;
+            }
+            if ($sessionPublicId === '') {
+                $sessionPublicId = \trim((string)($existingJob['session_public_id'] ?? ''));
+            }
+            if ($websitePublicId === '') {
+                $websitePublicId = \trim((string)($existingJob['website_public_id'] ?? ''));
+            }
+            if ($sessionPublicId !== '' && $websitePublicId !== '') {
+                break;
+            }
+        }
+
+        $fanoutJobs = $this->buildStageOnePageFanoutQueueJobs(
+            ['session_public_id' => $sessionPublicId],
+            ['website_public_id' => $websitePublicId],
+            $pagePlans,
+            $sharedPromptContext,
+            $planLocale
+        );
+
+        $jobs = [];
+        $sequence = [];
+        foreach ($existingJobs as $jobKey => $existingJob) {
+            if (!\is_array($existingJob) || $this->isStageOnePageFanoutJob($existingJob)) {
+                continue;
+            }
+            $resolvedJobKey = \trim((string)($existingJob['job_key'] ?? $jobKey));
+            if ($resolvedJobKey === '') {
+                continue;
+            }
+            $jobs[$resolvedJobKey] = $existingJob;
+            $sequence[] = $resolvedJobKey;
+        }
+
+        $pageJobKeys = [];
+        foreach ($fanoutJobs as $fanoutJob) {
+            $jobKey = \trim((string)($fanoutJob['job_key'] ?? ''));
+            if ($jobKey === '') {
+                continue;
+            }
+            $jobs[$jobKey] = $fanoutJob;
+            $sequence[] = $jobKey;
+            $pageJobKeys[] = $jobKey;
+        }
+
+        $stageOneQueue['version'] = (int)($stageOneQueue['version'] ?? 1);
+        $stageOneQueue['stage'] = 'stage1';
+        $stageOneQueue['status'] = (string)($stageOneQueue['status'] ?? 'done');
+        $stageOneQueue['sequence'] = \array_values(\array_unique($sequence));
+        $stageOneQueue['jobs'] = $jobs;
+        $stageOneQueue['fanout'] = [
+            'mode' => 'fiber_coroutine',
+            'task_granularity' => 'one_page_one_task',
+            'trigger_after' => 'stage1.shared.header_footer',
+            'page_job_count' => \count($pageJobKeys),
+            'page_job_keys' => $pageJobKeys,
+        ];
+
+        return $stageOneQueue;
     }
 
     /**
@@ -3999,6 +4087,16 @@ final class AiSiteExecutionBlueprintService
         }
 
         return $pagePlans;
+    }
+
+    /**
+     * @param array<string, mixed> $pages
+     * @param array<string, mixed> $sharedPromptContext
+     * @return array<string, mixed>
+     */
+    private function buildStageOnePagePlansConcurrently(array $pages, array $sharedPromptContext): array
+    {
+        return $this->buildStageOnePagePlans($pages, $sharedPromptContext);
     }
 
     /**
@@ -4209,6 +4307,127 @@ final class AiSiteExecutionBlueprintService
         });
 
         return \array_values($normalized);
+    }
+
+    /**
+     * @param array<string, mixed> $job
+     */
+    private function isStageOnePageFanoutJob(array $job): bool
+    {
+        $jobType = \trim((string)($job['job_type'] ?? ''));
+        if ($jobType === 'stage1.page_plan') {
+            return true;
+        }
+
+        return \trim((string)($job['fanout_group'] ?? '')) === 'stage1.page_fanout'
+            || \trim((string)($job['stage'] ?? '')) === 'stage1_page_fanout';
+    }
+
+    private function isStageOneWorkTerminalStatus(string $status): bool
+    {
+        return \in_array(\trim($status), ['done', 'failed', 'cancelled', 'stale'], true);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function markStageOneRowStaleForSharedContextChange(array $row, string $currentSharedContextHash): array
+    {
+        $previousSharedContextHash = \trim((string)(
+            $row['shared_context_hash']
+            ?? $row['inputs']['shared_context_hash']
+            ?? $row['source_ref']['shared_context_hash']
+            ?? ''
+        ));
+        if (
+            $currentSharedContextHash === ''
+            || $previousSharedContextHash === ''
+            || $previousSharedContextHash === $currentSharedContextHash
+            || $this->isStageOneWorkTerminalStatus((string)($row['status'] ?? ''))
+        ) {
+            return $row;
+        }
+
+        $row['status'] = 'stale';
+        $row['progress_percent'] = 0;
+        $row['stale_reason'] = 'shared_context_hash_changed';
+        $row['previous_shared_context_hash'] = $previousSharedContextHash;
+        $row['current_shared_context_hash'] = $currentSharedContextHash;
+        $row['last_error'] = 'shared_context_hash changed; rebuild required';
+
+        return $row;
+    }
+
+    /**
+     * @param array<int|string, mixed> $jobs
+     * @return array<int|string, mixed>
+     */
+    private function markStageOnePageFanoutJobsStaleForSharedContextChange(array $jobs, string $currentSharedContextHash): array
+    {
+        foreach ($jobs as $jobKey => $job) {
+            if (!\is_array($job) || !$this->isStageOnePageFanoutJob($job)) {
+                continue;
+            }
+            $jobs[$jobKey] = $this->markStageOneRowStaleForSharedContextChange($job, $currentSharedContextHash);
+        }
+
+        return $jobs;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $tasks
+     * @return list<array<string, mixed>>
+     */
+    private function markStageOnePageTasksStaleForSharedContextChange(array $tasks, string $currentSharedContextHash): array
+    {
+        foreach ($tasks as $index => $task) {
+            if (!\is_array($task) || (string)($task['task_type'] ?? '') !== 'page_block') {
+                continue;
+            }
+            $tasks[$index] = $this->markStageOneRowStaleForSharedContextChange($task, $currentSharedContextHash);
+        }
+
+        return \array_values($tasks);
+    }
+
+    /**
+     * @return array{0:array<string, mixed>,1:array<string, mixed>}
+     */
+    private function markStageOnePageWorkStaleForSharedContextChange(
+        array $structured,
+        array $executionBlueprint,
+        string $currentSharedContextHash
+    ): array {
+        if ($currentSharedContextHash === '') {
+            return [$structured, $executionBlueprint];
+        }
+
+        if (\is_array($structured['stage1_queue']['jobs'] ?? null)) {
+            $structured['stage1_queue']['jobs'] = $this->markStageOnePageFanoutJobsStaleForSharedContextChange(
+                $structured['stage1_queue']['jobs'],
+                $currentSharedContextHash
+            );
+        }
+        if (\is_array($executionBlueprint['stage1_queue']['jobs'] ?? null)) {
+            $executionBlueprint['stage1_queue']['jobs'] = $this->markStageOnePageFanoutJobsStaleForSharedContextChange(
+                $executionBlueprint['stage1_queue']['jobs'],
+                $currentSharedContextHash
+            );
+        }
+        if (\is_array($executionBlueprint['tasks'] ?? null)) {
+            $executionBlueprint['tasks'] = $this->markStageOnePageTasksStaleForSharedContextChange(
+                $executionBlueprint['tasks'],
+                $currentSharedContextHash
+            );
+        }
+        if (\is_array($structured['execution_steps'] ?? null)) {
+            $structured['execution_steps'] = $this->buildExecutionSteps(
+                \is_array($executionBlueprint['tasks'] ?? null) ? $executionBlueprint['tasks'] : []
+            );
+        }
+
+        return [$structured, $executionBlueprint];
     }
 
     /**
@@ -6414,6 +6633,11 @@ final class AiSiteExecutionBlueprintService
             ? $structured['shared_plan']['theme_design']
             : $themeContextSnapshot;
         $structured['shared_plan']['shared_prompt_context'] = $sharedPromptContext;
+        [$structured, $executionBlueprint] = $this->markStageOnePageWorkStaleForSharedContextChange(
+            $structured,
+            $executionBlueprint,
+            \trim((string)($sharedPromptContext['context_hash'] ?? ''))
+        );
 
         $pages = \is_array($executionBlueprint['pages'] ?? null)
             ? $executionBlueprint['pages']
