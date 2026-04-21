@@ -703,6 +703,24 @@ final class AiSiteVirtualThemePlanService
     }
 
     /**
+     * @param list<array<string, mixed>> $tasks
+     * @param array<string, mixed> $batch
+     * @return list<array<string, mixed>>
+     */
+    private function filterTaskPlanTaskListForBatch(array $tasks, array $batch): array
+    {
+        $taskKeys = rray_values(rray_filter(rray_map('strval', \is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : [])));
+        if ($taskKeys === []) {
+            return rray_values(rray_filter($tasks, static fn($task): bool => \is_array($task)));
+        }
+
+        $taskKeyMap = rray_fill_keys($taskKeys, true);
+        return rray_values(rray_filter($tasks, static function ($task) use ($taskKeyMap): bool {
+            return \is_array($task) && isset($taskKeyMap[(string)($task['task_key'] ?? '')]);
+        }));
+    }
+
+    /**
      * @param array{type:string,key:string,task_keys:list<string>} $batch
      * @return array<string, mixed>
      */
@@ -723,9 +741,10 @@ final class AiSiteVirtualThemePlanService
 
         $pageType = (string)($batch['key'] ?? '');
         $snapshot['page_type'] = $pageType;
-        $snapshot['page_tasks'] = \is_array($virtualThemePlan['page_tasks'][$pageType] ?? null)
-            ? $virtualThemePlan['page_tasks'][$pageType]
-            : [];
+        $snapshot['page_tasks'] = $this->filterTaskPlanTaskListForBatch(
+            \is_array($virtualThemePlan['page_tasks'][$pageType] ?? null) ? $virtualThemePlan['page_tasks'][$pageType] : [],
+            $batch
+        );
         $snapshot['shared_task_summary'] = \array_map(
             static fn(array $task): array => [
                 'task_key' => (string)($task['task_key'] ?? ''),
