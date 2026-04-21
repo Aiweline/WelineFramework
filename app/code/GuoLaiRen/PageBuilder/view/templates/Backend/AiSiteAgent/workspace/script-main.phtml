@@ -4374,11 +4374,30 @@
         return '<div class="d-flex flex-wrap mt-2">' + chips + '</div>';
     }
 
-    function renderFieldPlanTable(fieldPlan) {
+    function renderTaskPlanFieldTextarea(pageType, taskKey, taskIndex, fieldIndex, prop, value) {
+        return ''
+            + '<textarea class="form-control form-control-sm pb-ai-task-plan-field-editor" rows="2"'
+            + ' data-pb-task-plan-field-edit="1"'
+            + ' data-page-type="' + escapeHtml(String(pageType || '')) + '"'
+            + ' data-task-key="' + escapeHtml(String(taskKey || '')) + '"'
+            + ' data-task-index="' + escapeHtml(String(taskIndex)) + '"'
+            + ' data-field-index="' + escapeHtml(String(fieldIndex)) + '"'
+            + ' data-field-prop="' + escapeHtml(String(prop || 'sample')) + '">'
+            + escapeHtml(String(value || ''))
+            + '</textarea>';
+    }
+
+    function renderFieldPlanTable(fieldPlan, options) {
         if (!Array.isArray(fieldPlan) || fieldPlan.length === 0) {
             return '';
         }
-        var rows = fieldPlan.map(function (row) {
+        var opts = options && typeof options === 'object' ? options : {};
+        var editableTaskPlan = opts.editableTaskPlan === true;
+        var tableAttrs = editableTaskPlan
+            ? ' data-pb-task-plan-field-table="1" data-page-type="' + escapeHtml(String(opts.pageType || '')) + '" data-task-key="' + escapeHtml(String(opts.taskKey || '')) + '"'
+            : '';
+        var taskIndex = Object.prototype.hasOwnProperty.call(opts, 'taskIndex') ? opts.taskIndex : '';
+        var rows = fieldPlan.map(function (row, fieldIndex) {
             if (!row || typeof row !== 'object') {
                 return '';
             }
@@ -4397,10 +4416,16 @@
             if (!field && !sample && !reason) {
                 return '';
             }
+            var sampleCell = '<div class="small">' + (sample || '-') + '</div>';
+            var reasonCell = '<div class="small text-muted">' + (reason || '-') + '</div>';
+            if (editableTaskPlan) {
+                sampleCell = renderTaskPlanFieldTextarea(opts.pageType, opts.taskKey, taskIndex, fieldIndex, 'sample', sampleText);
+                reasonCell = renderTaskPlanFieldTextarea(opts.pageType, opts.taskKey, taskIndex, fieldIndex, 'implementation_note', noteText || fallbackFieldReason(fieldRaw));
+            }
             return '<tr>'
                 + '<td class="text-muted small" style="width:160px;vertical-align:top;">' + (field || '-') + '</td>'
-                + '<td style="vertical-align:top;"><div class="small">' + (sample || '-') + '</div></td>'
-                + '<td style="vertical-align:top;"><div class="small text-muted">' + (reason || '-') + '</div></td>'
+                + '<td style="vertical-align:top;">' + sampleCell + '</td>'
+                + '<td style="vertical-align:top;">' + reasonCell + '</td>'
                 + '</tr>';
         }).filter(Boolean).join('');
         if (!rows) {
@@ -4408,7 +4433,7 @@
         }
         return ''
             + '<div class="table-responsive mt-2">'
-            + '<table class="table table-sm align-middle mb-0">'
+            + '<table class="table table-sm align-middle mb-0"' + tableAttrs + '>'
             + '<thead><tr>'
             + '<th class="small text-muted">' + escapeHtml(previewLabels.field) + '</th>'
             + '<th class="small text-muted">' + escapeHtml(previewLabels.sample) + '</th>'
@@ -5293,7 +5318,12 @@
         var stage3Directive = escapeHtml(sanitizePreviewText(taskScript.stage3_directive || '', '第三阶段执行指令：按任务拆分逐步落地，确保可验收。')).replace(/\n/g, '<br>');
         var acceptance = normalizeStructuredItems(implementationContract.acceptance || []);
         var fieldRequirements = Array.isArray(taskScript.field_content_requirements) ? taskScript.field_content_requirements : [];
-        var fieldTable = renderFieldPlanTable(fieldRequirements);
+        var fieldTable = renderFieldPlanTable(fieldRequirements, {
+            editableTaskPlan: true,
+            pageType: String(pageType || 'shared'),
+            taskKey: rawTaskKey,
+            taskIndex: idx
+        });
         var blockTaskMetaTable = renderBlockTaskMetaFieldTable(blockTask.meta_fields || []);
         var blockTaskContentPlan = renderTaskPlanDetailList(previewLabels.blockTaskContentPlan || 'Content plan', blockTask.content_plan || []);
         var blockTaskStylePlan = renderBlockTaskStylePlan(blockTask.style_plan || {});
@@ -5305,7 +5335,8 @@
             + ' data-pb-preview-page-type="' + escapeHtml(String(pageType || 'shared')) + '"'
             + ' data-pb-sort-item="1"'
             + ' data-pb-sort-key="' + taskKey + '"'
-            + ' data-pb-preview-task-key="' + taskKey + '">'
+            + ' data-pb-preview-task-key="' + taskKey + '"'
+            + ' data-pb-preview-task-index="' + escapeHtml(String(idx)) + '">'
             + '<div class="d-flex flex-wrap align-items-start justify-content-between gap-2 pb-ai-plan-preview-block-head">'
             + '<div class="d-flex align-items-start gap-2 min-w-0">'
             + renderPreviewSortHandle()
@@ -5473,6 +5504,141 @@
 
     function rerenderCurrentTaskPlanPreview() {
         updateTaskPlanModalContent(String((currentTaskPlanPayload && currentTaskPlanPayload.markdown) || ''), { persistField: false });
+    }
+
+    function getCurrentTaskPlanStructuredRootForEdit() {
+        var payload = currentTaskPlanPayload && typeof currentTaskPlanPayload === 'object'
+            ? currentTaskPlanPayload
+            : {};
+        var structured = pickStructuredPlanRoot(payload);
+        if (!structured || typeof structured !== 'object' || Array.isArray(structured)) {
+            structured = {};
+        }
+        payload.structured = structured;
+        if (!payload.virtual_theme_plan || typeof payload.virtual_theme_plan !== 'object') {
+            payload.virtual_theme_plan = {};
+        }
+        currentTaskPlanPayload = payload;
+        return structured;
+    }
+
+    function getEditableTaskPlanTaskList(structuredRoot, pageType) {
+        if (!structuredRoot || typeof structuredRoot !== 'object') {
+            return [];
+        }
+        var normalizedPageType = String(pageType || 'shared').trim();
+        if (['shared', 'theme', 'global', 'shared_theme'].indexOf(normalizedPageType) !== -1) {
+            if (!Array.isArray(structuredRoot.shared_tasks)) {
+                structuredRoot.shared_tasks = [];
+            }
+            return structuredRoot.shared_tasks;
+        }
+        if (!structuredRoot.page_tasks || typeof structuredRoot.page_tasks !== 'object' || Array.isArray(structuredRoot.page_tasks)) {
+            structuredRoot.page_tasks = {};
+        }
+        if (!Array.isArray(structuredRoot.page_tasks[normalizedPageType])) {
+            structuredRoot.page_tasks[normalizedPageType] = [];
+        }
+        return structuredRoot.page_tasks[normalizedPageType];
+    }
+
+    function findEditableTaskPlanTask(structuredRoot, pageType, taskKey, taskIndex) {
+        var list = getEditableTaskPlanTaskList(structuredRoot, pageType);
+        var normalizedTaskKey = String(taskKey || '').trim();
+        var idx = parseInt(String(taskIndex || ''), 10);
+        if (!isNaN(idx) && list[idx] && typeof list[idx] === 'object') {
+            if (!normalizedTaskKey || String(list[idx].task_key || '').trim() === normalizedTaskKey) {
+                return list[idx];
+            }
+        }
+        if (normalizedTaskKey) {
+            for (var i = 0; i < list.length; i += 1) {
+                if (list[i] && typeof list[i] === 'object' && String(list[i].task_key || '').trim() === normalizedTaskKey) {
+                    return list[i];
+                }
+            }
+        }
+        return null;
+    }
+
+    function syncTaskPlanStructuredDraftAfterEdit(structuredRoot) {
+        if (!currentTaskPlanPayload || typeof currentTaskPlanPayload !== 'object') {
+            currentTaskPlanPayload = {};
+        }
+        currentTaskPlanPayload.structured = structuredRoot;
+        if (!currentTaskPlanPayload.virtual_theme_plan || typeof currentTaskPlanPayload.virtual_theme_plan !== 'object') {
+            currentTaskPlanPayload.virtual_theme_plan = {};
+        }
+        currentTaskPlanPayload.virtual_theme_plan.draft = structuredRoot;
+        currentTaskPlanPayload.virtual_theme_plan.draft_generated_at = currentTaskPlanPayload.virtual_theme_plan.draft_generated_at || new Date().toISOString();
+    }
+
+    function applyTaskPlanFieldEditorValue(editor) {
+        if (!editor || !editor.getAttribute) {
+            return false;
+        }
+        var structured = getCurrentTaskPlanStructuredRootForEdit();
+        var task = findEditableTaskPlanTask(
+            structured,
+            editor.getAttribute('data-page-type') || 'shared',
+            editor.getAttribute('data-task-key') || '',
+            editor.getAttribute('data-task-index') || ''
+        );
+        if (!task) {
+            return false;
+        }
+        if (!task.task_script || typeof task.task_script !== 'object' || Array.isArray(task.task_script)) {
+            task.task_script = {};
+        }
+        if (!Array.isArray(task.task_script.field_content_requirements)) {
+            task.task_script.field_content_requirements = [];
+        }
+        var fieldIndex = parseInt(String(editor.getAttribute('data-field-index') || ''), 10);
+        if (isNaN(fieldIndex) || fieldIndex < 0) {
+            return false;
+        }
+        while (task.task_script.field_content_requirements.length <= fieldIndex) {
+            task.task_script.field_content_requirements.push({});
+        }
+        var row = task.task_script.field_content_requirements[fieldIndex];
+        if (!row || typeof row !== 'object' || Array.isArray(row)) {
+            row = {};
+            task.task_script.field_content_requirements[fieldIndex] = row;
+        }
+        var prop = String(editor.getAttribute('data-field-prop') || 'sample').trim() || 'sample';
+        if (['sample', 'implementation_note'].indexOf(prop) === -1) {
+            prop = 'sample';
+        }
+        row[prop] = String(editor.value || '');
+        row.edited_at = new Date().toISOString();
+        task.task_script.edited_at = row.edited_at;
+        structured.last_field_content_edit = {
+            page_type: String(editor.getAttribute('data-page-type') || 'shared'),
+            task_key: String(editor.getAttribute('data-task-key') || ''),
+            field_index: fieldIndex,
+            field_prop: prop,
+            edited_at: row.edited_at
+        };
+        syncTaskPlanStructuredDraftAfterEdit(structured);
+        setTaskPlanModeStatus(messages.taskPlanFieldEditPending || messages.taskPlanDraftSaved);
+        return true;
+    }
+
+    function bindTaskPlanFieldEditors(container) {
+        var root = typeof container === 'string' ? document.getElementById(container) : container;
+        if (!root || root.dataset.pbTaskPlanFieldEditorsBound === '1') {
+            return;
+        }
+        root.dataset.pbTaskPlanFieldEditorsBound = '1';
+        var handle = function (event) {
+            var editor = event.target && event.target.closest ? event.target.closest('[data-pb-task-plan-field-edit="1"]') : null;
+            if (!editor || !root.contains(editor)) {
+                return;
+            }
+            applyTaskPlanFieldEditorValue(editor);
+        };
+        root.addEventListener('input', handle);
+        root.addEventListener('change', handle);
     }
 
     function resolveSortableAfterItem(list, clientY) {
@@ -6675,6 +6841,7 @@
             bindPreviewActionButtons(previewContent);
             bindPreviewTabButtons(previewContent);
             bindPreviewSortables(previewContent);
+            bindTaskPlanFieldEditors(previewContent);
         }
         if (persistField && markdownField) {
             markdownField.value = markdownText;
