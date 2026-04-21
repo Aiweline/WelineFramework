@@ -58,6 +58,7 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
             'postStartBuild' => $controller->postStartBuild(),
             'postResumeBuild' => $controller->postResumeBuild(),
             'postStartRefineComponent' => $controller->postStartRefineComponent(),
+            'postUpdateBlockConfig' => $controller->postUpdateBlockConfig(),
             'postPublishChecklist' => $controller->postPublishChecklist(),
             'postStartPublish' => $controller->postStartPublish(),
             'postSwitchPreviewPage' => $controller->postSwitchPreviewPage(),
