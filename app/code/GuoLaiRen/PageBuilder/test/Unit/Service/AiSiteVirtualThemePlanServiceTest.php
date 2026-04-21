@@ -168,21 +168,49 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         );
     }
 
-    public function testBuildTaskPlanArtifactsRejectsAiPageTasksMissingBlockTaskContract(): void
+    public function testStageTwoBatchPromptCarriesStageOneBlockCueFields(): void
     {
-        foreach (['meta_fields', 'content_plan', 'style_plan', 'planning_reason'] as $missingField) {
-            $service = new AiSiteVirtualThemePlanService(
-                $this->createAiServiceStub($this->buildTaskPlanResponseMissingBlockTaskField($missingField))
-            );
+        $capturedPrompts = [];
+        $aiService = $this->createMock(AiService::class);
+        $aiService->method('generate')->willReturnCallback(function (
+            string $prompt,
+            $modelCode,
+            string $scenarioCode,
+            $locale,
+            array $params
+        ) use (&$capturedPrompts): string {
+            $capturedPrompts[] = $prompt;
+            return $this->buildTaskPlanResponse();
+        });
+        $service = new AiSiteVirtualThemePlanService($aiService);
+        $scope = $this->buildPromptScope();
+        $scope['execution_blueprint']['pages']['home_page']['blocks'][0]['goal'] = 'Stage-one hero block goal.';
+        $scope['execution_blueprint']['pages']['home_page']['blocks'][0]['why'] = 'Stage-one hero reason.';
+        $scope['execution_blueprint']['pages']['home_page']['blocks'][0]['realtime_content'] = [
+            'headline' => 'Stage-one hero headline',
+            'cta_label' => 'Start from stage one',
+        ];
+        $scope['execution_blueprint']['pages']['home_page']['blocks'][0]['style_direction'] = 'Stage-one hero style direction.';
 
-            try {
-                $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
-                self::fail('Expected missing block_task field to be rejected: ' . $missingField);
-            } catch (\RuntimeException $exception) {
-                self::assertStringContainsString('block_task', $exception->getMessage());
-                self::assertStringContainsString($missingField, $exception->getMessage());
+        $service->buildTaskPlanArtifacts($scope, $this->buildPromptBlueprint());
+
+        $pagePrompt = '';
+        foreach ($capturedPrompts as $prompt) {
+            if (\str_contains($prompt, 'Batch type: page')) {
+                $pagePrompt = $prompt;
+                break;
             }
         }
+
+        self::assertNotSame('', $pagePrompt);
+        self::assertStringContainsString('block_goal', $pagePrompt);
+        self::assertStringContainsString('Stage-one hero block goal.', $pagePrompt);
+        self::assertStringContainsString('realtime_content', $pagePrompt);
+        self::assertStringContainsString('Stage-one hero headline', $pagePrompt);
+        self::assertStringContainsString('style_direction', $pagePrompt);
+        self::assertStringContainsString('Stage-one hero style direction.', $pagePrompt);
+        self::assertStringContainsString('reason', $pagePrompt);
+        self::assertStringContainsString('Stage-one hero reason.', $pagePrompt);
     }
 
 
