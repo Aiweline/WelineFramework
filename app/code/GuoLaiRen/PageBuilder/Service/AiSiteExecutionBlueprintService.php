@@ -4562,6 +4562,7 @@ final class AiSiteExecutionBlueprintService
                 $pagePlans,
                 $stageOneQueueJobs
             ),
+            'queue_jobs' => $stageOneQueueJobs,
             'block_index' => $blockIndex,
         ];
 
@@ -4743,7 +4744,11 @@ final class AiSiteExecutionBlueprintService
             }
             $pageBlocks[(string)$pageType] = [
                 'page_goal' => \trim((string)($pagePlan['page_goal'] ?? '')),
-                'theme_alignment_summary' => \trim((string)($pagePlan['theme_alignment_summary'] ?? '')),
+                'theme_alignment_summary' => \trim((string)(
+                    $stageOnePagePlan['theme_alignment_summary']
+                    ?? $pagePlan['theme_alignment_summary']
+                    ?? ''
+                )),
                 'why' => \trim((string)($pagePlan['why'] ?? '')),
                 'primary_keywords' => \array_values(\array_filter(\array_map(
                     static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
