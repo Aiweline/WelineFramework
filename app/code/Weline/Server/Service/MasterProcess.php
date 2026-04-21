@@ -362,6 +362,7 @@ class MasterProcess
 
             // 先拉起控制面并落盘 Master 信息，让后台启动确认不再被子服务启动阶段阻塞
             $this->orchestrator->bootstrapControlPlane($this->context);
+            $this->context = $this->orchestrator->getContext() ?? $this->context;
             $this->controlPort = $this->context?->controlPort ?? $this->controlPort;
             $this->log(__('Master 启动阶段：控制面已启动'));
             $this->logger->flush(true);

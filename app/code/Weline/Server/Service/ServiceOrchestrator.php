@@ -55,6 +55,7 @@ class ServiceOrchestrator
     private const CONTROL_OPERATION_STATE_ABORTING = 'aborting';
     private const CONTROL_OPERATION_STATE_COMPLETED = 'completed';
     private const CONTROL_OPERATION_STATE_CANCELLED = 'cancelled';
+    private const READY_CONFIRM_TIMEOUT_SEC = 3.0;
 
     private ServiceRegistry $registry;
     private ?ControlPlaneServerInterface $controlServer = null;
@@ -1580,6 +1581,7 @@ class ServiceOrchestrator
         $this->controlServer->setExpectedInstanceCode($context->instanceName);
         if ($context->controlPort !== $this->controlServer->getPort()) {
             $this->context = $context->withControlPort($this->controlServer->getPort());
+            $context = $this->context;
         }
         WlsLogger::info_("[Orchestrator] IPC 控制服务器已启动，端口: " . $this->controlServer->getPort());
         WlsLogger::info_(
@@ -7198,8 +7200,16 @@ class ServiceOrchestrator
             return false;
         }
         if ($launchId !== '' && $instance->launchId !== '' && $instance->launchId !== $launchId) {
-            WlsLogger::warning_("[Orchestrator] 忽略 launchId 不匹配注册 {$instance->role}#{$instance->instanceId}: msg={$launchId}, expected={$instance->launchId}");
-            return false;
+            if ($this->canReplaceExpiredPendingReady($instance, $clientId, $pid, $launchId)) {
+                WlsLogger::warning_(
+                    "[Orchestrator] 丢弃超时未确认 READY 并接管槽位: {$instance->role}#{$instance->instanceId}"
+                    . " old_launch={$instance->launchId}, new_launch={$launchId}, clientId={$clientId}, pid={$pid}"
+                );
+                $this->resetPendingReadyConfirmation($instance, $clientId);
+            } else {
+                WlsLogger::warning_("[Orchestrator] 忽略 launchId 不匹配注册 {$instance->role}#{$instance->instanceId}: msg={$launchId}, expected={$instance->launchId}");
+                return false;
+            }
         }
 
         $instance->ipcClientId = $clientId;
@@ -7266,6 +7276,62 @@ class ServiceOrchestrator
         return true;
     }
 
+    private function isPendingReadyConfirmationExpired(ServiceInstance $instance): bool
+    {
+        if ($instance->role !== ControlMessage::ROLE_WORKER) {
+            return false;
+        }
+        if ($instance->state !== ServiceInstance::STATE_READY) {
+            return false;
+        }
+        if ($instance->getMeta('dispatcher_pool_confirmed_at') !== null) {
+            return false;
+        }
+
+        $readyAt = (float) ($instance->getMeta('ready_received_at') ?? $instance->getMeta('ready_at') ?? 0.0);
+        return $readyAt > 0.0 && (\microtime(true) - $readyAt) >= self::READY_CONFIRM_TIMEOUT_SEC;
+    }
+
+    private function canReplaceExpiredPendingReady(
+        ServiceInstance $instance,
+        int $clientId,
+        int $pid,
+        string $launchId
+    ): bool {
+        if (!$this->isPendingReadyConfirmationExpired($instance)) {
+            return false;
+        }
+        if ($instance->ipcClientId !== $clientId) {
+            return true;
+        }
+        if ($launchId !== '' && $instance->launchId !== '' && $instance->launchId !== $launchId) {
+            return true;
+        }
+        return $pid > 0 && !$instance->matchesManagedPid($pid);
+    }
+
+    private function resetPendingReadyConfirmation(ServiceInstance $instance, int $newClientId, bool $closePreviousClient = true): void
+    {
+        $previousClientId = $instance->ipcClientId;
+        if ($closePreviousClient && $previousClientId !== null && $previousClientId !== $newClientId) {
+            $this->controlServer?->closeClient($previousClientId);
+        }
+
+        foreach ([
+            'ready_at',
+            'ready_received_at',
+            'ready_elapsed_ms',
+            'dispatcher_pool_confirmed_at',
+            'dispatcher_pool_rejected_at',
+            'ack_ready_at',
+            'ack_ready_elapsed_ms',
+        ] as $key) {
+            $instance->setMeta($key, null);
+        }
+        $this->lastDispatcherWorkerPoolSignature = '';
+        $this->registry->updateInstance($instance);
+    }
+
     /**
      * 处理 ready 消息
      */
@@ -7306,7 +7372,8 @@ class ServiceOrchestrator
         $isDuplicateReadyFromSameClient = $instance->state === ServiceInstance::STATE_READY
             && $instance->ipcClientId === $clientId;
         $readyAlreadyRecorded = $instance->getMeta('ready_at') !== null;
-        if ($isDuplicateReadyFromSameClient && $readyAlreadyRecorded) {
+        $readyConfirmationExpired = $this->isPendingReadyConfirmationExpired($instance);
+        if ($isDuplicateReadyFromSameClient && $readyAlreadyRecorded && !$readyConfirmationExpired) {
             $workerId = (int) ($instance->getMeta('worker_id') ?? $instance->instanceId);
             if ($instance->role !== ControlMessage::ROLE_WORKER || $instance->getMeta('dispatcher_pool_confirmed_at') !== null) {
                 $this->controlServer?->sendTo(
@@ -7329,6 +7396,13 @@ class ServiceOrchestrator
                 $this->persistServicesInfo($this->context);
             }
             return;
+        }
+        if ($isDuplicateReadyFromSameClient && $readyAlreadyRecorded && $readyConfirmationExpired) {
+            WlsLogger::warning_(
+                "[Orchestrator] READY 确认超过 " . self::READY_CONFIRM_TIMEOUT_SEC
+                . "s 未完成，重置确认窗口: {$instance->role}#{$instance->instanceId} (clientId={$clientId}, port={$instance->port})"
+            );
+            $this->resetPendingReadyConfirmation($instance, $clientId, false);
         }
 
         $instance->state = ServiceInstance::STATE_READY;
