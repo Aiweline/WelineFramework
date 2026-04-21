@@ -4481,31 +4481,62 @@ final class AiSiteExecutionBlueprintService
     private function deriveStageOneEditableFields(array $block, array $realtimeContent): array
     {
         $fields = [];
-        $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
-        foreach ($fieldPlan as $row) {
-            if (!\is_array($row)) {
-                continue;
-            }
-            $field = \trim((string)($row['field'] ?? $row['key'] ?? $row['name'] ?? ''));
+        $addField = static function (string $field) use (&$fields): void {
+            $field = \trim($field);
             if ($field !== '') {
                 $fields[] = $field;
             }
+        };
+
+        if (\is_array($block['field_plan'] ?? null)) {
+            foreach ($this->extractEditableFieldsFromFieldPlan($block['field_plan']) as $field) {
+                $addField($field);
+            }
         }
 
-        foreach ($realtimeContent as $key => $value) {
-            if (\is_int($key)) {
+        $slots = \is_array($realtimeContent['editable_slots'] ?? null)
+            ? $realtimeContent['editable_slots']
+            : (\is_array($block['editable_slots'] ?? null) ? $block['editable_slots'] : []);
+        foreach ($slots as $slotKey => $slotValue) {
+            if (\is_string($slotValue) || \is_numeric($slotValue)) {
+                $addField((string)$slotValue);
                 continue;
             }
-            if (\is_scalar($value) || (\is_array($value) && $value !== [])) {
-                $fields[] = (string)$key;
+            if (\is_string($slotKey)) {
+                $addField($slotKey);
             }
         }
 
-        if ($fields === []) {
-            $fields = ['headline', 'body_copy', 'cta_label'];
+        $content = $realtimeContent;
+        if ($content === []) {
+            $content = [
+                'headline' => \trim((string)($block['title'] ?? $block['content'] ?? $block['goal'] ?? '')),
+                'supporting_copy' => \trim((string)($block['content'] ?? '')),
+                'cta' => $block['cta'] ?? null,
+                'media' => \is_array($block['execution_script']['media_assets'] ?? null) ? $block['execution_script']['media_assets'] : null,
+            ];
+        }
+        foreach (['headline', 'supporting_copy', 'cta', 'media'] as $contentKey) {
+            $value = $content[$contentKey] ?? null;
+            if ($value === null || $value === '' || $value === []) {
+                continue;
+            }
+            $addField($contentKey === 'supporting_copy' ? 'body_copy' : $contentKey);
         }
 
-        return $this->normalizeStringList($fields);
+        $contentBrief = \is_array($block['content_brief'] ?? null) ? $block['content_brief'] : [];
+        foreach ([
+            'headline_direction' => 'headline',
+            'body_direction' => 'body_copy',
+            'cta_direction' => 'primary_cta',
+        ] as $briefKey => $fieldName) {
+            if (\trim((string)($contentBrief[$briefKey] ?? '')) !== '') {
+                $addField($fieldName);
+            }
+        }
+
+        $fields = \array_values(\array_unique($fields));
+        return $fields !== [] ? $fields : ['headline', 'body_copy'];
     }
 
     /**
@@ -4553,7 +4584,8 @@ final class AiSiteExecutionBlueprintService
         unset($hashSource['context_hash']);
 
         return \sha1((string)\json_encode([
-            'page_key' => $pageType,
+            'page_key' => $pageType !== '' ? $pageType : 'shared',
+            'block_key' => (string)($block['block_key'] ?? $block['section_code'] ?? $block['task_key'] ?? ''),
             'block' => $hashSource,
         ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
     }
