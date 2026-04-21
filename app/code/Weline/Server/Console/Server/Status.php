@@ -187,8 +187,13 @@ class Status extends CommandAbstract
                 $svcStatus = $isRunning ? __('● 运行中') : __('○ 已停止');
                 $svcColor = $isRunning ? 'success' : 'error';
                 $portDisplay = $service->port !== null && $service->port > 0 ? ':' . $service->port : '';
-                
-                $this->printer->$svcColor($childPrefix . '       ' . $svcPrefix . ' ' . $service->displayName . '#' . $service->instanceId . ' (PID:' . $service->pid . $portDisplay . ') ' . $svcStatus);
+                $trackingPid = $service->getTrackingPid();
+                $pidDisplay = $trackingPid > 0 ? $trackingPid : $service->pid;
+                $pidSuffix = ($service->pid > 0 && $trackingPid > 0 && $trackingPid !== $service->pid)
+                    ? ', child:' . $service->pid
+                    : '';
+
+                $this->printer->$svcColor($childPrefix . '       ' . $svcPrefix . ' ' . $service->displayName . '#' . $service->instanceId . ' (PID:' . $pidDisplay . $pidSuffix . $portDisplay . ') ' . $svcStatus);
                 $svcIndex++;
             }
             
@@ -342,10 +347,11 @@ class Status extends CommandAbstract
         $this->printer->$color("  │");
         $this->printer->$color("  {$prefix} {$label} {$icon} {$statusStr}");
         
-        if ($isRunning && $service->pid > 0) {
+        $trackingPid = $service->getTrackingPid();
+        if ($isRunning && $trackingPid > 0) {
             $memPrefix = $isLast ? '   ' : '│  ';
             // 使用预取的内存信息（避免逐个查询）
-            $memory = (string) ($processInfoMap[$service->pid]['memory'] ?? '');
+            $memory = (string) ($processInfoMap[$trackingPid]['memory'] ?? '');
             if ($memory !== '') {
                 $this->printer->note('  ' . $memPrefix . '  └─ ' . __('内存：') . $memory);
             }
@@ -381,8 +387,8 @@ class Status extends CommandAbstract
                 $pids[$info->masterPid] = $info->masterPid;
             }
             foreach ($info->services as $service) {
-                if ($service->pid > 0) {
-                    $pids[$service->pid] = $service->pid;
+                foreach ($service->getManagedPids() as $pid) {
+                    $pids[$pid] = $pid;
                 }
             }
         }
@@ -411,8 +417,17 @@ class Status extends CommandAbstract
             return false;
         }
 
-        if ($service->pid > 0) {
-            return (bool) ($processInfoMap[$service->pid]['exists'] ?? false);
+        $trackingPid = $service->getTrackingPid();
+        if ($trackingPid > 0) {
+            if ((bool) ($processInfoMap[$trackingPid]['exists'] ?? false)) {
+                return true;
+            }
+
+            if ($service->pid > 0 && $service->pid !== $trackingPid) {
+                return (bool) ($processInfoMap[$service->pid]['exists'] ?? false);
+            }
+
+            return false;
         }
 
         return true;

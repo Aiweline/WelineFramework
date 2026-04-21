@@ -89,20 +89,23 @@ abstract class AbstractServiceProvider implements ServiceProviderInterface
             return HealthCheckResult::healthy();
         }
 
-        if ($instance->pid <= 0) {
+        $trackingPid = $instance->getTrackingPid();
+        if ($trackingPid <= 0) {
             return HealthCheckResult::unhealthy('No PID');
         }
 
         $processName = (string) ($instance->getMeta('process_name') ?? '');
         $launchId = $instance->launchId !== '' ? $instance->launchId : (string) ($instance->getMeta('launch_id') ?? '');
-        $isRunning = ($processName !== '' || $launchId !== '')
-            ? Processer::isManagedProcessRunning(
-                $instance->pid,
-                $processName !== '' ? $processName : null,
-                $launchId,
-                $processName !== '' ? '--name=' . $processName : null
-            )
-            : Processer::isRunningByPid($instance->pid);
+        $isRunning = ($trackingPid !== $instance->pid)
+            ? Processer::isRunningByPid($trackingPid)
+            : (($processName !== '' || $launchId !== '')
+                ? Processer::isManagedProcessRunning(
+                    $trackingPid,
+                    $processName !== '' ? $processName : null,
+                    $launchId,
+                    $processName !== '' ? '--name=' . $processName : null
+                )
+                : Processer::isRunningByPid($trackingPid));
 
         if (!$isRunning) {
             return HealthCheckResult::unhealthy('Process not running');
