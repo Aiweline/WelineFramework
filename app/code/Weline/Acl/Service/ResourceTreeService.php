@@ -20,6 +20,16 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class ResourceTreeService implements ResourceTreeServiceInterface
 {
+    protected function newAclModel(): Acl
+    {
+        return ObjectManager::getInstance(Acl::class, [], false);
+    }
+
+    protected function newRoleAccessModel(): RoleAccess
+    {
+        return ObjectManager::getInstance(RoleAccess::class, [], false);
+    }
+
     /**
      * 获取后台菜单树（运行时使用）
      * 
@@ -28,7 +38,7 @@ class ResourceTreeService implements ResourceTreeServiceInterface
      */
     public function getBackendMenuTree(Role $role): array
     {
-        $aclModel = ObjectManager::getInstance(Acl::class, [], false);
+        $aclModel = $this->newAclModel();
         
         // 获取所有启用的菜单类型资源
         $menuSources = $aclModel->reset()
@@ -73,7 +83,7 @@ class ResourceTreeService implements ResourceTreeServiceInterface
     {
         $roleId = (int) $role->getId();
         
-        $aclModel = ObjectManager::getInstance(Acl::class, [], false);
+        $aclModel = $this->newAclModel();
         $allRows = $aclModel->reset()
             ->order(Acl::schema_fields_PARENT_SOURCE, 'ASC')
             ->order(Acl::schema_fields_ORDER, 'ASC')
@@ -108,7 +118,7 @@ class ResourceTreeService implements ResourceTreeServiceInterface
      */
     private function getAllowedMenuSources(Role $role, array $menuSourceIds): array
     {
-        $roleAccessModel = ObjectManager::getInstance(RoleAccess::class, [], false);
+        $roleAccessModel = $this->newRoleAccessModel();
         $roleAccess = $roleAccessModel->clear()
             ->where(RoleAccess::schema_fields_ROLE_ID, $role->getId(0))
             ->select()
@@ -215,7 +225,7 @@ class ResourceTreeService implements ResourceTreeServiceInterface
      */
     private function getRoleSelectedSources(int $roleId): array
     {
-        $roleAccessModel = ObjectManager::getInstance(RoleAccess::class, [], false);
+        $roleAccessModel = $this->newRoleAccessModel();
         $rows = $roleAccessModel->clear()
             ->where(RoleAccess::schema_fields_ROLE_ID, $roleId)
             ->select()
@@ -265,16 +275,15 @@ class ResourceTreeService implements ResourceTreeServiceInterface
      */
     public function getEnabledBackendMenuRoutes(): array
     {
-        $aclModel = ObjectManager::getInstance(Acl::class, [], false);
+        $aclModel = $this->newAclModel();
         $menus = $aclModel->reset()
             ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
             ->where(Acl::schema_fields_IS_BACKEND, 1)
             ->where(Acl::schema_fields_IS_ENABLE, 1)
-            ->select()
-            ->fetchArray();
+            ->select();
         
         $routes = [];
-        foreach ($menus as $menu) {
+        foreach ($menus->fetchIterator() as $menu) {
             $route = $menu[Acl::schema_fields_ROUTE] ?? '';
             if ($route !== '') {
                 $route = trim($route, '/');
@@ -295,7 +304,7 @@ class ResourceTreeService implements ResourceTreeServiceInterface
      */
     public function loadMenuResource(int|string $id): ?Acl
     {
-        $aclModel = ObjectManager::getInstance(Acl::class, [], false);
+        $aclModel = $this->newAclModel();
         
         // 尝试按 acl_id 加载
         if (is_numeric($id) && $id > 0) {
@@ -322,7 +331,7 @@ class ResourceTreeService implements ResourceTreeServiceInterface
      */
     public function hasMenuChildren(string $sourceId): bool
     {
-        $aclModel = ObjectManager::getInstance(Acl::class, [], false);
+        $aclModel = $this->newAclModel();
         $child = $aclModel->reset()
             ->where(Acl::schema_fields_PARENT_SOURCE, $sourceId)
             ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
@@ -339,7 +348,7 @@ class ResourceTreeService implements ResourceTreeServiceInterface
      */
     public function getAllMenuResources(): array
     {
-        $aclModel = ObjectManager::getInstance(Acl::class, [], false);
+        $aclModel = $this->newAclModel();
         return $aclModel->reset()
             ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
             ->order(Acl::schema_fields_ORDER, 'ASC')

@@ -55,4 +55,21 @@ class ServiceInfoRuntimeStatusTest extends TestCase
         $this->assertTrue($service->isRunning());
         \fclose($socket);
     }
+
+    public function testRunningStatePrefersTrackedRootPidWhenChildPidIsStale(): void
+    {
+        $service = new ServiceInfo(
+            role: 'worker',
+            displayName: 'HTTP Worker',
+            instanceId: 1,
+            pid: 999999,
+            port: null,
+            state: ServiceInstance::STATE_READY,
+            rootPid: \getmypid(),
+            launcherPid: \getmypid(),
+        );
+
+        $this->assertTrue($service->isRunning());
+        $this->assertSame(\getmypid(), $service->getTrackingPid());
+    }
 }

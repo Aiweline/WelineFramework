@@ -634,8 +634,7 @@ class ServerInstanceManager
                     continue;
                 }
 
-                $pid = (int) ($instanceData['pid'] ?? 0);
-                if ($pid > 0) {
+                foreach ($this->collectServiceRecordTrackedPids($instanceData) as $pid) {
                     $pids[$pid] = true;
                 }
             }
@@ -644,6 +643,33 @@ class ServerInstanceManager
         foreach ($this->collectIndexedPidsByInstance($name, $rawData) as $pid) {
             if ($pid > 0) {
                 $pids[$pid] = true;
+            }
+        }
+
+        return \array_map('intval', \array_keys($pids));
+    }
+
+    /**
+     * @return int[]
+     */
+    private function collectServiceRecordTrackedPids(array $instanceData): array
+    {
+        $pids = [];
+
+        foreach (['pid', 'root_pid', 'launcher_pid'] as $field) {
+            $pid = (int) ($instanceData[$field] ?? 0);
+            if ($pid > 0) {
+                $pids[$pid] = true;
+            }
+        }
+
+        $metadata = $instanceData['metadata'] ?? null;
+        if (\is_array($metadata)) {
+            foreach (['service_pid', 'root_pid', 'launcher_pid'] as $field) {
+                $pid = (int) ($metadata[$field] ?? 0);
+                if ($pid > 0) {
+                    $pids[$pid] = true;
+                }
             }
         }
 
@@ -1373,8 +1399,7 @@ class ServerInstanceManager
                     continue;
                 }
 
-                $pid = (int) ($instanceData['pid'] ?? 0);
-                if ($pid > 0) {
+                foreach ($this->collectServiceRecordTrackedPids($instanceData) as $pid) {
                     $pids[$pid] = true;
                 }
             }
