@@ -4490,6 +4490,54 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param array<string, mixed> $block
+     * @param array<string, mixed> $realtimeContent
+     * @return list<string>
+     */
+    private function deriveStageOneEditableFields(array $block, array $realtimeContent): array
+    {
+        $fields = [];
+        foreach (['editable_slots', 'data_slots'] as $slotKey) {
+            $fields = \array_merge($fields, $this->normalizeStringList($realtimeContent[$slotKey] ?? []));
+        }
+        foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $row) {
+            if (\is_array($row)) {
+                $field = \trim((string)($row['field'] ?? ''));
+                if ($field !== '') {
+                    $fields[] = $field;
+                }
+            }
+        }
+        foreach (\is_array($realtimeContent['editable_slots'] ?? null) ? $realtimeContent['editable_slots'] : [] as $slot) {
+            if (\is_scalar($slot)) {
+                $fields[] = (string)$slot;
+            }
+        }
+        if ($fields === []) {
+            $component = \trim((string)($block['component'] ?? ''));
+            $fields = $component === 'header'
+                ? ['brand_name', 'navigation_items', 'primary_cta']
+                : ($component === 'footer' ? ['footer_links', 'policy_links', 'contact_fields'] : ['headline', 'supporting_copy', 'cta', 'media']);
+        }
+
+        return $this->normalizeStringList($fields);
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function buildStageOneBlockContextHash(string $pageType, array $block): string
+    {
+        $hashSource = $block;
+        unset($hashSource['context_hash']);
+
+        return \sha1((string)\json_encode([
+            'page_key' => $pageType,
+            'block' => $hashSource,
+        ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+    }
+
+    /**
      * @param list<array<string, mixed>> $blocks
      * @param array<string, mixed> $sharedPromptContext
      */
@@ -6419,45 +6467,6 @@ final class AiSiteExecutionBlueprintService
             $fields[] = $field;
         }
         return \array_values(\array_unique($fields));
-    }
-
-    /**
-     * @param array<string, mixed> $componentPlan
-     * @param array<string, mixed> $realtimeContent
-     * @return list<string>
-     */
-    private function deriveStageOneEditableFields(array $componentPlan, array $realtimeContent): array
-    {
-        $fields = [];
-        foreach (['editable_slots', 'data_slots'] as $slotKey) {
-            $fields = \array_merge($fields, $this->normalizeStringList($realtimeContent[$slotKey] ?? []));
-        }
-        if (\is_array($componentPlan['field_plan'] ?? null)) {
-            $fields = \array_merge($fields, $this->extractEditableFieldsFromFieldPlan($componentPlan['field_plan']));
-        }
-
-        if ($fields === []) {
-            $component = \trim((string)($componentPlan['component'] ?? ''));
-            $fields = $component === 'header'
-                ? ['brand_name', 'navigation_items', 'primary_cta']
-                : ($component === 'footer' ? ['footer_links', 'policy_links', 'contact_fields'] : ['headline', 'supporting_copy', 'primary_cta']);
-        }
-
-        return \array_values(\array_unique($fields));
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     */
-    private function buildStageOneBlockContextHash(string $pageKey, array $payload): string
-    {
-        $hashSource = $payload;
-        unset($hashSource['context_hash']);
-
-        return \sha1((string)\json_encode([
-            'page_key' => $pageKey,
-            'block' => $hashSource,
-        ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
     }
 
     private function resolveFieldSample(
