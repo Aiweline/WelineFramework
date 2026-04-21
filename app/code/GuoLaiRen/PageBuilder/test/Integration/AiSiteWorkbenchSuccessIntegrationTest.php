@@ -667,6 +667,21 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
     }
 
     /**
+     * @param list<array<string,mixed>> $blocks
+     * @return array<string,mixed>
+     */
+    private function findBlockById(array $blocks, string $blockId): array
+    {
+        foreach ($blocks as $block) {
+            if (\is_array($block) && \trim((string)($block['block_id'] ?? '')) === $blockId) {
+                return $block;
+            }
+        }
+
+        self::fail('Expected block not found: ' . $blockId);
+    }
+
+    /**
      * @return array{
      *   public_id:string,
      *   site_title:string,
