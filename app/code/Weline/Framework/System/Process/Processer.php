@@ -1727,7 +1727,13 @@ class Processer
             // 优先使用 PowerShell CIM（wmic 已废弃）
             $out = [];
             $code = 0;
-            @\exec("powershell -NoProfile -Command \"(Get-CimInstance Win32_Process -Filter \\\"ProcessId={$pid}\\\" -ErrorAction SilentlyContinue).ParentProcessId\" 2>NUL", $out, $code);
+            @\exec(
+                'powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter '
+                . "'ProcessId={$pid}'"
+                . ' -ErrorAction SilentlyContinue).ParentProcessId" 2>NUL',
+                $out,
+                $code
+            );
             if ($code === 0 && !empty($out[0]) && \is_numeric(\trim($out[0]))) {
                 return (int)\trim($out[0]);
             }
@@ -2052,6 +2058,71 @@ class Processer
             }
         }
         
+        return $result;
+    }
+
+    /**
+     * 批量强制终止进程树。
+     *
+     * Windows 下优先合并成单条 taskkill /T /F 命令，避免逐个树杀带来的长尾延迟。
+     *
+     * @param int[] $pids
+     * @return array{killed: int, failed: int, remaining: int[]}
+     */
+    public static function batchKillProcessTrees(array $pids, bool $skipCheck = false): array
+    {
+        $result = [
+            'killed' => 0,
+            'failed' => 0,
+            'remaining' => [],
+        ];
+
+        if (empty($pids)) {
+            return $result;
+        }
+
+        $validPids = [];
+        foreach ($pids as $pid) {
+            $pid = (int) $pid;
+            if ($pid <= 0) {
+                continue;
+            }
+            if (!$skipCheck && !self::isProcessManagerCreated($pid)) {
+                $result['failed']++;
+                continue;
+            }
+            if (!self::isRunningByPid($pid)) {
+                $result['killed']++;
+                continue;
+            }
+            $validPids[$pid] = $pid;
+        }
+
+        if ($validPids === []) {
+            return $result;
+        }
+
+        if (IS_WIN) {
+            $batched = self::batchKillProcessTreesWindows(\array_values($validPids));
+            if ($batched !== null) {
+                $result['killed'] += $batched['killed'];
+                $result['failed'] += $batched['failed'];
+                $result['remaining'] = $batched['remaining'];
+                return $result;
+            }
+        }
+
+        foreach (\array_values($validPids) as $pid) {
+            if (self::killProcessTreeByPid($pid, true) || !self::isRunningByPid($pid)) {
+                $result['killed']++;
+                self::finalizeBatchGracefulKillPid($pid, 'force tree killed');
+                continue;
+            }
+
+            $result['failed']++;
+            $result['remaining'][] = $pid;
+        }
+
         return $result;
     }
     
@@ -3457,6 +3528,48 @@ CMD;
 
     /**
      * @param int[] $pids
+     * @return array{killed: int, failed: int, remaining: int[]}|null
+     */
+    private static function batchKillProcessTreesWindows(array $pids): ?array
+    {
+        if ($pids === []) {
+            return [
+                'killed' => 0,
+                'failed' => 0,
+                'remaining' => [],
+            ];
+        }
+
+        $result = [
+            'killed' => 0,
+            'failed' => 0,
+            'remaining' => [],
+        ];
+
+        foreach (\array_chunk(\array_values($pids), 32) as $chunk) {
+            $command = self::buildWindowsAsyncBatchTreeKillCommand($chunk);
+            $output = [];
+            $returnCode = 0;
+            self::execute($command, $output, $returnCode);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(150000);
+
+            if ($returnCode !== 0) {
+                $result['failed'] += \count($chunk);
+                $result['remaining'] = \array_merge($result['remaining'], $chunk);
+                continue;
+            }
+
+            foreach ($chunk as $pid) {
+                $result['killed']++;
+                self::finalizeBatchGracefulKillPid($pid, 'force tree kill dispatched');
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param int[] $pids
      */
     private static function buildWindowsBatchSignalCommand(array $pids): string
     {
@@ -3485,6 +3598,40 @@ CMD;
         }
 
         return 'cmd /d /c start "" /B cmd /d /c "taskkill /F '
+            . \implode(' ', $pidArgs)
+            . ' 1>NUL 2>NUL"';
+    }
+
+    /**
+     * @param int[] $pids
+     */
+    private static function buildWindowsBatchTreeKillCommand(array $pids): string
+    {
+        $pidArgs = [];
+        foreach ($pids as $pid) {
+            $pid = (int) $pid;
+            if ($pid > 0) {
+                $pidArgs[] = '/PID ' . $pid;
+            }
+        }
+
+        return 'taskkill /F /T ' . \implode(' ', $pidArgs) . ' 2>NUL';
+    }
+
+    /**
+     * @param int[] $pids
+     */
+    private static function buildWindowsAsyncBatchTreeKillCommand(array $pids): string
+    {
+        $pidArgs = [];
+        foreach ($pids as $pid) {
+            $pid = (int) $pid;
+            if ($pid > 0) {
+                $pidArgs[] = '/PID ' . $pid;
+            }
+        }
+
+        return 'cmd /d /c start "" /B cmd /d /c "taskkill /F /T '
             . \implode(' ', $pidArgs)
             . ' 1>NUL 2>NUL"';
     }

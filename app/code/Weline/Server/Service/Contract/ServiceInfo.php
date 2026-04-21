@@ -39,6 +39,8 @@ class ServiceInfo
         public readonly float $startedAt = 0,
         public readonly ?int $ipcClientId = null,
         public readonly array $metadata = [],
+        public readonly int $rootPid = 0,
+        public readonly int $launcherPid = 0,
     ) {}
 
     /**
@@ -55,8 +57,9 @@ class ServiceInfo
         }
 
         // 有 PID 时必须以 PID 为准，避免“端口被其他实例占用”导致假阳性
-        if ($this->pid > 0) {
-            return $this->isPidRunning($this->pid);
+        $trackingPid = $this->getTrackingPid();
+        if ($trackingPid > 0) {
+            return $this->isTrackingPidRunning();
         }
 
         // 无 PID 时回退到端口探测
@@ -90,11 +93,12 @@ class ServiceInfo
      */
     public function isRunningRealtime(): bool
     {
+        $trackingPid = $this->getTrackingPid();
+        if ($trackingPid > 0) {
+            return $this->isTrackingPidRunning();
+        }
         if ($this->port !== null && $this->port > 0) {
             return $this->isPortRunning($this->port);
-        }
-        if ($this->pid > 0) {
-            return $this->isPidRunning($this->pid);
         }
         return false;
     }
@@ -105,6 +109,36 @@ class ServiceInfo
     public function isHealthy(): bool
     {
         return $this->isRunning() && \in_array($this->state, [ServiceInstance::STATE_READY, ServiceInstance::STATE_REGISTERED], true);
+    }
+
+    public function getTrackingPid(): int
+    {
+        if ($this->rootPid > 0) {
+            return $this->rootPid;
+        }
+
+        return $this->pid > 0 ? $this->pid : 0;
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function getManagedPids(): array
+    {
+        $pids = [];
+        foreach ([$this->pid, $this->rootPid, $this->launcherPid] as $pid) {
+            $pid = (int) $pid;
+            if ($pid > 0) {
+                $pids[$pid] = true;
+            }
+        }
+
+        return \array_map('intval', \array_keys($pids));
+    }
+
+    public function matchesManagedPid(int $pid): bool
+    {
+        return $pid > 0 && \in_array($pid, $this->getManagedPids(), true);
     }
 
     private function isPidRunning(int $pid): bool
@@ -122,6 +156,30 @@ class ServiceInfo
                     $processName !== '' ? '--name=' . $processName : null
                 )
                 : Processer::processExists($pid);
+        }
+
+        return self::$pidRunningCache[$cacheKey];
+    }
+
+    private function isTrackingPidRunning(): bool
+    {
+        $trackingPid = $this->getTrackingPid();
+        if ($trackingPid <= 0) {
+            return false;
+        }
+
+        if ($trackingPid !== $this->pid) {
+            return $this->isPlainPidRunning($trackingPid);
+        }
+
+        return $this->isPidRunning($trackingPid);
+    }
+
+    private function isPlainPidRunning(int $pid): bool
+    {
+        $cacheKey = 'plain|' . $pid;
+        if (!isset(self::$pidRunningCache[$cacheKey])) {
+            self::$pidRunningCache[$cacheKey] = Processer::processExists($pid);
         }
 
         return self::$pidRunningCache[$cacheKey];
@@ -182,6 +240,8 @@ class ServiceInfo
             startedAt: $instance->startedAt,
             ipcClientId: $instance->ipcClientId,
             metadata: $instance->metadata,
+            rootPid: $instance->rootPid,
+            launcherPid: $instance->launcherPid,
         );
     }
 
@@ -203,6 +263,8 @@ class ServiceInfo
             startedAt: (float) ($data['started_at'] ?? 0),
             ipcClientId: isset($data['ipc_client_id']) ? (int) $data['ipc_client_id'] : null,
             metadata: \is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
+            rootPid: (int) ($data['root_pid'] ?? 0),
+            launcherPid: (int) ($data['launcher_pid'] ?? 0),
         );
     }
 
@@ -216,6 +278,9 @@ class ServiceInfo
             'display_name' => $this->displayName,
             'instance_id' => $this->instanceId,
             'pid' => $this->pid,
+            'root_pid' => $this->rootPid,
+            'launcher_pid' => $this->launcherPid,
+            'tracking_pid' => $this->getTrackingPid(),
             'port' => $this->port,
             'state' => $this->state,
             'priority' => $this->priority,
