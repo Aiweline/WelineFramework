@@ -163,6 +163,17 @@
     runtimeLabels.taskFinishedAt = '完成时间';
     runtimeLabels.runningSummary = '进行中...';
 
+    // A44 task-progress badges intentionally expose the semantic status contract.
+    runtimeLabels.statusTodo = 'todo';
+    runtimeLabels.statusQueued = 'queued';
+    runtimeLabels.statusRunning = 'running';
+    runtimeLabels.statusDone = 'done';
+    runtimeLabels.statusFailed = 'failed';
+    runtimeLabels.statusStale = 'stale';
+    runtimeLabels.statusCancelled = 'cancelled';
+    runtimeLabels.statusBlocked = 'blocked';
+    runtimeLabels.runningSummary = 'running...';
+
     function relayoutExpertWorkspaceWithRightLog() {
         if (isGuidedUi) {
             return;
@@ -300,6 +311,7 @@
             hydrateWorkspaceFromState(normalized.payload.state);
             updateTaskSummaryFromState(normalized.payload.state);
         }
+        updateTaskSummaryFromState(normalized.payload);
         syncQueuedStageUi(normalized.operation, normalized.kind, normalized.payload, {
             level: normalized.kind === 'error'
                 ? 'error'
@@ -821,10 +833,188 @@
         blockRefreshState.blockId = '';
     }
 
+    var TASK_PROGRESS_STATUSES = ['todo', 'queued', 'running', 'done', 'failed', 'stale', 'cancelled'];
+
+    function normalizeTaskProgressStatus(status) {
+        var normalized = String(status || '').trim().toLowerCase();
+        if (normalized === '' || normalized === 'pending') { return 'todo'; }
+        if (normalized === 'in_progress' || normalized === 'processing') { return 'running'; }
+        if (normalized === 'error') { return 'failed'; }
+        if (normalized === 'stop' || normalized === 'stopped' || normalized === 'canceled') { return 'cancelled'; }
+        if (TASK_PROGRESS_STATUSES.indexOf(normalized) !== -1) { return normalized; }
+        if (normalized === 'blocked') { return 'failed'; }
+        return 'todo';
+    }
+
+    function makeEmptyTaskProgressCounts() {
+        var counts = { total: 0, pending: 0 };
+        TASK_PROGRESS_STATUSES.forEach(function (status) {
+            counts[status] = 0;
+        });
+        return counts;
+    }
+
+    function countTaskProgressStatus(counts, status, amount) {
+        var normalized = normalizeTaskProgressStatus(status);
+        var delta = parseInt(String(amount == null ? 1 : amount), 10) || 0;
+        counts[normalized] = (parseInt(String(counts[normalized] || 0), 10) || 0) + delta;
+        if (normalized === 'todo') {
+            counts.pending = counts.todo;
+        }
+    }
+
+    function readTaskProgressCount(source, key) {
+        if (!source || typeof source !== 'object') {
+            return 0;
+        }
+        return parseInt(String(source[key] || 0), 10) || 0;
+    }
+
+    function normalizeTaskProgressSummary(rawSummary) {
+        if (!rawSummary || typeof rawSummary !== 'object') {
+            return null;
+        }
+        var summary = Object.assign({}, rawSummary);
+        var groups = rawSummary.groups && typeof rawSummary.groups === 'object' ? rawSummary.groups : null;
+        var normalizedGroups = {};
+        var totalsFromGroups = makeEmptyTaskProgressCounts();
+        var hasGroups = false;
+
+        if (groups) {
+            Object.keys(groups).forEach(function (groupKey) {
+                var group = groups[groupKey];
+                if (!group || typeof group !== 'object') {
+                    return;
+                }
+                hasGroups = true;
+                var normalizedGroup = Object.assign({}, group);
+                var groupCounts = makeEmptyTaskProgressCounts();
+                var tasks = Array.isArray(group.tasks) ? group.tasks.map(function (task) {
+                    var normalizedTask = Object.assign({}, task || {});
+                    normalizedTask.status = normalizeTaskProgressStatus(normalizedTask.status || 'todo');
+                    groupCounts.total += 1;
+                    countTaskProgressStatus(groupCounts, normalizedTask.status, 1);
+                    return normalizedTask;
+                }) : [];
+
+                if (tasks.length === 0) {
+                    TASK_PROGRESS_STATUSES.forEach(function (status) {
+                        var sourceKey = status === 'todo' ? 'pending' : status;
+                        var value = readTaskProgressCount(group, status) + (status === 'todo' ? readTaskProgressCount(group, sourceKey) : 0);
+                        if (value > 0) {
+                            countTaskProgressStatus(groupCounts, status, value);
+                        }
+                    });
+                    groupCounts.total = readTaskProgressCount(group, 'total') || TASK_PROGRESS_STATUSES.reduce(function (sum, status) {
+                        return sum + readTaskProgressCount(groupCounts, status);
+                    }, 0);
+                }
+
+                TASK_PROGRESS_STATUSES.forEach(function (status) {
+                    normalizedGroup[status] = readTaskProgressCount(groupCounts, status);
+                    totalsFromGroups[status] += normalizedGroup[status];
+                });
+                normalizedGroup.pending = normalizedGroup.todo;
+                normalizedGroup.total = groupCounts.total;
+                normalizedGroup.tasks = tasks;
+                totalsFromGroups.total += groupCounts.total;
+                normalizedGroups[groupKey] = normalizedGroup;
+            });
+        }
+
+        if (hasGroups) {
+            summary.groups = normalizedGroups;
+            TASK_PROGRESS_STATUSES.forEach(function (status) {
+                summary[status] = totalsFromGroups[status];
+            });
+            summary.pending = summary.todo;
+            summary.total = totalsFromGroups.total;
+        } else {
+            var counts = makeEmptyTaskProgressCounts();
+            TASK_PROGRESS_STATUSES.forEach(function (status) {
+                var value = readTaskProgressCount(rawSummary, status);
+                if (status === 'todo') {
+                    value += readTaskProgressCount(rawSummary, 'pending');
+                }
+                if (value > 0) {
+                    countTaskProgressStatus(counts, status, value);
+                }
+            });
+            counts.total = readTaskProgressCount(rawSummary, 'total') || TASK_PROGRESS_STATUSES.reduce(function (sum, status) {
+                return sum + readTaskProgressCount(counts, status);
+            }, 0);
+            TASK_PROGRESS_STATUSES.forEach(function (status) {
+                summary[status] = counts[status];
+            });
+            summary.pending = summary.todo;
+            summary.total = counts.total;
+        }
+
+        return summary;
+    }
+
+    function extractTaskProgressSummary(source) {
+        if (!source || typeof source !== 'object') {
+            return null;
+        }
+        if (source.build_task_summary && typeof source.build_task_summary === 'object') {
+            return source.build_task_summary;
+        }
+        if (source.task_summary && typeof source.task_summary === 'object') {
+            return source.task_summary;
+        }
+        if (source.task_progress && typeof source.task_progress === 'object') {
+            return source.task_progress;
+        }
+        if (source.state && typeof source.state === 'object') {
+            return extractTaskProgressSummary(source.state);
+        }
+        return null;
+    }
+
+    function cloneTaskProgressSummary(summary) {
+        try {
+            return JSON.parse(JSON.stringify(summary || {}));
+        } catch (error) {
+            return Object.assign({}, summary || {});
+        }
+    }
+
+    function mergeSingleTaskProgressPayload(summary, payload) {
+        if (!summary || !payload || typeof payload !== 'object') {
+            return summary;
+        }
+        var taskKey = String(payload.task_key || payload.block_key || '').trim();
+        if (taskKey === '') {
+            return summary;
+        }
+        var groups = summary.groups && typeof summary.groups === 'object' ? summary.groups : {};
+        Object.keys(groups).forEach(function (groupKey) {
+            var group = groups[groupKey];
+            var tasks = group && Array.isArray(group.tasks) ? group.tasks : [];
+            tasks.forEach(function (task) {
+                if (!task || String(task.task_key || '') !== taskKey) {
+                    return;
+                }
+                if (Object.prototype.hasOwnProperty.call(payload, 'status')) {
+                    task.status = normalizeTaskProgressStatus(payload.status);
+                }
+                ['message', 'updated_at', 'finished_at', 'attempt_no', 'progress_percent', 'stale_reason'].forEach(function (key) {
+                    if (Object.prototype.hasOwnProperty.call(payload, key)) {
+                        task[key] = payload[key];
+                    }
+                });
+            });
+        });
+        return summary;
+    }
+
     function updateTaskSummaryFromState(workspaceState) {
-        var summary = workspaceState && workspaceState.build_task_summary && typeof workspaceState.build_task_summary === 'object'
-            ? workspaceState.build_task_summary
-            : null;
+        var summary = extractTaskProgressSummary(workspaceState);
+        if (!summary && workspaceState && typeof workspaceState === 'object' && String(workspaceState.progress_kind || '') === 'task_progress') {
+            summary = mergeSingleTaskProgressPayload(cloneTaskProgressSummary(window.__pbTaskSummary), workspaceState);
+        }
+        summary = normalizeTaskProgressSummary(summary);
         if (!summary) {
             return;
         }
@@ -844,19 +1034,36 @@
     }
 
     function normalizeTaskStatusLabel(status) {
-        var normalized = String(status || '').trim().toLowerCase();
+        var normalized = normalizeTaskProgressStatus(status);
         if (normalized === 'done') { return runtimeLabels.statusDone; }
         if (normalized === 'running') { return runtimeLabels.statusRunning; }
         if (normalized === 'failed') { return runtimeLabels.statusFailed; }
-        return runtimeLabels.statusPending;
+        if (normalized === 'queued') { return runtimeLabels.statusQueued; }
+        if (normalized === 'stale') { return runtimeLabels.statusStale; }
+        if (normalized === 'cancelled') { return runtimeLabels.statusCancelled; }
+        return runtimeLabels.statusTodo || runtimeLabels.statusPending;
     }
 
     function normalizeTaskStatusBadgeClass(status) {
-        var normalized = String(status || '').trim().toLowerCase();
+        var normalized = normalizeTaskProgressStatus(status);
         if (normalized === 'done') { return 'text-bg-success'; }
-        if (normalized === 'running') { return 'text-bg-warning'; }
+        if (normalized === 'running') { return 'text-bg-primary'; }
+        if (normalized === 'queued') { return 'text-bg-warning'; }
         if (normalized === 'failed') { return 'text-bg-danger'; }
+        if (normalized === 'stale') { return 'text-bg-info'; }
+        if (normalized === 'cancelled') { return 'text-bg-dark'; }
         return 'text-bg-secondary';
+    }
+
+    function renderTaskStatusCountBadges(source) {
+        var counts = source && typeof source === 'object' ? source : {};
+        return TASK_PROGRESS_STATUSES.map(function (status) {
+            var count = parseInt(String(counts[status] || (status === 'todo' ? counts.pending : 0) || 0), 10) || 0;
+            if (count <= 0) {
+                return '';
+            }
+            return '<span class="badge ' + normalizeTaskStatusBadgeClass(status) + '">' + escapeTaskSummaryHtml(normalizeTaskStatusLabel(status)) + ' ' + count + '</span>';
+        }).filter(Boolean).join(' ');
     }
 
     function renderTaskSummaryTaskDetails(task) {
@@ -899,29 +1106,38 @@
         var totalEl = document.getElementById('pb-ai-task-total');
         var doneEl = document.getElementById('pb-ai-task-done');
         var pendingEl = document.getElementById('pb-ai-task-pending');
+        var queuedEl = document.getElementById('pb-ai-task-queued');
         var runningEl = document.getElementById('pb-ai-task-running');
+        var failedEl = document.getElementById('pb-ai-task-failed');
+        var staleEl = document.getElementById('pb-ai-task-stale');
+        var cancelledEl = document.getElementById('pb-ai-task-cancelled');
         var runningIndicatorEl = document.getElementById('pb-ai-task-running-indicator');
+
+        function updateTaskProgressCounterElements(counts) {
+            if (totalEl) { totalEl.textContent = String(counts.total || 0); }
+            if (pendingEl) { pendingEl.textContent = String(counts.todo || counts.pending || 0); }
+            if (queuedEl) { queuedEl.textContent = String(counts.queued || 0); }
+            if (runningEl) { runningEl.textContent = String(counts.running || 0); }
+            if (doneEl) { doneEl.textContent = String(counts.done || 0); }
+            if (failedEl) { failedEl.textContent = String(counts.failed || 0); }
+            if (staleEl) { staleEl.textContent = String(counts.stale || 0); }
+            if (cancelledEl) { cancelledEl.textContent = String(counts.cancelled || 0); }
+            if (runningIndicatorEl) {
+                var active = (parseInt(String(counts.queued || 0), 10) || 0) + (parseInt(String(counts.running || 0), 10) || 0);
+                runningIndicatorEl.classList.toggle('d-none', active <= 0);
+                runningIndicatorEl.textContent = active > 0
+                    ? (runtimeLabels.runningSummary + ' (' + active + ')')
+                    : runtimeLabels.runningSummary;
+            }
+        }
 
         var groupsContainer = document.getElementById('pb-ai-task-groups');
         var groups = summary.groups && typeof summary.groups === 'object' ? summary.groups : null;
         if (!groupsContainer || !groups) {
-            if (totalEl) { totalEl.textContent = String(summary.total || 0); }
-            if (doneEl) { doneEl.textContent = String(summary.done || 0); }
-            if (pendingEl) { pendingEl.textContent = String(summary.pending || 0); }
-            if (runningEl) { runningEl.textContent = String(summary.running || 0); }
-            if (runningIndicatorEl) {
-                var summaryRunning = parseInt(String(summary.running || 0), 10) || 0;
-                runningIndicatorEl.classList.toggle('d-none', summaryRunning <= 0);
-                runningIndicatorEl.textContent = summaryRunning > 0
-                    ? (runtimeLabels.runningSummary + ' (' + summaryRunning + ')')
-                    : runtimeLabels.runningSummary;
-            }
+            updateTaskProgressCounterElements(summary);
             return;
         }
-        var calcTotal = 0;
-        var calcDone = 0;
-        var calcPending = 0;
-        var calcRunning = 0;
+        var calc = makeEmptyTaskProgressCounts();
         groupsContainer.innerHTML = '';
         if (groupsContainer.dataset.pbTaskSummaryToggleBound !== '1') {
             groupsContainer.dataset.pbTaskSummaryToggleBound = '1';
@@ -952,14 +1168,13 @@
                 : false;
             var wrapper = document.createElement('div');
             wrapper.className = 'border rounded p-2 small';
-            var done = parseInt(String(group.done || 0), 10) || 0;
             var total = parseInt(String(group.total || 0), 10) || 0;
-            var running = parseInt(String(group.running || 0), 10) || 0;
-            var pending = Math.max(total - done - running, 0);
-            calcTotal += total;
-            calcDone += done;
-            calcRunning += running;
-            calcPending += pending;
+            TASK_PROGRESS_STATUSES.forEach(function (status) {
+                calc[status] += parseInt(String(group[status] || (status === 'todo' ? group.pending : 0) || 0), 10) || 0;
+            });
+            calc.pending = calc.todo;
+            calc.total += total;
+            var done = parseInt(String(group.done || 0), 10) || 0;
             var tasks = Array.isArray(group.tasks) ? group.tasks : [];
             var renderedTasks = tasks.map(function (task, idx) {
                 if (!task || typeof task !== 'object') {
@@ -986,22 +1201,14 @@
                 + '<strong>' + escapeTaskSummaryHtml(pageType) + '</strong><span class="text-muted">'
                 + done + '/' + total
                 + '</span></summary>'
+                + '<div class="mt-2 d-flex flex-wrap gap-1" data-task-progress-status-counts>' + renderTaskStatusCountBadges(group) + '</div>'
                 + '<div class="mt-2">'
                 + renderedTasks
                 + '</div>'
                 + '</details>';
             groupsContainer.appendChild(wrapper);
         });
-        if (totalEl) { totalEl.textContent = String(calcTotal); }
-        if (doneEl) { doneEl.textContent = String(calcDone); }
-        if (pendingEl) { pendingEl.textContent = String(calcPending); }
-        if (runningEl) { runningEl.textContent = String(calcRunning); }
-        if (runningIndicatorEl) {
-            runningIndicatorEl.classList.toggle('d-none', calcRunning <= 0);
-            runningIndicatorEl.textContent = calcRunning > 0
-                ? (runtimeLabels.runningSummary + ' (' + calcRunning + ')')
-                : runtimeLabels.runningSummary;
-        }
+        updateTaskProgressCounterElements(calc);
     };
 
     function normalizeStageStatusPresentation(kind, workspaceState) {
@@ -1265,6 +1472,7 @@
                     hydrateWorkspaceFromState(payload.state);
                     updateTaskSummaryFromState(payload.state);
                 }
+                updateTaskSummaryFromState(payload);
                 logOperationToWorkspaceTerminal('info', payload, 'info', String(payload.message || ''));
             });
 
@@ -1302,6 +1510,7 @@
                     hydrateWorkspaceFromState(payload.state);
                     updateTaskSummaryFromState(payload.state);
                 }
+                updateTaskSummaryFromState(payload);
 
                 var wmsg = normalizeToastMessage((payload && payload.message) ? String(payload.message) : (messages.operationDuplicateStream || ''));
                 if (wmsg) {
@@ -1340,6 +1549,7 @@
                 hydrateWorkspaceFromState(payload.state);
                 updateTaskSummaryFromState(payload.state);
             }
+            updateTaskSummaryFromState(payload);
             var progressMessage = String(payload.message || '');
             if (progressMessage) {
                 logOperationToWorkspaceTerminal('progress', payload, 'progress', progressMessage);
@@ -1535,7 +1745,9 @@
                 logOperationToWorkspaceTerminal('done', payload, 'warning', dupMsg);
                 if (payload.state) {
                     hydrateWorkspaceFromState(payload.state);
+                    updateTaskSummaryFromState(payload.state);
                 }
+                updateTaskSummaryFromState(payload);
                 buildStartupPending = false;
                 if (typeof previewBridge.hideBuildGuard === 'function') {
                     previewBridge.hideBuildGuard();
@@ -1558,6 +1770,7 @@
                     hydrateWorkspaceFromState(payload.state);
                     updateTaskSummaryFromState(payload.state);
                 }
+                updateTaskSummaryFromState(payload);
                 var deferredMsg = (payload && payload.message) ? String(payload.message) : '';
                 if (deferredMsg) {
                     logOperationToWorkspaceTerminal('done', payload, 'info', deferredMsg);
