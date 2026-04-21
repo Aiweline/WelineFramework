@@ -672,7 +672,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                     'tone_of_voice' => 'Trustworthy and action-oriented',
                     'cta_tone' => 'Direct CTA labels that move strong CTA visitors forward.',
                     'forbidden_styles' => ['Do not use vague premium-only descriptions.'],
-                    'selection_reason' => 'The strong CTA, trust, conversion, Teenipiya APK download requirement needs a concrete trust-first visual system for home and about visitors.',
+                    'selection_reason' => 'The strong CTA, trust, and conversion requirement needs a concrete trust-first visual system for home and about visitors.',
                 ],
                 'navigation_plan' => [
                     'header_items' => [
@@ -805,6 +805,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         }
 
         $decoded['plan_json']['site_strategy']['summary'] = 'Explain the core value with concise readable paragraphs.';
+        $decoded['plan_json']['theme_design']['selection_reason'] = 'The strong CTA and APK download requirement needs a concrete trust-first visual system before this prompt-like payload is rejected.';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['content'] = 'Write the title around the core value, then explain the main highlights and next CTA.';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'][0]['sample'] = '标题围绕核心价值展开';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'][0]['implementation_note'] = 'Keep the first-screen promise concise and lead visitors to the next step.';
@@ -852,6 +853,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             return '{}';
         }
 
+        $decoded['plan_json']['theme_design']['selection_reason'] = 'The Teenipiya APK download requirement needs a concrete trust-first visual system for rummy players.';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['content'] = '欢迎来到 Teenipiya websiteProfile。这里会展示重点内容，并提供一个清晰的下一步入口。';
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'] = [
             ['field' => 'title', 'sample' => '欢迎来到 Teenipiya websiteProfile', 'implementation_note' => '作为区块主标题直接上屏。'],
