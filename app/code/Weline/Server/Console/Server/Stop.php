@@ -917,8 +917,7 @@ class Stop extends CommandAbstract
 
     protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
     {
-        return $this->terminateResidualProcesses($this->collectDirectForceStopCandidatePids($info), true)
-            + $this->terminateCurrentInstanceProcessPrefixes($info->name);
+        return $this->terminateResidualProcesses($this->collectDirectForceStopCandidatePids($info), true);
     }
 
     /**
