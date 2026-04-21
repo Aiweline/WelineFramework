@@ -1,0 +1,392 @@
+<?php
+/**
+ * 第二阶段侧栏队列信息：task_plan 与 build 两条队列的快照 / process / result 刷新逻辑。
+ */
+?>
+<script>
+(function () {
+    'use strict';
+    var bridge = window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview === 'object'
+        ? window.PbAiWorkspacePreview
+        : {};
+    var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var workspaceSnapshotUrl = <?= \json_encode((string)($workspaceSnapshotUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var queueMessages = {
+        emptyTaskPlan: <?= \json_encode((string)__('当前没有可展示的第二阶段任务方案队列记录。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        emptyBuild: <?= \json_encode((string)__('当前没有可展示的生成主题队列记录。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        refreshed: <?= \json_encode((string)__('队列信息已刷新'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        refreshFailed: <?= \json_encode((string)__('刷新队列信息失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        queueIdLabel: <?= \json_encode((string)__('队列编号'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        unknown: <?= \json_encode((string)__('—'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        jobKeyLabel: <?= \json_encode((string)__('Job'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        jobTypeLabel: <?= \json_encode((string)__('类型'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        statusLabel: <?= \json_encode((string)__('状态'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        tokenLabel: <?= \json_encode((string)__('Token'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        inputTokensLabel: <?= \json_encode((string)__('输入 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        outputTokensLabel: <?= \json_encode((string)__('输出 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        totalTokensLabel: <?= \json_encode((string)__('总 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+    };
+    var panelMap = {
+        task_plan: {
+            stateKey: 'task_plan_queue_info',
+            meta: 'pb-ai-task-plan-queue-info-meta',
+            process: 'pb-ai-task-plan-queue-info-process',
+            result: 'pb-ai-task-plan-queue-info-result',
+            panel: 'pb-ai-task-plan-queue-info-panel',
+            status: '[data-phase2-queue-status="task_plan"]',
+            empty: queueMessages.emptyTaskPlan
+        },
+        build: {
+            stateKey: 'build_queue_info',
+            meta: 'pb-ai-build-queue-info-meta',
+            process: 'pb-ai-build-queue-info-process',
+            result: 'pb-ai-build-queue-info-result',
+            panel: 'pb-ai-build-queue-info-panel',
+            status: '[data-phase2-queue-status="build"]',
+            empty: queueMessages.emptyBuild
+        }
+    };
+
+    function escapeHtml(text) {
+        if (typeof bridge.escapeHtml === 'function') {
+            return bridge.escapeHtml(text);
+        }
+        var div = document.createElement('div');
+        div.textContent = String(text == null ? '' : text);
+        return div.innerHTML;
+    }
+
+    function toast(type, message) {
+        if (typeof bridge.toast === 'function') {
+            bridge.toast(type, message);
+        }
+    }
+
+    function postForm(url, fields) {
+        if (typeof bridge.postForm !== 'function') {
+            return Promise.reject(new Error('postForm unavailable'));
+        }
+        return bridge.postForm(url, fields);
+    }
+
+    function toObjectSafe(value) {
+        if (!value) {
+            return {};
+        }
+        if (typeof value === 'object') {
+            return value;
+        }
+        if (typeof value === 'string') {
+            try {
+                var parsed = JSON.parse(value);
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch (e) {
+                return {};
+            }
+        }
+        return {};
+    }
+
+    function normalizeOperation(operation) {
+        var op = String(operation || '').toLowerCase().trim();
+        return op === 'build' ? 'build' : (op === 'task_plan' ? 'task_plan' : '');
+    }
+
+    function normalizeQueueId(value) {
+        var qid = parseInt(String(value == null ? '' : value), 10);
+        return qid > 0 && !isNaN(qid) ? qid : 0;
+    }
+
+    function normalizeTokenCount(value) {
+        if (value === null || typeof value === 'undefined' || value === '') {
+            return null;
+        }
+        var parsed = parseInt(String(value), 10);
+        return !isNaN(parsed) && parsed >= 0 ? parsed : null;
+    }
+
+    function formatTokenCount(value) {
+        var normalized = normalizeTokenCount(value);
+        return normalized === null ? queueMessages.unknown : String(normalized);
+    }
+
+    function resolveTokenUsage(info) {
+        var snapshot = info && info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
+        var usage = Object.assign({}, toObjectSafe(snapshot.token_usage), toObjectSafe(info && info.token_usage));
+        var input = normalizeTokenCount(usage.input_tokens || usage.prompt_tokens || snapshot.input_tokens || snapshot.prompt_tokens);
+        var output = normalizeTokenCount(usage.output_tokens || usage.completion_tokens || snapshot.output_tokens || snapshot.completion_tokens);
+        var total = normalizeTokenCount(usage.total_tokens || snapshot.total_tokens);
+        if (total === null && input !== null && output !== null) {
+            total = input + output;
+        }
+        return { input_tokens: input, output_tokens: output, total_tokens: total };
+    }
+
+    function renderQueueSummaryItem(key, label, value, codeLike) {
+        var display = String(value == null || value === '' ? queueMessages.unknown : value);
+        var valueTag = codeLike ? 'code' : 'strong';
+        return '<div class="col-6" role="listitem" data-queue-info-field="' + escapeHtml(key) + '">'
+            + '<div class="text-muted small">' + escapeHtml(label) + '</div>'
+            + '<' + valueTag + ' class="small text-break">' + escapeHtml(display) + '</' + valueTag + '>'
+            + '</div>';
+    }
+
+    function renderQueueInfoSummary(operation, info) {
+        var snapshot = info && info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
+        var tokenUsage = resolveTokenUsage(info || {});
+        var jobKey = snapshot.job_key || (info && info.job_key) || snapshot.biz_key || '';
+        var jobType = snapshot.job_type || (info && info.job_type) || '';
+        var status = snapshot.job_status || snapshot.status || (info && (info.job_status || info.status)) || '';
+        var token = snapshot.token || snapshot.execution_token || (info && (info.token || info.execution_token)) || '';
+        return '<div class="row g-2 mb-2 pb-ai-phase2-queue-token-summary" role="list" data-queue-info-list="' + escapeHtml(operation) + '">'
+            + renderQueueSummaryItem('job_key', queueMessages.jobKeyLabel, jobKey, true)
+            + renderQueueSummaryItem('job_type', queueMessages.jobTypeLabel, jobType, false)
+            + renderQueueSummaryItem('job_status', queueMessages.statusLabel, status, false)
+            + renderQueueSummaryItem('token', queueMessages.tokenLabel, token, true)
+            + renderQueueSummaryItem('input_tokens', queueMessages.inputTokensLabel, formatTokenCount(tokenUsage.input_tokens), false)
+            + renderQueueSummaryItem('output_tokens', queueMessages.outputTokensLabel, formatTokenCount(tokenUsage.output_tokens), false)
+            + renderQueueSummaryItem('total_tokens', queueMessages.totalTokensLabel, formatTokenCount(tokenUsage.total_tokens), false)
+            + '</div>';
+    }
+
+    function renderQueueInfoPanel(operation, info) {
+        var normalized = normalizeOperation(operation);
+        var panel = panelMap[normalized];
+        if (!panel) {
+            return;
+        }
+        var metaEl = document.getElementById(panel.meta);
+        var procEl = document.getElementById(panel.process);
+        var resEl = document.getElementById(panel.result);
+        var statusEl = document.querySelector(panel.status);
+        if (!metaEl || !procEl || !resEl) {
+            return;
+        }
+        if (!info || !info.snapshot || typeof info.snapshot !== 'object') {
+            metaEl.innerHTML = '<div class="alert alert-light border mb-0 small">' + escapeHtml(panel.empty) + '</div>';
+            procEl.textContent = '';
+            resEl.textContent = '';
+            if (statusEl) {
+                statusEl.textContent = '';
+            }
+            return;
+        }
+        var snapJson = '';
+        try {
+            snapJson = JSON.stringify(info.snapshot, null, 2);
+        } catch (e) {
+            snapJson = String(info.snapshot);
+        }
+        var qid = normalizeQueueId(info.queue_id != null ? info.queue_id : info.snapshot.queue_id);
+        var idRow = '<div class="d-flex flex-wrap align-items-center gap-2 mb-2">'
+            + '<span class="text-muted small mb-0">' + escapeHtml(queueMessages.queueIdLabel) + '</span>'
+            + '<code class="small mb-0">' + escapeHtml(qid > 0 ? String(qid) : queueMessages.unknown) + '</code>'
+            + '</div>';
+        metaEl.innerHTML = idRow
+            + renderQueueInfoSummary(normalized, info)
+            + '<pre class="small mb-0 border rounded p-2 bg-light text-break" style="white-space:pre-wrap;max-height:min(24vh,12rem);overflow:auto;">'
+            + escapeHtml(snapJson)
+            + '</pre>';
+        procEl.textContent = String(info.process || '').trim() || queueMessages.unknown;
+        resEl.textContent = String(info.result_log || '').trim() || queueMessages.unknown;
+        if (statusEl) {
+            statusEl.textContent = String((info.snapshot && (info.snapshot.job_status || info.snapshot.status)) || '').trim();
+        }
+    }
+
+    function getLastWorkspaceState() {
+        try {
+            return window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object'
+                ? window.__pbLastWorkspaceState
+                : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function rememberQueueInfo(operation, info) {
+        var normalized = normalizeOperation(operation);
+        var panel = panelMap[normalized];
+        if (!panel) {
+            return getLastWorkspaceState();
+        }
+        var state = Object.assign({}, getLastWorkspaceState());
+        state[panel.stateKey] = info;
+        try {
+            window.__pbLastWorkspaceState = state;
+        } catch (e) {
+            // ignore
+        }
+        return state;
+    }
+
+    function appendQueueResultLog(current, delta) {
+        var text = String(current || '');
+        var piece = String(delta || '');
+        if (piece === '') {
+            return text;
+        }
+        if (piece.slice(-1) !== '\n' && text !== '' && text.charAt(0) !== '\n') {
+            piece += '\n';
+        }
+        text = piece + text;
+        var max = 24000;
+        if (text.length > max) {
+            text = text.slice(0, max) + '\n…（以下内容已截断，仅保留最新约 ' + max + ' 字符）';
+        }
+        return text;
+    }
+
+    function mergeQueueInfoFromSsePayload(operation, payload, eventKind) {
+        var normalized = normalizeOperation(operation || (payload && payload.operation));
+        var panel = panelMap[normalized];
+        if (!panel || !payload || typeof payload !== 'object') {
+            return null;
+        }
+        if (payload.state && payload.state[panel.stateKey] && typeof payload.state[panel.stateKey] === 'object') {
+            return payload.state[panel.stateKey];
+        }
+        if (payload.queue_info && typeof payload.queue_info === 'object') {
+            return payload.queue_info;
+        }
+        var hasQueueSignal = !!(
+            (payload.queue_snapshot && typeof payload.queue_snapshot === 'object')
+            || Object.prototype.hasOwnProperty.call(payload, 'queue_id')
+            || Object.prototype.hasOwnProperty.call(payload, 'queue_status')
+            || Object.prototype.hasOwnProperty.call(payload, 'job_status')
+            || Object.prototype.hasOwnProperty.call(payload, 'status')
+            || Object.prototype.hasOwnProperty.call(payload, 'queue_process')
+            || Object.prototype.hasOwnProperty.call(payload, 'queue_result_log')
+            || Object.prototype.hasOwnProperty.call(payload, 'queue_result_delta')
+            || Object.prototype.hasOwnProperty.call(payload, 'job_key')
+            || Object.prototype.hasOwnProperty.call(payload, 'job_type')
+            || Object.prototype.hasOwnProperty.call(payload, 'token')
+            || Object.prototype.hasOwnProperty.call(payload, 'execution_token')
+            || Object.prototype.hasOwnProperty.call(payload, 'token_usage')
+        );
+        if (!hasQueueSignal) {
+            return null;
+        }
+        var state = getLastWorkspaceState();
+        var existing = state[panel.stateKey] && typeof state[panel.stateKey] === 'object' ? state[panel.stateKey] : {};
+        var existingSnapshot = existing.snapshot && typeof existing.snapshot === 'object' ? existing.snapshot : {};
+        var snapshot = Object.assign({}, existingSnapshot);
+        if (payload.queue_snapshot && typeof payload.queue_snapshot === 'object') {
+            snapshot = Object.assign(snapshot, payload.queue_snapshot);
+        }
+        var payloadQueueId = normalizeQueueId(payload.queue_id);
+        if (payloadQueueId > 0) {
+            snapshot.queue_id = payloadQueueId;
+        }
+        ['queue_status', 'status', 'job_status', 'job_key', 'job_type', 'token', 'execution_token', 'input_tokens', 'output_tokens', 'total_tokens'].forEach(function (key) {
+            if (Object.prototype.hasOwnProperty.call(payload, key)) {
+                var targetKey = key === 'queue_status' ? 'status' : key;
+                snapshot[targetKey] = payload[key];
+            }
+        });
+        if (payload.token_usage && typeof payload.token_usage === 'object') {
+            snapshot.token_usage = Object.assign({}, snapshot.token_usage && typeof snapshot.token_usage === 'object' ? snapshot.token_usage : {}, payload.token_usage);
+        }
+        var process = String(existing.process || '');
+        if (Object.prototype.hasOwnProperty.call(payload, 'queue_process')) {
+            process = String(payload.queue_process || '');
+        } else if (String(eventKind || '') === 'progress' && payloadQueueId > 0 && payload.message) {
+            process = String(payload.message || '');
+        }
+        var resultLog = String(existing.result_log || '');
+        if (Object.prototype.hasOwnProperty.call(payload, 'queue_result_log')) {
+            resultLog = String(payload.queue_result_log || '');
+        } else if (Object.prototype.hasOwnProperty.call(payload, 'queue_result_delta')) {
+            resultLog = appendQueueResultLog(resultLog, payload.queue_result_delta);
+        }
+        return {
+            queue_id: normalizeQueueId(existing.queue_id || snapshot.queue_id || payloadQueueId),
+            snapshot: snapshot,
+            process: process,
+            result_log: resultLog
+        };
+    }
+
+    function syncPanelOpenState(workspaceState) {
+        var active = workspaceState && workspaceState.active_operation && typeof workspaceState.active_operation === 'object'
+            ? workspaceState.active_operation
+            : {};
+        var op = normalizeOperation(active.operation);
+        var activeStatus = String(active.status || '').toLowerCase();
+        var shouldOpen = activeStatus === 'queued' || activeStatus === 'running';
+        Object.keys(panelMap).forEach(function (key) {
+            var panelEl = document.getElementById(panelMap[key].panel);
+            if (panelEl && key === op && shouldOpen) {
+                panelEl.open = true;
+            }
+        });
+    }
+
+    function syncFromSsePayload(operation, payload, eventKind) {
+        var normalized = normalizeOperation(operation || (payload && payload.operation));
+        if (!normalized) {
+            return;
+        }
+        var info = mergeQueueInfoFromSsePayload(normalized, payload || {}, eventKind);
+        if (!info || typeof info !== 'object') {
+            return;
+        }
+        renderQueueInfoPanel(normalized, info);
+        rememberQueueInfo(normalized, info);
+        syncPanelOpenState(Object.assign({}, getLastWorkspaceState(), {
+            active_operation: { operation: normalized, status: 'running' }
+        }));
+    }
+
+    function syncFromWorkspaceState(workspaceState) {
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return;
+        }
+        try {
+            window.__pbLastWorkspaceState = workspaceState;
+        } catch (e) {
+            // ignore
+        }
+        renderQueueInfoPanel('task_plan', workspaceState.task_plan_queue_info || null);
+        renderQueueInfoPanel('build', workspaceState.build_queue_info || null);
+        syncPanelOpenState(workspaceState);
+    }
+
+    function bindPhase2QueueInfoRefresh() {
+        var btn = document.getElementById('pb-ai-phase2-queue-info-refresh');
+        if (!btn || btn.dataset.pbBound === '1' || !workspaceSnapshotUrl) {
+            return;
+        }
+        btn.dataset.pbBound = '1';
+        btn.addEventListener('click', function () {
+            btn.disabled = true;
+            postForm(workspaceSnapshotUrl, { public_id: publicId }).then(function (data) {
+                btn.disabled = false;
+                if (data && data.success && data.data) {
+                    if (typeof window.hydrateWorkspaceFromState === 'function') {
+                        window.hydrateWorkspaceFromState(data.data);
+                    } else {
+                        syncFromWorkspaceState(data.data);
+                    }
+                    toast('success', queueMessages.refreshed);
+                    return;
+                }
+                toast('error', (data && data.message) ? String(data.message) : queueMessages.refreshFailed);
+            }).catch(function () {
+                btn.disabled = false;
+                toast('error', queueMessages.refreshFailed);
+            });
+        });
+    }
+
+    window.__pbPhase2TaskProgress = {
+        syncFromWorkspaceState: syncFromWorkspaceState,
+        syncFromSsePayload: syncFromSsePayload,
+        renderQueueInfoPanel: renderQueueInfoPanel,
+        bindPhase2QueueInfoRefresh: bindPhase2QueueInfoRefresh
+    };
+
+    bindPhase2QueueInfoRefresh();
+    syncFromWorkspaceState(getLastWorkspaceState());
+})();
+</script>
