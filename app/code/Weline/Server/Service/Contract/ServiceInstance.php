@@ -36,6 +36,8 @@ class ServiceInstance
         public string $processKind = ControlMessage::PROCESS_KIND_FRAMEWORK,
         /** 模块代码（仅 module 类进程有效，如 'Weline_Payment'） */
         public string $moduleCode = '',
+        public int $rootPid = 0,
+        public int $launcherPid = 0,
     ) {}
 
     /**
@@ -112,6 +114,72 @@ class ServiceInstance
         return $this->metadata[$key] ?? $default;
     }
 
+    public function setProcessTreePids(int $pid, int $rootPid = 0, int $launcherPid = 0): void
+    {
+        $this->pid = \max(0, $pid);
+
+        $normalizedRootPid = \max(0, $rootPid);
+        if ($normalizedRootPid <= 0 && $this->pid > 0) {
+            $normalizedRootPid = $this->pid;
+        }
+        $this->rootPid = $normalizedRootPid;
+
+        $normalizedLauncherPid = \max(0, $launcherPid);
+        if ($normalizedLauncherPid <= 0 && $normalizedRootPid > 0) {
+            $normalizedLauncherPid = $normalizedRootPid;
+        }
+        $this->launcherPid = $normalizedLauncherPid;
+    }
+
+    public function getRootPid(): int
+    {
+        if ($this->rootPid > 0) {
+            return $this->rootPid;
+        }
+
+        return $this->pid > 0 ? $this->pid : 0;
+    }
+
+    public function getLauncherPid(): int
+    {
+        if ($this->launcherPid > 0) {
+            return $this->launcherPid;
+        }
+
+        return $this->getRootPid();
+    }
+
+    public function getTrackingPid(): int
+    {
+        $rootPid = $this->getRootPid();
+        if ($rootPid > 0) {
+            return $rootPid;
+        }
+
+        return $this->pid > 0 ? $this->pid : 0;
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function getManagedPids(): array
+    {
+        $pids = [];
+        foreach ([$this->pid, $this->rootPid, $this->launcherPid] as $pid) {
+            $pid = (int) $pid;
+            if ($pid > 0) {
+                $pids[$pid] = true;
+            }
+        }
+
+        return \array_map('intval', \array_keys($pids));
+    }
+
+    public function matchesManagedPid(int $pid): bool
+    {
+        return $pid > 0 && \in_array($pid, $this->getManagedPids(), true);
+    }
+
     /**
      * 转换为数组
      */
@@ -123,6 +191,9 @@ class ServiceInstance
             'epoch'             => $this->epoch,
             'launch_id'         => $this->launchId,
             'pid'               => $this->pid,
+            'root_pid'          => $this->rootPid,
+            'launcher_pid'      => $this->launcherPid,
+            'tracking_pid'      => $this->getTrackingPid(),
             'port'              => $this->port,
             'state'             => $this->state,
             'restarts'          => $this->restarts,

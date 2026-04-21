@@ -667,7 +667,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
         
         // 方案1：PowerShell CIM（推荐，现代 Windows）
         if ($this->isPowerShellAvailable()) {
-            $ps = "powershell -NoProfile -Command \"Get-CimInstance Win32_Process -Filter \\\"ProcessId={$pid}\\\" -ErrorAction SilentlyContinue | Select-Object Name,CommandLine,WorkingSetSize | Format-List\"";
+            $ps = "powershell -NoProfile -Command \"Get-CimInstance Win32_Process -Filter 'ProcessId={$pid}' -ErrorAction SilentlyContinue | Select-Object Name,CommandLine,WorkingSetSize | Format-List\"";
             $out = [];
             $code = 0;
             $this->executeCommand($ps, $out, $code);
@@ -737,7 +737,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
             $out = [];
             $exitCode = 0;
             $this->executeCommand(
-                "powershell -NoProfile -Command \"(Get-CimInstance Win32_Process -Filter \\\"ProcessId={$pid}\\\" -ErrorAction SilentlyContinue).CommandLine\" 2>NUL",
+                "powershell -NoProfile -Command \"(Get-CimInstance Win32_Process -Filter 'ProcessId={$pid}' -ErrorAction SilentlyContinue).CommandLine\" 2>NUL",
                 $out,
                 $exitCode
             );
