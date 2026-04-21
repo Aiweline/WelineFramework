@@ -1069,7 +1069,9 @@ final class AiSiteExecutionBlueprintService
             'baseline_execution_blueprint:',
             $baselineExecutionBlueprintText,
         ];
-        w_log('info', \implode("\n", $cleanPrompt), [], 'buildAiPlanPrompt');
+        if (\function_exists('w_log')) {
+            \call_user_func('w_log', 'info', \implode("\n", $cleanPrompt), [], 'buildAiPlanPrompt');
+        }
 
         return \implode("\n", $cleanPrompt);
     }
@@ -1319,6 +1321,13 @@ final class AiSiteExecutionBlueprintService
         $themeContextSnapshot = $this->mergeStageOneThemeDesignIntoSnapshot(
             \is_array($executionBlueprint['theme_context_snapshot'] ?? null) ? $executionBlueprint['theme_context_snapshot'] : [],
             $themeDesign
+        );
+        $themeDesignQueueJob = $this->buildStageOneThemeDesignQueueJob($scope, $websiteProfile, $themeContextSnapshot, $planLocale);
+        $stageOneQueueJobs = $this->upsertStageOneQueueJob(
+            \is_array($executionBlueprint['queue_jobs'] ?? null)
+                ? $executionBlueprint['queue_jobs']
+                : (\is_array($structured['queue_jobs'] ?? null) ? $structured['queue_jobs'] : []),
+            $themeDesignQueueJob
         );
         $sharedComponents = $this->normalizeStageOneSharedComponents(
             \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : []
@@ -4326,7 +4335,6 @@ final class AiSiteExecutionBlueprintService
             'page_plans' => $pagePlans,
             'page_tabs_state' => $this->buildStageOnePageTabsState($pagePlans),
             'interaction_state' => $this->buildStageOneInteractionState($pagePlans, $blockIndex),
-            'queue_jobs' => $stageOneQueueJobs,
             'progress' => $this->buildStageOneProgressSummary(
                 \is_array($structured['shared_plan'] ?? null) ? $structured['shared_plan'] : [],
                 $pagePlans,
