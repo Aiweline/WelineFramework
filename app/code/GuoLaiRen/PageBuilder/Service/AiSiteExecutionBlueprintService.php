@@ -4059,6 +4059,27 @@ final class AiSiteExecutionBlueprintService
      * @param array<string, mixed> $pages
      * @return array<string, mixed>
      */
+    private function buildStageOnePagePlansConcurrently(array $pages, array $sharedPromptContext): array
+    {
+        $pagePlans = $this->buildStageOnePagePlans($pages, $sharedPromptContext);
+        foreach ($pagePlans as $pageType => $pagePlan) {
+            if (!\is_array($pagePlan)) {
+                continue;
+            }
+            $pagePlans[$pageType] = \array_replace($pagePlan, [
+                'dispatch_mode' => 'automatic_after_shared_ready',
+                'fanout_group' => 'stage1.page_fanout',
+                'requires_user_tab' => false,
+            ]);
+        }
+
+        return $pagePlans;
+    }
+
+    /**
+     * @param array<string, mixed> $pages
+     * @return array<string, mixed>
+     */
     private function buildStageOnePagePlans(array $pages, array $sharedPromptContext): array
     {
         $pagePlans = [];
