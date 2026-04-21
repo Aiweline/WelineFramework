@@ -3522,12 +3522,7 @@ final class AiSiteExecutionBlueprintService
     private function buildPageTask(string $pageType, array $pagePlan, array $block): array
     {
         $blockKey = \trim((string)($block['block_key'] ?? 'block'));
-        $sharedContextHash = \trim((string)($pagePlan['shared_context_hash'] ?? ''));
-        if ($sharedContextHash === '') {
-            throw new \RuntimeException(
-                'Stage-1 page task rejected: missing shared_context_hash for page type "' . $pageType . '" and block "' . $blockKey . '".'
-            );
-        }
+        $pagePromptContext = \is_array($pagePlan['page_prompt_context'] ?? null) ? $pagePlan['page_prompt_context'] : [];
 
         return [
             'task_key' => 'page:' . $pageType . ':' . $blockKey,
@@ -3538,7 +3533,8 @@ final class AiSiteExecutionBlueprintService
             'source_ref' => [
                 'page_key' => $pageType,
                 'block_key' => $blockKey,
-                'shared_context_hash' => $sharedContextHash,
+                'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? ''),
+                'theme_context_hash' => (string)($pagePlan['theme_context_hash'] ?? ''),
             ],
             'prompt_context' => $pagePromptContext,
             'implementation_detail' => (string)($block['implementation_detail'] ?? $block['style_brief']['layout_rule'] ?? ''),
@@ -4026,6 +4022,48 @@ final class AiSiteExecutionBlueprintService
         ];
 
         return $this->buildPageThemeAlignmentSummary($pageLabel, $pageGoal, $blocks, $palette, $themeStyle);
+    }
+
+    /**
+     * @param array<string, mixed> $pagePlan
+     * @param array<string, mixed> $sharedPromptContext
+     * @return array<string, mixed>
+     */
+    private function buildStageOnePagePromptContext(string $pageType, array $pagePlan, array $sharedPromptContext): array
+    {
+        $themeDesign = $this->extractStageOneThemeDesign($sharedPromptContext);
+        $themeHardConstraints = [
+            'theme_purpose' => (string)($themeDesign['theme_purpose'] ?? ''),
+            'color_scheme' => \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [],
+            'typography_spacing_radius' => \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [],
+            'visual_keywords' => \is_array($themeDesign['visual_keywords'] ?? null) ? \array_values($themeDesign['visual_keywords']) : [],
+            'tone_of_voice' => (string)($themeDesign['tone_of_voice'] ?? ''),
+            'cta_tone' => (string)($themeDesign['cta_tone'] ?? ''),
+            'forbidden_styles' => \is_array($themeDesign['forbidden_styles'] ?? null) ? \array_values($themeDesign['forbidden_styles']) : [],
+            'selection_reason' => (string)($themeDesign['selection_reason'] ?? ''),
+        ];
+        $context = [
+            'page_type' => $pageType,
+            'page_goal' => (string)($pagePlan['page_goal'] ?? ''),
+            'locale' => (string)($sharedPromptContext['plan_locale'] ?? ''),
+            'shared_context_hash' => (string)($sharedPromptContext['context_hash'] ?? ''),
+            'theme_context_hash' => (string)($sharedPromptContext['theme_context_hash'] ?? ''),
+            'theme_design' => $themeDesign,
+            'theme_hard_constraints' => $themeHardConstraints,
+            'shared_prompt_context' => $sharedPromptContext,
+            'anti_hardcode_rules' => [
+                'Do not invent contacts, prices, credentials, awards, addresses, or customer names that the user did not provide.',
+                'Keep missing factual business details as editable fields instead of hard-coded claims.',
+            ],
+        ];
+        $context['prompt_context_id'] = 'stage1-page-' . \substr(\sha1((string)\json_encode([
+            'page_type' => $pageType,
+            'page_goal' => $context['page_goal'],
+            'shared_context_hash' => $context['shared_context_hash'],
+            'theme_design' => $themeDesign,
+        ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)), 0, 12);
+
+        return $context;
     }
 
     /**
