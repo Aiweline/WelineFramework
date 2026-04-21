@@ -1430,6 +1430,11 @@ final class AiSiteExecutionBlueprintService
                 throw new \RuntimeException('AI stage-1 plan invalid: page_goal for "' . $pageType . '" is empty or still instruction-like.');
             }
 
+            $themeAlignmentSummary = \trim((string)($page['theme_alignment_summary'] ?? ''));
+            if ($themeAlignmentSummary === '' || $this->isPromptLikeStageOneText($themeAlignmentSummary, 'theme_alignment_summary', '', '', $pageType)) {
+                throw new \RuntimeException('AI stage-1 plan invalid: theme_alignment_summary for "' . $pageType . '" is empty or still instruction-like.');
+            }
+
             $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
             if ($blocks === []) {
                 throw new \RuntimeException('AI stage-1 plan invalid: page "' . $pageType . '" has no blocks.');
@@ -1855,6 +1860,10 @@ final class AiSiteExecutionBlueprintService
             $pageGoal = \trim((string)($page['page_goal'] ?? ''));
             if ($pageGoal !== '' && $this->isPromptLikeStageOneText($pageGoal)) {
                 $page['page_goal'] = (string)($fallbackPage['page_goal'] ?? $pageGoal);
+            }
+            $themeAlignmentSummary = \trim((string)($page['theme_alignment_summary'] ?? ''));
+            if ($themeAlignmentSummary !== '' && $this->isPromptLikeStageOneText($themeAlignmentSummary, 'theme_alignment_summary', '', '', (string)$pageType)) {
+                $page['theme_alignment_summary'] = (string)($fallbackPage['theme_alignment_summary'] ?? $themeAlignmentSummary);
             }
             $page['blocks'] = $this->sanitizeStageOneBlocks(
                 \is_array($page['blocks'] ?? null) ? $page['blocks'] : [],
@@ -2595,6 +2604,7 @@ final class AiSiteExecutionBlueprintService
             'page_label' => $pageLabel,
             'page_title' => $pageTitle,
             'page_goal' => $pageGoal,
+            'theme_alignment_summary' => $this->buildPageThemeAlignmentSummary($pageLabel, $pageGoal, $blocks, $palette, $themeStyle, $locale),
             'why' => $this->resolvePageWhy($pageType, $pageLabel, $locale),
             'decision_reason' => $instruction !== ''
                 ? '页面策略按本轮补充说明对齐：' . $this->clipText($instruction, 80)
@@ -2608,6 +2618,53 @@ final class AiSiteExecutionBlueprintService
             'internal_links' => $internalLinks,
             'blocks' => $blocks,
         ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $blocks
+     * @param array<string, mixed> $palette
+     * @param array<string, mixed> $themeStyle
+     */
+    private function buildPageThemeAlignmentSummary(
+        string $pageLabel,
+        string $pageGoal,
+        array $blocks,
+        array $palette,
+        array $themeStyle,
+        string $locale = ''
+    ): string {
+        $isEn = $this->isEnglishLocale($locale);
+        $paletteName = \trim((string)($palette['name'] ?? ''));
+        $visualTone = \trim((string)($themeStyle['visual_tone'] ?? ''));
+        $blockKeys = \array_values(\array_filter(\array_map(
+            static fn(array $block): string => \trim((string)($block['block_key'] ?? $block['section_code'] ?? '')),
+            $blocks
+        ), static fn(string $value): bool => $value !== ''));
+        $blockSummary = $blockKeys === []
+            ? ($isEn ? 'the page blocks' : '页面区块')
+            : \implode($isEn ? ', ' : '、', \array_slice($blockKeys, 0, 4));
+        $paletteLabel = $paletteName !== '' ? $paletteName : ($isEn ? 'the shared color system' : '共享色系');
+        $toneLabel = $visualTone !== '' ? $visualTone : ($isEn ? 'the shared voice' : '共享语气');
+
+        if ($isEn) {
+            return \sprintf(
+                '%s follows %s and %s: %s support the page goal "%s", reuse the shared CTA/trust rhythm, and hand off cleanly from Header navigation to Footer reassurance.',
+                $pageLabel !== '' ? $pageLabel : 'This page',
+                $paletteLabel,
+                $toneLabel,
+                $blockSummary,
+                $pageGoal
+            );
+        }
+
+        return \sprintf(
+            '%s 遵守 %s 与%s：%s 围绕“%s”展开，延续共享 CTA 与信任表达，并从 Header 导航自然承接到 Footer 的补充背书。',
+            $pageLabel !== '' ? $pageLabel : '本页面',
+            $paletteLabel,
+            $toneLabel,
+            $blockSummary,
+            $pageGoal
+        );
     }
 
     /**
