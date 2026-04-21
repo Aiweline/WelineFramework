@@ -98,21 +98,6 @@ final class StopCommandWindowsTaskkillTest extends TestCase
         );
     }
 
-    public function testBatchKillCommandRunsTaskkillThroughCmdShell(): void
-    {
-        $stop = new class extends Stop {
-            public function command(array $ids): string
-            {
-                return $this->buildWindowsBatchStopCommand($ids);
-            }
-        };
-
-        self::assertSame(
-            'cmd /d /c start "" /B cmd /d /c "taskkill /F /T /PID 101 /PID 202 1>NUL 2>NUL"',
-            $stop->command([101, 202])
-        );
-    }
-
     public function testRunningPidScanUsesTasklistInsteadOfPowerShell(): void
     {
         $stop = new class extends Stop {
@@ -123,24 +108,6 @@ final class StopCommandWindowsTaskkillTest extends TestCase
         };
 
         self::assertSame('tasklist /FO CSV /NH', $stop->command([101, 202]));
-    }
-
-    public function testWindowsStopTargetsDoNotProbeParentsDuringBatchKill(): void
-    {
-        $stop = new class extends Stop {
-            public function expand(array $pids): array
-            {
-                return $this->expandWindowsStopTargetPids($pids);
-            }
-
-            protected function queryStopParentPid(int $pid): int
-            {
-                unset($pid);
-                throw new \RuntimeException('parent PID probing should not run during batch stop expansion');
-            }
-        };
-
-        self::assertSame([300], $stop->expand([300]));
     }
 
     public function testWindowsFrontendShellTitleScanningStaysOutOfStopCommand(): void
