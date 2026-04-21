@@ -12,7 +12,7 @@
     var hasGeneratedPages = <?= \json_encode($displayPagesByType !== [], \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var isOperationRunning = <?= \json_encode(\in_array($activeOperationStatus, ['queued', 'running'], true), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var currentActiveOperationState = <?= \json_encode($activeOperation, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
-    /** 鐟滅増鎸告晶鐘诲籍閻樻眹鈧妫冮姀銏ｎ潶闁搞劌顑呴ˇ鏌ユ焻婢跺鏀遍柡鍐啇缁辨瑦淇婇崒姘渐闂侇偆鍠愯啯鐎殿喖绻堥埀顒€鑻崳顖涘緞閸ワ妇鐟愮紒鎹愶骏閳ь剙绉甸鐐搭殽閵堝繒绀嗛柨娑樿嫰閼村﹦绮ｅΔ鍐╂殢闁哄牆绉存慨鐔虹博椤栨艾鍤掑ǎ鍥ㄧ箓閻°劎鐚剧拠鑼偓閿嬫媴濠娾偓鐠愮喖宕氬┑鍡╂綏闁告洟绠栭埀?*/
+    /** 服务端返回的已选页面类型列表（前端无状态时用作勾选回退）。 */
     var serverPageTypesFallback = <?= \json_encode(\array_values(\is_array($selectedPageTypesSafe) ? $selectedPageTypesSafe : []), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var pageTypesUserCustomized = <?= \json_encode($pageTypesUserCustomized, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var mergeScopeUrl = <?= \json_encode($mergeScopeUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -49,7 +49,7 @@
     var taskPlanConfirmedState = <?= \json_encode((bool)($state['task_plan_confirmed'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var hasExecutionBlueprintState = <?= \json_encode((bool)($state['has_execution_blueprint'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var hasPendingBuildTasksState = <?= \json_encode((bool)($state['has_pending_build_tasks'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
-    /** 濞?PHP $pbAiPhaseOnePlanPresent 閻庨潧缍婄紞鍫ユ晬濞屸杺drate 闁告艾瀛╁ú鍧楀棘鐢喚绀夐柣顫妺缁剛绮璺ㄧ檶闂傚啳鍩栭宀勫Υ瀹€鈧弫鎾诲箣閹邦喚鐭庨柤鍝勫€烽幑銏ゅ礉闄囬～澶愬礆閹烘挻鐓欐俊妤€鐗勯埀顒€绉电€垫粓鏌?*/
+    /** 与 PHP 注入的 $pbAiPhaseOnePlanPresent 同步：是否存在可用的第一阶段方案（用于按钮禁用等）。 */
     var lastPhaseOnePlanPresent = <?= \json_encode((bool)($pbAiPhaseOnePlanPresent), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var globalRunVirtualThemeDisabled = false;
     window.__pbTaskSummary = <?= \json_encode($buildTaskSummary, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -74,7 +74,7 @@
         blockConfig: {},
         fieldSchema: {}
     };
-    // 闁活潿鍔嬬花顒勫礌閸濆嫭鍋ョ紒?SSE 闁告帡鏀遍弻濠囨偐閼哥鍋撴笟濠勭缂備胶鍠嶇粩鎾箰閸屾艾鐓?window闁挎稑鐭傛导鈺呭礂瀹ュ拋妯?script 濞达絾绮庨弫銈夊春閻旇埖涓㈠鑸靛敾缁?
+    // 区块刷新与 SSE 相关状态挂在 window 上，便于跨脚本/多入口共享同一份引用。
     function getSharedBlockRefreshState() {
         if (!window.__pbBlockRefreshState || typeof window.__pbBlockRefreshState !== 'object') {
             window.__pbBlockRefreshState = {
@@ -113,7 +113,7 @@
         }
         return normalized.replace('/post-plan-sse', '/plan-sse');
     }
-    // 闂傚啫寮堕娑㈠捶閵娿儱姣愰柡浣规緲閻ㄥ寮甸鍥┿偞闁稿﹦鍘ф晶鐘垫偖椤愩垹寰撻悗鐟板暢閸撳ジ寮甸鍌涚函闁规亽鍎撮惃鐔兼偨閵娿儺鍤ら柤?ReferenceError
+    // 若宿主页未注入该函数，提供空实现，避免 ReferenceError。
     if (typeof window.updateTaskSummaryFromState !== 'function') {
         window.updateTaskSummaryFromState = function () {};
     }
@@ -124,7 +124,8 @@
     }
 
     /**
-     * 闁哄嫷鍨伴幆浣圭▔?workspace.phtml 濞?$pbAiPhaseOnePlanPresent 濞戞挴鍋撻柤鐤彧缁辩増瀵煎宕囨▓闂佹彃鏈Σ鎼佸触閿曗偓閸戯繝寮垫径鎰枆婵炲牆鍚€缁旀潙顕欓搹鍦讲闁哄倽顫夐、宥夊礃閸涱収鍟囬柕?     */
+     * 根据工作区状态判断是否已有可用的第一阶段方案（已确认、Markdown、JSON/结构化草稿等）。
+     */
     function phaseOnePlanPresentFromWorkspaceState(workspaceState) {
         if (!workspaceState || typeof workspaceState !== 'object') {
             return false;
@@ -368,7 +369,7 @@
         if (!workspaceState || typeof workspaceState !== 'object') {
             return;
         }
-        // 濞撴碍鐩。鈺冩喆閸繂鏁堕梺鍓у亾鐢挳鏌屽鍛櫢闁革絻鍔嬬粭宀勫储閸℃钑夌痪顓у枦椤撳寮憴鍕垫敵闁告瑯浜ｉ鐗堬紣閸曨噮娼斿璺虹Ф閺?
+        // 用后端/持久化返回的状态填充工作区：页面、方案、任务计划、SSE 地址与按钮状态等。
         if (workspaceState.pagebuilder_pages_by_type && typeof workspaceState.pagebuilder_pages_by_type === 'object') {
             window.__pbWorkspacePagesByType = workspaceState.pagebuilder_pages_by_type;
         }
@@ -507,13 +508,13 @@
             try {
                 window.__pbLastWorkspaceState = workspaceState;
             } catch (e) {
-                // ignore
+                // 忽略：仅用于调试缓存最近状态，失败不影响主流程。
             }
         }
         normalizeGuidedStaticLabels();
         syncConfirmPlanButtonEnabled();
     }
-    // 缂備胶鍠嶇粩瀵糕偓鐢垫嚀椤?API闁挎稒淇哄▔?script 閻犲鍟伴弫銈囩磼閻斿墎顏遍悹?window.__pbWorkspaceApi
+    // 组装并挂到 window.__pbWorkspaceApi 的对外 API，供其它脚本或内嵌页回调。
     var workspaceApi = window.__pbWorkspaceApi;
     if (!workspaceApi || typeof workspaceApi !== 'object') {
         workspaceApi = {};
@@ -534,7 +535,7 @@
     workspaceApi.getHasPendingBuildTasksState = function () {
         return !!hasPendingBuildTasksState;
     };
-    // 闁哄棙鎸冲﹢鍫曞棘鐟欏嫷鏀虫繛鎾冲级閻撳宕欓懞銉︽缂?stream/runtime 闁煎瓨纰嶅﹢浼存晬瀹€鈧垾妯荤┍?SSE chunk 闁告帗濯介幓顏堝籍?Markdown 濞戞挸閰ｉ。鈺冩喆閸繃鍊辨慨婵勫劚閸╂盯寮?
+    // 流式终端/SSE 回调通过此处更新方案弹层 Markdown 与进度（与运行时注入的 API 对齐）。
     workspaceApi.updatePlanModalContent = function (markdown) {
         return updatePlanModalContent(markdown);
     };
@@ -597,7 +598,8 @@
         confirmBtn.disabled = !hasCurrentPhaseOnePlanDraft();
     }
     /**
-     * 鐎规悶鍎扮紞鏃堝礌?stream-sse 闁革负鍔戝Ο浣糕枔閸忓摜顏?plan_generated 缂佹稑顦花銊︾鐠虹儤鍊甸柛銉у仩閻ㄧ喖鏁嶅鍐叉闁告柣鍔嬬换姘扁偓?scope 妤犵偞鍎艰闂佸じ闄嶉埀顒€鐬奸垾妯兼媼閵堝鈻夋繛鍫濆悁缁旀挳寮憴鍕垫敵闁靛棗绉查埀?     */
+     * 工作区流（非弹层 SSE）在 plan_generated 等节点回调：收敛按钮状态、写入方案 Markdown 并触发自动保存。
+     */
     workspaceApi.applyPlanGenerationCompletionFromWorkspaceStream = function (serverState) {
         try {
             planSseRunning = false;
@@ -642,11 +644,11 @@
         }
     };
     window.__pbWorkspaceApi = workspaceApi;
-    // 闁告碍鍨甸幃妤呭礂閻撳寒鍟囬柡鍐勫棛娈堕柣顫妼閸欏棝宕?
+    // 兼容旧入口：全局 hydrateWorkspaceFromState 委托到 __pbWorkspaceApi。
     window.hydrateWorkspaceFromState = function (workspaceState) {
         return window.__pbWorkspaceApi.hydrateWorkspaceFromState(workspaceState);
     };
-    // 闁稿繒鍘ч鎰板储閸℃钑夐柣鈺佺摠鐢鎷崘顏呮殢 window.updatePlanModalContent 闁汇劌瀚伴埀顒佹缁?
+    // 兼容旧入口：全局 updatePlanModalContent 与弹层更新函数绑定。
     window.updatePlanModalContent = function (markdown) {
         return updatePlanModalContent(markdown);
     };
@@ -850,7 +852,7 @@
         return text;
     }
 
-    // 闁稿繒鍘ч鎰板储閸℃钑夐柟椋庡帶閸熸捇鏁嶉崸顤祌malizetoastMessage闁挎稑顧€缁辨繈鏌嗛崹顔煎赋闁哄唲鍥紨闁?缂傚倹鎸搁悺銊╂嚇濮橆厽鎷遍悷娆欑畱瑜?ReferenceError
+    // 兼容旧函数名 normalizetoastMessage（历史拼写），避免外部脚本调用时报 ReferenceError。
     function normalizetoastMessage(message) {
         return normalizeToastMessage(message);
     }
@@ -884,14 +886,14 @@
         }).then(function (response) {
             if (!response.ok) {
                 return response.text().then(function (text) {
-                    var errMsg = '缂傚啯鍨圭划鍫曟煥濞嗘帩鍤? ' + response.status + ' ' + response.statusText;
+                    var errMsg = '请求失败：' + response.status + ' ' + response.statusText;
                     try {
                         var j = JSON.parse(text);
                         if (j && (j.message || j.error)) {
                             errMsg = String(j.message || j.error);
                         }
                     } catch (e) {
-                        // 濠碘€冲€归悘澶嬬▔瀹ュ棙笑 JSON闁挎稑濂旀繛鍥偨閵娿儱鏂у┑顔碱儔閺佸﹦鎷犻娆庣箚闁?
+                        // 响应体不是 JSON 时，保留状态码信息。
                     }
                     throw new Error(errMsg);
                 });
@@ -927,7 +929,8 @@
     }
 
     function showBuildGuard(message, detail) {
-        // 闁圭顦鍥传娴ｇ瓔娲ｆ慨鐟板€讳簺闂傚嫨鍊栭悗顖氼嚈濞差亙绱曠紓鍐ｆ櫅閼村﹦绮ｅΔ浣光枖缂佲偓閻氬骞㈠ǎ鍥ㄧ箘閺嗏偓閻犲鍟伴弫銈夋倷瑜版帊缂夐柛蹇撶Т婵傛牠宕鍥х疀闁哄牆顦扮粊锔剧矙鐎ｃ劉鍋?        void message;
+        // 占位：构建守卫弹层由其它逻辑接管，此处显式消除未使用参数告警。
+        void message;
         void detail;
         hideBuildGuard();
     }
@@ -1287,7 +1290,7 @@
         return document.querySelectorAll('.pb-ai-target-domain-sync');
     }
 
-    /** 濞村吋锚閸?#pb-ai-target-domain闁挎稑鐗婇鐐搭殽?1 濞戞挻妲掔欢顓㈠礂閵夘垳绀嗛柨娑樿嫰閹線宕氬▎鎰枀閻熸洑绀佺亸?#pb-ai-target-domain-summary闁挎稑濂旂换姘辨嫚娴ｉ鐟?scope.target_domain 闁告艾鏈花?*/
+    /** 读取目标域名：优先主输入框 #pb-ai-target-domain，其次摘要框，再同步类输入，最后回退到引导 scope 默认值 JSON。 */
     function getTargetDomainTrimmed() {
         var primary = document.getElementById('pb-ai-target-domain');
         if (primary && typeof primary.value === 'string') {
@@ -1359,7 +1362,7 @@
         var idNode = document.getElementById(elementId);
         pushNode(idNode);
 
-        // 闁稿繒鍘ч鎰版焾閵娿儱鐎?i18n 缂備礁瀚▎銏″濮橆叀顩柡?hidden/input 濞达絾绮堢拹鐔兼儑閻旈鏉介柛濠勫帶椤旀劙宕?
+        // 同步多语言隐藏域/输入框节点（主元素 id 及 *_value、*-hidden 等变体）。
         [
             elementId + '_value',
             elementId + '-value',
@@ -1538,11 +1541,11 @@
             domainEl.textContent = String(domainPurchaseState.domain || getTargetDomainTrimmed());
         }
         if (stageEl) {
-            stageEl.textContent = String(domainPurchaseState.stage_label || '閻犳劦鍘洪幏閬嶅春閻旈攱鍊?);
+            stageEl.textContent = String(domainPurchaseState.stage_label || '处理中');
         }
         if (orderEl) {
             var orderId = parseInt(String(domainPurchaseState.order_id || 0), 10) || parseInt(String(domainPurchaseState.purchase_order_id || 0), 10) || 0;
-            orderEl.textContent = orderId > 0 ? String(orderId) : '缂佹稑顦欢鐔兼偨閻旂鐏?;
+            orderEl.textContent = orderId > 0 ? String(orderId) : '待分配';
         }
         if (buttonEl) {
             buttonEl.disabled = ['queued', 'running'].indexOf(String(domainPurchaseState.status || 'idle')) !== -1;
@@ -1790,7 +1793,7 @@
         });
     }
 
-    // 缂佸倷鐒﹂娑欍亜閻㈠憡妗ㄩ柛鏃傚Ь濞村洭寮幆鏉挎闁告柣鍔嶆禒顔藉緞瀹ュ懐鍘甸柛姘Х閸犳ɑ绋?SSE闁挎稑鐬肩划鐑樼▔閳ь剟寮ㄩ柅娑滅闁活潿鍔嶉崺娑㈠及閹呯閻熸瑱绠戣ぐ鍌炲Υ?
+    // 工作区轨道按钮：提交 scope_patch 后刷新页面（与 SSE/合并作用域流程配合）。
     document.querySelectorAll('.pb-ai-workspace-track-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
             var track = btn.getAttribute('data-track');
@@ -1844,7 +1847,7 @@
         });
     }
 
-    // T36: 闁哄被鍎冲﹢鍛村储閸℃钑夌痪顓у枦椤撳寮憴鍕垫敵鐎殿喖婀遍悰?
+    // T36：打开已确认方案（阶段一/二）只读预览弹层。
     function showConfirmedPlanModal(planType) {
         var modalEl = document.getElementById('pb-ai-confirmed-plan-view-modal');
         if (!modalEl) {
@@ -1901,10 +1904,10 @@
         if (planSignature) planSignature.textContent = signature || '-';
         if (planLocale) planLocale.textContent = locale || '-';
 
-        // 閻庢稒锚閸嬪秷銇愰幘鍐差枀闁轰胶澧楀畵浣圭瑹濞戞﹩妲婚柛鎺撴构婵炲洭鎮?
+        // 供「复制 JSON」按钮读取的当前方案快照。
         window.__pbCurrentConfirmedPlanData = planData;
 
-        // 闁哄嫬澧介妵?Modal
+        // 使用 Bootstrap 5 Modal 或 jQuery 兼容方式打开弹层。
         var modal = window.bootstrap && window.bootstrap.Modal ? new window.bootstrap.Modal(modalEl) : null;
         if (modal) {
             modal.show();
@@ -1913,7 +1916,7 @@
         }
     }
 
-    // T36: 濠㈣泛绉撮崺妤冩兜椤旀鍚囬柡鍌濐潐椤?JSON
+    // T36：将当前已确认方案对象序列化并复制到剪贴板。
     function copyConfirmedPlanJson() {
         var data = window.__pbCurrentConfirmedPlanData || {};
         var json = JSON.stringify(data, null, 2);
@@ -1934,14 +1937,14 @@
         bindPlanModalViewSwitchers();
         bindPlanPrimaryPaneSwitchers();
         setPlanViewMode('pb-ai-plan-preview-content');
-        // 缂備焦鍨甸悾楣冨蓟閵壯勭畽闁告ê妫楄ぐ鍫曞棘鐟欏嫷鏀抽柟绋款樀閹?
+        // 绑定「查看已确认方案」按钮。
         document.querySelectorAll('.pb-ai-view-confirmed-plan').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 var planType = btn.getAttribute('data-plan-type') || 'stage1';
                 showConfirmedPlanModal(planType);
             });
         });
-        // 缂備焦鍨甸悾鐐緞瀹ュ懎鐓戦柟绋款樀閹?
+        // 绑定「复制方案 JSON」按钮。
         var copyJsonBtn = document.getElementById('pb-ai-copy-plan-json');
         if (copyJsonBtn) copyJsonBtn.addEventListener('click', copyConfirmedPlanJson);
     });
@@ -1981,7 +1984,7 @@
         return out;
     }
 
-    // Backward compatibility: older cached scripts still call this name.
+    // 向后兼容：旧版缓存脚本仍调用此函数名。
     function ensureRequiredPageSelected(types) {
         return ensureRequiredPageTypeSelected(types);
     }
@@ -2253,14 +2256,14 @@
             extra_page_types_panel_open: extraPageTypesPanelOpen,
             site_profile_manual: Object.assign({}, siteProfileManual)
         };
-        // SSE 闁哄倽顫夐、宥吤规担鍝ユ殮闁瑰瓨鍔曢幃妤呮晬鐏炴儳惟闁汇垻鍠愰崹姘舵儍閸曨剚鐓欐俊妤€鐗嗛崬瀵糕偓鍦嚀閹酣鐛幆鎵 scope patch闁挎稑鐭佽闁告瑦鍨奸崵婊堝礉閵娿倗绠介悗?
+        // 构建虚拟主题自动保存用的 scope_patch：含站点信息、页面类型及方案草稿（供 SSE/合并接口消费）。
         var draftMarkdown = currentPlanPayload && typeof currentPlanPayload === 'object'
             ? String(currentPlanPayload.markdown || '').trim()
             : '';
         if (draftMarkdown !== '') {
             patch.plan_markdown = draftMarkdown;
-            // 闂侇剙鐏濋崢銈夊捶閵娾懇鍋撳鍐；濠殿喖顑嗛悗顖氼嚈?闂傚啳鍩栭灞剧鐏炵偓鎯欏ù锝嗗閳ь剚绻冨鍌滄嫚椤栨稑惟鐎规瓕灏欓垾妯兼媼閵堝洦鐣遍梻鍐煐椤斿本绋夐埀顒勬偐閼哥鍋撴担鐟扳叺闁搞儳鍋炲﹢顓犳兜椤旀鍚囬柕?
-            // 濞寸姴鎳庡﹢顏囥亹閹惧啿顤呭ù鍏间亢閻︿粙寮甸鈧銊╁嫉椤忓棌鈧鎷嬮妶澶嬧枆婵炲牆鍚€缁旀挳寮拋鍦闁归潧绉靛Ο澶婎嚕韫囧海绠介柟?0闁?
+            // 附带当前第一阶段 Markdown 草稿；未确认时显式传 plan_confirmed=0，避免后端误判。
+            // 若存在结构化 plan_json 则一并提交。
             if (!planConfirmedState) {
                 patch.plan_confirmed = 0;
             }
@@ -2303,7 +2306,7 @@
         return true;
     }
 
-    /** 闂傚啳鍩栭灞剧鐏炶棄寮抽柛娆欑秶缁变即寮伴姘剨鐎瑰憡褰冮崣鎸庡緞閸ヮ剚鈻夋繛鍫濆悁缁旀潙顕欓搹鍦讲闁哄倽顫夐、宥夋晬閸粎鐟㈤柣鈺婂枟閻栵綁宕洪悢閿嬪€抽柡鍐Т閸櫻囨晬?*/
+    /** 根据当前前端状态判断是否已有第一阶段方案（草稿或已确认）。 */
     function hasPhaseOnePlanPresent() {
         var md = String((currentPlanPayload && currentPlanPayload.markdown) || '').trim();
         if (md !== '') {
@@ -2408,7 +2411,7 @@
 
     var tabClickLocked = false;
     function getPreviewTabContainers() {
-        // 娴?ul閿涙碍鏌熷鍫ヮ暕鐟欏牓鍣?div.pb-ai-preview-tabs 娑撳秷鍏?append li閿涘苯鎯侀崚娆庣窗閹炬垶鍨氱粩鏍ㄦ蒋鐢啫鐪?
+        // 优先取页面上已有的 ul.pb-ai-preview-tabs；若无则创建并返回包裹容器。
         var containers = Array.from(document.querySelectorAll('ul.pb-ai-preview-tabs'));
         if (containers.length > 0) {
             return containers;
@@ -2431,7 +2434,7 @@
         if (match && match[1] && match[1].trim()) {
             normalized = match[1].trim();
         }
-        normalized = normalized.replace(/^[\s(閿涘溄[閵嗘€?|[\s)閿涘　]閵嗘叜+$/g, '').trim();
+        normalized = normalized.replace(/^[\s([（【]+|[\s)\]）】]+$/g, '').trim();
         return normalized || fallback || String(pageType || '');
     }
 
@@ -2461,16 +2464,16 @@
             var sep = s.indexOf('?') >= 0 ? '&' : '?';
             frame.setAttribute('src', s + sep + '_pb_pv=' + encodeURIComponent(String(Date.now())));
         }
-        // T31: 閻犱礁澧介悿?iframe 闁告梻濮惧ù鍥┾偓鐟版湰閸ㄦ岸宕ユ惔銊ユ闁告劖鐟ラ崬鎾焾閵娾晜鎳犻柟?
+        // T31：iframe 加载完成后重写预览内链接，便于在视觉编辑模式内跳转。
         frame.onload = function () {
             applyPreviewLinkRewrite(frame);
         };
     }
 
     /**
-     * T31: 濡澘瀚～宥夊礃閸涘瓨鎳犻柟鎭掑劦閸ｆ悂宕樺▎蹇旂彜
-     * 闁瑰嚖闄勯崺?iframe 闁告劕鎳愬▓鎴﹀礃閸涙潙鍔ュ銈囨暬濞兼壆鐚剧拠鑼偓鐑芥煣閻愵剙澶嶉柨娑樼焸閸ｆ悂宕樺▎蹇撶厒闁告瑯鍨甸～瀣礌閺嶎偆妞介弶鍫熷灣缁楀倹绋夌€ｎ偅鐎?
-     * 濠㈣埖鐗犻崕鎾煣閻愵剙澶嶅ǎ鍥ㄧ箖鐎垫棃宕㈤悢娲诲殧濞戞柨顦粭澶愬矗?     */
+     * T31：在嵌入预览 iframe 内遍历链接并重写站内 href，使同站导航进入视觉编辑模式。
+     * 外链（非当前 iframe 源站）保持新窗口打开。
+     */
     function applyPreviewLinkRewrite(frame) {
         if (!frame || !frame.contentWindow || !frame.contentDocument) {
             return;
@@ -2494,7 +2497,7 @@
                 if (!href) {
                     return;
                 }
-                // 閻犲搫鐤囩换鍐矚濞差亝鏅柣鎰畭閳ь兛绂廰vaScript 闁告绻楅?
+                // 跳过锚点、空链与 javascript: 伪协议。
                 if (href.trim() === '' || href.trim().startsWith('#') || href.trim().startsWith('javascript:')) {
                     return;
                 }
@@ -2503,18 +2506,18 @@
                     var linkUrl = new URL(href, currentBaseUrl);
                     fullHref = linkUrl.href;
                 } catch (e) {
-                    // 闁烩晝顭堥顔炬崉椤栨氨绐為柨娑樺缁绘岸骞愭担绋挎枾闁?
+                    // 相对路径解析失败时沿用原始 href。
                 }
-                // 婵☆偀鍋撻柡灞诲劜濡叉悂宕ラ敂鑺バ﹀鑸电墵閸庢挳鏌ч悙顒€澶嶉柨娑樼墔缁楀宕ョ仦鐣屽幍闁告艾绋勭槐?
+                // 非本站链接：新窗口打开，避免在预览 iframe 内跳出域。
                 if (currentHost !== '' && !fullHref.startsWith(currentHost)) {
-                    // 濠㈣埖鐗犻崕鎾煣閻愵剙澶嶉柨娑欑閻栵絿鎷嬫０浣界闁哄倹澹嗛悰銉╁矗閿濆棗鈪电€殿喒鍋撻柨娑樺缁绘岸骞愭担绋挎枾閻犲浂鍘虹粻?
+                    // 已判定为外链。
                     link.setAttribute('target', '_blank');
                     link.setAttribute('rel', 'noopener noreferrer');
                     return;
                 }
-                // 闁告劕鎳橀崕鎾煣閻愵剙澶嶉柨娑欎亢琚欓柡瀣姍閵嗗妫冮姀銏ｎ潶闁搞劌顑呴懟鐔兼煂瀹ュ懎鏅稿☉鎾虫惈瑜拌尙鎲撮崱妤€顕х紓鍌涚墳缁额偅绋夋繝浣虹憮闁?
+                // 站内路径：尝试映射到已知 page_type（如 /about、/contact）。
                 var internalPath = fullHref.replace(currentHost, '');
-                // 闁圭粯鍔曡ぐ鍥╂崉椤栨氨绐炲☉鎿冨幘濞堟垶銇勯悽鍛婃〃缂侇偉顕ч悗鐑藉冀閸ヮ亞妲曢柨娑樼墕椤?/about/, /contact/, /products/闁?
+                // detectPageTypeFromPath 根据路径前缀匹配 home/about/contact 等。
                 var pageType = detectPageTypeFromPath(internalPath);
                 if (pageType && typeof rewriteInternalLinkToVisualEdit === 'function') {
                     var rewrittenUrl = rewriteInternalLinkToVisualEdit(pageType, fullHref);
@@ -2525,20 +2528,22 @@
                 }
             });
         } catch (e) {
-            // 閻犳亽鍔岄悡娆戞媼閸ф锛栭柟?iframe 闁哄牜浜滈悾顒勫礂閵娿儱顫ｉ弶鐐跺Г濡炲倿妫冨▎鎾跺笡闊洨鏅弳?
+            // 跨域或无权访问 iframe 文档时静默失败。
         }
     }
 
     /**
-     * T31: 濞?URL 閻犱警鍨扮欢鐐参涢埀顒€霉鐎ｎ喓鈧妫冮姀銏ｎ潶闁?     * @param {string} path URL 閻犱警鍨扮欢?
-     * @returns {string|null} 濡炪倗鏁诲鎵尵鐠囪尙鈧兘寮介崶顏嗘缂?     */
+     * 根据 URL 路径猜测 page_type（首页、关于、联系等）。
+     * @param {string} path 不含查询串的路径
+     * @returns {string|null} 匹配到的 page_type 或 null
+     */
     function detectPageTypeFromPath(path) {
         if (!path) {
             return null;
         }
-        // 閻熸瑥瀚€垫牠宕犻弽顒傜唴鐎?
+        // 去掉查询串、哈希与末尾斜杠并转小写。
         path = path.split('?')[0].split('#')[0].replace(/\/+$/, '').toLowerCase();
-        // 閻㈩垱鐡曢～鍡樸亜閻㈠憡妗ㄧ紒顐ヮ嚙閻庨鎹勯姘辩獮闁哄嫮濮撮惃?
+        // 常见路由与 page_type 的映射表。
         var pageTypePatterns = {
             'home_page': ['', '/', '/index', '/index.html', '/home'],
             'about_page': ['/about', '/about-us', '/aboutus', '/guanyu'],
@@ -2564,12 +2569,13 @@
     }
 
     /**
-     * T31: 閻忓繐妫楅崬鎾焾閵娾斂鈧妫冮姀銏ｎ潶闁搞劌顑夐幗濂稿箳閵夆晛娅㈤柛鎰懁鐠愮喖宕ｉ婵愭綊闁告牗鐗滅槐顏呮綇閹存粎鐟愬☉鎾愁儐閺?
-     * @param {string} pageType 濡炪倗鏁诲鎵尵鐠囪尙鈧兘寮介崶顏嗘缂?     * @param {string} originalUrl 闁告鍠庨～鎰版煣閻愵剙澶?
-     * @returns {string|null} 闂佹彃绉撮崯鎾诲触鎼达絾鐣?URL
+     * 将站内链接改写为视觉编辑 URL：优先带 page_id，其次带 page_type，失败则返回原始 URL。
+     * @param {string} pageType 页面类型
+     * @param {string} originalUrl 原始完整 URL
+     * @returns {string|null} 改写后的 URL
      */
     function rewriteInternalLinkToVisualEdit(pageType, originalUrl) {
-        // 濞村吋锚閸樻稒鎷呯捄銊︽殢鐟滅増鎸告晶鐘炽亜閻㈠憡妗ㄩ柣?page_id 閺夆晜绋栭、鎴犵磽閺嶎剛甯?
+        // 若已知 page_id，则拼接 visual_edit_url 并附带来源引用参数。
         var pageId = getPageIdByType(pageType);
         if (pageId && visualEditBaseUrl) {
             try {
@@ -2578,10 +2584,10 @@
                 editUrl.searchParams.set('_pb_ref', encodeURIComponent(originalUrl));
                 return editUrl.toString();
             } catch (e) {
-                // Fallback
+                // URL 构造失败则尝试仅按 page_type 分支。
             }
         }
-        // 濠碘€冲€归悘澶娾柦閳╁啯绠?page_id闁挎稑鑻惃鍓ф嫚閺囨艾鈻忛柣顫姂閵嗗妫冮姀銏ｎ潶闁搞劌顑呭顒勫极?
+        // 无 page_id 时：用 visual_edit_url + page_type 作为次选方案。
         if (visualEditBaseUrl) {
             try {
                 var typeUrl = new URL(visualEditBaseUrl, window.location.href);
@@ -2589,16 +2595,17 @@
                 typeUrl.searchParams.set('_pb_ref', encodeURIComponent(originalUrl));
                 return typeUrl.toString();
             } catch (e) {
-                // Fallback to original
+                // 仍失败则返回原始链接。
             }
         }
-        // 闁哄啰濮电涵鍫曟煂瀹ュ懎鏅搁柡鍐╁劶缁绘垿宕堕悙鎻掓枾濠殿喖顑夐幗濂稿箳?
+        // 无法改写时保持原 URL。
         return originalUrl;
     }
 
     /**
-     * T31: 闁哄秷顫夊畵浣广亜閻㈠憡妗ㄧ紒顐ヮ嚙閻庣兘鎳㈠畡鏉跨悼 page_id
-     * @param {string} pageType 濡炪倗鏁诲鎵尵鐠囪尙鈧兘寮介崶顏嗘缂?     * @returns {number|string|null} page_id
+     * 从 __pbWorkspacePagesByType 读取指定 page_type 对应的 page_id。
+     * @param {string} pageType 页面类型
+     * @returns {number|string|null} page_id
      */
     function getPageIdByType(pageType) {
         if (!pageType || !window.__pbWorkspacePagesByType) {
@@ -2748,7 +2755,7 @@
         return map;
     }
 
-    // 濞寸姾顕ф慨鐔告交濞戞ê顔婄紓浣哄枍缁旀挳宕烽妸銈嗘珷閺夊牐顫夐悥顕€妫冮姀鈩冪凡閻忕偞娲滈妵姘舵晬濞戞绠介柣锝嗙懅閳规牜鈧湱鍋熼獮鍥ㄧ瑹?runtime 闁搞儳鍋犻惃鐔煎礂閻撳寒鍟囬柕?
+    // 更新预览标签上的生成状态文案（queued/running 等），供运行时与队列状态联动。
     function markPageGenerationStatus(pageType, status, text) {
         var normalizedPageType = String(pageType || '').trim();
         if (!normalizedPageType) {
@@ -2767,7 +2774,7 @@
         });
     }
 
-    // 闁稿繒鍘ч鎰板储閸℃钑夐悹瀣暟閺併倝寮惂鍝ョ獥闁哄唲鍐╁殥闁?queueGenerationStatus 鐎规瓕灏～锔藉緞閺嶎厼鍔ラ柤瀛樼濠€鏉款嚕閺囩姵鏆忛柕?
+    // 兼容旧名 queueGenerationStatus（历史脚本仍可能调用）。
     function queueGenerationStatus(pageType, status, text) {
         return markPageGenerationStatus(pageType, status, text);
     }
@@ -2851,11 +2858,11 @@
         var region = String(payload.region || '');
         var componentCode = String(payload.component || '');
         var regionLabelMap = {
-            header: '妞ら潧銇?,
-            content: '閸愬懎顔?,
-            footer: '妞や絻鍓?
+            header: '页头',
+            content: '内容区',
+            footer: '页脚'
         };
-        var regionLabel = regionLabelMap[region] || '閸栧搫娼?;
+        var regionLabel = regionLabelMap[region] || '区块';
         var shortCode = componentCode;
         if (shortCode.indexOf('/') >= 0) {
             shortCode = shortCode.split('/').pop() || shortCode;
@@ -3177,7 +3184,7 @@
         }
 
         if (titleEl) {
-            titleEl.textContent = String(title || '閸栧搫娼￠悽鐔稿灇濞?);
+            titleEl.textContent = String(title || '区块生成详情');
         }
         if (contextEl) {
             contextEl.textContent = String(contextText || '');
@@ -3443,7 +3450,7 @@
                     window.PbAiOperationRunner.startFromResponse(data);
                 }
             }).catch(function () {
-                // no-op: avoid noisy toasts for background incremental task
+                // 无操作：后台增量任务失败时不弹 Toast，避免干扰用户。
             });
         });
     }
@@ -4139,8 +4146,8 @@
         if (!text) {
             return false;
         }
-        return /闂傚啳鍩栭瀵嶉柡鍌濐潐椤㈠尘闁告牕鎼顢傚銈囨暬濞肩殬闁告劕鎳庨鎭风紒鏃€鐟ч崑顥傞柡宥呮喘椤ｇ荡闁告瑯鍨甸～濯╅柛蹇嬪妿閻濈槃閻犱讲鈧啿鐏妡閻庢稒顨嗛瀵嶉悹鍥х摠濡叉啋闁哄牜浜滈幊顢傚鑸垫尦閸庣！閻忓繘绠栭崕?.test(text)
-            || /闁靛摫?|闁挎矐?|闁哄牜浜?.test(text);
+        return /[ÃÂ�]/.test(text)
+            || /(闂|閻|缂|鈧|锟)/.test(text);
     }
 
     function humanizePreviewKey(key) {
@@ -4150,71 +4157,71 @@
         }
         var normalized = text.toLowerCase().replace(/[\s-]+/g, '_');
         var known = {
-            theme: '娑撳顣?,
-            shared: '娑撳顣?,
-            global: '娑撳顣?,
-            shared_theme: '娑撳顣?,
-            home_page: '妫ｆ牠銆?,
-            about_page: '閸忓厖绨幋鎴滄粦',
-            contact_page: '閼辨梻閮撮幋鎴滄粦',
-            privacy_policy: '闂呮劗顫嗛弨璺ㄧ摜',
-            terms_of_service: '閺堝秴濮熼弶鈩冾儥',
-            refund_policy: '闁偓濞嗙偓鏂傜粵?,
-            shipping_policy: '闁板秹鈧焦鏂傜粵?,
-            cookie_policy: 'Cookie 閺€璺ㄧ摜',
-            blog_post: '閸楁艾顓归弬鍥╃彿',
-            blog_category: '閸楁艾顓归崚鍡欒',
-            blog_list: '閸楁艾顓归崚妤勩€?,
-            custom_page: '閼奉亜鐣炬稊澶愩€夐棃?,
-            hero: '妫ｆ牕鐫嗘稉鏄忣潒鐟?,
-            intro: '缁犫偓娴犲灏崸?,
-            features: '閸旂喕鍏樻禍顔惧仯',
-            feature: '閸旂喕鍏樻禍顔惧仯',
-            benefit: '娴犲嘲鈧棿绱崝?,
-            benefits: '娴犲嘲鈧棿绱崝?,
-            testimonial: '閻劍鍩涚拠鍕幆',
-            testimonials: '閻劍鍩涚拠鍕幆',
-            faq: '鐢瓕顫嗛梻顕€顣?,
-            cta: '鐞涘苯濮╁鏇烆嚤',
-            contact: '閼辨梻閮撮崗銉ュ經',
-            partner: '閸氬牅缍旀导娆庡嵆',
-            partners: '閸氬牅缍旀导娆庡嵆',
-            header: '妞ら潧銇?,
-            footer: '妞や絻鍓?,
-            title: '閺嶅洭顣?,
-            subtitle: '閸擃垱鐖ｆ０?,
-            description: '閹诲繗鍫?,
-            content: '閸愬懎顔?,
-            button_text: '閹稿鎸抽弬鍥х摟',
-            button_label: '閹稿鎸抽弬鍥х摟',
-            button_link: '閹稿鎸抽柧鐐复',
-            image: '閸ュ墽澧?,
-            images: '閸ュ墽澧?,
-            icon: '閸ョ偓鐖?,
-            background: '閼冲本娅?,
-            background_direction: '閼冲本娅欓弬鐟版倻',
-            core_copy: '閺嶇绺鹃弬鍥攳',
-            typography: '鐎涙ぞ缍嬫稉搴㈠笓閻?,
-            style_tone: '妞嬪孩鐗哥拠顓熺毜',
-            visual_style: '鐟欏棜顫庢搴㈢壐',
-            color_palette: '闁板秷澹婇弬瑙勵攳',
-            theme_palette: '娑撳顣介柊宥堝',
-            primary: '娑撴槒澹?,
-            secondary: '鏉堝懎濮懝?,
-            accent: '瀵缚鐨熼懝?,
-            surface: '閼冲本娅欓懝?,
-            text: '閺傚洤鐡ч懝?,
-            implementation_note: '閽€钘夋勾鐠囧瓨妲?,
-            reason: '閽€钘夋勾鐠囧瓨妲?,
-            page_goal: '妞ょ敻娼伴惄顔界垼',
-            block_goal: '閸栧搫娼￠惄顔界垼',
-            content_fill_rule: '閸愬懎顔愭繅顐㈠帠鐟欏嫬鍨?,
-            stage3_directive: '缁楊兛绗侀梼鑸殿唽閹笛嗩攽閹稿洣鎶?,
-            media_assets: '缁辩姵娼楀楦款唴',
-            task: '娴犺濮?,
-            task_key: '娴犺濮熼柨?,
-            field: '鐎涙顔?,
-            fields: '鐎涙顔?
+            theme: '主题',
+            shared: '主题',
+            global: '主题',
+            shared_theme: '主题',
+            home_page: '首页',
+            about_page: '关于页',
+            contact_page: '联系页',
+            privacy_policy: '隐私政策',
+            terms_of_service: '服务条款',
+            refund_policy: '退款政策',
+            shipping_policy: '配送政策',
+            cookie_policy: 'Cookie 政策',
+            blog_post: '博客文章',
+            blog_category: '博客分类',
+            blog_list: '博客列表',
+            custom_page: '自定义页面',
+            hero: '首屏',
+            intro: '介绍区',
+            features: '功能区',
+            feature: '功能区',
+            benefit: '价值点',
+            benefits: '价值点',
+            testimonial: '用户评价',
+            testimonials: '用户评价',
+            faq: '常见问题',
+            cta: '行动引导',
+            contact: '联系方式',
+            partner: '合作伙伴',
+            partners: '合作伙伴',
+            header: '页头',
+            footer: '页脚',
+            title: '标题',
+            subtitle: '副标题',
+            description: '描述',
+            content: '内容',
+            button_text: '按钮文案',
+            button_label: '按钮文案',
+            button_link: '按钮链接',
+            image: '图片',
+            images: '图片',
+            icon: '图标',
+            background: '背景',
+            background_direction: '背景方向',
+            core_copy: '核心文案',
+            typography: '排版',
+            style_tone: '风格语气',
+            visual_style: '视觉风格',
+            color_palette: '配色',
+            theme_palette: '主题配色',
+            primary: '主色',
+            secondary: '辅色',
+            accent: '强调色',
+            surface: '表面色',
+            text: '文本色',
+            implementation_note: '实现说明',
+            reason: '说明原因',
+            page_goal: '页面目标',
+            block_goal: '区块目标',
+            content_fill_rule: '内容填充规则',
+            stage3_directive: '第三阶段指令',
+            media_assets: '媒体素材',
+            task: '任务',
+            task_key: '任务键',
+            field: '字段',
+            fields: '字段'
         };
         if (Object.prototype.hasOwnProperty.call(known, normalized)) {
             return known[normalized];
@@ -4222,7 +4229,7 @@
         if (/[\u4e00-\u9fff]/.test(text)) {
             return text;
         }
-        return '';
+        return normalized.replace(/_/g, ' ');
     }
 
     function sanitizePreviewText(value, fallback) {
@@ -4239,16 +4246,11 @@
             return false;
         }
         return [
-            '閸ュ绮?,
-            '鐠囧瓨妲戦弽绋跨妇娴犲嘲鈧?,
-            '妫ｆ牠銆夐崗鍫ｎ唹濞?,
-            '闂冭埖顔屾稉鈧禒鍛舶閺傜懓鎮?,
-            '閺嶅洭顣介崶瀵哥搏',
-            '閸忓牏鏁ゆ稉鈧崣銉ㄧ樈鐠佸弶绔?,
-            '閸愬秵濡搁悽銊﹀煕鐢箑鍩?,
-            '鐠佲晞顔栫€广垹婀粭顑跨鐏?,
-            '閹垫寧甯撮弽绋跨妇閸忔娊鏁拠?,
-            '娑撳秷鍏橀柆顔藉皡閺嶅洭顣介崪灞煎瘜 cta',
+            '请填写',
+            '填写说明',
+            '写作提示',
+            '不要描述',
+            '仅说明方向',
             'block direction',
             'direction only',
             'first-screen promise',
@@ -4266,44 +4268,45 @@
         if (label) {
             return label;
         }
-        return String(pageTypeLabelMap[pageType] || humanizePreviewKey(pageType) || pageType || '妞ょ敻娼?);
+        return String(pageTypeLabelMap[pageType] || humanizePreviewKey(pageType) || pageType || '页面');
     }
 
     function fallbackBlockLabel(blockKey) {
         var key = String(blockKey || '').trim().toLowerCase();
         var known = {
-            hero: '妫ｆ牕鐫嗘稉鏄忣潒鐟?,
-            intro: '缁犫偓娴犲灏崸?,
-            features: '閸旂喕鍏樻禍顔惧仯',
-            benefit: '娴犲嘲鈧棿绱崝?,
-            benefits: '娴犲嘲鈧棿绱崝?,
-            testimonial: '閻劍鍩涚拠鍕幆',
-            testimonials: '閻劍鍩涚拠鍕幆',
-            faq: '鐢瓕顫嗛梻顕€顣?,
-            cta: '鏉烆剙瀵茬悰灞藉З閸栧搫娼?,
-            contact: '閼辨梻閮撮崗銉ュ經',
-            partner: '閸氬牅缍旀导娆庡嵆',
-            about_intro: '閸忓厖绨幋鎴滄粦',
-            why_choose_us: '娑撹桨绮堟稊鍫モ偓澶嬪閹存垳婊?
+            hero: '首屏',
+            intro: '介绍区',
+            features: '功能区',
+            benefit: '价值点',
+            benefits: '价值点',
+            testimonial: '用户评价',
+            testimonials: '用户评价',
+            faq: '常见问题',
+            cta: '行动引导',
+            contact: '联系方式',
+            partner: '合作伙伴',
+            about_intro: '关于介绍',
+            why_choose_us: '为什么选择我们'
         };
-        return String(known[key] || humanizePreviewKey(key) || '閸愬懎顔愰崠鍝勬健');
+        return String(known[key] || humanizePreviewKey(key) || '区块');
     }
 
     function fallbackPlanPageGoal(pageType, pageLabel) {
-        return String(pageLabel || fallbackPageLabel(pageType, '')) + '妞ょ敻娼伴棁鈧憰浣瑰閹恒儲鐗宠箛鍐╂偝缁便垺鍓伴崶鎾呯礉楠炶埖濡告稉鏄忣洣鏉烆剙瀵查崝銊ょ稊閺€鎯ф躬濞撳懏娅氭担宥囩枂閵?;
+        var label = String(pageLabel || fallbackPageLabel(pageType, '')).trim();
+        return label + '页面目标：明确本页核心价值，帮助用户快速理解并继续浏览。';
     }
 
     function fallbackPlanBlockGoal(pageType, pageLabel, blockKey) {
-        return '閸ュ绮垾? + String(pageLabel || fallbackPageLabel(pageType, '')) + '閳ユ繀鑵戦惃鍕ㄢ偓? + fallbackBlockLabel(blockKey) + '閳ユ繄绮嶇紒鍥︿繆閹垬鈧椒淇婃禒鑽ゅ仯閸滃奔绗呮稉鈧?CTA閵?;
+        return '在“' + String(pageLabel || fallbackPageLabel(pageType, '')) + '”页面中，明确“' + fallbackBlockLabel(blockKey) + '”区块承担的信息目标与行动目标（如 CTA）。';
     }
 
     function fallbackPlanBlockContent(pageType, pageLabel, blockKey) {
-        return '鏉╂瑤閲滈崠鍝勬健閻劋绨悰銉╃秷閳? + String(pageLabel || fallbackPageLabel(pageType, '')) + '閳ユ繄娈? + fallbackBlockLabel(blockKey) + '鐞涖劏鎻敍灞藉簻閸斺晝鏁ら幋宄版彥闁喓鎮婄憴锝勭幆閸婄厧鑻熺紒褏鐢诲ù蹇氼潔閵?;
+        return '为“' + String(pageLabel || fallbackPageLabel(pageType, '')) + '”页面的“' + fallbackBlockLabel(blockKey) + '”区块生成可直接展示的文案与结构。';
     }
 
     function fallbackFieldReason(field) {
-        var label = humanizePreviewKey(field) || '鐠囥儱鐡у▓?;
-        return '閳? + label + '閳ユ繀绻氶幐浣疯礋閸欘垳绱潏鎴ｆ儰閸︽澘鐡у▓纰夌礉绾喛顓婚崥搴″讲閻╁瓨甯存禍銈囩舶閺傚洦顢嶉妴浣筋啎鐠佲剝鍨ㄩ崜宥囶伂缂佈呯敾鐎圭偞鏌﹂妴?;
+        var label = humanizePreviewKey(field) || '字段';
+        return '“' + label + '”用于说明该项在当前区块中的必要性与业务意图。';
     }
 
     function resolveFieldPlanImplementationNote(row) {
@@ -4315,17 +4318,18 @@
 
     function fallbackExecutionValue(key, pageLabel, blockKey) {
         var blockLabel = fallbackBlockLabel(blockKey);
+        var pageText = String(pageLabel || '页面').trim();
         if (key === 'core_copy') {
-            return '閸ュ绮垾? + String(pageLabel || '瑜版挸澧犳い鐢告桨') + '閳ユ繄娈? + blockLabel + '閹崵绮ㄩ弽绋跨妇閸楁牜鍋ｉ敍灞借嫙閹?CTA 閺€鎯ф躬閺勫海鈥樻担宥囩枂閵?;
+            return '围绕“' + pageText + '”中的“' + blockLabel + '”输出一句核心价值表达，并补充对应 CTA。';
         }
         if (key === 'typography') {
-            return '閺嶅洭顣界仦鍌滈獓濞撳懏娅氶敍灞绢劀閺傚洣绻氶幐浣虹叚閸欍儰绗岄崣顖涘鐠囪崵绮ㄩ弸鍕┾偓?;
+            return '建议使用易读的标题层级与正文节奏，突出信息主次。';
         }
         if (key === 'style_tone') {
-            return '閺佺繝缍嬫穱婵囧瘮閸欘垯淇婇妴浣圭閺呰埇鈧礁褰茬紒褏鐢绘潻顓濆敩閻ㄥ嫭鏌熷鍫ｃ€冩潏淇扁偓?;
+            return '文案语气保持一致，匹配品牌定位和目标用户。';
         }
         if (key === 'background_direction') {
-            return '閼冲本娅欐稉搴濆瘜妫版﹢顥撻弽闂寸箽閹镐椒绔撮懛杈剧礉娑撳秵濮犻崡鐘卞瘜閸愬懎顔愭穱鈩冧紖鐏炲倻楠囬妴?;
+            return '背景风格应服务内容可读性，避免喧宾夺主。';
         }
         return '';
     }
@@ -4451,7 +4455,7 @@
                 if (text === '') {
                     return keyLabel;
                 }
-                return keyLabel + '閿? + text;
+                return keyLabel + '：' + text;
             }).filter(Boolean);
         }
         var single = sanitizePreviewText(value, '');
@@ -4511,7 +4515,7 @@
                 if (!value) {
                     return '';
                 }
-                return '<li class="small"><span class="text-muted">' + escapeHtml(humanizePreviewKey(key) || String(key)) + '</span>閿?
+                return '<li class="small"><span class="text-muted">' + escapeHtml(humanizePreviewKey(key) || String(key)) + '</span>：'
                     + '<code>' + escapeHtml(value) + '</code></li>';
             }).filter(Boolean).join('');
             if (paletteRows) {
@@ -4619,7 +4623,7 @@
     function resolvePreviewTabPageLabel(pageType, rawLabel) {
         var normalized = String(pageType || '').trim().toLowerCase();
         if (normalized === 'theme' || normalized === 'shared' || normalized === 'global' || normalized === 'shared_theme') {
-            return String(previewLabels.themeTab || '娑撳顣?);
+            return String(previewLabels.themeTab || '主题');
         }
         return fallbackPageLabel(pageType, rawLabel);
     }
@@ -4802,12 +4806,12 @@
         var planContext = (task.plan_context && typeof task.plan_context === 'object') ? task.plan_context : {};
         var taskScript = (task.task_script && typeof task.task_script === 'object') ? task.task_script : {};
         var implementationContract = (task.implementation_contract && typeof task.implementation_contract === 'object') ? task.implementation_contract : {};
-        var pageGoal = escapeHtml(sanitizePreviewText(planContext.page_goal || '', safePageLabel + ' 妞ょ敻娼版禒璇插鐟曚礁娲跨紒鏇炵秼閸撳秹銆夐棃銏㈡窗閺嶅洤鎷版潪顒€瀵查崝銊ょ稊缂佈呯敾缂佸棗瀵查妴?)).replace(/\n/g, '<br>');
-        var blockGoal = escapeHtml(sanitizePreviewText(planContext.block_goal || '', '鏉╂瑤閲滄禒璇插閸ф娓剁憰浣瑰Ω閸愬懎顔愰妴浣虹閺夋劕鎷版禍銈勭帛鐟曚焦鐪伴幏鍡毿掑〒鍛殶閵?)).replace(/\n/g, '<br>');
+        var pageGoal = escapeHtml(sanitizePreviewText(planContext.page_goal || '', safePageLabel + ' 页面目标：明确本页价值与转化意图。')).replace(/\n/g, '<br>');
+        var blockGoal = escapeHtml(sanitizePreviewText(planContext.block_goal || '', '区块目标：说明该区块承担的信息与行动目标。')).replace(/\n/g, '<br>');
         var scene = escapeHtml(sanitizePreviewText(taskScript.scene || '', rawTaskKey || safePageLabel)).replace(/\n/g, '<br>');
-        var storyGoal = escapeHtml(sanitizePreviewText(taskScript.story_goal || '', '閺勫海鈥樻潻娆庨嚋娴犺濮熼崸妤冩畱閻╊喗鐖ｉ妴浣风贩鐠ф牕鎷扮€瑰本鍨氶弽鍥у櫙閵?)).replace(/\n/g, '<br>');
-        var fillRule = escapeHtml(sanitizePreviewText(taskScript.content_fill_rule || '', '閹稿鐡у▓闈涳綖閸忓懎鍞寸€圭櫢绱濇穱婵囧瘮缂佹挻鐎〒鍛珰楠炶埖鏁幐浣告倵缂侇厾鎴风紒顓犵椽鏉堟垯鈧?)).replace(/\n/g, '<br>');
-        var stage3Directive = escapeHtml(sanitizePreviewText(taskScript.stage3_directive || '', '绾喛顓荤€涙顔岄妴浣虹閺夋劒缍呮稉搴ｅ閺夌喎鎮楅崘宥堢箻閸忋儱鐤勯梽鍛€鎭掆偓?)).replace(/\n/g, '<br>');
+        var storyGoal = escapeHtml(sanitizePreviewText(taskScript.story_goal || '', '叙事目标：让用户理解品牌价值并愿意继续操作。')).replace(/\n/g, '<br>');
+        var fillRule = escapeHtml(sanitizePreviewText(taskScript.content_fill_rule || '', '内容填充规则：保证文案完整、准确、可执行。')).replace(/\n/g, '<br>');
+        var stage3Directive = escapeHtml(sanitizePreviewText(taskScript.stage3_directive || '', '第三阶段执行指令：按任务拆分逐步落地，确保可验收。')).replace(/\n/g, '<br>');
         var acceptance = normalizeStructuredItems(implementationContract.acceptance || []);
         var fieldRequirements = Array.isArray(taskScript.field_content_requirements) ? taskScript.field_content_requirements : [];
         var fieldTable = renderFieldPlanTable(fieldRequirements);
@@ -5145,7 +5149,7 @@
                 try {
                     event.dataTransfer.setData('text/plain', sortKey);
                 } catch (error) {
-                    // noop
+                    // 无操作：部分浏览器不允许 drag data，忽略即可。
                 }
             }
         });
@@ -5232,7 +5236,7 @@
 
         var pages = planRoot.pages && typeof planRoot.pages === 'object' ? planRoot.pages : null;
         if (!pages) {
-            // 闁稿繒鍘ч鎰版晬濮濈湋an_json 闁烩晛鐡ㄧ敮瀛樼?page_type 濞?key闁挎稑鐗婂Λ?pages 闁告牕鎳撻敍娆撴晬?
+            // 无显式 pages 字段时：从根对象中挑出「像单页方案」的键作为 pages（排除 plan_json、seo 等保留键）。
             var reservedKeys = {
                 pages: true,
                 page_types: true,
@@ -5331,28 +5335,28 @@
             structuredRoot = coerceStructuredPlanRootFromParsedJson(parsedFromMd);
         }
 
-        // 濞戞挶鍊濆Ο浣糕枔閸偅鐓欐俊妤€鐗嗘晶鐘电博椤栨粎鍩犲☉鎾亾濞寸姴鎳庨惈宥囩矆閾忓湱娉㈤柡瀣鐎垫煡寮憴鍕垫敵濡澘瀚～宥夊Υ?
+        // 有结构化根数据时优先渲染结构化预览，否则仅展示 Markdown。
         return renderPlanStructuredPreviewHtml(structuredRoot);
     }
 
     function getPreviewActionLabel(action) {
         var normalized = String(action || '').trim();
         if (normalized === 'rebuild-stage') {
-            return String(previewLabels.rebuildStage || previewLabels.rebuildAction || '鐎瑰苯鍙忛柌宥嗘煀閻㈢喐鍨?);
+            return String(previewLabels.rebuildStage || previewLabels.rebuildAction || '重建阶段');
         }
         if (normalized === 'refine-stage') {
-            return String(previewLabels.refineStage || previewLabels.refineAction || '閺佺繝缍嬪顔跨殶');
+            return String(previewLabels.refineStage || previewLabels.refineAction || '微调阶段');
         }
         if (normalized === 'rebuild') {
-            return String(previewLabels.rebuildAction || '闁插秴缂?);
+            return String(previewLabels.rebuildAction || '重建');
         }
         if (normalized === 'delete') {
-            return String(previewLabels.deleteAction || '閸掔娀娅?);
+            return String(previewLabels.deleteAction || '删除');
         }
         if (normalized === 'add-block') {
-            return String(previewLabels.addBlockAction || '閺傛澘顤冮崸?);
+            return String(previewLabels.addBlockAction || '新增区块');
         }
-        return String(previewLabels.refineAction || '瀵邦喛鐨?);
+        return String(previewLabels.refineAction || '微调');
     }
 
     function getPreviewActionContextFingerprint(context) {
@@ -5428,67 +5432,19 @@
     }
 
     function buildPreviewActionPrompt(stage, action, scopeKind, pageLabel, blockLabel) {
-        var pageText = String(pageLabel || '').trim();
-        var blockText = String(blockLabel || '').trim();
-        var scope = String(scopeKind || '').trim();
-        if (stage === 'task-plan') {
-            if (scope === 'stage') {
-                if (action === 'rebuild-stage') {
-                    return '鐠囩柉顕╅弰搴ｎ儑娴滃矂妯佸▓鍨殻娴犳垝鎹㈤崝鈩冩煙濡楀牓娓剁憰浣割洤娴ｆ洟鍣稿鐚寸礉娓氬顩ч崫顏冪昂妞ょ敻娼版导妯哄帥閵嗕礁鎽㈡禍娑楁崲閸斅ゎ洣婢х偛鍨归妴浣告憿娴滄稐绶风挧鏍洣闁插秵鏌婂宕囨倞閵?;
-                }
-                return '鐠囩柉顕╅弰搴ｎ儑娴滃矂妯佸▓鍨殻娴犳垝鎹㈤崝鈩冩煙濡楀牓娓剁憰浣割洤娴ｆ洘鏆ｆ担鎾充簳鐠嬪喛绱濇笟瀣洤鐟曚椒绱崗鍫滅喘閸栨牕鎽㈡禍娑€夐棃顫崲閸斅扳偓浣风贩鐠ф牗鍨ㄦ禍銈勭帛閺嶅洤鍣妴?;
-            }
-            if (scope === 'page') {
-                if (action === 'delete') {
-                    return '鐠囩柉顕╅弰搴濊礋娴犫偓娑斿牐顩﹂崚鐘绘珟妞ょ敻娼伴垾? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繄娈戞禒璇插鐟欏嫬鍨濋敍灞间簰閸欏﹤鍨归梽銈呮倵閸撯晙缍戞禒璇插闂団偓鐟曚焦鈧孩鐗辩悰銉ょ秴閵?;
-                }
-                if (action === 'add-block') {
-                    return '鐠囩柉顕╅弰搴ゎ洣娑撴椽銆夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繃鏌婃晶鐐扮矆娑斿牅鎹㈤崝鈥虫健閿涘矂娓剁憰浣剿夌搾鍏呯矆娑斿牅鎹㈤崝锛勮閸ㄥ鈧椒绶风挧鏍ㄥ灗娴溿倓绮妴?;
-                }
-                if (action === 'rebuild') {
-                    return '鐠囩柉顕╅弰搴ㄣ€夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繄娈戞禒璇插鐟欏嫬鍨濈憰浣割洤娴ｆ洟鍣稿鐚寸礉娓氬顩ч柌宥嗘煀閸掓帒鍨庢禒璇插閸фぜ鈧椒绶风挧鏍€庢惔蹇斿灗鐎瑰本鍨氶弽鍥у櫙閵?;
-                }
-                return '鐠囩柉顕╅弰搴ㄣ€夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繄娈戞禒璇插鐟欏嫬鍨濋棁鈧憰浣割洤娴ｆ洖浜曠拫鍐跨礉娓氬顩ф导妯哄閸濐亙绨烘禒璇插閹峰棜袙閵嗕椒绶风挧鏍ㄥ灗閹笛嗩攽妞ゅ搫绨妴?;
-            }
-            if (action === 'delete') {
-                return '鐠囩柉顕╅弰搴濊礋娴犫偓娑斿牐顩﹂崚鐘绘珟妞ょ敻娼伴垾? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繀鑵戦惃鍕崲閸斺€虫健閳? + (blockText || '瑜版挸澧犳禒璇插閸?) + '閳ユ繐绱濇禒銉ュ挤閸掔娀娅庨崥搴″従娴ｆ瑤鎹㈤崝鈥愁洤娴ｆ洘澹欓幒銉ｂ偓?;
-            }
-            if (action === 'add-block') {
-                return '鐠囩柉顕╅弰搴ゎ洣娑撴椽銆夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繃鏌婃晶鐐扮矆娑斿牅鎹㈤崝鈥虫健閿涘矂娓剁憰浣剿夌搾鍐叉憿娴滄稒澧界悰灞兼崲閸斅扳偓浣虹閺夋劘顩﹀Ч鍌涘灗鐎瑰本鍨氶弽鍥у櫙閵?;
-            }
-            if (action === 'rebuild') {
-                return '鐠囩柉顕╅弰搴濇崲閸斺€虫健閳? + (blockText || '瑜版挸澧犳禒璇插閸?) + '閳ユ繆顩︽俊鍌欑秿闁插秴缂撻敍灞肩伐婵″倷鎹㈤崝鈩冨鐟欙絻鈧胶绀岄弶鎰洣濮瑰倸鎷扮€瑰本鍨氶弽鍥у櫙閹簼绠為弨骞库偓?;
-            }
-            return '鐠囩柉顕╅弰搴濇崲閸斺€虫健閳? + (blockText || '瑜版挸澧犳禒璇插閸?) + '閳ユ繈娓剁憰浣割洤娴ｆ洖浜曠拫鍐跨礉娓氬顩х拫鍐╂殻閸濐亙绨烘禒璇插閹诲繗鍫妴浣风贩鐠ф牗鍨ㄦ禍銈勭帛鐟曚焦鐪伴妴?;
-        }
+        var pageText = String(pageLabel || '页面').trim();
+        var blockText = String(blockLabel || '区块').trim();
+        var stageText = stage === 'task-plan' ? '第二阶段任务方案' : '第一阶段方案';
+        var scope = String(scopeKind || 'block').trim();
+        var actionText = getPreviewActionLabel(action);
+
         if (scope === 'stage') {
-            if (action === 'rebuild-stage') {
-                return '鐠囩柉顕╅弰搴ｎ儑娑撯偓闂冭埖顔岄弫缈犲敜閺傝顢嶇憰浣割洤娴ｆ洖鐣崗銊╁櫢瀵ょ尨绱濇笟瀣洤娣囨繄鏆€閸濐亙绨烘い鐢告桨閻╊喗鐖ｉ妴浣告憿娴滄稑鍞寸€瑰湱绮ㄩ弸鍕洣闁插秴鍟撻妴?;
-            }
-            return '鐠囩柉顕╅弰搴ｎ儑娑撯偓闂冭埖顔岄弫缈犲敜閺傝顢嶇憰浣割洤娴ｆ洘鏆ｆ担鎾充簳鐠嬪喛绱濇笟瀣洤娴兼ê鍘涙导妯哄閸濐亙绨烘い鐢告桨缂佹挻鐎妴浣规瀮濡楀牊鍨ㄩ崠鍝勬健閸掓帒鍨庨妴?;
+            return '请' + actionText + '“' + stageText + '”，并保持页面结构完整、逻辑一致。';
         }
         if (scope === 'page') {
-            if (action === 'delete') {
-                return '鐠囩柉顕╅弰搴濊礋娴犫偓娑斿牐顩﹂崚鐘绘珟妞ょ敻娼伴垾? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繄娈戦弬瑙勵攳鐟欏嫬鍨濋敍灞间簰閸欏﹤鍨归幒澶婃倵閸忔湹缍戞い鐢告桨閸滃苯顕遍懜顏勵洤娴ｆ洝鐨熼弫娣偓?;
-            }
-            if (action === 'add-block') {
-                return '鐠囩柉顕╅弰搴ゎ洣娑撴椽銆夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繃鏌婃晶鐐扮矆娑斿牊鏌熷鍫濇健閿涘矂娓剁憰浣剿夌搾鍏呯矆娑斿牆鍞寸€瑰湱娲伴弽鍥ㄥ灗鏉烆剙瀵查崝銊ょ稊閵?;
-            }
-            if (action === 'rebuild') {
-                return '鐠囩柉顕╅弰搴ㄣ€夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繄娈戦弬瑙勵攳鐟曚礁顩ф担鏇㈠櫢瀵ょ尨绱濇笟瀣洤閸栧搫娼＄紒鎾寸€妴浣规瀮濡楀牐濡總蹇斿灗鐠佹崘顓搁弬鐟版倻閹簼绠為弨骞库偓?;
-            }
-            return '鐠囩柉顕╅弰搴ㄣ€夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繄娈戦弬瑙勵攳鐟曚礁顩ф担鏇炰簳鐠嬪喛绱濇笟瀣洤娴兼ê瀵查崫顏冪昂閸栧搫娼＄紒鎾寸€妴浣规瀮濡楀牊鍨ㄧ拠瀛樻閵?;
+            return '请在“' + pageText + '”范围内执行“' + actionText + '”，并确保该页与站点整体风格一致。';
         }
-        if (action === 'delete') {
-            return '鐠囩柉顕╅弰搴濊礋娴犫偓娑斿牐顩﹂崚鐘绘珟妞ょ敻娼伴垾? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繀鑵戦惃鍕煙濡楀牆娼￠垾? + (blockText || '瑜版挸澧犻崸?) + '閳ユ繐绱濇禒銉ュ挤閸掔姵甯€閸氬骸澧挎担娆戠波閺嬪嫬顩ф担鏇㈠櫢缂佸嫨鈧?;
-        }
-        if (action === 'add-block') {
-            return '鐠囩柉顕╅弰搴ゎ洣娑撴椽銆夐棃鈶┾偓? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繃鏌婃晶鐐扮矆娑斿牊鏌熷鍫濇健閿涘矂娓剁憰浣剿夌搾鍏呯矆娑斿牆鍞寸€瑰湱绮ㄩ弸鍕┾偓浣芥祮閸栨牕濮╂担婊勫灗鐠囧瓨妲戦妴?;
-        }
-        if (action === 'rebuild') {
-            return '鐠囩柉顕╅弰搴㈡煙濡楀牆娼￠垾? + (blockText || '瑜版挸澧犻崸?) + '閳ユ繆顩︽俊鍌欑秿闁插秴缂撻敍灞肩伐婵″倽绻栭崸妤冩畱閸愬懎顔愰妴浣虹波閺嬪嫬鎷扮拋鎹愵吀鐠囧瓨妲戠拠銉︹偓搴濈疄閺€骞库偓?;
-        }
-        return '鐠囩柉顕╅弰搴㈡煙濡楀牆娼￠垾? + (blockText || '瑜版挸澧犻崸?) + '閳ユ繈娓剁憰浣割洤娴ｆ洖浜曠拫鍐跨礉娓氬顩х拫鍐╂殻鏉╂瑤绔撮崸妤冩畱鐞涖劏鎻妴浣虹波閺嬪嫬鎷扮拋鎹愵吀鐠囧瓨妲戦妴?;
+        return '请在“' + pageText + '”的“' + blockText + '”区块执行“' + actionText + '”，输出可直接发布的内容。';
     }
 
     function buildPreviewActionContext(stage, action, scopeKind, pageLabel, blockLabel, targetScope) {
@@ -5498,17 +5454,15 @@
         var blockText = String(blockLabel || '').trim();
         var actionLabel = getPreviewActionLabel(action);
         var subject = '';
+
         if (normalizedScopeKind === 'stage') {
-            subject = normalizedStage === 'task-plan'
-                ? '缁楊兛绨╅梼鑸殿唽閺佺繝鍞ゆ禒璇插閺傝顢?
-                : '缁楊兛绔撮梼鑸殿唽閺佺繝鍞ゅ铏圭彲閺傝顢?;
+            subject = normalizedStage === 'task-plan' ? '第二阶段任务方案' : '第一阶段方案';
         } else if (normalizedScopeKind === 'page') {
-            subject = '妞ょ敻娼伴垾? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳?;
+            subject = '页面“' + (pageText || '未命名页面') + '”';
         } else {
-            subject = '妞ょ敻娼伴垾? + (pageText || '瑜版挸澧犳い鐢告桨') + '閳ユ繀鑵戦惃?
-                + (normalizedStage === 'task-plan' ? '娴犺濮熼崸? : '閺傝顢嶉崸?)
-                + '閳? + (blockText || (normalizedStage === 'task-plan' ? '瑜版挸澧犳禒璇插閸? : '瑜版挸澧犻崸?)) + '閳?;
+            subject = '页面“' + (pageText || '未命名页面') + '”的区块“' + (blockText || '未命名区块') + '”';
         }
+
         return {
             stage: normalizedStage,
             action: String(action || '').trim(),
@@ -5517,7 +5471,7 @@
             pageLabel: pageText,
             blockLabel: blockText,
             promptHint: buildPreviewActionPrompt(normalizedStage, action, normalizedScopeKind, pageText, blockText),
-            summary: '瀹告煡鈧瀚ㄩ垾? + actionLabel + '閳ユ繐绱? + subject + '閵嗗倽顕崗鍫ｇ翻閸忋儰缍橀惃鍕殶閺佺顩﹀Ч鍌︾礉閸愬秶鍋ｉ崙鐑┾偓婊勫⒔鐞涘苯缍嬮崜宥喣佸蹇娾偓婵勨偓?
+            summary: '准备执行“' + actionLabel + '”，作用范围：' + subject + '。'
         };
     }
 
@@ -5838,7 +5792,7 @@
         var mdBtn = document.getElementById('pb-ai-plan-md-view');
         var previewBtn = document.getElementById('pb-ai-plan-preview-view');
         var showPreview = targetId === 'pb-ai-plan-preview-content';
-        /* 娑?Bootstrap .d-none閿?important閿涘宕楅崥宀嬬窗閻?class 閸掑洦宕查敍灞藉瑏娴犲懏鏁?style閿涘苯鎯侀崚?Markdown 濮樻瓕绻欓弮鐘崇《閺勫墽銇?*/
+        /* 切换 Markdown/预览视图：用 Bootstrap d-none 控制显隐，并清除内联 display 以免覆盖样式。 */
         if (markdownView) {
             markdownView.style.removeProperty('display');
             markdownView.classList.toggle('d-none', !!showPreview);
@@ -6118,7 +6072,7 @@
         if (!text) {
             return '';
         }
-        // 闂傚啫寮堕娑㈠箮?AI JSON 闁告鍠愰弸鍐儎鐎涙ê澶嶆繛鎾冲级閻撳宕氭导鎼殨閻熸瑥鐗炵槐鐗堝濡搫甯ラ柟缁樺姇瑜?markdown 閻庢稒顨嗛宀勫Υ?
+        // 若整段文本是 AI 返回的 JSON，则提取其中 markdown 字段或识别为结构化方案根。
         if (text.charAt(0) === '{' || text.charAt(0) === '[') {
             try {
                 var parsed = JSON.parse(text);
@@ -6126,13 +6080,13 @@
                     if (typeof parsed.markdown === 'string' && String(parsed.markdown || '').trim() !== '') {
                         return String(parsed.markdown || '').trim();
                     }
-                    // 缂佺虎鍨崇划銊╁几閸曨偄顕?JSON闁挎稑鐗嗛幆?pages/plan_json 缂佹稑顧€缁辨碍绋夊鍛畨濞达絾绮堢拹?Markdown 闁告鍠愰弸鍐沪閺囩姰浠?
+                    // 识别为结构化 JSON（含 pages/plan_json 等）时返回空字符串，由结构化预览接管。
                     if (coerceStructuredPlanRootFromParsedJson(parsed)) {
                         return '';
                     }
                 }
             } catch (e) {
-                // ignore
+                // 忽略：仅用于调试缓存最近状态，失败不影响主流程。
             }
         }
         return text;
@@ -6389,7 +6343,7 @@
             var payload = parsePlanTerminalPayload(event);
             if (payload && payload.message) {
                 var progressMsg = String(payload.message);
-                var isAiHintOnly = /AI\s*濮濓絽婀悽鐔稿灇闂冭埖顔屾稉鈧弬瑙勵攳閸愬懎顔?.test(progressMsg);
+                var isAiHintOnly = /AI\s*(提示|建议|草稿|思路)/.test(progressMsg);
                 setPlanModeStatus(progressMsg);
                 setPlanModalProgress(progressMsg, parseInt(String(payload.progress_percent || 60), 10) || 60, false);
                 if (!isAiHintOnly && typeof terminal.log === 'function') {
@@ -6454,7 +6408,8 @@
             if (typeof terminal.stop === 'function') {
                 terminal.stop({ suppressTransportError: true });
             }
-            // SSE 闁哄倽顫夐、宥吤规担鍝ユ殮闁瑰瓨鍔曢幃妤呮晬瀹€鈧悵娑㈠础鐎圭姌鏇㈠矗閹达絽娈伴柛鏂诲妺缁绘氨鈧稒锕槐婵堜焊閸℃ɑ鐓欐俊妤€鐗嗛崬瀵糕偓纭咁潐鐎垫梹绋婇崨顓烆嚙闁告帗婢橀幃妤冪博?            autoSaveScope();
+            // 方案 SSE 正常结束后触发一次作用域自动保存（防抖）。
+            autoSaveScope();
         });
         terminal.on('error', function (event) {
             planSseRunning = false;
@@ -6983,8 +6938,8 @@
                 }
             }
             clearTaskPlanPreviewActionContext({ restoreStatus: false });
-            // 濞戞挸閰ｅΟ浣糕枔閸忓摜顏遍柡鍌濐潐椤㈠秴霉娴ｉ顏遍柤鐤彧缁辨媽绠涢崨娣偓蹇旂▔鐠囨彃袟 stop闁挎稑鑻幆渚€宕氬▎鎰疀闁告棑绱曢顒傜磼閹惧瓨灏嗛弶鈺冨仦鐢挳宕ユ惔鈥虫枾闁?EventSource 濞村吋宀搁崳鍛婃交閻愬弶鍊卞☉鎾亾 URL闁?
-            // detect_bootstrap 缂佹稑顦甸弳杈ㄧ鐠囨彃顫ゅù鍏间亢閵嗗啴鎮虫０浣界闁靛棗鑻畷杈ㄦ媴韫囨挻鍊甸柛娆忕墦閸ｅ憡寰勫鍛岛閻?post-task-plan-sse闁靛棗绉查埀?
+            // 正常结束：停止终端与底层 EventSource，释放任务方案 SSE 连接。
+            // detect_bootstrap 队列若已安排后续模式，会在上方提前 return；此处处理收尾 stop。
             if (typeof terminal.stop === 'function') {
                 terminal.stop({ suppressTransportError: true });
             }
@@ -7015,7 +6970,8 @@
     }
 
     /**
-     * 闂傚啳鍩栭灞剧鐏炲吋宕查柛鏂哄墲閺岀喎顩?SSE闁挎稒顑恦entSource 濞?GET闁?     * 闁搞儱鎼悾楣冩晬濮濈湝blic_id闁靛棔鍨ompt_mode闁挎稒绋戞禍鏇犳嫬?闂佹彃绉寸紓鎾诲籍閹澘顏熼柡鍫濐槹閺嬪啫顩奸崼婵嗙仧閺夆晞妫勬慨?instruction闁挎稑鐗婇悡锛勬嫚椤叀顩柨娑橆槶閳?     */
+     * 拼接任务方案 SSE 的 GET URL：附加 public_id、prompt_mode，以及可选的 instruction、target_scope。
+     */
     function buildTaskPlanSseGetUrl(streamUrl, promptMode, instructionText, targetScope) {
         var base = String(streamUrl || '').trim();
         var mode = String(promptMode || '').trim();
@@ -7055,7 +7011,8 @@
     }
 
     /**
-     * 闁归潧顑夐ˉ鎾绘偠閺夋垹娼旂€殿喒鍋撻柨娑欑摂SE detect_bootstrap 闁?鐎圭寮跺﹢渚€寮憴鍕垫敵闁告帗鐟︾粊锕€顕ｈ箛鎾寸濠靛鍋撶槐婵嬪触閿曗偓閸垶鎮介悢绋跨亣妤犵偞鍎奸幆銈嗘償閹捐櫕鍊甸柛鎰Х缁额參宕欓幁鎺嗗亾?     */
+     * 启动任务方案的 detect_bootstrap SSE：在本地无草稿时向后端拉取初始任务计划骨架，再衔接后续模式。
+     */
     function startTaskPlanDetectBootstrapSse(options) {
         var opts = options && typeof options === 'object' ? options : {};
         if (taskPlanSseRunning || (!opts.ignoreStartRequestGuard && taskPlanStartRequestInFlight)) {
@@ -7232,7 +7189,8 @@
     }
 
     /**
-     * 缂佹鍏涚花鈺呮⒓閼告鍞藉ù鐘侯嚙婵喖寮憴鍕垫敵闁挎稒纰嶆晶婊勵槹鎼达絾鍎熼悘鐐存礀缁辨垿寮懜闈涚樆闂傚洠鍋撻柟宄邦槸瑜板洦锛冮弽顐㈩暭闁挎稒绋掗弫鍦導闁垮顦ч柛瀣矋椤?SSE闁?     */
+     * 判断是否已具备进入第二阶段任务方案的前置条件（阶段一方案/蓝图/工作区状态）。
+     */
     function hasPhaseOnePlanReadyForTaskPlan() {
         if (lastPhaseOnePlanPresent || (typeof hasCurrentPhaseOnePlanDraft === 'function' && hasCurrentPhaseOnePlanDraft())) {
             return true;
@@ -7698,7 +7656,7 @@
                 taskPlanConfirmedState = true;
                 hideTaskPlanGenerationModal();
                 toast('success', messages.taskPlanConfirmSaved);
-                // T26: 闁哄倽顫夐、宥咁啅闊厾绠介悗娑欙公缁辨繄鎷犻姀銈嗭紪闁活潿鍔嶉崺娑㈠及椤栨碍鍎婄紒鏂款儏瀹撳棝鎮介悢绋跨亣闁挎稑鐗撶划顖滄媼閵堝嫮鐟濋柤濂変簻婵晛顕ｉ埀顒傛崉閹搭垳绀?
+                // T26：任务方案确认成功后询问是否立即开始构建（使用 BackendConfirm）。
                 if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
                     window.BackendConfirm.show(messages.taskPlanConfirmStartBuildQuestion, {
                         title: messages.taskPlanConfirmSaved,
@@ -7714,7 +7672,8 @@
                         toast('info', messages.taskPlanDeferred);
                     });
                 } else {
-                    // Fallback: 濞戞挸绉烽崵婊堝礉閵娿儳纾婚悹鐑樺煀缁辨繈骞撻幇顔轰粵闁活潿鍔嶉崺娑氱矙瀹ュ懏鍊甸柟闈涱儏婵晛顕ｉ埀顒佹叏?                    toast('info', messages.taskPlanDeferred);
+                    // 无 BackendConfirm 时仅提示「稍后继续」。
+                    toast('info', messages.taskPlanDeferred);
                 }
                 return true;
             }).catch(function (error) {
@@ -7786,7 +7745,7 @@
             }
             hidePlanGenerationModal();
             toast('success', (data && data.message) ? String(data.message) : messages.planConfirmSaved);
-            // 鐎殿喗娲栭鍗烆嚕韫囨挾顏撮悘鐐╁亾闁圭顦板﹢鍥礉閿涘嫷浼傞梻鍐煐椤斿矂宕氶崱娆忣暬婵炴挸寮堕悡瀣晬瀹€鈧垾妯兼媼閵堝懏鍊电€规瓕灏欓弫閬嶅箳閵夈儱缍?setStage(visual_edit)闁挎稑鐭傚〒鍫曞极閹绢喓鈧娼诲☉妯哄汲缂佹鍏涚花鈺呮⒓閼告鍞?DOM闁?
+            // 阶段一确认后跳转引导页（若配置了 guidedUrl），否则整页刷新以同步阶段与 DOM。
             var guidedHref = typeof guidedUrl === 'string' ? guidedUrl.trim() : '';
             if (guidedHref !== '') {
                 window.location.href = guidedHref;
@@ -8001,14 +7960,15 @@
                 showBuildGuard(messages.buildPreparing);
                 setBuildNavigationGuard(true);
 
-                // 闁告艾鏈鐐哄炊閻愬鐖遍梺顐㈩槹鐎氥劑宕?                syncDomPageTypeChecks(selectedTypes);
+                // 根据用户勾选同步 DOM 中的页面类型复选框状态。
+                syncDomPageTypeChecks(selectedTypes);
 
                 setRunVirtualThemeButtonsDisabled(true);
                 if (confirmBtn) {
                     confirmBtn.disabled = true;
                 }
 
-                // 闁告凹鍨版慨?SSE 婵炵繝绀佺槐锟犳偨閻旂鐏?
+                // 提交构建请求；后续进度由 PbAiOperationRunner / SSE 接管。
                 postForm(runVirtualThemeUrl, {
                     public_id: publicId,
                     scope_patch: JSON.stringify(buildVirtualThemePatch())
@@ -8059,7 +8019,7 @@
                 }
                 toast('success', messages.orchestrated);
 
-                // 闁告凹鍨版慨?SSE 婵炵繝绀佺槐锟犳儎閹存繃鍎?
+                // 尝试从响应启动操作流（SSE）；失败则提示缺少可观察的进度流。
                 if (window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function') {
                     if (window.PbAiOperationRunner.startFromResponse(data)) {
                         return;
