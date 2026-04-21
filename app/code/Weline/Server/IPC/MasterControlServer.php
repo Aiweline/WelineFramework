@@ -589,6 +589,25 @@ class MasterControlServer implements ControlPlaneServerInterface
             return;
         }
 
+        // 使用 stream_select 检测连接是否真的可读（非阻塞模式下 fread='' 可能只是暂时无数据）
+        // 如果 stream_select 报告可读但 feof 已为真，说明连接已关闭
+        $readable = [$socket];
+        $write = null;
+        $except = null;
+        $ready = @stream_select($readable, $write, $except, 0, 0);
+
+        if ($ready === false) {
+            // socket 错误，断开连接
+            $this->removeClient($clientId, 'stream_select_error');
+            return;
+        }
+
+        // 如果 stream_select 报告不可读，且 feof 已为真，说明连接已关闭
+        if ($ready === 0 && @\feof($socket)) {
+            $this->removeClient($clientId, 'peer_eof');
+            return;
+        }
+
         $data = @\fread($socket, 65536);
 
         // 连接断开判定：
