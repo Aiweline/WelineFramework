@@ -90,10 +90,27 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             'end_at' => '2026-04-21 02:16:04',
             'process' => 'AI 流式生成中... (+33 B)',
             'result' => "QUEUE 开始执行\nLOG AI 生成中\n",
+            'content' => \json_encode([
+                'job_key' => 'glr_aisite:session:987:job:stage1.requirement_expand',
+                'job_type' => 'stage1.requirement_expand',
+                'status' => 'running',
+                'token' => 'token-abc',
+                'token_usage' => [
+                    'input_tokens' => 1200,
+                    'output_tokens' => 340,
+                    'total_tokens' => 1540,
+                ],
+            ], \JSON_THROW_ON_ERROR),
         ]);
 
         self::assertSame(143, $payload['queue_id']);
         self::assertSame('running', $payload['snapshot']['status']);
+        self::assertSame('glr_aisite:session:987:job:stage1.requirement_expand', $payload['snapshot']['job_key']);
+        self::assertSame('stage1.requirement_expand', $payload['snapshot']['job_type']);
+        self::assertSame('token-abc', $payload['snapshot']['token']);
+        self::assertSame(1200, $payload['snapshot']['token_usage']['input_tokens']);
+        self::assertSame(340, $payload['snapshot']['token_usage']['output_tokens']);
+        self::assertSame(1540, $payload['snapshot']['token_usage']['total_tokens']);
         self::assertSame('AI 流式生成中... (+33 B)', $payload['process']);
         self::assertSame("QUEUE 开始执行\nLOG AI 生成中\n", $payload['result_log']);
     }
@@ -181,6 +198,11 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertIsString($runtimeScript);
         self::assertStringContainsString('syncFromSsePayload', $phaseScript);
         self::assertStringContainsString('mergePlanQueueInfoFromSsePayload', $phaseScript);
+        self::assertStringContainsString('renderQueueInfoSummary', $phaseScript);
+        self::assertStringContainsString('resolveTokenUsage', $phaseScript);
+        self::assertStringContainsString('input_tokens', $phaseScript);
+        self::assertStringContainsString('output_tokens', $phaseScript);
+        self::assertStringContainsString('total_tokens', $phaseScript);
         self::assertStringContainsString('queue_result_delta', $phaseScript);
         self::assertStringContainsString('__pbPhase1TaskProgress.syncFromSsePayload(operation, payload || {}, eventKind)', $runtimeScript);
     }
