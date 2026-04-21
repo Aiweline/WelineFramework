@@ -331,8 +331,10 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
 
         $artifacts = $service->buildTaskPlanArtifacts($scope, ['tasks' => []]);
         $pageTasks = $artifacts['structured']['page_tasks']['home_page'] ?? [];
+        $confirmedBlocks = $scope['plan_workbench']['confirmed']['plan_book']['structured']['pages']['home_page']['blocks'];
 
         self::assertCount(2, $pageTasks);
+        self::assertCount(\count($confirmedBlocks), $pageTasks);
         self::assertSame(['hero', 'proof'], \array_map(
             static fn(array $task): string => (string)($task['block_key'] ?? ''),
             $pageTasks
@@ -344,13 +346,16 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         }
 
         $stage2Queue = $artifacts['structured']['stage2_queue'] ?? [];
+        $blockJobKeys = $stage2Queue['fanout']['block_job_keys'] ?? [];
+
         self::assertSame('stage2.block_task_plan', (string)($stage2Queue['fanout']['fanout_group'] ?? ''));
         self::assertSame('one_block_one_task', (string)($stage2Queue['fanout']['task_granularity'] ?? ''));
-        self::assertSame(2, (int)($stage2Queue['fanout']['block_job_count'] ?? 0));
+        self::assertSame(\count($confirmedBlocks), (int)($stage2Queue['fanout']['block_job_count'] ?? 0));
         self::assertSame(
             ['stage2.block_task_plan:home_page:hero', 'stage2.block_task_plan:home_page:proof'],
-            $stage2Queue['fanout']['block_job_keys'] ?? []
+            $blockJobKeys
         );
+        self::assertSame(\count($confirmedBlocks), \count($blockJobKeys));
         self::assertSame(
             'stage2.block_task_plan',
             (string)($stage2Queue['jobs']['stage2.block_task_plan:home_page:hero']['job_type'] ?? '')
