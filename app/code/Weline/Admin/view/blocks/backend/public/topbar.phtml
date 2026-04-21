@@ -191,14 +191,35 @@ $logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weli
     </div>
 </header>
 <style>
+    #page-topbar {
+        z-index: 10050;
+    }
+
     #page-topbar .dropdown-menu {
         z-index: 10055;
+    }
+
+    .rightbar-overlay {
+        z-index: 10040;
+    }
+
+    .right-bar {
+        z-index: 10060;
     }
 </style>
 <script>
     (function () {
+        return;
+
         var topbar = document.getElementById('page-topbar');
         if (!topbar || typeof window.bootstrap === 'undefined' || !window.bootstrap.Dropdown) {
+            return;
+        }
+
+        var Dropdown = window.bootstrap.Dropdown;
+        // Bootstrap 新版会自动处理 data-bs-toggle="dropdown"，
+        // 仅在旧版缺失 getOrCreateInstance 时做兜底，避免双重 toggle 导致无法展开。
+        if (Dropdown && typeof Dropdown.getOrCreateInstance === 'function') {
             return;
         }
 
@@ -210,10 +231,16 @@ $logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weli
             trigger.dataset.welineDropdownBound = '1';
             trigger.addEventListener('click', function (event) {
                 event.preventDefault();
-                event.stopPropagation();
-                var instance = window.bootstrap.Dropdown.getOrCreateInstance(trigger, {
-                    autoClose: true
-                });
+                var config = {autoClose: true};
+                var instance = null;
+                if (Dropdown && typeof Dropdown.getInstance === 'function') {
+                    instance = Dropdown.getInstance(trigger);
+                    if (!instance) {
+                        instance = new Dropdown(trigger, config);
+                    }
+                } else {
+                    instance = new Dropdown(trigger, config);
+                }
                 instance.toggle();
             });
         });

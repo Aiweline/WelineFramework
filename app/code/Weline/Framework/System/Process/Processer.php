@@ -2278,7 +2278,7 @@ class Processer
             }
 
             $nullDevice = 'NUL';
-            $batchCommand = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File '
+            $batchCommand = 'cmd /d /c '
                 . \escapeshellarg($scriptPath);
             $lastError = null;
 
@@ -2295,7 +2295,7 @@ class Processer
                 });
                 try {
                     $psProcess = @\proc_open(
-                        self::buildWindowsPowerShellProcOpenCommand($scriptPath),
+                        self::buildWindowsCmdProcOpenCommand($scriptPath),
                         $descriptorspec,
                         $psPipes,
                         BP,
@@ -2569,10 +2569,10 @@ class Processer
             return null;
         }
 
-        $scriptPath = $tmpBase . '.ps1';
+        $scriptPath = $tmpBase . '.cmd';
         @\unlink($tmpBase);
 
-        if (@\file_put_contents($scriptPath, self::WINDOWS_PS1_UTF8_BOM . $script) === false) {
+        if (@\file_put_contents($scriptPath, $script) === false) {
             @\unlink($scriptPath);
             return null;
         }
@@ -3180,6 +3180,11 @@ POWERSHELL;
         );
     }
 
+    private static function quoteWindowsBatchArgument(string $value): string
+    {
+        return '"' . \str_replace('"', '""', self::escapeWindowsBatchArgumentLiteral($value)) . '"';
+    }
+
     private static function normalizeWindowsForegroundWindowTitle(string $windowTitle): string
     {
         $windowTitle = \trim(\str_replace(["\r", "\n"], ' ', $windowTitle));
@@ -3236,91 +3241,62 @@ POWERSHELL;
     }
 
     /**
+     * @return list<string>
+     */
+    private static function buildWindowsCmdProcOpenCommand(string $scriptPath): array
+    {
+        return [
+            'cmd',
+            '/d',
+            '/c',
+            $scriptPath,
+        ];
+    }
+
+    /**
      * @param array<int, array{key: string, command: string, php: string, arguments: string, argument_list?: list<string>, process_name: string, cwd: string, enable_log: bool, foreground: bool, foreground_script?: string|null}> $launchItems
      */
     private static function buildWindowsBatchCreateScript(array $launchItems, string $resultPath, string $errorPath): ?string
     {
+        $resultFile = self::escapeWindowsBatchLiteral($resultPath);
+        $errorFile = self::escapeWindowsBatchLiteral($errorPath);
         $lines = [
-            "\$ErrorActionPreference = 'Stop'",
-            '$results = New-Object System.Collections.Generic.List[string]',
-            "\$resultPath = '" . self::escapePowerShellLiteral($resultPath) . "'",
-            "\$errorPath = '" . self::escapePowerShellLiteral($errorPath) . "'",
+            '@echo off',
+            'setlocal DisableDelayedExpansion',
+            'chcp 65001 >NUL',
+            'type NUL > "' . $resultFile . '"',
+            'type NUL > "' . $errorFile . '"',
         ];
 
         foreach ($launchItems as $item) {
-            $key = \str_replace('"', '""', (string) ($item['key'] ?? ''));
-            $php = \str_replace("'", "''", (string) ($item['php'] ?? ''));
-            $cwd = \str_replace("'", "''", (string) ($item['cwd'] ?? BP));
-            $arguments = self::escapePowerShellLiteral((string) ($item['arguments'] ?? ''));
+            $key = self::escapeWindowsBatchLiteral((string) ($item['key'] ?? ''));
+            $php = self::escapeWindowsBatchLiteral((string) ($item['php'] ?? ''));
+            $cwd = self::escapeWindowsBatchLiteral((string) ($item['cwd'] ?? BP));
             $argumentList = $item['argument_list'] ?? self::tokenizeCommandLineArguments((string) ($item['arguments'] ?? ''));
+            $arguments = $argumentList !== []
+                ? \implode(' ', \array_map(
+                    static fn (mixed $argument): string => self::quoteWindowsBatchArgument((string) $argument),
+                    $argumentList
+                ))
+                : self::escapeWindowsBatchArgumentLiteral((string) ($item['arguments'] ?? ''));
             $foreground = !empty($item['foreground']);
-            $block = !empty($item['block']);
-            $foregroundScript = self::escapePowerShellLiteral((string) ($item['foreground_script'] ?? ''));
-            $redirectBase = (string) ($item['process_name'] ?? $item['key'] ?? 'process');
-            $redirectBase = \preg_replace('/[^A-Za-z0-9._-]+/', '-', $redirectBase) ?: 'process';
-            $stdoutPath = self::escapePowerShellLiteral(
-                \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-batch-' . $redirectBase . '.out.log'
-            );
-            $stderrPath = self::escapePowerShellLiteral(
-                \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-batch-' . $redirectBase . '.err.log'
-            );
+            $foregroundScript = self::escapeWindowsBatchLiteral((string) ($item['foreground_script'] ?? ''));
 
             if ($key === '' || (!$foreground && $php === '') || ($foreground && $foregroundScript === '')) {
                 return null;
             }
 
-            $lines[] = 'try {';
-            $lines[] = '    $startArgs = @{';
-            $lines[] = "        FilePath = '" . ($foreground ? 'cmd.exe' : $php) . "'";
-            $lines[] = "        WorkingDirectory = '{$cwd}'";
-            $lines[] = "        WindowStyle = '" . ($foreground ? 'Normal' : 'Hidden') . "'";
-            $lines[] = "        ErrorAction = 'Stop'";
-            if (!$foreground && $block) {
-                $lines[] = '        PassThru = $true';
-            }
-            $lines[] = '    }';
             if ($foreground) {
                 $windowTitle = self::normalizeWindowsForegroundWindowTitle(
                     (string) ($item['process_name'] ?? $item['key'] ?? 'weline-process')
                 );
-                $cmdLine = self::buildWindowsForegroundCmdLine(
-                    (string) ($item['foreground_script'] ?? ''),
-                    $windowTitle
-                );
-                $lines[] = '        PassThru = $true';
-                $lines[] = "    \$startArgs.ArgumentList = @('/d','/c'," . self::toPowerShellSingleQuoted($cmdLine) . ")";
-                $lines[] = '    $p = Start-Process @startArgs';
-                $lines[] = "    \$results.Add(\"{$key}`t\" + [string]\$p.Id) | Out-Null";
+                $windowTitle = self::escapeWindowsBatchLiteral($windowTitle);
+                $lines[] = 'start "' . $windowTitle . '" /D "' . $cwd . '" cmd.exe /d /c call "' . $foregroundScript . '"';
             } else {
-                if ($block) {
-                    $lines[] = "    \$startArgs.RedirectStandardOutput = '{$stdoutPath}'";
-                    $lines[] = "    \$startArgs.RedirectStandardError = '{$stderrPath}'";
-                }
-                if ($argumentList !== []) {
-                    $argumentListLiteral = '@(' . \implode(',', \array_map(
-                        static fn (string $argument): string => self::toPowerShellSingleQuoted($argument),
-                        $argumentList
-                    )) . ')';
-                    $lines[] = "    \$startArgs.ArgumentList = {$argumentListLiteral}";
-                } elseif ($arguments !== '') {
-                    $lines[] = "    \$startArgs.ArgumentList = @('" . self::escapePowerShellLiteral($arguments) . "')";
-                }
-                if ($block) {
-                    $lines[] = '    $p = Start-Process @startArgs';
-                    $lines[] = "    \$results.Add(\"{$key}`t\" + [string]\$p.Id) | Out-Null";
-                } else {
-                    $lines[] = '    Start-Process @startArgs | Out-Null';
-                    $lines[] = "    \$results.Add(\"{$key}`t0\") | Out-Null";
-                }
+                $lines[] = 'start "" /B /D "' . $cwd . '" "' . $php . '" ' . $arguments;
             }
-            $lines[] = '} catch {';
-            $lines[] = '    [System.IO.File]::AppendAllText($errorPath, $_.Exception.Message + [Environment]::NewLine)';
-            $lines[] = "    \$results.Add(\"{$key}`t0\") | Out-Null";
-            $lines[] = '}';
+            $lines[] = '>> "' . $resultFile . '" echo ' . $key . "\t0";
         }
-
-        $lines[] = '$utf8NoBom = New-Object System.Text.UTF8Encoding($false)';
-        $lines[] = '[System.IO.File]::WriteAllLines($resultPath, $results, $utf8NoBom)';
 
         return \implode(PHP_EOL, $lines) . PHP_EOL;
     }

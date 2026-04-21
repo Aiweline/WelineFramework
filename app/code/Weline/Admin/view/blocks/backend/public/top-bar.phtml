@@ -183,8 +183,20 @@ if ((string) $logoHook !== '') {
     </div>
 </header>
 <style>
+    #page-topbar {
+        z-index: 10050;
+    }
+
     #page-topbar .dropdown-menu {
         z-index: 10055;
+    }
+
+    .rightbar-overlay {
+        z-index: 10040;
+    }
+
+    .right-bar {
+        z-index: 10060;
     }
 </style>
 <script>
@@ -331,12 +343,6 @@ if ((string) $logoHook !== '') {
             } else {
                 handleToggle(button);
             }
-        }
-
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initTopbarDropdownFallback);
-        } else {
-            initTopbarDropdownFallback();
         }
 
         initPaletteToggle();
