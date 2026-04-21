@@ -4043,7 +4043,26 @@ class ServiceOrchestrator
             }
         }
 
+        // 最终清理：确保所有实例都被正确清理，包括僵尸 IPC 连接
         foreach ($allInstances as $instance) {
+            $trackingPid = $this->getInstanceTrackingPid($instance);
+
+            // 强制关闭任何残留的 IPC 连接（防止僵尸 IPC 连接）
+            if ($instance->ipcClientId !== null) {
+                WlsLogger::info_(
+                    "[Orchestrator] 清理残留 IPC 连接: {$instance->role}#{$instance->instanceId}, pid={$trackingPid}, ipc={$instance->ipcClientId}"
+                );
+                $this->closeStopFlowClient($instance->ipcClientId);
+                $instance->ipcClientId = null;
+            }
+
+            // 如果进程已退出但未被清理，执行清理
+            if ($trackingPid > 0 && !$this->isProcessRunning($trackingPid)) {
+                WlsLogger::info_(
+                    "[Orchestrator] 检测到僵尸进程: {$instance->role}#{$instance->instanceId}, pid={$trackingPid} 已退出但未被回收"
+                );
+            }
+
             $this->cleanupInstancePidFile($instance);
             $instance->state = ServiceInstance::STATE_STOPPED;
             $this->registry->updateInstance($instance);
