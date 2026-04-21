@@ -1328,6 +1328,13 @@ final class AiSiteExecutionBlueprintService
         );
 
         $briefSignals = $this->extractStageOneBriefSignalTokens($briefDescription);
+        $themeDesign = \is_array($planJson['theme_design'] ?? null)
+            ? $planJson['theme_design']
+            : (\is_array($planJson['shared_plan']['theme_design'] ?? null) ? $planJson['shared_plan']['theme_design'] : []);
+        if ($themeDesign !== []) {
+            $this->assertAiStageOneThemeSelectionReason($themeDesign, $briefDescription);
+        }
+
         foreach ($pageTypes as $pageType) {
             $page = \is_array($planJson['pages'][$pageType] ?? null) ? $planJson['pages'][$pageType] : null;
             if ($page === null) {
@@ -1454,6 +1461,33 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param array<string, mixed> $themeDesign
+     */
+    private function assertAiStageOneThemeSelectionReason(array $themeDesign, string $briefDescription): void
+    {
+        $selectionReason = \trim((string)($themeDesign['selection_reason'] ?? ''));
+        if ($selectionReason === '' || $this->isPromptLikeStageOneText($selectionReason, 'selection_reason')) {
+            throw new \RuntimeException('AI stage-1 plan invalid: theme_design.selection_reason is empty or still instruction-like.');
+        }
+
+        $requirementSignals = $this->extractStageOneSelectionReasonRequirementTokens($briefDescription);
+        if ($requirementSignals === []) {
+            if ($this->isGenericThemeSelectionReason($selectionReason)) {
+                throw new \RuntimeException('AI stage-1 plan invalid: theme_design.selection_reason must reference the user one-line requirement.');
+            }
+            return;
+        }
+
+        foreach ($requirementSignals as $signal) {
+            if ($signal !== '' && \mb_stripos($selectionReason, $signal) !== false) {
+                return;
+            }
+        }
+
+        throw new \RuntimeException('AI stage-1 plan invalid: theme_design.selection_reason must reference the user one-line requirement.');
+    }
+
+    /**
      * @return list<string>
      */
     private function extractStageOneBriefSignalTokens(string $briefDescription): array
@@ -1475,6 +1509,83 @@ final class AiSiteExecutionBlueprintService
         }
 
         return \array_values(\array_unique($signals));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractStageOneSelectionReasonRequirementTokens(string $briefDescription): array
+    {
+        $brief = \trim($briefDescription);
+        if ($brief === '') {
+            return [];
+        }
+
+        $signals = $this->extractStageOneBriefSignalTokens($brief);
+        if (\preg_match_all('/[a-z0-9][a-z0-9+#.\'-]{2,}/iu', $brief, $matches) === 1) {
+            $stopWords = [
+                'and' => true,
+                'are' => true,
+                'build' => true,
+                'for' => true,
+                'need' => true,
+                'page' => true,
+                'pages' => true,
+                'site' => true,
+                'the' => true,
+                'this' => true,
+                'with' => true,
+                'website' => true,
+            ];
+            foreach ($matches[0] as $candidate) {
+                $candidate = \mb_strtolower(\trim((string)$candidate));
+                if ($candidate !== '' && !isset($stopWords[$candidate])) {
+                    $signals[] = $candidate;
+                }
+            }
+        }
+
+        if (\preg_match_all('/[\p{Han}]{2,}/u', $brief, $matches) === 1) {
+            foreach ($matches[0] as $candidate) {
+                $candidate = \trim((string)$candidate);
+                if ($candidate !== '') {
+                    $signals[] = $candidate;
+                }
+            }
+        }
+
+        return \array_values(\array_unique($signals));
+    }
+
+    private function isGenericThemeSelectionReason(string $selectionReason): bool
+    {
+        $normalized = \mb_strtolower(\trim($selectionReason));
+        if ($normalized === '') {
+            return true;
+        }
+
+        $genericMarkers = [
+            'modern',
+            'premium',
+            'high-end',
+            'high end',
+            'simple',
+            'clean',
+            'professional',
+            'elegant',
+            'minimal',
+            'trustworthy',
+            'contemporary',
+        ];
+        $withoutGeneric = $normalized;
+        foreach ($genericMarkers as $marker) {
+            if ($marker !== '') {
+                $withoutGeneric = \str_replace($marker, ' ', $withoutGeneric);
+            }
+        }
+        $withoutGeneric = (string)\preg_replace('/[\s,.;:\-]+/u', '', $withoutGeneric);
+
+        return $withoutGeneric === '' || \mb_strlen($withoutGeneric) < 4;
     }
 
     /**
