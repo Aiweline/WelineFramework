@@ -628,9 +628,13 @@ class SharedStateServiceManager
         foreach ([ControlMessage::ROLE_SESSION_SERVER, ControlMessage::ROLE_MEMORY_SERVER] as $role) {
             $this->withRoleLock($role, function () use ($role, $instanceName): void {
                 $registry = $this->createRegistry();
+                $runtime = $this->readRuntimeFile($role);
+                if ($runtime === []) {
+                    $runtime = $registry->getRecord($role);
+                }
+                $this->sendSharedServiceConsumerShutdown($role, $instanceName, $runtime);
                 $registry->releaseConsumer($role, $instanceName);
                 $this->syncRuntimeRegistryMetadata($role, $registry);
-                $this->shutdownIfUnusedUnderLock($role, [], $registry);
             });
         }
     }
@@ -795,6 +799,7 @@ class SharedStateServiceManager
     {
         $role = (string) $definition['role'];
         $record = \array_merge($runtime, [
+            'role' => $role,
             'host' => (string) ($runtime['host'] ?? $definition['host']),
             'port' => (int) ($runtime['port'] ?? $definition['port']),
             'token_file_name' => (string) ($runtime['token_file_name'] ?? $definition['token_file_name']),
@@ -812,24 +817,50 @@ class SharedStateServiceManager
      */
     protected function forceStopSharedService(array $record): bool
     {
-        $pid = (int) ($record['pid'] ?? 0);
         $port = (int) ($record['port'] ?? 0);
 
-        if ($pid > 0) {
-            $stopped = Processer::gracefulKill($pid, 1.0, true);
-            if (!$stopped) {
-                $stopped = Processer::killProcessTreeByPid($pid, true);
-            }
-            if ($stopped) {
-                return true;
-            }
-        }
-
         if ($port > 0) {
-            return Processer::killProcessByPort($port) || Processer::forceReleasePort($port);
+            return $this->sendSharedServiceServerShutdown($record);
         }
 
         return false;
+    }
+
+    protected function sendSharedServiceConsumerShutdown(string $role, string $consumerCode, array $runtime): bool
+    {
+        return $this->sendSharedServiceShutdown($role, $runtime, $consumerCode, []);
+    }
+
+    protected function sendSharedServiceServerShutdown(array $runtime): bool
+    {
+        return $this->sendSharedServiceShutdown((string) ($runtime['role'] ?? ''), $runtime, null, ['server' => true]);
+    }
+
+    protected function sendSharedServiceShutdown(
+        string $role,
+        array $runtime,
+        ?string $consumerCode,
+        array $params
+    ): bool {
+        $role = $this->normalizeRoleName($role);
+        $host = \trim((string) ($runtime['host'] ?? '127.0.0.1'));
+        $port = (int) ($runtime['port'] ?? 0);
+        $tokenFileName = \trim((string) ($runtime['token_file_name'] ?? $this->defaultTokenForRole($role)));
+        if ($host === '' || $port <= 0 || $tokenFileName === '') {
+            return false;
+        }
+
+        try {
+            return SharedStateProtocolProbe::shutdownWithTokenBasename(
+                $host,
+                $port,
+                $tokenFileName,
+                $consumerCode,
+                $params
+            );
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
