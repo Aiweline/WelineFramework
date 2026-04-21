@@ -289,8 +289,8 @@ final class AiSiteAgentSseMarkerTest extends TestCase
     public function testStageTwoTaskProgressUiSupportsRealtimeSemanticStatuses(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
-        $layout = ile_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
-        $runtimeScript = ile_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        $layout = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
+        $runtimeScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
 
         self::assertIsString($layout);
         self::assertIsString($runtimeScript);
