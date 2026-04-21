@@ -110,12 +110,38 @@
         return normalized === null ? queueMessages.unknown : String(normalized);
     }
 
+    function pickTokenCount(source, keys) {
+        if (!source || typeof source !== 'object') {
+            return null;
+        }
+        for (var i = 0; i < keys.length; i += 1) {
+            var key = keys[i];
+            if (!Object.prototype.hasOwnProperty.call(source, key)) {
+                continue;
+            }
+            var normalized = normalizeTokenCount(source[key]);
+            if (normalized !== null) {
+                return normalized;
+            }
+        }
+        return null;
+    }
+
     function resolveTokenUsage(info) {
         var snapshot = info && info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
         var usage = Object.assign({}, toObjectSafe(snapshot.token_usage), toObjectSafe(info && info.token_usage));
-        var input = normalizeTokenCount(usage.input_tokens || usage.prompt_tokens || snapshot.input_tokens || snapshot.prompt_tokens);
-        var output = normalizeTokenCount(usage.output_tokens || usage.completion_tokens || snapshot.output_tokens || snapshot.completion_tokens);
-        var total = normalizeTokenCount(usage.total_tokens || snapshot.total_tokens);
+        var input = pickTokenCount(usage, ['input_tokens', 'prompt_tokens']);
+        if (input === null) {
+            input = pickTokenCount(snapshot, ['input_tokens', 'prompt_tokens']);
+        }
+        var output = pickTokenCount(usage, ['output_tokens', 'completion_tokens']);
+        if (output === null) {
+            output = pickTokenCount(snapshot, ['output_tokens', 'completion_tokens']);
+        }
+        var total = pickTokenCount(usage, ['total_tokens']);
+        if (total === null) {
+            total = pickTokenCount(snapshot, ['total_tokens']);
+        }
         if (total === null && input !== null && output !== null) {
             total = input + output;
         }
@@ -125,7 +151,10 @@
     function renderQueueSummaryItem(key, label, value, codeLike) {
         var display = String(value == null || value === '' ? queueMessages.unknown : value);
         var valueTag = codeLike ? 'code' : 'strong';
-        return '<div class="col-6" role="listitem" data-queue-info-field="' + escapeHtml(key) + '">'
+        var tokenUsageAttr = (key === 'input_tokens' || key === 'output_tokens' || key === 'total_tokens')
+            ? ' data-token-usage-field="' + escapeHtml(key) + '"'
+            : '';
+        return '<div class="col-6" role="listitem" data-queue-info-field="' + escapeHtml(key) + '"' + tokenUsageAttr + '>'
             + '<div class="text-muted small">' + escapeHtml(label) + '</div>'
             + '<' + valueTag + ' class="small text-break">' + escapeHtml(display) + '</' + valueTag + '>'
             + '</div>';
