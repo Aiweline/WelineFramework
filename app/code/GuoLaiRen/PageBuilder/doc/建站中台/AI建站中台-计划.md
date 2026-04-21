@@ -1064,8 +1064,8 @@ Atomic Task ID:
 
 #### A. 第一阶段主题规划与共享 Tab
 
-- [ ] A01 定义 `theme_design` 最小 schema（status=todo, owner=backend-schema, covers=§1A/§13.2.3, output=`theme_purpose/color_scheme/typography_spacing_radius/visual_keywords/tone_of_voice/cta_tone/forbidden_styles/selection_reason` 字段定义）
-- [x] A02 为 `theme_design.color_scheme` 增加字段校验（status=done, owner=worker-2, covers=§1A, output=主色/辅色/强调色/背景/正文/按钮色均非空, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
+- [x] A01 定义 `theme_design` 最小 schema（status=done, owner=worker-1, covers=§1A/§13.2.3, output=`theme_purpose/color_scheme/typography_spacing_radius/visual_keywords/tone_of_voice/cta_tone/forbidden_styles/selection_reason` 字段定义；evidence=AiSiteExecutionBlueprintServiceTest theme_design schema assertions）
+- [ ] A02 为 `theme_design.color_scheme` 增加字段校验（status=todo, owner=validation, covers=§1A, output=主色/辅色/强调色/背景/正文/按钮色均非空）
 - [ ] A03 为 `selection_reason` 增加“引用用户一句话需求”的校验（status=todo, owner=validation, covers=§1A 具体性契约, output=禁止空泛“现代/高级/简洁”）
 - [ ] A04 修改共享提示词，强制输出具体主题规划而非方向描述（status=todo, owner=prompt, covers=§1A/§13.2.3, output=`buildStageOneSharedPlanPrompt` 条款）
 - [ ] A05 修改共享提示词，要求说明“为什么选择该色系/字体/语气”（status=todo, owner=prompt, covers=§1A, output=`selection_reason`）
