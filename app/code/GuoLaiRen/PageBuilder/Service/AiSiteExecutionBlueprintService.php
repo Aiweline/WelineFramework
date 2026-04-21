@@ -147,15 +147,17 @@ final class AiSiteExecutionBlueprintService
             $pageTypes,
             $planLocale
         );
+        $pagePlans = $this->buildStageOnePagePlans($pages, $sharedPromptContext);
         $stageOneQueue = $this->buildStageOneHeaderFooterQueueEnvelope(
+            $planningScope,
+            $websiteProfile,
             $themeContextSnapshot,
             $sharedComponents,
             $sharedPromptContext,
+            $pagePlans,
             $pageTypes,
             $planLocale
         );
-        $pagePlans = $this->buildStageOnePagePlansConcurrently($pages, $sharedPromptContext);
-        $stageOneQueue = $this->buildStageOnePageFanoutQueueEnvelope($stageOneQueue, $pagePlans, $sharedPromptContext, $planLocale);
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
 
         $executionBlueprint = [
@@ -1295,12 +1297,10 @@ final class AiSiteExecutionBlueprintService
             \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : []
         );
         $sharedPromptContext = $this->buildStageOneSharedPromptContext($themeContextSnapshot, $sharedComponents, $pageTypes, $planLocale);
-        $stageOneQueue = $this->buildStageOneHeaderFooterQueueEnvelope(
-            $themeContextSnapshot,
-            $sharedComponents,
-            $sharedPromptContext,
-            $pageTypes,
-            $planLocale
+        $themeDesignQueueJob = $this->buildStageOneThemeDesignQueueJob($scope, $websiteProfile, $themeContextSnapshot, $planLocale);
+        $stageOneQueueJobs = $this->upsertStageOneQueueJob(
+            \is_array($executionBlueprint['queue_jobs'] ?? null) ? $executionBlueprint['queue_jobs'] : [],
+            $themeDesignQueueJob
         );
         $structured['theme_context_snapshot'] = $themeContextSnapshot;
         $structured['shared_components'] = $sharedComponents;
@@ -1316,13 +1316,20 @@ final class AiSiteExecutionBlueprintService
         $planJson['theme_design'] = $themeDesign;
         $executionBlueprint['theme_context_snapshot'] = $themeContextSnapshot;
         $executionBlueprint['shared_prompt_context'] = $sharedPromptContext;
-        $structured['stage1_queue'] = $stageOneQueue;
-        $executionBlueprint['stage1_queue'] = $stageOneQueue;
-        $pagePlans = $this->buildStageOnePagePlansConcurrently(
+        $pagePlans = $this->buildStageOnePagePlans(
             \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [],
             $sharedPromptContext
         );
-        $stageOneQueue = $this->buildStageOnePageFanoutQueueEnvelope($stageOneQueue, $pagePlans, $sharedPromptContext, $planLocale);
+        $stageOneQueue = $this->buildStageOneHeaderFooterQueueEnvelope(
+            $scope,
+            $websiteProfile,
+            $themeContextSnapshot,
+            $sharedComponents,
+            $sharedPromptContext,
+            $pagePlans,
+            $pageTypes,
+            $planLocale
+        );
         $structured['stage1_queue'] = $stageOneQueue;
         $executionBlueprint['stage1_queue'] = $stageOneQueue;
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
@@ -3716,9 +3723,12 @@ final class AiSiteExecutionBlueprintService
      * @return array<string, mixed>
      */
     private function buildStageOneHeaderFooterQueueEnvelope(
+        array $scope,
+        array $websiteProfile,
         array $themeContextSnapshot,
         array $sharedComponents,
         array $sharedPromptContext,
+        array $pagePlans,
         array $pageTypes,
         string $planLocale
     ): array {
@@ -3755,16 +3765,113 @@ final class AiSiteExecutionBlueprintService
                 'shared_prompt_context',
             ],
         ];
+        $pageFanoutJobs = $this->buildStageOnePageFanoutQueueJobs($scope, $websiteProfile, $pagePlans, $sharedPromptContext, $planLocale);
+        $jobs = [
+            $job['job_key'] => $job,
+        ];
+        $sequence = [$job['job_key']];
+        foreach ($pageFanoutJobs as $pageFanoutJob) {
+            $pageJobKey = (string)($pageFanoutJob['job_key'] ?? '');
+            if ($pageJobKey === '') {
+                continue;
+            }
+            $jobs[$pageJobKey] = $pageFanoutJob;
+            $sequence[] = $pageJobKey;
+        }
 
         return [
             'version' => 1,
             'stage' => 'stage1',
             'status' => 'done',
-            'sequence' => [$job['job_key']],
-            'jobs' => [
-                $job['job_key'] => $job,
-            ],
+            'sequence' => $sequence,
+            'jobs' => $jobs,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $pagePlans
+     * @param array<string, mixed> $sharedPromptContext
+     * @return list<array<string, mixed>>
+     */
+    private function buildStageOnePageFanoutQueueJobs(
+        array $scope,
+        array $websiteProfile,
+        array $pagePlans,
+        array $sharedPromptContext,
+        string $planLocale
+    ): array {
+        $jobs = [];
+        $sessionPublicId = \trim((string)($scope['session_public_id'] ?? $scope['public_id'] ?? ''));
+        $websitePublicId = \trim((string)($scope['website_public_id'] ?? $websiteProfile['public_id'] ?? $websiteProfile['website_public_id'] ?? ''));
+        $sharedContextHash = \trim((string)($sharedPromptContext['context_hash'] ?? ''));
+        $themeContextHash = \trim((string)($sharedPromptContext['theme_context_hash'] ?? ''));
+        $sortOrder = 100;
+
+        foreach ($pagePlans as $pageKey => $pagePlan) {
+            if (!\is_array($pagePlan)) {
+                continue;
+            }
+            $pageKey = \trim((string)$pageKey);
+            if ($pageKey === '') {
+                continue;
+            }
+
+            $pageContextHash = \trim((string)($pagePlan['page_context_hash'] ?? ''));
+            $token = \sha1((string)\json_encode([
+                'job_type' => 'stage1.page_plan',
+                'page_key' => $pageKey,
+                'shared_context_hash' => $sharedContextHash,
+                'page_context_hash' => $pageContextHash,
+            ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+
+            $jobs[] = [
+                'job_key' => 'stage1.page_plan:' . $pageKey,
+                'job_type' => 'stage1.page_plan',
+                'stage' => 'stage1_page_fanout',
+                'sort_order' => $sortOrder++,
+                'session_public_id' => $sessionPublicId,
+                'website_public_id' => $websitePublicId,
+                'page_key' => $pageKey,
+                'block_key' => 'page:' . $pageKey,
+                'depends_on' => ['stage1.shared.header_footer'],
+                'status' => (string)($pagePlan['page_status'] ?? 'done'),
+                'progress_percent' => (string)($pagePlan['page_status'] ?? 'done') === 'done' ? 100 : 0,
+                'prompt_version' => 'stage1.page_plan.v1',
+                'plan_locale' => $planLocale,
+                'context_hash' => $pageContextHash,
+                'shared_context_hash' => $sharedContextHash,
+                'theme_context_hash' => $themeContextHash,
+                'token' => $token,
+                'dispatch_trigger' => 'stage1.shared.header_footer.done',
+                'dispatch_mode' => 'automatic_after_dependency',
+                'requires_user_tab' => false,
+                'fanout_group' => 'stage1.page_fanout',
+                'inputs' => [
+                    'page_key' => $pageKey,
+                    'shared_context_hash' => $sharedContextHash,
+                    'theme_context_hash' => $themeContextHash,
+                    'plan_locale' => $planLocale,
+                ],
+                'outputs' => [
+                    'page_plan' => $pagePlan,
+                    'page_context_hash' => $pageContextHash,
+                ],
+                'result_ref' => [
+                    'kind' => 'scope_path',
+                    'scope_path' => 'plan_workbench.stage1.page_plans.' . $pageKey,
+                    'structured_path' => 'plan_structured.page_plans.' . $pageKey,
+                    'execution_blueprint_path' => 'execution_blueprint_draft.page_plans.' . $pageKey,
+                    'context_hash' => $pageContextHash,
+                ],
+                'retry_count' => 0,
+                'last_error' => '',
+                'updated_at' => '',
+            ];
+        }
+
+        return $jobs;
     }
 
     /**
