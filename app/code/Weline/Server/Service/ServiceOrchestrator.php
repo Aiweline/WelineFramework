@@ -163,9 +163,9 @@ class ServiceOrchestrator
     private bool $maintenanceSticky = false;
 
     /**
-     * 等待 Worker 对 set_maintenance_mode 的 ACK（request_id 对齐）
+     * 等待维护态切换 ACK：业务 Worker set_maintenance_mode 或 Dispatcher 维护池切换。
      *
-     * @var array{request_id: string, expected: array<int, true>, acked: array<int, true>}|null
+     * @var array{request_id: string, expected: array<int|string, true>, acked: array<int|string, true>, kind?: string}|null
      */
     private ?array $pendingMaintenanceModeAck = null;
     private float $lastMaintenanceOperationLogAt = 0.0;
@@ -4498,15 +4498,35 @@ class ServiceOrchestrator
         // 单 Worker：无同角色接替，必须切维护池。多 Worker + force：一批全杀会短暂无业务 Worker，同样先切维护池兜底。
         $shouldEnableMaintenanceBeforeWorkerReload = $reloadsWorker
             && !$this->maintenanceMode
-            && (!$multiWorkerWorkerReload || $forceReload);
+            && !$multiWorkerWorkerReload;
         $maintenanceEnabledForReload = false;
+        $maintenanceStickyBeforeReload = $this->maintenanceSticky;
         try {
-            if ($multiWorkerWorkerReload && $this->maintenanceMode && !$this->maintenanceSticky) {
+            if ($multiWorkerWorkerReload && $this->maintenanceMode && !$this->maintenanceSticky && !$forceReload) {
                 $this->disableMaintenanceMode();
                 $this->controlServer?->poll(0, 400000);
             }
-            if ($shouldEnableMaintenanceBeforeWorkerReload) {
-                $enableResult = $this->enableMaintenanceMode(false, $forceReload);
+            if ($reloadsWorker && $forceReload) {
+                $enableResult = $this->enableMaintenanceMode(false, true);
+                if ($enableResult['success']) {
+                    $maintenanceEnabledForReload = !$maintenanceStickyBeforeReload;
+                    $this->controlServer?->poll(0, 600000);
+                } else {
+                    WlsLogger::warning_(
+                        '[Orchestrator] force reload 未能完成 Dispatcher 维护分流确认（'
+                        . ($enableResult['message'] ?? 'unknown')
+                        . '），已中止本轮强制并发重载'
+                    );
+                    $this->sendReloadWaitTerminalOutcome(
+                        ControlMessage::reloadFailed(
+                            'force reload aborted before worker restart: maintenance dispatcher takeover not confirmed'
+                        )
+                    );
+
+                    return;
+                }
+            } elseif ($shouldEnableMaintenanceBeforeWorkerReload) {
+                $enableResult = $this->enableMaintenanceMode(false, false);
                 if ($enableResult['success']) {
                     $maintenanceEnabledForReload = true;
                     $this->controlServer?->poll(0, 600000);
@@ -4514,7 +4534,7 @@ class ServiceOrchestrator
                     WlsLogger::warning_(
                         '[Orchestrator] reload_all 未能启用维护 Worker（'
                         . ($enableResult['message'] ?? 'unknown')
-                        . '），将继续重载；单 Worker/强制全批场景下入口可能短暂不可用'
+                        . '），将继续重载；单 Worker 场景下入口可能短暂不可用'
                     );
                 }
             } elseif ($reloadsWorker && $multiWorkerWorkerReload && !$forceReload) {
@@ -4532,7 +4552,7 @@ class ServiceOrchestrator
                 $this->reloadService((string)$role, $type, $imperialEpochSnap);
             }
         } finally {
-            if ($maintenanceEnabledForReload) {
+            if ($maintenanceEnabledForReload && !$maintenanceStickyBeforeReload) {
                 $this->disableMaintenanceMode();
             }
             $this->broadcastRoutingPolicyToWorkers();
@@ -4820,7 +4840,7 @@ class ServiceOrchestrator
             $this->controlServer?->poll(0, 160000);
         } else {
             $this->sendReloadProgressMessage(
-                "{$batchLabel}: force mode keep workers {$batchList} in dispatcher pool",
+                "{$batchLabel}: force mode uses maintenance dispatcher pool for workers {$batchList}",
                 $completedBefore,
                 $totalWorkers,
                 'removing_from_dispatcher',
@@ -4916,97 +4936,150 @@ class ServiceOrchestrator
             );
         }
 
-        $this->sendReloadProgressMessage(
-            "{$batchLabel}: stopping workers {$batchList}",
-            $completedBefore,
-            $totalWorkers,
-            'stopping',
-            $leadWorkerId,
-            $batchMeta
-        );
-        foreach ($instanceIds as $instanceId) {
-            if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
-                return 'aborted';
-            }
-            $worker = $this->registry->getInstance('worker', $instanceId);
-            if ($worker !== null) {
-                $this->stopInstance($worker);
-            }
-        }
-
-        $maxWaitExit = 15.0 + 5.0 * \count($instanceIds);
-        $exitDeadline = \microtime(true) + $maxWaitExit;
-        $lastExitHeartbeatAt = 0.0;
-        while (\microtime(true) < $exitDeadline) {
-            if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
-                return 'aborted';
-            }
-            $allGone = true;
-            $remainingExit = 0;
+        $cleanupRefs = [];
+        if ($skipDrain) {
+            $this->sendReloadProgressMessage(
+                "{$batchLabel}: force killing workers {$batchList} concurrently",
+                $completedBefore,
+                $totalWorkers,
+                'stopping',
+                $leadWorkerId,
+                $batchMeta
+            );
+            $killPids = [];
+            $closeClientIds = [];
             foreach ($instanceIds as $instanceId) {
-                $cur = $this->registry->getInstance('worker', $instanceId);
-                if ($cur === null) {
+                if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
+                    return 'aborted';
+                }
+                $worker = $this->registry->getInstance('worker', $instanceId);
+                if ($worker === null) {
                     continue;
                 }
-                $stillConnected = $cur->ipcClientId !== null;
-                $stillRunning = $cur->pid > 0 && $this->isProcessRunning($cur->pid);
-                if ($stillConnected || $stillRunning) {
-                    $allGone = false;
-                    $remainingExit++;
+                $worker->state = ServiceInstance::STATE_STOPPING;
+                $this->registry->updateInstance($worker);
+                $cleanupRefs[$instanceId] = $worker;
+                if ($worker->ipcClientId !== null) {
+                    $this->controlServer?->sendTo($worker->ipcClientId, ControlMessage::shutdown());
+                    $closeClientIds[] = $worker->ipcClientId;
+                }
+                $trackingPid = $this->getInstanceTrackingPid($worker);
+                if ($trackingPid > 0) {
+                    $killPids[$trackingPid] = true;
+                }
+                if ($worker->pid > 0) {
+                    $killPids[(int) $worker->pid] = true;
                 }
             }
-            if ($allGone) {
-                break;
-            }
-            $now = \microtime(true);
-            if (($now - $lastExitHeartbeatAt) >= 5.0) {
-                $elapsed = (int) \round($maxWaitExit - ($exitDeadline - $now));
-                $this->sendReloadProgressMessage(
-                    "{$batchLabel}: waiting old workers to exit {$remainingExit}/" . \count($instanceIds) . " {$batchList} ({$elapsed}s/{$maxWaitExit}s)",
-                    $completedBefore,
-                    $totalWorkers,
-                    'waiting_exit',
-                    $leadWorkerId,
-                    $batchMeta
+
+            if ($killPids !== []) {
+                $killResult = $this->forceStopRemainingProcesses(\array_map('intval', \array_keys($killPids)));
+                WlsLogger::warning_(
+                    '[Orchestrator] force 重载批量终止旧 Worker: requested=' . \count($killPids)
+                    . ', killed=' . (int) ($killResult['killed'] ?? 0)
+                    . ', failed=' . (int) ($killResult['failed'] ?? 0)
+                    . ', remaining=' . \implode(',', \array_map('strval', $killResult['remaining'] ?? []))
                 );
-                $lastExitHeartbeatAt = $now;
-            }
-            $this->controlServer?->poll(0, 200000);
-        }
-
-        foreach ($instanceIds as $instanceId) {
-            $worker = $this->registry->getInstance('worker', $instanceId);
-            if ($worker === null) {
-                continue;
             }
 
-            $stillConnected = $worker->ipcClientId !== null;
-            $stillRunning = $worker->pid > 0 && $this->isProcessRunning($worker->pid);
-            if (!$stillConnected && !$stillRunning) {
-                continue;
+            foreach ($closeClientIds as $clientId) {
+                $this->controlServer?->closeClient((int) $clientId);
             }
-
-            $reason = $skipDrain ? 'force 重载' : '优雅重载';
-            WlsLogger::warning_(
-                '[Orchestrator] ' . $reason . '发现旧 Worker 未退出，执行强制终止: '
-                . "worker#{$instanceId}, pid={$worker->pid}, ipc=" . ($stillConnected ? '1' : '0')
+            $this->controlServer?->poll(0, 100000);
+        } else {
+            $this->sendReloadProgressMessage(
+                "{$batchLabel}: stopping workers {$batchList}",
+                $completedBefore,
+                $totalWorkers,
+                'stopping',
+                $leadWorkerId,
+                $batchMeta
             );
-            $this->killInstanceProcess($worker);
-            if ($stillConnected && $worker->ipcClientId !== null) {
-                $this->controlServer?->closeClient($worker->ipcClientId);
+            foreach ($instanceIds as $instanceId) {
+                if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
+                    return 'aborted';
+                }
+                $worker = $this->registry->getInstance('worker', $instanceId);
+                if ($worker !== null) {
+                    $this->stopInstance($worker);
+                }
             }
-            if ($worker->port !== null && $worker->port > 0) {
-                $this->ensurePortReleasedForResurrection((int) $worker->port);
+
+            $maxWaitExit = 15.0 + 5.0 * \count($instanceIds);
+            $exitDeadline = \microtime(true) + $maxWaitExit;
+            $lastExitHeartbeatAt = 0.0;
+            while (\microtime(true) < $exitDeadline) {
+                if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
+                    return 'aborted';
+                }
+                $allGone = true;
+                $remainingExit = 0;
+                foreach ($instanceIds as $instanceId) {
+                    $cur = $this->registry->getInstance('worker', $instanceId);
+                    if ($cur === null) {
+                        continue;
+                    }
+                    $stillConnected = $cur->ipcClientId !== null;
+                    $stillRunning = $cur->pid > 0 && $this->isProcessRunning($cur->pid);
+                    if ($stillConnected || $stillRunning) {
+                        $allGone = false;
+                        $remainingExit++;
+                    }
+                }
+                if ($allGone) {
+                    break;
+                }
+                $now = \microtime(true);
+                if (($now - $lastExitHeartbeatAt) >= 5.0) {
+                    $elapsed = (int) \round($maxWaitExit - ($exitDeadline - $now));
+                    $this->sendReloadProgressMessage(
+                        "{$batchLabel}: waiting old workers to exit {$remainingExit}/" . \count($instanceIds) . " {$batchList} ({$elapsed}s/{$maxWaitExit}s)",
+                        $completedBefore,
+                        $totalWorkers,
+                        'waiting_exit',
+                        $leadWorkerId,
+                        $batchMeta
+                    );
+                    $lastExitHeartbeatAt = $now;
+                }
+                $this->controlServer?->poll(0, 200000);
+            }
+
+            foreach ($instanceIds as $instanceId) {
+                $worker = $this->registry->getInstance('worker', $instanceId);
+                if ($worker === null) {
+                    continue;
+                }
+
+                $stillConnected = $worker->ipcClientId !== null;
+                $stillRunning = $worker->pid > 0 && $this->isProcessRunning($worker->pid);
+                if (!$stillConnected && !$stillRunning) {
+                    continue;
+                }
+
+                WlsLogger::warning_(
+                    '[Orchestrator] 优雅重载发现旧 Worker 未退出，执行强制终止: '
+                    . "worker#{$instanceId}, pid={$worker->pid}, ipc=" . ($stillConnected ? '1' : '0')
+                );
+                $this->killInstanceProcess($worker);
+                if ($stillConnected && $worker->ipcClientId !== null) {
+                    $this->controlServer?->closeClient($worker->ipcClientId);
+                }
+                if ($worker->port !== null && $worker->port > 0) {
+                    $this->ensurePortReleasedForResurrection((int) $worker->port);
+                }
+            }
+
+            foreach ($instanceIds as $instanceId) {
+                $worker = $this->registry->getInstance('worker', $instanceId);
+                if ($worker !== null) {
+                    $cleanupRefs[$instanceId] = $worker;
+                }
             }
         }
 
-        $cleanupRefs = [];
         foreach ($instanceIds as $instanceId) {
-            $worker = $this->registry->getInstance('worker', $instanceId);
-            if ($worker !== null) {
-                $cleanupRefs[$instanceId] = $worker;
-                $this->registry->removeInstance('worker', $instanceId);
-            }
+            $this->registry->removeInstance('worker', $instanceId);
         }
         foreach ($cleanupRefs as $worker) {
             $this->cleanupInstancePidFile($worker);
@@ -7494,12 +7567,35 @@ class ServiceOrchestrator
     private function handleWorkerPoolAck(array $msg, int $clientId): void
     {
         $role = (string)($msg['role'] ?? ControlMessage::ROLE_WORKER);
+        $port = (int)($msg['port'] ?? 0);
+        $inPool = (bool)($msg['in_pool'] ?? false);
+        if ($role === ControlMessage::ROLE_MAINTENANCE) {
+            if ($port <= 0
+                || !$inPool
+                || $this->pendingMaintenanceModeAck === null
+                || ($this->pendingMaintenanceModeAck['kind'] ?? '') !== 'dispatcher_pool') {
+                return;
+            }
+
+            $ackKey = $clientId . ':' . $port;
+            if (!isset($this->pendingMaintenanceModeAck['expected'][$ackKey])) {
+                return;
+            }
+
+            $this->pendingMaintenanceModeAck['acked'][$ackKey] = true;
+            $this->logMaintenanceOperation(
+                'Dispatcher 维护池确认: client=' . $clientId . ', port=' . $port
+                . '，' . $this->formatMaintenanceOperationContext(),
+                'INFO',
+                'maintenance_dispatcher_pool_ack:' . $ackKey,
+                0.0
+            );
+            return;
+        }
         if ($role !== ControlMessage::ROLE_WORKER) {
             return;
         }
 
-        $port = (int)($msg['port'] ?? 0);
-        $inPool = (bool)($msg['in_pool'] ?? false);
         if ($port <= 0) {
             return;
         }
@@ -9229,7 +9325,7 @@ class ServiceOrchestrator
     }
 
     /**
-     * 启用维护：① ceil(N/3) 拉起维护 Worker；② Dispatcher 切池至仅维护端口；③ 业务 Worker 排空存量连接后 ACK；④ 再标 maintenanceMode。
+     * 启用维护：① ceil(N/3) 拉起维护 Worker；② Dispatcher 切池至仅维护端口并确认回执；③ 再标 maintenanceMode。
      *
      * @return array{success: bool, message: string, maintenance_workers: int, worker_ipc_acked?: int}
      */
@@ -9240,6 +9336,68 @@ class ServiceOrchestrator
                 $this->maintenanceSticky = true;
                 if ($this->context !== null) {
                     $this->persistServicesInfo($this->context);
+                }
+            }
+            if ($skipBusinessDrainAck && $this->context !== null) {
+                $maintPorts = $this->collectReadyMaintenancePortsSorted();
+                $dispatchers = $this->registry->getInstancesByRole(ControlMessage::ROLE_DISPATCHER);
+                if ($maintPorts === []) {
+                    return [
+                        'success' => false,
+                        'message' => 'Maintenance mode already enabled but no READY maintenance worker ports',
+                        'maintenance_workers' => $this->countMaintenanceWorkers(),
+                    ];
+                }
+                $expectedDispatcherAcks = [];
+                foreach ($dispatchers as $dispatcher) {
+                    if ($dispatcher->state !== ServiceInstance::STATE_READY || $dispatcher->ipcClientId === null) {
+                        continue;
+                    }
+                    foreach ($maintPorts as $port) {
+                        $expectedDispatcherAcks[$dispatcher->ipcClientId . ':' . $port] = true;
+                    }
+                }
+                if ($dispatchers !== [] && $expectedDispatcherAcks === []) {
+                    return [
+                        'success' => false,
+                        'message' => 'No READY Dispatcher IPC connection for maintenance pool confirmation',
+                        'maintenance_workers' => $this->countMaintenanceWorkers(),
+                    ];
+                }
+                if ($expectedDispatcherAcks !== []) {
+                    $this->pendingMaintenanceModeAck = [
+                        'kind' => 'dispatcher_pool',
+                        'request_id' => 'dispatcher_pool_' . \bin2hex(\random_bytes(6)),
+                        'expected' => $expectedDispatcherAcks,
+                        'acked' => [],
+                    ];
+                }
+                $this->notifyDispatcherSetWorkerPool($maintPorts, ControlMessage::ROLE_MAINTENANCE);
+                if ($expectedDispatcherAcks !== []) {
+                    $ackTimeout = (float) ($this->context->getConfig(
+                        'wls.orchestrator.maintenance_dispatcher_ack_timeout_sec',
+                        5.0
+                    ) ?? 5.0);
+                    $ackTimeout = \max(0.2, \min(30.0, $ackTimeout));
+                    $deadline = \microtime(true) + $ackTimeout;
+                    while (\microtime(true) < $deadline) {
+                        $expected = \count($this->pendingMaintenanceModeAck['expected'] ?? []);
+                        $acked = \count($this->pendingMaintenanceModeAck['acked'] ?? []);
+                        if ($expected > 0 && $acked >= $expected) {
+                            break;
+                        }
+                        $this->controlServer?->poll(0, 100000);
+                    }
+                    $expected = \count($this->pendingMaintenanceModeAck['expected'] ?? []);
+                    $acked = \count($this->pendingMaintenanceModeAck['acked'] ?? []);
+                    $this->pendingMaintenanceModeAck = null;
+                    if ($expected > 0 && $acked < $expected) {
+                        return [
+                            'success' => false,
+                            'message' => "Dispatcher maintenance pool ack timeout ({$acked}/{$expected})",
+                            'maintenance_workers' => $this->countMaintenanceWorkers(),
+                        ];
+                    }
                 }
             }
             $this->logMaintenanceOperation(
@@ -9311,6 +9469,13 @@ class ServiceOrchestrator
         $maintenanceProvider->enable($nMaint);
 
         for ($i = 1; $i <= $nMaint; $i++) {
+            $existing = $this->registry->getInstance('maintenance', $i);
+            if ($existing !== null
+                && $existing->state === ServiceInstance::STATE_READY
+                && $existing->port !== null
+                && $existing->port > 0) {
+                continue;
+            }
             if ($this->startInstance($maintenanceProvider, $i, $this->context) === null) {
                 for ($j = 1; $j < $i; $j++) {
                     $m = $this->registry->getInstance('maintenance', $j);
@@ -9381,8 +9546,75 @@ class ServiceOrchestrator
         );
 
         if ($hasDispatcher) {
+            $expectedDispatcherAcks = [];
+            foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_DISPATCHER) as $dispatcher) {
+                if ($dispatcher->state !== ServiceInstance::STATE_READY || $dispatcher->ipcClientId === null) {
+                    continue;
+                }
+                foreach ($maintPorts as $port) {
+                    $expectedDispatcherAcks[$dispatcher->ipcClientId . ':' . $port] = true;
+                }
+            }
+            if ($expectedDispatcherAcks === []) {
+                $this->logMaintenanceOperation(
+                    '启用维护失败：没有 READY Dispatcher IPC 可确认维护池切换，'
+                    . $this->formatMaintenanceOperationContext(),
+                    'ERROR',
+                    'enable_maintenance:no_dispatcher_ack_target:' . $this->formatMaintenanceOperationContext(),
+                    0.0
+                );
+
+                return [
+                    'success' => false,
+                    'message' => 'No READY Dispatcher IPC connection for maintenance pool confirmation',
+                    'maintenance_workers' => $nMaint,
+                ];
+            }
+            if ($expectedDispatcherAcks !== []) {
+                $this->pendingMaintenanceModeAck = [
+                    'kind' => 'dispatcher_pool',
+                    'request_id' => 'dispatcher_pool_' . \bin2hex(\random_bytes(6)),
+                    'expected' => $expectedDispatcherAcks,
+                    'acked' => [],
+                ];
+            }
             $this->notifyDispatcherSetWorkerPool($maintPorts, ControlMessage::ROLE_MAINTENANCE);
-            $this->controlServer?->poll(0, 150000);
+            if ($expectedDispatcherAcks !== []) {
+                $ackTimeout = (float) ($this->context->getConfig(
+                    'wls.orchestrator.maintenance_dispatcher_ack_timeout_sec',
+                    5.0
+                ) ?? 5.0);
+                $ackTimeout = \max(0.2, \min(30.0, $ackTimeout));
+                $deadline = \microtime(true) + $ackTimeout;
+                while (\microtime(true) < $deadline) {
+                    $expected = \count($this->pendingMaintenanceModeAck['expected'] ?? []);
+                    $acked = \count($this->pendingMaintenanceModeAck['acked'] ?? []);
+                    if ($expected > 0 && $acked >= $expected) {
+                        break;
+                    }
+                    $this->controlServer?->poll(0, 100000);
+                }
+                $expected = \count($this->pendingMaintenanceModeAck['expected'] ?? []);
+                $acked = \count($this->pendingMaintenanceModeAck['acked'] ?? []);
+                $this->pendingMaintenanceModeAck = null;
+                if ($expected > 0 && $acked < $expected) {
+                    $this->logMaintenanceOperation(
+                        "Dispatcher 维护池确认超时：acked={$acked}/{$expected}, ports={$maintPortsStr}，"
+                        . $this->formatMaintenanceOperationContext(),
+                        'ERROR',
+                        "enable_maintenance:dispatcher_ack_timeout:{$acked}/{$expected}:{$maintPortsStr}",
+                        0.0
+                    );
+
+                    return [
+                        'success' => false,
+                        'message' => "Dispatcher maintenance pool ack timeout ({$acked}/{$expected})",
+                        'maintenance_workers' => $nMaint,
+                    ];
+                }
+            } else {
+                $this->controlServer?->poll(0, 150000);
+            }
         }
 
         $this->pendingMaintenanceModeAck = null;
