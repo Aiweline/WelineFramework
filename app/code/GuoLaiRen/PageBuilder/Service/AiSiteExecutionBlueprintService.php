@@ -120,6 +120,7 @@ final class AiSiteExecutionBlueprintService
             'footer' => $tasks[1],
         ];
         $sharedComponents = $this->normalizeStageOneSharedComponents($sharedComponents);
+        $tasks = \array_values($sharedComponents);
         $themeContextSnapshot = $this->buildStageOneThemeContextSnapshot(
             $planningScope,
             $websiteProfile,
