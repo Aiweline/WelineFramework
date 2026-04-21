@@ -122,6 +122,7 @@ class BroadcastControlDispatchService
         $attempted = [];
         $succeeded = [];
         $failedByInstance = [];
+        $resultsByInstance = [];
         $targetInstances = $this->resolveRunningInstances($instanceName, $failedByInstance);
 
         foreach ($targetInstances as $targetInstance) {
@@ -132,6 +133,8 @@ class BroadcastControlDispatchService
                 $failedByInstance[$targetInstance] = $throwable->getMessage();
                 continue;
             }
+
+            $resultsByInstance[$targetInstance] = $result;
 
             if (!empty($result['success'])) {
                 $succeeded[] = $targetInstance;
@@ -146,6 +149,7 @@ class BroadcastControlDispatchService
             'attempted' => $attempted,
             'succeeded' => $succeeded,
             'failed_by_instance' => $failedByInstance,
+            'results_by_instance' => $resultsByInstance,
             'message' => $this->buildMessage($actionLabel, $attempted, $succeeded, $failedByInstance, $instanceName),
         ];
     }
