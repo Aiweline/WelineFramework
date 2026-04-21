@@ -47,6 +47,8 @@ final class BroadcastControlDispatchServiceTest extends TestCase
         $this->assertSame(['alpha', 'beta'], $result['attempted']);
         $this->assertSame(['alpha'], $result['succeeded']);
         $this->assertSame(['beta' => 'dispatcher offline'], $result['failed_by_instance']);
+        $this->assertSame('ok', $result['results_by_instance']['alpha']['message'] ?? null);
+        $this->assertSame('dispatcher offline', $result['results_by_instance']['beta']['message'] ?? null);
         $this->assertStringContainsString('beta: dispatcher offline', $result['message']);
     }
 
@@ -74,6 +76,7 @@ final class BroadcastControlDispatchServiceTest extends TestCase
         $this->assertSame([], $result['attempted']);
         $this->assertSame([], $result['succeeded']);
         $this->assertSame(['default' => 'Master 未运行，无法通过 IPC 控制。'], $result['failed_by_instance']);
+        $this->assertSame([], $result['results_by_instance']);
         $this->assertStringContainsString('default', $result['message']);
     }
 
@@ -85,8 +88,10 @@ final class BroadcastControlDispatchServiceTest extends TestCase
             public function setMaintenanceMode(
                 string $instanceName,
                 bool $enabled,
-                float $timeout = 6.0
+                float $timeout = 6.0,
+                bool $dispatcherOnly = false
             ): array {
+                unset($dispatcherOnly);
                 $this->calls[] = [$instanceName, $enabled, $timeout];
 
                 return ['success' => true, 'message' => 'ok', 'data' => []];
