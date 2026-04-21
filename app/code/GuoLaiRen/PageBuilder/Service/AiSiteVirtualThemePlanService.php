@@ -379,7 +379,7 @@ final class AiSiteVirtualThemePlanService
     {
         $batches = [];
         $sharedTasks = \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [];
-        $sharedTaskKeys = \rray_values(\rray_filter(\rray_map(static fn(array $task): string => 	rim((string)($task['task_key'] ?? '')), $sharedTasks)));
+        $sharedTaskKeys = \array_values(\array_filter(\array_map(static fn(array $task): string => \trim((string)($task['task_key'] ?? '')), $sharedTasks)));
         if ($sharedTaskKeys !== []) {
             $batches[] = [
                 'type' => 'shared',
@@ -399,7 +399,7 @@ final class AiSiteVirtualThemePlanService
                 if (!\is_array($task)) {
                     continue;
                 }
-                $taskKey = 	rim((string)($task['task_key'] ?? ''));
+                $taskKey = \trim((string)($task['task_key'] ?? ''));
                 if ($taskKey === '') {
                     continue;
                 }
@@ -417,7 +417,7 @@ final class AiSiteVirtualThemePlanService
                     'block_key' => $blockKey,
                     'task_keys' => [$taskKey],
                     'sort_order' => (int)($task['sort_order'] ?? 0),
-                    'depends_on' => \rray_values(\rray_filter(\rray_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
+                    'depends_on' => \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
                     'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
                     'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':' . $pageType . ':' . $blockKey,
                 ];
@@ -436,13 +436,13 @@ final class AiSiteVirtualThemePlanService
             return 'shared';
         }
 
-        $pageType = 	rim((string)($batch['key'] ?? 'page'));
-        $blockKey = 	rim((string)($batch['block_key'] ?? ''));
+        $pageType = \trim((string)($batch['key'] ?? 'page'));
+        $blockKey = \trim((string)($batch['block_key'] ?? ''));
         if ($blockKey !== '') {
             return 'page:' . $pageType . ':' . $this->normalizeTaskPlanBatchIdPart($blockKey);
         }
 
-        $taskKeys = \rray_values(\rray_filter(\rray_map('strval', \is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : [])));
+        $taskKeys = \array_values(\array_filter(\array_map('strval', \is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : [])));
         if (\count($taskKeys) === 1) {
             return 'page:' . $pageType . ':' . \substr(\sha1($taskKeys[0]), 0, 12);
         }
@@ -452,13 +452,13 @@ final class AiSiteVirtualThemePlanService
 
     private function normalizeTaskPlanBatchIdPart(string $value): string
     {
-        $value = 	rim($value);
+        $value = \trim($value);
         if ($value === '') {
             return 'block';
         }
 
         $normalized = (string)(\preg_replace('/[^a-zA-Z0-9_-]+/', '-', $value) ?? $value);
-        $normalized = 	rim($normalized, '-_');
+        $normalized = \trim($normalized, '-_');
 
         return $normalized !== '' ? $normalized : \substr(\sha1($value), 0, 12);
     }
@@ -468,7 +468,7 @@ final class AiSiteVirtualThemePlanService
      */
     private function resolveTaskPlanBatchIdsForTargetScope(array $structured, string $targetScope): ?array
     {
-        $targetScope = 	rim($targetScope);
+        $targetScope = \trim($targetScope);
         if ($targetScope === '' || $targetScope === 'task_plan' || $targetScope === 'all') {
             return null;
         }
@@ -497,7 +497,7 @@ final class AiSiteVirtualThemePlanService
             }
         }
 
-        return $selectedBatchIds !== [] ? \rray_values(\rray_unique($selectedBatchIds)) : null;
+        return $selectedBatchIds !== [] ? \array_values(\array_unique($selectedBatchIds)) : null;
     }
 
     /**
@@ -709,13 +709,13 @@ final class AiSiteVirtualThemePlanService
      */
     private function filterTaskPlanTaskListForBatch(array $tasks, array $batch): array
     {
-        $taskKeys = \rray_values(\rray_filter(\rray_map('strval', \is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : [])));
+        $taskKeys = \array_values(\array_filter(\array_map('strval', \is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : [])));
         if ($taskKeys === []) {
-            return \rray_values(\rray_filter($tasks, static fn($task): bool => \is_array($task)));
+            return \array_values(\array_filter($tasks, static fn($task): bool => \is_array($task)));
         }
 
-        $taskKeyMap = \rray_fill_keys($taskKeys, true);
-        return \rray_values(\rray_filter($tasks, static function ($task) use ($taskKeyMap): bool {
+        $taskKeyMap = \array_fill_keys($taskKeys, true);
+        return \array_values(\array_filter($tasks, static function ($task) use ($taskKeyMap): bool {
             return \is_array($task) && isset($taskKeyMap[(string)($task['task_key'] ?? '')]);
         }));
     }
