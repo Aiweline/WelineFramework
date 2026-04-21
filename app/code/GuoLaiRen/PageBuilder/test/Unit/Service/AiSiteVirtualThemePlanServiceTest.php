@@ -897,8 +897,8 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             ],
             'page_tasks' => [
                 'home_page' => [
-                    ['task_key' => 'page:home_page:content/home-page-hero', 'group_key' => 'home_page', 'page_type' => 'home_page', 'label' => 'Hero', 'section_code' => 'content/home-page-hero', 'sort_order' => 100],
-                    ['task_key' => 'page:home_page:content/home-page-proof', 'group_key' => 'home_page', 'page_type' => 'home_page', 'label' => 'Proof', 'section_code' => 'content/home-page-proof', 'sort_order' => 110],
+                    ['task_key' => 'page:home_page:content/home-page-hero', 'group_key' => 'home_page', 'page_type' => 'home_page', 'label' => 'Hero', 'section_code' => 'content/home-page-hero', 'sort_order' => 100, 'block_task' => ['sort_order' => 100]],
+                    ['task_key' => 'page:home_page:content/home-page-proof', 'group_key' => 'home_page', 'page_type' => 'home_page', 'label' => 'Proof', 'section_code' => 'content/home-page-proof', 'sort_order' => 110, 'block_task' => ['sort_order' => 110]],
                 ],
             ],
             'execution_order' => [
