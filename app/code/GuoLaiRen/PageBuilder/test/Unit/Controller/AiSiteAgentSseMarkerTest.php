@@ -254,7 +254,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
 
         self::assertIsString($controllerSource);
         self::assertStringContainsString(
-            "'plan' => $this->runPlanOperationSseBranch",
+            '\'plan\' => $this->runPlanOperationSseBranch',
             $controllerSource,
             'operation-sse claimed-operation dispatcher must route operation=plan instead of falling through to unknown operation.'
         );
@@ -310,6 +310,99 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString("String(workspaceState.progress_kind || '') === 'task_progress'", $runtimeScript);
         self::assertStringContainsString('updateTaskSummaryFromState(payload)', $runtimeScript);
         self::assertStringContainsString('renderTaskStatusCountBadges(group)', $runtimeScript);
+    }
+
+    public function testWorkspacePollingPayloadUsesSameStatusEnvelopeAsSseSnapshot(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $pollingMethod = new ReflectionMethod(AiSiteAgent::class, 'decorateWorkspaceStateWithPollingPayload');
+        $pollingMethod->setAccessible(true);
+        $sseMethod = new ReflectionMethod(AiSiteAgent::class, 'buildWorkspaceSseStatePayload');
+        $sseMethod->setAccessible(true);
+
+        $state = [
+            'public_id' => 'pub-123',
+            'stage' => AiSiteAgentSession::STAGE_PLAN,
+            'stage_label' => 'Plan',
+            'workspace_status' => 'building',
+            'publish_status' => 'draft',
+            'can_publish' => false,
+            'workspace_track' => 'html_blocks',
+            'site_ready' => 1,
+            'website_id' => 9,
+            'virtual_theme_id' => 11,
+            'draft_website_id' => 9,
+            'preview_page_type' => 'home_page',
+            'task_plan_confirmed' => 0,
+            'active_operation' => [
+                'operation' => 'plan',
+                'status' => 'running',
+                'progress_percent' => 45,
+                'updated_at' => '2026-04-21 12:20:00',
+            ],
+            'plan_queue_info' => [
+                'queue_id' => 143,
+                'snapshot' => [
+                    'queue_id' => 143,
+                    'status' => 'running',
+                    'job_status' => 'running',
+                    'job_key' => 'glr_aisite:session:987:job:stage1.requirement_expand',
+                    'job_type' => 'stage1.requirement_expand',
+                    'token' => 'token-abc',
+                    'token_usage' => [
+                        'input_tokens' => 1200,
+                        'output_tokens' => 340,
+                        'total_tokens' => 1540,
+                    ],
+                    'start_at' => '2026-04-21 12:19:50',
+                ],
+                'process' => 'AI queue running',
+                'result_log' => '',
+            ],
+            'task_plan_queue_info' => null,
+            'build_queue_info' => null,
+            'build_task_summary' => ['total' => 4, 'completed' => 1],
+            'build_summary' => [],
+            'pending_generation_page_types' => [],
+            'events' => [
+                ['event_id' => 41, 'event_type' => 'progress'],
+            ],
+            'top_logs' => [],
+            'scope' => [
+                'plan_confirmed' => 1,
+                'execution_blueprint_confirmed_signature' => 'confirmed-sig',
+            ],
+        ];
+
+        $pollingPayload = $pollingMethod->invoke($controller, $state);
+        $ssePayload = $sseMethod->invoke($controller, $state, [], true);
+
+        foreach ([
+            'job_key',
+            'job_type',
+            'status',
+            'event_id',
+            'seq_no',
+            'cursor',
+            'progress_percent',
+            'session_public_id',
+            'context_hash',
+            'state_fingerprint',
+            'token_usage',
+            'progress_kind',
+            'updated_at',
+        ] as $contractKey) {
+            self::assertArrayHasKey($contractKey, $pollingPayload);
+            self::assertArrayHasKey($contractKey, $ssePayload);
+            self::assertSame($pollingPayload[$contractKey], $ssePayload[$contractKey], $contractKey);
+        }
+
+        self::assertSame('poller', $pollingPayload['source']);
+        self::assertSame('queue', $ssePayload['source']);
+        self::assertSame('queue_info', $pollingPayload['progress_kind']);
+        self::assertSame(1200, $pollingPayload['token_usage']['input_tokens']);
+        self::assertSame(340, $pollingPayload['token_usage']['output_tokens']);
+        self::assertSame(1540, $pollingPayload['token_usage']['total_tokens']);
     }
 
 }
