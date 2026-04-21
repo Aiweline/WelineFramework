@@ -2,6 +2,15 @@
 
 declare(strict_types=1);
 
+namespace Weline\Server\Console\Server;
+
+if (!function_exists(__NAMESPACE__ . '\__')) {
+    function __(string $text, array $args = []): string
+    {
+        return $text;
+    }
+}
+
 namespace Weline\Server\Test\Unit\Console;
 
 use PHPUnit\Framework\TestCase;
@@ -202,6 +211,35 @@ final class StatusCommandTest extends TestCase
             $manager->calls
         );
         self::assertTrue($status->showAllCalled);
+    }
+
+    public function testServiceRunningUsesTrackedRootPidWhenChildPidIsStale(): void
+    {
+        $status = new class extends Status {
+            /**
+             * @param array<int, array{pid: int, exists: bool, name?: string, command?: string, memory?: string, cpu?: string, start_time?: string}> $processInfoMap
+             */
+            public function running(ServiceInfo $service, array $processInfoMap): bool
+            {
+                return $this->isServiceRunning($service, $processInfoMap);
+            }
+        };
+
+        $service = new ServiceInfo(
+            role: 'worker',
+            displayName: 'HTTP Worker',
+            instanceId: 1,
+            pid: 999999,
+            port: 19982,
+            state: ServiceInstance::STATE_READY,
+            rootPid: 4321,
+            launcherPid: 4321,
+        );
+
+        self::assertTrue($status->running($service, [
+            4321 => ['pid' => 4321, 'exists' => true],
+            999999 => ['pid' => 999999, 'exists' => false],
+        ]));
     }
 
     /**

@@ -65,6 +65,7 @@ class ServiceOrchestrator
     private bool $stopAllInProgress = false;
     private bool $childProcessStopInProgress = false;
     private ?string $pendingStopReason = null;
+    private bool $pendingStopForceTerminate = false;
     private ?string $startupFailureReason = null;
     private ?string $lastControlServerCloseReason = null;
     private ?int $pendingStopProgressClientId = null;
@@ -462,7 +463,12 @@ class ServiceOrchestrator
         );
     }
 
-    public function requestStop(string $reason = 'shutdown', ?int $progressClientId = null, bool $exclusiveIpc = false): bool
+    public function requestStop(
+        string $reason = 'shutdown',
+        ?int $progressClientId = null,
+        bool $exclusiveIpc = false,
+        bool $forceTerminate = false
+    ): bool
     {
         if ($this->stopAllInProgress || $this->shuttingDown || $this->pendingStopReason !== null) {
             $this->sendStopAlreadyInProgress($progressClientId);
@@ -493,6 +499,7 @@ class ServiceOrchestrator
         }
 
         $this->pendingStopReason = $reason;
+        $this->pendingStopForceTerminate = $forceTerminate;
         $this->pendingStopProgressClientId = $progressClientId;
         $this->setStopStage(self::STOP_STAGE_REQUESTED);
 
@@ -538,14 +545,21 @@ class ServiceOrchestrator
 
         $reason = $this->pendingStopReason;
         $progressClientId = $this->pendingStopProgressClientId;
+        $forceTerminate = $this->pendingStopForceTerminate;
         $this->pendingStopReason = null;
+        $this->pendingStopForceTerminate = false;
         $this->pendingStopProgressClientId = null;
         if ($this->hasMainLoopTask('control:stop_all')) {
             return true;
         }
 
-        if (!$this->scheduleMainLoopTask('control:stop_all', 'stop_all', function () use ($reason, $progressClientId): void {
+        if (!$this->scheduleMainLoopTask('control:stop_all', 'stop_all', function () use ($reason, $progressClientId, $forceTerminate): void {
             try {
+                if ($forceTerminate) {
+                    $this->forceTerminateMasterAndChildren('force_stop:' . $reason);
+                    return;
+                }
+
                 $this->stopAll($reason, $progressClientId);
             } catch (\Throwable $throwable) {
                 WlsLogger::error_(
@@ -557,6 +571,7 @@ class ServiceOrchestrator
             }
         })) {
             $this->pendingStopReason = $reason;
+            $this->pendingStopForceTerminate = $forceTerminate;
             $this->pendingStopProgressClientId = $progressClientId;
             return false;
         }
@@ -1471,6 +1486,7 @@ class ServiceOrchestrator
         $this->shuttingDown = false;
         $this->stopAllInProgress = false;
         $this->pendingStopReason = null;
+        $this->pendingStopForceTerminate = false;
         $this->pendingStopProgressClientId = null;
         $this->stopStage = self::STOP_STAGE_IDLE;
         $this->masterShutdownIntent = false;
@@ -1817,12 +1833,17 @@ class ServiceOrchestrator
             }
         }
 
-        // Startup children often connect a few seconds apart on Windows.
-        // Keep draining for a full window instead of only polling one frame,
-        // otherwise later READY/ACK messages get stranded behind the next
-        // batch spawn.
+        // Startup children often connect slightly out of phase on Windows, but
+        // a fixed 12s drain delays the first usable request more than needed.
+        // Keep a short minimum drain here, then let startup acceptance keep
+        // polling for later READY/ACK messages.
         $drainStartedAt = \microtime(true);
-        $this->drainControlPlaneAfterStartupStep(360, 50000, 4, 12000000);
+        $this->drainControlPlaneAfterStartupStep(
+            120,
+            50000,
+            4,
+            $this->resolveConcurrentStartupDrainMinDurationUsec($context)
+        );
         WlsLogger::info_(
             '[Orchestrator][StartupTiming] concurrent startup drain elapsed='
             . \max(0, (int) \round((\microtime(true) - $drainStartedAt) * 1000))
@@ -2202,11 +2223,14 @@ class ServiceOrchestrator
                     $cmd .= ' --name=' . \escapeshellarg($processName);
                 }
 
+                $foreground = $this->shouldLaunchForeground($role, $context);
+                $instance->setMeta('spawn_transport', $foreground ? 'processer_create_foreground' : 'processer_create');
+
                 $key = "{$role}#{$i}";
                 $commands[$key] = [
                     'command' => $cmd,
                     'block' => false,
-                    'foreground' => $this->shouldLaunchForeground($role, $context),
+                    'foreground' => $foreground,
                 ];
                 $prepared[$key] = [
                     'instance' => $instance,
@@ -2750,7 +2774,8 @@ class ServiceOrchestrator
             return false;
         }
 
-        if ($instance->pid > 0 && $this->isProcessRunning($instance->pid)) {
+        $trackingPid = $this->getInstanceTrackingPid($instance);
+        if ($trackingPid > 0 && $this->isProcessRunning($trackingPid)) {
             return true;
         }
 
@@ -2960,11 +2985,14 @@ class ServiceOrchestrator
                 $cmd .= ' --name=' . \escapeshellarg($processName);
             }
 
+            $foreground = $this->shouldLaunchForeground($role, $context);
+            $instance->setMeta('spawn_transport', $foreground ? 'processer_create_foreground' : 'processer_create');
+
             $preparedInstances[$instanceId] = $instance;
             $commands[(string) $instanceId] = [
                 'command' => $cmd,
                 'block' => false,
-                'foreground' => $this->shouldLaunchForeground($role, $context),
+                'foreground' => $foreground,
             ];
             WlsLogger::info_(
                 '[Orchestrator][StartupTiming] role=' . $role
@@ -3090,6 +3118,24 @@ class ServiceOrchestrator
         }
     }
 
+    private function resolveConcurrentStartupDrainMinDurationUsec(ServiceContext $context): int
+    {
+        $configured = (int) ($context->getConfig('wls.orchestrator.concurrent_startup_drain_min_usec', 0) ?? 0);
+        if ($configured > 0) {
+            return \min(12_000_000, $configured);
+        }
+
+        $isWin = \defined('IS_WIN')
+            ? (bool) \constant('IS_WIN')
+            : (\strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN');
+
+        if ($isWin && $context->frontend) {
+            return 2_500_000;
+        }
+
+        return $isWin ? 1_500_000 : 750_000;
+    }
+
     /**
      * 过滤不可重复拉起的槽位，防止同一 worker 槽位在 startup/liveness/reconcile 交叠时被重复 fork。
      *
@@ -3157,9 +3203,7 @@ class ServiceOrchestrator
         ?float $now = null
     ): array {
         $now ??= \microtime(true);
-        $trackedPid = $instance->pid > 0
-            ? $instance->pid
-            : (int) ($resurrectEntry['pid'] ?? 0);
+        $trackedPid = $this->getQueuedTrackingPid($instance, $resurrectEntry);
         $ipcAlive = $instance->ipcClientId !== null
             && $this->controlServer !== null
             && $this->controlServer->clientExists($instance->ipcClientId);
@@ -3413,6 +3457,7 @@ class ServiceOrchestrator
         }
 
         $this->pendingStopReason = null;
+        $this->pendingStopForceTerminate = false;
         $this->pendingStopProgressClientId = null;
         $this->stopAllInProgress = true;
         $this->shuttingDown = true;
@@ -3436,7 +3481,7 @@ class ServiceOrchestrator
         foreach ($this->registry->getAllInstances() as $inst) {
             $provider = $this->registry->getProvider($inst->role);
             $displayName = $provider?->getDisplayName() ?? $inst->role;
-            $instanceList[] = "{$displayName}(PID:{$inst->pid})";
+            $instanceList[] = "{$displayName}(PID:{$this->getInstanceTrackingPid($inst)})";
         }
         $this->sendStopProgress("共 {$totalInstances} 个实例待停止: " . \implode(', ', $instanceList));
 
@@ -3511,39 +3556,41 @@ class ServiceOrchestrator
     public function forceTerminateMasterAndChildren(string $reason = 'force'): void
     {
         WlsLogger::warning_("[Orchestrator] 强制终止 Master 及子进程，原因: {$reason}，阶段: {$this->stopStage}");
+        $pids = [];
+        foreach ($this->registry->getAllInstances() as $instance) {
+            $trackingPid = $this->getInstanceTrackingPid($instance);
+            if ($trackingPid > 0 && !$this->isExternallyManagedSharedInstance($instance)) {
+                $pids[$trackingPid] = $trackingPid;
+            }
+        }
+
         if ($this->controlServer !== null && $this->shouldForceTerminateNotifyIpcClients()) {
             try {
-                $this->broadcastDrainToAll();
                 $this->broadcastShutdownToAll();
-                $quickFlush = (float) ($this->context?->getConfig('wls.orchestrator.force_stop_ipc_flush_sec', 0.5) ?? 0.5);
+                $quickFlush = (float) ($this->context?->getConfig('wls.orchestrator.force_stop_ipc_flush_sec', 0.05) ?? 0.05);
                 if ($quickFlush > 0.0) {
-                    $this->controlServer->flushPendingWrites(\min(2.0, $quickFlush));
+                    $this->controlServer->flushPendingWrites(\min(0.2, \max(0.01, $quickFlush)));
                 }
-                $this->pollStopFlowIpc(0, 100000);
             } catch (\Throwable $e) {
                 WlsLogger::warning_('[Orchestrator] 强制停机前 IPC 通知失败: ' . $e->getMessage());
             }
         } elseif ($this->controlServer !== null) {
             WlsLogger::info_('[Orchestrator] 强制停机前跳过 IPC 广播：无已连接的服务 IPC 客户端');
         }
-        $pids = [];
-        foreach ($this->registry->getAllInstances() as $instance) {
-            if ($instance->pid > 0 && !$this->isExternallyManagedSharedInstance($instance)) {
-                $pids[] = $instance->pid;
-            }
-        }
+
         if ($pids !== []) {
-            Processer::batchGracefulKill(\array_values(\array_unique($pids)), 0.0, true);
-        }
-        $postKillWait = (float) ($this->context?->getConfig('wls.orchestrator.force_stop_ipc_post_kill_wait_sec', 0.35) ?? 0.35);
-        if ($postKillWait > 0.0 && $this->controlServer !== null) {
-            $deadline = \microtime(true) + \min(1.5, $postKillWait);
-            while (\microtime(true) < $deadline
-                && ($this->controlServer->countServiceClients($this->stopProgressClientId) > 0)) {
-                $this->pollStopFlowIpc(0, 50000);
+            $killResult = $this->forceStopRemainingProcesses(\array_values($pids));
+            if (!empty($killResult['remaining'])) {
+                WlsLogger::warning_(
+                    '[Orchestrator] 强制停机仍有残留进程: ' . \implode(',', $killResult['remaining'])
+                );
             }
         }
-        $this->closeIpcServer('force_terminate:' . $reason);
+
+        $this->closeIpcServer(
+            'force_terminate:' . $reason,
+            (float) ($this->context?->getConfig('wls.orchestrator.force_stop_close_ipc_flush_sec', 0.01) ?? 0.01)
+        );
         $this->finalizeForceTerminateMasterExit(2);
     }
 
@@ -3566,6 +3613,7 @@ class ServiceOrchestrator
         $this->stopAllInProgress = false;
         $this->shuttingDown = false;
         $this->pendingStopReason = null;
+        $this->pendingStopForceTerminate = false;
         $this->pendingStopProgressClientId = null;
         $this->stopProgressClientId = null;
         $this->setStopStage(self::STOP_STAGE_IDLE);
@@ -3656,7 +3704,7 @@ class ServiceOrchestrator
             if ($provider === null || !$provider->supportsShutdown()) {
                 continue;
             }
-            $connectedClients[] = "{$instance->role}#{$instance->instanceId}(pid:{$instance->pid},ipc:{$instance->ipcClientId})";
+            $connectedClients[] = "{$instance->role}#{$instance->instanceId}(pid:{$this->getInstanceTrackingPid($instance)},ipc:{$instance->ipcClientId})";
             $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::shutdown());
         }
         
@@ -3674,14 +3722,15 @@ class ServiceOrchestrator
     {
         $candidatePids = [];
         foreach ($this->registry->getAllInstances() as $instance) {
-            if ($instance->pid <= 0 || $this->isExternallyManagedSharedInstance($instance)) {
+            $trackingPid = $this->getInstanceTrackingPid($instance);
+            if ($trackingPid <= 0 || $this->isExternallyManagedSharedInstance($instance)) {
                 continue;
             }
 
             // stopAll 第 3 阶段只兜底处理已经脱离 IPC 管理的残留进程。
             // 仍保持 IPC 连接的服务已收到 SHUTDOWN，后续阶段统一异步收取回执并校验退出。
             if ($instance->ipcClientId === null) {
-                $candidatePids[$instance->pid] = $instance->pid;
+                $candidatePids[$trackingPid] = $trackingPid;
             }
         }
 
@@ -3726,8 +3775,10 @@ class ServiceOrchestrator
             foreach ($this->registry->getAllInstances() as $instance) {
                 $key = "{$instance->role}#{$instance->instanceId}";
                 
+                $trackingPid = $this->getInstanceTrackingPid($instance);
                 if ($instance->state === ServiceInstance::STATE_DRAINING
-                    && $this->isProcessRunning($instance->pid)
+                    && $trackingPid > 0
+                    && $this->isProcessRunning($trackingPid)
                 ) {
                     $drainingCount++;
                 } elseif ($instance->state !== ServiceInstance::STATE_DRAINING 
@@ -3737,7 +3788,7 @@ class ServiceOrchestrator
                     $drainedInstances[$key] = true;
                     $provider = $this->registry->getProvider($instance->role);
                     $displayName = $provider?->getDisplayName() ?? $instance->role;
-                    $msg = "  ✓ {$displayName}(PID:{$instance->pid}) 排水完成";
+                    $msg = "  ✓ {$displayName}(PID:{$trackingPid}) 排水完成";
                     $this->sendStopProgress($msg);
                 }
             }
@@ -3818,11 +3869,12 @@ class ServiceOrchestrator
                 }
                 
                 // 检查进程是否已退出
-                if ($instance->pid > 0 && !$this->isProcessRunning($instance->pid)) {
+                $trackingPid = $this->getInstanceTrackingPid($instance);
+                if ($trackingPid > 0 && !$this->isProcessRunning($trackingPid)) {
                     $exitedInstances[$key] = true;
                     $provider = $this->registry->getProvider($instance->role);
                     $displayName = $provider?->getDisplayName() ?? $instance->role;
-                    $msg = "  ✓ {$displayName}(PID:{$instance->pid}) 已退出";
+                    $msg = "  ✓ {$displayName}(PID:{$trackingPid}) 已退出";
                     WlsLogger::info_("[Orchestrator] {$msg}");
                     $this->sendStopProgress($msg);
                     // 进程已退出，主动关闭 IPC 连接，避免超时等待
@@ -3873,11 +3925,12 @@ class ServiceOrchestrator
         $immediateForceKillPids = [];
 
         foreach ($allInstances as $instance) {
-            if ($instance->pid <= 0 || $this->isExternallyManagedSharedInstance($instance)) {
+            $trackingPid = $this->getInstanceTrackingPid($instance);
+            if ($trackingPid <= 0 || $this->isExternallyManagedSharedInstance($instance)) {
                 continue;
             }
 
-            $pidToInstance[$instance->pid] = $instance;
+            $pidToInstance[$trackingPid] = $instance;
         }
 
         $initialRunningStatus = $this->batchCheckStopFlowRunning(\array_keys($pidToInstance));
@@ -3950,7 +4003,8 @@ class ServiceOrchestrator
         $totalCount = \count($allInstances);
         $exitedCount = 0;
         foreach ($allInstances as $instance) {
-            if ($instance->pid <= 0 || !isset($runningPidSet[$instance->pid])) {
+            $trackingPid = $this->getInstanceTrackingPid($instance);
+            if ($trackingPid <= 0 || !isset($runningPidSet[$trackingPid])) {
                 $exitedCount++;
             }
         }
@@ -4057,7 +4111,7 @@ class ServiceOrchestrator
      */
     protected function forceStopRemainingProcesses(array $pids): array
     {
-        return Processer::batchGracefulKill($pids, 0.0, true);
+        return Processer::batchKillProcessTrees($pids, true);
     }
 
     protected function pollStopFlowIpc(int $timeoutSec = 0, int $timeoutUsec = 100000): int
@@ -4090,15 +4144,18 @@ class ServiceOrchestrator
         return $timeout;
     }
 
-    private function closeIpcServer(string $reason = 'unspecified'): void
+    private function closeIpcServer(string $reason = 'unspecified', ?float $flushSecOverride = null): void
     {
         $this->lastControlServerCloseReason = $reason;
         if ($this->controlServer === null) {
             return;
         }
-        $flushSec = (float) ($this->context?->getConfig('wls.orchestrator.stop_ipc_flush_before_close_sec', 2.0) ?? 2.0);
+        $flushSec = $flushSecOverride;
+        if ($flushSec === null) {
+            $flushSec = (float) ($this->context?->getConfig('wls.orchestrator.stop_ipc_flush_before_close_sec', 2.0) ?? 2.0);
+        }
         if ($flushSec > 0.0) {
-            $this->controlServer->flushPendingWrites(\min(10.0, \max(0.05, $flushSec)));
+            $this->controlServer->flushPendingWrites(\min(10.0, \max(0.01, $flushSec)));
         }
         WlsLogger::info_('[IPC] 控制服务器关闭（出站缓冲已尽力排空）, reason=' . $reason);
         $this->controlServer->close();
@@ -4152,16 +4209,17 @@ class ServiceOrchestrator
     private function waitForInstanceExit(ServiceInstance $instance, float $timeout): void
     {
         $waitStart = \microtime(true);
+        $trackingPid = $this->getInstanceTrackingPid($instance);
         while (\microtime(true) - $waitStart < $timeout) {
             $this->controlServer?->poll(0, 100000);
 
-            if (!$this->isProcessRunning($instance->pid)) {
+            if ($trackingPid <= 0 || !$this->isProcessRunning($trackingPid)) {
                 return;
             }
         }
 
-        if ($this->isProcessRunning($instance->pid)) {
-            WlsLogger::warning_("[Orchestrator] 进程 {$instance->role}#{$instance->instanceId} (pid={$instance->pid}) 未在 {$timeout}s 内退出，强制杀死");
+        if ($trackingPid > 0 && $this->isProcessRunning($trackingPid)) {
+            WlsLogger::warning_("[Orchestrator] 进程 {$instance->role}#{$instance->instanceId} (pid={$trackingPid}) 未在 {$timeout}s 内退出，强制杀死");
             $this->killInstanceProcess($instance);
         }
     }
@@ -4203,11 +4261,18 @@ class ServiceOrchestrator
 
         $processName = $this->getInstanceProcessName($instance);
         $launchId = $this->getInstanceLaunchId($instance);
-        $pid = $instance->pid;
+        $servicePid = $instance->pid;
+        $trackingPid = $this->getInstanceTrackingPid($instance);
 
-        if ($pid > 0 && ($processName !== '' || $launchId !== '')) {
-            if (Processer::killManagedProcess(
-                $pid,
+        if ($trackingPid > 0 && $trackingPid !== $servicePid) {
+            if (Processer::killProcessTreeByPid($trackingPid, true)) {
+                return;
+            }
+        }
+
+        if ($servicePid > 0 && ($processName !== '' || $launchId !== '')) {
+            if (Processer::killManagedProcessTree(
+                $servicePid,
                 $processName !== '' ? $processName : null,
                 $launchId,
                 $processName !== '' ? '--name=' . $processName : null
@@ -4221,8 +4286,13 @@ class ServiceOrchestrator
             return;
         }
 
-        if ($pid > 0) {
-            Processer::killByPid($pid);
+        if ($trackingPid > 0) {
+            Processer::killProcessTreeByPid($trackingPid, true);
+            return;
+        }
+
+        if ($servicePid > 0) {
+            Processer::killByPid($servicePid);
         }
     }
 
@@ -4240,23 +4310,24 @@ class ServiceOrchestrator
 
     private function isManagedInstanceRunning(ServiceInstance $instance): bool
     {
-        if ($instance->pid <= 0) {
+        $trackingPid = $this->getInstanceTrackingPid($instance);
+        if ($trackingPid <= 0) {
             return false;
         }
 
         $processName = $this->getInstanceProcessName($instance);
         $launchId = $this->getInstanceLaunchId($instance);
 
-        if ($processName !== '' || $launchId !== '') {
+        if (($processName !== '' || $launchId !== '') && $trackingPid > 0) {
             return Processer::isManagedProcessRunning(
-                $instance->pid,
+                $trackingPid,
                 $processName !== '' ? $processName : null,
                 $launchId,
                 $processName !== '' ? '--name=' . $processName : null
             );
         }
 
-        return Processer::isRunningByPid($instance->pid);
+        return Processer::isRunningByPid($trackingPid);
     }
 
     /**
@@ -4319,7 +4390,8 @@ class ServiceOrchestrator
             }
             $allDrained = true;
             foreach ($instances as $instance) {
-                if ($instance->state === ServiceInstance::STATE_DRAINING && $this->isProcessRunning($instance->pid)) {
+                $trackingPid = $this->getInstanceTrackingPid($instance);
+                if ($instance->state === ServiceInstance::STATE_DRAINING && $trackingPid > 0 && $this->isProcessRunning($trackingPid)) {
                     $allDrained = false;
                     break;
                 }
@@ -4806,7 +4878,8 @@ class ServiceOrchestrator
 
                         $remainingDraining = 0;
                         foreach ($instancesForDrain as $instance) {
-                            if ($instance->state === ServiceInstance::STATE_DRAINING && $this->isProcessRunning($instance->pid)) {
+                            $trackingPid = $this->getInstanceTrackingPid($instance);
+                            if ($instance->state === ServiceInstance::STATE_DRAINING && $trackingPid > 0 && $this->isProcessRunning($trackingPid)) {
                                 $remainingDraining++;
                             }
                         }
@@ -5454,11 +5527,12 @@ class ServiceOrchestrator
             return false;
         }
 
-        if ($instance->pid > 0 && !$this->isProcessRunning($instance->pid)) {
-            return false;
+        $trackingPid = $this->getInstanceTrackingPid($instance);
+        if ($trackingPid <= 0) {
+            return true;
         }
 
-        return true;
+        return $this->isProcessRunning($trackingPid);
     }
 
     private function waitForWorkerCriticalInfraReady(string $operationLabel, ?float $timeoutSec = null): bool
@@ -5638,10 +5712,11 @@ class ServiceOrchestrator
                 // 启动中的实例：在宽限期内不检查
                 if ($instance->state === ServiceInstance::STATE_STARTING) {
                     // 尚未连上 IPC 且子进程已死 → 不等到 register 超时，立即拉起
+                    $trackingPid = $this->getInstanceTrackingPid($instance);
                     if ($instance->ipcClientId === null
-                        && $instance->pid > 0
+                        && $trackingPid > 0
                         && !$this->shouldSkipEarlyPidDeathResurrectionCheck($instance)
-                        && !$this->isProcessRunning($instance->pid)
+                        && !$this->isProcessRunning($trackingPid)
                         && \in_array($instance->role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)
                         && ($provider->getResurrectionPriority() > 0)) {
                         WlsLogger::warning_(
@@ -5716,13 +5791,14 @@ class ServiceOrchestrator
                     continue;
                 }
 
-                if ($instance->pid > 0 && $this->isProcessRunning($instance->pid)) {
+                $trackingPid = $this->getInstanceTrackingPid($instance);
+                if ($trackingPid > 0 && $this->isProcessRunning($trackingPid)) {
                     // PID 存活但没有 IPC 连接，可能正在启动或重连
                     if ($uptime < $this->startupGracePeriod * 2) {
                         continue;
                     }
                     // 超过宽限期仍没有 IPC 连接，视为僵尸进程，需要杀死并复活
-                    WlsLogger::warning_("[Orchestrator] 进程存活但无 IPC 超时: {$instance->role}#{$instance->instanceId} (pid={$instance->pid}, uptime={$uptime}s)");
+                    WlsLogger::warning_("[Orchestrator] 进程存活但无 IPC 超时: {$instance->role}#{$instance->instanceId} (pid={$trackingPid}, uptime={$uptime}s)");
                     $this->healthCheckRestartOrEscalate($instance, "no_ipc_timeout:{$instance->role}#{$instance->instanceId}");
                     continue;
                 }
@@ -5750,17 +5826,19 @@ class ServiceOrchestrator
             return;
         }
 
+        $trackingPid = $this->getInstanceTrackingPid($instance);
+
         // 外部复用的 shared sidecar 可能长期无法与当前 Master 建立 IPC（例如 Master 重启/代际切换）。
         // 只要进程仍存活，就不应触发本地 kill + resurrect，否则会在复用场景下形成“误复活风暴”。
         if ($this->isExternallyManagedSharedInstance($instance)
             && \str_starts_with($reason, 'no_ipc_timeout:')
-            && $instance->pid > 0
-            && $this->isProcessRunning($instance->pid)
+            && $trackingPid > 0
+            && $this->isProcessRunning($trackingPid)
         ) {
             $instance->lastHealthCheck = \microtime(true);
             $this->registry->updateInstance($instance);
             WlsLogger::info_(
-                "[Orchestrator] 跳过外部共享服务复活：进程仍存活但无 IPC（原因={$reason}）{$instance->role}#{$instance->instanceId} (pid={$instance->pid})"
+                "[Orchestrator] 跳过外部共享服务复活：进程仍存活但无 IPC（原因={$reason}）{$instance->role}#{$instance->instanceId} (pid={$trackingPid})"
             );
             return;
         }
@@ -5781,7 +5859,7 @@ class ServiceOrchestrator
             return;
         }
 
-        if ($instance->pid > 0 && $this->isProcessRunning($instance->pid)) {
+        if ($trackingPid > 0 && $this->isProcessRunning($trackingPid)) {
             $this->killInstanceProcess($instance);
             if (!$this->sleepInterruptiblyForPeriodicWork(200000)) {
                 return;
@@ -5903,7 +5981,8 @@ class ServiceOrchestrator
                     continue;
                 }
 
-                $pidAlive = $instance->pid > 0 && $this->isProcessRunning($instance->pid);
+                $trackingPid = $this->getInstanceTrackingPid($instance);
+                $pidAlive = $trackingPid > 0 && $this->isProcessRunning($trackingPid);
                 $reason = $pidAlive ? 'ipc_missing_after_threshold' : 'pid_not_running_after_threshold';
                 $instance->setMeta('startup_acceptance_recovery_reason', $reason);
                 $instance->setMeta('startup_acceptance_recovery_at', $now);
@@ -5924,7 +6003,13 @@ class ServiceOrchestrator
         string $spawnTransport,
         ?int $batchSize = null
     ): void {
-        $instance->setMeta('spawn_transport', $spawnTransport);
+        $resolvedTransport = (string) ($instance->getMeta('spawn_transport') ?? '');
+        if ($resolvedTransport === '') {
+            $resolvedTransport = $spawnTransport;
+        }
+
+        $instance->setMeta('spawn_transport', $resolvedTransport);
+        $instance->setMeta('spawn_strategy', $spawnTransport);
         $instance->setMeta('spawn_requested_at', $spawnStartedAt);
         $instance->setMeta('spawn_finished_at', $spawnFinishedAt);
         $instance->setMeta('spawn_cost_ms', \max(0, (int) \round(($spawnFinishedAt - $spawnStartedAt) * 1000)));
@@ -5932,7 +6017,8 @@ class ServiceOrchestrator
             $instance->setMeta('spawn_batch_size', $batchSize);
         }
 
-        $instance->pid = $pid > 0 ? $pid : 0;
+        $instance->setMeta('spawn_pid_returned', $pid > 0 ? $pid : 0);
+        $this->applySpawnedProcessTree($instance, $pid);
         $instance->state = ServiceInstance::STATE_STARTING;
         $instance->startedAt = $spawnFinishedAt;
 
@@ -5940,6 +6026,72 @@ class ServiceOrchestrator
             'pid_returned' => $pid > 0 ? $pid : 0,
             'batch_size' => $batchSize,
         ]);
+    }
+
+    private function applySpawnedProcessTree(ServiceInstance $instance, int $pid): void
+    {
+        $spawnPid = $pid > 0 ? $pid : 0;
+        $instance->setProcessTreePids($spawnPid, $spawnPid, $spawnPid);
+        $this->syncInstanceProcessTreeMeta($instance);
+    }
+
+    private function applyRegisteredServicePid(ServiceInstance $instance, int $pid): void
+    {
+        if ($pid <= 0) {
+            $this->syncInstanceProcessTreeMeta($instance);
+            return;
+        }
+
+        $currentServicePid = (int) $instance->pid;
+        $rootPid = (int) $instance->getRootPid();
+        $launcherPid = (int) $instance->getLauncherPid();
+
+        if ($rootPid <= 0 && $currentServicePid > 0 && $currentServicePid !== $pid) {
+            $rootPid = $currentServicePid;
+        }
+        if ($rootPid <= 0) {
+            $rootPid = $pid;
+        }
+        if ($launcherPid <= 0) {
+            $launcherPid = $rootPid;
+        }
+
+        $instance->setProcessTreePids($pid, $rootPid, $launcherPid);
+        $this->syncInstanceProcessTreeMeta($instance);
+    }
+
+    private function syncInstanceProcessTreeMeta(ServiceInstance $instance): void
+    {
+        $instance->setMeta('service_pid', $instance->pid > 0 ? $instance->pid : 0);
+        $instance->setMeta('root_pid', $instance->getRootPid());
+        $instance->setMeta('launcher_pid', $instance->getLauncherPid());
+        $instance->setMeta('tracking_pid', $this->getInstanceTrackingPid($instance));
+    }
+
+    private function getInstanceTrackingPid(ServiceInstance $instance): int
+    {
+        $rootPid = $instance->getRootPid();
+        if ($rootPid > 0) {
+            return $rootPid;
+        }
+
+        return $instance->pid > 0 ? $instance->pid : 0;
+    }
+
+    private function getQueuedTrackingPid(ServiceInstance $instance, ?array $resurrectEntry = null): int
+    {
+        $trackingPid = (int) ($resurrectEntry['tracking_pid'] ?? 0);
+        if ($trackingPid > 0) {
+            return $trackingPid;
+        }
+
+        return $this->getInstanceTrackingPid($instance);
+    }
+
+    private function isTrackingProcessRunning(ServiceInstance $instance): bool
+    {
+        $trackingPid = $this->getInstanceTrackingPid($instance);
+        return $trackingPid > 0 && $this->isProcessRunning($trackingPid);
     }
 
     private function triggerStartupInfraRecoveryAfterWorkerReady(): void
@@ -5968,14 +6120,16 @@ class ServiceOrchestrator
 
     private function formatInstanceDebugContext(ServiceInstance $instance): string
     {
+        $trackingPid = $this->getInstanceTrackingPid($instance);
         $pidAlive = '0';
-        if ($instance->pid > 0) {
-            $cached = $this->processRunningCache[$instance->pid] ?? null;
+        if ($trackingPid > 0) {
+            $cached = $this->processRunningCache[$trackingPid] ?? null;
             $pidAlive = $cached === null ? '?' : ((bool) ($cached['running'] ?? false) ? '1' : '0');
         }
         return 'instance=' . $instance->role . '#' . $instance->instanceId
             . ', state=' . $instance->state
             . ', pid=' . $instance->pid
+            . ', tracking_pid=' . $trackingPid
             . ', pid_alive=' . $pidAlive
             . ', ipc=' . ($instance->ipcClientId !== null ? (string) $instance->ipcClientId : 'null')
             . ', restarts=' . $instance->restarts
@@ -6560,8 +6714,12 @@ class ServiceOrchestrator
             }
 
             // 延迟复活：检查进程是否仍在运行
-            if (!empty($entry['delayed']) && !empty($entry['pid'])) {
-                if (!$this->terminateStaleProcessBeforeResurrection($oldInstance, (int)$entry['pid'], $port)) {
+            if (!empty($entry['delayed']) && (!empty($entry['tracking_pid']) || !empty($entry['pid']))) {
+                if (!$this->terminateStaleProcessBeforeResurrection(
+                    $oldInstance,
+                    (int) ($entry['tracking_pid'] ?? $entry['pid'] ?? 0),
+                    $port
+                )) {
                     $entry['scheduledAt'] = \microtime(true) + 1.0;
                     $this->resurrectQueue[$key] = $entry;
                     WlsLogger::warning_("[Orchestrator] {$entry['role']}#{$entry['instanceId']} 旧进程/端口尚未释放，1 秒后重试复活");
@@ -6633,6 +6791,7 @@ class ServiceOrchestrator
                             'scheduledAt' => \microtime(true) + 1.5,
                             'delayed' => false,
                             'pid' => 0,
+                            'tracking_pid' => 0,
                             'port' => $port,
                             'infraRetryBudget' => $left,
                         ];
@@ -6673,8 +6832,8 @@ class ServiceOrchestrator
         $this->broadcastRoutingPolicyToWorkers();
 
         $key = $instance->getKey();
-        $pid = $instance->pid;
-        $processStillRunning = $pid > 0 && $this->isProcessRunning($pid);
+        $trackingPid = $this->getInstanceTrackingPid($instance);
+        $processStillRunning = $trackingPid > 0 && $this->isProcessRunning($trackingPid);
         $delay = $processStillRunning ? \max(2.0, $this->ipcReconnectGraceSec) : 0.0;
         $port = (int) ($instance->port ?? 0);
 
@@ -6699,7 +6858,10 @@ class ServiceOrchestrator
             'restartDelay' => $delay,
             'scheduledAt' => \microtime(true) + $delay,
             'delayed' => $processStillRunning,
-            'pid' => $pid,
+            'pid' => $instance->pid,
+            'tracking_pid' => $trackingPid,
+            'root_pid' => $instance->getRootPid(),
+            'launcher_pid' => $instance->getLauncherPid(),
             'port' => $port,
             'infraRetryBudget' => $this->infraServiceResurrectAttempts,
         ];
@@ -6721,32 +6883,32 @@ class ServiceOrchestrator
     /**
      * 复活前确保旧进程已经真正退出，优先按真实 PID 终止，避免 PID 文件滞后误杀失败。
      */
-    private function terminateStaleProcessBeforeResurrection(?ServiceInstance $oldInstance, int $pid, int $port): bool
+    private function terminateStaleProcessBeforeResurrection(?ServiceInstance $oldInstance, int $trackingPid, int $port): bool
     {
-        if ($pid <= 0) {
+        if ($trackingPid <= 0) {
             return $this->ensurePortReleasedForResurrection($port);
         }
 
-        if (!$this->isProcessRunning($pid)) {
+        if (!$this->isProcessRunning($trackingPid)) {
             return $this->ensurePortReleasedForResurrection($port);
         }
 
-        WlsLogger::warning_("[Orchestrator] 进程 {$pid} 仍在运行（IPC已断开），优先按真实 PID 终止");
+        WlsLogger::warning_("[Orchestrator] 进程 {$trackingPid} 仍在运行（IPC已断开），优先按进程树终止");
 
-        $stopped = Processer::gracefulKill($pid, 1.0, true);
+        $stopped = Processer::gracefulKill($trackingPid, 1.0, true);
         if (!$stopped) {
-            $stopped = Processer::killProcessTreeByPid($pid, true);
+            $stopped = Processer::killProcessTreeByPid($trackingPid, true);
         }
         if (!$stopped && $oldInstance !== null) {
             $this->killInstanceProcess($oldInstance);
-            $stopped = !$this->isProcessRunning($pid);
+            $stopped = !$this->isProcessRunning($trackingPid);
         }
 
         if ($port > 0) {
             Processer::clearPortCache($port);
         }
 
-        return $stopped && !$this->isProcessRunning($pid) && $this->ensurePortReleasedForResurrection($port);
+        return $stopped && !$this->isProcessRunning($trackingPid) && $this->ensurePortReleasedForResurrection($port);
     }
 
     /**
@@ -6979,7 +7141,7 @@ class ServiceOrchestrator
         // 策略3：PID 匹配（Windows 下可能不准确）
         if ($pid > 0) {
             foreach ($instances as $instance) {
-                if ($instance->pid === $pid) {
+                if ($instance->matchesManagedPid($pid)) {
                     if ($this->registerInstanceIpc($instance, $clientId, $pid, $workerId, $epoch, $launchId, $processKind, $moduleCode)) {
                         return;
                     }
@@ -7070,11 +7232,14 @@ class ServiceOrchestrator
         if ($moduleCode !== '') {
             $instance->moduleCode = $moduleCode;
         }
-        // 更新真实 PID（Windows 下 spawnProcess 返回的可能不准确）
+        // Windows 前台启动返回的可能是 wrapper/root PID，register 上报的是实际服务 PID。
         if ($pid > 0 && $instance->pid !== $pid) {
-            WlsLogger::debug_("[Orchestrator] 更新 PID: {$instance->role}#{$instance->instanceId} 从 {$instance->pid} 到 {$pid}");
-            $instance->pid = $pid;
+            WlsLogger::debug_(
+                "[Orchestrator] 更新服务 PID: {$instance->role}#{$instance->instanceId}"
+                . " service={$instance->pid} -> {$pid}, root={$instance->getRootPid()}"
+            );
         }
+        $this->applyRegisteredServicePid($instance, $pid);
         $registerReceivedAt = \microtime(true);
         $instance->setMeta('register_received_at', $registerReceivedAt);
         if ($instance->startedAt > 0) {
@@ -8117,6 +8282,7 @@ class ServiceOrchestrator
                 $stopIntent = (string)($msg['stop_intent'] ?? '');
                 $stopSource = (string)($msg['stop_source'] ?? 'unknown');
                 $stopTraceId = (string)($msg['stop_trace_id'] ?? '');
+                $forceStop = (bool) ($msg['force_stop'] ?? false);
                 if ($stopIntent !== 'explicit') {
                     WlsLogger::warning_(
                         "[Orchestrator] 拒绝未显式确认的 STOP 命令: client={$clientId}, action={$action}, source={$stopSource}, trace={$stopTraceId}"
@@ -8130,11 +8296,12 @@ class ServiceOrchestrator
                 }
 
                 WlsLogger::warning_(
-                    "[Orchestrator] 接收 STOP 命令: client={$clientId}, source={$stopSource}, trace={$stopTraceId}"
+                    "[Orchestrator] 接收 STOP 命令: client={$clientId}, source={$stopSource}, trace={$stopTraceId}, force="
+                    . ($forceStop ? '1' : '0')
                 );
                 $this->clearPendingControlOperations('Control operation cancelled by stop');
                 $this->preemptActiveControlOperationForImperial($action);
-                $this->requestStop('command', $clientId, true);
+                $this->requestStop('command', $clientId, true, $forceStop);
 
                 return;
             }
@@ -8812,7 +8979,8 @@ class ServiceOrchestrator
                 }
                 $ipcBad = $instance->ipcClientId === null
                     || ($this->controlServer !== null && !$this->controlServer->clientExists($instance->ipcClientId));
-                $pidBad = $instance->pid > 0 && !$this->isProcessRunning($instance->pid);
+                $trackingPid = $this->getInstanceTrackingPid($instance);
+                $pidBad = $trackingPid > 0 && !$this->isProcessRunning($trackingPid);
                 if ($ipcBad || $pidBad) {
                     $this->clearStaleIpcClientIfNeeded($instance);
                     WlsLogger::warning_(
@@ -10035,9 +10203,10 @@ class ServiceOrchestrator
         $clientState = (string) ($clientInfo['state'] ?? '');
         $clientRole = (string) ($clientInfo['role'] ?? '');
         $disconnectReason = (string) ($clientInfo['disconnect_reason'] ?? 'unknown');
+        $trackingPid = $this->getInstanceTrackingPid($instance);
         WlsLogger::warning_(
             "[Orchestrator] IPC 断开: {$instance->role}#{$instance->instanceId} "
-            . "(pid={$instance->pid}, client_id={$clientId}, peer={$peer}, client_state={$clientState}, client_role={$clientRole}, reason={$disconnectReason}), "
+            . "(pid={$trackingPid}, client_id={$clientId}, peer={$peer}, client_state={$clientState}, client_role={$clientRole}, reason={$disconnectReason}), "
             . $this->formatInstanceDebugContext($instance)
         );
 
@@ -10054,7 +10223,7 @@ class ServiceOrchestrator
             if ($this->context !== null) {
                 $this->persistServicesInfo($this->context);
             }
-            $this->sendStopProgress("  ✓ {$displayName}(PID:{$instance->pid}) 已断开连接");
+            $this->sendStopProgress("  ✓ {$displayName}(PID:{$trackingPid}) 已断开连接");
             return;
         }
 
@@ -10101,7 +10270,7 @@ class ServiceOrchestrator
         }
 
         $now = \microtime(true);
-        $processStillRunning = $instance->pid > 0 && $this->isProcessRunning($instance->pid);
+        $processStillRunning = $trackingPid > 0 && $this->isProcessRunning($trackingPid);
         $canResurrectLocally = $this->canUseLocalSlotResurrection($instance, $provider);
         $maxSlotRestarts = 10;
 
@@ -10220,12 +10389,16 @@ class ServiceOrchestrator
             'scheduledAt' => \microtime(true) + $delay,
             'delayed' => true,  // 标记为延迟复活，执行前需要再次检查进程状态
             'pid' => $instance->pid,  // 保存 PID 用于检查进程是否仍在运行
+            'tracking_pid' => $this->getInstanceTrackingPid($instance),
+            'root_pid' => $instance->getRootPid(),
+            'launcher_pid' => $instance->getLauncherPid(),
             'port' => $instance->port ?? 0,
             'previousState' => $previousState,
         ];
+        $trackingPid = $this->getInstanceTrackingPid($instance);
         WlsLogger::info_(
             "[Orchestrator] 安排延迟复活 {$instance->role}#{$instance->instanceId}"
-            . "，延迟 {$delay}s (pid={$instance->pid}, previous_state={$previousState})"
+            . "，延迟 {$delay}s (pid={$trackingPid}, previous_state={$previousState})"
         );
     }
 

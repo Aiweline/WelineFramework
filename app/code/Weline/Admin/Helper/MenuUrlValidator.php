@@ -121,11 +121,15 @@ class MenuUrlValidator
         $whitelist = $whiteAclSource
             ->fields('path')
             ->where('type', WhiteAclSource::type_PC)
-            ->select()
-            ->fetchArray();
+            ->select();
 
-        // fetchArray() 可能返回空数组或 null
-        $paths = is_array($whitelist) ? array_column($whitelist, 'path') : [];
+        $paths = [];
+        foreach ($whitelist->fetchIterator() as $item) {
+            $path = $item['path'] ?? '';
+            if ($path !== '') {
+                $paths[] = $path;
+            }
+        }
         
         self::$whitelistCache = $paths;
         $cache->set(self::WHITELIST_CACHE_KEY, $paths, 3600);
