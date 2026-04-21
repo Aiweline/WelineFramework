@@ -4523,13 +4523,6 @@ SCRIPT;
     }
 
     /**
-     * 阶段一 plan 对应 weline_queue 行：queue_id + 快照 + process + result 尾部，供侧栏「任务进度」内嵌展示。
-     *
-     * @param array<string, mixed> $activeOperation
-     *
-     * @return array<string, mixed>|null
-     */
-    /**
      * @param array<string, mixed> $source
      *
      * @return array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string, mixed>|null}
@@ -4588,6 +4581,13 @@ SCRIPT;
         return null;
     }
 
+    /**
+     * 阶段一 plan 对应 weline_queue 行：queue_id + 快照 + process + result 尾部，供侧栏「任务进度」内嵌展示。
+     *
+     * @param array<string, mixed> $activeOperation
+     *
+     * @return array<string, mixed>|null
+     */
     private function buildPlanStageQueueInfoPayload(AiSiteAgentSession $session, array $activeOperation): ?array
     {
         $queueId = 0;
