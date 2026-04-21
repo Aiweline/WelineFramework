@@ -225,6 +225,7 @@ class AiSiteAgent extends BaseController
         $this->assign('confirm_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-confirm-plan'));
         $this->assign('sort_plan_blocks_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-sort-plan-blocks'));
         $this->assign('mutate_plan_block_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-mutate-plan-block'));
+        $this->assign('refine_plan_page_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-refine-plan-page'));
         $this->assign('plan_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/plan-sse'));
         $this->assign('start_task_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-task-plan'));
         $this->assign('confirm_task_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-confirm-task-plan'));
@@ -560,6 +561,12 @@ SCRIPT;
     public function postMutatePlanBlock(): string
     {
         return $this->handleMutatePlanBlock();
+    }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 寤虹珯浼氳瘽 API', 'mdi-api', '寰皟褰撳墠椤甸潰闃舵涓€鍧楁爲', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postRefinePlanPage(): string
+    {
+        return $this->handleRefinePlanPage();
     }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '排序阶段二任务块', 'GuoLaiRen_PageBuilder::ai_site_agent')]
