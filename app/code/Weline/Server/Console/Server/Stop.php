@@ -803,6 +803,9 @@ class Stop extends CommandAbstract
             if (!($inspect['in_use'] ?? false)) {
                 continue;
             }
+            if ($this->isSharedStatePortOccupant($inspect)) {
+                continue;
+            }
 
             $recoverable = (bool) ($inspect['is_weline'] ?? false)
                 || $this->isRecoverableWlsPortResponder((int) $port)
@@ -947,6 +950,9 @@ class Stop extends CommandAbstract
         foreach ($this->collectRecoverableKnownPorts($name, $info) as $port) {
             $inspect = $this->inspectRecoverablePortOccupant($port);
             if (!($inspect['in_use'] ?? false)) {
+                continue;
+            }
+            if ($this->isSharedStatePortOccupant($inspect)) {
                 continue;
             }
 
@@ -1706,6 +1712,19 @@ class Stop extends CommandAbstract
 
         return \str_contains($processName, 'weline-wls-session-')
             || \str_contains($processName, 'weline-wls-memory-');
+    }
+
+    /**
+     * @param array{pid?:int} $inspect
+     */
+    private function isSharedStatePortOccupant(array $inspect): bool
+    {
+        $pid = (int) ($inspect['pid'] ?? 0);
+        if ($pid <= 0 || !$this->isStopPidRunning($pid)) {
+            return false;
+        }
+
+        return $this->isSharedStateProcessName($this->getProcessPnameByPid($pid));
     }
 
     /**
@@ -2663,6 +2682,9 @@ class Stop extends CommandAbstract
     protected function cleanupRecoverableConfiguredPort(int $port, ?ServerInstanceInfo $info = null): bool
     {
         $inspect = $this->inspectRecoverablePortOccupant($port);
+        if ($this->isSharedStatePortOccupant($inspect)) {
+            return false;
+        }
         $recoverableWlsPort = ((bool) ($inspect['in_use'] ?? false) && (bool) ($inspect['is_weline'] ?? false))
             || $this->isRecoverableWlsPortResponder($port)
             || $this->isRecoverableManagedPort($port, $inspect, $info);
@@ -2758,6 +2780,9 @@ class Stop extends CommandAbstract
             }
 
             $pname = $this->getProcessPnameByPid($pid);
+            if ($this->isSharedStateProcessName($pname)) {
+                continue;
+            }
             $isWls = \str_contains($pname, 'weline-wls')
                 || \str_contains($pname, 'weline-master')
                 || $recoverableWlsPort;
