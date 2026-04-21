@@ -1336,6 +1336,11 @@ final class AiSiteExecutionBlueprintService
         }
         $this->assertAiStageOneThemeDesignSchema($planJson['theme_design']);
 
+        $themeDesign = \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : [];
+        if ($themeDesign !== []) {
+            $this->assertAiStageOneThemeDesignColorScheme($themeDesign);
+        }
+
         $this->assertAiStageOneLinkList(
             \is_array($planJson['navigation_plan']['header_items'] ?? null) ? $planJson['navigation_plan']['header_items'] : [],
             'navigation_plan.header_items'
