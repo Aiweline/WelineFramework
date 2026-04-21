@@ -1082,7 +1082,7 @@ Atomic Task ID:
 - [ ] A13 页面任务 fanout 使用 Fiber/协程并发（status=todo, owner=runtime, covers=§1A/§13.5, output=一页面一任务并发）
 - [ ] A14 页面任务输入强制携带 `theme_design` 全量硬约束（status=todo, owner=backend, covers=§1A, output=色系/宗旨/原因/禁用风格进入 prompt context）
 - [ ] A15 修改页面提示词，反复提醒 AI 遵守共享主题规划（status=todo, owner=prompt, covers=§1A, output=`theme_alignment_summary`）
-- [ ] A16 页面提示词输出 `theme_alignment_summary`（status=todo, owner=prompt+validation, covers=§13.2.4, output=每页说明如何服从主题）
+- [x] A16 页面提示词输出 `theme_alignment_summary`（status=done, owner=worker-5, covers=§13.2.4, output=每页说明如何服从主题, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
 - [ ] A17 页面任务缺失 `shared_context_hash` 时拒收（status=todo, owner=validation, covers=§13.7.1, output=非法输出阻断）
 - [ ] A18 共享规划变更时未完成页面任务标记 `stale`（status=todo, owner=backend-queue, covers=§13.5.3, output=旧 hash 不继续生成）
 
