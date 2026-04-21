@@ -1001,7 +1001,7 @@ final class AiSiteExecutionBlueprintService
             '    "footer_plan":{"featured":[],"policies":[]},',
             '    "seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"},',
             '    "page_types":["home_page"],',
-            '    "pages":{"home_page":{"page_goal":"string","theme_alignment_summary":"string explaining how this page obeys theme_design/shared_prompt_context","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}},',
+            '    "pages":{"home_page":{"page_goal":"string","theme_alignment_summary":"how this page and every block obey theme_design color_scheme, tone_of_voice, cta_tone, trust expression, and Header/Footer handoff","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}},',
             '    "execution_steps":[{"step":1,"task_key":"string","task_type":"string","status":"pending"}],',
             '    "stage2_task_hints":[{"page":"string","block":"string","task_types":["copywriting","ui_design","frontend_dev"]}]',
             '}',
@@ -3986,11 +3986,11 @@ final class AiSiteExecutionBlueprintService
                 'assembly_version' => 1,
                 'generation_method' => 'stage1.page_plan.generate',
             ]);
-            $assembledPagePlan['theme_alignment_summary'] = \trim((string)($assembledPagePlan['theme_alignment_summary'] ?? ''));
-            if ($assembledPagePlan['theme_alignment_summary'] === '') {
-                $assembledPagePlan['theme_alignment_summary'] = $this->buildStageOnePageThemeAlignmentSummary(
-                    (string)$pageType,
-                    $assembledPagePlan,
+            if (\trim((string)($assembledPagePlan['theme_alignment_summary'] ?? '')) === '') {
+                $assembledPagePlan['theme_alignment_summary'] = $this->buildPageThemeAlignmentSummaryFromSharedContext(
+                    (string)($assembledPagePlan['page_label'] ?? $pageType),
+                    (string)($assembledPagePlan['page_goal'] ?? ''),
+                    \is_array($assembledPagePlan['blocks'] ?? null) ? $assembledPagePlan['blocks'] : [],
                     $sharedPromptContext
                 );
             }
@@ -4002,219 +4002,25 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * @param array<string, mixed> $pages
-     * @return array<string, mixed>
-     */
-    private function buildStageOnePagePlansConcurrently(array $pages, array $sharedPromptContext): array
-    {
-        if (\count($pages) <= 1 || !\class_exists(\Fiber::class)) {
-            return $this->buildStageOnePagePlans($pages, $sharedPromptContext);
-        }
-
-        /** @var array<string, \Fiber> $fibers */
-        $fibers = [];
-        foreach ($pages as $pageType => $pagePlan) {
-            if (!\is_array($pagePlan)) {
-                continue;
-            }
-            $pageKey = (string)$pageType;
-            $fibers[$pageKey] = new \Fiber(function () use ($pageKey, $pagePlan, $sharedPromptContext): array {
-                return $this->buildStageOnePagePlan($pageKey, $pagePlan, $sharedPromptContext);
-            });
-        }
-
-        if ($fibers === []) {
-            return [];
-        }
-
-        $results = [];
-        $errors = [];
-        foreach ($fibers as $pageKey => $fiber) {
-            try {
-                $fiber->start();
-            } catch (\Throwable $throwable) {
-                $errors[$pageKey] = $throwable;
-            }
-        }
-
-        while (\count($results) + \count($errors) < \count($fibers)) {
-            $madeProgress = false;
-            foreach ($fibers as $pageKey => $fiber) {
-                if (isset($results[$pageKey]) || isset($errors[$pageKey])) {
-                    continue;
-                }
-
-                try {
-                    if ($fiber->isTerminated()) {
-                        $results[$pageKey] = $fiber->getReturn();
-                        $madeProgress = true;
-                        continue;
-                    }
-
-                    if ($fiber->isSuspended()) {
-                        $fiber->resume();
-                        $madeProgress = true;
-                    }
-                } catch (\Throwable $throwable) {
-                    $errors[$pageKey] = $throwable;
-                    $madeProgress = true;
-                }
-            }
-
-            if (!$madeProgress && \count($results) + \count($errors) < \count($fibers)) {
-                \usleep(1000);
-            }
-        }
-
-        if ($errors !== []) {
-            $firstError = \reset($errors);
-            if ($firstError instanceof \Throwable) {
-                throw $firstError;
-            }
-        }
-
-        $pagePlans = [];
-        foreach ($pages as $pageType => $_) {
-            $pageKey = (string)$pageType;
-            if (isset($results[$pageKey])) {
-                $pagePlans[$pageKey] = $results[$pageKey];
-            }
-        }
-
-        return $pagePlans;
-    }
-
-    /**
-     * @param array<string, mixed> $pagePlan
-     * @return array<string, mixed>
-     */
-    private function buildStageOnePagePlan(string $pageType, array $pagePlan, array $sharedPromptContext): array
-    {
-        $assembledPagePlan = \array_replace($pagePlan, [
-            'page_key' => $pageType,
-            'page_status' => 'done',
-            'shared_context_hash' => (string)($sharedPromptContext['context_hash'] ?? ''),
-            'theme_context_hash' => (string)($sharedPromptContext['theme_context_hash'] ?? ''),
-            'assembly_version' => 1,
-            'generation_method' => 'stage1.page_plan.generate',
-        ]);
-        $assembledPagePlan['page_context_hash'] = $this->buildStageOnePageContextHash($pageType, $assembledPagePlan);
-
-        return $assembledPagePlan;
-    }
-
-    /**
-     * @param array<string, mixed> $stageOneQueue
-     * @param array<string, mixed> $pagePlans
-     * @return array<string, mixed>
-     */
-    private function buildStageOnePageFanoutQueueEnvelope(
-        array $stageOneQueue,
-        array $pagePlans,
-        array $sharedPromptContext,
-        string $planLocale
-    ): array {
-        $jobs = \is_array($stageOneQueue['jobs'] ?? null) ? $stageOneQueue['jobs'] : [];
-        $sequence = \array_values(\array_map('strval', \is_array($stageOneQueue['sequence'] ?? null) ? $stageOneQueue['sequence'] : []));
-        $pageJobKeys = [];
-        $sortOrder = 40;
-
-        foreach ($pagePlans as $pageType => $pagePlan) {
-            if (!\is_array($pagePlan)) {
-                continue;
-            }
-
-            $pageKey = (string)$pageType;
-            $jobKey = 'stage1.page_plan:' . $pageKey;
-            $pageJobKeys[] = $jobKey;
-            $jobs[$jobKey] = [
-                'job_key' => $jobKey,
-                'job_type' => 'stage1.page_plan.generate',
-                'stage' => 'stage1_page',
-                'sort_order' => $sortOrder++,
-                'status' => 'done',
-                'depends_on' => ['stage1.shared.header_footer'],
-                'token' => \sha1((string)\json_encode([
-                    'job_key' => $jobKey,
-                    'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? $sharedPromptContext['context_hash'] ?? ''),
-                    'page_context_hash' => (string)($pagePlan['page_context_hash'] ?? ''),
-                ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
-                'concurrency' => [
-                    'mode' => 'fiber_coroutine',
-                    'fanout_group' => 'stage1.page_plan.fanout',
-                    'task_granularity' => 'one_page_one_task',
-                    'trigger_after' => 'stage1.shared.header_footer',
-                ],
-                'inputs' => [
-                    'page_key' => $pageKey,
-                    'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? $sharedPromptContext['context_hash'] ?? ''),
-                    'theme_context_hash' => (string)($pagePlan['theme_context_hash'] ?? $sharedPromptContext['theme_context_hash'] ?? ''),
-                    'plan_locale' => $planLocale,
-                ],
-                'outputs' => [
-                    'page_plan' => $pagePlan,
-                    'page_context_hash' => (string)($pagePlan['page_context_hash'] ?? ''),
-                ],
-                'output_refs' => [
-                    'plan_workbench.stage1.page_plans.' . $pageKey,
-                    'plan_structured.page_plans.' . $pageKey,
-                ],
-            ];
-        }
-
-        foreach ($pageJobKeys as $jobKey) {
-            if (!\in_array($jobKey, $sequence, true)) {
-                $sequence[] = $jobKey;
-            }
-        }
-
-        $stageOneQueue['sequence'] = $sequence;
-        $stageOneQueue['jobs'] = $jobs;
-        $stageOneQueue['fanout'] = [
-            'trigger_after' => 'stage1.shared.header_footer',
-            'mode' => 'fiber_coroutine',
-            'task_granularity' => 'one_page_one_task',
-            'page_job_count' => \count($pageJobKeys),
-            'page_job_keys' => $pageJobKeys,
-        ];
-
-        return $stageOneQueue;
-    }
-
-    /**
-     * @param array<string, mixed> $pagePlan
+     * @param list<array<string, mixed>> $blocks
      * @param array<string, mixed> $sharedPromptContext
      */
-    private function buildStageOnePageThemeAlignmentSummary(string $pageType, array $pagePlan, array $sharedPromptContext): string
-    {
+    private function buildPageThemeAlignmentSummaryFromSharedContext(
+        string $pageLabel,
+        string $pageGoal,
+        array $blocks,
+        array $sharedPromptContext
+    ): string {
         $themeDesign = \is_array($sharedPromptContext['theme_design'] ?? null) ? $sharedPromptContext['theme_design'] : [];
-        $themePurpose = \trim((string)($themeDesign['theme_purpose'] ?? 'shared theme purpose'));
         $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
-        $paletteName = \trim((string)($colorScheme['name'] ?? 'shared palette'));
-        $primaryColor = \trim((string)($colorScheme['primary'] ?? 'primary color'));
-        $accentColor = \trim((string)($colorScheme['accent'] ?? 'accent color'));
-        $typographySpacingRadius = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
-        $fontFamily = \trim((string)($typographySpacingRadius['font_family'] ?? 'shared font'));
-        $spacingScale = \trim((string)($typographySpacingRadius['spacing_scale'] ?? 'shared spacing'));
-        $radiusScale = \trim((string)($typographySpacingRadius['radius_scale'] ?? 'shared radius'));
-        $toneOfVoice = \trim((string)($themeDesign['tone_of_voice'] ?? 'shared voice'));
-        $ctaTone = \trim((string)($themeDesign['cta_tone'] ?? 'shared CTA tone'));
-        $forbiddenStyles = \is_array($themeDesign['forbidden_styles'] ?? null)
-            ? \array_values(\array_filter(\array_map(
-                static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-                $themeDesign['forbidden_styles']
-            ), static fn(string $value): bool => $value !== ''))
-            : [];
-        $forbiddenStyle = (string)($forbiddenStyles[0] ?? 'off-theme visual styles');
-        $pageGoal = \trim((string)($pagePlan['page_goal'] ?? $pageType));
+        $palette = [
+            'name' => (string)($colorScheme['name'] ?? $sharedPromptContext['palette_name'] ?? ''),
+        ];
+        $themeStyle = [
+            'visual_tone' => (string)($themeDesign['tone_of_voice'] ?? $sharedPromptContext['content_tone'] ?? ''),
+        ];
 
-        return \implode(' ', [
-            'Page "' . $pageType . '" uses the shared theme purpose "' . $themePurpose . '" to support "' . $pageGoal . '".',
-            'It must keep the "' . $paletteName . '" palette with primary ' . $primaryColor . ' and accent ' . $accentColor . ',',
-            'reuse ' . $fontFamily . ' with ' . $spacingScale . ' spacing and ' . $radiusScale . ' radius,',
-            'write in the shared voice "' . $toneOfVoice . '" with CTA tone "' . $ctaTone . '",',
-            'and avoid "' . $forbiddenStyle . '" so the page stays aligned with shared_prompt_context.',
-        ]);
+        return $this->buildPageThemeAlignmentSummary($pageLabel, $pageGoal, $blocks, $palette, $themeStyle);
     }
 
     /**
@@ -4662,7 +4468,7 @@ final class AiSiteExecutionBlueprintService
             }
             $pageBlocks[(string)$pageType] = [
                 'page_goal' => \trim((string)($pagePlan['page_goal'] ?? '')),
-                'theme_alignment_summary' => \trim((string)($pagePlan['theme_alignment_summary'] ?? $stageOnePagePlan['theme_alignment_summary'] ?? '')),
+                'theme_alignment_summary' => \trim((string)($pagePlan['theme_alignment_summary'] ?? '')),
                 'why' => \trim((string)($pagePlan['why'] ?? '')),
                 'primary_keywords' => \array_values(\array_filter(\array_map(
                     static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
