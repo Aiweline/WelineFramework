@@ -693,9 +693,9 @@ class Stop extends CommandAbstract
 
             if (empty($remainingPids) && empty($remainingPorts)) {
                 if ($totalKilled > 0) {
-                    $this->printer->success(__('  已清理 %1 个残留进程', [$totalKilled]));
+                    $this->printer->success(__('  已清理 %{1} 个残留进程', [$totalKilled]));
                     if ($attempt > 1) {
-                        $this->printer->note(__('  重试次数：%1', [$attempt]));
+                        $this->printer->note(__('  重试次数：%{1}', [$attempt]));
                     }
                 } else {
                     $this->printer->note(__('  无残留进程'));
@@ -721,7 +721,7 @@ class Stop extends CommandAbstract
         }
 
         if ($totalKilled > 0) {
-            $this->printer->success(__('  已清理 %1 个残留进程（复核结束）', [$totalKilled]));
+            $this->printer->success(__('  已清理 %{1} 个残留进程（复核结束）', [$totalKilled]));
         } else {
             $this->printer->note(__('  无残留进程'));
         }
