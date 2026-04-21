@@ -404,6 +404,85 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringNotContainsString("# Stage 1 Plan\n\n## Home\n- Hero focuses on first-screen conversion", $allPrompts);
     }
 
+    public function testBuildTaskPlanArtifactsFanoutsPageBlocksAsSingleTaskBatches(): void
+    {
+        $capturedPrompts = [];
+        $decoded = \json_decode($this->buildTaskPlanResponse(), true);
+        $virtualThemePlan = \is_array($decoded['virtual_theme_plan'] ?? null) ? $decoded['virtual_theme_plan'] : [];
+        $heroTask = $virtualThemePlan['page_tasks']['home_page'][0] ?? [];
+        $proofTask = \array_replace_recursive($heroTask, [
+            'task_key' => 'page:home_page:content/home-page-proof',
+            'label' => 'Proof',
+            'sort_order' => 110,
+            'plan_context' => [
+                'block_goal' => 'Show concrete proof for the offer.',
+                'block_code' => 'proof',
+            ],
+            'task_script' => [
+                'scene' => 'page:home_page/block:proof',
+                'story_goal' => 'Make the proof block credibility-ready.',
+            ],
+        ]);
+
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::exactly(3))
+            ->method('generate')
+            ->willReturnCallback(function (string $prompt) use (&$capturedPrompts, $virtualThemePlan, $heroTask, $proofTask): string {
+                $capturedPrompts[] = $prompt;
+                if (\str_contains($prompt, 'Batch type: shared')) {
+                    return \json_encode([
+                        'shared_tasks' => $virtualThemePlan['shared_tasks'] ?? [],
+                        'risk_notes' => ['Shared batch payload'],
+                    ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+                }
+
+                $task = \str_contains($prompt, 'page:home_page:content/home-page-proof') ? $proofTask : $heroTask;
+                return \json_encode([
+                    'page_type' => 'home_page',
+                    'page_tasks' => [$task],
+                    'risk_notes' => ['Block batch payload'],
+                ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+            });
+        $service = new AiSiteVirtualThemePlanService($aiService);
+        $scope = $this->buildPromptScope();
+        $scope['execution_blueprint']['pages']['home_page']['blocks'][] = [
+            'block_key' => 'proof',
+            'section_code' => 'content/home-page-proof',
+            'goal' => 'Show concrete proof for the offer.',
+            'why' => 'Proof reduces doubt after the hero CTA.',
+            'content_brief' => ['goal' => 'Show proof points.'],
+            'execution_script' => ['feature_points' => ['Trust metric'], 'core_copy' => 'Trusted by growing teams'],
+            'field_plan' => [['field' => 'title', 'sample' => 'Trusted by growing teams', 'reason' => 'Credibility headline']],
+            'result_ref' => ['context_hash' => 'proof-hash'],
+        ];
+        $blueprint = $this->buildPromptBlueprint();
+        $blueprint['tasks'][] = [
+            'task_key' => 'page:home_page:content/home-page-proof',
+            'group_key' => 'home_page',
+            'page_type' => 'home_page',
+            'label' => 'Proof',
+            'section_code' => 'content/home-page-proof',
+            'sort_order' => 110,
+            'dependencies' => ['shared:header'],
+        ];
+
+        $artifacts = $service->buildTaskPlanArtifacts($scope, $blueprint);
+
+        self::assertCount(3, $capturedPrompts);
+        $pagePrompts = \array_values(\array_filter($capturedPrompts, static fn(string $prompt): bool => \str_contains($prompt, 'Batch type: page')));
+        self::assertCount(2, $pagePrompts);
+        self::assertStringContainsString('Task keys in this batch: page:home_page:content/home-page-hero', $pagePrompts[0]);
+        self::assertStringContainsString('Task keys in this batch: page:home_page:content/home-page-proof', $pagePrompts[1]);
+        self::assertStringContainsString('Fanout group: stage2.block_task_plan', $pagePrompts[0]);
+        self::assertStringContainsString('Dependencies preserved from stage-1 task tree: shared:header', $pagePrompts[1]);
+        self::assertSame(
+            ['Hero', 'Proof'],
+            \array_map(static fn(array $task): string => (string)($task['label'] ?? ''), $artifacts['structured']['page_tasks']['home_page'] ?? [])
+        );
+        self::assertSame('weline_queue', (string)($artifacts['structured']['stage2_queue']['fanout']['queue_driver'] ?? ''));
+        self::assertSame('shared_first_then_block_fanout', (string)($artifacts['structured']['stage2_queue']['fanout']['dispatch_policy'] ?? ''));
+    }
+
     public function testBuildTaskPlanArtifactsStreamEnforcesTimeoutAndFallsBackToJsonGenerateWhenStreamResponseIsInvalid(): void
     {
         $capturedStreamParams = [];
