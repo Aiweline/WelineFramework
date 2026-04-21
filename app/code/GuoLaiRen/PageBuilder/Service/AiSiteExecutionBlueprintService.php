@@ -5896,6 +5896,9 @@ final class AiSiteExecutionBlueprintService
         if ($pageType === '') {
             throw new \RuntimeException('Page type is required for stage-1 reorder.');
         }
+        if ($pageType === 'shared') {
+            return $this->reorderDraftSharedPlanBlocks($scope, $orderedBlockKeys);
+        }
 
         $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
         $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null)
