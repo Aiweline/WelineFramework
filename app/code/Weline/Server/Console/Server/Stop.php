@@ -924,8 +924,7 @@ class Stop extends CommandAbstract
 
     protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
     {
-        return $this->terminateResidualProcesses($this->collectDirectForceStopCandidatePids($info), true)
-            + $this->terminateCurrentInstanceProcessPrefixes($info->name);
+        return $this->terminateCurrentInstanceProcessPrefixes($info->name);
     }
 
     /**
@@ -2311,9 +2310,11 @@ class Stop extends CommandAbstract
 
     protected function terminateWlsPortProcess(int $port, int $pid): bool
     {
-        $this->logWlsPortTermination($port, $pid, $pid);
+        $rootPid = $this->resolveManagedStopRootPid($pid);
+        $killPid = $rootPid > 0 ? $rootPid : $pid;
+        $this->logWlsPortTermination($port, $pid, $killPid);
 
-            return $this->killManagedProcessTreeForStop($pid);
+        return $this->killManagedProcessTreeForStop($killPid);
     }
 
     protected function logWlsPortTermination(int $port, int $pid, int $killPid): void
@@ -2791,10 +2792,12 @@ class Stop extends CommandAbstract
                 continue;
             }
 
+            $rootPid = $this->resolveManagedStopRootPid($pid);
+            $killPid = $rootPid > 0 ? $rootPid : $pid;
             $candidates[] = [
                 'port' => $port,
                 'pid' => $pid,
-                'kill_pid' => $pid,
+                'kill_pid' => $killPid,
             ];
         }
 
