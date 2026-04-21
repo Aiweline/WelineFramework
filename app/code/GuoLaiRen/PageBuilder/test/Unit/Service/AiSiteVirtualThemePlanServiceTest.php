@@ -118,9 +118,9 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertSame('Grow faster with our service', (string)($blockTask['meta_fields'][0]['default'] ?? ''));
         self::assertSame('Grow faster with our service', (string)($blockTask['meta_fields'][0]['sample'] ?? ''));
         self::assertIsArray($blockTask['content_plan'] ?? null);
-        self::assertSame('Grow faster with our service', (string)($blockTask['content_plan']['content_copy'][0]['copy'] ?? ''));
+        self::assertSame('Hero title', (string)($blockTask['content_plan']['content_copy'][0]['copy'] ?? ''));
         self::assertSame('Start now', (string)($blockTask['content_plan']['cta_plan'][0]['label'] ?? ''));
-        self::assertSame('/about', (string)($blockTask['content_plan']['link_plan'][0]['href'] ?? ''));
+        self::assertSame('#contact', (string)($blockTask['content_plan']['link_plan'][0]['href'] ?? ''));
         self::assertSame('primary_visual', (string)($blockTask['content_plan']['asset_plan'][0]['slot'] ?? ''));
         self::assertStringContainsString('Hero', (string)($blockTask['content_plan']['asset_plan'][0]['description'] ?? ''));
         self::assertIsArray($blockTask['style_plan'] ?? null);
