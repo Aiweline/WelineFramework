@@ -508,6 +508,48 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         self::assertSame(['show', 'residual', 'release:default', 'pid:default', 'unlock:default'], $stop->calls);
     }
 
+    public function testDirectForceStopCandidateKillDoesNotRunPrefixFallback(): void
+    {
+        $info = new ServerInstanceInfo(
+            'default',
+            33780,
+            26895,
+            '127.0.0.1',
+            443,
+            true,
+            false,
+            2,
+            16895,
+            80,
+            '2026-04-20 12:00:00',
+            1775448000,
+            []
+        );
+
+        $stop = new class extends Stop {
+            public function terminate(ServerInstanceInfo $info): int
+            {
+                return $this->terminateDirectForceStopCandidatePids($info);
+            }
+
+            protected function collectDirectForceStopCandidatePids(ServerInstanceInfo $info): array
+            {
+                unset($info);
+
+                return [];
+            }
+
+            protected function terminateCurrentInstanceProcessPrefixes(string $name): int
+            {
+                unset($name);
+
+                throw new \RuntimeException('prefix fallback must stay out of direct force stop');
+            }
+        };
+
+        self::assertSame(0, $stop->terminate($info));
+    }
+
     public function testForceStopKeepsInstanceFileWhenResidualCleanupCannotFinish(): void
     {
         $manager = new class extends ServerInstanceManager {
