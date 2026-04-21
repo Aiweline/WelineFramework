@@ -136,6 +136,91 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         );
     }
 
+
+    public function testBuildTaskPlanArtifactsUsesConfirmedPlanBookBlockTreeAsStageTwoInput(): void
+    {
+        $service = new AiSiteVirtualThemePlanService();
+        $scope = $this->buildPromptScope();
+        $scope['fake_mode'] = 1;
+        $scope['plan_markdown'] = "# Stale Markdown\n\n- stale_markdown_only";
+        $scope['execution_blueprint_confirmed_signature'] = 'stale-execution-signature';
+        $scope['execution_blueprint']['pages']['home_page']['blocks'] = [
+            [
+                'block_key' => 'stale_markdown_only',
+                'section_code' => 'content/stale-markdown-only',
+                'goal' => 'Stale markdown-only goal that must not feed stage two.',
+            ],
+        ];
+        $scope['plan_workbench']['confirmed']['plan_book']['structured'] = [
+            'source' => 'stage1.block_tree',
+            'source_signature' => 'confirmed-block-tree-signature',
+            'context_hash' => 'confirmed-plan-book-hash',
+            'plan_locale' => 'zh_CN',
+            'theme_context_hash' => 'stage1-theme-hash',
+            'shared_context_hash' => 'stage1-shared-hash',
+            'shared_blocks' => [
+                [
+                    'task_key' => 'shared:header',
+                    'block_key' => 'shared:header',
+                    'component' => 'header',
+                    'sort_order' => 10,
+                    'title' => 'Header',
+                    'goal' => 'Confirmed header goal from block tree.',
+                    'context_hash' => 'confirmed-header-hash',
+                ],
+            ],
+            'pages' => [
+                'home_page' => [
+                    'page_key' => 'home_page',
+                    'page_label' => 'Home',
+                    'page_goal' => 'Confirmed home page goal from block tree.',
+                    'shared_context_hash' => 'stage1-shared-hash',
+                    'theme_context_hash' => 'stage1-theme-hash',
+                    'page_context_hash' => 'confirmed-home-context-hash',
+                    'blocks' => [
+                        [
+                            'task_key' => 'page:home_page:confirmed_hero',
+                            'block_key' => 'page:home_page:confirmed_hero',
+                            'source_block_key' => 'confirmed_hero',
+                            'component_kind' => 'content/confirmed-hero',
+                            'sort_order' => 30,
+                            'title' => 'Confirmed Hero',
+                            'goal' => 'Confirmed hero goal from block tree.',
+                            'implementation_detail' => 'Render the confirmed hero, not the stale markdown block.',
+                            'realtime_content' => ['headline' => 'Confirmed hero headline'],
+                            'reason' => 'Confirmed reason from stage one.',
+                            'completion_rule' => 'Confirmed hero can be generated without markdown parsing.',
+                            'editable_fields' => ['title'],
+                            'style_direction' => 'Use confirmed style direction.',
+                            'context_hash' => 'confirmed-hero-hash',
+                        ],
+                    ],
+                ],
+            ],
+            'counts' => ['shared_blocks' => 1, 'pages' => 1, 'page_blocks' => 1, 'total_blocks' => 2],
+        ];
+        $buildBlueprint = [
+            'tasks' => [
+                ['task_key' => 'shared:header', 'group_key' => 'shared', 'page_type' => '', 'label' => 'Header', 'sort_order' => 10],
+                ['task_key' => 'page:home_page:stale_markdown_only', 'group_key' => 'home_page', 'page_type' => 'home_page', 'label' => 'Stale Markdown', 'section_code' => 'content/stale-markdown-only', 'sort_order' => 100],
+            ],
+        ];
+
+        $artifacts = $service->buildTaskPlanArtifacts($scope, $buildBlueprint);
+        $pageTasks = $artifacts['structured']['page_tasks']['home_page'] ?? [];
+
+        self::assertCount(1, $pageTasks);
+        self::assertSame('confirmed-block-tree-signature', (string)($artifacts['structured']['plan_signature'] ?? ''));
+        self::assertSame('page:home_page:confirmed_hero', (string)($pageTasks[0]['task_key'] ?? ''));
+        self::assertSame('confirmed_hero', (string)($pageTasks[0]['plan_context']['block_code'] ?? ''));
+        self::assertSame('content/confirmed-hero', (string)($pageTasks[0]['plan_context']['section_code'] ?? ''));
+        self::assertSame('Confirmed hero goal from block tree.', (string)($pageTasks[0]['plan_context']['block_goal'] ?? ''));
+        self::assertSame('confirmed-hero-hash', (string)($pageTasks[0]['plan_context']['result_ref']['context_hash'] ?? ''));
+        self::assertSame('plan_workbench.confirmed.plan_book.structured', (string)($artifacts['structured']['stage2_context_snapshot']['confirmed_stage1_source'] ?? ''));
+        self::assertSame('confirmed-plan-book-hash', (string)($artifacts['structured']['stage2_context_snapshot']['confirmed_plan_book_context_hash'] ?? ''));
+        self::assertStringNotContainsString('stale_markdown_only', \json_encode($artifacts['structured']['page_tasks'], \JSON_UNESCAPED_UNICODE));
+    }
+
     public function testBuildTaskPlanArtifactsFallsBackDeterministicallyWhenFakeModeIsEnabled(): void
     {
         $aiService = $this->createMock(AiService::class);
