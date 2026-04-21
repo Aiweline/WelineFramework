@@ -105,6 +105,10 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             ['task_goal', 'meta_fields', 'content_plan', 'style_plan', 'planning_reason', 'sort_order'],
             $artifacts['structured']['block_task_schema']['required_fields'] ?? []
         );
+        self::assertSame(
+            ['color', 'font', 'spacing', 'responsive'],
+            $artifacts['structured']['block_task_schema']['style_plan_required_keys'] ?? []
+        );
         $blockTask = $artifacts['structured']['page_tasks']['home_page'][0]['block_task'] ?? [];
         self::assertSame('stage2-block-task-v1', (string)($blockTask['schema_version'] ?? ''));
         self::assertSame('Open with a clear value proposition.', (string)($blockTask['task_goal'] ?? ''));
@@ -112,6 +116,10 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertSame('title', (string)($blockTask['meta_fields'][0]['field'] ?? ''));
         self::assertIsArray($blockTask['content_plan'] ?? null);
         self::assertIsArray($blockTask['style_plan'] ?? null);
+        self::assertNotSame('', (string)($blockTask['style_plan']['color'] ?? ''));
+        self::assertNotSame('', (string)($blockTask['style_plan']['font'] ?? ''));
+        self::assertNotSame('', (string)($blockTask['style_plan']['spacing'] ?? ''));
+        self::assertNotSame('', (string)($blockTask['style_plan']['responsive'] ?? ''));
         self::assertNotSame('', (string)($blockTask['planning_reason'] ?? ''));
         self::assertIsArray($artifacts['structured']['stage1_task_cues']['pages']['page:home_page:content/home-page-hero'] ?? null);
         self::assertSame('Build a reusable header with primary navigation.', (string)($artifacts['structured']['stage1_task_cues']['shared']['shared:header']['stage1_goal'] ?? ''));
@@ -378,6 +386,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('Treat this as a customer-visible implementation plan', $allPrompts);
         self::assertStringContainsString('block_task', $allPrompts);
         self::assertStringContainsString('task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order', $allPrompts);
+        self::assertStringContainsString('concrete color, font, spacing, and responsive keys', $allPrompts);
         self::assertStringContainsString('Stage-1 compact context summary:', $allPrompts);
         self::assertStringNotContainsString('Stage-1 plan_json:', $allPrompts);
         self::assertStringNotContainsString('Baseline virtual_theme_plan compatibility snapshot:', $allPrompts);
