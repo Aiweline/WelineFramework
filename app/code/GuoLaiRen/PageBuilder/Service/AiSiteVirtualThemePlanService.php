@@ -12,6 +12,8 @@ final class AiSiteVirtualThemePlanService
 {
     private const BLOCK_TASK_SCHEMA_VERSION = 'stage2-block-task-v1';
 
+    private const STAGE2_BLOCK_TASK_FANOUT_GROUP = 'stage2.block_task_plan';
+
     private const BLOCK_TASK_REQUIRED_FIELDS = [
         'task_goal',
         'meta_fields',
@@ -1434,7 +1436,7 @@ final class AiSiteVirtualThemePlanService
 
         [$sharedTasks, $pageTasks] = $this->enrichTasksWithStage1PlanContext(
             $sharedTasks,
-            $pageTasks,
+            $this->ensureStageTwoBlockTaskPlanFanoutTasks($pageTasks, $pagePlans, $blockPlanMatrix),
             $metaFieldMatrix,
             $blockPlanMatrix,
             $pagePlans
@@ -2973,6 +2975,96 @@ final class AiSiteVirtualThemePlanService
     }
 
     /**
+     * Ensure stage-2 task planning fans out at least one task per confirmed stage-1 page block.
+     *
+     * @param array<string, list<array<string, mixed>>> $pageTasks
+     * @param array<string, array<string, mixed>> $pagePlans
+     * @param array<string, array<string, array<string, mixed>>> $blockPlanMatrix
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function ensureStageTwoBlockTaskPlanFanoutTasks(array $pageTasks, array $pagePlans, array $blockPlanMatrix): array
+    {
+        foreach ($pagePlans as $pageType => $pagePlan) {
+            if (!\is_array($pagePlan)) {
+                continue;
+            }
+            $pageType = (string)$pageType;
+            $blocks = \is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [];
+            if ($pageType === '' || $blocks === []) {
+                continue;
+            }
+
+            $tasks = \is_array($pageTasks[$pageType] ?? null) ? \array_values($pageTasks[$pageType]) : [];
+            $existingBlockKeys = [];
+            $nextSortOrder = 100;
+            foreach ($tasks as $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $blockCode = $this->resolveTaskBlockCodeFromPlan($task, $pageType, $blockPlanMatrix);
+                if ($blockCode !== '') {
+                    $existingBlockKeys[$blockCode] = true;
+                }
+                $nextSortOrder = \max($nextSortOrder, (int)($task['sort_order'] ?? 0) + 10);
+            }
+
+            foreach ($blocks as $block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $blockKey = \trim((string)($block['block_key'] ?? $block['section_code'] ?? $block['component_kind'] ?? ''));
+                if ($blockKey === '' || isset($existingBlockKeys[$blockKey])) {
+                    continue;
+                }
+                $tasks[] = $this->buildStageTwoPageTaskFromPlanBlock($pageType, $block, $nextSortOrder);
+                $existingBlockKeys[$blockKey] = true;
+                $nextSortOrder += 10;
+            }
+
+            \usort($tasks, static fn(array $left, array $right): int => ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0)));
+            $pageTasks[$pageType] = \array_values($tasks);
+        }
+
+        return $pageTasks;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    private function buildStageTwoPageTaskFromPlanBlock(string $pageType, array $block, int $fallbackSortOrder): array
+    {
+        $blockKey = \trim((string)($block['block_key'] ?? $block['section_code'] ?? $block['component_kind'] ?? 'block'));
+        $sectionCode = \trim((string)($block['section_code'] ?? $block['component_kind'] ?? $blockKey));
+        $label = $this->firstNonEmptyString([
+            $block['title'] ?? null,
+            $block['section_name'] ?? null,
+            $block['label'] ?? null,
+            $blockKey,
+        ]);
+
+        return [
+            'task_key' => 'page:' . $pageType . ':' . $blockKey,
+            'task_type' => 'page_section',
+            'scope_key' => 'page_sections.' . $pageType . '.' . $blockKey,
+            'group_key' => $pageType,
+            'page_type' => $pageType,
+            'region' => 'content',
+            'section_code' => $sectionCode !== '' ? $sectionCode : $blockKey,
+            'section_key' => $blockKey,
+            'block_key' => $blockKey,
+            'label' => $label !== '' ? $label : $blockKey,
+            'sort_order' => (int)($block['sort_order'] ?? $fallbackSortOrder),
+            'dependencies' => [],
+            'result_ref' => \is_array($block['result_ref'] ?? null) ? $block['result_ref'] : [
+                'source' => 'stage1.block_tree',
+                'scope_path' => 'pages.' . $pageType . '.blocks.' . $blockKey,
+                'context_hash' => (string)($block['context_hash'] ?? ''),
+            ],
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $block
      * @return array<string, mixed>
      */
@@ -3443,6 +3535,139 @@ final class AiSiteVirtualThemePlanService
             $pageTasks[$pageType] = \array_values($tasks);
         }
         $structured['page_tasks'] = $pageTasks;
+
+        return $this->applyStageTwoBlockTaskPlanFanoutToStructured($structured);
+    }
+
+    /**
+     * @param array<string, mixed> $structured
+     * @return array<string, mixed>
+     */
+    private function applyStageTwoBlockTaskPlanFanoutToStructured(array $structured): array
+    {
+        $pageTasks = \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [];
+        $jobs = \is_array($structured['stage2_queue']['jobs'] ?? null) ? $structured['stage2_queue']['jobs'] : [];
+        $sequence = \array_values(\array_filter(\array_map('strval', \is_array($structured['stage2_queue']['sequence'] ?? null) ? $structured['stage2_queue']['sequence'] : [])));
+        $taskFanoutMap = [];
+        $blockJobKeys = [];
+
+        foreach ($pageTasks as $pageType => $tasks) {
+            if (!\is_array($tasks)) {
+                continue;
+            }
+            $pageType = (string)$pageType;
+            foreach ($tasks as $idx => $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $taskKey = \trim((string)($task['task_key'] ?? ''));
+                if ($taskKey === '') {
+                    continue;
+                }
+                $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
+                $resultRef = \is_array($task['result_ref'] ?? null) ? $task['result_ref'] : [];
+                $blockKey = $this->firstNonEmptyString([
+                    $task['block_key'] ?? null,
+                    $planContext['block_code'] ?? null,
+                    $task['section_key'] ?? null,
+                    $task['section_code'] ?? null,
+                    $taskKey,
+                ]);
+                $jobKey = self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':' . $pageType . ':' . $blockKey;
+                $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
+                $runtimeContext = \array_replace($runtimeContext, [
+                    'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                    'fanout_job_key' => $jobKey,
+                    'block_key' => $blockKey,
+                    'task_granularity' => 'one_block_one_task',
+                ]);
+
+                $task = \array_replace($task, [
+                    'block_key' => $blockKey,
+                    'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                    'fanout_job_key' => $jobKey,
+                    'runtime_context' => $runtimeContext,
+                ]);
+                $tasks[$idx] = $task;
+
+                $jobs[$jobKey] = [
+                    'job_key' => $jobKey,
+                    'job_type' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                    'stage' => 'stage2_block_task_plan',
+                    'sort_order' => (int)($task['sort_order'] ?? 0),
+                    'task_key' => $taskKey,
+                    'page_type' => $pageType,
+                    'block_key' => $blockKey,
+                    'depends_on' => \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
+                    'status' => (string)($task['status'] ?? 'pending'),
+                    'prompt_version' => (string)($runtimeContext['prompt_version'] ?? 'stage2-block-task-plan-v2'),
+                    'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                    'concurrency' => [
+                        'mode' => 'fiber_coroutine',
+                        'group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                        'task_granularity' => 'one_block_one_task',
+                    ],
+                    'inputs' => [
+                        'task_key' => $taskKey,
+                        'page_type' => $pageType,
+                        'block_key' => $blockKey,
+                        'context_hash' => (string)($resultRef['context_hash'] ?? $runtimeContext['stage2_context_hash'] ?? ''),
+                    ],
+                    'outputs' => [
+                        'block_task' => \is_array($task['block_task'] ?? null) ? $task['block_task'] : [],
+                        'result_ref' => $resultRef,
+                    ],
+                ];
+                $blockJobKeys[] = $jobKey;
+                if (!\in_array($jobKey, $sequence, true)) {
+                    $sequence[] = $jobKey;
+                }
+                $taskFanoutMap[$taskKey] = [
+                    'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                    'fanout_job_key' => $jobKey,
+                    'block_key' => $blockKey,
+                    'runtime_context' => $runtimeContext,
+                ];
+            }
+            $pageTasks[$pageType] = \array_values($tasks);
+        }
+
+        $structured['page_tasks'] = $pageTasks;
+        $structured['stage2_queue'] = [
+            'sequence' => $sequence,
+            'jobs' => $jobs,
+            'fanout' => [
+                'trigger_after' => 'stage1.confirmed_block_tree',
+                'mode' => 'fiber_coroutine',
+                'task_granularity' => 'one_block_one_task',
+                'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                'block_job_count' => \count($blockJobKeys),
+                'block_job_keys' => $blockJobKeys,
+            ],
+        ];
+
+        if ($taskFanoutMap !== [] && \is_array($structured['execution_blueprint']['tasks'] ?? null)) {
+            foreach ($structured['execution_blueprint']['tasks'] as $idx => $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $taskKey = \trim((string)($task['task_key'] ?? ''));
+                if ($taskKey === '' || !isset($taskFanoutMap[$taskKey])) {
+                    continue;
+                }
+                $fanout = $taskFanoutMap[$taskKey];
+                $runtimeContext = \array_replace(
+                    \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [],
+                    \is_array($fanout['runtime_context'] ?? null) ? $fanout['runtime_context'] : []
+                );
+                $structured['execution_blueprint']['tasks'][$idx] = \array_replace($task, [
+                    'fanout_group' => (string)$fanout['fanout_group'],
+                    'fanout_job_key' => (string)$fanout['fanout_job_key'],
+                    'block_key' => (string)$fanout['block_key'],
+                    'runtime_context' => $runtimeContext,
+                ]);
+            }
+        }
 
         return $structured;
     }
