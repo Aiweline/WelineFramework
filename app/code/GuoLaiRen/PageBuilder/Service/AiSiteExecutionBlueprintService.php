@@ -532,6 +532,7 @@ final class AiSiteExecutionBlueprintService
             $contentItems[] = [
                 'title' => (string)$pageType,
                 'goal' => (string)($pagePlan['page_goal'] ?? ''),
+                'theme_alignment_summary' => (string)($pagePlan['theme_alignment_summary'] ?? ''),
                 'blocks' => \array_values(\array_filter(\array_map(function ($block) use ($locale) {
                     if (!\is_array($block)) {
                         return null;
@@ -984,7 +985,7 @@ final class AiSiteExecutionBlueprintService
             '    "footer_plan":{"featured":[],"policies":[]},',
             '    "seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"},',
             '    "page_types":["home_page"],',
-            '    "pages":{"home_page":{"page_goal":"string","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}},',
+            '    "pages":{"home_page":{"page_goal":"string","theme_alignment_summary":"how this page and every block obey theme_design color_scheme, tone_of_voice, cta_tone, trust expression, and Header/Footer handoff","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}},',
             '    "execution_steps":[{"step":1,"task_key":"string","task_type":"string","status":"pending"}],',
             '    "stage2_task_hints":[{"page":"string","block":"string","task_types":["copywriting","ui_design","frontend_dev"]}]',
             '}',
@@ -1014,6 +1015,7 @@ final class AiSiteExecutionBlueprintService
             '- Even in refine/rebuild/translation mode, you must still output the full plan, not fragments.',
             '- Stage 1 only outputs plan content. Do not include build/executing/log/progress language.',
             '- Every selected page must be covered and ready for stage-2 task extraction.',
+            '- Each pages.<page>.theme_alignment_summary is REQUIRED and must explain how that page and its blocks obey theme_design color_scheme, tone_of_voice, cta_tone, trust expression, and Header/Footer handoff.',
             '- Header and footer must be described as concrete shared-site content and navigation.',
             '- The structured plan must be readable by product and implementation teams immediately.',
             '- Minimum concreteness: navigation_plan.header_items MUST be non-empty; each item MUST include concrete label + href (path or /route) tied to selected_page_types; forbid generic placeholders like "Link1" or "Nav item".',
@@ -1055,7 +1057,7 @@ final class AiSiteExecutionBlueprintService
             if ($pageType === '') {
                 continue;
             }
-            $lines[] = '- ' . $pageType . ': must include page goal, conversion rhythm, block implementation detail, field plan, execution script, SEO structure, CTA usage, responsive guidance.';
+            $lines[] = '- ' . $pageType . ': must include page goal, theme_alignment_summary, conversion rhythm, block implementation detail, field plan, execution script, SEO structure, CTA usage, responsive guidance.';
         }
 
         return $lines === [] ? '-' : \implode("\n", $lines);
@@ -1411,6 +1413,11 @@ final class AiSiteExecutionBlueprintService
             $pageGoal = \trim((string)($page['page_goal'] ?? ''));
             if ($pageGoal === '' || $this->isPromptLikeStageOneText($pageGoal, 'page_goal', '', '', $pageType)) {
                 throw new \RuntimeException('AI stage-1 plan invalid: page_goal for "' . $pageType . '" is empty or still instruction-like.');
+            }
+
+            $themeAlignmentSummary = \trim((string)($page['theme_alignment_summary'] ?? ''));
+            if ($themeAlignmentSummary === '' || $this->isPromptLikeStageOneText($themeAlignmentSummary, 'theme_alignment_summary', '', '', $pageType)) {
+                throw new \RuntimeException('AI stage-1 plan invalid: theme_alignment_summary for "' . $pageType . '" is empty or still instruction-like.');
             }
 
             $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
@@ -1838,6 +1845,10 @@ final class AiSiteExecutionBlueprintService
             $pageGoal = \trim((string)($page['page_goal'] ?? ''));
             if ($pageGoal !== '' && $this->isPromptLikeStageOneText($pageGoal)) {
                 $page['page_goal'] = (string)($fallbackPage['page_goal'] ?? $pageGoal);
+            }
+            $themeAlignmentSummary = \trim((string)($page['theme_alignment_summary'] ?? ''));
+            if ($themeAlignmentSummary !== '' && $this->isPromptLikeStageOneText($themeAlignmentSummary, 'theme_alignment_summary', '', '', (string)$pageType)) {
+                $page['theme_alignment_summary'] = (string)($fallbackPage['theme_alignment_summary'] ?? $themeAlignmentSummary);
             }
             $page['blocks'] = $this->sanitizeStageOneBlocks(
                 \is_array($page['blocks'] ?? null) ? $page['blocks'] : [],
@@ -2578,6 +2589,7 @@ final class AiSiteExecutionBlueprintService
             'page_label' => $pageLabel,
             'page_title' => $pageTitle,
             'page_goal' => $pageGoal,
+            'theme_alignment_summary' => $this->buildPageThemeAlignmentSummary($pageLabel, $pageGoal, $blocks, $palette, $themeStyle, $locale),
             'why' => $this->resolvePageWhy($pageType, $pageLabel, $locale),
             'decision_reason' => $instruction !== ''
                 ? '页面策略按本轮补充说明对齐：' . $this->clipText($instruction, 80)
@@ -2591,6 +2603,53 @@ final class AiSiteExecutionBlueprintService
             'internal_links' => $internalLinks,
             'blocks' => $blocks,
         ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $blocks
+     * @param array<string, mixed> $palette
+     * @param array<string, mixed> $themeStyle
+     */
+    private function buildPageThemeAlignmentSummary(
+        string $pageLabel,
+        string $pageGoal,
+        array $blocks,
+        array $palette,
+        array $themeStyle,
+        string $locale = ''
+    ): string {
+        $isEn = $this->isEnglishLocale($locale);
+        $paletteName = \trim((string)($palette['name'] ?? ''));
+        $visualTone = \trim((string)($themeStyle['visual_tone'] ?? ''));
+        $blockKeys = \array_values(\array_filter(\array_map(
+            static fn(array $block): string => \trim((string)($block['block_key'] ?? $block['section_code'] ?? '')),
+            $blocks
+        ), static fn(string $value): bool => $value !== ''));
+        $blockSummary = $blockKeys === []
+            ? ($isEn ? 'the page blocks' : '页面区块')
+            : \implode($isEn ? ', ' : '、', \array_slice($blockKeys, 0, 4));
+        $paletteLabel = $paletteName !== '' ? $paletteName : ($isEn ? 'the shared color system' : '共享色系');
+        $toneLabel = $visualTone !== '' ? $visualTone : ($isEn ? 'the shared voice' : '共享语气');
+
+        if ($isEn) {
+            return \sprintf(
+                '%s follows %s and %s: %s support the page goal "%s", reuse the shared CTA/trust rhythm, and hand off cleanly from Header navigation to Footer reassurance.',
+                $pageLabel !== '' ? $pageLabel : 'This page',
+                $paletteLabel,
+                $toneLabel,
+                $blockSummary,
+                $pageGoal
+            );
+        }
+
+        return \sprintf(
+            '%s 遵守 %s 与%s：%s 围绕“%s”展开，延续共享 CTA 与信任表达，并从 Header 导航自然承接到 Footer 的补充背书。',
+            $pageLabel !== '' ? $pageLabel : '本页面',
+            $paletteLabel,
+            $toneLabel,
+            $blockSummary,
+            $pageGoal
+        );
     }
 
     /**
@@ -3782,11 +3841,41 @@ final class AiSiteExecutionBlueprintService
                 'assembly_version' => 1,
                 'generation_method' => 'stage1.page_plan.generate',
             ]);
+            if (\trim((string)($assembledPagePlan['theme_alignment_summary'] ?? '')) === '') {
+                $assembledPagePlan['theme_alignment_summary'] = $this->buildPageThemeAlignmentSummaryFromSharedContext(
+                    (string)($assembledPagePlan['page_label'] ?? $pageType),
+                    (string)($assembledPagePlan['page_goal'] ?? ''),
+                    \is_array($assembledPagePlan['blocks'] ?? null) ? $assembledPagePlan['blocks'] : [],
+                    $sharedPromptContext
+                );
+            }
             $assembledPagePlan['page_context_hash'] = $this->buildStageOnePageContextHash((string)$pageType, $assembledPagePlan);
             $pagePlans[(string)$pageType] = $assembledPagePlan;
         }
 
         return $pagePlans;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $blocks
+     * @param array<string, mixed> $sharedPromptContext
+     */
+    private function buildPageThemeAlignmentSummaryFromSharedContext(
+        string $pageLabel,
+        string $pageGoal,
+        array $blocks,
+        array $sharedPromptContext
+    ): string {
+        $themeDesign = \is_array($sharedPromptContext['theme_design'] ?? null) ? $sharedPromptContext['theme_design'] : [];
+        $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+        $palette = [
+            'name' => (string)($colorScheme['name'] ?? $sharedPromptContext['palette_name'] ?? ''),
+        ];
+        $themeStyle = [
+            'visual_tone' => (string)($themeDesign['tone_of_voice'] ?? $sharedPromptContext['content_tone'] ?? ''),
+        ];
+
+        return $this->buildPageThemeAlignmentSummary($pageLabel, $pageGoal, $blocks, $palette, $themeStyle);
     }
 
     /**
@@ -4233,6 +4322,7 @@ final class AiSiteExecutionBlueprintService
             }
             $pageBlocks[(string)$pageType] = [
                 'page_goal' => \trim((string)($pagePlan['page_goal'] ?? '')),
+                'theme_alignment_summary' => \trim((string)($pagePlan['theme_alignment_summary'] ?? '')),
                 'why' => \trim((string)($pagePlan['why'] ?? '')),
                 'primary_keywords' => \array_values(\array_filter(\array_map(
                     static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
@@ -4394,6 +4484,10 @@ final class AiSiteExecutionBlueprintService
 
             $lines[] = '### ' . ((string)($pagePlan['page_label'] ?? $pageType));
             $lines[] = '- ' . ($isEn ? 'Page Goal' : '页面目标') . ': ' . \trim((string)($pagePlan['page_goal'] ?? ''));
+            $themeAlignmentSummary = \trim((string)($pagePlan['theme_alignment_summary'] ?? ''));
+            if ($themeAlignmentSummary !== '') {
+                $lines[] = '- ' . ($isEn ? 'Theme Alignment' : '主题遵守说明') . ': ' . $themeAlignmentSummary;
+            }
             $lines[] = '- ' . ($isEn ? 'Primary Keywords' : '主关键词') . ': ' . $this->buildKeywordSummary(\is_array($pagePlan['primary_keywords'] ?? null) ? $pagePlan['primary_keywords'] : [], $locale);
             $lines[] = '- ' . ($isEn ? 'Secondary Keywords' : '次关键词') . ': ' . $this->buildKeywordSummary(\is_array($pagePlan['secondary_keywords'] ?? null) ? $pagePlan['secondary_keywords'] : [], $locale);
             $lines[] = '';
@@ -4569,6 +4663,7 @@ final class AiSiteExecutionBlueprintService
             $contentItems[] = [
                 'title' => (string)$pageType,
                 'goal' => (string)($pagePlan['page_goal'] ?? ''),
+                'theme_alignment_summary' => (string)($pagePlan['theme_alignment_summary'] ?? ''),
                 'blocks' => \is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [],
             ];
         }
