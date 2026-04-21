@@ -222,6 +222,63 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         ]);
     }
 
+    public function testPlanBookStructuredIsGeneratedFromStageOneBlockTree(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+
+        $artifacts = $service->buildPlanArtifacts([
+            'site_title' => 'Structured Plan Book Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+        ], [
+            'site_title' => 'Structured Plan Book Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+
+        $planBook = $artifacts['plan_workbench']['confirmed']['plan_book']['structured'] ?? null;
+
+        self::assertIsArray($planBook);
+        self::assertSame('stage1.block_tree', (string)($planBook['source'] ?? ''));
+        self::assertSame(
+            (string)($artifacts['execution_blueprint']['signature'] ?? ''),
+            (string)($planBook['source_signature'] ?? '')
+        );
+        self::assertNotSame('', (string)($planBook['context_hash'] ?? ''));
+        self::assertSame(2, (int)($planBook['counts']['shared_blocks'] ?? 0));
+        self::assertArrayHasKey('home_page', $planBook['pages'] ?? []);
+
+        $sharedHeader = $planBook['shared_blocks'][0] ?? [];
+        self::assertSame('shared:header', (string)($sharedHeader['task_key'] ?? ''));
+        self::assertSame('shared:header', (string)($sharedHeader['block_key'] ?? ''));
+        self::assertNotSame('', (string)($sharedHeader['completion_rule'] ?? ''));
+        self::assertNotEmpty($sharedHeader['editable_fields'] ?? []);
+        self::assertNotSame('', (string)($sharedHeader['context_hash'] ?? ''));
+
+        $sourceHomeBlocks = \array_values(\array_map(
+            static fn(array $block): string => (string)($block['block_key'] ?? ''),
+            $artifacts['structured']['page_plans']['home_page']['blocks'] ?? []
+        ));
+        $bookHomeBlocks = \array_values(\array_map(
+            static fn(array $block): string => (string)($block['source_block_key'] ?? ''),
+            $planBook['pages']['home_page']['blocks'] ?? []
+        ));
+
+        self::assertSame($sourceHomeBlocks, $bookHomeBlocks);
+        self::assertNotEmpty($bookHomeBlocks);
+
+        $firstPageBlock = $planBook['pages']['home_page']['blocks'][0] ?? [];
+        self::assertSame('page:home_page:' . $bookHomeBlocks[0], (string)($firstPageBlock['task_key'] ?? ''));
+        self::assertSame('page:home_page:' . $bookHomeBlocks[0], (string)($firstPageBlock['block_key'] ?? ''));
+        self::assertNotSame('', (string)($firstPageBlock['implementation_detail'] ?? ''));
+        self::assertIsArray($firstPageBlock['realtime_content'] ?? null);
+        self::assertNotSame('', (string)($firstPageBlock['reason'] ?? ''));
+        self::assertNotSame('', (string)($firstPageBlock['completion_rule'] ?? ''));
+        self::assertNotEmpty($firstPageBlock['editable_fields'] ?? []);
+        self::assertNotSame('', (string)($firstPageBlock['context_hash'] ?? ''));
+    }
+
     public function testRefineDraftPlanAddsChangeScopeReport(): void
     {
         $service = new AiSiteExecutionBlueprintService(
@@ -616,88 +673,52 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertLessThan($headerMarkdownPosition, $footerMarkdownPosition);
     }
 
-    public function testPlanBookMarkdownIsGeneratedFromSortedBlockTree(): void
+    public function testPlanBookStructuredFollowsReorderedPageBlockTree(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
-        $pageType = Page::TYPE_HOME;
-        $laterBlock = [
-            'block_key' => 'later_block',
-            'section_code' => 'Later Block',
-            'sort_order' => 20,
-            'order' => 20,
-            'goal' => 'Render after the earlier block.',
-            'realtime_content' => [
-                'headline' => 'Later headline',
-                'supporting_copy' => ['Later copy'],
-                'cta' => [['label' => 'Later CTA']],
-            ],
-            'field_plan' => [
-                ['field' => 'title', 'sample' => 'Later headline'],
-            ],
-        ];
-        $earlierBlock = [
-            'block_key' => 'earlier_block',
-            'section_code' => 'Earlier Block',
-            'sort_order' => 10,
-            'order' => 10,
-            'goal' => 'Render before the later block.',
-            'realtime_content' => [
-                'headline' => 'Earlier headline',
-                'supporting_copy' => ['Earlier copy'],
-                'cta' => [['label' => 'Earlier CTA']],
-            ],
-            'field_plan' => [
-                ['field' => 'title', 'sample' => 'Earlier headline'],
-            ],
-        ];
-        $structured = [
-            'i18n' => ['locale' => 'en_US'],
-            'site_strategy' => [
-                'site_display_name' => 'Sorted Markdown Test',
-                'summary' => 'The markdown reader must be assembled from sorted blocks.',
-            ],
-            'theme_style' => ['name' => 'Sorted Theme'],
-            'palette' => ['name' => 'Sorted Palette'],
-            'navigation_plan' => ['header_items' => [['label' => 'Home', 'href' => '/']]],
-            'footer_plan' => ['featured' => [], 'policies' => []],
-            'seo_strategy' => ['core_intent' => 'sorted markdown'],
-            'page_types' => [$pageType],
-            'pages' => [
-                $pageType => [
-                    'page_label' => 'Home',
-                    'page_goal' => 'Prove sorted markdown assembly.',
-                    'theme_alignment_summary' => 'Home follows the shared sorted plan.',
-                    'primary_keywords' => ['sorted markdown'],
-                    'secondary_keywords' => ['block tree'],
-                    'blocks' => [$laterBlock, $earlierBlock],
-                ],
-            ],
-        ];
+        $artifacts = $service->buildPlanArtifacts([
+            'site_title' => 'Structured Reorder Test',
+            'brief_description' => 'Need multiple sections that can be reordered.',
+            'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+        ], [
+            'site_title' => 'Structured Reorder Test',
+            'brief_description' => 'Need multiple sections that can be reordered.',
+        ]);
 
-        $buildPlanJson = new \ReflectionMethod($service, 'buildPlanJson');
-        $buildPlanJson->setAccessible(true);
-        $planJson = $buildPlanJson->invoke($service, $structured);
-        self::assertIsArray($planJson);
+        $pageType = '';
+        $originalKeys = [];
+        foreach (($artifacts['structured']['page_plans'] ?? []) as $candidatePageType => $page) {
+            $candidateBlocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+            $candidateKeys = \array_values(\array_filter(\array_map(
+                static fn(array $block): string => \trim((string)($block['block_key'] ?? '')),
+                $candidateBlocks
+            )));
+            if (\count($candidateKeys) >= 2) {
+                $pageType = (string)$candidatePageType;
+                $originalKeys = $candidateKeys;
+                break;
+            }
+        }
 
-        $blockKeys = \array_values(\array_map(
-            static fn(array $block): string => (string)($block['block_key'] ?? ''),
-            $planJson['pages'][$pageType]['blocks'] ?? []
+        self::assertNotSame('', $pageType);
+        $orderedKeys = \array_values(\array_reverse($originalKeys));
+        $reordered = $service->reorderDraftPlanBlocks([
+            'plan_json' => $artifacts['plan_json'],
+            'plan_markdown' => $artifacts['markdown'],
+            'plan_structured' => $artifacts['structured'],
+            'plan_workbench' => $artifacts['plan_workbench'],
+            'execution_blueprint_draft' => $artifacts['execution_blueprint'],
+            'plan_locale' => 'en_US',
+        ], $pageType, $orderedKeys);
+
+        $bookBlockKeys = \array_values(\array_map(
+            static fn(array $block): string => (string)($block['source_block_key'] ?? ''),
+            $reordered['plan_workbench']['confirmed']['plan_book']['structured']['pages'][$pageType]['blocks'] ?? []
         ));
-        self::assertSame(['earlier_block', 'later_block'], \array_slice($blockKeys, 0, 2));
 
-        $planJson['markdown'] = 'FREE MARKDOWN SENTINEL THAT MUST NOT BE REUSED';
-        $buildMarkdownPlan = new \ReflectionMethod($service, 'buildMarkdownPlan');
-        $buildMarkdownPlan->setAccessible(true);
-        $markdown = (string)$buildMarkdownPlan->invoke($service, $planJson, 'en_US');
-
-        $earlierPosition = \strpos($markdown, '#### earlier_block');
-        $laterPosition = \strpos($markdown, '#### later_block');
-        self::assertIsInt($earlierPosition);
-        self::assertIsInt($laterPosition);
-        self::assertLessThan($laterPosition, $earlierPosition);
-        self::assertStringContainsString('Earlier headline', $markdown);
-        self::assertStringContainsString('Later headline', $markdown);
-        self::assertStringNotContainsString('FREE MARKDOWN SENTINEL', $markdown);
+        self::assertSame($orderedKeys, $bookBlockKeys);
     }
 
     public function testBuildAiPlanPromptContainsStageOneMustConstraints(): void
