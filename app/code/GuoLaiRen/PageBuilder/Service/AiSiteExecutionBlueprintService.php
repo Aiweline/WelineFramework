@@ -4440,6 +4440,60 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param list<array<string, mixed>> $blocks
+     * @return list<array<string, mixed>>
+     */
+    private function sortStageOneBlocksForPlanBookMarkdown(array $blocks): array
+    {
+        $wrapped = [];
+        foreach ($blocks as $index => $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $wrapped[] = [
+                'index' => (int)$index,
+                'sort_order' => $this->resolveStageOnePlanBookBlockSortOrder($block, (int)$index),
+                'block' => $block,
+            ];
+        }
+
+        \usort($wrapped, static function (array $left, array $right): int {
+            $sortCompare = ((int)$left['sort_order']) <=> ((int)$right['sort_order']);
+            if ($sortCompare !== 0) {
+                return $sortCompare;
+            }
+
+            return ((int)$left['index']) <=> ((int)$right['index']);
+        });
+
+        return \array_values(\array_map(static fn(array $row): array => $row['block'], $wrapped));
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function resolveStageOnePlanBookBlockSortOrder(array $block, int $fallbackIndex): int
+    {
+        foreach (['sort_order', 'order'] as $field) {
+            if (!\array_key_exists($field, $block)) {
+                continue;
+            }
+            $value = $block[$field];
+            if (\is_int($value)) {
+                return $value;
+            }
+            if (\is_float($value)) {
+                return (int)$value;
+            }
+            if (\is_string($value) && \trim($value) !== '' && \is_numeric($value)) {
+                return (int)$value;
+            }
+        }
+
+        return ($fallbackIndex + 1) * 10;
+    }
+
+    /**
      * @param array<string, array<string, mixed>> $sharedComponents
      * @param array<string, mixed> $pagePlans
      * @return array<string, mixed>
@@ -5023,13 +5077,13 @@ final class AiSiteExecutionBlueprintService
             }
             $stageOnePagePlan = \is_array($stageOnePagePlans[$pageType] ?? null) ? $stageOnePagePlans[$pageType] : [];
             $blockRows = [];
-            foreach (\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [] as $block) {
+            foreach ($this->sortStageOneBlocksForPlanBookMarkdown(\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : []) as $offset => $block) {
                 if (!\is_array($block)) {
                     continue;
                 }
                 $blockRows[] = [
                     'block_key' => (string)($block['block_key'] ?? $block['section_code'] ?? 'block'),
-                    'sort_order' => (int)($block['sort_order'] ?? $block['order'] ?? 0),
+                    'sort_order' => $this->resolveStageOnePlanBookBlockSortOrder($block, (int)$offset),
                     'content' => $this->buildBlockContentSummary($block),
                     'why' => \trim((string)($block['why'] ?? '')),
                     'implementation_note' => $this->buildBlockImplementationFocus($block, (string)($structured['i18n']['locale'] ?? '')),
@@ -5219,7 +5273,7 @@ final class AiSiteExecutionBlueprintService
             $lines[] = '- ' . ($isEn ? 'Secondary Keywords' : '次关键词') . ': ' . $this->buildKeywordSummary(\is_array($pagePlan['secondary_keywords'] ?? null) ? $pagePlan['secondary_keywords'] : [], $locale);
             $lines[] = '';
 
-            foreach (\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [] as $block) {
+            foreach ($this->sortStageOneBlocksForPlanBookMarkdown(\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : []) as $block) {
                 if (!\is_array($block)) {
                     continue;
                 }
@@ -5391,7 +5445,7 @@ final class AiSiteExecutionBlueprintService
                 'title' => (string)$pageType,
                 'goal' => (string)($pagePlan['page_goal'] ?? ''),
                 'theme_alignment_summary' => (string)($pagePlan['theme_alignment_summary'] ?? ''),
-                'blocks' => \is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [],
+                'blocks' => $this->sortStageOneBlocksForPlanBookMarkdown(\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : []),
             ];
         }
 
