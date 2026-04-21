@@ -1371,6 +1371,7 @@ final class AiSiteVirtualThemePlanService
             } else {
                 $incomingTasks = \is_array($incomingPageTasks[$pageType] ?? null) ? $incomingPageTasks[$pageType] : [];
             }
+            $this->assertIncomingBlockTasksHaveRequiredContract($incomingTasks, 'page:' . $pageType);
             $mergedTasks = $this->mergeTaskListByKey(
                 \is_array($structured['page_tasks'][$pageType] ?? null) ? $structured['page_tasks'][$pageType] : [],
                 $incomingTasks,
@@ -1385,6 +1386,54 @@ final class AiSiteVirtualThemePlanService
             'virtual_theme_plan' => $virtualThemePlan,
             'risk_notes' => $this->mergeRiskNotes($riskNotes, $incomingRiskNotes),
         ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $incomingTasks
+     */
+    private function assertIncomingBlockTasksHaveRequiredContract(array $incomingTasks, string $context): void
+    {
+        foreach ($incomingTasks as $taskIndex => $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            $taskLabel = $taskKey !== '' ? $taskKey : ($context . '#' . ((int)$taskIndex + 1));
+            if (!\is_array($task['block_task'] ?? null)) {
+                throw new \RuntimeException('AI task plan generation failed: ' . $taskLabel . ' is missing block_task.');
+            }
+
+            $blockTask = $task['block_task'];
+            foreach (self::BLOCK_TASK_REQUIRED_FIELDS as $requiredField) {
+                if (!\array_key_exists($requiredField, $blockTask)) {
+                    throw new \RuntimeException('AI task plan generation failed: ' . $taskLabel . ' block_task missing required field ' . $requiredField . '.');
+                }
+            }
+
+            if (\trim((string)($blockTask['task_goal'] ?? '')) === '') {
+                throw new \RuntimeException('AI task plan generation failed: ' . $taskLabel . ' block_task task_goal is empty.');
+            }
+            if (!\is_array($blockTask['meta_fields'] ?? null) || $blockTask['meta_fields'] === []) {
+                throw new \RuntimeException('AI task plan generation failed: ' . $taskLabel . ' block_task meta_fields is empty.');
+            }
+            if (!\is_array($blockTask['content_plan'] ?? null) || $blockTask['content_plan'] === []) {
+                throw new \RuntimeException('AI task plan generation failed: ' . $taskLabel . ' block_task content_plan is empty.');
+            }
+            if (!\is_array($blockTask['style_plan'] ?? null) || $blockTask['style_plan'] === []) {
+                throw new \RuntimeException('AI task plan generation failed: ' . $taskLabel . ' block_task style_plan is empty.');
+            }
+            if (\trim((string)($blockTask['planning_reason'] ?? '')) === '') {
+                throw new \RuntimeException('AI task plan generation failed: ' . $taskLabel . ' block_task planning_reason is empty.');
+            }
+
+            $stylePlan = \is_array($blockTask['style_plan'] ?? null) ? $blockTask['style_plan'] : [];
+            foreach (['color', 'font', 'spacing', 'responsive'] as $styleKey) {
+                if (\trim((string)($stylePlan[$styleKey] ?? '')) === '') {
+                    throw new \RuntimeException('AI task plan generation failed: ' . $taskLabel . ' block_task style_plan missing ' . $styleKey . '.');
+                }
+            }
+        }
     }
 
     /**
