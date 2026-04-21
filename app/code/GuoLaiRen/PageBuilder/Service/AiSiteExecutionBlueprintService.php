@@ -4169,7 +4169,7 @@ final class AiSiteExecutionBlueprintService
                 continue;
             }
             $index['pages'][$pageType] ??= [];
-            foreach (\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [] as $block) {
+            foreach ($this->normalizeStageOnePageBlocksForBlockIndex(\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : []) as $offset => $block) {
                 if (!\is_array($block)) {
                     continue;
                 }
@@ -4185,6 +4185,7 @@ final class AiSiteExecutionBlueprintService
                     'source_block_key' => $rawBlockKey,
                     'title' => (string)($block['section_code'] ?? $rawBlockKey),
                     'goal' => (string)($block['goal'] ?? ''),
+                    'sort_order' => $this->resolveStageOnePageBlockSortOrder($block, (int)$offset),
                     'status' => 'done',
                     'implementation_detail' => (string)($block['implementation_detail'] ?? $block['style_brief']['layout_rule'] ?? ''),
                     'reason' => (string)($block['why'] ?? ''),
@@ -4200,6 +4201,57 @@ final class AiSiteExecutionBlueprintService
         ];
 
         return $index;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $blocks
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeStageOnePageBlocksForBlockIndex(array $blocks): array
+    {
+        $wrapped = [];
+        foreach ($blocks as $offset => $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $wrapped[] = [
+                'offset' => (int)$offset,
+                'sort_order' => $this->resolveStageOnePageBlockSortOrder($block, (int)$offset),
+                'block_key' => \trim((string)($block['block_key'] ?? $block['section_code'] ?? '')),
+                'block' => $block,
+            ];
+        }
+
+        \usort($wrapped, static function (array $left, array $right): int {
+            $sortCompare = ((int)$left['sort_order']) <=> ((int)$right['sort_order']);
+            if ($sortCompare !== 0) {
+                return $sortCompare;
+            }
+
+            $offsetCompare = ((int)$left['offset']) <=> ((int)$right['offset']);
+            if ($offsetCompare !== 0) {
+                return $offsetCompare;
+            }
+
+            return \strcmp((string)$left['block_key'], (string)$right['block_key']);
+        });
+
+        return \array_values(\array_map(static fn(array $row): array => $row['block'], $wrapped));
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function resolveStageOnePageBlockSortOrder(array $block, int $offset): int
+    {
+        if (\array_key_exists('sort_order', $block)) {
+            return (int)$block['sort_order'];
+        }
+        if (\array_key_exists('order', $block)) {
+            return (int)$block['order'];
+        }
+
+        return ($offset + 1) * 10;
     }
 
     /**
@@ -4672,6 +4724,7 @@ final class AiSiteExecutionBlueprintService
                 }
                 $blockRows[] = [
                     'block_key' => (string)($block['block_key'] ?? $block['section_code'] ?? 'block'),
+                    'sort_order' => $this->resolveStageOnePageBlockSortOrder($block, \count($blockRows)),
                     'content' => $this->buildBlockContentSummary($block),
                     'why' => \trim((string)($block['why'] ?? '')),
                     'implementation_note' => $this->buildBlockImplementationFocus($block, (string)($structured['i18n']['locale'] ?? '')),
@@ -6795,7 +6848,14 @@ final class AiSiteExecutionBlueprintService
             return ((int)$left['index']) <=> ((int)$right['index']);
         });
 
-        return \array_values(\array_map(static fn(array $row): array => $row['block'], $wrapped));
+        return \array_values(\array_map(static function (array $row, int $offset): array {
+            $block = $row['block'];
+            $sortOrder = ($offset + 1) * 10;
+            $block['sort_order'] = $sortOrder;
+            $block['order'] = $sortOrder;
+
+            return $block;
+        }, $wrapped, \array_keys($wrapped)));
     }
 
     /**
