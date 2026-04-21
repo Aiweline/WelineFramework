@@ -3218,7 +3218,7 @@ POWERSHELL;
         $title = self::normalizeWindowsForegroundWindowTitle($windowTitle);
         $scriptPath = \str_replace('"', '""', $scriptPath);
 
-        return 'title ' . $title . ' & call "' . $scriptPath . '"';
+        return 'title ' . $title . ' & "' . $scriptPath . '"';
     }
 
     private static function escapePowerShellLiteral(string $value): string
@@ -3293,7 +3293,7 @@ POWERSHELL;
                     (string) ($item['process_name'] ?? $item['key'] ?? 'weline-process')
                 );
                 $windowTitle = self::escapeWindowsBatchLiteral($windowTitle);
-                $lines[] = 'start "' . $windowTitle . '" /D "' . $cwd . '" cmd.exe /d /c call "' . $foregroundScript . '"';
+                $lines[] = 'start "' . $windowTitle . '" /D "' . $cwd . '" cmd.exe /d /c "' . $foregroundScript . '"';
             } else {
                 $lines[] = 'start "" /B /D "' . $cwd . '" "' . $php . '" ' . $arguments;
             }
