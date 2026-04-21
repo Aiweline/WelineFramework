@@ -134,51 +134,76 @@ class MasterResurrector
      */
     public function attemptResurrect(): bool
     {
-        $delay = $this->getDelay();
-
-        for ($retry = 0; $retry < $this->maxRetries; $retry++) {
-            // 延迟等待（给更高优先级的进程机会）
-            SchedulerSystem::sleep($delay);
-
-            // 检查 Master 是否已被复活
-            if ($this->isMasterAlive()) {
-                return true; // 已被其他进程复活
-            }
-
-            // 尝试启动 Master
-            if ($this->startMaster()) {
-                // 等待 Master 启动完成
-                SchedulerSystem::sleep(2);
-
-                if ($this->isMasterAlive()) {
-                    return true;
-                }
-            }
-
-            // 失败，增加延迟后重试
-            $delay = \min($delay * 2, 30);
+        // ========== 文件锁：确保只有一个进程能执行复活 ==========
+        $lockDir = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances';
+        if (!is_dir($lockDir)) {
+            @mkdir($lockDir, 0755, true);
+        }
+        $lockFile = $lockDir . DIRECTORY_SEPARATOR . $this->instanceName . '.resurrect.lock';
+        $lockFp = @fopen($lockFile, 'c+');
+        if (!$lockFp) {
+            w_log_error('[MasterResurrector] 无法创建复活锁文件: ' . $lockFile);
+            return false;
         }
 
-        // 三次均无法复活：发送服务异常信号，派发事件向后台报错，停止策略等待人工干预（Worker 继续正常服务）
-        $message = \sprintf(
-            __('WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。'),
-            $this->instanceName,
-            $this->maxRetries
-        );
-        MasterProcess::setServiceException($this->instanceName, $message, $this->maxRetries);
-        $eventData = [
-            'instance_name' => $this->instanceName,
-            'attempts' => $this->maxRetries,
-            'message' => $message,
-        ];
+        // 获取独占锁（非阻塞模式，如果已被锁定则立即返回 false）
+        if (!flock($lockFp, LOCK_EX | LOCK_NB)) {
+            fclose($lockFp);
+            // 已有其他进程在执行复活
+            return true;
+        }
+
         try {
-            /** @var EventsManager $eventsManager */
-            $eventsManager = ObjectManager::getInstance(EventsManager::class);
-            $eventsManager->dispatch('Weline_Server::service::master_resurrection_failed', $eventData);
-        } catch (\Throwable $e) {
-            w_log_error('[MasterResurrector] dispatch master_resurrection_failed event failed: ' . $e->getMessage());
+            $delay = $this->getDelay();
+
+            for ($retry = 0; $retry < $this->maxRetries; $retry++) {
+                // 延迟等待（给更高优先级的进程机会）
+                SchedulerSystem::sleep($delay);
+
+                // 检查 Master 是否已被复活
+                if ($this->isMasterAlive()) {
+                    return true; // 已被其他进程复活
+                }
+
+                // 尝试启动 Master
+                if ($this->startMaster()) {
+                    // 等待 Master 启动完成
+                    SchedulerSystem::sleep(2);
+
+                    if ($this->isMasterAlive()) {
+                        return true;
+                    }
+                }
+
+                // 失败，增加延迟后重试
+                $delay = \min($delay * 2, 30);
+            }
+
+            // 三次均无法复活：发送服务异常信号，派发事件向后台报错，停止策略等待人工干预（Worker 继续正常服务）
+            $message = \sprintf(
+                __('WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。'),
+                $this->instanceName,
+                $this->maxRetries
+            );
+            MasterProcess::setServiceException($this->instanceName, $message, $this->maxRetries);
+            $eventData = [
+                'instance_name' => $this->instanceName,
+                'attempts' => $this->maxRetries,
+                'message' => $message,
+            ];
+            try {
+                /** @var EventsManager $eventsManager */
+                $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                $eventsManager->dispatch('Weline_Server::service::master_resurrection_failed', $eventData);
+            } catch (\Throwable $e) {
+                w_log_error('[MasterResurrector] dispatch master_resurrection_failed event failed: ' . $e->getMessage());
+            }
+            return false;
+        } finally {
+            // 释放锁并关闭文件
+            flock($lockFp, LOCK_UN);
+            fclose($lockFp);
         }
-        return false;
     }
 
     /**
