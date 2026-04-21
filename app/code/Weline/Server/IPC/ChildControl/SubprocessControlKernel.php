@@ -15,6 +15,9 @@ final class SubprocessControlKernel
     private ?ChildControlClientInterface $client = null;
 
     private const E2E_READY_DELAY_LIMIT_MS = 60000;
+    private const CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC = 30;
+    private const CONTROL_PORT_POLL_USEC = 100000;
+    private const CONTROL_CONNECT_SELF_HEAL_TIMEOUT_MS = 30000;
 
     public function __construct(
         private readonly ChildProcessIdentity $identity,
@@ -34,17 +37,17 @@ final class SubprocessControlKernel
      * 2. 从实例 JSON 中查找 control_port 字段（主要机制，支持并发启动）
      * 3. 如果实例 JSON 不存在，循环等待 Master 写入（轮询发现）
      *
-     * 心跳检查：
-     * - 初始检查（前2秒）：宽限，即使 updated_at 有点旧也接受，因为可能是Master刚启动尚未更新
-     * - 后续检查（2-6秒）：严格模式，如果 updated_at 超过 10 秒未更新，认为 Master 已死并快速返回 0
-     * - 目的：快速检测Master故障，避免Worker长时间等待
+     * 自愈窗口：
+     * - 实例文件不存在、JSON 未写完整、control_port=0、updated_at 过旧时继续重读真实文件
+     * - 最多等待 30 秒；30 秒后仍未发现可用 control_port 才返回 0
+     * - 目的：并发启动时不因短暂实例文件竞态导致子进程直接断开并被反复复活
      *
      * @param string $instanceName 实例名称
      * @param int $controlPort 命令行参数传入的端口（0 表示未传入）
-     * @param int $maxWaitSec 最多等待秒数（0 = 不等待，立即返回）
+     * @param int $maxWaitSec 最多等待秒数（0 = 不等待，立即返回；上限 30 秒）
      * @return int 发现的 Master 控制端口，或 0 if timeout/not found/Master stale
      */
-    public static function resolveControlPort(string $instanceName, int $controlPort = 0, int $maxWaitSec = 6): int
+    public static function resolveControlPort(string $instanceName, int $controlPort = 0, int $maxWaitSec = self::CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC): int
     {
         // 优先级 1：命令行参数
         if ($controlPort > 0) {
@@ -52,51 +55,32 @@ final class SubprocessControlKernel
         }
 
         $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
-        $deadline = \time() + $maxWaitSec;
-        $pollCount = 0;
-        $graceStartTime = \time();
-        $gracePeriodSec = 2;  // 前2秒为宽限期，接受任何 control_port（即使 updated_at 旧也可以）
-        $masterHeartbeatTimeout = 10;  // 2秒后如果 updated_at > 10秒未更新，判定 Master 已死
+        $maxWaitSec = \max(0, \min(self::CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC, $maxWaitSec));
+        $deadline = \microtime(true) + $maxWaitSec;
+        $masterHeartbeatTimeout = self::CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC;
 
         // 循环等待实例文件和 control_port 字段出现
-        while (\time() < $deadline) {
+        do {
             $now = \time();
-            $isInGracePeriod = ($now - $graceStartTime) <= $gracePeriodSec;
             
             if (\is_file($instanceFile)) {
                 $instanceData = @\json_decode((string)\file_get_contents($instanceFile), true);
                 if (\is_array($instanceData) && isset($instanceData['control_port'])) {
                     $port = (int)($instanceData['control_port']);
-                    
-                    // 心跳检查：检查 Master 是否仍然活着
                     $updatedAt = (int)($instanceData['updated_at'] ?? 0);
-                    $heartbeatAge = $now - $updatedAt;
                     
-                    if ($port > 0) {
-                        if ($isInGracePeriod) {
-                            // 宽限期内：只要 control_port > 0 就返回（Master可能刚启动）
-                            return $port;
-                        } elseif ($heartbeatAge <= $masterHeartbeatTimeout) {
-                            // 宽限期外：心跳正常，返回端口
-                            return $port;
-                        } else {
-                            // 宽限期外：心跳超时，Master 已死亡
-                            // 立即返回 0 而不是继续轮询（快速失败）
-                            return 0;
-                        }
+                    if ($port > 0 && $updatedAt > 0 && ($now - $updatedAt) <= $masterHeartbeatTimeout) {
+                        return $port;
                     }
                 }
             }
 
-            // 等待 100ms 后重试（支持轮询发现）
-            $pollCount++;
-            if ($pollCount * 0.1 < $maxWaitSec) {
-                \usleep(100000); // 100ms
-                continue;
+            if ($maxWaitSec <= 0) {
+                break;
             }
 
-            break;
-        }
+            \usleep(self::CONTROL_PORT_POLL_USEC);
+        } while (\microtime(true) < $deadline);
 
         return 0;
     }
@@ -177,14 +161,23 @@ final class SubprocessControlKernel
         }
 
         // 启动时重试连接 Master（支持并发启动，自动等待 Master 就绪）
-        // 快速失败：减少重试次数和延迟，加快启动速度
-        $maxStartupRetries = \intval(\getenv('WLS_STARTUP_CONNECT_RETRIES') ?: 10);  // 默认 10 次（之前 60 次）
-        $retryDelayMs = \intval(\getenv('WLS_STARTUP_CONNECT_RETRY_DELAY_MS') ?: 50);  // 默认 50ms（之前 100ms）
+        $retryDelayMs = \max(50, \intval(\getenv('WLS_STARTUP_CONNECT_RETRY_DELAY_MS') ?: 250));
+        $maxRetriesBySelfHealWindow = \max(1, (int) \ceil(self::CONTROL_CONNECT_SELF_HEAL_TIMEOUT_MS / $retryDelayMs));
+        $maxStartupRetries = \intval(\getenv('WLS_STARTUP_CONNECT_RETRIES') ?: $maxRetriesBySelfHealWindow);
+        $maxStartupRetries = \max(1, \min($maxStartupRetries, $maxRetriesBySelfHealWindow));
         $retryAttempt = 0;
         $lastError = '';
+        $instanceInfoGateway = $this->instanceCode !== '' ? new InstanceInfoGateway($this->instanceCode) : null;
 
         while ($retryAttempt < $maxStartupRetries) {
             $retryAttempt++;
+            if ($instanceInfoGateway !== null) {
+                $latestControlPort = $instanceInfoGateway->getLatestControlPort($controlPort);
+                if ($latestControlPort > 0 && $latestControlPort !== $controlPort) {
+                    $this->log("检测到 Master control_port 更新: {$controlPort} -> {$latestControlPort}");
+                    $controlPort = $latestControlPort;
+                }
+            }
             $client = $this->createClient();
             $this->client = $client;
             $client->setSelfTag($this->selfTag);
