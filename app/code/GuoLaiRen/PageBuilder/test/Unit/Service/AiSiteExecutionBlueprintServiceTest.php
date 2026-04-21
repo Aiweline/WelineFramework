@@ -414,6 +414,28 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                 $reordered['structured']['page_plans'][$pageType]['blocks'] ?? []
             ))
         );
+        self::assertSame(
+            [10, 20],
+            \array_values(\array_slice(\array_map(
+                static fn(array $block): int => (int)($block['sort_order'] ?? 0),
+                $reordered['structured']['page_plans'][$pageType]['blocks'] ?? []
+            ), 0, 2))
+        );
+
+        $pageIndex = \is_array($reordered['structured']['block_index']['pages'][$pageType] ?? null)
+            ? $reordered['structured']['block_index']['pages'][$pageType]
+            : [];
+        $expectedIndexKeys = \array_values(\array_map(
+            static fn(string $blockKey): string => 'page:' . $pageType . ':' . $blockKey,
+            $orderedKeys
+        ));
+        self::assertSame($expectedIndexKeys, \array_keys($pageIndex));
+        self::assertSame(10, (int)($pageIndex[$expectedIndexKeys[0]]['sort_order'] ?? 0));
+        self::assertSame(20, (int)($pageIndex[$expectedIndexKeys[1]]['sort_order'] ?? 0));
+        self::assertSame(
+            $pageIndex,
+            $reordered['plan_workbench']['confirmed']['block_index']['pages'][$pageType] ?? []
+        );
 
         $pageTaskBlockKeys = \array_values(\array_map(
             static fn(array $task): string => (string)($task['block']['block_key'] ?? ''),
