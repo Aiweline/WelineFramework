@@ -3624,23 +3624,21 @@ POWERSHELL;
             'remaining' => [],
         ];
 
-        foreach (\array_chunk(\array_values($pids), 32) as $chunk) {
-            $command = self::buildWindowsAsyncBatchTreeKillCommand($chunk);
-            $output = [];
-            $returnCode = 0;
-            self::execute($command, $output, $returnCode);
-            \Weline\Framework\Runtime\SchedulerSystem::usleep(150000);
+        $pids = \array_values($pids);
+        $command = self::buildWindowsAsyncBatchTreeKillCommand($pids);
+        $output = [];
+        $returnCode = 0;
+        self::execute($command, $output, $returnCode);
 
-            if ($returnCode !== 0) {
-                $result['failed'] += \count($chunk);
-                $result['remaining'] = \array_merge($result['remaining'], $chunk);
-                continue;
-            }
+        if ($returnCode !== 0) {
+            $result['failed'] += \count($pids);
+            $result['remaining'] = $pids;
+            return $result;
+        }
 
-            foreach ($chunk as $pid) {
-                $result['killed']++;
-                self::finalizeBatchGracefulKillPid($pid, 'force tree kill dispatched');
-            }
+        foreach ($pids as $pid) {
+            $result['killed']++;
+            self::finalizeBatchGracefulKillPid($pid, 'force tree kill dispatched');
         }
 
         return $result;
