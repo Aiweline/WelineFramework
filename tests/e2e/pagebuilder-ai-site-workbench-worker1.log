@@ -1,0 +1,60 @@
+﻿[34m工作目录：E:\WelineFramework\DEV-workspace\tests\e2e[0m
+[34m执行命令：cd /d "E:\WelineFramework\DEV-workspace\tests\e2e" && set "PLAYWRIGHT_HEADLESS=1" && "node" "node_modules/playwright/cli.js" "test" "specs/backend/ai-site-workbench.spec.js" "--project=chromium"[0m
+
+[playwright] explicit file mode using 1 files
+[playwright] rootDir: E:\WelineFramework\DEV-workspace
+[playwright] testDir: E:\WelineFramework\DEV-workspace\tests\e2e
+[playwright] testMatch: [ 'specs/backend/ai-site-workbench.spec.js' ]
+[playwright] proxy baseURL: https://127.0.0.1:3999
+[playwright] target origin: https://p11005ce4.weline.test
+
+Running 2 tests using 1 worker
+
+[playwright] explicit file mode using 1 files
+[playwright] rootDir: E:\WelineFramework\DEV-workspace
+[playwright] testDir: E:\WelineFramework\DEV-workspace\tests\e2e
+[playwright] testMatch: [ [32m'specs/backend/ai-site-workbench.spec.js'[39m ]
+[playwright] proxy baseURL: https://127.0.0.1:3999
+[playwright] target origin: https://p11005ce4.weline.test
+  ✘  1 [chromium] › specs\backend\ai-site-workbench.spec.js:334:3 › AI Site Workbench › pagebuilder provider closes the loop through native virtual theme orchestration and mirrored visual editing (1.7m)
+  -  2 [chromium] › specs\backend\ai-site-workbench.spec.js:507:3 › AI Site Workbench › pagebuilder provider in fake mode: session scope keeps fake_mode and local_fake_demo
+
+
+  1) [chromium] › specs\backend\ai-site-workbench.spec.js:334:3 › AI Site Workbench › pagebuilder provider closes the loop through native virtual theme orchestration and mirrored visual editing 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('#site-agent-description, #sbv1-desc').first()
+    Expected: visible
+    Timeout: 30000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 30000ms[22m
+    [2m  - waiting for locator('#site-agent-description, #sbv1-desc').first()[22m
+
+
+      123 |
+      124 | async function expectHubBriefReady(page) {
+    > 125 |   await expect(hubBriefLocator(page)).toBeVisible({ timeout: 30000 });
+          |                                       ^
+      126 | }
+      127 |
+      128 | async function fillHubBrief(page, text) {
+        at expectHubBriefReady (E:\WelineFramework\DEV-workspace\tests\e2e\specs\backend\ai-site-workbench.spec.js:125:39)
+        at E:\WelineFramework\DEV-workspace\tests\e2e\specs\backend\ai-site-workbench.spec.js:340:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\specs-backend-ai-site-work-0fd21-and-mirrored-visual-editing-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\specs-backend-ai-site-work-0fd21-and-mirrored-visual-editing-chromium\error-context.md
+
+  1 failed
+    [chromium] › specs\backend\ai-site-workbench.spec.js:334:3 › AI Site Workbench › pagebuilder provider closes the loop through native virtual theme orchestration and mirrored visual editing 
+  1 did not run
+
+[31mE2E 测试执行失败，退出码：1[0m
+[34m
+[0m
+[34m执行命令：e2e:run specs/backend/ai-site-workbench.spec.js[0m
