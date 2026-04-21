@@ -205,6 +205,46 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         );
     }
 
+    public function testStageOneHeaderFooterCompletionFansOutPageTasksWithoutTabDependency(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+
+        $artifacts = $service->buildPlanArtifacts([
+            'site_title' => 'Fanout Service Test',
+            'brief_description' => 'Need home and about pages generated after shared header and footer planning.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'Fanout Service Test',
+            'brief_description' => 'Need home and about pages generated after shared header and footer planning.',
+        ]);
+
+        $stageOneQueue = $artifacts['execution_blueprint']['stage1_queue'] ?? [];
+        self::assertIsArray($stageOneQueue);
+        self::assertSame('stage1.shared.header_footer', (string)($stageOneQueue['fanout']['trigger_after'] ?? ''));
+        self::assertSame('fiber_coroutine', (string)($stageOneQueue['fanout']['mode'] ?? ''));
+        self::assertSame('one_page_one_task', (string)($stageOneQueue['fanout']['task_granularity'] ?? ''));
+        self::assertSame(
+            ['stage1.page_plan:home_page', 'stage1.page_plan:about_page'],
+            $stageOneQueue['fanout']['page_job_keys'] ?? []
+        );
+
+        foreach (['home_page', 'about_page'] as $pageType) {
+            $pageJobKey = 'stage1.page_plan:' . $pageType;
+            $pageJob = $stageOneQueue['jobs'][$pageJobKey] ?? null;
+            self::assertIsArray($pageJob);
+            self::assertSame(['stage1.shared.header_footer'], $pageJob['depends_on'] ?? []);
+            self::assertSame('stage1.shared.header_footer.done', (string)($pageJob['dispatch_trigger'] ?? ''));
+            self::assertSame('automatic_after_dependency', (string)($pageJob['dispatch_mode'] ?? ''));
+            self::assertFalse((bool)($pageJob['requires_user_tab'] ?? true));
+            self::assertSame('one_page_one_task', (string)($pageJob['concurrency']['task_granularity'] ?? ''));
+            self::assertSame(
+                (string)($artifacts['execution_blueprint']['shared_prompt_context']['context_hash'] ?? ''),
+                (string)($pageJob['inputs']['shared_context_hash'] ?? '')
+            );
+        }
+    }
+
     public function testStageOneThemePlanningFieldsAreCompleteAcrossArtifacts(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
