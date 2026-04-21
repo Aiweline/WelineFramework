@@ -7272,6 +7272,29 @@ class ServiceOrchestrator
             WlsLogger::warning_("[Orchestrator] 忽略旧代际实例注册 {$instance->role}#{$instance->instanceId}: epoch={$epoch}");
             return false;
         }
+        if ($instance->role === ControlMessage::ROLE_WORKER
+            && $instance->state === ServiceInstance::STATE_READY
+            && $instance->ipcClientId !== null
+            && $instance->ipcClientId !== $clientId
+            && $instance->getMeta('dispatcher_pool_confirmed_at') !== null
+            && $this->controlServer !== null
+            && $this->controlServer->clientExists($instance->ipcClientId)) {
+            WlsLogger::warning_(
+                "[Orchestrator] 额外 Worker register 已拒绝: slot=worker#{$instance->instanceId}, "
+                . "current_client={$instance->ipcClientId}, extra_client={$clientId}, "
+                . "current_pid={$instance->pid}, extra_pid={$pid}, current_port={$instance->port}, "
+                . "current_launch={$instance->launchId}, extra_launch={$launchId}"
+            );
+            if ($pid > 0 && !$instance->matchesManagedPid($pid)) {
+                Processer::killProcessTreeByPid($pid, true);
+            }
+            $this->controlServer->closeClient($clientId);
+            $this->lastDispatcherWorkerPoolSignature = '';
+            $this->syncDispatcherFullWorkerPoolFromRegistry();
+            $this->reconcileRoleSlotGaps(ControlMessage::ROLE_WORKER);
+            return true;
+        }
+
         if ($launchId !== '' && $instance->launchId !== '' && $instance->launchId !== $launchId) {
             if ($this->canReplaceExpiredPendingReady($instance, $clientId, $pid, $launchId)) {
                 WlsLogger::warning_(
