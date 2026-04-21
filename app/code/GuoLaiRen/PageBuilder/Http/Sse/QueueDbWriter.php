@@ -158,6 +158,95 @@ class QueueDbWriter extends SseWriter
         return $this;
     }
 
+
+    /**
+     * Persist AI token usage onto the queue row content so queue observers and
+     * later audit screens can read usage without querying provider-specific logs.
+     *
+     * @param array<string, mixed> $usage
+     * @param array<string, mixed> $meta
+     */
+    public function recordTokenUsage(array $usage, array $meta = []): static
+    {
+        if ($this->queueId <= 0 || $usage === []) {
+            return $this;
+        }
+
+        try {
+            $incoming = $this->normalizeTokenUsage($usage);
+            if (!$this->hasAnyTokenCount($incoming)) {
+                return $this;
+            }
+
+            $row = w_query('queue', 'get', ['queue_id' => $this->queueId]);
+            if (!\is_array($row) || $row === []) {
+                return $this;
+            }
+
+            $content = \json_decode((string)($row['content'] ?? ''), true);
+            if (!\is_array($content)) {
+                $content = [];
+            }
+
+            $current = $this->normalizeTokenUsage($content);
+            $merged = $this->mergeTokenUsage($current, $incoming);
+            $mergedMeta = $this->mergeTokenCostMeta(
+                \is_array($current['token_cost_meta'] ?? null) ? $current['token_cost_meta'] : [],
+                \is_array($incoming['token_cost_meta'] ?? null) ? $incoming['token_cost_meta'] : [],
+                $meta
+            );
+            if ($mergedMeta !== []) {
+                $merged['token_cost_meta'] = $mergedMeta;
+            }
+
+            $content['token_usage'] = $merged;
+            foreach (['input_tokens', 'output_tokens', 'total_tokens'] as $tokenKey) {
+                if ($merged[$tokenKey] !== null) {
+                    $content[$tokenKey] = $merged[$tokenKey];
+                }
+            }
+
+            $summary = $this->formatTokenUsageSummary($incoming, $merged);
+            $existing = (string)($row['result'] ?? '');
+            $line = '[' . \date('H:i:s') . '] TOKEN_USAGE ' . $summary;
+            $patch = [
+                'content' => \json_encode($content, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR),
+                'process' => $summary,
+                'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
+            ];
+
+            w_query('queue', 'update', [
+                'queue_id' => $this->queueId,
+                'patch' => $patch,
+            ]);
+            $this->mirrorToCli($line);
+
+            try {
+                /** @var AiSiteAgentSessionService $sessionService */
+                $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
+                $sessionService->appendEvent(
+                    $this->sessionId,
+                    $this->adminId,
+                    'token_usage',
+                    [
+                        'operation' => $this->operation,
+                        'stage' => $this->stage,
+                        'token_usage' => $merged,
+                        'token_usage_delta' => $incoming,
+                    ],
+                    $this->stage,
+                    'info'
+                );
+            } catch (\Throwable) {
+                // Token accounting should never fail the queue job.
+            }
+        } catch (\Throwable) {
+            // Token accounting is diagnostic/audit data and must not interrupt queue execution.
+        }
+
+        return $this;
+    }
+
     /**
      * @param bool $force 为 true 时刷尽缓冲（任务结束/连接关闭）
      */
@@ -226,6 +315,158 @@ class QueueDbWriter extends SseWriter
         } catch (\Throwable) {
             // Ignore session-event side effects so queue execution keeps running.
         }
+    }
+
+
+    /**
+     * @param array<string, mixed> $source
+     * @return array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string, mixed>|null}
+     */
+    private function normalizeTokenUsage(array $source): array
+    {
+        $nested = \is_array($source['token_usage'] ?? null) ? $source['token_usage'] : [];
+        $input = $this->normalizeTokenCount(
+            $nested['input_tokens']
+            ?? $source['input_tokens']
+            ?? $nested['prompt_tokens']
+            ?? $source['prompt_tokens']
+            ?? $nested['prompt_eval_count']
+            ?? $source['prompt_eval_count']
+            ?? null
+        );
+        $output = $this->normalizeTokenCount(
+            $nested['output_tokens']
+            ?? $source['output_tokens']
+            ?? $nested['completion_tokens']
+            ?? $source['completion_tokens']
+            ?? $nested['eval_count']
+            ?? $source['eval_count']
+            ?? null
+        );
+        $total = $this->normalizeTokenCount(
+            $nested['total_tokens']
+            ?? $source['total_tokens']
+            ?? null
+        );
+        if ($total === null && $input !== null && $output !== null) {
+            $total = $input + $output;
+        }
+
+        return [
+            'input_tokens' => $input,
+            'output_tokens' => $output,
+            'total_tokens' => $total,
+            'token_cost_meta' => $this->extractTokenCostMeta($source, $nested),
+        ];
+    }
+
+    private function normalizeTokenCount(mixed $value): ?int
+    {
+        if (\is_int($value)) {
+            return $value >= 0 ? $value : null;
+        }
+        if (\is_float($value)) {
+            return $value >= 0 ? (int)\round($value) : null;
+        }
+        if (\is_string($value)) {
+            $trimmed = \trim($value);
+            if ($trimmed !== '' && \preg_match('/^\d+$/', $trimmed) === 1) {
+                return (int)$trimmed;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string, mixed>|null} $usage
+     */
+    private function hasAnyTokenCount(array $usage): bool
+    {
+        return $usage['input_tokens'] !== null
+            || $usage['output_tokens'] !== null
+            || $usage['total_tokens'] !== null;
+    }
+
+    /**
+     * @param array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string, mixed>|null} $current
+     * @param array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string, mixed>|null} $incoming
+     * @return array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string, mixed>|null}
+     */
+    private function mergeTokenUsage(array $current, array $incoming): array
+    {
+        $merged = $current;
+        foreach (['input_tokens', 'output_tokens', 'total_tokens'] as $tokenKey) {
+            if ($incoming[$tokenKey] === null) {
+                continue;
+            }
+            $merged[$tokenKey] = ($merged[$tokenKey] ?? 0) + $incoming[$tokenKey];
+        }
+        if ($merged['total_tokens'] === null && $merged['input_tokens'] !== null && $merged['output_tokens'] !== null) {
+            $merged['total_tokens'] = $merged['input_tokens'] + $merged['output_tokens'];
+        }
+
+        return $merged;
+    }
+
+    /**
+     * @param array<string, mixed> $source
+     * @param array<string, mixed> $nested
+     * @return array<string, mixed>|null
+     */
+    private function extractTokenCostMeta(array $source, array $nested): ?array
+    {
+        $meta = \is_array($nested['token_cost_meta'] ?? null)
+            ? $nested['token_cost_meta']
+            : (\is_array($source['token_cost_meta'] ?? null) ? $source['token_cost_meta'] : []);
+        foreach ([
+            'prompt_tokens_details',
+            'completion_tokens_details',
+            'input_token_details',
+            'output_token_details',
+            'cost',
+        ] as $key) {
+            if (\array_key_exists($key, $source)) {
+                $meta[$key] = $source[$key];
+            } elseif (\array_key_exists($key, $nested)) {
+                $meta[$key] = $nested[$key];
+            }
+        }
+
+        return $meta !== [] ? $meta : null;
+    }
+
+    /**
+     * @param array<string, mixed> ...$items
+     * @return array<string, mixed>
+     */
+    private function mergeTokenCostMeta(array ...$items): array
+    {
+        $merged = [];
+        foreach ($items as $item) {
+            foreach ($item as $key => $value) {
+                if ($value === null || $value === '') {
+                    continue;
+                }
+                $merged[(string)$key] = $value;
+            }
+        }
+
+        return $merged;
+    }
+
+    /**
+     * @param array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string, mixed>|null} $delta
+     * @param array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string, mixed>|null} $total
+     */
+    private function formatTokenUsageSummary(array $delta, array $total): string
+    {
+        return 'input=' . (string)($total['input_tokens'] ?? 0)
+            . ' output=' . (string)($total['output_tokens'] ?? 0)
+            . ' total=' . (string)($total['total_tokens'] ?? 0)
+            . ' (delta input=' . (string)($delta['input_tokens'] ?? 0)
+            . ' output=' . (string)($delta['output_tokens'] ?? 0)
+            . ' total=' . (string)($delta['total_tokens'] ?? 0) . ')';
     }
 
     public function isAlive(): bool
