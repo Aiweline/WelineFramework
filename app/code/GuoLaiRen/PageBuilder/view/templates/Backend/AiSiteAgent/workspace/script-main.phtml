@@ -5284,7 +5284,6 @@
         var taskScript = (task.task_script && typeof task.task_script === 'object') ? task.task_script : {};
         var implementationContract = (task.implementation_contract && typeof task.implementation_contract === 'object') ? task.implementation_contract : {};
         var blockTask = (task.block_task && typeof task.block_task === 'object') ? task.block_task : {};
-        var planningReasonItems = collectTaskPlanPlanningReasonItems(task, blockTask, planContext);
         var pageGoal = escapeHtml(sanitizePreviewText(planContext.page_goal || '', safePageLabel + ' 页面目标：明确本页价值与转化意图。')).replace(/\n/g, '<br>');
         var blockGoal = escapeHtml(sanitizePreviewText(planContext.block_goal || '', '区块目标：说明该区块承担的信息与行动目标。')).replace(/\n/g, '<br>');
         var scene = escapeHtml(sanitizePreviewText(taskScript.scene || '', rawTaskKey || safePageLabel)).replace(/\n/g, '<br>');
