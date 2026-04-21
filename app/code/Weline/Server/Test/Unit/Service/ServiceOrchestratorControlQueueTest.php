@@ -7,6 +7,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\MasterControlServer;
 use Weline\Server\Log\WlsLogger;
+use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\ServiceOrchestrator;
 
 final class ServiceOrchestratorControlQueueTest extends TestCase
@@ -325,6 +326,105 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
         self::assertTrue((bool)$second['success']);
         self::assertSame($first['data']['operation_id'] ?? null, $second['data']['operation_id'] ?? null);
         self::assertTrue((bool)($second['data']['deduplicated'] ?? false));
+    }
+
+    public function testDispatcherOnlyMaintenanceDisableStillPublishesWorkerPoolWhenAlreadyDisabled(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $server = new class extends MasterControlServer {
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = [
+                    'clientId' => $clientId,
+                    'message' => ControlMessage::decode(\rtrim($message, "\n")),
+                ];
+
+                return true;
+            }
+        };
+
+        $registry = $orchestrator->getRegistry();
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 301,
+        ));
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+            port: 19081,
+        ));
+
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+        $this->writePrivate($orchestrator, 'maintenanceMode', false);
+
+        $this->invokePrivate($orchestrator, 'handleCommand', [[
+            'action' => ControlMessage::ACTION_MAINTENANCE_DISABLE,
+            'dispatcher_only' => true,
+        ], 41]);
+
+        $pending = $this->readPrivate($orchestrator, 'pendingControlOperations');
+        self::assertCount(1, $pending);
+        self::assertSame(ControlMessage::ACTION_MAINTENANCE_DISABLE, $pending[0]['action']);
+        self::assertTrue((bool)($pending[0]['payload']['dispatcher_only'] ?? false));
+
+        $processed = $this->invokePrivate($orchestrator, 'processNextQueuedControlOperation');
+
+        self::assertTrue($processed);
+        self::assertCount(2, $server->sent);
+        self::assertSame(41, $server->sent[0]['clientId']);
+        self::assertSame('command_result', $server->sent[0]['message']['type'] ?? '');
+        self::assertSame(301, $server->sent[1]['clientId']);
+        self::assertSame(ControlMessage::TYPE_SET_WORKER_POOL, $server->sent[1]['message']['type'] ?? '');
+        self::assertSame(ControlMessage::ROLE_WORKER, $server->sent[1]['message']['role'] ?? '');
+        self::assertSame([19081], $server->sent[1]['message']['ports'] ?? []);
+    }
+
+    public function testDispatcherOnlyMaintenanceEnableWithoutMaintenanceWorkersDoesNotClaimLifecycleMode(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $server = new class extends MasterControlServer {
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = [
+                    'clientId' => $clientId,
+                    'message' => ControlMessage::decode(\rtrim($message, "\n")),
+                ];
+
+                return true;
+            }
+        };
+
+        $registry = $orchestrator->getRegistry();
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 302,
+        ));
+
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+        $this->writePrivate($orchestrator, 'maintenanceMode', false);
+
+        $this->invokePrivate($orchestrator, 'handleCommand', [[
+            'action' => ControlMessage::ACTION_MAINTENANCE_ENABLE,
+            'dispatcher_only' => true,
+        ], 42]);
+
+        $processed = $this->invokePrivate($orchestrator, 'processNextQueuedControlOperation');
+
+        self::assertTrue($processed);
+        self::assertFalse((bool)$this->readPrivate($orchestrator, 'maintenanceMode'));
+        self::assertFalse((bool)$this->readPrivate($orchestrator, 'maintenanceSticky'));
+        self::assertCount(1, $server->sent);
+        self::assertSame(42, $server->sent[0]['clientId']);
+        self::assertSame('command_result', $server->sent[0]['message']['type'] ?? '');
     }
 
     private function invokePrivate(object $object, string $method, array $arguments = []): mixed
