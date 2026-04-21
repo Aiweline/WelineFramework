@@ -10,6 +10,7 @@ use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Queue\Model\Queue;
 use Weline\Queue\QueueInterface;
 
@@ -60,6 +61,9 @@ class AiSitePlanQueue implements QueueInterface
         $queueId = (int)$queue->getId();
 
         $sse = null;
+        $previousSseContextExists = false;
+        $previousSseContext = null;
+        $sseContextRegistered = false;
         try {
             $this->appendQueueLifecycleLine($queue, '开始执行 queue_id=' . $queueId . ' public_id=' . $publicId . ' admin_id=' . $adminId);
 
@@ -102,6 +106,10 @@ class AiSitePlanQueue implements QueueInterface
                 AiSiteAgentSession::STAGE_PLAN,
                 'plan'
             );
+            $previousSseContextExists = RequestContext::has(RequestContext::SSE_WRITER_KEY);
+            $previousSseContext = RequestContext::get(RequestContext::SSE_WRITER_KEY);
+            RequestContext::set(RequestContext::SSE_WRITER_KEY, $sse);
+            $sseContextRegistered = true;
             $this->queueTrace($sse, 'QueueDbWriter 已创建，阶段一进度将写入队列 result 与会话事件。');
 
             /** @var AiSiteAgent $controller */
@@ -132,6 +140,13 @@ class AiSitePlanQueue implements QueueInterface
             $this->updateSessionError($publicId, $adminId, $effectiveExecutionToken, $message);
             throw new \RuntimeException($message, 0, $throwable);
         } finally {
+            if ($sseContextRegistered) {
+                if ($previousSseContextExists) {
+                    RequestContext::set(RequestContext::SSE_WRITER_KEY, $previousSseContext);
+                } else {
+                    RequestContext::remove(RequestContext::SSE_WRITER_KEY);
+                }
+            }
             if ($sse instanceof QueueDbWriter) {
                 $sse->complete();
             }
