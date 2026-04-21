@@ -9,7 +9,7 @@ use Weline\Server\Service\MasterProcess;
 
 final class StartCommandDaemonModeTest extends TestCase
 {
-    public function testFrontendModeDoesNotForceForegroundExecution(): void
+    public function testFrontendModeForcesForegroundExecution(): void
     {
         $start = new class extends Start {
             /**
@@ -22,8 +22,9 @@ final class StartCommandDaemonModeTest extends TestCase
         };
         $start->__init();
 
-        self::assertTrue($start->daemonMode(['daemon' => true], true));
+        self::assertFalse($start->daemonMode(['daemon' => true], true));
         self::assertFalse($start->daemonMode(['daemon' => false], true));
+        self::assertTrue($start->daemonMode(['daemon' => true], false));
     }
 
     public function testFrontendMasterBackgroundLaunchCarriesFrontendIdentity(): void
