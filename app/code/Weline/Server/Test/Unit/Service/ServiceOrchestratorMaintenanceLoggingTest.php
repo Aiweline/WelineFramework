@@ -5,6 +5,7 @@ namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\IPC\MasterControlServer;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\ServiceOrchestrator;
 
@@ -99,6 +100,84 @@ final class ServiceOrchestratorMaintenanceLoggingTest extends TestCase
 
         $pending = (array) $this->readPrivate($orchestrator, 'pendingMaintenanceModeAck');
         self::assertSame(['301:19999' => true], $pending['acked'] ?? []);
+    }
+
+    public function testExtraWorkerRegisterForNormalSlotIsRejectedAndDispatcherPoolCorrected(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $server = new class extends MasterControlServer {
+            public array $closed = [];
+            public array $sent = [];
+
+            public function clientExists(int $clientId): bool
+            {
+                return \in_array($clientId, [11, 201], true);
+            }
+
+            public function closeClient(int $clientId): void
+            {
+                $this->closed[] = $clientId;
+            }
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = [
+                    'clientId' => $clientId,
+                    'message' => ControlMessage::decode(\rtrim($message, "\n")),
+                ];
+
+                return true;
+            }
+
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                unset($timeoutSec, $timeoutUsec);
+                return 0;
+            }
+        };
+
+        $registry = $orchestrator->getRegistry();
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            launchId: 'current-launch',
+            pid: 1234,
+            port: 19001,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 11
+        );
+        $worker->setMeta('dispatcher_pool_confirmed_at', \microtime(true));
+        $registry->addInstance($worker);
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            port: 9443,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 201
+        ));
+
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+
+        $handled = $this->invokePrivate($orchestrator, 'registerInstanceIpc', [
+            $worker,
+            99,
+            0,
+            1,
+            1,
+            'extra-launch',
+        ]);
+
+        self::assertTrue($handled);
+        self::assertSame([99], $server->closed);
+        self::assertSame(11, $worker->ipcClientId);
+        self::assertSame('current-launch', $worker->launchId);
+
+        $setPoolMessages = \array_values(\array_filter(
+            $server->sent,
+            static fn(array $entry): bool => ($entry['message']['type'] ?? null) === ControlMessage::TYPE_SET_WORKER_POOL
+        ));
+        self::assertNotSame([], $setPoolMessages);
+        self::assertSame([19001], $setPoolMessages[0]['message']['ports'] ?? null);
     }
 
     private function invokePrivate(object $object, string $method, array $arguments = []): mixed
