@@ -4916,6 +4916,101 @@
             + '</span>';
     }
 
+    function normalizePlanSharedBlocks(planRoot) {
+        if (!planRoot || typeof planRoot !== 'object') {
+            return [];
+        }
+        var blocks = Array.isArray(planRoot.shared_blocks) ? planRoot.shared_blocks.slice() : [];
+        if (blocks.length === 0) {
+            if (planRoot.navigation_plan || planRoot.header_plan || planRoot.header) {
+                blocks.push({
+                    block_key: 'shared:header',
+                    component: 'header',
+                    label: previewLabels.headerPlan || 'Header',
+                    sort_order: 10,
+                    goal: ''
+                });
+            }
+            if (planRoot.footer_plan || planRoot.footer) {
+                blocks.push({
+                    block_key: 'shared:footer',
+                    component: 'footer',
+                    label: previewLabels.footerPlan || 'Footer',
+                    sort_order: 20,
+                    goal: ''
+                });
+            }
+        }
+        return blocks.filter(function (block) {
+            return block && typeof block === 'object';
+        }).sort(function (left, right) {
+            var leftOrder = Number(left.sort_order || 0);
+            var rightOrder = Number(right.sort_order || 0);
+            if (leftOrder !== rightOrder) {
+                return leftOrder - rightOrder;
+            }
+            return String(left.block_key || '').localeCompare(String(right.block_key || ''));
+        });
+    }
+
+    function renderPlanSharedBlockCard(block, idx) {
+        if (!block || typeof block !== 'object') {
+            return '';
+        }
+        var rawBlockKey = String(block.block_key || ('shared:' + (block.component || ('block_' + (idx + 1))))).trim();
+        if (rawBlockKey === '') {
+            rawBlockKey = 'shared:block_' + (idx + 1);
+        }
+        var component = String(block.component || rawBlockKey.replace(/^shared:/, '') || '').trim();
+        var label = String(block.label || component || rawBlockKey).trim();
+        var goal = sanitizePreviewText(block.goal || '', '');
+        var content = sanitizePreviewText(block.content || '', '');
+        var implementation = sanitizePreviewText(block.implementation_note || block.implementation_detail || '', '');
+        return ''
+            + '<div class="border rounded p-3 mb-0 pb-ai-plan-preview-block pb-ai-sortable-item"'
+            + ' data-pb-preview-stage="plan"'
+            + ' data-pb-preview-page-type="shared"'
+            + ' data-pb-sort-item="1"'
+            + ' data-pb-sort-key="' + escapeHtml(rawBlockKey) + '"'
+            + ' data-pb-preview-block-key="' + escapeHtml(rawBlockKey) + '">'
+            + '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 pb-ai-plan-preview-block-head">'
+            + '<div class="d-flex align-items-center gap-2 min-w-0">'
+            + renderPreviewSortHandle()
+            + '<div class="fw-semibold">' + escapeHtml(label) + '</div>'
+            + '</div>'
+            + '<div class="d-flex flex-wrap align-items-center gap-2">'
+            + buildPreviewActionToolbar('plan', 'block', {
+                pageType: 'shared',
+                blockKey: rawBlockKey,
+                blockLabel: label,
+                pageLabel: String(previewLabels.themeTab || 'Shared'),
+                targetScope: 'shared_plan.' + component
+            })
+            + '</div>'
+            + '</div>'
+            + (goal ? '<div class="small text-muted mt-2">' + escapeHtml(goal).replace(/\n/g, '<br>') + '</div>' : '')
+            + (content ? '<div class="small mt-2">' + escapeHtml(content).replace(/\n/g, '<br>') + '</div>' : '')
+            + (implementation ? '<div class="small text-muted mt-2">' + escapeHtml(implementation).replace(/\n/g, '<br>') + '</div>' : '')
+            + '</div>';
+    }
+
+    function renderPlanSharedBlocksSection(planRoot) {
+        var blocks = normalizePlanSharedBlocks(planRoot);
+        if (blocks.length === 0) {
+            return '';
+        }
+        return ''
+            + '<div class="card border-0 shadow-sm mb-3">'
+            + '<div class="card-body">'
+            + '<div class="fw-semibold">' + escapeHtml(previewLabels.sharedTasks || 'Shared blocks') + '</div>'
+            + '<div class="text-muted small mt-1">' + escapeHtml(previewLabels.stageToolbarHint || '') + '</div>'
+            + '<div class="mt-3 pb-ai-sortable-list" data-pb-sort-list="1" data-pb-sort-stage="plan" data-pb-sort-page-type="shared">'
+            + blocks.map(renderPlanSharedBlockCard).filter(Boolean).join('')
+            + '</div>'
+            + '</div>'
+            + '</div>';
+    }
+
     function renderPlanPagePreviewCard(pageType, page) {
         if (!page || typeof page !== 'object') {
             return '';
@@ -5494,16 +5589,14 @@
         var themeSections = [];
         var tabs = [];
         var themeHtml = renderThemeSummarySection(planRoot);
-        var headerPlan = planRoot.navigation_plan || planRoot.header_plan || planRoot.header || null;
-        var footerPlan = planRoot.footer_plan || planRoot.footer || null;
-        var headerHtml = renderStructuredListSection(previewLabels.headerPlan, headerPlan, {
-            reasonItems: collectPreviewReasonItems(headerPlan)
-        });
-        var footerHtml = renderStructuredListSection(previewLabels.footerPlan, footerPlan, {
-            reasonItems: collectPreviewReasonItems(footerPlan)
-        });
+        var sharedBlocksHtml = renderPlanSharedBlocksSection(planRoot);
+        var headerHtml = renderStructuredListSection(previewLabels.headerPlan, planRoot.navigation_plan || planRoot.header_plan || planRoot.header || null);
+        var footerHtml = renderStructuredListSection(previewLabels.footerPlan, planRoot.footer_plan || planRoot.footer || null);
         if (themeHtml) {
             themeSections.push(themeHtml);
+        }
+        if (sharedBlocksHtml) {
+            themeSections.push(sharedBlocksHtml);
         }
         if (headerHtml) {
             themeSections.push(headerHtml);
