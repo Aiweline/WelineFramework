@@ -72,8 +72,16 @@
             usage = Object.assign(usage, info.token_usage);
         }
 
-        var input = normalizeTokenCount(usage.input_tokens != null ? usage.input_tokens : (info && info.input_tokens != null ? info.input_tokens : snapshot.input_tokens));
-        var output = normalizeTokenCount(usage.output_tokens != null ? usage.output_tokens : (info && info.output_tokens != null ? info.output_tokens : snapshot.output_tokens));
+        var input = normalizeTokenCount(
+            usage.input_tokens != null
+                ? usage.input_tokens
+                : (usage.prompt_tokens != null ? usage.prompt_tokens : (info && info.input_tokens != null ? info.input_tokens : snapshot.input_tokens))
+        );
+        var output = normalizeTokenCount(
+            usage.output_tokens != null
+                ? usage.output_tokens
+                : (usage.completion_tokens != null ? usage.completion_tokens : (info && info.output_tokens != null ? info.output_tokens : snapshot.output_tokens))
+        );
         var total = normalizeTokenCount(usage.total_tokens != null ? usage.total_tokens : (info && info.total_tokens != null ? info.total_tokens : snapshot.total_tokens));
         if (total === null && input !== null && output !== null) {
             total = input + output;
@@ -86,10 +94,10 @@
         };
     }
 
-    function renderQueueSummaryItem(label, value, codeLike) {
+    function renderQueueSummaryItem(key, label, value, codeLike) {
         var display = String(value == null || value === '' ? queueMessages.queueIdUnknown : value);
         var valueTag = codeLike ? 'code' : 'strong';
-        return '<div class="col-6">'
+        return '<div class="col-6" role="listitem" data-queue-info-field="' + escapeHtml(key) + '">'
             + '<div class="text-muted small">' + escapeHtml(label) + '</div>'
             + '<' + valueTag + ' class="small text-break">' + escapeHtml(display) + '</' + valueTag + '>'
             + '</div>';
@@ -100,17 +108,17 @@
         var tokenUsage = resolveTokenUsage(info || {});
         var jobKey = snapshot.job_key || (info && info.job_key) || snapshot.biz_key || '';
         var jobType = snapshot.job_type || (info && info.job_type) || '';
-        var status = snapshot.job_status || snapshot.status || (info && info.status) || '';
+        var status = snapshot.job_status || snapshot.status || (info && (info.job_status || info.status)) || '';
         var token = snapshot.token || snapshot.execution_token || (info && (info.token || info.execution_token)) || '';
 
-        return '<div class="row g-2 mb-2 pb-ai-plan-queue-token-summary">'
-            + renderQueueSummaryItem(queueMessages.jobKeyLabel, jobKey, true)
-            + renderQueueSummaryItem(queueMessages.jobTypeLabel, jobType, false)
-            + renderQueueSummaryItem(queueMessages.statusLabel, status, false)
-            + renderQueueSummaryItem(queueMessages.tokenLabel, token, true)
-            + renderQueueSummaryItem(queueMessages.inputTokensLabel, formatTokenCount(tokenUsage.input_tokens), false)
-            + renderQueueSummaryItem(queueMessages.outputTokensLabel, formatTokenCount(tokenUsage.output_tokens), false)
-            + renderQueueSummaryItem(queueMessages.totalTokensLabel, formatTokenCount(tokenUsage.total_tokens), false)
+        return '<div class="row g-2 mb-2 pb-ai-plan-queue-token-summary" role="list" data-queue-info-list="stage1">'
+            + renderQueueSummaryItem('job_key', queueMessages.jobKeyLabel, jobKey, true)
+            + renderQueueSummaryItem('job_type', queueMessages.jobTypeLabel, jobType, false)
+            + renderQueueSummaryItem('job_status', queueMessages.statusLabel, status, false)
+            + renderQueueSummaryItem('token', queueMessages.tokenLabel, token, true)
+            + renderQueueSummaryItem('input_tokens', queueMessages.inputTokensLabel, formatTokenCount(tokenUsage.input_tokens), false)
+            + renderQueueSummaryItem('output_tokens', queueMessages.outputTokensLabel, formatTokenCount(tokenUsage.output_tokens), false)
+            + renderQueueSummaryItem('total_tokens', queueMessages.totalTokensLabel, formatTokenCount(tokenUsage.total_tokens), false)
             + '</div>';
     }
 
@@ -213,6 +221,8 @@
             (payload.queue_snapshot && typeof payload.queue_snapshot === 'object')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_id')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_status')
+            || Object.prototype.hasOwnProperty.call(payload, 'job_status')
+            || Object.prototype.hasOwnProperty.call(payload, 'status')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_process')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_result_log')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_result_delta')
@@ -224,6 +234,7 @@
             || Object.prototype.hasOwnProperty.call(payload, 'input_tokens')
             || Object.prototype.hasOwnProperty.call(payload, 'output_tokens')
             || Object.prototype.hasOwnProperty.call(payload, 'total_tokens')
+            || String(payload.progress_kind || '') === 'queue_info'
         );
         if (!hasQueueSignal) {
             return null;
@@ -245,6 +256,14 @@
         }
         if (Object.prototype.hasOwnProperty.call(payload, 'queue_status')) {
             snapshot.status = String(payload.queue_status || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'status')) {
+            snapshot.status = String(payload.status || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'job_status')) {
+            snapshot.job_status = String(payload.job_status || '');
+        } else if (Object.prototype.hasOwnProperty.call(payload, 'status')) {
+            snapshot.job_status = String(payload.status || '');
         }
         if (Object.prototype.hasOwnProperty.call(payload, 'queue_pid')) {
             snapshot.pid = normalizeQueueId(payload.queue_pid);
