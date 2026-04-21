@@ -3873,6 +3873,113 @@ final class AiSiteExecutionBlueprintService
     /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $themeContextSnapshot
+     * @return array<string, mixed>
+     */
+    private function buildStageOneThemeDesignQueueJob(
+        array $scope,
+        array $websiteProfile,
+        array $themeContextSnapshot,
+        string $planLocale
+    ): array {
+        $contextHash = \trim((string)($themeContextSnapshot['context_hash'] ?? ''));
+        $stableHash = $contextHash !== '' ? $contextHash : \sha1((string)\json_encode($themeContextSnapshot, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+        $sessionPublicId = \trim((string)($scope['session_public_id'] ?? $scope['public_id'] ?? ''));
+        $websitePublicId = \trim((string)($scope['website_public_id'] ?? $websiteProfile['public_id'] ?? $websiteProfile['website_public_id'] ?? ''));
+        $jobHash = \substr(\sha1('stage1.shared.theme_design|' . $sessionPublicId . '|' . $stableHash), 0, 12);
+
+        return [
+            'job_key' => 'stage1.shared.theme_design:' . $jobHash,
+            'job_type' => 'stage1.shared.theme_design',
+            'stage' => 'stage1',
+            'sort_order' => 20,
+            'session_public_id' => $sessionPublicId,
+            'website_public_id' => $websitePublicId,
+            'page_key' => '',
+            'block_key' => 'shared:theme_design',
+            'depends_on' => ['stage1.requirement_expand'],
+            'status' => 'done',
+            'progress_percent' => 100,
+            'prompt_version' => 'stage1.shared.theme_design.v1',
+            'plan_locale' => $planLocale,
+            'context_hash' => $stableHash,
+            'result_ref' => [
+                'kind' => 'scope_path',
+                'scope_path' => 'plan_workbench.stage1.theme_context_snapshot',
+                'structured_path' => 'plan_structured.theme_context_snapshot',
+                'execution_blueprint_path' => 'execution_blueprint_draft.theme_context_snapshot',
+                'context_hash' => $stableHash,
+            ],
+            'theme_context_snapshot' => $themeContextSnapshot,
+            'retry_count' => 0,
+            'last_error' => '',
+            'updated_at' => '',
+        ];
+    }
+
+    /**
+     * @param array<int|string, mixed> $jobs
+     * @param array<string, mixed> $job
+     * @return list<array<string, mixed>>
+     */
+    private function upsertStageOneQueueJob(array $jobs, array $job): array
+    {
+        $normalized = [];
+        $incomingJobKey = \trim((string)($job['job_key'] ?? ''));
+        $incomingJobType = \trim((string)($job['job_type'] ?? ''));
+
+        foreach ($jobs as $existing) {
+            if (!\is_array($existing)) {
+                continue;
+            }
+            $existingJobKey = \trim((string)($existing['job_key'] ?? ''));
+            $existingJobType = \trim((string)($existing['job_type'] ?? ''));
+            if (($incomingJobKey !== '' && $existingJobKey === $incomingJobKey)
+                || ($incomingJobType !== '' && $existingJobType === $incomingJobType)) {
+                continue;
+            }
+            $normalized[] = $existing;
+        }
+        $normalized[] = $job;
+
+        return $this->normalizeStageOneQueueJobs($normalized);
+    }
+
+    /**
+     * @param array<int|string, mixed> $jobs
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeStageOneQueueJobs(array $jobs): array
+    {
+        $normalized = [];
+        foreach ($jobs as $job) {
+            if (!\is_array($job)) {
+                continue;
+            }
+            $jobKey = \trim((string)($job['job_key'] ?? ''));
+            $jobType = \trim((string)($job['job_type'] ?? ''));
+            if ($jobKey === '' || $jobType === '') {
+                continue;
+            }
+            $normalized[] = $job;
+        }
+
+        \usort($normalized, static function (array $left, array $right): int {
+            $leftOrder = (int)($left['sort_order'] ?? 1000);
+            $rightOrder = (int)($right['sort_order'] ?? 1000);
+            if ($leftOrder !== $rightOrder) {
+                return $leftOrder <=> $rightOrder;
+            }
+
+            return \strcmp((string)($left['job_key'] ?? ''), (string)($right['job_key'] ?? ''));
+        });
+
+        return \array_values($normalized);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
      * @return array<string, mixed>
      */
     private function buildStageOneRequestSummary(array $scope, array $websiteProfile, string $instruction): array
@@ -4061,9 +4168,10 @@ final class AiSiteExecutionBlueprintService
     /**
      * @param array<string, mixed> $sharedPlan
      * @param array<string, mixed> $pagePlans
+     * @param array<int|string, mixed> $queueJobs
      * @return array<string, mixed>
      */
-    private function buildStageOneProgressSummary(array $sharedPlan, array $pagePlans): array
+    private function buildStageOneProgressSummary(array $sharedPlan, array $pagePlans, array $queueJobs = []): array
     {
         $sharedDone = (int)(\is_array($sharedPlan['theme_design'] ?? null) || $sharedPlan !== []);
         $pageTotal = \count($pagePlans);
@@ -4073,11 +4181,20 @@ final class AiSiteExecutionBlueprintService
                 $pageDone++;
             }
         }
+        $normalizedQueueJobs = $this->normalizeStageOneQueueJobs($queueJobs);
+        $queueJobDone = 0;
+        foreach ($normalizedQueueJobs as $queueJob) {
+            if ((string)($queueJob['status'] ?? '') === 'done') {
+                $queueJobDone++;
+            }
+        }
         $totalUnits = \max(1, 1 + $pageTotal);
         return [
             'shared_done' => $sharedDone,
             'page_total' => $pageTotal,
             'page_done' => $pageDone,
+            'queue_job_total' => \count($normalizedQueueJobs),
+            'queue_job_done' => $queueJobDone,
             'overall_percent' => (int)\round((($sharedDone + $pageDone) / $totalUnits) * 100),
             'queue_model' => 'shared-first-page-fanout',
         ];
