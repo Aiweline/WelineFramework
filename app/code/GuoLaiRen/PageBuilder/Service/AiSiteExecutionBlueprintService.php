@@ -4047,14 +4047,48 @@ final class AiSiteExecutionBlueprintService
             if (!\is_array($existingJob)) {
                 continue;
             }
-            if ($sessionPublicId === '') {
-                $sessionPublicId = \trim((string)($existingJob['session_public_id'] ?? ''));
-            }
-            if ($websitePublicId === '') {
-                $websitePublicId = \trim((string)($existingJob['website_public_id'] ?? ''));
-            }
-            if ($sessionPublicId !== '' && $websitePublicId !== '') {
-                break;
+
+            $pageKey = (string)$pageType;
+            $jobKey = 'stage1.page_plan:' . $pageKey;
+            $pageJobKeys[] = $jobKey;
+            $jobs[$jobKey] = [
+                'job_key' => $jobKey,
+                'job_type' => 'stage1.page_plan.generate',
+                'stage' => 'stage1_page_fanout',
+                'sort_order' => $sortOrder++,
+                'status' => 'done',
+                'depends_on' => ['stage1.shared.header_footer'],
+                'token' => \sha1((string)\json_encode([
+                    'job_key' => $jobKey,
+                    'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? $sharedPromptContext['context_hash'] ?? ''),
+                    'page_context_hash' => (string)($pagePlan['page_context_hash'] ?? ''),
+                ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
+                'concurrency' => [
+                    'mode' => 'fiber_coroutine',
+                    'fanout_group' => 'stage1.page_plan.fanout',
+                    'task_granularity' => 'one_page_one_task',
+                    'trigger_after' => 'stage1.shared.header_footer',
+                ],
+                'inputs' => [
+                    'page_key' => $pageKey,
+                    'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? $sharedPromptContext['context_hash'] ?? ''),
+                    'theme_context_hash' => (string)($pagePlan['theme_context_hash'] ?? $sharedPromptContext['theme_context_hash'] ?? ''),
+                    'plan_locale' => $planLocale,
+                ],
+                'outputs' => [
+                    'page_plan' => $pagePlan,
+                    'page_context_hash' => (string)($pagePlan['page_context_hash'] ?? ''),
+                ],
+                'output_refs' => [
+                    'plan_workbench.stage1.page_plans.' . $pageKey,
+                    'plan_structured.page_plans.' . $pageKey,
+                ],
+            ];
+        }
+
+        foreach ($pageJobKeys as $jobKey) {
+            if (!\in_array($jobKey, $sequence, true)) {
+                $sequence[] = $jobKey;
             }
         }
 
