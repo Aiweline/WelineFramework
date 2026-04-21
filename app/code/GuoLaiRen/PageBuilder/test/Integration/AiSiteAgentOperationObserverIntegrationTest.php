@@ -120,7 +120,8 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertTrue((bool)($startPlanPayload['success'] ?? false), \json_encode($startPlanPayload, \JSON_UNESCAPED_UNICODE));
         $session = $this->sessionService->loadByPublicId($publicId, 1);
         self::assertNotNull($session);
-        $queueId = (int)($session->getScopeArray()['active_operation']['queue_id'] ?? 0);
+        $activeOperation = \is_array($session->getScopeArray()['active_operation'] ?? null) ? $session->getScopeArray()['active_operation'] : [];
+        $queueId = (int)($activeOperation['queue_id'] ?? 0);
         self::assertGreaterThan(0, $queueId);
         self::assertTrue((bool)($startPlanPayload['queue_dispatch']['started'] ?? false), \json_encode($startPlanPayload, \JSON_UNESCAPED_UNICODE));
         self::assertSame(24680, (int)($startPlanPayload['queue_dispatch']['pid'] ?? 0));
@@ -129,6 +130,18 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertIsArray($queue);
         self::assertSame('running', (string)($queue['status'] ?? ''));
         self::assertSame(24680, (int)($queue['pid'] ?? 0));
+
+        $queueContent = \is_array($queue['content'] ?? null)
+            ? $queue['content']
+            : \json_decode((string)($queue['content'] ?? ''), true);
+        self::assertIsArray($queueContent);
+        self::assertSame('stage1.requirement_expand', (string)($queueContent['job_type'] ?? ''));
+        self::assertStringStartsWith('glr_aisite:session:' . (int)$session->getId() . ':job:stage1.requirement_expand', (string)($queueContent['job_key'] ?? ''));
+        self::assertSame('queued', (string)($queueContent['status'] ?? ''));
+        self::assertSame((string)($activeOperation['execution_token'] ?? ''), (string)($queueContent['token'] ?? ''));
+        self::assertSame((string)($queueContent['job_key'] ?? ''), (string)($activeOperation['job_key'] ?? ''));
+        self::assertSame((string)($queueContent['job_type'] ?? ''), (string)($activeOperation['job_type'] ?? ''));
+        self::assertSame((string)($queueContent['token'] ?? ''), (string)($activeOperation['token'] ?? ''));
     }
 
     public function testStartPlanPersistsActiveOperationBeforeQueueCreationCanBeObserved(): void
