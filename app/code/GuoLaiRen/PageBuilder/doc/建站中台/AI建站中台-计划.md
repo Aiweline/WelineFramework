@@ -1014,7 +1014,7 @@ Atomic Task ID:
 
 #### B. 第一阶段：共享优先的块化方案生成
 
-- [~] T01 第一阶段主队列编排器（status=in_progress, progress=70%, owner=backend-ai, note=A09/A10/A11/A12 已完成：stage1 requirement_expand、shared.theme_design、shared.header_footer envelope 与 Header/Footer 后自动页面 fanout 已建立；A13 页面 Fiber/协程并发仍待完成）
+- [~] T01 第一阶段主队列编排器（status=in_progress, progress=65%, owner=backend-ai, note=A09/A10/A11 已完成：stage1 requirement_expand、shared.theme_design、shared.header_footer envelope 已建立；A13 页面 Fiber fanout 队列元数据已完成；A12 自动触发仍待完成）
 - [x] T02 `buildStageOneSharedPlanPrompt(...)` 与共享规划校验器（status=done, progress=100%, owner=prompt-engineering, note=A01~A05 已完成：输出主题设计 + Header/Footer + shared_prompt_context；已补齐 §1A/§13.2.6 具体性契约、色系校验、selection_reason 引用需求校验；证据见 `AiSiteExecutionBlueprintServiceTest`）
 - [~] T03 共享规划持久化与上下文哈希管理（status=in_progress, progress=70%, owner=backend, note=A10/A11 已完成 theme_context_snapshot/shared_prompt_context 持久化入口；shared_context_hash 变更后的 stale/requeue 仍待 A17/A18 完成）
 - [ ] T04 `buildStageOnePagePlanPrompt(...)` 与页面任务输入装配器（status=todo, progress=0%, owner=prompt-engineering, note=注入主题设计与共享规划保证主题连续性；须遵守 §1A/§13.2.6；字段样例须可落地非方向性）
@@ -1078,8 +1078,8 @@ Atomic Task ID:
 - [x] A09 建立 `stage1.requirement_expand` 队列任务 envelope（status=done, owner=worker-4, covers=§13.5, output=job_key/job_type/status/token 字段, evidence=AiSiteExecutionBlueprintServiceTest）
 - [x] A10 建立 `stage1.shared.theme_design` 队列任务（status=done, owner=worker-5, covers=§1A, output=持久化 theme_context_snapshot, evidence=AiSiteExecutionBlueprintServiceTest）
 - [x] A11 建立 `stage1.shared.header_footer` 队列任务（status=done, owner=worker-6, covers=§1A, output=Header/Footer + shared_prompt_context, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
-- [x] A12 Header/Footer 完成后自动 fanout 页面任务（status=done, owner=worker-1, covers=§1A, output=stage1.shared.header_footer done 后自动生成 stage1.page_plan:* 队列任务且 requires_user_tab=false, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
-- [ ] A13 页面任务 fanout 使用 Fiber/协程并发（status=todo, owner=runtime, covers=§1A/§13.5, output=一页面一任务并发）
+- [ ] A12 Header/Footer 完成后自动 fanout 页面任务（status=todo, owner=backend-queue, covers=§1A, output=不依赖用户切 Tab）
+- [x] A13 页面任务 fanout 使用 Fiber/协程并发（status=done, owner=worker-2, covers=§1A/§13.5, output=一页面一任务并发，evidence=php-l+AiSiteExecutionBlueprintServiceTest）
 - [ ] A14 页面任务输入强制携带 `theme_design` 全量硬约束（status=todo, owner=backend, covers=§1A, output=色系/宗旨/原因/禁用风格进入 prompt context）
 - [ ] A15 修改页面提示词，反复提醒 AI 遵守共享主题规划（status=todo, owner=prompt, covers=§1A, output=`theme_alignment_summary`）
 - [ ] A16 页面提示词输出 `theme_alignment_summary`（status=todo, owner=prompt+validation, covers=§13.2.4, output=每页说明如何服从主题）
