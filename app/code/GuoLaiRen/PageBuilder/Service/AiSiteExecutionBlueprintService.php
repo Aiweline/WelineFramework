@@ -1348,9 +1348,14 @@ final class AiSiteExecutionBlueprintService
             \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [],
             $sharedPromptContext
         );
-        $stageOneQueue = $this->buildStageOnePageFanoutQueueEnvelope($stageOneQueue, $pagePlans, $sharedPromptContext, $planLocale);
-        $structured['stage1_queue'] = $stageOneQueue;
-        $executionBlueprint['stage1_queue'] = $stageOneQueue;
+        foreach ($pagePlans as $pageType => $pagePlan) {
+            if (!\is_array($pagePlan) || !\is_array($planJson['pages'][$pageType] ?? null)) {
+                continue;
+            }
+            if (\trim((string)($planJson['pages'][$pageType]['theme_alignment_summary'] ?? '')) === '') {
+                $planJson['pages'][$pageType]['theme_alignment_summary'] = (string)($pagePlan['theme_alignment_summary'] ?? '');
+            }
+        }
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
 
         $tasks = [];
@@ -3973,7 +3978,24 @@ final class AiSiteExecutionBlueprintService
             if (!\is_array($pagePlan)) {
                 continue;
             }
-            $pagePlans[(string)$pageType] = $this->buildStageOnePagePlan((string)$pageType, $pagePlan, $sharedPromptContext);
+            $assembledPagePlan = \array_replace($pagePlan, [
+                'page_key' => (string)$pageType,
+                'page_status' => 'done',
+                'shared_context_hash' => (string)($sharedPromptContext['context_hash'] ?? ''),
+                'theme_context_hash' => (string)($sharedPromptContext['theme_context_hash'] ?? ''),
+                'assembly_version' => 1,
+                'generation_method' => 'stage1.page_plan.generate',
+            ]);
+            $assembledPagePlan['theme_alignment_summary'] = \trim((string)($assembledPagePlan['theme_alignment_summary'] ?? ''));
+            if ($assembledPagePlan['theme_alignment_summary'] === '') {
+                $assembledPagePlan['theme_alignment_summary'] = $this->buildStageOnePageThemeAlignmentSummary(
+                    (string)$pageType,
+                    $assembledPagePlan,
+                    $sharedPromptContext
+                );
+            }
+            $assembledPagePlan['page_context_hash'] = $this->buildStageOnePageContextHash((string)$pageType, $assembledPagePlan);
+            $pagePlans[(string)$pageType] = $assembledPagePlan;
         }
 
         return $pagePlans;
@@ -4157,6 +4179,42 @@ final class AiSiteExecutionBlueprintService
         ];
 
         return $stageOneQueue;
+    }
+
+    /**
+     * @param array<string, mixed> $pagePlan
+     * @param array<string, mixed> $sharedPromptContext
+     */
+    private function buildStageOnePageThemeAlignmentSummary(string $pageType, array $pagePlan, array $sharedPromptContext): string
+    {
+        $themeDesign = \is_array($sharedPromptContext['theme_design'] ?? null) ? $sharedPromptContext['theme_design'] : [];
+        $themePurpose = \trim((string)($themeDesign['theme_purpose'] ?? 'shared theme purpose'));
+        $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+        $paletteName = \trim((string)($colorScheme['name'] ?? 'shared palette'));
+        $primaryColor = \trim((string)($colorScheme['primary'] ?? 'primary color'));
+        $accentColor = \trim((string)($colorScheme['accent'] ?? 'accent color'));
+        $typographySpacingRadius = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
+        $fontFamily = \trim((string)($typographySpacingRadius['font_family'] ?? 'shared font'));
+        $spacingScale = \trim((string)($typographySpacingRadius['spacing_scale'] ?? 'shared spacing'));
+        $radiusScale = \trim((string)($typographySpacingRadius['radius_scale'] ?? 'shared radius'));
+        $toneOfVoice = \trim((string)($themeDesign['tone_of_voice'] ?? 'shared voice'));
+        $ctaTone = \trim((string)($themeDesign['cta_tone'] ?? 'shared CTA tone'));
+        $forbiddenStyles = \is_array($themeDesign['forbidden_styles'] ?? null)
+            ? \array_values(\array_filter(\array_map(
+                static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+                $themeDesign['forbidden_styles']
+            ), static fn(string $value): bool => $value !== ''))
+            : [];
+        $forbiddenStyle = (string)($forbiddenStyles[0] ?? 'off-theme visual styles');
+        $pageGoal = \trim((string)($pagePlan['page_goal'] ?? $pageType));
+
+        return \implode(' ', [
+            'Page "' . $pageType . '" uses the shared theme purpose "' . $themePurpose . '" to support "' . $pageGoal . '".',
+            'It must keep the "' . $paletteName . '" palette with primary ' . $primaryColor . ' and accent ' . $accentColor . ',',
+            'reuse ' . $fontFamily . ' with ' . $spacingScale . ' spacing and ' . $radiusScale . ' radius,',
+            'write in the shared voice "' . $toneOfVoice . '" with CTA tone "' . $ctaTone . '",',
+            'and avoid "' . $forbiddenStyle . '" so the page stays aligned with shared_prompt_context.',
+        ]);
     }
 
     /**
