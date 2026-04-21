@@ -432,7 +432,9 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('Hero should translate the main value into first-screen conversion intent.', $allPrompts);
         self::assertStringContainsString('Treat this as a customer-visible implementation plan', $allPrompts);
         self::assertStringContainsString('block_task', $allPrompts);
+        self::assertStringContainsString('shared_tasks[] item MUST include planning_reason', $allPrompts);
         self::assertStringContainsString('task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order', $allPrompts);
+        self::assertStringContainsString('Every planning_reason must be concrete and traceable to stage-1', $allPrompts);
         self::assertStringContainsString('concrete color, font, spacing, and responsive keys', $allPrompts);
         self::assertStringContainsString('Stage-1 compact context summary:', $allPrompts);
         self::assertStringNotContainsString('Stage-1 plan_json:', $allPrompts);
