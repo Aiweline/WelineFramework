@@ -1828,6 +1828,7 @@ final class AiSiteVirtualThemePlanService
                     'block_goal' => (string)($planContext['block_goal'] ?? ''),
                     'page_goal' => (string)($planContext['page_goal'] ?? ''),
                     'realtime_content' => \is_array($planContext['realtime_content'] ?? null) ? $planContext['realtime_content'] : [],
+                    'design_tags' => \is_array($planContext['design_tags'] ?? null) ? $planContext['design_tags'] : [],
                     'style_direction' => (string)($planContext['style_direction'] ?? ''),
                     'reason' => (string)($planContext['block_reason'] ?? $planContext['block_why'] ?? ''),
                     'why' => (string)($planContext['block_why'] ?? $planContext['block_reason'] ?? ''),
@@ -2157,6 +2158,9 @@ final class AiSiteVirtualThemePlanService
         }
         $mergedVirtualThemePlan = \array_replace_recursive($virtualThemePlan, $aiVirtualThemePlan);
         $mergedStructured = \array_replace_recursive($structured, $mergedVirtualThemePlan);
+        if (\is_array($structured['stage1_task_cues'] ?? null)) {
+            $mergedStructured['stage1_task_cues'] = $structured['stage1_task_cues'];
+        }
         $mergedStructured = $this->sanitizePromptLikeTaskPlanStructured($mergedStructured);
         $mergedStructured = $this->applyBlockTaskSchemaToStructured($mergedStructured);
         $this->assertAiTaskPlanIsContentful($mergedStructured);
