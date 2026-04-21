@@ -1203,7 +1203,7 @@
         card = document.createElement('div');
         card.className = 'border rounded p-3 d-none';
         card.id = 'pb-ai-materialized-pages-card';
-        card.innerHTML = '<div class="fw-semibold mb-2">鐎规瓕灏欐晶鍧楀礌閺嶎厹鈧妫?/div><div class="d-flex flex-wrap gap-2" id="pb-ai-materialized-pages-list"></div>';
+        card.innerHTML = '<div class="fw-semibold mb-2">已生成页面</div><div class="d-flex flex-wrap gap-2" id="pb-ai-materialized-pages-list"></div>';
         container.insertBefore(card, anchor || null);
         return card;
     }
@@ -7709,7 +7709,8 @@
     }
 
     /**
-     * 鐎规挸鑻崣鍡橈紣閸曨噮娼?iframe闁挎稑鐗撻。鈺冩喆閸繂绐楀ù锝呯Ч閵嗗鏁嶆径鎰ㄥ亾濮樺磭绠?postMessage 閻犲洭鏀遍惇浼村捶閵娿儰绱ｅù锝嗙矊鐏忣垶宕ラ姘?AI 濡炪倗鏁诲浼存偨閻旂鐏囬柕?     */
+     * 处理嵌入预览 iframe 通过 postMessage 发起的「生成页面」请求：切换预览类型并校验阶段一方案。
+     */
     function handleEmbeddedPreviewGenerateRequest(pageType) {
         var pt = String(pageType || '').trim();
         if (pt !== '' && window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview.switchPreviewByType === 'function') {
