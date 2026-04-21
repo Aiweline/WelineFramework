@@ -452,6 +452,11 @@ class Stop extends CommandAbstract
         
         if ($ipcSuccess) {
             $this->printer->success(__('所有子进程已完整退出 ✓'));
+            $this->runResidualCleanupPairWithRetry($name, $instanceInfo);
+            if (!$this->wasLastResidualCleanupComplete()) {
+                $this->printer->warning(__('实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。', [$name]));
+                return;
+            }
         } else {
             // IPC 失败，强制杀死 Master 并彻底清理该实例下所有进程（含 Worker/Dispatcher 等）
             $this->printer->warning(__('IPC 超时，强制终止 Master 并清理该实例下所有进程...'));
@@ -631,35 +636,7 @@ class Stop extends CommandAbstract
         // 1) 先按已知 PID（实例信息 + PID 索引）直接终止
         $pids = $this->collectResidualCleanupCandidatePids($name, $info);
         $killedByPid = $this->terminateResidualProcesses($pids, true);
-        $remainingByPid = $this->collectRunningResidualPids($pids);
-
-        $killedByPrefix = 0;
-        // 2) 仅在按 PID 后仍有存活，或压根拿不到 PID 时，再执行按前缀兜底（Windows 上可显著减少慢扫描）
-        if (!empty($remainingByPid) || empty($pids) || $this->hasResidualCleanupPrefixMatch($name)) {
-            $prefixes = [
-                MasterProcess::getMasterProcessName($name),
-                MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name),
-                MasterProcess::buildScopedProcessName('weline-wls-session', $name),
-                MasterProcess::buildScopedProcessName('weline-wls-memory', $name),
-                MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
-                MasterProcess::buildScopedProcessName('weline-wls-worker', $name) . '-',
-                MasterProcess::buildScopedProcessName('weline-wls-maintenance', $name) . '-',
-                // 历史命名兼容
-                'weline-wls-dispatcher-' . $name,
-                'weline-wls-session-' . $name,
-                'weline-wls-memory-' . $name,
-                'weline-wls-maintenance-' . $name . '-',
-                MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
-                'weline-master-' . $name . '-maintenance-',
-                'weline-master-' . $name . '-redirect-',
-                'weline-wls-worker-' . $name . '-',
-                'weline-master-' . $name . '-worker-',
-            ];
-
-            foreach ($prefixes as $prefix) {
-                $killedByPrefix += Processer::killByProcessNamePrefix($prefix);
-            }
-        }
+        $killedByPrefix = $this->terminateCurrentInstanceProcessPrefixes($name);
 
         Processer::cleanupStalePidFiles();
 
@@ -674,7 +651,7 @@ class Stop extends CommandAbstract
     /**
      * 根据 ServerInstanceInfo 清理残留进程
      *
-     * 优化策略：优先使用已知 PID 直接杀（快速），仅在有残留时才按进程名前缀兜底
+     * 优化策略：优先使用已知 PID 直接杀（快速），随后把当前实例 scoped 前缀交给 Processer 批量树杀
      *
      * @param bool $quiet 为 true 时不打印，仅返回终止/尝试数（供 runResidualCleanupPair 合并输出）
      * @return int 已发送终止信号的 PID 数（quiet）或同上；非 quiet 时与原先展示一致
@@ -691,8 +668,7 @@ class Stop extends CommandAbstract
 
         while (++$attempt <= self::RESIDUAL_CLEANUP_MAX_ATTEMPTS) {
             $knownCandidatePids = $this->collectResidualCleanupCandidatePids($name, $info);
-            $allowPrefixFallback = $attempt > 1 && empty($knownCandidatePids);
-            $killedThisAttempt = $this->runResidualCleanupPass($name, $info, true, $allowPrefixFallback);
+            $killedThisAttempt = $this->runResidualCleanupPass($name, $info, true, true);
             $totalKilled += $killedThisAttempt;
 
             $remainingPids = $this->collectRunningResidualPids($knownCandidatePids);
@@ -712,9 +688,7 @@ class Stop extends CommandAbstract
             );
 
             $remainingPorts = $this->collectRemainingRecoverableWlsPorts($name, $info);
-            $includePrefixPids = empty($knownCandidatePids)
-                && ($attempt > 1 || ($totalKilled === 0 && empty($remainingPorts)));
-            $candidatePids = $this->collectResidualVerificationPids($name, $info, $remainingPorts, $includePrefixPids);
+            $candidatePids = $this->collectResidualVerificationPids($name, $info, $remainingPorts, true);
             $remainingPids = $this->collectRunningResidualPids($candidatePids);
 
             if (empty($remainingPids) && empty($remainingPorts)) {
@@ -767,17 +741,9 @@ class Stop extends CommandAbstract
 
         $pids = $this->collectResidualCleanupCandidatePids($name, $info);
         $killedByPid = $this->terminateResidualProcesses($pids, true);
-        $remainingByPid = $this->collectRunningResidualPids($pids);
-
-        $killedByPrefix = 0;
-        if (
-            $allowPrefixFallback
-            && (!empty($remainingByPid) || empty($pids) || $this->hasResidualCleanupPrefixMatch($name))
-        ) {
-            foreach ($this->collectResidualCleanupPrefixes($name) as $prefix) {
-                $killedByPrefix += $this->killStopProcessPrefix($prefix);
-            }
-        }
+        $killedByPrefix = $allowPrefixFallback
+            ? $this->terminateCurrentInstanceProcessPrefixes($name)
+            : 0;
 
         $this->cleanupStaleRecoverableProcessPidFiles();
 
@@ -793,9 +759,9 @@ class Stop extends CommandAbstract
         return $totalKilled;
     }
 
-    private function hasResidualCleanupPrefixMatch(string $name): bool
+    protected function terminateCurrentInstanceProcessPrefixes(string $name): int
     {
-        return $this->collectResidualPrefixPids($name) !== [];
+        return Processer::killByProcessNamePrefixes($this->collectResidualCleanupPrefixes($name));
     }
 
     /**
@@ -805,6 +771,7 @@ class Stop extends CommandAbstract
      */
     private function collectResidualCleanupPrefixes(string $name): array
     {
+        $scopedInstance = MasterProcess::getScopedInstanceName($name);
         $prefixes = [
             MasterProcess::getMasterProcessName($name),
             MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name),
@@ -813,15 +780,10 @@ class Stop extends CommandAbstract
             MasterProcess::buildScopedProcessName('weline-wls-session', $name),
             MasterProcess::buildScopedProcessName('weline-wls-memory', $name),
             MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
-            'weline-wls-maintenance-' . $name . '-',
-            'weline-wls-dispatcher-' . $name,
-            'weline-wls-worker-' . $name . '-',
-            'weline-master-' . $name . '-maintenance-',
-            'weline-wls-session-' . $name,
-            'weline-wls-memory-' . $name,
-            MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
-            'weline-master-' . $name . '-worker-',
-            'weline-master-' . $name . '-redirect-',
+            'weline-wls-worker-http-' . $scopedInstance . '-',
+            'weline-wls-worker-ssl-' . $scopedInstance . '-',
+            'weline-wls-maintenance-http-' . $scopedInstance . '-',
+            'weline-wls-maintenance-ssl-' . $scopedInstance . '-',
         ];
 
         return \array_values(\array_unique(\array_merge(
@@ -955,7 +917,8 @@ class Stop extends CommandAbstract
 
     protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
     {
-        return $this->terminateResidualProcesses($this->collectDirectForceStopCandidatePids($info), true);
+        return $this->terminateResidualProcesses($this->collectDirectForceStopCandidatePids($info), true)
+            + $this->terminateCurrentInstanceProcessPrefixes($info->name);
     }
 
     /**
@@ -1719,9 +1682,20 @@ class Stop extends CommandAbstract
      */
     private function collectIndexedResidualPidsFromPidIndex(array $pidIndex, string $instanceName, int $currentPid): array
     {
-        $instanceSuffix = '-' . $instanceName;
+        $scopedInstanceSuffix = '-' . MasterProcess::getScopedInstanceName($instanceName);
         $legacyWorkerPrefix = 'weline-master-' . $instanceName . '-worker-';
         $legacyMasterPrefix = 'weline-master-' . $instanceName . '-';
+        $legacyPrefixes = [
+            'weline-wls-master-' . $instanceName,
+            'weline-wls-worker-' . $instanceName . '-',
+            'weline-wls-maintenance-' . $instanceName . '-',
+            'weline-wls-dispatcher-' . $instanceName,
+            'weline-wls-session-' . $instanceName,
+            'weline-wls-memory-' . $instanceName,
+            MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $instanceName,
+            $legacyMasterPrefix,
+            $legacyWorkerPrefix,
+        ];
         $pids = [];
 
         foreach ($pidIndex as $pid => $record) {
@@ -1744,9 +1718,16 @@ class Stop extends CommandAbstract
                     : $pname;
             }
 
-            $isCurrentInstance = (\str_starts_with($taskName, 'weline-wls-') && \str_contains($taskName, $instanceSuffix))
-                || \str_starts_with($taskName, $legacyMasterPrefix)
-                || \str_starts_with($taskName, $legacyWorkerPrefix);
+            $isCurrentInstance = \str_starts_with($taskName, 'weline-wls-')
+                && \str_contains($taskName, $scopedInstanceSuffix);
+            if (!$isCurrentInstance) {
+                foreach ($legacyPrefixes as $legacyPrefix) {
+                    if (\str_starts_with($taskName, $legacyPrefix)) {
+                        $isCurrentInstance = true;
+                        break;
+                    }
+                }
+            }
 
             if (!$isCurrentInstance) {
                 continue;
@@ -1869,16 +1850,28 @@ class Stop extends CommandAbstract
             return 0;
         }
 
-        $pidArgs = \implode(' ', \array_map(
-            static fn (int $pid): string => '/PID ' . $pid,
-            $ids
-        ));
-        $command = 'start "" /B taskkill /F /T ' . $pidArgs . ' 1>NUL 2>NUL';
+        $command = $this->buildWindowsBatchStopCommand($ids);
         $output = [];
         $returnCode = 0;
         Processer::execute($command, $output, $returnCode);
 
         return $returnCode;
+    }
+
+    /**
+     * @param list<int> $pids
+     */
+    protected function buildWindowsBatchStopCommand(array $pids): string
+    {
+        $pidArgs = \implode(' ', \array_map(
+            static fn (int $pid): string => '/PID ' . $pid,
+            \array_values(\array_unique(\array_filter(
+                \array_map('intval', $pids),
+                static fn (int $pid): bool => $pid > 0
+            )))
+        ));
+
+        return 'cmd /d /c start "" /B cmd /d /c "taskkill /F /T ' . $pidArgs . ' 1>NUL 2>NUL"';
     }
 
     /**
@@ -1924,9 +1917,7 @@ class Stop extends CommandAbstract
             return [];
         }
 
-        $command = 'powershell -NoProfile -Command "Get-Process -Id '
-            . \implode(',', $ids)
-            . ' -ErrorAction SilentlyContinue | ForEach-Object { $_.Id }"';
+        $command = $this->buildWindowsCollectRunningPidsCommand($ids);
         $output = [];
         $returnCode = 0;
         Processer::execute($command, $output, $returnCode);
@@ -1934,15 +1925,27 @@ class Stop extends CommandAbstract
             return [];
         }
 
+        $requested = \array_fill_keys($ids, true);
         $running = [];
         foreach ($output as $line) {
-            $pid = (int) \preg_replace('/[^\d]/', '', (string) $line);
-            if ($pid > 0) {
+            $columns = \str_getcsv((string) $line);
+            $pid = (int) ($columns[1] ?? 0);
+            if ($pid > 0 && isset($requested[$pid])) {
                 $running[$pid] = $pid;
             }
         }
 
         return \array_values($running);
+    }
+
+    /**
+     * @param list<int> $pids
+     */
+    protected function buildWindowsCollectRunningPidsCommand(array $pids): string
+    {
+        unset($pids);
+
+        return 'tasklist /FO CSV /NH';
     }
 
     private function isWindowsPlatform(): bool
@@ -2082,14 +2085,15 @@ class Stop extends CommandAbstract
      */
     private function getRecoverableManagedProcessPrefixes(string $name): array
     {
+        $scopedInstance = MasterProcess::getScopedInstanceName($name);
+
         return [
             MasterProcess::buildScopedProcessName('weline-wls-worker', $name) . '-',
             MasterProcess::buildScopedProcessName('weline-wls-maintenance', $name) . '-',
-            'weline-wls-worker-' . $name . '-',
-            'weline-wls-maintenance-' . $name . '-',
-            'weline-master-' . $name . '-worker-',
-            'weline-master-' . $name . '-redirect-',
-            'weline-master-' . $name . '-maintenance-',
+            'weline-wls-worker-http-' . $scopedInstance . '-',
+            'weline-wls-worker-ssl-' . $scopedInstance . '-',
+            'weline-wls-maintenance-http-' . $scopedInstance . '-',
+            'weline-wls-maintenance-ssl-' . $scopedInstance . '-',
         ];
     }
 
@@ -2516,8 +2520,19 @@ class Stop extends CommandAbstract
             return [];
         }
 
-        $instanceSuffix = '-' . $name;
+        $scopedInstanceSuffix = '-' . MasterProcess::getScopedInstanceName($name);
         $legacyWorkerPrefix = 'weline-master-' . $name . '-worker-';
+        $legacyPrefixes = [
+            'weline-wls-worker-' . $name . '-',
+            'weline-wls-maintenance-' . $name . '-',
+            'weline-wls-dispatcher-' . $name,
+            'weline-wls-session-' . $name,
+            'weline-wls-memory-' . $name,
+            MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
+            $legacyWorkerPrefix,
+            'weline-master-' . $name . '-redirect-',
+            'weline-master-' . $name . '-maintenance-',
+        ];
         $pids = [];
 
         foreach (\glob($pidDir . '*-pid.json') ?: [] as $file) {
@@ -2538,9 +2553,23 @@ class Stop extends CommandAbstract
                 }
             }
 
-            $isCurrentInstance = (\str_starts_with($taskName, 'weline-wls-') && \str_contains($taskName, $instanceSuffix))
-                || \str_starts_with($taskName, $legacyWorkerPrefix)
-                || ($pname !== '' && (\str_contains($pname, '"' . $name . '"') || \str_contains($pname, '--instance-name=' . $name)));
+            $isCurrentInstance = \str_starts_with($taskName, 'weline-wls-')
+                && \str_contains($taskName, $scopedInstanceSuffix);
+            if (!$isCurrentInstance) {
+                foreach ($legacyPrefixes as $legacyPrefix) {
+                    if (\str_starts_with($taskName, $legacyPrefix)) {
+                        $isCurrentInstance = true;
+                        break;
+                    }
+                }
+            }
+            if (
+                !$isCurrentInstance
+                && $pname !== ''
+                && (\str_contains($pname, '"' . $name . '"') || \str_contains($pname, '--instance-name=' . $name))
+            ) {
+                $isCurrentInstance = true;
+            }
             if (!$isCurrentInstance) {
                 continue;
             }

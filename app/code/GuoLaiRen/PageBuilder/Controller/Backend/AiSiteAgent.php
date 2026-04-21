@@ -4547,6 +4547,16 @@ SCRIPT;
         if (!\is_array($queueRow) || $queueRow === []) {
             return null;
         }
+        return $this->buildQueueObserverPanelPayload($queueRow);
+    }
+
+    /**
+     * @param array<string, mixed> $queueRow
+     *
+     * @return array<string, mixed>
+     */
+    private function buildQueueObserverPanelPayload(array $queueRow): array
+    {
         $snap = $this->buildQueueObserverPublicSnapshot($queueRow);
         $process = \trim((string)($queueRow['process'] ?? ''));
         $result = (string)($queueRow['result'] ?? '');
@@ -4607,6 +4617,7 @@ SCRIPT;
             'message' => (string)($lines[0] ?? ''),
             'detail_lines' => $lines,
             'queue_snapshot' => $snap,
+            'queue_info' => $this->buildQueueObserverPanelPayload($queueRow),
             'operation' => $operation,
             'queue_id' => (int)$snap['queue_id'],
             'queue_status' => (string)$snap['status'],
@@ -4633,6 +4644,8 @@ SCRIPT;
         $queueId = (int)($queueRow['queue_id'] ?? 0);
         $queueStatus = \trim((string)($queueRow['status'] ?? ''));
         $queuePid = (int)($queueRow['pid'] ?? 0);
+        $queueSnapshot = $this->buildQueueObserverPublicSnapshot($queueRow);
+        $queuePanelInfo = $this->buildQueueObserverPanelPayload($queueRow);
 
         if ($queueStatus !== '' && $lastQueueStatus !== '' && $queueStatus !== $lastQueueStatus) {
             $sse->sendEvent('info', [
@@ -4643,6 +4656,8 @@ SCRIPT;
                 'operation' => $operation,
                 'queue_id' => $queueId,
                 'queue_status' => $queueStatus,
+                'queue_snapshot' => $queueSnapshot,
+                'queue_info' => $queuePanelInfo,
                 'observer_detail' => true,
             ]);
         }
@@ -4652,6 +4667,8 @@ SCRIPT;
                 'operation' => $operation,
                 'queue_id' => $queueId,
                 'queue_status' => $queueStatus,
+                'queue_snapshot' => $queueSnapshot,
+                'queue_info' => $queuePanelInfo,
                 'observer_detail' => true,
             ]);
         }
@@ -4660,13 +4677,26 @@ SCRIPT;
 
         $process = \trim((string)($queueRow['process'] ?? ''));
         if ($process !== '' && $process !== $lastQueueProcess) {
-            if (!$this->shouldSuppressObservedQueueProcessMirror($operation)) {
+            if ($this->shouldSuppressObservedQueueProcessMirror($operation)) {
+                $sse->sendEvent('info', [
+                    'message' => '',
+                    'operation' => $operation,
+                    'queue_id' => $queueId,
+                    'queue_status' => $queueStatus,
+                    'queue_snapshot' => $queueSnapshot,
+                    'queue_process' => $process,
+                    'observer_detail' => true,
+                    'queue_panel_update' => true,
+                ]);
+            } else {
                 $sse->sendEvent('progress', [
                     'message' => $process,
                     'operation' => $operation,
                     'progress_percent' => 0,
                     'queue_id' => $queueId,
                     'queue_status' => $queueStatus,
+                    'queue_snapshot' => $queueSnapshot,
+                    'queue_process' => $process,
                 ]);
             }
             $lastQueueProcess = $process;
@@ -4692,6 +4722,9 @@ SCRIPT;
                     'content' => $line . PHP_EOL,
                     'queue_id' => $queueId,
                     'queue_status' => $queueStatus,
+                    'queue_snapshot' => $queueSnapshot,
+                    'queue_process' => $process,
+                    'queue_result_delta' => $line . PHP_EOL,
                 ]);
             }
             $lastQueueResultLength = $resultLength;
