@@ -917,6 +917,7 @@ install_php() {
   [[ -x "$dest/php.exe" ]] && php_exe="$dest/php.exe"
   [[ -z "$php_exe" ]] && [[ -x "$dest/php" ]] && php_exe="$dest/php"
   [[ -z "$php_exe" ]] && [[ -x "$dest/bin/php" ]] && php_exe="$dest/bin/php"
+  [[ -z "$php_exe" ]] && [[ -x "$dest/bin/php.exe" ]] && php_exe="$dest/bin/php.exe"
   fi
   if [[ -n "$php_exe" ]]; then
     local installed
@@ -928,9 +929,13 @@ install_php() {
     else
       echo "PHP already present at $dest. Adding to PATH."
     fi
+    if [[ "$PLATFORM" == "linux" ]] && [[ "$php_exe" == "$dest/php.exe" ]]; then
+      mkdir -p "$dest/bin" || return 1
+      safe_ln_sf "$php_exe" "$dest/bin/php" || return 1
+    fi
     add_to_path "$dest"
     [[ -d "$dest/bin" ]] && add_to_path "$dest/bin"
-    return
+    return 0
   fi
   if [[ "$PATH_ONLY" == true ]]; then
     echo "(--path-only) PHP not found at $dest; add PATH manually if needed."
@@ -942,19 +947,20 @@ install_php() {
     sys_php="$(find_system_php_linux "$PHP_VERSION" 2>/dev/null || true)"
     if [[ -n "$sys_php" ]]; then
       echo "检测到系统已有 PHP $PHP_VERSION (含 pdo_pgsql)，直接使用，跳过安装：$sys_php"
-      mkdir -p "$dest/bin"
-      safe_ln_sf "$sys_php" "$dest/bin/php"
+      mkdir -p "$dest/bin" || return 1
+      safe_ln_sf "$sys_php" "$dest/bin/php" || return 1
       [[ -x "$(dirname "$sys_php")/php-fpm" ]] && safe_ln_sf "$(dirname "$sys_php")/php-fpm" "$dest/bin/php-fpm" 2>/dev/null || true
       add_to_path "$dest"
       add_to_path "$dest/bin"
-      return
+      return 0
     fi
   fi
   echo "Installing PHP $PHP_VERSION from php-src into $dest ..."
-  install_php_system_deps
-  install_php_from_source "$dest"
+  install_php_system_deps || return 1
+  install_php_from_source "$dest" || return 1
   add_to_path "$dest"
   [[ -d "$dest/bin" ]] && add_to_path "$dest/bin"
+  return 0
 }
 
 # Mac：用 Homebrew 安装 PostgreSQL，并在 extend/server/pgsql 做软链（与 Windows 路径一致，初始化逻辑复用 run.php）
@@ -1297,8 +1303,12 @@ add_to_profile_d
 PHP_EXE=""
 if [[ -x "$SERVER_DIR/php/bin/php" ]]; then
   PHP_EXE="$SERVER_DIR/php/bin/php"
+elif [[ -x "$SERVER_DIR/php/bin/php.exe" ]]; then
+  PHP_EXE="$SERVER_DIR/php/bin/php.exe"
 elif [[ -x "$SERVER_DIR/php/php" ]]; then
   PHP_EXE="$SERVER_DIR/php/php"
+elif [[ -x "$SERVER_DIR/php/php.exe" ]]; then
+  PHP_EXE="$SERVER_DIR/php/php.exe"
 elif command -v php &>/dev/null; then
   PHP_EXE="$(command -v php)"
 fi

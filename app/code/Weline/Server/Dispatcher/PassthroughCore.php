@@ -58,13 +58,13 @@ class PassthroughCore
      * 注意：当 Worker 处理慢事件（如 detect_website 数据库查询）时，
      * 需要足够的响应时间才能完成探活。已增加超时时间以适应 Worker 繁忙场景。
      */
-    private const IPC_READY_WARMUP_CONNECT_MIN = 1.0;
-    private const IPC_READY_WARMUP_CONNECT_MAX = 2.5;
-    private const IPC_READY_WARMUP_RESPONSE_SEC = 8.0;
-    private const IPC_READY_WARMUP_MIN_ATTEMPTS = 3;
-    private const IPC_READY_WARMUP_MAX_ATTEMPTS = 30;
-    private const IPC_READY_WARMUP_RETRY_GRACE_SEC = 3.0;
-    private const IPC_READY_WARMUP_RETRY_DELAY_USEC = 100000;
+    private const IPC_READY_WARMUP_CONNECT_MIN = 0.2;
+    private const IPC_READY_WARMUP_CONNECT_MAX = 0.6;
+    private const IPC_READY_WARMUP_RESPONSE_SEC = 1.0;
+    private const IPC_READY_WARMUP_MIN_ATTEMPTS = 2;
+    private const IPC_READY_WARMUP_MAX_ATTEMPTS = 8;
+    private const IPC_READY_WARMUP_RETRY_GRACE_SEC = 1.0;
+    private const IPC_READY_WARMUP_RETRY_DELAY_USEC = 50000;
     /**
      * 首页预热仅用于“提前点燃”应用栈，不参与入池成败判定；因此采用更短预算，避免拖慢维护接流。
      */
@@ -1848,7 +1848,8 @@ class PassthroughCore
         try {
             \stream_set_blocking($conn, false);
 
-            $connectDeadline = \microtime(true) + \max(0.2, $connectTimeout);
+            $overallDeadline = $startedAt + \max(0.5, $connectTimeout + $responseTimeout);
+            $connectDeadline = \min($overallDeadline, \microtime(true) + \max(0.2, $connectTimeout));
             $connected = $this->waitForStreamReady($conn, false, true, $connectDeadline);
             if ($connected === false) {
                 return [
@@ -1866,7 +1867,7 @@ class PassthroughCore
             }
 
             if ($this->workerSslEnabled) {
-                $tlsDeadline = \microtime(true) + \max(0.5, \min($responseTimeout, 2.5));
+                $tlsDeadline = \min($overallDeadline, \microtime(true) + \max(0.3, $responseTimeout));
                 $tlsOk = false;
                 while (\microtime(true) < $tlsDeadline) {
                     $this->warmupYield();
@@ -1905,7 +1906,7 @@ class PassthroughCore
 
             $request = $this->buildWorkerHealthRequest();
             $writeOffset = 0;
-            $writeDeadline = \microtime(true) + \max(0.3, \min($responseTimeout, 2.0));
+            $writeDeadline = \min($overallDeadline, \microtime(true) + \max(0.2, $responseTimeout / 2));
             $requestLen = \strlen($request);
             while ($writeOffset < $requestLen) {
                 $this->warmupYield();
@@ -1933,7 +1934,7 @@ class PassthroughCore
 
             $response = '';
             $closedWithoutResponse = false;
-            $readDeadline = \microtime(true) + \max(0.5, $responseTimeout);
+            $readDeadline = $overallDeadline;
             while (!\feof($conn) && \strlen($response) < 512 && \microtime(true) < $readDeadline) {
                 $this->warmupYield();
                 $chunk = @\fread($conn, 256);

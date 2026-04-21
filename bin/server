@@ -27,12 +27,18 @@ die() {
 }
 
 DEFAULT_PHP_1="${PROJECT_ROOT}/extend/server/php/bin/php"
-DEFAULT_PHP_2="${PROJECT_ROOT}/extend/server/php/php"
+DEFAULT_PHP_2="${PROJECT_ROOT}/extend/server/php/bin/php.exe"
+DEFAULT_PHP_3="${PROJECT_ROOT}/extend/server/php/php"
+DEFAULT_PHP_4="${PROJECT_ROOT}/extend/server/php/php.exe"
 
 if [[ -x "${DEFAULT_PHP_1}" ]]; then
   PHP_BIN="${PHP_BIN:-${DEFAULT_PHP_1}}"
 elif [[ -x "${DEFAULT_PHP_2}" ]]; then
   PHP_BIN="${PHP_BIN:-${DEFAULT_PHP_2}}"
+elif [[ -x "${DEFAULT_PHP_3}" ]]; then
+  PHP_BIN="${PHP_BIN:-${DEFAULT_PHP_3}}"
+elif [[ -x "${DEFAULT_PHP_4}" ]]; then
+  PHP_BIN="${PHP_BIN:-${DEFAULT_PHP_4}}"
 else
   PHP_BIN="${PHP_BIN:-php}"
 fi
@@ -375,4 +381,3 @@ case "$SERVICE" in
     die "unknown service: ${SERVICE} (expected server|pgsql|all)"
     ;;
 esac
-

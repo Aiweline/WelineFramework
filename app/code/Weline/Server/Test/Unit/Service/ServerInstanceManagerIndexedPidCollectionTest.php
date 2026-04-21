@@ -44,4 +44,24 @@ final class ServerInstanceManagerIndexedPidCollectionTest extends TestCase
 
         self::assertSame([101, 202], $pids);
     }
+
+    public function testCollectServiceRecordTrackedPidsIncludesPersistedProcessTreeHints(): void
+    {
+        $manager = new ServerInstanceManager();
+        $method = new \ReflectionMethod($manager, 'collectServiceRecordTrackedPids');
+        $method->setAccessible(true);
+
+        $pids = $method->invoke($manager, [
+            'pid' => 202,
+            'root_pid' => 1202,
+            'launcher_pid' => 1302,
+            'metadata' => [
+                'service_pid' => 2202,
+                'root_pid' => 3202,
+                'launcher_pid' => 3302,
+            ],
+        ]);
+
+        self::assertSame([202, 1202, 1302, 2202, 3202, 3302], $pids);
+    }
 }
