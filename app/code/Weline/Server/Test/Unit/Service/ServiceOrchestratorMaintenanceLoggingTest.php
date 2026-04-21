@@ -80,6 +80,27 @@ final class ServiceOrchestratorMaintenanceLoggingTest extends TestCase
         self::assertTrue((bool) ($noDispatcher['wait_for_worker_ack'] ?? false));
     }
 
+    public function testMaintenanceDispatcherPoolAckIsTrackedBeforeForceReloadContinues(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $this->writePrivate($orchestrator, 'pendingMaintenanceModeAck', [
+            'kind' => 'dispatcher_pool',
+            'request_id' => 'dispatcher_pool_test',
+            'expected' => ['301:19999' => true],
+            'acked' => [],
+        ]);
+
+        $this->invokePrivate($orchestrator, 'handleWorkerPoolAck', [[
+            'type' => ControlMessage::TYPE_WORKER_POOL_ACK,
+            'role' => ControlMessage::ROLE_MAINTENANCE,
+            'port' => 19999,
+            'in_pool' => true,
+        ], 301]);
+
+        $pending = (array) $this->readPrivate($orchestrator, 'pendingMaintenanceModeAck');
+        self::assertSame(['301:19999' => true], $pending['acked'] ?? []);
+    }
+
     private function invokePrivate(object $object, string $method, array $arguments = []): mixed
     {
         $reflection = new \ReflectionMethod($object, $method);
@@ -93,6 +114,14 @@ final class ServiceOrchestratorMaintenanceLoggingTest extends TestCase
         $reflection = $this->findPropertyReflection($object, $property);
         $reflection->setAccessible(true);
         $reflection->setValue($object, $value);
+    }
+
+    private function readPrivate(object $object, string $property): mixed
+    {
+        $reflection = $this->findPropertyReflection($object, $property);
+        $reflection->setAccessible(true);
+
+        return $reflection->getValue($object);
     }
 
     private function findPropertyReflection(object $object, string $property): \ReflectionProperty
