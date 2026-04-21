@@ -7157,6 +7157,7 @@ class ServiceOrchestrator
 
         // 代际校验：只接纳当前 epoch
         if ($this->context !== null && $epoch > 0 && $epoch !== $this->context->epoch) {
+            $this->rejectUntrustedChild($clientId, $role, $workerId, $port, 'stale_epoch', (string)($msg['msg_id'] ?? ''));
             WlsLogger::warning_("[Orchestrator] 丢弃旧代际 register: role={$role}, epoch={$epoch}, current_epoch={$this->context->epoch}");
             return;
         }
@@ -7220,6 +7221,10 @@ class ServiceOrchestrator
         }
 
         WlsLogger::warning_("[Orchestrator] 未找到匹配的实例: role={$role}, pid={$pid}, port={$port}, workerId={$workerId}, epoch={$epoch}, launch_id={$launchId}");
+        if (\in_array($role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
+            $this->rejectUntrustedChild($clientId, $role, $workerId, $port, 'no_matching_slot', (string)($msg['msg_id'] ?? ''));
+            return;
+        }
         if ($pid > 0 && $this->shouldTerminateUnmatchedRegisterPid($role, $pid, $port, $launchId)) {
             $killed = Processer::killByPid($pid);
             if ($killed) {
@@ -7285,10 +7290,7 @@ class ServiceOrchestrator
                 . "current_pid={$instance->pid}, extra_pid={$pid}, current_port={$instance->port}, "
                 . "current_launch={$instance->launchId}, extra_launch={$launchId}"
             );
-            if ($pid > 0 && !$instance->matchesManagedPid($pid)) {
-                Processer::killProcessTreeByPid($pid, true);
-            }
-            $this->controlServer->closeClient($clientId);
+            $this->rejectUntrustedChild($clientId, $instance->role, $workerId, $port, 'slot_already_owned');
             $this->lastDispatcherWorkerPoolSignature = '';
             $this->syncDispatcherFullWorkerPoolFromRegistry();
             $this->reconcileRoleSlotGaps(ControlMessage::ROLE_WORKER);
@@ -7304,6 +7306,7 @@ class ServiceOrchestrator
                 $this->resetPendingReadyConfirmation($instance, $clientId);
             } else {
                 WlsLogger::warning_("[Orchestrator] 忽略 launchId 不匹配注册 {$instance->role}#{$instance->instanceId}: msg={$launchId}, expected={$instance->launchId}");
+                $this->rejectUntrustedChild($clientId, $instance->role, $workerId, $port, 'launch_id_mismatch', $launchId);
                 return false;
             }
         }
@@ -7370,6 +7373,28 @@ class ServiceOrchestrator
             : '';
         WlsLogger::debug_("[Orchestrator] IPC 注册: {$instance->role}#{$instance->instanceId} (pid={$pid}, clientId={$clientId}, port={$instance->port}, epoch={$instance->epoch}, launch_id={$instance->launchId}{$kindInfo})");
         return true;
+    }
+
+    private function rejectUntrustedChild(
+        int $clientId,
+        string $role,
+        int $workerId,
+        int $port,
+        string $reason,
+        string $msgId = ''
+    ): void {
+        if ($this->controlServer === null) {
+            return;
+        }
+
+        $this->controlServer->sendTo(
+            $clientId,
+            ControlMessage::readyAck('', 0, false, $reason, $workerId, $port, $msgId)
+        );
+        WlsLogger::warning_(
+            "[Orchestrator] 已拒绝不可信子进程并要求自毁: role={$role}, worker_id={$workerId}, port={$port}, reason={$reason}, clientId={$clientId}"
+        );
+        $this->controlServer->closeClient($clientId);
     }
 
     private function isPendingReadyConfirmationExpired(ServiceInstance $instance): bool
@@ -7450,10 +7475,26 @@ class ServiceOrchestrator
         $epoch = (int) ($msg['epoch'] ?? 0);
         $launchId = (string) ($msg['launch_id'] ?? '');
         if ($this->context !== null && $epoch > 0 && $epoch !== $this->context->epoch) {
+            $this->rejectUntrustedChild(
+                $clientId,
+                $instance->role,
+                (int)($msg['worker_id'] ?? $instance->getMeta('worker_id') ?? $instance->instanceId),
+                (int)($msg['port'] ?? $instance->port ?? 0),
+                'stale_epoch',
+                (string)($msg['msg_id'] ?? '')
+            );
             WlsLogger::warning_("[Orchestrator] 丢弃旧代际 ready: {$instance->role}#{$instance->instanceId}, epoch={$epoch}");
             return;
         }
         if ($launchId !== '' && $instance->launchId !== '' && $launchId !== $instance->launchId) {
+            $this->rejectUntrustedChild(
+                $clientId,
+                $instance->role,
+                (int)($msg['worker_id'] ?? $instance->getMeta('worker_id') ?? $instance->instanceId),
+                (int)($msg['port'] ?? $instance->port ?? 0),
+                'launch_id_mismatch',
+                (string)($msg['msg_id'] ?? '')
+            );
             WlsLogger::warning_("[Orchestrator] 丢弃 launchId 不匹配 ready: {$instance->role}#{$instance->instanceId}, msg={$launchId}, expected={$instance->launchId}");
             return;
         }
