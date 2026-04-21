@@ -6736,6 +6736,7 @@ final class AiSiteExecutionBlueprintService
                 ? \trim((string)$componentPlan['task_type'])
                 : 'shared_component';
             $componentPlan['sort_order'] = (int)($componentPlan['sort_order'] ?? $this->defaultStageOneSharedSortOrder($component, \count($normalized)));
+            $componentPlan = $this->normalizeStageOneSharedBlock($component, $componentPlan);
             $normalized[$component] = $componentPlan;
         }
 
@@ -6747,6 +6748,74 @@ final class AiSiteExecutionBlueprintService
 
             return \strcmp((string)($left['component'] ?? ''), (string)($right['component'] ?? ''));
         });
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $componentPlan
+     * @return array<string, mixed>
+     */
+    private function normalizeStageOneSharedBlock(string $component, array $componentPlan): array
+    {
+        $taskKey = \trim((string)($componentPlan['task_key'] ?? ('shared:' . $component)));
+        if ($taskKey === '') {
+            $taskKey = 'shared:' . $component;
+        }
+        $goal = \trim((string)($componentPlan['goal'] ?? ''));
+        $implementationDetail = \trim((string)($componentPlan['implementation_detail'] ?? $componentPlan['implementation_note'] ?? ''));
+        if ($implementationDetail === '') {
+            $implementationDetail = $goal !== '' ? $goal : 'Build the shared ' . $component . ' block with editable content and responsive behavior.';
+        }
+        $reason = \trim((string)($componentPlan['reason'] ?? $componentPlan['why'] ?? ''));
+        if ($reason === '') {
+            $reason = $component === 'header'
+                ? 'The header anchors brand recognition, navigation, and the primary conversion action.'
+                : 'The footer closes the page with navigation, contact, policy, and support paths.';
+        }
+        $completionRule = \trim((string)($componentPlan['completion_rule'] ?? ''));
+        if ($completionRule === '') {
+            $completionRule = 'Shared block is complete when copy, links, editable fields, and responsive behavior are ready for all pages.';
+        }
+        $realtimeContent = \is_array($componentPlan['realtime_content'] ?? null)
+            ? $componentPlan['realtime_content']
+            : [
+                'headline' => \trim((string)($componentPlan['site_display_name'] ?? \ucfirst($component))),
+                'supporting_copy' => [],
+                'cta' => [],
+                'media' => [],
+                'editable_slots' => [],
+            ];
+        $editableFields = \is_array($componentPlan['editable_fields'] ?? null)
+            ? $this->normalizeStringList($componentPlan['editable_fields'])
+            : $this->deriveStageOneEditableFields($componentPlan, $realtimeContent);
+        $contentSource = \is_array($componentPlan['content_source'] ?? null)
+            ? $this->normalizeStringList($componentPlan['content_source'])
+            : ['theme_context_snapshot', 'shared_prompt_context', 'editable_field'];
+        $dependencies = \is_array($componentPlan['dependencies'] ?? null)
+            ? $this->normalizeStringList($componentPlan['dependencies'])
+            : [];
+
+        $normalized = \array_replace($componentPlan, [
+            'block_key' => $taskKey,
+            'block_type' => 'shared:' . $component,
+            'page_key' => '',
+            'title' => (string)($componentPlan['title'] ?? \ucfirst($component)),
+            'goal' => $goal,
+            'implementation_detail' => $implementationDetail,
+            'realtime_content' => $realtimeContent,
+            'editable_fields' => $editableFields,
+            'content_source' => $contentSource,
+            'style_direction' => (string)($componentPlan['style_direction'] ?? ''),
+            'responsive_rule' => (string)($componentPlan['responsive_rule'] ?? ''),
+            'seo_role' => (string)($componentPlan['seo_role'] ?? 'shared_site_chrome'),
+            'reason' => $reason,
+            'completion_rule' => $completionRule,
+            'dependencies' => $dependencies,
+            'prompt_context_hash' => (string)($componentPlan['prompt_context_hash'] ?? ''),
+            'version' => (int)($componentPlan['version'] ?? 1),
+        ]);
+        $normalized['context_hash'] = $this->buildStageOneBlockContextHash('', $normalized);
 
         return $normalized;
     }
