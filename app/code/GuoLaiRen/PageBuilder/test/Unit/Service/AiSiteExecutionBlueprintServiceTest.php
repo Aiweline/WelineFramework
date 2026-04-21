@@ -126,6 +126,37 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             (string)($artifacts['execution_blueprint']['shared_prompt_context']['context_hash'] ?? ''),
             (string)($artifacts['structured']['page_plans']['home_page']['shared_context_hash'] ?? '')
         );
+        $stageOneJobs = $artifacts['execution_blueprint']['stage1_queue']['jobs'] ?? [];
+        self::assertIsArray($stageOneJobs);
+        self::assertArrayHasKey('stage1.page_plan:home_page', $stageOneJobs);
+        self::assertArrayHasKey('stage1.page_plan:about_page', $stageOneJobs);
+        $homePageJob = $stageOneJobs['stage1.page_plan:home_page'] ?? [];
+        self::assertSame('stage1.page_plan', (string)($homePageJob['job_type'] ?? ''));
+        self::assertSame('stage1_page_fanout', (string)($homePageJob['stage'] ?? ''));
+        self::assertSame(['stage1.shared.header_footer'], $homePageJob['depends_on'] ?? []);
+        self::assertSame('automatic_after_dependency', (string)($homePageJob['dispatch_mode'] ?? ''));
+        self::assertSame('stage1.shared.header_footer.done', (string)($homePageJob['dispatch_trigger'] ?? ''));
+        self::assertFalse((bool)($homePageJob['requires_user_tab'] ?? true));
+        self::assertSame(
+            (string)($artifacts['execution_blueprint']['shared_prompt_context']['context_hash'] ?? ''),
+            (string)($homePageJob['shared_context_hash'] ?? '')
+        );
+        self::assertSame(
+            (string)($artifacts['structured']['page_plans']['home_page']['page_context_hash'] ?? ''),
+            (string)($homePageJob['context_hash'] ?? '')
+        );
+        self::assertSame(
+            $artifacts['structured']['page_plans']['home_page'] ?? null,
+            $homePageJob['outputs']['page_plan'] ?? null
+        );
+        self::assertContains('stage1.page_plan:home_page', $artifacts['execution_blueprint']['stage1_queue']['sequence'] ?? []);
+        self::assertContains('stage1.page_plan:about_page', $artifacts['execution_blueprint']['stage1_queue']['sequence'] ?? []);
+        self::assertSame(
+            $homePageJob,
+            $artifacts['plan_workbench']['stage1']['queue_jobs']['stage1.page_plan:home_page'] ?? null
+        );
+        self::assertSame(3, (int)($artifacts['plan_workbench']['stage1']['progress']['queue_job_total'] ?? 0));
+        self::assertSame(3, (int)($artifacts['plan_workbench']['stage1']['progress']['queue_job_done'] ?? 0));
         self::assertIsArray($artifacts['structured']['block_index']['flat'] ?? null);
         self::assertArrayHasKey('shared:header', $artifacts['structured']['block_index']['flat']);
         self::assertIsArray($artifacts['plan_workbench']['stage1']['page_tabs_state'] ?? null);
