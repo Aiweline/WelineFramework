@@ -806,6 +806,13 @@
         themeSummary: <?= \json_encode((string)__('主题规划'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themeTab: <?= \json_encode((string)__('主题'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themeTabEmpty: <?= \json_encode((string)__('当前方案暂未写入主题级全局信息，请先生成或微调方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        themePurpose: <?= \json_encode((string)__('主题宗旨'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        colorSystem: <?= \json_encode((string)__('色系系统'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        selectionReason: <?= \json_encode((string)__('风格选择原因'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        forbiddenStyles: <?= \json_encode((string)__('禁用风格'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        visualKeywords: <?= \json_encode((string)__('视觉关键词'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        toneOfVoice: <?= \json_encode((string)__('内容语气'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        ctaTone: <?= \json_encode((string)__('CTA 语气'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         stageToolbarHint: <?= \json_encode((string)__('悬停后可直接微调、重建、删除或新增块；拖动排序后会自动保存；也可以对整个阶段重新生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineAction: <?= \json_encode((string)__('微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         rebuildAction: <?= \json_encode((string)__('重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -4500,46 +4507,175 @@
         return filtered;
     }
 
+    function pickPreviewObject() {
+        for (var i = 0; i < arguments.length; i += 1) {
+            var value = arguments[i];
+            if (value && typeof value === 'object' && !Array.isArray(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    function pickPreviewValue() {
+        for (var i = 0; i < arguments.length; i += 1) {
+            var value = arguments[i];
+            if (value === null || typeof value === 'undefined') {
+                continue;
+            }
+            if (Array.isArray(value) && value.length === 0) {
+                continue;
+            }
+            if (value && typeof value === 'object' && Object.keys(value).length === 0) {
+                continue;
+            }
+            if (typeof value === 'string' && String(value).trim() === '') {
+                continue;
+            }
+            return value;
+        }
+        return null;
+    }
+
+    function renderThemeTextSection(title, value) {
+        var text = sanitizePreviewText(value, '');
+        if (text === '') {
+            return '';
+        }
+        return '<div class="mt-2"><div class="fw-semibold small">' + escapeHtml(String(title || '')) + '</div><div class="small">' + escapeHtml(text).replace(/\n/g, '<br>') + '</div></div>';
+    }
+
+    function renderThemeListSection(title, value, options) {
+        var opts = options && typeof options === 'object' ? options : {};
+        var items = normalizeStructuredItems(value);
+        if (items.length === 0) {
+            return '';
+        }
+        if (opts.badges) {
+            return '<div class="mt-2"><div class="fw-semibold small">' + escapeHtml(String(title || '')) + '</div>' + renderKeywordBadges(items) + '</div>';
+        }
+        return '<div class="mt-2"><div class="fw-semibold small">' + escapeHtml(String(title || '')) + '</div><ul class="mb-0 ps-3">' + items.map(function (item) {
+            return '<li class="small">' + escapeHtml(item) + '</li>';
+        }).join('') + '</ul></div>';
+    }
+
+    function renderThemeColorSchemeSection(value) {
+        var colorScheme = omitPreviewMetaKeys(value);
+        if (colorScheme && typeof colorScheme === 'object' && !Array.isArray(colorScheme)) {
+            var rows = Object.keys(colorScheme).map(function (key) {
+                var colorValue = colorScheme[key];
+                var text = sanitizePreviewText(colorValue, '');
+                if (!text) {
+                    return '';
+                }
+                return '<li class="small"><span class="text-muted">' + escapeHtml(humanizePreviewKey(key) || String(key)) + '</span>: '
+                    + '<code>' + escapeHtml(text) + '</code></li>';
+            }).filter(Boolean).join('');
+            if (rows) {
+                return '<div class="mt-2"><div class="fw-semibold small">' + escapeHtml(previewLabels.colorSystem || previewLabels.palette) + '</div><ul class="mb-0 ps-3">' + rows + '</ul></div>';
+            }
+        }
+        return renderThemeListSection(previewLabels.colorSystem || previewLabels.palette, colorScheme || value, { badges: true });
+    }
+
     function renderThemeSummarySection(planRoot) {
         if (!planRoot || typeof planRoot !== 'object') {
             return '';
         }
-        var palette = omitPreviewMetaKeys(planRoot.palette || planRoot.color_palette || planRoot.theme_palette || null);
-        var styleTone = omitPreviewMetaKeys(planRoot.style_tone || planRoot.visual_style || planRoot.theme_style || null);
-        var typography = omitPreviewMetaKeys(planRoot.typography || planRoot.font_plan || null);
+        var snapshot = pickPreviewObject(planRoot.theme_context_snapshot, planRoot.theme_context, planRoot.shared_theme_context);
+        var themeDesign = pickPreviewObject(
+            planRoot.theme_design,
+            planRoot.shared_theme_design,
+            snapshot && snapshot.theme_design,
+            snapshot
+        );
+        var palette = pickPreviewValue(
+            themeDesign && themeDesign.color_scheme,
+            planRoot.color_scheme,
+            planRoot.palette,
+            planRoot.color_palette,
+            planRoot.theme_palette,
+            snapshot && snapshot.palette
+        );
+        var styleTone = omitPreviewMetaKeys(pickPreviewValue(
+            themeDesign && themeDesign.visual_keywords,
+            planRoot.style_tone,
+            planRoot.visual_style,
+            planRoot.theme_style,
+            snapshot && snapshot.visual_direction
+        ));
+        var typography = omitPreviewMetaKeys(pickPreviewValue(
+            themeDesign && themeDesign.typography_spacing_radius,
+            planRoot.typography,
+            planRoot.font_plan
+        ));
+        var themePurpose = pickPreviewValue(
+            themeDesign && themeDesign.theme_purpose,
+            themeDesign && themeDesign.site_positioning,
+            planRoot.theme_purpose,
+            planRoot.site_positioning,
+            snapshot && snapshot.theme_purpose,
+            snapshot && snapshot.site_positioning
+        );
+        var selectionReason = pickPreviewValue(
+            themeDesign && themeDesign.selection_reason,
+            themeDesign && themeDesign.reason,
+            planRoot.selection_reason,
+            planRoot.decision_reason,
+            snapshot && snapshot.selection_reason
+        );
+        var forbiddenStyles = pickPreviewValue(
+            themeDesign && themeDesign.forbidden_styles,
+            planRoot.forbidden_styles,
+            snapshot && snapshot.forbidden_styles
+        );
+        var toneOfVoice = pickPreviewValue(
+            themeDesign && themeDesign.tone_of_voice,
+            themeDesign && themeDesign.content_tone,
+            planRoot.tone_of_voice,
+            snapshot && snapshot.content_tone
+        );
+        var ctaTone = pickPreviewValue(themeDesign && themeDesign.cta_tone, planRoot.cta_tone);
         var parts = [];
 
-        if (palette && typeof palette === 'object' && !Array.isArray(palette)) {
-            var paletteRows = Object.keys(palette).map(function (key) {
-                var value = sanitizePreviewText(palette[key], '');
-                if (!value) {
-                    return '';
-                }
-                return '<li class="small"><span class="text-muted">' + escapeHtml(humanizePreviewKey(key) || String(key)) + '</span>：'
-                    + '<code>' + escapeHtml(value) + '</code></li>';
-            }).filter(Boolean).join('');
-            if (paletteRows) {
-                parts.push('<div class="mt-2"><div class="fw-semibold small">' + escapeHtml(previewLabels.palette) + '</div><ul class="mb-0 ps-3">' + paletteRows + '</ul></div>');
-            }
-        } else {
-            var paletteItems = normalizeStructuredItems(palette);
-            if (paletteItems.length > 0) {
-                parts.push('<div class="mt-2"><div class="fw-semibold small">' + escapeHtml(previewLabels.palette) + '</div>' + renderKeywordBadges(paletteItems) + '</div>');
-            }
+        var purposeHtml = renderThemeTextSection(previewLabels.themePurpose, themePurpose);
+        if (purposeHtml) {
+            parts.push(purposeHtml);
         }
 
-        var styleItems = normalizeStructuredItems(styleTone);
-        if (styleItems.length > 0) {
-            parts.push('<div class="mt-2"><div class="fw-semibold small">' + escapeHtml(previewLabels.styleTone) + '</div><ul class="mb-0 ps-3">' + styleItems.map(function (item) {
-                return '<li class="small">' + escapeHtml(item) + '</li>';
-            }).join('') + '</ul></div>');
+        var paletteHtml = renderThemeColorSchemeSection(palette);
+        if (paletteHtml) {
+            parts.push(paletteHtml);
         }
 
-        var typoItems = normalizeStructuredItems(typography);
-        if (typoItems.length > 0) {
-            parts.push('<div class="mt-2"><div class="fw-semibold small">' + escapeHtml(previewLabels.typography) + '</div><ul class="mb-0 ps-3">' + typoItems.map(function (item) {
-                return '<li class="small">' + escapeHtml(item) + '</li>';
-            }).join('') + '</ul></div>');
+        var styleHtml = renderThemeListSection(previewLabels.visualKeywords || previewLabels.styleTone, styleTone);
+        if (styleHtml) {
+            parts.push(styleHtml);
+        }
+
+        var typoHtml = renderThemeListSection(previewLabels.typography, typography);
+        if (typoHtml) {
+            parts.push(typoHtml);
+        }
+
+        var toneHtml = renderThemeTextSection(previewLabels.toneOfVoice, toneOfVoice);
+        if (toneHtml) {
+            parts.push(toneHtml);
+        }
+
+        var ctaToneHtml = renderThemeTextSection(previewLabels.ctaTone, ctaTone);
+        if (ctaToneHtml) {
+            parts.push(ctaToneHtml);
+        }
+
+        var reasonHtml = renderThemeTextSection(previewLabels.selectionReason || previewLabels.reason, selectionReason);
+        if (reasonHtml) {
+            parts.push(reasonHtml);
+        }
+
+        var forbiddenHtml = renderThemeListSection(previewLabels.forbiddenStyles, forbiddenStyles);
+        if (forbiddenHtml) {
+            parts.push(forbiddenHtml);
         }
 
         if (parts.length === 0) {
