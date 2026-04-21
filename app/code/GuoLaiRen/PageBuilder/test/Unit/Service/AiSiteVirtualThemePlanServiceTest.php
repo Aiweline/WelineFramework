@@ -38,6 +38,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                                 'why' => 'Hero should translate the main value into first-screen conversion intent.',
                                 'content_brief' => ['goal' => 'Lead with value', 'cta_direction' => 'Drive to the main CTA first.'],
                                 'execution_script' => ['feature_points' => ['Primary headline', 'Primary CTA'], 'core_copy' => 'Hero core copy'],
+                                'design_tags' => ['visual' => ['premium banner'], 'motion' => ['5s fade in/out'], 'interaction' => ['CTA hover'], 'texture' => ['soft gradient'], 'responsive' => ['mobile stacked'], 'implementation_note' => 'Carry tags forward.'],
                                 'seo_brief' => ['keywords' => ['india games'], 'anchors' => ['#hero'], 'internal_links' => ['/about']],
                                 'field_plan' => [['field' => 'title', 'sample' => 'Hero title', 'reason' => 'Explain the offer']],
                                 'result_ref' => [],
@@ -141,6 +142,10 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertArrayHasKey(
             'style_direction',
             $artifacts['structured']['stage1_task_cues']['pages']['page:home_page:content/home-page-hero'] ?? []
+        );
+        self::assertSame(
+            ['visual' => ['premium banner'], 'motion' => ['5s fade in/out'], 'interaction' => ['CTA hover'], 'texture' => ['soft gradient'], 'responsive' => ['mobile stacked'], 'implementation_note' => 'Carry tags forward.'],
+            $artifacts['structured']['stage1_task_cues']['pages']['page:home_page:content/home-page-hero']['design_tags'] ?? []
         );
         self::assertArrayHasKey(
             'reason',
@@ -1457,8 +1462,9 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                                 'goal' => 'Open with a clear value proposition.',
                                 'why' => 'Hero should translate the main value into first-screen conversion intent.',
                                 'content_brief' => ['goal' => 'Lead with value', 'body_direction' => 'Keep the first fold scannable.'],
-                                'execution_script' => ['feature_points' => ['Primary headline', 'Primary CTA'], 'core_copy' => 'Hero core copy'],
-                                'seo_brief' => ['keywords' => ['india games'], 'anchors' => ['#hero'], 'internal_links' => ['/about']],
+                        'execution_script' => ['feature_points' => ['Primary headline', 'Primary CTA'], 'core_copy' => 'Hero core copy'],
+                        'design_tags' => ['visual' => ['premium banner'], 'motion' => ['5s fade in/out'], 'interaction' => ['CTA hover'], 'texture' => ['soft gradient'], 'responsive' => ['mobile stacked'], 'implementation_note' => 'Carry tags forward.'],
+                        'seo_brief' => ['keywords' => ['india games'], 'anchors' => ['#hero'], 'internal_links' => ['/about']],
                                 'field_plan' => [['field' => 'title', 'sample' => 'Hero title', 'reason' => 'Explain the offer']],
                                 'result_ref' => [],
                             ],
