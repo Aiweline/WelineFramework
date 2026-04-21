@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Unit\Controller;
 
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
+use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
@@ -95,6 +96,23 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame('running', $payload['snapshot']['status']);
         self::assertSame('AI 流式生成中... (+33 B)', $payload['process']);
         self::assertSame("QUEUE 开始执行\nLOG AI 生成中\n", $payload['result_log']);
+    }
+
+    public function testStageOneRequirementExpandQueueEnvelopeUsesJobFields(): void
+    {
+        $session = $this->createMock(AiSiteAgentSession::class);
+        $session->method('getId')->willReturn(321);
+
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(AiSiteAgent::class, 'buildOperationQueueEnvelope');
+        $method->setAccessible(true);
+
+        $envelope = $method->invoke($controller, $session, 'plan', 'token-abc', 'queued');
+
+        self::assertSame('glr_aisite:session:321:job:stage1.requirement_expand', $envelope['job_key']);
+        self::assertSame('stage1.requirement_expand', $envelope['job_type']);
+        self::assertSame('queued', $envelope['status']);
+        self::assertSame('token-abc', $envelope['token']);
     }
 
     public function testObservedQueueSignalsExposePanelSyncFields(): void
