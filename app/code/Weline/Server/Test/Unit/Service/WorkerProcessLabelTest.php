@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\WorkerProcessLabel;
 
 final class WorkerProcessLabelTest extends TestCase
@@ -35,12 +36,15 @@ final class WorkerProcessLabelTest extends TestCase
 
     public function testBuildProcessTitleIncludesRoleAndTransport(): void
     {
+        $defaultScope = MasterProcess::getScopedInstanceName('default');
+        $testScope = MasterProcess::getScopedInstanceName('test');
+
         self::assertSame(
-            'weline-wls-maintenance-ssl-default-1-16995',
+            "weline-wls-maintenance-ssl-{$defaultScope}-1-16995",
             WorkerProcessLabel::buildProcessTitle(true, true, 1, 16995, 'default')
         );
         self::assertSame(
-            'weline-wls-worker-http-test-2-18080',
+            "weline-wls-worker-http-{$testScope}-2-18080",
             WorkerProcessLabel::buildProcessTitle(false, false, 2, 18080, 'test')
         );
     }

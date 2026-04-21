@@ -366,6 +366,148 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         );
     }
 
+    public function testForceStopWithMissingMasterUsesDirectCleanupWithoutResidualRetry(): void
+    {
+        $manager = new class extends ServerInstanceManager {
+            public ?ServerInstanceInfo $info = null;
+            public array $deleted = [];
+
+            public function __construct()
+            {
+            }
+
+            public function getInstanceInfo(string $instanceName, bool $strict = false): ?ServerInstanceInfo
+            {
+                unset($strict);
+
+                return $instanceName === 'default' ? $this->info : null;
+            }
+
+            public function getRawInstanceData(string $instanceName): ?array
+            {
+                unset($instanceName);
+
+                return null;
+            }
+
+            public function deleteInstance(string $instanceName): bool
+            {
+                $this->deleted[] = $instanceName;
+
+                return true;
+            }
+        };
+        $manager->info = new ServerInstanceInfo(
+            'default',
+            39032,
+            26897,
+            '127.0.0.1',
+            443,
+            true,
+            false,
+            2,
+            16895,
+            80,
+            '2026-04-20 12:00:00',
+            1775448000,
+            []
+        );
+
+        $stop = new class($manager) extends Stop {
+            public array $calls = [];
+
+            public function __construct(private readonly ServerInstanceManager $manager)
+            {
+            }
+
+            protected function printWelcome(): void
+            {
+            }
+
+            protected function acquireStopLock(string $instanceName, int $timeout = 5): bool
+            {
+                unset($instanceName, $timeout);
+
+                return true;
+            }
+
+            protected function releaseStopLock(): void
+            {
+            }
+
+            protected function getInstanceManager(): ServerInstanceManager
+            {
+                return $this->manager;
+            }
+
+            protected function isMasterProcessAvailableForStop(ServerInstanceInfo $info): bool
+            {
+                unset($info);
+
+                return false;
+            }
+
+            protected function showInstanceInfo(ServerInstanceInfo $info): void
+            {
+                unset($info);
+                $this->calls[] = 'show';
+            }
+
+            protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
+            {
+                unset($info);
+                $this->calls[] = 'kill';
+
+                return 0;
+            }
+
+            protected function collectDirectForceStopCandidatePids(ServerInstanceInfo $info): array
+            {
+                unset($info);
+
+                return [];
+            }
+
+            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info): void
+            {
+                unset($name, $info);
+                $this->calls[] = 'residual';
+            }
+
+            protected function releaseSharedStateConsumersForInstance(string $instanceName): void
+            {
+                $this->calls[] = 'release:' . $instanceName;
+            }
+
+            protected function cleanupPidFiles(string $name, ServerInstanceInfo $info): void
+            {
+                unset($info);
+                $this->calls[] = 'pid:' . $name;
+            }
+
+            protected function releaseStartLock(string $instanceName): void
+            {
+                $this->calls[] = 'unlock:' . $instanceName;
+            }
+        };
+
+        $stop->__init();
+        \ob_start();
+        try {
+            $stop->execute([
+                0 => 'server:stop',
+                1 => 'default',
+                'force' => true,
+                'f' => true,
+            ], []);
+        } finally {
+            \ob_end_clean();
+        }
+
+        self::assertSame(['default'], $manager->deleted);
+        self::assertSame(['show', 'residual', 'release:default', 'pid:default', 'unlock:default'], $stop->calls);
+    }
+
     public function testForceStopKeepsInstanceFileWhenResidualCleanupCannotFinish(): void
     {
         $manager = new class extends ServerInstanceManager {
@@ -506,5 +648,144 @@ final class StopCommandFastLocalCleanupTest extends TestCase
 
         self::assertSame([], $manager->deleted);
         self::assertSame(['show', 'kill'], $stop->calls);
+    }
+
+    public function testGracefulStopRunsConcurrentResidualCleanupAfterIpcDrain(): void
+    {
+        $manager = new class extends ServerInstanceManager {
+            public ?ServerInstanceInfo $info = null;
+            public array $deleted = [];
+
+            public function __construct()
+            {
+            }
+
+            public function getInstanceInfo(string $instanceName, bool $strict = false): ?ServerInstanceInfo
+            {
+                unset($strict);
+
+                return $instanceName === 'default' ? $this->info : null;
+            }
+
+            public function getRawInstanceData(string $instanceName): ?array
+            {
+                return $instanceName === 'default' ? ['startup_phase' => 'running'] : null;
+            }
+
+            public function deleteInstance(string $instanceName): bool
+            {
+                $this->deleted[] = $instanceName;
+
+                return true;
+            }
+        };
+        $manager->info = new ServerInstanceInfo(
+            'default',
+            200,
+            26895,
+            '127.0.0.1',
+            443,
+            true,
+            false,
+            1,
+            16895,
+            80,
+            '2026-04-20 10:19:17',
+            1776651557,
+            []
+        );
+
+        $stop = new class($manager) extends Stop {
+            public array $calls = [];
+
+            public function __construct(private readonly ServerInstanceManager $manager)
+            {
+            }
+
+            protected function printWelcome(): void
+            {
+            }
+
+            protected function printGoodbye(bool $success = true, string $message = ''): void
+            {
+                unset($success, $message);
+            }
+
+            protected function acquireStopLock(string $instanceName, int $timeout = 5): bool
+            {
+                unset($instanceName, $timeout);
+
+                return true;
+            }
+
+            protected function releaseStopLock(): void
+            {
+            }
+
+            protected function getInstanceManager(): ServerInstanceManager
+            {
+                return $this->manager;
+            }
+
+            protected function isMasterProcessAvailableForStop(ServerInstanceInfo $info): bool
+            {
+                unset($info);
+
+                return true;
+            }
+
+            protected function showInstanceInfo(ServerInstanceInfo $info): void
+            {
+                unset($info);
+                $this->calls[] = 'show';
+            }
+
+            protected function sendStopViaIpcAndWait(string $instanceName, int $controlPort, int $masterPid, bool $force): bool
+            {
+                unset($instanceName, $controlPort, $masterPid, $force);
+                $this->calls[] = 'ipc';
+
+                return true;
+            }
+
+            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info): void
+            {
+                unset($info);
+                $this->calls[] = 'residual:' . $name;
+            }
+
+            protected function releaseSharedStateConsumersForInstance(string $instanceName): void
+            {
+                $this->calls[] = 'release:' . $instanceName;
+            }
+
+            protected function cleanupPidFiles(string $name, ServerInstanceInfo $info): void
+            {
+                unset($info);
+                $this->calls[] = 'pid:' . $name;
+            }
+
+            protected function releaseStartLock(string $instanceName): void
+            {
+                $this->calls[] = 'unlock:' . $instanceName;
+            }
+        };
+
+        $stop->__init();
+        \ob_start();
+        try {
+            $stop->execute([
+                0 => 'server:stop',
+                1 => 'default',
+            ], []);
+        } finally {
+            \ob_end_clean();
+        }
+
+        self::assertSame(['default'], $manager->deleted);
+        self::assertSame(
+            ['show', 'ipc', 'residual:default', 'release:default', 'pid:default', 'unlock:default'],
+            $stop->calls
+        );
     }
 }

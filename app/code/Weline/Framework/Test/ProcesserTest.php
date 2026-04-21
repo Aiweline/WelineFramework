@@ -257,17 +257,18 @@ class ProcesserTest extends TestCore
         self::assertIsString($script);
         self::assertStringContainsString("WindowStyle = 'Normal'", $script);
         self::assertStringContainsString("FilePath = 'cmd.exe'", $script);
-        self::assertStringContainsString("ArgumentList = @('/d','/c','\"C:\\temp\\weline-worker-visible.cmd\"')", $script);
+        self::assertStringContainsString("ArgumentList = @('/d','/c','title weline-worker-visible & call \"C:\\temp\\weline-worker-visible.cmd\"')", $script);
         self::assertStringContainsString('weline-worker-visible.cmd', $script);
         self::assertStringContainsString("FilePath = 'C:\\php\\php.exe'", $script);
         self::assertStringContainsString("ArgumentList = @('worker.php','--name=weline-worker-hidden')", $script);
         self::assertSame(0, \substr_count($script, 'RedirectStandardOutput'));
         self::assertSame(0, \substr_count($script, 'RedirectStandardError'));
-        self::assertSame(0, \substr_count($script, 'PassThru = $true'));
+        self::assertSame(1, \substr_count($script, 'PassThru = $true'));
+        self::assertStringContainsString('$results.Add("worker-foreground`t" + [string]$p.Id)', $script);
         self::assertStringContainsString('$results.Add("worker-hidden`t0")', $script);
     }
 
-    public function testBuildWindowsBatchCreateScriptMarksForegroundPidForLaterResolution(): void
+    public function testBuildWindowsBatchCreateScriptRecordsForegroundLauncherPid(): void
     {
         $script = $this->invokePrivateStatic(Processer::class, 'buildWindowsBatchCreateScript', [
             [[
@@ -286,9 +287,10 @@ class ProcesserTest extends TestCore
         ]);
 
         self::assertIsString($script);
-        self::assertStringContainsString('$results.Add("worker-foreground`t0")', $script);
-        self::assertStringContainsString('Start-Process @startArgs | Out-Null', $script);
-        self::assertStringContainsString("ArgumentList = @('/d','/c','\"C:\\temp\\weline-worker-visible.cmd\"')", $script);
+        self::assertStringContainsString('PassThru = $true', $script);
+        self::assertStringContainsString('$p = Start-Process @startArgs', $script);
+        self::assertStringContainsString('$results.Add("worker-foreground`t" + [string]$p.Id)', $script);
+        self::assertStringContainsString("ArgumentList = @('/d','/c','title weline-worker-visible & call \"C:\\temp\\weline-worker-visible.cmd\"')", $script);
     }
 
     public function testBuildWindowsBatchCreateScriptUsesExplicitArgumentArrayForBackgroundProcess(): void
@@ -414,6 +416,29 @@ class ProcesserTest extends TestCore
         self::assertStringContainsString('start "weline-worker-visible"', $command);
         self::assertStringContainsString('cmd.exe /d /c', $command);
         self::assertStringContainsString('weline-worker-visible.cmd', $command);
+    }
+
+    public function testWriteWindowsForegroundStartScriptReturnsCmdLauncherPid(): void
+    {
+        $scriptPath = $this->invokePrivateStatic(Processer::class, 'writeWindowsForegroundStartScript', [
+            'C:\temp\weline-worker-visible.cmd',
+            'C:\repo',
+            'weline-worker-visible',
+        ]);
+
+        self::assertIsString($scriptPath);
+        self::assertFileExists($scriptPath);
+
+        try {
+            $script = (string) \file_get_contents($scriptPath);
+            self::assertStringContainsString("FilePath = 'cmd.exe'", $script);
+            self::assertStringContainsString('PassThru = $true', $script);
+            self::assertStringContainsString('$cmdLine = \'title weline-worker-visible & call "C:\temp\weline-worker-visible.cmd"\'', $script);
+            self::assertStringContainsString("ArgumentList = @('/d','/c', \$cmdLine)", $script);
+            self::assertStringContainsString('[Console]::Out.WriteLine([string]$p.Id)', $script);
+        } finally {
+            @\unlink($scriptPath);
+        }
     }
 
     public function testWriteWindowsForegroundLauncherScriptBuildsSelfDeletingCmdFile(): void
