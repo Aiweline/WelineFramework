@@ -442,6 +442,20 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertSame([], $core->homepageCalls);
     }
 
+    public function testTrustingMasterReadyWarmupUsesShortHealthProbeBudget(): void
+    {
+        $core = $this->createTrustingMasterReadyWarmupCore([
+            19982 => ['success' => true, 'error' => '', 'status_line' => 'HTTP/1.1 200 OK', 'elapsed' => 0.01],
+        ]);
+
+        $result = $core->runTrustingMasterReadyWarmup(19982);
+
+        self::assertTrue($result['success']);
+        self::assertCount(1, $core->healthCalls);
+        self::assertSame(0.6, $core->healthCalls[0]['connect_timeout']);
+        self::assertSame(1.0, $core->healthCalls[0]['response_timeout']);
+    }
+
     public function testTrustingMasterReadyWarmupCanOptIntoHomepageWarmup(): void
     {
         $core = $this->createTrustingMasterReadyWarmupCore(

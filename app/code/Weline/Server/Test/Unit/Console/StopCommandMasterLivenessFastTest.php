@@ -42,7 +42,7 @@ final class StopCommandMasterLivenessFastTest extends TestCase
     {
         $stop = new class extends Stop {
             public bool $hasExitedFast = true;
-            public bool $processExists = true;
+            public bool $processExists = false;
 
             protected function hasMasterExitedFast(int $masterPid): bool
             {
