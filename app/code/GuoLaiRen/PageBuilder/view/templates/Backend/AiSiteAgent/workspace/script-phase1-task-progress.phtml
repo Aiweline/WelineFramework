@@ -101,6 +101,88 @@
         return null;
     }
 
+    function mergeTokenUsageNumbers(baseUsage, nextUsage) {
+        var base = baseUsage && typeof baseUsage === 'object' ? baseUsage : {};
+        var next = nextUsage && typeof nextUsage === 'object' ? nextUsage : {};
+        var input = normalizeTokenCount(next.input_tokens);
+        var output = normalizeTokenCount(next.output_tokens);
+        var total = normalizeTokenCount(next.total_tokens);
+        var baseInput = normalizeTokenCount(base.input_tokens);
+        var baseOutput = normalizeTokenCount(base.output_tokens);
+        var baseTotal = normalizeTokenCount(base.total_tokens);
+        if (input === null) {
+            input = baseInput;
+        } else if (baseInput !== null && baseInput > input) {
+            input = baseInput;
+        }
+        if (output === null) {
+            output = baseOutput;
+        } else if (baseOutput !== null && baseOutput > output) {
+            output = baseOutput;
+        }
+        if (total === null) {
+            total = baseTotal;
+        } else if (baseTotal !== null && baseTotal > total) {
+            total = baseTotal;
+        }
+        if (total === null && input !== null && output !== null) {
+            total = input + output;
+        }
+        return {
+            input_tokens: input,
+            output_tokens: output,
+            total_tokens: total
+        };
+    }
+
+    function parseTokenCountByPatterns(text, patterns) {
+        var source = String(text || '');
+        if (!source) {
+            return null;
+        }
+        for (var i = 0; i < patterns.length; i += 1) {
+            var match = source.match(patterns[i]);
+            if (!match || typeof match[1] === 'undefined') {
+                continue;
+            }
+            var normalized = normalizeTokenCount(match[1]);
+            if (normalized !== null) {
+                return normalized;
+            }
+        }
+        return null;
+    }
+
+    function extractTokenUsageFromText(text) {
+        var source = String(text || '');
+        if (!source) {
+            return null;
+        }
+        var input = parseTokenCountByPatterns(source, [
+            /(?:input_tokens|input token|input tokens|prompt_tokens|prompt token|prompt tokens|prompt_eval_count|输入\s*tokens?)\s*[:=]\s*(\d+)/i,
+            /(?:input_tokens|prompt_tokens|prompt_eval_count|输入\s*tokens?)\D+(\d+)/i
+        ]);
+        var output = parseTokenCountByPatterns(source, [
+            /(?:output_tokens|output token|output tokens|completion_tokens|completion token|completion tokens|eval_count|输出\s*tokens?)\s*[:=]\s*(\d+)/i,
+            /(?:output_tokens|completion_tokens|eval_count|输出\s*tokens?)\D+(\d+)/i
+        ]);
+        var total = parseTokenCountByPatterns(source, [
+            /(?:total_tokens|total token|total tokens|总\s*tokens?)\s*[:=]\s*(\d+)/i,
+            /(?:total_tokens|总\s*tokens?)\D+(\d+)/i
+        ]);
+        if (input === null && output === null && total === null) {
+            return null;
+        }
+        if (total === null && input !== null && output !== null) {
+            total = input + output;
+        }
+        return {
+            input_tokens: input,
+            output_tokens: output,
+            total_tokens: total
+        };
+    }
+
     function resolveTokenUsage(info) {
         var snapshot = info && info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
         var usage = Object.assign(
@@ -329,6 +411,41 @@
                 snapshot.token_usage && typeof snapshot.token_usage === 'object' ? snapshot.token_usage : {},
                 payload.token_usage
             );
+        }
+        var incomingUsage = mergeTokenUsageNumbers(
+            toObjectSafe(snapshot.token_usage),
+            mergeTokenUsageNumbers(
+                toObjectSafe(payload.token_usage),
+                toObjectSafe(payload.queue_snapshot && payload.queue_snapshot.token_usage)
+            )
+        );
+        var textUsage = mergeTokenUsageNumbers(
+            extractTokenUsageFromText(payload.queue_result_delta),
+            mergeTokenUsageNumbers(
+                extractTokenUsageFromText(payload.queue_process),
+                extractTokenUsageFromText(payload.message || payload.chunk || payload.content)
+            )
+        );
+        var mergedUsage = mergeTokenUsageNumbers(incomingUsage, textUsage);
+        if (
+            mergedUsage.input_tokens !== null
+            || mergedUsage.output_tokens !== null
+            || mergedUsage.total_tokens !== null
+        ) {
+            snapshot.token_usage = Object.assign(
+                {},
+                snapshot.token_usage && typeof snapshot.token_usage === 'object' ? snapshot.token_usage : {},
+                mergedUsage
+            );
+            if (mergedUsage.input_tokens !== null) {
+                snapshot.input_tokens = mergedUsage.input_tokens;
+            }
+            if (mergedUsage.output_tokens !== null) {
+                snapshot.output_tokens = mergedUsage.output_tokens;
+            }
+            if (mergedUsage.total_tokens !== null) {
+                snapshot.total_tokens = mergedUsage.total_tokens;
+            }
         }
 
         var process = String(existing.process || '');
