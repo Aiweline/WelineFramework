@@ -3990,92 +3990,71 @@ final class AiSiteExecutionBlueprintService
         array $sharedPromptContext,
         string $planLocale
     ): array {
-        $existingJobs = \is_array($stageOneQueue['jobs'] ?? null) ? $stageOneQueue['jobs'] : [];
-        $sessionPublicId = '';
-        $websitePublicId = '';
-        foreach ($existingJobs as $existingJob) {
-            if (!\is_array($existingJob)) {
-                continue;
-            }
-            if ($sessionPublicId === '') {
-                $sessionPublicId = \trim((string)($existingJob['session_public_id'] ?? ''));
-            }
-            if ($websitePublicId === '') {
-                $websitePublicId = \trim((string)($existingJob['website_public_id'] ?? ''));
-            }
-            if ($sessionPublicId !== '' && $websitePublicId !== '') {
-                break;
-            }
-        }
-
-        $fanoutJobs = $this->buildStageOnePageFanoutQueueJobs(
-            ['session_public_id' => $sessionPublicId],
-            ['website_public_id' => $websitePublicId],
-            $pagePlans,
-            $sharedPromptContext,
-            $planLocale
-        );
-
-        $jobs = [];
-        $sequence = [];
-        foreach ($existingJobs as $jobKey => $existingJob) {
-            if (!\is_array($existingJob) || $this->isStageOnePageFanoutJob($existingJob)) {
-                continue;
-            }
-            $resolvedJobKey = \trim((string)($existingJob['job_key'] ?? $jobKey));
-            if ($resolvedJobKey === '') {
-                continue;
-            }
-            $jobs[$resolvedJobKey] = $existingJob;
-            $sequence[] = $resolvedJobKey;
-        }
-
+        $jobs = \is_array($stageOneQueue['jobs'] ?? null) ? $stageOneQueue['jobs'] : [];
+        $sequence = \array_values(\array_map('strval', \is_array($stageOneQueue['sequence'] ?? null) ? $stageOneQueue['sequence'] : []));
         $pageJobKeys = [];
-        foreach ($fanoutJobs as $fanoutJob) {
-            $jobKey = \trim((string)($fanoutJob['job_key'] ?? ''));
-            if ($jobKey === '') {
+        $sortOrder = 40;
+
+        foreach ($pagePlans as $pageType => $pagePlan) {
+            if (!\is_array($pagePlan)) {
                 continue;
             }
-            $jobs[$jobKey] = $fanoutJob;
-            $sequence[] = $jobKey;
+
+            $pageKey = (string)$pageType;
+            $jobKey = 'stage1.page_plan:' . $pageKey;
             $pageJobKeys[] = $jobKey;
+            $jobs[$jobKey] = [
+                'job_key' => $jobKey,
+                'job_type' => 'stage1.page_plan.generate',
+                'stage' => 'stage1_page',
+                'sort_order' => $sortOrder++,
+                'status' => 'done',
+                'depends_on' => ['stage1.shared.header_footer'],
+                'token' => \sha1((string)\json_encode([
+                    'job_key' => $jobKey,
+                    'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? $sharedPromptContext['context_hash'] ?? ''),
+                    'page_context_hash' => (string)($pagePlan['page_context_hash'] ?? ''),
+                ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
+                'concurrency' => [
+                    'mode' => 'fiber_coroutine',
+                    'fanout_group' => 'stage1.page_plan.fanout',
+                    'task_granularity' => 'one_page_one_task',
+                    'trigger_after' => 'stage1.shared.header_footer',
+                ],
+                'inputs' => [
+                    'page_key' => $pageKey,
+                    'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? $sharedPromptContext['context_hash'] ?? ''),
+                    'theme_context_hash' => (string)($pagePlan['theme_context_hash'] ?? $sharedPromptContext['theme_context_hash'] ?? ''),
+                    'plan_locale' => $planLocale,
+                ],
+                'outputs' => [
+                    'page_plan' => $pagePlan,
+                    'page_context_hash' => (string)($pagePlan['page_context_hash'] ?? ''),
+                ],
+                'output_refs' => [
+                    'plan_workbench.stage1.page_plans.' . $pageKey,
+                    'plan_structured.page_plans.' . $pageKey,
+                ],
+            ];
         }
 
-        $stageOneQueue['version'] = (int)($stageOneQueue['version'] ?? 1);
-        $stageOneQueue['stage'] = 'stage1';
-        $stageOneQueue['status'] = (string)($stageOneQueue['status'] ?? 'done');
-        $stageOneQueue['sequence'] = \array_values(\array_unique($sequence));
+        foreach ($pageJobKeys as $jobKey) {
+            if (!\in_array($jobKey, $sequence, true)) {
+                $sequence[] = $jobKey;
+            }
+        }
+
+        $stageOneQueue['sequence'] = $sequence;
         $stageOneQueue['jobs'] = $jobs;
         $stageOneQueue['fanout'] = [
+            'trigger_after' => 'stage1.shared.header_footer',
             'mode' => 'fiber_coroutine',
             'task_granularity' => 'one_page_one_task',
-            'trigger_after' => 'stage1.shared.header_footer',
             'page_job_count' => \count($pageJobKeys),
             'page_job_keys' => $pageJobKeys,
         ];
 
         return $stageOneQueue;
-    }
-
-    /**
-     * @param array<string, mixed> $pages
-     * @return array<string, mixed>
-     */
-    private function buildStageOnePagePlansConcurrently(array $pages, array $sharedPromptContext): array
-    {
-        $pagePlans = $this->buildStageOnePagePlans($pages, $sharedPromptContext);
-        foreach ($pagePlans as $pageType => $pagePlan) {
-            if (!\is_array($pagePlan)) {
-                continue;
-            }
-            $pagePlans[$pageType] = \array_replace($pagePlan, [
-                'dispatch_mode' => 'automatic_after_shared_ready',
-                'fanout_group' => 'stage1.page_fanout',
-                'requires_user_tab' => false,
-            ]);
-        }
-
-        return $pagePlans;
     }
 
     /**
@@ -4286,6 +4265,105 @@ final class AiSiteExecutionBlueprintService
         $normalized['context_hash'] = $this->buildStageOneBlockContextHash($pageType, $normalized);
 
         return $normalized;
+    }
+
+    /**
+     * @param array<mixed> $values
+     * @return list<string>
+     */
+    private function normalizeStringList(array $values): array
+    {
+        return \array_values(\array_filter(\array_map(
+            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+            $values
+        ), static fn(string $value): bool => $value !== ''));
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    private function buildStageOneRealtimeContentFromPageBlock(array $block): array
+    {
+        $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
+        $headline = '';
+        $supportingCopy = [];
+        foreach ($fieldPlan as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $field = \mb_strtolower(\trim((string)($row['field'] ?? '')));
+            $sample = \trim((string)($row['sample'] ?? ''));
+            if ($sample === '') {
+                continue;
+            }
+            if ($headline === '' && (\str_contains($field, 'title') || \str_contains($field, 'headline') || \str_contains($field, 'heading'))) {
+                $headline = $sample;
+                continue;
+            }
+            $supportingCopy[] = $sample;
+        }
+
+        if ($headline === '') {
+            $headline = \trim((string)($block['title'] ?? $block['content'] ?? $block['goal'] ?? ''));
+        }
+        if ($supportingCopy === []) {
+            $content = \trim((string)($block['content'] ?? ''));
+            if ($content !== '' && $content !== $headline) {
+                $supportingCopy[] = $content;
+            }
+        }
+        $executionScript = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
+
+        return [
+            'headline' => $headline,
+            'supporting_copy' => \array_values(\array_slice($supportingCopy, 0, 6)),
+            'cta' => \is_array($block['cta'] ?? null) ? $block['cta'] : [],
+            'media' => \is_array($executionScript['media_assets'] ?? null) ? $executionScript['media_assets'] : [],
+            'editable_slots' => $this->deriveStageOneEditableFields($block, []),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param array<string, mixed> $realtimeContent
+     * @return list<string>
+     */
+    private function deriveStageOneEditableFields(array $block, array $realtimeContent): array
+    {
+        $fields = [];
+        foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $row) {
+            if (\is_array($row)) {
+                $field = \trim((string)($row['field'] ?? ''));
+                if ($field !== '') {
+                    $fields[] = $field;
+                }
+            }
+        }
+        foreach (\is_array($realtimeContent['editable_slots'] ?? null) ? $realtimeContent['editable_slots'] : [] as $slot) {
+            if (\is_scalar($slot)) {
+                $fields[] = (string)$slot;
+            }
+        }
+        if ($fields === []) {
+            $fields = ['headline', 'supporting_copy', 'cta', 'media'];
+        }
+
+        return $this->normalizeStringList($fields);
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function buildStageOneBlockContextHash(string $pageType, array $block): string
+    {
+        $hashSource = $block;
+        unset($hashSource['context_hash']);
+
+        return \sha1((string)\json_encode([
+            'page_key' => $pageType,
+            'block' => $hashSource,
+        ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
     }
 
     /**
