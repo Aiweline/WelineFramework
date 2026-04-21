@@ -716,7 +716,8 @@
         planPageRefineUnavailable: <?= \json_encode((string)__('微调当前页面接口暂不可用。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planFriendlyInvalidAiJson: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planStructuredPreviewTitle: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        planStructuredPreviewEmpty: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planStructuredPreviewEmpty: <?= \json_encode((string)__('方案等待确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planStructuredPreviewEmptyRunning: <?= \json_encode((string)__('方案正在生成中'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planStructuredPreviewNote: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanStartUnavailable: <?= \json_encode((string)__('第二阶段任务方案入口暂不可用，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanGenerating: <?= \json_encode((string)__('正在准备第二阶段任务方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -5523,9 +5524,54 @@
         });
     }
 
+    function isPlanGenerationRunningNow() {
+        var runningStatuses = ['queued', 'running', 'pending', 'processing'];
+        var active = currentActiveOperationState && typeof currentActiveOperationState === 'object'
+            ? currentActiveOperationState
+            : {};
+        var activeOperation = String(active.operation || '').trim().toLowerCase();
+        var activeStatus = String(active.status || '').trim().toLowerCase();
+        if (activeOperation === 'plan' && runningStatuses.indexOf(activeStatus) !== -1) {
+            return true;
+        }
+        var workspaceState = (window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object')
+            ? window.__pbWorkspaceState
+            : ((window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object') ? window.__pbLastWorkspaceState : null);
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return !!isOperationRunning;
+        }
+        var queueInfo = workspaceState.plan_queue_info && typeof workspaceState.plan_queue_info === 'object'
+            ? workspaceState.plan_queue_info
+            : null;
+        var snapshot = queueInfo && queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
+            ? queueInfo.snapshot
+            : null;
+        var queueStatus = snapshot
+            ? String(snapshot.job_status || snapshot.status || snapshot.queue_status || '').trim().toLowerCase()
+            : '';
+        if (queueStatus !== '' && runningStatuses.indexOf(queueStatus) !== -1) {
+            return true;
+        }
+        return !!isOperationRunning;
+    }
+
+    function getPlanStructuredPreviewEmptyText() {
+        if (isPlanGenerationRunningNow()) {
+            return String(messages.planStructuredPreviewEmptyRunning || '方案正在生成中');
+        }
+        return String(messages.planStructuredPreviewEmpty || '方案等待确认');
+    }
+
+    function renderPlanPreviewEmptyStateHtml() {
+        return ''
+            + '<div class="d-flex align-items-center justify-content-center text-center w-100 h-100 py-5">'
+            + '<div class="text-muted fs-5 fw-semibold">' + escapeHtml(getPlanStructuredPreviewEmptyText()) + '</div>'
+            + '</div>';
+    }
+
     function renderPlanStructuredPreviewHtml(planRoot) {
         if (!planRoot || typeof planRoot !== 'object') {
-            return '<div class="text-muted small">' + escapeHtml(String(messages.planStructuredPreviewEmpty || '')) + '</div>';
+            return renderPlanPreviewEmptyStateHtml();
         }
         if (isTaskPlanStructuredRoot(planRoot)) {
             return renderTaskPlanStructuredPreviewHtml(planRoot);
@@ -5637,7 +5683,7 @@
             });
         }
         if (tabs.length === 0) {
-            return '<div class="text-muted small">' + escapeHtml(String(messages.planStructuredPreviewEmpty || '')) + '</div>';
+            return renderPlanPreviewEmptyStateHtml();
         }
         return ''
             + buildPreviewStageToolbar('plan')
@@ -5662,7 +5708,10 @@
             structuredRoot = coerceStructuredPlanRootFromParsedJson(parsedFromMd);
         }
 
-        // 有结构化根数据时优先渲染结构化预览，否则仅展示 Markdown。
+        // 有结构化根数据时优先渲染结构化预览；当 Markdown 与结构化数据都为空时显示状态文案，避免空白区域。
+        if (!structuredRoot && md === '') {
+            return renderPlanPreviewEmptyStateHtml();
+        }
         return renderPlanStructuredPreviewHtml(structuredRoot);
     }
 

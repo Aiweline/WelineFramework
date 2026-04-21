@@ -199,10 +199,11 @@
         if (!event || typeof event.data !== 'string' || event.data === '') {
             return {};
         }
+        var raw = String(event.data || '');
         try {
             return JSON.parse(event.data);
         } catch (error) {
-            return {};
+            return { message: raw, raw: raw };
         }
     }
 
@@ -1270,12 +1271,28 @@
             source.addEventListener('error', function (event) {
                 stopObserverSyncTerminalPulse();
                 var payload = parsePayload(event);
-                if (payload && payload.message) {
-                    lastServerError = normalizeToastMessage(String(payload.message));
-                    if (Array.isArray(payload.required_params) && payload.required_params.length > 0) {
-                        lastServerError += ' [' + payload.required_params.join(', ') + ']';
-                    }
-                    logOperationToWorkspaceTerminal('error', payload, 'error', lastServerError);
+                var parsedMessage = payload && payload.message ? String(payload.message) : '';
+                if (!parsedMessage && event && typeof event.data === 'string' && String(event.data).trim() !== '') {
+                    parsedMessage = String(event.data).trim();
+                }
+                lastServerError = normalizeToastMessage(parsedMessage || <?= \json_encode((string)__('操作执行失败（服务端返回错误事件）'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                if (payload && Array.isArray(payload.required_params) && payload.required_params.length > 0) {
+                    lastServerError += ' [' + payload.required_params.join(', ') + ']';
+                }
+                logOperationToWorkspaceTerminal('error', payload, 'error', lastServerError);
+                if (settled) {
+                    return;
+                }
+                // 收到服务端 error 事件后立即终止当前操作流，避免继续处理后续 done 造成错误覆盖。
+                settled = true;
+                closeOperationSource(source);
+                toast('error', lastServerError);
+                resetOperationUiOnFailure(operation);
+                if (typeof enableNavigationAfterOperation === 'function') {
+                    enableNavigationAfterOperation();
+                }
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
                 }
             });
 
