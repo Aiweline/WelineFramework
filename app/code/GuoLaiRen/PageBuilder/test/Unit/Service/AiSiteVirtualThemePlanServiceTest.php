@@ -176,21 +176,24 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         );
     }
 
-    public function testBuildTaskPlanArtifactsRejectsAiPageTasksMissingBlockTaskContract(): void
+    public function testBuildTaskPlanArtifactsRejectsAiPageTasksMissingBlockTaskMetaFields(): void
     {
-        foreach (['meta_fields', 'content_plan', 'style_plan', 'planning_reason'] as $missingField) {
-            $service = new AiSiteVirtualThemePlanService(
-                $this->createAiServiceStub($this->buildTaskPlanResponseMissingBlockTaskField($missingField))
-            );
+        $this->assertMissingBlockTaskFieldIsRejected('meta_fields');
+    }
 
-            try {
-                $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
-                self::fail('Expected missing block_task field to be rejected: ' . $missingField);
-            } catch (\RuntimeException $exception) {
-                self::assertStringContainsString('block_task', $exception->getMessage());
-                self::assertStringContainsString($missingField, $exception->getMessage());
-            }
-        }
+    public function testBuildTaskPlanArtifactsRejectsAiPageTasksMissingBlockTaskContentPlan(): void
+    {
+        $this->assertMissingBlockTaskFieldIsRejected('content_plan');
+    }
+
+    public function testBuildTaskPlanArtifactsRejectsAiPageTasksMissingBlockTaskStylePlan(): void
+    {
+        $this->assertMissingBlockTaskFieldIsRejected('style_plan');
+    }
+
+    public function testBuildTaskPlanArtifactsRejectsAiPageTasksMissingBlockTaskPlanningReason(): void
+    {
+        $this->assertMissingBlockTaskFieldIsRejected('planning_reason');
     }
 
 
@@ -1219,6 +1222,21 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         $aiService = $this->createMock(AiService::class);
         $aiService->method('generate')->willReturn($response);
         return $aiService;
+    }
+
+    private function assertMissingBlockTaskFieldIsRejected(string $missingField): void
+    {
+        $service = new AiSiteVirtualThemePlanService(
+            $this->createAiServiceStub($this->buildTaskPlanResponseMissingBlockTaskField($missingField))
+        );
+
+        try {
+            $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
+            self::fail('Expected missing block_task field to be rejected: ' . $missingField);
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('block_task', $exception->getMessage());
+            self::assertStringContainsString($missingField, $exception->getMessage());
+        }
     }
 
     private function buildTaskPlanResponseMissingBlockTaskField(string $field): string
