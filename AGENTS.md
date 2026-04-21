@@ -51,6 +51,7 @@ Keep runtime marker contracts stable and non-destructive when overlays are appli
 - Use the lightest path that preserves quality: direct action, MCP, then delegation.
 - Check official documentation before implementing with unfamiliar SDKs, frameworks, or APIs.
 - Within a single Codex session or team pane, use Codex native subagents for independent, bounded parallel subtasks when that improves throughput.
+- Treat development/executor roles as full-stack by default: if an atomic task touches a workflow across backend services, APIs, frontend templates/JavaScript, state/SSE, and tests, the assigned development worker must implement the complete vertical slice inside its atom instead of stopping at only backend or only frontend code.
 <!-- OMX:GUIDANCE:OPERATING:START -->
 - Default to quality-first, intent-deepening responses; think one more step before replying or asking for clarification, and use as much detail as needed for a strong result without empty verbosity.
 - Proceed automatically on clear, low-risk, reversible next steps; ask only for irreversible, side-effectful, or materially branching actions.
