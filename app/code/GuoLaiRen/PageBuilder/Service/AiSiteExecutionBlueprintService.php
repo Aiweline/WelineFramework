@@ -681,20 +681,42 @@ final class AiSiteExecutionBlueprintService
         $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? ''));
         $themeDesign = \json_encode($planJson['theme_design'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         $baselinePage = \json_encode($planJson['pages'][$pageType] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        $pageArchitectureGuide = $this->buildStageOnePageArchitectureGuide($pageType);
         return \implode("\n", [
             'You are PageBuilder Stage-1 PAGE planner.',
             'Return STRICT JSON only for exactly one page. Do not return other pages.',
             'Locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
             'Page type: ' . $pageType,
+            'Page-type architecture guide: ' . $pageArchitectureGuide,
             'Brief: ' . ($brief !== '' ? $brief : '-'),
             'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
             'Target scope: ' . ($targetScope !== '' ? $targetScope : '-'),
             'Shared theme_design (non-negotiable): ' . $themeDesign,
             'Baseline page shape to improve, keep compatible keys: ' . $baselinePage,
+            'Critical page differentiation rules:',
+            '- Design this page from its page_type intent, not by copying the home page and changing nouns.',
+            '- home_page and about_page MUST have clearly different block_key sets, block order, content purpose, and design_tags.',
+            '- home_page usually needs conversion-first blocks such as hero, featured_games/highlights, trust/social proof, final_cta.',
+            '- about_page usually needs story/mission/team/values/trust narrative blocks, not another homepage conversion sequence.',
+            '- contact_page usually needs contact_methods, form_guidance, map/service_area, support_faq.',
+            '- policy/legal pages usually need structured legal_content, summary, details, help_cta; avoid marketing hero clones.',
+            '- Every block MUST include design_tags with visual, motion, interaction, texture, responsive arrays and an implementation_note.',
+            '- design_tags examples: visual=["premium","card shadow","rounded image","large banner"], motion=["5s fade in/out","subtle parallax","hover lift"], interaction=["primary CTA hover","tabs","accordion"], texture=["soft gradient","glass surface","Indian pattern accent"], responsive=["mobile stacked cards","desktop two-column"].',
+            '- These design_tags are source-of-truth for stage-2 and stage-3; make them specific enough to recreate effects, spacing, shadows, radius, image treatment, and interaction behavior.',
             'Schema:',
-            '{"page":{"page_goal":"string","theme_alignment_summary":"string","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}}',
-            'Hard rules: output 2-3 blocks only; each block exactly 3 field_plan rows; feature_points max 3; content and core_copy must be final customer-visible implementation content, compact and not instruction-like.',
+            '{"page":{"page_goal":"string","theme_alignment_summary":"string","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"implementation_note":"string"},"field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}}',
+            'Hard rules: output 2-3 blocks only; each block exactly 3 field_plan rows; feature_points max 3; content and core_copy must be final customer-visible implementation content, compact and not instruction-like; every block must have complete design_tags.',
         ]);
+    }
+
+    private function buildStageOnePageArchitectureGuide(string $pageType): string
+    {
+        return match ($pageType) {
+            Page::TYPE_HOME => 'Home page: conversion-first entry page. Use a distinctive opening/banner, value/game highlights, trust or final CTA. Avoid brand-history blocks as the primary structure.',
+            Page::TYPE_ABOUT => 'About page: brand story and trust narrative. Use origin/story, mission/values/team/proof, community promise or about CTA. Do not reuse homepage hero/highlights/cta as the same block sequence.',
+            Page::TYPE_CONTACT => 'Contact page: support and lead-capture path. Use contact methods, form guidance, service/support details, FAQ or map/location when relevant.',
+            default => $pageType . ': infer the standard information architecture for this page type and create blocks that differ from home_page in purpose, order, and content pattern.',
+        };
     }
 
     /**
@@ -1065,6 +1087,7 @@ final class AiSiteExecutionBlueprintService
                         'goal' => (string)($block['goal'] ?? ''),
                         'content' => $this->buildBlockContentSummary($block),
                         'implementation_note' => $this->buildBlockImplementationFocus($block, $locale),
+                        'design_tags' => \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [],
                         'field_plan' => $this->normalizeStageOneFieldPlanForCustomerView(\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : []),
                     ];
                 }, \is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : []))),
@@ -4928,6 +4951,7 @@ final class AiSiteExecutionBlueprintService
             'realtime_content' => $realtimeContent,
             'editable_fields' => $editableFields,
             'content_source' => $contentSource,
+            'design_tags' => $this->normalizeStageOneBlockDesignTags($block, $sharedPromptContext),
             'style_direction' => (string)($block['style_direction'] ?? $block['execution_script']['style_tone'] ?? ''),
             'responsive_rule' => (string)($block['responsive_rule'] ?? $block['execution_script']['responsive_rule'] ?? ''),
             'seo_role' => (string)($block['seo_role'] ?? $block['seo_impact'] ?? ''),
@@ -4942,6 +4966,99 @@ final class AiSiteExecutionBlueprintService
         $normalized['context_hash'] = $this->buildStageOneBlockContextHash($pageType, $normalized);
 
         return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param array<string, mixed> $sharedPromptContext
+     * @return array{visual:list<string>,motion:list<string>,interaction:list<string>,texture:list<string>,responsive:list<string>,implementation_note:string}
+     */
+    private function normalizeStageOneBlockDesignTags(array $block, array $sharedPromptContext): array
+    {
+        $raw = \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [];
+        $executionScript = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
+        $themeDesign = \is_array($sharedPromptContext['theme_design'] ?? null) ? $sharedPromptContext['theme_design'] : [];
+        $visualKeywords = \is_array($themeDesign['visual_keywords'] ?? null) ? $themeDesign['visual_keywords'] : [];
+        $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+        $typography = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
+        $blockKey = \trim((string)($block['block_key'] ?? $block['section_code'] ?? 'block'));
+
+        $normalizeList = static function (mixed $value): array {
+            if (!\is_array($value)) {
+                return [];
+            }
+
+            return \array_values(\array_filter(\array_map(
+                static fn($item): string => \is_scalar($item) ? \trim((string)$item) : '',
+                $value
+            ), static fn(string $item): bool => $item !== ''));
+        };
+
+        $visual = $normalizeList($raw['visual'] ?? []);
+        if ($visual === []) {
+            $visual = \array_values(\array_filter(\array_map(
+                static fn($item): string => \is_scalar($item) ? \trim((string)$item) : '',
+                \array_slice($visualKeywords, 0, 3)
+            ), static fn(string $item): bool => $item !== ''));
+        }
+        if ($visual === []) {
+            $visual = ['theme-consistent layout', 'clear visual hierarchy'];
+        }
+
+        $motion = $normalizeList($raw['motion'] ?? []);
+        if ($motion === []) {
+            $motion = $this->looksLikeHeroBlockKey($blockKey)
+                ? ['5s fade in/out', 'subtle entrance animation']
+                : ['hover lift', '150ms ease transition'];
+        }
+
+        $interaction = $normalizeList($raw['interaction'] ?? []);
+        if ($interaction === []) {
+            $interaction = ['CTA hover feedback', 'keyboard-focus visible state'];
+        }
+
+        $texture = $normalizeList($raw['texture'] ?? []);
+        if ($texture === []) {
+            $paletteName = \trim((string)($colorScheme['name'] ?? ''));
+            $texture = [$paletteName !== '' ? ($paletteName . ' surface') : 'soft themed surface'];
+            $backgroundDirection = \trim((string)($executionScript['background_direction'] ?? ''));
+            if ($backgroundDirection !== '') {
+                $texture[] = $backgroundDirection;
+            }
+        }
+
+        $responsive = $normalizeList($raw['responsive'] ?? []);
+        if ($responsive === []) {
+            $spacingScale = \trim((string)($typography['spacing_scale'] ?? ''));
+            $responsive = [
+                'desktop preserves intended composition',
+                'mobile stacks content without hiding CTA',
+            ];
+            if ($spacingScale !== '') {
+                $responsive[] = 'spacing follows ' . $spacingScale;
+            }
+        }
+
+        $implementationNote = \trim((string)($raw['implementation_note'] ?? ''));
+        if ($implementationNote === '') {
+            $implementationNote = 'Carry these design tags into stage-2 and stage-3 so animation, texture, spacing, radius, and interaction behavior are implemented consistently.';
+        }
+
+        return [
+            'visual' => \array_values(\array_unique($visual)),
+            'motion' => \array_values(\array_unique($motion)),
+            'interaction' => \array_values(\array_unique($interaction)),
+            'texture' => \array_values(\array_unique($texture)),
+            'responsive' => \array_values(\array_unique($responsive)),
+            'implementation_note' => $implementationNote,
+        ];
+    }
+
+    private function looksLikeHeroBlockKey(string $blockKey): bool
+    {
+        $blockKey = \mb_strtolower(\trim($blockKey));
+
+        return $blockKey === 'hero' || \str_contains($blockKey, 'hero') || \str_contains($blockKey, 'banner');
     }
 
     /**
@@ -5746,6 +5863,7 @@ final class AiSiteExecutionBlueprintService
             'editable_fields' => $this->normalizeStageOnePlanBookEditableFields($block),
             'content_source' => \is_array($block['content_source'] ?? null) ? \array_values($block['content_source']) : [],
             'style_direction' => \trim((string)($block['style_direction'] ?? '')),
+            'design_tags' => \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [],
             'responsive_rule' => \trim((string)($block['responsive_rule'] ?? $block['style_brief']['responsive_rule'] ?? '')),
             'seo_brief' => \is_array($block['seo_brief'] ?? null) ? $block['seo_brief'] : [],
             'context_hash' => $this->buildStageOnePlanBookBlockContextHash($taskKey, $block),
