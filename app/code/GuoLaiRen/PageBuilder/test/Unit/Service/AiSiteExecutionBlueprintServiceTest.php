@@ -69,10 +69,31 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertSame('plan_workbench.stage1.theme_context_snapshot', (string)($themeDesignJob['result_ref']['scope_path'] ?? ''));
         self::assertIsArray($artifacts['execution_blueprint']['shared_prompt_context'] ?? null);
         self::assertIsArray($artifacts['structured']['shared_plan']['shared_prompt_context'] ?? null);
-        self::assertSame($themeDesignJob, self::findQueueJobByType($artifacts['structured']['queue_jobs'] ?? [], 'stage1.shared.theme_design'));
-        self::assertSame($themeDesignJob, self::findQueueJobByType($artifacts['plan_workbench']['stage1']['queue_jobs'] ?? [], 'stage1.shared.theme_design'));
-        self::assertSame(1, (int)($artifacts['plan_workbench']['stage1']['progress']['queue_job_total'] ?? 0));
-        self::assertSame(1, (int)($artifacts['plan_workbench']['stage1']['progress']['queue_job_done'] ?? 0));
+        $headerFooterJob = $artifacts['execution_blueprint']['stage1_queue']['jobs']['stage1.shared.header_footer'] ?? null;
+        self::assertIsArray($headerFooterJob);
+        self::assertSame('stage1.shared.header_footer', (string)($headerFooterJob['job_key'] ?? ''));
+        self::assertSame('stage1.shared.header_footer', (string)($headerFooterJob['job_type'] ?? ''));
+        self::assertSame('done', (string)($headerFooterJob['status'] ?? ''));
+        self::assertNotSame('', (string)($headerFooterJob['token'] ?? ''));
+        self::assertSame(['stage1.shared.theme_design'], $headerFooterJob['depends_on'] ?? []);
+        self::assertSame(
+            (string)($artifacts['execution_blueprint']['theme_context_snapshot']['context_hash'] ?? ''),
+            (string)($headerFooterJob['inputs']['theme_context_hash'] ?? '')
+        );
+        self::assertSame('shared:header', (string)($headerFooterJob['outputs']['header_block']['task_key'] ?? ''));
+        self::assertSame('shared:footer', (string)($headerFooterJob['outputs']['footer_block']['task_key'] ?? ''));
+        self::assertSame(
+            (string)($artifacts['execution_blueprint']['shared_prompt_context']['context_hash'] ?? ''),
+            (string)($headerFooterJob['outputs']['shared_prompt_context']['context_hash'] ?? '')
+        );
+        self::assertSame(
+            $artifacts['execution_blueprint']['stage1_queue']['jobs']['stage1.shared.header_footer'] ?? null,
+            $artifacts['structured']['stage1_queue']['jobs']['stage1.shared.header_footer'] ?? null
+        );
+        self::assertSame(
+            $artifacts['execution_blueprint']['stage1_queue']['jobs']['stage1.shared.header_footer'] ?? null,
+            $artifacts['plan_workbench']['stage1']['queue_jobs']['stage1.shared.header_footer'] ?? null
+        );
         self::assertIsArray($artifacts['structured']['page_plans']['home_page'] ?? null);
         self::assertSame(
             (string)($artifacts['execution_blueprint']['shared_prompt_context']['context_hash'] ?? ''),
