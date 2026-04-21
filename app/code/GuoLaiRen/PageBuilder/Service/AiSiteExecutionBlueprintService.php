@@ -552,6 +552,7 @@ final class AiSiteExecutionBlueprintService
             $contentItems[] = [
                 'title' => (string)$pageType,
                 'goal' => (string)($pagePlan['page_goal'] ?? ''),
+                'theme_alignment_summary' => (string)($pagePlan['theme_alignment_summary'] ?? ''),
                 'blocks' => \array_values(\array_filter(\array_map(function ($block) use ($locale) {
                     if (!\is_array($block)) {
                         return null;
