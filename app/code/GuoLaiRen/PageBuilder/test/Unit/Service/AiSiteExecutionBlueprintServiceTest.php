@@ -94,6 +94,33 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             $artifacts['execution_blueprint']['stage1_queue']['jobs']['stage1.shared.header_footer'] ?? null,
             $artifacts['plan_workbench']['stage1']['queue_jobs']['stage1.shared.header_footer'] ?? null
         );
+        $stageOneQueue = $artifacts['execution_blueprint']['stage1_queue'] ?? [];
+        self::assertSame('fiber_coroutine', (string)($stageOneQueue['fanout']['mode'] ?? ''));
+        self::assertSame('one_page_one_task', (string)($stageOneQueue['fanout']['task_granularity'] ?? ''));
+        self::assertSame('stage1.shared.header_footer', (string)($stageOneQueue['fanout']['trigger_after'] ?? ''));
+        self::assertSame(2, (int)($stageOneQueue['fanout']['page_job_count'] ?? 0));
+        self::assertSame(
+            ['stage1.page_plan:home_page', 'stage1.page_plan:about_page'],
+            $stageOneQueue['fanout']['page_job_keys'] ?? []
+        );
+        $homePageJob = $stageOneQueue['jobs']['stage1.page_plan:home_page'] ?? null;
+        self::assertIsArray($homePageJob);
+        self::assertSame('stage1.page_plan.generate', (string)($homePageJob['job_type'] ?? ''));
+        self::assertSame(['stage1.shared.header_footer'], $homePageJob['depends_on'] ?? []);
+        self::assertSame('fiber_coroutine', (string)($homePageJob['concurrency']['mode'] ?? ''));
+        self::assertSame('home_page', (string)($homePageJob['inputs']['page_key'] ?? ''));
+        self::assertSame(
+            (string)($artifacts['execution_blueprint']['shared_prompt_context']['context_hash'] ?? ''),
+            (string)($homePageJob['inputs']['shared_context_hash'] ?? '')
+        );
+        self::assertSame(
+            (string)($artifacts['structured']['page_plans']['home_page']['page_context_hash'] ?? ''),
+            (string)($homePageJob['outputs']['page_context_hash'] ?? '')
+        );
+        self::assertSame(
+            $homePageJob,
+            $artifacts['plan_workbench']['stage1']['queue_jobs']['stage1.page_plan:home_page'] ?? null
+        );
         self::assertIsArray($artifacts['structured']['page_plans']['home_page'] ?? null);
         self::assertSame(
             (string)($artifacts['execution_blueprint']['shared_prompt_context']['context_hash'] ?? ''),
