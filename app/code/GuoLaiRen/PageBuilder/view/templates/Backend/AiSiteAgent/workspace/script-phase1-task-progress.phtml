@@ -62,27 +62,76 @@
         return normalized === null ? queueMessages.queueIdUnknown : String(normalized);
     }
 
+    function toObjectSafe(value) {
+        if (!value) {
+            return {};
+        }
+        if (typeof value === 'object') {
+            return value;
+        }
+        if (typeof value === 'string') {
+            var text = String(value || '').trim();
+            if (!text) {
+                return {};
+            }
+            try {
+                var parsed = JSON.parse(text);
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch (e) {
+                return {};
+            }
+        }
+        return {};
+    }
+
+    function pickTokenCount(source, keys) {
+        if (!source || typeof source !== 'object') {
+            return null;
+        }
+        for (var i = 0; i < keys.length; i += 1) {
+            var key = keys[i];
+            if (!Object.prototype.hasOwnProperty.call(source, key)) {
+                continue;
+            }
+            var normalized = normalizeTokenCount(source[key]);
+            if (normalized !== null) {
+                return normalized;
+            }
+        }
+        return null;
+    }
+
     function resolveTokenUsage(info) {
         var snapshot = info && info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
-        var usage = {};
-        if (snapshot.token_usage && typeof snapshot.token_usage === 'object') {
-            usage = Object.assign(usage, snapshot.token_usage);
+        var usage = Object.assign(
+            {},
+            toObjectSafe(snapshot.token_usage),
+            toObjectSafe(info && info.token_usage)
+        );
+
+        var input = pickTokenCount(usage, ['input_tokens', 'prompt_tokens', 'input_token', 'prompt_token', 'prompt_eval_count']);
+        if (input === null) {
+            input = pickTokenCount(info, ['input_tokens', 'prompt_tokens', 'input_token', 'prompt_token', 'prompt_eval_count']);
         }
-        if (info && info.token_usage && typeof info.token_usage === 'object') {
-            usage = Object.assign(usage, info.token_usage);
+        if (input === null) {
+            input = pickTokenCount(snapshot, ['input_tokens', 'prompt_tokens', 'input_token', 'prompt_token', 'prompt_eval_count']);
         }
 
-        var input = normalizeTokenCount(
-            usage.input_tokens != null
-                ? usage.input_tokens
-                : (usage.prompt_tokens != null ? usage.prompt_tokens : (info && info.input_tokens != null ? info.input_tokens : snapshot.input_tokens))
-        );
-        var output = normalizeTokenCount(
-            usage.output_tokens != null
-                ? usage.output_tokens
-                : (usage.completion_tokens != null ? usage.completion_tokens : (info && info.output_tokens != null ? info.output_tokens : snapshot.output_tokens))
-        );
-        var total = normalizeTokenCount(usage.total_tokens != null ? usage.total_tokens : (info && info.total_tokens != null ? info.total_tokens : snapshot.total_tokens));
+        var output = pickTokenCount(usage, ['output_tokens', 'completion_tokens', 'output_token', 'completion_token', 'eval_count']);
+        if (output === null) {
+            output = pickTokenCount(info, ['output_tokens', 'completion_tokens', 'output_token', 'completion_token', 'eval_count']);
+        }
+        if (output === null) {
+            output = pickTokenCount(snapshot, ['output_tokens', 'completion_tokens', 'output_token', 'completion_token', 'eval_count']);
+        }
+
+        var total = pickTokenCount(usage, ['total_tokens', 'total_token']);
+        if (total === null) {
+            total = pickTokenCount(info, ['total_tokens', 'total_token']);
+        }
+        if (total === null) {
+            total = pickTokenCount(snapshot, ['total_tokens', 'total_token']);
+        }
         if (total === null && input !== null && output !== null) {
             total = input + output;
         }
@@ -161,6 +210,7 @@
             + '</pre>';
         procEl.textContent = String(info.process || '').trim() || '—';
         resEl.textContent = String(info.result_log || '').trim() || '—';
+        resEl.scrollTop = 0;
     }
 
     function getLastWorkspaceState() {
@@ -195,13 +245,13 @@
         if (piece === '') {
             return text;
         }
-        if (text !== '' && text.slice(-1) !== '\n' && piece.charAt(0) !== '\n') {
-            text += '\n';
+        if (piece !== '' && piece.slice(-1) !== '\n' && text !== '' && text.charAt(0) !== '\n') {
+            piece += '\n';
         }
-        text += piece;
+        text = piece + text;
         var max = 24000;
         if (text.length > max) {
-            text = '…（以下仅显示末尾约 ' + max + ' 字符）\n' + text.slice(-max);
+            text = text.slice(0, max) + '\n…（以下内容已截断，仅保留最新约 ' + max + ' 字符）';
         }
         return text;
     }
@@ -268,7 +318,7 @@
         if (Object.prototype.hasOwnProperty.call(payload, 'queue_pid')) {
             snapshot.pid = normalizeQueueId(payload.queue_pid);
         }
-        ['job_key', 'job_type', 'token', 'execution_token', 'input_tokens', 'output_tokens', 'total_tokens'].forEach(function (key) {
+        ['job_key', 'job_type', 'token', 'execution_token', 'input_tokens', 'output_tokens', 'total_tokens', 'prompt_tokens', 'completion_tokens', 'prompt_eval_count', 'eval_count'].forEach(function (key) {
             if (Object.prototype.hasOwnProperty.call(payload, key)) {
                 snapshot[key] = payload[key];
             }
