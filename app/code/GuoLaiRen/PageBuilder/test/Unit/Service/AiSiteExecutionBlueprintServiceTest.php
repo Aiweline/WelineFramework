@@ -330,7 +330,11 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('Do not return markdown.', $capturedPrompt);
         self::assertStringContainsString('Do not return a separate markdown field.', $capturedPrompt);
         self::assertStringContainsString('Output only the structured plan object shown in the schema.', $capturedPrompt);
-        self::assertStringContainsString('"theme_design":{"theme_purpose":"string","color_scheme"', $capturedPrompt);
+        self::assertStringContainsString('"selection_reason":"why this font family and voice/tone fit the user requirement"', $capturedPrompt);
+        self::assertStringContainsString('"selection_reason":"why this color system fits the user requirement"', $capturedPrompt);
+        self::assertStringContainsString('theme_style.selection_reason and palette.selection_reason are REQUIRED', $capturedPrompt);
+        self::assertStringContainsString('why the color system, font family, and voice/tone were selected', $capturedPrompt);
+        self::assertStringContainsString('selection_reason must connect the color/font/tone choices to the user one-line requirement', $capturedPrompt);
         self::assertStringContainsString('Never write blueprint guidance such as "围绕...说明"', $capturedPrompt);
         self::assertStringContainsString('Never write process wording such as "标题围绕核心价值展开"', $capturedPrompt);
         self::assertStringContainsString('field_plan.sample must be direct content', $capturedPrompt);
@@ -383,6 +387,8 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertLessThan(8192, (int)($capturedParams['max_tokens'] ?? 0));
         self::assertSame(['type' => 'json_object'], $capturedParams['response_format'] ?? null);
         self::assertSame('ai', (string)($artifacts['generation_source'] ?? 'ai'));
+        self::assertStringContainsString('strong CTA', (string)($artifacts['plan_json']['theme_style']['selection_reason'] ?? ''));
+        self::assertStringContainsString('strong CTA', (string)($artifacts['plan_json']['palette']['selection_reason'] ?? ''));
     }
 
     public function testBuildPlanArtifactsByAiStreamAcceptsTopLevelPlanObjectShape(): void
@@ -602,6 +608,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                     'name' => 'Plan-Driven Hybrid',
                     'visual_tone' => 'Structured and clear',
                     'font_family' => 'Sans Serif',
+                    'selection_reason' => 'Sans Serif and a structured tone keep the strong CTA brief readable and trustworthy for home and about visitors.',
                 ],
                 'palette' => [
                     'name' => 'Ocean Slate',
@@ -610,6 +617,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                     'accent' => '#2563eb',
                     'surface' => '#f8fafc',
                     'text' => '#0f172a',
+                    'selection_reason' => 'Ocean Slate balances trust and action so the strong CTA stands out without overwhelming the home and about content.',
                 ],
                 'theme_design' => [
                     'theme_purpose' => 'Build trust quickly and guide visitors toward one clear CTA.',
