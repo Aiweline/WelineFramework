@@ -264,9 +264,6 @@ class ServiceOrchestrator
      */
     private bool $childServicesBootstrapInProgress = false;
 
-    /** Windows 启动期是否启用协作式顺序拉起；默认关闭，正常路径改为全并发启动。 */
-    private bool $useCooperativeSequentialStartup = false;
-
     /** 单实例重启优先（可恢复角色 IPC 断开时先单实例重启） */
     private bool $singleRestartFirst = true;
 
@@ -1518,22 +1515,6 @@ class ServiceOrchestrator
         $this->sweeperInterval = (float)$context->getConfig('wls.orchestrator.sweeper_interval_sec', 15.0);
         $this->periodicOrphanSweepEnabled = (bool)$context->getConfig('wls.orchestrator.periodic_orphan_sweep', false);
         $this->singleRestartFirst = (bool)$context->getConfig('wls.orchestrator.single_restart_first', true);
-        $configuredCooperativeSequentialStartup = (bool)($context->getConfig(
-            'wls.orchestrator.use_cooperative_sequential_startup',
-            false
-        ) ?? false);
-        $allowWindowsCooperativeSequentialStartup = (bool)($context->getConfig(
-            'wls.orchestrator.allow_windows_cooperative_sequential_startup',
-            false
-        ) ?? false);
-        $this->useCooperativeSequentialStartup = $configuredCooperativeSequentialStartup;
-        if (\defined('IS_WIN') && IS_WIN && $this->useCooperativeSequentialStartup && !$allowWindowsCooperativeSequentialStartup) {
-            $this->useCooperativeSequentialStartup = false;
-            WlsLogger::warning_(
-                '[Orchestrator] 检测到 Windows 串行协作启动配置已开启，为避免分钟级启动延迟，已自动改为并发启动。'
-                . ' 如需强制串行请设置 wls.orchestrator.allow_windows_cooperative_sequential_startup=true'
-            );
-        }
         $this->escalationWindowSec = (float)$context->getConfig('wls.orchestrator.escalation_window_sec', 60.0);
         $this->escalationThreshold = (int)$context->getConfig('wls.orchestrator.escalation_threshold', 3);
         $this->stabilizationSec = (float)$context->getConfig('wls.orchestrator.stabilization_sec', 15.0);
@@ -1742,10 +1723,7 @@ class ServiceOrchestrator
         ];
         $prefixes = \array_values(\array_unique($prefixes));
 
-        $killed = 0;
-        foreach ($prefixes as $prefix) {
-            $killed += Processer::killByProcessNamePrefix($prefix);
-        }
+        $killed = Processer::killByProcessNamePrefixes($prefixes);
         $staleRemoved = Processer::cleanupStalePidFiles();
 
         if ($killed > 0 || $staleRemoved > 0) {
@@ -2945,13 +2923,6 @@ class ServiceOrchestrator
             return [];
         }
 
-        if (\count($instanceIds) === 1) {
-            $single = $this->startInstance($provider, $instanceIds[0], $context);
-            // 单实例启动也可能命中 Windows spawn 阻塞，补一轮控制面排空，避免 READY/ACK 滞后。
-            $this->drainControlPlaneAfterStartupStep(60, 50000);
-            return [$single];
-        }
-
         $preparedInstances = [];
         $commands = [];
         $prepareStartedAt = \microtime(true);
@@ -3082,13 +3053,6 @@ class ServiceOrchestrator
         return Processer::batchCreate($commands);
     }
 
-    /**
-     * Windows 上批量 Processer::batchCreate 可能在启动期长时间阻塞，
-     * 期间 register/ready/ACK_READY 无法及时处理。启动阶段退回顺序拉起，
-     * 每启动一个实例就 poll 一次控制面，优先保证控制消息通畅。
-     *
-     * @param int[] $instanceIds
-     */
     /**
      * 启动窗口内尽量把已到达的 register/ready/ack 等控制消息及时消化掉，
      * 避免“只 poll 一帧”后马上再次进入长时间 spawnProcess，导致 READY 饿死。
@@ -6514,10 +6478,7 @@ class ServiceOrchestrator
             'weline-wls-maintenance-',
         ];
 
-        $killed = 0;
-        foreach ($prefixes as $prefix) {
-            $killed += Processer::killByProcessNamePrefix($prefix);
-        }
+        $killed = Processer::killByProcessNamePrefixes($prefixes);
 
         $staleRemoved = Processer::cleanupStalePidFiles();
         $this->lastSweepKilled = $killed;
