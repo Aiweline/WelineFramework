@@ -4156,7 +4156,7 @@ final class AiSiteExecutionBlueprintService
             $pageJobKeys[] = $jobKey;
             $jobs[$jobKey] = [
                 'job_key' => $jobKey,
-                'job_type' => 'stage1.page_plan.generate',
+                'job_type' => 'stage1.page_plan',
                 'stage' => 'stage1_page_fanout',
                 'sort_order' => $sortOrder++,
                 'status' => 'done',
