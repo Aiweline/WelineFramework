@@ -1844,100 +1844,10 @@ class Stop extends CommandAbstract
             return 0;
         }
 
-        if ($skipCheck && $this->isWindowsPlatform()) {
-            return $this->terminateResidualProcessesWindows($uniquePids);
-        }
+        $result = Processer::batchKillProcessTrees($uniquePids, $skipCheck);
+        $this->invalidateStopRuntimeState();
 
-        $processed = 0;
-        foreach ($uniquePids as $pid) {
-            if ($this->killStopPid($pid, $skipCheck)) {
-                $processed++;
-            }
-        }
-
-        return $processed;
-    }
-
-    /**
-     * Windows 下使用批量 taskkill，避免逐个 PID 串行等待导致 stop 长时间卡住。
-     *
-     * @param array<int> $pids
-     */
-    private function terminateResidualProcessesWindows(array $pids): int
-    {
-        $processed = 0;
-
-        foreach (\array_chunk($this->expandWindowsStopTargetPids($pids), 32) as $chunk) {
-            $this->executeWindowsBatchStopProcessForStop($chunk);
-            $this->invalidateStopRuntimeState();
-
-            SchedulerSystem::usleep(500000);
-            $running = $this->collectRunningResidualPidsWindows($chunk);
-            foreach ($chunk as $pid) {
-                if (!\in_array($pid, $running, true)) {
-                    $processed++;
-                }
-            }
-        }
-
-        return $processed;
-    }
-
-    /**
-     * @param list<int> $pids
-     * @return list<int>
-     */
-    protected function expandWindowsStopTargetPids(array $pids): array
-    {
-        $targets = [];
-        $currentPid = \getmypid();
-        foreach ($pids as $pid) {
-            $pid = (int) $pid;
-            if ($pid <= 0 || $pid === $currentPid) {
-                continue;
-            }
-
-            $targets[$pid] = $pid;
-        }
-
-        return \array_values($targets);
-    }
-
-    /**
-     * @param list<int> $pids
-     */
-    protected function executeWindowsBatchStopProcessForStop(array $pids): int
-    {
-        $ids = \array_values(\array_unique(\array_filter(
-            \array_map('intval', $pids),
-            static fn (int $pid): bool => $pid > 0
-        )));
-        if ($ids === []) {
-            return 0;
-        }
-
-        $command = $this->buildWindowsBatchStopCommand($ids);
-        $output = [];
-        $returnCode = 0;
-        Processer::execute($command, $output, $returnCode);
-
-        return $returnCode;
-    }
-
-    /**
-     * @param list<int> $pids
-     */
-    protected function buildWindowsBatchStopCommand(array $pids): string
-    {
-        $pidArgs = \implode(' ', \array_map(
-            static fn (int $pid): string => '/PID ' . $pid,
-            \array_values(\array_unique(\array_filter(
-                \array_map('intval', $pids),
-                static fn (int $pid): bool => $pid > 0
-            )))
-        ));
-
-        return 'cmd /d /c start "" /B cmd /d /c "taskkill /F /T ' . $pidArgs . ' 1>NUL 2>NUL"';
+        return (int) ($result['killed'] ?? 0);
     }
 
     /**
