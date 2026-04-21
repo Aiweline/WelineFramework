@@ -3888,6 +3888,43 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param array<string, mixed> $stageOneQueue
+     * @param array<string, mixed> $pagePlans
+     * @param array<string, mixed> $sharedPromptContext
+     * @return array<string, mixed>
+     */
+    private function buildStageOnePageFanoutQueueEnvelope(
+        array $stageOneQueue,
+        array $pagePlans,
+        array $sharedPromptContext,
+        string $planLocale
+    ): array {
+        $jobs = \is_array($stageOneQueue['jobs'] ?? null) ? $stageOneQueue['jobs'] : [];
+        $sequence = \is_array($stageOneQueue['sequence'] ?? null)
+            ? \array_values(\array_map('strval', $stageOneQueue['sequence']))
+            : [];
+
+        foreach ($this->buildStageOnePageFanoutQueueJobs([], [], $pagePlans, $sharedPromptContext, $planLocale) as $pageFanoutJob) {
+            $pageJobKey = \trim((string)($pageFanoutJob['job_key'] ?? ''));
+            if ($pageJobKey === '') {
+                continue;
+            }
+            $jobs[$pageJobKey] = $pageFanoutJob;
+            if (!\in_array($pageJobKey, $sequence, true)) {
+                $sequence[] = $pageJobKey;
+            }
+        }
+
+        return \array_replace($stageOneQueue, [
+            'version' => (int)($stageOneQueue['version'] ?? 1),
+            'stage' => (string)($stageOneQueue['stage'] ?? 'stage1'),
+            'status' => (string)($stageOneQueue['status'] ?? 'done'),
+            'sequence' => $sequence,
+            'jobs' => $jobs,
+        ]);
+    }
+
+    /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
      * @param array<string, mixed> $pagePlans
