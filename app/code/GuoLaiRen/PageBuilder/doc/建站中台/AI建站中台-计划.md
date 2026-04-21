@@ -1019,7 +1019,7 @@ Atomic Task ID:
 - [x] T03 共享规划持久化与上下文哈希管理（status=done, progress=100%, owner=backend, note=A10/A11/A17/A18 已完成 theme_context_snapshot/shared_prompt_context 持久化入口、shared_context_hash 缺失拒收与共享规划变更后的未完成页面任务 stale 标记；证据见 `AiSiteExecutionBlueprintServiceTest`）
 - [x] T04 `buildStageOnePagePlanPrompt(...)` 与页面任务输入装配器（status=done, progress=100%, owner=prompt-engineering, note=A14/A15/A16 已完成：页面任务输入注入 theme_design 全量硬约束，页面提示词强制主题延续并输出 theme_alignment_summary；证据见 `AiSiteExecutionBlueprintServiceTest`）
 - [x] T05 页面类型并发队列与冲突控制（status=done, progress=100%, owner=backend-queue, note=A13/A17/A18 已完成页面并发队列元数据、shared_context_hash 缺失拒收与共享规划变更 stale 标记；证据见 `AiSiteExecutionBlueprintServiceTest`）
-- [ ] T06 第一阶段块树装配器（status=todo, progress=0%, owner=backend, note=增量生成 plan_book.markdown + structured_plan + block_index）
+- [x] T06 第一阶段块树装配器（status=done, progress=100%, owner=backend, note=A20/A21/A22 已完成：plan_book.structured 由块树生成、plan_book.markdown 由排序块树组合、block_index 与排序同步；证据见 `AiSiteExecutionBlueprintServiceTest`）
 - [~] T07 第一阶段内联工作台 UI（status=in_progress, progress=55%, owner=frontend, note=A06/A07 已完成共享 Tab 主题字段展示与 reason 入口；队列状态/token 展示仍待 A27 完成）
 - [ ] T08 第一阶段页面级 AI 操作（status=todo, progress=0%, owner=frontend+backend, note=微调页面/重建页面/新增块）
 - [ ] T09 第一阶段块级操作 API（status=todo, progress=0%, owner=backend-api, note=块 refine/rebuild/create/delete/move）
@@ -1089,10 +1089,10 @@ Atomic Task ID:
 #### C. 第一阶段块树、Markdown 组合与内联操作
 
 - [x] A19 定义 `shared block` 与 `page block` 统一字段 schema（status=done, owner=worker-2, covers=§1A, output=implementation_detail/realtime_content/reason/completion_rule/editable_fields, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
-- [ ] A20 实现 `plan_book.structured` 由块树生成（status=todo, owner=backend, covers=§1A, output=结构化真相源）
-- [ ] A21 实现 `plan_book.markdown` 由块树排序组合生成（status=todo, owner=backend, covers=§1A, output=Markdown 不自由生成）
-- [ ] A22 实现 `block_index` 与块排序同步（status=todo, owner=backend, covers=§1A, output=sort_order 改变时 index 更新）
-- [ ] A23 页面 Tab 块排序写回结构化数据（status=todo, owner=frontend+backend, covers=§1A, output=排序影响 Markdown/第二阶段拆分）
+- [x] A20 实现 `plan_book.structured` 由块树生成（status=done, owner=worker-3, covers=§1A, output=结构化真相源, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
+- [x] A21 实现 `plan_book.markdown` 由块树排序组合生成（status=done, owner=worker-4, covers=§1A, output=Markdown 不自由生成, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
+- [x] A22 实现 `block_index` 与块排序同步（status=done, owner=worker-5, covers=§1A, output=sort_order 改变时 index 更新, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
+- [x] A23 页面 Tab 块排序写回结构化数据（status=done, owner=worker-6, covers=§1A, output=排序影响 Markdown/第二阶段拆分, evidence=php-l+AiSiteExecutionBlueprintServiceTest）
 - [ ] A24 页面级 `微调当前页面` API 只改当前页面块树（status=todo, owner=backend-api, covers=§1A, output=不影响其他页面）
 - [ ] A25 块级 `微调块` API 只改当前块结构化数据（status=todo, owner=backend-api, covers=§1A, output=不只改 Markdown）
 - [ ] A26 块级 `新增/删除/局部重建` API 更新装配结果（status=todo, owner=backend-api, covers=§1A, output=当前页面局部装配）
