@@ -31,6 +31,13 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('home_page', (string)($artifacts['markdown'] ?? ''));
         self::assertStringContainsString('about_page', (string)($artifacts['markdown'] ?? ''));
         self::assertIsArray($artifacts['plan_json'] ?? null);
+        self::assertStageOneThemeDesignSchema($artifacts['plan_json']['theme_design'] ?? null);
+        self::assertStageOneThemeDesignSchema($artifacts['structured']['shared_plan']['theme_design'] ?? null);
+        self::assertStageOneThemeDesignSchema($artifacts['execution_blueprint']['shared_prompt_context']['theme_design'] ?? null);
+        self::assertSame(
+            (string)($artifacts['plan_json']['theme_design']['selection_reason'] ?? ''),
+            (string)($artifacts['structured']['shared_plan']['theme_design']['selection_reason'] ?? '')
+        );
         self::assertNotEmpty($artifacts['plan_json']['pages']['home_page']['blocks'] ?? []);
         $firstBlock = $artifacts['plan_json']['pages']['home_page']['blocks'][0] ?? [];
         self::assertArrayHasKey('content', $firstBlock);
@@ -323,6 +330,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('Do not return markdown.', $capturedPrompt);
         self::assertStringContainsString('Do not return a separate markdown field.', $capturedPrompt);
         self::assertStringContainsString('Output only the structured plan object shown in the schema.', $capturedPrompt);
+        self::assertStringContainsString('"theme_design":{"theme_purpose":"string","color_scheme"', $capturedPrompt);
         self::assertStringContainsString('Never write blueprint guidance such as "围绕...说明"', $capturedPrompt);
         self::assertStringContainsString('Never write process wording such as "标题围绕核心价值展开"', $capturedPrompt);
         self::assertStringContainsString('field_plan.sample must be direct content', $capturedPrompt);
@@ -490,6 +498,33 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         ]);
     }
 
+    private static function assertStageOneThemeDesignSchema(mixed $themeDesign): void
+    {
+        self::assertIsArray($themeDesign);
+        foreach ([
+            'theme_purpose',
+            'color_scheme',
+            'typography_spacing_radius',
+            'visual_keywords',
+            'tone_of_voice',
+            'cta_tone',
+            'forbidden_styles',
+            'selection_reason',
+        ] as $field) {
+            self::assertArrayHasKey($field, $themeDesign);
+        }
+
+        self::assertIsArray($themeDesign['color_scheme']);
+        foreach (['name', 'primary', 'secondary', 'accent', 'background', 'body', 'button'] as $field) {
+            self::assertArrayHasKey($field, $themeDesign['color_scheme']);
+        }
+
+        self::assertIsArray($themeDesign['typography_spacing_radius']);
+        foreach (['font_family', 'heading_scale', 'body_scale', 'spacing_scale', 'radius_scale'] as $field) {
+            self::assertArrayHasKey($field, $themeDesign['typography_spacing_radius']);
+        }
+    }
+
     private function createStreamingAiServiceStub(string $response): AiService
     {
         $aiService = $this->createMock(AiService::class);
@@ -522,9 +557,34 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                 'palette' => [
                     'name' => 'Ocean Slate',
                     'primary' => '#0f172a',
+                    'secondary' => '#14b8a6',
                     'accent' => '#2563eb',
                     'surface' => '#f8fafc',
                     'text' => '#0f172a',
+                ],
+                'theme_design' => [
+                    'theme_purpose' => 'Need home and about pages with strong CTA.',
+                    'color_scheme' => [
+                        'name' => 'Ocean Slate',
+                        'primary' => '#0f172a',
+                        'secondary' => '#14b8a6',
+                        'accent' => '#2563eb',
+                        'background' => '#f8fafc',
+                        'body' => '#0f172a',
+                        'button' => '#0f172a',
+                    ],
+                    'typography_spacing_radius' => [
+                        'font_family' => 'Sans Serif',
+                        'heading_scale' => 'Hero 40-56px, section titles 28-36px.',
+                        'body_scale' => 'Body 16-18px with readable line-height.',
+                        'spacing_scale' => '8px base spacing with 48-96px section rhythm.',
+                        'radius_scale' => '16-24px cards and rounded CTA buttons.',
+                    ],
+                    'visual_keywords' => ['structured', 'clear', 'conversion-oriented'],
+                    'tone_of_voice' => 'Structured and clear',
+                    'cta_tone' => 'Direct and action-oriented',
+                    'forbidden_styles' => ['Do not use vague modern-only style labels.'],
+                    'selection_reason' => 'References user requirement: Need home and about pages with strong CTA.',
                 ],
                 'navigation_plan' => [
                     'header_items' => [
