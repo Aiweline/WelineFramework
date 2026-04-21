@@ -373,18 +373,19 @@ final class AiSiteVirtualThemePlanService
 
     /**
      * @param array<string, mixed> $structured
-     * @return list<array{type:string,key:string,task_keys:list<string>}>
+     * @return list<array<string, mixed>>
      */
     private function buildTaskPlanGenerationBatches(array $structured): array
     {
         $batches = [];
         $sharedTasks = \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [];
-        $sharedTaskKeys = \array_values(\array_filter(\array_map(static fn(array $task): string => \trim((string)($task['task_key'] ?? '')), $sharedTasks)));
+        $sharedTaskKeys = rray_values(rray_filter(rray_map(static fn(array $task): string => 	rim((string)($task['task_key'] ?? '')), $sharedTasks)));
         if ($sharedTaskKeys !== []) {
             $batches[] = [
                 'type' => 'shared',
                 'key' => 'shared',
                 'task_keys' => $sharedTaskKeys,
+                'fanout_group' => 'stage2.shared_task_plan',
             ];
         }
 
@@ -393,26 +394,73 @@ final class AiSiteVirtualThemePlanService
             if (!\is_array($tasks) || $tasks === []) {
                 continue;
             }
-            $taskKeys = \array_values(\array_filter(\array_map(static fn(array $task): string => \trim((string)($task['task_key'] ?? '')), $tasks)));
-            if ($taskKeys === []) {
-                continue;
+            $pageType = (string)$pageType;
+            foreach ($tasks as $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $taskKey = 	rim((string)($task['task_key'] ?? ''));
+                if ($taskKey === '') {
+                    continue;
+                }
+                $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
+                $blockKey = $this->firstNonEmptyString([
+                    $task['block_key'] ?? null,
+                    $planContext['block_code'] ?? null,
+                    $task['section_key'] ?? null,
+                    $task['section_code'] ?? null,
+                    $taskKey,
+                ]);
+                $batches[] = [
+                    'type' => 'page',
+                    'key' => $pageType,
+                    'block_key' => $blockKey,
+                    'task_keys' => [$taskKey],
+                    'sort_order' => (int)($task['sort_order'] ?? 0),
+                    'depends_on' => rray_values(rray_filter(rray_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
+                    'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
+                    'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':' . $pageType . ':' . $blockKey,
+                ];
             }
-            $batches[] = [
-                'type' => 'page',
-                'key' => (string)$pageType,
-                'task_keys' => $taskKeys,
-            ];
         }
 
         return $batches;
     }
 
     /**
-     * @param array{type:string,key:string,task_keys:list<string>} $batch
+     * @param array<string, mixed> $batch
      */
     private function buildTaskPlanBatchId(array $batch): string
     {
-        return $batch['type'] === 'shared' ? 'shared' : ('page:' . $batch['key']);
+        if (($batch['type'] ?? '') === 'shared') {
+            return 'shared';
+        }
+
+        $pageType = 	rim((string)($batch['key'] ?? 'page'));
+        $blockKey = 	rim((string)($batch['block_key'] ?? ''));
+        if ($blockKey !== '') {
+            return 'page:' . $pageType . ':' . $this->normalizeTaskPlanBatchIdPart($blockKey);
+        }
+
+        $taskKeys = rray_values(rray_filter(rray_map('strval', \is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : [])));
+        if (\count($taskKeys) === 1) {
+            return 'page:' . $pageType . ':' . \substr(\sha1($taskKeys[0]), 0, 12);
+        }
+
+        return 'page:' . $pageType;
+    }
+
+    private function normalizeTaskPlanBatchIdPart(string $value): string
+    {
+        $value = 	rim($value);
+        if ($value === '') {
+            return 'block';
+        }
+
+        $normalized = (string)(\preg_replace('/[^a-zA-Z0-9_-]+/', '-', $value) ?? $value);
+        $normalized = 	rim($normalized, '-_');
+
+        return $normalized !== '' ? $normalized : \substr(\sha1($value), 0, 12);
     }
 
     /**
@@ -420,7 +468,7 @@ final class AiSiteVirtualThemePlanService
      */
     private function resolveTaskPlanBatchIdsForTargetScope(array $structured, string $targetScope): ?array
     {
-        $targetScope = \trim($targetScope);
+        $targetScope = 	rim($targetScope);
         if ($targetScope === '' || $targetScope === 'task_plan' || $targetScope === 'all') {
             return null;
         }
@@ -428,24 +476,41 @@ final class AiSiteVirtualThemePlanService
             return ['shared'];
         }
 
-        $pageTasks = \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [];
-        foreach (\array_keys($pageTasks) as $pageType) {
-            $pageType = (string)$pageType;
-            if ($pageType !== '' && \str_contains($targetScope, $pageType)) {
-                return ['page:' . $pageType];
+        $selectedBatchIds = [];
+        foreach ($this->buildTaskPlanGenerationBatches($structured) as $batch) {
+            if (($batch['type'] ?? '') === 'shared') {
+                continue;
+            }
+            $haystackParts = [
+                (string)($batch['key'] ?? ''),
+                (string)($batch['block_key'] ?? ''),
+                (string)($batch['queue_job_key'] ?? ''),
+            ];
+            foreach (\is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : [] as $taskKey) {
+                $haystackParts[] = (string)$taskKey;
+            }
+            foreach ($haystackParts as $part) {
+                if ($part !== '' && \str_contains($targetScope, $part)) {
+                    $selectedBatchIds[] = $this->buildTaskPlanBatchId($batch);
+                    break;
+                }
             }
         }
 
-        return null;
+        return $selectedBatchIds !== [] ? rray_values(rray_unique($selectedBatchIds)) : null;
     }
 
     /**
-     * @param array{type:string,key:string,task_keys:list<string>} $batch
+     * @param array<string, mixed> $batch
      */
     private function resolveTaskPlanBatchMaxTokens(array $batch): int
     {
-        // shared/page 批次都可能返回较长 task_script 与字段样例；2200 容易截断为半截 JSON。
-        return $batch['type'] === 'shared' ? 5200 : 6400;
+        // shared/block 批次都可能返回较长 task_script 与字段样例；过低会截断为半截 JSON。
+        if (($batch['type'] ?? '') === 'shared') {
+            return 5200;
+        }
+
+        return \count(\is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : []) <= 1 ? 4200 : 6400;
     }
 
     /**
@@ -487,6 +552,10 @@ final class AiSiteVirtualThemePlanService
             'Batch key: ' . $batch['key'],
             'Mode: ' . $mode,
             'Task keys in this batch: ' . \implode(', ', $batch['task_keys']),
+            'Fanout group: ' . (string)($batch['fanout_group'] ?? ''),
+            'Queue job key: ' . (string)($batch['queue_job_key'] ?? ''),
+            'Block key: ' . (string)($batch['block_key'] ?? ''),
+            'Dependencies preserved from stage-1 task tree: ' . \implode(', ', \is_array($batch['depends_on'] ?? null) ? $batch['depends_on'] : []),
             'Only return tasks that belong to this batch.',
             'Preserve the provided task order.',
             'Treat this as a customer-visible implementation plan: every text field must read like final task content, not prompt guidance.',
@@ -525,6 +594,7 @@ final class AiSiteVirtualThemePlanService
             ], \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
         } else {
             $pageTasks = \is_array($structured['page_tasks'][$pageType] ?? null) ? $structured['page_tasks'][$pageType] : [];
+            $pageTasks = $this->filterTaskPlanTaskListForBatch($pageTasks, $batch);
             $pageCues = [];
             foreach ($batch['task_keys'] as $taskKey) {
                 if (\is_array($stage1TaskCues['pages'][$taskKey] ?? null)) {
@@ -571,6 +641,7 @@ final class AiSiteVirtualThemePlanService
         $lines[] = '- Every returned task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, and completion_rule-compatible detail.';
         $lines[] = '- Keep task_key, group_key, page_type, and sort_order compatible with the provided skeleton.';
         $lines[] = '- Do not drop any task from this batch.';
+        $lines[] = '- This batch is one stage2.block_task_plan queue job when Fanout group is stage2.block_task_plan; generate only that block task and preserve dependencies/sort_order.';
         $lines[] = '- Do not add unselected pages or tasks outside this batch.';
         $lines[] = '- risk_notes should mention only issues relevant to this batch.';
         $lines[] = '- story_goal, content_fill_rule, and every field sample must be direct implementation content; never write blueprint guidance such as "围绕...说明" or "阶段一仅给方向".';
