@@ -5811,6 +5811,7 @@
         var themeSections = [];
         var tabs = [];
         var themeHtml = renderThemeSummarySection(planRoot);
+        var sharedBlocksHtml = renderPlanSharedBlocksSection(planRoot);
         var headerPlan = planRoot.navigation_plan || planRoot.header_plan || planRoot.header || null;
         var footerPlan = planRoot.footer_plan || planRoot.footer || null;
         var headerHtml = renderStructuredListSection(previewLabels.headerPlan, headerPlan, {

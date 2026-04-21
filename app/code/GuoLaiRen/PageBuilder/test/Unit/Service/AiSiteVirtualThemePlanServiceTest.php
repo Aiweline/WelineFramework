@@ -411,7 +411,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     {
         $capturedPrompts = [];
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(2))
+        $aiService->expects(self::exactly(3))
             ->method('generate')
             ->willReturnCallback(function (string $prompt) use (&$capturedPrompts): string {
                 $capturedPrompts[] = $prompt;
@@ -421,7 +421,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
 
         $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
 
-        self::assertCount(2, $capturedPrompts);
+        self::assertCount(3, $capturedPrompts);
         $allPrompts = \implode("\n---batch---\n", $capturedPrompts);
         self::assertStringContainsString('Batch type: shared', $allPrompts);
         self::assertStringContainsString('Batch type: page', $allPrompts);
@@ -463,7 +463,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         ]);
 
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(3))
+        $aiService->expects(self::exactly(4))
             ->method('generate')
             ->willReturnCallback(function (string $prompt) use (&$capturedPrompts, $virtualThemePlan, $heroTask, $proofTask): string {
                 $capturedPrompts[] = $prompt;
@@ -506,7 +506,11 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
 
         $artifacts = $service->buildTaskPlanArtifacts($scope, $blueprint);
 
-        self::assertCount(3, $capturedPrompts);
+        self::assertCount(4, $capturedPrompts);
+        $sharedPrompts = \array_values(\array_filter($capturedPrompts, static fn(string $prompt): bool => \str_contains($prompt, 'Batch type: shared')));
+        self::assertCount(2, $sharedPrompts);
+        self::assertStringContainsString('Task keys in this batch: shared:header', $sharedPrompts[0]);
+        self::assertStringContainsString('Task keys in this batch: shared:footer', $sharedPrompts[1]);
         $pagePrompts = \array_values(\array_filter($capturedPrompts, static fn(string $prompt): bool => \str_contains($prompt, 'Batch type: page')));
         self::assertCount(2, $pagePrompts);
         self::assertStringContainsString('Task keys in this batch: page:home_page:content/home-page-hero', $pagePrompts[0]);
@@ -518,7 +522,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             \array_map(static fn(array $task): string => (string)($task['label'] ?? ''), $artifacts['structured']['page_tasks']['home_page'] ?? [])
         );
         self::assertSame('weline_queue', (string)($artifacts['structured']['stage2_queue']['fanout']['queue_driver'] ?? ''));
-        self::assertSame('shared_first_then_block_fanout', (string)($artifacts['structured']['stage2_queue']['fanout']['dispatch_policy'] ?? ''));
+        self::assertSame('all_blocks_parallel_after_stage1_theme', (string)($artifacts['structured']['stage2_queue']['fanout']['dispatch_policy'] ?? ''));
     }
 
     public function testBuildTaskPlanArtifactsStreamEnforcesTimeoutAndFallsBackToJsonGenerateWhenStreamResponseIsInvalid(): void
@@ -539,7 +543,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 $capturedStreamParams[] = $params;
                 $callback('not-json');
             });
-        $aiService->expects(self::exactly(2))
+        $aiService->expects(self::exactly(3))
             ->method('generate')
             ->willReturnCallback(function (
                 string $prompt,
@@ -582,7 +586,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     public function testBuildTaskPlanArtifactsSanitizesPromptLikeTaskCopy(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(2))
+        $aiService->expects(self::exactly(3))
             ->method('generate')
             ->willReturnCallback(function (string $prompt): string {
                 return $this->buildPromptLikeTaskPlanBatchResponse($prompt);
@@ -652,7 +656,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     public function testBuildTaskPlanArtifactsAcceptsWrappedJsonGenerateResponses(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(2))
+        $aiService->expects(self::exactly(3))
             ->method('generate')
             ->willReturnCallback(function (string $prompt): string {
                 return $this->buildWrappedTaskPlanBatchResponse($prompt);
@@ -674,7 +678,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     {
         $forwarded = '';
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(2))
+        $aiService->expects(self::exactly(3))
             ->method('generateStream')
             ->willReturnCallback(function (
                 string $prompt,
@@ -1040,7 +1044,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 ($params['on_heartbeat'])();
                 $callback('not-json');
             });
-        $aiService->expects(self::exactly(2))
+        $aiService->expects(self::exactly(3))
             ->method('generate')
             ->willReturnCallback(function (
                 string $prompt,
