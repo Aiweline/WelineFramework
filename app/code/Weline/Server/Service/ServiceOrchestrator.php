@@ -8741,15 +8741,76 @@ class ServiceOrchestrator
             $this->dispatcherAlertRecoveryAt = \array_slice($this->dispatcherAlertRecoveryAt, -64, 64, true);
         }
 
-        $this->syncDispatcherFullWorkerPoolFromRegistry();
         if ($subjectRole === ControlMessage::ROLE_WORKER) {
+            $this->queueDispatcherFailedWorkerRecoveries($payload);
             $this->queueStaleWorkerRecoveries();
         }
+        $this->syncDispatcherFullWorkerPoolFromRegistry();
         $this->reconcileRoleSlotGaps($subjectRole);
         $decision['recovery_dispatched'] = true;
         $decision['reason'] = 'dispatcher_alert_recovery';
 
         return $decision;
+    }
+
+    private function queueDispatcherFailedWorkerRecoveries(array $payload): void
+    {
+        $ports = \array_values(\array_unique(\array_map('intval', (array)($payload['failed_ports'] ?? []))));
+        if ($ports === []) {
+            return;
+        }
+
+        $failedReasons = \is_array($payload['failed_reasons'] ?? null) ? $payload['failed_reasons'] : [];
+        foreach ($ports as $port) {
+            if ($port <= 0) {
+                continue;
+            }
+
+            $worker = $this->findWorkerInstanceByPort($port);
+            if ($worker === null) {
+                WlsLogger::warning_("[Orchestrator] Dispatcher reported failed worker port {$port}, but no registry slot matched");
+                continue;
+            }
+
+            if (\in_array($worker->state, [
+                ServiceInstance::STATE_DRAINING,
+                ServiceInstance::STATE_STOPPING,
+                ServiceInstance::STATE_STOPPED,
+            ], true)) {
+                continue;
+            }
+
+            $reason = (string)($failedReasons[$port] ?? $failedReasons[(string)$port] ?? 'dispatcher health audit failed');
+            $worker->setMeta('dispatcher_health_failed_at', \microtime(true));
+            $worker->setMeta('dispatcher_health_failed_reason', $reason);
+            $worker->setMeta('dispatcher_health_failed_port', $port);
+            $worker->setMeta('dispatcher_pool_confirmed_at', null);
+
+            $clientId = $worker->ipcClientId;
+            if ($clientId !== null) {
+                $this->controlServer?->closeClient($clientId);
+                $worker->ipcClientId = null;
+            }
+
+            $this->registry->updateInstance($worker);
+            $this->lastDispatcherWorkerPoolSignature = '';
+            $this->scheduleResurrectionWithDelay($worker, 0.0);
+            WlsLogger::warning_(
+                "[Orchestrator] Dispatcher health audit failed for worker#{$worker->instanceId}, "
+                . "port={$port}; queued slot resurrection"
+            );
+        }
+    }
+
+    private function findWorkerInstanceByPort(int $port): ?ServiceInstance
+    {
+        foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $worker) {
+            if ((int)($worker->port ?? 0) === $port) {
+                return $worker;
+            }
+        }
+
+        return null;
     }
 
     private function logTelemetryAnomalyThrottled(string $key, string $message): void
