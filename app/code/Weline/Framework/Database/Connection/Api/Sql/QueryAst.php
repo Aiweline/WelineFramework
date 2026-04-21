@@ -946,7 +946,8 @@ abstract class QueryAst implements QueryInterface
                 $dbTraceSql = $this->sql;
             }
         }
-        $this->guardUnboundedSelectFetch($this->getFetchRowLimit());
+        $fetchRowLimit = $this->getFetchRowLimit();
+        $enforceFetchedRowLimit = $this->shouldEnforceFetchedRowLimit($fetchRowLimit);
         if ($this->batch and $this->fetch_type == 'insert') {
             // 检查 SQL 是否包含 RETURNING 子句（PostgreSQL）
             $hasReturning = stripos($this->sql, 'RETURNING') !== false;
@@ -974,7 +975,11 @@ abstract class QueryAst implements QueryInterface
             // 单条语句：若子类已执行并设置 PDOStatement（如 Pgsql 改写 SQL 后先执行），则不再 prepare，直接取结果（符合 Liskov：父类包容子类契约）
             $sqlForPrepare = trim($this->sql ?? '');
             if ($this->PDOStatement !== null && $sqlForPrepare === '') {
-                $origin_data = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+                if ($enforceFetchedRowLimit) {
+                    $origin_data = $this->collectStatementResultSets($this->PDOStatement, $fetchRowLimit);
+                } else {
+                    $origin_data = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+                }
             } else {
                 try {
                     $this->PDOStatement = $this->getConnectionInterface()->prepare($this->sql);
@@ -982,13 +987,17 @@ abstract class QueryAst implements QueryInterface
                 } catch (\PDOException $e) {
                     throw $e;
                 }
-                $origin_data = [];
-                do {
-                    $fetched = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
-                    $origin_data[] = $fetched;
-                } while ($this->PDOStatement->nextRowset());
-                if (count($origin_data) == 1) {
-                    $origin_data = $origin_data[0];
+                if ($enforceFetchedRowLimit) {
+                    $origin_data = $this->collectStatementResultSets($this->PDOStatement, $fetchRowLimit);
+                } else {
+                    $origin_data = [];
+                    do {
+                        $fetched = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+                        $origin_data[] = $fetched;
+                    } while ($this->PDOStatement->nextRowset());
+                    if (count($origin_data) == 1) {
+                        $origin_data = $origin_data[0];
+                    }
                 }
             }
         }
@@ -1201,13 +1210,17 @@ abstract class QueryAst implements QueryInterface
     public function fetchSmart(int $threshold = 0, string $model_class = '', int $iteratorBatchSize = 1): array|\Generator
     {
         $limit = $threshold > 0 ? $threshold : $this->getFetchRowLimit();
-        $this->guardUnboundedSelectFetch($limit);
         $this->resolveFetchTypeFromSql();
-        if ($this->isSelectStyleFetch()) {
-            return $this->fetchIterator($model_class, $iteratorBatchSize);
+        if (!$this->isSelectStyleFetch()) {
+            $result = $this->fetch($model_class);
+            return is_array($result) ? $result : [];
         }
-        $result = $this->fetch($model_class);
-        return is_array($result) ? $result : [];
+        $explicitLimit = $this->getLimitValue();
+        if ($explicitLimit !== null && ($limit <= 0 || $explicitLimit <= $limit)) {
+            $result = $this->fetch($model_class);
+            return is_array($result) ? $result : [];
+        }
+        return $this->fetchIterator($model_class, $iteratorBatchSize);
     }
 
     protected function getFetchRowLimit(): int
@@ -1227,6 +1240,27 @@ abstract class QueryAst implements QueryInterface
         return (bool)preg_match('/\bLIMIT\s+\d+/i', $this->sql);
     }
 
+    protected function getLimitValue(): ?int
+    {
+        $source = trim((string)$this->limit);
+        if ($source === '') {
+            $source = trim((string)$this->sql);
+        }
+        if ($source === '') {
+            return null;
+        }
+        if (preg_match('/\bLIMIT\s+(\d+)\s*,\s*(\d+)/i', $source, $matches)) {
+            return (int)$matches[2];
+        }
+        if (preg_match('/\bLIMIT\s+(\d+)\s+OFFSET\s+(\d+)/i', $source, $matches)) {
+            return (int)$matches[1];
+        }
+        if (preg_match('/\bLIMIT\s+(\d+)/i', $source, $matches)) {
+            return (int)$matches[1];
+        }
+        return null;
+    }
+
     protected function isSelectStyleFetch(): bool
     {
         if (in_array($this->fetch_type, ['select', 'query'], true)) {
@@ -1237,6 +1271,51 @@ abstract class QueryAst implements QueryInterface
         }
         $sql = strtoupper(ltrim((string)$this->sql));
         return str_starts_with($sql, 'SELECT') || str_starts_with($sql, 'WITH');
+    }
+
+    protected function shouldEnforceFetchedRowLimit(int $threshold): bool
+    {
+        return $threshold > 0 && $this->isSelectStyleFetch() && !$this->hasExplicitLimit();
+    }
+
+    protected function collectStatementResultSets(PDOStatement $statement, int $threshold = 0): array
+    {
+        $resultSets = [];
+        $fetchedRows = 0;
+        do {
+            $rows = [];
+            while (($row = $statement->fetch(PDO::FETCH_ASSOC)) !== false) {
+                $rows[] = $row;
+                $fetchedRows++;
+                if ($threshold > 0 && $fetchedRows > $threshold) {
+                    $this->throwUnboundedSelectFetch($threshold);
+                }
+            }
+            $resultSets[] = $rows;
+        } while ($this->moveToNextRowset($statement));
+
+        return count($resultSets) === 1 ? $resultSets[0] : $resultSets;
+    }
+
+    protected function moveToNextRowset(PDOStatement $statement): bool
+    {
+        try {
+            return $statement->nextRowset();
+        } catch (\PDOException $e) {
+            if ($this->isUnsupportedNextRowsetException($e)) {
+                return false;
+            }
+            throw $e;
+        }
+    }
+
+    protected function isUnsupportedNextRowsetException(\PDOException $e): bool
+    {
+        $code = (string)$e->getCode();
+        $message = $e->getMessage();
+        return $code === 'IM001'
+            || str_contains($message, 'driver does not support multiple rowsets')
+            || str_contains($message, 'Driver does not support this function');
     }
 
     protected function guardUnboundedSelectFetch(int $threshold = 0): void
@@ -1250,7 +1329,20 @@ abstract class QueryAst implements QueryInterface
         if ($this->hasExplicitLimit()) {
             return;
         }
-        throw new DbException(__('Unbounded SELECT detected. Add LIMIT or use fetchIterator()/fetchSmart() for stream-safe processing. Current threshold: {1}', [$threshold]));
+        $this->throwUnboundedSelectFetch($threshold);
+    }
+
+    protected function throwUnboundedSelectFetch(int $threshold): never
+    {
+        if ($this->PDOStatement !== null) {
+            try {
+                $this->PDOStatement->closeCursor();
+            } catch (\Throwable) {
+            }
+            $this->PDOStatement = null;
+        }
+        $this->batch = false;
+        throw new DbException(__('Unbounded SELECT detected. Add LIMIT or use fetchIterator()/fetchSmart() for stream-safe processing. Current threshold: %{1}', [$threshold]));
     }
 
     protected function resolveFetchTypeFromSql(): void

@@ -333,6 +333,35 @@ while (true) {
             }
         }
 
+        $localCaDir = BP . 'var' . DS . 'server' . DS . '_local_ca' . DS;
+        $localCaAssets = [
+            '/_wls/local-ca/rootCA.pem' => [
+                'path' => $localCaDir . 'rootCA.pem',
+                'content_type' => 'application/x-x509-ca-cert',
+            ],
+            '/_wls/local-ca/rootCA.crl' => [
+                'path' => $localCaDir . 'rootCA.crl',
+                'content_type' => 'application/pkix-crl',
+            ],
+        ];
+
+        if (isset($localCaAssets[$path])) {
+            $asset = $localCaAssets[$path];
+            $assetBody = \is_file($asset['path']) ? (string) @\file_get_contents($asset['path']) : '';
+            $statusLine = $assetBody !== '' ? '200 OK' : '404 Not Found';
+            $response = "HTTP/1.1 {$statusLine}\r\n";
+            $response .= "Content-Type: {$asset['content_type']}\r\n";
+            $response .= "Cache-Control: public, max-age=300\r\n";
+            $response .= "Content-Length: " . \strlen($assetBody) . "\r\n";
+            $response .= "Connection: close\r\n\r\n";
+            $response .= $assetBody;
+
+            @\fwrite($conn, $response);
+            @\fclose($conn);
+            unset($connections[$connId], $requestBuffers[$connId]);
+            continue;
+        }
+
         $redirectHost = $hostHeader;
         if (\strpos($redirectHost, ':') !== false) {
             $redirectHost = \explode(':', $redirectHost, 2)[0];

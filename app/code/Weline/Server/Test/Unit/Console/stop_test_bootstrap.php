@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\Server\Console\Server;
 
+if (!\defined('BP')) {
+    \define('BP', \rtrim((string) \dirname(__DIR__, 7), "\\/") . DIRECTORY_SEPARATOR);
+}
+
+if (!\defined('DS')) {
+    \define('DS', DIRECTORY_SEPARATOR);
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\__')) {
     function __(string $message, array $args = []): string
     {
