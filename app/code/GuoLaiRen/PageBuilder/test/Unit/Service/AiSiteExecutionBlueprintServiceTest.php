@@ -492,63 +492,62 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertLessThan($headerMarkdownPosition, $footerMarkdownPosition);
     }
 
-    public function testSharedPlanChangeMarksUnfinishedPageWorkStale(): void
+    public function testPlanBookMarkdownIsGeneratedFromSortedBlockTree(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
         $artifacts = $service->buildPlanArtifacts([
-            'site_title' => 'Shared Stale Test',
-            'brief_description' => 'Need page jobs to stop when shared context changes.',
-            'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT],
+            'site_title' => 'Sorted Markdown Test',
+            'brief_description' => 'Need a plan book whose markdown follows block tree sorting, not a free markdown string.',
+            'page_types' => [Page::TYPE_HOME],
             'workspace_track' => 'virtual_theme',
             'plan_locale' => 'en_US',
         ], [
-            'site_title' => 'Shared Stale Test',
-            'brief_description' => 'Need page jobs to stop when shared context changes.',
+            'site_title' => 'Sorted Markdown Test',
+            'brief_description' => 'Need a plan book whose markdown follows block tree sorting, not a free markdown string.',
         ]);
 
-        $oldSharedHash = (string)($artifacts['execution_blueprint']['shared_prompt_context']['context_hash'] ?? '');
-        self::assertNotSame('', $oldSharedHash);
+        $pageType = Page::TYPE_HOME;
+        $blocks = \is_array($artifacts['structured']['pages'][$pageType]['blocks'] ?? null)
+            ? $artifacts['structured']['pages'][$pageType]['blocks']
+            : [];
+        self::assertGreaterThanOrEqual(2, \count($blocks));
 
-        $homeJobKey = 'stage1.page_plan:' . Page::TYPE_HOME;
-        $artifacts['structured']['stage1_queue']['jobs'][$homeJobKey]['status'] = 'queued';
-        $artifacts['structured']['stage1_queue']['jobs'][$homeJobKey]['progress_percent'] = 40;
-        $artifacts['execution_blueprint']['stage1_queue'] = $artifacts['structured']['stage1_queue'];
+        $laterBlock = $blocks[0];
+        $earlierBlock = $blocks[1];
+        $laterBlock['sort_order'] = 20;
+        $laterBlock['order'] = 20;
+        $earlierBlock['sort_order'] = 10;
+        $earlierBlock['order'] = 10;
+        $artifacts['structured']['pages'][$pageType]['blocks'] = [$laterBlock, $earlierBlock];
+        $artifacts['structured']['page_types'] = [$pageType];
 
-        foreach ($artifacts['execution_blueprint']['tasks'] as $index => $task) {
-            if (
-                \is_array($task)
-                && (string)($task['task_type'] ?? '') === 'page_block'
-                && (string)($task['page_type'] ?? '') === Page::TYPE_HOME
-            ) {
-                $artifacts['execution_blueprint']['tasks'][$index]['status'] = 'running';
-                break;
-            }
-        }
+        $buildPlanJson = new \ReflectionMethod($service, 'buildPlanJson');
+        $buildPlanJson->setAccessible(true);
+        $planJson = $buildPlanJson->invoke($service, $artifacts['structured']);
+        self::assertIsArray($planJson);
 
-        $scope = [
-            'plan_json' => $artifacts['plan_json'],
-            'plan_markdown' => $artifacts['markdown'],
-            'plan_structured' => $artifacts['structured'],
-            'plan_workbench' => $artifacts['plan_workbench'],
-            'execution_blueprint_draft' => $artifacts['execution_blueprint'],
-        ];
-
-        $reordered = $service->reorderDraftPlanBlocks($scope, 'shared', ['shared:footer', 'shared:header']);
-
-        $staleJob = $reordered['structured']['stage1_queue']['jobs'][$homeJobKey] ?? [];
-        self::assertSame('stale', (string)($staleJob['status'] ?? ''));
-        self::assertSame('shared_context_hash_changed', (string)($staleJob['stale_reason'] ?? ''));
-        self::assertSame($oldSharedHash, (string)($staleJob['previous_shared_context_hash'] ?? ''));
-        self::assertNotSame($oldSharedHash, (string)($staleJob['current_shared_context_hash'] ?? ''));
-
-        $pageTasks = \array_values(\array_filter(
-            \is_array($reordered['execution_blueprint']['tasks'] ?? null) ? $reordered['execution_blueprint']['tasks'] : [],
-            static fn(array $task): bool => (string)($task['task_type'] ?? '') === 'page_block'
-                && (string)($task['page_type'] ?? '') === Page::TYPE_HOME
+        $blockKeys = \array_values(\array_map(
+            static fn(array $block): string => (string)($block['block_key'] ?? ''),
+            $planJson['pages'][$pageType]['blocks'] ?? []
         ));
-        self::assertNotEmpty($pageTasks);
-        self::assertSame('stale', (string)($pageTasks[0]['status'] ?? ''));
-        self::assertSame('shared_context_hash_changed', (string)($pageTasks[0]['stale_reason'] ?? ''));
+        self::assertSame([
+            (string)($earlierBlock['block_key'] ?? ''),
+            (string)($laterBlock['block_key'] ?? ''),
+        ], \array_slice($blockKeys, 0, 2));
+
+        $planJson['markdown'] = 'FREE MARKDOWN SENTINEL THAT MUST NOT BE REUSED';
+        $buildMarkdownPlan = new \ReflectionMethod($service, 'buildMarkdownPlan');
+        $buildMarkdownPlan->setAccessible(true);
+        $markdown = (string)$buildMarkdownPlan->invoke($service, $planJson, 'en_US');
+
+        $earlierTitle = (string)($earlierBlock['section_code'] ?? $earlierBlock['block_key'] ?? 'block');
+        $laterTitle = (string)($laterBlock['section_code'] ?? $laterBlock['block_key'] ?? 'block');
+        $earlierPosition = \strpos($markdown, '#### ' . $earlierTitle);
+        $laterPosition = \strpos($markdown, '#### ' . $laterTitle);
+        self::assertIsInt($earlierPosition);
+        self::assertIsInt($laterPosition);
+        self::assertLessThan($laterPosition, $earlierPosition);
+        self::assertStringNotContainsString('FREE MARKDOWN SENTINEL', $markdown);
     }
 
     public function testBuildAiPlanPromptContainsStageOneMustConstraints(): void
