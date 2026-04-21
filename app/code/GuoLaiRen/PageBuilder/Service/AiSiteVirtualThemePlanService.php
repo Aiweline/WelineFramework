@@ -611,6 +611,7 @@ final class AiSiteVirtualThemePlanService
             $lines[] = 'Page task skeleton:';
             $lines[] = \json_encode($pageTasks, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
             $lines[] = 'Relevant stage-1 page cues:';
+            $lines[] = 'Each stage-2 block task MUST ground task_goal/content_plan/style_plan/planning_reason in its stage-1 cue fields: block_goal, realtime_content, style_direction, reason.';
             $lines[] = \json_encode($pageCues, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
             $lines[] = 'Relevant page coverage and blueprint context:';
             $lines[] = \json_encode([
@@ -642,6 +643,7 @@ final class AiSiteVirtualThemePlanService
         $lines[] = 'Hard rules:';
         $lines[] = '- Every returned page_tasks[] entry must include block_task with required fields: task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order.';
         $lines[] = '- block_task.task_goal is the visible block outcome; block_task.meta_fields is the exact editable field list; block_task.content_plan and block_task.style_plan are concrete arrays; block_task.planning_reason explains the stage-1 rationale; block_task.sort_order mirrors the task sort_order.';
+        $lines[] = '- For page block tasks, read the matching Relevant stage-1 page cues entry and explicitly use block_goal for task_goal, realtime_content for content_plan examples, style_direction for style_plan, and reason for planning_reason.';
         $lines[] = '- block_task.style_plan MUST include concrete color, font, spacing, and responsive keys. Each key must be directly usable by stage 3: color names palette/hex usage, font names family/weight/scale, spacing names section padding/gap/radius rhythm, responsive names desktop/mobile behavior.';
         $lines[] = '- Every returned task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, and completion_rule-compatible detail.';
         $lines[] = '- Keep task_key, group_key, page_type, and sort_order compatible with the provided skeleton.';
@@ -1771,13 +1773,17 @@ final class AiSiteVirtualThemePlanService
                 if ($taskKey === '') {
                     continue;
                 }
+                $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
                 $stage1TaskCues['pages'][$taskKey] = [
                     'task_key' => $taskKey,
                     'page_type' => (string)$pageType,
                     'section_code' => (string)($task['section_code'] ?? ''),
-                    'block_goal' => (string)($task['plan_context']['block_goal'] ?? ''),
-                    'page_goal' => (string)($task['plan_context']['page_goal'] ?? ''),
-                    'why' => (string)($task['plan_context']['block_why'] ?? ''),
+                    'block_goal' => (string)($planContext['block_goal'] ?? ''),
+                    'page_goal' => (string)($planContext['page_goal'] ?? ''),
+                    'realtime_content' => \is_array($planContext['realtime_content'] ?? null) ? $planContext['realtime_content'] : [],
+                    'style_direction' => (string)($planContext['style_direction'] ?? ''),
+                    'reason' => (string)($planContext['block_reason'] ?? $planContext['block_why'] ?? ''),
+                    'why' => (string)($planContext['block_why'] ?? $planContext['block_reason'] ?? ''),
                 ];
             }
         }
@@ -4390,6 +4396,7 @@ final class AiSiteVirtualThemePlanService
                 $pageGoal = (string)($pagePlans[$pageType]['page_goal'] ?? '');
                 $blockMeta = \is_array($metaFieldMatrix[$pageType][$blockCode] ?? null) ? $metaFieldMatrix[$pageType][$blockCode] : [];
                 $blockPlan = \is_array($blockPlanMatrix[$pageType][$blockCode] ?? null) ? $blockPlanMatrix[$pageType][$blockCode] : [];
+                $blockReason = (string)($blockPlan['reason'] ?? $blockPlan['why'] ?? '');
                 $task['plan_context'] = [
                     'source_stage' => 'stage_1',
                     'page_type' => $pageType,
@@ -4397,7 +4404,8 @@ final class AiSiteVirtualThemePlanService
                     'block_code' => $blockCode,
                     'section_code' => (string)($blockPlan['section_code'] ?? $task['section_code'] ?? ''),
                     'block_goal' => (string)($blockMeta['goal'] ?? ''),
-                    'block_why' => (string)($blockPlan['why'] ?? ''),
+                    'block_reason' => $blockReason,
+                    'block_why' => $blockReason,
                     'implementation_detail' => (string)($blockPlan['implementation_detail'] ?? ''),
                     'realtime_content' => \is_array($blockPlan['realtime_content'] ?? null) ? $blockPlan['realtime_content'] : [],
                     'editable_fields' => \is_array($blockPlan['editable_fields'] ?? null) ? $blockPlan['editable_fields'] : [],
@@ -5332,6 +5340,7 @@ final class AiSiteVirtualThemePlanService
             '- Do not invent unselected pages or omit selected pages.',
             '- Every task must include enough content detail for direct implementation in stage 3: a builder must produce theme/HTML without guessing; reuse or improve concrete CTA labels, nav labels, hero strings, and footer link titles from stage-1—always spell them out again here.',
             '- Every page_tasks[] item MUST include block_task with required fields task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order; this block_task is the minimum structured source of truth for one stage-2 block task.',
+            '- For every page block task, use the matching extracted stage-1 task cue fields: block_goal drives task_goal, realtime_content drives content_plan examples, style_direction drives style_plan, and reason drives planning_reason.',
             '- Every block_task.style_plan MUST include concrete color, font, spacing, and responsive keys. The color key names palette/hex usage; font names family/weight/scale; spacing names section padding, card gaps, and radius rhythm; responsive names desktop/mobile behavior from the confirmed stage-1 plan.',
             '- Every task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, completion_rule.',
             '- The markdown must explain concrete execution steps by shared tasks, page tasks, and task tree order; every section MUST name real labels, routes, field keys, and example copy—never-only phrases like "完善导航" or "优化体验" without specifics.',
