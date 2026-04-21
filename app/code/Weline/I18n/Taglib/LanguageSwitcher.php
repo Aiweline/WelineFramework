@@ -80,15 +80,18 @@ class LanguageSwitcher implements TaglibInterface
                         }
                     }
                     if ($allowedMap !== []) {
+                        $allowedMapLower = [];
+                        foreach (\array_keys($allowedMap) as $allowedCode) {
+                            $allowedMapLower[\strtolower((string)$allowedCode)] = true;
+                        }
                         $filteredLanguages = [];
                         foreach ($welineLanguages as $languageCode => $languageData) {
-                            if (isset($allowedMap[(string)$languageCode])) {
+                            if (isset($allowedMap[(string)$languageCode]) || isset($allowedMapLower[\strtolower((string)$languageCode)])) {
                                 $filteredLanguages[$languageCode] = $languageData;
                             }
                         }
-                        if ($filteredLanguages !== []) {
-                            $welineLanguages = $filteredLanguages;
-                        }
+                        // 后台严格使用「已安装+已激活」语言集合，不参与网站维度过滤。
+                        $welineLanguages = $filteredLanguages;
                     }
                 } catch (\Throwable) {
                     // 失败时保持已安装语言兜底
@@ -135,7 +138,8 @@ class LanguageSwitcher implements TaglibInterface
             $currentName = htmlspecialchars((string)($welineCurrentLanguage['name'] ?? ''), ENT_QUOTES, 'UTF-8');
             $currentFlag = (string)($welineCurrentLanguage['flag'] ?? '');
             $renderFor = strtolower(trim((string)($attributes['for'] ?? '')));
-            $switcherId = 'weline-i18n-switcher-' . substr(md5((string)$websiteId . '|' . $currentCode . '|' . json_encode(array_keys($welineLanguages))), 0, 12);
+            $switcherScopeId = $isBackendArea ? 'backend' : (string)$websiteId;
+            $switcherId = 'weline-i18n-switcher-' . substr(md5($switcherScopeId . '|' . $currentCode . '|' . json_encode(array_keys($welineLanguages))), 0, 12);
             $parts = explode('_', $currentCode);
             $shortCode = strtoupper(substr($currentCode, 0, 2));
             if (count($parts) >= 2) {

@@ -10,6 +10,7 @@ use Weline\Framework\App\State;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
+use Weline\I18n\Model\Locals;
 
 /** @var \Weline\Framework\View\Template $this */
 
@@ -24,22 +25,33 @@ $i18n = ObjectManager::getInstance(I18n::class);
 // 获取可用语言列表
 // 使用 try-catch 避免数据库错误影响页面渲染
 try {
-    // 获取已安装的语言包路径
-    $installPacks = [];
-    $installPacksPath = glob(\Weline\Framework\App\Env::path_LANGUAGE_PACK . '*' . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR);
-    foreach ($installPacksPath as $path) {
-        $pathArr = explode(DIRECTORY_SEPARATOR, $path);
-        $installPacks[] = array_pop($pathArr);
+    // 后台语言来源：Locals 表里「已安装+已激活」的语言集合（与网站 id 无关）
+    /** @var Locals $localsModel */
+    $localsModel = ObjectManager::getInstance(Locals::class);
+    $activeInstalledRows = $localsModel->clearQuery()
+        ->where(Locals::schema_fields_IS_INSTALL, 1)
+        ->where(Locals::schema_fields_IS_ACTIVE, 1)
+        ->select([Locals::schema_fields_CODE])
+        ->fetchArray();
+    $allowedLocaleMap = [];
+    foreach ($activeInstalledRows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $code = (string)($row[Locals::schema_fields_CODE] ?? '');
+        if ($code !== '') {
+            $allowedLocaleMap[$code] = true;
+            $allowedLocaleMap[strtolower($code)] = true;
+        }
     }
     
     // 获取语言本地化名称
     $langLocals = $i18n->getLocals($currentLangLocal);
     
-    // 构建语言数据（只包含已安装的语言包）
+    // 构建语言数据（仅已安装且已激活）
     $i18nLanguages = [];
     foreach ($langLocals as $localeCode => $localeName) {
-        // 只包含已安装的语言包
-        if (!empty($installPacks) && !in_array($localeCode, $installPacks)) {
+        if (!empty($allowedLocaleMap) && !isset($allowedLocaleMap[(string)$localeCode]) && !isset($allowedLocaleMap[strtolower((string)$localeCode)])) {
             continue;
         }
         
