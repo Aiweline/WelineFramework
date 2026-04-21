@@ -275,6 +275,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('resolveTokenUsage', $phaseScript);
         self::assertStringContainsString('data-queue-info-list="stage1"', $phaseScript);
         self::assertStringContainsString("data-queue-info-field=\"' + escapeHtml(key) + '\"", $phaseScript);
+        self::assertStringContainsString('data-token-usage-field', $phaseScript);
         self::assertStringContainsString("'job_status'", $phaseScript);
         self::assertStringContainsString('payload.progress_kind', $phaseScript);
         self::assertStringContainsString('input_tokens', $phaseScript);
@@ -284,6 +285,27 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('completion_tokens', $phaseScript);
         self::assertStringContainsString('queue_result_delta', $phaseScript);
         self::assertStringContainsString('__pbPhase1TaskProgress.syncFromSsePayload(operation, payload || {}, eventKind)', $runtimeScript);
+    }
+
+    public function testQueueInfoListsExposeTokenUsageColumns(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 3);
+        $phaseOneScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-phase1-task-progress.phtml');
+        $phaseTwoScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-phase2-queue-progress.phtml');
+
+        self::assertIsString($phaseOneScript);
+        self::assertIsString($phaseTwoScript);
+
+        foreach ([$phaseOneScript, $phaseTwoScript] as $script) {
+            self::assertStringContainsString('data-token-usage-field', $script);
+            self::assertStringContainsString("renderQueueSummaryItem('input_tokens'", $script);
+            self::assertStringContainsString("renderQueueSummaryItem('output_tokens'", $script);
+            self::assertStringContainsString("renderQueueSummaryItem('total_tokens'", $script);
+        }
+
+        self::assertStringContainsString('pb-ai-plan-queue-token-summary', $phaseOneScript);
+        self::assertStringContainsString('pb-ai-phase2-queue-token-summary', $phaseTwoScript);
+        self::assertStringContainsString('pickTokenCount(usage, [\'input_tokens\', \'prompt_tokens\'])', $phaseTwoScript);
     }
 
     public function testStageTwoTaskProgressUiSupportsRealtimeSemanticStatuses(): void
