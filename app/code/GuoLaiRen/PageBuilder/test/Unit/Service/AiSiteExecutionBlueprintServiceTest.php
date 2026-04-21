@@ -224,9 +224,24 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertSame('stage1.shared.header_footer', (string)($stageOneQueue['fanout']['trigger_after'] ?? ''));
         self::assertSame('fiber_coroutine', (string)($stageOneQueue['fanout']['mode'] ?? ''));
         self::assertSame('one_page_one_task', (string)($stageOneQueue['fanout']['task_granularity'] ?? ''));
+        self::assertSame(2, (int)($stageOneQueue['fanout']['page_job_count'] ?? 0));
         self::assertSame(
             ['stage1.page_plan:home_page', 'stage1.page_plan:about_page'],
             $stageOneQueue['fanout']['page_job_keys'] ?? []
+        );
+
+        $queueSequence = $stageOneQueue['sequence'] ?? [];
+        self::assertIsArray($queueSequence);
+        self::assertContains('stage1.shared.header_footer', $queueSequence);
+        self::assertContains('stage1.page_plan:home_page', $queueSequence);
+        self::assertContains('stage1.page_plan:about_page', $queueSequence);
+        self::assertLessThan(
+            \array_search('stage1.page_plan:home_page', $queueSequence, true),
+            \array_search('stage1.shared.header_footer', $queueSequence, true)
+        );
+        self::assertLessThan(
+            \array_search('stage1.page_plan:about_page', $queueSequence, true),
+            \array_search('stage1.shared.header_footer', $queueSequence, true)
         );
 
         foreach (['home_page', 'about_page'] as $pageType) {
