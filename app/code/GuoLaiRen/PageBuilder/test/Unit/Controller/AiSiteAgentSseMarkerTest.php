@@ -258,9 +258,15 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('mergePlanQueueInfoFromSsePayload', $phaseScript);
         self::assertStringContainsString('renderQueueInfoSummary', $phaseScript);
         self::assertStringContainsString('resolveTokenUsage', $phaseScript);
+        self::assertStringContainsString('data-queue-info-list="stage1"', $phaseScript);
+        self::assertStringContainsString("data-queue-info-field=\"' + escapeHtml(key) + '\"", $phaseScript);
+        self::assertStringContainsString("'job_status'", $phaseScript);
+        self::assertStringContainsString("'progress_kind'", $phaseScript);
         self::assertStringContainsString('input_tokens', $phaseScript);
         self::assertStringContainsString('output_tokens', $phaseScript);
         self::assertStringContainsString('total_tokens', $phaseScript);
+        self::assertStringContainsString('prompt_tokens', $phaseScript);
+        self::assertStringContainsString('completion_tokens', $phaseScript);
         self::assertStringContainsString('queue_result_delta', $phaseScript);
         self::assertStringContainsString('__pbPhase1TaskProgress.syncFromSsePayload(operation, payload || {}, eventKind)', $runtimeScript);
     }
