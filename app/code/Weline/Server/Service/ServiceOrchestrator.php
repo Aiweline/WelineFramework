@@ -65,7 +65,8 @@ class ServiceOrchestrator
     private bool $stopAllInProgress = false;
     private bool $childProcessStopInProgress = false;
     private ?string $pendingStopReason = null;
-    private bool $pendingStopForceTerminate = false;
+    private bool $pendingStopSkipDrain = false;
+    private bool $stopAllSkipDrain = false;
     private ?string $startupFailureReason = null;
     private ?string $lastControlServerCloseReason = null;
     private ?int $pendingStopProgressClientId = null;
@@ -467,7 +468,7 @@ class ServiceOrchestrator
         string $reason = 'shutdown',
         ?int $progressClientId = null,
         bool $exclusiveIpc = false,
-        bool $forceTerminate = false
+        bool $skipDrain = false
     ): bool
     {
         if ($this->stopAllInProgress || $this->shuttingDown || $this->pendingStopReason !== null) {
@@ -499,7 +500,7 @@ class ServiceOrchestrator
         }
 
         $this->pendingStopReason = $reason;
-        $this->pendingStopForceTerminate = $forceTerminate;
+        $this->pendingStopSkipDrain = $skipDrain;
         $this->pendingStopProgressClientId = $progressClientId;
         $this->setStopStage(self::STOP_STAGE_REQUESTED);
 
@@ -545,21 +546,18 @@ class ServiceOrchestrator
 
         $reason = $this->pendingStopReason;
         $progressClientId = $this->pendingStopProgressClientId;
-        $forceTerminate = $this->pendingStopForceTerminate;
+        $skipDrain = $this->pendingStopSkipDrain;
         $this->pendingStopReason = null;
-        $this->pendingStopForceTerminate = false;
+        $this->pendingStopSkipDrain = false;
         $this->pendingStopProgressClientId = null;
         if ($this->hasMainLoopTask('control:stop_all')) {
             return true;
         }
 
-        if (!$this->scheduleMainLoopTask('control:stop_all', 'stop_all', function () use ($reason, $progressClientId, $forceTerminate): void {
+        if (!$this->scheduleMainLoopTask('control:stop_all', 'stop_all', function () use ($reason, $progressClientId, $skipDrain): void {
+            $previousSkipDrain = $this->stopAllSkipDrain;
+            $this->stopAllSkipDrain = $skipDrain;
             try {
-                if ($forceTerminate) {
-                    $this->forceTerminateMasterAndChildren('force_stop:' . $reason);
-                    return;
-                }
-
                 $this->stopAll($reason, $progressClientId);
             } catch (\Throwable $throwable) {
                 WlsLogger::error_(
@@ -568,10 +566,12 @@ class ServiceOrchestrator
                 );
                 $this->resetStopFlowFlagsAfterStopAllFailure();
                 $this->forceTerminateMasterAndChildren('stop_all_exception:' . $reason);
+            } finally {
+                $this->stopAllSkipDrain = $previousSkipDrain;
             }
         })) {
             $this->pendingStopReason = $reason;
-            $this->pendingStopForceTerminate = $forceTerminate;
+            $this->pendingStopSkipDrain = $skipDrain;
             $this->pendingStopProgressClientId = $progressClientId;
             return false;
         }
@@ -1486,7 +1486,8 @@ class ServiceOrchestrator
         $this->shuttingDown = false;
         $this->stopAllInProgress = false;
         $this->pendingStopReason = null;
-        $this->pendingStopForceTerminate = false;
+        $this->pendingStopSkipDrain = false;
+        $this->stopAllSkipDrain = false;
         $this->pendingStopProgressClientId = null;
         $this->stopStage = self::STOP_STAGE_IDLE;
         $this->masterShutdownIntent = false;
@@ -3457,13 +3458,14 @@ class ServiceOrchestrator
         }
 
         $this->pendingStopReason = null;
-        $this->pendingStopForceTerminate = false;
+        $this->pendingStopSkipDrain = false;
         $this->pendingStopProgressClientId = null;
         $this->stopAllInProgress = true;
         $this->shuttingDown = true;
         $this->masterShutdownIntent = true;
         $this->stopProgressClientId = $progressClientId;
-        WlsLogger::info_("[Orchestrator] 开始停止所有服务，原因: {$reason}");
+        $skipDrain = $this->shouldSkipStopAllDrain();
+        WlsLogger::info_("[Orchestrator] 开始停止所有服务，原因: {$reason}, skip_drain=" . ($skipDrain ? '1' : '0'));
 
         $totalInstances = \count($this->registry->getAllInstances());
         if ($totalInstances === 0) {
@@ -3485,29 +3487,37 @@ class ServiceOrchestrator
         }
         $this->sendStopProgress("共 {$totalInstances} 个实例待停止: " . \implode(', ', $instanceList));
 
-        // ========== 阶段 1：广播 DRAIN ==========
-        $this->setStopStage(self::STOP_STAGE_DRAIN);
-        WlsLogger::info_('[Orchestrator] 阶段1: 广播 DRAIN');
-        $this->sendStopProgress('阶段1/6: 广播 DRAIN - 通知子进程停止接受新请求');
-        $this->broadcastDrainToAll();
+        if ($skipDrain) {
+            WlsLogger::info_('[Orchestrator] -f stop: skip DRAIN and WAIT_DRAIN');
+            $this->sendStopProgress('-f 强制模式：跳过排水，直接进入统一终止');
+        } else {
+            // ========== 阶段 1：广播 DRAIN ==========
+            $this->setStopStage(self::STOP_STAGE_DRAIN);
+            WlsLogger::info_('[Orchestrator] 阶段1: 广播 DRAIN');
+            $this->sendStopProgress('阶段1/6: 广播 DRAIN - 通知子进程停止接受新请求');
+            $this->broadcastDrainToAll();
 
-        // ========== 阶段 2：等待排水完成（默认 10s，可配 wls.orchestrator.stop_all_drain_wait_sec）==========
-        $this->setStopStage(self::STOP_STAGE_WAIT_DRAIN);
-        WlsLogger::info_('[Orchestrator] 阶段2: 等待排水完成');
-        $this->sendStopProgress('阶段2/6: 等待排水完成 - 子进程处理完当前请求');
-        $stopDrainWait = (float) ($this->context?->getConfig('wls.orchestrator.stop_all_drain_wait_sec', 10.0) ?? 10.0);
-        if ($stopDrainWait < 1.0) {
-            $stopDrainWait = 1.0;
+            // ========== 阶段 2：等待排水完成（默认 10s，可配 wls.orchestrator.stop_all_drain_wait_sec）==========
+            $this->setStopStage(self::STOP_STAGE_WAIT_DRAIN);
+            WlsLogger::info_('[Orchestrator] 阶段2: 等待排水完成');
+            $this->sendStopProgress('阶段2/6: 等待排水完成 - 子进程处理完当前请求');
+            $stopDrainWait = (float) ($this->context?->getConfig('wls.orchestrator.stop_all_drain_wait_sec', 10.0) ?? 10.0);
+            if ($stopDrainWait < 1.0) {
+                $stopDrainWait = 1.0;
+            }
+            if ($stopDrainWait > 300.0) {
+                $stopDrainWait = 300.0;
+            }
+            $this->waitForAllDrained($stopDrainWait, true);
         }
-        if ($stopDrainWait > 300.0) {
-            $stopDrainWait = 300.0;
-        }
-        $this->waitForAllDrained($stopDrainWait, true);
 
         // ========== 阶段 3：统一终止子进程（并发） ==========
         $this->setStopStage(self::STOP_STAGE_SHUTDOWN);
         WlsLogger::info_('[Orchestrator] 阶段3: 统一终止子进程');
-        $this->sendStopProgress('阶段3/6: 统一终止子进程 - 排水后并行结束所有服务');
+        $this->sendStopProgress($skipDrain
+            ? '阶段3/6: 统一终止子进程 - 已跳过排水，并行结束所有服务'
+            : '阶段3/6: 统一终止子进程 - 排水后并行结束所有服务'
+        );
         $this->broadcastShutdownToAll();
         $this->terminateAllAfterDrain();
 
@@ -3547,6 +3557,11 @@ class ServiceOrchestrator
         WlsLogger::info_('[Orchestrator] Stop flow complete, Master exiting immediately');
         $this->cleanupMasterPidIndex();
         exit(0);
+    }
+
+    protected function shouldSkipStopAllDrain(): bool
+    {
+        return $this->stopAllSkipDrain;
     }
 
     /**
@@ -3613,7 +3628,8 @@ class ServiceOrchestrator
         $this->stopAllInProgress = false;
         $this->shuttingDown = false;
         $this->pendingStopReason = null;
-        $this->pendingStopForceTerminate = false;
+        $this->pendingStopSkipDrain = false;
+        $this->stopAllSkipDrain = false;
         $this->pendingStopProgressClientId = null;
         $this->stopProgressClientId = null;
         $this->setStopStage(self::STOP_STAGE_IDLE);

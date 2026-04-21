@@ -189,7 +189,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         );
     }
 
-    public function testForceStopSkipsIpcAndUsesLocalKillFallback(): void
+    public function testForceStopUsesIpcSkipDrainThenConcurrentResidualCleanup(): void
     {
         $manager = new class extends ServerInstanceManager {
             public ?ServerInstanceInfo $info = null;
@@ -283,8 +283,8 @@ final class StopCommandFastLocalCleanupTest extends TestCase
 
             protected function sendStopViaIpcAndWait(string $instanceName, int $controlPort, int $masterPid, bool $force): bool
             {
-                unset($instanceName, $controlPort, $masterPid, $force);
-                $this->calls[] = 'ipc';
+                unset($controlPort, $masterPid);
+                $this->calls[] = 'ipc:' . $instanceName . ':' . ($force ? 'force' : 'normal');
 
                 return true;
             }
@@ -356,8 +356,8 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         self::assertSame(
             [
                 'show',
-                'kill',
-                'stale',
+                'ipc:default:force',
+                'residual',
                 'release:default',
                 'pid:default',
                 'unlock:default',
@@ -453,6 +453,14 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 $this->calls[] = 'show';
             }
 
+            protected function sendStopViaIpcAndWait(string $instanceName, int $controlPort, int $masterPid, bool $force): bool
+            {
+                unset($controlPort, $masterPid);
+                $this->calls[] = 'ipc:' . $instanceName . ':' . ($force ? 'force' : 'normal');
+
+                return true;
+            }
+
             protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
             {
                 unset($info);
@@ -508,7 +516,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         self::assertSame(['show', 'residual', 'release:default', 'pid:default', 'unlock:default'], $stop->calls);
     }
 
-    public function testDirectForceStopCandidateKillDoesNotRunPrefixFallback(): void
+    public function testDirectForceStopCandidateKillAlsoRunsPrefixBatchKill(): void
     {
         $info = new ServerInstanceInfo(
             'default',
@@ -527,6 +535,8 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         );
 
         $stop = new class extends Stop {
+            public array $prefixCleanupNames = [];
+
             public function terminate(ServerInstanceInfo $info): int
             {
                 return $this->terminateDirectForceStopCandidatePids($info);
@@ -541,13 +551,14 @@ final class StopCommandFastLocalCleanupTest extends TestCase
 
             protected function terminateCurrentInstanceProcessPrefixes(string $name): int
             {
-                unset($name);
+                $this->prefixCleanupNames[] = $name;
 
-                throw new \RuntimeException('prefix fallback must stay out of direct force stop');
+                return 5;
             }
         };
 
-        self::assertSame(0, $stop->terminate($info));
+        self::assertSame(5, $stop->terminate($info));
+        self::assertSame(['default'], $stop->prefixCleanupNames);
     }
 
     public function testForceStopKeepsInstanceFileWhenResidualCleanupCannotFinish(): void
@@ -689,7 +700,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         }
 
         self::assertSame([], $manager->deleted);
-        self::assertSame(['show', 'kill'], $stop->calls);
+        self::assertSame(['show', 'ipc:default:force', 'residual:default'], $stop->calls);
     }
 
     public function testGracefulStopRunsConcurrentResidualCleanupAfterIpcDrain(): void
