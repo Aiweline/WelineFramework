@@ -359,7 +359,7 @@ class Stop extends CommandAbstract
             $this->printer->warning(__('Master 进程不存在 (PID: %{1})', [$masterPid]));
             $this->showInstanceInfo($instanceInfo);
             // 清理可能残留的进程和文件（含按 PID 与按名前缀，确保 Worker/Dispatcher 等全部退出）
-            $this->runResidualCleanupPairWithRetry($name, $instanceInfo);
+            $this->runResidualCleanupPairWithRetry($name, $instanceInfo, $force);
             if (!$this->wasLastResidualCleanupComplete()) {
                 $this->printer->warning(__('实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。', [$name]));
                 return;
@@ -397,7 +397,7 @@ class Stop extends CommandAbstract
                 $remainingDirectPids !== []
                 || $this->hasKnownRecoverablePortsInUse($name, $instanceInfo)
             ) {
-                $this->runResidualCleanupPairWithRetry($name, $instanceInfo);
+                $this->runResidualCleanupPairWithRetry($name, $instanceInfo, true);
                 if (!$this->wasLastResidualCleanupComplete()) {
                     echo "\n";
                     $this->printer->warning(__('实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。', [$name]));
@@ -433,7 +433,7 @@ class Stop extends CommandAbstract
                 Processer::killProcessTreeByPid($masterPid, true);
                 SchedulerSystem::usleep(500000);
             }
-            $this->runResidualCleanupPairWithRetry($name, $instanceInfo);
+            $this->runResidualCleanupPairWithRetry($name, $instanceInfo, $force);
             $this->releaseSharedStateConsumersForInstance($name);
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
@@ -452,7 +452,7 @@ class Stop extends CommandAbstract
         
         if ($ipcSuccess) {
             $this->printer->success(__('所有子进程已完整退出 ✓'));
-            $this->runResidualCleanupPairWithRetry($name, $instanceInfo);
+            $this->runResidualCleanupPairWithRetry($name, $instanceInfo, $force);
             if (!$this->wasLastResidualCleanupComplete()) {
                 $this->printer->warning(__('实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。', [$name]));
                 return;
@@ -463,7 +463,7 @@ class Stop extends CommandAbstract
             Processer::killProcessTreeByPid($masterPid, true);
             SchedulerSystem::usleep(500000);
             
-            $this->runResidualCleanupPairWithRetry($name, $instanceInfo);
+            $this->runResidualCleanupPairWithRetry($name, $instanceInfo, true);
         }
         
         // 从共享 Session/Memory 注册表移除本实例消费者，避免误导其它工具
@@ -656,7 +656,11 @@ class Stop extends CommandAbstract
      * @param bool $quiet 为 true 时不打印，仅返回终止/尝试数（供 runResidualCleanupPair 合并输出）
      * @return int 已发送终止信号的 PID 数（quiet）或同上；非 quiet 时与原先展示一致
      */
-    protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info): void
+    protected function runResidualCleanupPairWithRetry(
+        string $name,
+        ServerInstanceInfo $info,
+        bool $includeSharedState = false
+    ): void
     {
         $this->lastResidualCleanupComplete = false;
         $this->printer->note(__('清理残留进程...'));
@@ -667,8 +671,8 @@ class Stop extends CommandAbstract
         $remainingPids = [];
 
         while (++$attempt <= self::RESIDUAL_CLEANUP_MAX_ATTEMPTS) {
-            $knownCandidatePids = $this->collectResidualCleanupCandidatePids($name, $info);
-            $killedThisAttempt = $this->runResidualCleanupPass($name, $info, true, true);
+            $knownCandidatePids = $this->collectResidualCleanupCandidatePids($name, $info, $includeSharedState);
+            $killedThisAttempt = $this->runResidualCleanupPass($name, $info, true, true, $includeSharedState);
             $totalKilled += $killedThisAttempt;
 
             $remainingPids = $this->collectRunningResidualPids($knownCandidatePids);
@@ -688,7 +692,7 @@ class Stop extends CommandAbstract
             );
 
             $remainingPorts = $this->collectRemainingRecoverableWlsPorts($name, $info);
-            $candidatePids = $this->collectResidualVerificationPids($name, $info, $remainingPorts, true);
+            $candidatePids = $this->collectResidualVerificationPids($name, $info, $remainingPorts, true, $includeSharedState);
             $remainingPids = $this->collectRunningResidualPids($candidatePids);
 
             if (empty($remainingPids) && empty($remainingPorts)) {
@@ -732,17 +736,18 @@ class Stop extends CommandAbstract
         string $name,
         ServerInstanceInfo $info,
         bool $quiet = false,
-        bool $allowPrefixFallback = true
+        bool $allowPrefixFallback = true,
+        bool $includeSharedState = false
     ): int
     {
         if (!$quiet) {
             $this->printer->note(__('清理残留进程...'));
         }
 
-        $pids = $this->collectResidualCleanupCandidatePids($name, $info);
+        $pids = $this->collectResidualCleanupCandidatePids($name, $info, $includeSharedState);
         $killedByPid = $this->terminateResidualProcesses($pids, true);
         $killedByPrefix = $allowPrefixFallback
-            ? $this->terminateCurrentInstanceProcessPrefixes($name)
+            ? $this->terminateCurrentInstanceProcessPrefixes($name, $includeSharedState)
             : 0;
 
         $this->cleanupStaleRecoverableProcessPidFiles();
@@ -851,7 +856,7 @@ class Stop extends CommandAbstract
     /**
      * @return list<int>
      */
-    protected function collectRecoverablePortsFromInstance(ServerInstanceInfo $info): array
+    protected function collectRecoverablePortsFromInstance(ServerInstanceInfo $info, bool $includeSharedState = false): array
     {
         $ports = [];
 
@@ -869,7 +874,7 @@ class Stop extends CommandAbstract
         }
 
         foreach ($info->services as $service) {
-            if ($this->isSharedStateServiceInfo($service)) {
+            if (!$includeSharedState && $this->isSharedStateServiceInfo($service)) {
                 continue;
             }
             $port = (int) ($service->port ?? 0);
@@ -938,6 +943,7 @@ class Stop extends CommandAbstract
      */
     protected function collectDirectForceStopCandidatePids(ServerInstanceInfo $info): array
     {
+        $forcePorts = $this->collectRecoverablePortsFromInstance($info, true);
         return \array_values(\array_unique(\array_filter(
             \array_map(
                 'intval',
@@ -945,6 +951,7 @@ class Stop extends CommandAbstract
                     $this->collectBaseResidualPids($info->name, $info),
                     $this->collectResidualPidsByInfo($info, true),
                     $this->collectIndexedResidualPids($info->name, true),
+                    $this->collectRecoverablePortResidualPids($forcePorts),
                     $this->collectRecoverableManagedPids($info->name)
                 )
             ),
@@ -1053,14 +1060,22 @@ class Stop extends CommandAbstract
      *
      * @return list<int>
      */
-    protected function collectResidualCleanupCandidatePids(string $name, ServerInstanceInfo $info): array
+    protected function collectResidualCleanupCandidatePids(
+        string $name,
+        ServerInstanceInfo $info,
+        bool $includeSharedState = false
+    ): array
     {
+        $recoverablePorts = $includeSharedState ? $this->collectRecoverablePortsFromInstance($info, true) : [];
         return \array_values(\array_unique(\array_filter(
             \array_map(
                 'intval',
                 \array_merge(
-            $this->collectBaseResidualPids($name, $info),
-            $this->collectRecoverableManagedPids($name)
+                    $this->collectBaseResidualPids($name, $info),
+                    $includeSharedState ? $this->collectResidualPidsByInfo($info, true) : [],
+                    $includeSharedState ? $this->collectIndexedResidualPids($name, true) : [],
+                    $this->collectRecoverablePortResidualPids($recoverablePorts),
+                    $this->collectRecoverableManagedPids($name)
                 )
             ),
             static fn (int $pid): bool => $pid > 0
@@ -1106,11 +1121,12 @@ class Stop extends CommandAbstract
         string $name,
         ServerInstanceInfo $info,
         array $remainingPorts,
-        bool $includePrefixPids = true
+        bool $includePrefixPids = true,
+        bool $includeSharedState = false
     ): array
     {
         $pids = \array_merge(
-            $this->collectResidualCleanupCandidatePids($name, $info),
+            $this->collectResidualCleanupCandidatePids($name, $info, $includeSharedState),
             $this->collectRecoverablePortResidualPids($remainingPorts)
         );
         if ($includePrefixPids) {
