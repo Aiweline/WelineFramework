@@ -40,6 +40,23 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertStringContainsString('reasonItems: collectPreviewReasonItems(footerPlan)', $script);
     }
 
+    public function testStageTwoTaskPlanCardsRenderQuestionMarkReasonEntrypoints(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 3);
+        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+
+        self::assertIsString($script);
+        self::assertStringContainsString('function collectTaskPlanPlanningReasonItems(task, blockTask, planContext)', $script);
+        self::assertStringContainsString('blockTaskObj.planning_reason', $script);
+        self::assertStringContainsString('taskObj.planning_reason', $script);
+        self::assertStringContainsString('contextObj.planning_reason', $script);
+        self::assertStringContainsString('taskObj.reason', $script);
+        self::assertStringContainsString('contextObj.reason', $script);
+        self::assertStringContainsString('var planningReasonItems = collectTaskPlanPlanningReasonItems(task, blockTask, planContext);', $script);
+        self::assertStringContainsString('renderPreviewReasonDisclosure(previewLabels.reason, planningReasonItems)', $script);
+        self::assertStringContainsString('>?</summary>', $script);
+    }
+
     public function testCurrentPageRefineUsesDedicatedPageApi(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
