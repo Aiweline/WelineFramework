@@ -146,7 +146,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertArrayHasKey('stage1.page_plan:home_page', $stageOneJobs);
         self::assertArrayHasKey('stage1.page_plan:about_page', $stageOneJobs);
         $homePageJob = $stageOneJobs['stage1.page_plan:home_page'] ?? [];
-        self::assertSame('stage1.page_plan.generate', (string)($homePageJob['job_type'] ?? ''));
+        self::assertSame('stage1.page_plan', (string)($homePageJob['job_type'] ?? ''));
         self::assertSame('stage1_page_fanout', (string)($homePageJob['stage'] ?? ''));
         self::assertSame(['stage1.shared.header_footer'], $homePageJob['depends_on'] ?? []);
         self::assertSame('automatic_after_dependency', (string)($homePageJob['dispatch_mode'] ?? ''));
