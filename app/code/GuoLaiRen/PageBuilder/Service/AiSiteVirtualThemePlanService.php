@@ -638,8 +638,7 @@ final class AiSiteVirtualThemePlanService
         $lines[] = 'Hard rules:';
         $lines[] = '- Every returned page_tasks[] entry must include block_task with required fields: task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order.';
         $lines[] = '- block_task.task_goal is the visible block outcome; block_task.meta_fields is the exact editable field list; block_task.content_plan and block_task.style_plan are concrete arrays; block_task.planning_reason explains the stage-1 rationale; block_task.sort_order mirrors the task sort_order.';
-        $lines[] = '- block_task.content_plan MUST include concrete arrays content_copy, cta_plan, link_plan, and asset_plan. content_copy lists final on-page strings by field; cta_plan gives each real CTA label plus href/page_type target; link_plan gives every internal/external link label plus href/page_type and purpose; asset_plan gives each image/icon/logo/video slot, concrete asset description, alt_text, and source/use rule.';
-        $lines[] = '- Do not put content_plan placeholders such as "write copy later", "CTA TBD", "link TBD", or "asset TBD"; if stage-1 lacks a value, provide a concrete [assumption] value that fits the confirmed user brief.';
+        $lines[] = '- block_task.style_plan MUST include concrete color, font, spacing, and responsive keys. Each key must be directly usable by stage 3: color names palette/hex usage, font names family/weight/scale, spacing names section padding/gap/radius rhythm, responsive names desktop/mobile behavior.';
         $lines[] = '- Every returned task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, and completion_rule-compatible detail.';
         $lines[] = '- Keep task_key, group_key, page_type, and sort_order compatible with the provided skeleton.';
         $lines[] = '- Do not drop any task from this batch.';
@@ -3781,12 +3780,12 @@ final class AiSiteVirtualThemePlanService
         $structured['block_task_schema'] = [
             'schema_version' => self::BLOCK_TASK_SCHEMA_VERSION,
             'required_fields' => self::BLOCK_TASK_REQUIRED_FIELDS,
-            'meta_field_required_fields' => ['field', 'type', 'default', 'sample', 'reason'],
+            'style_plan_required_keys' => ['color', 'font', 'spacing', 'responsive'],
             'field_contract' => [
                 'task_goal' => 'Visible outcome this block must accomplish.',
                 'meta_fields' => 'Editable fields with type/default/sample/reason.',
                 'content_plan' => 'Concrete copy/content instructions for stage-3 execution.',
-                'style_plan' => 'Concrete styling direction derived from the confirmed stage-1 plan.',
+                'style_plan' => 'Concrete styling direction derived from the confirmed stage-1 plan; required keys: color, font, spacing, responsive.',
                 'planning_reason' => 'Why this block task exists in the confirmed plan.',
                 'sort_order' => 'Integer order matching the stage-2 task order.',
             ],
@@ -4000,6 +3999,40 @@ final class AiSiteVirtualThemePlanService
         );
 
         $stylePlan = \is_array($existing['style_plan'] ?? null) ? $existing['style_plan'] : [];
+        $stylePlan['color'] = $this->firstNonEmptyString([
+            $stylePlan['color'] ?? null,
+            $stylePlan['color_rule'] ?? null,
+            $stylePlan['palette'] ?? null,
+            $planContext['style_plan']['color'] ?? null,
+            $planContext['style_brief']['color'] ?? null,
+            $planContext['style_brief']['palette'] ?? null,
+            'Use the confirmed stage-1 palette for background, text, CTA, and accent states.',
+        ]);
+        $stylePlan['font'] = $this->firstNonEmptyString([
+            $stylePlan['font'] ?? null,
+            $stylePlan['font_rule'] ?? null,
+            $stylePlan['typography'] ?? null,
+            $planContext['style_plan']['font'] ?? null,
+            $planContext['style_brief']['font'] ?? null,
+            $planContext['style_brief']['typography'] ?? null,
+            'Use the confirmed stage-1 typography scale for heading, body, and CTA text.',
+        ]);
+        $stylePlan['spacing'] = $this->firstNonEmptyString([
+            $stylePlan['spacing'] ?? null,
+            $stylePlan['spacing_rule'] ?? null,
+            $planContext['style_plan']['spacing'] ?? null,
+            $planContext['style_brief']['spacing'] ?? null,
+            $planContext['style_brief']['layout_spacing'] ?? null,
+            'Use the confirmed stage-1 spacing rhythm for section padding, card gaps, and radius.',
+        ]);
+        $stylePlan['responsive'] = $this->firstNonEmptyString([
+            $stylePlan['responsive'] ?? null,
+            $stylePlan['responsive_rule'] ?? null,
+            $planContext['style_plan']['responsive'] ?? null,
+            $planContext['responsive_rule'] ?? null,
+            $task['responsive_rule'] ?? null,
+            'Keep the block usable on mobile and desktop breakpoints.',
+        ]);
         $stylePlan['style_direction'] = $this->firstNonEmptyString([
             $stylePlan['style_direction'] ?? null,
             $planContext['style_direction'] ?? null,
@@ -4009,6 +4042,7 @@ final class AiSiteVirtualThemePlanService
         ]);
         $stylePlan['responsive_rule'] = $this->firstNonEmptyString([
             $stylePlan['responsive_rule'] ?? null,
+            $stylePlan['responsive'] ?? null,
             $planContext['responsive_rule'] ?? null,
             'Keep the block usable on mobile and desktop breakpoints.',
         ]);
@@ -4338,6 +4372,8 @@ final class AiSiteVirtualThemePlanService
                     'completion_rule' => (string)($blockPlan['completion_rule'] ?? ''),
                     'content_brief' => \is_array($blockPlan['content_brief'] ?? null) ? $blockPlan['content_brief'] : [],
                     'field_plan' => \is_array($blockMeta['field_plan'] ?? null) ? $blockMeta['field_plan'] : [],
+                    'style_direction' => (string)($blockPlan['style_direction'] ?? ''),
+                    'responsive_rule' => (string)($blockPlan['responsive_rule'] ?? ''),
                     'result_ref' => \is_array($blockMeta['result_ref'] ?? null) ? $blockMeta['result_ref'] : [],
                 ];
                 $task['implementation_contract'] = [
@@ -5244,7 +5280,7 @@ final class AiSiteVirtualThemePlanService
             '    "virtual_theme_strategy": {},',
             '    "shared_tasks": [],',
             '    "page_tasks": {},',
-            '    "block_task_schema": {"schema_version":"' . self::BLOCK_TASK_SCHEMA_VERSION . '","required_fields":["task_goal","meta_fields","content_plan","style_plan","planning_reason","sort_order"],"meta_field_required_fields":["field","type","default","sample","reason"]},',
+            '    "block_task_schema": {"schema_version":"' . self::BLOCK_TASK_SCHEMA_VERSION . '","required_fields":["task_goal","meta_fields","content_plan","style_plan","planning_reason","sort_order"],"style_plan_required_keys":["color","font","spacing","responsive"]},',
             '    "task_tree": {},',
             '    "meta_field_matrix": {},',
             '    "style_tokens": {},',
@@ -5264,8 +5300,7 @@ final class AiSiteVirtualThemePlanService
             '- Do not invent unselected pages or omit selected pages.',
             '- Every task must include enough content detail for direct implementation in stage 3: a builder must produce theme/HTML without guessing; reuse or improve concrete CTA labels, nav labels, hero strings, and footer link titles from stage-1—always spell them out again here.',
             '- Every page_tasks[] item MUST include block_task with required fields task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order; this block_task is the minimum structured source of truth for one stage-2 block task.',
-            '- block_task.content_plan MUST include concrete arrays content_copy, cta_plan, link_plan, and asset_plan. content_copy lists final on-page copy by field; cta_plan gives each real CTA label plus href/page_type target; link_plan gives every visible link label plus href/page_type and purpose; asset_plan gives each image/icon/logo/video slot, concrete asset description, alt_text, and source/use rule.',
-            '- content_plan is not prose guidance: no "write copy later", "CTA TBD", "link TBD", or "asset TBD". If stage-1 does not name an exact value, output a concrete [assumption] value that still fits the confirmed user brief.',
+            '- Every block_task.style_plan MUST include concrete color, font, spacing, and responsive keys. The color key names palette/hex usage; font names family/weight/scale; spacing names section padding, card gaps, and radius rhythm; responsive names desktop/mobile behavior from the confirmed stage-1 plan.',
             '- Every task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, completion_rule.',
             '- The markdown must explain concrete execution steps by shared tasks, page tasks, and task tree order; every section MUST name real labels, routes, field keys, and example copy—never-only phrases like "完善导航" or "优化体验" without specifics.',
             '- The stage-2 document must include page coverage, task tree, execution order, and risk notes.',
@@ -5472,6 +5507,12 @@ final class AiSiteVirtualThemePlanService
                     || \trim((string)($blockTask['planning_reason'] ?? '')) === ''
                 ) {
                     throw new \RuntimeException('AI task plan generation failed: block_task schema is incomplete.');
+                }
+                $stylePlan = \is_array($blockTask['style_plan'] ?? null) ? $blockTask['style_plan'] : [];
+                foreach (['color', 'font', 'spacing', 'responsive'] as $styleKey) {
+                    if (\trim((string)($stylePlan[$styleKey] ?? '')) === '') {
+                        throw new \RuntimeException('AI task plan generation failed: block_task style_plan is incomplete.');
+                    }
                 }
                 $hasSample = false;
                 foreach ($requirements as $requirement) {
