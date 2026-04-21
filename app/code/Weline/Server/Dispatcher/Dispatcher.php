@@ -1303,6 +1303,17 @@ class Dispatcher
                                 $this->log("SET_WORKER_POOL 维护端口注册失败: {$port} - {$result['error']}", 'WARN');
                             }
                         }
+                        if ($this->ipcClient !== null && $this->ipcClient->isConnected()) {
+                            $currentMaintenancePorts = $this->passthroughCore->getMaintenanceWorkerPorts();
+                            foreach ($normalizedPorts as $port) {
+                                $p = (int) $port;
+                                $this->ipcClient->send(ControlMessage::workerPoolAck(
+                                    $p,
+                                    \in_array($p, $currentMaintenancePorts, true),
+                                    ControlMessage::ROLE_MAINTENANCE
+                                ));
+                            }
+                        }
                         $this->log(
                             '收到 SET_WORKER_POOL（maintenance）: 维护端口已同步，端口数: ' . \count($normalizedPorts),
                             'INFO'
