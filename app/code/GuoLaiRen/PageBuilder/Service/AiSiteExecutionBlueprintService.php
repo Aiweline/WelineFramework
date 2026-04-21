@@ -4474,6 +4474,72 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param array<string, mixed> $block
+     * @param array<string, mixed> $realtimeContent
+     * @return list<string>
+     */
+    private function deriveStageOneEditableFields(array $block, array $realtimeContent): array
+    {
+        $fields = [];
+        $addField = static function (string $field) use (&$fields): void {
+            $field = \trim($field);
+            if ($field !== '') {
+                $fields[] = $field;
+            }
+        };
+
+        if (\is_array($block['field_plan'] ?? null)) {
+            foreach ($this->extractEditableFieldsFromFieldPlan($block['field_plan']) as $field) {
+                $addField($field);
+            }
+        }
+
+        $slots = \is_array($realtimeContent['editable_slots'] ?? null)
+            ? $realtimeContent['editable_slots']
+            : (\is_array($block['editable_slots'] ?? null) ? $block['editable_slots'] : []);
+        foreach ($slots as $slotKey => $slotValue) {
+            if (\is_string($slotValue) || \is_numeric($slotValue)) {
+                $addField((string)$slotValue);
+                continue;
+            }
+            if (\is_string($slotKey)) {
+                $addField($slotKey);
+            }
+        }
+
+        $content = $realtimeContent;
+        if ($content === []) {
+            $content = [
+                'headline' => \trim((string)($block['title'] ?? $block['content'] ?? $block['goal'] ?? '')),
+                'supporting_copy' => \trim((string)($block['content'] ?? '')),
+                'cta' => $block['cta'] ?? null,
+                'media' => \is_array($block['execution_script']['media_assets'] ?? null) ? $block['execution_script']['media_assets'] : null,
+            ];
+        }
+        foreach (['headline', 'supporting_copy', 'cta', 'media'] as $contentKey) {
+            $value = $content[$contentKey] ?? null;
+            if ($value === null || $value === '' || $value === []) {
+                continue;
+            }
+            $addField($contentKey === 'supporting_copy' ? 'body_copy' : $contentKey);
+        }
+
+        $contentBrief = \is_array($block['content_brief'] ?? null) ? $block['content_brief'] : [];
+        foreach ([
+            'headline_direction' => 'headline',
+            'body_direction' => 'body_copy',
+            'cta_direction' => 'primary_cta',
+        ] as $briefKey => $fieldName) {
+            if (\trim((string)($contentBrief[$briefKey] ?? '')) !== '') {
+                $addField($fieldName);
+            }
+        }
+
+        $fields = \array_values(\array_unique($fields));
+        return $fields !== [] ? $fields : ['headline', 'body_copy'];
+    }
+
+    /**
      * @param list<array<string, mixed>> $blocks
      * @param array<string, mixed> $sharedPromptContext
      */
@@ -4506,6 +4572,21 @@ final class AiSiteExecutionBlueprintService
         return \sha1((string)\json_encode([
             'page_key' => $pageType,
             'page_plan' => $hashSource,
+        ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function buildStageOneBlockContextHash(string $pageType, array $block): string
+    {
+        $hashSource = $block;
+        unset($hashSource['context_hash']);
+
+        return \sha1((string)\json_encode([
+            'page_key' => $pageType !== '' ? $pageType : 'shared',
+            'block_key' => (string)($block['block_key'] ?? $block['section_code'] ?? $block['task_key'] ?? ''),
+            'block' => $hashSource,
         ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
     }
 
@@ -8026,6 +8107,28 @@ final class AiSiteExecutionBlueprintService
     private function getAiService(): AiService
     {
         return $this->aiService ?? ObjectManager::getInstance(AiService::class);
+    }
+
+    /**
+     * @param mixed $items
+     * @return list<string>
+     */
+    private function normalizeStringList(mixed $items): array
+    {
+        if (!\is_array($items)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($items as $item) {
+            $text = \trim((string)$item);
+            if ($text === '') {
+                continue;
+            }
+            $normalized[] = $text;
+        }
+
+        return $normalized;
     }
 
     private function isEnglishLocale(string $locale): bool
