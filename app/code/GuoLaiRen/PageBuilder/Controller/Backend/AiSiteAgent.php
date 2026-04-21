@@ -4507,6 +4507,11 @@ SCRIPT;
         $endAt = \trim((string)($queueRow['end_at'] ?? ''));
 
         $publicIdHint = '';
+        $jobKey = '';
+        $jobType = '';
+        $jobStatus = '';
+        $token = '';
+        $tokenUsage = $this->normalizeAiSiteQueueTokenUsage($queueRow);
         $contentRaw = (string)($queueRow['content'] ?? '');
         if ($contentRaw !== '') {
             $decoded = \json_decode($contentRaw, true);
@@ -4519,6 +4524,19 @@ SCRIPT;
                         $len = \strlen($pidStr);
                         $publicIdHint = $len > 12 ? \substr($pidStr, 0, 6) . '…' . \substr($pidStr, -4) : $pidStr;
                     }
+                }
+                $jobKey = \trim((string)($decoded['job_key'] ?? ''));
+                $jobType = \trim((string)($decoded['job_type'] ?? ''));
+                $jobStatus = \trim((string)($decoded['status'] ?? ''));
+                $token = \trim((string)($decoded['token'] ?? ($decoded['execution_token'] ?? '')));
+                $contentTokenUsage = $this->normalizeAiSiteQueueTokenUsage($decoded);
+                foreach (['input_tokens', 'output_tokens', 'total_tokens'] as $tokenKey) {
+                    if ($tokenUsage[$tokenKey] === null && $contentTokenUsage[$tokenKey] !== null) {
+                        $tokenUsage[$tokenKey] = $contentTokenUsage[$tokenKey];
+                    }
+                }
+                if (!\is_array($tokenUsage['token_cost_meta'] ?? null) && \is_array($contentTokenUsage['token_cost_meta'] ?? null)) {
+                    $tokenUsage['token_cost_meta'] = $contentTokenUsage['token_cost_meta'];
                 }
             }
         }
@@ -4535,6 +4553,11 @@ SCRIPT;
             'start_at' => $startAt,
             'end_at' => $endAt,
             'public_id_hint' => $publicIdHint,
+            'job_key' => $jobKey,
+            'job_type' => $jobType,
+            'job_status' => $jobStatus !== '' ? $jobStatus : $status,
+            'token' => $token,
+            'token_usage' => $tokenUsage,
         ];
     }
 
@@ -4545,6 +4568,65 @@ SCRIPT;
      *
      * @return array<string, mixed>|null
      */
+    /**
+     * @param array<string, mixed> $source
+     *
+     * @return array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string, mixed>|null}
+     */
+    private function normalizeAiSiteQueueTokenUsage(array $source): array
+    {
+        $nested = \is_array($source['token_usage'] ?? null) ? $source['token_usage'] : [];
+        $input = $this->normalizeAiSiteQueueTokenCount(
+            $nested['input_tokens']
+            ?? $source['input_tokens']
+            ?? $nested['prompt_tokens']
+            ?? $source['prompt_tokens']
+            ?? null
+        );
+        $output = $this->normalizeAiSiteQueueTokenCount(
+            $nested['output_tokens']
+            ?? $source['output_tokens']
+            ?? $nested['completion_tokens']
+            ?? $source['completion_tokens']
+            ?? null
+        );
+        $total = $this->normalizeAiSiteQueueTokenCount(
+            $nested['total_tokens']
+            ?? $source['total_tokens']
+            ?? null
+        );
+        if ($total === null && $input !== null && $output !== null) {
+            $total = $input + $output;
+        }
+
+        return [
+            'input_tokens' => $input,
+            'output_tokens' => $output,
+            'total_tokens' => $total,
+            'token_cost_meta' => \is_array($nested['token_cost_meta'] ?? null)
+                ? $nested['token_cost_meta']
+                : (\is_array($source['token_cost_meta'] ?? null) ? $source['token_cost_meta'] : null),
+        ];
+    }
+
+    private function normalizeAiSiteQueueTokenCount(mixed $value): ?int
+    {
+        if (\is_int($value)) {
+            return $value >= 0 ? $value : null;
+        }
+        if (\is_float($value)) {
+            return $value >= 0 ? (int)\round($value) : null;
+        }
+        if (\is_string($value)) {
+            $trimmed = \trim($value);
+            if ($trimmed !== '' && \preg_match('/^\d+$/', $trimmed) === 1) {
+                return (int)$trimmed;
+            }
+        }
+
+        return null;
+    }
+
     private function buildPlanStageQueueInfoPayload(AiSiteAgentSession $session, array $activeOperation): ?array
     {
         $queueId = 0;
