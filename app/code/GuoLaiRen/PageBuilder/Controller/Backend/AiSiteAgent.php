@@ -54,6 +54,7 @@ class AiSiteAgent extends BaseController
     private const PARAMS_REFINE_COMPONENT = ['public_id', 'page_type', 'component_code', 'instruction'];
     private const PARAMS_UPDATE_BLOCK = ['public_id', 'page_type', 'block_id', 'block_config'];
     private const PARAMS_MUTATE_PLAN_BLOCK = ['public_id', 'page_type', 'action', 'block_key', 'block_config'];
+    private const PARAMS_MUTATE_TASK_PLAN_TASK = ['public_id', 'bucket', 'page_type', 'action', 'task_key', 'task_config'];
     private const WORKSPACE_STREAM_SNAPSHOT_PERSIST = false;
     private const STREAM_LEASE_SCOPE_KEY = '_workspace_stream_lease';
     private const STREAM_LEASE_TTL_SEC = 60;
@@ -241,6 +242,7 @@ class AiSiteAgent extends BaseController
         $this->assign('start_task_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-task-plan'));
         $this->assign('confirm_task_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-confirm-task-plan'));
         $this->assign('sort_task_plan_tasks_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-sort-task-plan-tasks'));
+        $this->assign('mutate_task_plan_task_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-mutate-task-plan-task'));
         $this->assign('task_plan_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-task-plan-sse'));
         $this->assign('resume_build_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-resume-build'));
         $this->assign('run_virtual_theme_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-build'));
@@ -584,6 +586,12 @@ SCRIPT;
     public function postSortTaskPlanTasks(): string
     {
         return $this->handleSortTaskPlanTasks();
+    }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', 'Mutate stage-2 tasks', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postMutateTaskPlanTask(): string
+    {
+        return $this->handleMutateTaskPlanTask();
     }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '更新阶段', 'GuoLaiRen_PageBuilder::ai_site_agent')]
@@ -5718,6 +5726,7 @@ SCRIPT;
             'has_virtual_theme_plan' => $hasVirtualThemePlan,
             'has_pending_build_tasks' => (int)($taskSummary['pending'] ?? 0) > 0,
             'task_plan_sse_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-task-plan-sse'),
+            'mutate_task_plan_task_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-mutate-task-plan-task'),
             'auto_start_build_after_stream' => false,
             'preview_page_options' => \is_array($normalized['preview_page_options']) ? $normalized['preview_page_options'] : [],
             'preview_page_id' => (int)$normalized['preview_page_id'],
@@ -10449,6 +10458,115 @@ SCRIPT;
         return $this->fetchJson([
             'success' => true,
             'message' => 'Stage-2 task-plan order saved.',
+            'data' => $this->buildWorkspaceState($fresh, $adminId, 80, true),
+        ]);
+    }
+
+    private function handleMutateTaskPlanTask(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
+        $bucket = \trim((string)$this->getRequestBodyValue('bucket', 'page'));
+        $pageType = \trim((string)$this->getRequestBodyValue('page_type', ''));
+        $action = \strtolower(\trim((string)$this->getRequestBodyValue('action', '')));
+        $taskKey = \trim((string)$this->getRequestBodyValue('task_key', ''));
+        if ($adminId <= 0 || $publicId === '' || !\in_array($action, ['refine', 'rebuild', 'delete', 'create'], true)) {
+            return $this->jsonError('INVALID_PARAMS', 'Missing required params.', self::PARAMS_MUTATE_TASK_PLAN_TASK);
+        }
+        if ($action !== 'create' && $taskKey === '') {
+            return $this->jsonError('INVALID_PARAMS', 'task_key is required for refine/rebuild/delete.', self::PARAMS_MUTATE_TASK_PLAN_TASK);
+        }
+
+        $taskConfig = [];
+        $rawTaskConfig = $this->getRequestBodyValue('task_config', null);
+        if ($rawTaskConfig !== null && $rawTaskConfig !== '') {
+            $error = '';
+            $taskConfig = $this->getRequestJsonObject('task_config', $error);
+            if ($error !== '') {
+                return $this->fetchJson(['success' => false, 'message' => $error]);
+            }
+        }
+        if ($taskConfig === []) {
+            $rawTaskPatch = $this->getRequestBodyValue('task_patch', null);
+            if ($rawTaskPatch !== null && $rawTaskPatch !== '') {
+                $error = '';
+                $taskConfig = $this->getRequestJsonObject('task_patch', $error);
+                if ($error !== '') {
+                    return $this->fetchJson(['success' => false, 'message' => $error]);
+                }
+            }
+        }
+        $instruction = \trim((string)$this->getRequestBodyValue('instruction', ''));
+        if ($instruction !== '' && !isset($taskConfig['instruction'])) {
+            $taskConfig['instruction'] = $instruction;
+        }
+
+        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            return $this->jsonError('SESSION_NOT_FOUND', 'Session not found.', self::PARAMS_PUBLIC_ID);
+        }
+
+        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        try {
+            $artifacts = $this->virtualThemePlanService->mutateDraftTaskPlanTask($scope, $action, $bucket, $pageType, $taskKey, $taskConfig, $instruction);
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
+        }
+
+        $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
+        $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
+        $scopePatch = [
+            'virtual_theme_plan' => [
+                'draft' => $virtualThemePlan,
+                'draft_markdown' => (string)($artifacts['markdown'] ?? ''),
+                'draft_generated_at' => \date('Y-m-d H:i:s'),
+                'confirmed' => \is_array($scope['virtual_theme_plan']['confirmed'] ?? null) ? $scope['virtual_theme_plan']['confirmed'] : [],
+                'confirmed_markdown' => (string)($scope['virtual_theme_plan']['confirmed_markdown'] ?? ''),
+                'confirmed_at' => (string)($scope['virtual_theme_plan']['confirmed_at'] ?? ''),
+                'confirmed_signature' => (string)($scope['virtual_theme_plan']['confirmed_signature'] ?? ''),
+                'plan_signature' => (string)($virtualThemePlan['signature'] ?? $scope['virtual_theme_plan']['plan_signature'] ?? ''),
+                'last_prompt_mode' => 'manual_task_mutation',
+                'last_target_scope' => (string)(($artifacts['mutation_summary']['task_key'] ?? $taskKey) ?: ''),
+                'last_round' => (int)($scope['virtual_theme_plan']['last_round'] ?? 0),
+            ],
+            'task_plan_markdown' => (string)($artifacts['markdown'] ?? ''),
+            'task_plan_generated_at' => \date('Y-m-d H:i:s'),
+            'task_plan_structured' => $structured,
+            'task_plan_directory_tree' => \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [],
+            'task_plan_summary' => [
+                'signature' => (string)($virtualThemePlan['signature'] ?? ''),
+                'shared_task_count' => \count(\is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : []),
+                'page_task_count' => \array_sum(\array_map(static fn($items): int => \is_array($items) ? \count($items) : 0, \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [])),
+                'prompt_mode' => 'manual_task_mutation',
+                'generation_source' => 'manual_task_mutation',
+            ],
+            'task_plan_confirmed' => 0,
+        ];
+        $saved = $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
+        if (!$saved) {
+            return $this->fetchJson(['success' => false, 'message' => 'Failed to persist task-plan mutation.']);
+        }
+
+        $summary = \is_array($artifacts['mutation_summary'] ?? null) ? $artifacts['mutation_summary'] : [];
+        $this->appendWorkspaceEvent(
+            $session->getId(),
+            $adminId,
+            $this->scopeCompatibilityService->normalizeStage($session->getStage()),
+            'task_plan_task_mutated',
+            'Stage-2 task plan task updated.',
+            ['details' => $summary]
+        );
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+
+        return $this->fetchJson([
+            'success' => true,
+            'message' => 'Stage-2 task-plan task updated.',
+            'mutation' => $summary,
+            'task_plan' => [
+                'markdown' => (string)($artifacts['markdown'] ?? ''),
+                'structured' => $structured,
+                'virtual_theme_plan' => $virtualThemePlan,
+            ],
             'data' => $this->buildWorkspaceState($fresh, $adminId, 80, true),
         ]);
     }
