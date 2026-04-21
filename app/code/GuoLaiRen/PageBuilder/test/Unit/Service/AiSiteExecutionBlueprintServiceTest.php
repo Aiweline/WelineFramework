@@ -743,69 +743,36 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
     public function testPlanBookMarkdownIsGeneratedFromSortedBlockTree(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
-        $pageType = Page::TYPE_HOME;
-        $laterBlock = [
-            'block_key' => 'later_block',
-            'section_code' => 'Later Block',
-            'sort_order' => 20,
-            'order' => 20,
-            'goal' => 'Render after the earlier block.',
-            'realtime_content' => [
-                'headline' => 'Later headline',
-                'supporting_copy' => ['Later copy'],
-                'cta' => [['label' => 'Later CTA']],
-            ],
-            'field_plan' => [
-                ['field' => 'title', 'sample' => 'Later headline'],
-            ],
-        ];
-        $earlierBlock = [
-            'block_key' => 'earlier_block',
-            'section_code' => 'Earlier Block',
-            'sort_order' => 10,
-            'order' => 10,
-            'goal' => 'Render before the later block.',
-            'realtime_content' => [
-                'headline' => 'Earlier headline',
-                'supporting_copy' => ['Earlier copy'],
-                'cta' => [['label' => 'Earlier CTA']],
-            ],
-            'field_plan' => [
-                ['field' => 'title', 'sample' => 'Earlier headline'],
-            ],
-        ];
-        $structured = [
-            'i18n' => ['locale' => 'en_US'],
-            'site_strategy' => [
-                'site_display_name' => 'Sorted Markdown Test',
-                'summary' => 'The markdown reader must be assembled from sorted blocks.',
-            ],
-            'theme_style' => ['name' => 'Sorted Theme'],
-            'palette' => ['name' => 'Sorted Palette'],
-            'navigation_plan' => ['header_items' => [['label' => 'Home', 'href' => '/']]],
-            'footer_plan' => ['featured' => [], 'policies' => []],
-            'seo_strategy' => ['core_intent' => 'sorted markdown'],
-            'page_types' => [$pageType],
-            'pages' => [
-                $pageType => [
-                    'page_label' => 'Home',
-                    'page_goal' => 'Prove sorted markdown assembly.',
-                    'theme_alignment_summary' => 'Home follows the shared sorted plan.',
-                    'primary_keywords' => ['sorted markdown'],
-                    'secondary_keywords' => ['block tree'],
-                    'blocks' => [$laterBlock, $earlierBlock],
-                ],
-            ],
-        ];
+        [$scope, $structured, $executionBlueprint, $planJson] = $this->buildPlanBookStructuredFixture();
 
-        $buildPlanJson = new \ReflectionMethod($service, 'buildPlanJson');
-        $buildPlanJson->setAccessible(true);
-        $planJson = $buildPlanJson->invoke($service, $structured);
-        self::assertIsArray($planJson);
+        $pageType = '';
+        $originalKeys = [];
+        foreach (($structured['page_plans'] ?? []) as $candidatePageType => $page) {
+            $candidateBlocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+            $candidateKeys = \array_values(\array_filter(\array_map(
+                static fn(array $block): string => \trim((string)($block['block_key'] ?? '')),
+                $candidateBlocks
+            )));
+            if (\count($candidateKeys) >= 2) {
+                $pageType = (string)$candidatePageType;
+                $originalKeys = $candidateKeys;
+                break;
+            }
+        }
 
-        $blockKeys = \array_values(\array_map(
-            static fn(array $block): string => (string)($block['block_key'] ?? ''),
-            $planJson['pages'][$pageType]['blocks'] ?? []
+        self::assertNotSame('', $pageType);
+        $orderedKeys = \array_values(\array_reverse($originalKeys));
+        $reordered = $service->reorderDraftPlanBlocks($scope + [
+            'plan_json' => $planJson,
+            'plan_markdown' => '# Plan book fixture',
+            'plan_structured' => $structured,
+            'execution_blueprint_draft' => $executionBlueprint,
+            'plan_locale' => 'en_US',
+        ], $pageType, $orderedKeys);
+
+        $bookBlockKeys = \array_values(\array_map(
+            static fn(array $block): string => (string)($block['source_block_key'] ?? ''),
+            $reordered['plan_workbench']['confirmed']['plan_book']['structured']['pages'][$pageType]['blocks'] ?? []
         ));
         self::assertSame(['earlier_block', 'later_block'], \array_slice($blockKeys, 0, 2));
 
