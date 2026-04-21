@@ -62,6 +62,9 @@ class AiSiteBuildQueue implements QueueInterface
         $queueId = (int)$queue->getId();
 
         $sse = null;
+        $previousSseContextExists = false;
+        $previousSseContext = null;
+        $sseContextRegistered = false;
         try {
             $this->appendQueueLifecycleLine($queue, '开始执行 queue_id=' . $queueId . ' public_id=' . $publicId . ' admin_id=' . $adminId);
 
@@ -114,6 +117,10 @@ class AiSiteBuildQueue implements QueueInterface
                 AiSiteAgentSession::STAGE_VISUAL_EDIT,
                 'build'
             );
+            $previousSseContextExists = RequestContext::has(RequestContext::SSE_WRITER_KEY);
+            $previousSseContext = RequestContext::get(RequestContext::SSE_WRITER_KEY);
+            RequestContext::set(RequestContext::SSE_WRITER_KEY, $sse);
+            $sseContextRegistered = true;
             $this->queueTrace($sse, 'QueueDbWriter 已创建，构建进度将写入队列 result');
 
             /** @var AiSiteAgent $controller */
@@ -161,6 +168,13 @@ class AiSiteBuildQueue implements QueueInterface
             $this->updateSessionError($publicId, $adminId, $effectiveExecutionToken, $throwable->getMessage());
             throw new \RuntimeException('构建失败：' . $throwable->getMessage(), 0, $throwable);
         } finally {
+            if ($sseContextRegistered) {
+                if ($previousSseContextExists) {
+                    RequestContext::set(RequestContext::SSE_WRITER_KEY, $previousSseContext);
+                } else {
+                    RequestContext::remove(RequestContext::SSE_WRITER_KEY);
+                }
+            }
             if ($sse instanceof QueueDbWriter) {
                 $sse->complete();
             }
