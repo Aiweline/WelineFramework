@@ -106,8 +106,8 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             $artifacts['structured']['block_task_schema']['required_fields'] ?? []
         );
         self::assertSame(
-            ['field', 'type', 'default', 'sample', 'reason'],
-            $artifacts['structured']['block_task_schema']['meta_field_required_fields'] ?? []
+            ['color', 'font', 'spacing', 'responsive'],
+            $artifacts['structured']['block_task_schema']['style_plan_required_keys'] ?? []
         );
         $blockTask = $artifacts['structured']['page_tasks']['home_page'][0]['block_task'] ?? [];
         self::assertSame('stage2-block-task-v1', (string)($blockTask['schema_version'] ?? ''));
@@ -124,6 +124,10 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertSame('primary_visual', (string)($blockTask['content_plan']['asset_plan'][0]['slot'] ?? ''));
         self::assertStringContainsString('Hero', (string)($blockTask['content_plan']['asset_plan'][0]['description'] ?? ''));
         self::assertIsArray($blockTask['style_plan'] ?? null);
+        self::assertNotSame('', (string)($blockTask['style_plan']['color'] ?? ''));
+        self::assertNotSame('', (string)($blockTask['style_plan']['font'] ?? ''));
+        self::assertNotSame('', (string)($blockTask['style_plan']['spacing'] ?? ''));
+        self::assertNotSame('', (string)($blockTask['style_plan']['responsive'] ?? ''));
         self::assertNotSame('', (string)($blockTask['planning_reason'] ?? ''));
         self::assertIsArray($artifacts['structured']['stage1_task_cues']['pages']['page:home_page:content/home-page-hero'] ?? null);
         self::assertSame('Build a reusable header with primary navigation.', (string)($artifacts['structured']['stage1_task_cues']['shared']['shared:header']['stage1_goal'] ?? ''));
@@ -390,10 +394,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('Treat this as a customer-visible implementation plan', $allPrompts);
         self::assertStringContainsString('block_task', $allPrompts);
         self::assertStringContainsString('task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order', $allPrompts);
-        self::assertStringContainsString('block_task.content_plan MUST include concrete arrays content_copy, cta_plan, link_plan, and asset_plan', $allPrompts);
-        self::assertStringContainsString('cta_plan gives each real CTA label plus href/page_type target', $allPrompts);
-        self::assertStringContainsString('link_plan gives every internal/external link label plus href/page_type and purpose', $allPrompts);
-        self::assertStringContainsString('asset_plan gives each image/icon/logo/video slot', $allPrompts);
+        self::assertStringContainsString('concrete color, font, spacing, and responsive keys', $allPrompts);
         self::assertStringContainsString('Stage-1 compact context summary:', $allPrompts);
         self::assertStringNotContainsString('Stage-1 plan_json:', $allPrompts);
         self::assertStringNotContainsString('Baseline virtual_theme_plan compatibility snapshot:', $allPrompts);
