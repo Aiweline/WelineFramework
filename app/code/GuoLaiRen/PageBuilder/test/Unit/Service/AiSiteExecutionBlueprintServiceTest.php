@@ -1093,6 +1093,58 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('strong CTA', (string)($artifacts['plan_json']['palette']['selection_reason'] ?? ''));
     }
 
+    public function testBuildPlanArtifactsByAiStreamSupportsStagedThemeAndPageGeneration(): void
+    {
+        $calls = [];
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::exactly(3))
+            ->method('generateStream')
+            ->willReturnCallback(function (
+                string $prompt,
+                callable $callback,
+                $modelCode,
+                string $scenarioCode,
+                $locale,
+                array $params
+            ) use (&$calls): void {
+                $calls[] = [
+                    'prompt' => $prompt,
+                    'scenario' => $scenarioCode,
+                    'params' => $params,
+                ];
+                $callback($this->buildValidAiPlanResponse());
+            });
+
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $aiService
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+            'default_locale' => 'en_US',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ], [
+            'staged_generation' => true,
+        ]);
+
+        self::assertSame('ai_staged', (string)($artifacts['generation_source'] ?? ''));
+        self::assertSame('pagebuilder_plan_generation', (string)($calls[0]['scenario'] ?? ''));
+        self::assertSame('pagebuilder_plan_generation', (string)($calls[1]['scenario'] ?? ''));
+        self::assertSame('pagebuilder_plan_generation', (string)($calls[2]['scenario'] ?? ''));
+        self::assertStringContainsString('THEME planner', (string)($calls[0]['prompt'] ?? ''));
+        self::assertStringContainsString('PAGE planner', (string)($calls[1]['prompt'] ?? ''));
+        self::assertTrue((bool)($calls[0]['params']['enforce_timeout_in_stream'] ?? false));
+        self::assertTrue((bool)($calls[1]['params']['enforce_timeout_in_stream'] ?? false));
+        self::assertLessThanOrEqual(4096, (int)($calls[1]['params']['max_tokens'] ?? 0));
+    }
+
     public function testBuildPlanArtifactsByAiStreamAcceptsTopLevelPlanObjectShape(): void
     {
         $service = new AiSiteExecutionBlueprintService(
