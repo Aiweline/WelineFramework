@@ -4670,6 +4670,7 @@ final class AiSiteExecutionBlueprintService
             'queue_jobs' => $stageOneQueueJobs,
             'block_index' => $blockIndex,
         ];
+        $planBookStructured = $this->buildStageOnePlanBookStructured($structured, $executionBlueprint, $planLocale);
 
         return [
             'version' => 2,
@@ -4677,6 +4678,9 @@ final class AiSiteExecutionBlueprintService
             'stage1' => $stage1,
             'confirmed' => [
                 'plan_book_markdown' => $markdown,
+                'plan_book' => [
+                    'structured' => $planBookStructured,
+                ],
                 'structured_plan' => $structured,
                 'plan_json' => $planJson,
                 'execution_blueprint' => $executionBlueprint,
@@ -4685,6 +4689,191 @@ final class AiSiteExecutionBlueprintService
                 'confirmed_signature' => (string)($executionBlueprint['signature'] ?? ''),
             ],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $structured
+     * @param array<string, mixed> $executionBlueprint
+     * @return array<string, mixed>
+     */
+    private function buildStageOnePlanBookStructured(array $structured, array $executionBlueprint, string $planLocale): array
+    {
+        $sharedComponents = $this->resolveStageOneSharedComponents($structured, $executionBlueprint);
+        $pagePlans = \is_array($structured['page_plans'] ?? null)
+            ? $structured['page_plans']
+            : (\is_array($executionBlueprint['page_plans'] ?? null) ? $executionBlueprint['page_plans'] : []);
+        $sharedPromptContext = \is_array($structured['shared_plan']['shared_prompt_context'] ?? null)
+            ? $structured['shared_plan']['shared_prompt_context']
+            : (\is_array($executionBlueprint['shared_prompt_context'] ?? null) ? $executionBlueprint['shared_prompt_context'] : []);
+        $themeContextSnapshot = \is_array($structured['theme_context_snapshot'] ?? null)
+            ? $structured['theme_context_snapshot']
+            : (\is_array($executionBlueprint['theme_context_snapshot'] ?? null) ? $executionBlueprint['theme_context_snapshot'] : []);
+
+        $sharedBlocks = [];
+        foreach ($this->normalizeStageOneSharedComponents($sharedComponents) as $component => $componentPlan) {
+            $sharedBlocks[] = $this->buildStageOnePlanBookSharedBlock((string)$component, $componentPlan);
+        }
+
+        $pages = [];
+        $pageBlockCount = 0;
+        foreach ($pagePlans as $pageKey => $pagePlan) {
+            if (!\is_array($pagePlan)) {
+                continue;
+            }
+            $blocks = [];
+            $blockSortOrder = 10;
+            foreach (\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [] as $block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $blocks[] = $this->buildStageOnePlanBookPageBlock((string)$pageKey, $block, $blockSortOrder);
+                $blockSortOrder += 10;
+            }
+            $pageBlockCount += \count($blocks);
+            $pages[(string)$pageKey] = [
+                'page_key' => (string)$pageKey,
+                'page_label' => (string)($pagePlan['page_label'] ?? $pageKey),
+                'page_goal' => \trim((string)($pagePlan['page_goal'] ?? '')),
+                'page_status' => (string)($pagePlan['page_status'] ?? 'done'),
+                'theme_alignment_summary' => \trim((string)($pagePlan['theme_alignment_summary'] ?? '')),
+                'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? $sharedPromptContext['context_hash'] ?? ''),
+                'theme_context_hash' => (string)($pagePlan['theme_context_hash'] ?? $sharedPromptContext['theme_context_hash'] ?? ''),
+                'page_context_hash' => (string)($pagePlan['page_context_hash'] ?? ''),
+                'blocks' => $blocks,
+            ];
+        }
+
+        $planBook = [
+            'version' => 1,
+            'source' => 'stage1.block_tree',
+            'source_signature' => (string)($executionBlueprint['signature'] ?? ''),
+            'plan_locale' => $planLocale,
+            'theme_context_hash' => (string)($themeContextSnapshot['context_hash'] ?? $sharedPromptContext['theme_context_hash'] ?? ''),
+            'shared_context_hash' => (string)($sharedPromptContext['context_hash'] ?? ''),
+            'theme_design' => $this->extractStageOneThemeDesign(
+                \is_array($structured['shared_plan']['theme_design'] ?? null)
+                    ? $structured['shared_plan']['theme_design']
+                    : $themeContextSnapshot
+            ),
+            'shared_blocks' => $sharedBlocks,
+            'pages' => $pages,
+            'counts' => [
+                'shared_blocks' => \count($sharedBlocks),
+                'pages' => \count($pages),
+                'page_blocks' => $pageBlockCount,
+                'total_blocks' => \count($sharedBlocks) + $pageBlockCount,
+            ],
+        ];
+        $planBook['context_hash'] = $this->buildStageOnePlanBookContextHash($planBook);
+
+        return $planBook;
+    }
+
+    /**
+     * @param array<string, mixed> $componentPlan
+     * @return array<string, mixed>
+     */
+    private function buildStageOnePlanBookSharedBlock(string $component, array $componentPlan): array
+    {
+        $taskKey = \trim((string)($componentPlan['task_key'] ?? ''));
+        if ($taskKey === '') {
+            $taskKey = 'shared:' . $component;
+        }
+
+        return [
+            'task_key' => $taskKey,
+            'block_key' => $taskKey,
+            'block_scope' => 'shared',
+            'component' => $component,
+            'sort_order' => (int)($componentPlan['sort_order'] ?? $this->defaultStageOneSharedSortOrder($component, 0)),
+            'title' => (string)($componentPlan['component'] ?? $component),
+            'goal' => \trim((string)($componentPlan['goal'] ?? '')),
+            'implementation_detail' => $this->buildBlockImplementationFocus($componentPlan, ''),
+            'realtime_content' => \is_array($componentPlan['realtime_content'] ?? null) ? $componentPlan['realtime_content'] : [],
+            'reason' => \trim((string)($componentPlan['reason'] ?? $componentPlan['why'] ?? '')),
+            'completion_rule' => \trim((string)($componentPlan['completion_rule'] ?? '')),
+            'editable_fields' => $this->normalizeStageOnePlanBookEditableFields($componentPlan),
+            'content_source' => \is_array($componentPlan['content_source'] ?? null) ? \array_values($componentPlan['content_source']) : [],
+            'style_direction' => \trim((string)($componentPlan['style_direction'] ?? '')),
+            'responsive_rule' => \trim((string)($componentPlan['responsive_rule'] ?? '')),
+            'context_hash' => $this->buildStageOnePlanBookBlockContextHash($taskKey, $componentPlan),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    private function buildStageOnePlanBookPageBlock(string $pageKey, array $block, int $fallbackSortOrder): array
+    {
+        $sourceBlockKey = \trim((string)($block['block_key'] ?? $block['section_code'] ?? 'block'));
+        if ($sourceBlockKey === '') {
+            $sourceBlockKey = 'block';
+        }
+        $taskKey = 'page:' . $pageKey . ':' . $sourceBlockKey;
+
+        return [
+            'task_key' => $taskKey,
+            'block_key' => $taskKey,
+            'source_block_key' => $sourceBlockKey,
+            'block_scope' => 'page',
+            'page_key' => $pageKey,
+            'component_kind' => \trim((string)($block['component_kind'] ?? $block['section_code'] ?? 'section')),
+            'sort_order' => (int)($block['sort_order'] ?? $block['order'] ?? $fallbackSortOrder),
+            'title' => \trim((string)($block['section_code'] ?? $sourceBlockKey)),
+            'goal' => \trim((string)($block['goal'] ?? '')),
+            'implementation_detail' => $this->buildBlockImplementationFocus($block, ''),
+            'realtime_content' => \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [],
+            'reason' => \trim((string)($block['reason'] ?? $block['why'] ?? '')),
+            'completion_rule' => \trim((string)($block['completion_rule'] ?? '')),
+            'editable_fields' => $this->normalizeStageOnePlanBookEditableFields($block),
+            'content_source' => \is_array($block['content_source'] ?? null) ? \array_values($block['content_source']) : [],
+            'style_direction' => \trim((string)($block['style_direction'] ?? '')),
+            'responsive_rule' => \trim((string)($block['responsive_rule'] ?? $block['style_brief']['responsive_rule'] ?? '')),
+            'seo_brief' => \is_array($block['seo_brief'] ?? null) ? $block['seo_brief'] : [],
+            'context_hash' => $this->buildStageOnePlanBookBlockContextHash($taskKey, $block),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return list<string>
+     */
+    private function normalizeStageOnePlanBookEditableFields(array $block): array
+    {
+        $editableFields = \is_array($block['editable_fields'] ?? null) ? $block['editable_fields'] : [];
+        if ($editableFields === []) {
+            $editableFields = $this->extractEditableFieldsFromFieldPlan(\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : []);
+        }
+
+        return \array_values(\array_unique(\array_filter(\array_map(
+            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+            $editableFields
+        ), static fn(string $value): bool => $value !== '')));
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function buildStageOnePlanBookBlockContextHash(string $blockKey, array $payload): string
+    {
+        $hashPayload = $payload;
+        unset($hashPayload['context_hash']);
+
+        return \sha1((string)\json_encode([
+            'block_key' => $blockKey,
+            'payload' => $hashPayload,
+        ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+    }
+
+    /**
+     * @param array<string, mixed> $planBook
+     */
+    private function buildStageOnePlanBookContextHash(array $planBook): string
+    {
+        unset($planBook['context_hash']);
+
+        return \sha1((string)\json_encode($planBook, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
     }
 
     /**
