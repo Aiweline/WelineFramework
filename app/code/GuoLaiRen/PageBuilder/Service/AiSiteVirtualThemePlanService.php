@@ -642,8 +642,7 @@ final class AiSiteVirtualThemePlanService
         $lines[] = 'Hard rules:';
         $lines[] = '- Every returned page_tasks[] entry must include block_task with required fields: task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order.';
         $lines[] = '- block_task.task_goal is the visible block outcome; block_task.meta_fields is the exact editable field list; block_task.content_plan and block_task.style_plan are concrete arrays; block_task.planning_reason explains the stage-1 rationale; block_task.sort_order mirrors the task sort_order.';
-        $lines[] = '- block_task.content_plan MUST include concrete arrays content_copy, cta_plan, link_plan, and asset_plan. content_copy lists final on-page strings by field; cta_plan gives each real CTA label plus href/page_type target; link_plan gives every internal/external link label plus href/page_type and purpose; asset_plan gives each image/icon/logo/video slot, concrete asset description, alt_text, and source/use rule.';
-        $lines[] = '- Do not put content_plan placeholders such as "write copy later", "CTA TBD", "link TBD", or "asset TBD"; if stage-1 lacks a value, provide a concrete [assumption] value that fits the confirmed user brief.';
+        $lines[] = '- block_task.style_plan MUST include concrete color, font, spacing, and responsive keys. Each key must be directly usable by stage 3: color names palette/hex usage, font names family/weight/scale, spacing names section padding/gap/radius rhythm, responsive names desktop/mobile behavior.';
         $lines[] = '- Every returned task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, and completion_rule-compatible detail.';
         $lines[] = '- Keep task_key, group_key, page_type, and sort_order compatible with the provided skeleton.';
         $lines[] = '- Do not drop any task from this batch.';
@@ -3804,7 +3803,7 @@ final class AiSiteVirtualThemePlanService
         $structured['block_task_schema'] = [
             'schema_version' => self::BLOCK_TASK_SCHEMA_VERSION,
             'required_fields' => self::BLOCK_TASK_REQUIRED_FIELDS,
-            'meta_field_required_fields' => ['field', 'type', 'default', 'sample', 'reason'],
+            'style_plan_required_keys' => ['color', 'font', 'spacing', 'responsive'],
             'field_contract' => [
                 'task_goal' => 'Visible outcome this block must accomplish.',
                 'meta_fields' => 'Editable fields with type/default/sample/reason.',
@@ -5313,7 +5312,7 @@ final class AiSiteVirtualThemePlanService
             '    "virtual_theme_strategy": {},',
             '    "shared_tasks": [],',
             '    "page_tasks": {},',
-            '    "block_task_schema": {"schema_version":"' . self::BLOCK_TASK_SCHEMA_VERSION . '","required_fields":["task_goal","meta_fields","content_plan","style_plan","planning_reason","sort_order"],"meta_field_required_fields":["field","type","default","sample","reason"]},',
+            '    "block_task_schema": {"schema_version":"' . self::BLOCK_TASK_SCHEMA_VERSION . '","required_fields":["task_goal","meta_fields","content_plan","style_plan","planning_reason","sort_order"],"style_plan_required_keys":["color","font","spacing","responsive"]},',
             '    "task_tree": {},',
             '    "meta_field_matrix": {},',
             '    "style_tokens": {},',
@@ -5333,8 +5332,7 @@ final class AiSiteVirtualThemePlanService
             '- Do not invent unselected pages or omit selected pages.',
             '- Every task must include enough content detail for direct implementation in stage 3: a builder must produce theme/HTML without guessing; reuse or improve concrete CTA labels, nav labels, hero strings, and footer link titles from stage-1—always spell them out again here.',
             '- Every page_tasks[] item MUST include block_task with required fields task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order; this block_task is the minimum structured source of truth for one stage-2 block task.',
-            '- block_task.content_plan MUST include concrete arrays content_copy, cta_plan, link_plan, and asset_plan. content_copy lists final on-page copy by field; cta_plan gives each real CTA label plus href/page_type target; link_plan gives every visible link label plus href/page_type and purpose; asset_plan gives each image/icon/logo/video slot, concrete asset description, alt_text, and source/use rule.',
-            '- content_plan is not prose guidance: no "write copy later", "CTA TBD", "link TBD", or "asset TBD". If stage-1 does not name an exact value, output a concrete [assumption] value that still fits the confirmed user brief.',
+            '- Every block_task.style_plan MUST include concrete color, font, spacing, and responsive keys. The color key names palette/hex usage; font names family/weight/scale; spacing names section padding, card gaps, and radius rhythm; responsive names desktop/mobile behavior from the confirmed stage-1 plan.',
             '- Every task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, completion_rule.',
             '- The markdown must explain concrete execution steps by shared tasks, page tasks, and task tree order; every section MUST name real labels, routes, field keys, and example copy—never-only phrases like "完善导航" or "优化体验" without specifics.',
             '- The stage-2 document must include page coverage, task tree, execution order, and risk notes.',
