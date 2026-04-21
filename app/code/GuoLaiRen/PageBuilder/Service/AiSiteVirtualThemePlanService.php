@@ -639,7 +639,8 @@ final class AiSiteVirtualThemePlanService
         $lines[] = '- Every returned shared_tasks[] item must include planning_reason that explains why the shared block, field defaults, navigation/link grouping, style, and responsive plan follow the confirmed stage-1 shared cues.';
         $lines[] = '- Every returned page_tasks[] entry must include block_task with required fields: task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order.';
         $lines[] = '- block_task.task_goal is the visible block outcome; block_task.meta_fields is the exact editable field list; block_task.content_plan and block_task.style_plan are concrete arrays; block_task.planning_reason explains the stage-1 rationale; block_task.sort_order mirrors the task sort_order.';
-        $lines[] = '- For page block tasks, read the matching Relevant stage-1 page cues entry and explicitly use block_goal for task_goal, realtime_content for content_plan examples, style_direction for style_plan, and reason for planning_reason.';
+        $lines[] = '- For page block tasks, read the matching Relevant stage-1 page cues entry and explicitly use block_goal for task_goal, realtime_content for content_plan examples, design_tags/style_direction for style_plan, and reason for planning_reason.';
+        $lines[] = '- block_task.style_plan must preserve design_tags exactly enough for stage 3: visual tags, motion tags, interaction tags, texture tags, responsive tags, and implementation_note must appear in the style_plan values.';
         $lines[] = '- Every planning_reason must be concrete and traceable to stage-1 reason/implementation_detail; generic wording such as "needed for the page" is invalid.';
         $lines[] = '- block_task.style_plan MUST include concrete color, font, spacing, and responsive keys. Each key must be directly usable by stage 3: color names palette/hex usage, font names family/weight/scale, spacing names section padding/gap/radius rhythm, responsive names desktop/mobile behavior.';
         $lines[] = '- Every returned task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, and completion_rule-compatible detail.';
@@ -4539,6 +4540,7 @@ final class AiSiteVirtualThemePlanService
                     'completion_rule' => (string)($blockPlan['completion_rule'] ?? ''),
                     'content_brief' => \is_array($blockPlan['content_brief'] ?? null) ? $blockPlan['content_brief'] : [],
                     'field_plan' => \is_array($blockMeta['field_plan'] ?? null) ? $blockMeta['field_plan'] : [],
+                    'design_tags' => \is_array($blockPlan['design_tags'] ?? null) ? $blockPlan['design_tags'] : [],
                     'style_direction' => (string)($blockPlan['style_direction'] ?? ''),
                     'responsive_rule' => (string)($blockPlan['responsive_rule'] ?? ''),
                     'result_ref' => \is_array($blockMeta['result_ref'] ?? null) ? $blockMeta['result_ref'] : [],
@@ -5468,7 +5470,8 @@ final class AiSiteVirtualThemePlanService
             '- Every task must include enough content detail for direct implementation in stage 3: a builder must produce theme/HTML without guessing; reuse or improve concrete CTA labels, nav labels, hero strings, and footer link titles from stage-1—always spell them out again here.',
             '- Every shared_tasks[] item MUST include planning_reason that explains why the shared block structure, field defaults, navigation/link grouping, style rules, and responsive behavior follow the confirmed stage-1 shared cues.',
             '- Every page_tasks[] item MUST include block_task with required fields task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order; this block_task is the minimum structured source of truth for one stage-2 block task.',
-            '- For every page block task, use the matching extracted stage-1 task cue fields: block_goal drives task_goal, realtime_content drives content_plan examples, style_direction drives style_plan, and reason drives planning_reason.',
+            '- For every page block task, use the matching extracted stage-1 task cue fields: block_goal drives task_goal, realtime_content drives content_plan examples, design_tags/style_direction drives style_plan, and reason drives planning_reason.',
+            '- Preserve stage-1 design_tags in block_task.style_plan so stage 3 can recreate effects, shadows, radius, image treatment, motion timing, hover/interaction behavior, and responsive behavior.',
             '- Every planning_reason field MUST be concrete and traceable to stage-1 reason/implementation_detail; generic wording such as "needed for the page" is invalid.',
             '- Every block_task.style_plan MUST include concrete color, font, spacing, and responsive keys. The color key names palette/hex usage; font names family/weight/scale; spacing names section padding, card gaps, and radius rhythm; responsive names desktop/mobile behavior from the confirmed stage-1 plan.',
             '- Every task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, completion_rule.',
