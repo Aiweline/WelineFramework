@@ -180,9 +180,28 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertArrayHasKey('implementation_detail', $pageTask['block'] ?? []);
         self::assertArrayHasKey('realtime_content', $pageTask['block'] ?? []);
         self::assertSame(
-            $artifacts['plan_json']['theme_design']['color_scheme'] ?? [],
-            $pageTask['prompt_context']['theme_hard_constraints']['color_scheme'] ?? []
+            (string)($artifacts['execution_blueprint']['shared_prompt_context']['context_hash'] ?? ''),
+            (string)($pageTask['source_ref']['shared_context_hash'] ?? '')
         );
+    }
+
+    public function testPageTaskMissingSharedContextHashIsRejected(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $method = new \ReflectionMethod($service, 'buildPageTask');
+        $method->setAccessible(true);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('missing shared_context_hash');
+
+        $method->invoke($service, 'home_page', [
+            'page_label' => 'Home',
+            'slug' => '/',
+            'blocks' => [],
+        ], [
+            'block_key' => 'hero',
+            'implementation_detail' => 'Hero implementation',
+        ]);
     }
 
     public function testRefineDraftPlanAddsChangeScopeReport(): void
