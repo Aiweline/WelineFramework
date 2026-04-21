@@ -1684,6 +1684,16 @@ final class AiSiteExecutionBlueprintService
     private function assertAiStageOneThemeDesignColorScheme(array $themeDesign): void
     {
         $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+        // 历史阶段一产物可能仅输出 body（正文色）或仅输出 text，校验前先互补，避免因字段别名差异误判失败。
+        $textColor = \trim((string)($colorScheme['text'] ?? ''));
+        $bodyColor = \trim((string)($colorScheme['body'] ?? ''));
+        if ($textColor === '' && $bodyColor !== '') {
+            $colorScheme['text'] = $bodyColor;
+            $textColor = $bodyColor;
+        }
+        if ($bodyColor === '' && $textColor !== '') {
+            $colorScheme['body'] = $textColor;
+        }
         foreach (['primary', 'secondary', 'accent', 'background', 'text', 'button'] as $colorKey) {
             $value = \trim((string)($colorScheme[$colorKey] ?? ''));
             if ($value === '') {
@@ -3915,6 +3925,14 @@ final class AiSiteExecutionBlueprintService
     {
         $themeDesign = \is_array($candidate['theme_design'] ?? null) ? $candidate['theme_design'] : $candidate;
         $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+        $textColor = \trim((string)($colorScheme['text'] ?? ''));
+        $bodyColor = \trim((string)($colorScheme['body'] ?? ''));
+        if ($textColor === '' && $bodyColor !== '') {
+            $colorScheme['text'] = $bodyColor;
+        }
+        if ($bodyColor === '' && $textColor !== '') {
+            $colorScheme['body'] = $textColor;
+        }
         $typography = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
         $visualKeywords = \is_array($themeDesign['visual_keywords'] ?? null) ? $themeDesign['visual_keywords'] : [];
         $forbiddenStyles = \is_array($themeDesign['forbidden_styles'] ?? null) ? $themeDesign['forbidden_styles'] : [];
