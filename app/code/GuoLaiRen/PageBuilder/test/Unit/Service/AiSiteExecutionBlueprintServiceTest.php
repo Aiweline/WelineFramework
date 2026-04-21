@@ -449,6 +449,130 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertSame($orderedKeys, $pageTaskBlockKeys);
     }
 
+    public function testPageBlockReorderWritesStructuredSortOrderMarkdownAndStageTwoSplitOrder(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $artifacts = $service->buildPlanArtifacts([
+            'site_title' => 'Page Block Sort Writeback Test',
+            'brief_description' => 'Need page blocks whose sort order can drive downstream task splitting.',
+            'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+        ], [
+            'site_title' => 'Page Block Sort Writeback Test',
+            'brief_description' => 'Need page blocks whose sort order can drive downstream task splitting.',
+        ]);
+
+        $pageType = '';
+        $originalKeys = [];
+        foreach (($artifacts['plan_json']['pages'] ?? []) as $candidatePageType => $page) {
+            $candidateBlocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+            $candidateKeys = \array_values(\array_filter(\array_map(
+                static fn(array $block): string => \trim((string)($block['block_key'] ?? '')),
+                $candidateBlocks
+            )));
+            if (\count($candidateKeys) >= 2) {
+                $pageType = (string)$candidatePageType;
+                $originalKeys = $candidateKeys;
+                break;
+            }
+        }
+
+        self::assertNotSame('', $pageType);
+        self::assertGreaterThanOrEqual(2, \count($originalKeys));
+
+        $orderedKeys = \array_values(\array_reverse($originalKeys));
+        $scope = [
+            'site_title' => 'Page Block Sort Writeback Test',
+            'workspace_track' => 'virtual_theme',
+            'plan_json' => $artifacts['plan_json'],
+            'plan_markdown' => $artifacts['markdown'],
+            'plan_structured' => $artifacts['structured'],
+            'plan_workbench' => $artifacts['plan_workbench'],
+            'execution_blueprint_draft' => $artifacts['execution_blueprint'],
+        ];
+
+        $reordered = $service->reorderDraftPlanBlocks($scope, $pageType, $orderedKeys);
+
+        $expectedSortOrders = \array_map(
+            static fn(int $index): int => ($index + 1) * 10,
+            \array_keys($orderedKeys)
+        );
+        $structuredPageBlocks = \array_values(\is_array($reordered['structured']['pages'][$pageType]['blocks'] ?? null)
+            ? $reordered['structured']['pages'][$pageType]['blocks']
+            : []);
+        self::assertSame($orderedKeys, \array_map(
+            static fn(array $block): string => (string)($block['block_key'] ?? ''),
+            $structuredPageBlocks
+        ));
+        self::assertSame($expectedSortOrders, \array_map(
+            static fn(array $block): int => (int)($block['sort_order'] ?? 0),
+            $structuredPageBlocks
+        ));
+        self::assertSame($expectedSortOrders, \array_map(
+            static fn(array $block): int => (int)($block['order'] ?? 0),
+            $structuredPageBlocks
+        ));
+        self::assertSame($expectedSortOrders, \array_map(
+            static fn(array $block): int => (int)($block['sort_order'] ?? 0),
+            \array_values(\is_array($reordered['plan_json']['pages'][$pageType]['blocks'] ?? null)
+                ? $reordered['plan_json']['pages'][$pageType]['blocks']
+                : [])
+        ));
+
+        $blockIndexRows = \array_values(\is_array($reordered['structured']['block_index']['pages'][$pageType] ?? null)
+            ? $reordered['structured']['block_index']['pages'][$pageType]
+            : []);
+        self::assertSame($orderedKeys, \array_map(
+            static fn(array $row): string => (string)($row['source_block_key'] ?? ''),
+            $blockIndexRows
+        ));
+        self::assertSame($expectedSortOrders, \array_map(
+            static fn(array $row): int => (int)($row['sort_order'] ?? 0),
+            $blockIndexRows
+        ));
+
+        $firstMarkdownPosition = \strpos((string)$reordered['markdown'], '#### ' . $orderedKeys[0]);
+        $secondMarkdownPosition = \strpos((string)$reordered['markdown'], '#### ' . $orderedKeys[1]);
+        self::assertIsInt($firstMarkdownPosition);
+        self::assertIsInt($secondMarkdownPosition);
+        self::assertLessThan($secondMarkdownPosition, $firstMarkdownPosition);
+
+        $pageTasks = \array_values(\array_filter(
+            \is_array($reordered['execution_blueprint']['tasks'] ?? null) ? $reordered['execution_blueprint']['tasks'] : [],
+            static fn(array $task): bool => (string)($task['page_type'] ?? '') === $pageType
+                && \trim((string)($task['block']['block_key'] ?? '')) !== ''
+        ));
+        self::assertSame($orderedKeys, \array_map(
+            static fn(array $task): string => (string)($task['block']['block_key'] ?? ''),
+            $pageTasks
+        ));
+        self::assertSame($expectedSortOrders, \array_map(
+            static fn(array $task): int => (int)($task['sort_order'] ?? 0),
+            $pageTasks
+        ));
+
+        $stageTwoService = new AiSiteVirtualThemePlanService();
+        $taskPlan = $stageTwoService->buildTaskPlanArtifacts([
+            'fake_mode' => 1,
+            'site_title' => 'Page Block Sort Writeback Test',
+            'workspace_track' => 'virtual_theme',
+            'plan_json' => $reordered['plan_json'],
+            'plan_structured' => $reordered['structured'],
+            'plan_markdown' => $reordered['markdown'],
+            'plan_workbench' => $reordered['plan_workbench'],
+            'execution_blueprint' => $reordered['execution_blueprint'],
+            'execution_blueprint_confirmed_signature' => (string)($reordered['execution_blueprint']['signature'] ?? ''),
+        ], $reordered['execution_blueprint']);
+        $stageTwoPageTasks = \array_values(\is_array($taskPlan['structured']['page_tasks'][$pageType] ?? null)
+            ? $taskPlan['structured']['page_tasks'][$pageType]
+            : []);
+        self::assertSame(
+            \array_map(static fn(string $blockKey): string => 'page:' . $pageType . ':' . $blockKey, $orderedKeys),
+            \array_map(static fn(array $task): string => (string)($task['task_key'] ?? ''), $stageTwoPageTasks)
+        );
+    }
+
     public function testReorderDraftPlanBlocksSupportsSharedBlocksSortOrder(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
