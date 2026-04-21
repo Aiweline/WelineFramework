@@ -364,6 +364,143 @@ final class AiSiteExecutionBlueprintService
         return $artifacts;
     }
 
+
+    /**
+     * Refine a single stage-1 page plan while preserving every other page tree.
+     *
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $payload
+     * @return array{
+     *   plan_json:array<string, mixed>,
+     *   structured:array<string, mixed>,
+     *   execution_blueprint:array<string, mixed>,
+     *   markdown:string,
+     *   plan_workbench:array<string, mixed>,
+     *   page_refine_summary:array<string, mixed>
+     * }
+     */
+    public function refineDraftPlanPage(array $scope, array $websiteProfile, string $pageType, array $payload, ?callable $onChunk = null): array
+    {
+        $pageType = \trim($pageType);
+        if ($pageType === '') {
+            throw new \RuntimeException('Page type is required for stage-1 page refine.');
+        }
+
+        $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+        $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null)
+            ? $scope['execution_blueprint_draft']
+            : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
+        $existingPlanJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $pages = \is_array($executionBlueprint['pages'] ?? null)
+            ? $executionBlueprint['pages']
+            : (\is_array($structured['pages'] ?? null)
+                ? $structured['pages']
+                : (\is_array($existingPlanJson['pages'] ?? null) ? $existingPlanJson['pages'] : []));
+
+        if (!\is_array($pages[$pageType] ?? null)) {
+            throw new \RuntimeException('Stage-1 page plan not found for page type: ' . $pageType);
+        }
+
+        $instruction = \trim((string)($payload['instruction'] ?? ''));
+        $round = \max(1, (int)($payload['round'] ?? 1));
+        $targetScope = \trim((string)($payload['target_scope'] ?? ''));
+        $aiPayload = \array_replace($payload, [
+            'instruction' => $instruction !== ''
+                ? ('Refine only page "' . $pageType . '". Preserve every other page and shared plan unchanged. ' . $instruction)
+                : ('Refine only page "' . $pageType . '". Preserve every other page and shared plan unchanged.'),
+            'target_scope' => $targetScope !== '' ? $targetScope : ('pages.' . $pageType),
+            'prompt_mode' => 'refine_page',
+            'round' => $round,
+        ]);
+
+        $candidateArtifacts = $this->buildPlanArtifactsByAiStream($scope, $websiteProfile, $aiPayload, $onChunk);
+        $candidateStructured = \is_array($candidateArtifacts['structured'] ?? null) ? $candidateArtifacts['structured'] : [];
+        $candidatePlanJson = \is_array($candidateArtifacts['plan_json'] ?? null) ? $candidateArtifacts['plan_json'] : [];
+        $candidatePages = \is_array($candidateStructured['pages'] ?? null)
+            ? $candidateStructured['pages']
+            : (\is_array($candidatePlanJson['pages'] ?? null) ? $candidatePlanJson['pages'] : []);
+        $refinedPage = \is_array($candidatePages[$pageType] ?? null) ? $candidatePages[$pageType] : [];
+        if ($refinedPage === []) {
+            throw new \RuntimeException('AI page refine result did not include page type: ' . $pageType);
+        }
+
+        $originalPageKeys = \array_values(\array_map('strval', \array_keys($pages)));
+        $pages[$pageType] = $refinedPage;
+        $structured['pages'] = $pages;
+        $executionBlueprint['pages'] = $pages;
+
+        if (!\is_array($structured['page_types'] ?? null) || $structured['page_types'] === []) {
+            $structured['page_types'] = \is_array($executionBlueprint['page_types'] ?? null)
+                ? $executionBlueprint['page_types']
+                : \array_values(\array_map('strval', \array_keys($pages)));
+        }
+        if (!\is_array($executionBlueprint['page_types'] ?? null) || $executionBlueprint['page_types'] === []) {
+            $executionBlueprint['page_types'] = \is_array($structured['page_types'] ?? null)
+                ? $structured['page_types']
+                : \array_values(\array_map('strval', \array_keys($pages)));
+        }
+
+        $sharedPromptContext = \is_array($executionBlueprint['shared_prompt_context'] ?? null)
+            ? $executionBlueprint['shared_prompt_context']
+            : (\is_array($structured['shared_plan']['shared_prompt_context'] ?? null) ? $structured['shared_plan']['shared_prompt_context'] : []);
+        $pagePlans = $this->buildStageOnePagePlans($pages, $sharedPromptContext);
+        $structured['page_plans'] = $pagePlans;
+        $executionBlueprint['page_plans'] = $pagePlans;
+
+        $sharedComponents = $this->resolveStageOneSharedComponents($structured, $executionBlueprint);
+        $structured['shared_components'] = $sharedComponents;
+        $structured['shared_plan'] = \array_replace(
+            \is_array($structured['shared_plan'] ?? null) ? $structured['shared_plan'] : [],
+            [
+                'header_block' => \is_array($sharedComponents['header'] ?? null) ? $sharedComponents['header'] : [],
+                'footer_block' => \is_array($sharedComponents['footer'] ?? null) ? $sharedComponents['footer'] : [],
+                'shared_blocks' => $this->buildStageOneSharedBlocksPlanJson($sharedComponents),
+                'shared_prompt_context' => $sharedPromptContext,
+            ]
+        );
+
+        $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
+        $structured['block_index'] = $blockIndex;
+        $executionBlueprint['block_index'] = $blockIndex;
+
+        $existingTasks = \is_array($executionBlueprint['tasks'] ?? null) ? $executionBlueprint['tasks'] : [];
+        $targetPagePlan = \is_array($pagePlans[$pageType] ?? null) ? $pagePlans[$pageType] : [];
+        $targetTasks = $this->buildStageOnePageBlockTasks($pageType, $targetPagePlan);
+        $executionBlueprint['tasks'] = $this->replaceStageOnePageTasks($existingTasks, $pageType, $targetTasks);
+        $structured['execution_steps'] = $this->buildExecutionSteps($executionBlueprint['tasks']);
+        $executionBlueprint['signature'] = $this->buildExecutionBlueprintSignature($executionBlueprint);
+
+        $planLocale = \trim((string)($scope['plan_locale'] ?? $scope['default_language'] ?? $scope['default_locale'] ?? $structured['i18n']['locale'] ?? ''));
+        $planJson = $this->buildPlanJson($structured);
+        $markdown = $this->buildMarkdownPlan($planJson, $planLocale);
+        $planWorkbench = $this->buildPlanWorkbenchArtifacts($scope, $structured, $executionBlueprint, $planJson, $markdown, $planLocale);
+        $summary = [
+            'mode' => 'refine_page',
+            'page_type' => $pageType,
+            'target_scope' => $targetScope !== '' ? $targetScope : ('pages.' . $pageType),
+            'instruction' => $instruction,
+            'round' => $round,
+            'preserved_page_types' => \array_values(\array_filter(
+                $originalPageKeys,
+                static fn(string $candidate): bool => $candidate !== $pageType
+            )),
+            'changed_block_count' => \count(\is_array($pages[$pageType]['blocks'] ?? null) ? $pages[$pageType]['blocks'] : []),
+            'updated_at' => \date('Y-m-d H:i:s'),
+        ];
+        $planJson['change_scope_report'] = $summary;
+        $structured['change_scope_report'] = $summary;
+
+        return [
+            'plan_json' => $planJson,
+            'structured' => $structured,
+            'execution_blueprint' => $executionBlueprint,
+            'markdown' => $markdown,
+            'plan_workbench' => $planWorkbench,
+            'page_refine_summary' => $summary,
+        ];
+    }
+
     /**
      * 寰皟绛栫暐锛氶粯璁ょ疮鍔狅紙淇濈暀鍘嗗彶杩藉姞鍖哄潡锛夛紝浠呭綋鐢ㄦ埛鏄庣‘鈥滃垹闄?绉婚櫎鈥濇椂鎵ц鍒犻櫎銆?
      *
@@ -7880,6 +8017,68 @@ final class AiSiteExecutionBlueprintService
      * @param list<string> $orderedBlockKeys
      * @return list<array<string, mixed>>
      */
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function buildStageOnePageBlockTasks(string $pageType, array $pagePlan): array
+    {
+        $tasks = [];
+        foreach (\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [] as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $tasks[] = $this->buildPageTask($pageType, $pagePlan, $block);
+        }
+
+        return $tasks;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $tasks
+     * @param list<array<string, mixed>> $replacementTasks
+     * @return list<array<string, mixed>>
+     */
+    private function replaceStageOnePageTasks(array $tasks, string $pageType, array $replacementTasks): array
+    {
+        $result = [];
+        $inserted = false;
+        foreach ($tasks as $task) {
+            if (!\is_array($task) || !$this->isStageOnePageTaskForPage($task, $pageType)) {
+                $result[] = $task;
+                continue;
+            }
+
+            if (!$inserted) {
+                foreach ($replacementTasks as $replacementTask) {
+                    $result[] = $replacementTask;
+                }
+                $inserted = true;
+            }
+        }
+
+        if (!$inserted) {
+            foreach ($replacementTasks as $replacementTask) {
+                $result[] = $replacementTask;
+            }
+        }
+
+        return \array_values($result);
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     */
+    private function isStageOnePageTaskForPage(array $task, string $pageType): bool
+    {
+        if ((string)($task['page_type'] ?? '') !== $pageType) {
+            return false;
+        }
+
+        return (string)($task['task_type'] ?? '') === 'page_block'
+            || \trim((string)($task['block']['block_key'] ?? $task['block_key'] ?? $task['section_code'] ?? '')) !== '';
+    }
+
     private function rebuildStageOneTaskList(array $tasks, string $pageType, array $orderedBlockKeys): array
     {
         $orderMap = [];
