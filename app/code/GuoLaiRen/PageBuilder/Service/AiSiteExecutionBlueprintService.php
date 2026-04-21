@@ -4209,6 +4209,7 @@ final class AiSiteExecutionBlueprintService
         $paletteName = \trim((string)($planJson['palette']['name'] ?? ''));
         $navigationPlan = \is_array($planJson['navigation_plan'] ?? null) ? $planJson['navigation_plan'] : [];
         $footerPlan = \is_array($planJson['footer_plan'] ?? null) ? $planJson['footer_plan'] : [];
+        $sharedBlocks = \is_array($planJson['shared_blocks'] ?? null) ? $this->normalizeStageOneSharedBlockRows($planJson['shared_blocks']) : [];
         $seoStrategy = \is_array($planJson['seo_strategy'] ?? null) ? $planJson['seo_strategy'] : [];
         $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
         $pageTypes = \is_array($planJson['page_types'] ?? null) ? $planJson['page_types'] : \array_keys($pages);
@@ -4236,6 +4237,15 @@ final class AiSiteExecutionBlueprintService
         $lines[] = '- ' . ($isEn ? 'Header Navigation' : 'Header 导航') . ': ' . $this->buildLinkSummary(\is_array($navigationPlan['header_items'] ?? null) ? $navigationPlan['header_items'] : [], $locale);
         $lines[] = '- ' . ($isEn ? 'Footer Sections' : 'Footer 分组') . ': ' . $this->buildLinkSummary(\is_array($footerPlan['featured'] ?? null) ? $footerPlan['featured'] : [], $locale);
         $lines[] = '- ' . ($isEn ? 'Footer Policies' : 'Footer 政策') . ': ' . $this->buildLinkSummary(\is_array($footerPlan['policies'] ?? null) ? $footerPlan['policies'] : [], $locale);
+        foreach ($sharedBlocks as $sharedBlock) {
+            if (!\is_array($sharedBlock)) {
+                continue;
+            }
+            $sharedLabel = \trim((string)($sharedBlock['label'] ?? $sharedBlock['component'] ?? $sharedBlock['block_key'] ?? ''));
+            $sharedGoal = \trim((string)($sharedBlock['goal'] ?? ''));
+            $sharedOrder = (int)($sharedBlock['sort_order'] ?? 0);
+            $lines[] = '- ' . ($isEn ? 'Shared Block' : '共享块') . ' #' . (string)$sharedOrder . ': ' . ($sharedLabel !== '' ? $sharedLabel : 'shared') . ($sharedGoal !== '' ? (' - ' . $sharedGoal) : '');
+        }
         $lines[] = '- ' . ($isEn ? 'SEO Core Strategy' : 'SEO 核心策略') . ': ' . \trim((string)($seoStrategy['core_intent'] ?? ($isEn ? 'not set' : '待补充')));
         $lines[] = '';
         $lines[] = '## ' . (string)($labels['page_details'] ?? ($isEn ? 'Page And Block Content Details' : '页面与区块内容细化'));
