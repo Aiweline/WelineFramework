@@ -261,7 +261,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('data-queue-info-list="stage1"', $phaseScript);
         self::assertStringContainsString("data-queue-info-field=\"' + escapeHtml(key) + '\"", $phaseScript);
         self::assertStringContainsString("'job_status'", $phaseScript);
-        self::assertStringContainsString("'progress_kind'", $phaseScript);
+        self::assertStringContainsString('payload.progress_kind', $phaseScript);
         self::assertStringContainsString('input_tokens', $phaseScript);
         self::assertStringContainsString('output_tokens', $phaseScript);
         self::assertStringContainsString('total_tokens', $phaseScript);
