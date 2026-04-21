@@ -1776,11 +1776,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             'weline-master-' . $instanceName . '-worker-',
         ];
 
-        foreach (\array_unique($prefixes) as $prefix) {
-            if ($prefix !== '') {
-                Processer::killByProcessNamePrefix($prefix);
-            }
-        }
+        Processer::killByProcessNamePrefixes(\array_values(\array_unique($prefixes)));
 
         Processer::removePidFile('--name=' . MasterProcess::getMasterProcessName($instanceName));
         Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $instanceName));
@@ -3577,8 +3573,10 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         if (\count($pnamesInProcessDir) > 0) {
             $this->printer->note(__('  从 var/process 发现 %{1} 个匹配 Master，正在按前缀杀死', [\count($pnamesInProcessDir)]));
         }
-        $killed = Processer::killByProcessNamePrefix($masterPrefix);
-        $killed += Processer::killByProcessNamePrefix(MasterProcess::MASTER_PROCESS_NAME_PREFIX . $instanceName);
+        $killed = Processer::killByProcessNamePrefixes([
+            $masterPrefix,
+            MasterProcess::MASTER_PROCESS_NAME_PREFIX . $instanceName,
+        ]);
         if ($killed > 0) {
             $this->printer->note(__('  已按前缀清理 %{1} 个逃逸 Master 进程', [$killed]));
         }
@@ -3668,8 +3666,10 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         if (\count($pnamesInProcessDir) > 0) {
             $this->printer->note(__('  从 var/process 发现 %{1} 个匹配 Master，正在按前缀杀死', [\count($pnamesInProcessDir)]));
         }
-        $killed = Processer::killByProcessNamePrefix($masterPrefix);
-        $killed += Processer::killByProcessNamePrefix(MasterProcess::MASTER_PROCESS_NAME_PREFIX . $instanceName);
+        $killed = Processer::killByProcessNamePrefixes([
+            $masterPrefix,
+            MasterProcess::MASTER_PROCESS_NAME_PREFIX . $instanceName,
+        ]);
         if ($killed > 0) {
             $this->printer->note(__('  已按前缀清理 %{1} 个逃逸 Master 进程', [$killed]));
         }
