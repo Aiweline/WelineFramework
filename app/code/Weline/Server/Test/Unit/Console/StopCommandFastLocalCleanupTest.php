@@ -9,10 +9,54 @@ require_once __DIR__ . '/stop_test_bootstrap.php';
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Stop;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
+use Weline\Server\Service\Contract\ServiceInfo;
 use Weline\Server\Service\ServerInstanceManager;
 
 final class StopCommandFastLocalCleanupTest extends TestCase
 {
+    public function testFastLocalCandidatesIncludeCurrentInstanceSharedServices(): void
+    {
+        $stop = new class extends Stop {
+            public function candidates(ServerInstanceInfo $info): array
+            {
+                return $this->collectDirectForceStopCandidatePids($info);
+            }
+
+            protected function collectRecoverableManagedPids(string $name): array
+            {
+                unset($name);
+                return [];
+            }
+        };
+
+        $info = new ServerInstanceInfo(
+            'default',
+            111,
+            26899,
+            '127.0.0.1',
+            443,
+            true,
+            true,
+            1,
+            16895,
+            80,
+            '2026-04-21 10:00:00',
+            1776765600,
+            [
+                new ServiceInfo('session_server', 'Session Server', 1, 222, 26422, 'ready'),
+                new ServiceInfo('memory_server', 'Memory Service', 1, 333, 26423, 'ready'),
+                new ServiceInfo('worker', 'HTTP Worker', 1, 444, 16895, 'ready'),
+            ]
+        );
+
+        $candidates = $stop->candidates($info);
+
+        self::assertContains(111, $candidates);
+        self::assertContains(222, $candidates);
+        self::assertContains(333, $candidates);
+        self::assertContains(444, $candidates);
+    }
+
     public function testFastLocalCleanupSkipsIpcAndRunsLocalCleanupFlow(): void
     {
         $manager = new class extends ServerInstanceManager {
@@ -549,8 +593,9 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return [];
             }
 
-            protected function terminateCurrentInstanceProcessPrefixes(string $name): int
+            protected function terminateCurrentInstanceProcessPrefixes(string $name, bool $includeSharedState = false): int
             {
+                unset($includeSharedState);
                 $this->prefixCleanupNames[] = $name;
 
                 return 5;
