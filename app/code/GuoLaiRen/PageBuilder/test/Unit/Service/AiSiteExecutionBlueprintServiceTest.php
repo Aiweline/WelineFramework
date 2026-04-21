@@ -1112,7 +1112,11 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                     'scenario' => $scenarioCode,
                     'params' => $params,
                 ];
-                $callback($this->buildValidAiPlanResponse());
+                $callback(match (\count($calls)) {
+                    2 => $this->buildStagedPageAiResponse(Page::TYPE_HOME),
+                    3 => $this->buildStagedPageAiResponse(Page::TYPE_ABOUT),
+                    default => $this->buildValidAiPlanResponse(),
+                });
             });
 
         $service = new AiSiteExecutionBlueprintService(
@@ -1140,9 +1144,21 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertSame('pagebuilder_plan_generation', (string)($calls[2]['scenario'] ?? ''));
         self::assertStringContainsString('THEME planner', (string)($calls[0]['prompt'] ?? ''));
         self::assertStringContainsString('PAGE planner', (string)($calls[1]['prompt'] ?? ''));
+        self::assertStringContainsString('Critical page differentiation rules:', (string)($calls[1]['prompt'] ?? ''));
+        self::assertStringContainsString('Page-type architecture guide:', (string)($calls[2]['prompt'] ?? ''));
+        self::assertStringContainsString('design_tags', (string)($calls[1]['prompt'] ?? ''));
         self::assertTrue((bool)($calls[0]['params']['enforce_timeout_in_stream'] ?? false));
         self::assertTrue((bool)($calls[1]['params']['enforce_timeout_in_stream'] ?? false));
         self::assertLessThanOrEqual(4096, (int)($calls[1]['params']['max_tokens'] ?? 0));
+
+        $homeBlocks = \array_values(\array_map(static fn(array $block): string => (string)($block['block_key'] ?? ''), $artifacts['plan_json']['pages'][Page::TYPE_HOME]['blocks'] ?? []));
+        $aboutBlocks = \array_values(\array_map(static fn(array $block): string => (string)($block['block_key'] ?? ''), $artifacts['plan_json']['pages'][Page::TYPE_ABOUT]['blocks'] ?? []));
+        self::assertNotSame($homeBlocks, $aboutBlocks);
+        self::assertSame(['hero', 'featured_games', 'final_cta'], $homeBlocks);
+        self::assertSame(['brand_story', 'mission_values', 'community_cta'], $aboutBlocks);
+        self::assertContains('5s fade in/out', $artifacts['structured']['page_plans'][Page::TYPE_HOME]['blocks'][0]['design_tags']['motion'] ?? []);
+        self::assertContains('rounded image', $artifacts['structured']['page_plans'][Page::TYPE_HOME]['blocks'][0]['design_tags']['visual'] ?? []);
+        self::assertContains('timeline reveal', $artifacts['structured']['page_plans'][Page::TYPE_ABOUT]['blocks'][0]['design_tags']['motion'] ?? []);
     }
 
     public function testBuildPlanArtifactsByAiStreamAcceptsTopLevelPlanObjectShape(): void
@@ -1778,6 +1794,74 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         $decoded['plan_json']['pages']['about_page']['theme_alignment_summary'] = 'string explaining how this page obeys theme_design/shared_prompt_context';
 
         return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    private function buildStagedPageAiResponse(string $pageType): string
+    {
+        $page = $pageType === Page::TYPE_ABOUT
+            ? [
+                'page_goal' => 'Build brand trust with story, mission, values, and community proof.',
+                'theme_alignment_summary' => 'About page uses the shared trust palette and calmer narrative rhythm while avoiding homepage conversion-only structure.',
+                'primary_keywords' => ['about brand', 'mission', 'community trust'],
+                'secondary_keywords' => ['values', 'story', 'why trust us'],
+                'blocks' => [
+                    $this->buildStageOnePageBlockFixture('brand_story', 'Tell the origin story and show why the brand exists.', ['timeline layout', 'editorial portrait', 'soft shadow'], ['timeline reveal', 'slow fade'], ['story anchor links']),
+                    $this->buildStageOnePageBlockFixture('mission_values', 'Turn mission and values into proof points.', ['value cards', 'icon grid', 'calm spacing'], ['staggered card reveal'], ['card hover detail']),
+                    $this->buildStageOnePageBlockFixture('community_cta', 'Invite visitors to continue into community or support.', ['community strip', 'rounded avatar group'], ['gentle slide up'], ['secondary CTA hover']),
+                ],
+            ]
+            : [
+                'page_goal' => 'Convert visitors quickly with hero, game highlights, and a final action.',
+                'theme_alignment_summary' => 'Home page uses the shared palette, energetic CTA rhythm, and trust tone for a conversion-first entry.',
+                'primary_keywords' => ['home', 'games', 'download'],
+                'secondary_keywords' => ['Teen Patti', 'Rummy', 'Carrom'],
+                'blocks' => [
+                    $this->buildStageOnePageBlockFixture('hero', 'Show the main promise and immediate CTA.', ['premium banner', 'rounded image', 'card shadow'], ['5s fade in/out', 'subtle parallax'], ['primary CTA hover']),
+                    $this->buildStageOnePageBlockFixture('featured_games', 'Show game choices as fast scanning cards.', ['game cards', 'icon badges', 'shadowed tiles'], ['hover lift'], ['game card tap state']),
+                    $this->buildStageOnePageBlockFixture('final_cta', 'Close with a direct registration CTA.', ['full-width CTA band', 'soft gradient'], ['pulse accent'], ['sticky CTA on mobile']),
+                ],
+            ];
+
+        return \json_encode(['page' => $page], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    /**
+     * @param list<string> $visual
+     * @param list<string> $motion
+     * @param list<string> $interaction
+     * @return array<string, mixed>
+     */
+    private function buildStageOnePageBlockFixture(string $blockKey, string $goal, array $visual, array $motion, array $interaction): array
+    {
+        return [
+            'block_key' => $blockKey,
+            'goal' => $goal,
+            'keywords' => [$blockKey],
+            'content' => $goal . ' Use concrete copy and visible CTA language for Royal Indian Games.',
+            'design_tags' => [
+                'visual' => $visual,
+                'motion' => $motion,
+                'interaction' => $interaction,
+                'texture' => ['soft gradient', 'theme accent surface'],
+                'responsive' => ['desktop two-column', 'mobile stacked cards'],
+                'implementation_note' => 'Carry these tags into stage two and stage three implementation.',
+            ],
+            'field_plan' => [
+                ['field' => 'title', 'sample' => $blockKey . ' title', 'implementation_note' => 'Place this exact title in the block heading using the shared typography scale.'],
+                ['field' => 'description', 'sample' => $goal, 'implementation_note' => 'Place this copy below the title as the visible body message for the block.'],
+                ['field' => 'button_text', 'sample' => 'Start now', 'implementation_note' => 'Use this as the primary CTA label and connect it to the block action path.'],
+            ],
+            'execution_script' => [
+                'feature_points' => ['Visible title', 'Concrete supporting copy', 'CTA path'],
+                'core_copy' => $goal . ' Start now.',
+                'typography' => 'Use shared heading and body scale.',
+                'style_tone' => 'Use shared theme tone.',
+                'background_direction' => 'Use themed visual treatment.',
+                'media_assets' => ['brand visual'],
+            ],
+            'reusable' => 'no',
+            'seo_impact' => 'medium',
+        ];
     }
 
     private function buildPromptLikeAiPlanResponse(): string
