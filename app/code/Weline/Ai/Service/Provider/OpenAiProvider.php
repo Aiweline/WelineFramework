@@ -1285,6 +1285,13 @@ class OpenAiProvider implements ProviderInterface
         $timeout = max(0, (int)$timeout);
 
         if ($isStream) {
+            if ($timeout > 0) {
+                return [
+                    CURLOPT_TIMEOUT => $timeout,
+                    CURLOPT_CONNECTTIMEOUT => min($timeout, 60),
+                ];
+            }
+
             return [
                 CURLOPT_TIMEOUT => 0,
                 CURLOPT_CONNECTTIMEOUT => 60,
