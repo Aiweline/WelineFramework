@@ -215,7 +215,7 @@ $orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
 // IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
 // 优先使用命令行参数 --control-port=，否则从实例文件自动发现
 if ($controlPort <= 0) {
-    $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 6);
+    $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 30);
 }
 $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
 if ($controlPort > 0 || $supervisorEnabled) {

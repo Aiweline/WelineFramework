@@ -106,9 +106,9 @@ if (@\socket_listen($socket, 1024) === false) {
 
 // IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
 // 优先使用命令行参数 --control-port=，否则从实例文件自动发现
-// resolveControlPort 会轮询等待 Master 写入实例信息（最多 6 秒）
+// resolveControlPort 会轮询等待 Master 写入实例信息（最多 30 秒）
 if ($controlPort <= 0) {
-    $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 6);
+    $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 30);
 }
 $supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
 $supervisorEnabled = $supervisorEnabledRaw !== false

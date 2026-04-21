@@ -173,6 +173,45 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertFalse($server->bridgeEnabled);
     }
 
+    public function testBootstrapControlPlanePublishesActualControlPortInContext(): void
+    {
+        $server = new class extends MasterControlServer {
+            public int $requestedPort = 0;
+            public int $actualPort = 23456;
+
+            public function start(string $host, int $port): bool
+            {
+                unset($host);
+                $this->requestedPort = $port;
+
+                return true;
+            }
+
+            public function getPort(): int
+            {
+                return $this->actualPort;
+            }
+        };
+
+        $orchestrator = new class($server) extends ServiceOrchestrator {
+            public function __construct(private MasterControlServer $server)
+            {
+                parent::__construct();
+            }
+
+            protected function createControlServer(): MasterControlServer
+            {
+                return $this->server;
+            }
+        };
+
+        $context = $this->createWorkerInfraContext();
+        $orchestrator->bootstrapControlPlane($context);
+
+        self::assertSame($context->controlPort, $server->requestedPort);
+        self::assertSame(23456, $orchestrator->getContext()?->controlPort);
+    }
+
     public function testBootstrapControlPlaneCanEnableWindowsNativeSocketBridgeExplicitly(): void
     {
         $server = new class extends MasterControlServer {
@@ -1866,6 +1905,109 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         self::assertSame(0, $setPoolMessages, 'duplicate READY should not repush maintenance worker pool');
         self::assertSame(1, $ackMessages, 'duplicate READY should still receive ACK_READY');
+    }
+
+    public function testExpiredPendingWorkerReadyCanBeReplacedByNewWorkerReady(): void
+    {
+        $mockControl = new class extends MasterControlServer {
+            /** @var list<array{clientId:int, message:string}> */
+            public array $sent = [];
+            /** @var list<int> */
+            public array $closed = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = ['clientId' => $clientId, 'message' => $message];
+
+                return true;
+            }
+
+            public function closeClient(int $clientId): void
+            {
+                $this->closed[] = $clientId;
+            }
+
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                return 0;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        $context = $this->createWorkerInfraContext();
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $mockControl);
+        $this->writePrivate($orchestrator, 'running', true);
+
+        $dispatcher = new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'dispatcher-ready',
+            port: $context->mainPort,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 401,
+        );
+        $registry->addInstance($dispatcher);
+
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'old-worker-launch',
+            pid: 1001,
+            port: 28001,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 301,
+        );
+        $worker->setProcessTreePids(1001);
+        $worker->setMeta('worker_id', 1);
+        $worker->setMeta('ready_at', \microtime(true) - 4.0);
+        $worker->setMeta('ready_received_at', \microtime(true) - 4.0);
+        $worker->setMeta('dispatcher_pool_confirmed_at', null);
+        $registry->addInstance($worker);
+
+        $this->invokePrivateWithArgs($orchestrator, 'handleRegister', [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'pid' => 2002,
+            'port' => 28001,
+            'worker_id' => 1,
+            'epoch' => $context->epoch,
+            'launch_id' => 'new-worker-launch',
+        ], 302]);
+
+        $replaced = $registry->getInstance(ControlMessage::ROLE_WORKER, 1);
+        self::assertInstanceOf(ServiceInstance::class, $replaced);
+        self::assertSame(302, $replaced->ipcClientId);
+        self::assertSame('new-worker-launch', $replaced->launchId);
+        self::assertSame(ServiceInstance::STATE_REGISTERED, $replaced->state);
+        self::assertNull($replaced->getMeta('ready_at'));
+        self::assertSame([301], $mockControl->closed);
+
+        $this->invokePrivateWithArgs($orchestrator, 'handleReady', [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'worker_id' => 1,
+            'port' => 28001,
+            'epoch' => $context->epoch,
+            'launch_id' => 'new-worker-launch',
+        ], 302]);
+
+        $ready = $registry->getInstance(ControlMessage::ROLE_WORKER, 1);
+        self::assertInstanceOf(ServiceInstance::class, $ready);
+        self::assertSame(ServiceInstance::STATE_READY, $ready->state);
+        self::assertNotNull($ready->getMeta('ready_at'));
+        self::assertSame('new-worker-launch', $ready->launchId);
+
+        $setPoolMessages = 0;
+        foreach ($mockControl->sent as $entry) {
+            $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
+            if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_SET_WORKER_POOL) {
+                $setPoolMessages++;
+                self::assertContains(28001, $decoded['ports'] ?? []);
+            }
+        }
+        self::assertGreaterThanOrEqual(1, $setPoolMessages);
     }
 
     public function testAutoStartMaintenanceModeUsesRuntimeWorkerCount(): void
