@@ -3476,7 +3476,7 @@ final class AiSiteVirtualThemePlanService
             }
         }
 
-        return $structured;
+        return $this->applyStageTwoBlockTaskPlanFanoutToStructured($structured);
     }
 
     /**
