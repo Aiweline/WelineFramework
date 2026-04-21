@@ -394,8 +394,10 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('Treat this as a customer-visible implementation plan', $allPrompts);
         self::assertStringContainsString('block_task', $allPrompts);
         self::assertStringContainsString('task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order', $allPrompts);
-        self::assertStringContainsString('Every block_task.meta_fields[] item MUST be an object with field, type, default, sample, reason', $allPrompts);
-        self::assertStringContainsString('block_task.meta_fields[].default and block_task.meta_fields[].sample must be concrete stage-3-ready values', $allPrompts);
+        self::assertStringContainsString('block_task.content_plan MUST include concrete arrays content_copy, cta_plan, link_plan, and asset_plan', $allPrompts);
+        self::assertStringContainsString('cta_plan gives each real CTA label plus href/page_type target', $allPrompts);
+        self::assertStringContainsString('link_plan gives every internal/external link label plus href/page_type and purpose', $allPrompts);
+        self::assertStringContainsString('asset_plan gives each image/icon/logo/video slot', $allPrompts);
         self::assertStringContainsString('Stage-1 compact context summary:', $allPrompts);
         self::assertStringNotContainsString('Stage-1 plan_json:', $allPrompts);
         self::assertStringNotContainsString('Baseline virtual_theme_plan compatibility snapshot:', $allPrompts);
