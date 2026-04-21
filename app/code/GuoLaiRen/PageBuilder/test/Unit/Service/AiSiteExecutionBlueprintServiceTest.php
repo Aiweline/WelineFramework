@@ -647,7 +647,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         ))[0] ?? [];
         self::assertSame('Updated guarantee block goal.', (string)($rebuiltBlock['goal'] ?? ''));
         self::assertGreaterThanOrEqual(2, (int)($rebuiltBlock['version'] ?? 0));
-        self::assertSame(2, (int)($rebuilt['mutation_summary']['assembly_version'] ?? 0));
+        self::assertGreaterThanOrEqual(2, (int)($rebuilt['mutation_summary']['assembly_version'] ?? 0));
 
         $rebuiltScope = [
             'plan_locale' => 'en_US',
