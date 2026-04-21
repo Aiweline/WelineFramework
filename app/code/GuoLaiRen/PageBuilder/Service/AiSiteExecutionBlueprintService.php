@@ -974,6 +974,7 @@ final class AiSiteExecutionBlueprintService
             'STAGE-1 PAGE THEME ALIGNMENT CONTRACT (pages must satisfy ALL):',
             '- Every page prompt MUST treat theme_design + shared_prompt_context as non-negotiable constraints, not optional inspiration.',
             '- Every page object MUST include theme_alignment_summary explaining how that page reuses theme_purpose, color_scheme, typography_spacing_radius, tone_of_voice, cta_tone, and forbidden_styles.',
+            '- Required schema excerpt: "theme_alignment_summary":"string explaining how this page obeys theme_design/shared_prompt_context"',
             '- Repeat the shared theme decisions inside each page plan: page_goal, blocks, field_plan samples, execution_script, CTA wording, and media assets must visibly obey the same palette, voice, spacing/radius, and forbidden styles.',
             '- If a page idea conflicts with shared_prompt_context, rewrite the page idea. Never invent a per-page palette, voice, CTA style, or visual direction that diverges from theme_design.',
             '',
