@@ -371,6 +371,11 @@
         if (!workspaceState || typeof workspaceState !== 'object') {
             return;
         }
+        try {
+            window.__pbLastWorkspaceState = workspaceState;
+        } catch (e) {
+            // 忽略：仅用于队列面板复用最近工作区状态。
+        }
         // 用后端/持久化返回的状态填充工作区：页面、方案、任务计划、SSE 地址与按钮状态等。
         if (workspaceState.pagebuilder_pages_by_type && typeof workspaceState.pagebuilder_pages_by_type === 'object') {
             window.__pbWorkspacePagesByType = workspaceState.pagebuilder_pages_by_type;
@@ -509,15 +514,13 @@
         }
         if (window.__pbPhase1TaskProgress && typeof window.__pbPhase1TaskProgress.syncFromWorkspaceState === 'function') {
             window.__pbPhase1TaskProgress.syncFromWorkspaceState(workspaceState);
-        } else {
-            try {
-                window.__pbLastWorkspaceState = workspaceState;
-            } catch (e) {
-                // 忽略：仅用于调试缓存最近状态，失败不影响主流程。
-            }
+        }
+        if (window.__pbPhase2TaskProgress && typeof window.__pbPhase2TaskProgress.syncFromWorkspaceState === 'function') {
+            window.__pbPhase2TaskProgress.syncFromWorkspaceState(workspaceState);
         }
         normalizeGuidedStaticLabels();
         syncConfirmPlanButtonEnabled();
+        applyTaskPlanEditingLockFromActiveOperation();
     }
     // 组装并挂到 window.__pbWorkspaceApi 的对外 API，供其它脚本或内嵌页回调。
     var workspaceApi = window.__pbWorkspaceApi;
@@ -6473,8 +6476,14 @@
             block_key: blockKey,
             block_config: JSON.stringify(blockConfig)
         }).then(function (data) {
-            if (data && data.success && data.data && typeof data.data === 'object') {
+            if (data && data.data && typeof data.data === 'object') {
                 hydrateWorkspaceFromState(data.data);
+            }
+            if (data && data.success && window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function' && window.PbAiOperationRunner.startFromResponse(data, 'plan')) {
+                toast('success', data.message ? String(data.message) : 'Stage-1 plan block operation queued.');
+                return;
+            }
+            if (data && data.success && data.data && typeof data.data === 'object') {
                 toast('success', data.message ? String(data.message) : 'Stage-1 plan block updated.');
                 return;
             }
@@ -7383,9 +7392,77 @@
         }
     }
 
+    function isThemeBuildGenerationRunning() {
+        var active = currentActiveOperationState && typeof currentActiveOperationState === 'object'
+            ? currentActiveOperationState
+            : {};
+        var operation = String(active.operation || '').toLowerCase();
+        var status = String(active.status || '').toLowerCase();
+        return operation === 'build' && (status === 'queued' || status === 'running');
+    }
+
+    function setElementLockedForThemeBuild(el, locked) {
+        if (!el) {
+            return;
+        }
+        if (locked) {
+            if (!Object.prototype.hasOwnProperty.call(el.dataset, 'pbBuildLockPrevDisabled')) {
+                el.dataset.pbBuildLockPrevDisabled = el.disabled ? '1' : '0';
+                el.dataset.pbBuildLockPrevPointerEvents = String(el.style.pointerEvents || '');
+                el.dataset.pbBuildLockPrevOpacity = String(el.style.opacity || '');
+            }
+            el.disabled = true;
+            el.setAttribute('aria-disabled', 'true');
+            el.setAttribute('title', <?= \json_encode((string)__('生成主题进行中，禁止修改第二阶段方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+            el.style.pointerEvents = 'none';
+            el.style.opacity = '0.55';
+            return;
+        }
+        if (Object.prototype.hasOwnProperty.call(el.dataset, 'pbBuildLockPrevDisabled')) {
+            el.disabled = el.dataset.pbBuildLockPrevDisabled === '1';
+            el.style.pointerEvents = el.dataset.pbBuildLockPrevPointerEvents || '';
+            el.style.opacity = el.dataset.pbBuildLockPrevOpacity || '';
+            delete el.dataset.pbBuildLockPrevDisabled;
+            delete el.dataset.pbBuildLockPrevPointerEvents;
+            delete el.dataset.pbBuildLockPrevOpacity;
+        }
+        el.removeAttribute('aria-disabled');
+        el.removeAttribute('title');
+    }
+
+    function applyTaskPlanEditingLockFromActiveOperation() {
+        var locked = isThemeBuildGenerationRunning();
+        [
+            'pb-ai-task-plan-mode-refine',
+            'pb-ai-task-plan-mode-rebuild',
+            'pb-ai-task-plan-run-mode',
+            'pb-ai-task-plan-mode-prompt',
+            'pb-ai-save-task-plan-draft',
+            'pb-ai-confirm-task-plan'
+        ].forEach(function (id) {
+            setElementLockedForThemeBuild(document.getElementById(id), locked);
+        });
+        var panel = document.getElementById('pb-ai-task-plan-accordion');
+        if (panel) {
+            panel.querySelectorAll('button.pb-ai-plan-preview-action-btn, .pb-ai-sort-handle').forEach(function (el) {
+                setElementLockedForThemeBuild(el, locked);
+            });
+        }
+        if (locked) {
+            setTaskPlanModeStatus(<?= \json_encode((string)__('生成主题进行中，第二阶段方案暂时只读。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+        }
+        return locked;
+    }
+
     function setTaskPlanModeRunButtonLoading(loading) {
         var runBtn = document.getElementById('pb-ai-task-plan-run-mode');
         if (!runBtn) {
+            return;
+        }
+        if (!loading && isThemeBuildGenerationRunning()) {
+            runBtn.disabled = true;
+            runBtn.textContent = <?= \json_encode((string)__('生成主题中，禁止修改方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            applyTaskPlanEditingLockFromActiveOperation();
             return;
         }
         if (loading) {
@@ -7504,6 +7581,12 @@
 
     function saveTaskPlanDraftThen(callback) {
         var cb = typeof callback === 'function' ? callback : function () {};
+        if (isThemeBuildGenerationRunning()) {
+            applyTaskPlanEditingLockFromActiveOperation();
+            toast('warning', <?= \json_encode((string)__('生成主题进行中，禁止修改第二阶段方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+            cb(false);
+            return;
+        }
         if (!mergeScopeUrl || !String(publicId || '').trim()) {
             cb(false);
             return;
@@ -7592,8 +7675,9 @@
             runBtn.textContent = nextMode === 'rebuild_task_plan'
                 ? messages.taskPlanModeRebuild
                 : messages.taskPlanModeRefine;
-            runBtn.disabled = taskPlanSseRunning || !String(taskPlanSseUrl || '').trim();
+            runBtn.disabled = taskPlanSseRunning || !String(taskPlanSseUrl || '').trim() || isThemeBuildGenerationRunning();
         }
+        applyTaskPlanEditingLockFromActiveOperation();
         var taskHelpRefineEl = document.getElementById('pb-ai-task-plan-help-refine');
         var taskHelpRebuildEl = document.getElementById('pb-ai-task-plan-help-rebuild');
         if (taskHelpRefineEl && taskHelpRebuildEl) {
@@ -7916,6 +8000,11 @@
 
     function startTaskPlanModeStream(mode, options) {
         var opts = options && typeof options === 'object' ? options : {};
+        if (isThemeBuildGenerationRunning()) {
+            applyTaskPlanEditingLockFromActiveOperation();
+            toast('warning', <?= \json_encode((string)__('生成主题进行中，禁止修改第二阶段方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+            return false;
+        }
         if (taskPlanSseRunning) {
             return false;
         }
@@ -8014,8 +8103,9 @@
             progressBar.style.width = String(Math.max(0, Math.min(100, percent || 0))) + '%';
         }
         if (confirmBtn) {
-            confirmBtn.disabled = !enableConfirm;
+            confirmBtn.disabled = isThemeBuildGenerationRunning() || !enableConfirm;
         }
+        applyTaskPlanEditingLockFromActiveOperation();
     }
 
     function hideTaskPlanGenerationModal() {
