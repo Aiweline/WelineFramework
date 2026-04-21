@@ -987,7 +987,7 @@ final class AiSiteExecutionBlueprintService
             '    "footer_plan":{"featured":[],"policies":[]},',
             '    "seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"},',
             '    "page_types":["home_page"],',
-            '    "pages":{"home_page":{"page_goal":"string","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}},',
+            '    "pages":{"home_page":{"page_goal":"string","theme_alignment_summary":"how this page and every block obey theme_design color_scheme, tone_of_voice, cta_tone, trust expression, and Header/Footer handoff","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}},',
             '    "execution_steps":[{"step":1,"task_key":"string","task_type":"string","status":"pending"}],',
             '    "stage2_task_hints":[{"page":"string","block":"string","task_types":["copywriting","ui_design","frontend_dev"]}]',
             '}',
@@ -1017,6 +1017,7 @@ final class AiSiteExecutionBlueprintService
             '- Even in refine/rebuild/translation mode, you must still output the full plan, not fragments.',
             '- Stage 1 only outputs plan content. Do not include build/executing/log/progress language.',
             '- Every selected page must be covered and ready for stage-2 task extraction.',
+            '- Each pages.<page>.theme_alignment_summary is REQUIRED and must explain how that page and its blocks obey theme_design color_scheme, tone_of_voice, cta_tone, trust expression, and Header/Footer handoff.',
             '- Header and footer must be described as concrete shared-site content and navigation.',
             '- The structured plan must be readable by product and implementation teams immediately.',
             '- Minimum concreteness: navigation_plan.header_items MUST be non-empty; each item MUST include concrete label + href (path or /route) tied to selected_page_types; forbid generic placeholders like "Link1" or "Nav item".',
@@ -1058,7 +1059,7 @@ final class AiSiteExecutionBlueprintService
             if ($pageType === '') {
                 continue;
             }
-            $lines[] = '- ' . $pageType . ': must include page goal, conversion rhythm, block implementation detail, field plan, execution script, SEO structure, CTA usage, responsive guidance.';
+            $lines[] = '- ' . $pageType . ': must include page goal, theme_alignment_summary, conversion rhythm, block implementation detail, field plan, execution script, SEO structure, CTA usage, responsive guidance.';
         }
 
         return $lines === [] ? '-' : \implode("\n", $lines);
