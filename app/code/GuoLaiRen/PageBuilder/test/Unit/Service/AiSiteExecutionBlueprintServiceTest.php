@@ -1735,6 +1735,41 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }
 
+    private function buildPageOnlyRefineAiPlanResponse(): string
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        if (!\is_array($decoded)) {
+            return '{}';
+        }
+
+        $decoded['plan_json']['pages']['home_page']['page_goal'] = 'Drive launch-offer signups from the home page.';
+        $decoded['plan_json']['pages']['home_page']['blocks'] = [
+            [
+                'block_key' => 'launch_offer',
+                'goal' => 'Launch offer headline and CTA',
+                'keywords' => ['launch offer'],
+                'content' => 'Launch offer headline with a deadline, proof line, and primary CTA for visitors ready to start.',
+                'field_plan' => [
+                    ['field' => 'title', 'sample' => 'Launch offer headline', 'implementation_note' => 'Use this as the visible launch-offer headline.', 'reason' => 'Anchors the page-level refine to the current page.'],
+                    ['field' => 'cta_label', 'sample' => 'Claim the launch offer', 'implementation_note' => 'Use this as the primary CTA label.', 'reason' => 'Makes the refined page actionable.'],
+                ],
+                'execution_script' => [
+                    'feature_points' => ['Launch deadline', 'Primary CTA'],
+                    'core_copy' => 'Launch offer headline and CTA copy',
+                    'typography' => 'Bold hero heading',
+                    'style_tone' => 'Urgent but trustworthy',
+                    'background_direction' => 'Clean launch highlight',
+                    'media_assets' => ['launch-offer.jpg'],
+                ],
+                'reusable' => 'no',
+                'seo_impact' => 'high',
+            ],
+        ];
+        $decoded['plan_json']['pages']['about_page']['blocks'][0]['content'] = 'SHOULD_NOT_LEAK_TO_ABOUT_PAGE';
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
     private function buildGenericAiPlanResponse(): string
     {
         $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
