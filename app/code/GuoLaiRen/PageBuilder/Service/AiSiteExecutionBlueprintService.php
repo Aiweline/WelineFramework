@@ -3902,43 +3902,6 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * @param array<string, mixed> $stageOneQueue
-     * @param array<string, mixed> $pagePlans
-     * @param array<string, mixed> $sharedPromptContext
-     * @return array<string, mixed>
-     */
-    private function buildStageOnePageFanoutQueueEnvelope(
-        array $stageOneQueue,
-        array $pagePlans,
-        array $sharedPromptContext,
-        string $planLocale
-    ): array {
-        $jobs = \is_array($stageOneQueue['jobs'] ?? null) ? $stageOneQueue['jobs'] : [];
-        $sequence = \is_array($stageOneQueue['sequence'] ?? null)
-            ? \array_values(\array_map('strval', $stageOneQueue['sequence']))
-            : [];
-
-        foreach ($this->buildStageOnePageFanoutQueueJobs([], [], $pagePlans, $sharedPromptContext, $planLocale) as $pageFanoutJob) {
-            $pageJobKey = \trim((string)($pageFanoutJob['job_key'] ?? ''));
-            if ($pageJobKey === '') {
-                continue;
-            }
-            $jobs[$pageJobKey] = $pageFanoutJob;
-            if (!\in_array($pageJobKey, $sequence, true)) {
-                $sequence[] = $pageJobKey;
-            }
-        }
-
-        return \array_replace($stageOneQueue, [
-            'version' => (int)($stageOneQueue['version'] ?? 1),
-            'stage' => (string)($stageOneQueue['stage'] ?? 'stage1'),
-            'status' => (string)($stageOneQueue['status'] ?? 'done'),
-            'sequence' => $sequence,
-            'jobs' => $jobs,
-        ]);
-    }
-
-    /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
      * @param array<string, mixed> $pagePlans
@@ -4048,58 +4011,14 @@ final class AiSiteExecutionBlueprintService
             if (!\is_array($existingJob)) {
                 continue;
             }
-
-            $pageKey = (string)$pageType;
-            $jobKey = 'stage1.page_plan:' . $pageKey;
-            $pageJobKeys[] = $jobKey;
-            $jobs[$jobKey] = [
-                'job_key' => $jobKey,
-                'job_type' => 'stage1.page_plan.generate',
-                'stage' => 'stage1_page_fanout',
-                'sort_order' => $sortOrder++,
-                'status' => 'done',
-                'depends_on' => ['stage1.shared.header_footer'],
-                'progress_percent' => 100,
-                'prompt_version' => 'stage1.page_plan.v1',
-                'plan_locale' => $planLocale,
-                'context_hash' => (string)($pagePlan['page_context_hash'] ?? ''),
-                'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? $sharedPromptContext['context_hash'] ?? ''),
-                'theme_context_hash' => (string)($pagePlan['theme_context_hash'] ?? $sharedPromptContext['theme_context_hash'] ?? ''),
-                'dispatch_trigger' => 'stage1.shared.header_footer.done',
-                'dispatch_mode' => 'automatic_after_dependency',
-                'requires_user_tab' => false,
-                'fanout_group' => 'stage1.page_fanout',
-                'token' => \sha1((string)\json_encode([
-                    'job_key' => $jobKey,
-                    'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? $sharedPromptContext['context_hash'] ?? ''),
-                    'page_context_hash' => (string)($pagePlan['page_context_hash'] ?? ''),
-                ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
-                'concurrency' => [
-                    'mode' => 'fiber_coroutine',
-                    'fanout_group' => 'stage1.page_plan.fanout',
-                    'task_granularity' => 'one_page_one_task',
-                    'trigger_after' => 'stage1.shared.header_footer',
-                ],
-                'inputs' => [
-                    'page_key' => $pageKey,
-                    'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? $sharedPromptContext['context_hash'] ?? ''),
-                    'theme_context_hash' => (string)($pagePlan['theme_context_hash'] ?? $sharedPromptContext['theme_context_hash'] ?? ''),
-                    'plan_locale' => $planLocale,
-                ],
-                'outputs' => [
-                    'page_plan' => $pagePlan,
-                    'page_context_hash' => (string)($pagePlan['page_context_hash'] ?? ''),
-                ],
-                'output_refs' => [
-                    'plan_workbench.stage1.page_plans.' . $pageKey,
-                    'plan_structured.page_plans.' . $pageKey,
-                ],
-            ];
-        }
-
-        foreach ($pageJobKeys as $jobKey) {
-            if (!\in_array($jobKey, $sequence, true)) {
-                $sequence[] = $jobKey;
+            if ($sessionPublicId === '') {
+                $sessionPublicId = \trim((string)($existingJob['session_public_id'] ?? ''));
+            }
+            if ($websitePublicId === '') {
+                $websitePublicId = \trim((string)($existingJob['website_public_id'] ?? ''));
+            }
+            if ($sessionPublicId !== '' && $websitePublicId !== '') {
+                break;
             }
         }
 
