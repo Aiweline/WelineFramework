@@ -5961,10 +5961,16 @@ final class AiSiteExecutionBlueprintService
         $structured['page_plans'] = $pagePlans;
         $executionBlueprint['page_plans'] = $pagePlans;
 
-        $sharedComponents = \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : [
-            'header' => \is_array($structured['shared_plan']['header_block'] ?? null) ? $structured['shared_plan']['header_block'] : [],
-            'footer' => \is_array($structured['shared_plan']['footer_block'] ?? null) ? $structured['shared_plan']['footer_block'] : [],
-        ];
+        $sharedComponents = $this->resolveStageOneSharedComponents($structured, $executionBlueprint);
+        $structured['shared_components'] = $sharedComponents;
+        $structured['shared_plan'] = \array_replace(
+            \is_array($structured['shared_plan'] ?? null) ? $structured['shared_plan'] : [],
+            [
+                'header_block' => \is_array($sharedComponents['header'] ?? null) ? $sharedComponents['header'] : [],
+                'footer_block' => \is_array($sharedComponents['footer'] ?? null) ? $sharedComponents['footer'] : [],
+                'shared_blocks' => $this->buildStageOneSharedBlocksPlanJson($sharedComponents),
+            ]
+        );
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
         $structured['block_index'] = $blockIndex;
         $executionBlueprint['block_index'] = $blockIndex;
