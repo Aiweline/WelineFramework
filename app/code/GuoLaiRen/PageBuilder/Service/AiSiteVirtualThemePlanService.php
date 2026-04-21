@@ -638,6 +638,8 @@ final class AiSiteVirtualThemePlanService
         $lines[] = 'Hard rules:';
         $lines[] = '- Every returned page_tasks[] entry must include block_task with required fields: task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order.';
         $lines[] = '- block_task.task_goal is the visible block outcome; block_task.meta_fields is the exact editable field list; block_task.content_plan and block_task.style_plan are concrete arrays; block_task.planning_reason explains the stage-1 rationale; block_task.sort_order mirrors the task sort_order.';
+        $lines[] = '- Every block_task.meta_fields[] item MUST be an object with field, type, default, sample, reason. Use type values such as string, text, rich_text, image, url, number, boolean, list, object, cta, or link.';
+        $lines[] = '- block_task.meta_fields[].default and block_task.meta_fields[].sample must be concrete stage-3-ready values, not placeholders; sample may refine default but both must be usable if copied into the block config.';
         $lines[] = '- Every returned task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, and completion_rule-compatible detail.';
         $lines[] = '- Keep task_key, group_key, page_type, and sort_order compatible with the provided skeleton.';
         $lines[] = '- Do not drop any task from this batch.';
@@ -3779,6 +3781,7 @@ final class AiSiteVirtualThemePlanService
         $structured['block_task_schema'] = [
             'schema_version' => self::BLOCK_TASK_SCHEMA_VERSION,
             'required_fields' => self::BLOCK_TASK_REQUIRED_FIELDS,
+            'meta_field_required_fields' => ['field', 'type', 'default', 'sample', 'reason'],
             'field_contract' => [
                 'task_goal' => 'Visible outcome this block must accomplish.',
                 'meta_fields' => 'Editable fields with type/default/sample/reason.',
@@ -5077,7 +5080,7 @@ final class AiSiteVirtualThemePlanService
             '    "virtual_theme_strategy": {},',
             '    "shared_tasks": [],',
             '    "page_tasks": {},',
-            '    "block_task_schema": {"schema_version":"' . self::BLOCK_TASK_SCHEMA_VERSION . '","required_fields":["task_goal","meta_fields","content_plan","style_plan","planning_reason","sort_order"]},',
+            '    "block_task_schema": {"schema_version":"' . self::BLOCK_TASK_SCHEMA_VERSION . '","required_fields":["task_goal","meta_fields","content_plan","style_plan","planning_reason","sort_order"],"meta_field_required_fields":["field","type","default","sample","reason"]},',
             '    "task_tree": {},',
             '    "meta_field_matrix": {},',
             '    "style_tokens": {},',
@@ -5097,6 +5100,7 @@ final class AiSiteVirtualThemePlanService
             '- Do not invent unselected pages or omit selected pages.',
             '- Every task must include enough content detail for direct implementation in stage 3: a builder must produce theme/HTML without guessing; reuse or improve concrete CTA labels, nav labels, hero strings, and footer link titles from stage-1—always spell them out again here.',
             '- Every page_tasks[] item MUST include block_task with required fields task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order; this block_task is the minimum structured source of truth for one stage-2 block task.',
+            '- Every block_task.meta_fields[] item MUST include field, type, default, sample, reason. Type must be a usable editor/input type (string, text, rich_text, image, url, number, boolean, list, object, cta, link). Default and sample must be concrete stage-3-ready values, not placeholders.',
             '- Every task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, completion_rule.',
             '- The markdown must explain concrete execution steps by shared tasks, page tasks, and task tree order; every section MUST name real labels, routes, field keys, and example copy—never-only phrases like "完善导航" or "优化体验" without specifics.',
             '- The stage-2 document must include page coverage, task tree, execution order, and risk notes.',
