@@ -37,9 +37,9 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 $this->runResidualCleanupPairWithRetry($name, $info);
             }
 
-            protected function collectResidualCleanupCandidatePids(string $name, ServerInstanceInfo $info): array
+            protected function collectResidualCleanupCandidatePids(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): array
             {
-                unset($name, $info);
+                unset($name, $info, $includeSharedState);
 
                 return [];
             }
@@ -48,9 +48,10 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 string $name,
                 ServerInstanceInfo $info,
                 bool $quiet = false,
-                bool $allowPrefixFallback = true
+                bool $allowPrefixFallback = true,
+                bool $includeSharedState = false
             ): int {
-                unset($name, $info, $quiet, $allowPrefixFallback);
+                unset($name, $info, $quiet, $allowPrefixFallback, $includeSharedState);
                 $this->attempts++;
 
                 return $this->attempts === 1 ? 8 : 0;
@@ -58,7 +59,7 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
 
             protected function collectRemainingRecoverableWlsPorts(string $name, ServerInstanceInfo $info): array
             {
-                unset($name, $info);
+                unset($name, $info, $includeSharedState);
 
                 return [];
             }
@@ -67,10 +68,11 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 string $name,
                 ServerInstanceInfo $info,
                 array $remainingPorts,
-                bool $includePrefixPids = true
+                bool $includePrefixPids = true,
+                bool $includeSharedState = false
             ): array
             {
-                unset($name, $info, $remainingPorts, $includePrefixPids);
+                unset($name, $info, $remainingPorts, $includePrefixPids, $includeSharedState);
 
                 return $this->attempts === 1 ? [701] : [];
             }
@@ -125,9 +127,9 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 $this->runResidualCleanupPairWithRetry($name, $info);
             }
 
-            protected function collectResidualCleanupCandidatePids(string $name, ServerInstanceInfo $info): array
+            protected function collectResidualCleanupCandidatePids(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): array
             {
-                unset($name, $info);
+                unset($name, $info, $includeSharedState);
 
                 return [];
             }
@@ -136,7 +138,8 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 string $name,
                 ServerInstanceInfo $info,
                 bool $quiet = false,
-                bool $allowPrefixFallback = true
+                bool $allowPrefixFallback = true,
+                bool $includeSharedState = false
             ): int {
                 unset($name, $info, $quiet);
                 $this->prefixFallbackFlags[] = $allowPrefixFallback;
@@ -146,7 +149,7 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
 
             protected function collectRemainingRecoverableWlsPorts(string $name, ServerInstanceInfo $info): array
             {
-                unset($name, $info);
+                unset($name, $info, $includeSharedState);
 
                 return \count($this->prefixFallbackFlags) === 1 ? [80] : [];
             }
@@ -162,10 +165,11 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 string $name,
                 ServerInstanceInfo $info,
                 array $remainingPorts,
-                bool $includePrefixPids = true
+                bool $includePrefixPids = true,
+                bool $includeSharedState = false
             ): array
             {
-                unset($name, $info, $remainingPorts, $includePrefixPids);
+                unset($name, $info, $remainingPorts, $includePrefixPids, $includeSharedState);
 
                 return [];
             }
@@ -219,9 +223,9 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 $this->runResidualCleanupPairWithRetry($name, $info);
             }
 
-            protected function collectResidualCleanupCandidatePids(string $name, ServerInstanceInfo $info): array
+            protected function collectResidualCleanupCandidatePids(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): array
             {
-                unset($name, $info);
+                unset($name, $info, $includeSharedState);
 
                 return [];
             }
@@ -230,16 +234,17 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 string $name,
                 ServerInstanceInfo $info,
                 bool $quiet = false,
-                bool $allowPrefixFallback = true
+                bool $allowPrefixFallback = true,
+                bool $includeSharedState = false
             ): int {
-                unset($name, $info, $quiet, $allowPrefixFallback);
+                unset($name, $info, $quiet, $allowPrefixFallback, $includeSharedState);
 
                 return 8;
             }
 
             protected function collectRemainingRecoverableWlsPorts(string $name, ServerInstanceInfo $info): array
             {
-                unset($name, $info);
+                unset($name, $info, $includeSharedState);
 
                 return [];
             }
@@ -248,9 +253,10 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 string $name,
                 ServerInstanceInfo $info,
                 array $remainingPorts,
-                bool $includePrefixPids = true
+                bool $includePrefixPids = true,
+                bool $includeSharedState = false
             ): array {
-                unset($name, $info, $remainingPorts);
+                unset($name, $info, $remainingPorts, $includeSharedState);
                 $this->prefixVerificationFlags[] = $includePrefixPids;
 
                 return [];
@@ -305,9 +311,9 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 $this->runResidualCleanupPairWithRetry($name, $info);
             }
 
-            protected function collectResidualCleanupCandidatePids(string $name, ServerInstanceInfo $info): array
+            protected function collectResidualCleanupCandidatePids(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): array
             {
-                unset($name, $info);
+                unset($name, $info, $includeSharedState);
 
                 return [91001];
             }
@@ -316,9 +322,10 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 string $name,
                 ServerInstanceInfo $info,
                 bool $quiet = false,
-                bool $allowPrefixFallback = true
+                bool $allowPrefixFallback = true,
+                bool $includeSharedState = false
             ): int {
-                unset($name, $info, $quiet, $allowPrefixFallback);
+                unset($name, $info, $quiet, $allowPrefixFallback, $includeSharedState);
                 $this->attempts++;
 
                 return 0;
@@ -326,7 +333,7 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
 
             protected function collectRemainingRecoverableWlsPorts(string $name, ServerInstanceInfo $info): array
             {
-                unset($name, $info);
+                unset($name, $info, $includeSharedState);
                 $this->portChecks++;
 
                 return [443];
@@ -382,9 +389,9 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 $this->runResidualCleanupPairWithRetry($name, $info);
             }
 
-            protected function collectResidualCleanupCandidatePids(string $name, ServerInstanceInfo $info): array
+            protected function collectResidualCleanupCandidatePids(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): array
             {
-                unset($name, $info);
+                unset($name, $info, $includeSharedState);
 
                 return [];
             }
@@ -393,16 +400,17 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 string $name,
                 ServerInstanceInfo $info,
                 bool $quiet = false,
-                bool $allowPrefixFallback = true
+                bool $allowPrefixFallback = true,
+                bool $includeSharedState = false
             ): int {
-                unset($name, $info, $quiet, $allowPrefixFallback);
+                unset($name, $info, $quiet, $allowPrefixFallback, $includeSharedState);
 
                 return 0;
             }
 
             protected function collectRemainingRecoverableWlsPorts(string $name, ServerInstanceInfo $info): array
             {
-                unset($name, $info);
+                unset($name, $info, $includeSharedState);
 
                 return [];
             }
@@ -411,9 +419,10 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 string $name,
                 ServerInstanceInfo $info,
                 array $remainingPorts,
-                bool $includePrefixPids = true
+                bool $includePrefixPids = true,
+                bool $includeSharedState = false
             ): array {
-                unset($name, $info, $remainingPorts);
+                unset($name, $info, $remainingPorts, $includeSharedState);
                 $this->prefixVerificationFlags[] = $includePrefixPids;
 
                 return [];
