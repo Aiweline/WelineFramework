@@ -264,6 +264,7 @@ class ProcesserTest extends TestCore
         self::assertSame(0, \substr_count($script, 'Start-Process'));
         self::assertStringContainsString("echo worker-foreground\t0", $script);
         self::assertStringContainsString("echo worker-hidden\t0", $script);
+        self::assertStringContainsString('del "%~f0" >NUL 2>NUL', $script);
     }
 
     public function testBuildWindowsBatchCreateScriptRecordsForegroundLauncherPid(): void

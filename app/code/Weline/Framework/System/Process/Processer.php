@@ -2374,9 +2374,11 @@ class Processer
                 $output = '';
                 $stderr = '';
             }
-            @\unlink((string) $scriptPath);
-            @\unlink((string) $resultPath);
-            @\unlink((string) $errorPath);
+            if ($waitForResults) {
+                @\unlink((string) $scriptPath);
+                @\unlink((string) $resultPath);
+                @\unlink((string) $errorPath);
+            }
             $diagnostic = \trim(\implode(' | ', \array_filter([$output, $stderr], static fn (string $text): bool => $text !== '')));
         }
 
@@ -3297,6 +3299,8 @@ POWERSHELL;
             }
             $lines[] = '>> "' . $resultFile . '" echo ' . $key . "\t0";
         }
+
+        $lines[] = 'del "%~f0" >NUL 2>NUL';
 
         return \implode(PHP_EOL, $lines) . PHP_EOL;
     }

@@ -3,10 +3,11 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Taglib;
 
-use Weline\Framework\Http\Cookie;
+use Weline\Framework\App\State;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
+use Weline\I18n\Model\Locals;
 use Weline\Taglib\TaglibInterface;
 
 class LanguageSwitcher implements TaglibInterface
@@ -43,18 +44,57 @@ class LanguageSwitcher implements TaglibInterface
         return static function ($tag_key, $config, $tag_data, $attributes): string {
             /** @var I18n $i18n */
             $i18n = ObjectManager::getInstance(I18n::class);
-            $welineLanguages = $i18n->getLocalesWithFlagsDisplaySelf(Cookie::getLangLocal(), 24, 18, true, true);
+            $welineLanguages = $i18n->getLocalesWithFlagsDisplaySelf(State::getLangLocal(), 24, 18, true, true);
 
             $websiteId = 0;
+            $isBackendArea = false;
             try {
                 /** @var Request $request */
                 $request = ObjectManager::getInstance(Request::class);
                 $websiteId = (int)($request->getData('website_id') ?? 0);
+                $isBackendArea = (bool)$request->isBackend()
+                    || (\method_exists($request, 'isApiBackend') && (bool)$request->isApiBackend());
             } catch (\Throwable) {
                 $websiteId = 0;
+                $isBackendArea = false;
             }
 
-            if ($websiteId > 0) {
+            if ($isBackendArea) {
+                // 后台：读取 i18n 模块已安装且已激活语言
+                try {
+                    /** @var Locals $localsModel */
+                    $localsModel = ObjectManager::getInstance(Locals::class);
+                    $activeInstalledRows = $localsModel->clearQuery()
+                        ->where(Locals::schema_fields_IS_INSTALL, 1)
+                        ->where(Locals::schema_fields_IS_ACTIVE, 1)
+                        ->select([Locals::schema_fields_CODE])
+                        ->fetchArray();
+                    $allowedMap = [];
+                    foreach ($activeInstalledRows as $row) {
+                        if (!\is_array($row)) {
+                            continue;
+                        }
+                        $code = (string)($row[Locals::schema_fields_CODE] ?? '');
+                        if ($code !== '') {
+                            $allowedMap[$code] = true;
+                        }
+                    }
+                    if ($allowedMap !== []) {
+                        $filteredLanguages = [];
+                        foreach ($welineLanguages as $languageCode => $languageData) {
+                            if (isset($allowedMap[(string)$languageCode])) {
+                                $filteredLanguages[$languageCode] = $languageData;
+                            }
+                        }
+                        if ($filteredLanguages !== []) {
+                            $welineLanguages = $filteredLanguages;
+                        }
+                    }
+                } catch (\Throwable) {
+                    // 失败时保持已安装语言兜底
+                }
+            } elseif ($websiteId > 0) {
+                // 前台：按站点语言限制语言选项
                 $websiteLanguageCodes = w_query('websites', 'getWebsiteLanguageCodes', ['website_id' => $websiteId]);
                 if (is_array($websiteLanguageCodes) && !empty($websiteLanguageCodes)) {
                     $allowedMap = [];
@@ -78,8 +118,14 @@ class LanguageSwitcher implements TaglibInterface
                 }
             }
 
-            $currentCode = Cookie::getLang();
-            $welineCurrentLanguage = ['code' => 'zh_Hans_CN', 'name' => '中文', 'flag' => ''];
+            $currentCode = State::getLangLocal();
+            $firstCode = (string)(array_key_first($welineLanguages) ?? 'zh_Hans_CN');
+            $firstData = (array)($welineLanguages[$firstCode] ?? []);
+            $welineCurrentLanguage = [
+                'code' => $firstCode,
+                'name' => (string)($firstData['name'] ?? '中文'),
+                'flag' => (string)($firstData['flag'] ?? ''),
+            ];
             if (isset($welineLanguages[$currentCode])) {
                 $welineCurrentLanguage = $welineLanguages[$currentCode];
                 $welineCurrentLanguage['code'] = $currentCode;
