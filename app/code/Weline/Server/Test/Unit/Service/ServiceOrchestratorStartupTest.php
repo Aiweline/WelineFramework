@@ -22,6 +22,30 @@ class ServiceOrchestratorStartupTest extends TestCase
 {
     protected function setUp(): void
     {
+        if (!\defined('DS')) {
+            \define('DS', DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('BP')) {
+            \define('BP', \getcwd() . DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('APP_PATH')) {
+            \define('APP_PATH', BP . 'app' . DS);
+        }
+        if (!\defined('APP_CODE_PATH')) {
+            \define('APP_CODE_PATH', APP_PATH . 'code' . DS);
+        }
+        if (!\defined('APP_ETC_PATH')) {
+            \define('APP_ETC_PATH', APP_PATH . 'etc' . DS);
+        }
+        if (!\defined('DEV_PATH')) {
+            \define('DEV_PATH', BP . 'dev' . DS);
+        }
+        if (!\defined('PUB')) {
+            \define('PUB', BP . 'pub' . DS);
+        }
+        if (!\defined('IS_WIN')) {
+            \define('IS_WIN', true);
+        }
         WlsLogger::reset();
         WlsLogger::getInstance()
             ->setStdoutEnabled(false)
@@ -670,7 +694,67 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertInstanceOf(ServiceInstance::class, $instance);
         self::assertSame(43210, $instance->pid);
         self::assertFalse((bool) $instance->getMeta('shared_external'));
-        self::assertSame('providers_batch_create', $instance->getMeta('spawn_transport'));
+        self::assertSame('processer_create', $instance->getMeta('spawn_transport'));
+        self::assertSame('providers_batch_create', $instance->getMeta('spawn_strategy'));
+        self::assertSame(43210, $instance->getRootPid());
+        self::assertSame(43210, $instance->getLauncherPid());
+    }
+
+    public function testMarkSpawnedInstancePreservesLowLevelSpawnTransportAndRecordsTreePid(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $instance = new ServiceInstance(role: 'worker', instanceId: 1);
+        $instance->setMeta('spawn_transport', 'processer_create_foreground');
+
+        $this->invokePrivateWithArgs($orchestrator, 'markSpawnedInstance', [
+            $instance,
+            10.0,
+            10.5,
+            43210,
+            'providers_batch_create',
+            2,
+        ]);
+
+        self::assertSame('processer_create_foreground', $instance->getMeta('spawn_transport'));
+        self::assertSame('providers_batch_create', $instance->getMeta('spawn_strategy'));
+        self::assertSame(43210, $instance->pid);
+        self::assertSame(43210, $instance->getRootPid());
+        self::assertSame(43210, $instance->getLauncherPid());
+        self::assertSame(43210, $instance->getMeta('service_pid'));
+        self::assertSame(43210, $instance->getMeta('root_pid'));
+        self::assertSame(43210, $instance->getMeta('tracking_pid'));
+    }
+
+    public function testRegisterInstanceIpcPreservesSpawnedRootPidWhenRuntimeReportsRealServicePid(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $instance = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            launchId: 'worker-launch',
+            pid: 4100,
+            state: ServiceInstance::STATE_STARTING,
+        );
+        $instance->setProcessTreePids(4100, 4100, 4100);
+        $instance->setMeta('process_name', 'weline-wls-worker-test-1');
+
+        self::assertTrue($this->invokePrivateWithArgs($orchestrator, 'registerInstanceIpc', [
+            $instance,
+            77,
+            4200,
+            1,
+            0,
+            'worker-launch',
+            ControlMessage::PROCESS_KIND_FRAMEWORK,
+            '',
+        ]));
+
+        self::assertSame(4200, $instance->pid);
+        self::assertSame(4100, $instance->getRootPid());
+        self::assertSame(4100, $instance->getLauncherPid());
+        self::assertSame(4200, $instance->getMeta('service_pid'));
+        self::assertSame(4100, $instance->getMeta('root_pid'));
+        self::assertSame(4100, $instance->getMeta('tracking_pid'));
     }
 
     public function testStartProvidersBatchAdoptsConfiguredSharedRuntimeWithoutLaunchingLocalSessionServer(): void
@@ -943,10 +1027,10 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $this->writePrivate($orchestrator, 'running', true);
 
-        $registry->addInstance(new ServiceInstance(
+        $instance = new ServiceInstance(
             role: ControlMessage::ROLE_SESSION_SERVER,
             instanceId: 1,
-            pid: \getmypid(),
+            pid: 999999,
             port: 19970,
             state: ServiceInstance::STATE_READY,
             startedAt: \microtime(true) - 180.0,
@@ -954,7 +1038,9 @@ class ServiceOrchestratorStartupTest extends TestCase
                 'shared_external' => true,
                 'token_file_name' => 'session_server.shared.token',
             ],
-        ));
+        );
+        $instance->setProcessTreePids(999999, \getmypid(), \getmypid());
+        $registry->addInstance($instance);
 
         $this->invokePrivate($orchestrator, 'performHealthChecks');
 
@@ -973,10 +1059,10 @@ class ServiceOrchestratorStartupTest extends TestCase
         $registry->registerProvider(new SessionServerProvider());
         $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
 
-        $registry->addInstance(new ServiceInstance(
+        $instance = new ServiceInstance(
             role: ControlMessage::ROLE_SESSION_SERVER,
             instanceId: 1,
-            pid: \getmypid(),
+            pid: 999999,
             port: 19970,
             ipcClientId: 22,
             state: ServiceInstance::STATE_READY,
@@ -984,7 +1070,9 @@ class ServiceOrchestratorStartupTest extends TestCase
                 'shared_external' => true,
                 'token_file_name' => 'session_server.shared.token',
             ],
-        ));
+        );
+        $instance->setProcessTreePids(999999, \getmypid(), \getmypid());
+        $registry->addInstance($instance);
 
         $orchestrator->handleIpcDisconnect(22, [], $this->createMock(MasterControlServer::class));
 
@@ -1896,6 +1984,41 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertFalse($this->readPrivateBool($orchestrator, 'fullRestartRequested'));
     }
 
+    public function testHandleIpcDisconnectDelaysLocalRecoveryWhenWrapperRootStillRunning(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        if (!$registry->hasProvider(ControlMessage::ROLE_MAINTENANCE)) {
+            $registry->registerProvider(new MaintenanceWorkerProvider());
+        }
+        $this->writePrivate($orchestrator, 'maintenanceMode', true);
+
+        $instance = new ServiceInstance(
+            role: ControlMessage::ROLE_MAINTENANCE,
+            instanceId: 1,
+            pid: 999999,
+            port: 29333,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 904,
+            startedAt: \microtime(true) - 20.0,
+        );
+        $instance->setProcessTreePids(999999, \getmypid(), \getmypid());
+        $registry->addInstance($instance);
+
+        $orchestrator->handleIpcDisconnect(904, [], $this->createMock(MasterControlServer::class));
+
+        $instance = $registry->getInstance(ControlMessage::ROLE_MAINTENANCE, 1);
+        self::assertInstanceOf(ServiceInstance::class, $instance);
+        self::assertNull($instance->ipcClientId);
+        self::assertSame(ServiceInstance::STATE_FAILED, $instance->state);
+
+        $queue = $this->readPrivate($orchestrator, 'resurrectQueue');
+        self::assertArrayHasKey('maintenance:1', $queue);
+        self::assertGreaterThan(0.0, (float) ($queue['maintenance:1']['restartDelay'] ?? 0.0));
+        self::assertTrue((bool) ($queue['maintenance:1']['delayed'] ?? false));
+        self::assertSame(\getmypid(), (int) ($queue['maintenance:1']['tracking_pid'] ?? 0));
+    }
+
     public function testHealthCheckRestartOrEscalateSchedulesLocalRecoveryForActiveMaintenanceWorker(): void
     {
         $orchestrator = new ServiceOrchestrator();
@@ -1990,6 +2113,71 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(ServiceInstance::STATE_STARTING, $dispatcher->state);
         self::assertNull($dispatcher->ipcClientId);
         self::assertSame($context->mainPort, $dispatcher->port);
+    }
+
+    public function testMasterSelfAuditKeepsReadyDispatcherWhenWrapperRootStillAlive(): void
+    {
+        $server = new class extends MasterControlServer {
+            public array $existingClientIds = [];
+
+            public function getPort(): int
+            {
+                return 19981;
+            }
+
+            public function clientExists(int $clientId): bool
+            {
+                return \in_array($clientId, $this->existingClientIds, true);
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+
+        $registry = $orchestrator->getRegistry();
+        if (!$registry->hasProvider(ControlMessage::ROLE_DISPATCHER)) {
+            $registry->registerProvider(new DispatcherProvider());
+        }
+
+        $context = $this->createWorkerInfraContext();
+        $dispatcher = new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'dispatcher-wrapper-alive',
+            pid: 999999,
+            port: $context->mainPort,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 1001,
+            startedAt: \microtime(true) - 120.0,
+        );
+        $dispatcher->setProcessTreePids(999999, \getmypid(), \getmypid());
+        $registry->addInstance($dispatcher);
+
+        $server->existingClientIds = [1001];
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+        $this->writePrivate($orchestrator, 'running', true);
+        $this->writePrivate($orchestrator, 'desiredState', [
+            ControlMessage::ROLE_DISPATCHER => 1,
+        ]);
+
+        $readyBefore = (int) $this->invokePrivateWithArgs($orchestrator, 'countRoleSlotsReadyHealthy', [
+            ControlMessage::ROLE_DISPATCHER,
+        ]);
+        $this->invokePrivate($orchestrator, 'performMasterSelfAudit');
+        $readyAfter = (int) $this->invokePrivateWithArgs($orchestrator, 'countRoleSlotsReadyHealthy', [
+            ControlMessage::ROLE_DISPATCHER,
+        ]);
+
+        self::assertSame(1, $readyBefore);
+        self::assertSame(1, $readyAfter);
+
+        $dispatcherAfter = $registry->getInstance(ControlMessage::ROLE_DISPATCHER, 1);
+        self::assertInstanceOf(ServiceInstance::class, $dispatcherAfter);
+        self::assertSame('dispatcher-wrapper-alive', $dispatcherAfter->launchId);
+        self::assertSame(ServiceInstance::STATE_READY, $dispatcherAfter->state);
+        self::assertSame(1001, $dispatcherAfter->ipcClientId);
+        self::assertSame(\getmypid(), $dispatcherAfter->getRootPid());
     }
 
     public function testSerialStartupFallbackHelpersRemoved(): void
@@ -2288,6 +2476,31 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->invokePrivateWithArgs($orchestrator, 'drainControlPlaneAfterStartupStep', [8, 1]);
 
         self::assertSame(4, $pollCalls);
+    }
+
+    public function testConcurrentStartupDrainUsesShorterFrontendBudgetOnWindows(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $context = new ServiceContext(
+            instanceName: 'startup-drain',
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: 443,
+            sslEnabled: true,
+            sslCert: '',
+            sslKey: '',
+            mode: 'frontend',
+            daemon: false,
+            debug: false,
+            frontend: true,
+            envConfig: []
+        );
+
+        $budget = $this->invokePrivateWithArgs($orchestrator, 'resolveConcurrentStartupDrainMinDurationUsec', [$context]);
+
+        self::assertSame(2500000, $budget);
     }
 
     public function testConfiguredMaintenanceDoesNotAutoDisableWhenWorkerBecomesReady(): void

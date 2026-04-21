@@ -189,6 +189,7 @@ class WorkerScaler
     private function waitForWorkerReady(ServiceInstance $instance, int $timeoutSec): bool
     {
         $deadline = \microtime(true) + $timeoutSec;
+        $trackingPid = $this->getTrackingPid($instance);
 
         while (\microtime(true) < $deadline) {
             // 检查 Worker 状态
@@ -197,7 +198,7 @@ class WorkerScaler
             }
 
             // 检查进程是否还活着
-            if (!$this->isProcessAlive($instance->pid)) {
+            if (!$this->isProcessAlive($trackingPid)) {
                 return false;
             }
 
@@ -217,10 +218,11 @@ class WorkerScaler
     private function waitForWorkerExit(ServiceInstance $instance, int $timeoutSec): bool
     {
         $deadline = \microtime(true) + $timeoutSec;
+        $trackingPid = $this->getTrackingPid($instance);
 
         while (\microtime(true) < $deadline) {
             // 检查进程是否还活着
-            if (!$this->isProcessAlive($instance->pid)) {
+            if (!$this->isProcessAlive($trackingPid)) {
                 return true;
             }
 
@@ -239,6 +241,9 @@ class WorkerScaler
      */
     public function checkHealth(int $pid, float $timeoutSec = 2.0): bool
     {
+        $instance = $this->findInstanceByPid($pid);
+        $pid = $instance?->getTrackingPid() ?? $pid;
+
         // 检查进程是否存在
         if (!$this->isProcessAlive($pid)) {
             return false;
@@ -290,10 +295,10 @@ class WorkerScaler
     /**
      * 根据 PID 查找实例
      */
-    private function findInstanceByPid(int $pid): ?\Weline\Server\Service\ServiceInstance
+    private function findInstanceByPid(int $pid): ?ServiceInstance
     {
         foreach ($this->orchestrator->getInstancesByRole('worker') as $instance) {
-            if ($instance->pid === $pid) {
+            if ($instance->matchesManagedPid($pid)) {
                 return $instance;
             }
         }
@@ -327,5 +332,10 @@ class WorkerScaler
         }
 
         return Processer::isRunningByPid($pid);
+    }
+
+    private function getTrackingPid(ServiceInstance $instance): int
+    {
+        return $instance->getTrackingPid();
     }
 }
