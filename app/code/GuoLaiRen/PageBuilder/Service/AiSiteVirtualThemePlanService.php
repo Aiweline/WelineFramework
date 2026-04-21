@@ -14,6 +14,10 @@ final class AiSiteVirtualThemePlanService
 
     private const STAGE2_BLOCK_TASK_FANOUT_GROUP = 'stage2.block_task_plan';
 
+    private const FRONTEND_DESIGN_SKILL_SOURCE = 'https://github.com/anthropics/claude-code/blob/main/plugins/frontend-design/skills/frontend-design/SKILL.md';
+
+    private const FRONTEND_DESIGN_SKILL_LOCAL_PATH = 'app/code/GuoLaiRen/PageBuilder/Service/AI/prompt_guides/frontend-design/SKILL.md';
+
     private const BLOCK_TASK_REQUIRED_FIELDS = [
         'task_goal',
         'meta_fields',
@@ -344,6 +348,9 @@ final class AiSiteVirtualThemePlanService
     {
         $batches = [];
         $sharedTasks = \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [];
+        $sharedTaskKeys = [];
+        $sharedDependsOn = [];
+        $sharedSortOrder = 0;
         foreach ($sharedTasks as $task) {
             if (!\is_array($task) || $this->isStageTwoTaskPlanBatchComplete($task)) {
                 continue;
@@ -352,20 +359,23 @@ final class AiSiteVirtualThemePlanService
             if ($taskKey === '') {
                 continue;
             }
-            $component = \trim((string)($task['component'] ?? $task['region'] ?? ''));
-            if ($component === '' && \str_starts_with($taskKey, 'shared:')) {
-                $component = \trim(\substr($taskKey, 7));
-            }
-            $blockKey = $component !== '' ? $component : $taskKey;
+            $sharedTaskKeys[] = $taskKey;
+            $sharedSortOrder = $sharedSortOrder === 0 ? (int)($task['sort_order'] ?? 0) : \min($sharedSortOrder, (int)($task['sort_order'] ?? 0));
+            $sharedDependsOn = \array_merge(
+                $sharedDependsOn,
+                \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [])))
+            );
+        }
+        if ($sharedTaskKeys !== []) {
             $batches[] = [
                 'type' => 'shared',
-                'key' => $component !== '' ? $component : 'shared',
-                'block_key' => $blockKey,
-                'task_keys' => [$taskKey],
-                'sort_order' => (int)($task['sort_order'] ?? 0),
-                'depends_on' => \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
+                'key' => 'shared',
+                'block_key' => 'shared',
+                'task_keys' => \array_values(\array_unique($sharedTaskKeys)),
+                'sort_order' => $sharedSortOrder,
+                'depends_on' => \array_values(\array_unique($sharedDependsOn)),
                 'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
-                'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':shared:' . $this->normalizeTaskPlanBatchIdPart($blockKey),
+                'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':shared',
             ];
         }
 
@@ -375,6 +385,9 @@ final class AiSiteVirtualThemePlanService
                 continue;
             }
             $pageType = (string)$pageType;
+            $pageTaskKeys = [];
+            $pageDependsOn = [];
+            $pageSortOrder = 0;
             foreach ($tasks as $task) {
                 if (!\is_array($task) || $this->isStageTwoTaskPlanBatchComplete($task)) {
                     continue;
@@ -383,23 +396,23 @@ final class AiSiteVirtualThemePlanService
                 if ($taskKey === '') {
                     continue;
                 }
-                $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
-                $blockKey = $this->firstNonEmptyString([
-                    $task['block_key'] ?? null,
-                    $planContext['block_code'] ?? null,
-                    $task['section_key'] ?? null,
-                    $task['section_code'] ?? null,
-                    $taskKey,
-                ]);
+                $pageTaskKeys[] = $taskKey;
+                $pageSortOrder = $pageSortOrder === 0 ? (int)($task['sort_order'] ?? 0) : \min($pageSortOrder, (int)($task['sort_order'] ?? 0));
+                $pageDependsOn = \array_merge(
+                    $pageDependsOn,
+                    \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [])))
+                );
+            }
+            if ($pageTaskKeys !== []) {
                 $batches[] = [
                     'type' => 'page',
                     'key' => $pageType,
-                    'block_key' => $blockKey,
-                    'task_keys' => [$taskKey],
-                    'sort_order' => (int)($task['sort_order'] ?? 0),
-                    'depends_on' => \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
+                    'block_key' => $pageType,
+                    'task_keys' => \array_values(\array_unique($pageTaskKeys)),
+                    'sort_order' => $pageSortOrder,
+                    'depends_on' => \array_values(\array_unique($pageDependsOn)),
                     'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
-                    'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':' . $pageType . ':' . $blockKey,
+                    'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':' . $pageType,
                 ];
             }
         }
@@ -505,8 +518,8 @@ final class AiSiteVirtualThemePlanService
      */
     private function resolveTaskPlanBatchMaxTokens(array $batch): int
     {
-        // shared/block 批次都可能返回较长 task_script 与字段样例；过低会截断为半截 JSON。
-        return \count(\is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : []) <= 1 ? 4200 : 6400;
+        // Page-group batches carry multiple block task_script payloads; keep within provider limit but avoid truncating JSON.
+        return \count(\is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : []) <= 1 ? 4200 : 8192;
     }
 
     /**
@@ -532,6 +545,7 @@ final class AiSiteVirtualThemePlanService
         $userBriefBatch = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? ($scope['plan_workbench']['stage1']['request_summary']['raw_requirement'] ?? '')));
         $oneLineRequirementBatch = $userBriefBatch !== '' ? $userBriefBatch : ($instruction !== '' ? $instruction : '-');
 
+        $batchContext = $this->buildTaskPlanBatchPromptContext($scope, $structured, $batch, $pageType);
         $lines = [
             'You are PageBuilder AI planner for stage-2 virtual theme task planning of a real website (batched call).',
             'PRIMARY GOAL: For this ONE batch, expand the confirmed stage-1 theme and block plan into one or more CONCRETE EXECUTABLE frontend component tasks.',
@@ -544,7 +558,7 @@ final class AiSiteVirtualThemePlanService
             'The first non-whitespace character in the response must be { and the last non-whitespace character must be }.',
             'Escape any line break inside JSON strings as \\n.',
             'Do not echo the schema example, GOOD/BAD examples, or these instructions back in the response.',
-            'Do not copy or summarize the Stage-1 compact context, Baseline snapshot, execution_blueprint, confirmed_plan_book, theme_context_snapshot, or any prompt section into the output.',
+            'Do not copy or summarize any large stage-1 context, baseline snapshot, execution blueprint, theme snapshot, or prompt section into the output.',
             'Output only the requested batch payload: shared_tasks OR page_tasks plus optional risk_notes.',
             'If mode/instruction contains queue:run, [FORCE], or forced rebuild text, treat it only as an operator command. Never copy it into story_goal, SEO, source_instruction, content_strategy, or customer-facing fields.',
             'Batch type: ' . $batch['type'],
@@ -558,15 +572,10 @@ final class AiSiteVirtualThemePlanService
             'Only return tasks that belong to this batch.',
             'Preserve the provided task order.',
             'Treat this as a customer-visible implementation plan: every text field must read like final task content, not prompt guidance.',
-            '',
-            'GOOD vs BAD examples (style only):',
-            'BAD  story_goal     : "撰写 hero 文案突出价值"',
-            'GOOD story_goal     : "访客 5 秒看到一句话价值并点击 [免费试用 30 天]"',
-            'BAD  field sample   : "突出卖点"',
-            'GOOD field sample   : "30 分钟上手的轻量记账工具，给独立创作者用"',
-            'BAD  nav item       : {"label":"链接1"}',
-            'GOOD nav item       : {"label":"定价","page_type":"pricing_page","href":"/pricing"}',
+            'Compact context for this batch only:',
+            \json_encode($batchContext, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}',
         ];
+        \array_push($lines, ...$this->buildFrontendDesignSkillPromptGuide($batch));
         if ($instruction !== '') {
             $lines[] = 'User instruction: ' . $instruction;
         }
@@ -582,50 +591,23 @@ final class AiSiteVirtualThemePlanService
         if ($batch['type'] === 'shared') {
             $sharedTasks = \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [];
             $sharedTasks = $this->filterTaskPlanTaskListForBatch($sharedTasks, $batch);
-            $sharedCues = [];
-            foreach ($batch['task_keys'] as $taskKey) {
-                if (\is_array($stage1TaskCues['shared'][$taskKey] ?? null)) {
-                    $sharedCues[$taskKey] = $stage1TaskCues['shared'][$taskKey];
-                }
-            }
             $lines[] = 'Output schema: {"shared_tasks":[...],"risk_notes":["string"]}';
             $lines[] = 'Do not output page_tasks or a full virtual_theme_plan wrapper.';
             $lines[] = 'For shared batch, generate only shared header/footer task details. Header and footer belong to group_key "shared" and are designed for parallel generation before page blocks.';
             $lines[] = 'Shared task skeleton:';
-            $lines[] = \json_encode($sharedTasks, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
-            $lines[] = 'Relevant stage-1 shared cues:';
+            $lines[] = \json_encode($this->compactTaskPlanPromptTasks($sharedTasks), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
             $lines[] = 'Each returned shared_tasks[] item MUST include planning_reason explaining why this shared block structure, fields, navigation/link choices, style rules, and responsive behavior fit the confirmed stage-1 shared cues.';
             $lines[] = 'Use the matching stage-1 shared cue reason/implementation_detail for shared_tasks[].planning_reason; never leave planning_reason blank or replace it with a generic shared-component rationale.';
-            $lines[] = \json_encode($sharedCues, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
-            $lines[] = 'Relevant shared rules:';
-            $lines[] = \json_encode([
-                'content_rules' => \is_array($structured['content_rules'] ?? null) ? $structured['content_rules'] : [],
-                'style_tokens' => \is_array($structured['style_tokens'] ?? null) ? $structured['style_tokens'] : [],
-            ], \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
         } else {
             $pageTasks = \is_array($structured['page_tasks'][$pageType] ?? null) ? $structured['page_tasks'][$pageType] : [];
             $pageTasks = $this->filterTaskPlanTaskListForBatch($pageTasks, $batch);
-            $pageCues = [];
-            foreach ($batch['task_keys'] as $taskKey) {
-                if (\is_array($stage1TaskCues['pages'][$taskKey] ?? null)) {
-                    $pageCues[$taskKey] = $stage1TaskCues['pages'][$taskKey];
-                }
-            }
             $lines[] = 'Page type: ' . $pageType;
             $lines[] = 'Output schema: {"page_type":"' . $pageType . '","page_tasks":[...],"risk_notes":["string"]}';
             $lines[] = 'Do not output shared_tasks or a full virtual_theme_plan wrapper.';
             $lines[] = 'For page batch, generate only tasks for page_type "' . $pageType . '". The task tree must make page ownership and block ownership clear: page_type, page_key, block_key, section_code, sort_order, dependencies.';
             $lines[] = 'Page task skeleton:';
-            $lines[] = \json_encode($pageTasks, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
-            $lines[] = 'Relevant stage-1 page cues:';
+            $lines[] = \json_encode($this->compactTaskPlanPromptTasks($pageTasks), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
             $lines[] = 'Each stage-2 block task MUST ground task_goal/content_plan/style_plan/planning_reason in its stage-1 cue fields: block_goal, realtime_content, style_direction, reason.';
-            $lines[] = \json_encode($pageCues, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
-            $lines[] = 'Relevant page coverage and blueprint context:';
-            $lines[] = \json_encode([
-                'page_coverage' => \is_array($pageCoverage[$pageType] ?? null) ? $pageCoverage[$pageType] : [],
-                'execution_blueprint_page' => \is_array($executionBlueprint['pages'][$pageType] ?? null) ? $executionBlueprint['pages'][$pageType] : [],
-                'meta_field_matrix' => \is_array($structured['meta_field_matrix'][$pageType] ?? null) ? $structured['meta_field_matrix'][$pageType] : [],
-            ], \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
         }
 
         if ($planLocale !== '') {
@@ -635,18 +617,8 @@ final class AiSiteVirtualThemePlanService
             $lines[] = 'Default locale: ' . $defaultLocale;
         }
 
-        $lines[] = 'Stage-1 compact context summary:';
-        $lines[] = \json_encode(
-            $this->buildTaskPlanStageOneCompactContext($scope, $batch['type'] === 'page' ? $pageType : '__shared__'),
-            \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT
-        ) ?: '{}';
         $lines[] = 'Filtered build_blueprint tasks for this batch:';
         $lines[] = \json_encode($this->filterBuildBlueprintForTaskKeys($buildBlueprint, $batch['task_keys']), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
-        $lines[] = 'Baseline batch compatibility snapshot:';
-        $lines[] = \json_encode(
-            $this->filterVirtualThemePlanForBatch($virtualThemePlan, $batch),
-            \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT
-        ) ?: '{}';
         $lines[] = 'Hard rules:';
         $lines[] = '- This is stage 2: convert stage-1 page blocks into executable frontend-component tasks. Do not create a new marketing plan.';
         $lines[] = '- The final plan is assembled by shared group + page groups. Shared group contains header/footer and is parallelizable. Each page_type group contains its own block tasks and is parallelizable after shared dependencies.';
@@ -664,7 +636,7 @@ final class AiSiteVirtualThemePlanService
         $lines[] = '- Every returned task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, and completion_rule-compatible detail.';
         $lines[] = '- Keep task_key, group_key, page_type, and sort_order compatible with the provided skeleton.';
         $lines[] = '- Do not drop any task from this batch.';
-        $lines[] = '- This batch is one stage2.block_task_plan queue job when Fanout group is stage2.block_task_plan; generate only that block task and preserve dependencies/sort_order.';
+        $lines[] = '- This batch is one stage2.block_task_plan queue job when Fanout group is stage2.block_task_plan; generate every task listed in task_keys and preserve dependencies/sort_order.';
         $lines[] = '- Do not add unselected pages or tasks outside this batch.';
         $lines[] = '- risk_notes should mention only issues relevant to this batch.';
         $lines[] = '- story_goal, content_fill_rule, and every field sample must be direct implementation content; never write blueprint guidance such as "围绕...说明" or "阶段一仅给方向".';
@@ -676,6 +648,201 @@ final class AiSiteVirtualThemePlanService
         $lines[] = '- Final audit (silently before output): drop or rewrite any task that fails the above checks.';
 
         return \implode("\n", $lines);
+    }
+
+    /**
+     * @param array<string, mixed> $structured
+     * @param array<string, mixed> $batch
+     * @return array<string, mixed>
+     */
+    private function buildTaskPlanBatchPromptContext(array $scope, array $structured, array $batch, string $pageType): array
+    {
+        $taskKeys = \array_values(\array_filter(\array_map('strval', \is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : [])));
+        $taskKeyMap = \array_fill_keys($taskKeys, true);
+        $stage1TaskCues = \is_array($structured['stage1_task_cues'] ?? null) ? $structured['stage1_task_cues'] : [];
+        $styleTokens = \is_array($structured['style_tokens'] ?? null) ? $structured['style_tokens'] : [];
+        $contentRules = \is_array($structured['content_rules'] ?? null) ? $structured['content_rules'] : [];
+
+        $relevantCues = [];
+        $cueBucket = ($batch['type'] ?? '') === 'shared'
+            ? (\is_array($stage1TaskCues['shared'] ?? null) ? $stage1TaskCues['shared'] : [])
+            : (\is_array($stage1TaskCues['pages'] ?? null) ? $stage1TaskCues['pages'] : []);
+        foreach ($cueBucket as $taskKey => $cue) {
+            if (!isset($taskKeyMap[(string)$taskKey]) || !\is_array($cue)) {
+                continue;
+            }
+            $relevantCues[(string)$taskKey] = $this->compactStageTwoCueForPrompt($cue);
+        }
+
+        return [
+            'site' => [
+                'title' => (string)($scope['site_title'] ?? ''),
+                'tagline' => (string)($scope['site_tagline'] ?? ''),
+                'brief' => $this->excerptText((string)($scope['brief_description'] ?? $scope['user_description'] ?? ''), 480),
+                'plan_locale' => (string)($scope['plan_locale'] ?? ''),
+                'default_locale' => (string)($scope['default_locale'] ?? ''),
+            ],
+            'theme' => [
+                'palette' => \is_array($styleTokens['palette'] ?? null) ? $this->compactPromptMap($styleTokens['palette'], 8, 180) : [],
+                'theme_style' => \is_array($styleTokens['theme_style'] ?? null) ? $this->compactPromptMap($styleTokens['theme_style'], 8, 180) : [],
+                'seo_strategy' => \is_array($contentRules['seo_strategy'] ?? null) ? $this->compactPromptMap($contentRules['seo_strategy'], 6, 180) : [],
+                'navigation_plan' => \is_array($contentRules['navigation_plan'] ?? null) ? $this->compactPromptMap($contentRules['navigation_plan'], 6, 180) : [],
+                'footer_plan' => \is_array($contentRules['footer_plan'] ?? null) ? $this->compactPromptMap($contentRules['footer_plan'], 6, 180) : [],
+            ],
+            'batch' => [
+                'type' => (string)($batch['type'] ?? ''),
+                'key' => (string)($batch['key'] ?? ''),
+                'page_type' => $pageType,
+                'block_key' => (string)($batch['block_key'] ?? ''),
+                'task_keys' => $taskKeys,
+                'depends_on' => \array_values(\array_filter(\array_map('strval', \is_array($batch['depends_on'] ?? null) ? $batch['depends_on'] : []))),
+                'fanout_group' => (string)($batch['fanout_group'] ?? ''),
+                'queue_job_key' => (string)($batch['queue_job_key'] ?? ''),
+            ],
+            'stage1_cues' => $relevantCues,
+        ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $tasks
+     * @return list<array<string, mixed>>
+     */
+    private function compactTaskPlanPromptTasks(array $tasks): array
+    {
+        $compact = [];
+        foreach ($tasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
+            $runtime = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
+            $compact[] = [
+                'task_key' => (string)($task['task_key'] ?? ''),
+                'group_key' => (string)($task['group_key'] ?? ''),
+                'page_type' => (string)($task['page_type'] ?? ''),
+                'page_key' => (string)($task['page_key'] ?? ($task['page_type'] ?? '')),
+                'block_key' => (string)($task['block_key'] ?? ($planContext['block_code'] ?? '')),
+                'section_code' => (string)($task['section_code'] ?? ($planContext['section_code'] ?? '')),
+                'label' => (string)($task['label'] ?? ''),
+                'sort_order' => (int)($task['sort_order'] ?? 0),
+                'dependencies' => \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
+                'plan_context' => $this->compactPromptMap($planContext, 12, 220),
+                'runtime_context' => [
+                    'fanout_group' => (string)($runtime['fanout_group'] ?? ''),
+                    'fanout_job_key' => (string)($runtime['fanout_job_key'] ?? ''),
+                    'stage2_context_hash' => (string)($runtime['stage2_context_hash'] ?? ''),
+                ],
+            ];
+        }
+
+        return $compact;
+    }
+
+    /**
+     * @param array<string, mixed> $cue
+     * @return array<string, mixed>
+     */
+    private function compactStageTwoCueForPrompt(array $cue): array
+    {
+        return [
+            'task_key' => (string)($cue['task_key'] ?? ''),
+            'page_type' => (string)($cue['page_type'] ?? ''),
+            'block_key' => (string)($cue['block_key'] ?? $cue['source_block_key'] ?? ''),
+            'section_code' => (string)($cue['section_code'] ?? $cue['component_kind'] ?? ''),
+            'block_goal' => $this->excerptText((string)($cue['block_goal'] ?? $cue['stage1_goal'] ?? $cue['goal'] ?? ''), 260),
+            'realtime_content' => \is_array($cue['realtime_content'] ?? null) ? $this->compactPromptMap($cue['realtime_content'], 10, 180) : [],
+            'style_direction' => $this->excerptText((string)($cue['style_direction'] ?? ''), 260),
+            'design_tags' => \is_array($cue['design_tags'] ?? null) ? $this->compactPromptMap($cue['design_tags'], 8, 140) : [],
+            'reason' => $this->excerptText((string)($cue['reason'] ?? $cue['implementation_detail'] ?? ''), 320),
+            'editable_fields' => \array_values(\array_slice(\array_filter(\array_map('strval', \is_array($cue['editable_fields'] ?? null) ? $cue['editable_fields'] : [])), 0, 12)),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $source
+     * @return array<string, mixed>
+     */
+    private function compactPromptMap(array $source, int $maxItems = 8, int $maxText = 180): array
+    {
+        $out = [];
+        $count = 0;
+        foreach ($source as $key => $value) {
+            if ($count >= $maxItems) {
+                break;
+            }
+            $key = (string)$key;
+            if (\is_array($value)) {
+                $out[$key] = $this->compactPromptListOrMap($value, $maxItems, $maxText);
+            } else {
+                $out[$key] = $this->excerptText((string)$value, $maxText);
+            }
+            $count++;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<mixed> $source
+     * @return array<mixed>
+     */
+    private function compactPromptListOrMap(array $source, int $maxItems, int $maxText): array
+    {
+        $out = [];
+        $count = 0;
+        foreach ($source as $key => $value) {
+            if ($count >= $maxItems) {
+                break;
+            }
+            if (\is_array($value)) {
+                $next = [];
+                $innerCount = 0;
+                foreach ($value as $innerKey => $innerValue) {
+                    if ($innerCount >= $maxItems) {
+                        break;
+                    }
+                    $next[$innerKey] = \is_array($innerValue)
+                        ? '[nested]'
+                        : $this->excerptText((string)$innerValue, $maxText);
+                    $innerCount++;
+                }
+                $out[$key] = $next;
+            } else {
+                $out[$key] = $this->excerptText((string)$value, $maxText);
+            }
+            $count++;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<string, mixed> $batch
+     * @return list<string>
+     */
+    private function buildFrontendDesignSkillPromptGuide(array $batch): array
+    {
+        $batchType = (string)($batch['type'] ?? '');
+        $componentScope = $batchType === 'shared'
+            ? 'shared theme component such as header/footer'
+            : 'page-owned theme block component';
+
+        return [
+            '',
+            'Frontend design skill reference (mandatory for every generated theme component task):',
+            '- Local skill file: ' . self::FRONTEND_DESIGN_SKILL_LOCAL_PATH,
+            '- Source skill: ' . self::FRONTEND_DESIGN_SKILL_SOURCE,
+            '- Scope for this batch: ' . $componentScope,
+            '- Apply frontend-design skill before writing task_script/style_plan: pick a clear aesthetic direction that matches the site purpose, audience, page role, and block goal.',
+            '- Avoid generic AI aesthetics: no default Inter/Roboto/Arial/system-font look, no timid purple-gradient-on-white templates, no cookie-cutter card grids, no interchangeable SaaS hero patterns unless stage-1 explicitly demands that visual language.',
+            '- Make each component memorable through a deliberate typography, color, spatial composition, motion, texture, and visual-detail decision that can be implemented by stage 3.',
+            '- Match complexity to the chosen aesthetic: refined/minimal components need precise spacing, type scale, and restraint; expressive/maximal components need purposeful layering, motion, and atmosphere.',
+            '- For each returned task, encode the skill outcome in block_task.style_plan and task_script.responsive_contract/accessibility_contract/asset_requirements; do not merely mention this skill in prose.',
+            '- style_plan must include concrete typography, color/theme, motion, spatial composition, background/texture/detail, responsive behavior, and accessibility notes when relevant to the component.',
+            '- Shared components must keep the same aesthetic system while adapting interaction density: header navigation clarity, footer trust/compliance structure, and mobile ergonomics are mandatory.',
+            '- Page block components must translate stage-1 block_goal/realtime_content/style_direction into visible frontend decisions, not into instructions for a future designer.',
+            '',
+        ];
     }
 
     /**
@@ -811,9 +978,21 @@ final class AiSiteVirtualThemePlanService
     {
         $taskKeyMap = \array_fill_keys($taskKeys, true);
         $tasks = \is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [];
-        $filteredTasks = \array_values(\array_filter($tasks, static function ($task) use ($taskKeyMap): bool {
-            return \is_array($task) && isset($taskKeyMap[(string)($task['task_key'] ?? '')]);
-        }));
+        $filteredTasks = [];
+        foreach ($tasks as $task) {
+            if (!\is_array($task) || !isset($taskKeyMap[(string)($task['task_key'] ?? '')])) {
+                continue;
+            }
+            $filteredTasks[] = [
+                'task_key' => (string)($task['task_key'] ?? ''),
+                'group_key' => (string)($task['group_key'] ?? ''),
+                'page_type' => (string)($task['page_type'] ?? ''),
+                'label' => (string)($task['label'] ?? ''),
+                'section_code' => (string)($task['section_code'] ?? ''),
+                'sort_order' => (int)($task['sort_order'] ?? 0),
+                'dependencies' => \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []))),
+            ];
+        }
 
         return [
             'tasks' => $filteredTasks,
