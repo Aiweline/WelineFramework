@@ -634,6 +634,76 @@ class SslCertificateService
     }
 
     /**
+     * 检查已配置证书是否可被复用。
+     *
+     * 校验规则：
+     * - 证书文件存在且未过期（保留 7 天续期窗口）
+     * - 可选 key 文件存在且为有效私钥
+     * - 私钥与证书公钥匹配
+     */
+    public function canReuseConfiguredCertificate(string $certPath, string $keyPath = ''): bool
+    {
+        $certPath = \trim($certPath);
+        if ($certPath === '' || !\is_file($certPath)) {
+            return false;
+        }
+
+        if (!$this->isCertificateValid($certPath)) {
+            return false;
+        }
+
+        if ($keyPath === '') {
+            return true;
+        }
+
+        $keyPath = \trim($keyPath);
+        if ($keyPath === '' || !\is_file($keyPath)) {
+            return false;
+        }
+
+        $privateKeyPem = @\file_get_contents($keyPath);
+        if ($privateKeyPem === false || $privateKeyPem === '') {
+            return false;
+        }
+
+        $privateKey = @\openssl_pkey_get_private($privateKeyPem);
+        if ($privateKey === false) {
+            return false;
+        }
+
+        $certPem = @\file_get_contents($certPath);
+        if ($certPem === false || $certPem === '') {
+            return false;
+        }
+
+        $certResource = @\openssl_x509_read($certPem);
+        if ($certResource === false) {
+            return false;
+        }
+
+        $publicFromPrivate = @\openssl_pkey_get_public($privateKey);
+        $publicFromCert = @\openssl_pkey_get_public($certResource);
+        if ($publicFromPrivate === false || $publicFromCert === false) {
+            return false;
+        }
+
+        $privateDetails = @\openssl_pkey_get_details($privateKey);
+        $certPublicDetails = @\openssl_pkey_get_details($publicFromCert);
+        if (!\is_array($privateDetails) || !\is_array($certPublicDetails)) {
+            return false;
+        }
+
+        if ((int) ($privateDetails['type'] ?? -1) !== (int) ($certPublicDetails['type'] ?? -1)) {
+            return false;
+        }
+
+        $privatePublicKey = (string) ($privateDetails['key'] ?? '');
+        $certPublicKey = (string) ($certPublicDetails['key'] ?? '');
+
+        return $privatePublicKey !== '' && $privatePublicKey === $certPublicKey;
+    }
+
+    /**
      * 证书管理器视角：该主机名是否已有 **ACTIVE** 且覆盖该名的证书，且 PEM 或磁盘文件存在、未进入续期窗口（与 {@see isCertificateValid} 同为提前 7 天）。
      * 供域名池维护入队 / 健康扫描使用，**不**依赖域名池上的 https_status 字段。
      */
