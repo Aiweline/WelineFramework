@@ -7455,6 +7455,199 @@ final class AiSiteExecutionBlueprintService
 
     /**
      * @param array<string, mixed> $scope
+     * @param array<string, mixed> $structured
+     * @param array<string, mixed> $executionBlueprint
+     * @return array{
+     *     plan_json:array<string, mixed>,
+     *     structured:array<string, mixed>,
+     *     execution_blueprint:array<string, mixed>,
+     *     markdown:string,
+     *     plan_workbench:array<string, mixed>
+     * }
+     */
+    private function assembleStageOneDraftArtifacts(array $scope, array $structured, array $executionBlueprint): array
+    {
+        $sharedPromptContext = \is_array($executionBlueprint['shared_prompt_context'] ?? null)
+            ? $executionBlueprint['shared_prompt_context']
+            : (\is_array($structured['shared_plan']['shared_prompt_context'] ?? null) ? $structured['shared_plan']['shared_prompt_context'] : []);
+        $pages = \is_array($executionBlueprint['pages'] ?? null)
+            ? $executionBlueprint['pages']
+            : (\is_array($structured['pages'] ?? null) ? $structured['pages'] : []);
+        $pagePlans = $this->buildStageOnePagePlans($pages, $sharedPromptContext);
+        $structured['pages'] = $pages;
+        $structured['page_plans'] = $pagePlans;
+        $executionBlueprint['pages'] = $pages;
+        $executionBlueprint['page_plans'] = $pagePlans;
+
+        $sharedComponents = $this->resolveStageOneSharedComponents($structured, $executionBlueprint);
+        $structured['shared_components'] = $sharedComponents;
+        $structured['shared_plan'] = \array_replace(
+            \is_array($structured['shared_plan'] ?? null) ? $structured['shared_plan'] : [],
+            [
+                'header_block' => \is_array($sharedComponents['header'] ?? null) ? $sharedComponents['header'] : [],
+                'footer_block' => \is_array($sharedComponents['footer'] ?? null) ? $sharedComponents['footer'] : [],
+                'shared_blocks' => $this->buildStageOneSharedBlocksPlanJson($sharedComponents),
+            ]
+        );
+        $executionBlueprint['shared_components'] = $sharedComponents;
+
+        $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
+        $structured['block_index'] = $blockIndex;
+        $executionBlueprint['block_index'] = $blockIndex;
+        $tasks = $this->buildStageOneTasksFromBlocks($sharedComponents, $pagePlans);
+        $structured['execution_steps'] = $this->buildExecutionSteps($tasks);
+        $executionBlueprint['tasks'] = $tasks;
+        $executionBlueprint['signature'] = $this->buildExecutionBlueprintSignature($executionBlueprint);
+
+        $planLocale = \trim((string)($scope['plan_locale'] ?? $scope['default_language'] ?? $scope['default_locale'] ?? $structured['i18n']['locale'] ?? ''));
+        $planJson = $this->buildPlanJson($structured);
+        $markdown = $this->buildMarkdownPlan($planJson, $planLocale);
+        $planWorkbench = $this->buildPlanWorkbenchArtifacts($scope, $structured, $executionBlueprint, $planJson, $markdown, $planLocale);
+
+        return [
+            'plan_json' => $planJson,
+            'structured' => $structured,
+            'execution_blueprint' => $executionBlueprint,
+            'markdown' => $markdown,
+            'plan_workbench' => $planWorkbench,
+        ];
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $sharedComponents
+     * @param array<string, mixed> $pagePlans
+     * @return list<array<string, mixed>>
+     */
+    private function buildStageOneTasksFromBlocks(array $sharedComponents, array $pagePlans): array
+    {
+        $tasks = [];
+        foreach (['header', 'footer'] as $sharedKey) {
+            if (\is_array($sharedComponents[$sharedKey] ?? null)) {
+                $tasks[] = $sharedComponents[$sharedKey];
+            }
+        }
+        foreach ($pagePlans as $pageType => $pagePlan) {
+            if (!\is_array($pagePlan)) {
+                continue;
+            }
+            foreach (\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [] as $block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $tasks[] = $this->buildPageTask((string)$pageType, $pagePlan, $block);
+            }
+        }
+
+        return $tasks;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function stageOneBlockKeyMatches(array $block, string $blockKey): bool
+    {
+        $blockKey = \trim($blockKey);
+        if ($blockKey === '') {
+            return false;
+        }
+
+        return \in_array($blockKey, [
+            \trim((string)($block['block_key'] ?? '')),
+            \trim((string)($block['section_code'] ?? '')),
+            \trim((string)($block['task_key'] ?? '')),
+        ], true);
+    }
+
+    /**
+     * @param array<string, mixed> $pagePlan
+     * @param array<string, mixed> $blockPatch
+     * @param list<string> $existingKeys
+     * @return array<string, mixed>
+     */
+    private function buildStageOneCreatedBlock(array|string $pageType, array $pagePlan, array $blockPatch, array $existingKeys): array
+    {
+        $pageType = (string)$pageType;
+        $rawKey = \trim((string)($blockPatch['block_key'] ?? $blockPatch['section_code'] ?? $blockPatch['title'] ?? $blockPatch['label'] ?? 'custom_block'));
+        $blockKey = $this->uniqueStageOneBlockKey($this->sanitizeStageOneBlockKey($rawKey), $existingKeys);
+        $title = \trim((string)($blockPatch['title'] ?? $blockPatch['label'] ?? \str_replace(['_', '-'], ' ', $blockKey)));
+        $goal = \trim((string)($blockPatch['goal'] ?? $blockPatch['instruction'] ?? 'Add a focused page section that supports the current page goal.'));
+        $content = \trim((string)($blockPatch['content'] ?? $blockPatch['content_brief']['summary'] ?? $goal));
+        $fieldPlan = \is_array($blockPatch['field_plan'] ?? null) ? $blockPatch['field_plan'] : [
+            ['field' => 'headline', 'sample' => $title, 'reason' => 'New block headline for the stage-one page plan.'],
+            ['field' => 'body_copy', 'sample' => $content, 'reason' => 'New block body copy that can be edited before build.'],
+        ];
+
+        return \array_replace_recursive([
+            'block_key' => $blockKey,
+            'section_code' => $blockKey,
+            'title' => $title,
+            'goal' => $goal,
+            'content_brief' => ['summary' => $content],
+            'realtime_content' => [
+                'headline' => $title,
+                'supporting_copy' => [$content],
+            ],
+            'field_plan' => $fieldPlan,
+            'implementation_detail' => 'Render the new section as a concrete page block with editable copy, CTA/media slots when relevant, and responsive layout.',
+            'reason' => 'The user requested a new local block in the current stage-one page plan.',
+            'why' => 'The user requested a new local block in the current stage-one page plan.',
+            'completion_rule' => 'Block is complete when headline, copy, editable fields, responsive layout, and any CTA/media slots are ready.',
+            'editable_fields' => ['headline', 'body_copy'],
+            'content_source' => ['user_instruction', 'editable_field'],
+            'responsive_rule' => 'Stack content vertically on small screens and keep CTA/media visible.',
+            'status' => 'done',
+            'mutation_source' => 'stage1_block_mutation_api',
+            'created_for_page' => $pageType,
+            'page_label' => (string)($pagePlan['page_label'] ?? $pageType),
+            'version' => 1,
+        ], $blockPatch, [
+            'block_key' => $blockKey,
+            'section_code' => (string)($blockPatch['section_code'] ?? $blockKey),
+        ]);
+    }
+
+    private function sanitizeStageOneBlockKey(string $value): string
+    {
+        $value = \strtolower(\trim($value));
+        $value = (string)\preg_replace('/[^a-z0-9_-]+/i', '_', $value);
+        $value = \trim($value, '_-');
+
+        return $value !== '' ? $value : 'custom_block';
+    }
+
+    /**
+     * @param list<string> $existingKeys
+     */
+    private function uniqueStageOneBlockKey(string $baseKey, array $existingKeys): string
+    {
+        $existing = \array_fill_keys(\array_map('strval', $existingKeys), true);
+        $candidate = $baseKey !== '' ? $baseKey : 'custom_block';
+        $suffix = 2;
+        while (isset($existing[$candidate])) {
+            $candidate = $baseKey . '_' . $suffix;
+            $suffix++;
+        }
+
+        return $candidate;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $blocks
+     * @return array<string, mixed>|null
+     */
+    private function findStageOnePageBlock(array $blocks, string $blockKey): ?array
+    {
+        foreach ($blocks as $block) {
+            if (\is_array($block) && $this->stageOneBlockKeyMatches($block, $blockKey)) {
+                return $block;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
      * @param list<string> $orderedBlockKeys
      * @return array{
      *     plan_json:array<string, mixed>,
