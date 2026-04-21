@@ -5589,9 +5589,14 @@
         var themeSections = [];
         var tabs = [];
         var themeHtml = renderThemeSummarySection(planRoot);
-        var sharedBlocksHtml = renderPlanSharedBlocksSection(planRoot);
-        var headerHtml = renderStructuredListSection(previewLabels.headerPlan, planRoot.navigation_plan || planRoot.header_plan || planRoot.header || null);
-        var footerHtml = renderStructuredListSection(previewLabels.footerPlan, planRoot.footer_plan || planRoot.footer || null);
+        var headerPlan = planRoot.navigation_plan || planRoot.header_plan || planRoot.header || null;
+        var footerPlan = planRoot.footer_plan || planRoot.footer || null;
+        var headerHtml = renderStructuredListSection(previewLabels.headerPlan, headerPlan, {
+            reasonItems: collectPreviewReasonItems(headerPlan)
+        });
+        var footerHtml = renderStructuredListSection(previewLabels.footerPlan, footerPlan, {
+            reasonItems: collectPreviewReasonItems(footerPlan)
+        });
         if (themeHtml) {
             themeSections.push(themeHtml);
         }
