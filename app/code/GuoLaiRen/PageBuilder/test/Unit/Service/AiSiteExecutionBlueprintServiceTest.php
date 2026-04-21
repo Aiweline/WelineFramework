@@ -1169,6 +1169,174 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         return $aiService;
     }
 
+    /**
+     * @return array{
+     *     0:array<string, mixed>,
+     *     1:array<string, mixed>,
+     *     2:array<string, mixed>,
+     *     3:array<string, mixed>
+     * }
+     */
+    private function buildPlanBookStructuredFixture(): array
+    {
+        $themeDesign = [
+            'theme_purpose' => 'Convert visitors with a trust-first, action-ready site plan.',
+            'color_scheme' => [
+                'name' => 'Ocean Slate',
+                'primary' => '#0f4c81',
+                'secondary' => '#f5f7fb',
+                'accent' => '#ffb703',
+                'background' => '#ffffff',
+                'text' => '#0f172a',
+                'button' => '#0f4c81',
+                'selection_reason' => 'The strong CTA requirement needs a trustworthy high-contrast color system.',
+            ],
+            'typography_spacing_radius' => [
+                'font_family' => 'Inter',
+                'heading_scale' => 'Large concise headings.',
+                'body_scale' => 'Readable body copy.',
+                'spacing_scale' => 'Generous section rhythm.',
+                'radius_scale' => 'Rounded cards and CTA buttons.',
+            ],
+            'visual_keywords' => ['trustworthy', 'conversion-focused'],
+            'tone_of_voice' => 'Confident and helpful',
+            'cta_tone' => 'Direct',
+            'forbidden_styles' => ['generic luxury'],
+            'selection_reason' => 'The strong CTA request needs concrete trust signals and direct action language.',
+            'context_hash' => 'theme-hash',
+        ];
+        $sharedPromptContext = [
+            'context_hash' => 'shared-hash',
+            'theme_context_hash' => 'theme-hash',
+            'theme_design' => $themeDesign,
+        ];
+        $sharedComponents = [
+            'header' => [
+                'task_key' => 'shared:header',
+                'component' => 'header',
+                'sort_order' => 10,
+                'goal' => 'Make brand navigation and primary CTA immediately usable.',
+                'implementation_detail' => 'Desktop horizontal navigation, mobile collapsed menu, persistent CTA.',
+                'realtime_content' => [
+                    'headline' => 'Structured Plan Book Test',
+                    'supporting_copy' => ['Home', 'About', 'Contact'],
+                    'cta' => [['label' => 'Book a consult', 'target' => '#contact']],
+                ],
+                'editable_fields' => ['brand_name', 'navigation_items', 'primary_cta'],
+                'completion_rule' => 'Header is complete when brand, nav, CTA, and responsive behavior are defined.',
+                'content_source' => ['theme_context_snapshot', 'shared_prompt_context'],
+                'responsive_rule' => 'Collapse navigation on mobile while retaining CTA.',
+            ],
+            'footer' => [
+                'task_key' => 'shared:footer',
+                'component' => 'footer',
+                'sort_order' => 20,
+                'goal' => 'Close the site with contact, policy, and support paths.',
+                'implementation_detail' => 'Grouped footer columns with contact and policies.',
+                'realtime_content' => [
+                    'headline' => 'Continue with Structured Plan Book Test',
+                    'supporting_copy' => ['Contact', 'Privacy', 'Support'],
+                ],
+                'editable_fields' => ['footer_links', 'policy_links', 'contact_fields'],
+                'completion_rule' => 'Footer is complete when grouped links, policies, and contact fields are defined.',
+                'content_source' => ['theme_context_snapshot', 'shared_prompt_context'],
+                'responsive_rule' => 'Stack columns on mobile.',
+            ],
+        ];
+        $pages = [
+            'home_page' => [
+                'page_key' => 'home_page',
+                'page_label' => 'Home',
+                'page_goal' => 'Explain the offer and move visitors to contact.',
+                'page_status' => 'done',
+                'shared_context_hash' => 'shared-hash',
+                'theme_context_hash' => 'theme-hash',
+                'page_context_hash' => 'home-hash',
+                'theme_alignment_summary' => 'Home blocks reuse the Ocean Slate palette, direct CTA tone, and header/footer handoff.',
+                'blocks' => [
+                    [
+                        'block_key' => 'hero',
+                        'section_code' => 'Hero',
+                        'order' => 10,
+                        'goal' => 'State the value proposition and primary CTA.',
+                        'implementation_detail' => 'Use a two-column hero with proof points and CTA.',
+                        'realtime_content' => [
+                            'headline' => 'Launch your site with confidence',
+                            'supporting_copy' => ['Clear plan', 'Fast review', 'Ready CTA'],
+                            'cta' => [['label' => 'Start planning', 'target' => '#contact']],
+                        ],
+                        'why' => 'The hero turns the strong CTA requirement into visible content and action.',
+                        'completion_rule' => 'Hero is complete when headline, proof copy, CTA, media, and responsive behavior are defined.',
+                        'editable_fields' => ['headline', 'supporting_copy', 'primary_cta'],
+                        'content_source' => ['safe_inference', 'editable_field'],
+                        'responsive_rule' => 'Stack copy and media on small screens.',
+                    ],
+                    [
+                        'block_key' => 'proof',
+                        'section_code' => 'Proof',
+                        'order' => 20,
+                        'goal' => 'Show trust signals before the CTA repeats.',
+                        'implementation_detail' => 'Use cards for outcomes, testimonials, and process steps.',
+                        'realtime_content' => [
+                            'headline' => 'Proof visitors can verify',
+                            'supporting_copy' => ['Outcome cards', 'Process steps'],
+                        ],
+                        'why' => 'Proof content reduces hesitation before conversion.',
+                        'completion_rule' => 'Proof is complete when trust cards, labels, and supporting copy are defined.',
+                        'field_plan' => [
+                            ['field' => 'headline', 'sample' => 'Proof visitors can verify'],
+                            ['field' => 'card_title', 'sample' => 'Fast planning review'],
+                        ],
+                        'content_source' => ['safe_inference', 'editable_field'],
+                        'responsive_rule' => 'Cards become a single column on mobile.',
+                    ],
+                ],
+            ],
+        ];
+        $structured = [
+            'i18n' => ['locale' => 'en_US'],
+            'theme_context_snapshot' => $themeDesign,
+            'shared_components' => $sharedComponents,
+            'shared_plan' => [
+                'theme_design' => $themeDesign,
+                'shared_prompt_context' => $sharedPromptContext,
+            ],
+            'page_types' => ['home_page'],
+            'pages' => $pages,
+            'page_plans' => $pages,
+            'block_index' => ['flat' => []],
+            'execution_steps' => [],
+        ];
+        $executionBlueprint = [
+            'signature' => 'fixture-stage1-signature',
+            'theme_context_snapshot' => $themeDesign,
+            'shared_prompt_context' => $sharedPromptContext,
+            'shared_components' => $sharedComponents,
+            'page_types' => ['home_page'],
+            'pages' => $pages,
+            'page_plans' => $pages,
+            'tasks' => [],
+        ];
+        $scope = [
+            'plan_locale' => 'en_US',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ];
+        $planJson = [
+            'page_types' => ['home_page'],
+            'pages' => [
+                'home_page' => [
+                    'page_goal' => 'Explain the offer and move visitors to contact.',
+                    'blocks' => [
+                        ['block_key' => 'hero'],
+                        ['block_key' => 'proof'],
+                    ],
+                ],
+            ],
+        ];
+
+        return [$scope, $structured, $executionBlueprint, $planJson];
+    }
+
     private function buildValidAiPlanResponse(): string
     {
         return \json_encode([
