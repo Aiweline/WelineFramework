@@ -2701,6 +2701,39 @@ SCRIPT;
     }
 
     /**
+     * Block-level edits are intentionally scoped to the selected page/block.
+     *
+     * @param array<string,array<string,mixed>> $virtualPages
+     * @param array<string,mixed> $updatedBlock
+     * @return array<string,array<string,mixed>>
+     */
+    private function replaceCurrentPageBlockInVirtualPages(
+        array $virtualPages,
+        string $pageType,
+        string $blockId,
+        array $updatedBlock,
+        string $lastGeneratedAt
+    ): array {
+        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
+        $blocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+
+        foreach ($blocks as $index => $block) {
+            if (!\is_array($block) || \trim((string)($block['block_id'] ?? '')) !== $blockId) {
+                continue;
+            }
+
+            $blocks[$index] = $updatedBlock;
+            break;
+        }
+
+        $virtualPage['blocks'] = \array_values($blocks);
+        $virtualPage['last_generated_at'] = $lastGeneratedAt;
+        $virtualPages[$pageType] = $virtualPage;
+
+        return $virtualPages;
+    }
+
+    /**
      * 只读：返回当前 buildWorkspaceState，用于前端刷新队列信息等，不写 scope、不写事件。
      */
     private function handleWorkspaceSnapshot(): string
