@@ -62,6 +62,20 @@ if ($isEnvPhpInstalled($envPhpFile)) {
                 passthru($full, $code);
                 return (int) $code;
             };
+            $runWithUpgradeRetry = function (string $cmd, string $stage, string $setupLockPath, int $maxWaitSeconds = 120) use ($run): int {
+                $code = $run($cmd);
+                if ($code === 0 || !is_file($setupLockPath)) {
+                    return $code;
+                }
+                $waitSeconds = max(0, $maxWaitSeconds);
+                $interval = 2;
+                while ($waitSeconds > 0 && is_file($setupLockPath)) {
+                    echo "等待 setup:upgrade 执行中的锁释放，重试{$stage}（剩余 {$waitSeconds}s）...\n";
+                    sleep($interval);
+                    $waitSeconds -= $interval;
+                }
+                return $run($cmd);
+            };
             if (is_dir($phpDir)) {
                 try {
                     $iniCfg = new ConfigurePhpIni($projectRoot, $phpDir);
@@ -82,15 +96,16 @@ if ($isEnvPhpInstalled($envPhpFile)) {
             }
             $installModeFlagDir = $projectRoot . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'process';
             $installModeFlagFile = $installModeFlagDir . DIRECTORY_SEPARATOR . 'command_install_mode.flag';
+            $setupLockPath = $installModeFlagDir . DIRECTORY_SEPARATOR . 'setup_upgrade.lock';
             is_dir($installModeFlagDir) || @mkdir($installModeFlagDir, 0755, true);
             @file_put_contents($installModeFlagFile, date('Y-m-d H:i:s') . ' - install mode enabled');
             echo "系统已安装，正在执行 setup:upgrade...\n";
-            $code = $run('bin/w setup:upgrade -y');
+            $code = $runWithUpgradeRetry('bin/w setup:upgrade -y', '(1/2)', $setupLockPath);
             if ($code !== 0) {
                 @unlink($installModeFlagFile);
                 exit(1);
             }
-            $code = $run('bin/w setup:upgrade -y');
+            $code = $runWithUpgradeRetry('bin/w setup:upgrade -y', '(2/2)', $setupLockPath);
             @unlink($installModeFlagFile);
             if ($code !== 0) {
                 exit(1);
