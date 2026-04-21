@@ -39,6 +39,12 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             (string)($artifacts['structured']['shared_plan']['theme_design']['selection_reason'] ?? '')
         );
         self::assertNotEmpty($artifacts['plan_json']['pages']['home_page']['blocks'] ?? []);
+        self::assertNotSame('', (string)($artifacts['plan_json']['pages']['home_page']['theme_alignment_summary'] ?? ''));
+        self::assertSame(
+            (string)($artifacts['plan_json']['pages']['home_page']['theme_alignment_summary'] ?? ''),
+            (string)($artifacts['structured']['page_plans']['home_page']['theme_alignment_summary'] ?? '')
+        );
+        self::assertStringContainsString('主题遵守说明', (string)($artifacts['markdown'] ?? ''));
         $firstBlock = $artifacts['plan_json']['pages']['home_page']['blocks'][0] ?? [];
         self::assertArrayHasKey('content', $firstBlock);
         self::assertArrayHasKey('why', $firstBlock);
@@ -417,6 +423,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('Output only the structured plan object shown in the schema.', $capturedPrompt);
         self::assertStringContainsString('"selection_reason":"why this font family and voice/tone fit the user requirement"', $capturedPrompt);
         self::assertStringContainsString('"selection_reason":"why this color system fits the user requirement"', $capturedPrompt);
+        self::assertStringContainsString('"theme_alignment_summary":"how this page and every block obey theme_design color_scheme, tone_of_voice, cta_tone, trust expression, and Header/Footer handoff"', $capturedPrompt);
         self::assertStringContainsString('theme_style.selection_reason and palette.selection_reason are REQUIRED', $capturedPrompt);
         self::assertStringContainsString('why the color system, font family, and voice/tone were selected', $capturedPrompt);
         self::assertStringContainsString('selection_reason must connect the color/font/tone choices to the user one-line requirement', $capturedPrompt);
@@ -424,8 +431,9 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('Never write process wording such as "标题围绕核心价值展开"', $capturedPrompt);
         self::assertStringContainsString('field_plan.sample must be direct content', $capturedPrompt);
         self::assertStringContainsString('field_plan.implementation_note must be a customer-readable implementation note', $capturedPrompt);
+        self::assertStringContainsString('Each pages.<page>.theme_alignment_summary is REQUIRED', $capturedPrompt);
         self::assertStringContainsString('Selected page coverage hints (must all be represented in the final plan):', $capturedPrompt);
-        self::assertStringContainsString('- home_page: must include page goal, conversion rhythm, block implementation detail, field plan, execution script, SEO structure, CTA usage, responsive guidance.', $capturedPrompt);
+        self::assertStringContainsString('- home_page: must include page goal, theme_alignment_summary, conversion rhythm, block implementation detail, field plan, execution script, SEO structure, CTA usage, responsive guidance.', $capturedPrompt);
         self::assertStringContainsString('baseline_execution_blueprint:', $capturedPrompt);
         self::assertStringContainsString('"default_locale": "en_US"', $capturedPrompt);
         self::assertStringNotContainsString('"markdown":"string"', $capturedPrompt);
@@ -578,6 +586,29 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('instruction-like');
+
+        $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+            'default_locale' => 'en_US',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+    }
+
+    public function testBuildPlanArtifactsByAiStreamRequiresPageThemeAlignmentSummary(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildAiPlanResponseWithoutThemeAlignmentSummary())
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('theme_alignment_summary for "home_page"');
 
         $service->buildPlanArtifactsByAiStream([
             'site_title' => 'Plan Service Test',
@@ -769,6 +800,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                 'pages' => [
                     'home_page' => [
                         'page_goal' => 'Explain value and drive conversion.',
+                        'theme_alignment_summary' => 'Home page blocks use the Ocean Slate palette, trustworthy action tone, direct CTA rhythm, and Header-to-Footer trust handoff from the shared theme plan.',
                         'primary_keywords' => ['home keyword'],
                         'secondary_keywords' => ['cta keyword'],
                         'blocks' => [
@@ -795,6 +827,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                     ],
                     'about_page' => [
                         'page_goal' => 'Build trust.',
+                        'theme_alignment_summary' => 'About page blocks keep the Ocean Slate trust palette, brand-proof voice, shared CTA language, and Footer reassurance aligned with the theme plan.',
                         'primary_keywords' => ['about keyword'],
                         'secondary_keywords' => ['trust keyword'],
                         'blocks' => [
@@ -862,6 +895,18 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             $decoded['plan_json']['theme_design'] = [];
         }
         $decoded['plan_json']['theme_design']['selection_reason'] = $selectionReason;
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    private function buildAiPlanResponseWithoutThemeAlignmentSummary(): string
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        if (!\is_array($decoded)) {
+            return '{}';
+        }
+
+        unset($decoded['plan_json']['pages']['home_page']['theme_alignment_summary']);
 
         return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }
