@@ -52,6 +52,7 @@ class AiSiteAgent extends BaseController
     private const PARAMS_REGENERATE = ['public_id', 'page_type'];
     private const PARAMS_REFINE_COMPONENT = ['public_id', 'page_type', 'component_code', 'instruction'];
     private const PARAMS_UPDATE_BLOCK = ['public_id', 'page_type', 'block_id', 'block_config'];
+    private const PARAMS_MUTATE_PLAN_BLOCK = ['public_id', 'page_type', 'action', 'block_key', 'block_config'];
     private const WORKSPACE_STREAM_SNAPSHOT_PERSIST = false;
     private const STREAM_LEASE_SCOPE_KEY = '_workspace_stream_lease';
     private const STREAM_LEASE_TTL_SEC = 60;
@@ -222,6 +223,7 @@ class AiSiteAgent extends BaseController
         $this->assign('start_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-plan'));
         $this->assign('confirm_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-confirm-plan'));
         $this->assign('sort_plan_blocks_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-sort-plan-blocks'));
+        $this->assign('mutate_plan_block_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-mutate-plan-block'));
         $this->assign('plan_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/plan-sse'));
         $this->assign('start_task_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-task-plan'));
         $this->assign('confirm_task_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-confirm-task-plan'));
@@ -551,6 +553,12 @@ SCRIPT;
     public function postSortPlanBlocks(): string
     {
         return $this->handleSortPlanBlocks();
+    }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '新增/删除/重建阶段一方案块', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postMutatePlanBlock(): string
+    {
+        return $this->handleMutatePlanBlock();
     }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '排序阶段二任务块', 'GuoLaiRen_PageBuilder::ai_site_agent')]
@@ -10023,6 +10031,79 @@ SCRIPT;
         return $this->fetchJson([
             'success' => true,
             'message' => 'Stage-1 plan order saved.',
+            'data' => $this->buildWorkspaceState($fresh, $adminId, 80, true),
+        ]);
+    }
+
+    private function handleMutatePlanBlock(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
+        $pageType = \trim((string)$this->getRequestBodyValue('page_type', ''));
+        $action = \strtolower(\trim((string)$this->getRequestBodyValue('action', '')));
+        $blockKey = \trim((string)$this->getRequestBodyValue('block_key', ''));
+        if ($adminId <= 0 || $publicId === '' || $pageType === '' || !\in_array($action, ['create', 'delete', 'rebuild'], true)) {
+            return $this->jsonError('INVALID_PARAMS', 'Missing required params.', self::PARAMS_MUTATE_PLAN_BLOCK);
+        }
+        if ($action !== 'create' && $blockKey === '') {
+            return $this->jsonError('INVALID_PARAMS', 'block_key is required for delete/rebuild.', self::PARAMS_MUTATE_PLAN_BLOCK);
+        }
+
+        $blockConfig = [];
+        $rawBlockConfig = $this->getRequestBodyValue('block_config', null);
+        if ($rawBlockConfig !== null && $rawBlockConfig !== '') {
+            $error = '';
+            $blockConfig = $this->getRequestJsonObject('block_config', $error);
+            if ($error !== '') {
+                return $this->fetchJson(['success' => false, 'message' => $error]);
+            }
+        }
+        $instruction = \trim((string)$this->getRequestBodyValue('instruction', ''));
+        if ($instruction !== '' && !isset($blockConfig['instruction'])) {
+            $blockConfig['instruction'] = $instruction;
+        }
+
+        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            return $this->jsonError('SESSION_NOT_FOUND', 'Session not found.', self::PARAMS_PUBLIC_ID);
+        }
+
+        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        try {
+            $artifacts = $this->executionBlueprintService->mutateDraftPlanBlock($scope, $pageType, $action, $blockKey, $blockConfig);
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
+        }
+
+        $executionBlueprint = \is_array($artifacts['execution_blueprint'] ?? null) ? $artifacts['execution_blueprint'] : [];
+        $saved = $this->sessionService->mergeScope($session->getId(), $adminId, [
+            'execution_blueprint_draft' => $executionBlueprint,
+            'plan_json' => \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [],
+            'plan_markdown' => (string)($artifacts['markdown'] ?? ''),
+            'plan_structured' => \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [],
+            'plan_workbench' => \is_array($artifacts['plan_workbench'] ?? null) ? $artifacts['plan_workbench'] : [],
+            'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? $scope['execution_blueprint_signature'] ?? ''),
+        ]);
+        if (!$saved) {
+            return $this->fetchJson(['success' => false, 'message' => 'Failed to persist plan block mutation.']);
+        }
+
+        $summary = \is_array($artifacts['mutation_summary'] ?? null) ? $artifacts['mutation_summary'] : [];
+        $this->appendWorkspaceEvent(
+            $session->getId(),
+            $adminId,
+            $this->scopeCompatibilityService->normalizeStage($session->getStage()),
+            'plan_block_mutated',
+            'Stage-1 plan block updated.',
+            ['details' => $summary]
+        );
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+
+        return $this->fetchJson([
+            'success' => true,
+            'message' => 'Stage-1 plan block updated.',
+            'mutation' => $summary,
+            'block' => \is_array($artifacts['block'] ?? null) ? $artifacts['block'] : null,
             'data' => $this->buildWorkspaceState($fresh, $adminId, 80, true),
         ]);
     }
