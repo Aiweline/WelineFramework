@@ -4609,6 +4609,11 @@ SCRIPT;
             }
         }
 
+        $effectiveJobStatus = $jobStatus !== '' ? $jobStatus : $status;
+        if (\in_array($status, ['error', 'done', 'stop', 'cancelled'], true)) {
+            $effectiveJobStatus = $status;
+        }
+
         return [
             'queue_id' => $queueId,
             'name' => $name,
@@ -4623,7 +4628,7 @@ SCRIPT;
             'public_id_hint' => $publicIdHint,
             'job_key' => $jobKey,
             'job_type' => $jobType,
-            'job_status' => $jobStatus !== '' ? $jobStatus : $status,
+            'job_status' => $effectiveJobStatus,
             'token' => $token,
             'token_usage' => $tokenUsage,
         ];
@@ -5537,6 +5542,33 @@ SCRIPT;
 
         $stage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
         $activeOperation = \is_array($normalized['active_operation'] ?? null) ? $normalized['active_operation'] : [];
+        $planQueueInfo = $this->buildPlanStageQueueInfoPayload($session, $activeOperation);
+        if (
+            \trim((string)($activeOperation['operation'] ?? '')) === 'plan'
+            && \in_array(\trim((string)($activeOperation['status'] ?? '')), ['queued', 'running'], true)
+            && \is_array($planQueueInfo['snapshot'] ?? null)
+        ) {
+            $queueStatus = \trim((string)($planQueueInfo['snapshot']['status'] ?? ''));
+            if ($queueStatus === 'error') {
+                $queueProcess = \trim((string)($planQueueInfo['process'] ?? ''));
+                $queueResult = \trim((string)($planQueueInfo['result_log'] ?? ''));
+                $activeOperation['status'] = 'error';
+                $activeOperation['message'] = $queueProcess !== ''
+                    ? $queueProcess
+                    : ($queueResult !== ''
+                        ? (string)__('阶段一方案队列执行失败，请查看队列日志并重试。')
+                        : (string)__('阶段一方案队列执行失败，请重试。'));
+                $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
+                $normalized['active_operation'] = $activeOperation;
+            } elseif (\in_array($queueStatus, ['done', 'stop', 'cancelled'], true)) {
+                $activeOperation['status'] = 'done';
+                if (\trim((string)($activeOperation['message'] ?? '')) === '') {
+                    $activeOperation['message'] = (string)__('阶段一方案队列已完成。');
+                }
+                $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
+                $normalized['active_operation'] = $activeOperation;
+            }
+        }
         $siteReady = (int)($normalized['site_ready'] ?? 1) === 1;
         $titleOk = \trim((string)($normalized['website_profile']['site_title'] ?? '')) !== '';
         $taskReady = $this->taskSummaryIndicatesCompleted($taskSummary);
@@ -5695,7 +5727,7 @@ SCRIPT;
             'visual_edit_url' => (string)($normalized['visual_edit_url'] ?? ''),
             'pre_publish_visual_urls' => \is_array($normalized['pre_publish_visual_urls'] ?? null) ? $normalized['pre_publish_visual_urls'] : $prePublishVisualUrls,
             'active_operation' => $activeOperation,
-            'plan_queue_info' => $this->buildPlanStageQueueInfoPayload($session, $activeOperation),
+            'plan_queue_info' => $planQueueInfo,
             'build_summary' => \is_array($normalized['build_summary'] ?? null) ? $normalized['build_summary'] : [],
             'top_logs' => $topLogs,
             'scope' => $clientScope,
