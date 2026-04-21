@@ -1,0 +1,49 @@
+﻿[34m工作目录：E:\WelineFramework\DEV-workspace\tests\e2e[0m
+[34m执行命令：cd /d "E:\WelineFramework\DEV-workspace\tests\e2e" && set "PLAYWRIGHT_HEADLESS=1" && "node" "node_modules/playwright/cli.js" "test" "specs/backend/ai-site-workbench.spec.js" "--project=chromium"[0m
+
+[playwright] explicit file mode using 1 files
+[playwright] rootDir: E:\WelineFramework\DEV-workspace
+[playwright] testDir: E:\WelineFramework\DEV-workspace\tests\e2e
+[playwright] testMatch: [ 'specs/backend/ai-site-workbench.spec.js' ]
+[playwright] proxy baseURL: https://127.0.0.1:3999
+[playwright] target origin: https://127.0.0.1
+
+Running 2 tests using 1 worker
+
+[playwright] explicit file mode using 1 files
+[playwright] rootDir: E:\WelineFramework\DEV-workspace
+[playwright] testDir: E:\WelineFramework\DEV-workspace\tests\e2e
+[playwright] testMatch: [ [32m'specs/backend/ai-site-workbench.spec.js'[39m ]
+[playwright] proxy baseURL: https://127.0.0.1:3999
+[playwright] target origin: https://p11005ce4.weline.test
+  ✘  1 [chromium] › specs\backend\ai-site-workbench.spec.js:334:3 › AI Site Workbench › pagebuilder provider closes the loop through native virtual theme orchestration and mirrored visual editing (7.2m)
+  -  2 [chromium] › specs\backend\ai-site-workbench.spec.js:507:3 › AI Site Workbench › pagebuilder provider in fake mode: session scope keeps fake_mode and local_fake_demo
+
+
+  1) [chromium] › specs\backend\ai-site-workbench.spec.js:334:3 › AI Site Workbench › pagebuilder provider closes the loop through native virtual theme orchestration and mirrored visual editing 
+
+    [31mTest timeout of 420000ms exceeded.[39m
+
+    Error: page.goto: Test timeout of 420000ms exceeded.
+    Call log:
+    [2m  - navigating to "https://127.0.0.1:3999/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/CNY/zh_Hans_CN/websites/backend/site-builder-agent/index?provider=pagebuilder", waiting until "domcontentloaded"[22m
+
+
+      57 |   for (let attempt = 0; attempt < 3; attempt++) {
+      58 |     try {
+    > 59 |       await page.goto(hubUrl, { waitUntil: 'domcontentloaded', timeout: HUB_TIMEOUT });
+         |                  ^
+      60 |       lastError = null;
+      61 |       break;
+      62 |     } catch (error) {
+        at openHub (E:\WelineFramework\DEV-workspace\tests\e2e\specs\backend\ai-site-workbench.spec.js:59:18)
+        at E:\WelineFramework\DEV-workspace\tests\e2e\specs\backend\ai-site-workbench.spec.js:339:29
+
+  1 failed
+    [chromium] › specs\backend\ai-site-workbench.spec.js:334:3 › AI Site Workbench › pagebuilder provider closes the loop through native virtual theme orchestration and mirrored visual editing 
+  1 did not run
+
+[31mE2E 测试执行失败，退出码：1[0m
+[34m
+[0m
+[34m执行命令：e2e:run specs/backend/ai-site-workbench.spec.js[0m

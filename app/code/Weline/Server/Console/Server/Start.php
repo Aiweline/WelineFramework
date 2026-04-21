@@ -809,7 +809,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
 
         if ($daemon) {
             $this->wlsChildProcessesMayExist = true;
-            $startupCompleted = $this->startMasterInBackground($instanceName, $sslEnabled, $listenHost, $port);
+            $startupCompleted = $this->startMasterInBackground($instanceName, $sslEnabled, $listenHost, $port, $frontend);
             if ($startupCompleted) {
                 $this->wlsStartupProcessHandoffDone = true;
             }
@@ -1135,35 +1135,23 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
      * - 验证 Master 进程是否存活
      * - 超时（5秒）时输出警告而非假成功
      */
-    protected function startMasterInBackground(string $instanceName, bool $sslEnabled = false, string $host = '127.0.0.1', int $port = 443): bool
+    protected function startMasterInBackground(string $instanceName, bool $sslEnabled = false, string $host = '127.0.0.1', int $port = 443, bool $frontend = false): bool
     {
         $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
         $script = BP . 'bin' . DS . 'w';
         
         $masterName = MasterProcess::getMasterProcessName($instanceName);
+        $cmd = $this->buildMasterBackgroundCommand($phpBinary, $script, $instanceName, $masterName, $frontend);
         if (IS_WIN) {
-            $cmd = \sprintf(
-                '%s %s server:start %s --master-only --name=%s',
-                $phpBinary,
-                \escapeshellarg($script),
-                \escapeshellarg($instanceName),
-                \escapeshellarg($masterName)
-            );
-            if (\method_exists(Processer::class, 'createWindowsDetachedPhpArgv')) {
-                $argv = [
-                    $phpBinary,
-                    $script,
-                    'server:start',
-                    $instanceName,
-                    '--master-only',
-                    '--name=' . $masterName,
-                ];
+            if ($frontend) {
+                Processer::create($cmd, true, true, true);
+            } elseif (\method_exists(Processer::class, 'createWindowsDetachedPhpArgv')) {
+                $argv = $this->buildMasterBackgroundArgv($phpBinary, $script, $instanceName, $masterName, $frontend);
                 $pid = Processer::createWindowsDetachedPhpArgv($argv, BP, $cmd);
                 if ($pid <= 0) {
                     $bp = \str_replace("'", "''", BP);
                     $phpBin = \str_replace("'", "''", $phpBinary);
-                    $scriptRel = 'bin' . DS . 'w';
-                    $argList = "'" . $scriptRel . "','server:start','" . \str_replace("'", "''", $instanceName) . "','--master-only','--name=" . \str_replace("'", "''", $masterName) . "'";
+                    $argList = $this->buildPowerShellArgumentListLiteral(\array_slice($argv, 1));
                     $psCmd = "Set-Location -LiteralPath '" . $bp . "'; Start-Process -FilePath '" . $phpBin . "' -ArgumentList " . $argList . " -WindowStyle Hidden -WorkingDirectory '" . $bp . "'";
                     $fullCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' . \str_replace('"', '\"', $psCmd) . '"';
                     @\exec($fullCmd . ' 2>NUL');
@@ -1171,14 +1159,13 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             } else {
                 $bp = \str_replace("'", "''", BP);
                 $phpBin = \str_replace("'", "''", $phpBinary);
-                $scriptRel = 'bin' . DS . 'w';
-                $argList = "'" . $scriptRel . "','server:start','" . \str_replace("'", "''", $instanceName) . "','--master-only','--name=" . \str_replace("'", "''", $masterName) . "'";
+                $argv = $this->buildMasterBackgroundArgv($phpBinary, $script, $instanceName, $masterName, $frontend);
+                $argList = $this->buildPowerShellArgumentListLiteral(\array_slice($argv, 1));
                 $psCmd = "Set-Location -LiteralPath '" . $bp . "'; Start-Process -FilePath '" . $phpBin . "' -ArgumentList " . $argList . " -WindowStyle Hidden -WorkingDirectory '" . $bp . "'";
                 $fullCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' . \str_replace('"', '\"', $psCmd) . '"';
                 @\exec($fullCmd . ' 2>NUL');
             }
         } else {
-            $cmd = \sprintf('%s %s server:start %s --master-only --name=%s', $phpBinary, \escapeshellarg($script), \escapeshellarg($instanceName), \escapeshellarg($masterName));
             Processer::create($cmd, false);
         }
         
@@ -1283,6 +1270,77 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         }
 
         return $startupCompleted;
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function buildMasterBackgroundArgv(
+        string $phpBinary,
+        string $script,
+        string $instanceName,
+        string $masterName,
+        bool $frontend = false
+    ): array {
+        $argv = [
+            $phpBinary,
+            $script,
+            'server:start',
+            $instanceName,
+            '--master-only',
+        ];
+
+        if ($frontend) {
+            $argv[] = '--frontend';
+        }
+
+        $argv[] = '--name=' . $masterName;
+
+        if ($frontend) {
+            $argv[] = '--window-title=' . MasterProcess::getMasterProcessDisplayName($instanceName, true);
+        }
+
+        return $argv;
+    }
+
+    protected function buildMasterBackgroundCommand(
+        string $phpBinary,
+        string $script,
+        string $instanceName,
+        string $masterName,
+        bool $frontend = false
+    ): string {
+        $phpCommand = '"' . \str_replace('"', '\"', $phpBinary) . '"';
+        $command = $phpCommand
+            . ' ' . \escapeshellarg($script)
+            . ' server:start '
+            . \escapeshellarg($instanceName)
+            . ' --master-only';
+
+        if ($frontend) {
+            $command .= ' --frontend';
+        }
+
+        $command .= ' --name=' . \escapeshellarg($masterName);
+
+        if ($frontend) {
+            $command .= ' --window-title=' . \escapeshellarg(MasterProcess::getMasterProcessDisplayName($instanceName, true));
+        }
+
+        return $command;
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    protected function buildPowerShellArgumentListLiteral(array $arguments): string
+    {
+        $quoted = [];
+        foreach ($arguments as $argument) {
+            $quoted[] = "'" . \str_replace("'", "''", $argument) . "'";
+        }
+
+        return \implode(',', $quoted);
     }
 
     protected function resolveBackgroundStartupReadyWaitMs(array $instanceData = []): int
