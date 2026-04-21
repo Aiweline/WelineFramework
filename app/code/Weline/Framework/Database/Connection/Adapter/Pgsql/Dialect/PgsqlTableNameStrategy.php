@@ -51,7 +51,7 @@ class PgsqlTableNameStrategy implements TableNameStrategyInterface
     public function resolve(string $logicalName, string $defaultSchema = ''): string
     {
         // 去除所有引号（反引号和双引号）
-        $logicalName = trim($logicalName, '`"');
+        $logicalName = str_replace(['`', '"'], '', trim($logicalName));
 
         // 使用运行时 schema（动态获取 current_schema）
         $schema = $this->getRuntimeSchema();
