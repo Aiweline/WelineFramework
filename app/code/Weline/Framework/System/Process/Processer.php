@@ -2084,18 +2084,7 @@ class Processer
             }
         }
 
-        foreach (\array_values($validPids) as $pid) {
-            if (self::killProcessTreeByPid($pid, true)) {
-                $result['killed']++;
-                self::finalizeBatchGracefulKillPid($pid, 'force tree killed');
-                continue;
-            }
-
-            $result['failed']++;
-            $result['remaining'][] = $pid;
-        }
-
-        return $result;
+        return self::batchKillProcessTreesPosix(\array_values($validPids));
     }
     
     /**
@@ -2183,7 +2172,6 @@ class Processer
 
         $results = [];
         $batchLaunchItems = [];
-        $foregroundImmediateLaunchItems = [];
 
         foreach ($commands as $key => $config) {
             $command = (string) ($config['command'] ?? '');
@@ -2259,16 +2247,10 @@ class Processer
                 'foreground_script' => $foregroundScript,
             ];
 
-            if (self::shouldLaunchWindowsForegroundImmediatelyInBatch($foreground, $block)) {
-                $foregroundImmediateLaunchItems[] = $item;
-                $results[$key] = 0;
-                continue;
-            }
-
             $batchLaunchItems[] = $item;
         }
 
-        if ($batchLaunchItems === [] && $foregroundImmediateLaunchItems === []) {
+        if ($batchLaunchItems === []) {
             return $results;
         }
 
@@ -2285,13 +2267,11 @@ class Processer
             $errorPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-error-');
             if ($resultPath === false || $resultPath === '' || $errorPath === false || $errorPath === '') {
                 self::cleanupWindowsForegroundLaunchers($batchLaunchItems);
-                self::cleanupWindowsForegroundLaunchers($foregroundImmediateLaunchItems);
                 return null;
             }
             $scriptPath = self::writeWindowsBatchCreateScript($batchLaunchItems, $resultPath, $errorPath);
             if ($scriptPath === null) {
                 self::cleanupWindowsForegroundLaunchers($batchLaunchItems);
-                self::cleanupWindowsForegroundLaunchers($foregroundImmediateLaunchItems);
                 @\unlink($resultPath);
                 @\unlink($errorPath);
                 return null;
@@ -2328,7 +2308,6 @@ class Processer
 
                 if (!\is_resource($psProcess)) {
                     self::cleanupWindowsForegroundLaunchers($batchLaunchItems);
-                    self::cleanupWindowsForegroundLaunchers($foregroundImmediateLaunchItems);
                     @\unlink($scriptPath);
                     @\unlink($resultPath);
                     @\unlink($errorPath);
@@ -2355,7 +2334,6 @@ class Processer
 
                 if ($lastError !== null) {
                     self::cleanupWindowsForegroundLaunchers($batchLaunchItems);
-                    self::cleanupWindowsForegroundLaunchers($foregroundImmediateLaunchItems);
                     @\unlink($scriptPath);
                     @\unlink($resultPath);
                     @\unlink($errorPath);
@@ -2368,25 +2346,6 @@ class Processer
                     return null;
                 }
                 unset($outputLines, $exitCode);
-            }
-        }
-
-        foreach ($foregroundImmediateLaunchItems as $item) {
-            $windowTitle = self::normalizeWindowsForegroundWindowTitle(
-                (string) ($item['process_name'] ?? $item['key'] ?? 'weline-process')
-            );
-
-            $pid = self::launchWindowsForegroundImmediately(
-                (string) $item['command'],
-                (string) ($item['foreground_script'] ?? ''),
-                (string) ($item['cwd'] ?? BP),
-                $windowTitle,
-                !empty($item['enable_log']),
-                $procOpenAvailable,
-                $execAvailable
-            );
-            if ($pid > 0) {
-                $results[$item['key']] = self::setPid((string) $item['command'], $pid);
             }
         }
 
@@ -2462,88 +2421,6 @@ class Processer
         }
 
         return $results;
-    }
-
-    private static function shouldLaunchWindowsForegroundImmediatelyInBatch(bool $foreground, bool $block): bool
-    {
-        return $foreground && !$block;
-    }
-
-    private static function launchWindowsForegroundImmediately(
-        string $processCommand,
-        string $scriptPath,
-        string $workingDir,
-        string $windowTitle,
-        bool $enableLog,
-        bool $procOpenAvailable,
-        bool $execAvailable
-    ): int {
-        if ($scriptPath === '') {
-            if ($enableLog) {
-                self::setOutput($processCommand, "[ERROR] batchCreate foreground launch script is empty" . PHP_EOL, true);
-            }
-
-            return 0;
-        }
-
-        if ($procOpenAvailable) {
-            $result = self::launchWindowsForegroundWrapperProcess($scriptPath, $workingDir, $windowTitle);
-            $pid = (int) ($result['pid'] ?? 0);
-            if ($pid > 0) {
-                return $pid;
-            }
-            $lastError = (string) ($result['error'] ?? '');
-            if ($enableLog && $lastError !== '') {
-                self::setOutput($processCommand, "[WARN] foreground wrapper pid unavailable: {$lastError}" . PHP_EOL, true);
-            }
-        }
-
-        $launchCommand = self::buildWindowsForegroundStartCommand($scriptPath, $workingDir, $windowTitle);
-        $lastError = null;
-        $launched = false;
-        $disabledFunctions = \array_map('trim', \explode(',', \ini_get('disable_functions') ?: ''));
-        $popenAvailable = \function_exists('popen') && !\in_array('popen', $disabledFunctions, true);
-
-        if ($popenAvailable) {
-            \set_error_handler(function ($type, $msg) use (&$lastError) {
-                $lastError = $msg;
-                return true;
-            });
-            try {
-                $handle = @\popen($launchCommand, 'r');
-            } finally {
-                \restore_error_handler();
-            }
-
-            if (\is_resource($handle)) {
-                @\pclose($handle);
-                $launched = true;
-            }
-        }
-
-        if (!$launched && $execAvailable) {
-            \set_error_handler(function ($type, $msg) use (&$lastError) {
-                $lastError = $msg;
-                return true;
-            });
-            try {
-                @\exec($launchCommand . ' > NUL 2>NUL', $outputLines, $exitCode);
-            } finally {
-                \restore_error_handler();
-            }
-            unset($outputLines, $exitCode);
-            $launched = $lastError === null;
-        }
-
-        if (!$launched) {
-            @\unlink($scriptPath);
-            if ($enableLog && $lastError !== null) {
-                self::setOutput($processCommand, "[ERROR] batchCreate foreground launch failed: {$lastError}" . PHP_EOL, true);
-            }
-            return 0;
-        }
-
-        return 0;
     }
 
     /**
@@ -3767,6 +3644,90 @@ POWERSHELL;
         }
 
         return $result;
+    }
+
+    /**
+     * @param int[] $pids
+     * @return array{killed: int, failed: int, remaining: int[]}
+     */
+    private static function batchKillProcessTreesPosix(array $pids): array
+    {
+        $rootPids = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $pids),
+            static fn (int $pid): bool => $pid > 0
+        )));
+
+        $result = [
+            'killed' => 0,
+            'failed' => 0,
+            'remaining' => [],
+        ];
+        if ($rootPids === []) {
+            return $result;
+        }
+
+        $targetPids = self::collectBatchProcessTreePids($rootPids);
+        if ($targetPids === []) {
+            return $result;
+        }
+
+        $pidArgs = \implode(' ', $targetPids);
+        @\exec('kill -TERM ' . $pidArgs . ' 2>/dev/null');
+        \Weline\Framework\Runtime\SchedulerSystem::usleep(150000);
+        @\exec('kill -KILL ' . $pidArgs . ' 2>/dev/null');
+
+        foreach ($rootPids as $pid) {
+            $result['killed']++;
+            self::finalizeBatchGracefulKillPid($pid, 'force tree kill dispatched');
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param int[] $rootPids
+     * @return int[]
+     */
+    private static function collectBatchProcessTreePids(array $rootPids): array
+    {
+        $rootPids = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $rootPids),
+            static fn (int $pid): bool => $pid > 0
+        )));
+        if ($rootPids === []) {
+            return [];
+        }
+
+        $childrenByParent = [];
+        $lines = [];
+        @\exec('ps -eo pid=,ppid= 2>/dev/null', $lines);
+        foreach ($lines as $line) {
+            $parts = \preg_split('/\s+/', \trim((string) $line));
+            if (\count($parts) < 2) {
+                continue;
+            }
+            $pid = (int) $parts[0];
+            $ppid = (int) $parts[1];
+            if ($pid <= 0 || $ppid <= 0) {
+                continue;
+            }
+            $childrenByParent[$ppid][] = $pid;
+        }
+
+        $targets = [];
+        $stack = $rootPids;
+        while ($stack !== []) {
+            $pid = (int) \array_pop($stack);
+            if ($pid <= 0 || isset($targets[$pid])) {
+                continue;
+            }
+            $targets[$pid] = true;
+            foreach (($childrenByParent[$pid] ?? []) as $childPid) {
+                $stack[] = (int) $childPid;
+            }
+        }
+
+        return \array_map('intval', \array_keys($targets));
     }
 
     /**
