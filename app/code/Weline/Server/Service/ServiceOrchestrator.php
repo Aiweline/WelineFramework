@@ -1275,7 +1275,11 @@ class ServiceOrchestrator
                 $this->ipcClearFieldForNewImperial($clientId, ControlMessage::ACTION_MAINTENANCE_ENABLE);
                 $snap = $this->ipcImperialEpoch;
                 try {
-                    $this->enableMaintenanceMode(true);
+                    if (!empty($payload['dispatcher_only'])) {
+                        $this->setDispatcherMaintenanceRouting(true);
+                    } else {
+                        $this->enableMaintenanceMode(true);
+                    }
                 } finally {
                     if ($this->ipcImperialEpoch === $snap && $this->ipcExclusiveClientId === $clientId) {
                         $this->ipcReleaseExclusive();
@@ -1287,7 +1291,11 @@ class ServiceOrchestrator
                 $this->ipcClearFieldForNewImperial($clientId, ControlMessage::ACTION_MAINTENANCE_DISABLE);
                 $snap = $this->ipcImperialEpoch;
                 try {
-                    $this->disableMaintenanceMode();
+                    if (!empty($payload['dispatcher_only'])) {
+                        $this->setDispatcherMaintenanceRouting(false);
+                    } else {
+                        $this->disableMaintenanceMode();
+                    }
                 } finally {
                     if ($this->ipcImperialEpoch === $snap && $this->ipcExclusiveClientId === $clientId) {
                         $this->ipcReleaseExclusive();
@@ -8292,6 +8300,8 @@ class ServiceOrchestrator
 
             return;
         }
+        $dispatcherOnlyMaintenance = $this->isMaintenanceControlAction($action)
+            && !empty($msg['dispatcher_only']);
 
         if ($this->isQueuedControlCommand($action)) {
             if ($action === ControlMessage::ACTION_STOP) {
@@ -8323,7 +8333,9 @@ class ServiceOrchestrator
             }
 
             if ($this->isImperialControlCommand($action)) {
-                $existingImperialOperation = $this->findEquivalentQueuedOrActiveOperation($action);
+                $existingImperialOperation = $dispatcherOnlyMaintenance
+                    ? null
+                    : $this->findEquivalentQueuedOrActiveOperation($action);
                 if ($this->ipcExclusiveCommand === $action && $existingImperialOperation !== null) {
                     WlsLogger::info_(
                         "[Orchestrator] 帝王指令复用已有控制操作 action={$action} client={$clientId} -> existing={$existingImperialOperation['id']}"
@@ -8341,7 +8353,10 @@ class ServiceOrchestrator
                 $this->preemptActiveControlOperationForImperial($action);
                 $this->ipcClearFieldForNewImperial($clientId, $action);
 
-                if ($this->isMaintenanceControlAction($action) && $this->isMaintenanceActionAlreadySatisfied($action)) {
+                if (!$dispatcherOnlyMaintenance
+                    && $this->isMaintenanceControlAction($action)
+                    && $this->isMaintenanceActionAlreadySatisfied($action)
+                ) {
                     $message = $action === ControlMessage::ACTION_MAINTENANCE_ENABLE
                         ? 'Maintenance already enabled'
                         : 'Maintenance already disabled';
@@ -8361,7 +8376,7 @@ class ServiceOrchestrator
             }
 
             if ($this->isMaintenanceControlAction($action)) {
-                if ($this->isMaintenanceActionAlreadySatisfied($action)) {
+                if (!$dispatcherOnlyMaintenance && $this->isMaintenanceActionAlreadySatisfied($action)) {
                     $message = $action === ControlMessage::ACTION_MAINTENANCE_ENABLE
                         ? 'Maintenance already enabled'
                         : 'Maintenance already disabled';
@@ -9302,6 +9317,68 @@ class ServiceOrchestrator
             'message' => (string) __('维护模式已启用: Dispatcher 已切至维护池, 维护进程 %{1} 个', [$nMaint]),
             'maintenance_workers' => $nMaint,
             'worker_ipc_acked' => \count($ackedClients),
+        ];
+    }
+
+    /**
+     * Switch only Dispatcher routing for framework maintenance CLI toggles.
+     *
+     * This intentionally does not start/stop maintenance workers and does not
+     * send set_maintenance_mode to any worker process.
+     *
+     * @return array{success: bool, message: string}
+     */
+    private function setDispatcherMaintenanceRouting(bool $enabled): array
+    {
+        $ports = $enabled
+            ? $this->collectReadyMaintenancePortsSorted()
+            : $this->collectReadyWorkerPortsSorted();
+        $role = $enabled ? ControlMessage::ROLE_MAINTENANCE : ControlMessage::ROLE_WORKER;
+        $portsStr = \implode(',', $ports);
+
+        if ($enabled && $ports === []) {
+            $this->pendingMaintenanceModeAck = null;
+            $this->logMaintenanceOperation(
+                'Dispatcher-only maintenance routing skipped: no READY maintenance ports, '
+                . $this->formatMaintenanceOperationContext(),
+                'WARN',
+                'dispatcher_only_maintenance:enable:no_ports',
+                0.0
+            );
+
+            return [
+                'success' => true,
+                'message' => 'Dispatcher maintenance routing unchanged: no ready maintenance workers',
+            ];
+        }
+
+        if (\count($this->registry->getInstancesByRole(ControlMessage::ROLE_DISPATCHER)) > 0) {
+            $this->notifyDispatcherSetWorkerPool($ports, $role);
+            $this->controlServer?->poll(0, 150000);
+        }
+
+        $this->pendingMaintenanceModeAck = null;
+        $this->maintenanceMode = $enabled;
+        $this->maintenanceSticky = $enabled;
+
+        if ($this->context !== null) {
+            $this->persistServicesInfo($this->context);
+        }
+
+        $this->logMaintenanceOperation(
+            'Dispatcher-only maintenance routing ' . ($enabled ? 'enabled' : 'disabled')
+            . ", role={$role}, ports=" . ($portsStr !== '' ? $portsStr : '(none)')
+            . ', ' . $this->formatMaintenanceOperationContext(),
+            'INFO',
+            'dispatcher_only_maintenance:' . ($enabled ? 'enable:' : 'disable:') . $role . ':' . $portsStr,
+            0.0
+        );
+
+        return [
+            'success' => true,
+            'message' => $enabled
+                ? 'Dispatcher maintenance routing enabled'
+                : 'Dispatcher maintenance routing disabled',
         ];
     }
 

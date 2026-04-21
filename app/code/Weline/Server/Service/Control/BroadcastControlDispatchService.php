@@ -76,6 +76,28 @@ class BroadcastControlDispatchService
         );
     }
 
+    /**
+     * @return array{
+     *     success:bool,
+     *     attempted:array<int,string>,
+     *     succeeded:array<int,string>,
+     *     failed_by_instance:array<string,string>,
+     *     message:string
+     * }
+     */
+    public function setMaintenanceRoutingOnly(bool $enabled, ?string $instanceName = null, float $timeout = 6.0): array
+    {
+        $label = $enabled
+            ? (string) __('启用 Dispatcher 维护分流')
+            : (string) __('禁用 Dispatcher 维护分流');
+
+        return $this->dispatchToRunningInstances(
+            $instanceName,
+            $label,
+            fn(string $name): array => $this->ipcControlGateway->setMaintenanceMode($name, $enabled, $timeout, true)
+        );
+    }
+
     public function reloadSslCert(array $domains = [], ?string $instanceName = null): array
     {
         return $this->dispatchToRunningInstances(

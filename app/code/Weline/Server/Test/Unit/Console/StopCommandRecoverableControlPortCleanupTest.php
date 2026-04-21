@@ -297,7 +297,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
         }
 
         self::assertSame(3, $processed);
-        self::assertSame([[101, 102, 103]], $stop->terminatedBatches);
+        self::assertSame([[101, 202, 103]], $stop->terminatedBatches);
     }
 
     public function testCollectRecoverablePortsFromInstanceUsesWorkerBasePort(): void

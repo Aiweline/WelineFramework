@@ -25,7 +25,7 @@ final class WlsMaintenanceSync
             $dispatchService = ObjectManager::getInstance(
                 \Weline\Server\Service\Control\BroadcastControlDispatchService::class
             );
-            $result = $dispatchService->setMaintenanceMode($enabled, $instanceName);
+            $result = $dispatchService->setMaintenanceRoutingOnly($enabled, $instanceName);
 
             if (($result['attempted'] ?? []) === []) {
                 $printing->note(
