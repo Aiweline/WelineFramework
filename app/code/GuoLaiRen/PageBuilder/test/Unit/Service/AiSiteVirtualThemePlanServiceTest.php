@@ -947,6 +947,28 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             ))
         );
         self::assertSame(
+            $orderedTaskKeys,
+            \array_values(\array_map(
+                static fn(array $task): string => (string)($task['task_key'] ?? ''),
+                $result['structured']['page_block_tasks'] ?? []
+            ))
+        );
+        self::assertSame([100, 110], \array_values(\array_map(
+            static fn(array $task): int => (int)($task['sort_order'] ?? 0),
+            $result['structured']['page_block_tasks'] ?? []
+        )));
+        self::assertSame([100, 110], \array_values(\array_map(
+            static fn(array $task): int => (int)($task['block_task']['sort_order'] ?? 0),
+            $result['structured']['page_tasks']['home_page'] ?? []
+        )));
+        self::assertSame(
+            $orderedTaskKeys,
+            \array_values(\array_map(
+                static fn(array $node): string => (string)($node['task_key'] ?? ''),
+                $result['virtual_theme_plan']['virtual_theme_build_tree']['pages']['home_page']['blocks'] ?? []
+            ))
+        );
+        self::assertSame(
             ['shared:header', 'shared:footer', 'page:home_page:content/home-page-proof', 'page:home_page:content/home-page-hero'],
             \array_values(\array_map(
                 static fn(array $task): string => (string)($task['task_key'] ?? ''),
