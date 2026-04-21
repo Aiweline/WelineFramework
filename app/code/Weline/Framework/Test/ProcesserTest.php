@@ -255,7 +255,8 @@ class ProcesserTest extends TestCore
         ]);
 
         self::assertIsString($script);
-        self::assertStringContainsString('start "weline-worker-visible" /D "C:\repo" cmd.exe /d /c call "C:\temp\weline-worker-visible.cmd"', $script);
+        self::assertStringContainsString('start "weline-worker-visible" /D "C:\repo" cmd.exe /d /c "C:\temp\weline-worker-visible.cmd"', $script);
+        self::assertStringNotContainsString('cmd.exe /d /c call', $script);
         self::assertStringContainsString('weline-worker-visible.cmd', $script);
         self::assertStringContainsString('start "" /B /D "C:\repo" "C:\php\php.exe" "worker.php" "--name=weline-worker-hidden"', $script);
         self::assertSame(0, \substr_count($script, 'RedirectStandardOutput'));
@@ -287,7 +288,8 @@ class ProcesserTest extends TestCore
 
         self::assertIsString($script);
         self::assertStringNotContainsString('Start-Process', $script);
-        self::assertStringContainsString('start "weline-worker-visible" /D "C:\repo" cmd.exe /d /c call "C:\temp\weline-worker-visible.cmd"', $script);
+        self::assertStringContainsString('start "weline-worker-visible" /D "C:\repo" cmd.exe /d /c "C:\temp\weline-worker-visible.cmd"', $script);
+        self::assertStringNotContainsString('cmd.exe /d /c call', $script);
         self::assertStringContainsString("echo worker-foreground\t0", $script);
     }
 
@@ -410,7 +412,8 @@ class ProcesserTest extends TestCore
             $script = (string) \file_get_contents($scriptPath);
             self::assertStringContainsString("FilePath = 'cmd.exe'", $script);
             self::assertStringContainsString('PassThru = $true', $script);
-            self::assertStringContainsString('$cmdLine = \'title weline-worker-visible & call "C:\temp\weline-worker-visible.cmd"\'', $script);
+            self::assertStringContainsString('$cmdLine = \'title weline-worker-visible & "C:\temp\weline-worker-visible.cmd"\'', $script);
+            self::assertStringNotContainsString('& call "', $script);
             self::assertStringContainsString("ArgumentList = @('/d','/c', \$cmdLine)", $script);
             self::assertStringContainsString('[Console]::Out.WriteLine([string]$p.Id)', $script);
         } finally {
