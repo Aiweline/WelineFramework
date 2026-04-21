@@ -62,4 +62,26 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertStringContainsString('page_type: pageType', $script);
         self::assertStringContainsString('instruction: instruction', $script);
     }
+
+    public function testStageTwoConfirmWorkspaceShowsTaskProgress(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 3);
+        $workspace = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace.phtml');
+        $layout = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
+        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $runtime = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+
+        self::assertIsString($workspace);
+        self::assertIsString($layout);
+        self::assertIsString($script);
+        self::assertIsString($runtime);
+        self::assertStringContainsString("\$currentStage !== 'plan'", $layout);
+        self::assertStringContainsString('id="pb-ai-task-progress-heading"', $layout);
+        self::assertStringContainsString('data-task-progress-summary="stage2"', $layout);
+        self::assertStringContainsString("taskPlanConfirmedState = true;", $script);
+        self::assertStringContainsString('window.BackendConfirm.show(messages.taskPlanConfirmStartBuildQuestion', $script);
+        self::assertStringContainsString("window.__pbPhase2TaskProgress.syncFromWorkspaceState(workspaceState);", $script);
+        self::assertStringContainsString("window.__pbPhase2TaskProgress.syncFromSsePayload(operation, payload || {}, eventKind);", $runtime);
+        self::assertStringContainsString("workspace/script-phase2-queue-progress.phtml", $workspace);
+    }
 }
