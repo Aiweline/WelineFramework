@@ -7076,6 +7076,28 @@ final class AiSiteExecutionBlueprintService
         return false;
     }
 
+    /**
+     * @param mixed $raw
+     * @return list<string>
+     */
+    private function normalizeStringList(mixed $raw): array
+    {
+        $items = \is_array($raw) ? $raw : [$raw];
+        $normalized = [];
+        foreach ($items as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $value = \trim((string)$item);
+            if ($value === '') {
+                continue;
+            }
+            $normalized[$value] = $value;
+        }
+
+        return \array_values($normalized);
+    }
+
     private function clipText(string $text, int $maxLength): string
     {
         $text = \trim($text);
