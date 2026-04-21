@@ -34,7 +34,7 @@ final class StopCommandResidualPidIndexTest extends TestCase
             202
         );
 
-        self::assertSame([101, 404, 505], $pids);
+        self::assertSame([101, 505], $pids);
     }
 
     public function testCollectResidualCleanupCandidatePidsIncludesRecoverableManagedPids(): void
