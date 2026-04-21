@@ -842,6 +842,11 @@
         scriptScene: <?= \json_encode((string)__('脚本场景'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         scriptGoal: <?= \json_encode((string)__('脚本目标'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         fillRule: <?= \json_encode((string)__('内容填充规则'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockTaskMetaFields: <?= \json_encode((string)__('Meta field samples'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockTaskContentPlan: <?= \json_encode((string)__('Content plan'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockTaskStylePlan: <?= \json_encode((string)__('Style plan'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockTaskColorPlan: <?= \json_encode((string)__('Color details'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockTaskFontPlan: <?= \json_encode((string)__('Font details'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         acceptance: <?= \json_encode((string)__('验收标准'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         stage3Directive: <?= \json_encode((string)__('第三阶段执行指令'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         taskScriptBrief: <?= \json_encode((string)__('任务脚本概览'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -4412,6 +4417,132 @@
             + '</div>';
     }
 
+
+    function normalizeBlockTaskMetaFields(metaFields) {
+        var rows = [];
+        if (Array.isArray(metaFields)) {
+            rows = metaFields;
+        } else if (metaFields && typeof metaFields === 'object') {
+            rows = Object.keys(metaFields).map(function (key) {
+                var value = metaFields[key];
+                if (value && typeof value === 'object' && !Array.isArray(value)) {
+                    var copy = Object.assign({}, value);
+                    copy.field = copy.field || copy.name || copy.key || key;
+                    return copy;
+                }
+                return {
+                    field: key,
+                    sample: value
+                };
+            });
+        }
+
+        return rows.map(function (row) {
+            if (!row || typeof row !== 'object') {
+                return null;
+            }
+            return {
+                field: row.field || row.name || row.key || row.code || row.handle || '',
+                sample: row.sample || row.example || row.default_value || row.default || row.placeholder || row.value || '',
+                implementation_note: row.implementation_note || row.delivery_note || row.reason || row.why || row.description || row.type || ''
+            };
+        }).filter(function (row) {
+            return !!(row && (String(row.field || '').trim() || String(row.sample || '').trim() || String(row.implementation_note || '').trim()));
+        });
+    }
+
+    function renderBlockTaskMetaFieldTable(metaFields) {
+        var rows = normalizeBlockTaskMetaFields(metaFields);
+        if (rows.length === 0) {
+            return '';
+        }
+        return ''
+            + '<div class="border-top pt-2 mt-2">'
+            + '<div class="fw-semibold small">' + escapeHtml(previewLabels.blockTaskMetaFields || 'Meta field samples') + '</div>'
+            + renderFieldPlanTable(rows)
+            + '</div>';
+    }
+
+    function flattenTaskPlanDetailItems(value, prefix, depth) {
+        var items = [];
+        var safeDepth = Number(depth || 0);
+        var safePrefix = String(prefix || '').trim();
+        if (safeDepth > 4 || value === null || typeof value === 'undefined') {
+            return items;
+        }
+        if (Array.isArray(value)) {
+            value.forEach(function (item) {
+                items = items.concat(flattenTaskPlanDetailItems(item, safePrefix, safeDepth + 1));
+            });
+            return items;
+        }
+        if (typeof value === 'object') {
+            var textValue = sanitizePreviewText(value.title || value.name || value.label || value.text || value.value || value.sample || '', '');
+            if (textValue) {
+                items.push(safePrefix ? (safePrefix + ': ' + textValue) : textValue);
+            }
+            Object.keys(value).forEach(function (key) {
+                if (['title', 'name', 'label', 'text', 'value', 'sample'].indexOf(key) !== -1) {
+                    return;
+                }
+                var childPrefix = safePrefix ? (safePrefix + ' / ' + (humanizePreviewKey(key) || key)) : (humanizePreviewKey(key) || key);
+                items = items.concat(flattenTaskPlanDetailItems(value[key], childPrefix, safeDepth + 1));
+            });
+            return items;
+        }
+        var text = sanitizePreviewText(value, '');
+        if (text) {
+            items.push(safePrefix ? (safePrefix + ': ' + text) : text);
+        }
+        return items;
+    }
+
+    function renderTaskPlanDetailList(title, value) {
+        var items = flattenTaskPlanDetailItems(value, '', 0).filter(function (item, idx, all) {
+            return item && all.indexOf(item) === idx;
+        });
+        if (items.length === 0) {
+            return '';
+        }
+        return ''
+            + '<div class="border-top pt-2 mt-2">'
+            + '<div class="fw-semibold small">' + escapeHtml(String(title || '')) + '</div>'
+            + '<ul class="mb-0 ps-3">' + items.map(function (item) {
+                return '<li class="small text-muted">' + escapeHtml(item).replace(/\n/g, '<br>') + '</li>';
+            }).join('') + '</ul>'
+            + '</div>';
+    }
+
+    function renderBlockTaskStylePlan(stylePlan) {
+        if (!stylePlan || typeof stylePlan !== 'object') {
+            return renderTaskPlanDetailList(previewLabels.blockTaskStylePlan || 'Style plan', stylePlan);
+        }
+        var sections = [];
+        var colorValue = pickPreviewValue(stylePlan.color, stylePlan.colors, stylePlan.palette, stylePlan.color_scheme, stylePlan.color_system);
+        var fontValue = pickPreviewValue(stylePlan.font, stylePlan.fonts, stylePlan.typography, stylePlan.font_plan, stylePlan.type);
+        if (colorValue !== null) {
+            sections.push(renderTaskPlanDetailList(previewLabels.blockTaskColorPlan || 'Color details', colorValue));
+        }
+        if (fontValue !== null) {
+            sections.push(renderTaskPlanDetailList(previewLabels.blockTaskFontPlan || 'Font details', fontValue));
+        }
+        var remaining = {};
+        Object.keys(stylePlan).forEach(function (key) {
+            if (['color', 'colors', 'palette', 'color_scheme', 'color_system', 'font', 'fonts', 'typography', 'font_plan', 'type'].indexOf(key) !== -1) {
+                return;
+            }
+            remaining[key] = stylePlan[key];
+        });
+        if (Object.keys(remaining).length > 0) {
+            sections.push(renderTaskPlanDetailList(previewLabels.blockTaskStylePlan || 'Style plan', remaining));
+        }
+        var html = sections.filter(Boolean).join('');
+        if (html) {
+            return html;
+        }
+        return renderTaskPlanDetailList(previewLabels.blockTaskStylePlan || 'Style plan', stylePlan);
+    }
+
     function renderExecutionScriptSection(script) {
         if (!script || typeof script !== 'object') {
             return '';
@@ -5125,6 +5256,7 @@
         var planContext = (task.plan_context && typeof task.plan_context === 'object') ? task.plan_context : {};
         var taskScript = (task.task_script && typeof task.task_script === 'object') ? task.task_script : {};
         var implementationContract = (task.implementation_contract && typeof task.implementation_contract === 'object') ? task.implementation_contract : {};
+        var blockTask = (task.block_task && typeof task.block_task === 'object') ? task.block_task : {};
         var pageGoal = escapeHtml(sanitizePreviewText(planContext.page_goal || '', safePageLabel + ' 页面目标：明确本页价值与转化意图。')).replace(/\n/g, '<br>');
         var blockGoal = escapeHtml(sanitizePreviewText(planContext.block_goal || '', '区块目标：说明该区块承担的信息与行动目标。')).replace(/\n/g, '<br>');
         var scene = escapeHtml(sanitizePreviewText(taskScript.scene || '', rawTaskKey || safePageLabel)).replace(/\n/g, '<br>');
@@ -5134,6 +5266,9 @@
         var acceptance = normalizeStructuredItems(implementationContract.acceptance || []);
         var fieldRequirements = Array.isArray(taskScript.field_content_requirements) ? taskScript.field_content_requirements : [];
         var fieldTable = renderFieldPlanTable(fieldRequirements);
+        var blockTaskMetaTable = renderBlockTaskMetaFieldTable(blockTask.meta_fields || []);
+        var blockTaskContentPlan = renderTaskPlanDetailList(previewLabels.blockTaskContentPlan || 'Content plan', blockTask.content_plan || []);
+        var blockTaskStylePlan = renderBlockTaskStylePlan(blockTask.style_plan || {});
         var targetScope = String(taskScript.scene || (pageType ? ('page:' + pageType) : (rawTaskKey || 'shared')));
 
         return ''
@@ -5165,6 +5300,9 @@
             + (scene ? '<div class="small mt-2"><span class="fw-semibold">' + escapeHtml(previewLabels.scriptScene) + ':</span> <code>' + scene + '</code></div>' : '')
             + (storyGoal ? '<div class="small mt-2"><span class="fw-semibold">' + escapeHtml(previewLabels.scriptGoal) + ':</span> ' + storyGoal + '</div>' : '')
             + (fillRule ? '<div class="small mt-2"><span class="fw-semibold">' + escapeHtml(previewLabels.fillRule) + ':</span> ' + fillRule + '</div>' : '')
+            + blockTaskMetaTable
+            + blockTaskContentPlan
+            + blockTaskStylePlan
             + fieldTable
             + (acceptance.length ? ('<div class="mt-2"><div class="fw-semibold small">' + escapeHtml(previewLabels.acceptance) + '</div><ul class="mb-0 ps-3">' + acceptance.map(function (item) {
                 return '<li class="small">' + escapeHtml(item) + '</li>';
