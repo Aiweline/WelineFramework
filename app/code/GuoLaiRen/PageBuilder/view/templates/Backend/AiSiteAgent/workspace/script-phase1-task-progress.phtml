@@ -17,7 +17,14 @@
         refreshed: <?= \json_encode((string)__('队列信息已刷新'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         refreshFailed: <?= \json_encode((string)__('刷新队列信息失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         queueIdLabel: <?= \json_encode((string)__('队列编号'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        queueIdUnknown: <?= \json_encode((string)__('—'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+        queueIdUnknown: <?= \json_encode((string)__('—'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        jobKeyLabel: <?= \json_encode((string)__('Job'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        jobTypeLabel: <?= \json_encode((string)__('类型'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        statusLabel: <?= \json_encode((string)__('状态'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        tokenLabel: <?= \json_encode((string)__('Token'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        inputTokensLabel: <?= \json_encode((string)__('输入 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        outputTokensLabel: <?= \json_encode((string)__('输出 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        totalTokensLabel: <?= \json_encode((string)__('总 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
     };
 
     function escapeHtml(text) {
@@ -40,6 +47,71 @@
             return Promise.reject(new Error('postForm unavailable'));
         }
         return bridge.postForm(url, fields);
+    }
+
+    function normalizeTokenCount(value) {
+        if (value === null || typeof value === 'undefined' || value === '') {
+            return null;
+        }
+        var parsed = parseInt(String(value), 10);
+        return !isNaN(parsed) && parsed >= 0 ? parsed : null;
+    }
+
+    function formatTokenCount(value) {
+        var normalized = normalizeTokenCount(value);
+        return normalized === null ? queueMessages.queueIdUnknown : String(normalized);
+    }
+
+    function resolveTokenUsage(info) {
+        var snapshot = info && info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
+        var usage = {};
+        if (snapshot.token_usage && typeof snapshot.token_usage === 'object') {
+            usage = Object.assign(usage, snapshot.token_usage);
+        }
+        if (info && info.token_usage && typeof info.token_usage === 'object') {
+            usage = Object.assign(usage, info.token_usage);
+        }
+
+        var input = normalizeTokenCount(usage.input_tokens != null ? usage.input_tokens : (info && info.input_tokens != null ? info.input_tokens : snapshot.input_tokens));
+        var output = normalizeTokenCount(usage.output_tokens != null ? usage.output_tokens : (info && info.output_tokens != null ? info.output_tokens : snapshot.output_tokens));
+        var total = normalizeTokenCount(usage.total_tokens != null ? usage.total_tokens : (info && info.total_tokens != null ? info.total_tokens : snapshot.total_tokens));
+        if (total === null && input !== null && output !== null) {
+            total = input + output;
+        }
+
+        return {
+            input_tokens: input,
+            output_tokens: output,
+            total_tokens: total
+        };
+    }
+
+    function renderQueueSummaryItem(label, value, codeLike) {
+        var display = String(value == null || value === '' ? queueMessages.queueIdUnknown : value);
+        var valueTag = codeLike ? 'code' : 'strong';
+        return '<div class="col-6">'
+            + '<div class="text-muted small">' + escapeHtml(label) + '</div>'
+            + '<' + valueTag + ' class="small text-break">' + escapeHtml(display) + '</' + valueTag + '>'
+            + '</div>';
+    }
+
+    function renderQueueInfoSummary(info) {
+        var snapshot = info && info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
+        var tokenUsage = resolveTokenUsage(info || {});
+        var jobKey = snapshot.job_key || (info && info.job_key) || snapshot.biz_key || '';
+        var jobType = snapshot.job_type || (info && info.job_type) || '';
+        var status = snapshot.job_status || snapshot.status || (info && info.status) || '';
+        var token = snapshot.token || snapshot.execution_token || (info && (info.token || info.execution_token)) || '';
+
+        return '<div class="row g-2 mb-2 pb-ai-plan-queue-token-summary">'
+            + renderQueueSummaryItem(queueMessages.jobKeyLabel, jobKey, true)
+            + renderQueueSummaryItem(queueMessages.jobTypeLabel, jobType, false)
+            + renderQueueSummaryItem(queueMessages.statusLabel, status, false)
+            + renderQueueSummaryItem(queueMessages.tokenLabel, token, true)
+            + renderQueueSummaryItem(queueMessages.inputTokensLabel, formatTokenCount(tokenUsage.input_tokens), false)
+            + renderQueueSummaryItem(queueMessages.outputTokensLabel, formatTokenCount(tokenUsage.output_tokens), false)
+            + renderQueueSummaryItem(queueMessages.totalTokensLabel, formatTokenCount(tokenUsage.total_tokens), false)
+            + '</div>';
     }
 
     function renderPlanQueueInfoPanel(workspaceState) {
@@ -75,6 +147,7 @@
             + '<code class="small mb-0">' + escapeHtml(idDisplay) + '</code>'
             + '</div>';
         metaEl.innerHTML = idRow
+            + renderQueueInfoSummary(info)
             + '<pre class="small mb-0 border rounded p-2 bg-light text-break" style="white-space:pre-wrap;max-height:min(28vh,14rem);overflow:auto;">'
             + escapeHtml(snapJson)
             + '</pre>';
