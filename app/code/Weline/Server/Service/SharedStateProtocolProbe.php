@@ -42,6 +42,37 @@ final class SharedStateProtocolProbe
         return self::rawAuthThenPing($host, $port, $secret);
     }
 
+    public static function shutdownWithTokenBasename(
+        string $host,
+        int $port,
+        string $tokenBasename,
+        ?string $consumerCode = null,
+        array $params = []
+    ): bool {
+        $host = \trim($host);
+        $tokenBasename = \trim($tokenBasename);
+        if ($host === '' || $port <= 0 || $tokenBasename === '') {
+            return false;
+        }
+        $tokenBasename = \basename($tokenBasename);
+        if ($tokenBasename === '' || $tokenBasename === '.' || $tokenBasename === '..') {
+            return false;
+        }
+        if (!\defined('BP')) {
+            return false;
+        }
+        $path = BP . 'var' . \DIRECTORY_SEPARATOR . 'session' . \DIRECTORY_SEPARATOR . $tokenBasename;
+        if (!\is_file($path) || !\is_readable($path)) {
+            return false;
+        }
+        $secret = self::readSecretFromTokenFile($path);
+        if ($secret === '' || \strlen($secret) > 8192) {
+            return false;
+        }
+
+        return self::rawAuthThenShutdown($host, $port, $secret, $consumerCode, $params);
+    }
+
     public static function findWorkingTokenBasename(string $host, int $port, string $defaultBasename): ?string
     {
         $host = \trim($host);
@@ -160,6 +191,40 @@ final class SharedStateProtocolProbe
             return $msg !== null
                 && SessionProtocol::isSuccess($msg)
                 && SessionProtocol::getData($msg) === 'pong';
+        } finally {
+            @\fclose($socket);
+        }
+    }
+
+    private static function rawAuthThenShutdown(
+        string $host,
+        int $port,
+        string $secret,
+        ?string $consumerCode,
+        array $params
+    ): bool {
+        $socket = self::openTcp($host, $port);
+        if ($socket === null) {
+            return false;
+        }
+        $inSchedulerFiber = SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent() !== null;
+        $readTimeoutSec = $inSchedulerFiber ? 0.25 : 2.0;
+        $buffer = '';
+        try {
+            if (@\fwrite($socket, SessionProtocol::buildAuth($secret)) === false) {
+                return false;
+            }
+            $msg = self::readNextMessage($socket, $buffer, $readTimeoutSec);
+            if ($msg === null || !SessionProtocol::isSuccess($msg)) {
+                return false;
+            }
+            $buffer = '';
+            if (@\fwrite($socket, SessionProtocol::buildShutdown($consumerCode, $params)) === false) {
+                return false;
+            }
+            $msg = self::readNextMessage($socket, $buffer, $readTimeoutSec);
+
+            return $msg !== null && SessionProtocol::isSuccess($msg);
         } finally {
             @\fclose($socket);
         }

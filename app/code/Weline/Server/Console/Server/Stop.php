@@ -376,11 +376,8 @@ class Stop extends CommandAbstract
         $this->showInstanceInfo($instanceInfo);
         echo "\n";
 
-        if ($force || $fastLocal) {
-            $message = $force
-                ? __('-f 强制模式：跳过 IPC 排水，直接终止实例进程...')
-                : __('快速清场模式：跳过 IPC 排水，直接终止旧实例子进程...');
-            $this->printer->note($message);
+        if ($fastLocal) {
+            $this->printer->note(__('快速清场模式：跳过 IPC 排水，并发终止旧实例子进程...'));
             $terminated = $this->terminateDirectForceStopCandidatePids($instanceInfo);
             if ($terminated > 0) {
                 SchedulerSystem::usleep(500000);
@@ -447,6 +444,9 @@ class Stop extends CommandAbstract
         }
 
         // 通过 IPC 发送 STOP 命令并等待完整停止
+        if ($force) {
+            $this->printer->note(__('-f 强制模式：跳过排水，通过 IPC 发起停止，响应后并发清理当前实例进程...'));
+        }
         $this->printer->note(__('发送 STOP 命令给 Master (通过 IPC)...'));
         $ipcSuccess = $this->sendStopViaIpcAndWait($name, $controlPort, $masterPid, $force);
         
@@ -460,7 +460,7 @@ class Stop extends CommandAbstract
         } else {
             // IPC 失败，强制杀死 Master 并彻底清理该实例下所有进程（含 Worker/Dispatcher 等）
             $this->printer->warning(__('IPC 超时，强制终止 Master 并清理该实例下所有进程...'));
-            Processer::killByPid($masterPid, true);
+            Processer::killProcessTreeByPid($masterPid, true);
             SchedulerSystem::usleep(500000);
             
             $this->runResidualCleanupPairWithRetry($name, $instanceInfo);
@@ -777,8 +777,6 @@ class Stop extends CommandAbstract
             MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name),
             MasterProcess::buildScopedProcessName('weline-wls-worker', $name) . '-',
             MasterProcess::buildScopedProcessName('weline-wls-maintenance', $name) . '-',
-            MasterProcess::buildScopedProcessName('weline-wls-session', $name),
-            MasterProcess::buildScopedProcessName('weline-wls-memory', $name),
             MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
             'weline-wls-worker-http-' . $scopedInstance . '-',
             'weline-wls-worker-ssl-' . $scopedInstance . '-',
@@ -862,6 +860,9 @@ class Stop extends CommandAbstract
         }
 
         foreach ($info->services as $service) {
+            if ($this->isSharedStateServiceInfo($service)) {
+                continue;
+            }
             $port = (int) ($service->port ?? 0);
             if ($port > 0) {
                 $ports[] = $port;
@@ -895,6 +896,9 @@ class Stop extends CommandAbstract
         }
 
         $pname = $this->getProcessPnameByPid($pid);
+        if ($this->isSharedStateProcessName($pname)) {
+            return false;
+        }
         if (\str_contains($pname, 'weline-wls') || \str_contains($pname, 'weline-master')) {
             return true;
         }
@@ -917,7 +921,8 @@ class Stop extends CommandAbstract
 
     protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
     {
-        return $this->terminateResidualProcesses($this->collectDirectForceStopCandidatePids($info), true);
+        return $this->terminateResidualProcesses($this->collectDirectForceStopCandidatePids($info), true)
+            + $this->terminateCurrentInstanceProcessPrefixes($info->name);
     }
 
     /**
@@ -1636,7 +1641,7 @@ class Stop extends CommandAbstract
         }
 
         foreach ($info->services as $service) {
-            if ((bool) ($service->metadata['shared_external'] ?? false)) {
+            if ((bool) ($service->metadata['shared_external'] ?? false) || $this->isSharedStateServiceInfo($service)) {
                 continue;
             }
             $pid = (int) ($service->pid ?? 0);
@@ -1658,6 +1663,49 @@ class Stop extends CommandAbstract
         } catch (\Throwable) {
             // best-effort：registry 损坏或并发时不阻塞停机
         }
+    }
+
+    private function isSharedStateServiceInfo(object $service): bool
+    {
+        if ($this->isSharedStateServiceRole((string) ($service->role ?? ''))) {
+            return true;
+        }
+
+        return $this->isSharedStateProcessName((string) ($service->metadata['process_name'] ?? ''));
+    }
+
+    private function isSharedStateServiceRole(string $role): bool
+    {
+        $role = \strtolower(\trim($role));
+
+        return \in_array($role, [
+            'session',
+            'memory',
+            ControlMessage::ROLE_SESSION_SERVER,
+            ControlMessage::ROLE_MEMORY_SERVER,
+        ], true);
+    }
+
+    private function isSharedStateProcessName(string $processName): bool
+    {
+        $processName = \trim($processName);
+        if ($processName === '') {
+            return false;
+        }
+
+        try {
+            $taskName = Processer::getTaskName($processName);
+            if ($taskName !== '') {
+                $processName = $taskName;
+            }
+        } catch (\Throwable) {
+            if (\str_starts_with($processName, '--name=')) {
+                $processName = \substr($processName, 7);
+            }
+        }
+
+        return \str_contains($processName, 'weline-wls-session-')
+            || \str_contains($processName, 'weline-wls-memory-');
     }
 
     /**
@@ -1689,8 +1737,6 @@ class Stop extends CommandAbstract
             'weline-wls-worker-' . $instanceName . '-',
             'weline-wls-maintenance-' . $instanceName . '-',
             'weline-wls-dispatcher-' . $instanceName,
-            'weline-wls-session-' . $instanceName,
-            'weline-wls-memory-' . $instanceName,
             MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $instanceName,
             $legacyMasterPrefix,
             $legacyWorkerPrefix,
@@ -1715,6 +1761,9 @@ class Stop extends CommandAbstract
                 $taskName = \str_starts_with($pname, '--name=')
                     ? \substr($pname, 7)
                     : $pname;
+            }
+            if ($this->isSharedStateProcessName($taskName)) {
+                continue;
             }
 
             $isCurrentInstance = \str_starts_with($taskName, 'weline-wls-')
@@ -2158,6 +2207,9 @@ class Stop extends CommandAbstract
                     if (!\str_contains($processName, 'weline-wls-') && !\str_contains($processName, 'weline-master-')) {
                         continue;
                     }
+                    if ($this->isSharedStateProcessName($processName)) {
+                        continue;
+                    }
                     if (!\str_contains($processName, $needle) && !\str_ends_with($processName, $needleSuffix)) {
                         continue;
                     }
@@ -2525,8 +2577,6 @@ class Stop extends CommandAbstract
             'weline-wls-worker-' . $name . '-',
             'weline-wls-maintenance-' . $name . '-',
             'weline-wls-dispatcher-' . $name,
-            'weline-wls-session-' . $name,
-            'weline-wls-memory-' . $name,
             MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
             $legacyWorkerPrefix,
             'weline-master-' . $name . '-redirect-',
@@ -2550,6 +2600,9 @@ class Stop extends CommandAbstract
                         ? \substr($pname, 7)
                         : $pname;
                 }
+            }
+            if ($this->isSharedStateProcessName($taskName)) {
+                continue;
             }
 
             $isCurrentInstance = \str_starts_with($taskName, 'weline-wls-')
@@ -2790,15 +2843,11 @@ class Stop extends CommandAbstract
             MasterProcess::getMasterProcessName($name),
             MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name),
             MasterProcess::buildScopedProcessName('weline-wls-worker', $name) . '-',
-            MasterProcess::buildScopedProcessName('weline-wls-session', $name),
-            MasterProcess::buildScopedProcessName('weline-wls-memory', $name),
             MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
             'weline-wls-dispatcher-' . $name,
             'weline-wls-worker-' . $name . '-',
             'weline-master-' . $name . '-worker-',
             'weline-master-' . $name . '-redirect-',
-            'weline-wls-session-' . $name,
-            'weline-wls-memory-' . $name,
             MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
         ];
 
