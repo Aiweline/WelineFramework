@@ -219,6 +219,93 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertGreaterThan(0, (int)($activeOperation['queue_id'] ?? 0));
     }
 
+    public function testClaimedOperationSsePlanBranchRunsPlanGeneration(): void
+    {
+        $createPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-create-session',
+            'POST',
+            'postCreateSession'
+        );
+        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
+
+        $publicId = (string)($createPayload['public_id'] ?? '');
+        self::assertNotSame('', $publicId);
+
+        $scopePatch = [
+            'fake_mode' => 1,
+            'site_title' => 'Operation SSE plan branch',
+            'site_tagline' => 'Plan branch regression',
+            'target_domain' => 'operation-sse-plan.local.test',
+            'brief_description' => 'Verify operation-sse can dispatch the plan branch instead of returning unknown operation.',
+            'user_description' => 'Verify operation-sse can dispatch the plan branch instead of returning unknown operation.',
+            'default_locale' => 'zh_Hans_CN',
+            'plan_locale' => 'zh_Hans_CN',
+            'page_types' => [Page::TYPE_HOME],
+        ];
+
+        $mergePayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-merge-scope',
+            'POST',
+            'postMergeScope',
+            [],
+            [
+                'public_id' => $publicId,
+                'scope_patch' => $scopePatch,
+            ]
+        );
+        self::assertTrue((bool)($mergePayload['success'] ?? false), \json_encode($mergePayload, \JSON_UNESCAPED_UNICODE));
+
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+
+        $executionToken = 'operation-sse-plan-branch-token';
+        $startedAt = \date('Y-m-d H:i:s');
+        $scope = $session->getScopeArray();
+        $scope['active_operation'] = [
+            'operation' => 'plan',
+            'execution_token' => $executionToken,
+            'status' => 'running',
+            'message' => 'claimed by operation-sse',
+            'started_at' => $startedAt,
+            'updated_at' => $startedAt,
+            'progress_percent' => 0,
+        ];
+        $this->sessionService->replaceScope($session->getId(), 1, $scope);
+        $session = $this->sessionService->loadById($session->getId(), 1);
+        self::assertNotNull($session);
+
+        /** @var AiSiteAgent $controller */
+        $controller = ObjectManager::getInstance(AiSiteAgent::class);
+        $method = new ReflectionMethod(AiSiteAgent::class, 'runClaimedOperationSseBranch');
+        $method->setAccessible(true);
+
+        $writer = new InMemorySseWriter();
+        $result = $method->invoke(
+            $controller,
+            $writer,
+            $session,
+            1,
+            'plan',
+            $scope['active_operation']
+        );
+
+        self::assertIsArray($result);
+        self::assertSame(0, $writer->countEvents('error'), \json_encode($writer->eventsByName('error'), \JSON_UNESCAPED_UNICODE));
+        self::assertGreaterThan(0, $writer->countEvents('start'));
+        self::assertNotSame('', \trim((string)($result['plan_markdown'] ?? '')));
+        self::assertIsArray($result['plan_json'] ?? null);
+        self::assertNotSame([], $result['plan_json'] ?? []);
+        self::assertIsArray($result['execution_blueprint'] ?? null);
+        self::assertNotSame([], $result['execution_blueprint'] ?? []);
+
+        $fresh = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($fresh);
+        $freshScope = $fresh->getScopeArray();
+        $activeOperation = \is_array($freshScope['active_operation'] ?? null) ? $freshScope['active_operation'] : [];
+        self::assertSame('plan', (string)($activeOperation['operation'] ?? ''));
+        self::assertSame('done', (string)($activeOperation['status'] ?? ''));
+    }
+
     public function testDuplicateOperationObserverAutoDispatchesPendingPlanQueue(): void
     {
         $createPayload = $this->invokeJsonAction(
