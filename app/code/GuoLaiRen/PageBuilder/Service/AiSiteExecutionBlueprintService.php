@@ -125,6 +125,7 @@ final class AiSiteExecutionBlueprintService
             'header' => $tasks[0],
             'footer' => $tasks[1],
         ];
+        $sharedComponents = $this->normalizeStageOneSharedComponents($sharedComponents);
         $themeContextSnapshot = $this->buildStageOneThemeContextSnapshot(
             $planningScope,
             $websiteProfile,
@@ -182,10 +183,12 @@ final class AiSiteExecutionBlueprintService
             'navigation_plan' => $navigationPlan,
             'footer_plan' => $footerPlan,
             'theme_context_snapshot' => $themeContextSnapshot,
+            'shared_components' => $sharedComponents,
             'shared_plan' => [
                 'theme_design' => $themeContextSnapshot,
                 'header_block' => $sharedComponents['header'],
                 'footer_block' => $sharedComponents['footer'],
+                'shared_blocks' => $this->buildStageOneSharedBlocksPlanJson($sharedComponents),
                 'shared_prompt_context' => $sharedPromptContext,
             ],
             'page_types' => $pageTypes,
@@ -1273,19 +1276,26 @@ final class AiSiteExecutionBlueprintService
             \is_array($executionBlueprint['theme_context_snapshot'] ?? null) ? $executionBlueprint['theme_context_snapshot'] : [],
             $themeDesign
         );
-        $sharedComponents = \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : [];
+        $sharedComponents = $this->normalizeStageOneSharedComponents(
+            \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : []
+        );
         $sharedPromptContext = $this->buildStageOneSharedPromptContext($themeContextSnapshot, $sharedComponents, $pageTypes, $planLocale);
         $structured['theme_context_snapshot'] = $themeContextSnapshot;
+        $structured['shared_components'] = $sharedComponents;
         $structured['shared_plan'] = \array_replace(
             \is_array($structured['shared_plan'] ?? null) ? $structured['shared_plan'] : [],
             [
                 'theme_design' => $themeContextSnapshot,
+                'header_block' => \is_array($sharedComponents['header'] ?? null) ? $sharedComponents['header'] : [],
+                'footer_block' => \is_array($sharedComponents['footer'] ?? null) ? $sharedComponents['footer'] : [],
+                'shared_blocks' => $this->buildStageOneSharedBlocksPlanJson($sharedComponents),
                 'shared_prompt_context' => $sharedPromptContext,
             ]
         );
         $planJson['theme_design'] = $themeDesign;
         $executionBlueprint['theme_context_snapshot'] = $themeContextSnapshot;
         $executionBlueprint['shared_prompt_context'] = $sharedPromptContext;
+        $executionBlueprint['shared_components'] = $sharedComponents;
         $pagePlans = $this->buildStageOnePagePlans(
             \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [],
             $sharedPromptContext
@@ -3302,6 +3312,7 @@ final class AiSiteExecutionBlueprintService
             'task_key' => 'shared:' . $component,
             'task_type' => 'shared_component',
             'component' => $component,
+            'sort_order' => $isHeader ? 10 : 20,
             'goal' => $isHeader ? '输出可直接上屏的站点头部内容，并承接主导航与主 CTA。' : '输出可直接上屏的页脚内容，补齐联系入口、政策链接与次级导航。',
             'implementation_detail' => $isHeader
                 ? '桌面端使用横向导航与单一主按钮，移动端折叠菜单但保留品牌名和主 CTA。'
@@ -3724,7 +3735,7 @@ final class AiSiteExecutionBlueprintService
             'pages' => [],
             'flat' => [],
         ];
-        foreach ($sharedComponents as $region => $componentPlan) {
+        foreach ($this->normalizeStageOneSharedComponents($sharedComponents) as $region => $componentPlan) {
             if (!\is_array($componentPlan)) {
                 continue;
             }
@@ -3735,6 +3746,7 @@ final class AiSiteExecutionBlueprintService
                 'page_key' => '',
                 'title' => (string)($componentPlan['component'] ?? $region),
                 'goal' => (string)($componentPlan['goal'] ?? ''),
+                'sort_order' => (int)($componentPlan['sort_order'] ?? 0),
                 'status' => 'done',
             ];
             $index['shared'][$blockKey] = $row;
@@ -4025,6 +4037,9 @@ final class AiSiteExecutionBlueprintService
             ];
         }
 
+        $sharedComponents = $this->resolveStageOneSharedComponents($structured, []);
+        $sharedBlocks = $this->buildStageOneSharedBlocksPlanJson($sharedComponents);
+
         return [
             'i18n' => \is_array($structured['i18n'] ?? null) ? $structured['i18n'] : [],
             'site_strategy' => \is_array($structured['site_strategy'] ?? null) ? $structured['site_strategy'] : [],
@@ -4037,6 +4052,7 @@ final class AiSiteExecutionBlueprintService
             ),
             'navigation_plan' => \is_array($structured['navigation_plan'] ?? null) ? $structured['navigation_plan'] : [],
             'footer_plan' => \is_array($structured['footer_plan'] ?? null) ? $structured['footer_plan'] : [],
+            'shared_blocks' => $sharedBlocks,
             'seo_strategy' => \is_array($structured['seo_strategy'] ?? null) ? $structured['seo_strategy'] : [],
             'page_types' => \is_array($structured['page_types'] ?? null) ? $structured['page_types'] : [],
             'pages' => $pageBlocks,
