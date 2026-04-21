@@ -154,7 +154,8 @@ final class AiSiteExecutionBlueprintService
             $pageTypes,
             $planLocale
         );
-        $pagePlans = $this->buildStageOnePagePlans($pages, $sharedPromptContext);
+        $pagePlans = $this->buildStageOnePagePlansConcurrently($pages, $sharedPromptContext);
+        $stageOneQueue = $this->buildStageOnePageFanoutQueueEnvelope($stageOneQueue, $pagePlans, $sharedPromptContext, $planLocale);
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
 
         $executionBlueprint = [
@@ -1317,10 +1318,13 @@ final class AiSiteExecutionBlueprintService
         $executionBlueprint['shared_prompt_context'] = $sharedPromptContext;
         $structured['stage1_queue'] = $stageOneQueue;
         $executionBlueprint['stage1_queue'] = $stageOneQueue;
-        $pagePlans = $this->buildStageOnePagePlans(
+        $pagePlans = $this->buildStageOnePagePlansConcurrently(
             \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [],
             $sharedPromptContext
         );
+        $stageOneQueue = $this->buildStageOnePageFanoutQueueEnvelope($stageOneQueue, $pagePlans, $sharedPromptContext, $planLocale);
+        $structured['stage1_queue'] = $stageOneQueue;
+        $executionBlueprint['stage1_queue'] = $stageOneQueue;
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
 
         $tasks = [];
@@ -3774,19 +3778,190 @@ final class AiSiteExecutionBlueprintService
             if (!\is_array($pagePlan)) {
                 continue;
             }
-            $assembledPagePlan = \array_replace($pagePlan, [
-                'page_key' => (string)$pageType,
-                'page_status' => 'done',
-                'shared_context_hash' => (string)($sharedPromptContext['context_hash'] ?? ''),
-                'theme_context_hash' => (string)($sharedPromptContext['theme_context_hash'] ?? ''),
-                'assembly_version' => 1,
-                'generation_method' => 'stage1.page_plan.generate',
-            ]);
-            $assembledPagePlan['page_context_hash'] = $this->buildStageOnePageContextHash((string)$pageType, $assembledPagePlan);
-            $pagePlans[(string)$pageType] = $assembledPagePlan;
+            $pagePlans[(string)$pageType] = $this->buildStageOnePagePlan((string)$pageType, $pagePlan, $sharedPromptContext);
         }
 
         return $pagePlans;
+    }
+
+    /**
+     * @param array<string, mixed> $pages
+     * @return array<string, mixed>
+     */
+    private function buildStageOnePagePlansConcurrently(array $pages, array $sharedPromptContext): array
+    {
+        if (\count($pages) <= 1 || !\class_exists(\Fiber::class)) {
+            return $this->buildStageOnePagePlans($pages, $sharedPromptContext);
+        }
+
+        /** @var array<string, \Fiber> $fibers */
+        $fibers = [];
+        foreach ($pages as $pageType => $pagePlan) {
+            if (!\is_array($pagePlan)) {
+                continue;
+            }
+            $pageKey = (string)$pageType;
+            $fibers[$pageKey] = new \Fiber(function () use ($pageKey, $pagePlan, $sharedPromptContext): array {
+                return $this->buildStageOnePagePlan($pageKey, $pagePlan, $sharedPromptContext);
+            });
+        }
+
+        if ($fibers === []) {
+            return [];
+        }
+
+        $results = [];
+        $errors = [];
+        foreach ($fibers as $pageKey => $fiber) {
+            try {
+                $fiber->start();
+            } catch (\Throwable $throwable) {
+                $errors[$pageKey] = $throwable;
+            }
+        }
+
+        while (\count($results) + \count($errors) < \count($fibers)) {
+            $madeProgress = false;
+            foreach ($fibers as $pageKey => $fiber) {
+                if (isset($results[$pageKey]) || isset($errors[$pageKey])) {
+                    continue;
+                }
+
+                try {
+                    if ($fiber->isTerminated()) {
+                        $results[$pageKey] = $fiber->getReturn();
+                        $madeProgress = true;
+                        continue;
+                    }
+
+                    if ($fiber->isSuspended()) {
+                        $fiber->resume();
+                        $madeProgress = true;
+                    }
+                } catch (\Throwable $throwable) {
+                    $errors[$pageKey] = $throwable;
+                    $madeProgress = true;
+                }
+            }
+
+            if (!$madeProgress && \count($results) + \count($errors) < \count($fibers)) {
+                \usleep(1000);
+            }
+        }
+
+        if ($errors !== []) {
+            $firstError = \reset($errors);
+            if ($firstError instanceof \Throwable) {
+                throw $firstError;
+            }
+        }
+
+        $pagePlans = [];
+        foreach ($pages as $pageType => $_) {
+            $pageKey = (string)$pageType;
+            if (isset($results[$pageKey])) {
+                $pagePlans[$pageKey] = $results[$pageKey];
+            }
+        }
+
+        return $pagePlans;
+    }
+
+    /**
+     * @param array<string, mixed> $pagePlan
+     * @return array<string, mixed>
+     */
+    private function buildStageOnePagePlan(string $pageType, array $pagePlan, array $sharedPromptContext): array
+    {
+        $assembledPagePlan = \array_replace($pagePlan, [
+            'page_key' => $pageType,
+            'page_status' => 'done',
+            'shared_context_hash' => (string)($sharedPromptContext['context_hash'] ?? ''),
+            'theme_context_hash' => (string)($sharedPromptContext['theme_context_hash'] ?? ''),
+            'assembly_version' => 1,
+            'generation_method' => 'stage1.page_plan.generate',
+        ]);
+        $assembledPagePlan['page_context_hash'] = $this->buildStageOnePageContextHash($pageType, $assembledPagePlan);
+
+        return $assembledPagePlan;
+    }
+
+    /**
+     * @param array<string, mixed> $stageOneQueue
+     * @param array<string, mixed> $pagePlans
+     * @return array<string, mixed>
+     */
+    private function buildStageOnePageFanoutQueueEnvelope(
+        array $stageOneQueue,
+        array $pagePlans,
+        array $sharedPromptContext,
+        string $planLocale
+    ): array {
+        $jobs = \is_array($stageOneQueue['jobs'] ?? null) ? $stageOneQueue['jobs'] : [];
+        $sequence = \array_values(\array_map('strval', \is_array($stageOneQueue['sequence'] ?? null) ? $stageOneQueue['sequence'] : []));
+        $pageJobKeys = [];
+        $sortOrder = 40;
+
+        foreach ($pagePlans as $pageType => $pagePlan) {
+            if (!\is_array($pagePlan)) {
+                continue;
+            }
+
+            $pageKey = (string)$pageType;
+            $jobKey = 'stage1.page_plan:' . $pageKey;
+            $pageJobKeys[] = $jobKey;
+            $jobs[$jobKey] = [
+                'job_key' => $jobKey,
+                'job_type' => 'stage1.page_plan.generate',
+                'stage' => 'stage1_page',
+                'sort_order' => $sortOrder++,
+                'status' => 'done',
+                'depends_on' => ['stage1.shared.header_footer'],
+                'token' => \sha1((string)\json_encode([
+                    'job_key' => $jobKey,
+                    'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? $sharedPromptContext['context_hash'] ?? ''),
+                    'page_context_hash' => (string)($pagePlan['page_context_hash'] ?? ''),
+                ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
+                'concurrency' => [
+                    'mode' => 'fiber_coroutine',
+                    'fanout_group' => 'stage1.page_plan.fanout',
+                    'task_granularity' => 'one_page_one_task',
+                    'trigger_after' => 'stage1.shared.header_footer',
+                ],
+                'inputs' => [
+                    'page_key' => $pageKey,
+                    'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? $sharedPromptContext['context_hash'] ?? ''),
+                    'theme_context_hash' => (string)($pagePlan['theme_context_hash'] ?? $sharedPromptContext['theme_context_hash'] ?? ''),
+                    'plan_locale' => $planLocale,
+                ],
+                'outputs' => [
+                    'page_plan' => $pagePlan,
+                    'page_context_hash' => (string)($pagePlan['page_context_hash'] ?? ''),
+                ],
+                'output_refs' => [
+                    'plan_workbench.stage1.page_plans.' . $pageKey,
+                    'plan_structured.page_plans.' . $pageKey,
+                ],
+            ];
+        }
+
+        foreach ($pageJobKeys as $jobKey) {
+            if (!\in_array($jobKey, $sequence, true)) {
+                $sequence[] = $jobKey;
+            }
+        }
+
+        $stageOneQueue['sequence'] = $sequence;
+        $stageOneQueue['jobs'] = $jobs;
+        $stageOneQueue['fanout'] = [
+            'trigger_after' => 'stage1.shared.header_footer',
+            'mode' => 'fiber_coroutine',
+            'task_granularity' => 'one_page_one_task',
+            'page_job_count' => \count($pageJobKeys),
+            'page_job_keys' => $pageJobKeys,
+        ];
+
+        return $stageOneQueue;
     }
 
     /**
