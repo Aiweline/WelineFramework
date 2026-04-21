@@ -17,6 +17,7 @@ use Weline\Framework\Console\CommandInterface;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\System\Process\Processer;
 use Weline\Queue\Model\Queue;
 use Weline\Queue\QueueInterface;
 
@@ -49,6 +50,45 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->success(__('正确示例：php bin/w queue:run --id=%{1}', $id));
             exit();
         }
+        $currentPid = (int)getmypid();
+        $existingPid = (int)($queue->getPid() ?: 0);
+        $existingStatus = \trim((string)$queue->getStatus());
+        $sameQueueRunning = false;
+        if ($existingStatus === $queue::status_running) {
+            if ($existingPid > 0 && $existingPid !== $currentPid) {
+                $sameQueueRunning = Processer::isRunningByPid($existingPid);
+            } elseif ($existingPid === 0) {
+                // 无 pid 但状态仍是 running，按“正在执行”处理，避免并发重复消费。
+                $sameQueueRunning = true;
+            }
+        }
+        if ($sameQueueRunning) {
+            if (!$force) {
+                $this->printing->error(__('队列 #%{1} 正在运行中，禁止重复运行（pid=%{2}）。', [$id, (string)($existingPid > 0 ? $existingPid : '-')]));
+                $this->printing->warning(__('如需接管，请使用 --force；系统会先终止当前同 ID 任务后再启动新任务。'));
+                exit();
+            }
+            $this->printing->warning(__('强制模式：检测到队列 #%{1} 正在运行（pid=%{2}），将先终止旧任务再继续。', [$id, (string)($existingPid > 0 ? $existingPid : '-')]));
+            if ($existingPid > 0 && $existingPid !== $currentPid && Processer::isRunningByPid($existingPid)) {
+                $killed = (bool)Processer::killByPid($existingPid, true);
+                if (!$killed) {
+                    $this->printing->error(__('终止队列 #%{1} 旧任务失败（pid=%{2}），已中止本次运行。', [$id, $existingPid]));
+                    exit();
+                }
+                $this->printing->note(__('已终止队列 #%{1} 旧任务（pid=%{2}）。', [$id, $existingPid]));
+            }
+            $queue = $this->queue->load($id);
+            $queue->setStatus($queue::status_pending)
+                ->setPid(0)
+                ->setProcess(\trim((string)$queue->getProcess() . PHP_EOL . __('强制接管：已终止同 ID 旧任务，准备重新执行。')))
+                ->save();
+        } elseif ($existingStatus === $queue::status_running && $existingPid > 0 && !Processer::isRunningByPid($existingPid)) {
+            // 兜底：running + 僵尸 pid，自动回收，允许本次继续执行。
+            $queue->setStatus($queue::status_pending)
+                ->setPid(0)
+                ->setProcess(\trim((string)$queue->getProcess() . PHP_EOL . __('检测到历史运行进程不存在，已自动回收为 pending。')))
+                ->save();
+        }
 
         # 获取执行者
         $type = $queue->getType();
@@ -70,6 +110,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $validate_result = $queue_execute->validate($queue);
         if (is_bool($validate_result) and $validate_result) {
             $queue->setStatus($queue::status_running)
+                ->setPid((int)getmypid())
                 ->setResult($queue->getResult() . PHP_EOL . __('正在执行...'))
                 ->save();
             try {
@@ -78,6 +119,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 // execute() 内常通过 w_query 等直接更新库里的 result；此处必须重新 load，否则会用过期内存覆盖掉过程日志
                 $queue = $this->queue->load($id);
                 $queue->setStatus($queue::status_done)
+                    ->setPid(0)
                     ->setResult(\trim($queue->getResult() . PHP_EOL . $result))
                     ->save();
                 $this->printing->title(__('队列执行详情') . ' queue_id=' . $id);
@@ -86,6 +128,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $result = $e->getMessage();
                 $queue = $this->queue->load($id);
                 $queue->setStatus($queue::status_error)
+                    ->setPid(0)
                     ->setResult(\trim($queue->getResult() . PHP_EOL . $result))
                     ->save();
                 $this->printing->title(__('队列执行详情（失败）') . ' queue_id=' . $id);
@@ -97,6 +140,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $result = __('队列消息内容验证不通过。') . ($validate_result ? __('验证结果：') : '');
             $this->printing->error($result);
             $queue->setStatus($queue::status_error)
+                ->setPid(0)
                 ->setResult($result . PHP_EOL . $queue->getResult())
                 ->save();
         }

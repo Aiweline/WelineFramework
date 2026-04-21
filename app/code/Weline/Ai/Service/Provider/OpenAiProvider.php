@@ -859,6 +859,9 @@ class OpenAiProvider implements ProviderInterface
 
             if ($httpCode !== 200) {
                 $errorMsg = $result['error']['message'] ?? __('HTTP错误: %{code}', ['code' => $httpCode]);
+                if ($this->isNonRetryableApiError($httpCode, (string)$errorMsg)) {
+                    throw new Exception(__('API返回错误（不可重试）: %{error}', ['error' => $errorMsg]));
+                }
                 throw new Exception(__('API返回错误: %{error}', ['error' => $errorMsg]));
             }
 
@@ -874,6 +877,9 @@ class OpenAiProvider implements ProviderInterface
                 strpos($e->getMessage(), '执行时间') !== false) {
                 throw $e;
             }
+            if ($this->isNonRetryableApiErrorMessage($e->getMessage())) {
+                throw $e;
+            }
             
             if ($retryCount < self::MAX_RETRIES) {
                 SchedulerSystem::sleep(self::RETRY_DELAY * ($retryCount + 1));
@@ -884,6 +890,37 @@ class OpenAiProvider implements ProviderInterface
                 'msg' => $e->getMessage()
             ]));
         }
+    }
+
+    private function isNonRetryableApiError(int $httpCode, string $errorMessage): bool
+    {
+        if (\in_array($httpCode, [400, 401, 403], true)) {
+            return true;
+        }
+        return $this->isNonRetryableApiErrorMessage($errorMessage);
+    }
+
+    private function isNonRetryableApiErrorMessage(string $message): bool
+    {
+        $normalized = \mb_strtolower(\trim($message));
+        if ($normalized === '') {
+            return false;
+        }
+        foreach ([
+            'authentication fails',
+            'invalid api key',
+            'unauthorized',
+            'permission denied',
+            'insufficient_quota',
+            'quota exceeded',
+            'invalid_request_error',
+            'model not found',
+        ] as $keyword) {
+            if (\str_contains($normalized, $keyword)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
