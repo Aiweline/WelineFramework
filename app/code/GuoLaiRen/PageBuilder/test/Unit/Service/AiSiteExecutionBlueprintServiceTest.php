@@ -227,24 +227,26 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
     public function testPlanBookStructuredIsGeneratedFromStageOneBlockTree(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        [$scope, $structured, $executionBlueprint, $planJson] = $this->buildPlanBookStructuredFixture();
 
-        $artifacts = $service->buildPlanArtifacts([
-            'site_title' => 'Structured Plan Book Test',
-            'brief_description' => 'Need home and about pages with strong CTA.',
-            'page_types' => ['home_page', 'about_page'],
-            'workspace_track' => 'virtual_theme',
-            'plan_locale' => 'en_US',
-        ], [
-            'site_title' => 'Structured Plan Book Test',
-            'brief_description' => 'Need home and about pages with strong CTA.',
-        ]);
+        $method = new \ReflectionMethod($service, 'buildPlanWorkbenchArtifacts');
+        $method->setAccessible(true);
+        $planWorkbench = $method->invoke(
+            $service,
+            $scope,
+            $structured,
+            $executionBlueprint,
+            $planJson,
+            '# Plan book fixture',
+            'en_US'
+        );
 
-        $planBook = $artifacts['plan_workbench']['confirmed']['plan_book']['structured'] ?? null;
+        $planBook = $planWorkbench['confirmed']['plan_book']['structured'] ?? null;
 
         self::assertIsArray($planBook);
         self::assertSame('stage1.block_tree', (string)($planBook['source'] ?? ''));
         self::assertSame(
-            (string)($artifacts['execution_blueprint']['signature'] ?? ''),
+            (string)($executionBlueprint['signature'] ?? ''),
             (string)($planBook['source_signature'] ?? '')
         );
         self::assertNotSame('', (string)($planBook['context_hash'] ?? ''));
@@ -260,7 +262,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
 
         $sourceHomeBlocks = \array_values(\array_map(
             static fn(array $block): string => (string)($block['block_key'] ?? ''),
-            $artifacts['structured']['page_plans']['home_page']['blocks'] ?? []
+            $structured['page_plans']['home_page']['blocks'] ?? []
         ));
         $bookHomeBlocks = \array_values(\array_map(
             static fn(array $block): string => (string)($block['source_block_key'] ?? ''),
@@ -736,6 +738,44 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertIsInt($footerMarkdownPosition);
         self::assertIsInt($headerMarkdownPosition);
         self::assertLessThan($headerMarkdownPosition, $footerMarkdownPosition);
+    }
+
+    public function testPlanBookStructuredFollowsReorderedPageBlockTree(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        [$scope, $structured, $executionBlueprint, $planJson] = $this->buildPlanBookStructuredFixture();
+
+        $pageType = '';
+        $originalKeys = [];
+        foreach (($structured['page_plans'] ?? []) as $candidatePageType => $page) {
+            $candidateBlocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+            $candidateKeys = \array_values(\array_filter(\array_map(
+                static fn(array $block): string => \trim((string)($block['block_key'] ?? '')),
+                $candidateBlocks
+            )));
+            if (\count($candidateKeys) >= 2) {
+                $pageType = (string)$candidatePageType;
+                $originalKeys = $candidateKeys;
+                break;
+            }
+        }
+
+        self::assertNotSame('', $pageType);
+        $orderedKeys = \array_values(\array_reverse($originalKeys));
+        $reordered = $service->reorderDraftPlanBlocks($scope + [
+            'plan_json' => $planJson,
+            'plan_markdown' => '# Plan book fixture',
+            'plan_structured' => $structured,
+            'execution_blueprint_draft' => $executionBlueprint,
+            'plan_locale' => 'en_US',
+        ], $pageType, $orderedKeys);
+
+        $bookBlockKeys = \array_values(\array_map(
+            static fn(array $block): string => (string)($block['source_block_key'] ?? ''),
+            $reordered['plan_workbench']['confirmed']['plan_book']['structured']['pages'][$pageType]['blocks'] ?? []
+        ));
+
+        self::assertSame($orderedKeys, $bookBlockKeys);
     }
 
     public function testBuildAiPlanPromptContainsStageOneMustConstraints(): void
