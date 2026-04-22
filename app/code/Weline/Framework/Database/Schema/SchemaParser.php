@@ -33,17 +33,17 @@ final class SchemaParser
             return null;
         }
 
+        $columns = $this->parseColumns($ref);
+        if ($columns === []) {
+            return null;
+        }
+
         $tableName = $this->resolveTableName($modelClass);
         $comment = '';
         $tableAttrs = $ref->getAttributes(Table::class);
         if ($tableAttrs !== []) {
             $a = $tableAttrs[0]->newInstance();
             $comment = $a->comment;
-        }
-
-        $columns = $this->parseColumns($ref);
-        if ($columns === []) {
-            return null;
         }
 
         $indexes = $this->parseIndexes($ref);
@@ -99,8 +99,13 @@ final class SchemaParser
      */
     private function parseColumns(ReflectionClass $ref): array
     {
+        if (!$this->hasOwnColumnDeclaration($ref)) {
+            return [];
+        }
+
         $byName = [];
         $chain = $this->getClassChain($ref);
+        $materializedConstants = [];
         $customPk = null;
         $skipParentId = false;
         try {
@@ -138,13 +143,19 @@ final class SchemaParser
                 if ($attrs === []) {
                     continue;
                 }
+                if (isset($materializedConstants[$constName])) {
+                    continue;
+                }
                 try {
                     $col = $attrs[0]->newInstance();
-                    $name = $c->getValue();
+                    $name = $this->resolveColumnName($ref, $class, $constName, $c);
                     if (!is_string($name)) {
                         continue;
                     }
                     if (($customPk !== null || $skipParentId) && $name === 'id') {
+                        continue;
+                    }
+                    if (isset($byName[$name])) {
                         continue;
                     }
                     $byName[$name] = new ColumnDefinition(
@@ -158,12 +169,57 @@ final class SchemaParser
                         comment: $col->comment ?? '',
                         unique: $col->unique
                     );
+                    $materializedConstants[$constName] = true;
                 } catch (\Throwable) {
                     // 忽略无效常量
                 }
             }
         }
         return array_values($byName);
+    }
+
+    private function hasOwnColumnDeclaration(ReflectionClass $ref): bool
+    {
+        foreach ($ref->getReflectionConstants() as $c) {
+            if ($c->getDeclaringClass()->getName() !== $ref->getName()) {
+                continue;
+            }
+            if (!str_starts_with($c->getName(), 'schema_fields_') || !$c->isPublic()) {
+                continue;
+            }
+            if ($c->getAttributes(Col::class) !== []) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function resolveColumnName(
+        ReflectionClass $ref,
+        ReflectionClass $sourceClass,
+        string $constName,
+        \ReflectionClassConstant $sourceConstant
+    ): mixed {
+        foreach ($this->getClassChain($ref) as $class) {
+            $declared = $this->getDeclaredConstant($class, $constName);
+            if ($declared !== null) {
+                return $declared->getValue();
+            }
+            if ($class->getName() === $sourceClass->getName()) {
+                break;
+            }
+        }
+        return $sourceConstant->getValue();
+    }
+
+    private function getDeclaredConstant(ReflectionClass $class, string $constName): ?\ReflectionClassConstant
+    {
+        foreach ($class->getReflectionConstants() as $candidate) {
+            if ($candidate->getName() === $constName && $candidate->getDeclaringClass()->getName() === $class->getName()) {
+                return $candidate;
+            }
+        }
+        return null;
     }
 
     /** @return list<ReflectionClass> 从当前类到 AbstractModel 的继承链（子类在前，父类在后） */

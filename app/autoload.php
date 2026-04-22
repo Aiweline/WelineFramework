@@ -34,7 +34,7 @@ if (!\defined('APP_CODE_PATH')) {
 
 // 注册 app/code 和 generated/code 优先的自动加载器（在 Composer 之前，prepend=true）
 // 顺序：classmap → generated/code → app/code（兜底，classmap 未刷新时新类仍可加载）
-\spl_autoload_register(function ($class) {
+$welineProjectAutoloader = static function ($class) {
     static $loadedFiles = [];
     static $classMap = null;
     static $classMapLoaded = false;
@@ -85,11 +85,15 @@ if (!\defined('APP_CODE_PATH')) {
     }
 
     return false;
-}, true, true);
+};
+\spl_autoload_register($welineProjectAutoloader, true, true);
 
 $autoloader = VENDOR_PATH . 'autoload.php';
 if (\is_file($autoloader)) {
     $composerLoader = require $autoloader;
+    // Composer registers itself with prepend=true. Restore project priority so stale absolute paths cannot shadow BP.
+    \spl_autoload_unregister($welineProjectAutoloader);
+    \spl_autoload_register($welineProjectAutoloader, true, true);
 
     $psr4CacheFile = BP . 'generated' . \DIRECTORY_SEPARATOR . 'psr4_map.php';
     if (\is_file($psr4CacheFile)) {
@@ -114,4 +118,19 @@ if (\is_file($autoloader)) {
         }
     }
 }
+
+    $localClassMapFile = BP . 'generated' . \DIRECTORY_SEPARATOR . 'classmap.php';
+    if (\is_file($localClassMapFile) && \method_exists($composerLoader, 'addClassMap')) {
+        $localClassMap = @include $localClassMapFile;
+        if (\is_array($localClassMap) && $localClassMap !== []) {
+            $composerLoader->addClassMap($localClassMap);
+        }
+    }
+
+    if (\method_exists($composerLoader, 'addPsr4')) {
+        $composerLoader->addPsr4('', [
+            APP_CODE_PATH,
+            BP . 'generated' . \DIRECTORY_SEPARATOR . 'code' . \DIRECTORY_SEPARATOR,
+        ], true);
+    }
 }
