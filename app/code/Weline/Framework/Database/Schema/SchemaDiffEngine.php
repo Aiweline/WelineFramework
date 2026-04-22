@@ -127,16 +127,26 @@ final class SchemaDiffEngine
     {
         return $a->name === $b->name
             && $this->normalizeType($a->type) === $this->normalizeType($b->type)
-            && (string) ($a->length ?? '') === (string) ($b->length ?? '')
+            && $this->normalizeLength($a->type, $a->length) === $this->normalizeLength($b->type, $b->length)
             && $a->nullable === $b->nullable
             && $a->primaryKey === $b->primaryKey
             && $a->autoIncrement === $b->autoIncrement
-            && $a->unique === $b->unique
-            && (string) $a->comment === (string) $b->comment
+            && $this->columnUniqueCompatible($a, $b)
+            && $this->columnCommentCompatible($a, $b)
             && (string) ($a->default ?? '') === (string) ($b->default ?? '');
     }
 
     /** timestamp/datetime/date 间变更易触发 PostgreSQL USING/UPDATE 转换错误，跳过兼容的 MODIFY */
+    private function columnUniqueCompatible(ColumnDefinition $declared, ColumnDefinition $actual): bool
+    {
+        return $declared->unique === $actual->unique || !$actual->unique;
+    }
+
+    private function columnCommentCompatible(ColumnDefinition $declared, ColumnDefinition $actual): bool
+    {
+        return $actual->comment === '' || (string) $declared->comment === (string) $actual->comment;
+    }
+
     private function skipTimestampCompatibleModify(ColumnDefinition $declared, ColumnDefinition $actual): bool
     {
         $tsTypes = ['timestamp', 'datetime', 'timestamptz', 'date', 'timestamp with time zone', 'timestamp without time zone'];
@@ -165,5 +175,14 @@ final class SchemaDiffEngine
             'timestamp without time zone' => 'timestamp',
         ];
         return $map[$t] ?? $t;
+    }
+
+    private function normalizeLength(string $type, int|string|null $length): string
+    {
+        if (in_array($this->normalizeType($type), ['int', 'bigint', 'smallint', 'tinyint', 'mediumint'], true)) {
+            return '';
+        }
+        $value = trim((string) ($length ?? ''));
+        return $value === '0' ? '' : $value;
     }
 }

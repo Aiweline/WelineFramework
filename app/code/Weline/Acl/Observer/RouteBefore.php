@@ -188,10 +188,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 ->fields('path')
                 ->where('type', \Weline\Acl\Model\WhiteAclSource::type_PC)
                 ->select()
-                ->fetchIterator();
+                ->fetchArray();
             $paths = [];
             foreach ($white_lists as $white_list) {
-                $white_list = \is_array($white_list) ? $white_list : (\method_exists($white_list, 'getData') ? $white_list->getData() : []);
                 $paths[] = $white_list['path'];
             }
             $white_lists = $paths;
@@ -222,6 +221,15 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         if (strtolower($uri) === '_wls/health') {
             w_auth_log('acl_whitelist', 'URI 为 WLS 健康检查，跳过权限校验', ['uri' => $uri]);
             return;
+        }
+
+        $normalizedUri = strtolower($uri);
+        foreach ($white_lists as $whiteList) {
+            $whiteList = strtolower(trim((string)$whiteList, '/'));
+            if ($normalizedUri === $whiteList || str_ends_with($normalizedUri, '/' . $whiteList)) {
+                w_auth_log('acl_whitelist', 'URI 在白名单内，跳过权限校验', ['uri' => $uri]);
+                return;
+            }
         }
 
         if (in_array(strtolower($uri), $white_lists)) {
@@ -508,10 +516,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 ->fields('path')
                 ->where('type', \Weline\Acl\Model\WhiteAclSource::type_API)
                 ->select()
-                ->fetchIterator();
+                ->fetchArray();
             $paths = [];
             foreach ($white_lists as $white_list) {
-                $white_list = \is_array($white_list) ? $white_list : (\method_exists($white_list, 'getData') ? $white_list->getData() : []);
                 $paths[] = $white_list['path'];
             }
             $white_lists = $paths;

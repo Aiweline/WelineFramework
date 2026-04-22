@@ -28,17 +28,17 @@ class Component extends BackendController
         $params = $this->request->getPost('params', []);
 
         if ($themeId <= 0) {
-            return $this->fetchJson($this->error(__('璇烽€夋嫨涓婚')));
+            return $this->fetchJson($this->error(__('Invalid theme id')));
         }
 
         if ($component === '') {
-            return $this->fetchJson($this->error(__('璇烽€夋嫨缁勪欢')));
+            return $this->fetchJson($this->error(__('Missing component')));
         }
 
         $theme = clone $this->welineTheme;
         $theme->clearData()->clearQuery()->load($themeId);
         if (!$theme->getId()) {
-            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?')));
+            return $this->fetchJson($this->error(__('Theme not found')));
         }
 
         $availableComponents = $this->themeResourceCatalog->getComponents($area, $theme);
@@ -51,7 +51,7 @@ class Component extends BackendController
         }
 
         if (!$componentExists) {
-            return $this->fetchJson($this->error(__('缁勪欢涓嶅瓨鍦')));
+            return $this->fetchJson($this->error(__('Component is not available for this theme')));
         }
 
         ThemeData::setCurrentTheme($theme);
@@ -80,9 +80,9 @@ class Component extends BackendController
         try {
             ThemeData::setParamValues("components.{$component}", $normalizedParams, $scope);
             ThemeData::clearCache();
-            return $this->fetchJson($this->success(__('鍙傛暟淇濆瓨鎴愬姛')));
+            return $this->fetchJson($this->success(__('Component parameters saved')));
         } catch (\Throwable $throwable) {
-            return $this->fetchJson($this->error(__('淇濆瓨澶辫触锛?{error}', ['error' => $throwable->getMessage()])));
+            return $this->fetchJson($this->error(__('Failed to save component parameters: {error}', ['error' => $throwable->getMessage()])));
         }
     }
 }
