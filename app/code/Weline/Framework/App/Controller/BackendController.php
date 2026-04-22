@@ -102,7 +102,7 @@ class BackendController extends PcController
             
             $routeUrlPath = $this->request->getRouteUrlPath();
             
-            if (!\in_array($routeUrlPath, $whitelist_url, true)) {
+            if (!$this->isBackendWhitelistedRoute($routeUrlPath, $whitelist_url)) {
                 if ($this->isSseLikeRequest()) {
                     throw new ResponseTerminateException(
                         Response::json([
@@ -132,6 +132,23 @@ class BackendController extends PcController
                 $this->noRouter();
             }
         }
+    }
+
+    private function isBackendWhitelistedRoute(string $routeUrlPath, array $whitelistUrls): bool
+    {
+        $normalizedRoute = \strtolower(\trim($routeUrlPath, '/'));
+        foreach ($whitelistUrls as $whitelistUrl) {
+            $normalizedWhitelist = \strtolower(\trim((string)$whitelistUrl, '/'));
+            if ($normalizedWhitelist === '') {
+                continue;
+            }
+
+            if ($normalizedRoute === $normalizedWhitelist || \str_ends_with($normalizedRoute, '/' . $normalizedWhitelist)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function isSseLikeRequest(): bool

@@ -37,7 +37,7 @@ final class SystemConfigTest extends TestCase
         self::assertSame(1, $counter->singleLoads);
     }
 
-    public function testGetConfigCachesNullMissesAcrossRequests(): void
+    public function testGetConfigRechecksCachedNullMissesAcrossRequests(): void
     {
         $cache = new SystemConfigTestCachePool('system_config');
         $counter = (object) ['singleLoads' => 0, 'rowsLoads' => 0];
@@ -49,8 +49,8 @@ final class SystemConfigTest extends TestCase
         RequestContext::cleanup();
 
         $second = $this->createConfigModel($cache, $counter, 'should-not-load');
-        self::assertNull($second->getConfig('missing_key', 'Weline_Backend', SystemConfig::area_BACKEND));
-        self::assertSame(1, $counter->singleLoads);
+        self::assertSame('should-not-load', $second->getConfig('missing_key', 'Weline_Backend', SystemConfig::area_BACKEND));
+        self::assertSame(2, $counter->singleLoads);
     }
 
     public function testGetConfigMapByModuleNormalizesRowsAndCachesThem(): void
@@ -87,6 +87,59 @@ final class SystemConfigTest extends TestCase
             ['logo_dark' => 'logo-dark.png', 'site_name' => 'Weline'],
             $second->getConfigMapByModule('Weline_Backend', SystemConfig::area_BACKEND)
         );
+        self::assertSame(1, $counter->rowsLoads);
+    }
+
+    public function testGetConfigTreatsMissingSystemConfigTableAsUnconfigured(): void
+    {
+        $cache = new SystemConfigTestCachePool('system_config');
+        $counter = (object) ['singleLoads' => 0, 'rowsLoads' => 0];
+
+        $model = new class($cache, $counter) extends SystemConfig {
+            public function __construct(
+                CachePoolInterface $cache,
+                private readonly object $counter
+            ) {
+                $this->_cache = $cache;
+            }
+
+            protected function loadSingleConfigValue(string $key, string $module, string $area): mixed
+            {
+                $this->counter->singleLoads++;
+                throw new \PDOException('SQLSTATE[HY000]: General error: 1 no such table: system_config');
+            }
+
+            protected function dispatchConfigGetEvent(string $key, string $module, string $area, mixed $value): mixed
+            {
+                return $value;
+            }
+        };
+
+        self::assertNull($model->getConfig('start_page_path', 'Weline_Backend', SystemConfig::area_BACKEND));
+        self::assertSame(1, $counter->singleLoads);
+    }
+
+    public function testGetConfigMapTreatsMissingSystemConfigTableAsEmpty(): void
+    {
+        $cache = new SystemConfigTestCachePool('system_config');
+        $counter = (object) ['singleLoads' => 0, 'rowsLoads' => 0];
+
+        $model = new class($cache, $counter) extends SystemConfig {
+            public function __construct(
+                CachePoolInterface $cache,
+                private readonly object $counter
+            ) {
+                $this->_cache = $cache;
+            }
+
+            protected function loadConfigRowsByModule(string $module, string $area): array
+            {
+                $this->counter->rowsLoads++;
+                throw new \PDOException('SQLSTATE[HY000]: General error: 1 no such table: system_config');
+            }
+        };
+
+        self::assertSame([], $model->getConfigMapByModule('Weline_Backend', SystemConfig::area_BACKEND));
         self::assertSame(1, $counter->rowsLoads);
     }
 

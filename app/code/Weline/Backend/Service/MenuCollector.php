@@ -225,7 +225,6 @@ class MenuCollector
         $field = Acl::schema_fields_ACL_ORIGIN;
         $this->acl->reset();
         $this->acl->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
-            ->where($field, '', '=', 'OR')
             ->where($field, Acl::acl_origin_user, '!=');
 
         if (!empty($modulesFilter)) {
@@ -491,7 +490,6 @@ class MenuCollector
         $this->acl->reset();
         $this->acl->where(Acl::schema_fields_PARENT_SOURCE, $parentSource)
             ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
-            ->where($field, '', '=', 'OR')
             ->where($field, Acl::acl_origin_user, '!=')
             ->select();
 

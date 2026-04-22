@@ -24,13 +24,13 @@ class Partials extends BackendController
         $themeId = (int)$this->request->getParam('theme_id', 0);
         $scope = (string)$this->request->getParam('scope', 'default');
         if ($themeId <= 0) {
-            return $this->fetchJson($this->error(__('璇烽€夋嫨涓婚')));
+            return $this->fetchJson($this->error(__('Invalid theme id')));
         }
 
         $theme = clone $this->welineTheme;
         $theme->clearData()->clearQuery()->load($themeId);
         if (!$theme->getId()) {
-            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?')));
+            return $this->fetchJson($this->error(__('Theme not found')));
         }
 
         $frontendPartials = $this->toLegacyPartialMap($this->themeResourceCatalog->getPartials('frontend', $theme));
@@ -54,13 +54,13 @@ class Partials extends BackendController
         $themeId = (int)$this->request->getParam('theme_id', 0);
         $scope = (string)$this->request->getParam('scope', 'default');
         if ($themeId <= 0) {
-            return $this->fetchJson($this->error(__('璇烽€夋嫨涓婚')));
+            return $this->fetchJson($this->error(__('Invalid theme id')));
         }
 
         $theme = clone $this->welineTheme;
         $theme->clearData()->clearQuery()->load($themeId);
         if (!$theme->getId()) {
-            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?')));
+            return $this->fetchJson($this->error(__('Theme not found')));
         }
 
         $frontendPartials = $this->toLegacyPartialMap($this->themeResourceCatalog->getPartials('frontend', $theme));
@@ -90,19 +90,19 @@ class Partials extends BackendController
         $partials = (array)$this->request->getPost('partials', []);
 
         if ($themeId <= 0) {
-            return $this->fetchJson($this->error(__('璇烽€夋嫨涓婚')));
+            return $this->fetchJson($this->error(__('Invalid theme id')));
         }
 
         $theme = clone $this->welineTheme;
         $theme->clearData()->clearQuery()->load($themeId);
         if (!$theme->getId()) {
-            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?')));
+            return $this->fetchJson($this->error(__('Theme not found')));
         }
 
         $availablePartials = $this->toLegacyPartialMap($this->themeResourceCatalog->getPartials($area, $theme));
         foreach ($partials as $type => $option) {
             if (!isset($availablePartials[$type]) || !\in_array((string)$option, $availablePartials[$type], true)) {
-                return $this->fetchJson($this->error(__('Partials 閫夐」鏃犳晥锛?{type}/%{option}', ['type' => $type, 'option' => $option])));
+                return $this->fetchJson($this->error(__('Partial option is not available: {type}/{option}', ['type' => $type, 'option' => $option])));
             }
         }
 
@@ -113,7 +113,7 @@ class Partials extends BackendController
         }
         ThemeData::clearCache();
 
-        return $this->fetchJson($this->success(__('閰嶇疆淇濆瓨鎴愬姛')));
+        return $this->fetchJson($this->success(__('Partials saved')));
     }
 
     public function getOptions()
@@ -123,13 +123,13 @@ class Partials extends BackendController
         $type = \trim((string)$this->request->getParam('type', ''));
 
         if ($themeId <= 0 || $type === '') {
-            return $this->fetchJson($this->error(__('鍙傛暟涓嶅畬鏁')));
+            return $this->fetchJson($this->error(__('Invalid theme or partial type')));
         }
 
         $theme = clone $this->welineTheme;
         $theme->clearData()->clearQuery()->load($themeId);
         if (!$theme->getId()) {
-            return $this->fetchJson($this->error(__('涓婚涓嶅瓨鍦?')));
+            return $this->fetchJson($this->error(__('Theme not found')));
         }
 
         $partials = $this->toLegacyPartialMap($this->themeResourceCatalog->getPartials($area, $theme));
