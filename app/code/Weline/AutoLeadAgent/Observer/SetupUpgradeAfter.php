@@ -13,6 +13,7 @@ namespace Weline\AutoLeadAgent\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\App\Env;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\AutoLeadAgent\Service\WasmCompileService;
@@ -137,6 +138,14 @@ class SetupUpgradeAfter implements ObserverInterface
 
             // 检查编译环境（WASI SDK）
             if (!isset($envCheck['wasi_sdk']) || !$envCheck['wasi_sdk']) {
+                $autoInstallOnUpgrade = (bool)Env::get('auto_lead_agent.wasm.auto_install_on_upgrade', false)
+                    || getenv('WELINE_AUTOLEAD_WASM_AUTO_INSTALL') === '1';
+                if (!$autoInstallOnUpgrade) {
+                    $this->printing->note(__('WASI SDK is not installed; skipping automatic download during setup upgrade.'));
+                    $this->printing->note(__('AutoLeadAgent will use the JavaScript fallback engine.'));
+                    $this->printing->note(__('Run php bin/w wasm:compile --install-deps manually, or set WELINE_AUTOLEAD_WASM_AUTO_INSTALL=1 to allow setup-time download.'));
+                    return;
+                }
                 $this->printing->note(__('WASI SDK 未安装，开始自动安装依赖...'));
                 // 立即刷新输出，确保用户能看到进度
                 if (ob_get_level() > 0) {
