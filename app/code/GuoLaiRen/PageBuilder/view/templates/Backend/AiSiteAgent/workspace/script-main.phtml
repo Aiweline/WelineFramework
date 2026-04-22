@@ -413,6 +413,9 @@
                 ? persistedTaskPlanStructured
                 : (vtPlan.confirmed && typeof vtPlan.confirmed === 'object' ? vtPlan.confirmed : {}),
         };
+        var hasConfirmedTaskPlanEntity = String(window.__pbWorkspaceConfirmedTaskPlan.confirmed_at || window.__pbWorkspaceConfirmedTaskPlan.signature || '').trim() !== ''
+            || String(window.__pbWorkspaceConfirmedTaskPlan.markdown || window.__pbWorkspaceConfirmedTaskPlan.confirmed_markdown || '').trim() !== ''
+            || isNonEmptyObject(window.__pbWorkspaceConfirmedTaskPlan.structured);
         var taskPlanDraftMarkdown = String(workspaceTaskPlan.markdown || workspaceState.task_plan_markdown || vtPlan.draft_markdown || '').trim();
         var taskPlanConfirmedMarkdown = String(vtPlan.confirmed_markdown || '').trim();
         var taskPlanDraftStructured = isNonEmptyObject(persistedTaskPlanStructured)
@@ -476,7 +479,9 @@
             hasVirtualThemePlanState = !!workspaceState.has_virtual_theme_plan;
         }
         if (Object.prototype.hasOwnProperty.call(workspaceState, 'task_plan_confirmed')) {
-            taskPlanConfirmedState = !!workspaceState.task_plan_confirmed;
+            taskPlanConfirmedState = !!workspaceState.task_plan_confirmed || hasConfirmedTaskPlanEntity;
+        } else if (hasConfirmedTaskPlanEntity) {
+            taskPlanConfirmedState = true;
         }
         if (Object.prototype.hasOwnProperty.call(workspaceState, 'has_execution_blueprint')) {
             hasExecutionBlueprintState = !!workspaceState.has_execution_blueprint;
@@ -797,11 +802,15 @@
         publishChecking: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishRunning: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishPreviewUnavailable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        visualPreviewFullscreenTitle: <?= \json_encode((string)__('主题预览放大查看'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        visualPreviewFullscreenOpen: <?= \json_encode((string)__('放大预览'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        visualPreviewFullscreenClose: <?= \json_encode((string)__('关闭'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planPreviewFullscreenTitle: <?= \json_encode((string)__('阶段一建站方案全屏查看'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanPreviewFullscreenTitle: <?= \json_encode((string)__('第二阶段任务方案全屏查看'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planPreviewFullscreenClose: <?= \json_encode((string)__('关闭'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
     };
     var planPreviewFullscreenEscapeHandler = null;
+    var visualPreviewFullscreenEscapeHandler = null;
     var currentPreviewTabKeyByStage = {
         plan: 'theme',
         'task-plan': 'theme'
@@ -1139,6 +1148,7 @@
         try {
             window.localStorage.setItem('pb-ai-preview-device', currentPreviewDevice);
         } catch (error) {}
+        syncVisualPreviewFullscreenFrameSizing();
     }
 
     function bindPreviewDeviceButtons() {
@@ -1151,6 +1161,159 @@
                 applyPreviewDeviceMode(String(button.getAttribute('data-preview-device') || 'desktop'));
             });
         });
+    }
+
+    function buildCacheBustedPreviewUrl(url, key) {
+        var s = String(url || '').trim();
+        if (!s) {
+            return '';
+        }
+        try {
+            var u = new URL(s, window.location.href);
+            u.searchParams.set(key || '_pb_zoom', String(Date.now()));
+            return u.toString();
+        } catch (error) {
+            return s + (s.indexOf('?') >= 0 ? '&' : '?') + encodeURIComponent(key || '_pb_zoom') + '=' + encodeURIComponent(String(Date.now()));
+        }
+    }
+
+    function resolveVisualPreviewFullscreenUrl() {
+        if (currentEmbeddedVisualUrl) {
+            return String(currentEmbeddedVisualUrl);
+        }
+        var frame = document.getElementById('pb-ai-visual-preview-frame');
+        return frame ? String(frame.getAttribute('src') || '') : '';
+    }
+
+    function syncVisualPreviewFullscreenFrameSizing() {
+        var frame = document.getElementById('pb-ai-visual-preview-fullscreen-frame');
+        if (!frame) {
+            return;
+        }
+        applyPreviewDeviceFrameSizing(frame);
+        frame.style.height = '100%';
+        frame.style.minHeight = '100%';
+        frame.style.maxHeight = '100%';
+        frame.style.borderRadius = '12px';
+        frame.style.background = 'var(--backend-color-bg-primary, #fff)';
+    }
+
+    function ensureVisualPreviewFullscreenOverlay() {
+        var existing = document.getElementById('pb-ai-visual-preview-fullscreen-overlay');
+        if (existing) {
+            return existing;
+        }
+        var overlay = document.createElement('div');
+        overlay.id = 'pb-ai-visual-preview-fullscreen-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.innerHTML = ''
+            + '<div class="pb-ai-visual-preview-fullscreen-dialog">'
+            + '  <div class="pb-ai-visual-preview-fullscreen-header">'
+            + '    <h2 class="pb-ai-visual-preview-fullscreen-title"></h2>'
+            + '    <button type="button" class="btn btn-sm btn-soft-secondary pb-ai-visual-preview-fullscreen-close">'
+            + '      <i class="mdi mdi-close" aria-hidden="true"></i>'
+            + '    </button>'
+            + '  </div>'
+            + '  <div class="pb-ai-visual-preview-fullscreen-body">'
+            + '    <div id="pb-ai-visual-preview-fullscreen-stage" class="pb-ai-preview-device-stage pb-ai-visual-preview-fullscreen-stage is-desktop">'
+            + '      <iframe id="pb-ai-visual-preview-fullscreen-frame" title="" loading="lazy" referrerpolicy="no-referrer"></iframe>'
+            + '    </div>'
+            + '  </div>'
+            + '</div>';
+        var titleEl = overlay.querySelector('.pb-ai-visual-preview-fullscreen-title');
+        if (titleEl) {
+            titleEl.textContent = messages.visualPreviewFullscreenTitle;
+        }
+        var closeBtn = overlay.querySelector('.pb-ai-visual-preview-fullscreen-close');
+        if (closeBtn) {
+            closeBtn.setAttribute('aria-label', messages.visualPreviewFullscreenClose);
+            closeBtn.setAttribute('title', messages.visualPreviewFullscreenClose);
+            closeBtn.addEventListener('click', function (event) {
+                event.preventDefault();
+                closeVisualPreviewFullscreen();
+            });
+        }
+        overlay.addEventListener('click', function (event) {
+            if (event.target === overlay) {
+                closeVisualPreviewFullscreen();
+            }
+        });
+        document.body.appendChild(overlay);
+        return overlay;
+    }
+
+    function openVisualPreviewFullscreen() {
+        var url = resolveVisualPreviewFullscreenUrl();
+        if (!url) {
+            toast('warning', previewLabels.visualPreviewEmpty);
+            return;
+        }
+        var overlay = ensureVisualPreviewFullscreenOverlay();
+        var frame = document.getElementById('pb-ai-visual-preview-fullscreen-frame');
+        if (!frame) {
+            return;
+        }
+        frame.setAttribute('title', messages.visualPreviewFrameTitle || messages.visualPreviewFullscreenTitle);
+        frame.setAttribute('src', buildCacheBustedPreviewUrl(url, '_pb_zoom'));
+        overlay.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('pb-ai-visual-preview-fullscreen-open');
+        applyPreviewDeviceMode(currentPreviewDevice);
+        syncVisualPreviewFullscreenFrameSizing();
+        if (visualPreviewFullscreenEscapeHandler) {
+            document.removeEventListener('keydown', visualPreviewFullscreenEscapeHandler);
+            visualPreviewFullscreenEscapeHandler = null;
+        }
+        visualPreviewFullscreenEscapeHandler = function (event) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeVisualPreviewFullscreen();
+            }
+        };
+        document.addEventListener('keydown', visualPreviewFullscreenEscapeHandler);
+    }
+
+    function closeVisualPreviewFullscreen() {
+        var overlay = document.getElementById('pb-ai-visual-preview-fullscreen-overlay');
+        if (overlay) {
+            overlay.setAttribute('aria-hidden', 'true');
+        }
+        var frame = document.getElementById('pb-ai-visual-preview-fullscreen-frame');
+        if (frame) {
+            frame.setAttribute('src', 'about:blank');
+        }
+        document.body.classList.remove('pb-ai-visual-preview-fullscreen-open');
+        if (visualPreviewFullscreenEscapeHandler) {
+            document.removeEventListener('keydown', visualPreviewFullscreenEscapeHandler);
+            visualPreviewFullscreenEscapeHandler = null;
+        }
+    }
+
+    function bindVisualPreviewFullscreenControls() {
+        document.querySelectorAll('.pb-ai-visual-preview-fullscreen-trigger').forEach(function (trigger) {
+            if (trigger.dataset.visualFullscreenBound === '1') {
+                return;
+            }
+            trigger.dataset.visualFullscreenBound = '1';
+            trigger.setAttribute('title', messages.visualPreviewFullscreenOpen);
+            trigger.setAttribute('aria-label', messages.visualPreviewFullscreenOpen);
+            trigger.addEventListener('click', function (event) {
+                event.preventDefault();
+                openVisualPreviewFullscreen();
+            });
+        });
+
+        var shell = document.querySelector('.pb-ai-visual-preview-shell');
+        if (shell && shell.dataset.visualFullscreenDblBound !== '1') {
+            shell.dataset.visualFullscreenDblBound = '1';
+            shell.addEventListener('dblclick', function (event) {
+                if (event.target && event.target.closest && event.target.closest('button, a, input, textarea, select')) {
+                    return;
+                }
+                openVisualPreviewFullscreen();
+            });
+        }
     }
 
     function ensureVisualPreviewFrame() {
@@ -1190,7 +1353,9 @@
             if (emptyState) {
                 emptyState.classList.add('d-none');
             }
-            return ensureVisualPreviewFrame();
+            var frame = ensureVisualPreviewFrame();
+            bindVisualPreviewFullscreenControls();
+            return frame;
         }
         host.innerHTML = '<div class="alert alert-info mb-0 pb-ai-preview-host-empty">' + escapeHtml(previewLabels.visualPreviewEmpty) + '</div>';
         if (emptyState) {
@@ -3696,20 +3861,8 @@
                     var actions = wrapper.querySelector('.component-actions');
                     if (actions) {
                         actions.classList.remove('pb-actions-visible');
-                        var region = String(wrapper.getAttribute('data-region') || '');
-                        if (region === 'header' || region === 'footer') {
-                            actions.classList.add('pb-actions-visible');
-                        }
                     }
                 });
-
-                var region = String(wrapper.getAttribute('data-region') || '');
-                if (region === 'header' || region === 'footer') {
-                    var initialActions = wrapper.querySelector('.component-actions');
-                    if (initialActions) {
-                        initialActions.classList.add('pb-actions-visible');
-                    }
-                }
                 ensureWrapperActionButtons(wrapper);
 
                 wrapper.addEventListener('click', function (event) {
@@ -3821,6 +3974,7 @@
         currentPreviewDevice = 'desktop';
     }
     bindPreviewDeviceButtons();
+    bindVisualPreviewFullscreenControls();
     applyPreviewDeviceMode(currentPreviewDevice);
     var pageTypesInitialized = ensureDefaultPageTypes();
     bindWorkspacePreviewMessages();
