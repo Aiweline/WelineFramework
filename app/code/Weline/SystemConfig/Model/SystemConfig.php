@@ -64,7 +64,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
             return $cacheEntry['value'];
         }
 
-        $rows = $this->loadConfigRowsByModule($module, $area);
+        $rows = $this->loadConfigRowsByModuleIfAvailable($module, $area);
         self::$configs[$area][$module] = $rows;
         RequestContext::set($requestCacheKey, $rows);
         $this->writeCacheEnvelope($this->buildModuleRowsCacheKey($module, $area), $rows);
@@ -202,47 +202,34 @@ class SystemConfig extends \Weline\Framework\Database\Model
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function toArrayFromIterator(iterable $iterator): array
-    {
-        $rows = [];
-        foreach ($iterator as $row) {
-            $row = is_array($row) ? $row : (method_exists($row, 'getData') ? $row->getData() : []);
-            if ($row !== []) {
-                $rows[] = $row;
-            }
-        }
-        return $rows;
-    }
-
     protected function loadConfigRowsByModule(string $module, string $area): array
     {
-        return $this->toArrayFromIterator(
-            $this->clear()
-                ->reset()
-                ->where([
-                    [self::schema_fields_AREA, $area],
-                    [self::schema_fields_MODULE, $module],
-                ])
-                ->select()
-                ->fetchIterator()
-        );
+        return $this->clear()
+            ->reset()
+            ->where([
+                [self::schema_fields_AREA, $area],
+                [self::schema_fields_MODULE, $module],
+            ])
+            ->select()
+            ->fetchArray();
     }
 
     protected function loadSingleConfigValue(string $key, string $module, string $area): mixed
     {
-        foreach ($this->clear()
-                     ->reset()
-                     ->where([
-                         [self::schema_fields_KEY, $key],
-                         [self::schema_fields_AREA, $area],
-                         [self::schema_fields_MODULE, $module],
-                     ])
-                     ->limit(1)
-                     ->select()
-                     ->fetchIterator() as $configValue) {
-            if (is_array($configValue) && array_key_exists(self::schema_fields_VALUE, $configValue)) {
-                return $configValue[self::schema_fields_VALUE];
-            }
+        $configRows = $this->clear()
+            ->reset()
+            ->where([
+                [self::schema_fields_KEY, $key],
+                [self::schema_fields_AREA, $area],
+                [self::schema_fields_MODULE, $module],
+            ])
+            ->select()
+            ->fetchArray();
+
+        $configValue = is_array($configRows) ? ($configRows[0] ?? null) : null;
+
+        if (is_array($configValue) && array_key_exists(self::schema_fields_VALUE, $configValue)) {
+            return $configValue[self::schema_fields_VALUE];
         }
 
         return null;
@@ -281,7 +268,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
 
             // Guard against stale null cache: a config key may be created by another request/worker later.
             // Re-check DB once before trusting cached null.
-            $dbValue = $this->loadSingleConfigValue($key, $module, $area);
+            $dbValue = $this->loadSingleConfigValueIfAvailable($key, $module, $area);
             if ($dbValue !== null) {
                 RequestContext::set($requestCacheKey, $dbValue);
                 $this->writeCacheEnvelope($this->buildSingleCacheKey($key, $module, $area), $dbValue);
@@ -292,11 +279,54 @@ class SystemConfig extends \Weline\Framework\Database\Model
             return null;
         }
 
-        $value = $this->loadSingleConfigValue($key, $module, $area);
+        $value = $this->loadSingleConfigValueIfAvailable($key, $module, $area);
         RequestContext::set($requestCacheKey, $value);
         $this->writeCacheEnvelope($this->buildSingleCacheKey($key, $module, $area), $value);
 
         return $value;
+    }
+
+    /**
+     * setup:upgrade may read config before SchemaDiff creates system_config.
+     */
+    private function loadConfigRowsByModuleIfAvailable(string $module, string $area): array
+    {
+        try {
+            return $this->loadConfigRowsByModule($module, $area);
+        } catch (\Throwable $e) {
+            if ($this->isSystemConfigTableMissing($e)) {
+                return [];
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * setup:upgrade may read config before SchemaDiff creates system_config.
+     */
+    private function loadSingleConfigValueIfAvailable(string $key, string $module, string $area): mixed
+    {
+        try {
+            return $this->loadSingleConfigValue($key, $module, $area);
+        } catch (\Throwable $e) {
+            if ($this->isSystemConfigTableMissing($e)) {
+                return null;
+            }
+            throw $e;
+        }
+    }
+
+    private function isSystemConfigTableMissing(\Throwable $e): bool
+    {
+        $message = strtolower($e->getMessage());
+        if (!str_contains($message, 'system_config')) {
+            return false;
+        }
+
+        return str_contains($message, 'no such table')
+            || str_contains($message, 'base table or view not found')
+            || str_contains($message, 'undefined table')
+            || str_contains($message, 'does not exist');
     }
 
     private function extractNestedConfigValue(mixed $configValue, string $rootKey, array $keys): mixed

@@ -38,7 +38,7 @@ class EavEntity extends Model
     public const schema_fields_name = 'name';
     #[Col('varchar', 255, nullable: false, comment: '实体类')]
     public const schema_fields_class = 'class';
-    #[Col('smallint', 1, nullable: false, default: 0, comment: '是否系统')]
+    #[Col('smallint', 1, nullable: true, default: 0, comment: '是否系统')]
     public const schema_fields_is_system = 'is_system';
     #[Col('varchar', 60, nullable: false, comment: '实体ID字段类型')]
     public const schema_fields_eav_entity_id_field_type = 'eav_entity_id_field_type';
