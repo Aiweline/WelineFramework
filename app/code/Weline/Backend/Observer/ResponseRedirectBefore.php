@@ -117,8 +117,15 @@ class ResponseRedirectBefore implements ObserverInterface
     {
         try {
             // 登录成功后的重定向：当前请求为 admin/login/post 时，不要根据登录态把目标改成登录页，避免 WLS/时序下误判导致 admin↔login 循环
-            $currentPath = $this->request->getRouteUrlPath();
-            if ($currentPath === 'admin/login/post') {
+            $currentPath = trim($this->request->getRouteUrlPath(), '/');
+            $publicBackendPaths = $this->getBackendWhitelistUrls();
+            $publicBackendPaths[] = 'admin/login/logout';
+            foreach ($publicBackendPaths as $publicBackendPath) {
+                if ($currentPath === $publicBackendPath || str_ends_with($currentPath, '/' . $publicBackendPath)) {
+                    return;
+                }
+            }
+            if (in_array($currentPath, $publicBackendPaths, true)) {
                 return;
             }
 

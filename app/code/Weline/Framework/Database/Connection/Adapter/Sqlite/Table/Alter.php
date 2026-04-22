@@ -262,17 +262,19 @@ class Alter extends AbstractTable implements AlterInterface
         }
         # --如果存在要新增的字段
         if ($this->fields) {
-            $fields = join(',', $this->fields);
-            $sql = "ALTER TABLE {$this->table} $fields";
-            if ($dump_sql) {
-                $dump_sqls[] = $sql;
-            } else {
+            foreach ($this->fields as $field) {
+                $sql = "ALTER TABLE {$this->table} {$field}";
+                if ($dump_sql) {
+                    $dump_sqls[] = $sql;
+                    continue;
+                }
                 try {
                     $this->query($sql)->fetch();
                 } catch (\Exception $exception) {
-                    exit($exception->getMessage() . PHP_EOL . __('数据库SQL:%{1}', $sql) . PHP_EOL);
+                    exit($exception->getMessage() . PHP_EOL . __('SQLite alter table failed: %{1}', $sql) . PHP_EOL);
                 }
             }
+            $this->fields = [];
         }
         try {
             $table_fields = $this->getTableColumns();

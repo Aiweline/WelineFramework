@@ -177,7 +177,7 @@ class ModuleUpgradeExecuteAfterPlugin
             ->fetch();
 
         $this->urlManager->recovery()
-            ->insert(array_values($deduplicatedRows))
+            ->insert(array_values($deduplicatedRows), UrlManager::schema_fields_IDENTIFY)
             ->fetch();
     }
 
