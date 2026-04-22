@@ -158,6 +158,12 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
         self::assertTrue((bool)($confirmTaskPlanPayload['success'] ?? false), \json_encode($confirmTaskPlanPayload, \JSON_UNESCAPED_UNICODE));
         self::assertSame(1, (int)($confirmTaskPlanPayload['data']['task_plan_confirmed'] ?? 0));
 
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+        $scope = $session->getScopeArray();
+        $scope['task_plan_confirmed'] = 0;
+        $this->sessionService->replaceScope($session->getId(), 1, $scope);
+
         $startBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
             'POST',

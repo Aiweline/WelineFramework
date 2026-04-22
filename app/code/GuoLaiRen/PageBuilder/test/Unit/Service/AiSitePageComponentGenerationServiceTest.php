@@ -282,7 +282,7 @@ HTML,
             return $this->ensureAiPayloadValid($payload, 'footer');
         })->call($service, $payload);
 
-        self::assertStringContainsString('$footerNote = \'Need help?\'', (string)($validatedPayload['html_extra_column'] ?? ''));
+        self::assertSame('', (string)($validatedPayload['html_extra_column'] ?? ''));
 
         $componentInfo = [
             'name' => 'Footer With Inline Php',
@@ -414,5 +414,210 @@ HTML,
 
         self::assertSame('Grow faster with our service', (string)($config['content.title'] ?? ''));
         self::assertSame('Launch faster with a focused hero message.', (string)($config['content.description'] ?? ''));
+    }
+
+    public function testSectionDefaultConfigDoesNotUsePageLabelAsVisibleEyebrow(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $config = (function (string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): array {
+            return $this->buildSectionDefaultConfig($pageType, $section, $blueprint, $websiteProfile, $scope);
+        })->call(
+            $service,
+            'home_page',
+            [
+                'code' => 'content/home-page-hero',
+                'key' => 'hero',
+                'name' => 'Hero',
+                'template' => 'hero',
+                'config' => [],
+            ],
+            [
+                'page_title' => 'Royal Indian Games',
+                'page_label' => '首页',
+                'ai_description' => 'Explain value',
+            ],
+            [
+                'site_title' => 'Royal Indian Games',
+                'brief_description' => 'Explain value',
+            ],
+            []
+        );
+
+        self::assertSame('', (string)($config['content.subtitle'] ?? ''));
+    }
+
+    public function testSharedComponentPromptAndDefaultsUseConfirmedThemeContract(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+        $scope = [
+            'task_plan_confirmed' => 1,
+            'virtual_theme_plan' => [
+                'confirmed' => [
+                    'shared_tasks' => [
+                        [
+                            'task_key' => 'shared:header',
+                            'region' => 'header',
+                            'task_script' => [
+                                'data_contract' => [
+                                    'required_data' => [
+                                        'primary_cta_label: 立即开始游戏',
+                                        'primary_cta_href: /games',
+                                    ],
+                                ],
+                                'field_content_requirements' => [
+                                    ['field' => 'title', 'sample' => 'header'],
+                                    ['field' => 'platform_name', 'sample' => 'Royal Indian Games'],
+                                    ['field' => 'cta_text', 'sample' => '立即开始游戏'],
+                                ],
+                            ],
+                            'runtime_context' => [
+                                'theme_context_snapshot' => [
+                                    'visual_direction' => [
+                                        'name' => 'Midnight Ember',
+                                        'visual_tone' => 'trustworthy gaming',
+                                        'font_family' => 'Poppins, Inter, sans-serif',
+                                    ],
+                                    'palette' => [
+                                        'primary' => '#111827',
+                                        'accent' => '#f59e0b',
+                                        'secondary' => '#dc2626',
+                                        'surface' => '#1f2937',
+                                        'text' => '#f9fafb',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $config = (function (array $websiteProfile, array $scope, string $siteDisplayName): array {
+            return $this->buildHeaderDefaultConfig($websiteProfile, $scope, $siteDisplayName);
+        })->call(
+            $service,
+            ['site_title' => 'Royal Indian Games', 'brief_description' => 'Indian card and board games'],
+            $scope,
+            'Royal Indian Games'
+        );
+        $prompt = (function (array $websiteProfile, array $scope, string $siteDisplayName, array $headerConfig): string {
+            return $this->buildHeaderGenerationPrompt($websiteProfile, $scope, $siteDisplayName, $headerConfig);
+        })->call(
+            $service,
+            ['site_title' => 'Royal Indian Games', 'brief_description' => 'Indian card and board games'],
+            $scope,
+            'Royal Indian Games',
+            $config
+        );
+
+        self::assertSame('#1f2937', (string)($config['style.bg_color'] ?? ''));
+        self::assertSame('#f9fafb', (string)($config['style.text_color'] ?? ''));
+        self::assertSame('#f59e0b', (string)($config['style.accent_color'] ?? ''));
+        self::assertSame('Royal Indian Games', (string)($config['logo.text'] ?? ''));
+        self::assertSame('立即开始游戏', (string)($config['cta.text'] ?? ''));
+        self::assertSame('/games', (string)($config['cta.url'] ?? ''));
+        self::assertStringContainsString('Confirmed visual contract', $prompt);
+        self::assertStringContainsString('#f59e0b', $prompt);
+        self::assertStringContainsString('Do not invent unrelated accent colors', $prompt);
+        self::assertStringContainsString('Weline/PageBuilder skill contract', $prompt);
+        self::assertStringContainsString('pagebuilder-style-templates', $prompt);
+        self::assertStringContainsString('theme-development', $prompt);
+        self::assertStringContainsString('primary_cta_label', $prompt);
+    }
+
+    public function testVirtualThemeComponentPolicyRemovesFrameworkReinventionFromAiPayload(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $payload = [
+            'extra_fields' => ['group:content' => '内容设置'],
+            'php_variables' => '$navItems = [];',
+            'css_extra' => '#<?= $componentId ?> .cta { color: red; }',
+            'html_extra' => '<section>@component_start <style>.x{}</style><?= $unsafe ?></section>',
+            'js_content' => 'window.x = 1;',
+        ];
+
+        $validated = (function (array $payload, string $region): array {
+            return $this->ensureAiPayloadValid($payload, $region);
+        })->call($service, $payload, 'header');
+
+        self::assertSame('', $validated['extra_fields']);
+        self::assertSame('', $validated['php_variables']);
+        self::assertSame('', $validated['css_extra']);
+        self::assertSame('', $validated['html_extra']);
+        self::assertSame('', $validated['js_content']);
+    }
+
+    public function testVirtualThemeComponentPolicyDropsPageTypeEyebrowLabels(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $payload = [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '',
+            'html_content' => '<div class="hero-eyebrow">首页</div><div class="feature-card"><h3>Royal Indian Games</h3><p>印度棋牌体验，安全公平的现代化游戏社区。</p></div>',
+            'js_content' => '',
+        ];
+
+        $validated = (function (array $payload, string $region): array {
+            return $this->ensureAiPayloadValid($payload, $region);
+        })->call($service, $payload, 'content');
+
+        self::assertStringNotContainsString('hero-eyebrow', (string)($validated['html_content'] ?? ''));
+        self::assertStringContainsString('Royal Indian Games', (string)($validated['html_content'] ?? ''));
+    }
+
+    public function testVirtualThemeComponentPolicyRejectsBrokenImages(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $payload = [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '',
+            'html_content' => '<figure><img src="" alt="Game cards"><img src="https://example.com/hero.jpg" alt="Hero visual"></figure>',
+            'js_content' => '',
+        ];
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('AI');
+
+        (function (array $payload, string $region): array {
+            return $this->ensureAiPayloadValid($payload, $region);
+        })->call($service, $payload, 'content');
+    }
+
+    public function testVirtualThemeComponentPolicyRejectsBrokenBackgroundImages(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $payload = [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '',
+            'html_content' => '<div class="visual" style="background-image:url(https://example.com/card.webp)">Royal Indian Games</div>',
+            'js_content' => '',
+        ];
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('AI');
+
+        (function (array $payload, string $region): array {
+            return $this->ensureAiPayloadValid($payload, $region);
+        })->call($service, $payload, 'content');
     }
 }

@@ -630,6 +630,8 @@ final class AiSiteVirtualThemePlanService
         $lines[] = '- Every returned page_tasks[] entry must include block_task with required fields: task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order.';
         $lines[] = '- block_task.task_goal is the visible block outcome; block_task.meta_fields is the exact editable field list; block_task.content_plan and block_task.style_plan are concrete arrays; block_task.planning_reason explains the stage-1 rationale; block_task.sort_order mirrors the task sort_order.';
         $lines[] = '- For page block tasks, read the matching Relevant stage-1 page cues entry and explicitly use block_goal for task_goal, realtime_content for content_plan examples, design_tags/style_direction for style_plan, and reason for planning_reason.';
+        $lines[] = '- Never use task_key, page_type, section_code, block_key, component paths, or internal IDs as customer-visible copy.';
+        $lines[] = '- Visible-language rule: customer-visible copy, field samples, CTA labels, link labels, and alt text must use content_locale/default_locale, which is the website requirement language. Do NOT use plan_locale as the website content language unless it is identical to default_locale. Keep internal IDs in task_key/section_code only.';
         $lines[] = '- block_task.style_plan must preserve design_tags exactly enough for stage 3: visual tags, motion tags, interaction tags, texture tags, responsive tags, and implementation_note must appear in the style_plan values.';
         $lines[] = '- Every planning_reason must be concrete and traceable to stage-1 reason/implementation_detail; generic wording such as "needed for the page" is invalid.';
         $lines[] = '- block_task.style_plan MUST include concrete color, font, spacing, and responsive keys. Each key must be directly usable by stage 3: color names palette/hex usage, font names family/weight/scale, spacing names section padding/gap/radius rhythm, responsive names desktop/mobile behavior.';
@@ -681,6 +683,7 @@ final class AiSiteVirtualThemePlanService
                 'brief' => $this->excerptText((string)($scope['brief_description'] ?? $scope['user_description'] ?? ''), 480),
                 'plan_locale' => (string)($scope['plan_locale'] ?? ''),
                 'default_locale' => (string)($scope['default_locale'] ?? ''),
+                'content_locale' => $this->resolveStageTwoContentLocale($scope),
             ],
             'theme' => [
                 'palette' => \is_array($styleTokens['palette'] ?? null) ? $this->compactPromptMap($styleTokens['palette'], 8, 180) : [],
@@ -1978,6 +1981,9 @@ final class AiSiteVirtualThemePlanService
             }
         }
 
+        $sharedComponentPlans = $this->resolveStageTwoSharedComponentPlans($executionBlueprint, $confirmedPlanBook);
+        $sharedTasks = $this->ensureStageTwoSharedTasks($sharedTasks, $sharedComponentPlans, $sharedPromptContext, $themeContextSnapshot);
+
         [$sharedTasks, $pageTasks] = $this->enrichTasksWithStage1PlanContext(
             $sharedTasks,
             $this->ensureStageTwoBlockTaskPlanFanoutTasks($pageTasks, $pagePlans, $blockPlanMatrix),
@@ -1990,7 +1996,6 @@ final class AiSiteVirtualThemePlanService
             'shared' => [],
             'pages' => [],
         ];
-        $sharedComponentPlans = $this->resolveStageTwoSharedComponentPlans($executionBlueprint, $confirmedPlanBook);
         foreach ($sharedTasks as $task) {
             if (!\is_array($task)) {
                 continue;
@@ -2267,6 +2272,10 @@ final class AiSiteVirtualThemePlanService
         $structured = [
             'plan_signature' => $sourceSignature,
             'stage2_context_snapshot' => $stage2ContextSnapshot,
+            'theme_context_snapshot' => $themeContextSnapshot,
+            'shared_prompt_context' => $sharedPromptContext,
+            'content_locale' => $this->resolveStageTwoContentLocale($scope),
+            'plan_locale' => \trim((string)($scope['plan_locale'] ?? '')),
             'virtual_theme_strategy' => [
                 'workspace_track' => (string)($executionBlueprint['workspace_track'] ?? $scope['workspace_track'] ?? ''),
                 'site_summary' => (string)($planStructured['site_strategy']['summary'] ?? ''),
@@ -2283,8 +2292,9 @@ final class AiSiteVirtualThemePlanService
             'execution_blueprint' => $executionBlueprintPlan,
             'meta_field_matrix' => $metaFieldMatrix,
             'style_tokens' => [
-                'palette' => \is_array($planStructured['palette'] ?? null) ? $planStructured['palette'] : (\is_array($scope['palette'] ?? null) ? $scope['palette'] : []),
-                'theme_style' => \is_array($planStructured['theme_style'] ?? null) ? $planStructured['theme_style'] : (\is_array($scope['theme_style'] ?? null) ? $scope['theme_style'] : []),
+                'palette' => $this->resolveStageTwoThemePalette($planStructured, $themeContextSnapshot, $scope),
+                'theme_style' => $this->resolveStageTwoThemeStyle($planStructured, $themeContextSnapshot, $scope),
+                'theme_design' => \is_array($themeContextSnapshot['theme_design'] ?? null) ? $themeContextSnapshot['theme_design'] : $themeContextSnapshot,
             ],
             'content_rules' => [
                 'seo_strategy' => \is_array($planStructured['seo_strategy'] ?? null) ? $planStructured['seo_strategy'] : [],
@@ -2902,6 +2912,10 @@ final class AiSiteVirtualThemePlanService
             return false;
         }
 
+        if ($this->isInternalComponentReference($normalized)) {
+            return true;
+        }
+
         foreach (['阶段一', '蓝图', '方向', '围绕', '说明核心价值', 'block direction', 'list 2-4', 'specify heading font'] as $marker) {
             if ($marker !== '' && \mb_stripos($normalized, $marker) !== false) {
                 return true;
@@ -2909,6 +2923,57 @@ final class AiSiteVirtualThemePlanService
         }
 
         return false;
+    }
+
+    private function isInternalComponentReference(string $text): bool
+    {
+        $value = \trim($text);
+        if ($value === '') {
+            return false;
+        }
+
+        return \preg_match('/^(page:[a-z0-9_]+:)?content\/[a-z0-9][a-z0-9_-]*$/i', $value) === 1
+            || \preg_match('/^[a-z0-9_]+:(shared|header|footer|content)\/[a-z0-9][a-z0-9_-]*$/i', $value) === 1;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @param list<array<string, mixed>> $fieldPlan
+     */
+    private function resolveVisibleSampleForStageTwoField(string $field, array $context, array $fieldPlan = []): string
+    {
+        $realtimeContent = \is_array($context['realtime_content'] ?? null) ? $context['realtime_content'] : [];
+        if (\preg_match('/(cta|button|action)/i', $field) === 1) {
+            foreach (\is_array($realtimeContent['cta'] ?? null) ? $realtimeContent['cta'] : [] as $cta) {
+                $label = \is_array($cta) ? \trim((string)($cta['label'] ?? '')) : \trim((string)$cta);
+                if ($label !== '' && !$this->isInternalComponentReference($label)) {
+                    return $label;
+                }
+            }
+        }
+
+        foreach (['headline', 'title', 'heading'] as $key) {
+            $value = \trim((string)($realtimeContent[$key] ?? ''));
+            if ($value !== '' && !$this->isInternalComponentReference($value)) {
+                return $value;
+            }
+        }
+
+        foreach (\is_array($realtimeContent['supporting_copy'] ?? null) ? $realtimeContent['supporting_copy'] : [] as $value) {
+            $sample = \trim((string)$value);
+            if ($sample !== '' && !$this->isInternalComponentReference($sample)) {
+                return $sample;
+            }
+        }
+
+        foreach ($fieldPlan as $row) {
+            $sample = \trim((string)($row['sample'] ?? ''));
+            if ($sample !== '' && !$this->isInternalComponentReference($sample)) {
+                return $sample;
+            }
+        }
+
+        return 'Concrete stage-1 content sample';
     }
 
     /**
@@ -3770,7 +3835,20 @@ final class AiSiteVirtualThemePlanService
     private function buildStageTwoFieldPlanFromPlanBookBlock(array $block): array
     {
         if (\is_array($block['field_plan'] ?? null) && $block['field_plan'] !== []) {
-            return \array_values(\array_filter($block['field_plan'], static fn($row): bool => \is_array($row)));
+            $fieldPlan = \array_values(\array_filter($block['field_plan'], static fn($row): bool => \is_array($row)));
+            foreach ($fieldPlan as $index => $row) {
+                $sample = \trim((string)($row['sample'] ?? ''));
+                if ($sample === '' || !$this->isInternalComponentReference($sample)) {
+                    continue;
+                }
+                $fieldPlan[$index]['sample'] = $this->resolveVisibleSampleForStageTwoField(
+                    \trim((string)($row['field'] ?? '')),
+                    $block,
+                    $fieldPlan
+                );
+            }
+
+            return $fieldPlan;
         }
 
         $fields = \array_values(\array_filter(\array_map('strval', \is_array($block['editable_fields'] ?? null) ? $block['editable_fields'] : [])));
@@ -3893,6 +3971,8 @@ final class AiSiteVirtualThemePlanService
             'prompt_template_key' => 'stage2_task_execute',
             'round' => (int)($scope['task_plan_round'] ?? 1),
             'source_signature' => (string)($stage2ContextSnapshot['source_confirmed_signature'] ?? $scope['execution_blueprint_confirmed_signature'] ?? ''),
+            'content_locale' => $this->resolveStageTwoContentLocale($scope),
+            'plan_locale' => \trim((string)($scope['plan_locale'] ?? '')),
             'target_scope' => (string)($task['page_type'] ?? ''),
             'sse_scope' => $sseScope,
             'stream_session_key' => $sessionScope !== '' && $taskKey !== '' ? ($sessionScope . ':' . $taskKey) : $taskKey,
@@ -3953,6 +4033,8 @@ final class AiSiteVirtualThemePlanService
             'source_confirmed_signature' => $sourceSignature,
             'confirmed_stage1_source' => $confirmedPlanBook !== [] ? 'plan_workbench.confirmed.plan_book.structured' : 'execution_blueprint',
             'confirmed_plan_book_context_hash' => (string)($confirmedPlanBook['context_hash'] ?? ''),
+            'content_locale' => $this->resolveStageTwoContentLocale($scope),
+            'plan_locale' => \trim((string)($scope['plan_locale'] ?? '')),
             'confirmed_block_tree' => $this->compactConfirmedPlanBookForPrompt($confirmedPlanBook),
             'theme_context_snapshot' => $themeContextSnapshot,
             'shared_prompt_context' => $sharedPromptContext,
@@ -3965,6 +4047,246 @@ final class AiSiteVirtualThemePlanService
         ];
         $snapshot['context_hash'] = \sha1((string)\json_encode($snapshot, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
         return $snapshot;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $sharedTasks
+     * @param array<string, array<string, mixed>> $sharedComponentPlans
+     * @param array<string, mixed> $sharedPromptContext
+     * @param array<string, mixed> $themeContextSnapshot
+     * @return list<array<string, mixed>>
+     */
+    private function ensureStageTwoSharedTasks(
+        array $sharedTasks,
+        array $sharedComponentPlans,
+        array $sharedPromptContext,
+        array $themeContextSnapshot
+    ): array {
+        $byKey = [];
+        foreach ($sharedTasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey !== '') {
+                $byKey[$taskKey] = $task;
+            }
+        }
+
+        foreach (['header', 'footer'] as $index => $region) {
+            $taskKey = 'shared:' . $region;
+            $plan = \is_array($sharedComponentPlans[$region] ?? null) ? $sharedComponentPlans[$region] : [];
+            $label = $region === 'header' ? 'Header' : 'Footer';
+            $goal = \trim((string)($plan['goal'] ?? $sharedPromptContext[$region . '_plan']['goal'] ?? ''));
+            if ($goal === '') {
+                $goal = $region === 'header'
+                    ? 'Build the global header with brand identity, navigation, and primary CTA from the confirmed stage-1 plan.'
+                    : 'Build the global footer with grouped links, support/trust content, and compliance paths from the confirmed stage-1 plan.';
+            }
+            $realtimeContent = \is_array($plan['realtime_content'] ?? null) ? $plan['realtime_content'] : [];
+            $styleDirection = \trim((string)($plan['style_direction'] ?? $themeContextSnapshot['visual_direction']['visual_tone'] ?? $themeContextSnapshot['content_tone'] ?? ''));
+            $fieldRequirements = $this->buildSharedTaskFieldRequirementsFromPlan($region, $plan, $sharedPromptContext);
+            $baseTask = [
+                'task_key' => $taskKey,
+                'task_type' => 'shared_component',
+                'group_key' => 'shared',
+                'page_type' => '',
+                'page_key' => '',
+                'block_key' => $taskKey,
+                'section_code' => $taskKey,
+                'region' => $region,
+                'label' => (string)($plan['component'] ?? $label),
+                'sort_order' => (int)($plan['sort_order'] ?? (($index + 1) * 10)),
+                'dependencies' => [],
+                'status' => 'done',
+                'attempt_no' => 1,
+                'result_ref' => \is_array($plan['result_ref'] ?? null) ? $plan['result_ref'] : ['scope' => 'shared_components.' . $region],
+                'plan_context' => [
+                    'source_stage' => 'stage_1',
+                    'scope' => 'shared',
+                    'stage1_theme_summary' => (string)($themeContextSnapshot['theme_purpose'] ?? $themeContextSnapshot['site_positioning'] ?? ''),
+                    'stage1_block_goal' => $goal,
+                    'stage1_block_content' => \json_encode($realtimeContent, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '',
+                    'stage1_style_direction' => $styleDirection,
+                    'stage1_shared_context' => $sharedPromptContext,
+                    'completion_rule' => (string)($plan['completion_rule'] ?? ''),
+                    'editable_fields' => \is_array($plan['editable_fields'] ?? null) ? $plan['editable_fields'] : [],
+                    'realtime_content' => $realtimeContent,
+                ],
+                'task_script' => [
+                    'scene' => $taskKey,
+                    'story_goal' => $goal,
+                    'content_fill_rule' => $this->buildSharedTaskContentFillRule($region, $fieldRequirements),
+                    'stage3_directive' => 'Generate the shared ' . $region . ' component from this task, the confirmed stage-1 theme, and the shared prompt context. Do not invent unrelated navigation or footer content.',
+                    'component_type' => $region === 'header' ? 'SharedHeader' : 'SharedFooter',
+                    'technical_steps' => [
+                        'Use the confirmed stage-1 brand/navigation/footer data.',
+                        'Apply the confirmed theme palette and typography.',
+                        'Keep desktop and mobile interaction states explicit.',
+                    ],
+                    'data_contract' => [
+                        'required_data' => \array_values(\array_map(static fn(array $row): string => (string)($row['field'] ?? ''), $fieldRequirements)),
+                    ],
+                    'responsive_contract' => $region === 'header' ? 'Desktop horizontal nav; mobile collapses without hiding primary CTA.' : 'Desktop grouped columns; mobile stacked link groups with readable spacing.',
+                    'accessibility_contract' => ['Keyboard reachable links', 'Visible focus states', 'Readable contrast'],
+                    'asset_requirements' => ['Use inline SVG/CSS visuals for logo or trust icons unless a verified brand asset URL exists.'],
+                    'validation_points' => ['No missing nav labels', 'No placeholder links', 'Theme colors visible', 'Mobile layout usable'],
+                    'completion_rule' => (string)($plan['completion_rule'] ?? ($region . ' component can be reused across every generated page.')),
+                    'field_content_requirements' => $fieldRequirements,
+                ],
+                'implementation_contract' => [
+                    'delivery_rule' => 'Implement only the shared ' . $region . ' component described by this task.',
+                    'implementation_detail' => (string)($plan['implementation_detail'] ?? ''),
+                    'realtime_output' => $realtimeContent,
+                    'completion_rule' => (string)($plan['completion_rule'] ?? ''),
+                    'acceptance' => [
+                        'Uses confirmed stage-1 shared context and theme.',
+                        'Contains no placeholder navigation/footer copy.',
+                        'Can be reused by all page tasks.',
+                    ],
+                ],
+                'block_task' => [
+                    'schema_version' => self::BLOCK_TASK_SCHEMA_VERSION,
+                    'task_goal' => $goal,
+                    'meta_fields' => $fieldRequirements,
+                    'content_plan' => [
+                        'story_goal' => $goal,
+                        'content_fill_rule' => $this->buildSharedTaskContentFillRule($region, $fieldRequirements),
+                        'field_content_requirements' => $fieldRequirements,
+                        'content_copy' => $fieldRequirements,
+                    ],
+                    'style_plan' => [
+                        'color' => 'Use confirmed stage-1 palette for background, text, active states, and CTA.',
+                        'font' => 'Use confirmed stage-1 typography for logo/title, nav labels, and support text.',
+                        'spacing' => 'Use confirmed stage-1 spacing/radius for header/footer density.',
+                        'responsive' => $region === 'header' ? 'Mobile navigation remains reachable and CTA stays visible.' : 'Footer groups stack cleanly on mobile.',
+                    ],
+                    'planning_reason' => (string)($plan['reason'] ?? $goal),
+                    'sort_order' => (int)($plan['sort_order'] ?? (($index + 1) * 10)),
+                ],
+            ];
+            $byKey[$taskKey] = \array_replace_recursive($baseTask, \is_array($byKey[$taskKey] ?? null) ? $byKey[$taskKey] : []);
+        }
+
+        \uasort($byKey, static fn(array $a, array $b): int => ((int)($a['sort_order'] ?? 0)) <=> ((int)($b['sort_order'] ?? 0)));
+        return \array_values($byKey);
+    }
+
+    /**
+     * @param array<string, mixed> $plan
+     * @param array<string, mixed> $sharedPromptContext
+     * @return list<array<string, mixed>>
+     */
+    private function buildSharedTaskFieldRequirementsFromPlan(string $region, array $plan, array $sharedPromptContext): array
+    {
+        $rows = [];
+        foreach (\is_array($plan['field_plan'] ?? null) ? $plan['field_plan'] : [] as $row) {
+            if (\is_array($row)) {
+                $rows[] = $row;
+            }
+        }
+        if ($rows !== []) {
+            return $rows;
+        }
+        if ($region === 'header') {
+            $items = \is_array($sharedPromptContext['header_items'] ?? null) ? $sharedPromptContext['header_items'] : [];
+            return [
+                ['field' => 'brand_name', 'sample' => (string)($sharedPromptContext['site_display_name'] ?? 'Site'), 'reason' => 'Header brand identity.'],
+                ['field' => 'navigation_items', 'sample' => \json_encode($items, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '[]', 'reason' => 'Confirmed stage-1 navigation items.'],
+                ['field' => 'primary_cta', 'sample' => (string)($sharedPromptContext['shared_cta_strategy']['primary_action'] ?? 'Get Started'), 'reason' => 'Confirmed shared CTA.'],
+            ];
+        }
+
+        $featured = \is_array($sharedPromptContext['footer_featured'] ?? null) ? $sharedPromptContext['footer_featured'] : [];
+        return [
+            ['field' => 'brand_summary', 'sample' => (string)($sharedPromptContext['site_positioning'] ?? $sharedPromptContext['site_display_name'] ?? 'Site'), 'reason' => 'Footer brand summary.'],
+            ['field' => 'featured_links', 'sample' => \json_encode($featured, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '[]', 'reason' => 'Confirmed footer featured links.'],
+            ['field' => 'support_text', 'sample' => 'Support / Contact / Policy', 'reason' => 'Footer support and compliance path.'],
+        ];
+    }
+
+    private function resolveStageTwoContentLocale(array $scope): string
+    {
+        foreach ([
+            $scope['default_locale'] ?? null,
+            $scope['website_profile']['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+        ] as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $locale = \trim((string)$value);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $planStructured
+     * @param array<string, mixed> $themeContextSnapshot
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function resolveStageTwoThemePalette(array $planStructured, array $themeContextSnapshot, array $scope): array
+    {
+        foreach ([
+            $themeContextSnapshot['palette'] ?? null,
+            $themeContextSnapshot['color_scheme'] ?? null,
+            $themeContextSnapshot['theme_design']['color_scheme'] ?? null,
+            $planStructured['palette'] ?? null,
+            $scope['palette'] ?? null,
+        ] as $candidate) {
+            if (\is_array($candidate) && $candidate !== []) {
+                return $candidate;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $planStructured
+     * @param array<string, mixed> $themeContextSnapshot
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function resolveStageTwoThemeStyle(array $planStructured, array $themeContextSnapshot, array $scope): array
+    {
+        foreach ([
+            $themeContextSnapshot['visual_direction'] ?? null,
+            $themeContextSnapshot['theme_style'] ?? null,
+            $themeContextSnapshot['theme_design'] ?? null,
+            $planStructured['theme_style'] ?? null,
+            $scope['theme_style'] ?? null,
+        ] as $candidate) {
+            if (\is_array($candidate) && $candidate !== []) {
+                return $candidate;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $fieldRequirements
+     */
+    private function buildSharedTaskContentFillRule(string $region, array $fieldRequirements): string
+    {
+        $samples = [];
+        foreach ($fieldRequirements as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $field = \trim((string)($row['field'] ?? ''));
+            $sample = \trim((string)($row['sample'] ?? ''));
+            if ($field !== '' && $sample !== '') {
+                $samples[] = $field . ': ' . $sample;
+            }
+        }
+        return 'Populate the shared ' . $region . ' using these confirmed fields: ' . \implode(' | ', \array_slice($samples, 0, 6));
     }
 
     /**
@@ -4591,6 +4913,67 @@ final class AiSiteVirtualThemePlanService
             $contentPlan['asset_plan'] = $assets;
         }
 
+        $contentPlan = $this->replaceInternalComponentReferencesInContentPlan($contentPlan, $metaFields, $planContext);
+
+        return $contentPlan;
+    }
+
+    /**
+     * @param array<string, mixed> $contentPlan
+     * @param list<array<string, mixed>> $metaFields
+     * @param array<string, mixed> $planContext
+     * @return array<string, mixed>
+     */
+    private function replaceInternalComponentReferencesInContentPlan(array $contentPlan, array $metaFields, array $planContext): array
+    {
+        $fieldPlan = \is_array($planContext['field_plan'] ?? null) ? $planContext['field_plan'] : $metaFields;
+        if (\is_array($contentPlan['field_content_requirements'] ?? null)) {
+            foreach ($contentPlan['field_content_requirements'] as $index => $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $sample = \trim((string)($row['sample'] ?? ''));
+                if ($sample === '' || !$this->isInternalComponentReference($sample)) {
+                    continue;
+                }
+                $contentPlan['field_content_requirements'][$index]['sample'] = $this->resolveVisibleSampleForStageTwoField(
+                    \trim((string)($row['field'] ?? '')),
+                    $planContext,
+                    $fieldPlan
+                );
+            }
+        }
+
+        if (\is_array($contentPlan['content_copy'] ?? null)) {
+            foreach ($contentPlan['content_copy'] as $index => $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $copy = \trim((string)($row['copy'] ?? ''));
+                if ($copy === '' || !$this->isInternalComponentReference($copy)) {
+                    continue;
+                }
+                $contentPlan['content_copy'][$index]['copy'] = $this->resolveVisibleSampleForStageTwoField(
+                    \trim((string)($row['field'] ?? '')),
+                    $planContext,
+                    $fieldPlan
+                );
+            }
+        }
+
+        if (\is_array($contentPlan['cta_plan'] ?? null)) {
+            foreach ($contentPlan['cta_plan'] as $index => $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $label = \trim((string)($row['label'] ?? ''));
+                if ($label === '' || !$this->isInternalComponentReference($label)) {
+                    continue;
+                }
+                $contentPlan['cta_plan'][$index]['label'] = $this->resolveVisibleSampleForStageTwoField('primary_cta', $planContext, $fieldPlan);
+            }
+        }
+
         return $contentPlan;
     }
 
@@ -4815,18 +5198,18 @@ final class AiSiteVirtualThemePlanService
             if (!\is_array($task)) {
                 continue;
             }
-            $label = \trim((string)($task['label'] ?? $task['task_key'] ?? '共享任务'));
+            $label = \trim((string)($task['label'] ?? $task['task_key'] ?? 'shared task'));
             $task['task_script'] = \array_replace(
                 \is_array($task['task_script'] ?? null) ? $task['task_script'] : [],
                 [
-                    'story_goal' => $label . ' 需要先稳定落地，供后续页面复用。',
-                    'content_fill_rule' => '先实现可复用结构，再补充必要文案与链接，不引入额外功能分歧。',
-                    'stage3_directive' => '按共享组件规范实现并保留后续页面复用能力。',
+                    'story_goal' => $label . ' must be implemented first so later pages can reuse it.',
+                    'content_fill_rule' => 'Implement reusable structure, required copy, and links without adding unrelated features.',
+                    'stage3_directive' => 'Implement according to the shared component contract and keep it reusable.',
                     'field_content_requirements' => [
                         [
                             'field' => 'title',
                             'sample' => $label,
-                            'reason' => '明确共享组件的识别信息与用途。',
+                            'reason' => 'Identify the shared component and its purpose.',
                         ],
                     ],
                 ]
@@ -4835,8 +5218,8 @@ final class AiSiteVirtualThemePlanService
                 \is_array($task['implementation_contract'] ?? null) ? $task['implementation_contract'] : [],
                 [
                     'acceptance' => [
-                        '共享组件可被所有已选页面复用。',
-                        '字段配置具备可编辑性，且不依赖额外规划即可进入第三阶段生成。',
+                        'Shared component can be reused by selected pages.',
+                        'Field configuration stays editable and can enter stage 3 generation directly.',
                     ],
                 ]
             );
@@ -4866,15 +5249,15 @@ final class AiSiteVirtualThemePlanService
                     $sample = \trim((string)($field['sample'] ?? ''));
                     $requirements[] = [
                         'field' => $name,
-                        'sample' => $sample !== '' ? $sample : ('为 ' . $name . ' 提供示例内容'),
-                        'reason' => \trim((string)($field['reason'] ?? '')) !== '' ? (string)$field['reason'] : '保持该区块字段在第三阶段可直接生成。',
+                        'sample' => $sample !== '' ? $sample : ('Display-ready sample for ' . $name),
+                        'reason' => \trim((string)($field['reason'] ?? '')) !== '' ? (string)$field['reason'] : 'Keep this field directly usable in stage 3 generation.',
                     ];
                 }
                 if ($requirements === []) {
                     $requirements[] = [
                         'field' => 'content',
-                        'sample' => '根据该区块目标生成可直接展示的内容。',
-                        'reason' => '确保任务脚本具备最小可执行字段样例。',
+                        'sample' => 'Display-ready content for this block.',
+                        'reason' => 'Provide a minimum executable field sample.',
                     ];
                 }
                 $blockGoal = \trim((string)($planContext['block_goal'] ?? ''));
@@ -4883,9 +5266,9 @@ final class AiSiteVirtualThemePlanService
                 $task['task_script'] = \array_replace(
                     \is_array($task['task_script'] ?? null) ? $task['task_script'] : [],
                     [
-                        'story_goal' => $blockGoal !== '' ? $blockGoal : ($label . ' 需要服务于页面目标：' . ($pageGoal !== '' ? $pageGoal : $pageType)),
-                        'content_fill_rule' => '严格围绕区块目标填充内容，保持字段样例、SEO 意图与 CTA 方向一致。',
-                        'stage3_directive' => '按该任务脚本直接生成组件配置、文案与结构，不再额外发散规划。',
+                        'story_goal' => $blockGoal !== '' ? $blockGoal : ($label . ' supports page goal: ' . ($pageGoal !== '' ? $pageGoal : $pageType)),
+                        'content_fill_rule' => 'Fill content around the block goal and keep field samples, SEO intent, and CTA direction aligned.',
+                        'stage3_directive' => 'Generate component config, copy, and structure directly from this task script.',
                         'field_content_requirements' => $requirements,
                     ]
                 );
@@ -4895,8 +5278,8 @@ final class AiSiteVirtualThemePlanService
                     \is_array($task['implementation_contract'] ?? null) ? $task['implementation_contract'] : [],
                     [
                         'acceptance' => [
-                            '区块输出需覆盖 block_goal 与 page_goal。',
-                            'field_content_requirements 中每个字段都提供可直接使用的样例值。',
+                            'Block output covers block_goal and page_goal.',
+                            'Every field_content_requirements field has a directly usable sample value.',
                         ],
                     ]
                 );
