@@ -16,6 +16,7 @@ use Weline\Framework\Database\Connection\Adapter\Sqlite\Connector as SqliteConne
 use Weline\Framework\Database\Connection\Adapter\Sqlite\Query as SqliteQuery;
 use Weline\Framework\Database\Connection\Api\Sql\QueryAst;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
+use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\Exception\DbException;
 
 final class FakePdoStatement extends \PDOStatement
@@ -294,6 +295,42 @@ final class DatabaseAstCompilerRegressionTest extends TestCase
 
         $this->expectException(DbException::class);
         $connector->{$method}(...$args);
+    }
+
+    public function testSqliteConnectorIsEnabledAndSelfReferencesLikePgsql(): void
+    {
+        $connector = new SqliteConnector(new ConfigProvider([
+            'type' => 'sqlite',
+            'path' => ':memory:',
+            'prefix' => '',
+        ]));
+
+        $this->assertSame($connector, $connector->getConnector());
+        $this->assertSame($connector, $connector->getConnection());
+        $this->assertSame($connector, $connector->getQuery());
+    }
+
+    public function testSqliteConnectorExecutesBasicPdoFlowWhenDriverAvailable(): void
+    {
+        if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+            $this->markTestSkipped('pdo_sqlite is not enabled.');
+        }
+
+        $connector = new SqliteConnector(new ConfigProvider([
+            'type' => 'sqlite',
+            'path' => ':memory:',
+            'prefix' => '',
+        ]));
+
+        $connector->query('CREATE TABLE weline_sqlite_probe (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)')->fetch();
+        $connector->query("INSERT INTO weline_sqlite_probe (name) VALUES ('ok')")->fetch();
+
+        $this->assertSame(
+            [['name' => 'ok']],
+            $connector->query('SELECT name FROM weline_sqlite_probe ORDER BY id DESC LIMIT 1')->fetch()
+        );
+
+        $connector->close();
     }
 
     public static function adapterQueryProvider(): array

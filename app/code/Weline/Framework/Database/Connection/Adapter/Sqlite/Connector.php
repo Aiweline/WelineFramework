@@ -36,8 +36,6 @@ final class Connector extends Query implements ConnectorInterface
     public function __construct(
         private readonly ConfigProvider $configProvider
     ) {
-        // FIXME 鍋滄浣跨敤锛岄€傞厤涓嶅畬鍏紝浠呮彁渚汸gsql閫傞厤鍣紝鍚庣画鐗堟湰鍙兘绉婚櫎
-        throw new \Exception('SQLite 数据库连接适配器已停止使用，请使用 Pgsql。');
         $identifierFormatter = new SqliteIdentifierFormatter();
         $tableStrategy = new DefaultTableNameStrategy(
             $identifierFormatter,
@@ -54,6 +52,16 @@ final class Connector extends Query implements ConnectorInterface
     public function getConnectionInterface(): DbConnectionInterface
     {
         return $this->getWrappedConnection();
+    }
+
+    public function getConnector(): ConnectorInterface
+    {
+        return $this;
+    }
+
+    public function getConnection(): ConnectorInterface
+    {
+        return $this;
     }
 
     protected ?PDO $link = null;
@@ -80,21 +88,40 @@ final class Connector extends Query implements ConnectorInterface
         }
 
         $db_type = $this->configProvider->getDbType();
+        if (!in_array($db_type, PDO::getAvailableDrivers(), true)) {
+            $availableDrivers = implode(',', PDO::getAvailableDrivers());
+            $installHint = PHP_OS_FAMILY === 'Windows'
+                ? ' Windows: enable php_pdo_sqlite.dll and php_sqlite3.dll in php.ini.'
+                : ' Linux: install/enable the pdo_sqlite and sqlite3 PHP extensions, then restart PHP.';
+            throw new LinkException(__('SQLite driver is not available: %{1}. Available drivers: %{2}.%{3}', [$db_type, $availableDrivers, $installHint]));
+        }
         
         // 浠庤繛鎺ユ睜鑾峰彇杩炴帴
         $this->link = ConnectionPool::getConnection(
             $this->configProvider,
             function () use ($db_type) {
-                $dsn = "{$db_type}:{$this->configProvider->getData('path')}";
+                $path = (string)($this->configProvider->getData('path') ?: $this->configProvider->getDatabase() ?: ':memory:');
+                if ($path !== ':memory:') {
+                    $dir = dirname($path);
+                    if ($dir !== '' && $dir !== '.' && !is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+                        throw new LinkException(__('SQLite database directory is not writable: %{1}', [$dir]));
+                    }
+                }
+                $dsn = "{$db_type}:{$path}";
                 try {
                     $options = $this->configProvider->getOptions();
                     // SQLite 涔熸敮鎸佹寔涔呰繛鎺ワ紝浣嗛渶瑕佺‘淇濋敊璇ā寮忚缃?
-                    if (!isset($options[PDO::ATTR_ERRMODE])) {
-                        $options[PDO::ATTR_ERRMODE] = PDO::ERRMODE_EXCEPTION;
-                    }
                     $connection = new PDO($dsn, null, null, $options);
+                    $connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
                     # PRAGMA case_sensitive_like = ON;  -- 寮€鍚ぇ灏忓啓鏁忔劅鐨凩IKE鏌ヨ
                     $connection->exec('PRAGMA case_sensitive_like = OFF; -- 鍏抽棴澶у皬鍐欐晱鎰熺殑LIKE鏌ヨ锛堥粯璁わ級');
+                    $connection->exec('PRAGMA foreign_keys = ON;');
+                    if ($busyTimeout = (int)$this->configProvider->getData('busy_timeout')) {
+                        $connection->exec('PRAGMA busy_timeout = ' . $busyTimeout);
+                    }
+                    if ($this->configProvider->getPreSql()) {
+                        $connection->exec($this->configProvider->getPreSql());
+                    }
                     return $connection;
                 } catch (PDOException $e) {
                     throw new LinkException($e->getMessage());
@@ -119,6 +146,14 @@ final class Connector extends Query implements ConnectorInterface
             $this->wrappedConnection = new PdoConnection($this->link, 'sqlite');
         }
         return $this->wrappedConnection;
+    }
+
+    public function query(string $sql): QueryInterface
+    {
+        if ($this->link === null) {
+            $this->create();
+        }
+        return parent::query($sql);
     }
 
     public function close(): void
@@ -303,7 +338,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function getExistingTables(array $tableNames): array
     {
-        // SQLite connector 宸插純鐢紙鏋勯€犲嚱鏁?throw锛夛紝姝ゅ闄嶇骇涓洪€愯〃妫€鏌?
+        // Keep behavior aligned with MySQL/Pgsql: normalize input names and check each table safely.
         return array_values(array_filter(
             array_map(fn($t) => trim(str_replace(['`', '"'], '', (string) $t)), $tableNames),
             fn($t) => $t !== '' && $this->tableExist($t)
