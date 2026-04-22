@@ -40,6 +40,10 @@ class FixAiSiteAgentEventIdIdentity20260323V100 extends AbstractMigration
     public function install(): bool
     {
         $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnection();
+        if (!$this->usesPgsqlSequence($connection)) {
+            return true;
+        }
+
         /** @var AiSiteAgentSessionEvent $model */
         $model = ObjectManager::getInstance(AiSiteAgentSessionEvent::class);
 
@@ -87,6 +91,10 @@ class FixAiSiteAgentEventIdIdentity20260323V100 extends AbstractMigration
     public function uninstall(): bool
     {
         $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnection();
+        if (!$this->usesPgsqlSequence($connection)) {
+            return true;
+        }
+
         /** @var AiSiteAgentSessionEvent $model */
         $model = ObjectManager::getInstance(AiSiteAgentSessionEvent::class);
 
@@ -107,6 +115,18 @@ class FixAiSiteAgentEventIdIdentity20260323V100 extends AbstractMigration
         )->fetch();
 
         return true;
+    }
+
+    private function usesPgsqlSequence(object $connection): bool
+    {
+        if (!\method_exists($connection, 'getConfigProvider')) {
+            return false;
+        }
+        $configProvider = $connection->getConfigProvider();
+        if (!\is_object($configProvider) || !\method_exists($configProvider, 'getDbType')) {
+            return false;
+        }
+        return \strtolower((string)$configProvider->getDbType()) === 'pgsql';
     }
 }
 
