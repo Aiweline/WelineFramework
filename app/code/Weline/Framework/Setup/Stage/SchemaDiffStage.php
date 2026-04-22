@@ -114,10 +114,11 @@ class SchemaDiffStage extends AbstractStage
                 if (in_array($declared->tableName, self::EXCLUDE_TABLES, true)) {
                     continue;
                 }
-                if (isset($processedTables[$declared->tableName])) {
+                $processedTableKey = $this->normalizeProcessedTableKey($declared->tableName);
+                if (isset($processedTables[$processedTableKey])) {
                     continue;
                 }
-                $processedTables[$declared->tableName] = true;
+                $processedTables[$processedTableKey] = true;
                 $declaredSchemas[$declared->tableName] = $declared;
             }
         }
@@ -183,6 +184,11 @@ class SchemaDiffStage extends AbstractStage
     public function getDiffOps(): array
     {
         return $this->diffOps;
+    }
+
+    private function normalizeProcessedTableKey(string $tableName): string
+    {
+        return strtolower(trim(str_replace(['`', '"'], '', $tableName)));
     }
 
 }

@@ -63,6 +63,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     public function fetch(string $model_class = ''): mixed
     {
+        $traceOperation = $this->fetch_type ?: 'query';
+        $traceTable = $this->table !== '' ? $this->table : 'unknown';
+        $dbTraceLabel = 'db::' . $traceOperation . '::' . $traceTable;
         $dbTraceStart = 0.0;
         $dbTraceSql = '';
         if (RequestLifecycleTrace::isEnabled()) {
@@ -110,12 +113,19 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
             Debug::target('pre_fetch', $msg);
         }
-        $this->resolveFetchTypeFromSql();
-        $traceOperation = $this->fetch_type ?: 'query';
-        $traceTable = $this->table !== '' ? $this->table : 'unknown';
-        $dbTraceLabel = 'db::' . $traceOperation . '::' . $traceTable;
-        $fetchRowLimit = $this->getFetchRowLimit();
-        $enforceFetchedRowLimit = $this->shouldEnforceFetchedRowLimit($fetchRowLimit);
+        // 防御：fetch_type 为空但 sql 已有时，根据 SQL 推断操作类型（避免链式操作中 query 被 reset/clear 后丢失类型）
+        if ($this->fetch_type === '' && trim($this->sql) !== '') {
+            $sqlUpper = strtoupper(ltrim(trim($this->sql)));
+            if (str_starts_with($sqlUpper, 'INSERT')) {
+                $this->fetch_type = 'insert';
+            } elseif (str_starts_with($sqlUpper, 'SELECT')) {
+                $this->fetch_type = 'select';
+            } elseif (str_starts_with($sqlUpper, 'UPDATE')) {
+                $this->fetch_type = 'update';
+            } elseif (str_starts_with($sqlUpper, 'DELETE')) {
+                $this->fetch_type = 'delete';
+            }
+        }
         if ($this->batch and $this->fetch_type == 'insert') {
             // 使用重试机制执行批量插入
             $origin_data = $this->executeWithRetry(function() {
@@ -134,7 +144,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             
             if (count($statements) == 1) {
                 // 使用重试机制执行单条语句
-                $origin_data = $this->executeWithRetry(function() use ($enforceFetchedRowLimit, $fetchRowLimit) {
+                $origin_data = $this->executeWithRetry(function() {
                     $stmt = $this->getLink()->prepare($this->sql);
                     if ($stmt === false) {
                         $errorInfo = $this->getLink()->errorInfo();
@@ -158,9 +168,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     }
                     $this->PDOStatement = $stmt;
                     $this->PDOStatement->execute($this->bound_values);
-                    if ($enforceFetchedRowLimit) {
-                        return $this->collectStatementResultSets($this->PDOStatement, $fetchRowLimit);
-                    }
                     return $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
                 });
             } else {
@@ -288,6 +295,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
             $msg .= __('查询结果:') . (is_string($result) ? $result : json_encode($result)) . PHP_EOL;
             Debug::target('fetch', $msg);
+            exit(1);
         }
         //        $this->clear();
         $this->clearQuery();
@@ -311,6 +319,63 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                         'table' => $traceTable,
                     ]
                 );
+            }
+        }
+    }
+
+    public function fetchIterator(string $model_class = '', int $batchSize = 1): \Generator
+    {
+        $sql = $this->getSqlWithBounds($this->sql);
+        $statements = $this->splitSqlStatements($sql);
+        if (count($statements) !== 1) {
+            throw new Exception(__('SQLite fetchIterator only supports a single SQL statement.'));
+        }
+
+        $stmt = $this->PDOStatement;
+        if ($stmt === null) {
+            $stmt = $this->getLink()->prepare($this->sql);
+            if ($stmt === false) {
+                $errorInfo = $this->getLink()->errorInfo();
+                throw new Exception($errorInfo[2] ?? 'SQLite prepare failed');
+            }
+            $this->PDOStatement = $stmt;
+        }
+
+        $this->executeWithRetry(function () use ($stmt) {
+            $stmt->execute($this->bound_values);
+            return true;
+        });
+
+        try {
+            $batch = [];
+            while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+                if ($model_class && is_array($row)) {
+                    $row = ObjectManager::make($model_class, ['data' => $row], '__construct');
+                }
+                if ($batchSize <= 1) {
+                    yield $row;
+                    continue;
+                }
+
+                $batch[] = $row;
+                if (count($batch) >= $batchSize) {
+                    yield $batch;
+                    $batch = [];
+                }
+            }
+            if ($batchSize > 1 && !empty($batch)) {
+                yield $batch;
+            }
+        } finally {
+            if ($this->PDOStatement !== null) {
+                $this->PDOStatement->closeCursor();
+                $this->PDOStatement = null;
+            }
+            $this->batch = false;
+            $this->fetch_type = '';
+            $this->clearQuery();
+            if ($this->table_alias !== 'main_table') {
+                $this->alias('main_table');
             }
         }
     }
