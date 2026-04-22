@@ -72,6 +72,8 @@ class AiSiteBuildQueue implements QueueInterface
             $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
             /** @var AiSiteScopeCompatibilityService $scopeService */
             $scopeService = ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
+            /** @var AiSiteBuildTaskService $buildTaskService */
+            $buildTaskService = ObjectManager::getInstance(AiSiteBuildTaskService::class);
 
             $session = $sessionService->loadByPublicId($publicId, $adminId);
             if (!$session instanceof AiSiteAgentSession) {
@@ -103,6 +105,14 @@ class AiSiteBuildQueue implements QueueInterface
             $scope = $scopeService->normalizeScope($session->getScopeArray());
             if ($scopePatch !== []) {
                 $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
+            }
+            $normalizedScope = $buildTaskService->normalizeConfirmedTaskPlanFlag($scope);
+            if ((int)($normalizedScope['task_plan_confirmed'] ?? 0) !== (int)($scope['task_plan_confirmed'] ?? 0)) {
+                $scope = $normalizedScope;
+                $sessionService->replaceScope((int)$session->getId(), $adminId, $scope);
+                $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+            } else {
+                $scope = $normalizedScope;
             }
             if ((int)($scope['task_plan_confirmed'] ?? 0) !== 1) {
                 throw new \RuntimeException('请先确认第二阶段任务方案，再开始执行构建。');

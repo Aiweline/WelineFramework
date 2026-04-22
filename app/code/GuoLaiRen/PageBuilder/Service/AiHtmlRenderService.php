@@ -296,17 +296,20 @@ final class AiHtmlRenderService
 
     private function buildBlockLabel(string $blockId, string $blockType, string $region): string
     {
-        $regionLabel = match ($region) {
-            'header' => '页头块',
-            'footer' => '页脚块',
+        $cleanRegionLabel = match ($region) {
+            'header' => '页头',
+            'footer' => '页脚',
             default => '内容块',
         };
-        $type = \trim($blockType);
-        if ($type === '') {
-            return $regionLabel . ' · ' . $blockId;
+        $source = \trim($blockId !== '' ? $blockId : $blockType);
+        if (\str_contains($source, '/')) {
+            $source = (string)\substr($source, (int)\strrpos($source, '/') + 1);
         }
+        $source = (string)\preg_replace('/^(?:header|footer)-|^home-page-|^about-page-|^ai-generated-/i', '', $source);
+        $source = \trim((string)\preg_replace('/[-_]+/', ' ', $source));
+        $source = $source !== '' ? $source : 'section';
 
-        return $regionLabel . ' · ' . $type;
+        return $cleanRegionLabel . ' · ' . $source;
     }
 
     private function buildVisualBlockActionsHtml(string $blockId, string $region, int $index, string $pageType): string
