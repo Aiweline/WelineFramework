@@ -29,6 +29,9 @@ class StarPage
     {
         $result = $request->parse_url($url)['path'] ?? '';
         if (empty($result) or $result == '/') {
+            if (PHP_SAPI === 'cli') {
+                return $result ?? '';
+            }
             $result = $this->cache->get(KeysInterface::cache_start_page_path);
             if (empty($result)) {
                 /**@var Config $configModel */
