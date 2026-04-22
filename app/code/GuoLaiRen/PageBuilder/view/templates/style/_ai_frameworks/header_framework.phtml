@@ -40,8 +40,8 @@
  * style.bg_color => 背景颜色:color:#0f0f1a
  * style.text_color => 文字颜色:color:#ffffff
  * style.link_color => 链接颜色:color:#a0a0b8
- * style.link_hover_color => 链接悬停颜色:color:#6366f1
- * style.accent_color => 强调色:color:#6366f1
+ * style.link_hover_color => 链接悬停颜色:color:#f59e0b
+ * style.accent_color => 强调色:color:#f59e0b
  * 
  * {{EXTRA_FIELDS}}
  * 
@@ -57,6 +57,17 @@ $config = array_merge($styleSettings, $componentConfig);
 $getConfig = function($key, $default = '') use ($config) {
     return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
 };
+$sanitizeVisibleText = static function (string $text, string $fallback = ''): string {
+    $text = trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
+    if ($text === '') {
+        return $fallback;
+    }
+    if (preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|home_page|about_page|shared:[a-z0-9:_-]+|page:[a-z0-9:_-]+)\b/iu', $text)) {
+        return $fallback;
+    }
+
+    return $text;
+};
 
 $componentId = 'header-' . substr(uniqid(), -8);
 $cls = $componentId;
@@ -64,7 +75,7 @@ $cls = $componentId;
 // Logo配置
 $showLogo = $getConfig('logo.display', 'yes') !== 'no';
 $logoImage = $getConfig('logo.image', '');
-$logoText = $getConfig('logo.text', 'Brand Name');
+$logoText = $sanitizeVisibleText((string)$getConfig('logo.text', 'Brand Name'), 'Brand Name');
 $logoWidth = (int)$getConfig('logo.width', 40);
 
 // 导航配置（必须使用真实子页面）
@@ -79,7 +90,7 @@ if ($page) {
     }
     foreach ($navigationPages as $navPage) {
         $navItems[] = [
-            'text' => $navPage['title'] ?? ($navPage['text'] ?? ''),
+            'text' => $sanitizeVisibleText((string)($navPage['title'] ?? ($navPage['text'] ?? '')), ''),
             'href' => $navPage['url'] ?? ($navPage['href'] ?? '#'),
         ];
     }
@@ -92,7 +103,7 @@ if (empty($navItems)) {
             if (!is_array($navItem)) {
                 continue;
             }
-            $text = trim((string)($navItem['text'] ?? $navItem['label'] ?? ''));
+            $text = $sanitizeVisibleText((string)($navItem['text'] ?? $navItem['label'] ?? ''), '');
             if ($text === '') {
                 continue;
             }
@@ -112,7 +123,7 @@ if (empty($navItems)) {
                 continue;
             }
             $parts = explode('=>', $navLine, 2);
-            $text = trim((string)($parts[0] ?? ''));
+            $text = $sanitizeVisibleText((string)($parts[0] ?? ''), '');
             if ($text === '') {
                 continue;
             }
@@ -130,7 +141,7 @@ if (empty($navItems)) {
 
 // CTA配置
 $showCta = $getConfig('cta.show', 'yes') !== 'no';
-$ctaText = $getConfig('cta.text', 'Get Started');
+$ctaText = $sanitizeVisibleText((string)$getConfig('cta.text', 'Get Started'), 'Get Started');
 $ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl((string)$getConfig('cta.url', '#contact'));
 $ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
 $ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
@@ -139,8 +150,8 @@ $ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolv
 $bgColor = $getConfig('style.bg_color', '#0f0f1a');
 $textColor = $getConfig('style.text_color', '#ffffff');
 $linkColor = $getConfig('style.link_color', '#a0a0b8');
-$linkHoverColor = $getConfig('style.link_hover_color', '#6366f1');
-$accentColor = $getConfig('style.accent_color', '#6366f1');
+$linkHoverColor = $getConfig('style.link_hover_color', '#f59e0b');
+$accentColor = $getConfig('style.accent_color', '#f59e0b');
 
 // ===== AI生成的额外PHP变量 =====
 try {
@@ -254,7 +265,7 @@ try {
 
 #<?= $componentId ?> .<?= $cls ?>-cta:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 6px 20px color-mix(in srgb, var(--header-primary) 42%, transparent);
 }
 
 #<?= $componentId ?> .<?= $cls ?>-toggle {

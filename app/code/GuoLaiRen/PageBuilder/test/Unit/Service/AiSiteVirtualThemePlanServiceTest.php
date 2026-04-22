@@ -63,6 +63,8 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('Avoid generic AI aesthetics', $prompt);
         self::assertStringContainsString('block_task.style_plan', $prompt);
         self::assertStringContainsString('task_script.responsive_contract', $prompt);
+        self::assertStringContainsString('Never use task_key, page_type, section_code, block_key, component paths, or internal IDs as customer-visible copy.', $prompt);
+        self::assertStringContainsString('Visible-language rule', $prompt);
     }
 
     public function testBuildTaskPlanArtifactsProducesStructuredPlan(): void
@@ -249,6 +251,43 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     public function testBuildTaskPlanArtifactsRejectsAiPageTasksMissingBlockTaskPlanningReason(): void
     {
         $this->assertMissingBlockTaskFieldIsRejected('planning_reason');
+    }
+
+    public function testBuildTaskPlanArtifactsRepairsInternalComponentPathsInTaskCopy(): void
+    {
+        $service = new AiSiteVirtualThemePlanService(
+            $this->createAiServiceStub($this->buildTaskPlanResponseWithInternalComponentPathCopy())
+        );
+
+        $artifacts = $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
+        $task = $artifacts['structured']['page_tasks']['home_page'][0] ?? [];
+        $contentPlan = \is_array($task['block_task']['content_plan'] ?? null) ? $task['block_task']['content_plan'] : [];
+
+        self::assertNotSame('content/home-page-hero', (string)($contentPlan['field_content_requirements'][0]['sample'] ?? ''));
+        self::assertNotSame('page:home_page:content/home-page-hero', (string)($contentPlan['content_copy'][0]['copy'] ?? ''));
+        self::assertNotSame('content/home-page-hero', (string)($contentPlan['cta_plan'][0]['label'] ?? ''));
+    }
+
+    public function testStageTwoFieldPlanReplacesComponentPathSamplesWithStageOneContent(): void
+    {
+        $service = new AiSiteVirtualThemePlanService();
+        $method = new \ReflectionMethod($service, 'buildStageTwoFieldPlanFromPlanBookBlock');
+        $method->setAccessible(true);
+
+        $fieldPlan = $method->invokeArgs($service, [[
+            'field_plan' => [
+                ['field' => 'title', 'sample' => 'content/home-page-hero', 'reason' => 'bad internal key'],
+                ['field' => 'primary_cta', 'sample' => 'page:home_page:content/home-page-hero', 'reason' => 'bad internal key'],
+            ],
+            'realtime_content' => [
+                'headline' => '专为印度玩家打造的棋牌娱乐殿堂',
+                'supporting_copy' => ['体验Teen Patti、Rummy等经典游戏，享受安全公平的现代化社区'],
+                'cta' => [['label' => '安全加入游戏']],
+            ],
+        ]]);
+
+        self::assertSame('专为印度玩家打造的棋牌娱乐殿堂', $fieldPlan[0]['sample'] ?? '');
+        self::assertSame('安全加入游戏', $fieldPlan[1]['sample'] ?? '');
     }
 
 
@@ -1305,6 +1344,19 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         ) {
             unset($decoded['virtual_theme_plan']['page_tasks']['home_page'][0]['block_task'][$field]);
         }
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    private function buildTaskPlanResponseWithInternalComponentPathCopy(): string
+    {
+        $decoded = \json_decode($this->buildTaskPlanResponse(), true);
+        $task =& $decoded['virtual_theme_plan']['page_tasks']['home_page'][0];
+        $task['task_script']['story_goal'] = 'Make the hero conversion-ready.';
+        $task['task_script']['content_fill_rule'] = 'Use short headline and one CTA.';
+        $task['task_script']['field_content_requirements'][0]['sample'] = 'content/home-page-hero';
+        $task['block_task']['content_plan']['content_copy'][0]['copy'] = 'page:home_page:content/home-page-hero';
+        $task['block_task']['content_plan']['cta_plan'][0]['label'] = 'content/home-page-hero';
 
         return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }
