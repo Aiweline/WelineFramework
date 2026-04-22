@@ -108,7 +108,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
             ['shared:header', 'shared:footer', 'page:home_page:hero'],
             \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
         );
-        $this->assertSame('hero', $scope['build_tasks']['page:home_page:hero']['section_code'] ?? null);
+        $this->assertSame('content/home-page-hero', $scope['build_tasks']['page:home_page:hero']['section_code'] ?? null);
         $this->assertSame('home_page', $scope['build_tasks']['page:home_page:hero']['page_type'] ?? null);
         $this->assertSame(
             ['shared:header', 'shared:footer'],
@@ -117,6 +117,45 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertSame(
             ['block_key' => 'hero', 'origin' => 'stage2'],
             $scope['build_tasks']['page:home_page:hero']['runtime_context'] ?? []
+        );
+    }
+
+    public function testEnsureTaskScopeRepairsStaleConfirmedFlagWhenConfirmedExecutionBlueprintExists(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page'],
+            'task_plan_confirmed' => 0,
+            'virtual_theme_plan' => [
+                'confirmed' => [
+                    'signature' => 'confirmed-but-flag-stale',
+                    'execution_blueprint' => [
+                        'tasks' => [
+                            [
+                                'task_key' => 'shared:header',
+                                'sort_order' => 10,
+                            ],
+                            [
+                                'task_key' => 'page:home_page:hero',
+                                'page_type' => 'home_page',
+                                'section_code' => 'hero',
+                                'sort_order' => 20,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ], [
+            'site_title' => 'Example Site',
+            'brief_description' => 'Example site summary',
+        ], 'virtual_theme');
+
+        $this->assertSame(1, (int)($scope['task_plan_confirmed'] ?? 0));
+        $this->assertSame('stage2_confirmed_task_plan', $scope['build_blueprint']['source'] ?? null);
+        $this->assertSame(
+            ['shared:header', 'page:home_page:hero'],
+            \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
         );
     }
 

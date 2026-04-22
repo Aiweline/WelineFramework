@@ -643,7 +643,15 @@ class AiService
                 ->fetch();
         }
 
-        // 6. 如果找到模型，用 config 覆盖 provider_config（读取时覆盖，不保存到数据库）
+        // 6. 如果没有显式默认，但系统已有可用模型，则使用任意已激活模型，避免功能入口误报未配置。
+        if (!$model || !$model->getId()) {
+            $model = $this->newAiModelQuery()
+                ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+                ->find()
+                ->fetch();
+        }
+
+        // 7. 如果找到模型，用 config 覆盖 provider_config（读取时覆盖，不保存到数据库）
         if ($model && $model->getId()) {
             $model = $this->createDetachedModel($model);
             $this->mergeConfigToProviderConfig($model);

@@ -273,6 +273,7 @@
         var metaEl = document.getElementById('pb-ai-plan-queue-info-meta');
         var procEl = document.getElementById('pb-ai-plan-queue-info-process');
         var resEl = document.getElementById('pb-ai-plan-queue-info-result');
+        var statusEl = document.querySelector('[data-phase1-queue-status="plan"]');
         if (!metaEl || !procEl || !resEl) {
             return;
         }
@@ -283,6 +284,9 @@
             metaEl.innerHTML = '<div class="alert alert-light border mb-0 small">' + escapeHtml(queueMessages.empty) + '</div>';
             procEl.textContent = '';
             resEl.textContent = '';
+            if (statusEl) {
+                statusEl.textContent = '';
+            }
             return;
         }
         var snapJson = '';
@@ -309,6 +313,9 @@
         procEl.textContent = String(info.process || '').trim() || '—';
         resEl.textContent = String(info.result_log || '').trim() || '—';
         resEl.scrollTop = 0;
+        if (statusEl) {
+            statusEl.textContent = String((info.snapshot && (info.snapshot.job_status || info.snapshot.status)) || '').trim();
+        }
     }
 
     function getLastWorkspaceState() {
@@ -330,6 +337,19 @@
             // ignore
         }
         return state;
+    }
+
+    function syncPanelOpenState(workspaceState) {
+        var panelEl = document.getElementById('pb-ai-plan-queue-info-panel');
+        if (!panelEl) {
+            return;
+        }
+        var active = workspaceState && workspaceState.active_operation && typeof workspaceState.active_operation === 'object'
+            ? workspaceState.active_operation
+            : {};
+        var op = String(active.operation || '').toLowerCase();
+        var status = String(active.status || '').toLowerCase();
+        panelEl.open = op === 'plan' && (status === 'queued' || status === 'running');
     }
 
     function normalizeQueueId(value) {
@@ -512,7 +532,11 @@
         if (!info || typeof info !== 'object') {
             return;
         }
-        renderPlanQueueInfoPanel(rememberPlanQueueInfo(info));
+        var state = rememberPlanQueueInfo(info);
+        renderPlanQueueInfoPanel(state);
+        syncPanelOpenState(Object.assign({}, state, {
+            active_operation: { operation: 'plan', status: 'running' }
+        }));
     }
 
     function syncFromWorkspaceState(workspaceState) {
@@ -525,6 +549,7 @@
             // ignore
         }
         renderPlanQueueInfoPanel(workspaceState);
+        syncPanelOpenState(workspaceState);
     }
 
     function bindPlanQueueInfoRefresh() {

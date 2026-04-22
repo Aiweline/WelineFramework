@@ -632,90 +632,6 @@ final class AiSitePageComponentGenerationService
 
         throw new \RuntimeException($message, 0, $lastThrowable);
 
-        /*
-        throw new \RuntimeException(
-            (string)__('AI 缁勪欢鐢熸垚澶辫触锛堝凡灏濊瘯 %{1} 杞?AI 閲嶇敓鎴愶級锛?{2}', [
-                self::COMPONENT_GENERATION_MAX_ATTEMPTS,
-                $this->summarizeThrowable($lastThrowable ?? new \RuntimeException('unknown')),
-            ]),
-            0,
-            $lastThrowable
-        );
-        */
-    }
-
-    /**
-     * 尝试自动修复 PHP 语法错误，修复失败则抛出异常
-     */
-    private function buildFallbackComponent(
-        string $componentCode,
-        string $name,
-        string $region,
-        string $prompt,
-        array $defaultConfig,
-        array $renderContext,
-        array $componentInfo,
-        array $aiData,
-        \Throwable $throwable
-    ): array {
-        throw new \LogicException('Local fallback component generation is disabled; use real AI retry or fail explicitly.', 0, $throwable);
-
-        $reason = $this->summarizeThrowable($throwable);
-        $fallbackAiData = $this->buildStubAiPayload($region, $prompt);
-        $fallbackAiData['_fallback_reason'] = $reason;
-        $fallbackAiData['_fallback_used'] = 1;
-
-        $this->emitComponentFallbackNotice($region, $componentCode, $reason);
-        \w_log_warning('[AI Site Component Fallback] ' . $componentCode . ' (' . $region . '): ' . $reason);
-
-        $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $fallbackAiData);
-        $syntaxCheck = $this->getCodeValidator()->checkSyntax($phtml);
-        if (empty($syntaxCheck['valid'])) {
-            throw new \RuntimeException(
-                (string)__('AI 组件兜底模板仍未通过 PHP 语法校验：%{message}', [
-                    'message' => (string)($syntaxCheck['error'] ?? $reason),
-                ]),
-                0,
-                $throwable
-            );
-        }
-
-        $html = $this->renderTemplateToHtml($phtml, $defaultConfig, $renderContext);
-
-        return [
-            'code' => $componentCode,
-            'name' => $name,
-            'region' => $region,
-            'phtml' => $phtml,
-            'html' => $html,
-            'default_config' => $defaultConfig,
-            'ai_data' => $fallbackAiData,
-            'generation_notice' => [
-                'type' => 'fallback',
-                'message' => $reason,
-                'source_ai_data' => $aiData,
-            ],
-        ];
-    }
-
-    private function emitComponentFallbackNotice(string $region, string $componentCode, string $reason): void
-    {
-        $sse = RequestContext::get(RequestContext::SSE_WRITER_KEY);
-        if (!$sse || !\method_exists($sse, 'sendEvent')) {
-            return;
-        }
-
-        try {
-            $sse->sendEvent('warning', [
-                'region' => $region,
-                'component_code' => $componentCode,
-                'message' => (string)__('AI 组件输出未通过校验，已自动切换安全兜底渲染：%{reason}', [
-                    'reason' => $reason,
-                ]),
-                'fallback_used' => true,
-            ]);
-        } catch (\Throwable) {
-        }
     }
 
     private function summarizeThrowable(\Throwable $throwable): string
@@ -811,20 +727,8 @@ final class AiSitePageComponentGenerationService
             }
         }
 
-        // 第 4 轮：清空所有可选字段后重新组装（保底）
-        $minimalAiData = $aiData;
-        foreach ($this->getOptionalAiFieldsForRegion($region) as $optField) {
-            $minimalAiData[$optField] = '';
-        }
-        $minimalAiData = $codeFixer->fixAiData($minimalAiData);
-        $rebuilt = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $minimalAiData);
-        $check = $codeValidator->checkSyntax($rebuilt);
-        if (!empty($check['valid'])) {
-            return $rebuilt;
-        }
-
         throw new \RuntimeException((string)__('AI 生成的组件未通过 PHP 语法校验（已尝试 %{n} 轮自动修复）：%{message}', [
-            'n' => self::SYNTAX_FIX_MAX_ATTEMPTS + 2,
+            'n' => self::SYNTAX_FIX_MAX_ATTEMPTS + 1,
             'message' => (string)($initialCheck['error'] ?? 'unknown'),
         ]));
     }
@@ -832,29 +736,17 @@ final class AiSitePageComponentGenerationService
     /**
      * @param array<string,mixed> $aiData
      */
-    private function ensureAiPayloadValid(array $aiData, string $region): array
+    private function ensureAiPayloadValid(
+        array $aiData,
+        string $region
+    ): array
     {
         $aiData = $this->getCodeFixer()->fixAiData($aiData);
+        $aiData = $this->applyStrictVirtualThemeComponentPolicy($aiData, $region);
 
         $validation = $this->getCodeValidator()->validateAiData($aiData, $region);
         if (!empty($validation['valid'])) {
             return $aiData;
-        }
-
-        $safeAiData = $this->dropInvalidOptionalFields($aiData, $validation['errors'] ?? [], $region);
-        if ($safeAiData !== $aiData) {
-            $safeValidation = $this->getCodeValidator()->validateAiData($safeAiData, $region);
-            if (!empty($safeValidation['valid'])) {
-                return $safeAiData;
-            }
-        }
-
-        $broadSafeAiData = $this->dropAllOptionalFields($aiData, $region);
-        if ($broadSafeAiData !== $aiData) {
-            $broadSafeValidation = $this->getCodeValidator()->validateAiData($broadSafeAiData, $region);
-            if (!empty($broadSafeValidation['valid'])) {
-                return $broadSafeAiData;
-            }
         }
 
         $errors = \array_values(\array_filter(\array_map('strval', $validation['errors'] ?? [])));
@@ -865,115 +757,152 @@ final class AiSitePageComponentGenerationService
 
     /**
      * @param array<string,mixed> $aiData
-     * @param array<int|string,mixed> $errors
      * @return array<string,mixed>
      */
-    private function dropInvalidOptionalFields(array $aiData, array $errors, string $region): array
+    private function applyStrictVirtualThemeComponentPolicy(
+        array $aiData,
+        string $region
+    ): array
     {
-        $optionalFields = $this->getOptionalAiFieldsForRegion($region);
-        $invalidFields = $this->extractInvalidAiFields($errors);
+        $aiData['extra_fields'] = '';
+        $aiData['php_variables'] = '';
+        $aiData['js_content'] = '';
 
-        if ($invalidFields === []) {
-            $invalidFields = ['php_variables', 'js_content'];
+        foreach (['css_extra', 'css_responsive', 'css_content'] as $cssKey) {
+            if (!\is_string($aiData[$cssKey] ?? null)) {
+                continue;
+            }
+            $css = \trim((string)$aiData[$cssKey]);
+            if ($css === '' || \str_contains($css, '<?') || \str_contains($css, '?>') || \str_contains($css, '@component_')) {
+                $aiData[$cssKey] = '';
+                continue;
+            }
+            $aiData[$cssKey] = $this->clipText($css, 1800);
         }
 
-        foreach ($invalidFields as $field) {
-            if (\in_array($field, $optionalFields, true)) {
-                $aiData[$field] = '';
+        if (\in_array($region, ['header', 'footer'], true)) {
+            $aiData['html_extra'] = '';
+            if ($region === 'footer') {
+                $aiData['html_extra_column'] = '';
+                $aiData['footer_extra_text'] = $this->cleanAiHtmlFragment((string)($aiData['footer_extra_text'] ?? ''));
             }
+
+            return $aiData;
+        }
+
+        if (\is_string($aiData['html_content'] ?? null)) {
+            $aiData['html_content'] = $this->cleanAiHtmlFragment((string)$aiData['html_content']);
+        }
+
+        if ($this->isLowQualityGeneratedSectionHtml((string)($aiData['html_content'] ?? ''))) {
+            throw new \RuntimeException((string)__('AI 组件内容质量不足：缺少真实文案、视觉层次或有效内容。请重新生成。'));
         }
 
         return $aiData;
     }
 
-    /**
-     * @param array<string,mixed> $aiData
-     * @return array<string,mixed>
-     */
-    private function dropAllOptionalFields(array $aiData, string $region): array
+    private function cleanAiHtmlFragment(string $html): string
     {
-        foreach ($this->getOptionalAiFieldsForRegion($region) as $field) {
-            $aiData[$field] = '';
-        }
+        $html = \preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $html) ?? $html;
+        $html = \preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html) ?? $html;
+        $html = \preg_replace('/<\?(?:php|=)?[\s\S]*?\?>/i', '', $html) ?? $html;
+        $html = \preg_replace('/@(?:component|fields)_(?:start|end)\b/i', '', $html) ?? $html;
+        $html = \preg_replace('/<div([^>]*class="[^"]*(?:eyebrow|subtitle|kicker|badge)[^"]*"[^>]*)>\s*(首页|主页|关于我们|关于|Home|About|About Us)\s*<\/div>/iu', '', $html) ?? $html;
+        $html = \preg_replace('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|content\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', '', $html) ?? $html;
+        $html = \preg_replace('/(?:核心卖点|功能特性|把首页[^。！？.!?]{0,80}放出来|值得点击|页面类型|内容块)/u', '', $html) ?? $html;
+        $this->assertNoBrokenGeneratedImageReferences($html);
+        $html = \preg_replace('/\s{2,}/u', ' ', $html) ?? $html;
+        $html = \trim($html);
 
-        return $aiData;
+        return $this->clipText($html, 5000);
     }
 
-    /**
-     * @param array<int|string,mixed> $errors
-     * @return list<string>
-     */
-    private function extractInvalidAiFields(array $errors): array
+    private function isLowQualityGeneratedSectionHtml(string $html): bool
     {
-        $knownFields = [
-            'extra_fields',
-            'php_variables',
-            'css_extra',
-            'css_responsive',
-            'css_content',
-            'html_extra',
-            'html_extra_column',
-            'footer_extra_text',
-            'js_content',
-        ];
-        $fields = [];
+        $trimmed = \trim($html);
+        if ($trimmed === '') {
+            return true;
+        }
 
-        foreach ($errors as $error) {
-            if (!\is_scalar($error)) {
-                continue;
-            }
+        $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($trimmed)));
+        if ($plain === '' || \mb_strlen($plain) < 18) {
+            return true;
+        }
 
-            $message = (string)$error;
-            if (\preg_match('/^\[([a-z_]+)\]/i', $message, $matches)) {
-                $fields[] = \strtolower((string)$matches[1]);
-                continue;
-            }
+        if (\preg_match('/AI content placeholder|ai-empty|placeholder|demo|example\.com/iu', $trimmed) === 1) {
+            return true;
+        }
 
-            foreach ($knownFields as $field) {
-                if (\str_contains($message, $field)) {
-                    $fields[] = $field;
+        if (\preg_match('/<(h[1-6]|p|a)\b[^>]*>\s*<\/\1>/iu', $trimmed) === 1) {
+            return true;
+        }
+
+        $hasVisual = \preg_match('/<svg\b|data:image\/svg\+xml|class=["\'][^"\']*(?:card|visual|panel|media|grid|badge)[^"\']*/iu', $trimmed) === 1;
+        $hasRealCopy = \mb_strlen($plain) >= 32;
+
+        return !$hasVisual && !$hasRealCopy;
+    }
+
+    private function assertNoBrokenGeneratedImageReferences(string $html): void
+    {
+        $broken = [];
+        if (\preg_match_all('/<img\b[^>]*\bsrc\s*=\s*(["\'])(.*?)\1/iu', $html, $found, \PREG_SET_ORDER) > 0) {
+            foreach ($found as $row) {
+                $src = \trim((string)($row[2] ?? ''));
+                if ($this->isBrokenGeneratedImageSource($src)) {
+                    $broken[] = $src === '' ? '<empty img src>' : $src;
                 }
             }
         }
+        if (\preg_match_all('/url\(\s*([\'\"]?)([^\'\")]+)\1\s*\)/iu', $html, $found, \PREG_SET_ORDER) > 0) {
+            foreach ($found as $row) {
+                $src = \trim((string)($row[2] ?? ''));
+                if ($this->isBrokenGeneratedImageSource($src)) {
+                    $broken[] = $src;
+                }
+            }
+        }
+        $broken = \array_values(\array_unique($broken));
+        if ($broken !== []) {
+            throw new \RuntimeException((string)__('AI 组件包含无效图片资源：%{1}', [\implode(', ', \array_slice($broken, 0, 5))]));
+        }
+    }
+    private function extractHtmlAttribute(string $tag, string $attribute): string
+    {
+        if (\preg_match('/\s' . \preg_quote($attribute, '/') . '\s*=\s*(["\'])(.*?)\1/iu', $tag, $matches) === 1) {
+            return \html_entity_decode((string)($matches[2] ?? ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        }
+        if (\preg_match('/\s' . \preg_quote($attribute, '/') . '\s*=\s*([^\s>]+)/iu', $tag, $matches) === 1) {
+            return \html_entity_decode(\trim((string)($matches[1] ?? ''), " \t\n\r\0\x0B\"'"), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        }
 
-        return \array_values(\array_unique(\array_filter($fields)));
+        return '';
     }
 
-    /**
-     * @return list<string>
-     */
-    private function getOptionalAiFieldsForRegion(string $region): array
+    private function isBrokenGeneratedImageSource(string $src): bool
     {
-        return match ($region) {
-            'header' => [
-                'extra_fields',
-                'php_variables',
-                'css_extra',
-                'css_responsive',
-                'css_content',
-                'html_extra',
-                'js_content',
-            ],
-            'footer' => [
-                'extra_fields',
-                'php_variables',
-                'css_extra',
-                'css_responsive',
-                'css_content',
-                'html_extra_column',
-                'html_extra',
-                'footer_extra_text',
-                'js_content',
-            ],
-            default => [
-                'extra_fields',
-                'php_variables',
-                'css_extra',
-                'css_responsive',
-                'css_content',
-                'js_content',
-            ],
-        };
+        $src = \trim(\html_entity_decode($src, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'));
+        if ($src === '' || $src === '#') {
+            return true;
+        }
+
+        $lower = \strtolower($src);
+        if (\str_starts_with($lower, 'data:image/') || \str_starts_with($lower, 'blob:')) {
+            return false;
+        }
+        foreach (['example.com', 'placeholder.com', 'placehold.co', 'via.placeholder', 'dummyimage.com', 'placekitten.com', 'picsum.photos', 'loremflickr.com'] as $marker) {
+            if (\str_contains($lower, $marker)) {
+                return true;
+            }
+        }
+        if (\preg_match('/^https?:\/\/.+\.(?:jpe?g|png|webp|gif|svg)(?:[?#].*)?$/i', $src) === 1) {
+            return true;
+        }
+        if (\preg_match('/^(?:\.{0,2}\/)?(?:images?|assets?|uploads?)\/.+\.(?:jpe?g|png|webp|gif|svg)(?:[?#].*)?$/i', $src) === 1) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -1063,8 +992,8 @@ final class AiSitePageComponentGenerationService
             [
                 'allow_zero_balance_provider' => true,
                 'temperature' => 0.35,
-                'max_tokens' => 8192,
-                'timeout' => 240,
+                'max_tokens' => 4096,
+                'timeout' => 180,
                 'response_format' => ['type' => 'json_object'],
             ]
         );
@@ -1522,25 +1451,29 @@ final class AiSitePageComponentGenerationService
             $this->resolveSharedTaskPlanTask($scope, 'header'),
             'header'
         );
+        $themeContract = $this->buildThemeContractPromptAddon($scope);
+        $skillContract = $this->buildWelineSkillContractPromptAddon();
 
         return $langRule
             . "You are generating a PageBuilder website header component.\n"
             . "Site name: {$siteDisplayName}\n"
             . "Visitor-facing brand summary: {$siteSummary}\n"
             . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . $skillContract
+            . $themeContract
             . "Selected pages: " . \implode(', ', $pageList) . "\n"
-            . "Current navigation fallback: " . \json_encode($headerConfig['nav_items'] ?? [], \JSON_UNESCAPED_UNICODE) . "\n"
+            . "Current navigation data: " . \json_encode($headerConfig['nav_items'] ?? [], \JSON_UNESCAPED_UNICODE) . "\n"
             . $taskPlanPromptAddon
             . ($sharedRefinement !== '' ? "Latest user refinement for this header: {$sharedRefinement}\n" : '')
             . "Rules:\n"
             . "1. Output only one header component, never a full page.\n"
             . "2. The copy must read like finished website copy for visitors.\n"
             . "3. Never expose internal wording such as customer brief, prompt text, page focus, requirements, or 'I want to build'.\n"
-            . "4. Navigation must be compatible with real page links; when real page nav exists it should win over fallback items.\n"
+            . "4. Navigation must be compatible with real page links and the provided navigation data.\n"
             . "5. Keep the structure practical: logo area, navigation, optional CTA, mobile-friendly behavior.\n"
             . "6. Style should be inspired by the reference theme, but do not mention the theme name in visible copy.\n"
-            . "7. If you add new visitor-visible text, image URLs, button labels, or link labels beyond the framework defaults, expose them through extra_fields and read them from \$getConfig()/\$componentConfig instead of hardcoding them.\n"
-            . "8. Return pure JSON only. No markdown. No explanation.\n"
+            . "7. The framework already provides fields/config/nav/CTA. Set extra_fields, php_variables, html_extra, and js_content to empty strings unless explicitly required.\n"
+            . "8. Return compact JSON only. No markdown. No explanation. Keep css_extra under 1200 chars.\n"
             . "JSON fields: extra_fields, php_variables, css_extra, html_extra, js_content.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
@@ -1556,15 +1489,19 @@ final class AiSitePageComponentGenerationService
             $this->resolveSharedTaskPlanTask($scope, 'footer'),
             'footer'
         );
+        $themeContract = $this->buildThemeContractPromptAddon($scope);
+        $skillContract = $this->buildWelineSkillContractPromptAddon();
 
         return $langRule
             . "You are generating a PageBuilder website footer component.\n"
             . "Site name: {$siteDisplayName}\n"
             . "Visitor-facing brand summary: {$siteSummary}\n"
             . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . $skillContract
+            . $themeContract
             . $taskPlanPromptAddon
             . ($sharedRefinement !== '' ? "Latest user refinement for this footer: {$sharedRefinement}\n" : '')
-            . "Footer link fallback: " . \json_encode([
+            . "Footer link data: " . \json_encode([
                 'column1' => $footerConfig['links.column1_items'] ?? '',
                 'column2' => $footerConfig['links.column2_items'] ?? '',
                 'column3' => $footerConfig['links.column3_items'] ?? '',
@@ -1574,10 +1511,10 @@ final class AiSitePageComponentGenerationService
             . "2. The copy must read like real customer-facing site copy, not internal notes.\n"
             . "3. Never print customer brief text, prompt instructions, or requirement wording on the page.\n"
             . "4. Keep footer structure practical: brand area, grouped links, support/legal text, optional extra column or subscription area.\n"
-            . "5. Footer links should be compatible with real page nav logic and the fallback link groups.\n"
+            . "5. Footer links should be compatible with real page nav logic and the provided link groups.\n"
             . "6. Style should follow the reference theme direction without naming the theme in visible text.\n"
-            . "7. If you add new visitor-visible text, image URLs, social links, link groups, or CTA labels beyond the framework defaults, expose them through extra_fields and read them from \$getConfig()/\$componentConfig instead of hardcoding them.\n"
-            . "8. Return pure JSON only. No markdown. No explanation.\n"
+            . "7. The framework already provides brand/link/social/copyright fields. Set extra_fields, php_variables, html_extra_column, html_extra, and js_content to empty strings unless explicitly required.\n"
+            . "8. Return compact JSON only. No markdown. No explanation. Keep footer_extra_text as one short visitor-facing sentence.\n"
             . "JSON fields: extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
@@ -1600,6 +1537,8 @@ final class AiSitePageComponentGenerationService
             $this->resolveSectionTaskPlanTask($scope, $pageType, (string)($section['code'] ?? ''), $sectionKey),
             'section'
         );
+        $themeContract = $this->buildThemeContractPromptAddon($scope);
+        $skillContract = $this->buildWelineSkillContractPromptAddon();
 
         return $langRule
             . "You are generating a PageBuilder content component.\n"
@@ -1611,6 +1550,8 @@ final class AiSitePageComponentGenerationService
             . "Page guidance: {$pageInstruction}\n"
             . "Suggested section config: {$sectionConfig}\n"
             . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . $skillContract
+            . $themeContract
             . $taskPlanPromptAddon
             . ($refinement !== '' ? "Latest refine instruction for this section: {$refinement}\n" : '')
             . ($blogPrompt !== '' ? $blogPrompt . "\n" : '')
@@ -1619,10 +1560,12 @@ final class AiSitePageComponentGenerationService
             . "2. Write finished visitor-facing copy. Do not expose internal prompts, briefs, requirement wording, or phrases such as 'page focus' and 'site summary'.\n"
             . "3. The section must be meaningfully different for its page type and role; home, about, contact, policy, and blog sections should not read the same.\n"
             . "4. Use the style reference as visual/tone inspiration, but do not mention the style name in visible text.\n"
-            . "5. If you add cards, stats, FAQ rows, image URLs, buttons, badges, or any other visitor-visible values beyond the framework defaults, expose matching fields via extra_fields and read them from \$getConfig()/\$componentConfig instead of hardcoding them.\n"
-            . "6. Return pure JSON only. No markdown. No explanation.\n"
-            . "7. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
-            . "8. If real blog data variables are provided, prefer them over invented articles or categories.\n"
+            . "5. Art direction is mandatory: do not output a flat one-color strip. Give this block a clear foreground/background relationship, card or panel layering, hover/focus states, and at least one inline SVG or CSS visual when no real asset is supplied.\n"
+            . "6. Do not repeat the framework title/description in the body as empty h1/h2/p tags. The body must add useful content such as cards, trust points, game tiles, proof points, or CTA support.\n"
+            . "7. Set extra_fields, php_variables, and js_content to empty strings. Put final visible section body only in html_content.\n"
+            . "8. Return compact JSON only. No markdown. No explanation. Keep html_content under 1800 chars and css_extra under 1200 chars.\n"
+            . "9. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
+            . "10. If real blog data variables are provided, prefer them over invented articles or categories.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
 
@@ -1633,13 +1576,14 @@ final class AiSitePageComponentGenerationService
     {
         return "PHP / HTML / CSS / JSON safety (critical — invalid output breaks the site build):\n"
             . "- Output one JSON object only. Every value must be a valid JSON string: escape double quotes as \\\", represent newlines inside strings as \\n. Do not truncate strings mid-escape.\n"
-            . "- Field php_variables: ONLY raw PHP statements that will be injected inside an existing try { } block in a .phtml template. No <?php, no ?>, no opening/closing PHP tags. Prefer an empty string if you do not need extra logic.\n"
+            . "- Field php_variables: MUST be an empty string for this virtual-theme build. The framework already provides variables and config.\n"
             . "- In php_variables, every array literal must be complete: e.g. \$x = ['k' => 'v']; with all [, ], (, ), quotes, and semicolons balanced. Never paste JavaScript object literals or JSON blobs here. The PHP token => must appear only inside valid PHP array syntax, never loose in HTML/CSS.\n"
             . "- Do not redeclare or break framework-provided variables (\$page, \$getConfig, \$componentId, \$cls, \$parseLinks, \$navItems, etc.) unless you know exactly how; prefer using them read-only.\n"
-            . "- Prefer simple safe components: leave extra_fields, php_variables, and js_content empty unless they are absolutely necessary.\n"
-            . "- html_extra, html_extra_column, html_content: use <?= expression ?> for output. Never write <?php = (invalid). Each <?= must wrap one valid PHP expression; use htmlspecialchars(\$var, ENT_QUOTES, 'UTF-8') for text.\n"
-            . "- css_extra, css_responsive: CSS only. No <? ... ?> and no PHP. No unclosed /* comments.\n"
-            . "- js_content: JavaScript only; avoid embedding PHP unless trivial and syntactically valid.\n";
+            . "- extra_fields and js_content: MUST be empty strings unless the task explicitly requires them.\n"
+            . "- html_extra, html_extra_column, html_content: static HTML fragments only. No PHP tags, no <style>, no <script>, no @component_start/@fields_start metadata.\n"
+            . "- css_extra, css_responsive: CSS only. No <? ... ?> and no PHP. Prefer empty CSS because theme tokens are already applied through default_config.\n"
+            . "- Images: never output broken image placeholders. If no verified asset URL is provided, create the visual directly with inline SVG or CSS shapes inside html_content; do not use empty src, example.com, placeholder services, or unverified .jpg/.png/.webp URLs.\n"
+            . "- js_content: MUST be an empty string for this virtual-theme build.\n";
     }
 
     private function resolvePromptStyleCode(array $scope, string $pageType): string
@@ -1661,6 +1605,204 @@ final class AiSitePageComponentGenerationService
             'tpmst' => 'practical, service-focused, trustworthy, content-forward',
             default => 'clean editorial structure, clear hierarchy, practical CTA emphasis',
         };
+    }
+
+    private function buildWelineSkillContractPromptAddon(): string
+    {
+        return "Weline/PageBuilder skill contract for this virtual-theme component:\n"
+            . "- pagebuilder-style-templates: output must map to PageBuilder component fields/config, keep @fields/default_config alignment, scope all CSS under the component root id, and use data-glr-ref/GlrDownloadRegistry-compatible download or CTA links when applicable.\n"
+            . "- theme-development: use confirmed theme palette tokens and CSS variables/inline scoped styles; no CDN, no global selectors, no unrelated hardcoded brand colors, no duplicate pixel/tracking snippets.\n"
+            . "- frontend-components: generate one reusable component/block with editable fields and visitor-facing copy; do not emit full-page HTML, static placeholder sections, internal prompt text, generic substitute content, or page-type labels as visible eyebrow text.\n"
+            . "- asset-rule: when a visual/image is needed but no verified uploaded asset URL exists, create a theme-colored inline SVG or CSS visual directly. Never render a broken <img>.\n"
+            . "- ai-module-development: this is an audited AI scenario result; include only content that follows the provided stage-1 theme context and current stage-2 task contract.\n"
+            . "- queue-usage/sse-streaming: long generation is already queued; return the final component JSON only, not progress narration or markdown.\n";
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function buildThemeContractPromptAddon(array $scope): string
+    {
+        $contract = $this->resolveThemeContract($scope);
+        $palette = \is_array($contract['palette'] ?? null) ? $contract['palette'] : [];
+        if ($palette === []) {
+            return '';
+        }
+        $themeContext = \is_array($contract['raw_context'] ?? null) ? $contract['raw_context'] : [];
+
+        return "Confirmed visual contract from the approved stage-1 theme and stage-2 task plan:\n"
+            . "- theme_name: " . (string)($contract['name'] ?? '') . "\n"
+            . "- visual_tone: " . (string)($contract['visual_tone'] ?? '') . "\n"
+            . "- font_family: " . (string)($contract['font_family'] ?? '') . "\n"
+            . "- palette: " . \json_encode($palette, \JSON_UNESCAPED_UNICODE) . "\n"
+            . "- full_theme_context: " . $this->jsonEncodeForPrompt($themeContext, 9000) . "\n"
+            . "- Use these exact palette tokens for generated CSS and extra fields. Do not invent unrelated accent colors.\n";
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,string>
+     */
+    private function resolveThemeStyleDefaults(array $scope, string $region): array
+    {
+        $contract = $this->resolveThemeContract($scope);
+        $palette = \is_array($contract['palette'] ?? null) ? $contract['palette'] : [];
+        if ($palette === []) {
+            return [];
+        }
+
+        $primary = $this->pickPaletteColor($palette, ['primary', 'button']);
+        $accent = $this->pickPaletteColor($palette, ['accent', 'secondary', 'primary']);
+        $secondary = $this->pickPaletteColor($palette, ['secondary', 'accent']);
+        $surface = $this->pickPaletteColor($palette, ['surface', 'background', 'primary']);
+        $text = $this->pickPaletteColor($palette, ['text', 'body']);
+        $background = $this->pickPaletteColor($palette, ['background', 'surface']);
+
+        if ($region === 'header') {
+            return \array_filter([
+                'style.bg_color' => $surface !== '' ? $surface : $primary,
+                'style.text_color' => $text,
+                'style.link_color' => $text,
+                'style.link_hover_color' => $accent,
+                'style.accent_color' => $accent,
+            ], static fn(string $value): bool => $value !== '');
+        }
+
+        if ($region === 'footer') {
+            return \array_filter([
+                'style.bg_color' => $surface !== '' ? $surface : $primary,
+                'style.text_color' => $text,
+                'style.title_color' => $text,
+                'style.link_color' => $text,
+                'style.link_hover_color' => $accent !== '' ? $accent : $secondary,
+                'style.accent_color' => $accent !== '' ? $accent : $secondary,
+            ], static fn(string $value): bool => $value !== '');
+        }
+
+        return \array_filter([
+            'style.bg_color' => $background !== '' ? $background : '#ffffff',
+            'style.text_color' => $text,
+            'style.title_color' => $text,
+            'style.accent_color' => $accent !== '' ? $accent : $primary,
+            'style.bg_gradient' => ($primary !== '' && $accent !== '')
+                ? 'linear-gradient(135deg, ' . $primary . ' 0%, ' . $accent . ' 100%)'
+                : '',
+        ], static fn(string $value): bool => $value !== '');
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array{name?:string,visual_tone?:string,font_family?:string,palette?:array<string,string>}
+     */
+    private function resolveThemeContract(array $scope): array
+    {
+        foreach ([
+            $this->resolveTaskPlanRoot($scope),
+            \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [],
+            \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
+            \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [],
+        ] as $candidate) {
+            if (!\is_array($candidate) || $candidate === []) {
+                continue;
+            }
+
+            $themeContext = $this->findThemeContextCandidate($candidate);
+            $contract = $this->normalizeThemeContract($themeContext);
+            if (\is_array($contract['palette'] ?? null) && $contract['palette'] !== []) {
+                return $contract;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $source
+     * @return array<string,mixed>
+     */
+    private function findThemeContextCandidate(array $source, int $depth = 0): array
+    {
+        if ($depth > 6) {
+            return [];
+        }
+
+        foreach (['theme_context_snapshot', 'theme_design'] as $key) {
+            if (\is_array($source[$key] ?? null)) {
+                return $source[$key];
+            }
+        }
+
+        if (\is_array($source['palette'] ?? null) || \is_array($source['color_scheme'] ?? null)) {
+            return $source;
+        }
+
+        foreach ($source as $value) {
+            if (!\is_array($value)) {
+                continue;
+            }
+            $candidate = $this->findThemeContextCandidate($value, $depth + 1);
+            if ($candidate !== []) {
+                return $candidate;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $themeContext
+     * @return array{name?:string,visual_tone?:string,font_family?:string,palette?:array<string,string>}
+     */
+    private function normalizeThemeContract(array $themeContext): array
+    {
+        if ($themeContext === []) {
+            return [];
+        }
+
+        $palette = [];
+        foreach ([
+            \is_array($themeContext['palette'] ?? null) ? $themeContext['palette'] : [],
+            \is_array($themeContext['color_scheme'] ?? null) ? $themeContext['color_scheme'] : [],
+            \is_array($themeContext['theme_design']['color_scheme'] ?? null) ? $themeContext['theme_design']['color_scheme'] : [],
+        ] as $candidate) {
+            foreach ($candidate as $key => $value) {
+                if (!\is_string($key) || !\is_scalar($value)) {
+                    continue;
+                }
+                $color = \trim((string)$value);
+                if (!\preg_match('/^#[0-9a-f]{6}$/i', $color)) {
+                    continue;
+                }
+                $palette[\strtolower($key)] = $color;
+            }
+        }
+
+        $visualDirection = \is_array($themeContext['visual_direction'] ?? null) ? $themeContext['visual_direction'] : [];
+        $typography = \is_array($themeContext['typography_spacing_radius'] ?? null) ? $themeContext['typography_spacing_radius'] : [];
+
+        return [
+            'name' => (string)($themeContext['name'] ?? $visualDirection['name'] ?? $palette['name'] ?? ''),
+            'visual_tone' => (string)($themeContext['visual_tone'] ?? $themeContext['content_tone'] ?? ''),
+            'font_family' => (string)($themeContext['font_family'] ?? $visualDirection['font_family'] ?? $typography['font_family'] ?? ''),
+            'palette' => $palette,
+            'raw_context' => $themeContext,
+        ];
+    }
+
+    /**
+     * @param array<string,string> $palette
+     * @param list<string> $keys
+     */
+    private function pickPaletteColor(array $palette, array $keys): string
+    {
+        foreach ($keys as $key) {
+            $color = \trim((string)($palette[\strtolower($key)] ?? ''));
+            if ($color !== '') {
+                return $color;
+            }
+        }
+
+        return '';
     }
 
     private function buildHeaderPrompt(array $websiteProfile, array $scope, string $siteDisplayName, array $headerConfig): string
@@ -1823,6 +1965,7 @@ final class AiSitePageComponentGenerationService
             'cta.text' => $this->resolvePrimaryCtaText($scope),
             'cta.url' => '#contact',
         ];
+        $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'header'));
 
         return $this->applyTaskPlanDefaults($defaultConfig, $this->resolveSharedTaskPlanTask($scope, 'header'));
     }
@@ -1882,6 +2025,7 @@ final class AiSitePageComponentGenerationService
             'copyright.text' => 'All rights reserved.',
             'copyright.year' => \date('Y'),
         ];
+        $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'footer'));
 
         return $this->applyTaskPlanDefaults($defaultConfig, $this->resolveSharedTaskPlanTask($scope, 'footer'));
     }
@@ -1905,7 +2049,7 @@ final class AiSitePageComponentGenerationService
         );
         $subtitle = $this->pickString(
             $sectionConfig['eyebrow'] ?? null,
-            $blueprint['page_label'] ?? null
+            $sectionConfig['subtitle'] ?? null
         );
         $description = $this->pickString(
             $sectionConfig['section_intro'] ?? null,
@@ -1936,6 +2080,7 @@ final class AiSitePageComponentGenerationService
             'style.title_color' => ((string)($section['template'] ?? '') === 'cta') ? '#ffffff' : '#0f172a',
             'style.accent_color' => '#2563eb',
         ];
+        $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'content'));
 
         $taskPlanTask = $this->resolveSectionTaskPlanTask(
             $scope,
@@ -1953,17 +2098,21 @@ final class AiSitePageComponentGenerationService
      */
     private function resolveTaskPlanRoot(array $scope): array
     {
+        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
+        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
+        if (
+            $confirmed !== []
+            && (
+                (int)($scope['task_plan_confirmed'] ?? 0) === 1
+                || $this->confirmedTaskPlanHasExecutionBlueprint($confirmed)
+            )
+        ) {
+            return $confirmed;
+        }
+
         $structured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
         if ($structured !== []) {
             return $structured;
-        }
-
-        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        if ((int)($scope['task_plan_confirmed'] ?? 0) === 1) {
-            $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
-            if ($confirmed !== []) {
-                return $confirmed;
-            }
         }
 
         $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
@@ -1971,8 +2120,20 @@ final class AiSitePageComponentGenerationService
             return $draft;
         }
 
-        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
         return $confirmed !== [] ? $confirmed : [];
+    }
+
+    /**
+     * @param array<string,mixed> $confirmed
+     */
+    private function confirmedTaskPlanHasExecutionBlueprint(array $confirmed): bool
+    {
+        $executionBlueprint = \is_array($confirmed['execution_blueprint'] ?? null)
+            ? $confirmed['execution_blueprint']
+            : [];
+        $tasks = \is_array($executionBlueprint['tasks'] ?? null) ? $executionBlueprint['tasks'] : [];
+
+        return $tasks !== [];
     }
 
     /**
@@ -2047,17 +2208,33 @@ final class AiSitePageComponentGenerationService
         $taskScript = \is_array($taskPlanTask['task_script'] ?? null) ? $taskPlanTask['task_script'] : [];
         $implementationContract = \is_array($taskPlanTask['implementation_contract'] ?? null) ? $taskPlanTask['implementation_contract'] : [];
         $runtimeContext = \is_array($taskPlanTask['runtime_context'] ?? null) ? $taskPlanTask['runtime_context'] : [];
+        $blockTask = \is_array($taskPlanTask['block_task'] ?? null) ? $taskPlanTask['block_task'] : [];
+        $themeContext = \is_array($runtimeContext['theme_context_snapshot'] ?? null) ? $runtimeContext['theme_context_snapshot'] : [];
+        $stage2Context = \is_array($runtimeContext['stage2_context_snapshot'] ?? null) ? $runtimeContext['stage2_context_snapshot'] : [];
+        $taskScriptDataContract = \is_array($taskScript['data_contract'] ?? null) ? $taskScript['data_contract'] : [];
+        $implementationDataContract = \is_array($implementationContract['data_contract'] ?? null) ? $implementationContract['data_contract'] : [];
         $fieldRequirements = \is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [];
         $acceptance = \is_array($implementationContract['acceptance'] ?? null) ? $implementationContract['acceptance'] : [];
+        $contentPlan = \is_array($blockTask['content_plan'] ?? null) ? $blockTask['content_plan'] : [];
+        $stylePlan = \is_array($blockTask['style_plan'] ?? null) ? $blockTask['style_plan'] : [];
 
         return "Stage-2 task context for this {$contextLabel}:\n"
             . "- task_key: " . (string)($taskPlanTask['task_key'] ?? '') . "\n"
             . "- page_goal: " . (string)($planContext['page_goal'] ?? '') . "\n"
             . "- block_goal: " . (string)($planContext['block_goal'] ?? '') . "\n"
+            . "- stage1_theme_summary: " . (string)($planContext['stage1_theme_summary'] ?? '') . "\n"
+            . "- stage1_block_content: " . (string)($planContext['stage1_block_content'] ?? '') . "\n"
+            . "- stage1_style_direction: " . (string)($planContext['stage1_style_direction'] ?? '') . "\n"
             . "- story_goal: " . (string)($taskScript['story_goal'] ?? '') . "\n"
             . "- content_fill_rule: " . (string)($taskScript['content_fill_rule'] ?? '') . "\n"
             . "- stage3_directive: " . (string)($taskScript['stage3_directive'] ?? '') . "\n"
+            . "- data_contract: " . $this->jsonEncodeForPrompt(\array_replace_recursive($implementationDataContract, $taskScriptDataContract), 4000) . "\n"
             . "- field_content_requirements: " . \json_encode($fieldRequirements, \JSON_UNESCAPED_UNICODE) . "\n"
+            . "- block_task.content_plan: " . \json_encode($contentPlan, \JSON_UNESCAPED_UNICODE) . "\n"
+            . "- block_task.style_plan: " . \json_encode($stylePlan, \JSON_UNESCAPED_UNICODE) . "\n"
+            . "- block_task.planning_reason: " . (string)($blockTask['planning_reason'] ?? '') . "\n"
+            . "- theme_context_snapshot: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
+            . "- stage2_context_snapshot: " . $this->jsonEncodeForPrompt($stage2Context, 5000) . "\n"
             . "- acceptance: " . \json_encode($acceptance, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- runtime_context: " . \json_encode($runtimeContext, \JSON_UNESCAPED_UNICODE) . "\n";
     }
@@ -2080,13 +2257,17 @@ final class AiSitePageComponentGenerationService
                 continue;
             }
             $field = \strtolower(\trim((string)($requirement['field'] ?? '')));
-            $sample = \trim((string)($requirement['sample'] ?? ''));
+            $sample = $this->sanitizeVisibleCopy((string)($requirement['sample'] ?? ''));
             if ($field === '' || $sample === '') {
+                continue;
+            }
+            if (\in_array(\strtolower($sample), ['header', 'footer'], true)) {
                 continue;
             }
 
             $candidateKeys = match (true) {
-                \str_contains($field, 'title'), \str_contains($field, 'headline') => ['content.title', 'logo.text', 'brand.name'],
+                \str_contains($field, 'brand'), \str_contains($field, 'platform'), \str_contains($field, 'site_title'), \str_contains($field, 'logo_text') => ['logo.text', 'brand.name'],
+                \str_contains($field, 'title'), \str_contains($field, 'headline') => ['content.title'],
                 \str_contains($field, 'subtitle'), \str_contains($field, 'eyebrow') => ['content.subtitle'],
                 \str_contains($field, 'description'), \str_contains($field, 'body'), \str_contains($field, 'text') => ['content.description', 'brand.description'],
                 \str_contains($field, 'button_text'), \str_contains($field, 'cta') => ['cta.text'],
@@ -2101,17 +2282,192 @@ final class AiSitePageComponentGenerationService
             }
         }
 
-        $storyGoal = \trim((string)($taskScript['story_goal'] ?? ''));
+        $storyGoal = $this->sanitizeVisibleCopy((string)($taskScript['story_goal'] ?? ''));
         if ($storyGoal !== '' && \trim((string)($defaultConfig['content.title'] ?? '')) === '') {
             $defaultConfig['content.title'] = $this->clipText($storyGoal, 72);
         }
 
-        $fillRule = \trim((string)($taskScript['content_fill_rule'] ?? ''));
+        $fillRule = $this->sanitizeVisibleCopy((string)($taskScript['content_fill_rule'] ?? ''));
         if ($fillRule !== '' && \trim((string)($defaultConfig['content.description'] ?? '')) === '') {
             $defaultConfig['content.description'] = $this->clipText($fillRule, 160);
         }
 
+        return $this->sanitizeDefaultConfigVisibleCopy(
+            $this->applyTaskPlanDataContractDefaults($defaultConfig, $taskPlanTask)
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $taskPlanTask
+     * @return array<string,mixed>
+     */
+    private function applyTaskPlanDataContractDefaults(array $defaultConfig, array $taskPlanTask): array
+    {
+        foreach ($this->extractTaskPlanDataContractLines($taskPlanTask) as $line) {
+            if (!\str_contains($line, ':')) {
+                continue;
+            }
+            [$rawKey, $rawValue] = \explode(':', $line, 2);
+            $key = \strtolower(\trim($rawKey));
+            $value = $this->sanitizeVisibleCopy(\trim(\trim($rawValue), " \t\n\r\0\x0B'\""));
+            if ($key === '' || $value === '') {
+                continue;
+            }
+
+            $candidateKeys = match (true) {
+                \str_contains($key, 'site_title'), \str_contains($key, 'platform_name'), \str_contains($key, 'brand_name') => ['logo.text', 'brand.name'],
+                \str_contains($key, 'site_tagline'), \str_contains($key, 'platform_tagline') => ['brand.description', 'content.subtitle'],
+                \str_contains($key, 'primary_cta_label'), \str_contains($key, 'cta_label'), \str_contains($key, 'cta_text') => ['cta.text'],
+                \str_contains($key, 'primary_cta_href'), \str_contains($key, 'cta_href'), \str_contains($key, 'cta_url') => ['cta.url'],
+                default => [],
+            };
+            foreach ($candidateKeys as $candidateKey) {
+                if (\array_key_exists($candidateKey, $defaultConfig)) {
+                    $defaultConfig[$candidateKey] = $value;
+                    break;
+                }
+            }
+        }
+
         return $defaultConfig;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @return array<string,mixed>
+     */
+    private function sanitizeDefaultConfigVisibleCopy(array $defaultConfig): array
+    {
+        foreach ($defaultConfig as $key => $value) {
+            if (\is_string($value)) {
+                if ($key === 'navigation.items') {
+                    $defaultConfig[$key] = $this->sanitizeNavigationItemsText($value);
+                    continue;
+                }
+                if ($this->isVisualTextConfigKey($key)) {
+                    $defaultConfig[$key] = $this->sanitizeVisibleCopy($value);
+                }
+                continue;
+            }
+
+            if ($key === 'nav_items' && \is_array($value)) {
+                foreach ($value as $idx => $item) {
+                    if (!\is_array($item)) {
+                        continue;
+                    }
+                    $item['text'] = $this->sanitizeVisibleCopy((string)($item['text'] ?? $item['label'] ?? ''));
+                    if ($item['text'] === '') {
+                        unset($value[$idx]);
+                        continue;
+                    }
+                    $value[$idx] = $item;
+                }
+                $defaultConfig[$key] = \array_values($value);
+            }
+        }
+
+        return $defaultConfig;
+    }
+
+    private function sanitizeNavigationItemsText(string $lines): string
+    {
+        $rows = \preg_split('/\r?\n/', $lines) ?: [];
+        $cleanRows = [];
+        foreach ($rows as $row) {
+            $row = \trim($row);
+            if ($row === '') {
+                continue;
+            }
+            $parts = \explode('=>', $row, 2);
+            $label = $this->sanitizeVisibleCopy((string)($parts[0] ?? ''));
+            $href = \trim((string)($parts[1] ?? '#'));
+            if ($label === '') {
+                continue;
+            }
+            $cleanRows[] = $label . '=>' . ($href !== '' ? $href : '#');
+        }
+
+        return \implode("\n", $cleanRows);
+    }
+
+    private function isVisualTextConfigKey(string $key): bool
+    {
+        if (\str_contains($key, 'style.') || \str_contains($key, 'color') || \str_contains($key, '.url')) {
+            return false;
+        }
+
+        return \str_contains($key, 'content.')
+            || \str_contains($key, 'title')
+            || \str_contains($key, 'subtitle')
+            || \str_contains($key, 'description')
+            || \str_contains($key, 'logo.text')
+            || \str_contains($key, 'brand.')
+            || \str_contains($key, 'cta.text');
+    }
+
+    private function sanitizeVisibleCopy(string $value): string
+    {
+        $value = \trim(\preg_replace('/\s+/u', ' ', $value) ?? $value);
+        if ($value === '') {
+            return '';
+        }
+
+        $normalized = \mb_strtolower($value);
+        if (\in_array($normalized, ['首页', '主页', '关于我们', '关于', 'home', 'home page', 'about', 'about page', 'about us'], true)) {
+            return '';
+        }
+        foreach (['核心卖点', '功能特性', '把首页', '值得点击', '放出来', '页面类型', '内容块', '需要作为一次独立', '共享任务只生成一次'] as $marker) {
+            if ($marker !== '' && \mb_stripos($normalized, \mb_strtolower($marker)) !== false) {
+                return '';
+            }
+        }
+
+        if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|content\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $value)) {
+            return '';
+        }
+
+        return $this->clipText($value, 220);
+    }
+
+    /**
+     * @param array<string,mixed> $taskPlanTask
+     * @return list<string>
+     */
+    private function extractTaskPlanDataContractLines(array $taskPlanTask): array
+    {
+        $sources = [];
+        foreach (['task_script', 'implementation_contract'] as $rootKey) {
+            $root = \is_array($taskPlanTask[$rootKey] ?? null) ? $taskPlanTask[$rootKey] : [];
+            $dataContract = \is_array($root['data_contract'] ?? null) ? $root['data_contract'] : [];
+            $sources[] = \is_array($dataContract['required_data'] ?? null) ? $dataContract['required_data'] : [];
+        }
+
+        $lines = [];
+        foreach ($sources as $source) {
+            foreach ($source as $item) {
+                if (\is_scalar($item)) {
+                    $lines[] = \trim((string)$item);
+                }
+            }
+        }
+
+        return \array_values(\array_filter($lines, static fn(string $line): bool => $line !== ''));
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     */
+    private function jsonEncodeForPrompt(array $payload, int $maxChars): string
+    {
+        if ($payload === []) {
+            return '{}';
+        }
+
+        return $this->clipText(
+            (string)\json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR),
+            $maxChars
+        );
     }
 
     /**
@@ -2305,7 +2661,7 @@ final class AiSitePageComponentGenerationService
         }
         $hint = $this->describeLocaleForAiPrompt($locale);
 
-        return "Primary language (locale {$locale} — {$hint}): all visitor-visible copy (headings, buttons, nav labels, body text, footer) must be written in this language.\n";
+        return "Website content language (locale {$locale} — {$hint}): all visitor-visible copy (headings, buttons, nav labels, body text, footer, alt text) must be written in this language from the website requirement. Do not use the planning/plan language as visitor copy unless it matches this locale.\n";
     }
 
     /**
@@ -2320,7 +2676,7 @@ final class AiSitePageComponentGenerationService
         }
         $hint = $this->describeLocaleForAiPrompt($locale);
 
-        return "主语言（locale {$locale}，{$hint}）：所有面向访客可见的文案（标题、按钮、导航、段落、页脚等）均须使用该语言撰写。\n";
+        return "网站内容主语言（locale {$locale}，{$hint}）：所有面向访客可见的文案（标题、按钮、导航、段落、页脚、alt 文案等）均须使用用户需求选择的网站主语言撰写。禁止把方案/计划语言当成网站可见文案语言，除非它与该 locale 一致。\n";
     }
 
     private function emitComponentRetryNotice(string $region, string $componentCode, string $reason, int $attempt): void
@@ -2354,10 +2710,10 @@ final class AiSitePageComponentGenerationService
         return $basePrompt
             . "\n\nRetry mode (attempt {$attempt}/" . self::COMPONENT_GENERATION_MAX_ATTEMPTS . "):"
             . "\n- The previous AI output failed validation because: {$reason}"
-            . "\n- Regenerate the SAME component with a simpler, safer implementation."
-            . "\n- Simpler is better than fancy."
+            . "\n- Regenerate the SAME component with a safer implementation that is still production-quality and visually layered."
+            . "\n- Keep the structure compact, but include real visitor-facing copy, panel/card depth, button states, and an inline SVG or CSS visual if no real asset URL is provided."
             . "\n- Keep `extra_fields`, `php_variables`, and `js_content` empty unless absolutely necessary."
-            . "\n- Prefer one small section/root wrapper, one heading, one short paragraph, and one optional CTA."
+            . "\n- Prefer one small section/root wrapper, practical cards/proof points, one short paragraph, and one optional CTA."
             . "\n- Avoid loops, complex PHP, embedded arrays, dynamic calculations, markdown fences, and long CSS."
             . "\n- Return pure JSON only for component `{$componentCode}`.";
     }

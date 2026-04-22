@@ -61,6 +61,7 @@ class Stop extends CommandAbstract
     /** @var array<string, list<int>> */
     private array $residualPrefixPidsCache = [];
     private bool $lastResidualCleanupComplete = true;
+    private bool $lastIpcStopFlowStillActive = false;
 
     /** IPC 等待超时（秒）- 与 Windows 一致，不长时间等待，超时后强制杀进程 */
     private const IPC_TIMEOUT = 15;
@@ -196,6 +197,7 @@ class Stop extends CommandAbstract
         $this->recoverableManagedPidsCache = [];
         $this->residualPrefixPidsCache = [];
         $this->lastResidualCleanupComplete = true;
+        $this->lastIpcStopFlowStillActive = false;
     }
 
     private function invalidateStopRuntimeState(): void
@@ -361,7 +363,7 @@ class Stop extends CommandAbstract
             // 清理可能残留的进程和文件（含按 PID 与按名前缀，确保 Worker/Dispatcher 等全部退出）
             $this->runResidualCleanupPairWithRetry($name, $instanceInfo, $force);
             if (!$this->wasLastResidualCleanupComplete()) {
-                $this->printer->warning(__('实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。', [$name]));
+                $this->printer->warning(__('Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.', [$name]));
                 return;
             }
             $this->releaseSharedStateConsumersForInstance($name);
@@ -454,16 +456,24 @@ class Stop extends CommandAbstract
             $this->printer->success(__('所有子进程已完整退出 ✓'));
             $this->runResidualCleanupPairWithRetry($name, $instanceInfo, $force);
             if (!$this->wasLastResidualCleanupComplete()) {
-                $this->printer->warning(__('实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。', [$name]));
+                $this->printer->warning(__('Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.', [$name]));
                 return;
             }
         } else {
+            if ($this->lastIpcStopFlowStillActive) {
+                $this->printer->warning(__('Stop flow is still running in Master after the CLI wait ended; keeping instance metadata and skipping local cleanup.'));
+                return;
+            }
             // IPC 失败，强制杀死 Master 并彻底清理该实例下所有进程（含 Worker/Dispatcher 等）
             $this->printer->warning(__('IPC 超时，强制终止 Master 并清理该实例下所有进程...'));
             Processer::killProcessTreeByPid($masterPid, true);
             SchedulerSystem::usleep(500000);
             
             $this->runResidualCleanupPairWithRetry($name, $instanceInfo, true);
+            if (!$this->wasLastResidualCleanupComplete()) {
+                $this->printer->warning(__('Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.', [$name]));
+                return;
+            }
         }
         
         // 从共享 Session/Memory 注册表移除本实例消费者，避免误导其它工具
@@ -1409,7 +1419,12 @@ class Stop extends CommandAbstract
             $this->ipcMsg("Master 进程已退出 ✓", 'success');
             return true;
         }
-        
+        if ($observedStopStage > 0) {
+            $this->lastIpcStopFlowStillActive = true;
+            $this->ipcMsg("Stop flow still appears active after hard wait; keep metadata and avoid local cleanup.", 'info');
+            return false;
+        }
+
         $this->ipcMsg("Wait timeout (hard {$hardTimeout}s)", 'error');
         return false;
     }
@@ -1557,10 +1572,6 @@ class Stop extends CommandAbstract
     private function getIpcHardTimeout(bool $force = false): int
     {
         $isWin = (\strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN');
-        if ($force) {
-            return $isWin ? self::IPC_FORCE_HARD_TIMEOUT_WIN : self::IPC_FORCE_HARD_TIMEOUT_LINUX;
-        }
-
         $base = $isWin ? self::IPC_HARD_TIMEOUT_WIN : self::IPC_HARD_TIMEOUT_LINUX;
         $cap = $isWin ? 600 : 420;
 
