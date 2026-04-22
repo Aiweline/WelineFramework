@@ -391,23 +391,61 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $list = [];
         foreach ($rows as $row) {
             $name = $row['name'] ?? '';
-            $type = strtolower($row['type'] ?? '');
+            $typeInfo = $this->normalizeSqliteColumnType((string) ($row['type'] ?? ''));
             $notnull = (int) ($row['notnull'] ?? 0);
             $pk = (int) ($row['pk'] ?? 0);
             $default = $row['dflt_value'] ?? null;
             $list[] = [
                 'name' => $name,
-                'type' => $type ?: 'text',
-                'length' => null,
-                'nullable' => $notnull === 0,
+                'type' => $typeInfo['type'],
+                'length' => $typeInfo['length'],
+                'nullable' => $pk > 0 ? false : $notnull === 0,
                 'primary_key' => $pk > 0,
-                'auto_increment' => $pk > 0 && ($type === 'integer' || $type === 'int'),
-                'default' => $default,
+                'auto_increment' => $pk > 0 && in_array($typeInfo['type'], ['integer', 'int'], true),
+                'default' => $this->normalizeSqliteDefault($default),
                 'comment' => '',
                 'unique' => false,
             ];
         }
         return $list;
+    }
+
+    /** @return array{type:string,length:int|string|null} */
+    private function normalizeSqliteColumnType(string $rawType): array
+    {
+        $rawType = strtolower(trim($rawType));
+        if ($rawType === '') {
+            return ['type' => 'text', 'length' => null];
+        }
+        if (preg_match('/^([a-z][a-z0-9_]*)\s*\((.+)\)$/i', $rawType, $m)) {
+            $length = trim($m[2]);
+            return [
+                'type' => strtolower($m[1]),
+                'length' => ctype_digit($length) ? (int) $length : $length,
+            ];
+        }
+        return ['type' => $rawType, 'length' => null];
+    }
+
+    private function normalizeSqliteDefault(mixed $default): mixed
+    {
+        if ($default === null) {
+            return null;
+        }
+        $value = trim((string) $default);
+        if (strcasecmp($value, 'NULL') === 0) {
+            return null;
+        }
+        if (str_starts_with($value, '(') && str_ends_with($value, ')')) {
+            $value = trim(substr($value, 1, -1));
+        }
+        if (strlen($value) >= 2 && $value[0] === "'" && substr($value, -1) === "'") {
+            return str_replace("''", "'", substr($value, 1, -1));
+        }
+        if (strcasecmp($value, "datetime('now')") === 0) {
+            return 'CURRENT_TIMESTAMP';
+        }
+        return $value;
     }
 
     /** @inheritDoc */
@@ -421,6 +459,9 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $list = [];
         foreach ($indexList as $idx) {
             $name = $idx['name'] ?? '';
+            if (str_starts_with((string) $name, 'sqlite_autoindex_')) {
+                continue;
+            }
             $unique = (bool) ($idx['unique'] ?? false);
             $info = $this->query("PRAGMA index_info(" . $this->getLink()->quote($name) . ")")->fetchArray();
             $columns = [];
@@ -458,7 +499,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function buildAlterModifyColumnSql(string $table, array $col, ?array $existingCol = null): string
     {
-        throw new \RuntimeException('SQLite does not support ALTER COLUMN MODIFY. Use table recreation workaround.');
+        return '';
     }
 
     /** @inheritDoc */
@@ -473,7 +514,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function buildAlterTableCommentSql(string $table, string $comment): string
     {
-        throw new DbException(__('SQLite 不支持表注释 DDL：ALTER TABLE COMMENT %{1}', [$table]));
+        return '';
     }
 
     /** @inheritDoc */
@@ -501,13 +542,13 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function buildAddForeignKeySql(string $table, array $fk): string
     {
-        throw new DbException(__('SQLite 不支持添加外键 DDL：ALTER TABLE ADD CONSTRAINT %{1}', [$table]));
+        return '';
     }
 
     /** @inheritDoc */
     public function buildDropForeignKeySql(string $table, string $fkName): string
     {
-        throw new DbException(__('SQLite 不支持删除外键 DDL：ALTER TABLE DROP CONSTRAINT %{1}.%{2}', [$table, $fkName]));
+        return '';
     }
 
     private function sqliteColumnDef(array $col): string
