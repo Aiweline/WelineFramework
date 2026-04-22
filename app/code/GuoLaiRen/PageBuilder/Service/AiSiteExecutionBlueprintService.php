@@ -256,19 +256,13 @@ final class AiSiteExecutionBlueprintService
      *   execution_blueprint:array<string, mixed>,
      *   derived_scope_patch:array<string, mixed>,
      *   markdown:string,
-     *   ai_generated?:int,
-     *   ai_fallback?:int
+     *   ai_generated?:int
      * }
      */
     public function buildPlanArtifactsByAiStream(array $scope, array $websiteProfile, array $payload = [], ?callable $onChunk = null): array
     {
         if ((int)($scope['fake_mode'] ?? 0) === 1) {
-            $artifacts = $this->buildPlanArtifacts($scope, $websiteProfile, $payload);
-            $artifacts = $this->applyFakeModePreviewMutation($artifacts, $scope, $payload);
-            $artifacts['ai_generated'] = 0;
-            $artifacts['ai_fallback'] = 1;
-            $artifacts['generation_source'] = 'deterministic';
-            return $artifacts;
+            throw new \RuntimeException((string)__('AI 建站阶段一不允许使用 deterministic/fake 回退方案'));
         }
 
         if (!empty($payload['staged_generation'])) {
@@ -317,7 +311,6 @@ final class AiSiteExecutionBlueprintService
 
             $artifacts = $this->mapAiPlanToArtifacts($scope, $websiteProfile, $decoded, $pageTypes, $planLocale, $instruction, $targetScope);
             $artifacts['ai_generated'] = 1;
-            $artifacts['ai_fallback'] = 0;
             return $artifacts;
         } catch (\Throwable $throwable) {
             throw new \RuntimeException(
@@ -343,11 +336,7 @@ final class AiSiteExecutionBlueprintService
         $planLocale = \trim((string)($scope['plan_locale'] ?? $scope['default_language'] ?? $scope['default_locale'] ?? ''));
         $siteDisplayName = $this->pageBlueprintService->resolveSiteDisplayName($websiteProfile, $scope);
         $siteSummary = $this->pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope);
-        $baseline = $this->buildPlanArtifacts($scope, $websiteProfile, [
-            'instruction' => $instruction,
-            'target_scope' => $targetScope,
-        ]);
-        $planJson = \is_array($baseline['plan_json'] ?? null) ? $baseline['plan_json'] : [];
+        $planJson = [];
 
         try {
             $themeDecoded = $this->generateStageOneJsonByAi(
@@ -374,7 +363,6 @@ final class AiSiteExecutionBlueprintService
 
             $artifacts = $this->mapAiPlanToArtifacts($scope, $websiteProfile, ['plan_json' => $planJson], $pageTypes, $planLocale, $instruction, $targetScope);
             $artifacts['ai_generated'] = 1;
-            $artifacts['ai_fallback'] = 0;
             $artifacts['generation_source'] = 'ai_staged';
             return $artifacts;
         } catch (\Throwable $throwable) {
@@ -1221,9 +1209,9 @@ final class AiSiteExecutionBlueprintService
 
         return \str_contains($text, 'add block')
             || \str_contains($text, 'add a')
-            || \str_contains($text, '鏂板')
-            || \str_contains($text, '琛ヨ冻')
-            || \str_contains($text, '娣诲姞');
+            || \str_contains($text, '新增')
+            || \str_contains($text, '补足')
+            || \str_contains($text, '添加');
     }
 
     /**
@@ -1484,6 +1472,9 @@ final class AiSiteExecutionBlueprintService
             // === 角色与意图：放到最前，先“锁定要做什么”，再给 schema ===
             'You are Structured Web Blueprint Engine for a real website builder.',
             'PRIMARY GOAL: Take the user one-line website requirement and EXPAND it into a CONCRETE, READY-TO-BUILD plan. This is NOT a writing tutorial; it is the actual blueprint that Stage-2 will execute.',
+            'STAGE ORDER CONTRACT: first decide theme_design (visual concept, palette, typography, spacing/radius, CTA tone, motion/interaction direction), then shared Header/Footer, then page plans and page blocks. Do not design page blocks before the shared theme contract exists.',
+            'PRODUCTION SITE CONTRACT: the result must be suitable for an operating website, not a demo, not a proposal page, and not a page that explains the plan to visitors.',
+            'VISUAL RICHNESS CONTRACT: unless the user explicitly asks for minimalism, choose a rich but coherent visual system with layered backgrounds, varied accent colors, card treatments, icon/SVG visual language, button hover/focus states, transition timing, and smooth scroll/reveal motion guidance.',
             '中文要求：根据下面的【用户一句话需求】拓写出**真实可落地**的建站方案——给出具体导航、栏目、标题、正文、CTA、字段示例与落地说明，禁止通篇“围绕…/突出…/说明…”这类方向性描述。',
             '【用户一句话需求】(authoritative, expand from this): ' . $oneLineRequirement,
             '【站点名】: ' . ($siteDisplayName !== '' ? $siteDisplayName : '-'),
@@ -1562,6 +1553,7 @@ final class AiSiteExecutionBlueprintService
             '- field_plan.sample must be direct content, for example "欢迎来到 Teenipiya 棋牌中心" or "立即开始", not "标题围绕核心价值展开".',
             '- field_plan.implementation_note must be a customer-readable implementation note such as layout handling, editable constraint, delivery requirement, or asset direction; never write abstract design rationale or prompt guidance.',
             '- For media/image fields, field_plan.sample must be a concrete asset brief the client can review, not a generic instruction like "使用一张主视觉图".',
+            '- Do not output fake image URLs such as hero.jpg, about.jpg, example.com, placeholder services, or unverified .jpg/.png/.webp paths. When an image is needed, describe a concrete SVG-expressible visual (cards, board, shield, avatars, icons, texture) that stage 3 can render inline until real assets are uploaded.',
             '- execution_script.feature_points must be concrete deliverables for this block, not meta-writing advice.',
             '- execution_script.core_copy must summarize the actual content message already written for the block.',
             '- Treat the output as a customer-visible implementation plan: every visible sentence must answer the user brief directly.',

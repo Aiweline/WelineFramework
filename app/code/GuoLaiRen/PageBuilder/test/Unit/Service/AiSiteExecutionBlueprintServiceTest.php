@@ -449,7 +449,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertIsArray($artifacts['plan_json'] ?? null);
     }
 
-    public function testBuildPlanArtifactsByAiStreamFallsBackToDeterministicInFakeMode(): void
+    public function testBuildPlanArtifactsByAiStreamRejectsFakeMode(): void
     {
         $aiService = $this->createMock(AiService::class);
         $aiService->expects(self::never())->method('generateStream');
@@ -459,7 +459,10 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             $aiService
         );
 
-        $artifacts = $service->buildPlanArtifactsByAiStream([
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('deterministic');
+
+        $service->buildPlanArtifactsByAiStream([
             'site_title' => 'Fake Mode Plan',
             'brief_description' => 'Use deterministic plan generation for fake mode.',
             'page_types' => ['home_page', 'about_page'],
@@ -472,13 +475,6 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             'instruction' => 'Refine only the homepage hero.',
             'target_scope' => 'page:home_page:block:hero',
         ]);
-
-        self::assertSame(0, (int)($artifacts['ai_generated'] ?? -1));
-        self::assertSame(1, (int)($artifacts['ai_fallback'] ?? 0));
-        self::assertSame('deterministic', (string)($artifacts['generation_source'] ?? ''));
-        self::assertNotSame('', (string)($artifacts['markdown'] ?? ''));
-        self::assertIsArray($artifacts['plan_json'] ?? null);
-        self::assertNotEmpty($artifacts['plan_json']['pages']['home_page']['blocks'] ?? []);
     }
 
     public function testBuildPlanArtifactsOnlyUsesSelectedPageTypes(): void
@@ -1288,7 +1284,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         ]);
 
         self::assertSame(1, (int)($artifacts['ai_generated'] ?? 0));
-        self::assertSame(0, (int)($artifacts['ai_fallback'] ?? -1));
+        self::assertArrayNotHasKey('ai_fallback', $artifacts);
         self::assertIsArray($artifacts['plan_json'] ?? null);
         self::assertNotEmpty($artifacts['plan_json']['pages']['home_page']['blocks'] ?? []);
     }
