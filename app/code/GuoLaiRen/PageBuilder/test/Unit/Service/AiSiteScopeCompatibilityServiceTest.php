@@ -27,8 +27,8 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
     {
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
 
-        $this->assertSame('virtual_theme', $service->normalizeStage('page_types'));
-        $this->assertSame('virtual_theme', $service->normalizeStage('content'));
+        $this->assertSame('plan', $service->normalizeStage('page_types'));
+        $this->assertSame('plan', $service->normalizeStage('content'));
         $this->assertSame('visual_edit', $service->normalizeStage('visual_edit'));
         $this->assertSame('publish', $service->normalizeStage('publish'));
     }
@@ -100,6 +100,31 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         $this->assertSame(Page::TYPE_HOME, $scope['preview_page_type']);
         $this->assertCount(2, $scope['preview_page_options']);
         $this->assertSame(11, $scope['preview_page_options'][0]['page_id']);
+    }
+
+    public function testNormalizeScopeResolvesPreviewTypeFromVirtualPagesWhenMaterializedPageIsMissing(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $scope = $service->normalizeScope([
+            'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT],
+            'preview_page_type' => Page::TYPE_ABOUT,
+            'virtual_pages_by_type' => [
+                Page::TYPE_HOME => [
+                    'page_type' => Page::TYPE_HOME,
+                    'title' => 'Home',
+                    'blocks' => [],
+                ],
+                Page::TYPE_ABOUT => [
+                    'page_type' => Page::TYPE_ABOUT,
+                    'title' => 'About',
+                    'blocks' => [],
+                ],
+            ],
+        ]);
+
+        $this->assertSame(0, $scope['preview_page_id']);
+        $this->assertSame(Page::TYPE_ABOUT, $scope['preview_page_type']);
     }
 
     public function testNormalizePageTypesDefaultsToAllSupportedPageTypes(): void
@@ -413,5 +438,46 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         self::assertCount(3, $virtualPages[Page::TYPE_HOME]['blocks']);
         self::assertSame('home-page-site-header', $virtualPages[Page::TYPE_HOME]['blocks'][0]['block_id']);
         self::assertSame('home-page-site-footer', $virtualPages[Page::TYPE_HOME]['blocks'][2]['block_id']);
+    }
+
+    public function testBuildVirtualPagesByTypeCanDisableAllPlaceholderHydrationForVirtualThemeBuild(): void
+    {
+        $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
+        $blocksBuilder->expects($this->never())
+            ->method('buildPlaceholderBlocksForPageType');
+        $blocksBuilder->expects($this->never())
+            ->method('buildStaticPlaceholderBlocksForPageType');
+
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer(), $blocksBuilder);
+
+        $virtualPages = $service->buildVirtualPagesByType([Page::TYPE_HOME], [
+            'website_profile' => [
+                'site_title' => 'Virtual Theme Build',
+                'default_locale' => 'en_US',
+            ],
+            'page_type_layouts' => [
+                Page::TYPE_HOME => [
+                    'content' => [
+                        [
+                            'code' => 'content/home-page',
+                            'enabled' => true,
+                            'config' => [],
+                            'sort_order' => 10,
+                        ],
+                    ],
+                ],
+            ],
+            'virtual_pages_by_type' => [
+                Page::TYPE_HOME => [
+                    'page_type' => Page::TYPE_HOME,
+                    'title' => '首页',
+                    'locale' => 'en_US',
+                    'style_code' => 'default',
+                    'blocks' => [],
+                ],
+            ],
+        ], false, false);
+
+        self::assertSame([], $virtualPages[Page::TYPE_HOME]['blocks']);
     }
 }
