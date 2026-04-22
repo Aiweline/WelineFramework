@@ -38,6 +38,7 @@ class ConnectionPool
             'host' => $configProvider->getHostName(),
             'port' => $configProvider->getHostPort(),
             'database' => $configProvider->getDatabase(),
+            'path' => method_exists($configProvider, 'getData') ? (string)$configProvider->getData('path') : '',
             'username' => $configProvider->getUsername(),
         ]));
     }
