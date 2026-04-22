@@ -203,7 +203,19 @@
             }
             console[type === 'error' ? 'error' : 'log'](message);
         };
+    var normalizeToastMessage = typeof previewBridge.normalizeToastMessage === 'function'
+        ? previewBridge.normalizeToastMessage
+        : (typeof window.normalizeToastMessage === 'function'
+            ? window.normalizeToastMessage
+            : function (message) { return String(message || ''); });
 
+    function getCurrentPreviewPageType() {
+        if (typeof previewBridge.getCurrentPreviewPageType === 'function') {
+            return String(previewBridge.getCurrentPreviewPageType() || '');
+        }
+        var activeTab = document.querySelector('.pb-ai-preview-tab.active');
+        return activeTab ? String(activeTab.getAttribute('data-page-type') || '') : '';
+    }
 
 
     function parsePayload(event) {
@@ -1599,7 +1611,7 @@
 
             // 实时更新预览 iframe（如果存在）
             var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
-            if (previewFrame && payload.page_type && payload.progress_percent >= 100 && !blockRefreshState.active && (buildStartupPending || String(payload.page_type || '') === String(currentPreviewPageType || ''))) {
+            if (previewFrame && payload.page_type && payload.progress_percent >= 100 && !blockRefreshState.active && (buildStartupPending || String(payload.page_type || '') === getCurrentPreviewPageType())) {
                 // 页面生成完成，刷新预览
                 window.setTimeout(function() {
                     if (previewFrame.src) {
@@ -1693,7 +1705,7 @@
 
             // 页面生成完成，实时刷新预览
             var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
-            if (previewFrame && previewFrame.src && !blockRefreshState.active && (buildStartupPending || String(payload.page_type || '') === String(currentPreviewPageType || ''))) {
+            if (previewFrame && previewFrame.src && !blockRefreshState.active && (buildStartupPending || String(payload.page_type || '') === getCurrentPreviewPageType())) {
                 window.setTimeout(function() {
                     // 刷新 iframe 以显示新生成的页面
                     previewFrame.src = previewFrame.src;
@@ -1981,7 +1993,7 @@
         if (triggerButton) {
             triggerButton.disabled = true;
         }
-        postForm(startPublishUrl, { public_id: publicId }).then(function (data) {
+        postForm(startPublishUrl, { public_id: publicId, confirm_visual_theme: '1' }).then(function (data) {
             if (!data || !data.success) {
                 if (triggerButton) {
                     triggerButton.disabled = false;

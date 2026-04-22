@@ -7,7 +7,6 @@ namespace GuoLaiRen\PageBuilder\Service;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RequestContext;
 
 class AiSiteScopeCompatibilityService
 {
@@ -19,12 +18,6 @@ class AiSiteScopeCompatibilityService
     public const WORKSPACE_STATUS_PUBLISHING = 'publishing';
     public const WORKSPACE_STATUS_PUBLISHED = 'published';
     public const WORKSPACE_STATUS_FAILED = 'failed';
-    /** AI 占位回退日志去重：同一进程只记录一次，避免 402 刷屏。 */
-    private static bool $workspacePlaceholderFallbackLogged = false;
-    private const REQUEST_KEY_PLACEHOLDER_FORCE_STATIC = 'pagebuilder.workspace.placeholder.force_static';
-    /** 测试/调试可开启：占位块必须走 AI 生成，禁止静态回退。 */
-    public const REQUEST_KEY_PLACEHOLDER_REQUIRE_AI = 'pagebuilder.workspace.placeholder.require_ai';
-
     public function __construct(
         private readonly LayoutConfigNormalizer $layoutConfigNormalizer,
         private readonly ?AiSiteHtmlBlocksBuildService $aiSiteHtmlBlocksBuildService = null,
@@ -346,7 +339,11 @@ class AiSiteScopeCompatibilityService
      * @param array<string, mixed> $scope
      * @return array<string, array<string, mixed>>
      */
-    public function buildVirtualPagesByType(array $pageTypes, array $scope = [], bool $allowAiPlaceholderGeneration = true): array
+    public function buildVirtualPagesByType(
+        array $pageTypes,
+        array $scope = [],
+        bool $allowAiPlaceholderGeneration = true
+    ): array
     {
         $existing = $this->normalizeVirtualPagesByType($scope['virtual_pages_by_type'] ?? [], $pageTypes);
         $layouts = $this->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
@@ -375,9 +372,10 @@ class AiSiteScopeCompatibilityService
                 $record['style_settings'] = [];
             }
             $shouldHydrateLegacyBlocks = $this->shouldHydrateLegacyBlocks($record, $layouts[$pageType] ?? [], $pageType);
-            $placeholderBlocks = ($shouldHydrateLegacyBlocks && $allowAiPlaceholderGeneration)
-                ? $this->buildWorkspacePlaceholderBlocks($blocksBuilder, $pageType, $websiteProfile, $scope)
-                : $blocksBuilder->buildStaticPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope);
+            $placeholderBlocks = [];
+            if ($shouldHydrateLegacyBlocks && $allowAiPlaceholderGeneration) {
+                $placeholderBlocks = $this->buildWorkspacePlaceholderBlocks($blocksBuilder, $pageType, $websiteProfile, $scope);
+            }
             if ($shouldHydrateLegacyBlocks) {
                 $record['blocks'] = $placeholderBlocks;
             } else {
@@ -393,163 +391,17 @@ class AiSiteScopeCompatibilityService
     }
 
     /**
-     * 工作台初始化时允许在 AI 占位生成不可用时回退到静态占位块，
-     * 避免旧会话或查看页因为实时 AI 生成/校验失败而直接 500。
-     *
      * @param array<string, mixed> $websiteProfile
      * @param array<string, mixed> $scope
      * @return list<array<string, mixed>>
-     */
-    private function buildWorkspacePlaceholderBlocks(
+     */    private function buildWorkspacePlaceholderBlocks(
         AiSiteHtmlBlocksBuildService $blocksBuilder,
         string $pageType,
         array $websiteProfile,
         array $scope
     ): array {
-        if ((bool)RequestContext::get(self::REQUEST_KEY_PLACEHOLDER_FORCE_STATIC, false)) {
-            return $blocksBuilder->buildStaticPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope);
-        }
-
-        try {
-            return $blocksBuilder->buildPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope);
-        } catch (\Throwable $throwable) {
-            if ((bool)RequestContext::get(self::REQUEST_KEY_PLACEHOLDER_REQUIRE_AI, false)) {
-                throw $throwable;
-            }
-            if (!$this->shouldFallbackToStaticBlocks($throwable)) {
-                throw $throwable;
-            }
-            RequestContext::set(self::REQUEST_KEY_PLACEHOLDER_FORCE_STATIC, true);
-
-            $message = \trim(\strip_tags($throwable->getMessage()));
-            if (!self::$workspacePlaceholderFallbackLogged) {
-                self::$workspacePlaceholderFallbackLogged = true;
-                w_log_error('AI Site workspace placeholder fallback: ' . ($message !== '' ? $message : 'unknown error'));
-            }
-
-            return $blocksBuilder->buildStaticPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope);
-        }
+        return $blocksBuilder->buildPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope);
     }
-
-    private function shouldFallbackToStaticBlocks(\Throwable $throwable): bool
-    {
-        for ($cursor = $throwable; $cursor !== null; $cursor = $cursor->getPrevious()) {
-            $message = \strtolower(\trim(\strip_tags($cursor->getMessage())));
-            if ($message === '') {
-                if ($this->isRecoverableWorkspacePlaceholderThrowable($cursor)) {
-                    return true;
-                }
-                continue;
-            }
-
-            if (
-                \str_contains($message, 'http 402')
-                || \str_contains($message, 'insufficient balance')
-                || \str_contains($message, '余额不足')
-                || \str_contains($message, '额度不足')
-                || \str_contains($message, 'api key')
-                || \str_contains($message, 'api密钥')
-                || \str_contains($message, '供应商账户')
-                || \str_contains($message, 'provider account')
-                || \str_contains($message, '组件 json')
-                || \str_contains($message, 'component json')
-                || \str_contains($message, '校验失败')
-                || \str_contains($message, 'validation failed')
-                || \str_contains($message, '语法校验')
-                || \str_contains($message, '预览渲染失败')
-                || \str_contains($message, 'preview render')
-                || \str_contains($message, '反引号')
-                || \str_contains($message, '#<?= $componentid ?>')
-            ) {
-                return true;
-            }
-
-            if ($this->isRecoverableWorkspacePlaceholderThrowable($cursor)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function isRecoverableWorkspacePlaceholderThrowable(\Throwable $throwable): bool
-    {
-        if ($this->isRecoverableWorkspacePlaceholderFile($throwable->getFile())) {
-            return true;
-        }
-
-        foreach ($throwable->getTrace() as $frame) {
-            $class = (string)($frame['class'] ?? '');
-            if (
-                $class === AiSitePageComponentGenerationService::class
-                || \str_starts_with($class, 'GuoLaiRen\\PageBuilder\\Service\\AI\\')
-            ) {
-                return true;
-            }
-
-            $file = (string)($frame['file'] ?? '');
-            if ($this->isRecoverableWorkspacePlaceholderFile($file)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function isRecoverableWorkspacePlaceholderFile(string $file): bool
-    {
-        if ($file === '') {
-            return false;
-        }
-
-        $normalized = \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $file);
-
-        return \str_contains($normalized, 'GuoLaiRen' . \DIRECTORY_SEPARATOR . 'PageBuilder' . \DIRECTORY_SEPARATOR . 'Service' . \DIRECTORY_SEPARATOR . 'AiSitePageComponentGenerationService.php')
-            || \str_contains($normalized, 'GuoLaiRen' . \DIRECTORY_SEPARATOR . 'PageBuilder' . \DIRECTORY_SEPARATOR . 'Service' . \DIRECTORY_SEPARATOR . 'AI' . \DIRECTORY_SEPARATOR);
-    }
-
-    /**
-     * @param array<string, array<string, mixed>> $virtualPagesByType
-     */
-    /**
-     * HTML 区块轨：每个页面类型均须有非空 blocks[]
-     *
-     * @param array<string, array<string, mixed>> $virtualPagesByType
-     * @param list<string> $pageTypes
-     */
-    public function htmlTrackHasCompleteBlocks(array $virtualPagesByType, array $pageTypes): bool
-    {
-        foreach ($pageTypes as $pageType) {
-            $row = $virtualPagesByType[$pageType] ?? [];
-            $blocks = \is_array($row['blocks'] ?? null) ? $row['blocks'] : [];
-            if ($blocks === []) {
-                return false;
-            }
-        }
-
-        return $pageTypes !== [];
-    }
-
-    public function resolvePreviewPageType(array $virtualPagesByType, string $requestedPageType = ''): string
-    {
-        $requestedPageType = \trim($requestedPageType);
-        if ($requestedPageType !== '' && isset($virtualPagesByType[$requestedPageType])) {
-            return $requestedPageType;
-        }
-
-        if (isset($virtualPagesByType[Page::TYPE_HOME])) {
-            return Page::TYPE_HOME;
-        }
-
-        foreach ($virtualPagesByType as $pageType => $row) {
-            if (\is_string($pageType) && $pageType !== '') {
-                return $pageType;
-            }
-        }
-
-        return '';
-    }
-
     /**
      * @param array<string, array{page_id:int,website_id:int,type:string,name:string,title:string,handle:string}> $pagesByType
      * @return list<array{value:int,page_id:int,type:string,label:string,title:string,handle:string}>
@@ -640,6 +492,29 @@ class AiSiteScopeCompatibilityService
             'preview_page_id' => 0,
             'preview_page_type' => '',
         ];
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $virtualPagesByType
+     */
+    public function resolvePreviewPageType(array $virtualPagesByType, string $requestedPageType = ''): string
+    {
+        $requestedPageType = \trim($requestedPageType);
+        if ($requestedPageType !== '' && isset($virtualPagesByType[$requestedPageType])) {
+            return $requestedPageType;
+        }
+
+        if (isset($virtualPagesByType[Page::TYPE_HOME])) {
+            return Page::TYPE_HOME;
+        }
+
+        foreach ($virtualPagesByType as $pageType => $row) {
+            if (\is_string($pageType) && $pageType !== '') {
+                return $pageType;
+            }
+        }
+
+        return '';
     }
 
     /**

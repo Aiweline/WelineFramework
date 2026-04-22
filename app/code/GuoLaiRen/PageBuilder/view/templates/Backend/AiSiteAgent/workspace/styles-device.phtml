@@ -32,8 +32,11 @@
 .pb-ai-preview-device-stage iframe {
     display: block;
     margin: 0 auto;
-    transition: width .2s ease, min-height .2s ease, box-shadow .2s ease;
+    transition: width .2s ease, height .2s ease, min-height .2s ease, box-shadow .2s ease;
     box-shadow: var(--backend-shadow-lg, 0 18px 50px rgba(15, 23, 42, 0.18));
+}
+#pb-ai-visual-preview-frame {
+    overflow: hidden;
 }
 .pb-ai-preview-device-stage.is-desktop iframe {
     width: 100%;
