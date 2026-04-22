@@ -15,6 +15,7 @@ use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePublishService;
 use GuoLaiRen\PageBuilder\Service\AiSiteProfileGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
+use GuoLaiRen\PageBuilder\Service\AiSiteQualityGateService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspaceDebugDefaults;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemeService;
@@ -881,6 +882,13 @@ SCRIPT;
             return $this->fetchJson(['success' => false, 'message' => $error]);
         }
         $scope = $this->scopeCompatibilityService->normalizeScope(\array_replace($session->getScopeArray(), $scopePatch));
+        if (\trim((string)($scope['target_domain'] ?? '')) === '') {
+            return $this->jsonError(
+                'TARGET_DOMAIN_REQUIRED',
+                (string)__('请先填写目标域名，再确认&更新方案。'),
+                ['target_domain']
+            );
+        }
         $confirmRegenerate = \in_array(\strtolower(\trim((string)$this->getRequestBodyValue('confirm_regenerate', '0'))), ['1', 'true', 'yes', 'on'], true);
         $requestedPlanLocale = \trim((string)$this->getRequestBodyValue('plan_locale', ''));
         if ($requestedPlanLocale !== '') {
@@ -1232,7 +1240,6 @@ SCRIPT;
                 'plan_structured' => $structured !== [] ? $structured : $planJson,
                 'plan_locale' => $this->resolvePlanLocale($scope),
                 'plan_ai_generated' => (int)($artifacts['ai_generated'] ?? 0),
-                'plan_ai_fallback' => (int)($artifacts['ai_fallback'] ?? 0),
                 'plan_generated_at' => \date('Y-m-d H:i:s'),
                 // 微调在已有确认状态下默认保持已确认，避免仅做文案/区块增补后打断后续阶段。
                 'plan_confirmed' => $effectivePromptMode === 'rebuild' ? 0 : (int)($scope['plan_confirmed'] ?? 0),
@@ -1675,6 +1682,7 @@ SCRIPT;
                     'prompt_mode' => $promptMode,
                 ],
                 'task_plan_confirmed' => 0,
+                '_task_plan_rebuild_in_progress' => 0,
             ];
             if ($promptMode === 'rebuild_task_plan') {
                 $scopePatch['task_plan_rebuild_summary'] = \is_array($result['rebuild_summary'] ?? null) ? $result['rebuild_summary'] : [];
@@ -1859,33 +1867,7 @@ SCRIPT;
             $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
             $markdown = (string)($artifacts['markdown'] ?? '');
             $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
-            /*
-            $deterministicFallbackAllowed = false;
-            try {
-                $artifacts = $this->virtualThemePlanService->buildTaskPlanArtifacts(
-                    $scope,
-                    $buildBlueprint
-                                'message' => (string)__('AI 正在持续生成任务方案，请保持连接'),
-                );
-            } catch (\Throwable $streamThrowable) {
-                // 流式阶段失败时回退到 deterministic 方案，保证 SSE 能给出稳定可确认草案。
-                $sse->sendEvent('progress', [
-                    'message' => (string)__('AI 流式任务方案生成失败，正在回退为稳定草案'),
-                    'prompt_mode' => $promptMode,
-                    'progress_percent' => 46,
-                ]);
-                $fallbackScope = \array_replace($scope, ['fake_mode' => 1]);
-                $artifacts = $this->virtualThemePlanService->buildTaskPlanArtifacts(
-                    $fallbackScope,
-                    $buildBlueprint /*
-                
-                $deterministicFallbackAllowed = true;
-            }
-            $taskPlanGenerationSource = (string)($artifacts['generation_source'] ?? '');
-            if ($this->shouldRejectTaskPlanGenerationSource($scope, $taskPlanGenerationSource, $deterministicFallbackAllowed)) {
-                throw new \RuntimeException((string)__('第二阶段任务方案生成失败：未获取到 AI 生成结果，请检查 AI 服务配置后重试'));
-            }
-            */
+
             $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
             $markdown = (string)($artifacts['markdown'] ?? '');
             $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
@@ -1946,6 +1928,7 @@ SCRIPT;
                     'generation_source' => $taskPlanGenerationSource,
                 ],
                 'task_plan_confirmed' => 0,
+                '_task_plan_rebuild_in_progress' => 0,
             ];
             $sse->sendEvent('progress', [
                 'message' => (string)__('正在持久化任务方案草案'),
@@ -2068,12 +2051,16 @@ SCRIPT;
             $scopePatch['site_profile_manual'] = $siteProfileManual;
         }
         $mergedScope = $this->scopeCompatibilityService->normalizeScope(\array_replace($session->getScopeArray(), $scopePatch));
-        if ((int)($mergedScope['task_plan_confirmed'] ?? 0) !== 1) {
+        $mergedScope = $this->normalizeTaskPlanConfirmationForBuild($mergedScope);
+        if (!$this->isTaskPlanConfirmedForBuild($mergedScope)) {
             return $this->jsonError(
                 'TASK_PLAN_REQUIRED_BEFORE_BUILD',
                 (string)__('请先确认第二阶段任务方案，再开始执行构建'),
                 ['public_id', 'task_plan_confirmed']
             );
+        }
+        if ((int)($mergedScope['task_plan_confirmed'] ?? 0) === 1) {
+            $scopePatch['task_plan_confirmed'] = 1;
         }
         if ($isResume) {
             $pendingSummary = $this->buildTaskService->summarize($mergedScope);
@@ -2104,6 +2091,24 @@ SCRIPT;
             $startResult['start_sse'] = true;
         }
         return $this->fetchJson($startResult);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function isTaskPlanConfirmedForBuild(array $scope): bool
+    {
+        return (int)($scope['task_plan_confirmed'] ?? 0) === 1
+            || $this->buildTaskService->hasConfirmedTaskPlanForBuild($scope);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function normalizeTaskPlanConfirmationForBuild(array $scope): array
+    {
+        return $this->buildTaskService->normalizeConfirmedTaskPlanFlag($scope);
     }
 
     private function handleStartRegeneratePage(): string
@@ -2153,7 +2158,7 @@ SCRIPT;
             return $this->jsonError('INVALID_PARAMS', (string)__('所选页面类型不在当前工作区中'), self::PARAMS_REGENERATE);
         }
 
-        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
+        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope, false);
         $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
         $sectionRefinements = \is_array($virtualPage['section_refinements'] ?? null) ? $virtualPage['section_refinements'] : [];
         $sectionRefinements[$componentCode] = $instruction;
@@ -2354,12 +2359,7 @@ SCRIPT;
             }
         }
 
-        $fallbackSectionCode = \str_starts_with($componentCode, 'content/') ? $componentCode : ('content/' . $componentCode);
-        return [
-            'task_key' => 'page:' . $pageType . ':' . $fallbackSectionCode,
-            'section_code' => $fallbackSectionCode,
-            'shared_region' => '',
-        ];
+        throw new \RuntimeException((string)__('未找到组件对应的构建任务：%{1}', [$componentCode]));
     }
 
     private function runRegenerateBlockOperation(
@@ -2626,6 +2626,30 @@ SCRIPT;
                 return $this->fetchJson(['success' => false, 'message' => __('请先确认第二阶段任务方案，再进入发布流程。')]);
             }
             return $this->fetchJson(['success' => false, 'message' => __('当前工作区尚未准备好发布，请先完成页面生成与编辑。')]);
+        }
+        $qualityGate = ObjectManager::getInstance(AiSiteQualityGateService::class);
+        $qualityReport = $qualityGate->inspectScope(\is_array($state['scope'] ?? null) ? $state['scope'] : []);
+        if (empty($qualityReport['passed'])) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('发布门禁未通过，请先修复页面内容质量、破图或任务状态问题。'),
+                'data' => $qualityReport,
+            ]);
+        }
+        $confirmVisualTheme = \in_array(
+            \strtolower(\trim((string)$this->getRequestBodyValue('confirm_visual_theme', '0'))),
+            ['1', 'true', 'yes', 'on'],
+            true
+        );
+        if (!$confirmVisualTheme && (int)($state['scope']['virtual_theme_effect_confirmed'] ?? 0) !== 1) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('请先确认虚拟主题预览效果无问题，再发布正式站点。'),
+                'data' => [
+                    'required_param' => 'confirm_visual_theme',
+                    'publish_quality_gate' => $qualityReport,
+                ],
+            ]);
         }
         return $this->fetchJson($this->startOperation(
             $session,
@@ -2904,6 +2928,13 @@ SCRIPT;
                 'value' => ['visual_preview_url' => $state['visual_preview_url'], 'visual_edit_url' => $state['visual_edit_url']],
             ],
         ];
+        $qualityGate = ObjectManager::getInstance(AiSiteQualityGateService::class);
+        $qualityReport = $qualityGate->inspectScope($scope);
+        foreach (\is_array($qualityReport['items'] ?? null) ? $qualityReport['items'] : [] as $qualityItem) {
+            if (\is_array($qualityItem)) {
+                $checkItems[] = $qualityItem;
+            }
+        }
         $passed = true;
         foreach ($checkItems as $item) {
             if (empty($item['ok'])) {
@@ -2917,6 +2948,7 @@ SCRIPT;
             'stage' => $state['stage'],
             'workspace_status' => $state['workspace_status'],
             'publish_status' => $state['publish_status'],
+            'quality_gate' => $qualityReport,
         ];
         $this->appendWorkspaceEvent($session->getId(), $adminId, $state['stage'], 'publish_check', $passed ? (string)__('发布检查已通过') : (string)__('发布检查尚未通过'), ['details' => $payload]);
 
@@ -3426,7 +3458,6 @@ SCRIPT;
                             $mutationBlockConfig
                         );
                         $artifacts['ai_generated'] = 1;
-                        $artifacts['ai_fallback'] = (int)($scope['plan_ai_fallback'] ?? 0);
                     } elseif ($requestedPromptMode === 'refine' && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
                         $refineInstruction = $requestedInstruction;
                         $refineTargetScope = $requestedTargetScope;
@@ -3488,7 +3519,6 @@ SCRIPT;
                 'plan_structured' => \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : $planJson,
                 'plan_locale' => $this->resolvePlanLocale($scope),
                 'plan_ai_generated' => (int)($artifacts['ai_generated'] ?? 0),
-                'plan_ai_fallback' => (int)($artifacts['ai_fallback'] ?? 0),
                 'plan_generated_at' => \date('Y-m-d H:i:s'),
                 'plan_generated_locale' => (string)$scope['plan_locale'],
                 'plan_generated_page_types' => \array_values(\array_map('strval', $currentPageTypes)),
@@ -5704,14 +5734,9 @@ SCRIPT;
      */
     private function shouldRejectTaskPlanGenerationSource(
         array $scope,
-        string $generationSource,
-        bool $deterministicFallbackAllowed = false
+        string $generationSource
     ): bool {
-        if ((int)($scope['fake_mode'] ?? 0) === 1 || $generationSource === 'ai') {
-            return false;
-        }
-
-        return !($deterministicFallbackAllowed && \in_array($generationSource, ['deterministic', 'fallback'], true));
+        return $generationSource !== 'ai';
     }
 
     private function registerAiChunkForwarder(
@@ -5814,6 +5839,7 @@ SCRIPT;
             \is_array($normalized['website_profile']) ? $normalized['website_profile'] : [],
             $workspaceTrack
         );
+        $normalized = $this->normalizeTaskPlanConfirmationForBuild($normalized);
         $normalized['page_type_layouts'] = $this->scopeCompatibilityService->normalizePageTypeLayouts(
             $normalized['page_type_layouts'] ?? [],
             $normalized['page_types']
@@ -5850,14 +5876,17 @@ SCRIPT;
         $normalized['page_type_layouts'] = $pageTypeLayouts;
 
         $virtualPagesStartedAt = \microtime(true);
-        $virtualPagesByType = $this->scopeCompatibilityService->buildVirtualPagesByType($normalized['page_types'], $normalized, false);
+        $virtualPagesByType = $this->scopeCompatibilityService->buildVirtualPagesByType(
+            $normalized['page_types'],
+            $normalized,
+            false
+        );
         $virtualPagesByType = $this->decorateVirtualPagesWithUrls($session->getPublicId(), $virtualThemeId, $virtualPagesByType);
         $this->logHotPathStage('build_workspace_state.virtual_pages', $virtualPagesStartedAt, [
             'public_id' => $session->getPublicId(),
             'page_type_count' => \count($normalized['page_types']),
         ]);
         $normalized['virtual_pages_by_type'] = $virtualPagesByType;
-        $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($normalized['workspace_track'] ?? ''));
         $taskSummaryStartedAt = \microtime(true);
         $taskSummary = $this->buildTaskService->summarize($normalized);
         $this->logHotPathStage('build_workspace_state.task_summary', $taskSummaryStartedAt, [
@@ -7094,6 +7123,9 @@ SCRIPT;
 
         $scope = \array_replace($scope, $scopePatch);
         $scope['page_types'] = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
+        if ($operation === 'build') {
+            $scope = $this->normalizeTaskPlanConfirmationForBuild($scope);
+        }
         if ($pageType !== '' && !\in_array($pageType, $scope['page_types'], true)) {
             return ['success' => false, 'message' => __('所选页面类型不在当前工作区中')];
         }
@@ -8525,12 +8557,17 @@ SCRIPT;
 
         $sectionBlockId = \trim((string)($sectionBlock['block_id'] ?? ''));
         $sectionInserted = false;
+        $dropLegacyPageBlocks = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? '')) === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
+            || (string)($sectionBlock['type'] ?? '') === 'ai_generated_section';
         foreach ($existingBlocks as $block) {
             if (!\is_array($block)) {
                 continue;
             }
             $blockId = \trim((string)($block['block_id'] ?? ''));
             if ($this->isHtmlSharedBlock($blockId, $block)) {
+                continue;
+            }
+            if ($dropLegacyPageBlocks && !$this->isGeneratedHtmlContentBlock($blockId, $block)) {
                 continue;
             }
             if ($sectionBlockId !== '' && $blockId === $sectionBlockId) {
@@ -8556,6 +8593,26 @@ SCRIPT;
         }
 
         return $blocks;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function isGeneratedHtmlContentBlock(string $blockId, array $block): bool
+    {
+        $type = \trim((string)($block['type'] ?? ''));
+        if ($type === 'ai_generated_section') {
+            return true;
+        }
+        if (\is_array($block['config'] ?? null) && \trim((string)($block['config']['_pb_server_component_code'] ?? '')) !== '') {
+            return true;
+        }
+        if (\str_contains($blockId, '-hero-banner') || \str_contains($blockId, '-featured-games') || \str_contains($blockId, '-trust-cta')
+            || \str_contains($blockId, '-brand-story') || \str_contains($blockId, '-trust-pillars') || \str_contains($blockId, '-community-cta')) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -8717,6 +8774,14 @@ SCRIPT;
                     }
 
                     $sectionMap[$code] = $sectionSpec;
+                    $key = \trim((string)($sectionSpec['key'] ?? ''));
+                    if ($key !== '') {
+                        $sectionMap[$key] = $sectionSpec;
+                    }
+                    $blockId = \str_replace(['content/', '/'], ['', '-'], $code);
+                    if ($blockId !== '') {
+                        $sectionMap[$blockId] = $sectionSpec;
+                    }
                 }
 
                 $pageSpecCache[$pageType] = [
@@ -8730,15 +8795,26 @@ SCRIPT;
             $pageSpecs = \is_array($pageSpecCache[$pageType] ?? null) ? $pageSpecCache[$pageType] : [];
             $sectionSpec = \is_array($pageSpecs['sections'][$sectionCode] ?? null) ? $pageSpecs['sections'][$sectionCode] : null;
             if (!\is_array($sectionSpec)) {
-                throw new \RuntimeException((string)__('Unknown section task in concurrent batch: %{page} / %{section}', [
-                    'page' => $pageType,
-                    'section' => $sectionCode,
-                ]));
+                $taskBlockKey = \trim((string)($task['block_key'] ?? ''));
+                if ($taskBlockKey !== '') {
+                    $sectionSpec = \is_array($pageSpecs['sections'][$taskBlockKey] ?? null) ? $pageSpecs['sections'][$taskBlockKey] : null;
+                }
             }
+            if (!\is_array($sectionSpec) && $taskKey !== '') {
+                $taskKeyTail = \trim((string)\preg_replace('/^page:[^:]+:/', '', $taskKey));
+                if ($taskKeyTail !== '') {
+                    $sectionSpec = \is_array($pageSpecs['sections'][$taskKeyTail] ?? null) ? $pageSpecs['sections'][$taskKeyTail] : null;
+                }
+            }
+            if (!\is_array($sectionSpec)) {
+                throw new \RuntimeException((string)__('构建任务缺少阶段二区块规格：%{1}', [$taskKey]));
+            }
+            $resolvedSectionCode = \trim((string)($sectionSpec['code'] ?? $sectionCode));
+            $resolvedSectionCode = $resolvedSectionCode !== '' ? $resolvedSectionCode : $sectionCode;
 
             $components[$taskKey] = [
-                'componentCode' => (string)($sectionSpec['code'] ?? $sectionCode),
-                'name' => (string)($sectionSpec['name'] ?? $sectionCode),
+                'componentCode' => $resolvedSectionCode,
+                'name' => (string)($sectionSpec['name'] ?? $resolvedSectionCode),
                 'region' => (string)($sectionSpec['region'] ?? 'content'),
                 'prompt' => (string)($sectionSpec['prompt'] ?? ''),
                 'defaultConfig' => \is_array($sectionSpec['default_config'] ?? null) ? $sectionSpec['default_config'] : [],
@@ -8748,7 +8824,8 @@ SCRIPT;
                 'task_key' => $taskKey,
                 'page_type' => $pageType,
                 'page_label' => (string)($pageTypeLabels[$pageType] ?? $pageType),
-                'section_code' => $sectionCode,
+                'section_code' => $resolvedSectionCode,
+                'source_section_code' => $sectionCode,
                 'blueprint' => \is_array($pageSpecs['blueprint'] ?? null) ? $pageSpecs['blueprint'] : [],
             ];
         }
@@ -8757,24 +8834,6 @@ SCRIPT;
             'components' => $components,
             'meta' => $meta,
         ];
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function extractBuildBatchPageTypes(array $tasks): array
-    {
-        $pageTypes = [];
-        foreach ($tasks as $task) {
-            $pageType = \trim((string)($task['page_type'] ?? ''));
-            if ($pageType === '' || isset($pageTypes[$pageType])) {
-                continue;
-            }
-
-            $pageTypes[$pageType] = $pageType;
-        }
-
-        return \array_values($pageTypes);
     }
 
     /**
@@ -9827,6 +9886,14 @@ SCRIPT;
         );
         // queue:run -f：_queue_force_build.active=1 时强制走 AI，并绕过共享 Header/Footer 的进程内静态缓存。
         $queueForcedAiRebuild = (int)($scope['_queue_force_build']['active'] ?? 0) === 1;
+        if ($queueForcedAiRebuild && \is_array($scope['virtual_pages_by_type'] ?? null)) {
+            foreach ($pageTypes as $pageType) {
+                if (!\is_array($scope['virtual_pages_by_type'][$pageType] ?? null)) {
+                    continue;
+                }
+                $scope['virtual_pages_by_type'][$pageType]['blocks'] = [];
+            }
+        }
         $pageTypeLabels = Page::getPageTypes();
         $dispatchWindow = 3;
         $initialPendingTasks = $this->buildTaskService->listPendingTasks($scope);
@@ -10051,7 +10118,7 @@ SCRIPT;
                 $currentVirtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType([$pageType], \array_replace($scope, [
                     'page_type_layouts' => $pageTypeLayouts,
                     'virtual_pages_by_type' => $virtualPages,
-                ]));
+                ]), false, false);
                 if (isset($currentVirtualPages[$pageType])) {
                     $currentVirtualPages[$pageType]['last_generated_at'] = \date('Y-m-d H:i:s');
                     $currentVirtualPages[$pageType]['title'] = (string)($blueprint['page_title'] ?? ($currentVirtualPages[$pageType]['title'] ?? ''));
@@ -10060,6 +10127,14 @@ SCRIPT;
                     $currentVirtualPages[$pageType]['meta_description'] = (string)($blueprint['meta_description'] ?? ($currentVirtualPages[$pageType]['meta_description'] ?? ''));
                     $currentVirtualPages[$pageType]['meta_keywords'] = (string)($blueprint['meta_keywords'] ?? ($currentVirtualPages[$pageType]['meta_keywords'] ?? ''));
                     $currentVirtualPages[$pageType]['section_refinements'] = \is_array($blueprint['section_refinements'] ?? null) ? $blueprint['section_refinements'] : [];
+                    $currentVirtualPages[$pageType]['blocks'] = $this->composeHtmlBlocksForPage(
+                        $pageType,
+                        \is_array($virtualPages[$pageType]['blocks'] ?? null) ? $virtualPages[$pageType]['blocks'] : [],
+                        $sharedComponents,
+                        $this->htmlBlocksBuildService->buildGeneratedSectionBlock($sectionComponent),
+                        $scope['website_profile'],
+                        $scope
+                    );
                     $virtualPages[$pageType] = $currentVirtualPages[$pageType];
                 }
 
@@ -10353,6 +10428,11 @@ SCRIPT;
             }
         } elseif ($websiteId <= 0 || $virtualThemeId <= 0) {
             throw new \RuntimeException((string)__('发布前请先完成主题构建'));
+        }
+        $qualityGate = ObjectManager::getInstance(AiSiteQualityGateService::class);
+        $qualityReport = $qualityGate->inspectScope($scope);
+        if (empty($qualityReport['passed'])) {
+            throw new \RuntimeException((string)__('发布门禁未通过，请先修复页面内容质量、破图或任务状态问题。'));
         }
 
         $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', __('正在创建正式页面并发布上线'), 25);

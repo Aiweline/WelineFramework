@@ -406,7 +406,9 @@ class Start extends CommandAbstract
                     $this->printer->warning(__('检测到服务器已运行，-f 直接切换（不等待）...'));
                 }
                 $this->printer->warning(__('注意：-f 强制切换属于停机型更新，不会自动等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。'));
-                $this->stopExistingServer($instanceName, $port, $count, !$frontend);
+                if (!$this->stopExistingServer($instanceName, $port, $count, !$frontend)) {
+                    return;
+                }
                 // -r -f 是停机型切换：新实例启动后默认恢复到业务流量态，避免残留 system.maintenance 让 WLS 继续 sticky 维护。
                 $maintenanceResetAfterForceSwitch = true;
                 // Windows 下端口释放需要更长时间（TIME_WAIT 状态）
@@ -438,7 +440,9 @@ class Start extends CommandAbstract
                     $this->printer->warning(__('等待超时，强制切换...'));
                 }
                 
-                $this->stopExistingServer($instanceName, $port, $count);
+                if (!$this->stopExistingServer($instanceName, $port, $count)) {
+                    return;
+                }
                 SchedulerSystem::sleep(1);
             }
         }
@@ -554,6 +558,11 @@ class Start extends CommandAbstract
         // - 用户指定了 -p 或降级端口 9981 也被占用 → 报错退出
         $autoDowngradedFromDefaultPort = false;
         $mainPortInspect = Processer::inspectPortOccupantWithHistory($port);
+        if ($forceRestart && ($mainPortInspect['in_use'] ?? false)) {
+            $this->printer->error(__('强制重启后主端口 %{1} 仍被占用，已中止启动，避免同名实例切换到新端口。', [$port]));
+            $this->printer->note(__('请先确认旧实例已完全停止，再重新执行启动命令。'));
+            return;
+        }
         if (($mainPortInspect['in_use'] ?? false) && !($mainPortInspect['is_weline'] ?? false)) {
             if (!$portExplicit && ($port === self::DEFAULT_PORT || $port === self::DEFAULT_PORT_HTTPS)) {
                 $this->printer->warning(__('默认端口 %{1} 被占用（可能被宝塔/nginx 等 web 服务占用），已降级到 %{2}', [$port, self::DEFAULT_PORT_FALLBACK]));
@@ -617,10 +626,16 @@ class Start extends CommandAbstract
                 $workerPort = $workerBasePort + $port;
             }
 
+            if ($forceRestart && $this->hasRestartCleanupResidue($instanceName, $port, $count, $workerPort)) {
+                $this->printer->error(__('强制重启前仍检测到旧实例 [%{1}] 的残留 WLS 进程或端口，已中止启动。', [$instanceName]));
+                $this->printer->note(__('必须先完成旧实例清理，禁止自动切换主端口或 Worker 端口启动第二个同名实例。'));
+                return;
+            }
+
         // Dispatcher 模式或独立端口模式：Worker 端口段需智能分配
         // - WLS 进程占用的端口：释放后分配给新进程
         // - 非 WLS 进程占用的端口：跳过，使用下一个可用端口
-        if ($dispatcherEnabled || (!$useDirectMode && $count > 1)) {
+        if (!$forceRestart && ($dispatcherEnabled || (!$useDirectMode && $count > 1))) {
             $nextWorkerPort = $this->findAvailableWorkerPortBase(
                 $workerPort,
                 $count,
@@ -3484,10 +3499,79 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
      * 委托给 server:stop 统一执行：先停 Master，再按进程名杀 Worker/Dispatcher 并清理 PID 文件，
      * 避免重复逻辑与 var/process/pid 残留。
      */
-    protected function stopExistingServer(string $instanceName, int $port, int $count, bool $fastLocal = false): void
+    protected function stopExistingServer(string $instanceName, int $port, int $count, bool $fastLocal = false): bool
     {
         $mainStop = ObjectManager::getInstance(MainStop::class);
         $mainStop->execute($this->buildStopExistingServerArgs($instanceName, $fastLocal), []);
+        if ($this->waitForRestartCleanupComplete($instanceName, $port, $count)) {
+            return true;
+        }
+
+        $this->printer->error(__('旧实例 [%{1}] 未完全停止，已中止本次启动，避免启动第二个同名实例。', [$instanceName]));
+        $this->printer->note(__('请先继续执行 `php bin/w server:stop %{1} -f` 或检查残留 WLS 进程后再启动。', [$instanceName]));
+        return false;
+    }
+
+    protected function waitForRestartCleanupComplete(string $instanceName, int $mainPort, int $workerCount): bool
+    {
+        $deadline = \microtime(true) + 12.0;
+        do {
+            if (!$this->hasRestartCleanupResidue($instanceName, $mainPort, $workerCount)) {
+                return true;
+            }
+            SchedulerSystem::usleep(300000);
+        } while (\microtime(true) < $deadline);
+
+        return !$this->hasRestartCleanupResidue($instanceName, $mainPort, $workerCount);
+    }
+
+    protected function hasRestartCleanupResidue(string $instanceName, int $mainPort, int $workerCount, int $workerPort = 0): bool
+    {
+        $ports = [$mainPort, $this->resolvePreferredControlPort($mainPort)];
+        if ($mainPort === self::DEFAULT_PORT_HTTPS) {
+            $ports[] = self::DEFAULT_PORT;
+        }
+
+        $workerBase = $workerPort > 0
+            ? $workerPort
+            : (10000 + MasterProcess::getProjectPortOffset() + $mainPort);
+        for ($i = 0; $i < $workerCount; $i++) {
+            $ports[] = $workerBase + $i;
+        }
+
+        foreach (\array_values(\array_unique(\array_filter($ports, static fn (int $port): bool => $port > 0))) as $port) {
+            $inspect = Processer::inspectPortOccupantWithHistory($port);
+            if (($inspect['in_use'] ?? false) && ($inspect['is_weline'] ?? false)) {
+                return true;
+            }
+        }
+
+        foreach ($this->getRestartCleanupProcessPrefixes($instanceName) as $prefix) {
+            foreach (Processer::getProcessNamesByPrefix($prefix) as $processName) {
+                $pid = Processer::getPid($processName);
+                if ($pid > 0 && Processer::isRunningByPid($pid)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function getRestartCleanupProcessPrefixes(string $instanceName): array
+    {
+        return [
+            MasterProcess::buildScopedProcessName(MasterProcess::MASTER_PROCESS_NAME_PREFIX, $instanceName),
+            MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $instanceName),
+            MasterProcess::buildScopedProcessName('weline-wls-session', $instanceName),
+            MasterProcess::buildScopedProcessName('weline-wls-memory', $instanceName),
+            MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $instanceName),
+            MasterProcess::buildScopedProcessName('weline-wls-worker', $instanceName),
+            MasterProcess::buildScopedProcessName('weline-wls-maintenance', $instanceName),
+        ];
     }
 
     /**
@@ -3838,7 +3922,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             return $configuredControlPort;
         }
 
-        return $mainPort + 10000;
+        return 20000 + $mainPort + MasterProcess::getProjectPortOffset();
     }
 
     protected function isWorkerPortAllocated(int $port): bool

@@ -165,9 +165,8 @@ class FrameworkBuilder
         // 1. 预处理AI数据 - 移除危险内容
         $aiData = $this->sanitizeAiData($aiData);
         
-        // 兜底：content 组件必须有基础 HTML（根据当前语言生成预置文本）
         if ($category === 'content' && (empty($aiData['html_content']) || !is_string($aiData['html_content']))) {
-            $aiData['html_content'] = '<div class="ai-empty">' . __('AI content placeholder') . '</div>';
+            throw new \InvalidArgumentException((string)__('AI 组件缺少必需的 html_content 字段'));
         }
         
         // 2. 验证每个字段
