@@ -175,10 +175,6 @@ final class AiHtmlRenderService
             .pb-ai-block-wrapper.selected .component-actions {
                 display: flex !important;
             }
-            .pb-ai-block-wrapper[data-region="header"] .component-actions,
-            .pb-ai-block-wrapper[data-region="footer"] .component-actions {
-                display: flex !important;
-            }
             .pb-ai-block-wrapper .component-action-btn {
                 border: 0;
                 border-radius: 999px;
