@@ -159,9 +159,15 @@
         return document.querySelectorAll('.pb-ai-run-virtual-theme');
     }
 
+    function isTargetDomainRequiredForPlanActionSatisfied() {
+        return getTargetDomainTrimmed() !== '';
+    }
+
     function applyRunVirtualThemeButtonsDisabledState() {
+        var domainLocked = !isTargetDomainRequiredForPlanActionSatisfied();
         getRunVirtualThemeButtons().forEach(function (b) {
-            b.disabled = globalRunVirtualThemeDisabled;
+            b.disabled = globalRunVirtualThemeDisabled || domainLocked;
+            b.setAttribute('aria-disabled', b.disabled ? 'true' : 'false');
         });
         document.querySelectorAll('[data-pb-gate-phase-one="1"]').forEach(function (b) {
             var locked = globalRunVirtualThemeDisabled || !lastPhaseOnePlanPresent;
@@ -310,6 +316,8 @@
         setText('.pb-guided-domain-sidebar .fw-semibold.mt-2.small', '购买域名');
         setText('#pb-ai-recommend-domain-btn', '推荐域名');
         setText('#pb-ai-purchase-domain-btn', '购买域名');
+        setText('label[for="pb-ai-target-domain"]', messages.targetDomainRequiredLabel);
+        setPlaceholder('#pb-ai-target-domain', messages.targetDomainRequiredPlaceholder);
         var sessionBox = guidedRoot.querySelector('.pb-guided-sidebar .summary-grid');
         if (sessionBox) {
             var sessionCard = sessionBox.closest('.pb-guided-session-summary');
@@ -689,10 +697,13 @@
         switched: <?= \json_encode((string)__('预览页已切换'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         visualPreviewUnreachable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         visualPreviewFrameTitle: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        targetDomainRequiredLabel: <?= \json_encode((string)__('目标域名（必填）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        targetDomainRequiredPlaceholder: <?= \json_encode((string)__('请填写要绑定的目标域名'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         noPageType: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         briefRequired: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         siteTitleRequired: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        domainRequiredForBuild: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainRequiredForPlanAction: <?= \json_encode((string)__('请先填写目标域名，再确认&更新方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainRequiredForBuild: <?= \json_encode((string)__('请先填写目标域名，再确认&更新方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planStartUnavailable: <?= \json_encode((string)__('第一阶段方案入口暂不可用，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSaving: <?= \json_encode((string)__('正在保存第一阶段草稿...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planGenerating: <?= \json_encode((string)__('正在生成第一阶段建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -779,7 +790,7 @@
         refineUnavailable: <?= \json_encode((string)__('当前区块暂时无法发起 AI 微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineQueued: <?= \json_encode((string)__('已提交区块微调，正在重新生成当前页面'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineContextFallback: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        editUnavailable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        editUnavailable: <?= \json_encode((string)__('当前区块没有可直接编辑的字段，已尝试打开页面编辑器。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editSaved: <?= \json_encode((string)__('区块字段已更新，已刷新当前块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseDoneConfirm: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseNoResult: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -811,6 +822,8 @@
     };
     var planPreviewFullscreenEscapeHandler = null;
     var visualPreviewFullscreenEscapeHandler = null;
+    var visualPreviewHeightResizeObserver = null;
+    var visualPreviewHeightSyncTimer = null;
     var currentPreviewTabKeyByStage = {
         plan: 'theme',
         'task-plan': 'theme'
@@ -890,6 +903,8 @@
     function normalizetoastMessage(message) {
         return normalizeToastMessage(message);
     }
+    window.normalizeToastMessage = normalizeToastMessage;
+    window.normalizetoastMessage = normalizetoastMessage;
 
     function toast(type, message) {
         if (!message) {
@@ -1103,25 +1118,156 @@
         return ['desktop', 'tablet', 'mobile'].indexOf(device) >= 0 ? device : 'desktop';
     }
 
+    function getPreviewDeviceMinHeight() {
+        if (currentPreviewDevice === 'tablet') {
+            return 1112;
+        }
+        if (currentPreviewDevice === 'mobile') {
+            return 844;
+        }
+        return 860;
+    }
+
+    function getPreviewFrameDocument(frame) {
+        if (!frame) {
+            return null;
+        }
+        try {
+            return frame.contentDocument || (frame.contentWindow ? frame.contentWindow.document : null);
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function isAdaptiveVisualPreviewFrame(frame) {
+        if (!frame || !frame.id) {
+            return false;
+        }
+        return frame.id === 'pb-ai-visual-preview-frame' || frame.id === 'pb-ai-visual-preview-fullscreen-frame';
+    }
+
+    function disconnectVisualPreviewHeightObserver() {
+        if (!visualPreviewHeightResizeObserver) {
+            return;
+        }
+        try {
+            visualPreviewHeightResizeObserver.disconnect();
+        } catch (error) {}
+        visualPreviewHeightResizeObserver = null;
+    }
+
+    function measureVisualPreviewDocumentHeight(frame, minHeight) {
+        var doc = getPreviewFrameDocument(frame);
+        if (!doc) {
+            return minHeight;
+        }
+        var body = doc.body;
+        var root = doc.documentElement;
+        var candidates = [minHeight];
+        if (body) {
+            candidates.push(body.scrollHeight || 0, body.offsetHeight || 0, body.clientHeight || 0);
+        }
+        if (root) {
+            candidates.push(root.scrollHeight || 0, root.offsetHeight || 0, root.clientHeight || 0);
+        }
+        return Math.max.apply(Math, candidates.map(function (height) {
+            return Math.ceil(Number(height) || 0);
+        }));
+    }
+
+    function syncVisualPreviewFrameHeight(frame) {
+        if (!isAdaptiveVisualPreviewFrame(frame)) {
+            return;
+        }
+        var minHeight = getPreviewDeviceMinHeight();
+        var nextHeight = measureVisualPreviewDocumentHeight(frame, minHeight);
+        frame.style.minHeight = minHeight + 'px';
+        frame.style.height = nextHeight + 'px';
+        frame.style.maxHeight = 'none';
+    }
+
+    function scheduleVisualPreviewFrameHeightSync(frame) {
+        if (!isAdaptiveVisualPreviewFrame(frame)) {
+            return;
+        }
+        if (visualPreviewHeightSyncTimer) {
+            window.clearTimeout(visualPreviewHeightSyncTimer);
+        }
+        visualPreviewHeightSyncTimer = window.setTimeout(function () {
+            visualPreviewHeightSyncTimer = null;
+            syncVisualPreviewFrameHeight(frame);
+        }, 50);
+    }
+
+    function observeVisualPreviewFrameHeight(frame) {
+        if (!isAdaptiveVisualPreviewFrame(frame)) {
+            return;
+        }
+        disconnectVisualPreviewHeightObserver();
+        var doc = getPreviewFrameDocument(frame);
+        if (!doc) {
+            return;
+        }
+        var ResizeObserverCtor = window.ResizeObserver || (frame.contentWindow ? frame.contentWindow.ResizeObserver : null);
+        if (!ResizeObserverCtor) {
+            return;
+        }
+        try {
+            visualPreviewHeightResizeObserver = new ResizeObserverCtor(function () {
+                scheduleVisualPreviewFrameHeightSync(frame);
+            });
+            if (doc.documentElement) {
+                visualPreviewHeightResizeObserver.observe(doc.documentElement);
+            }
+            if (doc.body) {
+                visualPreviewHeightResizeObserver.observe(doc.body);
+            }
+        } catch (error) {
+            visualPreviewHeightResizeObserver = null;
+        }
+    }
+
+    function bindVisualPreviewFrameHeightSync(frame) {
+        if (!isAdaptiveVisualPreviewFrame(frame)) {
+            return;
+        }
+        if (frame.dataset.visualPreviewHeightSyncBound !== '1') {
+            frame.dataset.visualPreviewHeightSyncBound = '1';
+            frame.addEventListener('load', function () {
+                observeVisualPreviewFrameHeight(frame);
+                scheduleVisualPreviewFrameHeightSync(frame);
+                window.setTimeout(function () { scheduleVisualPreviewFrameHeightSync(frame); }, 250);
+                window.setTimeout(function () { scheduleVisualPreviewFrameHeightSync(frame); }, 900);
+                window.setTimeout(function () { scheduleVisualPreviewFrameHeightSync(frame); }, 1600);
+            });
+        }
+        observeVisualPreviewFrameHeight(frame);
+        scheduleVisualPreviewFrameHeightSync(frame);
+    }
+
     function applyPreviewDeviceFrameSizing(frame) {
         if (!frame) {
+            return;
+        }
+        if (frame.id === 'pb-ai-visual-preview-fullscreen-frame') {
             return;
         }
         if (currentPreviewDevice === 'desktop') {
             frame.style.width = '100%';
             frame.style.maxWidth = '100%';
-            frame.style.minHeight = '860px';
+            frame.style.minHeight = getPreviewDeviceMinHeight() + 'px';
         } else if (currentPreviewDevice === 'tablet') {
             frame.style.width = '834px';
             frame.style.maxWidth = '834px';
-            frame.style.minHeight = '1112px';
+            frame.style.minHeight = getPreviewDeviceMinHeight() + 'px';
         } else {
             frame.style.width = '390px';
             frame.style.maxWidth = '390px';
-            frame.style.minHeight = '844px';
+            frame.style.minHeight = getPreviewDeviceMinHeight() + 'px';
         }
         frame.style.display = 'block';
         frame.style.margin = '0 auto';
+        bindVisualPreviewFrameHeightSync(frame);
     }
 
     function applyPreviewDeviceMode(device) {
@@ -1191,11 +1337,7 @@
             return;
         }
         applyPreviewDeviceFrameSizing(frame);
-        frame.style.height = '100%';
-        frame.style.minHeight = '100%';
-        frame.style.maxHeight = '100%';
-        frame.style.borderRadius = '12px';
-        frame.style.background = 'var(--backend-color-bg-primary, #fff)';
+        bindVisualPreviewFrameHeightSync(frame);
     }
 
     function ensureVisualPreviewFullscreenOverlay() {
@@ -1255,6 +1397,7 @@
         if (!frame) {
             return;
         }
+        bindVisualPreviewFrameHeightSync(frame);
         frame.setAttribute('title', messages.visualPreviewFrameTitle || messages.visualPreviewFullscreenTitle);
         frame.setAttribute('src', buildCacheBustedPreviewUrl(url, '_pb_zoom'));
         overlay.setAttribute('aria-hidden', 'false');
@@ -1484,11 +1627,17 @@
     function getTargetDomainTrimmed() {
         var primary = document.getElementById('pb-ai-target-domain');
         if (primary && typeof primary.value === 'string') {
-            return String(primary.value || '').trim();
+            var primaryValue = String(primary.value || '').trim();
+            if (primaryValue !== '') {
+                return primaryValue;
+            }
         }
         var summary = document.getElementById('pb-ai-target-domain-summary');
         if (summary && typeof summary.value === 'string') {
-            return String(summary.value || '').trim();
+            var summaryValue = String(summary.value || '').trim();
+            if (summaryValue !== '') {
+                return summaryValue;
+            }
         }
         var nodes = getTargetDomainInputs();
         var v = nodes.length ? String(nodes[0].value || '').trim() : '';
@@ -1520,11 +1669,14 @@
                 return;
             }
             el.dataset.pbDomainInvalidClearBound = '1';
-            el.addEventListener('input', function () {
+            var onTargetDomainChanged = function () {
                 if (String(el.value || '').trim() !== '') {
                     setTargetDomainFieldInvalid(false);
                 }
-            });
+                applyRunVirtualThemeButtonsDisabledState();
+            };
+            el.addEventListener('input', onTargetDomainChanged);
+            el.addEventListener('change', onTargetDomainChanged);
         });
     }
 
@@ -1533,6 +1685,10 @@
         getTargetDomainInputs().forEach(function (el) {
             el.value = v;
         });
+        if (v.trim() !== '') {
+            setTargetDomainFieldInvalid(false);
+        }
+        applyRunVirtualThemeButtonsDisabledState();
     }
 
     function collectLocaleInputNodes(syncClass, elementId) {
@@ -2492,6 +2648,18 @@
             return false;
         }
 
+        if (!isTargetDomainRequiredForPlanActionSatisfied()) {
+            bindTargetDomainInvalidClearOnce();
+            setTargetDomainFieldInvalid(true);
+            toast('warning', messages.domainRequiredForPlanAction || messages.domainRequiredForBuild);
+            var targetDomainEl = document.getElementById('pb-ai-target-domain') || document.getElementById('pb-ai-target-domain-summary');
+            if (targetDomainEl && typeof targetDomainEl.focus === 'function') {
+                targetDomainEl.focus();
+            }
+            applyRunVirtualThemeButtonsDisabledState();
+            return false;
+        }
+
         setTargetDomainFieldInvalid(false);
         return true;
     }
@@ -2806,6 +2974,46 @@
             return parseInt(pageData.page_id, 10) || null;
         }
         return null;
+    }
+
+    function buildVisualPageEditorUrl(pageType, componentCode) {
+        if (!visualEditBaseUrl) {
+            return '';
+        }
+        try {
+            var editorUrl = new URL(visualEditBaseUrl, window.location.href);
+            var pageId = getPageIdByType(pageType);
+            if (pageId) {
+                editorUrl.searchParams.set('page_id', String(pageId));
+            } else if (pageType) {
+                editorUrl.searchParams.set('page_type', String(pageType));
+            }
+            if (componentCode) {
+                editorUrl.searchParams.set('block_id', String(componentCode));
+                editorUrl.searchParams.set('component', String(componentCode));
+            }
+            return editorUrl.toString();
+        } catch (error) {
+            return String(visualEditBaseUrl || '');
+        }
+    }
+
+    function openVisualPageEditorForBlock(pageType, componentCode) {
+        var editorUrl = buildVisualPageEditorUrl(pageType, componentCode);
+        if (!editorUrl) {
+            toast('error', messages.editUnavailable);
+            return false;
+        }
+        var opened = null;
+        try {
+            opened = window.open(editorUrl, '_blank', 'noopener');
+        } catch (error) {
+            opened = null;
+        }
+        if (!opened) {
+            window.location.href = editorUrl;
+        }
+        return true;
     }
 
     function setVisualEditorUrl(url) {
@@ -3562,6 +3770,10 @@
 
         var block = findVirtualBlock(pageType, blockId);
         if (!block || !block.field_schema || Object.keys(block.field_schema).length === 0) {
+            if (openVisualPageEditorForBlock(pageType, blockId)) {
+                toast('info', messages.editUnavailable);
+                return;
+            }
             toast('error', messages.editUnavailable);
             return;
         }
@@ -4196,6 +4408,9 @@
 
     getRunVirtualThemeButtons().forEach(function (runVTBtn) {
         runVTBtn.addEventListener('click', function () {
+            if (runVTBtn.disabled || globalRunVirtualThemeDisabled) {
+                return;
+            }
             if (!runVirtualThemeUrl) { return; }
             var pageTypes = selectedPageTypes();
             if (pageTypes.length === 0) {
@@ -4211,6 +4426,7 @@
             startPlanGenerationForSelection(triggerBtn, pageTypes);
         });
     });
+    bindTargetDomainInvalidClearOnce();
     applyRunVirtualThemeButtonsDisabledState();
 
     var currentPlanSelection = [];
@@ -9143,6 +9359,7 @@
         messages: messages,
         toast: toast,
         postForm: postForm,
+        normalizeToastMessage: normalizeToastMessage,
         escapeHtml: escapeHtml,
         validateVirtualThemeInputs: validateVirtualThemeInputs,
         ensureTargetDomainOkBeforeBuild: ensureTargetDomainOkBeforeBuild,
@@ -9150,6 +9367,12 @@
         bindTargetDomainInvalidClearOnce: bindTargetDomainInvalidClearOnce,
         resetBuildStartUi: resetBuildStartUi,
         compactPageDisplayLabel: compactPageDisplayLabel,
+        getCurrentPreviewPageType: function () {
+            return String(currentPreviewPageType || getActivePreviewPageType() || '');
+        },
+        getCurrentPreviewPageId: function () {
+            return parseInt(currentPreviewPageId || 0, 10) || 0;
+        },
         upsertPreviewTab: upsertPreviewTab,
         switchPreviewByType: function (pageType) {
             var tab = document.querySelector('.pb-ai-preview-tab[data-page-type="' + pageType + '"]');

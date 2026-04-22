@@ -2717,9 +2717,18 @@ class Processer
         }
         if (!empty($availableFunctions['proc_open'])) {
             $result = self::launchWindowsForegroundWrapperProcess($scriptPath, BP, $windowTitle);
-            $pid = (int) ($result['pid'] ?? 0);
-            if ($pid > 0) {
-                return self::setPid($pname, $pid);
+            $wrapperPid = (int) ($result['pid'] ?? 0);
+            // 即使 wrapper (cmd.exe) 启动成功，也需要等待真正的 PHP 进程出现并跟踪它。
+            // cmd.exe 可能是短期存在的（PHP 启动后它会等待 PHP 退出），
+            // 而 killProcessTree(cmd.exePID) 可能失败（cmd.exe 已退出，PHP 被 init 收养）。
+            // 所以必须找到 PHP Master 的 PID 并跟踪它。
+            $phpPid = self::waitForManagedProcessLaunch($pname, 5.0);
+            if ($phpPid > 0) {
+                return self::setPid($pname, $phpPid);
+            }
+            // 如果还没找到 PHP（可能还在启动），先用 wrapper PID 顶着
+            if ($wrapperPid > 0) {
+                return self::setPid($pname, $wrapperPid);
             }
             if ($enableLog && (string) ($result['error'] ?? '') !== '') {
                 self::setOutput($pname, "[WARN] foreground wrapper pid unavailable: " . (string) $result['error'] . PHP_EOL, true);
@@ -2969,6 +2978,15 @@ CMD;
     ): ?string
     {
         $cmdLine = self::buildWindowsForegroundCmdLine($scriptPath, $windowTitle);
+        // PowerShell 直接用 & 调用 cmd.exe（保持父子关系），不用 Start-Process（会分离进程）。
+        // cmd.exe /d /c <script> 会启动 PHP，PHP 是 WLS Master。
+        // PHP 进程将成为 PowerShell 的子进程，PowerShell 是 proc_open 的子进程。
+        // 这样 proc_close 等待 PowerShell 时会一起等待整个进程树。
+        // 但 WLS Master 是长期运行的，不会退出。
+        // 因此需要：不等待 PowerShell 退出，而是立即返回 cmd.exe 的 PID。
+        // 方案：后台启动 PowerShell，PowerShell 启动 cmd.exe 后立即输出 cmd.exe PID 并退出，
+        // cmd.exe 作为孤儿继续运行（但它的父进程是 PowerShell，PowerShell 已退出）。
+        // 更好的方案：直接用 cmd.exe 作为 proc_open 的子进程，不用 PowerShell 中转。
         $template = <<<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
 $scriptPath = __SCRIPT__
@@ -2990,7 +3008,12 @@ $startArgs = @{
 }
 try {
     $p = Start-Process @startArgs
+    # 立即输出 cmd.exe PID，让 PHP proc_open 能读到
     [Console]::Out.WriteLine([string]$p.Id)
+    # 等待 cmd.exe 进程退出（这样 PHP proc_close 时整个树都能被清理）
+    # 但 WLS 是长期运行的，会一直等待...
+    # 解决方案：不在这里等待，而是在 PHP 端通过 waitForManagedProcessLaunch 找到真正的 PHP 进程
+    # 关键：必须保持 cmd.exe 是 PowerShell 的子进程，这样 taskkill /T 才能杀掉整个树
 } catch {
     [Console]::Error.WriteLine($_.Exception.Message)
     exit 1

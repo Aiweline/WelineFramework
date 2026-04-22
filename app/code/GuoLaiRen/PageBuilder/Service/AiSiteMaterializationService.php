@@ -58,6 +58,10 @@ class AiSiteMaterializationService
             $pageHandle = \trim((string)($virtualPage['handle'] ?? $defaults['handle']));
             $layoutConfig = $layouts[$pageType] ?? $this->scopeCompatibilityService->normalizeLayoutConfig([]);
             $materializedLayoutConfig = $this->resolveMaterializedLayoutConfig($layoutConfig);
+            $blocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+            $aiLayout = ['blocks' => $blocks];
+            $renderMode = $blocks !== [] ? Page::RENDER_MODE_AI_HTML : Page::RENDER_MODE_THEME;
+            $aiLayoutJson = $blocks !== [] ? \json_encode($aiLayout, \JSON_UNESCAPED_UNICODE) : null;
 
             $page->setData(Page::schema_fields_TYPE, $pageType)
                 ->setData(Page::schema_fields_WEBSITE_ID, $websiteId)
@@ -72,6 +76,9 @@ class AiSiteMaterializationService
                 ->setData(Page::schema_fields_PARENT_ID, $pageType === Page::TYPE_HOME ? 0 : $homePageId)
                 ->setData(Page::schema_fields_STYLE, $styleCode)
                 ->setData(Page::schema_fields_STYLE_SETTING, \json_encode($styleSettings, \JSON_UNESCAPED_UNICODE))
+                ->setData(Page::schema_fields_RENDER_MODE, $renderMode)
+                ->setData(Page::schema_fields_AI_LAYOUT, $aiLayoutJson)
+                ->setData(Page::schema_fields_AI_PUBLISH_SNAPSHOTS, null)
                 ->setData(Page::schema_fields_DEFAULT_LOCALE, $pageLocale)
                 ->setData(Page::schema_fields_LOCALES, \json_encode($pageLocales, \JSON_UNESCAPED_UNICODE))
                 ->setData(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED)
@@ -98,6 +105,7 @@ class AiSiteMaterializationService
             $layout = $this->getOrCreateLayout($pageId);
             $layout->importConfig($materializedLayoutConfig)->useOriginalTemplate(false)->save();
             $this->syncLayoutConfigToPage($page, $layout->exportConfig());
+            $this->forceRenderModePersistence($page, $renderMode, $aiLayoutJson);
             $this->logMaterializedLayoutContext($page, $pageType, $layoutConfig, $materializedLayoutConfig);
 
             $pagesByType[$pageType] = [
@@ -157,6 +165,7 @@ class AiSiteMaterializationService
             $pageHandle = \trim((string)($virtualPage['handle'] ?? $defaults['handle']));
             $blocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
             $aiLayout = ['blocks' => $blocks];
+            $aiLayoutJson = \json_encode($aiLayout, \JSON_UNESCAPED_UNICODE);
 
             $page->setData(Page::schema_fields_TYPE, $pageType)
                 ->setData(Page::schema_fields_WEBSITE_ID, $websiteId)
@@ -172,7 +181,7 @@ class AiSiteMaterializationService
                 ->setData(Page::schema_fields_STYLE, 'default')
                 ->setData(Page::schema_fields_STYLE_SETTING, '{}')
                 ->setData(Page::schema_fields_RENDER_MODE, Page::RENDER_MODE_AI_HTML)
-                ->setData(Page::schema_fields_AI_LAYOUT, \json_encode($aiLayout, \JSON_UNESCAPED_UNICODE))
+                ->setData(Page::schema_fields_AI_LAYOUT, $aiLayoutJson)
                 ->setData(Page::schema_fields_AI_PUBLISH_SNAPSHOTS, null)
                 ->setData(Page::schema_fields_DEFAULT_LOCALE, $pageLocale)
                 ->setData(Page::schema_fields_LOCALES, \json_encode($pageLocales, \JSON_UNESCAPED_UNICODE))
@@ -208,6 +217,7 @@ class AiSiteMaterializationService
             ];
             $layout->importConfig($emptyExport)->useOriginalTemplate(false)->save();
             $this->syncLayoutConfigToPage($page, $emptyExport);
+            $this->forceRenderModePersistence($page, Page::RENDER_MODE_AI_HTML, $aiLayoutJson);
 
             $pagesByType[$pageType] = [
                 'page_id' => $pageId,
@@ -364,6 +374,18 @@ class AiSiteMaterializationService
             ->update([
                 Page::schema_fields_LAYOUT_CONFIG => $layoutJson,
             ]);
+    }
+
+    private function forceRenderModePersistence(Page $page, string $renderMode, ?string $aiLayoutJson): void
+    {
+        $pageId = (int)$page->getId();
+        if ($pageId <= 0) {
+            return;
+        }
+
+        $page->setData(Page::schema_fields_RENDER_MODE, $renderMode)
+            ->setData(Page::schema_fields_AI_LAYOUT, $aiLayoutJson);
+        $page->save(true);
     }
 
     /**
