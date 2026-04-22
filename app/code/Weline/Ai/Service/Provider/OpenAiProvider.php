@@ -700,7 +700,7 @@ class OpenAiProvider implements ProviderInterface
     {
         // 智能体模式：直接使用完整消息历史
         if (!empty($params['messages']) && is_array($params['messages'])) {
-            return $params['messages'];
+            return $this->ensureJsonResponseFormatMention($params['messages'], $params);
         }
 
         $messages = [];
@@ -726,7 +726,70 @@ class OpenAiProvider implements ProviderInterface
             ];
         }
 
+        return $this->ensureJsonResponseFormatMention($messages, $params);
+    }
+
+    private function ensureJsonResponseFormatMention(array $messages, array $params): array
+    {
+        if (!$this->requiresJsonObjectResponseFormat($params) || $this->messagesMentionJson($messages)) {
+            return $messages;
+        }
+
+        $instruction = 'Return the response as valid JSON.';
+        foreach ($messages as $index => $message) {
+            if (($message['role'] ?? '') !== 'system') {
+                continue;
+            }
+            $messages[$index]['content'] = \rtrim((string)($message['content'] ?? '')) . "\n\n" . $instruction;
+            return $messages;
+        }
+
+        \array_unshift($messages, [
+            'role' => 'system',
+            'content' => $instruction,
+        ]);
+
         return $messages;
+    }
+
+    private function requiresJsonObjectResponseFormat(array $params): bool
+    {
+        return \is_array($params['response_format'] ?? null)
+            && \strtolower((string)($params['response_format']['type'] ?? '')) === 'json_object';
+    }
+
+    private function messagesMentionJson(array $messages): bool
+    {
+        foreach ($messages as $message) {
+            $content = $message['content'] ?? '';
+            if (\is_string($content) && \stripos($content, 'json') !== false) {
+                return true;
+            }
+            if (\is_array($content) && $this->messagePartsMentionJson($content)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function messagePartsMentionJson(array $parts): bool
+    {
+        foreach ($parts as $part) {
+            if (\is_string($part) && \stripos($part, 'json') !== false) {
+                return true;
+            }
+            if (!\is_array($part)) {
+                continue;
+            }
+            foreach (['text', 'content'] as $key) {
+                if (isset($part[$key]) && \is_string($part[$key]) && \stripos($part[$key], 'json') !== false) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -280,6 +280,9 @@ class AiSiteTaskPlanQueue implements QueueInterface
                 'round' => $nextRound,
                 'forced_by_queue_run' => 1,
             ],
+            '_task_plan_rebuild_in_progress' => 1,
+            'build_blueprint' => [],
+            'build_tasks' => [],
             'task_plan_confirmed' => 0,
         ]);
 

@@ -80,6 +80,24 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertStringContainsString('instruction: instruction', $script);
     }
 
+    public function testConfirmUpdatePlanRequiresTargetDomain(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 3);
+        $controller = \file_get_contents($moduleRoot . '/Controller/Backend/AiSiteAgent.php');
+        $layout = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
+        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+
+        self::assertIsString($controller);
+        self::assertIsString($layout);
+        self::assertIsString($script);
+        self::assertStringContainsString('目标域名（必填）', $layout);
+        self::assertStringContainsString('function isTargetDomainRequiredForPlanActionSatisfied()', $script);
+        self::assertStringContainsString('var domainLocked = !isTargetDomainRequiredForPlanActionSatisfied();', $script);
+        self::assertStringContainsString('b.disabled = globalRunVirtualThemeDisabled || domainLocked;', $script);
+        self::assertStringContainsString('messages.domainRequiredForPlanAction', $script);
+        self::assertStringContainsString('TARGET_DOMAIN_REQUIRED', $controller);
+    }
+
     public function testStageTwoConfirmWorkspaceShowsTaskProgress(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
