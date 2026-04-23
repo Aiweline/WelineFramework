@@ -435,6 +435,7 @@ class ProcesserTest extends TestCore
         try {
             $script = (string) \file_get_contents($scriptPath);
             self::assertStringContainsString('title weline-process', $script);
+            self::assertStringContainsString('chcp 65001 >NUL', $script);
             self::assertStringContainsString('cd /d "C:\repo"', $script);
             self::assertStringContainsString('"C:\php\php.exe" worker.php --name=weline-worker-visible --launch-id=launch-visible', $script);
             self::assertStringContainsString('del "%~f0"', $script);

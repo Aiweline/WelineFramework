@@ -25,6 +25,14 @@
               order="20"/>
     </menu>
 
+    <menu source="GuoLaiRen_PageBuilder::ai_site_agent"
+          name="ai_site_agent"
+          title="AI 建站工作台"
+          action="pagebuilder/backend/ai-site-agent/index"
+          parent="Weline_Backend::page_builder_group"
+          icon="mdi mdi-robot-outline"
+          order="15"/>
+
     <menu source="GuoLaiRen_PageBuilder::website_management"
           name="website_management"
           title="网站管理"

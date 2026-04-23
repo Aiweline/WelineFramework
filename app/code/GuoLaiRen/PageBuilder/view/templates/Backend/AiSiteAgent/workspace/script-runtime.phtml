@@ -296,6 +296,10 @@
             case 'task_plan_rebuilt':
                 mirroredKind = 'info';
                 break;
+            case 'total':
+            case 'operation_total':
+                mirroredKind = 'total';
+                break;
             case 'error':
             case 'operation_failed':
                 mirroredKind = 'error';
@@ -329,7 +333,7 @@
                 ? 'error'
                 : (normalized.kind === 'warning'
                     ? 'warning'
-                    : (normalized.kind === 'progress' ? 'progress' : 'info'))
+                    : (normalized.kind === 'progress' ? 'progress' : (normalized.kind === 'total' ? 'total' : 'info')))
         });
     }
 
@@ -361,6 +365,23 @@
         return message;
     }
 
+    function isBenignOperationInProgressConflict(payload, fallbackMessage) {
+        var parsed = payload && typeof payload === 'object' ? payload : {};
+        var code = String(parsed.http_code || parsed.code || '');
+        var message = String(parsed.message || fallbackMessage || '').toLowerCase();
+        return code === '409'
+            && (
+                message.indexOf('正在生成阶段一方案') >= 0
+                || message.indexOf('正在执行的第一阶段') >= 0
+                || message.indexOf('第一阶段主题规划') >= 0
+                || message.indexOf('阶段一方案任务已在执行') >= 0
+                || message.indexOf('stage-1') >= 0
+                || message.indexOf('stage 1') >= 0
+                || message.indexOf('already running') >= 0
+                || message.indexOf('in progress') >= 0
+            );
+    }
+
     /**
      * 阶段一/二 SSE 终端镜像：优先使用事件载荷中的 operation（与后端一致），
      * 避免仅依赖 runningOperationType 时第二阶段 info/progress 误写入第一阶段终端。
@@ -374,8 +395,12 @@
     }
 
     function logOperationToWorkspaceTerminal(kind, payload, level, fallback) {
+        if (kind === 'error' && isBenignOperationInProgressConflict(payload, fallback)) {
+            kind = 'warning';
+            level = 'warning';
+        }
         var mirroredKind = '';
-        if (kind === 'start' || kind === 'progress' || kind === 'chunk' || kind === 'error') {
+        if (kind === 'start' || kind === 'progress' || kind === 'chunk' || kind === 'total' || kind === 'error') {
             mirroredKind = kind;
         } else if (kind === 'done_error') {
             mirroredKind = 'error';
@@ -453,6 +478,15 @@
     function getQueuedStageDefaultMessage(operation, eventKind) {
         var normalized = String(operation || '').toLowerCase();
         var kind = String(eventKind || '').toLowerCase();
+        if (kind === 'total') {
+            if (normalized === 'plan') {
+                return <?= \json_encode((string)__('第一阶段方案阶段提示已生成，事件流将继续同步后续进度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            }
+            if (normalized === 'task_plan') {
+                return <?= \json_encode((string)__('第二阶段任务方案阶段提示已生成，事件流将继续同步后续进度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            }
+            return <?= \json_encode((string)__('阶段提示已生成，事件流将继续同步后续进度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+        }
         if (normalized === 'plan') {
             if (kind === 'start') { return '后台队列已接管，正在生成第一阶段方案。'; }
             if (kind === 'progress') { return '第一阶段方案正在后台生成。'; }
@@ -485,7 +519,7 @@
         if (kind === 'progress') {
             return normalized === 'plan' ? 48 : 52;
         }
-        if (kind === 'done' || kind === 'error') {
+        if (kind === 'total' || kind === 'done' || kind === 'error') {
             return 100;
         }
         if (kind === 'warning') {
@@ -559,10 +593,10 @@
                     || (eventKind === 'warning' && !!observerBg)
                 );
             }
-            if ((eventKind === 'start' || eventKind === 'progress' || eventKind === 'done' || eventKind === 'error' || eventKind === 'warning') && typeof binding.setStatus === 'function') {
+            if ((eventKind === 'start' || eventKind === 'progress' || eventKind === 'total' || eventKind === 'done' || eventKind === 'error' || eventKind === 'warning') && typeof binding.setStatus === 'function') {
                 binding.setStatus(message);
             }
-            if ((eventKind === 'start' || eventKind === 'progress' || eventKind === 'done' || eventKind === 'error' || eventKind === 'warning') && typeof binding.setProgress === 'function') {
+            if ((eventKind === 'start' || eventKind === 'progress' || eventKind === 'total' || eventKind === 'done' || eventKind === 'error' || eventKind === 'warning') && typeof binding.setProgress === 'function') {
                 binding.setProgress(
                     message,
                     percent,
@@ -573,7 +607,7 @@
             }
         }
         if (binding.terminal && typeof binding.terminal.log === 'function') {
-            var level = opts.level || (eventKind === 'error' ? 'error' : (eventKind === 'done' ? 'done' : (eventKind === 'progress' ? 'progress' : (eventKind === 'warning' ? 'warning' : 'info'))));
+            var level = opts.level || (eventKind === 'error' ? 'error' : ((eventKind === 'done' || eventKind === 'total') ? eventKind : (eventKind === 'progress' ? 'progress' : (eventKind === 'warning' ? 'warning' : 'info'))));
             if (eventKind === 'chunk') {
                 var chunkText = String((payload && (payload.content || payload.chunk || payload.message)) || '');
                 if (chunkText !== '') {
@@ -1028,7 +1062,35 @@
         return summary;
     }
 
+    function shouldShowBuildTaskProgressPanel(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        if (state.task_plan_confirmed || state.has_virtual_theme_plan) {
+            return true;
+        }
+        if (state.task_plan && typeof state.task_plan === 'object') {
+            if (String(state.task_plan.markdown || '').trim() !== '') {
+                return true;
+            }
+            if (state.task_plan.structured && typeof state.task_plan.structured === 'object' && Object.keys(state.task_plan.structured).length > 0) {
+                return true;
+            }
+        }
+        var api = resolveWorkspaceApi();
+        return getWorkspaceFlagState('getTaskPlanConfirmedState', false)
+            || getWorkspaceFlagState('getHasVirtualThemePlanState', false)
+            || (typeof api.getHasPendingBuildTasksState === 'function' && !!api.getHasPendingBuildTasksState());
+    }
+
+    function syncBuildTaskProgressPanelVisibility(workspaceState) {
+        var panel = document.getElementById('pb-ai-build-task-progress-panel');
+        if (!panel) {
+            return;
+        }
+        panel.classList.toggle('d-none', !shouldShowBuildTaskProgressPanel(workspaceState));
+    }
+
     function updateTaskSummaryFromState(workspaceState) {
+        syncBuildTaskProgressPanelVisibility(workspaceState);
         var summary = extractTaskProgressSummary(workspaceState);
         if (!summary && workspaceState && typeof workspaceState === 'object' && String(workspaceState.progress_kind || '') === 'task_progress') {
             summary = mergeSingleTaskProgressPayload(cloneTaskProgressSummary(window.__pbTaskSummary), workspaceState);
@@ -1083,6 +1145,33 @@
             }
             return '<span class="badge ' + normalizeTaskStatusBadgeClass(status) + '">' + escapeTaskSummaryHtml(normalizeTaskStatusLabel(status)) + ' ' + count + '</span>';
         }).filter(Boolean).join(' ');
+    }
+
+    function readTaskProgressStatusCount(source, status) {
+        var counts = source && typeof source === 'object' ? source : {};
+        var count = parseInt(String(counts[status] || 0), 10) || 0;
+        if (status === 'todo') {
+            count = count || (parseInt(String(counts.pending || 0), 10) || 0);
+        }
+        return count;
+    }
+
+    function renderTaskProgressGroupSummary(group) {
+        var counts = group && typeof group === 'object' ? group : {};
+        var total = parseInt(String(counts.total || 0), 10) || 0;
+        var done = readTaskProgressStatusCount(counts, 'done');
+        if (total > 0 && done >= total) {
+            return escapeTaskSummaryHtml(normalizeTaskStatusLabel('done') + ' ' + done + '/' + total);
+        }
+        var priority = ['failed', 'running', 'queued', 'stale', 'cancelled', 'todo', 'done'];
+        for (var i = 0; i < priority.length; i++) {
+            var status = priority[i];
+            var count = readTaskProgressStatusCount(counts, status);
+            if (count > 0) {
+                return escapeTaskSummaryHtml(normalizeTaskStatusLabel(status) + ' ' + count + '/' + total);
+            }
+        }
+        return escapeTaskSummaryHtml('0/' + total);
     }
 
     function renderTaskSummaryTaskDetails(task) {
@@ -1218,7 +1307,7 @@
             wrapper.innerHTML = '<details' + (groupOpen ? ' open' : '') + ' data-pb-task-group-key="' + escapeTaskSummaryHtml(pageType) + '">'
                 + '<summary class="d-flex align-items-center justify-content-between gap-2">'
                 + '<strong>' + escapeTaskSummaryHtml(pageType) + '</strong><span class="text-muted">'
-                + done + '/' + total
+                + renderTaskProgressGroupSummary(group)
                 + '</span></summary>'
                 + '<div class="mt-2 d-flex flex-wrap gap-1" data-task-progress-status-counts>' + renderTaskStatusCountBadges(group) + '</div>'
                 + '<div class="mt-2">'
@@ -1401,6 +1490,10 @@
     window.__pbWorkspaceApi = workspaceApiRef;
     window.updateTaskSummaryFromState = updateTaskSummaryFromState;
     window.updateStageStatusSummary = updateStageStatusSummary;
+    syncBuildTaskProgressPanelVisibility({
+        task_plan_confirmed: getWorkspaceFlagState('getTaskPlanConfirmedState', false),
+        has_virtual_theme_plan: getWorkspaceFlagState('getHasVirtualThemePlanState', false)
+    });
     updateStageStatusSummary({
         active_operation: activeOperation,
         plan_confirmed: getWorkspaceFlagState('getPlanConfirmedState', false),
@@ -1506,6 +1599,20 @@
                 if (payload && Array.isArray(payload.required_params) && payload.required_params.length > 0) {
                     lastServerError += ' [' + payload.required_params.join(', ') + ']';
                 }
+                if (isBenignOperationInProgressConflict(payload, lastServerError)) {
+                    var benignMessage = lastServerError;
+                    logOperationToWorkspaceTerminal('warning', payload, 'warning', benignMessage);
+                    if (!settled) {
+                        settled = true;
+                        lastServerError = '';
+                        closeOperationSource(source);
+                        toast('warning', benignMessage);
+                    }
+                    if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                        previewBridge.resumeWorkspaceStream();
+                    }
+                    return;
+                }
                 logOperationToWorkspaceTerminal('error', payload, 'error', lastServerError);
                 if (settled) {
                     return;
@@ -1537,6 +1644,23 @@
                     if (!(payload && payload.retry_attempt)) {
                         toast('warning', wmsg);
                     }
+                }
+            });
+
+            source.addEventListener('total', function (event) {
+                var payload = parsePayload(event);
+                if (!payload || typeof payload !== 'object') {
+                    return;
+                }
+                if (payload.state && typeof payload.state === 'object') {
+                    hydrateWorkspaceFromState(payload.state);
+                    updateTaskSummaryFromState(payload.state);
+                }
+                updateTaskSummaryFromState(payload);
+                var totalMessage = normalizeToastMessage(String(payload.message || getQueuedStageDefaultMessage(payload.operation || operation, 'total') || ''));
+                if (totalMessage) {
+                    logOperationToWorkspaceTerminal('total', payload, 'total', totalMessage);
+                    toast('info', totalMessage);
                 }
             });
 
@@ -1675,6 +1799,9 @@
             var pageCompleted = payload.page_completed !== false;
             if (payload.state) {
                 hydrateWorkspaceFromState(payload.state);
+                if (window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview.syncPreviewMetaFromState === 'function') {
+                    window.PbAiWorkspacePreview.syncPreviewMetaFromState(payload.state);
+                }
             }
             logOperationToWorkspaceTerminal(
                 'page_generated',
@@ -1699,6 +1826,13 @@
                         : <?= \json_encode((string)__('可编辑'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
                 );
                 if (shouldActivate) {
+                    window.PbAiWorkspacePreview.switchPreviewByType(pageType);
+                } else if (
+                    pageId > 0
+                    && typeof window.PbAiWorkspacePreview.getCurrentPreviewPageType === 'function'
+                    && String(window.PbAiWorkspacePreview.getCurrentPreviewPageType() || '') === pageType
+                    && typeof window.PbAiWorkspacePreview.switchPreviewByType === 'function'
+                ) {
                     window.PbAiWorkspacePreview.switchPreviewByType(pageType);
                 }
             }
@@ -1744,6 +1878,13 @@
             closeOperationSource(source);
 
             var success = !payload || payload.success !== false;
+            var normalizedDonePayload = Object.assign({}, payload || {}, {
+                operation: String((payload && payload.operation) || operation || '')
+            });
+            var normalizedDoneOperation = String(normalizedDonePayload.operation || '');
+            if (success && (normalizedDoneOperation === 'plan' || normalizedDoneOperation === 'task_plan')) {
+                finishOperation(normalizedDonePayload);
+            }
             if (!success) {
                 logOperationToWorkspaceTerminal('done_error', payload, 'error', lastServerError || '工作区操作执行失败');
                 toast('error', (payload && payload.message) ? String(payload.message) : lastServerError || <?= \json_encode((string)__('操作执行失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
@@ -1880,9 +2021,9 @@
             if (typeof previewBridge.resumeWorkspaceStream === 'function') {
                 previewBridge.resumeWorkspaceStream();
             }
-            finishOperation(Object.assign({}, payload || {}, {
-                operation: String((payload && payload.operation) || operation || '')
-            }));
+            if (normalizedDoneOperation !== 'plan' && normalizedDoneOperation !== 'task_plan') {
+                finishOperation(normalizedDonePayload);
+            }
         });
 
         source.onerror = function () {
