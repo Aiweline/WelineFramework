@@ -1487,6 +1487,12 @@ class ServiceOrchestrator
             return;
         }
 
+        // P2 观测性埋点：记录控制面 bootstrap 的起始时间，
+        // 在方法最终 return 之前（见文件内对应 observe 调用）上报 `orchestrator.bootstrap_control_plane.ms`。
+        // 不包 try/finally 是为了避免把这个超长方法整体内嵌一层，保持 diff 最小、调试栈帧不变形；
+        // 若 bootstrap 抛异常，本样本缺失不会影响业务（Master 启动失败本身已由 log 强信号告警）。
+        $bootstrapStartNs = \hrtime(true);
+
         $this->context = $context;
         $this->running = true;
         $this->shuttingDown = false;
@@ -1601,6 +1607,13 @@ class ServiceOrchestrator
         // 启动预设：优先将入口置入“维护池优先”语义，避免业务 Worker 未就绪时流量无处可去。
         // 真正进程拉起放到 startAllChildServicesBody 的第一阶段并发批启动。
         $this->autoStartMaintenanceMode($context);
+
+        // P2 观测性埋点收尾：方法入口已记录 $bootstrapStartNs，在此处 observe 毫秒耗时。
+        // 放在方法末尾而非 finally，是权衡"异常路径样本 vs. 代码可读性"的结果（详见入口注释）。
+        \Weline\Server\Observability\MetricsRegistry::observe(
+            'orchestrator.bootstrap_control_plane.ms',
+            (\hrtime(true) - $bootstrapStartNs) / 1_000_000.0
+        );
     }
 
     /**
@@ -1755,6 +1768,11 @@ class ServiceOrchestrator
      */
     private function startAllChildServicesBody(ServiceContext $context): void
     {
+        // P2 观测性埋点：Master 生命周期内子服务批启动阶段耗时。
+        // 方法有多处 return（early abort），尾部 observe 覆盖不全 —— 这里只记"完整走到结尾"的样本，
+        // 早退场景由 `shouldAbortStartupTransition` 自己写 log/告警，不参与此指标。
+        $startChildrenStartNs = \hrtime(true);
+
         // 计算子服务启动截止绝对时间（用于计算总启动时间）
         $this->childServicesStartupDeadline = \microtime(true) + $this->startupMaxDuration;
         WlsLogger::info_('[Orchestrator] 子服务启动开始，截止时间: '
@@ -1861,6 +1879,12 @@ class ServiceOrchestrator
 
         // 启动后置任务改为异步调度，避免在启动 Fiber 内同步阻塞。
         $this->schedulePostStartupHousekeeping($context);
+
+        // P2 观测性收尾：只统计"完整启动到末尾"的样本，见方法入口注释。
+        \Weline\Server\Observability\MetricsRegistry::observe(
+            'orchestrator.start_children.ms',
+            (\hrtime(true) - $startChildrenStartNs) / 1_000_000.0
+        );
     }
 
     /**
@@ -3455,6 +3479,12 @@ class ServiceOrchestrator
      */
     public function stopAll(string $reason = 'shutdown', ?int $progressClientId = null): void
     {
+        // P2 观测性埋点：记录 stopAll 触发次数（幂等-保护的 "already in progress" 分支不计入）。
+        // 便于运维观察是否被异常/重复信号频繁触发（例如 Ctrl+C 重按、上层 supervisor 抖动）。
+        if (!$this->stopAllInProgress && !$this->shuttingDown) {
+            \Weline\Server\Observability\MetricsRegistry::inc('orchestrator.stop_all.invoked');
+        }
+
         if ($this->stopAllInProgress || $this->shuttingDown) {
             $this->sendStopAlreadyInProgress($progressClientId);
             WlsLogger::warning_("[Orchestrator] 已在停机流程中，忽略重复 stopAll 请求，原因: {$reason}，阶段: {$this->stopStage}");
@@ -4518,6 +4548,11 @@ class ServiceOrchestrator
      */
     public function reloadAll(string $type = 'code', ?int $imperialEpochSnap = null): void
     {
+        // P2 观测性埋点：reload 触发频次（按 type 标签），用于评估是否有异常热重载风暴。
+        // 只计入调用次数不计耗时，因为方法有多条提前 return 分支（独占/epoch 不匹配），
+        // 耗时在混杂分支下平均无意义。
+        \Weline\Server\Observability\MetricsRegistry::inc('orchestrator.reload_all.invoked.' . $type);
+
         if ($this->ipcExclusiveCommand === ControlMessage::ACTION_STOP && !$this->isStopFlowActive()) {
             WlsLogger::warning_('[Orchestrator] 停机流程已结束但仍残留 IPC 独占 STOP，已自动清理以便重载');
             $this->ipcReleaseExclusive();
