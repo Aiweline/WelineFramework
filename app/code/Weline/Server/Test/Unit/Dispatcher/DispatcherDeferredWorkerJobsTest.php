@@ -132,6 +132,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
             public function handleWritable(): bool { return true; }
             public function tryReconnect(): bool { return true; }
             public function close(): void {}
+            public function getResurrectionPriority(): int { return 0; }
         };
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
@@ -231,6 +232,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
             public function handleWritable(): bool { return true; }
             public function tryReconnect(): bool { return true; }
             public function close(): void {}
+            public function getResurrectionPriority(): int { return 0; }
         };
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
@@ -291,6 +293,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
             public function handleWritable(): bool { return true; }
             public function tryReconnect(): bool { return true; }
             public function close(): void {}
+            public function getResurrectionPriority(): int { return 0; }
         };
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
@@ -395,6 +398,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
             public function handleWritable(): bool { return true; }
             public function tryReconnect(): bool { return true; }
             public function close(): void {}
+            public function getResurrectionPriority(): int { return 0; }
         };
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
@@ -468,6 +472,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
             public function handleWritable(): bool { return true; }
             public function tryReconnect(): bool { return true; }
             public function close(): void {}
+            public function getResurrectionPriority(): int { return 0; }
         };
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
