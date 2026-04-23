@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+use Weline\Framework\Console\ConsoleEncoding;
+
 /**
  * Long-running daemon processes must explicitly disable PHP execution limits.
  * Otherwise Master / Worker / Dispatcher can be killed by max_execution_time
@@ -12,9 +14,17 @@ class LongRunningPhpRuntime
 {
     public function apply(): void
     {
+        $this->initConsoleEncoding();
         $this->setIniValue('max_execution_time', '0');
         $this->setTimeLimit(0);
         $this->setIgnoreUserAbort(true);
+    }
+
+    protected function initConsoleEncoding(): void
+    {
+        if (\PHP_SAPI === 'cli') {
+            ConsoleEncoding::initForCli();
+        }
     }
 
     protected function setIniValue(string $key, string $value): void

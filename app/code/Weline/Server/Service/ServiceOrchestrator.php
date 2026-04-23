@@ -3221,6 +3221,10 @@ class ServiceOrchestrator
             return null;
         }
         $port = $provider->getPort($instanceId, $context);
+        if (!$this->prepareLocalPortForStart($role, (int) ($port ?? 0))) {
+            WlsLogger::warning_("[Orchestrator] {$role}#{$instanceId} 端口 {$port} 未释放，跳过本次启动");
+            return null;
+        }
         $launchId = $this->generateLaunchId($role, $instanceId);
 
         // 创建实例对象
@@ -3278,6 +3282,32 @@ class ServiceOrchestrator
         $provider->onStarted($instance);
 
         return $instance;
+    }
+
+    private function prepareLocalPortForStart(string $role, int $port): bool
+    {
+        if ($port <= 0) {
+            return true;
+        }
+        if (!\in_array($role, [
+            ControlMessage::ROLE_WORKER,
+            ControlMessage::ROLE_MAINTENANCE,
+            ControlMessage::ROLE_DISPATCHER,
+            ControlMessage::ROLE_REDIRECT,
+        ], true)) {
+            return true;
+        }
+
+        Processer::clearPortCache($port);
+        if (!Processer::isPortInUse($port)) {
+            return true;
+        }
+        if (!Processer::isPortUsedByWeline($port)) {
+            return false;
+        }
+
+        WlsLogger::warning_("[Orchestrator] {$role} 启动前发现端口 {$port} 仍被 Weline 残留进程占用，先清理再拉起");
+        return $this->ensurePortReleasedForResurrection($port);
     }
 
     /**
@@ -3928,6 +3958,8 @@ class ServiceOrchestrator
             if (!($initialRunningStatus[$pid] ?? false)) {
                 if ($instance->ipcClientId !== null) {
                     $this->closeStopFlowClient($instance->ipcClientId);
+                    $instance->ipcClientId = null;
+                    $this->registry->updateInstance($instance);
                 }
                 continue;
             }
@@ -3961,6 +3993,8 @@ class ServiceOrchestrator
                     $instance = $pidToInstance[$pid] ?? null;
                     if ($instance?->ipcClientId !== null) {
                         $this->closeStopFlowClient($instance->ipcClientId);
+                        $instance->ipcClientId = null;
+                        $this->registry->updateInstance($instance);
                     }
                 }
                 $runningPids = $stillRunning;
@@ -4029,6 +4063,8 @@ class ServiceOrchestrator
                 $instance = $pidToInstance[$pid] ?? null;
                 if ($instance?->ipcClientId !== null) {
                     $this->closeStopFlowClient($instance->ipcClientId);
+                    $instance->ipcClientId = null;
+                    $this->registry->updateInstance($instance);
                 }
             }
 
@@ -6176,6 +6212,26 @@ class ServiceOrchestrator
         return $trackingPid > 0 && $this->isProcessRunning($trackingPid);
     }
 
+    private function isInstanceServiceAlive(ServiceInstance $instance): bool
+    {
+        $managedPids = $instance->getManagedPids();
+        foreach ($managedPids as $pid) {
+            if ($pid > 0 && $this->isProcessRunning($pid)) {
+                return true;
+            }
+        }
+        if ($managedPids !== []) {
+            return false;
+        }
+
+        $port = (int) ($instance->port ?? 0);
+        if ($port > 0 && Processer::isPortUsedByWeline($port)) {
+            return true;
+        }
+
+        return false;
+    }
+
     private function triggerStartupInfraRecoveryAfterWorkerReady(): void
     {
         foreach ([ControlMessage::ROLE_DISPATCHER, ControlMessage::ROLE_REDIRECT] as $role) {
@@ -7292,6 +7348,7 @@ class ServiceOrchestrator
         string $moduleCode = ''
     ): bool
     {
+        $port = (int) ($instance->port ?? 0);
         if ($this->context !== null && $epoch > 0 && $epoch !== $this->context->epoch) {
             WlsLogger::warning_("[Orchestrator] 忽略旧代际实例注册 {$instance->role}#{$instance->instanceId}: epoch={$epoch}");
             return false;
@@ -7398,13 +7455,14 @@ class ServiceOrchestrator
         int $clientId,
         string $role,
         int $workerId,
-        int $port,
+        ?int $port,
         string $reason,
         string $msgId = ''
     ): void {
         if ($this->controlServer === null) {
             return;
         }
+        $port = \max(0, (int) $port);
 
         $this->controlServer->sendTo(
             $clientId,
@@ -9201,6 +9259,9 @@ class ServiceOrchestrator
                 || ($this->controlServer !== null && !$this->controlServer->clientExists($inst->ipcClientId))) {
                 continue;
             }
+            if (!$this->isInstanceServiceAlive($inst)) {
+                continue;
+            }
             $n++;
         }
 
@@ -9216,10 +9277,7 @@ class ServiceOrchestrator
             if ($inst === null) {
                 continue;
             }
-            if ($inst->pid <= 0) {
-                continue;
-            }
-            if (!$this->isProcessRunning($inst->pid)) {
+            if (!$this->isInstanceServiceAlive($inst)) {
                 continue;
             }
             $n++;
@@ -9285,8 +9343,7 @@ class ServiceOrchestrator
                 }
                 $ipcBad = $instance->ipcClientId === null
                     || ($this->controlServer !== null && !$this->controlServer->clientExists($instance->ipcClientId));
-                $trackingPid = $this->getInstanceTrackingPid($instance);
-                $pidBad = $trackingPid > 0 && !$this->isProcessRunning($trackingPid);
+                $pidBad = !$this->isInstanceServiceAlive($instance);
                 if ($ipcBad || $pidBad) {
                     $this->clearStaleIpcClientIfNeeded($instance);
                     WlsLogger::warning_(
