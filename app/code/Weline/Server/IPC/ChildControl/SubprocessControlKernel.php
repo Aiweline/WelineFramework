@@ -6,6 +6,8 @@ namespace Weline\Server\IPC\ChildControl;
 
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\ControlClient;
+use Weline\Server\IPC\ResurrectionCoordinatorInterface;
+use Weline\Server\IPC\MasterResurrectionCoordinator;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Supervisor\Client\SupervisorChildClient;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
@@ -19,14 +21,34 @@ final class SubprocessControlKernel
     private const CONTROL_PORT_POLL_USEC = 100000;
     private const CONTROL_CONNECT_SELF_HEAL_TIMEOUT_MS = 30000;
 
+    /** 最近一次 connect 成功使用的 control port，供 onDisconnect 自愈用 */
+    private int $lastControlPort = 0;
+
+    /** Master 自愈协调器；null 时保持向后兼容（不自愈） */
+    private ?ResurrectionCoordinatorInterface $resurrectionCoordinator;
+
     public function __construct(
         private readonly ChildProcessIdentity $identity,
         private readonly RoleControlHandlerInterface $handler,
         private readonly string $selfTag,
         private readonly bool $verboseLog = false,
         private readonly string $instanceCode = '',
-        private readonly mixed $clientFactory = null
+        private readonly mixed $clientFactory = null,
+        ?ResurrectionCoordinatorInterface $resurrectionCoordinator = null
     ) {
+        // 默认注入真实协调器；生产入口（bin/worker.php 等）无需改代码。
+        // 显式传 null 无法绕过，因为我们把 "禁用自愈" 的决策权下放给 MasterResurrector::isChildResurrectionEnabled()
+        //（它读 env.php 的 allow_child_resurrection 开关）。
+        // 测试若要禁用可显式注入一个 no-op 协调器。
+        $this->resurrectionCoordinator = $resurrectionCoordinator ?? new MasterResurrectionCoordinator();
+    }
+
+    /**
+     * 注入 / 替换 Master 自愈协调器（用于启动期接线与单测）
+     */
+    public function setResurrectionCoordinator(?ResurrectionCoordinatorInterface $coordinator): void
+    {
+        $this->resurrectionCoordinator = $coordinator;
     }
 
     /**
@@ -206,8 +228,10 @@ final class SubprocessControlKernel
             });
             $client->onDisconnect(static function (bool $receivedShutdown, ChildControlClientInterface $client) use ($kernel): void {
                 $kernel->handler->onDisconnect($receivedShutdown, $kernel);
+                $kernel->maybeTriggerMasterSelfHeal($receivedShutdown, $client);
             });
-            
+
+            $this->lastControlPort = $controlPort;
             if (!$client->connect('127.0.0.1', $controlPort)) {
                 $lastError = "[连接失败]";
                 if ($retryAttempt < $maxStartupRetries) {
@@ -370,6 +394,46 @@ final class SubprocessControlKernel
     public function getClient(): ?ChildControlClientInterface
     {
         return $this->client;
+    }
+
+    /**
+     * 由 ControlClient 断开回调触发；在 Handler 业务处理后评估是否需要自愈 Master。
+     *
+     * 职责：
+     *   - 收到 shutdown（显式停止）不自愈
+     *   - 本子进程优先级 = 0 不自愈（已在 Coordinator 内二次判断）
+     *   - 其它由 coordinator 统一走 `should -> confirm grace -> attempt`
+     */
+    public function maybeTriggerMasterSelfHeal(bool $receivedShutdown, ChildControlClientInterface $client): void
+    {
+        if ($this->resurrectionCoordinator === null) {
+            return;
+        }
+        if ($receivedShutdown) {
+            return;
+        }
+
+        $priority = 0;
+        try {
+            $priority = $client->getResurrectionPriority();
+        } catch (\Throwable $e) {
+            WlsLogger::debug_('[Kernel] 读取复活优先级失败: ' . $e->getMessage());
+        }
+
+        if ($priority <= 0 || $this->instanceCode === '' || $this->lastControlPort <= 0) {
+            return;
+        }
+
+        try {
+            $this->resurrectionCoordinator->handleDisconnect(
+                $priority,
+                $this->instanceCode,
+                $this->lastControlPort,
+                $receivedShutdown
+            );
+        } catch (\Throwable $e) {
+            WlsLogger::error_('[Kernel] 触发 Master 自愈失败: ' . $e->getMessage());
+        }
     }
 
     public function sendExited(): void

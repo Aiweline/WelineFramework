@@ -372,6 +372,14 @@ final class SupervisorChildClient implements ChildControlClientInterface
         $this->readyConfirmed = false;
     }
 
+    /**
+     * Supervisor 模式不参与子进程自愈（由 Supervisor 统一负责生命周期）
+     */
+    public function getResurrectionPriority(): int
+    {
+        return 0;
+    }
+
     private function buildSlotId(string $role, int $workerId): string
     {
         return match ($role) {
