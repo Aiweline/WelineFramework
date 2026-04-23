@@ -92,7 +92,6 @@ class YourRegistrar implements DomainRegistrarInterface
 | **Admin `Domain` 控制器** | **`DomainPurchaseService`** | **`DomainRegistrarResolverService` / `w_query`** | 与抽象一致。 |
 | **SSE `SiteBuilderAgent::getTriggerSse`** | **`WebsiteAgentService` → `createAndProcessOrder`** | 后续解析/证书同全局链路 | 已透传 **`user_client_ip`**；联系人仍靠 **env 默认** 或账号（如 Gname）。 |
 | **AI 工具 `PurchaseDomainAndBuildSiteTool`** | 同上 | 同上 | 无 Request 时无 client_ip；请配 **env `domain_purchase_default_contact`**。 |
-| **`QuickBuildAggregator::purchaseDomain`** | **`w_query('websites','purchaseDomain')`** | 同 Query | 支持 **`options.client_ip`、`options.purchase_contact`**。 |
-| **PageBuilder `DomainManagement` 购买 AJAX** | 经聚合器 | 同上 | 自动附带 **客户端 IP**；可选 POST **`purchase_contact` JSON**。 |
+| **PageBuilder `DomainManagement` 购买 AJAX** | **`w_query('websites','purchaseDomain')`** | 同 Query | 自动附带 **客户端 IP**；可选 POST **`purchase_contact` JSON**。 |
 
-**结论**：定时 DNS 类任务与 **SSE/QuickBuild/后台** 购买路径均已落到 **`DomainRegistrarInterface` + `WebsitesQueryProvider`**（或 `DomainPurchaseService`），与新版单一抽象一致；未再走已移除的拆分接口。
+**结论**：定时 DNS 类任务与 **SSE/后台** 购买路径均已落到 **`DomainRegistrarInterface` + `WebsitesQueryProvider`**（或 `DomainPurchaseService`），与新版单一抽象一致；未再走已移除的拆分接口。

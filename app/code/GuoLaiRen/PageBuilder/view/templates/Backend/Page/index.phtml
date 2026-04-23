@@ -1793,31 +1793,6 @@ hr {
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // 从快速建站向导跳转：自动打开一键建站弹窗并可选预选站点
-    (function() {
-        var params = new URLSearchParams(window.location.search);
-        var openQuickSite = params.get('open_quick_site') === '1';
-        var websiteId = params.get('website_id') || '';
-        if (!openQuickSite) return;
-        var modalEl = document.getElementById('quickSiteModal');
-        if (!modalEl || typeof bootstrap === 'undefined') return;
-        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-        modal.show();
-        modalEl.addEventListener('shown.bs.modal', function onShown() {
-            modalEl.removeEventListener('shown.bs.modal', onShown);
-            if (websiteId) {
-                var item = document.querySelector('.website-item[data-website-id="' + websiteId + '"]');
-                if (item && typeof window.selectWebsite === 'function') {
-                    window.selectWebsite(item);
-                }
-            }
-        }, { once: true });
-        var cleanUrl = window.location.pathname + (websiteId ? '?website_id=' + websiteId : '') + (window.location.hash || '');
-        if (history.replaceState) {
-            history.replaceState(null, '', cleanUrl);
-        }
-    })();
-
     // 拷贝链接功能
     const copyButtons = document.querySelectorAll('.copy-link-btn');
     
