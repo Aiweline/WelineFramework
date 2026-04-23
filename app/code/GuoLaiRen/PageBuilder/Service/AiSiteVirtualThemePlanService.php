@@ -232,11 +232,16 @@ final class AiSiteVirtualThemePlanService
                         $heartbeatCallback
                     );
                 } catch (\Throwable $batchThrowable) {
-                    $this->emitTaskPlanBatchProgress($progressCallback, 'batch_failed', $batch, $batchIndex, $totalBatches, $completedBatches, [
+                    $decodedByBatchId[$this->buildTaskPlanBatchId($batch)] = $this->buildRecoverableTaskPlanBatchPayload(
+                        $assembledStructured,
+                        $batch,
+                        $batchThrowable->getMessage()
+                    );
+                    $this->emitTaskPlanBatchProgress($progressCallback, 'batch_done', $batch, $batchIndex, $totalBatches, $completedBatches, [
                         'attempt_no' => 3,
-                        'error_message' => $batchThrowable->getMessage(),
+                        'recovered' => true,
+                        'warning_message' => $batchThrowable->getMessage(),
                     ]);
-                    throw $batchThrowable;
                 }
             }
             return $decodedByBatchId;
@@ -280,7 +285,24 @@ final class AiSiteVirtualThemePlanService
             try {
                 $fiber->start();
             } catch (\Throwable $throwable) {
-                $errors[$batchId] = $throwable;
+                $decodedByBatchId[$batchId] = $this->buildRecoverableTaskPlanBatchPayload(
+                    $assembledStructured,
+                    \is_array($batchById[$batchId] ?? null) ? $batchById[$batchId] : [],
+                    $throwable->getMessage()
+                );
+                $this->emitTaskPlanBatchProgress(
+                    $progressCallback,
+                    'batch_done',
+                    \is_array($batchById[$batchId] ?? null) ? $batchById[$batchId] : [],
+                    (int)($batchIndexById[$batchId] ?? 0),
+                    $totalBatches,
+                    $completedBatches,
+                    [
+                        'attempt_no' => 3,
+                        'recovered' => true,
+                        'warning_message' => $throwable->getMessage(),
+                    ]
+                );
             }
         }
 
@@ -306,7 +328,24 @@ final class AiSiteVirtualThemePlanService
                         $madeProgress = true;
                     }
                 } catch (\Throwable $throwable) {
-                    $errors[$batchId] = $throwable;
+                    $decodedByBatchId[$batchId] = $this->buildRecoverableTaskPlanBatchPayload(
+                        $assembledStructured,
+                        \is_array($batchById[$batchId] ?? null) ? $batchById[$batchId] : [],
+                        $throwable->getMessage()
+                    );
+                    $this->emitTaskPlanBatchProgress(
+                        $progressCallback,
+                        'batch_done',
+                        \is_array($batchById[$batchId] ?? null) ? $batchById[$batchId] : [],
+                        (int)($batchIndexById[$batchId] ?? 0),
+                        $totalBatches,
+                        $completedBatches,
+                        [
+                            'attempt_no' => 3,
+                            'recovered' => true,
+                            'warning_message' => $throwable->getMessage(),
+                        ]
+                    );
                     $madeProgress = true;
                 }
             }
@@ -316,28 +355,43 @@ final class AiSiteVirtualThemePlanService
             }
         }
 
-        if ($errors !== []) {
-            foreach ($errors as $batchId => $throwable) {
-                $this->emitTaskPlanBatchProgress(
-                    $progressCallback,
-                    'batch_failed',
-                    \is_array($batchById[$batchId] ?? null) ? $batchById[$batchId] : [],
-                    (int)($batchIndexById[$batchId] ?? 0),
-                    $totalBatches,
-                    $completedBatches,
-                    [
-                        'attempt_no' => 3,
-                        'error_message' => $throwable->getMessage(),
-                    ]
-                );
-            }
-            $firstError = \reset($errors);
-            if ($firstError instanceof \Throwable) {
-                throw $firstError;
-            }
+        return $decodedByBatchId;
+    }
+
+    /**
+     * Keep stage-2 generation usable when a model returns truncated or malformed
+     * JSON for a single batch. The deterministic baseline still carries the
+     * confirmed stage-1 page/block tree and can be refined by the user later.
+     *
+     * @param array<string, mixed> $structured
+     * @param array<string, mixed> $batch
+     * @return array<string, mixed>
+     */
+    private function buildRecoverableTaskPlanBatchPayload(array $structured, array $batch, string $reason): array
+    {
+        $riskNotes = [
+            'AI batch output was not usable JSON; deterministic stage-2 task baseline was used for this batch. Reason: ' . $this->excerptText($reason, 360),
+        ];
+
+        if (($batch['type'] ?? '') === 'shared') {
+            return [
+                'shared_tasks' => $this->filterTaskPlanTaskListForBatch(
+                    \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [],
+                    $batch
+                ),
+                'risk_notes' => $riskNotes,
+            ];
         }
 
-        return $decodedByBatchId;
+        $pageType = (string)($batch['key'] ?? '');
+        return [
+            'page_type' => $pageType,
+            'page_tasks' => $this->filterTaskPlanTaskListForBatch(
+                \is_array($structured['page_tasks'][$pageType] ?? null) ? $structured['page_tasks'][$pageType] : [],
+                $batch
+            ),
+            'risk_notes' => $riskNotes,
+        ];
     }
 
     /**
@@ -352,7 +406,7 @@ final class AiSiteVirtualThemePlanService
         $sharedDependsOn = [];
         $sharedSortOrder = 0;
         foreach ($sharedTasks as $task) {
-            if (!\is_array($task) || $this->isStageTwoTaskPlanBatchComplete($task)) {
+            if (!\is_array($task)) {
                 continue;
             }
             $taskKey = \trim((string)($task['task_key'] ?? ''));
@@ -389,7 +443,7 @@ final class AiSiteVirtualThemePlanService
             $pageDependsOn = [];
             $pageSortOrder = 0;
             foreach ($tasks as $task) {
-                if (!\is_array($task) || $this->isStageTwoTaskPlanBatchComplete($task)) {
+                if (!\is_array($task)) {
                     continue;
                 }
                 $taskKey = \trim((string)($task['task_key'] ?? ''));
@@ -596,6 +650,8 @@ final class AiSiteVirtualThemePlanService
             $lines[] = 'For shared batch, generate only shared header/footer task details. Header and footer belong to group_key "shared" and are designed for parallel generation before page blocks.';
             $lines[] = 'Shared task skeleton:';
             $lines[] = \json_encode($this->compactTaskPlanPromptTasks($sharedTasks), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
+            $lines[] = 'Compact shared JSON example to imitate (shape only; replace values with this batch context):';
+            $lines[] = \json_encode($this->buildSharedTaskPlanPromptExample($batch), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
             $lines[] = 'Each returned shared_tasks[] item MUST include planning_reason explaining why this shared block structure, fields, navigation/link choices, style rules, and responsive behavior fit the confirmed stage-1 shared cues.';
             $lines[] = 'Use the matching stage-1 shared cue reason/implementation_detail for shared_tasks[].planning_reason; never leave planning_reason blank or replace it with a generic shared-component rationale.';
         } else {
@@ -607,6 +663,8 @@ final class AiSiteVirtualThemePlanService
             $lines[] = 'For page batch, generate only tasks for page_type "' . $pageType . '". The task tree must make page ownership and block ownership clear: page_type, page_key, block_key, section_code, sort_order, dependencies.';
             $lines[] = 'Page task skeleton:';
             $lines[] = \json_encode($this->compactTaskPlanPromptTasks($pageTasks), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
+            $lines[] = 'Compact page JSON example to imitate (shape only; replace values with this batch context):';
+            $lines[] = \json_encode($this->buildPageTaskPlanPromptExample($pageType, $batch), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
             $lines[] = 'Each stage-2 block task MUST ground task_goal/content_plan/style_plan/planning_reason in its stage-1 cue fields: block_goal, realtime_content, style_direction, reason.';
         }
 
@@ -650,6 +708,145 @@ final class AiSiteVirtualThemePlanService
         $lines[] = '- Final audit (silently before output): drop or rewrite any task that fails the above checks.';
 
         return \implode("\n", $lines);
+    }
+
+    /**
+     * @param array<string, mixed> $batch
+     * @return array<string, mixed>
+     */
+    private function buildSharedTaskPlanPromptExample(array $batch): array
+    {
+        $taskKey = (string)(\is_array($batch['task_keys'] ?? null) && ($batch['task_keys'][0] ?? '') !== '' ? $batch['task_keys'][0] : 'shared:header');
+        $blockKey = (string)($batch['block_key'] ?? 'shared');
+
+        return [
+            'shared_tasks' => [
+                [
+                    'task_key' => $taskKey,
+                    'group_key' => 'shared',
+                    'page_type' => '',
+                    'page_key' => '',
+                    'block_key' => $blockKey,
+                    'section_code' => '',
+                    'label' => 'Header or Footer',
+                    'sort_order' => 10,
+                    'dependencies' => [],
+                    'status' => 'done',
+                    'attempt_no' => 1,
+                    'plan_context' => [
+                        'stage1_theme_summary' => 'Use the confirmed brand tone, palette, and navigation intent.',
+                        'stage1_block_goal' => 'Reusable site navigation or footer trust area.',
+                        'stage1_block_content' => 'Concrete labels, links, contact/policy fields.',
+                        'stage1_style_direction' => 'Match confirmed typography, color, spacing, and responsive behavior.',
+                        'source_page_type' => '',
+                        'source_block_key' => $blockKey,
+                    ],
+                    'task_script' => [
+                        'component_type' => 'shared_header_or_footer',
+                        'story_goal' => 'Visitors can navigate core pages and find the primary action immediately.',
+                        'content_fill_rule' => 'Use real labels such as Home, Games, About, Contact, and a concrete CTA.',
+                        'technical_steps' => ['Build semantic nav/footer structure', 'Bind editable link fields', 'Add mobile collapse behavior'],
+                        'data_contract' => ['brand_name' => 'string', 'nav_items' => 'array<label,href>', 'primary_cta' => 'object'],
+                        'state_contract' => ['mobile_menu_open' => 'boolean'],
+                        'responsive_contract' => ['desktop' => 'horizontal nav', 'mobile' => 'collapsed menu'],
+                        'accessibility_contract' => ['keyboard focus visible', 'aria label for menu button'],
+                        'asset_requirements' => ['brand logo or text mark', 'optional small trust icons'],
+                        'validation_points' => ['all links have labels and hrefs', 'mobile menu opens and closes'],
+                        'completion_rule' => 'Shared component renders with real content and works on desktop/mobile.',
+                    ],
+                    'field_content_requirements' => [
+                        ['field' => 'brand_name', 'sample' => 'Royal Indian Games', 'reason' => 'brand identity'],
+                        ['field' => 'primary_cta.label', 'sample' => 'Play Now', 'reason' => 'primary conversion action'],
+                    ],
+                    'implementation_contract' => [
+                        'acceptance' => ['No empty nav labels', 'Responsive menu works', 'CTA link is editable'],
+                    ],
+                    'planning_reason' => 'The shared component anchors every page and must be generated before page blocks.',
+                    'result_ref' => ['target' => 'shared_component'],
+                ],
+            ],
+            'risk_notes' => [],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $batch
+     * @return array<string, mixed>
+     */
+    private function buildPageTaskPlanPromptExample(string $pageType, array $batch): array
+    {
+        $taskKey = (string)(\is_array($batch['task_keys'] ?? null) && ($batch['task_keys'][0] ?? '') !== '' ? $batch['task_keys'][0] : ('page:' . $pageType . ':hero'));
+        $blockKey = (string)($batch['block_key'] ?? 'hero');
+
+        return [
+            'page_type' => $pageType !== '' ? $pageType : 'home_page',
+            'page_tasks' => [
+                [
+                    'task_key' => $taskKey,
+                    'group_key' => $pageType !== '' ? $pageType : 'home_page',
+                    'page_type' => $pageType !== '' ? $pageType : 'home_page',
+                    'page_key' => $pageType !== '' ? $pageType : 'home_page',
+                    'block_key' => $blockKey,
+                    'section_code' => 'content/example-hero',
+                    'label' => 'Hero',
+                    'sort_order' => 100,
+                    'dependencies' => ['shared:header'],
+                    'status' => 'done',
+                    'attempt_no' => 1,
+                    'plan_context' => [
+                        'stage1_theme_summary' => 'Premium gaming brand using dark background and ember accents.',
+                        'stage1_block_goal' => 'Explain the page value and drive the primary CTA.',
+                        'stage1_block_content' => 'Headline, supporting copy, CTA, and visual slot from stage one.',
+                        'stage1_style_direction' => 'Large headline, high contrast CTA, mobile stacked layout.',
+                        'source_page_type' => $pageType !== '' ? $pageType : 'home_page',
+                        'source_block_key' => $blockKey,
+                    ],
+                    'task_script' => [
+                        'component_type' => 'hero_section',
+                        'story_goal' => 'Visitors understand the offer in five seconds and click Play Now.',
+                        'content_fill_rule' => 'Use concrete headline, subheading, CTA label, CTA href, and visual alt text.',
+                        'technical_steps' => ['Build hero layout', 'Map editable fields', 'Apply responsive breakpoints'],
+                        'data_contract' => ['title' => 'string', 'description' => 'string', 'cta' => 'object', 'image' => 'object'],
+                        'state_contract' => ['image_loaded' => 'boolean'],
+                        'responsive_contract' => ['desktop' => 'two columns', 'mobile' => 'single column'],
+                        'accessibility_contract' => ['CTA has accessible name', 'image has alt text'],
+                        'asset_requirements' => ['hero image matching stage-one theme', 'optional game icon set'],
+                        'validation_points' => ['no placeholder copy', 'CTA href is valid', 'mobile layout is readable'],
+                        'completion_rule' => 'Block renders with concrete copy, assets, CTA, and responsive styling.',
+                    ],
+                    'block_task' => [
+                        'schema_version' => self::BLOCK_TASK_SCHEMA_VERSION,
+                        'task_goal' => 'Explain value and drive primary action.',
+                        'meta_fields' => [
+                            ['field' => 'title', 'type' => 'string', 'default' => 'Royal Indian Games', 'sample' => 'Royal Indian Games'],
+                            ['field' => 'cta.label', 'type' => 'string', 'default' => 'Play Now', 'sample' => 'Play Now'],
+                        ],
+                        'content_plan' => [
+                            'content_copy' => [['field' => 'title', 'copy' => 'Royal Indian Games']],
+                            'cta_plan' => [['label' => 'Play Now', 'href' => '/play']],
+                            'asset_plan' => [['slot' => 'hero_image', 'description' => 'Indian card game visual']],
+                        ],
+                        'style_plan' => [
+                            'color' => 'dark background with ember CTA',
+                            'font' => 'bold display heading, readable body',
+                            'spacing' => 'generous hero padding and CTA gap',
+                            'responsive' => 'desktop two-column, mobile stacked',
+                        ],
+                        'planning_reason' => 'Stage-one hero block requires immediate value communication and conversion.',
+                        'sort_order' => 100,
+                    ],
+                    'field_content_requirements' => [
+                        ['field' => 'title', 'sample' => 'Royal Indian Games', 'reason' => 'visible headline'],
+                        ['field' => 'cta.label', 'sample' => 'Play Now', 'reason' => 'primary action'],
+                    ],
+                    'implementation_contract' => [
+                        'acceptance' => ['fields are editable', 'style follows theme tokens', 'CTA works'],
+                    ],
+                    'result_ref' => ['target' => 'page_block'],
+                ],
+            ],
+            'risk_notes' => [],
+        ];
     }
 
     /**
@@ -1023,6 +1220,8 @@ final class AiSiteVirtualThemePlanService
             'temperature' => 0.2,
             'max_tokens' => \min(8192, \max(512, $maxTokens)),
             'timeout' => 0,
+            'disable_ai_timeout' => true,
+            'disable_cli_timeout' => true,
             'session_id' => $publicId,
             'disable_conversation_history' => true,
             'disable_conversation_persist' => true,
@@ -1570,9 +1769,11 @@ final class AiSiteVirtualThemePlanService
             } else {
                 $incomingTasks = \is_array($incomingPageTasks[$pageType] ?? null) ? $incomingPageTasks[$pageType] : [];
             }
-            $this->assertIncomingBlockTasksHaveRequiredContract($incomingTasks, 'page:' . $pageType);
+            $baselinePageTasks = \is_array($structured['page_tasks'][$pageType] ?? null) ? $structured['page_tasks'][$pageType] : [];
+            $incomingTasks = $this->normalizeIncomingBlockTasksWithBaseline($incomingTasks, $baselinePageTasks, (string)$pageType);
+            $this->assertIncomingBlockTasksHaveRequiredContract($incomingTasks, 'page:' . $pageType, $baselinePageTasks);
             $mergedTasks = $this->mergeTaskListByKey(
-                \is_array($structured['page_tasks'][$pageType] ?? null) ? $structured['page_tasks'][$pageType] : [],
+                $baselinePageTasks,
                 $incomingTasks,
                 'page:' . $pageType
             );
@@ -1589,9 +1790,146 @@ final class AiSiteVirtualThemePlanService
 
     /**
      * @param list<array<string, mixed>> $incomingTasks
+     * @param list<array<string, mixed>> $baselineTasks
+     * @return list<array<string, mixed>>
      */
-    private function assertIncomingBlockTasksHaveRequiredContract(array $incomingTasks, string $context): void
+    private function normalizeIncomingBlockTasksWithBaseline(array $incomingTasks, array $baselineTasks, string $pageType): array
     {
+        $baselineByAlias = [];
+        foreach ($baselineTasks as $baselineIndex => $baselineTask) {
+            if (!\is_array($baselineTask)) {
+                continue;
+            }
+            foreach ($this->buildStageTwoTaskMatchAliases($baselineTask, $pageType) as $alias) {
+                $baselineByAlias[$alias] = $baselineTask;
+            }
+            $baselineByAlias['#' . $baselineIndex] ??= $baselineTask;
+        }
+
+        foreach ($incomingTasks as $idx => $incomingTask) {
+            if (!\is_array($incomingTask)) {
+                continue;
+            }
+            $baselineTask = [];
+            foreach ($this->buildStageTwoTaskMatchAliases($incomingTask, $pageType) as $alias) {
+                if (\is_array($baselineByAlias[$alias] ?? null)) {
+                    $baselineTask = $baselineByAlias[$alias];
+                    break;
+                }
+            }
+            if ($baselineTask === [] && \is_array($baselineByAlias['#' . $idx] ?? null)) {
+                $baselineTask = $baselineByAlias['#' . $idx];
+            }
+
+            $normalizedTask = \array_replace_recursive($baselineTask, $incomingTask);
+            if ($baselineTask !== [] && \trim((string)($baselineTask['task_key'] ?? '')) !== '') {
+                $normalizedTask['task_key'] = \trim((string)$baselineTask['task_key']);
+            }
+
+            $incomingTasks[$idx] = $this->applyBlockTaskSchemaToTask(
+                $normalizedTask,
+                $pageType
+            );
+        }
+
+        return \array_values($incomingTasks);
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @return list<string>
+     */
+    private function buildStageTwoTaskMatchAliases(array $task, string $pageType): array
+    {
+        $aliases = [];
+        foreach ([
+            $task['task_key'] ?? null,
+            $task['section_code'] ?? null,
+            $task['block_key'] ?? null,
+            $task['plan_context']['section_code'] ?? null,
+            $task['plan_context']['block_code'] ?? null,
+            $task['plan_context']['source_block_key'] ?? null,
+        ] as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $raw = \trim((string)$value);
+            if ($raw === '') {
+                continue;
+            }
+            foreach ($this->expandStageTwoTaskAlias($raw, $pageType) as $alias) {
+                $aliases[] = $alias;
+            }
+        }
+
+        return \array_values(\array_unique(\array_filter($aliases, static fn(string $alias): bool => $alias !== '')));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function expandStageTwoTaskAlias(string $value, string $pageType): array
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return [];
+        }
+
+        $aliases = [$value];
+        $tail = $value;
+        if (\str_contains($tail, ':')) {
+            $tail = (string)\substr($tail, (int)\strrpos($tail, ':') + 1);
+            $aliases[] = $tail;
+        }
+        if (\str_starts_with($tail, 'content/')) {
+            $withoutContent = \substr($tail, 8);
+            $aliases[] = $withoutContent;
+            $aliases[] = 'content/' . $withoutContent;
+            if ($pageType !== '') {
+                $pageSlug = $this->slugifyStageTwoTaskAlias($pageType);
+                $short = \preg_replace('/^' . \preg_quote($pageSlug, '/') . '-/i', '', $withoutContent) ?? $withoutContent;
+                $aliases[] = $short;
+                $aliases[] = $pageType . ':' . $short;
+                $aliases[] = 'page:' . $pageType . ':' . $short;
+            }
+        } elseif ($pageType !== '') {
+            $aliases[] = 'page:' . $pageType . ':' . $tail;
+            $aliases[] = $pageType . ':' . $tail;
+            $pageSlug = $this->slugifyStageTwoTaskAlias($pageType);
+            $aliases[] = 'content/' . $pageSlug . '-' . $tail;
+            $aliases[] = 'page:' . $pageType . ':content/' . $pageSlug . '-' . $tail;
+        }
+
+        return \array_values(\array_unique($aliases));
+    }
+
+    private function slugifyStageTwoTaskAlias(string $value): string
+    {
+        $slug = \strtolower(\trim($value));
+        $slug = \preg_replace('/[^a-z0-9]+/i', '-', $slug) ?? $slug;
+        $slug = \trim($slug, '-');
+
+        return $slug !== '' ? $slug : 'page';
+    }
+
+    /**
+     * @param list<array<string, mixed>> $incomingTasks
+     * @param list<array<string, mixed>> $baselineTasks
+     */
+    private function assertIncomingBlockTasksHaveRequiredContract(array &$incomingTasks, string $context, array $baselineTasks = []): void
+    {
+        $baselineSortOrders = [];
+        foreach ($baselineTasks as $baselineTask) {
+            if (!\is_array($baselineTask)) {
+                continue;
+            }
+            $baselineTaskKey = \trim((string)($baselineTask['task_key'] ?? ''));
+            if ($baselineTaskKey === '') {
+                continue;
+            }
+            $baselineSortOrders[$baselineTaskKey] = (int)($baselineTask['sort_order'] ?? $baselineTask['block_task']['sort_order'] ?? 0);
+        }
+
         foreach ($incomingTasks as $taskIndex => $task) {
             if (!\is_array($task)) {
                 continue;
@@ -1604,6 +1942,21 @@ final class AiSiteVirtualThemePlanService
             }
 
             $blockTask = $task['block_task'];
+            if (!\array_key_exists('sort_order', $blockTask)) {
+                $sortOrder = null;
+                if (\array_key_exists('sort_order', $task)) {
+                    $sortOrder = (int)$task['sort_order'];
+                } elseif ($taskKey !== '' && \array_key_exists($taskKey, $baselineSortOrders)) {
+                    $sortOrder = (int)$baselineSortOrders[$taskKey];
+                }
+                if ($sortOrder !== null) {
+                    $blockTask['sort_order'] = $sortOrder;
+                    $incomingTasks[$taskIndex]['block_task'] = $blockTask;
+                    if (!\array_key_exists('sort_order', $incomingTasks[$taskIndex])) {
+                        $incomingTasks[$taskIndex]['sort_order'] = $sortOrder;
+                    }
+                }
+            }
             foreach (self::BLOCK_TASK_REQUIRED_FIELDS as $requiredField) {
                 if (!\array_key_exists($requiredField, $blockTask)) {
                     throw new \RuntimeException('AI task plan generation failed: ' . $taskLabel . ' block_task missing required field ' . $requiredField . '.');
@@ -2943,6 +3296,44 @@ final class AiSiteVirtualThemePlanService
     private function resolveVisibleSampleForStageTwoField(string $field, array $context, array $fieldPlan = []): string
     {
         $realtimeContent = \is_array($context['realtime_content'] ?? null) ? $context['realtime_content'] : [];
+        if (\preg_match('/(link|href|url|target)/i', $field) === 1) {
+            foreach (\is_array($realtimeContent['cta'] ?? null) ? $realtimeContent['cta'] : [] as $cta) {
+                if (!\is_array($cta)) {
+                    continue;
+                }
+                $target = \trim((string)($cta['target'] ?? $cta['href'] ?? $cta['url'] ?? ''));
+                if ($target !== '' && !$this->isInternalComponentReference($target)) {
+                    return $target;
+                }
+            }
+            return '#start';
+        }
+
+        if (\preg_match('/(image|visual|media|asset)/i', $field) === 1) {
+            foreach (\is_array($realtimeContent['media'] ?? null) ? $realtimeContent['media'] : [] as $media) {
+                if (!\is_array($media)) {
+                    continue;
+                }
+                $description = $this->firstNonEmptyString([
+                    $media['description'] ?? null,
+                    $media['rule'] ?? null,
+                    $media['alt_text'] ?? null,
+                ]);
+                if ($description !== '' && !$this->isInternalComponentReference($description)) {
+                    return $description;
+                }
+            }
+        }
+
+        if (\preg_match('/(description|subtitle|body|copy)/i', $field) === 1) {
+            foreach (\is_array($realtimeContent['supporting_copy'] ?? null) ? $realtimeContent['supporting_copy'] : [] as $value) {
+                $sample = \trim((string)$value);
+                if ($sample !== '' && !$this->isInternalComponentReference($sample)) {
+                    return $sample;
+                }
+            }
+        }
+
         if (\preg_match('/(cta|button|action)/i', $field) === 1) {
             foreach (\is_array($realtimeContent['cta'] ?? null) ? $realtimeContent['cta'] : [] as $cta) {
                 $label = \is_array($cta) ? \trim((string)($cta['label'] ?? '')) : \trim((string)$cta);
@@ -3859,13 +4250,13 @@ final class AiSiteVirtualThemePlanService
             if (isset($realtimeContent[$field]) && \is_scalar($realtimeContent[$field])) {
                 $sample = \trim((string)$realtimeContent[$field]);
             }
-            if ($sample === '' && \in_array($field, ['title', 'heading', 'headline'], true)) {
-                $sample = \trim((string)($realtimeContent['headline'] ?? $block['title'] ?? ''));
+            if ($sample === '' || $this->isInternalComponentReference($sample)) {
+                $sample = $this->resolveVisibleSampleForStageTwoField($field, $block, $fieldPlan);
             }
             $fieldPlan[] = [
                 'field' => $field,
-                'sample' => $sample !== '' ? $sample : (string)($block['title'] ?? $field),
-                'reason' => 'Derived from confirmed stage-1 block tree editable_fields.',
+                'sample' => $sample !== '' && !$this->isInternalComponentReference($sample) ? $sample : $this->resolveVisibleSampleForStageTwoField($field, $block, $fieldPlan),
+                'reason' => 'Inherited from confirmed stage-1 block content and editable field contract.',
             ];
         }
 
@@ -4208,6 +4599,8 @@ final class AiSiteVirtualThemePlanService
     private function resolveStageTwoContentLocale(array $scope): string
     {
         foreach ([
+            $scope['content_locale'] ?? null,
+            $scope['website_profile']['content_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $scope['website_profile']['default_locale'] ?? null,
             $scope['default_language'] ?? null,
@@ -4447,6 +4840,9 @@ final class AiSiteVirtualThemePlanService
                 \str_starts_with($taskKey, 'shared:') ? \substr($taskKey, 7) : null,
                 $taskKey,
             ]);
+            if (\str_starts_with($blockKey, 'shared:')) {
+                $blockKey = \substr($blockKey, 7);
+            }
             $jobKey = self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':shared:' . $blockKey;
             $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
             $runtimeContext = \array_replace($runtimeContext, [
@@ -4651,17 +5047,25 @@ final class AiSiteVirtualThemePlanService
         $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
         $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
 
-        $metaFieldSource = \is_array($taskScript['field_content_requirements'] ?? null)
-            ? $taskScript['field_content_requirements']
-            : (\is_array($existing['meta_fields'] ?? null)
-                ? $existing['meta_fields']
-                : (\is_array($planContext['field_plan'] ?? null) ? $planContext['field_plan'] : []));
+        $taskScriptRequirements = \is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [];
+        $existingMetaFields = \is_array($existing['meta_fields'] ?? null) ? $existing['meta_fields'] : [];
+        $existingContentPlan = \is_array($existing['content_plan'] ?? null) ? $existing['content_plan'] : [];
+        $existingContentRequirements = \is_array($existingContentPlan['field_content_requirements'] ?? null) ? $existingContentPlan['field_content_requirements'] : [];
+        $planFieldPlan = \is_array($planContext['field_plan'] ?? null) ? $planContext['field_plan'] : [];
+        $metaFieldSource = $this->hasUsableStageTwoFieldRequirements($existingMetaFields)
+            ? $existingMetaFields
+            : ($this->hasUsableStageTwoFieldRequirements($existingContentRequirements)
+                ? $existingContentRequirements
+                : ($this->hasUsableStageTwoFieldRequirements($taskScriptRequirements)
+                    ? $taskScriptRequirements
+                    : ($this->hasUsableStageTwoFieldRequirements($planFieldPlan) ? $planFieldPlan : $this->buildMinimalBlockTaskMetaFieldSource($task, $planContext, $existing))));
         $metaFields = $this->normalizeBlockTaskMetaFields($metaFieldSource);
+        $metaFields = $this->repairStageTwoMetaFieldsWithContext($metaFields, $planContext, $task);
 
         $taskGoal = $this->firstNonEmptyString([
             $planContext['block_goal'] ?? null,
-            $taskScript['story_goal'] ?? null,
             $existing['task_goal'] ?? null,
+            $taskScript['story_goal'] ?? null,
             $task['label'] ?? null,
             $task['task_key'] ?? null,
         ]);
@@ -4669,22 +5073,22 @@ final class AiSiteVirtualThemePlanService
             $taskGoal = 'Deliver the ' . ($pageType !== '' ? $pageType . ' ' : '') . 'block output.';
         }
 
-        $contentPlan = \is_array($existing['content_plan'] ?? null) ? $existing['content_plan'] : [];
+        $contentPlan = $existingContentPlan;
         $contentPlan['story_goal'] = $this->firstNonEmptyString([
+            $contentPlan['story_goal'] ?? null,
             $taskScript['story_goal'] ?? null,
             $taskGoal,
-            $contentPlan['story_goal'] ?? null,
         ]);
         $contentPlan['content_fill_rule'] = $this->firstNonEmptyString([
-            $taskScript['content_fill_rule'] ?? null,
             $contentPlan['content_fill_rule'] ?? null,
+            $taskScript['content_fill_rule'] ?? null,
             $planContext['content_brief']['goal'] ?? null,
             'Fill the block fields with concrete copy and CTA content from the confirmed stage-1 plan.',
         ]);
         $contentPlan['stage3_directive'] = $this->firstNonEmptyString([
             $contentPlan['stage3_directive'] ?? null,
             $taskScript['stage3_directive'] ?? null,
-            'Generate this block directly from the block_task content_plan and meta_fields.',
+            'Generate the frontend block from the confirmed stage-1 theme context, this stage-2 task detail, block_task.content_plan, block_task.style_plan, and the frontend component skill.',
         ]);
         $contentPlan['field_content_requirements'] = \is_array($contentPlan['field_content_requirements'] ?? null)
             ? $contentPlan['field_content_requirements']
@@ -4763,8 +5167,334 @@ final class AiSiteVirtualThemePlanService
             'planning_reason' => $planningReason,
             'sort_order' => (int)($task['sort_order'] ?? $existing['sort_order'] ?? 0),
         ];
+        $task['task_script'] = $this->ensureTaskScriptFromBlockTask($task, $task['block_task'], $planContext, $pageType);
+        if (!\is_array($task['field_content_requirements'] ?? null) || $task['field_content_requirements'] === []) {
+            $task['field_content_requirements'] = $task['task_script']['field_content_requirements'] ?? [];
+        }
 
         return $task;
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @param array<string, mixed> $planContext
+     * @param array<string, mixed> $existingBlockTask
+     * @return list<array<string, mixed>>
+     */
+    private function buildMinimalBlockTaskMetaFieldSource(array $task, array $planContext, array $existingBlockTask): array
+    {
+        $contentPlan = \is_array($existingBlockTask['content_plan'] ?? null) ? $existingBlockTask['content_plan'] : [];
+        $requirements = \is_array($contentPlan['field_content_requirements'] ?? null) ? $contentPlan['field_content_requirements'] : [];
+        if ($requirements !== []) {
+            return $requirements;
+        }
+
+        $fields = [];
+        $realtimeContent = \is_array($planContext['realtime_content'] ?? null) ? $planContext['realtime_content'] : [];
+        $headline = $this->firstNonEmptyString([
+            $realtimeContent['headline'] ?? null,
+            $realtimeContent['title'] ?? null,
+            $planContext['title'] ?? null,
+            $task['label'] ?? null,
+        ]);
+        if ($headline !== '') {
+            $fields[] = [
+                'field' => 'headline',
+                'type' => 'string',
+                'sample' => $headline,
+                'reason' => 'Primary visible headline from the confirmed stage-1 block context.',
+            ];
+        }
+
+        foreach ($this->collectTaskContentSamples($planContext, 2) as $index => $sample) {
+            if ($sample === '' || $sample === $headline) {
+                continue;
+            }
+            $fields[] = [
+                'field' => $index === 0 ? 'supporting_copy' : 'proof_copy_' . ((int)$index + 1),
+                'type' => 'string',
+                'sample' => $sample,
+                'reason' => 'Visible copy sample inherited from the confirmed stage-1 block context.',
+            ];
+        }
+
+        foreach ($this->collectTaskCtaLabels($planContext, 1) as $ctaLabel) {
+            if ($ctaLabel === '') {
+                continue;
+            }
+            $fields[] = [
+                'field' => 'primary_cta',
+                'type' => 'string',
+                'sample' => $ctaLabel,
+                'reason' => 'Primary action label inherited from the confirmed stage-1 block context.',
+            ];
+        }
+
+        if ($fields === []) {
+            $blockGoal = $this->firstNonEmptyString([
+                $planContext['block_goal'] ?? null,
+                $existingBlockTask['task_goal'] ?? null,
+                $task['label'] ?? null,
+                $task['task_key'] ?? null,
+            ]);
+            $fields[] = [
+                'field' => 'headline',
+                'type' => 'string',
+                'sample' => $blockGoal !== '' ? $blockGoal : 'Primary block message',
+                'reason' => 'Minimum editable field derived from the confirmed stage-1 task context.',
+            ];
+        }
+
+        return $fields;
+    }
+
+    /**
+     * @param array<int, mixed> $requirements
+     */
+    private function hasUsableStageTwoFieldRequirements(array $requirements): bool
+    {
+        foreach ($requirements as $requirement) {
+            if (!\is_array($requirement)) {
+                continue;
+            }
+            $field = $this->firstNonEmptyString([$requirement['field'] ?? null, $requirement['name'] ?? null, $requirement['key'] ?? null]);
+            $sample = $this->firstNonEmptyString([$requirement['sample'] ?? null, $requirement['example'] ?? null, $requirement['default'] ?? null]);
+            if ($field !== '' && $sample !== '' && !$this->isStageTwoMetaInstructionLike($sample)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $metaFields
+     * @param array<string, mixed> $planContext
+     * @param array<string, mixed> $task
+     * @return list<array<string, mixed>>
+     */
+    private function repairStageTwoMetaFieldsWithContext(array $metaFields, array $planContext, array $task): array
+    {
+        foreach ($metaFields as $index => $field) {
+            if (!\is_array($field)) {
+                continue;
+            }
+            $fieldName = $this->firstNonEmptyString([$field['field'] ?? null, $field['name'] ?? null, $field['key'] ?? null]);
+            $sample = $this->firstNonEmptyString([$field['sample'] ?? null, $field['default'] ?? null]);
+            if ($sample !== '' && !$this->isInternalComponentReference($sample) && !$this->isStageTwoMetaInstructionLike($sample)) {
+                continue;
+            }
+
+            $replacement = $fieldName !== '' ? $this->resolveVisibleSampleForStageTwoField($fieldName, $planContext, $metaFields) : '';
+            if ($replacement === '' || $this->isInternalComponentReference($replacement) || $this->isStageTwoMetaInstructionLike($replacement)) {
+                $replacement = $this->firstReusableStageTwoFieldSample($metaFields);
+            }
+            if ($replacement === '' || $this->isInternalComponentReference($replacement) || $this->isStageTwoMetaInstructionLike($replacement)) {
+                $replacement = $this->defaultStageTwoFieldSample($fieldName, $task);
+            }
+
+            $field['sample'] = $replacement;
+            if (!isset($field['default']) || $field['default'] === '' || $this->isInternalComponentReference((string)$field['default']) || $this->isStageTwoMetaInstructionLike((string)$field['default'])) {
+                $field['default'] = $replacement;
+            }
+            $metaFields[$index] = $field;
+        }
+
+        return \array_values($metaFields);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $metaFields
+     */
+    private function firstReusableStageTwoFieldSample(array $metaFields): string
+    {
+        foreach ($metaFields as $field) {
+            if (!\is_array($field)) {
+                continue;
+            }
+            $sample = $this->firstNonEmptyString([$field['sample'] ?? null, $field['default'] ?? null]);
+            if ($sample !== '' && !$this->isInternalComponentReference($sample) && !$this->isStageTwoMetaInstructionLike($sample)) {
+                return $sample;
+            }
+        }
+
+        return '';
+    }
+
+    private function defaultStageTwoFieldSample(string $fieldName, array $task): string
+    {
+        if (\preg_match('/(link|href|url|target)/i', $fieldName) === 1) {
+            return '#start';
+        }
+        if (\preg_match('/(cta|button|action)/i', $fieldName) === 1) {
+            return 'Start now';
+        }
+        if (\preg_match('/(image|visual|media|asset)/i', $fieldName) === 1) {
+            return 'SVG visual matching the confirmed theme and block goal';
+        }
+
+        $label = $this->firstNonEmptyString([$task['label'] ?? null, $task['page_type'] ?? null, 'Primary block message']);
+        return $this->isInternalComponentReference($label) ? 'Primary block message' : $label;
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @param array<string, mixed> $blockTask
+     * @param array<string, mixed> $planContext
+     * @return array<string, mixed>
+     */
+    private function ensureTaskScriptFromBlockTask(array $task, array $blockTask, array $planContext, string $pageType): array
+    {
+        $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
+        $contentPlan = \is_array($blockTask['content_plan'] ?? null) ? $blockTask['content_plan'] : [];
+        $stylePlan = \is_array($blockTask['style_plan'] ?? null) ? $blockTask['style_plan'] : [];
+        $metaFields = \is_array($blockTask['meta_fields'] ?? null) ? $blockTask['meta_fields'] : [];
+        $implementationContract = \is_array($task['implementation_contract'] ?? null) ? $task['implementation_contract'] : [];
+        $blockCode = $this->firstNonEmptyString([
+            $planContext['block_code'] ?? null,
+            $planContext['section_code'] ?? null,
+            $task['section_code'] ?? null,
+            $task['block_key'] ?? null,
+            $task['task_key'] ?? null,
+        ]);
+
+        $taskScript['scene'] = $this->firstNonEmptyString([
+            $taskScript['scene'] ?? null,
+            $blockCode !== '' ? ('page:' . $pageType . '/block:' . $blockCode) : null,
+            $task['task_key'] ?? null,
+        ]);
+
+        $storyGoal = \trim((string)($taskScript['story_goal'] ?? ''));
+        if ($storyGoal === '' || $this->isStageTwoMetaInstructionLike($storyGoal)) {
+            $taskScript['story_goal'] = $this->firstNonEmptyString([
+                $contentPlan['story_goal'] ?? null,
+                $blockTask['task_goal'] ?? null,
+                $planContext['block_goal'] ?? null,
+                $this->composeConcretePageStoryGoal($task, $pageType),
+            ]);
+        }
+
+        $contentPlanRequirements = \is_array($contentPlan['field_content_requirements'] ?? null) ? $contentPlan['field_content_requirements'] : [];
+        $requirements = $this->hasUsableStageTwoFieldRequirements($contentPlanRequirements)
+            ? $contentPlanRequirements
+            : (\is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : []);
+        if (!$this->hasUsableStageTwoFieldRequirements($requirements)) {
+            $requirements = $metaFields;
+        }
+        $requirements = $this->sanitizeTaskFieldRequirementSamples($requirements, $metaFields);
+        if ($requirements === []) {
+            $requirements = $metaFields;
+        }
+        $taskScript['field_content_requirements'] = \array_values($requirements);
+
+        $contentFillRule = \trim((string)($taskScript['content_fill_rule'] ?? ''));
+        if ($contentFillRule === '' || $this->isStageTwoMetaInstructionLike($contentFillRule)) {
+            $taskScript['content_fill_rule'] = $this->firstNonEmptyString([
+                $contentPlan['content_fill_rule'] ?? null,
+                $this->buildTaskScriptFillRuleFromRequirements($taskScript['field_content_requirements']),
+                $this->composeConcretePageFillRule($task, $pageType),
+            ]);
+        }
+
+        $taskScript['stage3_directive'] = $this->firstNonEmptyString([
+            $taskScript['stage3_directive'] ?? null,
+            $contentPlan['stage3_directive'] ?? null,
+            'Generate the frontend block from the confirmed stage-1 theme context, this task_script, block_task.content_plan, block_task.style_plan, and the frontend component skill. Do not add page labels, task ids, or plan-instruction copy as visible text.',
+        ]);
+        $taskScript['component_type'] = $this->firstNonEmptyString([
+            $taskScript['component_type'] ?? null,
+            $task['component_type'] ?? null,
+            $planContext['component_type'] ?? null,
+            $blockCode !== '' ? $blockCode . '_section' : 'page_section',
+        ]);
+
+        if (!\is_array($taskScript['technical_steps'] ?? null) || $taskScript['technical_steps'] === []) {
+            $taskScript['technical_steps'] = [
+                'Map every required field into semantic HTML visible content.',
+                'Apply block_task.style_plan for palette, typography, spacing, responsive layout, and motion.',
+                'Use block_task.content_plan assets or SVG/CSS visuals when no real media URL exists.',
+            ];
+        }
+        if (!\is_array($taskScript['data_contract'] ?? null) || $taskScript['data_contract'] === []) {
+            $taskScript['data_contract'] = $this->buildTaskScriptDataContract($taskScript['field_content_requirements']);
+        }
+        if (!\is_array($taskScript['state_contract'] ?? null) || $taskScript['state_contract'] === []) {
+            $taskScript['state_contract'] = ['interactive_state' => 'Use only state needed by this block, such as hover, focus, carousel, menu, or form state.'];
+        }
+        if (!\is_array($taskScript['responsive_contract'] ?? null) || $taskScript['responsive_contract'] === []) {
+            $taskScript['responsive_contract'] = [
+                'desktop' => $this->firstNonEmptyString([$stylePlan['responsive'] ?? null, 'Use the confirmed desktop composition from stage 1.']),
+                'mobile' => 'Keep text readable, buttons reachable, and visuals stacked without overlap.',
+            ];
+        }
+        if (!\is_array($taskScript['accessibility_contract'] ?? null) || $taskScript['accessibility_contract'] === []) {
+            $taskScript['accessibility_contract'] = [
+                'Use semantic landmarks/headings and descriptive alt text for visuals.',
+                'Keep CTA focus states visible and preserve color contrast.',
+            ];
+        }
+        if (!\is_array($taskScript['asset_requirements'] ?? null) || $taskScript['asset_requirements'] === []) {
+            $taskScript['asset_requirements'] = \is_array($contentPlan['asset_plan'] ?? null) ? $contentPlan['asset_plan'] : [];
+        }
+        if (!\is_array($taskScript['validation_points'] ?? null) || $taskScript['validation_points'] === []) {
+            $taskScript['validation_points'] = [
+                'Visible copy matches task_script.field_content_requirements and does not expose internal task keys.',
+                'Theme colors, typography, spacing, and responsive behavior match block_task.style_plan.',
+                'No broken images, example.com media URLs, or empty visual slots.',
+            ];
+        }
+        $taskScript['completion_rule'] = $this->firstNonEmptyString([
+            $taskScript['completion_rule'] ?? null,
+            $implementationContract['completion_rule'] ?? null,
+            $task['completion_rule'] ?? null,
+            'The block is complete when stage 3 renders production-ready HTML/CSS/JS matching the confirmed stage-1 theme and this stage-2 task detail.',
+        ]);
+
+        return $taskScript;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $requirements
+     */
+    private function buildTaskScriptFillRuleFromRequirements(array $requirements): string
+    {
+        $examples = [];
+        foreach ($requirements as $requirement) {
+            if (!\is_array($requirement)) {
+                continue;
+            }
+            $field = $this->firstNonEmptyString([$requirement['field'] ?? null, $requirement['name'] ?? null]);
+            $sample = $this->firstNonEmptyString([$requirement['sample'] ?? null, $requirement['default'] ?? null]);
+            if ($field === '' || $sample === '') {
+                continue;
+            }
+            $examples[] = $field . '=' . $sample;
+        }
+
+        return $examples !== []
+            ? 'Populate these visible fields from the confirmed stage-1 plan: ' . \implode(' | ', \array_slice($examples, 0, 8)) . '.'
+            : '';
+    }
+
+    /**
+     * @param list<array<string, mixed>> $requirements
+     * @return array<string, string>
+     */
+    private function buildTaskScriptDataContract(array $requirements): array
+    {
+        $contract = [];
+        foreach ($requirements as $requirement) {
+            if (!\is_array($requirement)) {
+                continue;
+            }
+            $field = $this->firstNonEmptyString([$requirement['field'] ?? null, $requirement['name'] ?? null]);
+            if ($field === '') {
+                continue;
+            }
+            $contract[$field] = $this->firstNonEmptyString([$requirement['type'] ?? null, 'string']);
+        }
+
+        return $contract !== [] ? $contract : ['content' => 'string'];
     }
 
 
@@ -4809,21 +5539,35 @@ final class AiSiteVirtualThemePlanService
 
         if (!\is_array($contentPlan['cta_plan'] ?? null) || $contentPlan['cta_plan'] === []) {
             $ctaPlan = [];
+            $realtimeCtaTarget = '';
+            $realtimeContent = \is_array($planContext['realtime_content'] ?? null) ? $planContext['realtime_content'] : [];
+            foreach (\is_array($realtimeContent['cta'] ?? null) ? $realtimeContent['cta'] : [] as $cta) {
+                if (!\is_array($cta)) {
+                    continue;
+                }
+                $realtimeCtaTarget = $this->firstNonEmptyString([$cta['target'] ?? null, $cta['href'] ?? null, $cta['url'] ?? null]);
+                if ($realtimeCtaTarget !== '') {
+                    break;
+                }
+            }
             foreach ($metaFields as $field) {
                 $fieldName = $this->firstNonEmptyString([$field['field'] ?? null, $field['name'] ?? null]);
                 if ($fieldName === '' || !\preg_match('/(cta|button|action)/i', $fieldName)) {
                     continue;
                 }
+                if (\preg_match('/(link|href|url|target)/i', $fieldName) === 1) {
+                    continue;
+                }
                 $ctaPlan[] = [
                     'label' => $this->firstNonEmptyString([$field['sample'] ?? null, $field['default'] ?? null, 'Start now']),
-                    'target' => $this->firstNonEmptyString([$field['href'] ?? null, $field['url'] ?? null, $field['target'] ?? null, '#contact']),
+                    'target' => $this->firstNonEmptyString([$field['href'] ?? null, $field['url'] ?? null, $field['target'] ?? null, $realtimeCtaTarget, '#contact']),
                     'source_field' => $fieldName,
                 ];
             }
             if ($ctaPlan === []) {
                 $ctaPlan[] = [
                     'label' => $this->extractBracketedLabel((string)($taskScript['story_goal'] ?? '')) ?: 'Start now',
-                    'target' => $this->firstNonEmptyString([$planContext['content_brief']['cta_target'] ?? null, $planContext['cta_target'] ?? null, '#contact']),
+                    'target' => $this->firstNonEmptyString([$planContext['content_brief']['cta_target'] ?? null, $planContext['cta_target'] ?? null, $realtimeCtaTarget, '#contact']),
                     'source_field' => 'primary_cta',
                 ];
             }
@@ -4903,6 +5647,9 @@ final class AiSiteVirtualThemePlanService
             }
             if ($assets === []) {
                 $label = $this->firstNonEmptyString([$task['label'] ?? null, $planContext['block_code'] ?? null, 'block']);
+                if ($this->isInternalComponentReference($label)) {
+                    $label = $this->firstNonEmptyString([$planContext['block_goal'] ?? null, $planContext['page_goal'] ?? null, 'block']);
+                }
                 $assets[] = [
                     'slot' => 'primary_visual',
                     'description' => $label . ' visual that illustrates the block promise without adding unstated requirements.',
@@ -5365,6 +6112,8 @@ final class AiSiteVirtualThemePlanService
             'max_tokens' => 8192,
             // SSE 任务方案流不设置 provider 业务超时，避免生成中途被参数阈值截断。
             'timeout' => 0,
+            'disable_ai_timeout' => true,
+            'disable_cli_timeout' => true,
             'session_id' => $publicId,
             'disable_conversation_history' => true,
             'disable_conversation_persist' => true,
@@ -5763,12 +6512,25 @@ final class AiSiteVirtualThemePlanService
         $sectionCode = \trim((string)($task['section_code'] ?? ''));
         if ($sectionCode !== '') {
             $pageBlocks = \is_array($blockPlanMatrix[$pageType] ?? null) ? $blockPlanMatrix[$pageType] : [];
+            $taskAliases = $this->expandStageTwoTaskAlias($sectionCode, $pageType);
             foreach ($pageBlocks as $blockKey => $blockPlan) {
                 if (!\is_array($blockPlan)) {
                     continue;
                 }
-                $planSectionCode = \trim((string)($blockPlan['section_code'] ?? ''));
-                if ($planSectionCode !== '' && $planSectionCode === $sectionCode) {
+                $planAliases = [];
+                foreach ([
+                    $blockKey,
+                    $blockPlan['block_key'] ?? null,
+                    $blockPlan['section_code'] ?? null,
+                    $blockPlan['component_kind'] ?? null,
+                    $blockPlan['title'] ?? null,
+                ] as $value) {
+                    if (!\is_scalar($value)) {
+                        continue;
+                    }
+                    $planAliases = \array_merge($planAliases, $this->expandStageTwoTaskAlias(\trim((string)$value), $pageType));
+                }
+                if (\array_intersect($taskAliases, \array_values(\array_unique($planAliases))) !== []) {
                     return (string)$blockKey;
                 }
             }
@@ -5819,6 +6581,8 @@ final class AiSiteVirtualThemePlanService
             // detect_bootstrap 返回完整任务计划 JSON，需足够输出预算避免中途截断。
             'max_tokens' => 8192,
             'timeout' => 0,
+            'disable_ai_timeout' => true,
+            'disable_cli_timeout' => true,
         ];
         try {
             $raw = '';
@@ -6145,6 +6909,7 @@ final class AiSiteVirtualThemePlanService
         $mergedVirtualThemePlan = \array_replace_recursive($virtualThemePlan, $aiVirtualThemePlan);
         $mergedStructured = \array_replace_recursive($structured, $mergedVirtualThemePlan);
         $mergedStructured = $this->sanitizePromptLikeTaskPlanStructured($mergedStructured);
+        $mergedStructured = $this->applyBlockTaskSchemaToStructured($mergedStructured);
         $mergedStructured = $this->ensureTaskDirectoryHierarchy($mergedStructured);
         $mergedStructured = $this->syncStageTwoTaskSortArtifacts($mergedStructured);
         $mergedVirtualThemePlan = \array_replace_recursive($mergedVirtualThemePlan, [
@@ -6240,6 +7005,8 @@ final class AiSiteVirtualThemePlanService
      */
     private function assertAiTaskPlanIsContentful(array $structured): void
     {
+        $contentLocale = $this->resolveStageTwoStructuredContentLocale($structured);
+        $requiresEnglishContent = $this->isStageTwoEnglishLocale($contentLocale);
         $pageTasks = \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [];
         if ($pageTasks === []) {
             throw new \RuntimeException('AI task plan generation failed: empty page_tasks.');
@@ -6259,8 +7026,27 @@ final class AiSiteVirtualThemePlanService
                 $storyGoal = \trim((string)($taskScript['story_goal'] ?? ''));
                 $contentFillRule = \trim((string)($taskScript['content_fill_rule'] ?? ''));
                 $requirements = \is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [];
-                if ($blockGoal === '' || $storyGoal === '' || $contentFillRule === '' || $requirements === []) {
-                    throw new \RuntimeException('AI task plan generation failed: task script content is incomplete.');
+                $missingScriptFields = [];
+                if ($blockGoal === '') {
+                    $missingScriptFields[] = 'plan_context.block_goal';
+                }
+                if ($storyGoal === '') {
+                    $missingScriptFields[] = 'task_script.story_goal';
+                }
+                if ($contentFillRule === '') {
+                    $missingScriptFields[] = 'task_script.content_fill_rule';
+                }
+                if ($requirements === []) {
+                    $missingScriptFields[] = 'task_script.field_content_requirements';
+                }
+                if ($missingScriptFields !== []) {
+                    throw new \RuntimeException(
+                        'AI task plan generation failed: task script content is incomplete for '
+                        . (string)($task['task_key'] ?? 'page task')
+                        . ' missing '
+                        . \implode(', ', $missingScriptFields)
+                        . '.'
+                    );
                 }
                 foreach (self::BLOCK_TASK_REQUIRED_FIELDS as $requiredField) {
                     if (!\array_key_exists($requiredField, $blockTask)) {
@@ -6298,6 +7084,9 @@ final class AiSiteVirtualThemePlanService
                 if (!$hasSample) {
                     throw new \RuntimeException('AI task plan generation failed: field samples are missing.');
                 }
+                if ($requiresEnglishContent && $this->stageTwoTaskHasCjkVisibleContent($taskScript, $blockTask)) {
+                    throw new \RuntimeException('AI task plan generation failed: task visible content language does not match content_locale.');
+                }
                 if ($this->isStageTwoMetaInstructionLike($storyGoal)) {
                     throw new \RuntimeException('AI task plan generation failed: story_goal still contains blueprint guidance.');
                 }
@@ -6314,6 +7103,68 @@ final class AiSiteVirtualThemePlanService
                 }
             }
         }
+    }
+
+    private function resolveStageTwoStructuredContentLocale(array $structured): string
+    {
+        foreach ([
+            $structured['stage2_context_snapshot']['content_locale'] ?? null,
+            $structured['content_locale'] ?? null,
+            $structured['site_context']['content_locale'] ?? null,
+            $structured['virtual_theme_strategy']['content_locale'] ?? null,
+            $structured['default_locale'] ?? null,
+        ] as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $locale = \trim((string)$value);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return '';
+    }
+
+    private function isStageTwoEnglishLocale(string $locale): bool
+    {
+        $locale = \strtolower(\trim($locale));
+        return $locale === 'en' || \str_starts_with($locale, 'en_') || \str_starts_with($locale, 'en-');
+    }
+
+    private function stageTwoTaskHasCjkVisibleContent(array $taskScript, array $blockTask): bool
+    {
+        $contentPlan = \is_array($blockTask['content_plan'] ?? null) ? $blockTask['content_plan'] : [];
+        foreach ([
+            $taskScript['field_content_requirements'] ?? [],
+            $blockTask['meta_fields'] ?? [],
+            $contentPlan['field_content_requirements'] ?? [],
+            $contentPlan['content_copy'] ?? [],
+            $contentPlan['cta_plan'] ?? [],
+            $contentPlan['asset_plan'] ?? [],
+        ] as $rows) {
+            if (!\is_array($rows)) {
+                continue;
+            }
+            foreach ($rows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                foreach (['sample', 'default', 'copy', 'label', 'description', 'alt_text'] as $key) {
+                    $value = \trim((string)($row[$key] ?? ''));
+                    if ($value !== '' && $this->containsStageTwoCjkText($value)) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function containsStageTwoCjkText(string $text): bool
+    {
+        return \preg_match('/\p{Han}/u', $text) === 1;
     }
 
     /**
