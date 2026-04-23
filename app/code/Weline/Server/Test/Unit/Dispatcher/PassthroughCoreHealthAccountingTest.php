@@ -178,4 +178,73 @@ final class PassthroughCoreHealthAccountingTest extends TestCase
         self::assertSame(1, $workerHealth[19091]['total_failures']);
         self::assertSame(0.0, $workerHealth[19091]['blacklisted_at']);
     }
+
+    public function testAuditWorkerApplicationHealthDoesNotRemoveRecentlyResponsiveWorkerOnTimeout(): void
+    {
+        $core = new class('127.0.0.1', 19981, 2) extends PassthroughCore {
+            protected function requestWorkerHealth(int $port, float $connectTimeout, float $responseTimeout): array
+            {
+                unset($port, $connectTimeout, $responseTimeout);
+
+                return ['success' => false, 'error' => 'health tls handshake timeout after 1.02s'];
+            }
+        };
+        $this->writePrivateProperty($core, 'workerPorts', [19091]);
+        $this->writePrivateProperty($core, 'workerCount', 1);
+        $this->writePrivateProperty($core, 'workerHealth', [
+            19091 => [
+                'failures' => 2,
+                'blacklisted_at' => 0.0,
+                'last_success' => \microtime(true) - 2.0,
+                'total_failures' => 2,
+            ],
+        ]);
+
+        $result = $core->auditWorkerApplicationHealth();
+        $workerHealth = $this->readPrivateProperty($core, 'workerHealth');
+
+        self::assertSame([], $result['healthy']);
+        self::assertSame([], $result['failed']);
+        self::assertSame(2, $workerHealth[19091]['failures']);
+        self::assertSame(3, $workerHealth[19091]['total_failures']);
+        self::assertSame(0.0, $workerHealth[19091]['blacklisted_at']);
+    }
+
+    public function testAuditWorkerApplicationHealthReportsStaleTimeoutAfterThreshold(): void
+    {
+        $core = new class('127.0.0.1', 19981, 2) extends PassthroughCore {
+            protected function requestWorkerHealth(int $port, float $connectTimeout, float $responseTimeout): array
+            {
+                unset($port, $connectTimeout, $responseTimeout);
+
+                return ['success' => false, 'error' => 'health tls handshake timeout after 1.02s'];
+            }
+        };
+        $this->writePrivateProperty($core, 'workerPorts', [19091]);
+        $this->writePrivateProperty($core, 'workerCount', 1);
+        $this->writePrivateProperty($core, 'workerHealth', [
+            19091 => [
+                'failures' => 2,
+                'blacklisted_at' => 0.0,
+                'last_success' => \microtime(true) - 60.0,
+                'total_failures' => 2,
+            ],
+        ]);
+
+        $result = $core->auditWorkerApplicationHealth();
+        $workerHealth = $this->readPrivateProperty($core, 'workerHealth');
+
+        self::assertSame([19091 => 'health tls handshake timeout after 1.02s'], $result['failed']);
+        self::assertSame(3, $workerHealth[19091]['failures']);
+        self::assertGreaterThan(0.0, $workerHealth[19091]['blacklisted_at']);
+    }
+
+    public function testTlsHandshakeZeroResultIsTreatedAsPending(): void
+    {
+        $core = new PassthroughCore('127.0.0.1', 19981, 1);
+
+        self::assertTrue($this->invokePrivateMethod($core, 'isTlsHandshakePending', 0));
+        self::assertTrue($this->invokePrivateMethod($core, 'isTlsHandshakePending', false));
+        self::assertFalse($this->invokePrivateMethod($core, 'isTlsHandshakePending', true));
+    }
 }
