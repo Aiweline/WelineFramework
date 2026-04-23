@@ -402,9 +402,6 @@ final class AiSiteVirtualThemePlanService
     {
         $batches = [];
         $sharedTasks = \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [];
-        $sharedTaskKeys = [];
-        $sharedDependsOn = [];
-        $sharedSortOrder = 0;
         foreach ($sharedTasks as $task) {
             if (!\is_array($task)) {
                 continue;
@@ -413,23 +410,21 @@ final class AiSiteVirtualThemePlanService
             if ($taskKey === '') {
                 continue;
             }
-            $sharedTaskKeys[] = $taskKey;
-            $sharedSortOrder = $sharedSortOrder === 0 ? (int)($task['sort_order'] ?? 0) : \min($sharedSortOrder, (int)($task['sort_order'] ?? 0));
-            $sharedDependsOn = \array_merge(
-                $sharedDependsOn,
-                \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [])))
-            );
-        }
-        if ($sharedTaskKeys !== []) {
+            $blockKey = $this->firstNonEmptyString([
+                $task['block_key'] ?? null,
+                $task['component'] ?? null,
+                \str_starts_with($taskKey, 'shared:') ? \substr($taskKey, 7) : null,
+                $taskKey,
+            ]);
             $batches[] = [
                 'type' => 'shared',
                 'key' => 'shared',
-                'block_key' => 'shared',
-                'task_keys' => \array_values(\array_unique($sharedTaskKeys)),
-                'sort_order' => $sharedSortOrder,
-                'depends_on' => \array_values(\array_unique($sharedDependsOn)),
+                'block_key' => $blockKey !== '' ? $blockKey : $taskKey,
+                'task_keys' => [$taskKey],
+                'sort_order' => (int)($task['sort_order'] ?? 0),
+                'depends_on' => \array_values(\array_unique(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [])))),
                 'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
-                'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':shared',
+                'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':shared:' . ($blockKey !== '' ? $blockKey : $taskKey),
             ];
         }
 
@@ -439,9 +434,6 @@ final class AiSiteVirtualThemePlanService
                 continue;
             }
             $pageType = (string)$pageType;
-            $pageTaskKeys = [];
-            $pageDependsOn = [];
-            $pageSortOrder = 0;
             foreach ($tasks as $task) {
                 if (!\is_array($task)) {
                     continue;
@@ -450,23 +442,22 @@ final class AiSiteVirtualThemePlanService
                 if ($taskKey === '') {
                     continue;
                 }
-                $pageTaskKeys[] = $taskKey;
-                $pageSortOrder = $pageSortOrder === 0 ? (int)($task['sort_order'] ?? 0) : \min($pageSortOrder, (int)($task['sort_order'] ?? 0));
-                $pageDependsOn = \array_merge(
-                    $pageDependsOn,
-                    \array_values(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [])))
-                );
-            }
-            if ($pageTaskKeys !== []) {
+                $blockKey = $this->firstNonEmptyString([
+                    $task['plan_context']['block_code'] ?? null,
+                    $task['section_code'] ?? null,
+                    $task['block_key'] ?? null,
+                    \str_contains($taskKey, ':') ? \substr($taskKey, \strrpos($taskKey, ':') + 1) : null,
+                    $taskKey,
+                ]);
                 $batches[] = [
                     'type' => 'page',
                     'key' => $pageType,
-                    'block_key' => $pageType,
-                    'task_keys' => \array_values(\array_unique($pageTaskKeys)),
-                    'sort_order' => $pageSortOrder,
-                    'depends_on' => \array_values(\array_unique($pageDependsOn)),
+                    'block_key' => $blockKey !== '' ? $blockKey : $taskKey,
+                    'task_keys' => [$taskKey],
+                    'sort_order' => (int)($task['sort_order'] ?? 0),
+                    'depends_on' => \array_values(\array_unique(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [])))),
                     'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
-                    'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':' . $pageType,
+                    'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':' . $pageType . ':' . ($blockKey !== '' ? $blockKey : $taskKey),
                 ];
             }
         }
@@ -2274,13 +2265,14 @@ final class AiSiteVirtualThemePlanService
         $stage1Workbench = \is_array($planWorkbench['stage1'] ?? null) ? $planWorkbench['stage1'] : [];
         $confirmedWorkbench = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
         $confirmedPlanBook = $this->resolveConfirmedStageOnePlanBook($scope);
+        if ($confirmedPlanBook === []) {
+            throw new \RuntimeException('Stage-2 task plan requires confirmed stage-1 plan_book.structured.');
+        }
         $planStructured = \is_array($confirmedWorkbench['structured_plan'] ?? null)
             ? $confirmedWorkbench['structured_plan']
             : (\is_array($confirmedWorkbench['plan_json'] ?? null)
                 ? $confirmedWorkbench['plan_json']
-                : (\is_array($scope['plan_json'] ?? null)
-                    ? $scope['plan_json']
-                    : (\is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [])));
+                : []);
         $themeContextSnapshot = \is_array($stage1Workbench['theme_context_snapshot'] ?? null)
             ? $stage1Workbench['theme_context_snapshot']
             : (\is_array($executionBlueprint['theme_context_snapshot'] ?? null) ? $executionBlueprint['theme_context_snapshot'] : []);
@@ -2295,6 +2287,9 @@ final class AiSiteVirtualThemePlanService
 
         $buildTasks = $this->resolveStageTwoBuildTasks($buildBlueprint, $confirmedPlanBook);
         \usort($buildTasks, static fn(array $left, array $right): int => ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0)));
+        if ($buildTasks === []) {
+            throw new \RuntimeException('Stage-2 task plan requires confirmed stage-1 shared/page blocks.');
+        }
 
         $sharedTasks = [];
         $pageTasks = [];
@@ -3386,8 +3381,8 @@ final class AiSiteVirtualThemePlanService
         foreach ([
             '阶段一仅给方向', '蓝图方向', '说明核心价值', '标题围绕核心价值', '围绕区块目标', '说明要写什么',
             '围绕 hero', '围绕 header', '围绕 footer',
-            'block direction', 'direction only', 'blueprint direction', 'list 2-4', 'specify heading font',
-            'write the title around', 'explain the core value', 'describe what should be written',
+            'block direction', 'direction only', 'blueprint direction', 'stage one only gives direction', 'list 2-4', 'specify heading font',
+            'write the title around', 'title around core value', 'write around', 'explain the core value', 'describe what should be written',
             '待补充', '待撰写', '详见后文', '突出卖点', '完善导航', '优化体验',
             '需要进一步', '建议后续', '应当突出', '旨在说明', '重点在于说明',
         ] as $marker) {
@@ -3817,16 +3812,9 @@ final class AiSiteVirtualThemePlanService
     {
         $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
         $confirmedWorkbench = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
-        $candidates = [
-            $confirmedWorkbench['plan_book']['structured'] ?? null,
-            $scope['confirmed_plan_book']['structured'] ?? null,
-            $scope['plan_book']['structured'] ?? null,
-        ];
-
-        foreach ($candidates as $candidate) {
-            if (\is_array($candidate) && $this->looksLikeConfirmedStageOnePlanBook($candidate)) {
-                return $candidate;
-            }
+        $candidate = $confirmedWorkbench['plan_book']['structured'] ?? null;
+        if (\is_array($candidate) && $this->looksLikeConfirmedStageOnePlanBook($candidate)) {
+            return $candidate;
         }
 
         return [];
@@ -3976,14 +3964,7 @@ final class AiSiteVirtualThemePlanService
             }
         }
 
-        if ($tasks !== []) {
-            return $tasks;
-        }
-
-        return \array_values(\array_filter(
-            \is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [],
-            static fn($task): bool => \is_array($task)
-        ));
+        return $tasks;
     }
 
     /**
@@ -4067,7 +4048,7 @@ final class AiSiteVirtualThemePlanService
             'block_key' => $blockKey,
             'label' => $label !== '' ? $label : $blockKey,
             'sort_order' => (int)($block['sort_order'] ?? $fallbackSortOrder),
-            'dependencies' => [],
+            'dependencies' => \array_values(\array_filter(\array_map('strval', \is_array($block['dependencies'] ?? null) ? $block['dependencies'] : []))),
             'result_ref' => \is_array($block['result_ref'] ?? null) ? $block['result_ref'] : [
                 'source' => 'stage1.block_tree',
                 'scope_path' => 'pages.' . $pageType . '.blocks.' . $blockKey,
@@ -4100,7 +4081,7 @@ final class AiSiteVirtualThemePlanService
             'region' => $component,
             'label' => (string)($block['title'] ?? ($component !== '' ? $component : $taskKey)),
             'sort_order' => (int)($block['sort_order'] ?? 0),
-            'dependencies' => [],
+            'dependencies' => \array_values(\array_filter(\array_map('strval', \is_array($block['dependencies'] ?? null) ? $block['dependencies'] : []))),
             'result_ref' => [
                 'source' => 'plan_workbench.confirmed.plan_book.structured',
                 'scope_path' => 'shared_blocks.' . $taskKey,
@@ -4134,7 +4115,7 @@ final class AiSiteVirtualThemePlanService
             'block_key' => $sourceBlockKey,
             'label' => (string)($block['title'] ?? $sourceBlockKey),
             'sort_order' => (int)($block['sort_order'] ?? 0),
-            'dependencies' => [],
+            'dependencies' => \array_values(\array_filter(\array_map('strval', \is_array($block['dependencies'] ?? null) ? $block['dependencies'] : []))),
             'result_ref' => [
                 'source' => 'plan_workbench.confirmed.plan_book.structured',
                 'scope_path' => 'pages.' . $pageKey . '.blocks.' . $sourceBlockKey,
@@ -4213,6 +4194,7 @@ final class AiSiteVirtualThemePlanService
             'field_plan' => $this->buildStageTwoFieldPlanFromPlanBookBlock($block),
             'result_ref' => $resultRef,
             'style_direction' => (string)($block['style_direction'] ?? ''),
+            'design_tags' => \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [],
             'responsive_rule' => (string)($block['responsive_rule'] ?? ''),
             'seo_brief' => \is_array($block['seo_brief'] ?? null) ? $block['seo_brief'] : [],
             'context_hash' => (string)($block['context_hash'] ?? ''),

@@ -332,50 +332,53 @@ HTML,
                 'content_locale' => 'zh_Hans_CN',
                 'default_locale' => 'en_US',
                 'plan_locale' => 'en_US',
-                'task_plan_structured' => [
-                    'page_tasks' => [
-                        'home_page' => [
-                            [
-                                'task_key' => 'page:home_page:content/home-page-hero',
-                                'section_code' => 'content/home-page-hero',
-                                'plan_context' => [
-                                    'page_goal' => 'Explain value',
-                                    'block_goal' => 'Open with a clear value proposition.',
-                                ],
-                                'task_script' => [
-                                    'story_goal' => 'Make the hero conversion-ready.',
-                                    'content_fill_rule' => 'Use short headline and one CTA.',
-                                    'stage3_directive' => 'Follow the confirmed hero task contract.',
-                                    'field_content_requirements' => [
-                                        ['field' => 'title', 'sample' => 'Grow faster with our service', 'reason' => 'Lead with value'],
+                'task_plan_confirmed' => 1,
+                'virtual_theme_plan' => [
+                    'confirmed' => [
+                        'page_tasks' => [
+                            'home_page' => [
+                                [
+                                    'task_key' => 'page:home_page:content/home-page-hero',
+                                    'section_code' => 'content/home-page-hero',
+                                    'plan_context' => [
+                                        'page_goal' => 'Explain value',
+                                        'block_goal' => 'Open with a clear value proposition.',
                                     ],
-                                ],
-                                'implementation_contract' => [
-                                    'acceptance' => ['Hero must render value proposition and CTA.'],
-                                ],
-                                'block_task' => [
-                                    'content_plan' => [
-                                        'headline' => 'Use a launch-ready hero promise from the block plan.',
-                                        'body' => 'Explain one primary benefit and one proof point.',
-                                    ],
-                                    'style_plan' => [
-                                        'visual' => 'Use a layered neon card visual with CSS depth.',
-                                    ],
-                                ],
-                                'runtime_context' => [
-                                    'task_session_id' => 'abc123',
-                                    'theme_context_snapshot' => [
-                                        'visual_direction' => [
-                                            'name' => 'Festival Neon',
-                                            'visual_tone' => 'bright gaming trust',
-                                        ],
-                                        'palette' => [
-                                            'primary' => '#101827',
-                                            'accent' => '#f59e0b',
+                                    'task_script' => [
+                                        'story_goal' => 'Make the hero conversion-ready.',
+                                        'content_fill_rule' => 'Use short headline and one CTA.',
+                                        'stage3_directive' => 'Follow the confirmed hero task contract.',
+                                        'field_content_requirements' => [
+                                            ['field' => 'title', 'sample' => 'Grow faster with our service', 'reason' => 'Lead with value'],
                                         ],
                                     ],
-                                    'shared_prompt_context' => [
-                                        'brand_promise' => 'Fast game discovery with trusted checkout.',
+                                    'implementation_contract' => [
+                                        'acceptance' => ['Hero must render value proposition and CTA.'],
+                                    ],
+                                    'block_task' => [
+                                        'content_plan' => [
+                                            'headline' => 'Use a launch-ready hero promise from the block plan.',
+                                            'body' => 'Explain one primary benefit and one proof point.',
+                                        ],
+                                        'style_plan' => [
+                                            'visual' => 'Use a layered neon card visual with CSS depth.',
+                                        ],
+                                    ],
+                                    'runtime_context' => [
+                                        'task_session_id' => 'abc123',
+                                        'theme_context_snapshot' => [
+                                            'visual_direction' => [
+                                                'name' => 'Festival Neon',
+                                                'visual_tone' => 'bright gaming trust',
+                                            ],
+                                            'palette' => [
+                                                'primary' => '#101827',
+                                                'accent' => '#f59e0b',
+                                            ],
+                                        ],
+                                        'shared_prompt_context' => [
+                                            'brand_promise' => 'Fast game discovery with trusted checkout.',
+                                        ],
                                     ],
                                 ],
                             ],
@@ -439,16 +442,19 @@ HTML,
                 'brief_description' => 'Explain value',
             ],
             [
-                'task_plan_structured' => [
-                    'page_tasks' => [
-                        'home_page' => [
-                            [
-                                'task_key' => 'page:home_page:content/home-page-hero',
-                                'section_code' => 'content/home-page-hero',
-                                'task_script' => [
-                                    'field_content_requirements' => [
-                                        ['field' => 'title', 'sample' => 'Grow faster with our service', 'reason' => 'Lead with value'],
-                                        ['field' => 'description', 'sample' => 'Launch faster with a focused hero message.', 'reason' => 'Clarify value'],
+                'task_plan_confirmed' => 1,
+                'virtual_theme_plan' => [
+                    'confirmed' => [
+                        'page_tasks' => [
+                            'home_page' => [
+                                [
+                                    'task_key' => 'page:home_page:content/home-page-hero',
+                                    'section_code' => 'content/home-page-hero',
+                                    'task_script' => [
+                                        'field_content_requirements' => [
+                                            ['field' => 'title', 'sample' => 'Grow faster with our service', 'reason' => 'Lead with value'],
+                                            ['field' => 'description', 'sample' => 'Launch faster with a focused hero message.', 'reason' => 'Clarify value'],
+                                        ],
                                     ],
                                 ],
                             ],
@@ -460,6 +466,67 @@ HTML,
 
         self::assertSame('Grow faster with our service', (string)($config['content.title'] ?? ''));
         self::assertSame('Launch faster with a focused hero message.', (string)($config['content.description'] ?? ''));
+    }
+
+    public function testSectionPromptIgnoresUnconfirmedTaskPlanDrafts(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $prompt = (function (string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): string {
+            return $this->buildSectionGenerationPrompt($pageType, $section, $blueprint, $websiteProfile, $scope);
+        })->call(
+            $service,
+            'home_page',
+            [
+                'code' => 'content/home-page-hero',
+                'key' => 'hero',
+                'name' => 'Hero',
+                'template' => 'hero',
+                'config' => [],
+            ],
+            [
+                'page_title' => 'Task Plan Test',
+                'page_label' => 'Home',
+                'ai_description' => 'Explain value',
+            ],
+            [
+                'site_title' => 'Task Plan Test',
+                'brief_description' => 'Explain value',
+            ],
+            [
+                'task_plan_confirmed' => 0,
+                'task_plan_structured' => [
+                    'page_tasks' => [
+                        'home_page' => [
+                            [
+                                'task_key' => 'page:home_page:content/home-page-hero',
+                                'section_code' => 'content/home-page-hero',
+                                'task_script' => ['stage3_directive' => 'UNCONFIRMED STRUCTURED TASK MUST NOT BE USED'],
+                            ],
+                        ],
+                    ],
+                ],
+                'virtual_theme_plan' => [
+                    'draft' => [
+                        'page_tasks' => [
+                            'home_page' => [
+                                [
+                                    'task_key' => 'page:home_page:content/home-page-hero',
+                                    'section_code' => 'content/home-page-hero',
+                                    'task_script' => ['stage3_directive' => 'UNCONFIRMED DRAFT TASK MUST NOT BE USED'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ]
+        );
+
+        self::assertStringNotContainsString('UNCONFIRMED STRUCTURED TASK MUST NOT BE USED', $prompt);
+        self::assertStringNotContainsString('UNCONFIRMED DRAFT TASK MUST NOT BE USED', $prompt);
+        self::assertStringNotContainsString('Stage-2 task context for this section:', $prompt);
     }
 
     public function testSectionDefaultConfigDoesNotUsePageLabelAsVisibleEyebrow(): void
