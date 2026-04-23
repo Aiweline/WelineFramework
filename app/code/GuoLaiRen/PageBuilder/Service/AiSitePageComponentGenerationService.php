@@ -2150,29 +2150,18 @@ final class AiSitePageComponentGenerationService
      */
     private function resolveTaskPlanRoot(array $scope): array
     {
-        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
-        if (
-            $confirmed !== []
-            && (
-                (int)($scope['task_plan_confirmed'] ?? 0) === 1
-                || $this->confirmedTaskPlanHasExecutionBlueprint($confirmed)
-            )
-        ) {
-            return $confirmed;
-        }
-
         $structured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
-        if ($structured !== []) {
+        if ($structured !== [] && (int)($scope['task_plan_confirmed'] ?? 0) === 1) {
             return $structured;
         }
 
-        $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
-        if ($draft !== []) {
-            return $draft;
+        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
+        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
+        if ($confirmed !== [] && (int)($scope['task_plan_confirmed'] ?? 0) === 1) {
+            return $confirmed;
         }
 
-        return $confirmed !== [] ? $confirmed : [];
+        return [];
     }
 
     /**
