@@ -14,9 +14,11 @@ final class LocalWelineHostsSyncServiceTest extends TestCase
 
         self::assertTrue($service->isEligibleDomain('apk-seo-d4de8e.weline.test'));
         self::assertTrue($service->isEligibleDomain('DEMO-123.weline.test'));
+        self::assertTrue($service->isEligibleDomain('queued-phase-flow.local.test'));
         self::assertTrue($service->isEligibleDomain('demo-123.weline.localhost'));
 
         self::assertFalse($service->isEligibleDomain('weline.test'));
+        self::assertFalse($service->isEligibleDomain('local.test'));
         self::assertFalse($service->isEligibleDomain('foo.bar.weline.test'));
         self::assertFalse($service->isEligibleDomain('apk-seo.local'));
         self::assertFalse($service->isEligibleDomain('apk-seo.example.com'));
@@ -39,6 +41,11 @@ final class LocalWelineHostsSyncServiceTest extends TestCase
         self::assertSame('server', $calls[0][0]);
         self::assertSame('hostsAdd', $calls[0][1]);
         self::assertSame('apk-seo-d4de8e.weline.test', $calls[0][2]['domain']);
+
+        $localTest = $service->ensureHostsInjected('queued-phase-flow.local.test');
+        self::assertTrue((bool)($localTest['success'] ?? false));
+        self::assertCount(2, $calls);
+        self::assertSame('queued-phase-flow.local.test', $calls[1][2]['domain']);
 
         $calls = [];
         $loopback = $service->ensureHostsInjected('demo-123.weline.localhost');

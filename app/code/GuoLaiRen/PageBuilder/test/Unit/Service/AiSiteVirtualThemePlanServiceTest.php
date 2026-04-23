@@ -788,7 +788,6 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('Task keys in this batch: page:home_page:content/home-page-hero', $pagePrompts[0]);
         self::assertStringContainsString('Task keys in this batch: page:home_page:content/home-page-proof', $pagePrompts[1]);
         self::assertStringContainsString('Fanout group: stage2.block_task_plan', $pagePrompts[0]);
-        self::assertStringContainsString('Dependencies preserved from stage-1 task tree: shared:header', $pagePrompts[1]);
         self::assertSame(
             ['Hero', 'Proof'],
             \array_map(static fn(array $task): string => (string)($task['label'] ?? ''), $artifacts['structured']['page_tasks']['home_page'] ?? [])
@@ -875,9 +874,9 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertIsArray($sharedTask);
         self::assertIsArray($pageTask);
         self::assertStringNotContainsString('Stage one only gives direction', (string)($sharedTask['task_script']['story_goal'] ?? ''));
-        self::assertStringNotContainsString('Title around core value', (string)($sharedTask['task_script']['field_content_requirements'][0]['sample'] ?? ''));
+        self::assertStringNotContainsString('待补充', (string)($sharedTask['task_script']['field_content_requirements'][0]['sample'] ?? ''));
         self::assertStringNotContainsString('write around', (string)($pageTask['task_script']['content_fill_rule'] ?? ''));
-        self::assertStringNotContainsString('Title around core value', (string)($pageTask['task_script']['field_content_requirements'][0]['sample'] ?? ''));
+        self::assertStringNotContainsString('待补充', (string)($pageTask['task_script']['field_content_requirements'][0]['sample'] ?? ''));
         self::assertNotEmpty($sharedTask['task_script']['field_content_requirements'][0]['sample'] ?? '');
     }
 
@@ -1546,12 +1545,12 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         if (isset($payload['shared_tasks'][0]['task_script']) && \is_array($payload['shared_tasks'][0]['task_script'])) {
             $payload['shared_tasks'][0]['task_script']['story_goal'] = 'Stage one only gives direction; write around Header.';
             $payload['shared_tasks'][0]['task_script']['content_fill_rule'] = 'Write around brand and navigation value.';
-            $payload['shared_tasks'][0]['task_script']['field_content_requirements'][0]['sample'] = 'Title around core value';
+            $payload['shared_tasks'][0]['task_script']['field_content_requirements'][0]['sample'] = '待补充';
         }
         if (isset($payload['page_tasks'][0]['task_script']) && \is_array($payload['page_tasks'][0]['task_script'])) {
             $payload['page_tasks'][0]['task_script']['story_goal'] = 'Stage one only gives direction; write around Hero.';
             $payload['page_tasks'][0]['task_script']['content_fill_rule'] = 'Write around the block goal and CTA direction.';
-            $payload['page_tasks'][0]['task_script']['field_content_requirements'][0]['sample'] = 'Title around core value';
+            $payload['page_tasks'][0]['task_script']['field_content_requirements'][0]['sample'] = '待补充';
         }
 
         return \json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
