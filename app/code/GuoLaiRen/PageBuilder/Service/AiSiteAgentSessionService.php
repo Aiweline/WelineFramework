@@ -167,6 +167,23 @@ class AiSiteAgentSessionService
         return true;
     }
 
+    public function replaceScopeJson(int $sessionId, int $forAdminUserId, string $scopeJson): bool
+    {
+        $session = $this->loadById($sessionId, $forAdminUserId);
+        if ($session === null) {
+            return false;
+        }
+        $scopeJson = \trim($scopeJson);
+        if ($scopeJson === '' || !\json_validate($scopeJson)) {
+            return false;
+        }
+
+        $session->setData(AiSiteAgentSession::schema_fields_SCOPE_JSON, $scopeJson);
+        $this->touchUpdateTime($session);
+        $session->save();
+        return true;
+    }
+
     public function setStage(int $sessionId, int $forAdminUserId, string $stage): bool
     {
         $session = $this->loadById($sessionId, $forAdminUserId);

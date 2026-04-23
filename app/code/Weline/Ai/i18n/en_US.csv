@@ -348,6 +348,7 @@ API响应格式错误,"Invalid API response format"
 模型列表请求失败,模型列表请求失败
 "模型列表请求失败，HTTP状态码: %{1}","模型列表请求失败，HTTP状态码: %{1}"
 "模型列表响应解析失败: %{1}","模型列表响应解析失败: %{1}"
+"API返回错误（不可重试）: %{error}","API返回错误（不可重试）: %{error}"
 "SSE stream aborted by reasoning callback","SSE stream aborted by reasoning callback"
 未配置翻译默认模型,未配置翻译默认模型
 id属性不能为空,"The id attribute cannot be empty."

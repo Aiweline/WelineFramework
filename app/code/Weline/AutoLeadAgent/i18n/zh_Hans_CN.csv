@@ -208,6 +208,7 @@ WASM记录不存在,WASM记录不存在
 "⚠️ WASM 文件复制失败","⚠️ WASM 文件复制失败"
 "✓ WASM 文件已更新到静态资源目录","✓ WASM 文件已更新到静态资源目录"
 "⚠️ WASM 文件更新失败","⚠️ WASM 文件更新失败"
+"WASI SDK is not installed; skipping automatic download during setup upgrade.","WASI SDK is not installed; skipping automatic download during setup upgrade."
 "WASI SDK 未安装，开始自动安装依赖...","WASI SDK 未安装，开始自动安装依赖..."
 "✓ WASI SDK 自动安装成功","✓ WASI SDK 自动安装成功"
 "WASI SDK 安装后验证失败，无法编译 WASM","WASI SDK 安装后验证失败，无法编译 WASM"

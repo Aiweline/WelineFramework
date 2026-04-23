@@ -6,7 +6,7 @@ data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
 <lang>{{target_button_text|''}}</lang>
 </{{target_tag}}>
 <!-- {{id}} -->
-<div class='offcanvas {{class_names}}' tabindex='-1' id='{{id}}'
+<div class='offcanvas weline-component-offcanvas {{class_names}}' tabindex='-1' id='{{id}}'
      aria-labelledby='{{id}}Label'>
     <div class='offcanvas-header'>
         <h5 id='{{id}}Label'>
@@ -42,10 +42,77 @@ data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
         </div>
     </div>
 </div>
+<style>
+    .weline-component-offcanvas {
+        z-index: 200020 !important;
+    }
+    .offcanvas-backdrop.weline-component-offcanvas-backdrop {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        transform: none !important;
+        z-index: 200009 !important;
+    }
+    .weline-component-offcanvas-screen {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background: rgba(33, 37, 41, 0.5);
+        z-index: 200010 !important;
+        pointer-events: auto;
+    }
+    body.weline-component-offcanvas-active #page-topbar,
+    body.weline-component-offcanvas-active .navbar-header,
+    body.weline-component-offcanvas-active .vertical-menu {
+        z-index: 200000 !important;
+    }
+</style>
 <script>
     //show.bs.offcanvas
     $(function () {
+        var offcanvasEl = document.getElementById('{{id}}');
+        if (offcanvasEl && offcanvasEl.parentElement !== document.body) {
+            document.body.appendChild(offcanvasEl);
+        }
+        function markOffcanvasBackdrop() {
+            $('.offcanvas-backdrop').addClass('weline-component-offcanvas-backdrop');
+            document.body.classList.add('weline-component-offcanvas-active');
+        }
+        function ensureOffcanvasScreen() {
+            var screenId = 'weline-component-offcanvas-screen';
+            var screen = document.getElementById(screenId);
+            if (!screen) {
+                screen = document.createElement('div');
+                screen.id = screenId;
+                screen.className = 'weline-component-offcanvas-screen';
+                screen.addEventListener('click', function () {
+                    var shown = document.querySelector('.weline-component-offcanvas.show');
+                    if (!shown || !window.bootstrap || !window.bootstrap.Offcanvas) {
+                        return;
+                    }
+                    var instance = window.bootstrap.Offcanvas.getInstance(shown);
+                    if (instance) {
+                        instance.hide();
+                    }
+                });
+                document.body.appendChild(screen);
+            }
+        }
+        function removeOffcanvasScreenIfIdle() {
+            if ($('.weline-component-offcanvas.show').length) {
+                return;
+            }
+            var screen = document.getElementById('weline-component-offcanvas-screen');
+            if (screen) {
+                screen.remove();
+            }
+        }
         $('#{{id}}').on('show.bs.offcanvas', function () {
+            document.body.classList.add('weline-component-offcanvas-active');
+            ensureOffcanvasScreen();
+            setTimeout(markOffcanvasBackdrop, 0);
             var Iframe = $('#{{id}}Iframe')
             Iframe.attr('src', Iframe.attr('data-src'))
             if ('{{save}}' === '1') {
@@ -98,6 +165,14 @@ data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
                         console.log('OffCanvas form check skipped:', e);
                     }
                 })
+            }
+        })
+        $('#{{id}}').on('shown.bs.offcanvas', markOffcanvasBackdrop)
+        $('#{{id}}').on('hidden.bs.offcanvas', function () {
+            if (!$('.weline-component-offcanvas.show').length) {
+                $('.offcanvas-backdrop.weline-component-offcanvas-backdrop').removeClass('weline-component-offcanvas-backdrop');
+                document.body.classList.remove('weline-component-offcanvas-active');
+                removeOffcanvasScreenIfIdle();
             }
         })
     })

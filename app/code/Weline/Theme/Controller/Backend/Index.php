@@ -321,6 +321,7 @@ class Index extends BackendController
     {
         $themeId = $this->request->getPost('theme_id');
         $area = $this->request->getPost('area', 'frontend');
+        $area = $area === 'backend' ? 'backend' : 'frontend';
         $force = (bool)$this->request->getPost('force', false);
 
         if (!$themeId) {
@@ -333,6 +334,10 @@ class Index extends BackendController
 
         if (!$theme->getId()) {
             return $this->fetchJson($this->error(__('主题不存在')));
+        }
+
+        if (!$this->themeSupportsArea($theme, $area)) {
+            return $this->fetchJson($this->error(__('主题不支持 %{1} 区域', [$area])));
         }
 
         try {
@@ -999,21 +1004,24 @@ class Index extends BackendController
 
     private function themeSupportsArea(WelineTheme $theme, string $area): bool
     {
-        $originPath = trim((string)$theme->getOriginPath(), '/\\');
-        return $this->themeHasArea($originPath, $area);
+        return $this->themeHasArea($theme->getPath(), $area);
     }
 
     private function themeHasArea(string $themePath, string $area): bool
     {
-        $themePath = trim($themePath, '/\\');
+        $themePath = trim($themePath);
         if ($themePath === '') {
             return false;
         }
 
-        $basePath = rtrim(Env::path_THEME_DESIGN_DIR, '/\\') . DS . str_replace(['/', '\\'], DS, $themePath);
+        $normalizedPath = str_replace(['/', '\\'], DS, $themePath);
+        $basePath = preg_match('/^[A-Za-z]:[\\\\\/]/', $normalizedPath) === 1 || str_starts_with($normalizedPath, DS)
+            ? rtrim($normalizedPath, DS)
+            : rtrim(Env::path_THEME_DESIGN_DIR, '/\\') . DS . trim($normalizedPath, DS);
 
         return is_dir($basePath . DS . $area)
-            || is_dir($basePath . DS . 'view' . DS . 'theme' . DS . $area);
+            || is_dir($basePath . DS . 'view' . DS . 'theme' . DS . $area)
+            || is_dir($basePath . DS . 'theme' . DS . $area);
     }
 }
 

@@ -118,7 +118,9 @@ class OpenAiProvider implements ProviderInterface
 
         $messages = $this->buildMessages($prompt, $params);
         // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
-        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
+        $timeout = (!empty($params['disable_ai_timeout']) || (PHP_SAPI === 'cli' && !empty($params['disable_cli_timeout'])))
+            ? 0
+            : (isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180));
         
         // 设置执行时间限制（SSE 模式下跳过，由 SseWriter 统一管理为无限制）
         $shouldRestoreExecutionTimeLimit = !SseContext::isSseEnabled();
@@ -1331,6 +1333,9 @@ class OpenAiProvider implements ProviderInterface
 
     private function resolveStreamTimeout(array $params, array $config): int
     {
+        if (!empty($params['disable_ai_timeout']) || (PHP_SAPI === 'cli' && !empty($params['disable_cli_timeout']))) {
+            return 0;
+        }
         if (!empty($params['enforce_timeout_in_stream'])) {
             return isset($params['timeout'])
                 ? (int)$params['timeout']
@@ -1348,13 +1353,6 @@ class OpenAiProvider implements ProviderInterface
         $timeout = max(0, (int)$timeout);
 
         if ($isStream) {
-            if ($timeout > 0) {
-                return [
-                    CURLOPT_TIMEOUT => $timeout,
-                    CURLOPT_CONNECTTIMEOUT => min($timeout, 60),
-                ];
-            }
-
             return [
                 CURLOPT_TIMEOUT => 0,
                 CURLOPT_CONNECTTIMEOUT => 60,
