@@ -564,6 +564,14 @@ class ObjectManager implements ManagerInterface
     {
         return self::getInstance($class, $arguments, $shared, $cache);
     }
+
+    /**
+     * Backward-compatible alias for callers that use ObjectManager::get().
+     */
+    public static function get(string $class = '', array $arguments = [], bool $shared = true, bool $cache = false): mixed
+    {
+        return self::getInstance($class, $arguments, $shared, $cache);
+    }
     
     /**
      * 解析构造函数参数：合并用户参数和依赖注入参数

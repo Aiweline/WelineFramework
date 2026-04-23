@@ -26,6 +26,10 @@ class ThemePreviewGenerator
         if (!$themeId) {
             return false;
         }
+        $area = $area === 'backend' ? 'backend' : 'frontend';
+        if (!self::themeSupportsArea($theme, $area)) {
+            throw new \Exception(__('Theme does not support %{1} area.', [$area]));
+        }
 
         $previewPath = self::getPreviewImagePath($themeId, $area);
         if (!$force && is_file($previewPath)) {
@@ -191,6 +195,11 @@ class ThemePreviewGenerator
         $force = $task['force'] ?? false;
 
         $themeId = $theme->getId();
+        $area = $area === 'backend' ? 'backend' : 'frontend';
+        if (!self::themeSupportsArea($theme, $area)) {
+            return null;
+        }
+
         $previewPath = self::getPreviewImagePath($themeId, $area);
 
         if (!$force && is_file($previewPath)) {
@@ -380,10 +389,25 @@ class ThemePreviewGenerator
             ]);
         }
 
-        return $url->getFrontendUrl('index/index', [
+        return $url->getFrontendUrl('theme/frontend/theme-preview/gateway', [
             'preview_theme' => $themeId,
+            'preview_area' => 'frontend',
+            'editor_area' => 'frontend',
+            'page_type' => 'homepage',
             'preview_gen' => '1',
         ]);
+    }
+
+    private static function themeSupportsArea(WelineTheme $theme, string $area): bool
+    {
+        $basePath = \rtrim($theme->getPath(), '/\\');
+        if ($basePath === '') {
+            return false;
+        }
+
+        return \is_dir($basePath . \DS . $area)
+            || \is_dir($basePath . \DS . 'view' . \DS . 'theme' . \DS . $area)
+            || \is_dir($basePath . \DS . 'theme' . \DS . $area);
     }
 
     private static function captureScreenshot(string $url, string $savePath): string

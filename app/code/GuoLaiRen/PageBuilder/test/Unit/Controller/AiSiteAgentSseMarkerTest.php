@@ -179,7 +179,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             'queue_id' => 143,
             'name' => 'PageBuilder plan',
             'module' => 'GuoLaiRen_PageBuilder',
-            'biz_key' => 'glr_aisite:session:987:stage:plan:operation:plan',
+            'biz_key' => 'glr_aisite:session:987:queue_slot:planning',
             'status' => 'running',
             'pid' => 48104,
             'type_id' => 6,
@@ -244,7 +244,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
                 'queue_id' => 143,
                 'name' => 'PageBuilder plan',
                 'module' => 'GuoLaiRen_PageBuilder',
-                'biz_key' => 'glr_aisite:session:987:stage:plan:operation:plan',
+                'biz_key' => 'glr_aisite:session:987:queue_slot:planning',
                 'status' => 'running',
                 'pid' => 48104,
                 'type_id' => 6,
@@ -365,9 +365,11 @@ final class AiSiteAgentSseMarkerTest extends TestCase
     {
         $moduleRoot = \dirname(__DIR__, 3);
         $layout = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
+        $mainScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
         $runtimeScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
 
         self::assertIsString($layout);
+        self::assertIsString($mainScript);
         self::assertIsString($runtimeScript);
 
         foreach (['todo', 'queued', 'running', 'done', 'failed', 'stale', 'cancelled'] as $status) {
@@ -382,9 +384,22 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('pb-ai-task-cancelled', $layout);
         self::assertStringContainsString('TASK_PROGRESS_STATUSES', $runtimeScript);
         self::assertStringContainsString('normalizeTaskProgressStatus', $runtimeScript);
+        self::assertStringContainsString('function renderTaskProgressGroupSummary(group)', $runtimeScript);
         self::assertStringContainsString("String(workspaceState.progress_kind || '') === 'task_progress'", $runtimeScript);
         self::assertStringContainsString('updateTaskSummaryFromState(payload)', $runtimeScript);
         self::assertStringContainsString('renderTaskStatusCountBadges(group)', $runtimeScript);
+        self::assertStringContainsString('renderTaskProgressGroupSummary(group)', $runtimeScript);
+        self::assertStringContainsString('var livePreviewBridge = resolvePreviewBridge();', $mainScript);
+        self::assertStringContainsString('previewBridge = resolvePreviewBridge();', $mainScript);
+        self::assertStringContainsString('window.PbAiWorkspacePreview.syncPreviewMetaFromState(payload.state)', $runtimeScript);
+        self::assertStringContainsString('window.PbAiWorkspacePreview.switchPreviewByType(pageType);', $runtimeScript);
+        self::assertStringContainsString('$groupSummaryLabel = (string)__(\'待处理\');', $layout);
+        self::assertStringContainsString('htmlspecialchars($groupSummaryLabel', $layout);
+        self::assertStringContainsString(
+            "'总任务',\n            '待处理',\n            '排队中',\n            '进行中',\n            '已完成'",
+            $mainScript
+        );
+        self::assertStringContainsString('if (doneEl) { doneEl.textContent = String(counts.done || 0); }', $runtimeScript);
     }
 
     public function testWorkspacePollingPayloadUsesSameStatusEnvelopeAsSseSnapshot(): void
@@ -478,6 +493,38 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame(1200, $pollingPayload['token_usage']['input_tokens']);
         self::assertSame(340, $pollingPayload['token_usage']['output_tokens']);
         self::assertSame(1540, $pollingPayload['token_usage']['total_tokens']);
+    }
+
+    public function testTaskPlanRecoveryNoticeOverridesSettledDoneQueue(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(AiSiteAgent::class, 'buildWorkspaceEntryQueueNotice');
+        $method->setAccessible(true);
+
+        $notice = $method->invoke($controller, [
+            'operation' => 'task_plan',
+            'status' => 'done',
+            'message' => '第二阶段任务方案队列已完成。',
+            'task_plan_recovery_action' => 'reused_queue',
+        ], [
+            'task_plan' => [
+                'queue_id' => 82,
+                'snapshot' => [
+                    'queue_id' => 82,
+                    'status' => 'done',
+                    'name' => 'PageBuilder task_plan #82',
+                    'biz_key' => 'glr_aisite:session:48:queue_slot:planning',
+                ],
+                'process' => '第二阶段任务方案已生成，正在输出完成标记',
+                'result_log' => '',
+            ],
+        ]);
+
+        self::assertTrue((bool)($notice['show'] ?? false));
+        self::assertSame('warning', (string)($notice['level'] ?? ''));
+        self::assertStringContainsString('已重跑', (string)($notice['message'] ?? ''));
+        self::assertStringNotContainsString('已完成', (string)($notice['message'] ?? ''));
+        self::assertSame('已重跑', (string)($notice['queue_status_label'] ?? ''));
     }
 
 }

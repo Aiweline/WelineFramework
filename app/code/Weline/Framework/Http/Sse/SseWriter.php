@@ -125,7 +125,7 @@ class SseWriter
         if ($isWlsMode) {
             // WLS 模式：直接写入 socket，构建完整 HTTP 响应
             $headers = "HTTP/1.1 200 OK\r\n";
-            $headers .= "Content-Type: text/event-stream\r\n";
+            $headers .= "Content-Type: text/event-stream; charset=utf-8\r\n";
             $headers .= "Cache-Control: no-cache\r\n";
             $headers .= "Connection: keep-alive\r\n";
             $headers .= "X-Accel-Buffering: no\r\n";
@@ -146,7 +146,7 @@ class SseWriter
                 @\apache_setenv('no-gzip', '1');
             }
             if (!\headers_sent()) {
-                \header('Content-Type: text/event-stream');
+                \header('Content-Type: text/event-stream; charset=utf-8');
                 \header('Cache-Control: no-cache, no-store, must-revalidate, no-transform');
                 \header('Pragma: no-cache');
                 \header('Connection: keep-alive');
