@@ -25,6 +25,7 @@ use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Server\Service\SslCertificateService;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\SharedSidecarInspector;
+use Weline\Server\Service\SharedStateRuntimeResolver;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\WlsLogService;
 use Weline\Server\Log\LogConfig;
@@ -1076,7 +1077,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         if (!IS_WIN && \function_exists('posix_setsid')) {
             @\posix_setsid();
         }
-        $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $instanceName . '.json';
+        $instanceFile = $this->getRuntimeInstanceFile($instanceName);
         if (!\is_file($instanceFile)) {
             $this->printer->error(__('实例文件不存在：%{1}', [$instanceFile]));
             return;
@@ -1220,7 +1221,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         
         // ========== 启动确认机制 ==========
         // 轮询检查后台 Master 是否成功启动
-        $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $instanceName . '.json';
+        $instanceFile = $this->getRuntimeInstanceFile($instanceName);
         $maxWaitMs = 5000;      // 最大等待 5 秒
         $waitStepMs = 200;      // 每 200ms 检查一次
         $waited = 0;
@@ -1561,17 +1562,17 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         $summary = $this->summarizeBackgroundStartupServices($instanceData);
         $parts = [
             (string) __('启动中'),
-            (string) __('阶段：%{1}', [$phase]),
+            '阶段：' . $phase,
         ];
 
         if ($summary['total'] > 0) {
-            $parts[] = (string) __('服务就绪：%{1}/%{2}', [$summary['ready'], $summary['total']]);
+            $parts[] = '服务就绪：' . $summary['ready'] . '/' . $summary['total'];
             if ($summary['pending_detail'] !== '') {
-                $parts[] = (string) __('待完成：%{1}', [$summary['pending_detail']]);
+                $parts[] = '待完成：' . $summary['pending_detail'];
             }
         }
 
-        $parts[] = (string) __('已等待 %{1} 秒', [\max(0, (int) \ceil($waitedMs / 1000))]);
+        $parts[] = '已等待 ' . \max(0, (int) \ceil($waitedMs / 1000)) . ' 秒';
 
         return \implode(' | ', $parts);
     }
@@ -1837,11 +1838,21 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             ->setWorkerPort($workerPort);
     }
 
+    protected function createSharedStateRuntimeResolver(): SharedStateRuntimeResolver
+    {
+        return ObjectManager::getInstance(SharedStateRuntimeResolver::class);
+    }
+
     protected function resolveSharedStateRuntimeConfig(string $instanceName, array $config, bool $forceRestart = false, bool $frontend = false): array
     {
-        $envConfig = Env::getInstance()->getConfig();
+        $envConfig = $this->getEnvConfig();
         if (!\is_array($envConfig)) {
             $envConfig = [];
+        }
+
+        $resolvedRuntime = $this->createSharedStateRuntimeResolver()->resolve($config, $envConfig, $instanceName);
+        if (\is_array($resolvedRuntime['session'] ?? null) && \is_array($resolvedRuntime['memory'] ?? null)) {
+            return $resolvedRuntime;
         }
 
         // 提供默认端口和 token，Providers 会使用这些配置
@@ -2326,7 +2337,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         }
         
         // 读取 env 配置
-        $envConfig = Env::getInstance()->getConfig();
+        $envConfig = $this->getEnvConfig();
         
         $wlsServers = ($envConfig['wls'] ?? [])['servers'] ?? [];
         // 2. 多实例：wls.servers[实例名]
@@ -2349,10 +2360,10 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
 
         // 如果 env 配置中的 host 是 127.0.0.1 或旧格式域名，恢复为项目唯一域名（避免多项目 SSL 证书冲突）
         $envHost = $config['host'] ?? '';
-        if ($envHost === '127.0.0.1' || \preg_match('/^weline-p[0-9a-f]{8}\.local$/i', $envHost)) {
+        if ($this->shouldUseDefaultHostFallback((string)$envHost)) {
             $config['host'] = $this->getDefaultHost();
             // 同时清理 ssl_domain，让它使用新的 host
-            if (($config['ssl_domain'] ?? '') === '127.0.0.1' || ($config['ssl_domain'] ?? '') === 'localhost' || \preg_match('/^weline-p[0-9a-f]{8}\.local$/i', $config['ssl_domain'] ?? '')) {
+            if ($this->shouldUseDefaultHostFallback((string)($config['ssl_domain'] ?? ''))) {
                 unset($config['ssl_domain']);
             }
         }
@@ -2683,6 +2694,27 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
 
         // 生成项目唯一域名（子域名格式更符合 DNS 规范）
         return LocalDomainPolicy::buildProjectHost($shortHash);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function getEnvConfig(): array
+    {
+        $envConfig = Env::getInstance()->getConfig();
+
+        return \is_array($envConfig) ? $envConfig : [];
+    }
+
+    protected function shouldUseDefaultHostFallback(string $host): bool
+    {
+        $host = LocalDomainPolicy::normalizeDomain($host);
+        if ($host === '' || $host === '127.0.0.1' || $host === 'localhost') {
+            return true;
+        }
+
+        return LocalDomainPolicy::isManagedLocalDomain($host)
+            || (bool)\preg_match('/^p[0-9a-f]{8}\.weline\.local$/i', $host);
     }
 
     /**
@@ -3377,14 +3409,16 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
     protected function isServerRunning(string $instanceName, int $port): bool
     {
         // 检查实例文件（无实例文件 = 从未启动过）
-        $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $instanceName . '.json';
+        $instanceFile = $this->getRuntimeInstanceFile($instanceName);
         if (!\is_file($instanceFile)) {
-            return false;
+            return $this->isPortOccupiedByWelineProcess($port)
+                || $this->hasRecoverableManagedProcessHint($instanceName);
         }
         
         $instanceData = \json_decode(\file_get_contents($instanceFile), true);
         if (!$instanceData) {
-            return false;
+            return $this->isPortOccupiedByWelineProcess($port)
+                || $this->hasRecoverableManagedProcessHint($instanceName);
         }
         
         $count = (int) ($instanceData['count'] ?? 4);
@@ -3975,6 +4009,11 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         return Env::VAR_DIR . 'server' . DS . 'instances' . DS;
     }
 
+    protected function getRuntimeInstanceFile(string $instanceName): string
+    {
+        return $this->getInstanceRuntimeDir() . $instanceName . '.json';
+    }
+
     protected function isWorkerPortReservationActive(array $instanceData, string $instanceFile = ''): bool
     {
         if ($this->extractReservedWorkerPortsFromInstanceData($instanceData) === []) {
@@ -4087,12 +4126,6 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
      */
     protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000, array $sharedStateRuntime = [], array $orchestratorRuntimeOptions = []): void
     {
-        $instanceDir = $this->getInstanceRuntimeDir();
-        if (!\is_dir($instanceDir)) {
-            @\mkdir($instanceDir, 0755, true);
-        }
-        
-        $instanceFile = $instanceDir . $instanceName . '.json';
         $instanceData = [
             'name' => $instanceName,
             'host' => $host,
@@ -4150,7 +4183,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             $instanceData['main_port'] = 0;
         }
         
-        ServerInstanceManager::atomicWriteJsonStatic($instanceFile, $instanceData);
+        $this->getInstanceManager()->saveInstance($instanceName, $instanceData);
     }
 
     /**
