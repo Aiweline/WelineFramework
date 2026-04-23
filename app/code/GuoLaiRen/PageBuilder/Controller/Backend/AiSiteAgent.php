@@ -24,7 +24,6 @@ use GuoLaiRen\PageBuilder\Service\AiSiteHtmlBlocksBuildService;
 use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSiteTaskPlanSseService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemePlanService;
-use GuoLaiRen\PageBuilder\Service\QuickBuildAggregator;
 use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
 use Weline\Framework\App\State;
 use Weline\Admin\Controller\BaseController;
@@ -34,6 +33,7 @@ use Weline\Framework\Http\Sse\LastEventIdResolver;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Service\Query\FrameworkQueryService;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\SchedulerSystem;
@@ -11422,9 +11422,9 @@ SCRIPT;
         return \array_values(\array_filter(\array_map(static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '', $decoded), static fn(string $value): bool => $value !== ''));
     }
 
-    private function getQuickBuildAggregator(): QuickBuildAggregator
+    private function getFrameworkQueryService(): FrameworkQueryService
     {
-        return ObjectManager::getInstance(QuickBuildAggregator::class);
+        return ObjectManager::getInstance(FrameworkQueryService::class);
     }
 
     private function getWebsitesSessionService(): WebsitesSessionService
@@ -11442,7 +11442,7 @@ SCRIPT;
      */
     private function buildRegistrarAccountOptions(): array
     {
-        $rows = $this->getQuickBuildAggregator()->queryRegistrarAccounts(['status' => 'active']);
+        $rows = $this->getFrameworkQueryService()->execute('websites', 'getRegistrarAccounts', ['status' => 'active']);
         if (!\is_array($rows)) {
             $rows = [];
         }
