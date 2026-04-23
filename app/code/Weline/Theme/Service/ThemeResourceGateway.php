@@ -62,12 +62,12 @@ final class ThemeResourceGateway
         }
 
         $publicRelativePath = '/pub/static/'
-            . trim(str_replace('\\', '/', $publicThemePath), '/')
+            . $this->buildThemeModulePublicPath(
+                $publicThemePath,
+                $resource['vendor'],
+                $resource['module']
+            )
             . '/'
-            . $resource['vendor']
-            . '/'
-            . $resource['module']
-            . '/view/theme/'
             . $resource['area']
             . '/'
             . str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
@@ -111,12 +111,12 @@ final class ThemeResourceGateway
             }
 
             return $this->buildStaticUrl(
-                trim($publicThemePath, '/')
+                $this->buildThemeModulePublicPath(
+                    $publicThemePath,
+                    $module['vendor'],
+                    $module['module']
+                )
                 . '/'
-                . $module['vendor']
-                . '/'
-                . $module['module']
-                . '/view/theme/'
                 . $area
                 . '/'
                 . $relativePath,
@@ -202,8 +202,8 @@ final class ThemeResourceGateway
             return '';
         }
 
-        return trim(str_replace('\\', '/', $publicThemePath), '/')
-            . '/Weline/Theme/view/theme/'
+        return $this->buildThemeModulePublicPath($publicThemePath, 'Weline', 'Theme')
+            . '/'
             . $area
             . '/layouts/'
             . str_replace(['\\', '/'], '/', $layoutType)
@@ -272,6 +272,17 @@ final class ThemeResourceGateway
         }
 
         return $this->themeStaticNamespaceService->appendPreviewContextQuery($url);
+    }
+
+    private function buildThemeModulePublicPath(string $publicThemePath, string $vendor, string $module): string
+    {
+        $basePath = trim(str_replace('\\', '/', $publicThemePath), '/');
+        $moduleThemePath = $vendor . '/' . $module . '/view/theme';
+        if ($basePath === '' || $basePath === $moduleThemePath || str_ends_with($basePath, '/' . $moduleThemePath)) {
+            return $basePath !== '' ? $basePath : $moduleThemePath;
+        }
+
+        return $basePath . '/' . $moduleThemePath;
     }
 
     private function buildAbsoluteUrl(string $path): string

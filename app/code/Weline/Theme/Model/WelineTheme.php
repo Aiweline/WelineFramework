@@ -120,10 +120,23 @@ class WelineTheme extends Model
     }
     public function getPath(): string
     {
-        if ($this->getData(self::schema_fields_PATH)) {
-            return Env::path_THEME_DESIGN_DIR . str_replace('\\', DS, $this->getData(self::schema_fields_PATH)) . DS;
+        $path = (string)$this->getData(self::schema_fields_PATH);
+        if ($path !== '') {
+            $path = str_replace(['/', '\\'], DS, $path);
+            if ($this->isAbsoluteThemePath($path)) {
+                return rtrim($path, DS) . DS;
+            }
+
+            return rtrim(Env::path_THEME_DESIGN_DIR, '/\\') . DS . trim($path, DS) . DS;
         }
         return App::Env('theme')['path'] ?? '';
+    }
+
+    private function isAbsoluteThemePath(string $path): bool
+    {
+        return preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1
+            || str_starts_with($path, DS)
+            || str_starts_with($path, '\\\\');
     }
     public function getOriginPath(): string
     {
