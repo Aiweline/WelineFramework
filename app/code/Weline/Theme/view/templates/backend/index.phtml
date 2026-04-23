@@ -901,11 +901,7 @@ foreach ($themes as $themeItem) {
             return null;
         }
 
-        if (window.bootstrap && window.bootstrap.Modal) {
-            return new window.bootstrap.Modal(element);
-        }
-
-        return {
+        const adapter = window.bootstrap && window.bootstrap.Modal ? new window.bootstrap.Modal(element) : {
             show: function() {
                 element.classList.add('show');
                 element.style.display = 'block';
@@ -924,6 +920,15 @@ foreach ($themes as $themeItem) {
                 });
             }
         };
+
+        element.querySelectorAll('[data-bs-dismiss="modal"], [data-dismiss="modal"]').forEach(function(button) {
+            button.addEventListener('click', function(event) {
+                event.preventDefault();
+                adapter.hide();
+            });
+        });
+
+        return adapter;
     }
 
     const batchGenerateModal = createModalAdapter(batchGenerateModalElement);
@@ -955,6 +960,17 @@ foreach ($themes as $themeItem) {
         }
 
         console.log(message);
+    }
+
+    function isSuccessResponse(result) {
+        return !!result && (
+            result.status === 'success' ||
+            result.success === true ||
+            result.success === 1 ||
+            result.success === '1' ||
+            result.code === 200 ||
+            result.code === '200'
+        );
     }
 
     function findThemeCard(themeId, area) {
@@ -1103,8 +1119,8 @@ foreach ($themes as $themeItem) {
             });
 
             const result = await response.json();
-            if (result.status === 'success') {
-                const imageUrl = result?.data?.image_url || '';
+            if (isSuccessResponse(result)) {
+                const imageUrl = result?.data?.image_url || result?.image_url || '';
                 if (card) {
                     updateThemeCardPreview(card, imageUrl);
                     setThemeCardStatus(card, 'success', config.successMessage || '<?= __('预览图已更新') ?>');
@@ -1287,16 +1303,7 @@ foreach ($themes as $themeItem) {
             }).then(function(response) {
                 return response.json();
             }).then(function(result) {
-                const isSuccess = result && (
-                    result.status === 'success' ||
-                    result.success === true ||
-                    result.success === 1 ||
-                    result.success === '1' ||
-                    result.code === 200 ||
-                    result.code === '200'
-                );
-
-                if (isSuccess) {
+                if (isSuccessResponse(result)) {
                     showToast('success', '<?= __('主题已设置为 %{1} 主题') ?>'.replace('%{1}', areaLabel));
                     window.location.reload();
                     return;

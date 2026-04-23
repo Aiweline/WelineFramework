@@ -229,7 +229,7 @@
 .pb-guided-extra-types label { background: var(--pb-guided-surface-alt); border-radius: 20px; padding: .35rem .85rem; font-size: .8125rem; cursor: pointer; transition: background .15s; color: var(--backend-color-text-primary, inherit); }
 .pb-guided-extra-types label:hover { background: var(--pb-guided-surface-alt-2); }
 .pb-guided-extra-types input { margin-right: .35rem; }
-/* 椤甸潰鍐?Bootstrap 璇箟绫绘ˉ鎺ワ紝淇濊瘉娴?鏆椾富棰樿儗鏅竴鑷?*/
+/* 页面内 Bootstrap 语义类桥接，保证浅/暗主题背景一致 */
 .pb-guided .text-muted { color: var(--backend-color-text-secondary, #64748b) !important; }
 .pb-guided .bg-light {
     background: var(--pb-guided-surface-alt) !important;
@@ -346,7 +346,7 @@
     to { transform: rotate(360deg); }
 }
 
-/* 鍩熷悕涓庢敞鍐屽晢鏉垮潡缃《鏍峰紡 */
+/* 域名与注册商侧边块置顶样式 */
 .pb-guided-domain-sidebar.fixed-top-right {
     position: static;
     top: auto;

@@ -21,7 +21,7 @@
     box-sizing: border-box;
     background: linear-gradient(180deg, var(--backend-color-bg-secondary, #eef2f7) 0%, var(--backend-color-bg-tertiary, #e2e8f0) 100%);
 }
-/* 妯悜 flex 涓嬮粯璁?flex:0 1 auto 浼氳銆宨frame width:100%銆嶆寜鏀剁缉瀹藉害瑙ｆ瀽锛孭C 妯″紡鐪嬭捣鏉ュ儚鎵嬫満绐勬潯 */
+/* 横向 flex 下默认 flex:0 1 auto 会让 iframe width:100% 按收缩宽度解析，PC 模式会看起来像手机窄条 */
 #pb-ai-visual-preview-host {
     flex: 1 1 auto;
     width: 100%;
@@ -103,7 +103,7 @@ div.pb-ai-preview-tabs > .pb-ai-preview-tab-panel {
     margin-bottom: 0;
 }
 
-/* 鍙鍖栫紪杈戯細椤电 + 璁惧 + 鎿嶄綔锛屽悓涓€宸ュ叿鏉★紙蹇€熸ā寮?/ 涓撳妯″紡宸︽爮锛?*/
+/* 可视化编辑：页签 + 设备 + 操作，同一工具栏（快速模式/专家模式左栏） */
 .pb-ai-visual-editor-toolbar {
     display: flex;
     flex-wrap: wrap;

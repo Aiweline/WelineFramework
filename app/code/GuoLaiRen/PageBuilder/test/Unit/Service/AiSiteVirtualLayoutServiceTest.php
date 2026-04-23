@@ -47,6 +47,42 @@ final class AiSiteVirtualLayoutServiceTest extends TestCase
         self::assertNull($svc->loadContext('pub_1', 1, Page::TYPE_HOME));
     }
 
+    public function testLoadContextAllowsHtmlBlocksPreviewWithoutVirtualThemeId(): void
+    {
+        $session = $this->createMock(AiSiteAgentSession::class);
+        $session->method('getScopeArray')->willReturn([
+            'virtual_theme_id' => 0,
+            'page_types' => [Page::TYPE_HOME],
+            'virtual_pages_by_type' => [
+                Page::TYPE_HOME => [
+                    'page_type' => Page::TYPE_HOME,
+                    'title' => 'Generated Home',
+                    'blocks' => [
+                        [
+                            'block_id' => 'hero',
+                            'type' => 'content/hero',
+                            'html' => '<section>Generated</section>',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $session->method('getVirtualThemeId')->willReturn(0);
+
+        $sessionSvc = $this->createMock(AiSiteAgentSessionService::class);
+        $sessionSvc->method('loadByPublicId')->willReturn($session);
+
+        $scopeSvc = new AiSiteScopeCompatibilityService(LayoutConfigNormalizer::getInstance());
+        $vt = $this->createMock(VirtualThemeLayout::class);
+        $svc = new AiSiteVirtualLayoutService($sessionSvc, $scopeSvc, $vt);
+
+        $context = $svc->loadContext('pub_1', 1, Page::TYPE_HOME);
+
+        self::assertIsArray($context);
+        self::assertSame(0, $context['virtual_theme_id']);
+        self::assertSame(Page::TYPE_HOME, $context['page_type']);
+    }
+
     public function testSaveVirtualPagePatchMergesPatchAndCallsReplaceScope(): void
     {
         $captured = null;

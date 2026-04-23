@@ -139,13 +139,56 @@ final class ThemeStaticNamespaceService
 
     private function resolveThemePath(WelineTheme $theme): string
     {
-        $themePath = \trim(\str_replace('\\', '/', (string)$theme->getOriginPath()), '/');
+        $themePath = $this->normalizePublicThemePath((string)$theme->getOriginPath());
         if ($themePath !== '') {
             return $themePath;
         }
 
         $configuredTheme = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'] ?? '';
-        return \trim(\str_replace('\\', '/', (string)$configuredTheme), '/');
+        return $this->normalizePublicThemePath((string)$configuredTheme);
+    }
+
+    private function normalizePublicThemePath(string $themePath): string
+    {
+        $themePath = \rtrim(\str_replace('\\', '/', \trim($themePath)), '/');
+        if ($themePath === '') {
+            return '';
+        }
+
+        $designRoot = \rtrim(\str_replace('\\', '/', Env::path_THEME_DESIGN_DIR), '/');
+        if ($this->isPathUnderRoot($themePath, $designRoot)) {
+            return \trim(\substr($themePath, \strlen($designRoot)), '/');
+        }
+
+        $codeRoot = \rtrim(\str_replace('\\', '/', BP), '/') . '/app/code';
+        if ($this->isPathUnderRoot($themePath, $codeRoot)) {
+            $relativeCodePath = \trim(\substr($themePath, \strlen($codeRoot)), '/');
+            if (\preg_match('#^([^/]+)/([^/]+)/view/theme(?:/|$)#', $relativeCodePath, $matches)) {
+                return $matches[1] . '/' . $matches[2] . '/view/theme';
+            }
+        }
+
+        if ($this->isAbsolutePath($themePath)) {
+            return '';
+        }
+
+        return \trim($themePath, '/');
+    }
+
+    private function isPathUnderRoot(string $path, string $root): bool
+    {
+        if ($root === '') {
+            return false;
+        }
+
+        return $path === $root || \str_starts_with($path, $root . '/');
+    }
+
+    private function isAbsolutePath(string $path): bool
+    {
+        return \preg_match('#^[A-Za-z]:/#', $path) === 1
+            || \str_starts_with($path, '/')
+            || \str_starts_with($path, '//');
     }
 
     private function sanitizeSegment(string $segment): string

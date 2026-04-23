@@ -46,6 +46,21 @@ class ProviderStreamTimeoutPolicyTest extends TestCase
     }
 
     /**
+     * @dataProvider providerClasses
+     */
+    public function testPageBuilderCanDisableProviderTimeout(string $providerClass): void
+    {
+        $provider = new $providerClass();
+
+        $timeout = $this->invokePrivate($provider, 'resolveStreamTimeout', [
+            ['disable_ai_timeout' => true, 'enforce_timeout_in_stream' => true],
+            ['timeout' => 180],
+        ]);
+
+        $this->assertSame(0, $timeout);
+    }
+
+    /**
      * @dataProvider timeoutOptionCases
      */
     public function testBuildCurlTimeoutOptionsPreservesStreamAndNonStreamPolicies(

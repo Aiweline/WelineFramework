@@ -1,0 +1,4 @@
+interface:
+  display_name: "Queue"
+  short_description: "Weline queue diagnostics and CLI workflow"
+  default_prompt: "Use Weline queue helpers, w_query examples, and queue CLI commands to diagnose or operate queue tasks in this workspace."
