@@ -52,6 +52,14 @@ final class ServerQueryProviderHostsAddTest extends TestCase
         self::assertIsArray($result);
         self::assertFalse((bool)($result['success'] ?? true));
         self::assertSame('weline.test', $result['domain'] ?? null);
+
+        $localTest = $provider->execute('hostsAdd', [
+            'domain' => 'local.test',
+        ]);
+
+        self::assertIsArray($localTest);
+        self::assertFalse((bool)($localTest['success'] ?? true));
+        self::assertSame('local.test', $localTest['domain'] ?? null);
     }
 
     public function testHostsAddSkipsManagedLoopbackDomain(): void
