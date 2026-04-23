@@ -1407,7 +1407,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         );
     }
 
-    public function testBuildPlanArtifactsByAiStreamRejectsThemeSelectionReasonThatIgnoresRequirement(): void
+    public function testBuildPlanArtifactsByAiStreamRepairsThemeSelectionReasonThatIgnoresRequirement(): void
     {
         $service = new AiSiteExecutionBlueprintService(
             new AiSitePageBlueprintService(),
@@ -1416,18 +1416,120 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             ))
         );
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('theme_design.selection_reason must reference the user one-line requirement');
-
-        $service->buildPlanArtifactsByAiStream([
-            'site_title' => 'Teenipiya',
-            'brief_description' => 'Build an APK download landing page for Teenipiya rummy players in India.',
-            'page_types' => ['home_page'],
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
             'workspace_track' => 'virtual_theme',
         ], [
-            'site_title' => 'Teenipiya',
-            'brief_description' => 'Build an APK download landing page for Teenipiya rummy players in India.',
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
         ]);
+
+        $selectionReason = (string)($artifacts['plan_json']['theme_design']['selection_reason'] ?? '');
+
+        self::assertSame(1, (int)($artifacts['ai_generated'] ?? 0));
+        self::assertStringContainsString('Need home and about pages with strong CTA.', $selectionReason);
+        self::assertNotSame('Modern, premium, clean, and simple.', $selectionReason);
+    }
+
+    public function testBuildPlanArtifactsByAiStreamRepairsMissingFieldImplementationNote(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildAiPlanResponseWithMissingFieldImplementationNote())
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+
+        $fieldPlan = $artifacts['plan_json']['pages']['home_page']['blocks'][0]['field_plan'] ?? [];
+        self::assertIsArray($fieldPlan);
+        self::assertNotSame('', \trim((string)($fieldPlan[0]['implementation_note'] ?? '')));
+        self::assertStringContainsString('visible heading', (string)($fieldPlan[0]['implementation_note'] ?? ''));
+    }
+
+    public function testBuildPlanArtifactsByAiStreamRepairsPromptLikeFeaturePoints(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildAiPlanResponseWithPromptLikeFeaturePoint())
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+
+        $featurePoints = $artifacts['plan_json']['pages']['home_page']['blocks'][0]['execution_script']['feature_points'] ?? [];
+        self::assertIsArray($featurePoints);
+        self::assertNotEmpty($featurePoints);
+        self::assertStringNotContainsString('List 2-4', (string)($featurePoints[0] ?? ''));
+    }
+
+    public function testBuildPlanArtifactsByAiStreamRepairsDetailedTermsFeaturePointsFromQueueOutput(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildAiPlanResponseWithDetailedTermsInstructionLikeFeaturePoint())
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+            'default_locale' => 'en_US',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+
+        $block = $artifacts['plan_json']['pages']['home_page']['blocks'][0] ?? [];
+        self::assertIsArray($block);
+        self::assertSame('detailed_terms_content', (string)($block['block_key'] ?? ''));
+
+        $featurePoints = $block['execution_script']['feature_points'] ?? [];
+        self::assertIsArray($featurePoints);
+        self::assertNotEmpty($featurePoints);
+        self::assertStringNotContainsString('section titles', \implode(' ', \array_map('strval', $featurePoints)));
+    }
+
+    public function testBuildPlanArtifactsByAiStreamRecordsLocalRegenReportForProblemBlocks(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildAiPlanResponseWithDetailedTermsInstructionLikeFeaturePoint())
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+            'default_locale' => 'en_US',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+
+        $report = $artifacts['plan_json']['_stage1_local_regen_report'] ?? [];
+        self::assertIsArray($report);
+        self::assertArrayHasKey('final_issue_count', $report);
     }
 
     public function testBuildPlanArtifactsByAiStreamReportsMissingPlanJsonOnlyOnce(): void
@@ -2076,6 +2178,67 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             $decoded['plan_json']['theme_design'] = [];
         }
         $decoded['plan_json']['theme_design']['selection_reason'] = $selectionReason;
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    private function buildAiPlanResponseWithMissingFieldImplementationNote(): string
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        if (!\is_array($decoded)) {
+            return '{}';
+        }
+
+        unset(
+            $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'][0]['implementation_note'],
+            $decoded['plan_json']['pages']['home_page']['blocks'][0]['field_plan'][0]['reason']
+        );
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    private function buildAiPlanResponseWithPromptLikeFeaturePoint(): string
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        if (!\is_array($decoded)) {
+            return '{}';
+        }
+
+        $decoded['plan_json']['pages']['home_page']['blocks'][0]['execution_script']['feature_points'] = ['List 2-4 value points'];
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    private function buildAiPlanResponseWithDetailedTermsInstructionLikeFeaturePoint(): string
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        if (!\is_array($decoded)) {
+            return '{}';
+        }
+
+        $block = &$decoded['plan_json']['pages']['home_page']['blocks'][0];
+        if (!\is_array($block)) {
+            return '{}';
+        }
+
+        $block['block_key'] = 'detailed_terms_content';
+        $block['section_code'] = 'detailed_terms_content';
+        $block['component_kind'] = 'legal';
+        $block['goal'] = 'Explain terms with clear acceptance, eligibility, APK use, privacy, disclaimer, updates, and contact sections.';
+        $block['content'] = 'Acceptance, eligibility, APK use, privacy, disclaimer, update, and contact terms are presented as readable sections for visitors before they continue.';
+        $block['field_plan'] = [
+            ['field' => 'terms_title', 'sample' => 'Terms of Service', 'implementation_note' => 'Render this as the visible legal content heading above the terms sections.'],
+            ['field' => 'terms_summary', 'sample' => 'Review acceptance, eligibility, APK use, privacy, disclaimer, updates, and contact paths before continuing.', 'implementation_note' => 'Render this summary directly below the legal heading as customer-visible copy.'],
+            ['field' => 'contact_note', 'sample' => 'Contact support@example.com with questions about these terms.', 'implementation_note' => 'Render this as the final support note in the terms content block.'],
+        ];
+        $block['execution_script']['feature_points'] = [
+            'Numbered sections for clarity',
+            'Sticky sidebar navigation on desktop',
+            'Hover effects on section titles',
+        ];
+        $block['execution_script']['core_copy'] = 'Acceptance, eligibility, APK use, privacy, disclaimer, updates, and contact terms are ready as visible legal copy.';
+
+        unset($block);
 
         return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }
