@@ -34,6 +34,12 @@ class MasterResurrector
         ControlMessage::RESURRECTION_WORKER      => 6,
     ];
 
+    /** 默认 grace 秒数（可被 env.php 覆盖） */
+    public const DEFAULT_GRACE_SECONDS = 2;
+
+    /** grace 窗内探测步长 */
+    private const GRACE_POLL_USEC = 200_000; // 200ms
+
     /** 复活优先级 */
     private int $priority;
 
@@ -71,6 +77,61 @@ class MasterResurrector
     }
 
     /**
+     * Grace 窗确认：复活前先等一会儿看 Master 是否自己恢复
+     *
+     * 防御目标：
+     *   - T4：Master 正在做耗时 reload/cache warmup，TCP 缓冲暂时堆积导致子进程断开
+     *   - T5：本进程局部网络栈抖动，其它子进程其实看得到 Master
+     *
+     * 行为：在 `grace_seconds` 窗口内以 200 ms 步长轮询 `isMasterAlive()`；
+     *       任何一次探测成功 → 返回 false（放弃复活，等重连）；
+     *       窗口耗尽仍不通 → 返回 true（继续后续复活流程）。
+     *
+     * @return bool true = 确认 Master 确实失联，应继续复活；false = Master 已恢复，放弃
+     */
+    public function confirmAfterGrace(): bool
+    {
+        $grace = $this->resolveGraceSeconds();
+        if ($grace <= 0) {
+            return true;
+        }
+
+        $deadline = \microtime(true) + $grace;
+        while (\microtime(true) < $deadline) {
+            if ($this->isMasterAlive()) {
+                return false;
+            }
+            $this->pollSleep(self::GRACE_POLL_USEC);
+        }
+        return !$this->isMasterAlive();
+    }
+
+    /**
+     * grace 窗微睡眠（子类可覆盖以便单测）
+     */
+    protected function pollSleep(int $usec): void
+    {
+        \usleep($usec);
+    }
+
+    /**
+     * 从 env.php 读取 grace 秒数；缺省 DEFAULT_GRACE_SECONDS
+     */
+    private function resolveGraceSeconds(): int
+    {
+        try {
+            $config = Env::getInstance()->getConfig() ?: [];
+            $val = $config['wls']['orchestrator']['resurrect_grace_seconds'] ?? self::DEFAULT_GRACE_SECONDS;
+            if (!\is_int($val) && !\is_numeric($val)) {
+                return self::DEFAULT_GRACE_SECONDS;
+            }
+            return \max(0, (int)$val);
+        } catch (\Throwable) {
+            return self::DEFAULT_GRACE_SECONDS;
+        }
+    }
+
+    /**
      * 是否应该尝试复活 Master
      *
      * @param bool $receivedShutdown 是否收到过 shutdown 命令
@@ -102,16 +163,35 @@ class MasterResurrector
     }
 
     /**
-     * 是否允许子进程复活 Master（默认关闭）
+     * 是否允许子进程复活 Master
+     *
+     * 默认 true（2026-04-23 起）。支持的部署形态：
+     *   - 单机单实例
+     *   - 同机多实例（按 instance_name 隔离）
+     *   - 跨项目（不同 BP 互不影响）
+     *   - 跨主机多活（各节点独立自愈）
+     *
+     * 显式关闭：在 env.php 中设置
+     *   'wls' => ['orchestrator' => ['allow_child_resurrection' => false]]
      */
-    private function isChildResurrectionEnabled(): bool
+    public function isChildResurrectionEnabled(): bool
     {
         try {
             $config = Env::getInstance()->getConfig() ?: [];
-            return (bool)($config['wls']['orchestrator']['allow_child_resurrection'] ?? false);
+            return (bool)($config['wls']['orchestrator']['allow_child_resurrection'] ?? true);
         } catch (\Throwable) {
-            return false;
+            return true;
         }
+    }
+
+    /**
+     * 当前 HA 自愈模式（用于启动日志和 server:status 展示）
+     *
+     * @return string 'on' | 'off'
+     */
+    public function describeSelfHealMode(): string
+    {
+        return $this->isChildResurrectionEnabled() ? 'on' : 'off';
     }
 
     /**

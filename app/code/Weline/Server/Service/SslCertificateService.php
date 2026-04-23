@@ -348,6 +348,12 @@ class SslCertificateService
             return $this->loopbackResolveCache[$domain];
         }
         
+        // 与 isLocalDomain 对齐：*.test / *.local 等开发后缀不走阻塞式 DNS。
+        // 否则 Windows 上 gethostbynamel 可能因上游解析超时卡住很久，拖死 server:start 的 SSL 准备阶段。
+        if ($this->isLocalDomain($domain)) {
+            return $this->loopbackResolveCache[$domain] = true;
+        }
+        
         // 如果已经是 IP 地址，直接检查
         if (\filter_var($domain, FILTER_VALIDATE_IP)) {
             return $this->loopbackResolveCache[$domain] = $this->isLoopbackIp($domain);
@@ -543,6 +549,40 @@ class SslCertificateService
      * @param int $websiteId 网站 ID
      * @return array ['success' => bool, 'message' => string, 'cert_path' => string, 'key_path' => string]
      */
+    /**
+     * 快速探测：本地是否已经存在可直接复用的证书文件（不触发任何签发/DNS/IO 重活）。
+     *
+     * 仅用于"是否要给用户打印『正在准备 SSL 证书...』"这类 UX 判定，
+     * 真正的复用校验仍由 {@see ensureCertificate()} 自身完成。
+     */
+    public function hasValidLocalCertificate(string $domain): bool
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '0.0.0.0') {
+            $domain = 'localhost';
+        }
+        if ($domain === '') {
+            return false;
+        }
+
+        $certDir = $this->getCertificateDir($domain);
+        $certPath = $certDir . 'fullchain.pem';
+        $keyPath = $certDir . 'privkey.pem';
+
+        if (!\is_file($certPath) || !\is_file($keyPath) || !$this->isCertificateValid($certPath)) {
+            return false;
+        }
+
+        // 若属于本地 CA 签发场景，但既有 fullchain 无法提取 CA 证书（老旧 bundle/自签漂移），
+        // ensureCertificate 会主动重签——此时不能宣称"已有证书可复用"。
+        if ($this->shouldUseTrustedLocalCertificateAuthority($domain)
+            && !$this->prepareExistingLocalCaCertificateForReuse($certPath)) {
+            return false;
+        }
+
+        return true;
+    }
+
     public function ensureCertificate(string $domain, string $webroot = '', string $email = '', int $websiteId = 0): array
     {
         // 0.0.0.0 是"监听所有网卡"的绑定地址，不是真实域名，归一化为 localhost
@@ -587,7 +627,9 @@ class SslCertificateService
         
         // 1. 检查本地证书文件是否存在且未过期，若有则入库后直接使用（避免每次重新申请）
         if ($this->isCertificateValid($certPath) && \is_file($keyPath)) {
-            $this->syncCertificateRecordFromFiles($domain, $certPath, $keyPath, $websiteId, true);
+            // 启动复用路径只做入库/映射，不重复触发「从 bundle 恢复 CA + Windows 信任探测」，
+            // 避免 certutil 慢调用把“使用已有证书”也拖成十几秒。
+            $this->syncCertificateRecordFromFiles($domain, $certPath, $keyPath, $websiteId, true, '', false);
             $this->regenerateCertificateMap();
             $certInfo = $this->parseCertificate($certPath);
             return [
@@ -959,12 +1001,34 @@ CNF;
     protected function getOpensslConfigForLocalCaLeaf(string $domain): array
     {
         $opensslConfig = $this->getOpensslConfig();
+        // 本地 CA 叶子证书改用 ECDSA P-256：
+        //   Windows + PHP 某些构建下 `openssl_pkey_new(RSA 2048)` 每次 5~30s，
+        //   多域名站点叠加会把 server:start 的 SSL 准备阶段拖到长时间"看起来卡住"。
+        //   ECC P-256 同等安全强度下，密钥生成在毫秒级；本地/内网场景完全够用，
+        //   且 CA 证书仍保留原 RSA 2048（不改信任链），仅叶子密钥加速。
+        //   env.php: ['wls']['ssl']['local_leaf_key_type'] 允许改回 'rsa' 兜底。
+        $leafKeyType = 'ec';
+        try {
+            $configured = Env::get('wls.ssl.local_leaf_key_type');
+            if (\is_string($configured) && $configured !== '') {
+                $leafKeyType = \strtolower($configured);
+            }
+        } catch (\Throwable) {
+            // 读 env 失败不影响默认 ECC 路径
+        }
+
+        if ($leafKeyType === 'ec' && \defined('OPENSSL_KEYTYPE_EC')) {
+            $opensslConfig['private_key_type'] = \OPENSSL_KEYTYPE_EC;
+            $opensslConfig['curve_name'] = 'prime256v1';
+            unset($opensslConfig['private_key_bits']);
+        }
+
         $sanEntries = $this->collectSanEntries($domain);
         if (empty($sanEntries['dns']) && empty($sanEntries['ip'])) {
             return $opensslConfig;
         }
 
-        $configHash = \md5('local-ca-leaf:' . $domain . \serialize($sanEntries));
+        $configHash = \md5('local-ca-leaf:' . $leafKeyType . ':' . $domain . \serialize($sanEntries));
         $configPath = $this->getLocalCaDir() . "openssl_leaf_{$configHash}.cnf";
         @\file_put_contents($configPath, $this->buildServerLeafOpenSslConfig($domain, $sanEntries));
         if (\is_file($configPath)) {
@@ -1037,6 +1101,11 @@ CNF;
             ];
         }
 
+        // 首次生成 CA（或既有 CA 失效）时 RSA 2048 可能很慢：
+        // 向日志明确打点，避免运维看到"准备 SSL 证书..."长时间无输出以为死循环。
+        $caGenStart = \hrtime(true);
+        w_log_info('[SslCertificateService] local CA not ready, generating new CA (RSA 2048) ...');
+
         $opensslConfig = $this->getOpensslConfig();
         $configPath = $this->getLocalCaDir() . 'openssl_local_ca.cnf';
         @\file_put_contents($configPath, $this->buildLocalCaOpenSslConfig());
@@ -1084,6 +1153,9 @@ CNF;
         @\chmod($certPath, 0644);
         @\chmod($keyPath, 0600);
 
+        $caMs = (int) \round((\hrtime(true) - $caGenStart) / 1_000_000.0);
+        w_log_info(\sprintf('[SslCertificateService] local CA generated in %dms', $caMs));
+
         return [
             'success' => true,
             'cert_path' => $certPath,
@@ -1113,15 +1185,26 @@ CNF;
             return false;
         }
 
-        $storeOutput = (string) @\shell_exec('certutil -user -store Root 2>&1');
+        // 仅按 SHA1 指纹查询单张证书。全量 `certutil -user -store Root` 会枚举当前用户
+        // 信任库中全部根证，证书多时可能卡住数十秒，拖慢每次本地 CA 签发。
+        $thumb = $this->normalizeCertificateFingerprint($fingerprint);
+        if ($thumb === '') {
+            return false;
+        }
+
+        $storeOutput = (string) @\shell_exec(
+            'certutil -user -store Root ' . \escapeshellarg($thumb) . ' 2>&1'
+        );
         if ($storeOutput === '') {
             return false;
         }
 
-        return \str_contains(
-            $this->normalizeCertificateFingerprint($storeOutput),
-            $this->normalizeCertificateFingerprint($fingerprint)
-        );
+        if (\preg_match('/command\s+FAILED|0x80092004|NOT_FOUND/i', $storeOutput)) {
+            return false;
+        }
+
+        return \str_contains($storeOutput, '================ Certificate')
+            || \str_contains($storeOutput, 'Certificate:');
     }
 
     protected function trustLocalCertificateAuthority(string $caCertPath): array
@@ -1188,12 +1271,23 @@ CNF;
                 return ['success' => false, 'message' => __('Domain cannot be empty')];
             }
 
+            // 分阶段耗时追踪：帮助诊断 "准备 SSL 证书..." 卡在哪一步。
+            // 每步通过 w_log_info 记录毫秒级耗时，复杂度极低但在事故时价值高。
+            $trace = static function (string $step, float $startNs) use ($domain): void {
+                $ms = (int) \round((\hrtime(true) - $startNs) / 1_000_000.0);
+                w_log_info(\sprintf('[SslCertificateService][%s] %s elapsed=%dms', $domain, $step, $ms));
+            };
+
+            $tCa = \hrtime(true);
             $ca = $this->ensureLocalCertificateAuthority();
+            $trace('ensureLocalCertificateAuthority', $tCa);
             if (!($ca['success'] ?? false)) {
                 return $ca;
             }
 
+            $tTrust = \hrtime(true);
             $trust = $this->trustLocalCertificateAuthority((string) $ca['cert_path']);
+            $trace('trustLocalCertificateAuthority', $tTrust);
 
             $certDir = $this->getCertificateDir($domain);
             $certPath = $certDir . 'fullchain.pem';
@@ -1201,7 +1295,9 @@ CNF;
             $chainPath = $certDir . 'chain.pem';
 
             $opensslConfig = $this->getOpensslConfigForLocalCaLeaf($domain);
+            $tLeafKey = \hrtime(true);
             $privateKey = \openssl_pkey_new($opensslConfig);
+            $trace('openssl_pkey_new(leaf)', $tLeafKey);
             if (!$privateKey) {
                 return ['success' => false, 'message' => __('Failed to generate local leaf private key')];
             }
@@ -1216,7 +1312,9 @@ CNF;
                 'emailAddress' => 'dev@' . $domain,
             ];
 
+            $tCsr = \hrtime(true);
             $csr = \openssl_csr_new($dn, $privateKey, $opensslConfig);
+            $trace('openssl_csr_new(leaf)', $tCsr);
             if (!$csr) {
                 return ['success' => false, 'message' => __('Failed to generate local leaf CSR')];
             }
@@ -1229,6 +1327,7 @@ CNF;
                 return ['success' => false, 'message' => __('Failed to load local CA certificate or private key')];
             }
 
+            $tSign = \hrtime(true);
             $leafCert = \openssl_csr_sign(
                 $csr,
                 $caCert,
@@ -1237,6 +1336,7 @@ CNF;
                 $opensslConfig,
                 $this->nextLocalCaSerial()
             );
+            $trace('openssl_csr_sign(leaf)', $tSign);
             if (!$leafCert) {
                 return ['success' => false, 'message' => __('Failed to sign local certificate with local CA')];
             }
@@ -1373,18 +1473,27 @@ CNF;
             return $this->sanEntriesCache[$domain] = ['dns' => $dns, 'ip' => $ip];
         }
         
-        // 3. 解析域名获取 IP
+        // 3. 本地开发用后缀（*.test / *.local / *.dev 等）：不调用阻塞式 DNS。
+        // gethostbynamel/gethostbyname 在 Windows 上可能因 .test 等后缀长时间挂起，
+        // 用户看到「正在为 *.weline.test 准备 SSL 证书...」后无进展。
+        // 开发域默认按本机 HTTPS 使用，SAN 补全回环地址即可（与 hosts 指向 127.0.0.1 的常见约定一致）。
+        if ($this->isLocalDomain($domain)) {
+            if (!\in_array('127.0.0.1', $ip, true)) {
+                $ip[] = '127.0.0.1';
+            }
+            if (!\in_array('::1', $ip, true)) {
+                $ip[] = '::1';
+            }
+            return $this->sanEntriesCache[$domain] = ['dns' => \array_unique($dns), 'ip' => \array_unique($ip)];
+        }
+        
+        // 4. 解析域名获取 IP（非本地开发后缀）
         $resolvedIps = $this->resolveDomainIps($domain);
         foreach ($resolvedIps as $resolvedIp) {
             // 只添加本地/内网 IP 到 SAN（公网 IP 不需要）
             if ($this->isLoopbackIp($resolvedIp)) {
                 $ip[] = $resolvedIp;
             }
-        }
-        
-        // 如果域名是 *.localhost 类型，也加上 127.0.0.1
-        if (\str_ends_with($domain, '.localhost') && !\in_array('127.0.0.1', $ip, true)) {
-            $ip[] = '127.0.0.1';
         }
         
         return $this->sanEntriesCache[$domain] = ['dns' => \array_unique($dns), 'ip' => \array_unique($ip)];
@@ -2096,7 +2205,8 @@ CNF;
         string $keyPath,
         int $websiteId = 0,
         bool $httpsEnabled = true,
-        string $provider = ''
+        string $provider = '',
+        bool $recoverAndTrustLocalCa = true
     ): ?SslCertificate {
         $domain = \strtolower(\trim($domain));
         if ($domain === '' || !\is_file($certPath) || !\is_file($keyPath)) {
@@ -2140,12 +2250,14 @@ CNF;
                 $chainPath = $candidateChainPath;
             }
             $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
-            $this->recoverAndTrustLocalCaFromCertificateBundle(
-                $provider,
-                $issuer,
-                $certContents['cert_pem'],
-                $certContents['chain_pem']
-            );
+            if ($recoverAndTrustLocalCa) {
+                $this->recoverAndTrustLocalCaFromCertificateBundle(
+                    $provider,
+                    $issuer,
+                    $certContents['cert_pem'],
+                    $certContents['chain_pem']
+                );
+            }
 
             $cert->setDomain($domain)
                 ->setWebsiteId($websiteId)

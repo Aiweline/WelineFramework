@@ -89,7 +89,14 @@ class PassthroughCore
      * 首个 HTTPS 请求会把 Worker 启动空窗直接暴露为浏览器 400/协议错误。
      * 因此在 SSL Worker 模式下为启动恢复保留一个最小等待窗口。
      */
-    private const MIN_SSL_STARTUP_SPIN_WAIT_SECONDS = 15.0;
+    /**
+     * SSL 冷启动场景下 spin_wait_max_seconds 被显式置 0 时的下限（秒）。
+     *
+     * P0-1 修复：旧值 15.0s 会把单个 accept 的 handleNewConnection 同步自旋拖长到 15s，
+     * 阻塞主循环造成连接风暴放大。现降至 3.0s，并通过 maxHandleNewConnectionSpinBudgetSec 再截断
+     * 到单连接 0.8s，让 Phase 1 的 pending 维护页队列兜底剩余等待。
+     */
+    private const MIN_SSL_STARTUP_SPIN_WAIT_SECONDS = 3.0;
     
     /**
      * Worker 基础端口（仅用于兼容初始化，实际端口由动态列表管理）
@@ -298,6 +305,26 @@ class PassthroughCore
     private int $spinWaitIntervalMs = 50;
 
     /**
+     * 单次 handleNewConnection 的自旋预算硬上限（秒）。
+     *
+     * P0-1 修复：即使 spinWaitMaxSeconds 配置得较大（例如 SSL 3s、reload 10s），
+     * 单个 accept 也不应阻塞主循环超过此值。超过阈值即 fallback，由
+     * Dispatcher 的 pending 维护页队列 / 维护 Worker 接管继续推进。
+     *
+     * 默认 0.8s：HTTPS 冷启动短窗口足够，正常业务路径远低于此。
+     */
+    private float $maxHandleNewConnectionSpinBudgetSec = 0.8;
+
+    /**
+     * connectToWorker 里 non-blocking connect 失败后 socket_select 的阻塞超时（秒）。
+     *
+     * P0-2 修复：旧硬编码 max(0.3, min(connectTimeout, 0.5)) 对 localhost Worker 过大；
+     * 高并发失败路径每次额外阻塞 300-500ms 会级联拖垮主循环。
+     * 默认 0.1s 对 localhost TCP connect 绰绰有余；远端后端可通过 configure 覆盖。
+     */
+    private float $workerConnectSelectTimeoutSec = 0.1;
+
+    /**
      * 上次输出「workerPorts 为空」到 stderr 的时间（节流，避免启动时刷屏）
      */
     private float $lastEmptyWorkerPortsStderrAt = 0.0;
@@ -393,6 +420,16 @@ class PassthroughCore
         }
         if (isset($config['empty_pool_spin_max_seconds'])) {
             $this->emptyPoolSpinMaxSeconds = \max(0.0, (float) $config['empty_pool_spin_max_seconds']);
+        }
+        if (isset($config['max_handle_new_connection_spin_budget_sec'])) {
+            // 允许 0 => 完全关闭自旋；负值则用默认
+            $requested = (float) $config['max_handle_new_connection_spin_budget_sec'];
+            $this->maxHandleNewConnectionSpinBudgetSec = $requested >= 0.0 ? $requested : 0.8;
+        }
+        if (isset($config['worker_connect_select_timeout_sec'])) {
+            // 限制到 [0.01s, 2.0s]，防止误配置导致极端阻塞或 connect 几乎立即失败
+            $requested = (float) $config['worker_connect_select_timeout_sec'];
+            $this->workerConnectSelectTimeoutSec = \max(0.01, \min($requested, 2.0));
         }
         if (isset($config['homepage_warmup_enabled'])) {
             $this->homepageWarmupEnabled = (bool) $config['homepage_warmup_enabled'];
@@ -758,7 +795,14 @@ class PassthroughCore
             return 0.0;
         }
 
-        return $this->spinWaitMaxSeconds;
+        // P0-1：单个 accept 的同步自旋上限受 maxHandleNewConnectionSpinBudgetSec 硬截断，
+        // 防止事件循环被单连接 SSL 冷启动路径阻塞到 15s 级别。
+        // maxHandleNewConnectionSpinBudgetSec == 0 则完全关闭自旋（极端低延迟场景）。
+        if ($this->maxHandleNewConnectionSpinBudgetSec <= 0.0) {
+            return 0.0;
+        }
+
+        return \min($this->spinWaitMaxSeconds, $this->maxHandleNewConnectionSpinBudgetSec);
     }
 
     private function runSpinWaitTick(): void
@@ -1036,46 +1080,50 @@ class PassthroughCore
         // 设置非阻塞
         \socket_set_nonblock($workerSocket);
 
-        // 尝试连接
+        // 尝试连接（非阻塞）
         $result = @\socket_connect($workerSocket, $this->workerHost, $workerPort);
-        
-        if ($result === false) {
-            $error = \socket_last_error($workerSocket);
-            
-            // 非阻塞连接中，EINPROGRESS 是正常的
-            if ($error !== SOCKET_EINPROGRESS && $error !== SOCKET_EALREADY) {
-                // Windows 上可能返回 WSAEWOULDBLOCK
-                if (PHP_OS_FAMILY !== 'Windows' || $error !== 10035) {
-                    \socket_close($workerSocket);
-                    return false;
-                }
-            }
-            
-            // 连接超时不能太长，否则高并发下会因等待导致级联超时。限制在 0.3~0.5s 内，
-            // 失败则依赖连接池的指数退避策略在后续请求恢复。
-            $write = [$workerSocket];
-            $read = null;
-            $except = null;
-            $failoverTimeout = \max(0.3, \min($this->connectTimeout, 0.5));
-            
-            // socket_select 第4参数需要整数秒，第5参数为微秒
-            $seconds = (int)$failoverTimeout;
-            $microseconds = (int)(($failoverTimeout - $seconds) * 1000000);
-            $ready = @\socket_select($read, $write, $except, $seconds, $microseconds);
-            
-            if ($ready <= 0) {
-                \socket_close($workerSocket);
-                return false;
-            }
-            
-            // 检查连接是否成功（修复：正确获取 socket_get_option 返回值）
-            $optval = \socket_get_option($workerSocket, SOL_SOCKET, SO_ERROR);
-            if ($optval !== 0) {
-                \socket_close($workerSocket);
-                return false;
-            }
+        if ($result === true) {
+            // 罕见但可能：localhost 上 connect 立即完成（loopback 内核栈），无需 select。
+            return $workerSocket;
         }
-        
+
+        $error = \socket_last_error($workerSocket);
+
+        // 非阻塞连接中，EINPROGRESS/EALREADY（POSIX）或 WSAEWOULDBLOCK=10035（Windows）是正常的
+        $isPending = $error === SOCKET_EINPROGRESS
+            || $error === SOCKET_EALREADY
+            || (PHP_OS_FAMILY === 'Windows' && $error === 10035);
+        if (!$isPending) {
+            \socket_close($workerSocket);
+            return false;
+        }
+
+        // P0-2：用可配置的 workerConnectSelectTimeoutSec 替代旧 0.3-0.5s 硬上限。
+        // 默认 0.1s 对 localhost Worker 绰绰有余；远端后端可通过 worker_connect_select_timeout_sec 覆盖。
+        // 高并发失败路径下，单次 connect 的最差阻塞从 500ms → 100ms。
+        $failoverTimeout = \max(0.01, \min(
+            $this->workerConnectSelectTimeoutSec,
+            (float) $this->connectTimeout
+        ));
+        $seconds = (int) $failoverTimeout;
+        $microseconds = (int) (($failoverTimeout - $seconds) * 1_000_000);
+
+        $write = [$workerSocket];
+        $read = null;
+        $except = null;
+        $ready = @\socket_select($read, $write, $except, $seconds, $microseconds);
+        if ($ready === false || $ready === 0) {
+            \socket_close($workerSocket);
+            return false;
+        }
+
+        // 检查连接是否真的成功
+        $optval = \socket_get_option($workerSocket, SOL_SOCKET, SO_ERROR);
+        if ($optval !== 0) {
+            \socket_close($workerSocket);
+            return false;
+        }
+
         return $workerSocket;
     }
     
