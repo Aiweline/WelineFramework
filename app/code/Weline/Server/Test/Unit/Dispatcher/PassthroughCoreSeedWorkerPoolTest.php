@@ -232,12 +232,14 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         $budget = (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds');
         self::assertSame(0.0, $budget);
 
+        // P0-1：默认 spin budget 受 maxHandleNewConnectionSpinBudgetSec=0.8 硬截断，
+        // 防止单次 accept 自旋阻塞事件循环超过 0.8s。
         $readyCore = $this->createWarmupStubCore([
             19982 => true,
         ]);
         $readyCore->setWorkerPorts([19982]);
         $readyBudget = (float) $this->invokePrivateMethod($readyCore, 'resolvePostFailureSpinBudgetSeconds');
-        self::assertSame(3.0, $readyBudget);
+        self::assertSame(0.8, $readyBudget);
     }
 
     public function testPostFailureSpinBudgetUsesFullSpinMaxWhenOnlyMaintenanceCandidatesExist(): void
@@ -245,7 +247,8 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         $core = new PassthroughCore('127.0.0.1', 19981, 2);
         $this->setPrivateProperty($core, 'maintenanceWorkerPorts', [19992]);
 
-        self::assertSame(3.0, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
+        // P0-1：单连接默认受 0.8s 硬截断。
+        self::assertSame(0.8, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
     }
 
     public function testPostFailureSpinBudgetNonEmptyPoolUsesFullSpinMax(): void
@@ -255,14 +258,64 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
             19983 => true,
         ]);
         $core->setWorkerPorts([19982, 19983]);
-        self::assertSame(3.0, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
+        // P0-1：默认 0.8s 硬截断（min(spinWaitMaxSeconds=3.0, budget=0.8)）。
+        self::assertSame(0.8, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
 
         $core->blacklistWorker(19982);
         $core->blacklistWorker(19983);
-        self::assertSame(3.0, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
+        self::assertSame(0.8, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
 
         $core->unblacklistWorker(19982);
-        self::assertSame(3.0, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
+        self::assertSame(0.8, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
+    }
+
+    public function testPostFailureSpinBudgetCanBeWidenedViaConfig(): void
+    {
+        // P0-1：允许通过 max_handle_new_connection_spin_budget_sec 显式放宽上限；
+        // 真正生效的是 min(spinWaitMaxSeconds, maxHandleNewConnectionSpinBudgetSec)。
+        $core = $this->createWarmupStubCore([19982 => true]);
+        $core->setWorkerPorts([19982]);
+
+        $core->configure([
+            'spin_wait_max_seconds' => 5.0,
+            'max_handle_new_connection_spin_budget_sec' => 2.0,
+        ]);
+        self::assertSame(2.0, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
+
+        $core->configure([
+            'spin_wait_max_seconds' => 1.5,
+            'max_handle_new_connection_spin_budget_sec' => 10.0,
+        ]);
+        self::assertSame(1.5, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
+    }
+
+    public function testWorkerConnectSelectTimeoutIsConfigurableAndBounded(): void
+    {
+        // P0-2：worker_connect_select_timeout_sec 覆盖旧硬编码 0.3-0.5s，默认 0.1s，
+        // 且受 [0.01, 2.0] 钳制避免误配置引入极端阻塞。
+        $core = new PassthroughCore('127.0.0.1', 19981, 2);
+        self::assertSame(0.1, (float) $this->getPrivateProperty($core, 'workerConnectSelectTimeoutSec'));
+
+        $core->configure(['worker_connect_select_timeout_sec' => 0.25]);
+        self::assertSame(0.25, (float) $this->getPrivateProperty($core, 'workerConnectSelectTimeoutSec'));
+
+        // 下边界：< 0.01 会被钳制到 0.01
+        $core->configure(['worker_connect_select_timeout_sec' => 0.001]);
+        self::assertSame(0.01, (float) $this->getPrivateProperty($core, 'workerConnectSelectTimeoutSec'));
+
+        // 上边界：> 2.0 会被钳制到 2.0
+        $core->configure(['worker_connect_select_timeout_sec' => 10.0]);
+        self::assertSame(2.0, (float) $this->getPrivateProperty($core, 'workerConnectSelectTimeoutSec'));
+    }
+
+    public function testPostFailureSpinBudgetCanBeCompletelyDisabled(): void
+    {
+        // P0-1：maxHandleNewConnectionSpinBudgetSec=0 完全关闭自旋（极端低延迟场景）。
+        $core = $this->createWarmupStubCore([19982 => true]);
+        $core->setWorkerPorts([19982]);
+        $core->configure(['max_handle_new_connection_spin_budget_sec' => 0.0]);
+
+        self::assertSame(0.0, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
     }
 
     public function testSslModeKeepsStartupSpinWaitGraceEvenWhenConfiguredZero(): void
@@ -272,7 +325,8 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         $sslCore->configure(['spin_wait_max_seconds' => 0.0]);
 
         self::assertSame(0.0, (float) $this->invokePrivateMethod($sslCore, 'resolvePostFailureSpinBudgetSeconds'));
-        self::assertSame(15.0, $this->getPrivateProperty($sslCore, 'spinWaitMaxSeconds'));
+        // P0-1：旧 SSL 冷启动下限 15.0s 已降至 3.0s，防止 15s 级自旋阻塞主循环。
+        self::assertSame(3.0, $this->getPrivateProperty($sslCore, 'spinWaitMaxSeconds'));
 
         $plainCore = new PassthroughCore('127.0.0.1', 19981, 2, false);
         $plainCore->setWorkerPorts([]);
@@ -288,7 +342,8 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         $sslCore->configure(['spin_wait_max_seconds' => 0.0]);
         $this->setPrivateProperty($sslCore, 'workerPorts', [19982]);
 
-        self::assertSame(15.0, (float) $this->invokePrivateMethod($sslCore, 'resolvePostFailureSpinBudgetSeconds'));
+        // P0-1：SSL 冷启动下 spinWaitMaxSeconds=3.0s，单连接再被 0.8s 截断。
+        self::assertSame(0.8, (float) $this->invokePrivateMethod($sslCore, 'resolvePostFailureSpinBudgetSeconds'));
     }
 
     public function testAddWorkerPortRejectsPortWhenWarmupFails(): void

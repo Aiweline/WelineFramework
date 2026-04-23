@@ -188,6 +188,12 @@ class WlsLogger
 
         if (self::$ipcSinkWindowCount >= self::IPC_SINK_MAX_LOW_PRI_PER_WINDOW) {
             self::$ipcSinkDroppedBursty++;
+            // P2 观测性：把 IPC 节流"被丢弃的低优先级日志"同步到 MetricsRegistry。
+            // 使用 class_exists 守护是因为 WlsLogger 可能在 composer autoload 启用前就被调用
+            // （framework bootstrap 早期日志），此时 MetricsRegistry 还不可见。
+            if (\class_exists(\Weline\Server\Observability\MetricsRegistry::class, false)) {
+                \Weline\Server\Observability\MetricsRegistry::inc('wls.log.ipc_dropped_bursty');
+            }
             if (self::$ipcSinkDroppedBursty % 200 === 1) {
                 @\error_log(
                     '[WlsLogger] IPC log sink: low-priority rate limited (not forwarded to Master); '
@@ -358,6 +364,11 @@ class WlsLogger
             // 仅保留 ERROR 和 FATAL 级别日志
             if ($level !== LogLevel::ERROR && $level !== LogLevel::FATAL) {
                 $this->droppedLogCount++;
+                // P2 观测性：内存压力下丢弃的日志也同步到 MetricsRegistry，
+                // 与 ipc_dropped_bursty 一起构成"日志系统健康度"面板。
+                if (\class_exists(\Weline\Server\Observability\MetricsRegistry::class, false)) {
+                    \Weline\Server\Observability\MetricsRegistry::inc('wls.log.memory_pressure_dropped');
+                }
                 // 每丢弃 100 条日志输出一次警告
                 if ($this->droppedLogCount % 100 === 1) {
                     $this->writeStdout("[WARN] Memory pressure: dropped {$this->droppedLogCount} logs\n", LogLevel::WARNING);

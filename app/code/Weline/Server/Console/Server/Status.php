@@ -16,6 +16,7 @@ use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
+use Weline\Framework\App\Env;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
@@ -242,6 +243,8 @@ class Status extends CommandAbstract
         $masterStatusStr = $masterRunning ? __('● 运行中') : __('○ 已停止');
         $this->printer->note(\sprintf('║  Master PID：%-47s║', $masterPidStr));
         $this->printer->note(\sprintf('║  ' . __('Master 状态：') . '%-46s║', $masterStatusStr));
+        $selfHealMode = $this->resolveSelfHealMode();
+        $this->printer->note(\sprintf('║  ' . __('Master 自愈：') . '%-46s║', $selfHealMode));
         $this->printer->note('╚══════════════════════════════════════════════════════════════╝');
         echo "\n";
         
@@ -282,7 +285,27 @@ class Status extends CommandAbstract
         $this->printer->note(__('测试请求：curl %{1}/', [$info->getListenAddress()]));
         $this->printer->note(__('停止服务：php bin/w server:stop %{1}', [$name]));
     }
-    
+
+    /**
+     * 读取当前 Master 自愈开关的展示字符串
+     *
+     * - 默认开启：'● on'
+     * - 显式关闭：'○ off (env.php)'
+     */
+    protected function resolveSelfHealMode(): string
+    {
+        try {
+            $config = Env::getInstance()->getConfig() ?: [];
+            $raw = $config['wls']['orchestrator']['allow_child_resurrection'] ?? null;
+            if ($raw === null) {
+                return __('● on (默认)');
+            }
+            return ((bool)$raw) ? __('● on (env.php)') : __('○ off (env.php)');
+        } catch (\Throwable) {
+            return __('● on (默认)');
+        }
+    }
+
     /**
      * 显示服务实例树形结构
      * 
