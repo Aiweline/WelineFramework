@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Console;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Console\Server\Start;
+use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\SslCertificateService;
 
 final class StartCommandArgsSolidificationTest extends TestCase
@@ -104,6 +105,25 @@ final class StartCommandArgsSolidificationTest extends TestCase
         $start = new StartBaseEnvConfigProbe();
 
         self::assertIsArray($start->readEnvConfig());
+    }
+
+    public function testSaveInstanceInfoUsesManagerAppendOnlySemantics(): void
+    {
+        $manager = new StartInstanceManagerProbe();
+        $start = new StartInstanceInfoProbe($manager);
+
+        $start->persistInstanceInfo('unit-solidify');
+
+        self::assertCount(1, $manager->savedInstances);
+        self::assertSame('unit-solidify', $manager->savedInstances[0]['name']);
+
+        $info = $manager->savedInstances[0]['info'];
+        self::assertSame('unit-solidify', $info['name'] ?? null);
+        self::assertSame('127.0.0.1', $info['host'] ?? null);
+        self::assertSame(9443, $info['port'] ?? null);
+        self::assertSame(2, $info['count'] ?? null);
+        self::assertSame(19443, $info['worker_port'] ?? null);
+        self::assertSame(80, $info['http_redirect_port'] ?? null);
     }
 
     private function createProbe(?array $savedConfig = null, array $envConfig = []): StartConfigProbe
@@ -223,5 +243,57 @@ final class StartBaseEnvConfigProbe extends Start
         }
 
         return (int)$workerCount;
+    }
+}
+
+final class StartInstanceInfoProbe extends Start
+{
+    public function __construct(private readonly ServerInstanceManager $manager)
+    {
+    }
+
+    public function persistInstanceInfo(string $instanceName): void
+    {
+        $this->saveInstanceInfo(
+            $instanceName,
+            '127.0.0.1',
+            9443,
+            2,
+            true,
+            true,
+            '/tmp/cert.pem',
+            '/tmp/key.pem',
+            [101, 102],
+            true,
+            19443,
+            80,
+            true,
+            true,
+            false,
+            19443,
+            [],
+            ['frontend_process_mode' => true]
+        );
+    }
+
+    protected function getInstanceManager(): ServerInstanceManager
+    {
+        return $this->manager;
+    }
+}
+
+final class StartInstanceManagerProbe extends ServerInstanceManager
+{
+    /**
+     * @var list<array{name: string, info: array<string, mixed>}>
+     */
+    public array $savedInstances = [];
+
+    public function saveInstance(string $name, array $info): void
+    {
+        $this->savedInstances[] = [
+            'name' => $name,
+            'info' => $info,
+        ];
     }
 }
