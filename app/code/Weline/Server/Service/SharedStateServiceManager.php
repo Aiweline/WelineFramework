@@ -124,16 +124,35 @@ class SharedStateServiceManager
             });
         }
 
-        // 启动所有 Fiber
-        $sessionPrepare = $sessionNeedsStartup ? $fiberSession->start() : $sessionProbe;
-        $memoryPrepare = $memoryNeedsStartup && $fiberMemory !== null ? $fiberMemory->start() : $memoryProbe;
-
-        // 等待 Fiber 完成（如果它们还在运行）
-        if ($sessionNeedsStartup && $fiberSession !== null && !$fiberSession->isTerminated()) {
-            $sessionPrepare = $fiberSession->get();
+        // 启动所有 Fiber 并拿回其最终 return value。
+        //
+        // 正确的 \Fiber API：
+        //   - start()       返回的是 Fiber 内 `Fiber::suspend()` 的挂起值；若 fiber 一路 return
+        //                   未 suspend，则返回 null 且 `isTerminated()=true`。
+        //   - getReturn()   仅在 `isTerminated()=true` 后可用，才是真正的 return value。
+        //   - resume()      把控制权再交回 fiber，从上一次 suspend 处继续。
+        //
+        // 早前此处写成 `$fiberSession->get()`（方法根本不存在，intelephense 长期报错；
+        // 冷门分支触发时就是 fatal "Call to undefined method Fiber::get()"）。
+        // 现修正为：start 后若仍未 terminated，resume 直到跑完，再从 getReturn() 取结果。
+        if ($sessionNeedsStartup && $fiberSession !== null) {
+            $fiberSession->start();
+            while (!$fiberSession->isTerminated()) {
+                $fiberSession->resume();
+            }
+            $sessionPrepare = $fiberSession->getReturn();
+        } else {
+            $sessionPrepare = $sessionProbe;
         }
-        if ($memoryNeedsStartup && $fiberMemory !== null && !$fiberMemory->isTerminated()) {
-            $memoryPrepare = $fiberMemory->get();
+
+        if ($memoryNeedsStartup && $fiberMemory !== null) {
+            $fiberMemory->start();
+            while (!$fiberMemory->isTerminated()) {
+                $fiberMemory->resume();
+            }
+            $memoryPrepare = $fiberMemory->getReturn();
+        } else {
+            $memoryPrepare = $memoryProbe;
         }
 
         // 收集所有需要等待就绪的服务
@@ -1483,14 +1502,17 @@ class SharedStateServiceManager
         }
 
         if ($explicitConfigured) {
-            if (!$this->isPortCandidateReusable($role, $preferredPort, $tokenFileName)) {
-                throw new \RuntimeException(\sprintf(
-                    'Configured %s port %d is not available: in use by a non-reusable process (or another project).',
-                    $this->displayNameForRole($role),
-                    $preferredPort
-                ));
-            }
-
+            // 用户在 env.php 中钉死了端口：严格按配置返回，不做"可复用性"早校验、也不顺延。
+            //
+            // 早前版本会在这里调 `isPortCandidateReusable()` 做一次前置校验，占用不可复用时立即
+            // 抛 "Configured %s port %d is not available"。移除原因：
+            //   1. 与下游 `probeDefinition()` / `assessHealth()` 的 "Shared %s port %d is occupied
+            //      by an unexpected process." 语义完全重合，却消息不一致，调用方难以统一处理；
+            //   2. `isPortCandidateReusable()` 依赖 `Processer::isPortInUse()` 的静态缓存（Win 上
+            //      10s TTL），使 `SharedStateServiceManagerTest` 在批量运行时可能被前序测试的
+            //      netstat 探测污染，出现与单跑不同的行为漂移。
+            // 放弃早抛，让主流程 `ensureSharedService()` 在 `probeDefinition()` 阶段统一判定、
+            // 统一报错消息即可；生产端"端口不可用"的失败行为不变。
             return $preferredPort;
         }
 
@@ -1537,7 +1559,7 @@ class SharedStateServiceManager
             return false;
         }
 
-        if (!Processer::isPortInUse($port)) {
+        if (!$this->probePortInUse($port)) {
             return true;
         }
 
@@ -1550,6 +1572,22 @@ class SharedStateServiceManager
         );
 
         return (bool) ($inspection['reusable'] ?? false) && $this->isInspectionOwnedByCurrentProject($inspection);
+    }
+
+    /**
+     * 判定端口是否被 OS 级占用（TCP LISTEN / socket connect 成功等）。
+     *
+     * 单独提为 protected 钩子有两个意图：
+     * 1. 生产路径保持原语义 —— 委托给 `Processer::isPortInUse()`，其内部对 Windows/Linux 各有
+     *    带缓存（10s TTL）和多级兜底的实现；
+     * 2. 单元测试路径 —— 通过子类 override 屏蔽宿主环境/静态缓存带来的非确定性。
+     *    `isPortCandidateReusable()` 是 `resolveSharedServicePort()` 在 `explicitConfigured`
+     *    早抛分支前的唯一判据，若直接静态调用会让 `SharedStateServiceManagerTest` 的断言随
+     *    宿主机端口状态漂移（已发生："Configured ..." vs "Shared ... occupied by unexpected"）。
+     */
+    protected function probePortInUse(int $port): bool
+    {
+        return Processer::isPortInUse($port);
     }
 
     /**
