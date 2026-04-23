@@ -33,7 +33,8 @@ class BroadcastControlDispatchService
         return $this->dispatchToRunningInstances(
             $instanceName,
             $label,
-            fn(string $name): array => $this->ipcControlGateway->reloadAsync($name, $reloadType, $timeout)
+            fn(string $name): array => $this->ipcControlGateway->reloadAsync($name, $reloadType, $timeout),
+            fn(array $names): array => $this->ipcControlGateway->reloadAsyncMany($names, $reloadType, $timeout)
         );
     }
 
@@ -51,7 +52,8 @@ class BroadcastControlDispatchService
         return $this->dispatchToRunningInstances(
             $instanceName,
             '缓存清理',
-            fn(string $name): array => $this->ipcControlGateway->cacheClear($name, $timeout)
+            fn(string $name): array => $this->ipcControlGateway->cacheClear($name, $timeout),
+            fn(array $names): array => $this->ipcControlGateway->cacheClearMany($names, $timeout)
         );
     }
 
@@ -72,7 +74,8 @@ class BroadcastControlDispatchService
         return $this->dispatchToRunningInstances(
             $instanceName,
             $label,
-            fn(string $name): array => $this->ipcControlGateway->setMaintenanceMode($name, $enabled, $timeout)
+            fn(string $name): array => $this->ipcControlGateway->setMaintenanceMode($name, $enabled, $timeout),
+            fn(array $names): array => $this->ipcControlGateway->setMaintenanceModeMany($names, $enabled, $timeout, false)
         );
     }
 
@@ -94,7 +97,8 @@ class BroadcastControlDispatchService
         return $this->dispatchToRunningInstances(
             $instanceName,
             $label,
-            fn(string $name): array => $this->ipcControlGateway->setMaintenanceMode($name, $enabled, $timeout, true)
+            fn(string $name): array => $this->ipcControlGateway->setMaintenanceMode($name, $enabled, $timeout, true),
+            fn(array $names): array => $this->ipcControlGateway->setMaintenanceModeMany($names, $enabled, $timeout, true)
         );
     }
 
@@ -103,12 +107,20 @@ class BroadcastControlDispatchService
         return $this->dispatchToRunningInstances(
             $instanceName,
             'SSL 证书刷新',
-            fn(string $name): array => $this->ipcControlGateway->reloadSslCert($name, $domains)
+            fn(string $name): array => $this->ipcControlGateway->reloadSslCert($name, $domains),
+            fn(array $names): array => $this->ipcControlGateway->reloadSslCertMany($names, $domains)
         );
     }
 
     /**
+     * P0-3 修复：支持批量并发派发。
+     *
+     * - `$dispatcher` 仍用于单实例场景（目标数 == 1）以保持旧行为和测试兼容性。
+     * - `$batchDispatcher` 存在且目标数 >= 2 时，走并发路径；由 IpcControlGateway::*Many 系列实现
+     *   一次 open-fwrite + stream_select 多路复用等待 ACK，总耗时从 N × timeout 降到 ≈ timeout。
+     *
      * @param callable(string): array{success:bool,message:string,data?:array} $dispatcher
+     * @param null|callable(array<int,string>): array<string, array{success:bool,message:string,data?:array}> $batchDispatcher
      * @return array{
      *     success:bool,
      *     attempted:array<int,string>,
@@ -117,31 +129,68 @@ class BroadcastControlDispatchService
      *     message:string
      * }
      */
-    private function dispatchToRunningInstances(?string $instanceName, string $actionLabel, callable $dispatcher): array
-    {
+    private function dispatchToRunningInstances(
+        ?string $instanceName,
+        string $actionLabel,
+        callable $dispatcher,
+        ?callable $batchDispatcher = null
+    ): array {
         $attempted = [];
         $succeeded = [];
         $failedByInstance = [];
         $resultsByInstance = [];
         $targetInstances = $this->resolveRunningInstances($instanceName, $failedByInstance);
 
-        foreach ($targetInstances as $targetInstance) {
-            $attempted[] = $targetInstance;
+        $useBatch = $batchDispatcher !== null && \count($targetInstances) >= 2;
+
+        if ($useBatch) {
+            $batchResults = null;
             try {
-                $result = $dispatcher($targetInstance);
+                /** @var array<string, array{success:bool,message:string,data?:array}> $batchResults */
+                $batchResults = $batchDispatcher($targetInstances);
             } catch (\Throwable $throwable) {
-                $failedByInstance[$targetInstance] = $throwable->getMessage();
-                continue;
+                // 批量派发器整体崩溃：把全部目标登记为 attempted + failed，保持对等可观测性。
+                foreach ($targetInstances as $name) {
+                    $attempted[] = $name;
+                    $failedByInstance[$name] = $throwable->getMessage();
+                }
             }
 
-            $resultsByInstance[$targetInstance] = $result;
-
-            if (!empty($result['success'])) {
-                $succeeded[] = $targetInstance;
-                continue;
+            if ($batchResults !== null) {
+                foreach ($targetInstances as $targetInstance) {
+                    $attempted[] = $targetInstance;
+                    if (!\array_key_exists($targetInstance, $batchResults)) {
+                        $failedByInstance[$targetInstance] = (string) __('批量派发遗漏该实例');
+                        continue;
+                    }
+                    $result = $batchResults[$targetInstance];
+                    $resultsByInstance[$targetInstance] = $result;
+                    if (!empty($result['success'])) {
+                        $succeeded[] = $targetInstance;
+                        continue;
+                    }
+                    $failedByInstance[$targetInstance] = (string) ($result['message'] ?? 'unknown');
+                }
             }
+        } else {
+            foreach ($targetInstances as $targetInstance) {
+                $attempted[] = $targetInstance;
+                try {
+                    $result = $dispatcher($targetInstance);
+                } catch (\Throwable $throwable) {
+                    $failedByInstance[$targetInstance] = $throwable->getMessage();
+                    continue;
+                }
 
-            $failedByInstance[$targetInstance] = (string) ($result['message'] ?? 'unknown');
+                $resultsByInstance[$targetInstance] = $result;
+
+                if (!empty($result['success'])) {
+                    $succeeded[] = $targetInstance;
+                    continue;
+                }
+
+                $failedByInstance[$targetInstance] = (string) ($result['message'] ?? 'unknown');
+            }
         }
 
         return [
@@ -163,23 +212,34 @@ class BroadcastControlDispatchService
         $instanceName = $instanceName !== null ? \trim($instanceName) : null;
         if ($instanceName !== null && $instanceName !== '') {
             if (!$this->serverInstanceManager->hasInstance($instanceName)) {
-                $failedByInstance[$instanceName] = '实例未运行';
+                $failedByInstance[$instanceName] = (string) __('实例未运行');
                 return [];
             }
 
             if (!$this->serverInstanceManager->isInstanceIpcControllable($instanceName)) {
-                $failedByInstance[$instanceName] = 'Master 未运行，无法通过 IPC 控制。';
+                $failedByInstance[$instanceName] = (string) __('Master 未运行，无法通过 IPC 控制。');
                 return [];
             }
 
             return [$instanceName];
         }
 
+        // P1-8 修复：广播场景下不再静默跳过「存在但无 IPC」的实例，
+        // 将其显式登记到 failedByInstance，避免运维误以为「什么都没发生」。
+        // （相比之下历史行为是仅对「指定单实例」的场景报错，广播全部时悄悄丢弃。）
         $instances = [];
         foreach ($this->serverInstanceManager->listPersistedInstanceNames() as $name) {
             if ($this->serverInstanceManager->isInstanceIpcControllable($name)) {
                 $instances[] = $name;
+                continue;
             }
+
+            if (!$this->serverInstanceManager->hasInstance($name)) {
+                // 已过时的登记信息（实例已彻底不存在），无需告警
+                continue;
+            }
+
+            $failedByInstance[$name] = (string) __('Master 未运行，跳过该实例（请检查 server:start 或 Master 复活状态）。');
         }
 
         return $instances;
