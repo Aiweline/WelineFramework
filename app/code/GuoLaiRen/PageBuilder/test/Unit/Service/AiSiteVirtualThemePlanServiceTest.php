@@ -234,6 +234,26 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         );
     }
 
+    public function testBuildTaskPlanArtifactsRecordsStageTwoLocalRegenReportWhenTaskCopyIsInstructionLike(): void
+    {
+        $decoded = \json_decode($this->buildTaskPlanResponse(), true);
+        $decoded['virtual_theme_plan']['page_tasks']['home_page'][0]['task_script']['story_goal'] = '围绕首页主承诺补充写作说明';
+        $decoded['virtual_theme_plan']['page_tasks']['home_page'][0]['task_script']['content_fill_rule'] = '列出 2-4 个卖点并说明如何写';
+        $decoded['virtual_theme_plan']['page_tasks']['home_page'][0]['task_script']['field_content_requirements'][0]['sample'] = '待补充';
+
+        $service = new AiSiteVirtualThemePlanService(
+            $this->createAiServiceStub(\json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}')
+        );
+
+        $artifacts = $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
+
+        $report = $artifacts['structured']['_stage2_local_regen_report'] ?? [];
+        self::assertIsArray($report);
+        self::assertArrayHasKey('final_issue_count', $report);
+        self::assertIsArray($artifacts['structured']['page_tasks']['home_page'] ?? null);
+        self::assertNotEmpty($artifacts['structured']['page_tasks']['home_page'] ?? []);
+    }
+
     public function testBuildTaskPlanArtifactsRejectsAiPageTasksMissingBlockTaskMetaFields(): void
     {
         $this->assertMissingBlockTaskFieldIsRejected('meta_fields');
