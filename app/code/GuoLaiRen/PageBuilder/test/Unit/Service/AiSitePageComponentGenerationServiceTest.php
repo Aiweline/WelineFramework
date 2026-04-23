@@ -324,10 +324,14 @@ HTML,
             [
                 'site_title' => 'Task Plan Test',
                 'brief_description' => 'Explain value',
+                'content_locale' => 'zh_Hans_CN',
                 'default_locale' => 'en_US',
+                'plan_locale' => 'en_US',
             ],
             [
+                'content_locale' => 'zh_Hans_CN',
                 'default_locale' => 'en_US',
+                'plan_locale' => 'en_US',
                 'task_plan_structured' => [
                     'page_tasks' => [
                         'home_page' => [
@@ -349,8 +353,30 @@ HTML,
                                 'implementation_contract' => [
                                     'acceptance' => ['Hero must render value proposition and CTA.'],
                                 ],
+                                'block_task' => [
+                                    'content_plan' => [
+                                        'headline' => 'Use a launch-ready hero promise from the block plan.',
+                                        'body' => 'Explain one primary benefit and one proof point.',
+                                    ],
+                                    'style_plan' => [
+                                        'visual' => 'Use a layered neon card visual with CSS depth.',
+                                    ],
+                                ],
                                 'runtime_context' => [
                                     'task_session_id' => 'abc123',
+                                    'theme_context_snapshot' => [
+                                        'visual_direction' => [
+                                            'name' => 'Festival Neon',
+                                            'visual_tone' => 'bright gaming trust',
+                                        ],
+                                        'palette' => [
+                                            'primary' => '#101827',
+                                            'accent' => '#f59e0b',
+                                        ],
+                                    ],
+                                    'shared_prompt_context' => [
+                                        'brand_promise' => 'Fast game discovery with trusted checkout.',
+                                    ],
                                 ],
                             ],
                         ],
@@ -363,6 +389,26 @@ HTML,
         self::assertStringContainsString('Follow the confirmed hero task contract.', $prompt);
         self::assertStringContainsString('Grow faster with our service', $prompt);
         self::assertStringContainsString('Hero must render value proposition and CTA.', $prompt);
+        self::assertStringContainsString('stage1.theme_context_snapshot', $prompt);
+        self::assertStringContainsString('Festival Neon', $prompt);
+        self::assertStringContainsString('stage1.shared_prompt_context', $prompt);
+        self::assertStringContainsString('Fast game discovery with trusted checkout.', $prompt);
+        self::assertStringContainsString('stage2.task_script', $prompt);
+        self::assertStringContainsString('stage2.block_task', $prompt);
+        self::assertStringContainsString('block_task.content_plan', $prompt);
+        self::assertStringContainsString('Use a launch-ready hero promise from the block plan.', $prompt);
+        self::assertStringContainsString('block_task.style_plan', $prompt);
+        self::assertStringContainsString('Use a layered neon card visual with CSS depth.', $prompt);
+        self::assertStringContainsString('Weline/PageBuilder skill contract / frontend skill contract', $prompt);
+        self::assertStringContainsString('frontend-components', $prompt);
+        self::assertStringContainsString('content_locale/default_locale: zh_Hans_CN', $prompt);
+        self::assertStringContainsString('plan_locale: en_US is only an internal planning language hint', $prompt);
+        self::assertStringContainsString('Visitor-visible copy must use content_locale/default_locale', $prompt);
+        self::assertStringContainsString('Never render internal identifiers or paths as visible copy', $prompt);
+        self::assertStringContainsString('plan_locale, page_type, section_code, task_key', $prompt);
+        self::assertStringContainsString('Never render broken image placeholders', $prompt);
+        self::assertStringContainsString('inline SVG or CSS shapes', $prompt);
+        self::assertStringContainsString('Images: never output broken image placeholders', $prompt);
     }
 
     public function testBuildSectionDefaultConfigUsesTaskPlanFieldSamples(): void
@@ -610,6 +656,28 @@ HTML,
             'php_variables' => '',
             'css_extra' => '',
             'html_content' => '<div class="visual" style="background-image:url(https://example.com/card.webp)">Royal Indian Games</div>',
+            'js_content' => '',
+        ];
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('AI');
+
+        (function (array $payload, string $region): array {
+            return $this->ensureAiPayloadValid($payload, $region);
+        })->call($service, $payload, 'content');
+    }
+
+    public function testVirtualThemeComponentPolicyRejectsBrokenCssBackgroundImages(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $payload = [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '.hero-card { background-image: url("https://example.com/card.webp"); }',
+            'html_content' => '<div class="visual-card"><h2>Royal Indian Games</h2><p>Trusted play, fast discovery, and clear rewards for every visitor.</p></div>',
             'js_content' => '',
         ];
 
