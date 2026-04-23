@@ -8,18 +8,22 @@ use Weline\Framework\App\Env;
 final class LocalDomainPolicy
 {
     public const TEST_ROOT_DOMAIN = 'weline.test';
+    public const LEGACY_LOCAL_TEST_ROOT_DOMAIN = 'local.test';
     public const LOOPBACK_ROOT_DOMAIN = 'weline.localhost';
 
     public const TEST_WILDCARD_DOMAIN = '*.weline.test';
+    public const LEGACY_LOCAL_TEST_WILDCARD_DOMAIN = '*.local.test';
     public const LOOPBACK_WILDCARD_DOMAIN = '*.weline.localhost';
 
     private const LOCAL_ROOT_DOMAINS = [
         self::TEST_ROOT_DOMAIN,
+        self::LEGACY_LOCAL_TEST_ROOT_DOMAIN,
         self::LOOPBACK_ROOT_DOMAIN,
     ];
 
     private const LOCAL_WILDCARD_DOMAINS = [
         self::TEST_WILDCARD_DOMAIN,
+        self::LEGACY_LOCAL_TEST_WILDCARD_DOMAIN,
         self::LOOPBACK_WILDCARD_DOMAIN,
     ];
 
@@ -130,7 +134,7 @@ final class LocalDomainPolicy
         }
 
         return (bool) \preg_match(
-            '/^p[0-9a-f]{8}\.(?:weline\.test|weline\.localhost)$/i',
+            '/^p[0-9a-f]{8}\.(?:weline\.test|local\.test|weline\.localhost)$/i',
             $domain
         );
     }
@@ -138,7 +142,7 @@ final class LocalDomainPolicy
     public static function requiresHostsEntry(string $domain): bool
     {
         $rootDomain = self::resolveRootDomain($domain);
-        return $rootDomain === self::TEST_ROOT_DOMAIN;
+        return \in_array($rootDomain, [self::TEST_ROOT_DOMAIN, self::LEGACY_LOCAL_TEST_ROOT_DOMAIN], true);
     }
 
     public static function resolvesViaLoopbackSuffix(string $domain): bool
