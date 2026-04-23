@@ -15,6 +15,7 @@ namespace Weline\Queue\Cron;
 
 use Weline\Cron\Helper\CronStatus;
 use Weline\Cron\Helper\Process;
+use Weline\Framework\System\Process\Processer;
 use Weline\Framework\Output\Cli\Printing;
 
 class Queue implements \Weline\Cron\CronTaskInterface
@@ -96,13 +97,17 @@ QUEUETIP;
                 $queue_name = Process::initTaskName('queue-' . $queue->getName() . '-' . $queue->getId());
                 # 进程名
                 $process_name = PHP_BINARY . ' bin/w queue:run --id=' . $queue->getId() . ' --name \'' . $queue_name . '\'';
-                # 使用进程名检查该进程是否在运行
-                $pid = Process::getPidByName($process_name);
+                # 优先使用队列记录 PID 精确判活（Windows 下按命令行匹配不稳定，容易误判）
+                $queuePid = (int)($queue->getPid() ?: 0);
+                $queuePidRunning = $queuePid > 0 && Processer::isRunningByPid($queuePid);
+                # 兼容旧逻辑：命令行名匹配作为回退
+                $pid = $queuePidRunning ? $queuePid : Process::getPidByName($process_name);
                 $result = $queue->getResult();
                 if ($pid) {
                     $output = Process::getProcessOutput($process_name);
                     $queue->setResult($output . __('进程已存在，请检查进程状态！进程名：%{1}', $process_name) . $result)
                         ->setPid($pid)
+                        ->setStatus($queue::status_running)
                         ->save();
                     continue;
                 } elseif ($queue->getPid()) {
