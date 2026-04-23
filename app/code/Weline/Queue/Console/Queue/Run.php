@@ -44,7 +44,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->success(__('正确示例：php bin/w queue:run --id=1'));
             exit();
         }
-        $queue = $this->queue->load($id);
+        $queue = $this->newQueueModel()->load($id);
         if (empty($queue->getId())) {
             $this->printing->error(__('队列不存在。 '));
             $this->printing->success(__('正确示例：php bin/w queue:run --id=%{1}', $id));
@@ -77,7 +77,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 }
                 $this->printing->note(__('已终止队列 #%{1} 旧任务（pid=%{2}）。', [$id, $existingPid]));
             }
-            $queue = $this->queue->load($id);
+            $queue = $this->newQueueModel()->load($id);
             $queue->setStatus($queue::status_pending)
                 ->setPid(0)
                 ->setProcess(\trim((string)$queue->getProcess() . PHP_EOL . __('强制接管：已终止同 ID 旧任务，准备重新执行。')))
@@ -117,7 +117,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $queue->setArgs($args); # 记录执行参数
                 $result = $queue_execute->execute($queue);
                 // execute() 内常通过 w_query 等直接更新库里的 result；此处必须重新 load，否则会用过期内存覆盖掉过程日志
-                $queue = $this->queue->load($id);
+                $queue = $this->newQueueModel()->load($id);
                 $queue->setStatus($queue::status_done)
                     ->setPid(0)
                     ->setResult(\trim($queue->getResult() . PHP_EOL . $result))
@@ -126,7 +126,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $this->printing->note($queue->getResult());
             } catch (\Throwable $e) {
                 $result = $e->getMessage();
-                $queue = $this->queue->load($id);
+                $queue = $this->newQueueModel()->load($id);
                 $queue->setStatus($queue::status_error)
                     ->setPid(0)
                     ->setResult(\trim($queue->getResult() . PHP_EOL . $result))
@@ -153,6 +153,11 @@ class Run implements \Weline\Framework\Console\CommandInterface
     public function tip(): string
     {
         return __('运行队列. ') . 'php bin/w queue:run --id=1 [-f]';
+    }
+
+    private function newQueueModel(): Queue
+    {
+        return (clone $this->queue)->clearData()->clearQuery();
     }
 
     public function help(): array|string

@@ -11,6 +11,8 @@ use Weline\Framework\Runtime\SchedulerSystem;
 final class AiSiteVirtualThemePlanService
 {
     private const BLOCK_TASK_SCHEMA_VERSION = 'stage2-block-task-v1';
+    private const STAGE_TWO_LOCAL_REGEN_MAX_ROUNDS = 3;
+    private const STAGE_TWO_LOCAL_REGEN_BATCH_BLOCKS = 5;
 
     private const STAGE2_BLOCK_TASK_FANOUT_GROUP = 'stage2.block_task_plan';
 
@@ -121,6 +123,26 @@ final class AiSiteVirtualThemePlanService
         $assembledStructured = $this->ensureTaskDirectoryHierarchy($assembledStructured);
         $assembledStructured = $this->syncStageTwoRuntimeContexts($assembledStructured);
         $assembledStructured = $this->syncStageTwoTaskSortArtifacts($assembledStructured, $pageTypes);
+        $localRegenReport = [];
+        [
+            'structured' => $assembledStructured,
+            'virtual_theme_plan' => $assembledVirtualThemePlan,
+            'risk_notes' => $riskNotes,
+            'report' => $localRegenReport,
+        ] = $this->repairStageTwoProblemBatchesByAi(
+            $scope,
+            $buildBlueprint,
+            $assembledStructured,
+            $assembledVirtualThemePlan,
+            $riskNotes,
+            $mode,
+            $instruction,
+            $targetScope,
+            $chunkCallback,
+            $heartbeatCallback,
+            $progressCallback
+        );
+        $assembledStructured = $this->syncStageTwoTaskSortArtifacts($assembledStructured, $pageTypes);
         $assembledVirtualThemePlan = \array_replace_recursive($assembledVirtualThemePlan, [
             'block_task_schema' => $assembledStructured['block_task_schema'] ?? [],
             'task_directory_tree' => $assembledStructured['task_directory_tree'] ?? [],
@@ -131,7 +153,12 @@ final class AiSiteVirtualThemePlanService
             'page_block_tasks' => $assembledStructured['page_block_tasks'] ?? [],
             'virtual_theme_build_tree' => $assembledStructured['virtual_theme_build_tree'] ?? [],
             'execution_blueprint' => $assembledStructured['execution_blueprint'] ?? [],
+            'risk_notes' => $riskNotes,
         ]);
+        if ($localRegenReport !== []) {
+            $assembledStructured['_stage2_local_regen_report'] = $localRegenReport;
+            $assembledVirtualThemePlan['_stage2_local_regen_report'] = $localRegenReport;
+        }
         $this->assertAiTaskPlanIsContentful($assembledStructured);
         $assembledVirtualThemePlan['signature'] = $this->buildSignature($assembledStructured);
 
@@ -6983,6 +7010,402 @@ final class AiSiteVirtualThemePlanService
     }
 
     /**
+     * @param list<string> $riskNotes
+     * @return array{structured:array<string,mixed>,virtual_theme_plan:array<string,mixed>,risk_notes:list<string>,report:array<string,mixed>}
+     */
+    private function repairStageTwoProblemBatchesByAi(
+        array $scope,
+        array $buildBlueprint,
+        array $structured,
+        array $virtualThemePlan,
+        array $riskNotes,
+        string $mode,
+        string $instruction,
+        string $targetScope,
+        ?callable $chunkCallback,
+        ?callable $heartbeatCallback,
+        ?callable $progressCallback
+    ): array {
+        $report = ['rounds' => [], 'final_issue_count' => 0];
+        $baselineStructured = $structured;
+        $allBatches = $this->buildTaskPlanGenerationBatches($structured);
+
+        for ($round = 1; $round <= self::STAGE_TWO_LOCAL_REGEN_MAX_ROUNDS; $round++) {
+            $issues = $this->collectStageTwoTaskPlanIssues($structured);
+            if ($issues === []) {
+                $report['final_issue_count'] = 0;
+                return [
+                    'structured' => $structured,
+                    'virtual_theme_plan' => $virtualThemePlan,
+                    'risk_notes' => $riskNotes,
+                    'report' => $report,
+                ];
+            }
+
+            $targetBatchIds = $this->resolveStageTwoIssueBatchIds($issues, $allBatches);
+            if ($targetBatchIds === []) {
+                break;
+            }
+            $targetBatchIds = \array_slice($targetBatchIds, 0, self::STAGE_TWO_LOCAL_REGEN_BATCH_BLOCKS);
+            $fanoutBatches = [];
+            foreach ($allBatches as $batchIndex => $batch) {
+                $batchId = $this->buildTaskPlanBatchId($batch);
+                if (!\in_array($batchId, $targetBatchIds, true)) {
+                    continue;
+                }
+                $fanoutBatches[] = ['batch' => $batch, 'batch_index' => $batchIndex];
+            }
+            if ($fanoutBatches === []) {
+                break;
+            }
+
+            $issueSummary = [];
+            foreach ($issues as $issue) {
+                $issueSummary[] = '[' . (string)($issue['page_type'] ?? '') . '][' . (string)($issue['block_key'] ?? '') . '] '
+                    . (string)($issue['field_path'] ?? '')
+                    . ': '
+                    . (string)($issue['reason_code'] ?? 'invalid');
+                if (\count($issueSummary) >= 20) {
+                    break;
+                }
+            }
+            $regenInstruction = \trim($instruction . "\n"
+                . 'Repair only the selected stage-2 task batches with invalid visible content or schema details. '
+                . 'Keep task_key/sort_order/dependencies unchanged. '
+                . 'Issue list: ' . \implode('; ', $issueSummary));
+
+            $decodedByBatchId = $this->requestTaskPlanFanoutBatchesConcurrently(
+                $scope,
+                $buildBlueprint,
+                $structured,
+                $virtualThemePlan,
+                $fanoutBatches,
+                $mode,
+                $regenInstruction,
+                $targetScope,
+                $chunkCallback,
+                $heartbeatCallback,
+                $progressCallback,
+                \count($fanoutBatches),
+                0
+            );
+
+            foreach ($fanoutBatches as $fanoutBatch) {
+                $batch = \is_array($fanoutBatch['batch'] ?? null) ? $fanoutBatch['batch'] : [];
+                $batchId = $this->buildTaskPlanBatchId($batch);
+                $decoded = \is_array($decodedByBatchId[$batchId] ?? null) ? $decodedByBatchId[$batchId] : [];
+                ['structured' => $structured, 'virtual_theme_plan' => $virtualThemePlan, 'risk_notes' => $riskNotes] = $this->mergeTaskPlanGenerationBatch(
+                    $structured,
+                    $virtualThemePlan,
+                    $riskNotes,
+                    $batch,
+                    $decoded
+                );
+            }
+
+            $structured = $this->sanitizePromptLikeTaskPlanStructured($structured);
+            $structured = $this->applyBlockTaskSchemaToStructured($structured);
+            $structured = $this->ensureTaskDirectoryHierarchy($structured);
+            $structured = $this->syncStageTwoRuntimeContexts($structured);
+            $structured = $this->applyStageTwoTaskStructureLock($baselineStructured, $structured);
+            $structured = $this->syncStageTwoTaskSortArtifacts($structured);
+            $report['rounds'][] = [
+                'round' => $round,
+                'batch_ids' => $targetBatchIds,
+                'issue_count_before' => \count($issues),
+            ];
+        }
+
+        $finalIssues = $this->collectStageTwoTaskPlanIssues($structured);
+        if ($finalIssues !== []) {
+            $structured = $this->applyStageTwoIssueFallbacks($structured, $finalIssues);
+            $structured = $this->applyStageTwoTaskStructureLock($baselineStructured, $structured);
+            $riskNotes[] = 'Stage-2 local regeneration reached retry limit; unresolved blocks were downgraded with safe placeholders.';
+            $riskNotes[] = 'Remaining issue count: ' . (string)\count($finalIssues);
+        }
+        $report['final_issue_count'] = \count($finalIssues);
+        $report['final_issues'] = \array_slice($finalIssues, 0, 30);
+
+        return [
+            'structured' => $structured,
+            'virtual_theme_plan' => $virtualThemePlan,
+            'risk_notes' => \array_values(\array_unique($riskNotes)),
+            'report' => $report,
+        ];
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function collectStageTwoTaskPlanIssues(array $structured): array
+    {
+        $issues = [];
+        $contentLocale = $this->resolveStageTwoStructuredContentLocale($structured);
+        $requiresEnglishContent = $this->isStageTwoEnglishLocale($contentLocale);
+        $pageTasks = \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [];
+        foreach ($pageTasks as $pageType => $tasks) {
+            if (!\is_array($tasks)) {
+                continue;
+            }
+            foreach ($tasks as $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $taskKey = \trim((string)($task['task_key'] ?? ''));
+                $blockKey = \trim((string)($task['block_key'] ?? $task['section_code'] ?? $taskKey));
+                $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
+                $blockTask = \is_array($task['block_task'] ?? null) ? $task['block_task'] : [];
+                $storyGoal = \trim((string)($taskScript['story_goal'] ?? ''));
+                $contentFillRule = \trim((string)($taskScript['content_fill_rule'] ?? ''));
+                $requirements = \is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [];
+                $stylePlan = \is_array($blockTask['style_plan'] ?? null) ? $blockTask['style_plan'] : [];
+
+                if ($storyGoal === '' || $this->isStageTwoMetaInstructionLike($storyGoal)) {
+                    $issues[] = [
+                        'stage' => 'stage2',
+                        'page_type' => (string)$pageType,
+                        'block_key' => $blockKey,
+                        'task_key' => $taskKey,
+                        'field_path' => 'task_script.story_goal',
+                        'reason_code' => 'instruction_like_or_empty',
+                        'snippet' => $this->clipText($storyGoal, 120),
+                    ];
+                }
+                if ($contentFillRule === '' || $this->isStageTwoMetaInstructionLike($contentFillRule)) {
+                    $issues[] = [
+                        'stage' => 'stage2',
+                        'page_type' => (string)$pageType,
+                        'block_key' => $blockKey,
+                        'task_key' => $taskKey,
+                        'field_path' => 'task_script.content_fill_rule',
+                        'reason_code' => 'instruction_like_or_empty',
+                        'snippet' => $this->clipText($contentFillRule, 120),
+                    ];
+                }
+                if ($requirements === []) {
+                    $issues[] = [
+                        'stage' => 'stage2',
+                        'page_type' => (string)$pageType,
+                        'block_key' => $blockKey,
+                        'task_key' => $taskKey,
+                        'field_path' => 'task_script.field_content_requirements',
+                        'reason_code' => 'missing_field_requirements',
+                        'snippet' => '',
+                    ];
+                }
+                foreach (['color', 'font', 'spacing', 'responsive'] as $styleKey) {
+                    if (\trim((string)($stylePlan[$styleKey] ?? '')) === '') {
+                        $issues[] = [
+                            'stage' => 'stage2',
+                            'page_type' => (string)$pageType,
+                            'block_key' => $blockKey,
+                            'task_key' => $taskKey,
+                            'field_path' => 'block_task.style_plan.' . $styleKey,
+                            'reason_code' => 'missing_style_plan_key',
+                            'snippet' => '',
+                        ];
+                    }
+                }
+                foreach ($requirements as $requirement) {
+                    if (!\is_array($requirement)) {
+                        continue;
+                    }
+                    $sample = \trim((string)($requirement['sample'] ?? ''));
+                    if ($sample === '' || $this->isStageTwoMetaInstructionLike($sample)) {
+                        $issues[] = [
+                            'stage' => 'stage2',
+                            'page_type' => (string)$pageType,
+                            'block_key' => $blockKey,
+                            'task_key' => $taskKey,
+                            'field_path' => 'task_script.field_content_requirements.sample',
+                            'reason_code' => 'instruction_like_or_empty',
+                            'snippet' => $this->clipText($sample, 120),
+                        ];
+                    }
+                }
+                if ($requiresEnglishContent && $this->stageTwoTaskHasCjkVisibleContent($taskScript, $blockTask)) {
+                    $issues[] = [
+                        'stage' => 'stage2',
+                        'page_type' => (string)$pageType,
+                        'block_key' => $blockKey,
+                        'task_key' => $taskKey,
+                        'field_path' => 'visible_content',
+                        'reason_code' => 'locale_mismatch',
+                        'snippet' => '',
+                    ];
+                }
+            }
+        }
+
+        return $issues;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $issues
+     * @param list<array<string,mixed>> $batches
+     * @return list<string>
+     */
+    private function resolveStageTwoIssueBatchIds(array $issues, array $batches): array
+    {
+        $batchIds = [];
+        foreach ($issues as $issue) {
+            $taskKey = \trim((string)($issue['task_key'] ?? ''));
+            $pageType = \trim((string)($issue['page_type'] ?? ''));
+            $blockKey = \trim((string)($issue['block_key'] ?? ''));
+            foreach ($batches as $batch) {
+                $candidateBatchId = $this->buildTaskPlanBatchId($batch);
+                $batchTaskKeys = \array_map('strval', \is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : []);
+                if ($taskKey !== '' && \in_array($taskKey, $batchTaskKeys, true)) {
+                    $batchIds[] = $candidateBatchId;
+                    continue;
+                }
+                $batchPageType = \trim((string)($batch['key'] ?? ''));
+                $batchBlockKey = \trim((string)($batch['block_key'] ?? ''));
+                if ($pageType !== '' && $pageType === $batchPageType && $blockKey !== '' && $blockKey === $batchBlockKey) {
+                    $batchIds[] = $candidateBatchId;
+                }
+            }
+        }
+
+        return \array_values(\array_unique($batchIds));
+    }
+
+    /**
+     * @param list<array<string,mixed>> $issues
+     * @return array<string,mixed>
+     */
+    private function applyStageTwoIssueFallbacks(array $structured, array $issues): array
+    {
+        $isEn = $this->isStageTwoEnglishLocale($this->resolveStageTwoStructuredContentLocale($structured));
+        $pageTasks = \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [];
+        foreach ($issues as $issue) {
+            $pageType = \trim((string)($issue['page_type'] ?? ''));
+            $taskKey = \trim((string)($issue['task_key'] ?? ''));
+            if ($pageType === '' || !\is_array($pageTasks[$pageType] ?? null)) {
+                continue;
+            }
+            foreach ($pageTasks[$pageType] as $taskIndex => $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                if ($taskKey !== '' && \trim((string)($task['task_key'] ?? '')) !== $taskKey) {
+                    continue;
+                }
+                $fieldPath = \trim((string)($issue['field_path'] ?? ''));
+                if ($fieldPath === 'task_script.story_goal') {
+                    $pageTasks[$pageType][$taskIndex]['task_script']['story_goal'] = $isEn
+                        ? 'Visitors can see clear and actionable on-page content.'
+                        : '访客可以看到清晰且可执行的页面可见内容。';
+                } elseif ($fieldPath === 'task_script.content_fill_rule') {
+                    $pageTasks[$pageType][$taskIndex]['task_script']['content_fill_rule'] = $isEn
+                        ? 'Provide concrete heading, supporting copy, CTA label, and proof sample values.'
+                        : '提供具体标题、辅助文案、CTA 标签与可信点示例值。';
+                } elseif ($fieldPath === 'task_script.field_content_requirements' || $fieldPath === 'task_script.field_content_requirements.sample') {
+                    $requirements = \is_array($task['task_script']['field_content_requirements'] ?? null)
+                        ? $task['task_script']['field_content_requirements']
+                        : [];
+                    if ($requirements === []) {
+                        $requirements[] = [
+                            'field' => 'headline',
+                            'sample' => $isEn ? 'Play with confidence today' : '今天就放心开始体验',
+                            'reason' => $isEn ? 'visible conversion copy' : '可见转化文案',
+                        ];
+                    } else {
+                        foreach ($requirements as $reqIndex => $requirement) {
+                            if (!\is_array($requirement)) {
+                                continue;
+                            }
+                            if (\trim((string)($requirement['sample'] ?? '')) === '') {
+                                $requirements[$reqIndex]['sample'] = $isEn ? 'Explore the core offer now' : '现在即可了解核心内容';
+                            }
+                        }
+                    }
+                    $pageTasks[$pageType][$taskIndex]['task_script']['field_content_requirements'] = $requirements;
+                } elseif (\str_starts_with($fieldPath, 'block_task.style_plan.')) {
+                    $stylePlan = \is_array($task['block_task']['style_plan'] ?? null) ? $task['block_task']['style_plan'] : [];
+                    foreach (['color', 'font', 'spacing', 'responsive'] as $styleKey) {
+                        if (\trim((string)($stylePlan[$styleKey] ?? '')) === '') {
+                            $stylePlan[$styleKey] = $isEn ? ('Use shared ' . $styleKey . ' tokens.') : ('使用共享的' . $styleKey . '设计令牌。');
+                        }
+                    }
+                    $pageTasks[$pageType][$taskIndex]['block_task']['style_plan'] = $stylePlan;
+                } elseif ($fieldPath === 'visible_content') {
+                    $pageTasks[$pageType][$taskIndex]['task_script']['story_goal'] = 'Visitors can see clear and actionable on-page content.';
+                }
+                break;
+            }
+        }
+        $structured['page_tasks'] = $pageTasks;
+
+        return $structured;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function applyStageTwoTaskStructureLock(array $baselineStructured, array $targetStructured): array
+    {
+        $baselineShared = \is_array($baselineStructured['shared_tasks'] ?? null) ? $baselineStructured['shared_tasks'] : [];
+        $targetShared = \is_array($targetStructured['shared_tasks'] ?? null) ? $targetStructured['shared_tasks'] : [];
+        $targetStructured['shared_tasks'] = $this->applyStageTwoTaskStructureLockToList($baselineShared, $targetShared);
+
+        $baselinePageTasks = \is_array($baselineStructured['page_tasks'] ?? null) ? $baselineStructured['page_tasks'] : [];
+        $targetPageTasks = \is_array($targetStructured['page_tasks'] ?? null) ? $targetStructured['page_tasks'] : [];
+        foreach ($targetPageTasks as $pageType => $tasks) {
+            if (!\is_array($tasks)) {
+                continue;
+            }
+            $baselineTasks = \is_array($baselinePageTasks[$pageType] ?? null) ? $baselinePageTasks[$pageType] : [];
+            $targetPageTasks[$pageType] = $this->applyStageTwoTaskStructureLockToList($baselineTasks, $tasks);
+        }
+        $targetStructured['page_tasks'] = $targetPageTasks;
+
+        return $targetStructured;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $baselineTasks
+     * @param list<array<string,mixed>> $tasks
+     * @return list<array<string,mixed>>
+     */
+    private function applyStageTwoTaskStructureLockToList(array $baselineTasks, array $tasks): array
+    {
+        $baselineByTaskKey = [];
+        foreach ($baselineTasks as $baselineTask) {
+            if (!\is_array($baselineTask)) {
+                continue;
+            }
+            $taskKey = \trim((string)($baselineTask['task_key'] ?? ''));
+            if ($taskKey !== '') {
+                $baselineByTaskKey[$taskKey] = $baselineTask;
+            }
+        }
+
+        foreach ($tasks as $index => $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '' || !\is_array($baselineByTaskKey[$taskKey] ?? null)) {
+                continue;
+            }
+            $baselineTask = $baselineByTaskKey[$taskKey];
+            $tasks[$index]['task_key'] = $taskKey;
+            $tasks[$index]['sort_order'] = (int)($baselineTask['sort_order'] ?? $task['sort_order'] ?? 0);
+            $tasks[$index]['dependencies'] = \array_values(\array_unique(\array_filter(\array_map(
+                'strval',
+                \is_array($baselineTask['dependencies'] ?? null) ? $baselineTask['dependencies'] : (\is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [])
+            ))));
+            if (!\is_array($tasks[$index]['block_task'] ?? null)) {
+                $tasks[$index]['block_task'] = [];
+            }
+            $tasks[$index]['block_task']['sort_order'] = (int)($baselineTask['block_task']['sort_order'] ?? $tasks[$index]['sort_order']);
+        }
+
+        return $tasks;
+    }
+
+    /**
      * @param array<string, mixed> $structured
      */
     private function assertAiTaskPlanIsContentful(array $structured): void
@@ -7147,6 +7570,19 @@ final class AiSiteVirtualThemePlanService
     private function containsStageTwoCjkText(string $text): bool
     {
         return \preg_match('/\p{Han}/u', $text) === 1;
+    }
+
+    private function clipText(string $text, int $maxLength = 120): string
+    {
+        $text = \trim($text);
+        if ($text === '' || $maxLength <= 0) {
+            return '';
+        }
+        if (\mb_strlen($text) <= $maxLength) {
+            return $text;
+        }
+
+        return \mb_substr($text, 0, $maxLength) . '...';
     }
 
     /**

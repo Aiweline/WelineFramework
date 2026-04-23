@@ -11,6 +11,9 @@ use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreviewRequestInspector;
 use Weline\Theme\Service\PreviewTokenService;
+use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemeDirectoryResolver;
+use Weline\Theme\Service\ThemeResourceGateway;
 use Weline\Theme\Service\ThemeStaticNamespaceService;
 
 class ThemeStaticNamespaceServiceTest extends TestCase
@@ -74,6 +77,52 @@ class ThemeStaticNamespaceServiceTest extends TestCase
         );
     }
 
+    public function testDesignAbsoluteOriginPathResolvesToPublicThemePath(): void
+    {
+        $service = $this->createService(false, [
+            'frontend_theme_id' => 0,
+            'preview_token' => '',
+        ]);
+
+        $themePath = rtrim(str_replace('\\', '/', BP), '/') . '/app/design/WeShop/motor';
+
+        $this->assertSame(
+            'WeShop/motor',
+            $service->resolvePublicThemePath($this->createTheme($themePath))
+        );
+    }
+
+    public function testModuleThemeAbsoluteOriginPathStaysRelativeInPreviewStaticPath(): void
+    {
+        $service = $this->createService(true, [
+            'backend_theme_id' => 10,
+            'preview_token' => 'pv_absolute_module',
+            'editor_area' => 'backend',
+            'shell' => 'theme-editor',
+            'preview_mode' => 'live',
+            'status' => 'draft',
+            'scope' => 'default',
+        ]);
+        $gateway = new ThemeResourceGateway(
+            $this->createMock(ThemeDirectoryResolver::class),
+            new ThemeContextService($this->createMock(WelineTheme::class)),
+            $service,
+            $this->createMock(Request::class),
+        );
+        $theme = $this->createTheme(
+            rtrim(str_replace('\\', '/', BP), '/') . '/app/code/Weline/Theme/view/theme',
+            10
+        );
+
+        $path = str_replace('\\', '/', $gateway->buildLayoutAssetDiskPath('backend', 'default', 'default', 'css', $theme));
+        $staticRelative = substr($path, strpos($path, '/pub/static/') + strlen('/pub/static/'));
+
+        $this->assertSame(
+            '__preview/token_pv_absolute_module/Weline/Theme/view/theme/backend/layouts/default/default.css',
+            $staticRelative
+        );
+    }
+
     /**
      * @param array<string, mixed> $context
      */
@@ -116,10 +165,11 @@ class ThemeStaticNamespaceServiceTest extends TestCase
         return new ThemeStaticNamespaceService($previewContextService, $session);
     }
 
-    private function createTheme(string $originPath): WelineTheme
+    private function createTheme(string $originPath, int $id = 1): WelineTheme
     {
         $theme = $this->createMock(WelineTheme::class);
         $theme->method('getOriginPath')->willReturn($originPath);
+        $theme->method('getId')->willReturn($id);
 
         return $theme;
     }
