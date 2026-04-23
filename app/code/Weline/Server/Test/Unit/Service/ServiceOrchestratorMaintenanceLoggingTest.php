@@ -180,6 +180,44 @@ final class ServiceOrchestratorMaintenanceLoggingTest extends TestCase
         self::assertSame([19001], $setPoolMessages[0]['message']['ports'] ?? null);
     }
 
+    public function testRejectUntrustedChildHandlesMissingPort(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $server = new class extends MasterControlServer {
+            public array $closed = [];
+            public array $sent = [];
+
+            public function closeClient(int $clientId): void
+            {
+                $this->closed[] = $clientId;
+            }
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = [
+                    'clientId' => $clientId,
+                    'message' => ControlMessage::decode(\rtrim($message, "\n")),
+                ];
+
+                return true;
+            }
+        };
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+
+        $this->invokePrivate($orchestrator, 'rejectUntrustedChild', [
+            99,
+            ControlMessage::ROLE_WORKER,
+            1,
+            null,
+            'launch_id_mismatch',
+            'msg-1',
+        ]);
+
+        self::assertSame([99], $server->closed);
+        self::assertArrayNotHasKey('port', $server->sent[0]['message']);
+        self::assertSame('launch_id_mismatch', $server->sent[0]['message']['reason'] ?? null);
+    }
+
     private function invokePrivate(object $object, string $method, array $arguments = []): mixed
     {
         $reflection = new \ReflectionMethod($object, $method);

@@ -252,7 +252,7 @@ class MasterProcess
             $this->log(__('  已注册 Master PID'));
             $this->logger->flush(true);
 
-            // 清理孤儿实例文件（超过 60 秒未更新的实例 JSON，说明对应的 Master 已死亡）
+            // 标记/清理孤儿实例记录；保留实例 JSON 供后续控制与恢复使用。
             $this->cleanupStaleInstanceFiles();
             $this->logger->flush(true);
 
@@ -408,7 +408,7 @@ class MasterProcess
                 WlsLogger::debug_('[Master] IPC 关闭过程中出现错误: ' . $ipcError->getMessage());
             }
 
-            // 最后再注销 Master PID，并根据剩余子进程决定保留还是删除实例记录。
+            // 最后再注销 Master PID，并在保留实例 JSON 的前提下标记/清理运行记录。
             try {
                 $this->unregisterMasterPid();
             } catch (\Throwable $indexCleanupError) {
@@ -461,7 +461,7 @@ class MasterProcess
      * Master 退出后整理实例运行记录。
      *
      * 若子进程仍存活，则保留 instance.json，避免 stop/status 失去恢复线索。
-     * 若所有受管进程都已退出，则直接删除实例记录。
+     * 若所有受管进程都已退出，则标记/清理当前运行记录；实例 JSON 仍保留。
      */
     private function finalizeInstanceRuntimeAfterMasterExit(int $masterPid): void
     {
@@ -481,17 +481,17 @@ class MasterProcess
     }
 
     /**
-     * 清理孤儿实例文件（启动时调用）
+     * 清理孤儿实例记录（启动时调用）
      *
-     * 删除所有 updated_at 超过 60 秒未更新的实例 JSON 文件，
-     * 说明对应的 Master 进程已经死亡或崩溃。
+     * 标记/清理 updated_at 超过 60 秒未更新的实例记录，
+     * 说明对应的 Master 进程已经死亡或崩溃；实例 JSON 文件保留供后续控制与恢复使用。
      */
     private function cleanupStaleInstanceFiles(): void
     {
         try {
             $cleaned = (new ServerInstanceManager())->cleanupStaleInstances();
             if ($cleaned > 0) {
-                $this->log(__('共清理 %{1} 个孤儿实例文件', [$cleaned]));
+                $this->log(__('共清理 %{1} 个孤儿实例记录，实例 JSON 已保留', [$cleaned]));
             }
         } catch (\Throwable $e) {
             $this->log(__('孤儿实例清理过程出错: %{1}', [$e->getMessage()]));
@@ -1440,10 +1440,7 @@ class MasterProcess
      */
     public static function clearMasterInfo(string $instanceName = 'default'): void
     {
-        $file = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $instanceName . '.json';
-        if (\is_file($file)) {
-            @\unlink($file);
-        }
+        (new ServerInstanceManager())->deleteInstance($instanceName);
     }
 
     /**

@@ -384,7 +384,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
     public function testDirectForceStopCandidatesSkipRootPromotionOnFirstPass(): void
     {
         $info = new ServerInstanceInfo(
-            'default',
+            'unit-direct-candidates-4f7b',
             33780,
             26895,
             '127.0.0.1',
@@ -417,6 +417,20 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
                 unset($name);
 
                 return [7704, 16048, 0];
+            }
+
+            protected function getRawStopInstanceData(string $name): ?array
+            {
+                unset($name);
+
+                return null;
+            }
+
+            protected function inspectRecoverablePortOccupant(int $port): array
+            {
+                unset($port);
+
+                return ['in_use' => false, 'pid' => 0, 'pid_running' => false, 'is_weline' => false, 'state' => 'free'];
             }
 
             protected function queryWindowsCmdWindowRowsForStop(): array
@@ -479,6 +493,13 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
 
                 return [303, 0];
             }
+
+            protected function inspectRecoverablePortOccupant(int $port): array
+            {
+                unset($port);
+
+                return ['in_use' => false, 'pid' => 0, 'pid_running' => false, 'is_weline' => false, 'state' => 'free'];
+            }
         };
 
         self::assertSame([101, 202, 303], $stop->collectDirectCandidates($info));
@@ -518,8 +539,9 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
                 return [];
             }
 
-            protected function terminateCurrentInstanceProcessPrefixes(string $name): int
+            protected function terminateCurrentInstanceProcessPrefixes(string $name, bool $includeSharedState = false): int
             {
+                unset($includeSharedState);
                 $this->prefixCleanupNames[] = $name;
 
                 return 7;
