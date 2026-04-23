@@ -14,6 +14,12 @@ final class LongRunningPhpRuntimeTest extends TestCase
             public array $iniValues = [];
             public array $timeLimits = [];
             public array $abortFlags = [];
+            public int $consoleEncodingInitCount = 0;
+
+            protected function initConsoleEncoding(): void
+            {
+                $this->consoleEncodingInitCount++;
+            }
 
             protected function setIniValue(string $key, string $value): void
             {
@@ -33,6 +39,7 @@ final class LongRunningPhpRuntimeTest extends TestCase
 
         $runtime->apply();
 
+        self::assertSame(1, $runtime->consoleEncodingInitCount);
         self::assertSame(['max_execution_time' => '0'], $runtime->iniValues);
         self::assertSame([0], $runtime->timeLimits);
         self::assertSame([true], $runtime->abortFlags);

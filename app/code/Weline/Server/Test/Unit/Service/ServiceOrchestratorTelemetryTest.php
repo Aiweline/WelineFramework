@@ -74,6 +74,43 @@ final class ServiceOrchestratorTelemetryTest extends TestCase
         self::assertArrayHasKey('default', $this->readPrivate($orchestrator, 'telemetryWorkerRecoveryAt'));
     }
 
+    public function testReadyHealthySlotsRequireLiveServiceProcess(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $this->primeTelemetryState($orchestrator, 1, 0);
+
+        $orchestrator->getRegistry()->addInstance(new ServiceInstance(
+            role: 'worker',
+            instanceId: 1,
+            pid: 999999,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 42,
+        ));
+
+        self::assertSame(0, $this->invokePrivate($orchestrator, 'countRoleSlotsReadyHealthy', ['worker']));
+        self::assertSame(0, $this->invokePrivate($orchestrator, 'countRoleSlotsProcessAlive', ['worker']));
+    }
+
+    public function testReadyHealthySlotsUseServicePidWhenLauncherPidIsStale(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $this->primeTelemetryState($orchestrator, 1, 0);
+
+        $worker = new ServiceInstance(
+            role: 'worker',
+            instanceId: 1,
+            pid: \getmypid(),
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 42,
+            rootPid: 999999,
+            launcherPid: 999999,
+        );
+        $orchestrator->getRegistry()->addInstance($worker);
+
+        self::assertSame(1, $this->invokePrivate($orchestrator, 'countRoleSlotsReadyHealthy', ['worker']));
+        self::assertSame(1, $this->invokePrivate($orchestrator, 'countRoleSlotsProcessAlive', ['worker']));
+    }
+
     private function primeTelemetryState(ServiceOrchestrator $orchestrator, int $desiredWorkers, ?int $aliveSlots = null): void
     {
         $aliveSlots ??= $desiredWorkers;

@@ -27,6 +27,9 @@ class ServerInstanceManager
     /** 实例信息存储相对路径（相对 VAR_DIR） */
     public const INSTANCE_SUBDIR = 'server' . \DIRECTORY_SEPARATOR . 'instances' . \DIRECTORY_SEPARATOR;
 
+    private const INSTANCE_RECORDS_KEY = 'instance_records';
+    private const CURRENT_SNAPSHOT_KEY = 'current_snapshot';
+
     /** 服务角色显示名称映射 */
     private const ROLE_DISPLAY_NAMES = [
         'session_server' => 'Session Server',
@@ -334,30 +337,127 @@ class ServerInstanceManager
         }
 
         // 构建 services 数组（按角色分组）
-        $servicesArray = [];
         foreach ($services as $service) {
-            $role = $service->role;
-            if (!isset($servicesArray[$role])) {
-                $servicesArray[$role] = [
-                    'display_name' => $service->displayName,
-                    'instances' => [],
-                ];
-            }
-            $servicesArray[$role]['instances'][] = $service->toArray();
+            $this->mergeServiceRecord($data, $service);
         }
-
-        $data['services'] = $servicesArray;
         $data['services_updated_at'] = \date('Y-m-d H:i:s');
 
         // 同时更新便于直接访问的旧字段（向后兼容）
         $this->updateLegacyFields($data, $services);
 
-        $this->atomicWriteJson($file, $data);
+        $this->atomicUpdateJson($file, fn(array $existing): array => $this->mergeInstanceRecordData($existing, $data));
+    }
+
+    private function mergeInstanceRecordData(array $existing, array $data): array
+    {
+        $services = \is_array($existing['services'] ?? null) ? $existing['services'] : [];
+        $dataServices = \is_array($data['services'] ?? null) ? $data['services'] : [];
+        $records = \is_array($existing[self::INSTANCE_RECORDS_KEY] ?? null)
+            ? $existing[self::INSTANCE_RECORDS_KEY]
+            : [];
+
+        $merged = \array_merge($existing, $data);
+        if ($services !== [] || $dataServices !== []) {
+            $merged['services'] = $this->mergeServiceTables($services, $dataServices);
+        }
+        unset(
+            $merged['stopped_reason'],
+            $merged['stopped_at'],
+            $merged['stopped_timestamp'],
+            $merged['master_exited_at'],
+            $merged['master_exited_timestamp']
+        );
+        $merged['lifecycle_state'] = (string)($data['startup_phase'] ?? 'starting');
+        $merged[self::INSTANCE_RECORDS_KEY] = $this->appendInstanceRuntimeRecord($records, $data);
+        $merged[self::CURRENT_SNAPSHOT_KEY] = $this->buildCurrentSnapshot($merged);
+
+        return $merged;
+    }
+
+    private function mergeServiceTables(array $existing, array $incoming): array
+    {
+        $merged = $existing;
+        foreach ($incoming as $role => $roleData) {
+            if (!\is_array($roleData)) {
+                continue;
+            }
+            if (!isset($merged[$role]) || !\is_array($merged[$role])) {
+                $merged[$role] = [
+                    'display_name' => (string)($roleData['display_name'] ?? $this->getDisplayName((string)$role)),
+                    'instances' => [],
+                ];
+            }
+            if (!isset($merged[$role]['instances']) || !\is_array($merged[$role]['instances'])) {
+                $merged[$role]['instances'] = [];
+            }
+            if (isset($roleData['display_name'])) {
+                $merged[$role]['display_name'] = $roleData['display_name'];
+            }
+
+            foreach (($roleData['instances'] ?? []) as $record) {
+                if (!\is_array($record)) {
+                    continue;
+                }
+                $key = $this->getServiceRecordIdentity($record);
+                $replaced = false;
+                foreach ($merged[$role]['instances'] as $i => $existingRecord) {
+                    if (!\is_array($existingRecord)) {
+                        continue;
+                    }
+                    if ($this->getServiceRecordIdentity($existingRecord) === $key) {
+                        $merged[$role]['instances'][$i] = $record;
+                        $replaced = true;
+                        break;
+                    }
+                }
+                if (!$replaced) {
+                    $merged[$role]['instances'][] = $record;
+                }
+            }
+        }
+
+        return $merged;
     }
 
     /**
      * 更新实例的 Master PID（Orchestrator 启动完成后调用，供 server:status 等正确显示）
      */
+    private function buildCurrentSnapshot(array $data): array
+    {
+        $snapshot = $this->buildInstanceRuntimeRecord($data);
+        unset($snapshot['recorded_at'], $snapshot['recorded_timestamp']);
+
+        $snapshot['lifecycle_state'] = (string)($data['lifecycle_state'] ?? $data['startup_phase'] ?? '');
+        foreach (['stopped_reason', 'stopped_at', 'stopped_timestamp', 'updated_at'] as $field) {
+            if (\array_key_exists($field, $data)) {
+                $snapshot[$field] = $data[$field];
+            }
+        }
+
+        $services = $data['services'] ?? [];
+        if (\is_array($services) && $services !== []) {
+            $snapshot['services'] = $this->buildCurrentServiceTable($services);
+        }
+
+        return $snapshot;
+    }
+
+    private function buildCurrentServiceTable(array $services): array
+    {
+        $current = [];
+        foreach ($services as $role => $roleData) {
+            if (!\is_array($roleData)) {
+                continue;
+            }
+            $current[$role] = [
+                'display_name' => (string)($roleData['display_name'] ?? $this->getDisplayName((string)$role)),
+                'instances' => $this->selectConsensusServiceRecords($roleData['instances'] ?? []),
+            ];
+        }
+
+        return $current;
+    }
+
     public function updateMasterPid(string $instanceName, int $masterPid): void
     {
         $file = $this->getInstanceFile($instanceName);
@@ -366,6 +466,11 @@ class ServerInstanceManager
         }
         $this->atomicUpdateJson($file, function (array $data) use ($masterPid): array {
             $data['master_pid'] = $masterPid;
+            $data['pid'] = $masterPid;
+            $records = \is_array($data[self::INSTANCE_RECORDS_KEY] ?? null)
+                ? $data[self::INSTANCE_RECORDS_KEY]
+                : [];
+            $data[self::INSTANCE_RECORDS_KEY] = $this->appendInstanceRuntimeRecord($records, $data);
             return $data;
         });
     }
@@ -393,17 +498,7 @@ class ServerInstanceManager
             }
 
             // 查找并更新已存在的实例，或添加新实例
-            $found = false;
-            foreach ($data['services'][$role]['instances'] as $i => $inst) {
-                if (($inst['instance_id'] ?? 0) === $service->instanceId) {
-                    $data['services'][$role]['instances'][$i] = $service->toArray();
-                    $found = true;
-                    break;
-                }
-            }
-            if (!$found) {
-                $data['services'][$role]['instances'][] = $service->toArray();
-            }
+            $this->mergeServiceRecord($data, $service);
 
             $data['services_updated_at'] = \date('Y-m-d H:i:s');
 
@@ -417,13 +512,111 @@ class ServerInstanceManager
     /**
      * 删除实例文件
      */
+    private function mergeServiceRecord(array &$data, ServiceInfo $service): void
+    {
+        $role = $service->role;
+        if (!isset($data['services']) || !\is_array($data['services'])) {
+            $data['services'] = [];
+        }
+        if (!isset($data['services'][$role]) || !\is_array($data['services'][$role])) {
+            $data['services'][$role] = [
+                'display_name' => $service->displayName,
+                'instances' => [],
+            ];
+        }
+        if (!isset($data['services'][$role]['instances']) || !\is_array($data['services'][$role]['instances'])) {
+            $data['services'][$role]['instances'] = [];
+        }
+        $data['services'][$role]['display_name'] = $service->displayName;
+
+        $record = $service->toArray();
+        $record['recorded_at'] = \date('Y-m-d H:i:s');
+        $record['recorded_timestamp'] = \time();
+        $recordKey = $this->getServiceRecordIdentity($record);
+
+        foreach ($data['services'][$role]['instances'] as $i => $existing) {
+            if (!\is_array($existing)) {
+                continue;
+            }
+            if ($this->getServiceRecordIdentity($existing) === $recordKey) {
+                $data['services'][$role]['instances'][$i] = $record;
+                return;
+            }
+        }
+
+        $data['services'][$role]['instances'][] = $record;
+    }
+
+    private function getServiceRecordIdentity(array $record): string
+    {
+        $role = (string)($record['role'] ?? '');
+        $instanceId = (int)($record['instance_id'] ?? 0);
+        $launchId = (string)($record['launch_id'] ?? '');
+        if ($launchId === '' && \is_array($record['metadata'] ?? null)) {
+            $launchId = (string)($record['metadata']['launch_id'] ?? '');
+        }
+        if ($launchId !== '') {
+            return $role . ':' . $instanceId . ':launch:' . $launchId;
+        }
+
+        foreach (['pid', 'root_pid', 'launcher_pid'] as $field) {
+            $pid = (int)($record[$field] ?? 0);
+            if ($pid > 0) {
+                return $role . ':' . $instanceId . ':pid:' . $pid;
+            }
+        }
+
+        return $role . ':' . $instanceId . ':epoch:' . (int)($record['epoch'] ?? 0);
+    }
+
     public function deleteInstance(string $name): bool
     {
         $file = $this->getInstanceFile($name);
         if (\is_file($file)) {
-            return @\unlink($file);
+            return $this->markInstanceRecordStopped($file, 'deleted');
         }
         return true;
+    }
+
+    private function markInstanceRecordStopped(string $file, string $reason): bool
+    {
+        if (!\is_file($file)) {
+            return true;
+        }
+
+        $now = \time();
+        $at = \date('Y-m-d H:i:s', $now);
+
+        return $this->atomicUpdateJson($file, function (array $data) use ($reason, $now, $at): array {
+            $data['pid'] = 0;
+            $data['master_pid'] = 0;
+            $data['master_enabled'] = false;
+            $data['startup_phase'] = 'stopped';
+            $data['lifecycle_state'] = 'stopped';
+            $data['stopped_reason'] = $reason;
+            $data['stopped_at'] = $at;
+            $data['stopped_timestamp'] = $now;
+            $data['updated_at'] = $now;
+
+            foreach (($data['services'] ?? []) as $role => $roleData) {
+                if (!\is_array($roleData) || !\is_array($roleData['instances'] ?? null)) {
+                    continue;
+                }
+                foreach ($roleData['instances'] as $i => $record) {
+                    if (!\is_array($record)) {
+                        continue;
+                    }
+                    $record['state'] = ServiceInstance::STATE_STOPPED;
+                    $record['stopped_reason'] = $reason;
+                    $record['stopped_at'] = $at;
+                    $record['stopped_timestamp'] = $now;
+                    $data['services'][$role]['instances'][$i] = $record;
+                }
+            }
+            $data[self::CURRENT_SNAPSHOT_KEY] = $this->buildCurrentSnapshot($data);
+
+            return $data;
+        });
     }
 
     /**
@@ -542,6 +735,10 @@ class ServerInstanceManager
     private function isStaleInstanceRecord(string $name, array $rawData, ?ServerInstanceInfo $info = null): bool
     {
         if ($this->isStartLockHeld($name)) {
+            return false;
+        }
+        if (\in_array((string)($rawData['lifecycle_state'] ?? ''), ['stopped', 'stale_cleanup', 'master_exited'], true)
+            && !$this->hasTrackedRunningProcess($name, $rawData, $info)) {
             return false;
         }
 
@@ -814,7 +1011,7 @@ class ServerInstanceManager
             @\unlink($exceptionFile);
         }
 
-        $this->deleteInstance($name);
+        $this->markInstanceRecordStopped($this->getInstanceFile($name), 'stale_cleanup');
         Processer::cleanupStalePidFiles();
     }
 
@@ -847,24 +1044,60 @@ class ServerInstanceManager
      */
     private function buildInstanceInfo(string $name, array $rawData): ServerInstanceInfo
     {
+        if (\is_array($rawData[self::CURRENT_SNAPSHOT_KEY] ?? null)) {
+            $rawData = \array_replace($rawData, $rawData[self::CURRENT_SNAPSHOT_KEY]);
+        }
+        $runtimeData = $this->resolveConsensusInstanceRuntimeData($rawData);
         $services = $this->parseServices($rawData);
-        $httpRedirectPort = $this->resolveHttpRedirectPort($rawData, $services);
+        $httpRedirectPort = $this->resolveHttpRedirectPort($runtimeData, $services);
 
         return new ServerInstanceInfo(
             name: $name,
-            masterPid: (int) ($rawData['master_pid'] ?? 0),
-            controlPort: (int) ($rawData['control_port'] ?? 0),
-            host: (string) ($rawData['host'] ?? '127.0.0.1'),
-            port: (int) ($rawData['port'] ?? 0),
-            sslEnabled: (bool) ($rawData['ssl_enabled'] ?? false),
-            dispatcherEnabled: (bool) ($rawData['dispatcher_enabled'] ?? false),
-            workerCount: (int) ($rawData['count'] ?? 0),
-            workerBasePort: (int) ($rawData['worker_port'] ?? $rawData['port'] ?? 0),
+            masterPid: (int) ($runtimeData['master_pid'] ?? 0),
+            controlPort: (int) ($runtimeData['control_port'] ?? 0),
+            host: (string) ($runtimeData['host'] ?? '127.0.0.1'),
+            port: (int) ($runtimeData['port'] ?? 0),
+            sslEnabled: (bool) ($runtimeData['ssl_enabled'] ?? false),
+            dispatcherEnabled: (bool) ($runtimeData['dispatcher_enabled'] ?? false),
+            workerCount: (int) ($runtimeData['count'] ?? 0),
+            workerBasePort: (int) ($runtimeData['worker_port'] ?? $runtimeData['port'] ?? 0),
             httpRedirectPort: $httpRedirectPort,
-            startedAt: (string) ($rawData['started_at'] ?? ''),
-            startedTimestamp: (int) ($rawData['started_timestamp'] ?? 0),
+            startedAt: (string) ($runtimeData['started_at'] ?? ''),
+            startedTimestamp: (int) ($runtimeData['started_timestamp'] ?? 0),
             services: $services,
         );
+    }
+
+    private function resolveConsensusInstanceRuntimeData(array $rawData): array
+    {
+        $records = $rawData[self::INSTANCE_RECORDS_KEY] ?? [];
+        if (!\is_array($records) || $records === []) {
+            return $rawData;
+        }
+
+        for ($i = \count($records) - 1; $i >= 0; $i--) {
+            $record = $records[$i] ?? null;
+            if (!\is_array($record)) {
+                continue;
+            }
+            if ($this->isRuntimeRecordReachable($record)) {
+                return \array_replace($rawData, $record);
+            }
+        }
+
+        $latest = \end($records);
+        return \is_array($latest) ? \array_replace($rawData, $latest) : $rawData;
+    }
+
+    private function isRuntimeRecordReachable(array $record): bool
+    {
+        $masterPid = (int)($record['master_pid'] ?? $record['pid'] ?? 0);
+        if ($masterPid > 0 && Processer::processExists($masterPid)) {
+            return true;
+        }
+
+        $controlPort = (int)($record['control_port'] ?? 0);
+        return $controlPort > 0 && Processer::isPortInUse($controlPort);
     }
 
     /**
@@ -883,7 +1116,7 @@ class ServerInstanceManager
             foreach ($rawData['services'] as $role => $roleData) {
                 $displayName = $roleData['display_name'] ?? $this->getDisplayName($role);
                 $instances = $roleData['instances'] ?? [];
-                foreach ($instances as $instData) {
+                foreach ($this->selectConsensusServiceRecords($instances) as $instData) {
                     $instData['role'] = $role;
                     $instData['display_name'] = $displayName;
                     if (!isset($instData['priority'])) {
@@ -903,8 +1136,66 @@ class ServerInstanceManager
     /**
      * 从旧字段构建服务列表（向后兼容）
      *
-     * @return ServiceInfo[]
+     * Pick one current record per logical service slot, trying the newest live record first.
+     *
+     * @param mixed $instances
+     * @return array<int, array<string, mixed>>
      */
+    private function selectConsensusServiceRecords(mixed $instances): array
+    {
+        if (!\is_array($instances)) {
+            return [];
+        }
+
+        $groups = [];
+        foreach ($instances as $record) {
+            if (!\is_array($record)) {
+                continue;
+            }
+            $instanceId = (int)($record['instance_id'] ?? 0);
+            $groups[$instanceId][] = $record;
+        }
+
+        $selected = [];
+        foreach ($groups as $records) {
+            $fallback = null;
+            for ($i = \count($records) - 1; $i >= 0; $i--) {
+                $record = $records[$i];
+                $fallback ??= $record;
+                if ($this->isServiceRecordReachable($record)) {
+                    $selected[] = $record;
+                    continue 2;
+                }
+            }
+            if ($fallback !== null) {
+                $selected[] = $fallback;
+            }
+        }
+
+        return $selected;
+    }
+
+    private function isServiceRecordReachable(array $record): bool
+    {
+        $state = (string)($record['state'] ?? '');
+        if (\in_array($state, [ServiceInstance::STATE_STOPPED, ServiceInstance::STATE_FAILED], true)) {
+            return false;
+        }
+
+        $trackedPids = $this->collectServiceRecordTrackedPids($record);
+        foreach ($trackedPids as $pid) {
+            if ($pid > 0 && Processer::processExists($pid)) {
+                return true;
+            }
+        }
+        if ($trackedPids !== []) {
+            return false;
+        }
+
+        $port = (int)($record['port'] ?? 0);
+        return $port > 0 && Processer::isPortUsedByWeline($port);
+    }
+
     private function buildServicesFromLegacyFields(array $rawData): array
     {
         $services = [];
@@ -1142,12 +1433,7 @@ class ServerInstanceManager
      */
     private function atomicUpdateJson(string $file, callable $updater): bool
     {
-        $content = @\file_get_contents($file);
-        $data = $content !== false ? (\json_decode($content, true) ?: []) : [];
-
-        $data = $updater($data);
-
-        return $this->atomicWriteJson($file, $data);
+        return self::atomicUpdateJsonStatic($file, $updater);
     }
 
     // ========================================================================
@@ -1447,12 +1733,93 @@ class ServerInstanceManager
             'os' => PHP_OS,
         ], $info);
 
-        $this->atomicWriteJson($file, $data);
+        $this->atomicUpdateJson($file, fn(array $existing): array => $this->mergeInstanceRecordData($existing, $data));
     }
 
     /**
      * 获取实例 PID 文件路径
      */
+    /**
+     * @param array<int, mixed> $records
+     * @param array<string, mixed> $data
+     * @return array<int, array<string, mixed>>
+     */
+    private function appendInstanceRuntimeRecord(array $records, array $data): array
+    {
+        $record = $this->buildInstanceRuntimeRecord($data);
+        $recordKey = $this->getInstanceRuntimeRecordIdentity($record);
+        $normalized = [];
+
+        foreach ($records as $existing) {
+            if (!\is_array($existing)) {
+                continue;
+            }
+            if ($this->getInstanceRuntimeRecordIdentity($existing) === $recordKey) {
+                $normalized[] = $record;
+                $record = [];
+                continue;
+            }
+            $normalized[] = $existing;
+        }
+
+        if ($record !== []) {
+            $normalized[] = $record;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function buildInstanceRuntimeRecord(array $data): array
+    {
+        $now = \time();
+        $fields = [
+            'name',
+            'pid',
+            'master_pid',
+            'control_port',
+            'host',
+            'port',
+            'count',
+            'daemon',
+            'ssl_enabled',
+            'dispatcher_enabled',
+            'dispatcher_port',
+            'worker_port',
+            'worker_base_port',
+            'http_redirect_port',
+            'started_at',
+            'started_timestamp',
+            'master_started_at',
+            'startup_phase',
+            'instance_name',
+            'control_plane_mode',
+            'supervisor_enabled',
+        ];
+        $record = [];
+        foreach ($fields as $field) {
+            if (\array_key_exists($field, $data)) {
+                $record[$field] = $data[$field];
+            }
+        }
+        $record['recorded_at'] = \date('Y-m-d H:i:s', $now);
+        $record['recorded_timestamp'] = $now;
+
+        return $record;
+    }
+
+    private function getInstanceRuntimeRecordIdentity(array $record): string
+    {
+        $started = (string)($record['started_timestamp'] ?? $record['started_at'] ?? '');
+        $masterPid = (int)($record['master_pid'] ?? $record['pid'] ?? 0);
+        $controlPort = (int)($record['control_port'] ?? 0);
+
+        return $started . ':' . $masterPid . ':' . $controlPort;
+    }
+
     public function getPidFile(string $name): string
     {
         return $this->getInstanceDir() . $name . '.pid';

@@ -98,7 +98,7 @@ class Status extends CommandAbstract
     {
         /** @var ServerInstanceManager $manager */
         $manager = ObjectManager::getInstance(ServerInstanceManager::class);
-        return $manager->hasInstance($name);
+        return $manager->isInstanceRunning($name);
     }
     
     /**
@@ -366,8 +366,20 @@ class Status extends CommandAbstract
     protected function filterActiveInstances(array $instances, array $processInfoMap): array
     {
         $active = [];
+        $manager = $this->getInstanceManager();
         foreach ($instances as $name => $info) {
-            if ($this->isMasterRunning($info, $processInfoMap) || $this->getServiceStats($info, $processInfoMap, false)['running'] > 0) {
+            $rawData = $manager->getRawInstanceData($name) ?? [];
+            $masterRunning = $this->isMasterRunning($info, $processInfoMap);
+            $state = (string)($rawData['lifecycle_state'] ?? $rawData['startup_phase'] ?? '');
+            $starterPid = (int)($rawData['pid'] ?? 0);
+            if (!$masterRunning
+                && (
+                    \in_array($state, ['stopped', 'stale_cleanup'], true)
+                    || (empty($rawData['services']) && empty($rawData['master_enabled']) && ($starterPid <= 0 || !Processer::processExists($starterPid)))
+                )) {
+                continue;
+            }
+            if ($masterRunning || $this->getServiceStats($info, $processInfoMap, false)['running'] > 0) {
                 $active[$name] = $info;
             }
         }

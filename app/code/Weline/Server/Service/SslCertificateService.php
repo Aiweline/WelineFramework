@@ -574,6 +574,16 @@ class SslCertificateService
         $certDir = $this->getCertificateDir($domain);
         $certPath = $certDir . 'fullchain.pem';
         $keyPath = $certDir . 'privkey.pem';
+
+        if ($this->shouldUseTrustedLocalCertificateAuthority($domain)
+            && \is_file($certPath)
+            && \is_file($keyPath)
+            && !$this->prepareExistingLocalCaCertificateForReuse($certPath)) {
+            $localCaResult = $this->generateLocalCaSignedCertificate($domain, $websiteId);
+            if ($localCaResult['success'] ?? false) {
+                return $localCaResult;
+            }
+        }
         
         // 1. 检查本地证书文件是否存在且未过期，若有则入库后直接使用（避免每次重新申请）
         if ($this->isCertificateValid($certPath) && \is_file($keyPath)) {
@@ -840,6 +850,12 @@ CNF;
         return $this->isLocalDomain($domain) || $this->resolvesToLoopback($domain);
     }
 
+    protected function shouldPreferTrustedLocalSelfSignedCertificate(string $domain): bool
+    {
+        return \PHP_OS_FAMILY === 'Windows'
+            && $this->shouldUseTrustedLocalCertificateAuthority($domain);
+    }
+
     protected function getLocalCaDir(): string
     {
         $dir = Env::VAR_DIR . 'server' . DS . self::LOCAL_CA_DIRNAME . DS;
@@ -885,7 +901,12 @@ keyUsage = critical, digitalSignature, cRLSign, keyCertSign
 CNF;
     }
 
-    protected function buildServerLeafOpenSslConfig(string $domain, array $sanEntries): string
+    protected function buildServerLeafOpenSslConfig(
+        string $domain,
+        array $sanEntries,
+        string $caIssuersUri = '',
+        string $crlDistributionUri = ''
+    ): string
     {
         $altNames = [];
         $dnsIndex = 1;
@@ -901,6 +922,12 @@ CNF;
         }
 
         $altNamesStr = \implode("\n", $altNames);
+        $authorityInfoAccess = $caIssuersUri !== ''
+            ? "\nauthorityInfoAccess = caIssuers;URI:{$caIssuersUri}"
+            : '';
+        $crlDistributionPoints = $crlDistributionUri !== ''
+            ? "\ncrlDistributionPoints = URI:{$crlDistributionUri}"
+            : '';
 
         return <<<CNF
 [ req ]
@@ -922,7 +949,7 @@ authorityKeyIdentifier = keyid,issuer
 basicConstraints = critical, CA:false
 keyUsage = critical, digitalSignature, keyEncipherment
 extendedKeyUsage = serverAuth
-subjectAltName = @alt_names
+subjectAltName = @alt_names{$authorityInfoAccess}{$crlDistributionPoints}
 
 [ alt_names ]
 {$altNamesStr}
@@ -945,6 +972,56 @@ CNF;
         }
 
         return $opensslConfig;
+    }
+
+    protected function prepareExistingLocalCaCertificateForReuse(string $certPath): bool
+    {
+        if (!\is_file($certPath)) {
+            return false;
+        }
+
+        if (!$this->isCertificateValid($certPath)
+            || $this->isCertificateSelfSigned($certPath)
+            || $this->isCertificateAuthority($certPath)) {
+            return false;
+        }
+
+        $certPem = (string) @\file_get_contents($certPath);
+        $chainPath = \dirname($certPath) . DS . 'chain.pem';
+        $chainPem = \is_file($chainPath) ? (string) @\file_get_contents($chainPath) : '';
+
+        return $this->extractLocalCaPemFromCertificateBundle($certPem, $chainPem) !== '';
+    }
+
+    protected function ensureReusableLocalCaCertificate(string $domain, string $certPath, int $websiteId = 0): array
+    {
+        if (!$this->shouldUseTrustedLocalCertificateAuthority($domain)) {
+            return [
+                'usable' => false,
+                'regenerated' => false,
+                'cert_path' => $certPath,
+                'key_path' => '',
+            ];
+        }
+
+        if ($this->prepareExistingLocalCaCertificateForReuse($certPath)) {
+            return [
+                'usable' => true,
+                'regenerated' => false,
+                'cert_path' => $certPath,
+                'key_path' => $this->getCertificateDir($domain) . 'privkey.pem',
+            ];
+        }
+
+        $generated = $this->generateLocalCaSignedCertificate($domain, $websiteId);
+
+        return [
+            'usable' => (bool)($generated['success'] ?? false),
+            'regenerated' => (bool)($generated['success'] ?? false),
+            'cert_path' => (string)($generated['cert_path'] ?? ''),
+            'key_path' => (string)($generated['key_path'] ?? ''),
+            'message' => (string)($generated['message'] ?? ''),
+        ];
     }
 
     protected function ensureLocalCertificateAuthority(): array
@@ -1364,7 +1441,7 @@ default_bits = 2048
 default_md = sha256
 distinguished_name = dn
 req_extensions = v3_req
-x509_extensions = v3_ca
+x509_extensions = v3_leaf
 
 [ dn ]
 CN = {$domain}
@@ -1372,11 +1449,12 @@ CN = {$domain}
 [ v3_req ]
 subjectAltName = @alt_names
 
-[ v3_ca ]
+[ v3_leaf ]
 subjectKeyIdentifier = hash
-authorityKeyIdentifier = keyid:always,issuer
-basicConstraints = CA:true
+authorityKeyIdentifier = keyid,issuer
+basicConstraints = critical, CA:false
 keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
 subjectAltName = @alt_names
 
 [ alt_names ]
@@ -1624,6 +1702,12 @@ CNF;
             $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
 
             $isLocalManaged = $this->isLocalManagedProvider($provider);
+            $this->recoverAndTrustLocalCaFromCertificateBundle(
+                $provider,
+                $issuer,
+                $certContents['cert_pem'],
+                $certContents['chain_pem']
+            );
 
             $cert->setDomain($domain)
                 ->setWebsiteId($websiteId)
@@ -2056,6 +2140,12 @@ CNF;
                 $chainPath = $candidateChainPath;
             }
             $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
+            $this->recoverAndTrustLocalCaFromCertificateBundle(
+                $provider,
+                $issuer,
+                $certContents['cert_pem'],
+                $certContents['chain_pem']
+            );
 
             $cert->setDomain($domain)
                 ->setWebsiteId($websiteId)
@@ -2496,6 +2586,167 @@ CNF;
         }
         $end += \strlen('-----END CERTIFICATE-----');
         return \trim(\substr($fullchainPem, $start, $end - $start));
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function extractPemCertificates(string $pem): array
+    {
+        if (!\preg_match_all('/-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----/s', $pem, $matches)) {
+            return [];
+        }
+
+        return \array_map(static fn (string $cert): string => \trim($cert), $matches[0]);
+    }
+
+    protected function parseCertificatePem(string $certPem): array|false
+    {
+        $certResource = @\openssl_x509_read($certPem);
+        if ($certResource === false) {
+            return false;
+        }
+
+        $parsed = @\openssl_x509_parse($certResource, false);
+
+        return \is_array($parsed) ? $parsed : false;
+    }
+
+    protected function normalizeCertificateNameForComparison(array $name): string
+    {
+        \ksort($name);
+        $parts = [];
+        foreach ($name as $key => $value) {
+            if (\is_array($value)) {
+                \sort($value);
+                $value = \implode(',', \array_map('strval', $value));
+            }
+            $parts[] = \strtolower((string) $key) . '=' . \strtolower(\trim((string) $value));
+        }
+
+        return \implode(';', $parts);
+    }
+
+    protected function isCertificateAuthorityPem(string $certPem): bool
+    {
+        $parsed = $this->parseCertificatePem($certPem);
+        if (!$parsed) {
+            return false;
+        }
+
+        $basicConstraints = (string) ($parsed['extensions']['basicConstraints'] ?? '');
+        $keyUsage = (string) ($parsed['extensions']['keyUsage'] ?? '');
+
+        return (bool) \preg_match('/(?:^|[,\s])CA\s*:\s*TRUE(?:$|[,\s])/i', $basicConstraints)
+            && (
+                \stripos($keyUsage, 'Certificate Sign') !== false
+                || \stripos($keyUsage, 'keyCertSign') !== false
+                || \stripos($keyUsage, 'CRL Sign') !== false
+                || \stripos($keyUsage, 'cRLSign') !== false
+            );
+    }
+
+    protected function isCertificateSelfSignedPem(string $certPem): bool
+    {
+        $parsed = $this->parseCertificatePem($certPem);
+        if (!$parsed) {
+            return false;
+        }
+
+        $subject = $parsed['subject'] ?? [];
+        $issuer = $parsed['issuer'] ?? [];
+        if (!\is_array($subject) || !\is_array($issuer)) {
+            return false;
+        }
+
+        if ($this->normalizeCertificateNameForComparison($subject) !== $this->normalizeCertificateNameForComparison($issuer)) {
+            return false;
+        }
+
+        $certResource = @\openssl_x509_read($certPem);
+        if ($certResource === false) {
+            return false;
+        }
+
+        $publicKey = @\openssl_pkey_get_public($certResource);
+        if ($publicKey === false) {
+            return false;
+        }
+
+        return @\openssl_x509_verify($certResource, $publicKey) === 1;
+    }
+
+    protected function isCertificateSelfSigned(string $certPath): bool
+    {
+        if (!\is_file($certPath)) {
+            return false;
+        }
+
+        $certPem = (string) @\file_get_contents($certPath);
+        $certs = $this->extractPemCertificates($certPem);
+        if ($certs === []) {
+            return false;
+        }
+
+        return $this->isCertificateSelfSignedPem($certs[0]);
+    }
+
+    protected function isCertificateAuthority(string $certPath): bool
+    {
+        if (!\is_file($certPath)) {
+            return false;
+        }
+
+        $certPem = (string) @\file_get_contents($certPath);
+        $certs = $this->extractPemCertificates($certPem);
+        if ($certs === []) {
+            return false;
+        }
+
+        return $this->isCertificateAuthorityPem($certs[0]);
+    }
+
+    protected function extractLocalCaPemFromCertificateBundle(string $fullchainPem, string $chainPem = ''): string
+    {
+        $candidates = \array_merge(
+            $this->extractPemCertificates($chainPem),
+            $this->extractPemCertificates($fullchainPem)
+        );
+
+        foreach ($candidates as $candidatePem) {
+            if ($this->isCertificateAuthorityPem($candidatePem) && $this->isCertificateSelfSignedPem($candidatePem)) {
+                return \trim($candidatePem) . "\n";
+            }
+        }
+
+        return '';
+    }
+
+    protected function recoverAndTrustLocalCaFromCertificateBundle(
+        string $provider,
+        string $issuer,
+        string $fullchainPem,
+        string $chainPem = ''
+    ): void {
+        $provider = $this->normalizeAcmeProvider($provider);
+        if ($provider !== self::PROVIDER_LOCAL_CA
+            && !\str_contains(\strtolower($issuer), \strtolower(self::ISSUER_LOCAL_CA))) {
+            return;
+        }
+
+        $localCaPem = $this->extractLocalCaPemFromCertificateBundle($fullchainPem, $chainPem);
+        if ($localCaPem === '') {
+            return;
+        }
+
+        $caCertPath = $this->getLocalCaCertPath();
+        if (@\file_put_contents($caCertPath, $localCaPem) === false) {
+            w_log_warning(__('[SslCertificateService] Failed to recover local CA certificate to %{1}', [$caCertPath]), [], 'ssl_cert');
+            return;
+        }
+
+        @\chmod($caCertPath, 0644);
+        $this->trustLocalCertificateAuthority($caCertPath);
     }
 
     protected function restoreCertificateFilesFromData(array $cert): bool
