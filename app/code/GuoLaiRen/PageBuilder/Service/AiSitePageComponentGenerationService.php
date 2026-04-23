@@ -777,6 +777,7 @@ final class AiSitePageComponentGenerationService
                 $aiData[$cssKey] = '';
                 continue;
             }
+            $this->assertNoBrokenGeneratedImageReferences($css);
             $aiData[$cssKey] = $this->clipText($css, 1800);
         }
 
@@ -808,7 +809,7 @@ final class AiSitePageComponentGenerationService
         $html = \preg_replace('/<\?(?:php|=)?[\s\S]*?\?>/i', '', $html) ?? $html;
         $html = \preg_replace('/@(?:component|fields)_(?:start|end)\b/i', '', $html) ?? $html;
         $html = \preg_replace('/<div([^>]*class="[^"]*(?:eyebrow|subtitle|kicker|badge)[^"]*"[^>]*)>\s*(首页|主页|关于我们|关于|Home|About|About Us)\s*<\/div>/iu', '', $html) ?? $html;
-        $html = \preg_replace('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|content\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', '', $html) ?? $html;
+        $html = \preg_replace('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', '', $html) ?? $html;
         $html = \preg_replace('/(?:核心卖点|功能特性|把首页[^。！？.!?]{0,80}放出来|值得点击|页面类型|内容块)/u', '', $html) ?? $html;
         $this->assertNoBrokenGeneratedImageReferences($html);
         $html = \preg_replace('/\s{2,}/u', ' ', $html) ?? $html;
@@ -854,7 +855,7 @@ final class AiSitePageComponentGenerationService
                 }
             }
         }
-        if (\preg_match_all('/url\(\s*([\'\"]?)([^\'\")]+)\1\s*\)/iu', $html, $found, \PREG_SET_ORDER) > 0) {
+        if (\preg_match_all('/url\(\s*([\'\"]?)([^\'\")]*)\1\s*\)/iu', $html, $found, \PREG_SET_ORDER) > 0) {
             foreach ($found as $row) {
                 $src = \trim((string)($row[2] ?? ''));
                 if ($this->isBrokenGeneratedImageSource($src)) {
@@ -1013,6 +1014,10 @@ final class AiSitePageComponentGenerationService
     private function buildStubAiPayload(string $region, string $prompt): array
     {
         $summary = $this->clipText(\preg_replace('/\s+/u', ' ', \trim($prompt)) ?: '', 220);
+        $title = $this->extractStubTitleFromPrompt($summary, $region);
+        $body = $summary !== ''
+            ? $summary
+            : 'This section presents concrete website content, visible calls to action, and reusable trust signals for the generated page.';
 
         return match ($region) {
             'header' => [
@@ -1043,13 +1048,36 @@ final class AiSitePageComponentGenerationService
                     . "\n" . '#<?= $componentId ?> .ai-site-callout { padding:18px 20px; border-radius:18px; background:color-mix(in srgb, var(--section-primary) 10%, white); color:var(--section-heading); text-align:left; }',
                 'css_responsive' => '#<?= $componentId ?> .ai-site-card-grid { grid-template-columns:1fr; }',
                 'html_content' => '<div class="ai-site-card-grid">'
-                    . '<article class="ai-site-card"><strong><?= htmlspecialchars($getConfig("content.title", "Section")) ?></strong><p>' . \htmlspecialchars($summary, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
-                    . '<article class="ai-site-card"><strong>AI</strong><p>Test environment uses deterministic section markup so build and publish flows stay stable.</p></article>'
-                    . '<article class="ai-site-card"><strong>Prompt</strong><p>' . \htmlspecialchars($summary, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
+                    . '<article class="ai-site-card"><strong>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($body, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
+                    . '<article class="ai-site-card"><strong>Visible CTA path</strong><p>Visitors see a clear next action, supporting proof, and page-specific content that can be reviewed before publishing.</p></article>'
+                    . '<article class="ai-site-card"><strong>Trust content</strong><p>The section keeps real headings, body copy, and visual hierarchy so build and publish checks validate meaningful output.</p></article>'
                     . '</div>'
-                    . '<div class="ai-site-callout"><p><?= nl2br(htmlspecialchars($getConfig("content.description", ""))) ?></p></div>',
+                    . '<div class="ai-site-callout"><p>Use this generated block as reviewable page content with editable copy, responsive cards, and a clear conversion path.</p></div>',
                 'js_content' => '',
             ],
+        };
+    }
+
+    private function extractStubTitleFromPrompt(string $summary, string $region): string
+    {
+        foreach ([
+            '/title["\']?\s*[:=]\s*["\']([^"\']{4,80})["\']/iu',
+            '/headline["\']?\s*[:=]\s*["\']([^"\']{4,80})["\']/iu',
+            '/站点[:：]\s*([^,，。]{4,60})/u',
+            '/Site[:：]\s*([^,，。]{4,60})/iu',
+        ] as $pattern) {
+            if (\preg_match($pattern, $summary, $matches) === 1) {
+                $title = \trim((string)($matches[1] ?? ''));
+                if ($title !== '') {
+                    return $title;
+                }
+            }
+        }
+
+        return match ($region) {
+            'hero' => 'Website hero content',
+            'cta' => 'Conversion action block',
+            default => 'Generated website section',
         };
     }
 
@@ -1453,12 +1481,14 @@ final class AiSitePageComponentGenerationService
         );
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $skillContract = $this->buildWelineSkillContractPromptAddon();
+        $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
 
         return $langRule
             . "You are generating a PageBuilder website header component.\n"
             . "Site name: {$siteDisplayName}\n"
             . "Visitor-facing brand summary: {$siteSummary}\n"
             . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . $visibleCopyRule
             . $skillContract
             . $themeContract
             . "Selected pages: " . \implode(', ', $pageList) . "\n"
@@ -1491,12 +1521,14 @@ final class AiSitePageComponentGenerationService
         );
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $skillContract = $this->buildWelineSkillContractPromptAddon();
+        $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
 
         return $langRule
             . "You are generating a PageBuilder website footer component.\n"
             . "Site name: {$siteDisplayName}\n"
             . "Visitor-facing brand summary: {$siteSummary}\n"
             . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . $visibleCopyRule
             . $skillContract
             . $themeContract
             . $taskPlanPromptAddon
@@ -1539,6 +1571,7 @@ final class AiSitePageComponentGenerationService
         );
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $skillContract = $this->buildWelineSkillContractPromptAddon();
+        $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
 
         return $langRule
             . "You are generating a PageBuilder content component.\n"
@@ -1550,6 +1583,7 @@ final class AiSitePageComponentGenerationService
             . "Page guidance: {$pageInstruction}\n"
             . "Suggested section config: {$sectionConfig}\n"
             . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . $visibleCopyRule
             . $skillContract
             . $themeContract
             . $taskPlanPromptAddon
@@ -1609,13 +1643,31 @@ final class AiSitePageComponentGenerationService
 
     private function buildWelineSkillContractPromptAddon(): string
     {
-        return "Weline/PageBuilder skill contract for this virtual-theme component:\n"
+        return "Weline/PageBuilder skill contract / frontend skill contract for this virtual-theme component:\n"
             . "- pagebuilder-style-templates: output must map to PageBuilder component fields/config, keep @fields/default_config alignment, scope all CSS under the component root id, and use data-glr-ref/GlrDownloadRegistry-compatible download or CTA links when applicable.\n"
             . "- theme-development: use confirmed theme palette tokens and CSS variables/inline scoped styles; no CDN, no global selectors, no unrelated hardcoded brand colors, no duplicate pixel/tracking snippets.\n"
             . "- frontend-components: generate one reusable component/block with editable fields and visitor-facing copy; do not emit full-page HTML, static placeholder sections, internal prompt text, generic substitute content, or page-type labels as visible eyebrow text.\n"
             . "- asset-rule: when a visual/image is needed but no verified uploaded asset URL exists, create a theme-colored inline SVG or CSS visual directly. Never render a broken <img>.\n"
             . "- ai-module-development: this is an audited AI scenario result; include only content that follows the provided stage-1 theme context and current stage-2 task contract.\n"
             . "- queue-usage/sse-streaming: long generation is already queued; return the final component JSON only, not progress narration or markdown.\n";
+    }
+
+    /**
+     * @param array<string,mixed> $websiteProfile
+     * @param array<string,mixed> $scope
+     */
+    private function buildVisibleCopyGovernancePromptAddon(array $websiteProfile, array $scope): string
+    {
+        $contentLocale = $this->resolvePrimaryLocale($websiteProfile, $scope);
+        $defaultLocale = \trim((string)($scope['default_locale'] ?? $websiteProfile['default_locale'] ?? ''));
+        $planLocale = \trim((string)($scope['plan_locale'] ?? $scope['planning_locale'] ?? $websiteProfile['plan_locale'] ?? ''));
+
+        return "Visible copy governance:\n"
+            . "- content_locale/default_locale: " . ($contentLocale !== '' ? $contentLocale : 'not provided') . ($defaultLocale !== '' && $defaultLocale !== $contentLocale ? " (default_locale {$defaultLocale})" : '') . "\n"
+            . "- plan_locale: " . ($planLocale !== '' ? $planLocale : 'not provided') . " is only an internal planning language hint, never a visitor-facing language source.\n"
+            . "- Visitor-visible copy must use content_locale/default_locale. Do not use plan_locale unless it is the same locale.\n"
+            . "- Never render internal identifiers or paths as visible copy: plan_locale, page_type, section_code, task_key, block_key, runtime_context, app/code paths, var/ paths, content/... component paths, shared:* keys, or page:* keys.\n"
+            . "- Never render broken image placeholders. If a verified uploaded asset URL is absent, create the visual with inline SVG or CSS shapes.\n";
     }
 
     /**
@@ -2210,6 +2262,13 @@ final class AiSitePageComponentGenerationService
         $runtimeContext = \is_array($taskPlanTask['runtime_context'] ?? null) ? $taskPlanTask['runtime_context'] : [];
         $blockTask = \is_array($taskPlanTask['block_task'] ?? null) ? $taskPlanTask['block_task'] : [];
         $themeContext = \is_array($runtimeContext['theme_context_snapshot'] ?? null) ? $runtimeContext['theme_context_snapshot'] : [];
+        if ($themeContext === [] && \is_array($taskPlanTask['theme_context_snapshot'] ?? null)) {
+            $themeContext = $taskPlanTask['theme_context_snapshot'];
+        }
+        $sharedPromptContext = \is_array($runtimeContext['shared_prompt_context'] ?? null) ? $runtimeContext['shared_prompt_context'] : [];
+        if ($sharedPromptContext === [] && \is_array($taskPlanTask['shared_prompt_context'] ?? null)) {
+            $sharedPromptContext = $taskPlanTask['shared_prompt_context'];
+        }
         $stage2Context = \is_array($runtimeContext['stage2_context_snapshot'] ?? null) ? $runtimeContext['stage2_context_snapshot'] : [];
         $taskScriptDataContract = \is_array($taskScript['data_contract'] ?? null) ? $taskScript['data_contract'] : [];
         $implementationDataContract = \is_array($implementationContract['data_contract'] ?? null) ? $implementationContract['data_contract'] : [];
@@ -2230,6 +2289,10 @@ final class AiSitePageComponentGenerationService
             . "- stage3_directive: " . (string)($taskScript['stage3_directive'] ?? '') . "\n"
             . "- data_contract: " . $this->jsonEncodeForPrompt(\array_replace_recursive($implementationDataContract, $taskScriptDataContract), 4000) . "\n"
             . "- field_content_requirements: " . \json_encode($fieldRequirements, \JSON_UNESCAPED_UNICODE) . "\n"
+            . "- stage1.theme_context_snapshot: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
+            . "- stage1.shared_prompt_context: " . $this->jsonEncodeForPrompt($sharedPromptContext, 5000) . "\n"
+            . "- stage2.task_script: " . $this->jsonEncodeForPrompt($taskScript, 7000) . "\n"
+            . "- stage2.block_task: " . $this->jsonEncodeForPrompt($blockTask, 7000) . "\n"
             . "- block_task.content_plan: " . \json_encode($contentPlan, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- block_task.style_plan: " . \json_encode($stylePlan, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- block_task.planning_reason: " . (string)($blockTask['planning_reason'] ?? '') . "\n"
@@ -2423,7 +2486,7 @@ final class AiSitePageComponentGenerationService
             }
         }
 
-        if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|content\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $value)) {
+        if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $value)) {
             return '';
         }
 
@@ -2645,7 +2708,12 @@ final class AiSitePageComponentGenerationService
     private function resolvePrimaryLocale(array $websiteProfile, array $scope): string
     {
         return \trim((string)(
-            $scope['default_locale'] ?? $scope['default_language'] ?? $websiteProfile['default_locale'] ?? ''
+            $scope['content_locale']
+                ?? $websiteProfile['content_locale']
+                ?? $scope['default_locale']
+                ?? $scope['default_language']
+                ?? $websiteProfile['default_locale']
+                ?? ''
         ));
     }
 

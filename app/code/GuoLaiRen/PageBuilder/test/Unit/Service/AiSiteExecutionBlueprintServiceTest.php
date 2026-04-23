@@ -205,6 +205,76 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         );
     }
 
+    public function testBuildPlanArtifactsUsesDefaultLocaleForWebsiteContentWhenPlanLocaleDiffers(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+
+        $artifacts = $service->buildPlanArtifacts([
+            'site_title' => 'Teenipiya',
+            'brief_description' => 'Indian card game APK download SEO site for Teen Patti and Rummy players.',
+            'page_types' => [Page::TYPE_HOME],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'zh_Hans_CN',
+            'default_locale' => 'en_US',
+        ], [
+            'site_title' => 'Teenipiya',
+            'brief_description' => 'Indian card game APK download SEO site for Teen Patti and Rummy players.',
+        ]);
+
+        $planBook = $artifacts['plan_workbench']['confirmed']['plan_book']['structured'] ?? [];
+        $homeBlocks = \is_array($planBook['pages']['home_page']['blocks'] ?? null) ? $planBook['pages']['home_page']['blocks'] : [];
+        $heroBlock = $homeBlocks[0] ?? [];
+        $displayVisibleBlocks = \array_map(
+            static fn(array $block): array => [
+                'block_scope' => (string)($block['block_scope'] ?? ''),
+                'component' => (string)($block['component'] ?? ''),
+                'page_key' => (string)($block['page_key'] ?? ''),
+                'realtime_content' => \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [],
+                'field_plan' => \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [],
+                'editable_fields' => \is_array($block['editable_fields'] ?? null) ? $block['editable_fields'] : [],
+            ],
+            \array_values(\array_filter(
+                \is_array($planBook['pages']['home_page']['display_blocks'] ?? null) ? $planBook['pages']['home_page']['display_blocks'] : [],
+                static fn($block): bool => \is_array($block)
+            ))
+        );
+        $sharedVisibleBlocks = \array_map(
+            static fn(array $block): array => [
+                'component' => (string)($block['component'] ?? ''),
+                'realtime_content' => \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [],
+                'editable_fields' => \is_array($block['editable_fields'] ?? null) ? $block['editable_fields'] : [],
+            ],
+            \array_values(\array_filter(
+                \is_array($planBook['shared_blocks'] ?? null) ? $planBook['shared_blocks'] : [],
+                static fn($block): bool => \is_array($block)
+            ))
+        );
+        $visiblePayload = \json_encode([
+            'page_label' => $planBook['pages']['home_page']['page_label'] ?? '',
+            'content_locale' => $planBook['pages']['home_page']['content_locale'] ?? '',
+            'realtime_content' => $heroBlock['realtime_content'] ?? [],
+            'field_plan' => $heroBlock['field_plan'] ?? [],
+            'display_blocks' => $displayVisibleBlocks,
+        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '';
+        $sharedVisiblePayload = \json_encode($sharedVisibleBlocks, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '';
+
+        self::assertSame('en_US', (string)($artifacts['plan_json']['content_locale'] ?? ''));
+        self::assertSame('en_US', (string)($artifacts['structured']['content_locale'] ?? ''));
+        self::assertSame('en_US', (string)($artifacts['execution_blueprint']['content_locale'] ?? ''));
+        self::assertSame('en_US', (string)($artifacts['execution_blueprint']['theme_context_snapshot']['content_locale'] ?? ''));
+        self::assertSame('en_US', (string)($artifacts['execution_blueprint']['shared_prompt_context']['content_locale'] ?? ''));
+        self::assertSame('en_US', (string)($planBook['content_locale'] ?? ''));
+        self::assertSame('en_US', (string)($planBook['theme_context_snapshot']['content_locale'] ?? ''));
+        self::assertSame('en_US', (string)($planBook['shared_prompt_context']['content_locale'] ?? ''));
+        self::assertSame('en_US', (string)($planBook['pages']['home_page']['content_locale'] ?? ''));
+        self::assertSame('Home', (string)($planBook['pages']['home_page']['page_label'] ?? ''));
+        self::assertStringContainsString('Download Now', $visiblePayload);
+        self::assertStringContainsString('Download Now', $sharedVisiblePayload);
+        self::assertDoesNotMatchRegularExpression('/\p{Han}/u', $visiblePayload);
+        self::assertDoesNotMatchRegularExpression('/\p{Han}/u', $sharedVisiblePayload);
+        self::assertStringNotContainsString('content/home-page', $visiblePayload);
+    }
+
     public function testStageOneHeaderFooterCompletionFansOutPageTasksWithoutTabDependency(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
@@ -1088,15 +1158,20 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringNotContainsString('FREE MARKDOWN SENTINEL', $markdown);
     }
 
-    public function testBuildAiPlanPromptContainsStageOneMustConstraints(): void
+    public function testBuildAiPlanPromptsContainStageOneThemeFirstConstraints(): void
     {
-        $capturedPrompt = null;
+        $capturedPrompts = [];
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::once())
+        $aiService->expects(self::exactly(4))
             ->method('generateStream')
-            ->willReturnCallback(function (string $prompt, callable $callback) use (&$capturedPrompt): void {
-                $capturedPrompt = $prompt;
-                $callback($this->buildValidAiPlanResponse());
+            ->willReturnCallback(function (string $prompt, callable $callback) use (&$capturedPrompts): void {
+                $capturedPrompts[] = $prompt;
+                $callback(match (\count($capturedPrompts)) {
+                    1 => $this->buildStageOneRequirementExpansionAiResponse(),
+                    3 => $this->buildStagedPageAiResponse(Page::TYPE_HOME),
+                    4 => $this->buildStagedPageAiResponse(Page::TYPE_ABOUT),
+                    default => $this->buildValidAiPlanResponse(),
+                });
             });
 
         $service = new AiSiteExecutionBlueprintService(
@@ -1119,46 +1194,39 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             'target_scope' => 'about_page',
         ]);
 
-        self::assertIsString($capturedPrompt);
-        self::assertStringContainsString('The plan must contain final-ready content samples, not writing instructions.', $capturedPrompt);
-        self::assertStringContainsString('STAGE-1 SHARED THEME PLAN CONTRACT (theme_design must satisfy ALL):', $capturedPrompt);
-        self::assertStringContainsString('theme_design is the concrete shared plan for Header/Footer and later page prompts', $capturedPrompt);
-        self::assertStringContainsString('never output it as abstract direction', $capturedPrompt);
-        self::assertStringContainsString('theme_design.color_scheme must provide ready-to-apply hex colors', $capturedPrompt);
-        self::assertStringContainsString('theme_design MUST be a concrete shared theme plan', $capturedPrompt);
-        self::assertStringContainsString('STAGE-1 PAGE THEME ALIGNMENT CONTRACT (pages must satisfy ALL):', $capturedPrompt);
-        self::assertStringContainsString('Every page prompt MUST treat theme_design + shared_prompt_context as non-negotiable constraints', $capturedPrompt);
-        self::assertStringContainsString('"theme_alignment_summary":"string explaining how this page obeys theme_design/shared_prompt_context"', $capturedPrompt);
-        self::assertStringContainsString('Every pages.*.theme_alignment_summary MUST explicitly name the shared theme purpose', $capturedPrompt);
-        self::assertStringContainsString('Do not return markdown.', $capturedPrompt);
-        self::assertStringContainsString('Do not return a separate markdown field.', $capturedPrompt);
-        self::assertStringContainsString('Output only the structured plan object shown in the schema.', $capturedPrompt);
-        self::assertStringContainsString('"selection_reason":"why this font family and voice/tone fit the user requirement"', $capturedPrompt);
-        self::assertStringContainsString('"selection_reason":"why this color system fits the user requirement"', $capturedPrompt);
-        self::assertStringContainsString('"theme_alignment_summary":"how this page and every block obey theme_design color_scheme, tone_of_voice, cta_tone, trust expression, and Header/Footer handoff"', $capturedPrompt);
-        self::assertStringContainsString('theme_style.selection_reason and palette.selection_reason are REQUIRED', $capturedPrompt);
-        self::assertStringContainsString('why the color system, font family, and voice/tone were selected', $capturedPrompt);
-        self::assertStringContainsString('selection_reason must connect the color/font/tone choices to the user one-line requirement', $capturedPrompt);
-        self::assertStringContainsString('Never write blueprint guidance such as "围绕...说明"', $capturedPrompt);
-        self::assertStringContainsString('Never write process wording such as "标题围绕核心价值展开"', $capturedPrompt);
-        self::assertStringContainsString('field_plan.sample must be direct content', $capturedPrompt);
-        self::assertStringContainsString('field_plan.implementation_note must be a customer-readable implementation note', $capturedPrompt);
-        self::assertStringContainsString('Each pages.<page>.theme_alignment_summary is REQUIRED', $capturedPrompt);
-        self::assertStringContainsString('Selected page coverage hints (must all be represented in the final plan):', $capturedPrompt);
-        self::assertStringContainsString('- home_page: must include page goal, theme_alignment_summary, conversion rhythm, block implementation detail, field plan, execution script, SEO structure, CTA usage, responsive guidance.', $capturedPrompt);
-        self::assertStringContainsString('baseline_execution_blueprint:', $capturedPrompt);
-        self::assertStringContainsString('"default_locale": "en_US"', $capturedPrompt);
-        self::assertStringNotContainsString('"markdown":"string"', $capturedPrompt);
-        self::assertStringNotContainsString('Markdown template (fill with concrete content, never with direction text):', $capturedPrompt);
-        self::assertStringNotContainsString('"reason":"string"', $capturedPrompt);
-        self::assertStringNotContainsString('????????', $capturedPrompt);
+        self::assertCount(4, $capturedPrompts);
+        self::assertStringContainsString('Stage-1 REQUIREMENT EXPANSION planner', $capturedPrompts[0]);
+        self::assertStringContainsString('expand the user one-line requirement', $capturedPrompts[0]);
+        self::assertStringContainsString('Do not generate theme, Header/Footer, or page blocks.', $capturedPrompts[0]);
+        self::assertStringContainsString('Stage-1 THEME planner', $capturedPrompts[1]);
+        self::assertStringContainsString('Confirmed requirement expansion from step 1', $capturedPrompts[1]);
+        self::assertStringContainsString('shared Header/Footer', $capturedPrompts[1]);
+        self::assertStringContainsString('Plan locale: zh_Hans_CN', $capturedPrompts[1]);
+        self::assertStringContainsString('Website content locale: en_US', $capturedPrompts[1]);
+        self::assertStringContainsString('Header/Footer labels, CTA labels, link labels, media text, and other customer-visible website copy MUST use Website content locale', $capturedPrompts[1]);
+        self::assertStringContainsString('theme_design and shared_components.header/footer must be concrete implementation decisions', $capturedPrompts[1]);
+        self::assertStringContainsString('Stage-1 PAGE planner', $capturedPrompts[2]);
+        self::assertStringContainsString('Plan locale: zh_Hans_CN', $capturedPrompts[2]);
+        self::assertStringContainsString('Website content locale: en_US', $capturedPrompts[2]);
+        self::assertStringContainsString('Do not use Plan locale for website copy unless it is identical to Website content locale.', $capturedPrompts[2]);
+        self::assertStringContainsString('Confirmed requirement expansion (non-negotiable):', $capturedPrompts[2]);
+        self::assertStringContainsString('Shared theme_design (non-negotiable):', $capturedPrompts[2]);
+        self::assertStringContainsString('Confirmed shared Header/Footer blocks (must frame this page when displayed):', $capturedPrompts[2]);
+        self::assertStringContainsString('Baseline page shape to improve, keep compatible keys:', $capturedPrompts[2]);
+        self::assertStringContainsString('Critical page differentiation rules:', $capturedPrompts[2]);
+        self::assertStringContainsString('design_tags', $capturedPrompts[2]);
+        self::assertStringContainsString('Hard rules: output 2-3 blocks only', $capturedPrompts[2]);
+        $joinedPrompts = \implode("\n", $capturedPrompts);
+        self::assertStringNotContainsString('"markdown":"string"', $joinedPrompts);
+        self::assertStringNotContainsString('Markdown template (fill with concrete content, never with direction text):', $joinedPrompts);
+        self::assertStringNotContainsString('????????', $joinedPrompts);
     }
 
     public function testBuildPlanArtifactsByAiStreamCapsMaxTokensBelowProviderLimit(): void
     {
-        $capturedParams = null;
+        $capturedCalls = [];
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::once())
+        $aiService->expects(self::exactly(4))
             ->method('generateStream')
             ->willReturnCallback(function (
                 string $prompt,
@@ -1167,9 +1235,18 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                 string $scenarioCode,
                 $locale,
                 array $params
-            ) use (&$capturedParams): void {
-                $capturedParams = $params;
-                $callback($this->buildValidAiPlanResponse());
+            ) use (&$capturedCalls): void {
+                $capturedCalls[] = [
+                    'prompt' => $prompt,
+                    'scenario' => $scenarioCode,
+                    'params' => $params,
+                ];
+                $callback(match (\count($capturedCalls)) {
+                    1 => $this->buildStageOneRequirementExpansionAiResponse(),
+                    3 => $this->buildStagedPageAiResponse(Page::TYPE_HOME),
+                    4 => $this->buildStagedPageAiResponse(Page::TYPE_ABOUT),
+                    default => $this->buildValidAiPlanResponse(),
+                });
             });
 
         $service = new AiSiteExecutionBlueprintService(
@@ -1187,13 +1264,18 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             'brief_description' => 'Keep stream token budget below the provider cap.',
         ]);
 
-        self::assertIsArray($capturedParams);
-        self::assertLessThanOrEqual(8192, (int)($capturedParams['max_tokens'] ?? 0));
-        self::assertLessThan(8192, (int)($capturedParams['max_tokens'] ?? 0));
-        self::assertSame(240, (int)($capturedParams['timeout'] ?? 0));
-        self::assertTrue((bool)($capturedParams['enforce_timeout_in_stream'] ?? false));
-        self::assertSame(['type' => 'json_object'], $capturedParams['response_format'] ?? null);
-        self::assertSame('ai', (string)($artifacts['generation_source'] ?? 'ai'));
+        self::assertCount(4, $capturedCalls);
+        self::assertStringContainsString('REQUIREMENT EXPANSION planner', (string)($capturedCalls[0]['prompt'] ?? ''));
+        self::assertStringContainsString('THEME planner', (string)($capturedCalls[1]['prompt'] ?? ''));
+        self::assertStringContainsString('PAGE planner', (string)($capturedCalls[2]['prompt'] ?? ''));
+        self::assertLessThanOrEqual(8192, (int)($capturedCalls[0]['params']['max_tokens'] ?? 0));
+        self::assertLessThan(8192, (int)($capturedCalls[0]['params']['max_tokens'] ?? 0));
+        self::assertSame(0, (int)($capturedCalls[0]['params']['timeout'] ?? -1));
+        self::assertTrue((bool)($capturedCalls[0]['params']['disable_ai_timeout'] ?? false));
+        self::assertTrue((bool)($capturedCalls[0]['params']['disable_cli_timeout'] ?? false));
+        self::assertFalse((bool)($capturedCalls[0]['params']['enforce_timeout_in_stream'] ?? true));
+        self::assertSame(['type' => 'json_object'], $capturedCalls[0]['params']['response_format'] ?? null);
+        self::assertSame('ai_staged', (string)($artifacts['generation_source'] ?? ''));
         self::assertStringContainsString('strong CTA', (string)($artifacts['plan_json']['theme_style']['selection_reason'] ?? ''));
         self::assertStringContainsString('strong CTA', (string)($artifacts['plan_json']['palette']['selection_reason'] ?? ''));
     }
@@ -1202,7 +1284,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
     {
         $calls = [];
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(3))
+        $aiService->expects(self::exactly(4))
             ->method('generateStream')
             ->willReturnCallback(function (
                 string $prompt,
@@ -1218,8 +1300,9 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                     'params' => $params,
                 ];
                 $callback(match (\count($calls)) {
-                    2 => $this->buildStagedPageAiResponse(Page::TYPE_HOME),
-                    3 => $this->buildStagedPageAiResponse(Page::TYPE_ABOUT),
+                    1 => $this->buildStageOneRequirementExpansionAiResponse(),
+                    3 => $this->buildStagedPageAiResponse(Page::TYPE_HOME),
+                    4 => $this->buildStagedPageAiResponse(Page::TYPE_ABOUT),
                     default => $this->buildValidAiPlanResponse(),
                 });
             });
@@ -1247,14 +1330,23 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertSame('pagebuilder_plan_generation', (string)($calls[0]['scenario'] ?? ''));
         self::assertSame('pagebuilder_plan_generation', (string)($calls[1]['scenario'] ?? ''));
         self::assertSame('pagebuilder_plan_generation', (string)($calls[2]['scenario'] ?? ''));
-        self::assertStringContainsString('THEME planner', (string)($calls[0]['prompt'] ?? ''));
-        self::assertStringContainsString('PAGE planner', (string)($calls[1]['prompt'] ?? ''));
-        self::assertStringContainsString('Critical page differentiation rules:', (string)($calls[1]['prompt'] ?? ''));
-        self::assertStringContainsString('Page-type architecture guide:', (string)($calls[2]['prompt'] ?? ''));
-        self::assertStringContainsString('design_tags', (string)($calls[1]['prompt'] ?? ''));
-        self::assertTrue((bool)($calls[0]['params']['enforce_timeout_in_stream'] ?? false));
-        self::assertTrue((bool)($calls[1]['params']['enforce_timeout_in_stream'] ?? false));
-        self::assertLessThanOrEqual(4096, (int)($calls[1]['params']['max_tokens'] ?? 0));
+        self::assertSame('pagebuilder_plan_generation', (string)($calls[3]['scenario'] ?? ''));
+        self::assertStringContainsString('REQUIREMENT EXPANSION planner', (string)($calls[0]['prompt'] ?? ''));
+        self::assertStringContainsString('THEME planner', (string)($calls[1]['prompt'] ?? ''));
+        self::assertStringContainsString('PAGE planner', (string)($calls[2]['prompt'] ?? ''));
+        self::assertStringContainsString('Critical page differentiation rules:', (string)($calls[2]['prompt'] ?? ''));
+        self::assertStringContainsString('Page-type architecture guide:', (string)($calls[3]['prompt'] ?? ''));
+        self::assertStringContainsString('design_tags', (string)($calls[2]['prompt'] ?? ''));
+        self::assertStringContainsString('Confirmed requirement expansion', (string)($calls[1]['prompt'] ?? ''));
+        self::assertStringContainsString('Confirmed shared Header/Footer blocks', (string)($calls[2]['prompt'] ?? ''));
+        self::assertFalse((bool)($calls[0]['params']['enforce_timeout_in_stream'] ?? true));
+        self::assertFalse((bool)($calls[1]['params']['enforce_timeout_in_stream'] ?? true));
+        self::assertSame(0, (int)($calls[0]['params']['timeout'] ?? -1));
+        self::assertTrue((bool)($calls[0]['params']['disable_ai_timeout'] ?? false));
+        self::assertTrue((bool)($calls[0]['params']['disable_cli_timeout'] ?? false));
+        self::assertLessThanOrEqual(4096, (int)($calls[2]['params']['max_tokens'] ?? 0));
+        self::assertNotEmpty($artifacts['plan_json']['requirement_expansion']['expanded_brief'] ?? '');
+        self::assertNotEmpty($artifacts['plan_json']['pages'][Page::TYPE_HOME]['display_blocks'] ?? []);
 
         $homeBlocks = \array_values(\array_map(static fn(array $block): string => (string)($block['block_key'] ?? ''), $artifacts['plan_json']['pages'][Page::TYPE_HOME]['blocks'] ?? []));
         $aboutBlocks = \array_values(\array_map(static fn(array $block): string => (string)($block['block_key'] ?? ''), $artifacts['plan_json']['pages'][Page::TYPE_ABOUT]['blocks'] ?? []));
@@ -1346,7 +1438,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         );
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('AI plan generation failed: missing plan_json payload. received top-level keys: markdown');
+        $this->expectExceptionMessage('AI plan generation failed: stage-one theme plan must be generated before page plans.');
 
         $service->buildPlanArtifactsByAiStream([
             'site_title' => 'Plan Service Test',
@@ -1570,7 +1662,11 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
     {
         $aiService = $this->createMock(AiService::class);
         $aiService->method('generateStream')
-            ->willReturnCallback(static function (string $prompt, callable $callback) use ($response): void {
+            ->willReturnCallback(function (string $prompt, callable $callback) use ($response): void {
+                if (\str_contains($prompt, 'Stage-1 REQUIREMENT EXPANSION planner')) {
+                    $callback($this->buildStageOneRequirementExpansionAiResponse());
+                    return;
+                }
                 $callback($response);
             });
 
@@ -1745,6 +1841,37 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         return [$scope, $structured, $executionBlueprint, $planJson];
     }
 
+    private function buildStageOneRequirementExpansionAiResponse(): string
+    {
+        return \json_encode([
+            'requirement_expansion' => [
+                'original_brief' => 'Need home and about pages with strong CTA.',
+                'expanded_brief' => 'Plan Service Test needs a trust-first website that explains the offer, proves credibility, and moves visitors toward one strong CTA across Home and About.',
+                'planning_summary' => 'Create a concise conversion path with clear positioning, trust proof, and page-specific content blocks that stay ready for frontend implementation.',
+                'site_goal' => 'Capture qualified leads through a clear CTA while keeping the brand credible.',
+                'target_users' => ['Prospects', 'Decision makers'],
+                'business_context' => 'Brand site with direct lead-capture intent.',
+                'content_direction' => 'Use concrete headings, proof points, CTA copy, and reusable trust language.',
+                'conversion_strategy' => 'Lead visitors from value proof to contact action.',
+                'page_strategy' => [
+                    [
+                        'page_type' => Page::TYPE_HOME,
+                        'intent' => 'Introduce value and drive the primary CTA.',
+                        'content_focus' => 'Hero promise, service proof, and final action.',
+                        'conversion_role' => 'Primary conversion entry.',
+                    ],
+                    [
+                        'page_type' => Page::TYPE_ABOUT,
+                        'intent' => 'Build trust with story and credibility.',
+                        'content_focus' => 'Origin, mission, values, and reassurance.',
+                        'conversion_role' => 'Trust support before contact.',
+                    ],
+                ],
+                'technical_direction' => ['Use responsive block plans', 'Keep shared Header/Footer reusable'],
+            ],
+        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
     private function buildValidAiPlanResponse(): string
     {
         return \json_encode([
@@ -1810,6 +1937,36 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                     ],
                     'policies' => [
                         ['label' => 'Privacy Policy', 'href' => '/privacy-policy'],
+                    ],
+                ],
+                'shared_components' => [
+                    'header' => [
+                        'component' => 'header',
+                        'title' => 'Header',
+                        'goal' => 'Make brand navigation and the primary CTA visible before page content.',
+                        'implementation_detail' => 'Responsive header with brand name, Home/About links, and one CTA using the shared theme.',
+                        'realtime_content' => [
+                            'headline' => 'Plan Service Test',
+                            'supporting_copy' => ['Home', 'About'],
+                            'cta' => [['label' => 'Contact us', 'target' => '/contact']],
+                            'editable_slots' => ['brand_name', 'nav_items', 'primary_cta'],
+                        ],
+                        'editable_fields' => ['brand_name', 'nav_items', 'primary_cta'],
+                        'responsive_rule' => 'Collapse navigation into a compact mobile menu.',
+                    ],
+                    'footer' => [
+                        'component' => 'footer',
+                        'title' => 'Footer',
+                        'goal' => 'Close each page with trust, contact, and policy paths.',
+                        'implementation_detail' => 'Shared footer with contact link, policy links, and concise brand reassurance.',
+                        'realtime_content' => [
+                            'headline' => 'Continue with Plan Service Test',
+                            'supporting_copy' => ['Contact', 'Privacy Policy'],
+                            'cta' => [['label' => 'Contact us', 'target' => '/contact']],
+                            'editable_slots' => ['footer_links', 'policy_links', 'support_copy'],
+                        ],
+                        'editable_fields' => ['footer_links', 'policy_links', 'support_copy'],
+                        'responsive_rule' => 'Stack footer groups on mobile.',
                     ],
                 ],
                 'seo_strategy' => [
