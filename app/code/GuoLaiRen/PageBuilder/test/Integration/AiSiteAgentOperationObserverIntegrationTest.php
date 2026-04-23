@@ -50,6 +50,95 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertTrue((bool)$method->invoke($controller, ['operation' => 'build']));
     }
 
+    public function testOperationLookupUsesActiveOperationsWhenBuildOverwritesCurrentOperation(): void
+    {
+        /** @var AiSiteAgent $controller */
+        $controller = ObjectManager::getInstance(AiSiteAgent::class);
+        $method = new ReflectionMethod(AiSiteAgent::class, 'resolveActiveOperationForExecutionToken');
+        $method->setAccessible(true);
+
+        $taskPlanToken = 'task-plan-overwritten-token';
+        $scope = [
+            'active_operation' => [
+                'operation' => 'build',
+                'execution_token' => 'build-current-token',
+                'status' => 'running',
+                'queue_id' => 83,
+            ],
+            'active_operations' => [
+                'task_plan' => [
+                    'operation' => 'task_plan',
+                    'execution_token' => $taskPlanToken,
+                    'status' => 'running',
+                    'queue_id' => 79,
+                ],
+                'build' => [
+                    'operation' => 'build',
+                    'execution_token' => 'build-current-token',
+                    'status' => 'running',
+                    'queue_id' => 83,
+                ],
+            ],
+        ];
+
+        $operation = $method->invoke($controller, $scope, $taskPlanToken);
+
+        self::assertIsArray($operation);
+        self::assertSame('task_plan', (string)($operation['operation'] ?? ''));
+        self::assertSame($taskPlanToken, (string)($operation['execution_token'] ?? ''));
+        self::assertSame(79, (int)($operation['queue_id'] ?? 0));
+    }
+
+    public function testUpdatingTaskPlanOperationDoesNotOverwriteCurrentBuildOperation(): void
+    {
+        $createPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-create-session',
+            'POST',
+            'postCreateSession'
+        );
+        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
+
+        $publicId = (string)($createPayload['public_id'] ?? '');
+        self::assertNotSame('', $publicId);
+
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+
+        $taskPlanToken = 'task-plan-update-token';
+        $buildToken = 'build-current-token';
+        $scope = $session->getScopeArray();
+        $scope['active_operation'] = [
+            'operation' => 'build',
+            'execution_token' => $buildToken,
+            'status' => 'running',
+            'queue_id' => 83,
+        ];
+        $scope['active_operations'] = [
+            'task_plan' => [
+                'operation' => 'task_plan',
+                'execution_token' => $taskPlanToken,
+                'status' => 'running',
+                'queue_id' => 79,
+            ],
+            'build' => $scope['active_operation'],
+        ];
+        $this->sessionService->replaceScope($session->getId(), 1, $scope);
+
+        /** @var AiSiteAgent $controller */
+        $controller = ObjectManager::getInstance(AiSiteAgent::class);
+        $method = new ReflectionMethod(AiSiteAgent::class, 'updateActiveOperation');
+        $method->setAccessible(true);
+        $method->invoke($controller, $session, 1, ['operation' => 'task_plan', 'status' => 'done', 'message' => 'task plan done']);
+
+        $fresh = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($fresh);
+        $freshScope = $fresh->getScopeArray();
+        self::assertSame('build', (string)($freshScope['active_operation']['operation'] ?? ''));
+        self::assertSame($buildToken, (string)($freshScope['active_operation']['execution_token'] ?? ''));
+        self::assertSame('done', (string)($freshScope['active_operations']['task_plan']['status'] ?? ''));
+        self::assertSame($taskPlanToken, (string)($freshScope['active_operations']['task_plan']['execution_token'] ?? ''));
+    }
+
     public function testOnlyPlanningQueuesUseSelfDispatchWorkerBootstrap(): void
     {
         /** @var AiSiteAgent $controller */
@@ -59,7 +148,205 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
 
         self::assertTrue((bool)$method->invoke($controller, 'plan'));
         self::assertTrue((bool)$method->invoke($controller, 'task_plan'));
-        self::assertFalse((bool)$method->invoke($controller, 'build'));
+        self::assertTrue((bool)$method->invoke($controller, 'build'));
+    }
+
+    public function testSessionKeepsTwoReusableQueuesForPlanningAndBuild(): void
+    {
+        $createPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-create-session',
+            'POST',
+            'postCreateSession'
+        );
+        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
+
+        $publicId = (string)($createPayload['public_id'] ?? '');
+        self::assertNotSame('', $publicId);
+
+        $scopePatch = [
+            'site_title' => 'Session queue reuse',
+            'site_tagline' => 'Planning queue and build queue should each be reused',
+            'target_domain' => 'session-queue-reuse.local.test',
+            'brief_description' => 'Ensure plan/task_plan share one queue row and build keeps its own reusable queue row.',
+            'user_description' => 'Ensure plan/task_plan share one queue row and build keeps its own reusable queue row.',
+            'page_types' => [Page::TYPE_HOME],
+        ];
+        $mergePayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-merge-scope',
+            'POST',
+            'postMergeScope',
+            [],
+            [
+                'public_id' => $publicId,
+                'scope_patch' => $scopePatch,
+            ]
+        );
+        self::assertTrue((bool)($mergePayload['success'] ?? false), \json_encode($mergePayload, \JSON_UNESCAPED_UNICODE));
+
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+        $sessionId = (int)$session->getId();
+
+        RequestContext::set('pagebuilder.ai.queue.dispatcher', static function (string $processName, array $meta): array {
+            self::assertStringContainsString('queue:run --id=', $processName);
+            self::assertContains((string)($meta['operation'] ?? ''), ['plan', 'task_plan', 'build']);
+
+            return ['started' => true, 'pid' => 13579];
+        });
+
+        try {
+            $planPayload = $this->invokeJsonAction(
+                '/pagebuilder/backend/ai-site-agent/post-start-plan',
+                'POST',
+                'postStartPlan',
+                [],
+                [
+                    'public_id' => $publicId,
+                    'scope_patch' => $scopePatch,
+                ]
+            );
+            self::assertTrue((bool)($planPayload['success'] ?? false), \json_encode($planPayload, \JSON_UNESCAPED_UNICODE));
+            $planQueueId = (int)($planPayload['queue_id'] ?? 0);
+            self::assertGreaterThan(0, $planQueueId);
+
+            w_query('queue', 'update', [
+                'queue_id' => $planQueueId,
+                'patch' => [
+                    'status' => 'done',
+                    'pid' => 0,
+                    'finished' => 1,
+                ],
+            ]);
+            $session = $this->sessionService->loadByPublicId($publicId, 1);
+            self::assertNotNull($session);
+            $scope = $session->getScopeArray();
+            $scope['active_operation'] = [
+                'operation' => 'plan',
+                'execution_token' => (string)($planPayload['execution_token'] ?? ''),
+                'status' => 'done',
+                'queue_id' => $planQueueId,
+                'message' => 'plan done',
+            ];
+            $scope['active_operations']['plan'] = $scope['active_operation'];
+            $scope['plan_confirmed'] = 1;
+            $scope['execution_blueprint'] = [
+                'summary' => 'confirmed blueprint',
+                'pages' => [
+                    [
+                        'page_type' => Page::TYPE_HOME,
+                        'title' => 'Home',
+                    ],
+                ],
+            ];
+            $scope['website_profile'] = [
+                'site_title' => 'Session queue reuse',
+            ];
+            $this->sessionService->replaceScope($session->getId(), 1, $scope);
+
+            $taskPlanPayload = $this->invokeJsonAction(
+                '/pagebuilder/backend/ai-site-agent/post-start-task-plan',
+                'POST',
+                'postStartTaskPlan',
+                [],
+                ['public_id' => $publicId]
+            );
+            self::assertTrue((bool)($taskPlanPayload['success'] ?? false), \json_encode($taskPlanPayload, \JSON_UNESCAPED_UNICODE));
+            $taskPlanQueueId = (int)($taskPlanPayload['queue_id'] ?? 0);
+            self::assertSame($planQueueId, $taskPlanQueueId, 'Task plan should reuse the planning queue row.');
+
+            w_query('queue', 'update', [
+                'queue_id' => $taskPlanQueueId,
+                'patch' => [
+                    'status' => 'done',
+                    'pid' => 0,
+                    'finished' => 1,
+                ],
+            ]);
+            $session = $this->sessionService->loadByPublicId($publicId, 1);
+            self::assertNotNull($session);
+            $scope = $session->getScopeArray();
+            $scope['active_operation'] = [
+                'operation' => 'task_plan',
+                'execution_token' => (string)($taskPlanPayload['execution_token'] ?? ''),
+                'status' => 'done',
+                'queue_id' => $taskPlanQueueId,
+                'message' => 'task plan done',
+            ];
+            $scope['active_operations']['task_plan'] = $scope['active_operation'];
+            $scope['task_plan_confirmed'] = 1;
+            $this->sessionService->replaceScope($session->getId(), 1, $scope);
+
+            $buildPayload = $this->invokeJsonAction(
+                '/pagebuilder/backend/ai-site-agent/post-start-build',
+                'POST',
+                'postStartBuild',
+                [],
+                [
+                    'public_id' => $publicId,
+                    'scope_patch' => $scopePatch,
+                ]
+            );
+            self::assertTrue((bool)($buildPayload['success'] ?? false), \json_encode($buildPayload, \JSON_UNESCAPED_UNICODE));
+            $buildQueueId = (int)($buildPayload['queue_id'] ?? 0);
+            self::assertGreaterThan(0, $buildQueueId);
+            self::assertNotSame($taskPlanQueueId, $buildQueueId, 'Build should keep its own queue row.');
+
+            w_query('queue', 'update', [
+                'queue_id' => $buildQueueId,
+                'patch' => [
+                    'status' => 'done',
+                    'pid' => 0,
+                    'finished' => 1,
+                ],
+            ]);
+            $session = $this->sessionService->loadByPublicId($publicId, 1);
+            self::assertNotNull($session);
+            $scope = $session->getScopeArray();
+            $scope['active_operation'] = [
+                'operation' => 'build',
+                'execution_token' => (string)($buildPayload['execution_token'] ?? ''),
+                'status' => 'done',
+                'queue_id' => $buildQueueId,
+                'message' => 'build done',
+            ];
+            $scope['active_operations']['build'] = $scope['active_operation'];
+            $this->sessionService->replaceScope($session->getId(), 1, $scope);
+
+            $buildAgainPayload = $this->invokeJsonAction(
+                '/pagebuilder/backend/ai-site-agent/post-start-build',
+                'POST',
+                'postStartBuild',
+                [],
+                [
+                    'public_id' => $publicId,
+                    'scope_patch' => $scopePatch,
+                ]
+            );
+            self::assertTrue((bool)($buildAgainPayload['success'] ?? false), \json_encode($buildAgainPayload, \JSON_UNESCAPED_UNICODE));
+            self::assertSame($buildQueueId, (int)($buildAgainPayload['queue_id'] ?? 0), 'Repeated build should reuse the build queue row.');
+
+            $planningQueue = w_query('queue', 'get', ['queue_id' => $taskPlanQueueId]);
+            self::assertIsArray($planningQueue);
+            self::assertSame('glr_aisite:session:' . $sessionId . ':queue_slot:planning', (string)($planningQueue['biz_key'] ?? ''));
+            $planningQueueContent = \is_array($planningQueue['content'] ?? null)
+                ? $planningQueue['content']
+                : \json_decode((string)($planningQueue['content'] ?? ''), true);
+            self::assertIsArray($planningQueueContent);
+            self::assertSame('task_plan', (string)($planningQueueContent['operation'] ?? ''));
+            self::assertSame('stage2.shared.tasks', (string)($planningQueueContent['job_type'] ?? ''));
+
+            $buildQueue = w_query('queue', 'get', ['queue_id' => $buildQueueId]);
+            self::assertIsArray($buildQueue);
+            self::assertSame('glr_aisite:session:' . $sessionId . ':queue_slot:build', (string)($buildQueue['biz_key'] ?? ''));
+            $buildQueueContent = \is_array($buildQueue['content'] ?? null)
+                ? $buildQueue['content']
+                : \json_decode((string)($buildQueue['content'] ?? ''), true);
+            self::assertIsArray($buildQueueContent);
+            self::assertSame('build', (string)($buildQueueContent['operation'] ?? ''));
+            self::assertSame('virtual_theme.tree.build', (string)($buildQueueContent['job_type'] ?? ''));
+        } finally {
+            RequestContext::remove('pagebuilder.ai.queue.dispatcher');
+        }
     }
 
     public function testStartPlanImmediatelyDispatchesQueueWorkerWithoutCron(): void
