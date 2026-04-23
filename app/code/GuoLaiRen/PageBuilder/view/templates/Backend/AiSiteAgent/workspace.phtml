@@ -26,6 +26,7 @@ $planSseUrl = (string)($this->getData('plan_sse_url') ?? $this->getData('start_p
 $startTaskPlanUrl = (string)($this->getData('start_task_plan_url') ?? '');
 $confirmTaskPlanUrl = (string)($this->getData('confirm_task_plan_url') ?? '');
 $sortTaskPlanTasksUrl = (string)($this->getData('sort_task_plan_tasks_url') ?? '');
+$mutateTaskPlanTaskUrl = (string)($this->getData('mutate_task_plan_task_url') ?? '');
 $taskPlanSseUrl = (string)($this->getData('task_plan_sse_url') ?? '');
 $resumeBuildUrl = (string)($this->getData('resume_build_url') ?? '');
 $runVirtualThemeUrl = (string)($this->getData('run_virtual_theme_url') ?? '');
@@ -344,13 +345,28 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         ? (string)((int)($domainPurchaseState['purchase_order_id'] ?? 0))
         : (string)__('暂未生成'));
 ?>
-<?php $workspaceTplData = \get_defined_vars(); ?>
-<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/styles-device.phtml', $workspaceTplData) ?>
 <?php
 $workspaceRenderStage = \in_array($currentStage, ['plan', 'visual_edit', 'publish'], true)
     ? $currentStage
     : 'plan';
+$workspaceIsPlanStage = $workspaceRenderStage === 'plan';
+if ($workspaceIsPlanStage) {
+    // 阶段一仅加载阶段一前端资源，避免提前注入阶段二/构建阶段前端入口。
+    $startTaskPlanUrl = '';
+    $confirmTaskPlanUrl = '';
+    $sortTaskPlanTasksUrl = '';
+    $taskPlanSseUrl = '';
+    $resumeBuildUrl = '';
+    $runVirtualThemeUrl = '';
+    $startRegeneratePageUrl = '';
+    $startRefineComponentUrl = '';
+    $startBlockRefineSseUrl = '';
+    $startBlockRegenerateSseUrl = '';
+    $updateBlockConfigUrl = '';
+}
+$workspaceTplData = \get_defined_vars();
 ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/styles-device.phtml', $workspaceTplData) ?>
 <?php if ($workspaceRenderStage === 'plan'): ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/style-plan.phtml', $workspaceTplData) ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/layout.phtml', $workspaceTplData) ?>
