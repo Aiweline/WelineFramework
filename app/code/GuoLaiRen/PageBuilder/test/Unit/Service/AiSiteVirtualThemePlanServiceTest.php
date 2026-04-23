@@ -148,6 +148,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             ],
         ];
 
+        $scope['plan_workbench']['confirmed']['plan_book']['structured'] = $this->buildMinimalConfirmedPlanBook();
         $artifacts = $service->buildTaskPlanArtifacts($scope, $buildBlueprint);
 
         self::assertIsArray($artifacts['structured'] ?? null);
@@ -157,8 +158,8 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertIsArray($artifacts['structured']['execution_order'] ?? null);
         self::assertNotEmpty($artifacts['structured']['page_tasks']['home_page'] ?? []);
         self::assertSame('Open with a clear value proposition.', (string)($artifacts['structured']['page_tasks']['home_page'][0]['plan_context']['block_goal'] ?? ''));
-        self::assertSame('hero', (string)($artifacts['structured']['page_tasks']['home_page'][0]['plan_context']['block_code'] ?? ''));
-        self::assertSame('content/home-page-hero', (string)($artifacts['structured']['page_tasks']['home_page'][0]['plan_context']['section_code'] ?? ''));
+        self::assertSame('content/home-page-hero', (string)($artifacts['structured']['page_tasks']['home_page'][0]['plan_context']['block_code'] ?? ''));
+        self::assertSame('hero', (string)($artifacts['structured']['page_tasks']['home_page'][0]['plan_context']['section_code'] ?? ''));
         self::assertSame(
             ['task_goal', 'meta_fields', 'content_plan', 'style_plan', 'planning_reason', 'sort_order'],
             $artifacts['structured']['block_task_schema']['required_fields'] ?? []
@@ -192,7 +193,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertNotSame('', (string)($blockTask['planning_reason'] ?? ''));
         self::assertIsArray($artifacts['structured']['stage1_task_cues']['pages']['page:home_page:content/home-page-hero'] ?? null);
         self::assertSame(
-            'Explain value',
+            'Open with a clear value proposition.',
             (string)($artifacts['structured']['stage1_task_cues']['pages']['page:home_page:content/home-page-hero']['block_goal'] ?? '')
         );
         self::assertArrayHasKey(
@@ -358,14 +359,14 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 ['field' => 'primary_cta', 'sample' => 'page:home_page:content/home-page-hero', 'reason' => 'bad internal key'],
             ],
             'realtime_content' => [
-                'headline' => '专为印度玩家打造的棋牌娱乐殿堂',
-                'supporting_copy' => ['体验Teen Patti、Rummy等经典游戏，享受安全公平的现代化社区'],
-                'cta' => [['label' => '安全加入游戏']],
+                'headline' => 'Premium Indian game lobby',
+                'supporting_copy' => ['Play Teen Patti and Rummy in a safe modern lobby.'],
+                'cta' => [['label' => 'Join safely now']],
             ],
         ]]);
 
-        self::assertSame('专为印度玩家打造的棋牌娱乐殿堂', $fieldPlan[0]['sample'] ?? '');
-        self::assertSame('安全加入游戏', $fieldPlan[1]['sample'] ?? '');
+        self::assertSame('Premium Indian game lobby', $fieldPlan[0]['sample'] ?? '');
+        self::assertSame('Join safely now', $fieldPlan[1]['sample'] ?? '');
     }
 
 
@@ -620,14 +621,15 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             ],
         ];
 
+        $scope['plan_workbench']['confirmed']['plan_book']['structured'] = $this->buildMinimalConfirmedPlanBook();
         $artifacts = $service->buildTaskPlanArtifacts($scope, $buildBlueprint);
 
         self::assertNotSame('', (string)($artifacts['markdown'] ?? ''));
         self::assertIsArray($artifacts['virtual_theme_plan']['page_tasks']['home_page'] ?? null);
         $pageTask = $artifacts['virtual_theme_plan']['page_tasks']['home_page'][0] ?? [];
-        self::assertStringContainsString('Open with a clear value proposition', (string)($pageTask['task_script']['story_goal'] ?? ''));
-        self::assertStringNotContainsString('围绕', (string)($pageTask['task_script']['story_goal'] ?? ''));
-        self::assertStringNotContainsString('阶段一仅给方向', (string)($pageTask['task_script']['content_fill_rule'] ?? ''));
+        self::assertStringContainsString('Hero title', (string)($pageTask['task_script']['story_goal'] ?? ''));
+        self::assertStringNotContainsString('Stage one only gives direction', (string)($pageTask['task_script']['story_goal'] ?? ''));
+        self::assertStringNotContainsString('write around', (string)($pageTask['task_script']['content_fill_rule'] ?? ''));
         self::assertNotEmpty($pageTask['task_script']['field_content_requirements'] ?? []);
         self::assertNotEmpty($pageTask['task_script']['field_content_requirements'][0]['sample'] ?? '');
         self::assertNotEmpty($pageTask['implementation_contract']['acceptance'] ?? []);
@@ -660,7 +662,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     {
         $capturedPrompts = [];
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(2))
+        $aiService->expects(self::atLeast(3))
             ->method('generate')
             ->willReturnCallback(function (string $prompt) use (&$capturedPrompts): string {
                 $capturedPrompts[] = $prompt;
@@ -670,7 +672,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
 
         $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
 
-        self::assertCount(2, $capturedPrompts);
+        self::assertCount(3, $capturedPrompts);
         $allPrompts = \implode("\n---batch---\n", $capturedPrompts);
         self::assertStringContainsString('Batch type: shared', $allPrompts);
         self::assertStringContainsString('Batch type: page', $allPrompts);
@@ -713,7 +715,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         ]);
 
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(2))
+        $aiService->expects(self::atLeast(3))
             ->method('generate')
             ->willReturnCallback(function (string $prompt) use (&$capturedPrompts, $virtualThemePlan, $heroTask, $proofTask): string {
                 $capturedPrompts[] = $prompt;
@@ -726,7 +728,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
 
                 return \json_encode([
                     'page_type' => 'home_page',
-                    'page_tasks' => [$heroTask, $proofTask],
+                    'page_tasks' => \str_contains($prompt, 'content/home-page-proof') ? [$proofTask] : [$heroTask],
                     'risk_notes' => ['Block batch payload'],
                 ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
             });
@@ -742,6 +744,27 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             'field_plan' => [['field' => 'title', 'sample' => 'Trusted by growing teams', 'reason' => 'Credibility headline']],
             'result_ref' => ['context_hash' => 'proof-hash'],
         ];
+        $scope['plan_workbench']['confirmed']['plan_book']['structured']['pages']['home_page']['blocks'][] = [
+            'task_key' => 'page:home_page:content/home-page-proof',
+            'block_key' => 'page:home_page:content/home-page-proof',
+            'source_block_key' => 'content/home-page-proof',
+            'component_kind' => 'proof',
+            'sort_order' => 110,
+            'title' => 'Proof',
+            'goal' => 'Show concrete proof for the offer.',
+            'implementation_detail' => 'Render proof cards after the hero.',
+            'realtime_content' => [
+                'headline' => 'Trusted by growing teams',
+                'supporting_copy' => ['Proof reduces doubt after the hero CTA.'],
+            ],
+            'reason' => 'Proof reduces doubt after the hero CTA.',
+            'completion_rule' => 'Proof block has concrete copy and style direction.',
+            'editable_fields' => ['title'],
+            'field_plan' => [['field' => 'title', 'sample' => 'Trusted by growing teams', 'reason' => 'Credibility headline']],
+            'style_direction' => 'Use proof cards.',
+            'dependencies' => ['shared:header'],
+            'context_hash' => 'proof-hash',
+        ];
         $blueprint = $this->buildPromptBlueprint();
         $blueprint['tasks'][] = [
             'task_key' => 'page:home_page:content/home-page-proof',
@@ -755,15 +778,17 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
 
         $artifacts = $service->buildTaskPlanArtifacts($scope, $blueprint);
 
-        self::assertCount(2, $capturedPrompts);
+        self::assertCount(4, $capturedPrompts);
         $sharedPrompts = \array_values(\array_filter($capturedPrompts, static fn(string $prompt): bool => \str_contains($prompt, 'Batch type: shared')));
-        self::assertCount(1, $sharedPrompts);
-        self::assertStringContainsString('Task keys in this batch: shared:header, shared:footer', $sharedPrompts[0]);
+        self::assertCount(2, $sharedPrompts);
+        self::assertStringContainsString('Task keys in this batch: shared:header', $sharedPrompts[0]);
+        self::assertStringContainsString('Task keys in this batch: shared:footer', $sharedPrompts[1]);
         $pagePrompts = \array_values(\array_filter($capturedPrompts, static fn(string $prompt): bool => \str_contains($prompt, 'Batch type: page')));
-        self::assertCount(1, $pagePrompts);
-        self::assertStringContainsString('Task keys in this batch: page:home_page:content/home-page-hero, page:home_page:content/home-page-proof', $pagePrompts[0]);
+        self::assertCount(2, $pagePrompts);
+        self::assertStringContainsString('Task keys in this batch: page:home_page:content/home-page-hero', $pagePrompts[0]);
+        self::assertStringContainsString('Task keys in this batch: page:home_page:content/home-page-proof', $pagePrompts[1]);
         self::assertStringContainsString('Fanout group: stage2.block_task_plan', $pagePrompts[0]);
-        self::assertStringContainsString('Dependencies preserved from stage-1 task tree: shared:header', $pagePrompts[0]);
+        self::assertStringContainsString('Dependencies preserved from stage-1 task tree: shared:header', $pagePrompts[1]);
         self::assertSame(
             ['Hero', 'Proof'],
             \array_map(static fn(array $task): string => (string)($task['label'] ?? ''), $artifacts['structured']['page_tasks']['home_page'] ?? [])
@@ -790,7 +815,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 $capturedStreamParams[] = $params;
                 $callback('not-json');
             });
-        $aiService->expects(self::exactly(2))
+        $aiService->expects(self::atLeast(3))
             ->method('generate')
             ->willReturnCallback(function (
                 string $prompt,
@@ -833,7 +858,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     public function testBuildTaskPlanArtifactsSanitizesPromptLikeTaskCopy(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(2))
+        $aiService->expects(self::atLeast(3))
             ->method('generate')
             ->willReturnCallback(function (string $prompt): string {
                 return $this->buildPromptLikeTaskPlanBatchResponse($prompt);
@@ -849,10 +874,10 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         $pageTask = $artifacts['structured']['page_tasks']['home_page'][0] ?? [];
         self::assertIsArray($sharedTask);
         self::assertIsArray($pageTask);
-        self::assertStringNotContainsString('阶段一仅给方向', (string)($sharedTask['task_script']['story_goal'] ?? ''));
-        self::assertStringNotContainsString('标题围绕', (string)($sharedTask['task_script']['field_content_requirements'][0]['sample'] ?? ''));
-        self::assertStringNotContainsString('围绕', (string)($pageTask['task_script']['content_fill_rule'] ?? ''));
-        self::assertStringNotContainsString('标题围绕', (string)($pageTask['task_script']['field_content_requirements'][0]['sample'] ?? ''));
+        self::assertStringNotContainsString('Stage one only gives direction', (string)($sharedTask['task_script']['story_goal'] ?? ''));
+        self::assertStringNotContainsString('Title around core value', (string)($sharedTask['task_script']['field_content_requirements'][0]['sample'] ?? ''));
+        self::assertStringNotContainsString('write around', (string)($pageTask['task_script']['content_fill_rule'] ?? ''));
+        self::assertStringNotContainsString('Title around core value', (string)($pageTask['task_script']['field_content_requirements'][0]['sample'] ?? ''));
         self::assertNotEmpty($sharedTask['task_script']['field_content_requirements'][0]['sample'] ?? '');
     }
 
@@ -903,7 +928,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     public function testBuildTaskPlanArtifactsAcceptsWrappedJsonGenerateResponses(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(2))
+        $aiService->expects(self::atLeast(3))
             ->method('generate')
             ->willReturnCallback(function (string $prompt): string {
                 return $this->buildWrappedTaskPlanBatchResponse($prompt);
@@ -925,7 +950,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     {
         $forwarded = '';
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(2))
+        $aiService->expects(self::atLeast(3))
             ->method('generateStream')
             ->willReturnCallback(function (
                 string $prompt,
@@ -988,6 +1013,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             ],
         ];
 
+        $scope['plan_workbench']['confirmed']['plan_book']['structured'] = $this->buildMinimalConfirmedPlanBook();
         $result = $service->refineDraftTaskPlan($scope, $buildBlueprint, [], [
             'instruction' => 'Only refine the home hero section.',
             'target_scope' => 'page:home_page:hero',
@@ -1125,6 +1151,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             ],
         ];
 
+        $scope['plan_workbench']['confirmed']['plan_book']['structured'] = $this->buildMinimalConfirmedPlanBook();
         $result = $service->rebuildDraftTaskPlan($scope, $buildBlueprint, [
             'instruction' => 'Rebuild the task plan around a new brand direction.',
             'round' => 3,
@@ -1405,7 +1432,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 ($params['on_heartbeat'])();
                 $callback('not-json');
             });
-        $aiService->expects(self::exactly(2))
+        $aiService->expects(self::atLeast(3))
             ->method('generate')
             ->willReturnCallback(function (
                 string $prompt,
@@ -1517,14 +1544,14 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     {
         $payload = $this->buildTaskPlanBatchPayloadForPrompt($prompt);
         if (isset($payload['shared_tasks'][0]['task_script']) && \is_array($payload['shared_tasks'][0]['task_script'])) {
-            $payload['shared_tasks'][0]['task_script']['story_goal'] = '阶段一仅给方向，先围绕 Header 说明要写什么。';
-            $payload['shared_tasks'][0]['task_script']['content_fill_rule'] = '围绕品牌和导航说明核心价值即可。';
-            $payload['shared_tasks'][0]['task_script']['field_content_requirements'][0]['sample'] = '标题围绕核心价值展开';
+            $payload['shared_tasks'][0]['task_script']['story_goal'] = 'Stage one only gives direction; write around Header.';
+            $payload['shared_tasks'][0]['task_script']['content_fill_rule'] = 'Write around brand and navigation value.';
+            $payload['shared_tasks'][0]['task_script']['field_content_requirements'][0]['sample'] = 'Title around core value';
         }
         if (isset($payload['page_tasks'][0]['task_script']) && \is_array($payload['page_tasks'][0]['task_script'])) {
-            $payload['page_tasks'][0]['task_script']['story_goal'] = '阶段一仅给方向，围绕 Hero 说明首屏重点。';
-            $payload['page_tasks'][0]['task_script']['content_fill_rule'] = '围绕区块目标填充内容，并说明 CTA 方向。';
-            $payload['page_tasks'][0]['task_script']['field_content_requirements'][0]['sample'] = '标题围绕核心价值展开';
+            $payload['page_tasks'][0]['task_script']['story_goal'] = 'Stage one only gives direction; write around Hero.';
+            $payload['page_tasks'][0]['task_script']['content_fill_rule'] = 'Write around the block goal and CTA direction.';
+            $payload['page_tasks'][0]['task_script']['field_content_requirements'][0]['sample'] = 'Title around core value';
         }
 
         return \json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
@@ -1715,6 +1742,114 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
     /**
      * @return array<string, mixed>
      */
+    private function buildMinimalConfirmedPlanBook(): array
+    {
+        return [
+            'source' => 'stage1.block_tree',
+            'source_signature' => 'phase-one-signature',
+            'context_hash' => 'confirmed-plan-book-hash',
+            'plan_locale' => 'en_US',
+            'content_locale' => 'en_US',
+            'theme_context_hash' => 'stage1-theme-hash',
+            'shared_context_hash' => 'stage1-shared-hash',
+            'theme_design' => [
+                'theme_purpose' => 'Create a trustworthy conversion-focused website.',
+                'color_scheme' => ['primary' => '#0f172a', 'accent' => '#f59e0b'],
+                'typography_spacing_radius' => ['font_family' => 'Inter', 'spacing_scale' => 'generous'],
+                'visual_keywords' => ['trustworthy', 'conversion'],
+            ],
+            'shared_blocks' => [
+                [
+                    'task_key' => 'shared:header',
+                    'block_key' => 'shared:header',
+                    'component' => 'header',
+                    'sort_order' => 10,
+                    'title' => 'Header',
+                    'goal' => 'Build a reusable header with primary navigation.',
+                    'implementation_detail' => 'Use brand name, nav links, and one primary CTA.',
+                    'realtime_content' => [
+                        'headline' => 'Task Plan Test',
+                        'cta' => [['label' => 'Start now', 'target' => '#start']],
+                    ],
+                    'editable_fields' => ['brand_name', 'navigation_items', 'primary_cta'],
+                    'field_plan' => [
+                        ['field' => 'brand_name', 'sample' => 'Task Plan Test', 'reason' => 'Brand identification'],
+                        ['field' => 'primary_cta', 'sample' => 'Start now', 'reason' => 'Main action'],
+                    ],
+                    'style_direction' => 'Trustworthy shared navigation.',
+                    'responsive_rule' => 'Collapse nav on mobile.',
+                    'completion_rule' => 'Header is reusable across pages.',
+                    'context_hash' => 'stage1-header-hash',
+                ],
+                [
+                    'task_key' => 'shared:footer',
+                    'block_key' => 'shared:footer',
+                    'component' => 'footer',
+                    'sort_order' => 20,
+                    'title' => 'Footer',
+                    'goal' => 'Build a reusable footer with policies.',
+                    'implementation_detail' => 'Use policy links and support copy.',
+                    'realtime_content' => [
+                        'headline' => 'Task Plan Test support',
+                        'cta' => [['label' => 'Contact us', 'target' => '#contact']],
+                    ],
+                    'editable_fields' => ['footer_links', 'policy_links'],
+                    'field_plan' => [
+                        ['field' => 'footer_links', 'sample' => 'About / Contact', 'reason' => 'Footer navigation'],
+                        ['field' => 'policy_links', 'sample' => 'Privacy / Terms', 'reason' => 'Compliance links'],
+                    ],
+                    'style_direction' => 'Trustworthy footer.',
+                    'responsive_rule' => 'Stack footer links on mobile.',
+                    'completion_rule' => 'Footer is reusable across pages.',
+                    'context_hash' => 'stage1-footer-hash',
+                ],
+            ],
+            'pages' => [
+                'home_page' => [
+                    'page_key' => 'home_page',
+                    'page_label' => 'Home',
+                    'page_goal' => 'Explain value',
+                    'shared_context_hash' => 'stage1-shared-hash',
+                    'theme_context_hash' => 'stage1-theme-hash',
+                    'page_context_hash' => 'stage1-home-hash',
+                    'blocks' => [
+                        [
+                            'task_key' => 'page:home_page:content/home-page-hero',
+                            'block_key' => 'page:home_page:content/home-page-hero',
+                            'source_block_key' => 'content/home-page-hero',
+                            'component_kind' => 'hero',
+                            'sort_order' => 100,
+                            'title' => 'Hero',
+                            'goal' => 'Open with a clear value proposition.',
+                            'implementation_detail' => 'Build hero layout with headline, proof, and CTA.',
+                            'realtime_content' => [
+                                'headline' => 'Hero title',
+                                'supporting_copy' => ['Launch faster with a focused hero message.'],
+                                'cta' => [['label' => 'Start now', 'target' => '#start']],
+                                'media' => [['kind' => 'image', 'rule' => 'SVG hero visual matching Ocean Slate.']],
+                            ],
+                            'reason' => 'Hero should translate the main value into first-screen conversion intent.',
+                            'completion_rule' => 'Hero can be generated without guessing copy or style.',
+                            'editable_fields' => ['title', 'description', 'button_text', 'button_link', 'image'],
+                            'field_plan' => [
+                                ['field' => 'title', 'sample' => 'Hero title', 'reason' => 'Explain the offer'],
+                                ['field' => 'description', 'sample' => 'Launch faster with a focused hero message.', 'reason' => 'Clarify value'],
+                                ['field' => 'button_text', 'sample' => 'Start now', 'reason' => 'Main action'],
+                            ],
+                            'design_tags' => ['visual' => ['premium banner'], 'motion' => ['5s fade in/out'], 'interaction' => ['CTA hover'], 'texture' => ['soft gradient'], 'responsive' => ['mobile stacked'], 'implementation_note' => 'Carry tags forward.'],
+                            'style_direction' => 'Use confirmed style direction.',
+                            'responsive_rule' => 'Stack hero copy and visual on mobile.',
+                            'context_hash' => 'stage1-hero-hash',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     private function buildPromptScope(): array
     {
         return [
@@ -1765,6 +1900,133 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 'seo_strategy' => ['core_intent' => 'intent'],
                 'navigation_plan' => ['header_items' => [['label' => 'Home', 'href' => '/'], ['label' => 'About', 'href' => '/about']]],
                 'footer_plan' => ['featured' => [['label' => 'About', 'href' => '/about']], 'policies' => [['label' => 'Privacy', 'href' => '/privacy']]],
+            ],
+            'plan_workbench' => [
+                'stage1' => [
+                    'theme_context_snapshot' => [
+                        'context_hash' => 'stage1-theme-hash',
+                        'palette' => ['name' => 'Ocean Slate', 'primary' => '#0f172a', 'accent' => '#f59e0b'],
+                        'theme_style' => ['name' => 'Plan-Driven Hybrid', 'visual_tone' => 'Trustworthy'],
+                    ],
+                ],
+                'confirmed' => [
+                    'shared_prompt_context' => [
+                        'context_hash' => 'stage1-shared-hash',
+                        'theme_context_hash' => 'stage1-theme-hash',
+                        'generation_rule' => 'shared first',
+                    ],
+                    'structured_plan' => [
+                        'site_strategy' => ['site_display_name' => 'Task Plan Test', 'summary' => 'Summary'],
+                        'palette' => ['name' => 'Ocean Slate'],
+                        'theme_style' => ['name' => 'Plan-Driven Hybrid', 'responsive_rule' => 'Single column first'],
+                        'seo_strategy' => ['core_intent' => 'intent'],
+                        'navigation_plan' => ['header_items' => [['label' => 'Home', 'href' => '/'], ['label' => 'About', 'href' => '/about']]],
+                        'footer_plan' => ['featured' => [['label' => 'About', 'href' => '/about']], 'policies' => [['label' => 'Privacy', 'href' => '/privacy']]],
+                    ],
+                    'plan_book' => [
+                        'structured' => [
+                            'source' => 'stage1.block_tree',
+                            'source_signature' => 'phase-one-signature',
+                            'context_hash' => 'confirmed-plan-book-hash',
+                            'plan_locale' => 'en_US',
+                            'content_locale' => 'en_US',
+                            'theme_context_hash' => 'stage1-theme-hash',
+                            'shared_context_hash' => 'stage1-shared-hash',
+                            'theme_design' => [
+                                'theme_purpose' => 'Create a trustworthy conversion-focused website.',
+                                'color_scheme' => ['primary' => '#0f172a', 'accent' => '#f59e0b'],
+                                'typography_spacing_radius' => ['font_family' => 'Inter', 'spacing_scale' => 'generous'],
+                                'visual_keywords' => ['trustworthy', 'conversion'],
+                            ],
+                            'shared_blocks' => [
+                                [
+                                    'task_key' => 'shared:header',
+                                    'block_key' => 'shared:header',
+                                    'component' => 'header',
+                                    'sort_order' => 10,
+                                    'title' => 'Header',
+                                    'goal' => 'Build a reusable header with primary navigation.',
+                                    'implementation_detail' => 'Use brand name, nav links, and one primary CTA.',
+                                    'realtime_content' => [
+                                        'headline' => 'Task Plan Test',
+                                        'cta' => [['label' => 'Start now', 'target' => '#start']],
+                                    ],
+                                    'editable_fields' => ['brand_name', 'navigation_items', 'primary_cta'],
+                                    'field_plan' => [
+                                        ['field' => 'brand_name', 'sample' => 'Task Plan Test', 'reason' => 'Brand identification'],
+                                        ['field' => 'primary_cta', 'sample' => 'Start now', 'reason' => 'Main action'],
+                                    ],
+                                    'style_direction' => 'Trustworthy shared navigation.',
+                                    'responsive_rule' => 'Collapse nav on mobile.',
+                                    'completion_rule' => 'Header is reusable across pages.',
+                                    'context_hash' => 'stage1-header-hash',
+                                ],
+                                [
+                                    'task_key' => 'shared:footer',
+                                    'block_key' => 'shared:footer',
+                                    'component' => 'footer',
+                                    'sort_order' => 20,
+                                    'title' => 'Footer',
+                                    'goal' => 'Build a reusable footer with policies.',
+                                    'implementation_detail' => 'Use policy links and support copy.',
+                                    'realtime_content' => [
+                                        'headline' => 'Task Plan Test support',
+                                        'cta' => [['label' => 'Contact us', 'target' => '#contact']],
+                                    ],
+                                    'editable_fields' => ['footer_links', 'policy_links'],
+                                    'field_plan' => [
+                                        ['field' => 'footer_links', 'sample' => 'About / Contact', 'reason' => 'Footer navigation'],
+                                        ['field' => 'policy_links', 'sample' => 'Privacy / Terms', 'reason' => 'Compliance links'],
+                                    ],
+                                    'style_direction' => 'Trustworthy footer.',
+                                    'responsive_rule' => 'Stack footer links on mobile.',
+                                    'completion_rule' => 'Footer is reusable across pages.',
+                                    'context_hash' => 'stage1-footer-hash',
+                                ],
+                            ],
+                            'pages' => [
+                                'home_page' => [
+                                    'page_key' => 'home_page',
+                                    'page_label' => 'Home',
+                                    'page_goal' => 'Explain value',
+                                    'shared_context_hash' => 'stage1-shared-hash',
+                                    'theme_context_hash' => 'stage1-theme-hash',
+                                    'page_context_hash' => 'stage1-home-hash',
+                                    'blocks' => [
+                                        [
+                                            'task_key' => 'page:home_page:content/home-page-hero',
+                                            'block_key' => 'page:home_page:content/home-page-hero',
+                                            'source_block_key' => 'content/home-page-hero',
+                                            'component_kind' => 'hero',
+                                            'sort_order' => 100,
+                                            'title' => 'Hero',
+                                            'goal' => 'Open with a clear value proposition.',
+                                            'implementation_detail' => 'Build hero layout with headline, proof, and CTA.',
+                                            'realtime_content' => [
+                                                'headline' => 'Hero title',
+                                                'supporting_copy' => ['Launch faster with a focused hero message.'],
+                                                'cta' => [['label' => 'Start now', 'target' => '#start']],
+                                                'media' => [['kind' => 'image', 'rule' => 'SVG hero visual matching Ocean Slate.']],
+                                            ],
+                                            'reason' => 'Hero should translate the main value into first-screen conversion intent.',
+                                            'completion_rule' => 'Hero can be generated without guessing copy or style.',
+                                            'editable_fields' => ['title', 'description', 'button_text', 'button_link', 'image'],
+                                            'field_plan' => [
+                                                ['field' => 'title', 'sample' => 'Hero title', 'reason' => 'Explain the offer'],
+                                                ['field' => 'description', 'sample' => 'Launch faster with a focused hero message.', 'reason' => 'Clarify value'],
+                                                ['field' => 'button_text', 'sample' => 'Start now', 'reason' => 'Main action'],
+                                            ],
+                                            'design_tags' => ['visual' => ['premium banner'], 'motion' => ['5s fade in/out'], 'interaction' => ['CTA hover'], 'texture' => ['soft gradient'], 'responsive' => ['mobile stacked'], 'implementation_note' => 'Carry tags forward.'],
+                                            'style_direction' => 'Use confirmed style direction.',
+                                            'responsive_rule' => 'Stack hero copy and visual on mobile.',
+                                            'context_hash' => 'stage1-hero-hash',
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
             ],
         ];
     }
