@@ -81,4 +81,12 @@ interface ChildControlClientInterface
     public function tryReconnect(): bool;
 
     public function close(): void;
+
+    /**
+     * 返回当前子进程的 Master 自愈优先级（ControlMessage::RESURRECTION_*）
+     *
+     * 由 Master ACK 下发给 Client，驱动 MasterResurrectionCoordinator；
+     * Supervisor 等不参与子进程自愈的 Client 实现应返回 0。
+     */
+    public function getResurrectionPriority(): int;
 }
