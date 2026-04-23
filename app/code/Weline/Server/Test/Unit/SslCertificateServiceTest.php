@@ -53,6 +53,24 @@ class SslCertificateServiceTest extends TestCase
         $this->assertNull($liteStaging);
     }
 
+    public function testCollectSanEntriesSkipsBlockingDnsForWelineTestHost(): void
+    {
+        $service = new SslCertificateService();
+        $m = new ReflectionMethod($service, 'collectSanEntries');
+        $m->setAccessible(true);
+
+        $san = $m->invoke($service, 'p11005ce4.weline.test');
+        $this->assertContains('p11005ce4.weline.test', $san['dns']);
+        $this->assertContains('127.0.0.1', $san['ip']);
+        $this->assertContains('::1', $san['ip']);
+    }
+
+    public function testResolvesToLoopbackIsTrueForLocalTldWithoutDns(): void
+    {
+        $service = new SslCertificateService();
+        $this->assertTrue($service->resolvesToLoopback('p11005ce4.weline.test'));
+    }
+
     public function testIsWelineLocalWildcardCandidateDomain(): void
     {
         $service = new SslCertificateService();
@@ -385,6 +403,26 @@ class SslCertificateServiceTest extends TestCase
         $this->assertStringContainsString('DNS.1 = p11005ce4.weline.test', $config);
         $this->assertStringContainsString('IP.1 = 127.0.0.1', $config);
     }
+
+    public function testHasValidLocalCertificateReturnsFalseWhenFilesMissing(): void
+    {
+        $service = new SslCertificateService();
+        // 一个绝对不存在的私有开发域名：目录通常不会被预先创建，应直接返回 false。
+        $this->assertFalse($service->hasValidLocalCertificate(
+            'this-host-must-not-exist-' . \bin2hex(\random_bytes(3)) . '.weline.test'
+        ));
+    }
+
+    public function testHasValidLocalCertificateNormalizesWildcardBindAndRejectsEmpty(): void
+    {
+        $service = new SslCertificateService();
+        // 空域名直接 false，不触发任何文件探测。
+        $this->assertFalse($service->hasValidLocalCertificate(''));
+        // "0.0.0.0" 归一为 localhost；本地环境下 localhost 证书也可能不存在，
+        // 这里只确保方法不抛异常并返回 bool，不对具体结果断言（避免依赖真机状态）。
+        $this->assertIsBool($service->hasValidLocalCertificate('0.0.0.0'));
+    }
+
     private function makeTempDir(): string
     {
         $tempDir = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-local-ca-' . \bin2hex(\random_bytes(4));

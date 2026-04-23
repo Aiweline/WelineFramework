@@ -2518,7 +2518,9 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
                     $certPath,
                     $keyPath,
                     0,
-                    true
+                    true,
+                    '',
+                    false
                 );
                 $certInfo = $sslService->parseCertificate($certPath);
                 return [
@@ -2537,13 +2539,55 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         // 优先使用 host（项目唯一域名），忽略可能来自旧配置的 ssl_domain
         $domain = $host;
 
-        // 3. 使用 SslCertificateService 自动获取或生成证书
-        $this->printer->note(__('正在为 %{1} 准备 SSL 证书...', [$domain]));
-        
         $webroot = \defined('PUB') ? PUB : '';
         $email = Env::get('admin_email', 'admin@' . $domain);
-        
+
+        // 3. 先快速探测本地是否已有可复用证书，避免「明明复用却先喊『正在准备...』」的误导性输出。
+        //    hasValidLocalCertificate 只检查文件是否存在 + 有效期 + 本地 CA 复用能力，
+        //    不做任何 DNS/签发/IO 重活，耗时可忽略。
+        $willReuse = $sslService->hasValidLocalCertificate($domain);
+        if (!$willReuse) {
+            // 真正要走签发/续签路径：本地 CA + CSR + 可能的 Windows 信任库操作存在长尾风险，
+            // 提前提示并在结束后连同耗时、签发方一起打印，配合 SslCertificateService 内部分阶段
+            // w_log_info 可在事故时快速定位瓶颈。
+            $this->printer->note(__('正在为 %{1} 准备 SSL 证书...', [$domain]));
+        }
+
+        $tStart = \hrtime(true);
         $result = $sslService->ensureCertificate($domain, $webroot, $email);
+        $elapsedMs = (int) \round((\hrtime(true) - $tStart) / 1_000_000.0);
+
+        if (($result['success'] ?? false) === true) {
+            $issuer = (string) ($result['issuer'] ?? '');
+            $isNew = (bool) ($result['is_new'] ?? false);
+            if ($isNew) {
+                $this->printer->success(__('SSL 证书已签发：%{1}（签发方：%{2}，耗时 %{3}ms）', [
+                    $domain,
+                    $issuer !== '' ? $issuer : __('本地 CA'),
+                    (string) $elapsedMs,
+                ]));
+            } else {
+                // 复用路径：正常毫秒级，不强显耗时避免噪声；仅当不常见地慢（>200ms）才追加耗时。
+                if ($elapsedMs > 200) {
+                    $this->printer->success(__('使用已有证书：%{1}（签发方：%{2}，耗时 %{3}ms）', [
+                        $domain,
+                        $issuer !== '' ? $issuer : __('未知'),
+                        (string) $elapsedMs,
+                    ]));
+                } else {
+                    $this->printer->success(__('使用已有证书：%{1}（签发方：%{2}）', [
+                        $domain,
+                        $issuer !== '' ? $issuer : __('未知'),
+                    ]));
+                }
+            }
+        } else {
+            $this->printer->warning(__('SSL 证书准备失败：%{1}（耗时 %{2}ms）— %{3}', [
+                $domain,
+                (string) $elapsedMs,
+                (string) ($result['message'] ?? ''),
+            ]));
+        }
         return $result;
     }
 
