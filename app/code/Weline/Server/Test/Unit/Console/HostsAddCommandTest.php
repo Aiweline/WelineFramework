@@ -13,6 +13,7 @@ final class HostsAddCommandTest extends TestCase
     {
         $this->assertTrue(Add::isEligibleLocalHostname('p01234567.weline.test'));
         $this->assertTrue(Add::isEligibleLocalHostname('shop-1.weline.test'));
+        $this->assertTrue(Add::isEligibleLocalHostname('queued-phase-flow.local.test'));
     }
 
     public function testIsEligibleLocalHostname_rejectsNonLocal(): void
