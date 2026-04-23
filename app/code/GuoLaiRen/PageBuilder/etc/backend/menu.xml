@@ -25,43 +25,13 @@
               order="20"/>
     </menu>
 
-    <menu source="GuoLaiRen_PageBuilder::quick_build"
-          name="quick_build"
-          title="快速建站"
-          action=""
-          parent="Weline_Backend::page_builder_group"
-          icon="mdi mdi-rocket-launch-outline"
-          order="20">
-
-        <menu source="GuoLaiRen_PageBuilder::quick_build_wizard"
-              name="quick_build_wizard"
-              title="建站向导"
-              action="pagebuilder/backend/quick-build/wizard"
-              icon="mdi mdi-creation"
-              order="10"/>
-
-        <menu source="GuoLaiRen_PageBuilder::quick_build_orders"
-              name="quick_build_orders"
-              title="建站订单"
-              action="pagebuilder/backend/quick-build/orders"
-              icon="mdi mdi-clipboard-list-outline"
-              order="20"/>
-
-        <menu source="GuoLaiRen_PageBuilder::ai_site_agent"
-              name="ai_site_agent"
-              title="AI 建站工作台"
-              action="pagebuilder/backend/ai-site-agent/index?legacy=1"
-              icon="mdi mdi-robot-outline"
-              order="15"/>
-    </menu>
-
     <menu source="GuoLaiRen_PageBuilder::website_management"
           name="website_management"
           title="网站管理"
           action=""
           parent="Weline_Backend::page_builder_group"
           icon="mdi mdi-web"
-          order="30">
+          order="20">
 
         <menu source="GuoLaiRen_PageBuilder::website_listing"
               name="website_listing"

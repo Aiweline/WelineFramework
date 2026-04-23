@@ -614,6 +614,6 @@
 - 所有 API 调用需添加适当的错误处理和日志记录
 - 前端使用主题变量，禁止硬编码颜色
 - 用户提示使用 BackendToast/BackendConfirm
-- PageBuilder 复用 Weline_Websites 后端服务，通过 QuickBuildAggregator 或直接注入 DomainSyncService/DomainResolveService 等
+- PageBuilder 复用 Weline_Websites 后端服务，通过 DomainManagement 的 FrameworkQueryService 查询入口或直接注入 DomainSyncService/DomainResolveService 等
 - PageBuilder 前端与 Weline_Websites 前端保持一致的用户体验
 

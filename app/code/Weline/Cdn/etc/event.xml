@@ -86,15 +86,5 @@
                   shared="true"
                   sort="10"/>
     </event>
-    
-    <!-- ========== PageBuilder 快速建站事件观察者 ========== -->
-    
-    <!--注册 CDN 服务能力-->
-    <event name="GuoLaiRen_PageBuilder::quickbuild::query_services">
-        <observer name="Weline_Cdn::register_quickbuild_services" 
-                  instance="Weline\Cdn\Observer\RegisterQuickBuildServices"
-                  disabled="false"
-                  shared="true" sort="30"/>
-    </event>
 </config>
 
