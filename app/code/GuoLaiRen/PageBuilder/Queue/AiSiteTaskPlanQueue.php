@@ -246,6 +246,63 @@ class AiSiteTaskPlanQueue implements QueueInterface
         $scope = $scopeService->normalizeScope($fresh->getScopeArray());
         $draft = \is_array($scope['virtual_theme_plan']['draft'] ?? null) ? $scope['virtual_theme_plan']['draft'] : [];
         $draftMarkdown = \trim((string)($scope['virtual_theme_plan']['draft_markdown'] ?? ''));
+        $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
+        $taskPlanMarkdown = \trim((string)($scope['task_plan_markdown'] ?? ''));
+        $taskPlanGeneratedAt = \trim((string)($scope['task_plan_generated_at'] ?? ''));
+        $needsRepair = false;
+
+        if ($taskPlanStructured === [] && $draft !== []) {
+            $taskPlanStructured = $draft;
+            $needsRepair = true;
+        }
+        if ($taskPlanMarkdown === '' && $draftMarkdown !== '') {
+            $taskPlanMarkdown = $draftMarkdown;
+            $needsRepair = true;
+        }
+        if ($taskPlanGeneratedAt === '' && $draftMarkdown !== '') {
+            $taskPlanGeneratedAt = \date('Y-m-d H:i:s');
+            $needsRepair = true;
+        }
+
+        if ($needsRepair) {
+            $summary = \is_array($scope['task_plan_summary'] ?? null) ? $scope['task_plan_summary'] : [];
+            if (!isset($summary['signature']) || \trim((string)$summary['signature']) === '') {
+                $summary['signature'] = (string)($draft['signature'] ?? $scope['virtual_theme_plan']['plan_signature'] ?? '');
+            }
+            if (!isset($summary['source']) || \trim((string)$summary['source']) === '') {
+                $summary['source'] = 'task_plan_queue_repair';
+            }
+            if (!isset($summary['generation_source']) || \trim((string)$summary['generation_source']) === '') {
+                $summary['generation_source'] = 'ai';
+            }
+            if (!isset($summary['shared_task_count'])) {
+                $summary['shared_task_count'] = \count(\is_array($taskPlanStructured['shared_tasks'] ?? null) ? $taskPlanStructured['shared_tasks'] : []);
+            }
+            if (!isset($summary['page_task_count'])) {
+                $summary['page_task_count'] = \array_sum(\array_map(
+                    static fn($items): int => \is_array($items) ? \count($items) : 0,
+                    \is_array($taskPlanStructured['page_tasks'] ?? null) ? $taskPlanStructured['page_tasks'] : []
+                ));
+            }
+
+            $sessionService->mergeScope((int)$fresh->getId(), $adminId, [
+                'task_plan_structured' => $taskPlanStructured,
+                'task_plan_markdown' => $taskPlanMarkdown,
+                'task_plan_generated_at' => $taskPlanGeneratedAt,
+                'task_plan_summary' => $summary,
+            ]);
+
+            $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+            $scope = $scopeService->normalizeScope($fresh->getScopeArray());
+            $draft = \is_array($scope['virtual_theme_plan']['draft'] ?? null) ? $scope['virtual_theme_plan']['draft'] : [];
+            $draftMarkdown = \trim((string)($scope['virtual_theme_plan']['draft_markdown'] ?? ''));
+            $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
+            $taskPlanMarkdown = \trim((string)($scope['task_plan_markdown'] ?? ''));
+            if ($sse instanceof QueueDbWriter) {
+                $this->queueTrace($sse, '已回填 task_plan_* 会话字段（structured/markdown/generated_at/summary）');
+            }
+        }
+
         if ($draft !== [] && $draftMarkdown !== '') {
             if ($sse instanceof QueueDbWriter) {
                 $this->queueTrace($sse, '草案校验通过：virtual_theme_plan.draft + draft_markdown 均存在');
@@ -253,8 +310,6 @@ class AiSiteTaskPlanQueue implements QueueInterface
             return;
         }
 
-        $taskPlanMarkdown = \trim((string)($scope['task_plan_markdown'] ?? ''));
-        $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
         $hint = 'runTaskPlanOperation 已返回但草案字段缺失：'
             . 'draft=' . ($draft === [] ? 'empty' : 'ok')
             . ', draft_markdown=' . ($draftMarkdown === '' ? 'empty' : 'ok')
