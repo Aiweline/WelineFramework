@@ -253,6 +253,84 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         $this->assertMissingBlockTaskFieldIsRejected('planning_reason');
     }
 
+    public function testBuildTaskPlanArtifactsCopiesSortOrderFromBaselineWhenAiOmitsIt(): void
+    {
+        $decoded = \json_decode($this->buildTaskPlanResponse(), true);
+        unset($decoded['virtual_theme_plan']['page_tasks']['home_page'][0]['sort_order']);
+        unset($decoded['virtual_theme_plan']['page_tasks']['home_page'][0]['block_task']['sort_order']);
+
+        $service = new AiSiteVirtualThemePlanService(
+            $this->createAiServiceStub(\json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}')
+        );
+
+        $artifacts = $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
+        $task = $artifacts['structured']['page_tasks']['home_page'][0] ?? [];
+
+        self::assertSame(100, (int)($task['sort_order'] ?? 0));
+        self::assertSame(100, (int)($task['block_task']['sort_order'] ?? 0));
+    }
+
+    public function testBuildTaskPlanArtifactsBuildsMissingBlockTaskFromStageOneBaselineAlias(): void
+    {
+        $decoded = \json_decode($this->buildTaskPlanResponse(), true);
+        $decoded['virtual_theme_plan']['page_tasks']['home_page'][0]['task_key'] = 'page:home_page:hero';
+        $decoded['virtual_theme_plan']['page_tasks']['home_page'][0]['section_code'] = 'hero';
+        unset($decoded['virtual_theme_plan']['page_tasks']['home_page'][0]['block_task']);
+
+        $service = new AiSiteVirtualThemePlanService(
+            $this->createAiServiceStub(\json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}')
+        );
+
+        $artifacts = $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
+        $task = $artifacts['structured']['page_tasks']['home_page'][0] ?? [];
+
+        self::assertSame('page:home_page:content/home-page-hero', (string)($task['task_key'] ?? ''));
+        self::assertSame(100, (int)($task['block_task']['sort_order'] ?? 0));
+        self::assertSame('Open with a clear value proposition.', (string)($task['block_task']['task_goal'] ?? ''));
+        self::assertNotEmpty($task['block_task']['content_plan']['field_content_requirements'] ?? []);
+    }
+
+    public function testBuildTaskPlanArtifactsBuildsTaskScriptFromBlockTaskWhenAiReturnsEmptyScript(): void
+    {
+        $decoded = \json_decode($this->buildTaskPlanResponse(), true);
+        $task =& $decoded['virtual_theme_plan']['page_tasks']['home_page'][0];
+        $task['task_key'] = 'page:home_page:hero';
+        $task['section_code'] = 'hero';
+        $task['task_script'] = [
+            'scene' => '',
+            'story_goal' => '',
+            'content_fill_rule' => '',
+            'stage3_directive' => '',
+            'field_content_requirements' => [
+                ['field' => 'headline', 'sample' => '', 'reason' => 'AI omitted the concrete sample'],
+            ],
+        ];
+        $task['block_task']['content_plan']['story_goal'] = 'Visitors see the Royal Indian Games launch offer and understand how to start.';
+        $task['block_task']['content_plan']['content_fill_rule'] = 'headline=Royal Indian Games lobby | primary_cta=Play Teen Patti now.';
+        $task['block_task']['content_plan']['field_content_requirements'] = [
+            ['field' => 'headline', 'sample' => 'Royal Indian Games lobby', 'reason' => 'Use the confirmed offer wording'],
+            ['field' => 'primary_cta', 'sample' => 'Play Teen Patti now', 'reason' => 'Use the confirmed conversion action'],
+        ];
+        $task['block_task']['meta_fields'] = $task['block_task']['content_plan']['field_content_requirements'];
+
+        $service = new AiSiteVirtualThemePlanService(
+            $this->createAiServiceStub(\json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}')
+        );
+
+        $artifacts = $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
+        $task = $artifacts['structured']['page_tasks']['home_page'][0] ?? [];
+
+        self::assertSame('page:home_page:content/home-page-hero', (string)($task['task_key'] ?? ''));
+        self::assertSame(
+            'Visitors see the Royal Indian Games launch offer and understand how to start.',
+            (string)($task['task_script']['story_goal'] ?? '')
+        );
+        self::assertStringContainsString('Royal Indian Games lobby', (string)($task['task_script']['content_fill_rule'] ?? ''));
+        self::assertStringContainsString('frontend block', (string)($task['task_script']['stage3_directive'] ?? ''));
+        self::assertSame('Royal Indian Games lobby', (string)($task['task_script']['field_content_requirements'][0]['sample'] ?? ''));
+        self::assertNotEmpty($task['field_content_requirements'] ?? []);
+    }
+
     public function testBuildTaskPlanArtifactsRepairsInternalComponentPathsInTaskCopy(): void
     {
         $service = new AiSiteVirtualThemePlanService(
@@ -290,6 +368,39 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertSame('安全加入游戏', $fieldPlan[1]['sample'] ?? '');
     }
 
+
+    public function testStageTwoFieldPlanBuildsSamplesFromRealtimeContentWhenFieldPlanIsMissing(): void
+    {
+        $service = new AiSiteVirtualThemePlanService();
+        $method = new \ReflectionMethod($service, 'buildStageTwoFieldPlanFromPlanBookBlock');
+        $method->setAccessible(true);
+
+        $fieldPlan = $method->invokeArgs($service, [[
+            'title' => 'content/home-page-hero',
+            'editable_fields' => ['title', 'subtitle', 'description', 'button_text', 'button_link', 'image'],
+            'realtime_content' => [
+                'headline' => 'Welcome to Teenipiya',
+                'supporting_copy' => [
+                    'Play Teen Patti and Rummy with a fast APK download path.',
+                    'Compare games, check rules, and start from one clear entry.',
+                ],
+                'cta' => [
+                    ['label' => 'Download Now', 'target' => '#start'],
+                ],
+                'media' => [
+                    ['kind' => 'image', 'rule' => 'SVG card-table visual with warm Indian gaming colors.'],
+                ],
+            ],
+        ]]);
+
+        $encoded = \json_encode($fieldPlan, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '';
+
+        self::assertStringContainsString('Welcome to Teenipiya', $encoded);
+        self::assertStringContainsString('Download Now', $encoded);
+        self::assertStringContainsString('#start', $encoded);
+        self::assertStringContainsString('SVG card-table visual', $encoded);
+        self::assertStringNotContainsString('content/home-page-hero', $encoded);
+    }
 
     public function testBuildTaskPlanArtifactsUsesConfirmedPlanBookBlockTreeAsStageTwoInput(): void
     {
@@ -444,12 +555,17 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
 
         self::assertSame('stage2.block_task_plan', (string)($stage2Queue['fanout']['fanout_group'] ?? ''));
         self::assertSame('one_block_one_task', (string)($stage2Queue['fanout']['task_granularity'] ?? ''));
-        self::assertSame(\count($confirmedBlocks), (int)($stage2Queue['fanout']['block_job_count'] ?? 0));
+        self::assertSame(\count($confirmedBlocks) + 2, (int)($stage2Queue['fanout']['block_job_count'] ?? 0));
         self::assertSame(
-            ['stage2.block_task_plan:home_page:hero', 'stage2.block_task_plan:home_page:proof'],
+            [
+                'stage2.block_task_plan:shared:header',
+                'stage2.block_task_plan:shared:footer',
+                'stage2.block_task_plan:home_page:hero',
+                'stage2.block_task_plan:home_page:proof',
+            ],
             $blockJobKeys
         );
-        self::assertSame(\count($confirmedBlocks), \count($blockJobKeys));
+        self::assertSame(\count($confirmedBlocks) + 2, \count($blockJobKeys));
         self::assertSame(
             'stage2.block_task_plan',
             (string)($stage2Queue['jobs']['stage2.block_task_plan:home_page:hero']['job_type'] ?? '')
@@ -509,12 +625,35 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertNotSame('', (string)($artifacts['markdown'] ?? ''));
         self::assertIsArray($artifacts['virtual_theme_plan']['page_tasks']['home_page'] ?? null);
         $pageTask = $artifacts['virtual_theme_plan']['page_tasks']['home_page'][0] ?? [];
-        self::assertStringContainsString('Hero', (string)($pageTask['task_script']['story_goal'] ?? ''));
+        self::assertStringContainsString('Open with a clear value proposition', (string)($pageTask['task_script']['story_goal'] ?? ''));
         self::assertStringNotContainsString('围绕', (string)($pageTask['task_script']['story_goal'] ?? ''));
         self::assertStringNotContainsString('阶段一仅给方向', (string)($pageTask['task_script']['content_fill_rule'] ?? ''));
         self::assertNotEmpty($pageTask['task_script']['field_content_requirements'] ?? []);
         self::assertNotEmpty($pageTask['task_script']['field_content_requirements'][0]['sample'] ?? '');
         self::assertNotEmpty($pageTask['implementation_contract']['acceptance'] ?? []);
+    }
+
+    public function testBuildTaskPlanArtifactsRejectsChineseVisibleContentForEnglishLocale(): void
+    {
+        $decoded = \json_decode($this->buildTaskPlanResponse(), true);
+        $task =& $decoded['virtual_theme_plan']['page_tasks']['home_page'][0];
+        $task['task_script']['field_content_requirements'][0]['sample'] = "\u{6B22}\u{8FCE}\u{5F00}\u{59CB}";
+        $task['block_task']['meta_fields'][0]['sample'] = "\u{6B22}\u{8FCE}\u{5F00}\u{59CB}";
+        $task['block_task']['meta_fields'][0]['default'] = "\u{6B22}\u{8FCE}\u{5F00}\u{59CB}";
+        $task['block_task']['content_plan']['content_copy'][0]['copy'] = "\u{6B22}\u{8FCE}\u{5F00}\u{59CB}";
+        $task['block_task']['content_plan']['cta_plan'][0]['label'] = "\u{7ACB}\u{5373}\u{5F00}\u{59CB}";
+        $task['block_task']['content_plan']['asset_plan'][0]['description'] = "\u{4E3B}\u{89C6}\u{89C9}";
+
+        $service = new AiSiteVirtualThemePlanService(
+            $this->createAiServiceStub(\json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}')
+        );
+        $scope = $this->buildPromptScope();
+        $scope['content_locale'] = 'en_US';
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('content_locale');
+
+        $service->buildTaskPlanArtifacts($scope, $this->buildPromptBlueprint());
     }
 
     public function testBuildTaskPlanArtifactsPassesStageOneTaskCuesIntoAiPrompt(): void
