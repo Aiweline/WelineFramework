@@ -52,8 +52,10 @@ class SseTerminalTaglibTest extends TestCore
         $this->assertStringContainsString('var callbackEvent = rawEvent || { data: JSON.stringify(data) };', $html);
         $this->assertStringContainsString('dispatchSseEvent(eventName, data, e);', $html);
         $this->assertStringNotContainsString('dispatchSseEvent(eventName, data);', $html);
-        $this->assertStringContainsString('// 自动重连同一 URL', $html);
-        $this->assertStringContainsString(
+        $this->assertStringContainsString('"total"', $html);
+        $this->assertStringContainsString('.weline-sse-terminal-line.total', $html);
+        $this->assertStringContainsString("if (eventName === 'done')", $html);
+        $this->assertStringNotContainsString(
             "if (eventName === 'done' || eventName === 'failed' || eventName === 'error')",
             $html
         );
