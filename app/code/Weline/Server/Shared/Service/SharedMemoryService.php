@@ -216,6 +216,8 @@ class SharedMemoryService implements MemoryServiceInterface, AtomicMemoryService
 
     public function __destruct()
     {
-        $this->client->disconnect();
+        if (isset($this->client)) {
+            $this->client->disconnect();
+        }
     }
 }
