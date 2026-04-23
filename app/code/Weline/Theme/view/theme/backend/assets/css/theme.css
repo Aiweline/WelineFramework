@@ -464,9 +464,12 @@ textarea.form-control {
 .btn-light.disabled,
 .btn-secondary:disabled,
 .btn-secondary.disabled {
-    color: var(--backend-color-text-secondary) !important;
-    background: var(--backend-color-bg-secondary) !important;
-    border-color: var(--backend-color-border-light) !important;
+    color: var(--backend-color-text-primary) !important;
+    background: var(--backend-color-bg-tertiary) !important;
+    border-color: var(--backend-color-border-default) !important;
+    opacity: 1;
+    transform: none;
+    box-shadow: none;
 }
 
 .alert {
@@ -498,4 +501,3 @@ textarea.form-control {
         padding-right: 0.55rem;
     }
 }
-

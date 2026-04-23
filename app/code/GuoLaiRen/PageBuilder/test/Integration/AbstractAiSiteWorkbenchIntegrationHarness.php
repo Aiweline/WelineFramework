@@ -13,8 +13,10 @@ use GuoLaiRen\PageBuilder\Service\AiSiteProfileGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\UnitTest\TestCore;
+use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
 
 /**
  * AI 建站工作台集成测共享：后台登录 + 模拟 HTTP 上下文 + JSON/SSE 调用。
@@ -24,12 +26,37 @@ use Weline\Framework\UnitTest\TestCore;
 abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
 {
     protected AiSiteAgentSessionService $sessionService;
+    private int $outputBufferBaseline = 0;
 
     protected function setUp(): void
     {
+        $this->outputBufferBaseline = \ob_get_level();
+        \ob_start();
         parent::setUp();
         $this->sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
         $this->loginAsBackendAdmin();
+        RequestContext::set('pagebuilder.ai.queue.dispatcher', static fn(string $processName, array $meta = []): array => [
+            'started' => false,
+            'pid' => 0,
+            'message' => 'Queue auto-dispatch disabled by PHPUnit; queue:run executes explicitly.',
+        ]);
+        RequestContext::set(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST, true);
+    }
+
+    protected function tearDown(): void
+    {
+        try {
+            RequestContext::remove('pagebuilder.ai.queue.dispatcher');
+            RequestContext::remove(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST);
+            parent::tearDown();
+        } finally {
+            while (\ob_get_level() > $this->outputBufferBaseline) {
+                \ob_end_clean();
+            }
+            while (\ob_get_level() < $this->outputBufferBaseline) {
+                \ob_start();
+            }
+        }
     }
 
     /**

@@ -106,7 +106,9 @@ class AnthropicProvider implements ProviderInterface
         $systemMessage = $this->extractSystemMessage($params);
         
         // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
-        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
+        $timeout = (!empty($params['disable_ai_timeout']) || (PHP_SAPI === 'cli' && !empty($params['disable_cli_timeout'])))
+            ? 0
+            : (isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180));
         
         // 设置执行时间限制
         if ($timeout > 0) {
@@ -965,6 +967,9 @@ class AnthropicProvider implements ProviderInterface
 
     private function resolveStreamTimeout(array $params, array $config): int
     {
+        if (!empty($params['disable_ai_timeout']) || (PHP_SAPI === 'cli' && !empty($params['disable_cli_timeout']))) {
+            return 0;
+        }
         if (!empty($params['enforce_timeout_in_stream'])) {
             return isset($params['timeout'])
                 ? (int)$params['timeout']

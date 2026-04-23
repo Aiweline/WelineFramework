@@ -43,7 +43,10 @@ class AiSiteVirtualLayoutService
             (int)($scope['virtual_theme_id'] ?? 0),
             (int)$session->getVirtualThemeId()
         );
-        if ($virtualThemeId <= 0) {
+        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
+        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
+        $hasHtmlBlocks = \is_array($virtualPage['blocks'] ?? null) && $virtualPage['blocks'] !== [];
+        if ($virtualThemeId <= 0 && !$hasHtmlBlocks) {
             return null;
         }
 
