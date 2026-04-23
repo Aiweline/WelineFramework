@@ -404,7 +404,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
 
     /**
      * 获取可用于 DNS/CDN 管理的账户列表（与域名购买/管理中的逻辑一致）
-     * 返回结构同 DomainManagement::getDnsAccounts，供 QuickBuild 向导等复用。
+     * 返回结构同 DomainManagement::getDnsAccounts，供后台域名管理等复用。
      */
     private function getDnsCdnAccounts(array $params): array
     {

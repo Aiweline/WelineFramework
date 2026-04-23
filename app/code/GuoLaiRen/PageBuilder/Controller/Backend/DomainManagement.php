@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Controller\Backend;
 
-use GuoLaiRen\PageBuilder\Service\QuickBuildAggregator;
 use Weline\Admin\Controller\BaseController;
 use Weline\Backend\Model\Config as BackendConfig;
 use Weline\Cron\Schedule\Schedule;
@@ -11,6 +10,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Service\Query\FrameworkQueryService;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainRegistrarAccount;
@@ -28,16 +28,16 @@ class DomainManagement extends BaseController
 {
     private const CRON_MODULE = 'Weline_Cron';
 
-    private QuickBuildAggregator $aggregator;
+    private FrameworkQueryService $queryService;
     private Schedule $schedule;
     private BackendConfig $backendConfig;
 
     public function __construct(
-        QuickBuildAggregator $aggregator,
+        FrameworkQueryService $queryService,
         Schedule $schedule,
         BackendConfig $backendConfig
     ) {
-        $this->aggregator = $aggregator;
+        $this->queryService = $queryService;
         $this->schedule = $schedule;
         $this->backendConfig = $backendConfig;
     }
@@ -45,14 +45,14 @@ class DomainManagement extends BaseController
     #[Acl('GuoLaiRen_PageBuilder::domain_management_index', '域名管理首页', 'mdi-dns', '查看域名管理')]
     public function index(): string
     {
-        $accounts = $this->aggregator->queryRegistrarAccounts([]);
-        $registrars = $this->aggregator->queryRegistrars();
+        $accounts = $this->queryRegistrarAccounts([]);
+        $registrars = $this->queryRegistrars();
 
-        $activeAccounts = $this->aggregator->getActiveRegistrarAccounts();
+        $activeAccounts = $this->getActiveRegistrarAccounts();
 
-        $lastSyncTime = $this->aggregator->getDomainLastSyncTime();
+        $lastSyncTime = $this->getDomainLastSyncTime();
 
-        $statusOptions = $this->aggregator->getDomainStatusOptions();
+        $statusOptions = $this->getDomainStatusOptions();
 
         $cronInstalled = $this->isCronInstalled();
 
@@ -98,7 +98,7 @@ class DomainManagement extends BaseController
     public function postGetRegistrars(): string
     {
         try {
-            $registrars = $this->aggregator->queryRegistrars();
+            $registrars = $this->queryRegistrars();
             return $this->fetchJson(['success' => true, 'data' => $registrars]);
         } catch (\Throwable $e) {
             return $this->fetchJson(['success' => false, 'msg' => $e->getMessage()]);
@@ -116,7 +116,7 @@ class DomainManagement extends BaseController
         }
 
         try {
-            $fields = $this->aggregator->queryRegistrarConfigFields($registrarCode);
+            $fields = $this->queryRegistrarConfigFields($registrarCode);
             return $this->fetchJson(['success' => true, 'data' => $fields]);
         } catch (\Throwable $e) {
             return $this->fetchJson(['success' => false, 'msg' => $e->getMessage()]);
@@ -134,7 +134,7 @@ class DomainManagement extends BaseController
         }
 
         try {
-            $info = $this->aggregator->queryRegistrarInfo($registrarCode);
+            $info = $this->queryRegistrarInfo($registrarCode);
             return $this->fetchJson(['success' => true, 'data' => $info]);
         } catch (\Throwable $e) {
             return $this->fetchJson(['success' => false, 'msg' => $e->getMessage()]);
@@ -226,7 +226,7 @@ class DomainManagement extends BaseController
         ];
 
         try {
-            $result = $this->aggregator->saveRegistrarAccount($data);
+            $result = $this->saveRegistrarAccount($data);
             return $this->fetchJson($result);
         } catch (\Throwable $e) {
             return $this->fetchJson(['success' => false, 'msg' => __('保存失败：%{1}', [$e->getMessage()])]);
@@ -244,7 +244,7 @@ class DomainManagement extends BaseController
         }
 
         try {
-            $result = $this->aggregator->deleteRegistrarAccount($accountId);
+            $result = $this->deleteRegistrarAccount($accountId);
             return $this->fetchJson($result);
         } catch (\Throwable $e) {
             return $this->fetchJson(['success' => false, 'msg' => __('删除失败：%{1}', [$e->getMessage()])]);
@@ -262,7 +262,7 @@ class DomainManagement extends BaseController
         }
 
         try {
-            $result = $this->aggregator->testRegistrarConnection($accountId);
+            $result = $this->testRegistrarConnection($accountId);
             return $this->fetchJson($result);
         } catch (\Throwable $e) {
             return $this->fetchJson(['success' => false, 'msg' => $e->getMessage()]);
@@ -355,7 +355,7 @@ class DomainManagement extends BaseController
 
         try {
             // 获取要查询的账户列表
-            $activeAccounts = $this->aggregator->getActiveRegistrarAccounts();
+            $activeAccounts = $this->getActiveRegistrarAccounts();
             $accountMap = [];
             foreach ($activeAccounts as $acct) {
                 $accountMap[(int) ($acct['account_id'] ?? 0)] = $acct['account_name'] ?? '';
@@ -387,7 +387,7 @@ class DomainManagement extends BaseController
             $filters = $accountId > 0 ? ['account_id' => $accountId] : [];
             $localPage = 1;
             do {
-                $localResult = $this->aggregator->getLocalDomains($filters, $localPage, 500);
+                $localResult = $this->getLocalDomains($filters, $localPage, 500);
                 foreach ($localResult['items'] ?? [] as $item) {
                     $localDomains[$item['domain'] ?? ''] = $item;
                 }
@@ -489,7 +489,7 @@ class DomainManagement extends BaseController
                 $fetchError = '';
 
                 try {
-                    $remoteResult = $this->aggregator->getRemoteDomains($acctId);
+                    $remoteResult = $this->getRemoteDomains($acctId);
                     $remoteDomains = $remoteResult['domains'] ?? [];
 
                     if (($remoteResult['success'] ?? true) === false) {
@@ -748,12 +748,12 @@ class DomainManagement extends BaseController
         try {
             // 如果指定了账户，直接使用
             if ($accountId > 0) {
-                $result = $this->aggregator->importDomains($accountId, $domains, $autoResolve, $bindDns, $bindCdn);
+                $result = $this->importDomains($accountId, $domains, $autoResolve, $bindDns, $bindCdn);
                 return $this->fetchJson($result);
             }
 
             // 未指定账户时，需要为每个域名找到对应的账户
-            $activeAccounts = $this->aggregator->getActiveRegistrarAccounts();
+            $activeAccounts = $this->getActiveRegistrarAccounts();
             if ($activeAccounts === []) {
                 return $this->fetchJson(['success' => false, 'msg' => __('没有可用的域名商账户')]);
             }
@@ -766,7 +766,7 @@ class DomainManagement extends BaseController
                     continue;
                 }
                 try {
-                    $remoteResult = $this->aggregator->getRemoteDomains($acctId);
+                    $remoteResult = $this->getRemoteDomains($acctId);
                     foreach ($remoteResult['domains'] ?? [] as $rd) {
                         $domainName = \strtolower($rd['domain'] ?? '');
                         if ($domainName !== '' && !isset($domainAccountMap[$domainName])) {
@@ -800,7 +800,7 @@ class DomainManagement extends BaseController
             $errors = [];
             foreach ($accountDomains as $acctId => $acctDomains) {
                 try {
-                    $result = $this->aggregator->importDomains($acctId, $acctDomains, $autoResolve, $bindDns, $bindCdn);
+                    $result = $this->importDomains($acctId, $acctDomains, $autoResolve, $bindDns, $bindCdn);
                     if ($result['success'] ?? false) {
                         $totalImported += $result['imported'] ?? \count($acctDomains);
                         if ($result['auto_resolve_queued'] ?? false) {
@@ -840,9 +840,9 @@ class DomainManagement extends BaseController
 
         try {
             if ($accountId > 0) {
-                $result = $this->aggregator->syncDomains($accountId);
+                $result = $this->syncDomains($accountId);
             } else {
-                $result = $this->aggregator->syncDomains();
+                $result = $this->syncDomains();
             }
             return $this->fetchJson($result);
         } catch (\Throwable $e) {
@@ -873,7 +873,7 @@ class DomainManagement extends BaseController
         }
 
         try {
-            $result = $this->aggregator->batchOperateDomains($domainIds, $operation, $params);
+            $result = $this->batchOperateDomains($domainIds, $operation, $params);
             return $this->fetchJson($result);
         } catch (\Throwable $e) {
             return $this->fetchJson(['success' => false, 'message' => __('操作失败：%{1}', [$e->getMessage()])]);
@@ -888,7 +888,7 @@ class DomainManagement extends BaseController
         $accountId = (int) $this->request->getParam('account_id', 0);
 
         try {
-            $lastSyncTime = $this->aggregator->getDomainLastSyncTime($accountId);
+            $lastSyncTime = $this->getDomainLastSyncTime($accountId);
 
             return $this->fetchJson([
                 'success' => true,
@@ -932,7 +932,7 @@ class DomainManagement extends BaseController
         }
 
         try {
-            $results = $this->aggregator->checkAvailability($accountId, $domains);
+            $results = $this->checkAvailability($accountId, $domains);
             return $this->fetchJson(['success' => true, 'data' => $results]);
         } catch (\Throwable $e) {
             return $this->fetchJson(['success' => false, 'msg' => __('检查失败：%{1}', [$e->getMessage()])]);
@@ -999,7 +999,7 @@ class DomainManagement extends BaseController
         }
 
         try {
-            $result = $this->aggregator->purchaseDomain($accountId, $items, $autoResolve, $options);
+            $result = $this->purchaseDomain($accountId, $items, $autoResolve, $options);
             return $this->fetchJson($result);
         } catch (\Throwable $e) {
             return $this->fetchJson(['success' => false, 'msg' => __('购买失败：%{1}', [$e->getMessage()])]);
@@ -1046,7 +1046,7 @@ class DomainManagement extends BaseController
 
         try {
             $items = [['domain' => $domain, 'years' => max(1, $years)]];
-            $result = $this->aggregator->purchaseDomain($accountId, $items, $autoResolve, $options);
+            $result = $this->purchaseDomain($accountId, $items, $autoResolve, $options);
             return $this->fetchJson($result);
         } catch (\Throwable $e) {
             return $this->fetchJson(['success' => false, 'msg' => __('购买失败：%{1}', [$e->getMessage()])]);
@@ -1064,12 +1064,12 @@ class DomainManagement extends BaseController
         }
 
         try {
-            $result = $this->aggregator->getDomainLifecycleStatus($domain);
+            $result = $this->getDomainLifecycleStatus($domain);
             if (($result['success'] ?? false) && !empty($result['data']['order']['order_id'])) {
                 $orderId = (int) ($result['data']['order']['order_id'] ?? 0);
                 if ($orderId > 0) {
-                    $this->aggregator->processLifecycleOrder($orderId);
-                    $result = $this->aggregator->getDomainLifecycleStatus($domain);
+                    $this->processLifecycleOrder($orderId);
+                    $result = $this->getDomainLifecycleStatus($domain);
                 }
             }
 
@@ -1097,7 +1097,7 @@ class DomainManagement extends BaseController
         }
 
         try {
-            $result = $this->aggregator->repairLifecycleOrder($domain, $accountId);
+            $result = $this->repairLifecycleOrder($domain, $accountId);
             return $this->fetchJson($result);
         } catch (\Throwable $e) {
             return $this->fetchJson([
@@ -4211,5 +4211,171 @@ class DomainManagement extends BaseController
                 'msg' => __('清理失败：%{1}', [$e->getMessage()]),
             ]);
         }
+    }
+
+    private function queryRegistrars(): array
+    {
+        return $this->queryService->execute('websites', 'getRegistrars');
+    }
+
+    private function queryRegistrarAccounts(array $filter = []): array
+    {
+        return $this->queryService->execute('websites', 'getRegistrarAccounts', $filter);
+    }
+
+    private function saveRegistrarAccount(array $data): array
+    {
+        return $this->queryService->execute('websites', 'saveRegistrarAccount', $data);
+    }
+
+    private function deleteRegistrarAccount(int $accountId): array
+    {
+        return $this->queryService->execute('websites', 'deleteRegistrarAccount', [
+            'account_id' => $accountId,
+        ]);
+    }
+
+    private function testRegistrarConnection(int $accountId): array
+    {
+        return $this->queryService->execute('websites', 'testConnection', [
+            'account_id' => $accountId,
+        ]);
+    }
+
+    private function queryRegistrarConfigFields(string $registrarCode): array
+    {
+        return $this->queryService->execute('websites', 'getConfigFields', [
+            'registrar_code' => $registrarCode,
+        ]);
+    }
+
+    private function queryRegistrarInfo(string $registrarCode): array
+    {
+        return $this->queryService->execute('websites', 'getRegistrarInfo', [
+            'registrar_code' => $registrarCode,
+        ]);
+    }
+
+    private function getActiveRegistrarAccounts(): array
+    {
+        return $this->queryService->execute('websites', 'getActiveAccounts');
+    }
+
+    private function getDomainStatusOptions(): array
+    {
+        return $this->queryService->execute('websites', 'getDomainStatusOptions');
+    }
+
+    private function getDomainLastSyncTime(int $accountId = 0): ?string
+    {
+        return $this->queryService->execute('websites', 'getLastSyncTime', [
+            'account_id' => $accountId,
+        ]);
+    }
+
+    private function getLocalDomains(array $filters, int $page = 1, int $limit = 20): array
+    {
+        return $this->queryService->execute('websites', 'getLocalDomains', [
+            'filters' => $filters,
+            'page' => $page,
+            'limit' => $limit,
+        ]);
+    }
+
+    private function getRemoteDomains(int $accountId): array
+    {
+        return $this->queryService->execute('websites', 'getRemoteDomains', [
+            'account_id' => $accountId,
+        ]);
+    }
+
+    private function importDomains(
+        int $accountId,
+        array $domains,
+        bool|string $resolveMode,
+        int $bindDnsAccountId = 0,
+        int $bindCdnAccountId = 0,
+    ): array {
+        return $this->queryService->execute('websites', 'importDomains', [
+            'account_id' => $accountId,
+            'domains' => $domains,
+            'resolve_mode' => $resolveMode,
+            'bind_dns_account_id' => $bindDnsAccountId,
+            'bind_cdn_account_id' => $bindCdnAccountId,
+        ]);
+    }
+
+    private function syncDomains(int $accountId = 0): array
+    {
+        return $this->queryService->execute('websites', 'syncDomains', [
+            'account_id' => $accountId,
+        ]);
+    }
+
+    private function batchOperateDomains(array $domainIds, string $operation, array $params = []): array
+    {
+        return $this->queryService->execute('websites', 'batchOperateDomains', [
+            'domain_ids' => $domainIds,
+            'operation' => $operation,
+            'params' => $params,
+        ]);
+    }
+
+    private function checkAvailability(int $accountId, array $domains): array
+    {
+        return $this->queryService->execute('websites', 'checkAvailability', [
+            'account_id' => $accountId,
+            'domains' => $domains,
+        ]);
+    }
+
+    private function purchaseDomain(int $accountId, array $items, bool $autoResolve = false, array $options = []): array
+    {
+        $params = [
+            'account_id' => $accountId,
+            'items' => $items,
+            'auto_resolve' => $autoResolve,
+            'resolve_to_local' => $options['resolve_to_local'] ?? ($autoResolve ? 'yes' : 'no'),
+            'subdomains' => $options['subdomains'] ?? ['@', 'www'],
+            'dns_choice' => $options['dns_choice'] ?? 'follow_registrar',
+            'dns_provider' => $options['dns_provider'] ?? '',
+            'dns_account_id' => $options['dns_account_id'] ?? 0,
+            'dns_nameservers' => $options['dns_nameservers'] ?? '',
+            'cdn_choice' => $options['cdn_choice'] ?? 'follow_registrar',
+            'cdn_provider' => $options['cdn_provider'] ?? '',
+            'cdn_account_id' => $options['cdn_account_id'] ?? 0,
+            'start_lifecycle' => $options['start_lifecycle'] ?? '1',
+        ];
+        if (!empty($options['purchase_contact']) && \is_array($options['purchase_contact'])) {
+            $params['purchase_contact'] = $options['purchase_contact'];
+        }
+        $clientIp = \trim((string)($options['client_ip'] ?? $options['user_client_ip'] ?? ''));
+        if ($clientIp !== '' && \filter_var($clientIp, FILTER_VALIDATE_IP)) {
+            $params['client_ip'] = $clientIp;
+        }
+
+        return $this->queryService->execute('websites', 'purchaseDomain', $params);
+    }
+
+    private function getDomainLifecycleStatus(string $domain): array
+    {
+        return $this->queryService->execute('websites', 'getDomainLifecycleStatus', [
+            'domain' => $domain,
+        ]);
+    }
+
+    private function processLifecycleOrder(int $orderId): array
+    {
+        return $this->queryService->execute('websites', 'processOrder', [
+            'order_id' => $orderId,
+        ]);
+    }
+
+    private function repairLifecycleOrder(string $domain, int $accountId, array $options = []): array
+    {
+        return $this->queryService->execute('websites', 'startPurchasedLifecycle', \array_merge($options, [
+            'domain' => $domain,
+            'registrar_account_id' => $accountId,
+        ]));
     }
 }

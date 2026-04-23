@@ -66,17 +66,6 @@
                   disabled="false"
                   shared="true" sort="10"/>
     </event>
-    
-    <!-- ========== PageBuilder 快速建站事件观察者 ========== -->
-    
-    <!--注册域名服务能力-->
-    <event name="GuoLaiRen_PageBuilder::quickbuild::query_services">
-        <observer name="Weline_Websites::register_quickbuild_services" 
-                  instance="Weline\Websites\Observer\RegisterQuickBuildServices"
-                  disabled="false"
-                  shared="true" sort="10"/>
-    </event>
-    
     <!-- 域名池解析偏离本站：发送通知 -->
     <event name="Weline_Websites::domain_pool::resolve_off_local">
         <observer name="Weline_Websites::domain_pool_resolve_off_local_notify"
@@ -91,23 +80,4 @@
                   disabled="false"
                   shared="true" sort="20"/>
     </event>
-
-    <event name="GuoLaiRen_PageBuilder::quickbuild::start_provisioning">
-        <observer name="Weline_Websites::handle_start_provisioning"
-                  instance="Weline\Websites\Observer\HandleStartProvisioning"
-                  disabled="false"
-                  shared="true" sort="10"/>
-    </event>
-
-    <event name="GuoLaiRen_PageBuilder::quickbuild::query_provisioning_orders">
-        <observer name="Weline_Websites::provide_provisioning_orders"
-                  instance="Weline\Websites\Observer\ProvideProvisioningOrders"
-                  disabled="false"
-                  shared="true" sort="10"/>
-    </event>
-
-    <!-- 以下事件已迁移到 WebsitesQueryProvider（统一查询器），不再需要独立观察者 -->
-    <!-- 已删除：query_registrar_accounts, check_availability, purchase, query_registrars,
-         save_registrar_account, delete_registrar_account, query_domain_list,
-         test_connection, query_config_fields -->
 </config>
