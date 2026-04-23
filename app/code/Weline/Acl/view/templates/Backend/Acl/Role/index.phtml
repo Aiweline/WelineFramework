@@ -4,6 +4,29 @@
  * @var \Weline\Framework\View\Template $this
  */
 ?>
+<style>
+.acl-role-action-buttons .acl-role-permission-btn {
+    color: #334155 !important;
+    background-color: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+}
+
+.acl-role-action-buttons .acl-role-permission-btn:hover,
+.acl-role-action-buttons .acl-role-permission-btn:focus {
+    color: #0f172a !important;
+    background-color: #e2e8f0 !important;
+    border-color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .acl-role-action-buttons .acl-role-permission-btn,
+[data-theme-mode="dark"] .acl-role-action-buttons .acl-role-permission-btn,
+[data-bs-theme="dark"] .acl-role-action-buttons .acl-role-permission-btn,
+[data-layout-mode="dark"] .acl-role-action-buttons .acl-role-permission-btn {
+    color: var(--backend-color-text-primary, #e6eef8) !important;
+    background-color: var(--backend-color-bg-secondary, #172033) !important;
+    border-color: var(--backend-color-border-emphasis, rgba(148, 163, 184, 0.28)) !important;
+}
+</style>
 <!-- start page title -->
 <div class='row'>
     <div class='col-12'>
@@ -89,7 +112,7 @@
                                     <td class='co-name'>{{role.update_time}}</td>
                                     <td class='co-name'>
                                         <if condition="role.role_id !== 1">
-                                            <div class="d-grid gap-2 d-md-flex">
+                                            <div class="acl-role-action-buttons d-grid gap-2 d-md-flex">
                                                 <form action="@backend-url('*/backend/acl/role/delete')" method='post'>
                                                     <input type='hidden' name='id' value='{{role.role_id}}'>
                                                     <input type='submit' class='btn btn-danger btn-sm' value='@lang{删除}'>
@@ -97,7 +120,7 @@
                                                 <a class='btn btn-sm btn-info' href="@backend-url('*/backend/acl/role/edit')?id={{role.role_id}}">
                                                     <lang>编辑</lang>
                                                 </a>
-                                                <a class='btn btn-sm btn-secondary' href="@backend-url('*/backend/acl/role/assign')?id={{role.role_id}}">
+                                                <a class='acl-role-permission-btn btn btn-sm btn-secondary' href="@backend-url('*/backend/acl/role/assign')?id={{role.role_id}}">
                                                     <lang>权限管理</lang>
                                                 </a>
                                             </div>

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Session\Session;
 use Weline\Theme\Model\WelineTheme;
@@ -581,12 +580,11 @@ final class PreviewContextService
             return false;
         }
 
-        $originPath = \trim((string)$theme->getOriginPath(), '/\\');
-        if ($originPath === '') {
+        $basePath = \rtrim($theme->getPath(), '/\\');
+        if ($basePath === '') {
             return false;
         }
 
-        $basePath = \rtrim(Env::path_THEME_DESIGN_DIR, '/\\') . \DIRECTORY_SEPARATOR . \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $originPath);
         $area = $this->normalizeArea($area);
 
         return \is_dir($basePath . \DIRECTORY_SEPARATOR . $area)

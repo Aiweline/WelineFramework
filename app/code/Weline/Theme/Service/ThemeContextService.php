@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Session;
@@ -214,12 +213,10 @@ class ThemeContextService
     public function themeSupportsArea(WelineTheme $theme, string $area): bool
     {
         $area = $this->normalizeArea($area);
-        $originPath = \trim((string)$theme->getOriginPath(), '/\\');
-        if ($originPath === '') {
+        $basePath = \rtrim($theme->getPath(), '/\\');
+        if ($basePath === '') {
             return false;
         }
-
-        $basePath = \rtrim(Env::path_THEME_DESIGN_DIR, '/\\') . \DIRECTORY_SEPARATOR . \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $originPath);
 
         return \is_dir($basePath . \DIRECTORY_SEPARATOR . $area)
             || \is_dir($basePath . \DIRECTORY_SEPARATOR . 'view' . \DIRECTORY_SEPARATOR . 'theme' . \DIRECTORY_SEPARATOR . $area)
