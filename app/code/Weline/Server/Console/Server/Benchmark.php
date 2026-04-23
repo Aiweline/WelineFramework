@@ -120,7 +120,6 @@ class Benchmark extends CommandAbstract
                 // 将反斜杠转换为正斜杠
                 $originalPath = \str_replace('\\', '/', $originalPath);
                 
-                $this->printer->warning(__('检测到 Git Bash 路径转换，已自动修复：%{1} → %{2}', [$path, $originalPath]));
                 return $originalPath;
             }
         }

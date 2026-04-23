@@ -77,7 +77,7 @@ final class ServerInstanceManagerMasterExitRetentionTest extends TestCase
         self::assertSame(1, $data['retained_pid_count'] ?? null);
     }
 
-    public function testDeletesInstanceRecordWhenNoManagedProcessRemains(): void
+    public function testMarksInstanceRecordStoppedWhenNoManagedProcessRemains(): void
     {
         $this->writeInstanceFile([
             'name' => $this->instanceName,
@@ -92,7 +92,13 @@ final class ServerInstanceManagerMasterExitRetentionTest extends TestCase
         $retained = $this->manager->finalizeAfterMasterExit($this->instanceName, 22222);
 
         self::assertFalse($retained);
-        self::assertFileDoesNotExist($this->instanceFile);
+        self::assertFileExists($this->instanceFile);
+
+        $data = $this->readInstanceFile();
+        self::assertSame(0, $data['master_pid'] ?? null);
+        self::assertSame(0, $data['pid'] ?? null);
+        self::assertSame('stopped', $data['lifecycle_state'] ?? null);
+        self::assertSame('stale_cleanup', $data['stopped_reason'] ?? null);
     }
 
     /**

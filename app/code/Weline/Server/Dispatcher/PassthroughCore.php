@@ -65,6 +65,8 @@ class PassthroughCore
     private const IPC_READY_WARMUP_MAX_ATTEMPTS = 8;
     private const IPC_READY_WARMUP_RETRY_GRACE_SEC = 1.0;
     private const IPC_READY_WARMUP_RETRY_DELAY_USEC = 50000;
+    private const HEALTH_AUDIT_RESPONSE_SEC = 1.0;
+    private const HEALTH_AUDIT_RECENT_SUCCESS_GRACE_SEC = 30.0;
     /**
      * 首页预热仅用于“提前点燃”应用栈，不参与入池成败判定；因此采用更短预算，避免拖慢维护接流。
      */
@@ -1241,7 +1243,8 @@ class PassthroughCore
                 continue;
             }
 
-            $probe = $this->requestWorkerHealth($port, $connectTimeout, 0.5);
+            $lastSuccessAt = (float)($this->workerHealth[$port]['last_success'] ?? 0.0);
+            $probe = $this->requestWorkerHealth($port, $connectTimeout, self::HEALTH_AUDIT_RESPONSE_SEC);
             if (!empty($probe['success'])) {
                 $this->recordWorkerSuccess($port);
                 $healthy[] = $port;
@@ -1249,9 +1252,19 @@ class PassthroughCore
             }
 
             $this->recordWorkerFailure($port);
+            $probeError = (string)($probe['error'] ?? 'health probe failed');
+            if ($this->shouldDebounceHealthAuditFailure($probeError, $lastSuccessAt)) {
+                $this->workerHealth[$port]['blacklisted_at'] = 0.0;
+                $this->workerHealth[$port]['failures'] = \min(
+                    (int)($this->workerHealth[$port]['failures'] ?? 0),
+                    self::WORKER_FAIL_THRESHOLD - 1
+                );
+                continue;
+            }
+
             $failureCount = (int)($this->workerHealth[$port]['failures'] ?? 0);
             if ($failureCount >= self::WORKER_FAIL_THRESHOLD) {
-                $failed[$port] = (string)($probe['error'] ?? 'health probe failed');
+                $failed[$port] = $probeError;
             }
         }
 
@@ -1259,6 +1272,20 @@ class PassthroughCore
             'healthy' => $healthy,
             'failed' => $failed,
         ];
+    }
+
+    private function shouldDebounceHealthAuditFailure(string $error, float $lastSuccessAt): bool
+    {
+        if ($lastSuccessAt <= 0.0) {
+            return false;
+        }
+        if ((\microtime(true) - $lastSuccessAt) > self::HEALTH_AUDIT_RECENT_SUCCESS_GRACE_SEC) {
+            return false;
+        }
+
+        return \str_contains($error, 'timeout')
+            || \str_contains($error, 'temporarily unavailable')
+            || \str_contains($error, 'would block');
     }
 
     private function isWorkerManuallyBlacklisted(int $port): bool
@@ -1933,7 +1960,7 @@ class PassthroughCore
                         break;
                     }
                     // crypto === false 表示握手尚未完成或遇到可恢复错误，继续等待
-                    if ($crypto === false) {
+                    if ($this->isTlsHandshakePending($crypto)) {
                         $ready = $this->waitForStreamReady($conn, true, true, $tlsDeadline);
                         if ($ready === false) {
                             // select 失败，继续循环等待
@@ -2056,6 +2083,11 @@ class PassthroughCore
         } finally {
             @\fclose($conn);
         }
+    }
+
+    private function isTlsHandshakePending(mixed $crypto): bool
+    {
+        return $crypto === false || $crypto === 0;
     }
 
     private function buildWorkerHealthRequest(): string
