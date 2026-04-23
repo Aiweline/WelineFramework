@@ -2936,6 +2936,7 @@ POWERSHELL;
         $template = <<<'CMD'
 @echo off
 setlocal DisableDelayedExpansion
+chcp 65001 >NUL
 title __WINDOW_TITLE__
 cd /d "__WORKING_DIR__"
 "__PHP_BINARY__" __ARGUMENTS__

@@ -39,8 +39,17 @@ class AiSitePlanQueue implements QueueInterface
         }
 
         $executionToken = \trim((string)($content['execution_token'] ?? $content['token'] ?? ''));
+        $publicId = \trim((string)($content['public_id'] ?? ''));
+        $adminId = (int)($content['admin_id'] ?? 0);
+        if ($publicId === '' || $adminId <= 0 || $executionToken === '') {
+            return false;
+        }
 
-        return !empty($content['public_id']) && !empty($content['admin_id']) && $executionToken !== '';
+        /** @var AiSiteAgentSessionService $sessionService */
+        $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
+        $session = $sessionService->loadByPublicId($publicId, $adminId);
+
+        return $session instanceof AiSiteAgentSession;
     }
 
     public function execute(Queue &$queue): string
@@ -249,6 +258,9 @@ class AiSitePlanQueue implements QueueInterface
             'started_at' => (string)($active['started_at'] ?? \date('Y-m-d H:i:s')),
             'updated_at' => \date('Y-m-d H:i:s'),
         ]);
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        $activeOperations[$operation] = $scope['active_operation'];
+        $scope['active_operations'] = $activeOperations;
         $sessionService->replaceScope((int)$fresh->getId(), $adminId, $scope);
 
         return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;

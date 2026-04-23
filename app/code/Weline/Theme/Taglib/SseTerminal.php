@@ -63,7 +63,7 @@ class SseTerminal implements TaglibInterface
             $eventsAttr = \trim((string) ($attributes['events'] ?? ''));
             $eventsList = $eventsAttr !== ''
                 ? \array_map('trim', \array_filter(\explode(',', $eventsAttr)))
-                : ['start', 'progress', 'chunk', 'done', 'error', 'info', 'warning', 'success', 'debug'];
+                : ['start', 'progress', 'chunk', 'total', 'done', 'error', 'info', 'warning', 'success', 'debug'];
             $autoScroll = !isset($attributes['auto-scroll']) || $attributes['auto-scroll'] !== 'false';
             $showTimestamp = !isset($attributes['show-timestamp']) || $attributes['show-timestamp'] !== 'false';
             $showToolbar = !isset($attributes['show-toolbar']) || $attributes['show-toolbar'] !== 'false';
@@ -168,6 +168,7 @@ class SseTerminal implements TaglibInterface
             $html[] = '.weline-sse-terminal-line.progress { color: var(--backend-color-info, #89dceb); height: auto !important; }';
             $html[] = '.weline-sse-terminal-line.debug { color: var(--backend-color-text-muted, #6c7086); font-style: italic; }';
             $html[] = '.weline-sse-terminal-line.start { color: var(--backend-color-primary, #89b4fa); font-weight: 500; }';
+            $html[] = '.weline-sse-terminal-line.total { color: var(--backend-color-success, #a6e3a1); font-weight: 500; }';
             $html[] = '.weline-sse-terminal-line.done { color: var(--backend-color-success, #a6e3a1); font-weight: 500; }';
             $html[] = '.weline-sse-terminal-line.weline-sse-terminal-streaming .weline-sse-terminal-text { white-space: pre-wrap; word-break: break-word; }';
             $html[] = '.weline-sse-terminal-progress { height: 3px; background: var(--backend-color-border-default, #313244); }';
@@ -380,10 +381,11 @@ function dispatchSseEvent(eventName, data, rawEvent) {
         if (data.progress !== undefined) {
             setProgress(data.progress);
         }
-        // done/failed/error 表示服务端流已结束：必须关闭原生 EventSource，否则 TCP 关闭后浏览器会
+        // Use total for a stage-complete prompt when the backend will keep the stream open.
+        // done 表示服务端流已结束：必须关闭原生 EventSource，否则 TCP 关闭后浏览器会
         // 自动重连同一 URL，状态栏长期显示「连接重试中...」且可能重复打后端。
         // 回调仍先于 stop() 执行；若需在完成后立刻发起新流，请在回调里 setTimeout(0, () => term.start(...))。
-        if (eventName === 'done' || eventName === 'failed' || eventName === 'error') {
+        if (eventName === 'done') {
             stop();
         }
     } catch (err) {
