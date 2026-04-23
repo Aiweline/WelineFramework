@@ -126,6 +126,13 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertSame(80, $info['http_redirect_port'] ?? null);
     }
 
+    public function testBaseStartExposesInstanceManagerForRuntimePersistence(): void
+    {
+        $start = new StartInstanceManagerAccessorProbe();
+
+        self::assertInstanceOf(ServerInstanceManager::class, $start->readInstanceManager());
+    }
+
     private function createProbe(?array $savedConfig = null, array $envConfig = []): StartConfigProbe
     {
         $sslServiceMock = $this->createMock(SslCertificateService::class);
@@ -295,5 +302,13 @@ final class StartInstanceManagerProbe extends ServerInstanceManager
             'name' => $name,
             'info' => $info,
         ];
+    }
+}
+
+final class StartInstanceManagerAccessorProbe extends Start
+{
+    public function readInstanceManager(): ServerInstanceManager
+    {
+        return $this->getInstanceManager();
     }
 }
