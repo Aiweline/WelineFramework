@@ -860,9 +860,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         if ($daemon) {
             $this->wlsChildProcessesMayExist = true;
             $startupCompleted = $this->startMasterInBackground($instanceName, $sslEnabled, $listenHost, $port, $frontend);
-            if ($startupCompleted) {
-                $this->wlsStartupProcessHandoffDone = true;
-            }
+            $this->wlsStartupProcessHandoffDone = true;
             // 后台模式：Master 已独立启动，释放启动锁
             $this->releaseStartLock();
             $this->finalizeBackgroundStartupOutput(
@@ -3498,6 +3496,81 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         
         return false;
     }
+
+    /**
+     * 端口是否被 Weline 管理进程占用
+     */
+    protected function isPortOccupiedByWelineProcess(int $port): bool
+    {
+        if ($port <= 0) {
+            return false;
+        }
+
+        $inspect = Processer::inspectPortOccupantWithHistory($port);
+        if (($inspect['pid_running'] ?? false) && ($inspect['is_weline'] ?? false)) {
+            return true;
+        }
+
+        /** @var MainStop $mainStop */
+        $mainStop = ObjectManager::getInstance(MainStop::class);
+        return $mainStop->findWelineServerInstanceNameByPort($port) !== null;
+    }
+
+    /**
+     * 判断当前实例是否存在可恢复的受管进程线索
+     */
+    protected function hasRecoverableManagedProcessHint(string $instanceName): bool
+    {
+        $processNames = [
+            MasterProcess::getMasterProcessName($instanceName),
+            MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $instanceName),
+            MasterProcess::buildScopedProcessName('weline-wls-session', $instanceName),
+            MasterProcess::buildScopedProcessName('weline-wls-memory', $instanceName),
+            MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $instanceName),
+            'weline-wls-dispatcher-' . $instanceName,
+            'weline-wls-session-' . $instanceName,
+            'weline-wls-memory-' . $instanceName,
+            MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $instanceName,
+            'weline-master-' . $instanceName . '-redirect-',
+        ];
+
+        foreach ($processNames as $processName) {
+            $pname = '--name=' . $processName;
+            $pid = (int) Processer::getData($pname, 'pid');
+            if ($pid > 0 && Processer::isManagedProcessRunning($pid, $processName, '', $pname)) {
+                return true;
+            }
+        }
+
+        $scopedInstance = MasterProcess::getScopedInstanceName($instanceName);
+        $prefixes = [
+            MasterProcess::buildScopedProcessName('weline-wls-worker', $instanceName) . '-',
+            MasterProcess::buildScopedProcessName('weline-wls-maintenance', $instanceName) . '-',
+            'weline-wls-worker-http-' . $scopedInstance . '-',
+            'weline-wls-worker-ssl-' . $scopedInstance . '-',
+            'weline-wls-maintenance-http-' . $scopedInstance . '-',
+            'weline-wls-maintenance-ssl-' . $scopedInstance . '-',
+        ];
+
+        foreach ($prefixes as $prefix) {
+            foreach (Processer::getProcessNamesByPrefix($prefix) as $pname) {
+                $pname = (string) $pname;
+                if ($pname === '') {
+                    continue;
+                }
+
+                $processName = \str_starts_with($pname, '--name=')
+                    ? \substr($pname, 7)
+                    : $pname;
+                $pid = (int) Processer::getData($pname, 'pid');
+                if ($pid > 0 && Processer::isManagedProcessRunning($pid, $processName, '', $pname)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
     
     /**
      * 显示服务器已运行的提示信息
@@ -4012,6 +4085,11 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
     protected function getRuntimeInstanceFile(string $instanceName): string
     {
         return $this->getInstanceRuntimeDir() . $instanceName . '.json';
+    }
+
+    protected function getInstanceManager(): ServerInstanceManager
+    {
+        return ObjectManager::getInstance(ServerInstanceManager::class);
     }
 
     protected function isWorkerPortReservationActive(array $instanceData, string $instanceFile = ''): bool
