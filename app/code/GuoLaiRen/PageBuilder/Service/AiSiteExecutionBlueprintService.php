@@ -12,7 +12,6 @@ use Weline\Framework\Manager\ObjectManager;
 final class AiSiteExecutionBlueprintService
 {
     public const VERSION = 1;
-    private const AI_STREAM_MAX_TOKENS = 7168;
     /** @var array<string, array<string, mixed>|null> */
     private array $appendInstructionDecisionCache = [];
 
@@ -57,6 +56,27 @@ final class AiSiteExecutionBlueprintService
         ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
     }
 
+    private function resolveStageOneContentLocale(array $scope, string $planLocale = ''): string
+    {
+        foreach ([
+            $scope['content_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $scope['website_profile']['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+            $planLocale,
+        ] as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $locale = \trim((string)$value);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return '';
+    }
+
     /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
@@ -74,25 +94,27 @@ final class AiSiteExecutionBlueprintService
         $instruction = \trim((string)($payload['instruction'] ?? ''));
         $targetScope = \trim((string)($payload['target_scope'] ?? ''));
         $planLocale = \trim((string)($scope['plan_locale'] ?? $scope['default_language'] ?? $scope['default_locale'] ?? ''));
+        $contentLocale = $this->resolveStageOneContentLocale($scope, $planLocale);
         $planningScope = \array_replace($scope, [
             'page_types' => $pageTypes,
             AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY => 1,
             'plan_instruction' => $instruction,
             'plan_target_scope' => $targetScope,
             'plan_locale' => $planLocale,
+            'content_locale' => $contentLocale,
         ]);
 
         $siteDisplayName = $this->pageBlueprintService->resolveSiteDisplayName($websiteProfile, $planningScope);
         $siteSummary = $this->pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $planningScope);
         $palette = $this->buildPalettePlan($planningScope, $websiteProfile, $instruction);
         $themeStyle = $this->buildThemeStyle($planningScope, $websiteProfile, $palette, $instruction);
-        $navigationPlan = $this->buildNavigationPlan($pageTypes);
-        $footerPlan = $this->buildFooterPlan($pageTypes);
+        $navigationPlan = $this->buildNavigationPlan($pageTypes, $contentLocale);
+        $footerPlan = $this->buildFooterPlan($pageTypes, $contentLocale);
         $seoStrategy = $this->buildSeoStrategy($siteDisplayName, $planningScope, $pageTypes, $instruction);
 
         $tasks = [
-            $this->buildSharedTask('header', $siteDisplayName, $navigationPlan, $palette, $themeStyle, $seoStrategy),
-            $this->buildSharedTask('footer', $siteDisplayName, $footerPlan, $palette, $themeStyle, $seoStrategy),
+            $this->buildSharedTask('header', $siteDisplayName, $navigationPlan, $palette, $themeStyle, $seoStrategy, $contentLocale),
+            $this->buildSharedTask('footer', $siteDisplayName, $footerPlan, $palette, $themeStyle, $seoStrategy, $contentLocale),
         ];
 
         $pages = [];
@@ -110,7 +132,7 @@ final class AiSiteExecutionBlueprintService
                 $themeStyle,
                 $instruction,
                 $targetScope,
-                $planLocale
+                $contentLocale
             );
             $pages[$pageType] = $pagePlan;
         }
@@ -172,6 +194,7 @@ final class AiSiteExecutionBlueprintService
             'version' => self::VERSION,
             'build_method' => 'stage1_shared_first_block_plan_v2',
             'workspace_track' => (string)($planningScope['workspace_track'] ?? AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME),
+            'content_locale' => $contentLocale,
             'page_types' => $pageTypes,
             'page_blueprints' => $pageBlueprints,
             'theme_context_snapshot' => $themeContextSnapshot,
@@ -189,6 +212,7 @@ final class AiSiteExecutionBlueprintService
         $structured = [
             'i18n' => $this->ensurePlanI18nSection([], $planLocale, $this->isEnglishLocale($planLocale)),
             'build_method' => 'stage1_shared_first_block_plan_v2',
+            'content_locale' => $contentLocale,
             'request_summary' => $this->buildStageOneRequestSummary($planningScope, $websiteProfile, $instruction),
             'site_strategy' => [
                 'site_display_name' => $siteDisplayName,
@@ -198,6 +222,7 @@ final class AiSiteExecutionBlueprintService
                 'instruction' => $instruction,
                 'target_scope' => $targetScope,
                 'plan_locale' => $planLocale,
+                'content_locale' => $contentLocale,
             ],
             'seo_strategy' => $seoStrategy,
             'palette' => $palette,
@@ -223,6 +248,7 @@ final class AiSiteExecutionBlueprintService
             'execution_steps' => $this->buildExecutionSteps($tasks),
         ];
         $planJson = $this->buildPlanJson($structured);
+        $planJson['content_locale'] = $contentLocale;
         $markdown = $this->buildMarkdownPlan($planJson, $planLocale);
         $planWorkbench = $this->buildPlanWorkbenchArtifacts(
             $planningScope,
@@ -265,60 +291,7 @@ final class AiSiteExecutionBlueprintService
             throw new \RuntimeException((string)__('AI 建站阶段一不允许使用 deterministic/fake 回退方案'));
         }
 
-        if (!empty($payload['staged_generation'])) {
-            return $this->buildPlanArtifactsByStagedAiStream($scope, $websiteProfile, $payload, $onChunk);
-        }
-
-        $pageTypes = $this->expandPageTypes($scope);
-        $instruction = \trim((string)($payload['instruction'] ?? ''));
-        $targetScope = \trim((string)($payload['target_scope'] ?? ''));
-        $planLocale = \trim((string)($scope['plan_locale'] ?? $scope['default_language'] ?? $scope['default_locale'] ?? ''));
-        $siteDisplayName = $this->pageBlueprintService->resolveSiteDisplayName($websiteProfile, $scope);
-        $siteSummary = $this->pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope);
-
-        $prompt = $this->buildAiPlanPrompt($scope, $websiteProfile, $pageTypes, $planLocale, $instruction, $targetScope, $siteDisplayName, $siteSummary);
-        $fullContent = '';
-
-        try {
-            $this->getAiService()->generateStream(
-                $prompt,
-                static function (string $chunk) use (&$fullContent, $onChunk): bool {
-                    $fullContent .= $chunk;
-                    if (\is_callable($onChunk) && $chunk !== '') {
-                        $onChunk($chunk);
-                    }
-                    return true;
-                },
-                null,
-                'pagebuilder_plan_generation',
-                null,
-                [
-                    'allow_zero_balance_provider' => true,
-                    'temperature' => 0.35,
-                    // Leave headroom below the provider hard cap to avoid model-specific validation errors.
-                    'max_tokens' => self::AI_STREAM_MAX_TOKENS,
-                    'timeout' => 240,
-                    'enforce_timeout_in_stream' => true,
-                    'response_format' => ['type' => 'json_object'],
-                ]
-            );
-
-            $parser = $this->getResponseJsonParser();
-            $decoded = $parser->extractAndDecode($fullContent);
-            if (!\is_array($decoded)) {
-                throw new \RuntimeException('invalid ai json: ' . \substr(\preg_replace('/\s+/', ' ', $fullContent), 0, 200));
-            }
-
-            $artifacts = $this->mapAiPlanToArtifacts($scope, $websiteProfile, $decoded, $pageTypes, $planLocale, $instruction, $targetScope);
-            $artifacts['ai_generated'] = 1;
-            return $artifacts;
-        } catch (\Throwable $throwable) {
-            throw new \RuntimeException(
-                $this->normalizeAiPlanGenerationErrorMessage($throwable->getMessage()),
-                (int)$throwable->getCode(),
-                $throwable
-            );
-        }
+        return $this->buildPlanArtifactsByStagedAiStream($scope, $websiteProfile, $payload, $onChunk);
     }
 
     /**
@@ -334,25 +307,51 @@ final class AiSiteExecutionBlueprintService
         $instruction = \trim((string)($payload['instruction'] ?? ''));
         $targetScope = \trim((string)($payload['target_scope'] ?? ''));
         $planLocale = \trim((string)($scope['plan_locale'] ?? $scope['default_language'] ?? $scope['default_locale'] ?? ''));
+        $contentLocale = $this->resolveStageOneContentLocale($scope, $planLocale);
+        $scope = \array_replace($scope, ['content_locale' => $contentLocale]);
         $siteDisplayName = $this->pageBlueprintService->resolveSiteDisplayName($websiteProfile, $scope);
         $siteSummary = $this->pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope);
+        $oneLineRequirement = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? $siteSummary));
         $planJson = [];
 
         try {
+            $requirementDecoded = $this->generateStageOneJsonByAi(
+                $this->buildAiStageOneRequirementExpansionPrompt($scope, $websiteProfile, $pageTypes, $planLocale, $instruction, $siteDisplayName, $siteSummary),
+                'pagebuilder_plan_generation',
+                2048,
+                150,
+                $onChunk
+            );
+            $planJson = $this->mergeStageOneRequirementExpansionAiPlanJson($planJson, $requirementDecoded, $oneLineRequirement, $pageTypes);
+            $this->assertStageOneRequirementExpansionIsGenerated($planJson);
+
             $themeDecoded = $this->generateStageOneJsonByAi(
-                $this->buildAiStageOneThemePrompt($scope, $websiteProfile, $pageTypes, $planLocale, $instruction, $siteDisplayName, $siteSummary),
+                $this->buildAiStageOneThemePrompt(
+                    $scope,
+                    $websiteProfile,
+                    $pageTypes,
+                    $planLocale,
+                    $contentLocale,
+                    $instruction,
+                    $siteDisplayName,
+                    $siteSummary,
+                    \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : []
+                ),
                 'pagebuilder_plan_generation',
                 3072,
                 150,
                 $onChunk
             );
-            $planJson = $this->mergeStageOneThemeAiPlanJson($planJson, $themeDecoded, $planLocale, $pageTypes);
+            $planJson = $this->mergeStageOneThemeAiPlanJson($planJson, $themeDecoded, $planLocale, $pageTypes, $scope);
+            $planJson['content_locale'] = $contentLocale;
+            $this->assertStageOneThemePlanIsGenerated($planJson);
             $pagePlans = $this->generateStageOnePagePlansByAi(
                 $scope,
                 $websiteProfile,
                 $planJson,
                 $pageTypes,
                 $planLocale,
+                $contentLocale,
                 $instruction,
                 $targetScope,
                 $onChunk
@@ -397,8 +396,10 @@ final class AiSiteExecutionBlueprintService
                 'allow_zero_balance_provider' => true,
                 'temperature' => 0.25,
                 'max_tokens' => $maxTokens,
-                'timeout' => $timeout,
-                'enforce_timeout_in_stream' => true,
+                'timeout' => 0,
+                'disable_ai_timeout' => true,
+                'disable_cli_timeout' => true,
+                'enforce_timeout_in_stream' => false,
                 'response_format' => ['type' => 'json_object'],
             ]
         );
@@ -417,16 +418,49 @@ final class AiSiteExecutionBlueprintService
      * @param list<string> $pageTypes
      * @return array<string, mixed>
      */
-    private function mergeStageOneThemeAiPlanJson(array $planJson, array $decoded, string $planLocale, array $pageTypes): array
+    private function mergeStageOneRequirementExpansionAiPlanJson(array $planJson, array $decoded, string $oneLineRequirement, array $pageTypes): array
     {
         $decoded = $this->normalizeAiPlanResponseShape($decoded);
         $source = \is_array($decoded['plan_json'] ?? null) ? $decoded['plan_json'] : $decoded;
-        foreach (['i18n', 'site_strategy', 'theme_style', 'palette', 'theme_design', 'navigation_plan', 'footer_plan', 'seo_strategy'] as $key) {
+        $candidate = \is_array($source['requirement_expansion'] ?? null)
+            ? $source['requirement_expansion']
+            : (\is_array($source['expanded_requirement_plan'] ?? null) ? $source['expanded_requirement_plan'] : []);
+
+        $planJson['requirement_expansion'] = $this->normalizeStageOneRequirementExpansion($candidate, $oneLineRequirement, $pageTypes);
+
+        return $planJson;
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @param array<string, mixed> $decoded
+     * @param list<string> $pageTypes
+     * @return array<string, mixed>
+     */
+    private function mergeStageOneThemeAiPlanJson(array $planJson, array $decoded, string $planLocale, array $pageTypes, array $scope): array
+    {
+        $decoded = $this->normalizeAiPlanResponseShape($decoded);
+        $source = \is_array($decoded['plan_json'] ?? null) ? $decoded['plan_json'] : $decoded;
+        foreach (['i18n', 'site_strategy', 'theme_style', 'palette', 'theme_design', 'navigation_plan', 'footer_plan', 'shared_components', 'seo_strategy'] as $key) {
             if (\is_array($source[$key] ?? null)) {
                 $planJson[$key] = $source[$key];
             }
         }
+        if (!\is_array($planJson['shared_components'] ?? null)) {
+            $sharedPlan = \is_array($source['shared_plan'] ?? null) ? $source['shared_plan'] : [];
+            $sharedComponents = [];
+            if (\is_array($sharedPlan['header_block'] ?? null)) {
+                $sharedComponents['header'] = $sharedPlan['header_block'];
+            }
+            if (\is_array($sharedPlan['footer_block'] ?? null)) {
+                $sharedComponents['footer'] = $sharedPlan['footer_block'];
+            }
+            if ($sharedComponents !== []) {
+                $planJson['shared_components'] = $sharedComponents;
+            }
+        }
         $planJson['page_types'] = $pageTypes;
+        $planJson['content_locale'] = $this->resolveStageOneContentLocale($scope, $planLocale);
         $planJson['i18n'] = $this->ensurePlanI18nSection(
             \is_array($planJson['i18n'] ?? null) ? $planJson['i18n'] : [],
             $planLocale,
@@ -434,6 +468,120 @@ final class AiSiteExecutionBlueprintService
         );
 
         return $planJson;
+    }
+
+    /**
+     * @param array<string, mixed> $candidate
+     * @param list<string> $pageTypes
+     * @return array<string, mixed>
+     */
+    private function normalizeStageOneRequirementExpansion(array $candidate, string $oneLineRequirement, array $pageTypes): array
+    {
+        $expandedBrief = \trim((string)($candidate['expanded_brief'] ?? $candidate['expanded_description'] ?? $candidate['planning_summary'] ?? ''));
+        $planningSummary = \trim((string)($candidate['planning_summary'] ?? $candidate['site_planning_summary'] ?? $expandedBrief));
+        $siteGoal = \trim((string)($candidate['site_goal'] ?? $candidate['core_goal'] ?? ''));
+        $conversionStrategy = \trim((string)($candidate['conversion_strategy'] ?? $candidate['conversion_direction'] ?? ''));
+        $contentDirection = \trim((string)($candidate['content_direction'] ?? $candidate['content_strategy'] ?? ''));
+
+        if ($expandedBrief === '' && $oneLineRequirement !== '') {
+            $expandedBrief = $oneLineRequirement;
+        }
+        if ($planningSummary === '') {
+            $planningSummary = $expandedBrief;
+        }
+
+        $pageStrategy = [];
+        foreach (\is_array($candidate['page_strategy'] ?? null) ? $candidate['page_strategy'] : [] as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $pageType = \trim((string)($row['page_type'] ?? $row['page'] ?? ''));
+            if ($pageType === '') {
+                continue;
+            }
+            $pageStrategy[] = [
+                'page_type' => $pageType,
+                'intent' => \trim((string)($row['intent'] ?? $row['page_intent'] ?? '')),
+                'content_focus' => \trim((string)($row['content_focus'] ?? $row['focus'] ?? '')),
+                'conversion_role' => \trim((string)($row['conversion_role'] ?? '')),
+            ];
+        }
+
+        if ($pageStrategy === []) {
+            foreach ($pageTypes as $pageType) {
+                $pageStrategy[] = [
+                    'page_type' => (string)$pageType,
+                    'intent' => (string)$pageType,
+                    'content_focus' => $planningSummary,
+                    'conversion_role' => $conversionStrategy,
+                ];
+            }
+        }
+
+        return [
+            'original_brief' => $oneLineRequirement,
+            'expanded_brief' => $expandedBrief,
+            'planning_summary' => $planningSummary,
+            'site_goal' => $siteGoal !== '' ? $siteGoal : $planningSummary,
+            'target_users' => $this->normalizeStringList($candidate['target_users'] ?? []),
+            'business_context' => \trim((string)($candidate['business_context'] ?? $candidate['market_context'] ?? '')),
+            'content_direction' => $contentDirection,
+            'conversion_strategy' => $conversionStrategy,
+            'page_strategy' => $pageStrategy,
+            'technical_direction' => $this->normalizeStringList($candidate['technical_direction'] ?? $candidate['technical_notes'] ?? []),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     */
+    private function assertStageOneRequirementExpansionIsGenerated(array $planJson): void
+    {
+        $expansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
+        foreach (['original_brief', 'expanded_brief', 'planning_summary', 'site_goal'] as $key) {
+            if (\trim((string)($expansion[$key] ?? '')) === '') {
+                throw new \RuntimeException('AI plan generation failed: stage-one requirement expansion must be generated before theme planning.');
+            }
+        }
+        if (!\is_array($expansion['page_strategy'] ?? null) || $expansion['page_strategy'] === []) {
+            throw new \RuntimeException('AI plan generation failed: stage-one requirement expansion must be generated before theme planning.');
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     */
+    private function assertStageOneThemePlanIsGenerated(array $planJson): void
+    {
+        $themeDesign = \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : [];
+        $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+        $typography = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
+
+        $requiredStrings = [
+            $themeDesign['theme_purpose'] ?? null,
+            $themeDesign['selection_reason'] ?? null,
+            $colorScheme['primary'] ?? null,
+            $colorScheme['accent'] ?? null,
+            $typography['font_family'] ?? null,
+            $typography['spacing_scale'] ?? null,
+        ];
+
+        foreach ($requiredStrings as $value) {
+            if (!\is_string($value) || \trim($value) === '') {
+                throw new \RuntimeException('AI plan generation failed: stage-one theme plan must be generated before page plans.');
+            }
+        }
+
+        if (!\is_array($themeDesign['visual_keywords'] ?? null) || $themeDesign['visual_keywords'] === []) {
+            throw new \RuntimeException('AI plan generation failed: stage-one theme plan must be generated before page plans.');
+        }
+        $sharedComponents = \is_array($planJson['shared_components'] ?? null) ? $planJson['shared_components'] : [];
+        foreach (['header', 'footer'] as $component) {
+            $componentPlan = \is_array($sharedComponents[$component] ?? null) ? $sharedComponents[$component] : [];
+            if (\trim((string)($componentPlan['goal'] ?? '')) === '' || \trim((string)($componentPlan['implementation_detail'] ?? $componentPlan['implementation_note'] ?? '')) === '') {
+                throw new \RuntimeException('AI plan generation failed: stage-one theme/Header/Footer plan must be generated before page plans.');
+            }
+        }
     }
 
     /**
@@ -450,22 +598,23 @@ final class AiSiteExecutionBlueprintService
         array $planJson,
         array $pageTypes,
         string $planLocale,
+        string $contentLocale,
         string $instruction,
         string $targetScope,
         ?callable $onChunk = null
     ): array {
         $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
         if (\count($pageTypes) <= 1 || !\class_exists(\Fiber::class)) {
-            return $this->generateStageOnePagePlansByAiSequential($scope, $websiteProfile, $planJson, $pageTypes, $planLocale, $instruction, $targetScope, $onChunk);
+            return $this->generateStageOnePagePlansByAiSequential($scope, $websiteProfile, $planJson, $pageTypes, $planLocale, $contentLocale, $instruction, $targetScope, $onChunk);
         }
 
         /** @var array<string, \Fiber> $fibers */
         $fibers = [];
         foreach ($pageTypes as $pageType) {
             $pageKey = (string)$pageType;
-            $fibers[$pageKey] = new \Fiber(function () use ($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $instruction, $targetScope, $onChunk): array {
+            $fibers[$pageKey] = new \Fiber(function () use ($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope, $onChunk): array {
                 $decoded = $this->generateStageOneJsonByAi(
-                    $this->buildAiStageOnePagePrompt($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $instruction, $targetScope),
+                    $this->buildAiStageOnePagePrompt($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope),
                     'pagebuilder_plan_generation',
                     4096,
                     150,
@@ -545,6 +694,7 @@ final class AiSiteExecutionBlueprintService
         array $planJson,
         array $pageTypes,
         string $planLocale,
+        string $contentLocale,
         string $instruction,
         string $targetScope,
         ?callable $onChunk = null
@@ -554,7 +704,7 @@ final class AiSiteExecutionBlueprintService
         foreach ($pageTypes as $pageType) {
             $pageKey = (string)$pageType;
             $decoded = $this->generateStageOneJsonByAi(
-                $this->buildAiStageOnePagePrompt($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $instruction, $targetScope),
+                $this->buildAiStageOnePagePrompt($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope),
                 'pagebuilder_plan_generation',
                 4096,
                 150,
@@ -632,7 +782,7 @@ final class AiSiteExecutionBlueprintService
     /**
      * @param list<string> $pageTypes
      */
-    private function buildAiStageOneThemePrompt(
+    private function buildAiStageOneRequirementExpansionPrompt(
         array $scope,
         array $websiteProfile,
         array $pageTypes,
@@ -643,17 +793,54 @@ final class AiSiteExecutionBlueprintService
     ): string {
         $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? $siteSummary));
         return \implode("\n", [
-            'You are PageBuilder Stage-1 THEME planner.',
-            'Return STRICT JSON only. Do not include page block plans.',
-            'Goal: generate the shared theme/global plan first; page-specific plans are generated in separate fanout calls.',
+            'You are PageBuilder Stage-1 REQUIREMENT EXPANSION planner.',
+            'Step 1 only: expand the user one-line requirement into a concrete website planning brief. Do not generate theme, Header/Footer, or page blocks.',
+            'Return STRICT JSON only.',
             'Locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
+            'Site: ' . ($siteDisplayName !== '' ? $siteDisplayName : '-'),
+            'User one-line requirement: ' . ($brief !== '' ? $brief : '-'),
+            'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
+            'Selected page types: ' . \implode(', ', $pageTypes),
+            'Site summary: ' . ($siteSummary !== '' ? $siteSummary : '-'),
+            'Schema:',
+            '{"requirement_expansion":{"original_brief":"string","expanded_brief":"string","planning_summary":"string","site_goal":"string","target_users":["string"],"business_context":"string","content_direction":"string","conversion_strategy":"string","page_strategy":[{"page_type":"string","intent":"string","content_focus":"string","conversion_role":"string"}],"technical_direction":["string"]}}',
+            'Hard rules: expanded_brief must be a larger concrete version of the user requirement; page_strategy must cover every selected page type; all values must be customer-visible planning content, not prompt instructions.',
+        ]);
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     * @param array<string, mixed> $requirementExpansion
+     */
+    private function buildAiStageOneThemePrompt(
+        array $scope,
+        array $websiteProfile,
+        array $pageTypes,
+        string $planLocale,
+        string $contentLocale,
+        string $instruction,
+        string $siteDisplayName,
+        string $siteSummary,
+        array $requirementExpansion
+    ): string {
+        $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? $siteSummary));
+        $requirementExpansionJson = \json_encode($requirementExpansion, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        return \implode("\n", [
+            'You are PageBuilder Stage-1 THEME planner.',
+            'Step 2 only: use the confirmed requirement expansion to generate the shared theme, Header, and Footer plan. Do not include page-specific block plans.',
+            'Return STRICT JSON only.',
+            'Confirmed requirement expansion from step 1: ' . $requirementExpansionJson,
+            'Goal: confirm the shared theme/global plan and shared Header/Footer before page-specific plans are generated in separate fanout calls.',
+            'Plan locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
+            'Website content locale: ' . ($contentLocale !== '' ? $contentLocale : ($planLocale !== '' ? $planLocale : 'zh_Hans_CN')),
+            'Language rule: Header/Footer labels, CTA labels, link labels, media text, and other customer-visible website copy MUST use Website content locale. Do not use Plan locale for visible website copy unless both locales are identical.',
             'Site: ' . ($siteDisplayName !== '' ? $siteDisplayName : '-'),
             'Brief: ' . ($brief !== '' ? $brief : '-'),
             'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
             'Selected page types: ' . \implode(', ', $pageTypes),
             'Schema:',
-            '{"i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},"site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},"theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"string"},"palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"string"},"theme_design":{"theme_purpose":"string","color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"string"},"navigation_plan":{"header_items":[{"label":"string","href":"string"}]},"footer_plan":{"featured":[{"label":"string","href":"string"}],"policies":[{"label":"string","href":"string"}]},"seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"}}',
-            'Hard rules: theme_design must be concrete implementation decisions; selection_reason must reference the user brief; keep output compact.',
+            '{"i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},"site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},"theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"string"},"palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"string"},"theme_design":{"theme_purpose":"string","color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"string"},"navigation_plan":{"header_items":[{"label":"string","href":"string"}]},"footer_plan":{"featured":[{"label":"string","href":"string"}],"policies":[{"label":"string","href":"string"}]},"shared_components":{"header":{"component":"header","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"},"footer":{"component":"footer","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"}},"seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"}}',
+            'Hard rules: theme_design and shared_components.header/footer must be concrete implementation decisions derived from the expanded requirement; selection_reason must reference the expanded requirement; keep output compact.',
         ]);
     }
 
@@ -663,23 +850,31 @@ final class AiSiteExecutionBlueprintService
         array $planJson,
         string $pageType,
         string $planLocale,
+        string $contentLocale,
         string $instruction,
         string $targetScope
     ): string {
         $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? ''));
+        $requirementExpansion = \json_encode($planJson['requirement_expansion'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         $themeDesign = \json_encode($planJson['theme_design'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        $sharedComponents = \json_encode($planJson['shared_components'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         $baselinePage = \json_encode($planJson['pages'][$pageType] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         $pageArchitectureGuide = $this->buildStageOnePageArchitectureGuide($pageType);
         return \implode("\n", [
             'You are PageBuilder Stage-1 PAGE planner.',
+            'Step 3 only: generate exactly this page type by carrying the confirmed requirement expansion, theme, Header, and Footer. Other page types are generated in parallel calls.',
             'Return STRICT JSON only for exactly one page. Do not return other pages.',
-            'Locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
+            'Plan locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
+            'Website content locale: ' . ($contentLocale !== '' ? $contentLocale : ($planLocale !== '' ? $planLocale : 'zh_Hans_CN')),
+            'Language rule: blocks[].content, field_plan[].sample, CTA labels, link labels, alt text, and media descriptions are customer-visible website content and MUST use Website content locale. Do not use Plan locale for website copy unless it is identical to Website content locale.',
             'Page type: ' . $pageType,
             'Page-type architecture guide: ' . $pageArchitectureGuide,
             'Brief: ' . ($brief !== '' ? $brief : '-'),
             'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
             'Target scope: ' . ($targetScope !== '' ? $targetScope : '-'),
+            'Confirmed requirement expansion (non-negotiable): ' . $requirementExpansion,
             'Shared theme_design (non-negotiable): ' . $themeDesign,
+            'Confirmed shared Header/Footer blocks (must frame this page when displayed): ' . $sharedComponents,
             'Baseline page shape to improve, keep compatible keys: ' . $baselinePage,
             'Critical page differentiation rules:',
             '- Design this page from its page_type intent, not by copying the home page and changing nouns.',
@@ -693,7 +888,7 @@ final class AiSiteExecutionBlueprintService
             '- These design_tags are source-of-truth for stage-2 and stage-3; make them specific enough to recreate effects, spacing, shadows, radius, image treatment, and interaction behavior.',
             'Schema:',
             '{"page":{"page_goal":"string","theme_alignment_summary":"string","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"implementation_note":"string"},"field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}}',
-            'Hard rules: output 2-3 blocks only; each block exactly 3 field_plan rows; feature_points max 3; content and core_copy must be final customer-visible implementation content, compact and not instruction-like; every block must have complete design_tags.',
+            'Hard rules: output 2-3 blocks only; each block exactly 3 field_plan rows; feature_points max 3; content and core_copy must be final customer-visible implementation content in Website content locale, compact and not instruction-like; every block must have complete design_tags.',
         ]);
     }
 
@@ -1822,9 +2017,11 @@ final class AiSiteExecutionBlueprintService
         $this->assertAiStageOnePlanJsonIsStrict($planJson, $pageTypes, $briefDescription, $planLocale);
 
         $executionBlueprint = \is_array($baseline['execution_blueprint'] ?? null) ? $baseline['execution_blueprint'] : [];
+        $requirementExpansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
         $structured = \array_replace(
             \is_array($baseline['structured'] ?? null) ? $baseline['structured'] : [],
             [
+                'requirement_expansion' => $requirementExpansion,
                 'site_strategy' => \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [],
                 'theme_style' => \is_array($planJson['theme_style'] ?? null) ? $planJson['theme_style'] : [],
                 'palette' => \is_array($planJson['palette'] ?? null) ? $planJson['palette'] : [],
@@ -1835,6 +2032,11 @@ final class AiSiteExecutionBlueprintService
                 'pages' => \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [],
                 'plan_blocks' => $planBlocks,
             ]
+        );
+        $structured['content_locale'] = $this->resolveStageOneContentLocale($scope, $planLocale);
+        $structured['site_strategy'] = \array_replace(
+            \is_array($structured['site_strategy'] ?? null) ? $structured['site_strategy'] : [],
+            ['content_locale' => $structured['content_locale']]
         );
 
         $themeDesign = \is_array($planJson['theme_design'] ?? null)
@@ -1851,10 +2053,20 @@ final class AiSiteExecutionBlueprintService
                 : (\is_array($structured['queue_jobs'] ?? null) ? $structured['queue_jobs'] : []),
             $themeDesignQueueJob
         );
-        $sharedComponents = $this->normalizeStageOneSharedComponents(
-            \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : []
-        );
-        $sharedPromptContext = $this->buildStageOneSharedPromptContext($themeContextSnapshot, $sharedComponents, $pageTypes, $planLocale);
+        $sharedComponentSource = \is_array($planJson['shared_components'] ?? null) ? $planJson['shared_components'] : [];
+        if ($sharedComponentSource === [] && \is_array($planJson['shared_plan'] ?? null)) {
+            if (\is_array($planJson['shared_plan']['header_block'] ?? null)) {
+                $sharedComponentSource['header'] = $planJson['shared_plan']['header_block'];
+            }
+            if (\is_array($planJson['shared_plan']['footer_block'] ?? null)) {
+                $sharedComponentSource['footer'] = $planJson['shared_plan']['footer_block'];
+            }
+        }
+        if ($sharedComponentSource === []) {
+            $sharedComponentSource = \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : [];
+        }
+        $sharedComponents = $this->normalizeStageOneSharedComponents($sharedComponentSource);
+        $sharedPromptContext = $this->buildStageOneSharedPromptContext($themeContextSnapshot, $sharedComponents, $pageTypes, $planLocale, $requirementExpansion);
         $themeDesignQueueJob = $this->buildStageOneThemeDesignQueueJob($scope, $websiteProfile, $themeContextSnapshot, $planLocale);
         $stageOneQueueJobs = $this->upsertStageOneQueueJob(
             \is_array($executionBlueprint['queue_jobs'] ?? null) ? $executionBlueprint['queue_jobs'] : [],
@@ -1867,13 +2079,19 @@ final class AiSiteExecutionBlueprintService
             [
                 'theme_design' => $themeContextSnapshot,
                 'theme_design_job' => $themeDesignQueueJob,
+                'requirement_expansion' => $requirementExpansion,
                 'shared_prompt_context' => $sharedPromptContext,
             ]
         );
         $structured['queue_jobs'] = $stageOneQueueJobs;
+        $executionBlueprint['requirement_expansion'] = $requirementExpansion;
         $planJson['theme_design'] = $themeDesign;
+        $planJson['requirement_expansion'] = $requirementExpansion;
+        $planJson['shared_components'] = $sharedComponents;
         $executionBlueprint['theme_context_snapshot'] = $themeContextSnapshot;
         $executionBlueprint['shared_prompt_context'] = $sharedPromptContext;
+        $executionBlueprint['shared_components'] = $sharedComponents;
+        $executionBlueprint['content_locale'] = (string)($structured['content_locale'] ?? '');
         $stageOneQueue = \is_array($structured['stage1_queue'] ?? null)
             ? $structured['stage1_queue']
             : (\is_array($executionBlueprint['stage1_queue'] ?? null) ? $executionBlueprint['stage1_queue'] : [
@@ -1901,6 +2119,17 @@ final class AiSiteExecutionBlueprintService
             }
         }
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
+        $sharedBlockRows = $this->buildStageOneSharedBlocksPlanJson($sharedComponents);
+        $planJson['shared_blocks'] = $sharedBlockRows;
+        foreach (\is_array($planJson['pages'] ?? null) ? \array_keys($planJson['pages']) : [] as $pageType) {
+            if (!\is_array($planJson['pages'][$pageType] ?? null)) {
+                continue;
+            }
+            $planJson['pages'][$pageType]['display_blocks'] = $this->buildStageOnePageDisplayBlocks(
+                $sharedBlockRows,
+                \array_values(\is_array($planJson['pages'][$pageType]['blocks'] ?? null) ? $planJson['pages'][$pageType]['blocks'] : [])
+            );
+        }
 
         $tasks = [];
         foreach (['header', 'footer'] as $sharedKey) {
@@ -3029,14 +3258,13 @@ final class AiSiteExecutionBlueprintService
         ];
     }
 
-    private function buildNavigationPlan(array $pageTypes): array
+    private function buildNavigationPlan(array $pageTypes, string $contentLocale = ''): array
     {
-        $labels = Page::getPageTypes();
         $allItems = [];
         foreach ($pageTypes as $pageType) {
             $allItems[] = [
                 'type' => $pageType,
-                'label' => (string)($labels[$pageType] ?? $pageType),
+                'label' => $this->resolveStageOnePageTypeLabel((string)$pageType, $contentLocale),
                 'href' => $pageType === Page::TYPE_HOME ? '/' : '/' . Page::getDefaultHandleForType($pageType),
             ];
         }
@@ -3118,16 +3346,15 @@ final class AiSiteExecutionBlueprintService
      * @param list<string> $pageTypes
      * @return array<string, mixed>
      */
-    private function buildFooterPlan(array $pageTypes): array
+    private function buildFooterPlan(array $pageTypes, string $contentLocale = ''): array
     {
-        $labels = Page::getPageTypes();
         $featured = [];
         $policies = [];
         $allItems = [];
         foreach ($pageTypes as $pageType) {
             $item = [
                 'type' => $pageType,
-                'label' => (string)($labels[$pageType] ?? $pageType),
+                'label' => $this->resolveStageOnePageTypeLabel((string)$pageType, $contentLocale),
                 'href' => $pageType === Page::TYPE_HOME ? '/' : '/' . Page::getDefaultHandleForType($pageType),
             ];
             $allItems[] = $item;
@@ -3171,6 +3398,40 @@ final class AiSiteExecutionBlueprintService
             'all_items' => $allItems,
             'why' => 'Footer ???????????????????????? SEO ??????',
         ];
+    }
+
+    private function resolveStageOnePageTypeLabel(string $pageType, string $contentLocale = ''): string
+    {
+        if ($this->isEnglishLocale($contentLocale)) {
+            $englishLabels = [
+                Page::TYPE_HOME => 'Home',
+                Page::TYPE_ABOUT => 'About',
+                Page::TYPE_CONTACT => 'Contact',
+                Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+                Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+                Page::TYPE_REFUND_POLICY => 'Refund Policy',
+                Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
+                Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
+                Page::TYPE_BLOG => 'Blog Post',
+                Page::TYPE_BLOG_CATEGORY => 'Blog Category',
+                Page::TYPE_BLOG_LIST => 'Blog',
+                Page::TYPE_CUSTOM => 'Custom Page',
+            ];
+
+            return $englishLabels[$pageType] ?? \ucwords(\str_replace('_', ' ', $pageType));
+        }
+
+        return (string)(Page::getPageTypes()[$pageType] ?? $pageType);
+    }
+
+    private function normalizeStageOneVisibleTextLocale(string $value, string $fallback, string $contentLocale = ''): string
+    {
+        $value = \trim($value);
+        if ($this->isEnglishLocale($contentLocale) && \preg_match('/\p{Han}/u', $value) === 1) {
+            return \trim($fallback);
+        }
+
+        return $value !== '' ? $value : \trim($fallback);
     }
 
     /**
@@ -3228,8 +3489,13 @@ final class AiSiteExecutionBlueprintService
         string $targetScope = '',
         string $locale = ''
     ): array {
-        $pageLabel = (string)($pageBlueprint['page_label'] ?? (Page::getPageTypes()[$pageType] ?? $pageType));
+        $pageLabel = $this->isEnglishLocale($locale)
+            ? $this->resolveStageOnePageTypeLabel($pageType, $locale)
+            : (string)($pageBlueprint['page_label'] ?? (Page::getPageTypes()[$pageType] ?? $pageType));
         $pageTitle = (string)($pageBlueprint['page_title'] ?? $pageLabel);
+        if ($this->isEnglishLocale($locale) && \preg_match('/\p{Han}/u', $pageTitle) === 1) {
+            $pageTitle = $pageLabel;
+        }
         $pageGoal = $this->resolvePageGoal($pageType, $pageLabel, $locale);
         $blocks = [];
         foreach (\is_array($pageBlueprint['sections'] ?? null) ? $pageBlueprint['sections'] : [] as $section) {
@@ -3284,7 +3550,7 @@ final class AiSiteExecutionBlueprintService
             }
             $internalLinks[] = [
                 'type' => $candidateType,
-                'label' => (string)(Page::getPageTypes()[$candidateType] ?? $candidateType),
+                'label' => $this->resolveStageOnePageTypeLabel((string)$candidateType, $locale),
                 'href' => $candidateType === Page::TYPE_HOME ? '/' : '/' . Page::getDefaultHandleForType($candidateType),
             ];
             if (\count($internalLinks) >= 4) {
@@ -3304,8 +3570,8 @@ final class AiSiteExecutionBlueprintService
                 : '页面策略基于已选页面类型与站点目标自动生成。',
             'slug' => $pageType === Page::TYPE_HOME ? '/' : '/' . Page::getDefaultHandleForType($pageType),
             'nav_label' => $pageLabel,
-            'meta_title' => (string)($pageBlueprint['meta_title'] ?? $pageTitle),
-            'meta_description' => (string)($pageBlueprint['meta_description'] ?? ''),
+            'meta_title' => $this->normalizeStageOneVisibleTextLocale((string)($pageBlueprint['meta_title'] ?? $pageTitle), $pageTitle, $locale),
+            'meta_description' => $this->normalizeStageOneVisibleTextLocale((string)($pageBlueprint['meta_description'] ?? ''), $siteSummary, $locale),
             'primary_keywords' => $this->buildPageKeywords($pageTitle, $pageLabel, $siteDisplayName),
             'secondary_keywords' => $this->buildSecondaryKeywords($pageType, $pageLabel),
             'internal_links' => $internalLinks,
@@ -4091,34 +4357,74 @@ final class AiSiteExecutionBlueprintService
         array $payload,
         array $palette,
         array $themeStyle,
-        array $seoStrategy
+        array $seoStrategy,
+        string $contentLocale = ''
     ): array {
         $isHeader = $component === 'header';
-        $brandName = $siteDisplayName !== '' ? $siteDisplayName : '品牌名称';
+        $isEn = $this->isEnglishLocale($contentLocale);
+        $brandName = $siteDisplayName !== '' ? $siteDisplayName : ($isEn ? 'Brand name' : '品牌名称');
+        $headerCopy = $isEn
+            ? [
+                'goal' => 'Output ready-to-render site header content and carry the primary navigation plus main CTA.',
+                'implementation_detail' => 'Use horizontal navigation and one primary button on desktop; collapse navigation on mobile while keeping the brand name and primary CTA visible.',
+                'supporting_copy' => ['Home', 'About', 'Download Now'],
+                'cta_label' => 'Download Now',
+                'media_rule' => 'Use a replaceable brand logo slot with clear recognition.',
+                'responsive_rule' => 'On mobile, keep the brand name and primary CTA visible while navigation collapses into a menu.',
+                'completion_rule' => 'Header is complete when brand identity, navigation, primary CTA, and mobile behavior are defined.',
+            ]
+            : [
+                'goal' => '输出可直接上屏的站点头部内容，并承接主导航与主 CTA。',
+                'implementation_detail' => '桌面端使用横向导航与单一主按钮，移动端折叠菜单但保留品牌名和主 CTA。',
+                'supporting_copy' => ['首页', '关于我们', '立即咨询'],
+                'cta_label' => '立即咨询',
+                'media_rule' => '使用可替换的品牌 Logo 位，保持清晰识别度。',
+                'responsive_rule' => '移动端优先保留品牌名与主 CTA，导航折叠为菜单。',
+                'completion_rule' => 'Header 完整条件是品牌识别、导航、主 CTA 与移动端规则都已明确。',
+            ];
+        $footerCopy = $isEn
+            ? [
+                'goal' => 'Output ready-to-render footer content with contact paths, policy links, and secondary navigation.',
+                'implementation_detail' => 'Group footer information with priority for contact paths, common pages, and policy links.',
+                'headline' => 'Continue with ' . $brandName,
+                'supporting_copy' => ['Quick links', 'Policies', 'Contact', 'Support'],
+                'media_rule' => 'Information groups may use lightweight icons without overpowering text.',
+                'responsive_rule' => 'On mobile, stack footer groups in one column while keeping policy and contact links easy to tap.',
+                'completion_rule' => 'Footer is complete when information groups, policy links, contact fields, and responsive behavior are defined.',
+            ]
+            : [
+                'goal' => '输出可直接上屏的页脚内容，补齐联系入口、政策链接与次级导航。',
+                'implementation_detail' => '页脚按信息分组呈现，优先展示联系入口、常用页面和政策链接。',
+                'headline' => '继续了解 ' . $brandName,
+                'supporting_copy' => ['快速入口', '政策说明', '联系渠道', '客服支持'],
+                'media_rule' => '信息分组可搭配轻量图标，但不要压过文字内容。',
+                'responsive_rule' => '移动端按分组单列堆叠，确保政策与联系入口仍然清晰可点。',
+                'completion_rule' => 'Footer 完整条件是信息分组、政策链接、联系字段与响应式规则都已明确。',
+            ];
 
         return [
             'task_key' => 'shared:' . $component,
             'task_type' => 'shared_component',
             'component' => $component,
             'sort_order' => $isHeader ? 10 : 20,
-            'goal' => $isHeader ? '输出可直接上屏的站点头部内容，并承接主导航与主 CTA。' : '输出可直接上屏的页脚内容，补齐联系入口、政策链接与次级导航。',
+            'goal' => $isHeader ? $headerCopy['goal'] : $footerCopy['goal'],
             'implementation_detail' => $isHeader
-                ? '桌面端使用横向导航与单一主按钮，移动端折叠菜单但保留品牌名和主 CTA。'
-                : '页脚按信息分组呈现，优先展示联系入口、常用页面和政策链接。',
+                ? $headerCopy['implementation_detail']
+                : $footerCopy['implementation_detail'],
             'realtime_content' => $isHeader
                 ? [
                     'headline' => $brandName,
-                    'supporting_copy' => ['首页', '关于我们', '立即咨询'],
-                    'cta' => [['label' => '立即咨询', 'target' => '#contact']],
-                    'media' => [['kind' => 'logo', 'rule' => '使用可替换的品牌 Logo 位，保持清晰识别度。']],
+                    'supporting_copy' => $headerCopy['supporting_copy'],
+                    'cta' => [['label' => $headerCopy['cta_label'], 'target' => '#contact']],
+                    'media' => [['kind' => 'logo', 'rule' => $headerCopy['media_rule']]],
                     'data_slots' => ['brand_name', 'navigation_items', 'primary_cta'],
                     'editable_slots' => ['brand_name', 'logo', 'navigation_items', 'primary_cta'],
                 ]
                 : [
-                    'headline' => '继续了解 ' . $brandName,
-                    'supporting_copy' => ['快速入口', '政策说明', '联系渠道', '客服支持'],
+                    'headline' => $footerCopy['headline'],
+                    'supporting_copy' => $footerCopy['supporting_copy'],
                     'cta' => [],
-                    'media' => [['kind' => 'icon', 'rule' => '信息分组可搭配轻量图标，但不要压过文字内容。']],
+                    'media' => [['kind' => 'icon', 'rule' => $footerCopy['media_rule']]],
                     'data_slots' => ['footer_links', 'policy_links', 'contact_fields'],
                     'editable_slots' => ['footer_links', 'policy_links', 'contact_fields'],
                 ],
@@ -4128,11 +4434,12 @@ final class AiSiteExecutionBlueprintService
             'content_source' => ['theme_context_snapshot', 'shared_prompt_context', 'editable_field'],
             'style_direction' => (string)($themeStyle['visual_tone'] ?? ''),
             'responsive_rule' => $isHeader
-                ? '移动端优先保留品牌名与主 CTA，导航折叠为菜单。'
-                : '移动端按分组单列堆叠，确保政策与联系入口仍然清晰可点。',
+                ? $headerCopy['responsive_rule']
+                : $footerCopy['responsive_rule'],
             'completion_rule' => $isHeader
-                ? 'Header 完整条件是品牌识别、导航、主 CTA 与移动端规则都已明确。'
-                : 'Footer 完整条件是信息分组、政策链接、联系字段与响应式规则都已明确。',
+                ? $headerCopy['completion_rule']
+                : $footerCopy['completion_rule'],
+            'content_locale' => $contentLocale,
             'site_display_name' => $siteDisplayName,
             'style_brief' => [
                 'palette' => $palette,
@@ -4323,8 +4630,11 @@ final class AiSiteExecutionBlueprintService
             $themeStyle,
             $instruction
         );
+        $contentLocale = $this->resolveStageOneContentLocale($scope, (string)($scope['plan_locale'] ?? ''));
+        $isContentEnglish = $this->isEnglishLocale($contentLocale);
         $snapshot = [
             'theme_context_id' => 'stage1-theme-' . \substr(\sha1($siteDisplayName . '|' . \implode(',', $pageTypes)), 0, 12),
+            'content_locale' => $contentLocale,
             'site_positioning' => $siteSummary,
             'site_display_name' => $siteDisplayName,
             'visual_direction' => $themeStyle,
@@ -4333,7 +4643,7 @@ final class AiSiteExecutionBlueprintService
             'shared_navigation_strategy' => $navigationPlan,
             'shared_footer_strategy' => $footerPlan,
             'shared_cta_strategy' => [
-                'primary_action' => $this->isEnglishLocale((string)($scope['plan_locale'] ?? '')) ? 'Contact / Start now' : '立即咨询 / 立即开始',
+                'primary_action' => $isContentEnglish ? 'Contact / Start now' : '立即咨询 / 立即开始',
                 'reason' => '共享 CTA 必须在 Header、Footer 与页面核心区块中保持同一转化方向。',
             ],
             'seo_strategy' => $seoStrategy,
@@ -4468,19 +4778,24 @@ final class AiSiteExecutionBlueprintService
      * @param list<string> $pageTypes
      * @return array<string, mixed>
      */
-    private function buildStageOneSharedPromptContext(array $themeContextSnapshot, array $sharedComponents, array $pageTypes, string $planLocale): array
+    private function buildStageOneSharedPromptContext(array $themeContextSnapshot, array $sharedComponents, array $pageTypes, string $planLocale, array $requirementExpansion = []): array
     {
+        $contentLocale = \trim((string)($themeContextSnapshot['content_locale'] ?? ''));
         $context = [
             'prompt_context_id' => 'stage1-shared-' . \substr((string)($themeContextSnapshot['context_hash'] ?? \sha1('shared')), 0, 12),
             'theme_context_hash' => (string)($themeContextSnapshot['context_hash'] ?? ''),
             'plan_locale' => $planLocale,
+            'content_locale' => $contentLocale,
             'page_types' => $pageTypes,
+            'requirement_expansion' => $requirementExpansion,
             'theme_design' => [
                 ...$this->extractStageOneThemeDesign($themeContextSnapshot),
             ],
             'header_plan' => \is_array($sharedComponents['header'] ?? null) ? $sharedComponents['header'] : [],
             'footer_plan' => \is_array($sharedComponents['footer'] ?? null) ? $sharedComponents['footer'] : [],
-            'generation_rule' => '页面类型方案必须携带该共享上下文，并保持 Header、Footer 与主题连续性。',
+            'generation_rule' => $this->isEnglishLocale($contentLocale)
+                ? 'Page type plans must carry this shared context and preserve Header, Footer, and theme continuity.'
+                : '页面类型方案必须携带该共享上下文，并保持 Header、Footer 与主题连续性。',
         ];
         $context['context_hash'] = \sha1((string)\json_encode($context, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
 
@@ -4528,6 +4843,7 @@ final class AiSiteExecutionBlueprintService
                 'theme_context_snapshot' => $themeContextSnapshot,
                 'page_types' => $pageTypes,
                 'plan_locale' => $planLocale,
+                'content_locale' => (string)($sharedPromptContext['content_locale'] ?? ''),
             ],
             'outputs' => [
                 'header_block' => $headerBlock,
@@ -4621,6 +4937,7 @@ final class AiSiteExecutionBlueprintService
                 'progress_percent' => (string)($pagePlan['page_status'] ?? 'done') === 'done' ? 100 : 0,
                 'prompt_version' => 'stage1.page_plan.v1',
                 'plan_locale' => $planLocale,
+                'content_locale' => (string)($sharedPromptContext['content_locale'] ?? ''),
                 'context_hash' => $pageContextHash,
                 'shared_context_hash' => $sharedContextHash,
                 'theme_context_hash' => $themeContextHash,
@@ -4639,6 +4956,7 @@ final class AiSiteExecutionBlueprintService
                     'shared_context_hash' => $sharedContextHash,
                     'theme_context_hash' => $themeContextHash,
                     'plan_locale' => $planLocale,
+                    'content_locale' => (string)($sharedPromptContext['content_locale'] ?? ''),
                 ],
                 'outputs' => [
                     'page_plan' => $pagePlan,
@@ -4862,6 +5180,7 @@ final class AiSiteExecutionBlueprintService
         $assembledPagePlan = \array_replace($pagePlan, [
             'page_key' => $pageType,
             'page_status' => 'done',
+            'content_locale' => (string)($sharedPromptContext['content_locale'] ?? ''),
             'shared_context_hash' => $sharedContextHash,
             'theme_context_hash' => $themeContextHash,
             'assembly_version' => 1,
@@ -5683,6 +6002,7 @@ final class AiSiteExecutionBlueprintService
             );
         $stage1 = [
             'request_summary' => \is_array($structured['request_summary'] ?? null) ? $structured['request_summary'] : $this->buildStageOneRequestSummary($scope, [], ''),
+            'requirement_expansion' => \is_array($structured['requirement_expansion'] ?? null) ? $structured['requirement_expansion'] : [],
             'theme_context_snapshot' => \is_array($structured['theme_context_snapshot'] ?? null) ? $structured['theme_context_snapshot'] : [],
             'shared_plan' => \is_array($structured['shared_plan'] ?? null) ? $structured['shared_plan'] : [],
             'page_plans' => $pagePlans,
@@ -5734,6 +6054,10 @@ final class AiSiteExecutionBlueprintService
         $themeContextSnapshot = \is_array($structured['theme_context_snapshot'] ?? null)
             ? $structured['theme_context_snapshot']
             : (\is_array($executionBlueprint['theme_context_snapshot'] ?? null) ? $executionBlueprint['theme_context_snapshot'] : []);
+        $contentLocale = \trim((string)($structured['content_locale'] ?? $structured['site_strategy']['content_locale'] ?? $executionBlueprint['content_locale'] ?? ''));
+        $requirementExpansion = \is_array($structured['requirement_expansion'] ?? null)
+            ? $structured['requirement_expansion']
+            : (\is_array($executionBlueprint['requirement_expansion'] ?? null) ? $executionBlueprint['requirement_expansion'] : []);
 
         $sharedBlocks = [];
         foreach ($this->normalizeStageOneSharedComponents($sharedComponents) as $component => $componentPlan) {
@@ -5760,12 +6084,14 @@ final class AiSiteExecutionBlueprintService
                 'page_key' => (string)$pageKey,
                 'page_label' => (string)($pagePlan['page_label'] ?? $pageKey),
                 'page_goal' => \trim((string)($pagePlan['page_goal'] ?? '')),
+                'content_locale' => $contentLocale,
                 'page_status' => (string)($pagePlan['page_status'] ?? 'done'),
                 'theme_alignment_summary' => \trim((string)($pagePlan['theme_alignment_summary'] ?? '')),
                 'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? $sharedPromptContext['context_hash'] ?? ''),
                 'theme_context_hash' => (string)($pagePlan['theme_context_hash'] ?? $sharedPromptContext['theme_context_hash'] ?? ''),
                 'page_context_hash' => (string)($pagePlan['page_context_hash'] ?? ''),
                 'blocks' => $blocks,
+                'display_blocks' => $this->buildStageOnePageDisplayBlocks($sharedBlocks, $blocks),
             ];
         }
 
@@ -5774,8 +6100,12 @@ final class AiSiteExecutionBlueprintService
             'source' => 'stage1.block_tree',
             'source_signature' => (string)($executionBlueprint['signature'] ?? ''),
             'plan_locale' => $planLocale,
+            'content_locale' => $contentLocale,
             'theme_context_hash' => (string)($themeContextSnapshot['context_hash'] ?? $sharedPromptContext['theme_context_hash'] ?? ''),
             'shared_context_hash' => (string)($sharedPromptContext['context_hash'] ?? ''),
+            'requirement_expansion' => $requirementExpansion,
+            'theme_context_snapshot' => $themeContextSnapshot,
+            'shared_prompt_context' => $sharedPromptContext,
             'theme_design' => $this->extractStageOneThemeDesign(
                 \is_array($structured['shared_plan']['theme_design'] ?? null)
                     ? $structured['shared_plan']['theme_design']
@@ -6036,6 +6366,8 @@ final class AiSiteExecutionBlueprintService
     {
         $pages = \is_array($structured['pages'] ?? null) ? $structured['pages'] : [];
         $stageOnePagePlans = \is_array($structured['page_plans'] ?? null) ? $structured['page_plans'] : [];
+        $sharedComponents = $this->resolveStageOneSharedComponents($structured, []);
+        $sharedBlocks = $this->buildStageOneSharedBlocksPlanJson($sharedComponents);
         $pageBlocks = [];
         foreach ($pages as $pageType => $pagePlan) {
             if (!\is_array($pagePlan)) {
@@ -6080,14 +6412,14 @@ final class AiSiteExecutionBlueprintService
                     \is_array($pagePlan['secondary_keywords'] ?? null) ? $pagePlan['secondary_keywords'] : []
                 ), static fn(string $value): bool => $value !== '')),
                 'blocks' => $blockRows,
+                'display_blocks' => $this->buildStageOnePageDisplayBlocks($sharedBlocks, $blockRows),
             ];
         }
 
-        $sharedComponents = $this->resolveStageOneSharedComponents($structured, []);
-        $sharedBlocks = $this->buildStageOneSharedBlocksPlanJson($sharedComponents);
-
         return [
             'i18n' => \is_array($structured['i18n'] ?? null) ? $structured['i18n'] : [],
+            'content_locale' => \trim((string)($structured['content_locale'] ?? $structured['site_strategy']['content_locale'] ?? '')),
+            'requirement_expansion' => \is_array($structured['requirement_expansion'] ?? null) ? $structured['requirement_expansion'] : [],
             'site_strategy' => \is_array($structured['site_strategy'] ?? null) ? $structured['site_strategy'] : [],
             'theme_style' => \is_array($structured['theme_style'] ?? null) ? $structured['theme_style'] : [],
             'palette' => \is_array($structured['palette'] ?? null) ? $structured['palette'] : [],
@@ -6114,6 +6446,37 @@ final class AiSiteExecutionBlueprintService
             ], (string)($structured['i18n']['locale'] ?? '')),
             'execution_steps' => \is_array($structured['execution_steps'] ?? null) ? $structured['execution_steps'] : [],
         ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $sharedBlocks
+     * @param list<array<string, mixed>> $pageBlocks
+     * @return list<array<string, mixed>>
+     */
+    private function buildStageOnePageDisplayBlocks(array $sharedBlocks, array $pageBlocks): array
+    {
+        $headerBlocks = [];
+        $footerBlocks = [];
+        foreach ($sharedBlocks as $sharedBlock) {
+            if (!\is_array($sharedBlock)) {
+                continue;
+            }
+            $component = \trim((string)($sharedBlock['component'] ?? ''));
+            if ($component === 'header') {
+                $headerBlocks[] = \array_replace($sharedBlock, ['display_role' => 'shared_header']);
+            } elseif ($component === 'footer') {
+                $footerBlocks[] = \array_replace($sharedBlock, ['display_role' => 'shared_footer']);
+            }
+        }
+
+        $pageRows = [];
+        foreach ($pageBlocks as $pageBlock) {
+            if (\is_array($pageBlock)) {
+                $pageRows[] = \array_replace($pageBlock, ['display_role' => 'page_block']);
+            }
+        }
+
+        return \array_values(\array_merge($headerBlocks, $pageRows, $footerBlocks));
     }
 
     /**
@@ -6171,6 +6534,7 @@ final class AiSiteExecutionBlueprintService
         $isEn = $this->isEnglishLocale($locale);
         $i18n = \is_array($planJson['i18n'] ?? null) ? $planJson['i18n'] : [];
         $labels = \is_array($i18n['labels'] ?? null) ? $i18n['labels'] : [];
+        $requirementExpansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
         $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
         $site = \trim((string)($siteStrategy['site_display_name'] ?? ''));
         $summary = \trim((string)($siteStrategy['summary'] ?? ''));
@@ -6197,6 +6561,22 @@ final class AiSiteExecutionBlueprintService
         $lines[] = '- ' . ($isEn ? 'Palette' : '色盘') . ': ' . ($paletteName !== '' ? $paletteName : 'Ocean Slate');
         $lines[] = '- ' . ($isEn ? 'Page Count' : '页面数量') . ': ' . (string)\count($pageTypes);
         $lines[] = '';
+        if ($requirementExpansion !== []) {
+            $expandedBrief = \trim((string)($requirementExpansion['expanded_brief'] ?? ''));
+            $planningSummary = \trim((string)($requirementExpansion['planning_summary'] ?? ''));
+            $siteGoal = \trim((string)($requirementExpansion['site_goal'] ?? ''));
+            $lines[] = '## ' . ($isEn ? 'Expanded Requirement Plan' : '需求拓展规划');
+            if ($expandedBrief !== '') {
+                $lines[] = '- ' . ($isEn ? 'Expanded Brief' : '拓展说明') . ': ' . $expandedBrief;
+            }
+            if ($planningSummary !== '') {
+                $lines[] = '- ' . ($isEn ? 'Planning Summary' : '规划说明') . ': ' . $planningSummary;
+            }
+            if ($siteGoal !== '') {
+                $lines[] = '- ' . ($isEn ? 'Site Goal' : '站点目标') . ': ' . $siteGoal;
+            }
+            $lines[] = '';
+        }
         $lines[] = '## ' . (string)($labels['site_structure'] ?? ($isEn ? 'Site Structure' : '全站结构'));
         foreach ($pageTypes as $pageType) {
             $lines[] = '- ' . (string)$pageType;
@@ -7478,6 +7858,9 @@ final class AiSiteExecutionBlueprintService
     {
         $summary = \trim(\preg_replace('/\s+/u', ' ', $siteSummary) ?? '');
         if ($summary === '' || $this->looksLikeBlueprintInstruction($summary)) {
+            return '';
+        }
+        if ($this->isEnglishLocale($locale) && \preg_match('/\p{Han}/u', $summary) === 1) {
             return '';
         }
 
