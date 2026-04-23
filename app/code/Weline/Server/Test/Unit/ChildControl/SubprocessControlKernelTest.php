@@ -522,6 +522,7 @@ PHP);
                     public function handleWritable(): bool { return false; }
                     public function tryReconnect(): bool { return false; }
                     public function close(): void {}
+                    public function getResurrectionPriority(): int { return 0; }
                 };
             }
         );
@@ -582,6 +583,7 @@ PHP);
                     public function handleWritable(): bool { return false; }
                     public function tryReconnect(): bool { return false; }
                     public function close(): void {}
+                    public function getResurrectionPriority(): int { return 0; }
                 };
             }
         );

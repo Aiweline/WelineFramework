@@ -45,10 +45,18 @@ class WorkerScaler
     }
 
     /**
-     * 扩容：启动 N 个新 Worker
+     * 扩容：启动 N 个新 Worker（P0-4：并发启动 + 并发等待注册）
      *
-     * @param int $count 要启动的 Worker 数量
-     * @param ServiceContext $context 服务上下文
+     * 旧行为：逐个启动 → 逐个等待 READY，最坏 N × START_TIMEOUT。
+     * 新行为：
+     *   1) 先批量派发 startInstance（无阻塞），得到候选集合；
+     *   2) 共享 START_TIMEOUT 窗口，轮询多实例 state 变化；
+     *   3) 超时未 READY 的实例被清理，已 READY 的继续服役。
+     *
+     * 与旧版保持的语义：
+     *   - 若 startInstance 返回 null（进程未起），立即返回，保留已起实例（由调用方负责后续治理）。
+     *   - 返回 added_pids 反映最终成功注册的 Worker。
+     *
      * @return array{success: bool, added_pids: int[], message: string}
      */
     public function scaleUp(int $count, ServiceContext $context): array
@@ -61,18 +69,17 @@ class WorkerScaler
             ];
         }
 
-        $addedPids = [];
         $currentWorkers = $this->orchestrator->getInstancesByRole('worker');
         $nextInstanceId = \count($currentWorkers) + 1;
 
+        /** @var array<int, ServiceInstance> $startedInstances instanceId => instance */
+        $startedInstances = [];
+
+        // Phase 1：批量启动（不等待 READY）
         for ($i = 0; $i < $count; $i++) {
             $instanceId = $nextInstanceId + $i;
-
             try {
-                // 构建启动命令
                 $command = $this->workerProvider->buildCommand($instanceId, $context);
-
-                // 启动 Worker 进程
                 $instance = $this->orchestrator->startInstance(
                     'worker',
                     $instanceId,
@@ -81,6 +88,7 @@ class WorkerScaler
                 );
 
                 if ($instance === null) {
+                    $addedPids = \array_map(static fn(ServiceInstance $inst): int => $inst->pid, \array_values($startedInstances));
                     return [
                         'success' => false,
                         'added_pids' => $addedPids,
@@ -88,26 +96,48 @@ class WorkerScaler
                     ];
                 }
 
-                // 等待 Worker 注册（超时 10 秒）
-                $registered = $this->waitForWorkerReady($instance, self::START_TIMEOUT);
-                if (!$registered) {
-                    // 启动失败，清理进程
-                    $this->orchestrator->stopInstance($instance);
-                    return [
-                        'success' => false,
-                        'added_pids' => $addedPids,
-                        'message' => "Worker #{$instanceId} failed to register within " . self::START_TIMEOUT . " seconds",
-                    ];
-                }
-
-                $addedPids[] = $instance->pid;
+                $startedInstances[$instanceId] = $instance;
             } catch (\Throwable $e) {
+                $addedPids = \array_map(static fn(ServiceInstance $inst): int => $inst->pid, \array_values($startedInstances));
                 return [
                     'success' => false,
                     'added_pids' => $addedPids,
                     'message' => "Failed to start Worker #{$instanceId}: " . $e->getMessage(),
                 ];
             }
+        }
+
+        // Phase 2：共享 START_TIMEOUT 并发等待所有候选进入 READY
+        $stillPending = $this->waitForWorkersReady($startedInstances, self::START_TIMEOUT);
+
+        // Phase 3：超时未就绪的清理，已就绪的保留
+        foreach ($stillPending as $instance) {
+            try {
+                $this->orchestrator->stopInstance($instance);
+            } catch (\Throwable) {
+                // best effort
+            }
+        }
+
+        $addedPids = [];
+        foreach ($startedInstances as $id => $instance) {
+            if (!isset($stillPending[$id])) {
+                $addedPids[] = $instance->pid;
+            }
+        }
+
+        if ($stillPending !== []) {
+            $readyCount = \count($startedInstances) - \count($stillPending);
+            return [
+                'success' => false,
+                'added_pids' => $addedPids,
+                'message' => \sprintf(
+                    'Only %d/%d Worker(s) became ready within %ds',
+                    $readyCount,
+                    \count($startedInstances),
+                    self::START_TIMEOUT
+                ),
+            ];
         }
 
         return [
@@ -118,9 +148,14 @@ class WorkerScaler
     }
 
     /**
-     * 缩容：停止 N 个 Worker
+     * 缩容：停止 N 个 Worker（P0-4：并发发出优雅关闭 + 并发等待退出）
      *
-     * @param int $count 要停止的 Worker 数量
+     * 旧行为：逐个发送 graceful → 逐个等待退出，最坏 N × STOP_TIMEOUT。
+     * 新行为：
+     *   1) 先批量发送 gracefulShutdown；
+     *   2) 共享 STOP_TIMEOUT 窗口，轮询多实例存活状态；
+     *   3) 超时仍在运行的执行强制 stop（SIGKILL 等价）。
+     *
      * @return array{success: bool, removed_pids: int[], message: string}
      */
     public function scaleDown(int $count): array
@@ -142,28 +177,22 @@ class WorkerScaler
             ];
         }
 
-        // 选择要停止的 Worker（优先选择 ID 最大的）
         \usort($workers, fn($a, $b) => $b->instanceId <=> $a->instanceId);
         $toStop = \array_slice($workers, 0, \min($count, \count($workers)));
 
-        $removedPids = [];
+        /** @var array<int, ServiceInstance> $shutdownCandidates */
+        $shutdownCandidates = [];
+
+        // Phase 1：批量发送 gracefulShutdown
         foreach ($toStop as $worker) {
             try {
-                // 发送优雅关闭消息
                 $this->orchestrator->sendMessageToInstance(
                     $worker,
                     ControlMessage::gracefulShutdown(self::STOP_TIMEOUT)
                 );
-
-                // 等待 Worker 退出（超时 30 秒）
-                $exited = $this->waitForWorkerExit($worker, self::STOP_TIMEOUT);
-                if (!$exited) {
-                    // 超时，强制 kill
-                    $this->orchestrator->stopInstance($worker, true);
-                }
-
-                $removedPids[] = $worker->pid;
+                $shutdownCandidates[$worker->instanceId] = $worker;
             } catch (\Throwable $e) {
+                $removedPids = \array_map(static fn(ServiceInstance $w): int => $w->pid, \array_values($shutdownCandidates));
                 return [
                     'success' => false,
                     'removed_pids' => $removedPids,
@@ -172,6 +201,19 @@ class WorkerScaler
             }
         }
 
+        // Phase 2：并发等待所有目标退出
+        $stillAlive = $this->waitForWorkersExit($shutdownCandidates, self::STOP_TIMEOUT);
+
+        // Phase 3：超时未退出的强制 kill
+        foreach ($stillAlive as $worker) {
+            try {
+                $this->orchestrator->stopInstance($worker, true);
+            } catch (\Throwable) {
+                // best effort
+            }
+        }
+
+        $removedPids = \array_map(static fn(ServiceInstance $w): int => $w->pid, \array_values($shutdownCandidates));
         return [
             'success' => true,
             'removed_pids' => $removedPids,
@@ -180,56 +222,64 @@ class WorkerScaler
     }
 
     /**
-     * 等待 Worker 就绪（注册到 Master）
+     * P0-4：并发等待多个 Worker 进入 READY，共享超时窗口。
      *
-     * @param ServiceInstance $instance Worker 实例
-     * @param int $timeoutSec 超时时间（秒）
-     * @return bool 是否就绪
+     * 返回超时仍未就绪的实例，调用方负责清理。
+     * 进程在等待过程中死亡的实例会尽快退出重试循环（下一次 tick 检查到 pid 不存活即标记为失败）。
+     *
+     * @param array<int, ServiceInstance> $instances instanceId => instance
+     * @return array<int, ServiceInstance>           仍未 READY 的实例（timeout 或 process dead）
      */
-    private function waitForWorkerReady(ServiceInstance $instance, int $timeoutSec): bool
+    private function waitForWorkersReady(array $instances, int $timeoutSec): array
     {
+        $pending = $instances;
         $deadline = \microtime(true) + $timeoutSec;
-        $trackingPid = $this->getTrackingPid($instance);
 
-        while (\microtime(true) < $deadline) {
-            // 检查 Worker 状态
-            if ($instance->state === ServiceInstance::STATE_READY) {
-                return true;
+        while ($pending !== [] && \microtime(true) < $deadline) {
+            foreach ($pending as $id => $instance) {
+                if ($instance->state === ServiceInstance::STATE_READY) {
+                    unset($pending[$id]);
+                    continue;
+                }
+                if (!$this->isProcessAlive($this->getTrackingPid($instance))) {
+                    // 进程已死 → 视为失败，保留在 pending 中由调用方清理
+                    // （无需在此 unset，外层会 stopInstance 做兜底）
+                    continue;
+                }
             }
-
-            // 检查进程是否还活着
-            if (!$this->isProcessAlive($trackingPid)) {
-                return false;
+            if ($pending === []) {
+                break;
             }
-
             SchedulerSystem::usleep(100000); // 100ms
         }
 
-        return false;
+        return $pending;
     }
 
     /**
-     * 等待 Worker 退出
+     * P0-4：并发等待多个 Worker 退出，共享超时窗口。
      *
-     * @param ServiceInstance $instance Worker 实例
-     * @param int $timeoutSec 超时时间（秒）
-     * @return bool 是否已退出
+     * @param array<int, ServiceInstance> $instances instanceId => instance
+     * @return array<int, ServiceInstance>           仍存活需要强制 kill 的实例
      */
-    private function waitForWorkerExit(ServiceInstance $instance, int $timeoutSec): bool
+    private function waitForWorkersExit(array $instances, int $timeoutSec): array
     {
+        $pending = $instances;
         $deadline = \microtime(true) + $timeoutSec;
-        $trackingPid = $this->getTrackingPid($instance);
 
-        while (\microtime(true) < $deadline) {
-            // 检查进程是否还活着
-            if (!$this->isProcessAlive($trackingPid)) {
-                return true;
+        while ($pending !== [] && \microtime(true) < $deadline) {
+            foreach ($pending as $id => $instance) {
+                if (!$this->isProcessAlive($this->getTrackingPid($instance))) {
+                    unset($pending[$id]);
+                }
             }
-
-            SchedulerSystem::usleep(100000); // 100ms
+            if ($pending === []) {
+                break;
+            }
+            SchedulerSystem::usleep(100000);
         }
 
-        return false;
+        return $pending;
     }
 
     /**
