@@ -245,12 +245,19 @@ class SslCertificateServiceTest extends TestCase
      */
     private function createLocalCaFixture(string $domain): array
     {
-        $opensslConfig = $this->getOpenSslConfigForFixture();
+        $caOpenSslConfig = $this->getOpenSslConfigForFixture(
+            'ca',
+            $this->buildFixtureLocalCaOpenSslConfig()
+        );
+        $leafOpenSslConfig = $this->getOpenSslConfigForFixture(
+            'leaf',
+            $this->buildFixtureServerLeafOpenSslConfig($domain)
+        );
         $caKey = \openssl_pkey_new([
             'private_key_type' => OPENSSL_KEYTYPE_RSA,
             'private_key_bits' => 2048,
             'digest_alg' => 'sha256',
-            'config' => $opensslConfig['config'] ?? null,
+            'config' => $caOpenSslConfig['config'] ?? null,
         ]);
         $this->assertNotFalse($caKey);
 
@@ -264,10 +271,10 @@ class SslCertificateServiceTest extends TestCase
             'emailAddress' => 'dev@weline.localhost',
         ];
 
-        $caCsr = \openssl_csr_new($caDistinguishedName, $caKey, $opensslConfig);
+        $caCsr = \openssl_csr_new($caDistinguishedName, $caKey, $caOpenSslConfig);
         $this->assertNotFalse($caCsr);
 
-        $caCert = \openssl_csr_sign($caCsr, null, $caKey, 3650, $opensslConfig, 1);
+        $caCert = \openssl_csr_sign($caCsr, null, $caKey, 3650, $caOpenSslConfig, 1);
         $this->assertNotFalse($caCert);
 
         \openssl_x509_export($caCert, $caPem);
@@ -277,7 +284,7 @@ class SslCertificateServiceTest extends TestCase
             'private_key_type' => OPENSSL_KEYTYPE_RSA,
             'private_key_bits' => 2048,
             'digest_alg' => 'sha256',
-            'config' => $opensslConfig['config'] ?? null,
+            'config' => $leafOpenSslConfig['config'] ?? null,
         ]);
         $this->assertNotFalse($leafKey);
 
@@ -291,10 +298,10 @@ class SslCertificateServiceTest extends TestCase
             'emailAddress' => 'dev@' . $domain,
         ];
 
-        $leafCsr = \openssl_csr_new($leafDistinguishedName, $leafKey, $opensslConfig);
+        $leafCsr = \openssl_csr_new($leafDistinguishedName, $leafKey, $leafOpenSslConfig);
         $this->assertNotFalse($leafCsr);
 
-        $leafCert = \openssl_csr_sign($leafCsr, $caCert, $caKey, 825, $opensslConfig, 2);
+        $leafCert = \openssl_csr_sign($leafCsr, $caCert, $caKey, 825, $leafOpenSslConfig, 2);
         $this->assertNotFalse($leafCert);
 
         \openssl_x509_export($leafCert, $leafPem);
@@ -306,6 +313,14 @@ class SslCertificateServiceTest extends TestCase
             'chain' => \trim($caPem) . "\n",
             'fullchain' => \trim($leafPem) . "\n" . \trim($caPem) . "\n",
         ];
+    }
+
+    /**
+     * @return array{ca:string, leaf:string, chain:string, fullchain:string}
+     */
+    private function createLocalCaSignedCertificateFixture(string $domain): array
+    {
+        return $this->createLocalCaFixture($domain);
     }
 
     public function testShouldPreferTrustedLocalSelfSignedCertificateMatchesWindowsForLocalDomains(): void
@@ -383,7 +398,7 @@ class SslCertificateServiceTest extends TestCase
     /**
      * @return array<string, mixed>
      */
-    private function getOpenSslConfigForFixture(): array
+    private function getOpenSslConfigForFixture(string $name = 'default', string $configContent = ''): array
     {
         $service = new SslCertificateService();
         $method = new ReflectionMethod($service, 'getOpensslConfig');
@@ -392,7 +407,30 @@ class SslCertificateServiceTest extends TestCase
         $config = $method->invoke($service);
         $this->assertIsArray($config);
         $config['digest_alg'] = 'sha256';
+        if ($configContent !== '') {
+            $configPath = $this->makeTempDir() . DIRECTORY_SEPARATOR . $name . '.cnf';
+            \file_put_contents($configPath, $configContent);
+            $config['config'] = $configPath;
+        }
 
         return $config;
+    }
+
+    private function buildFixtureLocalCaOpenSslConfig(): string
+    {
+        $service = new SslCertificateService();
+        $method = new ReflectionMethod($service, 'buildLocalCaOpenSslConfig');
+        $method->setAccessible(true);
+
+        return (string) $method->invoke($service);
+    }
+
+    private function buildFixtureServerLeafOpenSslConfig(string $domain): string
+    {
+        $service = new SslCertificateService();
+        $method = new ReflectionMethod($service, 'buildServerLeafOpenSslConfig');
+        $method->setAccessible(true);
+
+        return (string) $method->invoke($service, $domain, ['dns' => [$domain], 'ip' => []]);
     }
 }

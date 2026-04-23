@@ -236,26 +236,9 @@ class Stop extends CommandAbstract
             return $instanceName;
         }
 
-        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
-        if (!\is_dir($instanceDir)) {
-            return $this->findConfiguredRunningInstanceNameByPort($port);
-        }
-        $files = \glob($instanceDir . '*.json');
-        foreach ($files as $file) {
-            $name = \basename($file, '.json');
-            $data = \json_decode(\file_get_contents($file), true);
-            if (!\is_array($data)) {
-                continue;
-            }
-            $instancePort = (int) ($data['port'] ?? 0);
-            $count = (int) ($data['count'] ?? 4);
-            if ($instancePort <= $port && $port < $instancePort + $count) {
-                return $name;
-            }
-            $httpRedirectPort = (int) ($data['http_redirect_port'] ?? 0);
-            if ($httpRedirectPort > 0 && $port === $httpRedirectPort) {
-                return $name;
-            }
+        $instanceName = $this->findPersistedRecoverableInstanceNameByPort($port);
+        if ($instanceName !== null) {
+            return $instanceName;
         }
 
         return $this->findConfiguredRunningInstanceNameByPort($port);
@@ -370,7 +353,7 @@ class Stop extends CommandAbstract
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
             $this->releaseStartLock($name);
-            $this->printer->success(__('实例文件已清理 ✓'));
+            $this->printer->success(__('实例元数据已标记停止并保留 ✓'));
             return;
         }
         
@@ -479,7 +462,7 @@ class Stop extends CommandAbstract
         // 从共享 Session/Memory 注册表移除本实例消费者，避免误导其它工具
         $this->releaseSharedStateConsumersForInstance($name);
 
-        // 删除实例文件
+        // 标记实例停止；保留实例 JSON 供后续控制面恢复和审计使用。
         $manager->deleteInstance($name);
         
         // 清理 PID 文件
@@ -501,6 +484,14 @@ class Stop extends CommandAbstract
     protected function getInstanceManager(): ServerInstanceManager
     {
         return ObjectManager::getInstance(ServerInstanceManager::class);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    protected function getRawStopInstanceData(string $name): ?array
+    {
+        return $this->getInstanceManager()->getRawInstanceData($name);
     }
 
     /**
@@ -853,6 +844,7 @@ class Stop extends CommandAbstract
         if ($info !== null) {
             $ports = \array_merge($ports, $this->collectRecoverablePortsFromInstance($info));
         }
+        $ports = \array_merge($ports, $this->collectRecoverablePortsFromInstanceRecords($name));
 
         $ports = \array_values(\array_unique(\array_filter(
             \array_map('intval', $ports),
@@ -890,6 +882,85 @@ class Stop extends CommandAbstract
             $port = (int) ($service->port ?? 0);
             if ($port > 0) {
                 $ports[] = $port;
+            }
+        }
+
+        return \array_values(\array_unique(\array_filter(
+            \array_map('intval', $ports),
+            static fn (int $port): bool => $port > 0
+        )));
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function collectRecoverablePortsFromInstanceRecords(string $name, bool $includeSharedState = false): array
+    {
+        $rawData = $this->getRawStopInstanceData($name);
+        if ($rawData === null) {
+            return [];
+        }
+
+        $ports = $this->collectRecoverablePortsFromRecord($rawData, $includeSharedState);
+        foreach (($rawData['instance_records'] ?? []) as $record) {
+            if (\is_array($record)) {
+                $ports = \array_merge($ports, $this->collectRecoverablePortsFromRecord($record, $includeSharedState));
+            }
+        }
+
+        $ports = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $ports),
+            static fn (int $port): bool => $port > 0
+        )));
+        \sort($ports);
+
+        return $ports;
+    }
+
+    /**
+     * @param array<string, mixed> $record
+     * @return list<int>
+     */
+    private function collectRecoverablePortsFromRecord(array $record, bool $includeSharedState = false): array
+    {
+        $ports = [];
+        foreach (['port', 'worker_port', 'worker_base_port', 'control_port', 'dispatcher_port', 'http_redirect_port'] as $field) {
+            $port = (int) ($record[$field] ?? 0);
+            if ($port > 0) {
+                $ports[] = $port;
+            }
+        }
+
+        foreach (['port', 'worker_port', 'worker_base_port'] as $baseField) {
+            $basePort = (int) ($record[$baseField] ?? 0);
+            $count = (int) ($record['count'] ?? 0);
+            if ($basePort <= 0 || $count <= 1) {
+                continue;
+            }
+            for ($offset = 1; $offset < $count; $offset++) {
+                $ports[] = $basePort + $offset;
+            }
+        }
+
+        $services = \is_array($record['services'] ?? null) ? $record['services'] : [];
+        foreach ($services as $role => $roleData) {
+            if (!\is_array($roleData) || !\is_array($roleData['instances'] ?? null)) {
+                continue;
+            }
+            if (!$includeSharedState && $this->isSharedStateServiceRole((string) $role)) {
+                continue;
+            }
+            foreach ($roleData['instances'] as $serviceRecord) {
+                if (!\is_array($serviceRecord)) {
+                    continue;
+                }
+                if (!$includeSharedState && $this->isSharedStateServiceRecord($serviceRecord)) {
+                    continue;
+                }
+                $port = (int) ($serviceRecord['port'] ?? 0);
+                if ($port > 0) {
+                    $ports[] = $port;
+                }
             }
         }
 
@@ -938,6 +1009,7 @@ class Stop extends CommandAbstract
         // Duplicate same-instance masters may outlive pid_index records but still carry a scoped --name.
         return \array_values(\array_unique(\array_merge(
             $this->collectResidualPidsByInfo($info),
+            $this->collectResidualPidsFromInstanceRecords($name),
             $this->collectIndexedResidualPids($name),
             $this->collectResidualPrefixPids($name)
         )));
@@ -953,7 +1025,10 @@ class Stop extends CommandAbstract
      */
     protected function collectDirectForceStopCandidatePids(ServerInstanceInfo $info): array
     {
-        $forcePorts = $this->collectRecoverablePortsFromInstance($info, true);
+        $forcePorts = \array_values(\array_unique(\array_merge(
+            $this->collectRecoverablePortsFromInstance($info, true),
+            $this->collectRecoverablePortsFromInstanceRecords($info->name, true)
+        )));
         return \array_values(\array_unique(\array_filter(
             \array_map(
                 'intval',
@@ -1076,7 +1151,12 @@ class Stop extends CommandAbstract
         bool $includeSharedState = false
     ): array
     {
-        $recoverablePorts = $includeSharedState ? $this->collectRecoverablePortsFromInstance($info, true) : [];
+        $recoverablePorts = $includeSharedState
+            ? \array_values(\array_unique(\array_merge(
+                $this->collectRecoverablePortsFromInstance($info, true),
+                $this->collectRecoverablePortsFromInstanceRecords($name, true)
+            )))
+            : [];
         return \array_values(\array_unique(\array_filter(
             \array_map(
                 'intval',
@@ -1685,9 +1765,82 @@ class Stop extends CommandAbstract
                 || (!$includeSharedState && $this->isSharedStateServiceInfo($service))) {
                 continue;
             }
-            $pid = (int) ($service->pid ?? 0);
+            foreach ($service->getManagedPids() as $pid) {
+                if ($pid > 0) {
+                    $pids[$pid] = true;
+                }
+            }
+        }
+
+        return \array_map('intval', \array_keys($pids));
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function collectResidualPidsFromInstanceRecords(string $name, bool $includeSharedState = false): array
+    {
+        $rawData = $this->getRawStopInstanceData($name);
+        if ($rawData === null) {
+            return [];
+        }
+
+        $pids = $this->collectResidualPidsFromRecord($rawData, $includeSharedState);
+        foreach (($rawData['instance_records'] ?? []) as $record) {
+            if (\is_array($record)) {
+                $pids = \array_merge($pids, $this->collectResidualPidsFromRecord($record, $includeSharedState));
+            }
+        }
+
+        return \array_values(\array_unique(\array_filter(
+            \array_map('intval', $pids),
+            static fn (int $pid): bool => $pid > 0
+        )));
+    }
+
+    /**
+     * @param array<string, mixed> $record
+     * @return list<int>
+     */
+    private function collectResidualPidsFromRecord(array $record, bool $includeSharedState = false): array
+    {
+        $pids = [];
+        foreach (['pid', 'master_pid', 'root_pid', 'launcher_pid', 'master_exited_pid'] as $field) {
+            $pid = (int) ($record[$field] ?? 0);
             if ($pid > 0) {
                 $pids[$pid] = true;
+            }
+        }
+
+        $retainedPids = \is_array($record['retained_pids'] ?? null) ? $record['retained_pids'] : [];
+        foreach ($retainedPids as $pid) {
+            $pid = (int) $pid;
+            if ($pid > 0) {
+                $pids[$pid] = true;
+            }
+        }
+
+        $services = \is_array($record['services'] ?? null) ? $record['services'] : [];
+        foreach ($services as $role => $roleData) {
+            if (!\is_array($roleData) || !\is_array($roleData['instances'] ?? null)) {
+                continue;
+            }
+            if (!$includeSharedState && $this->isSharedStateServiceRole((string) $role)) {
+                continue;
+            }
+            foreach ($roleData['instances'] as $serviceRecord) {
+                if (!\is_array($serviceRecord)) {
+                    continue;
+                }
+                if (!$includeSharedState && $this->isSharedStateServiceRecord($serviceRecord)) {
+                    continue;
+                }
+                foreach (['pid', 'root_pid', 'launcher_pid', 'tracking_pid'] as $field) {
+                    $pid = (int) ($serviceRecord[$field] ?? 0);
+                    if ($pid > 0) {
+                        $pids[$pid] = true;
+                    }
+                }
             }
         }
 
@@ -1713,6 +1866,21 @@ class Stop extends CommandAbstract
         }
 
         return $this->isSharedStateProcessName((string) ($service->metadata['process_name'] ?? ''));
+    }
+
+    /**
+     * @param array<string, mixed> $record
+     */
+    private function isSharedStateServiceRecord(array $record): bool
+    {
+        if ((bool) ($record['metadata']['shared_external'] ?? false)) {
+            return true;
+        }
+        if ($this->isSharedStateServiceRole((string) ($record['role'] ?? ''))) {
+            return true;
+        }
+
+        return $this->isSharedStateProcessName((string) ($record['metadata']['process_name'] ?? ''));
     }
 
     private function isSharedStateServiceRole(string $role): bool
@@ -2043,6 +2211,27 @@ class Stop extends CommandAbstract
             }
 
             if ($this->hasRecoverableManagedProcessHint($name)) {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    private function findPersistedRecoverableInstanceNameByPort(int $port): ?string
+    {
+        $manager = $this->getInstanceManager();
+        foreach ($manager->listPersistedInstanceNames() as $name) {
+            $ports = $this->collectRecoverablePortsFromInstanceRecords($name, true);
+            $info = $manager->getInstanceInfo($name, false);
+            if ($info !== null) {
+                $ports = \array_merge($ports, $this->collectRecoverablePortsFromInstance($info, true));
+            }
+            $ports = \array_values(\array_unique(\array_filter(
+                \array_map('intval', $ports),
+                static fn (int $candidatePort): bool => $candidatePort > 0
+            )));
+            if (\in_array($port, $ports, true)) {
                 return $name;
             }
         }
@@ -2871,8 +3060,8 @@ class Stop extends CommandAbstract
      */
     protected function stopAllInstances(bool $force = false): void
     {
-        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
-        $instances = \is_dir($instanceDir) ? \glob($instanceDir . '*.json') : [];
+        $manager = $this->getInstanceManager();
+        $instances = $this->collectStopAllInstanceNames($manager);
         $cliService = ObjectManager::getInstance(CliServerService::class);
         $cliStatus = $cliService->getCliServerStatus();
 
@@ -2888,8 +3077,7 @@ class Stop extends CommandAbstract
             $totalInstances = \count($instances);
             $this->printer->note(__('发现 %{1} 个 Weline Server 实例', [$totalInstances]));
             echo "\n";
-            foreach ($instances as $instanceFile) {
-                $name = \basename($instanceFile, '.json');
+            foreach ($instances as $name) {
                 $this->printer->note(__('正在停止实例 [%{1}]...', [$name]));
                 if (!$this->acquireStopLock($name)) {
                     $this->printer->warning(__('实例 [%{1}] 正在被其他 stop 任务处理，已跳过。', [$name]));
@@ -2911,6 +3099,74 @@ class Stop extends CommandAbstract
             $this->stopCliServer($force);
             $this->printer->success(__('PHP 内置服务器已停止'));
         }
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function collectStopAllInstanceNames(ServerInstanceManager $manager): array
+    {
+        $names = [];
+        foreach ($manager->listPersistedInstanceNames() as $name) {
+            $info = $manager->getInstanceInfo($name, false);
+            if ($info === null) {
+                if ($this->hasRecoverableManagedProcessHint($name) || $this->hasRecoverableConfiguredPortHint($name)) {
+                    $names[] = $name;
+                }
+                continue;
+            }
+
+            if (!$this->isInactiveStoppedInstanceRecord($name, $info)) {
+                $names[] = $name;
+            }
+        }
+
+        return \array_values(\array_unique($names));
+    }
+
+    protected function isInactiveStoppedInstanceRecord(string $name, ServerInstanceInfo $info): bool
+    {
+        $rawData = $this->getRawStopInstanceData($name) ?? [];
+        $state = (string) ($rawData['lifecycle_state'] ?? $rawData['startup_phase'] ?? '');
+        if (!\in_array($state, ['stopped', 'stale_cleanup', 'master_exited'], true)) {
+            return false;
+        }
+
+        return !$this->hasRecoverablePersistedInstanceRuntimeHint($name, $info);
+    }
+
+    protected function hasRecoverablePersistedInstanceRuntimeHint(string $name, ?ServerInstanceInfo $info = null): bool
+    {
+        $pids = $this->collectResidualPidsFromInstanceRecords($name, true);
+        if ($info !== null) {
+            $pids = \array_merge($pids, $this->collectResidualPidsByInfo($info, true));
+        }
+        if ($this->collectRunningResidualPids($pids) !== []) {
+            return true;
+        }
+
+        $ports = $this->collectRecoverablePortsFromInstanceRecords($name, true);
+        if ($info !== null) {
+            $ports = \array_merge($ports, $this->collectRecoverablePortsFromInstance($info, true));
+        }
+        foreach (\array_values(\array_unique(\array_map('intval', $ports))) as $port) {
+            if ($port <= 0) {
+                continue;
+            }
+            $inspect = $this->inspectRecoverablePortOccupant($port);
+            if (!($inspect['in_use'] ?? false)) {
+                continue;
+            }
+            if (
+                (bool) ($inspect['is_weline'] ?? false)
+                || $this->isRecoverableWlsPortResponder($port)
+                || $this->isRecoverableManagedPort($port, $inspect, $info)
+            ) {
+                return true;
+            }
+        }
+
+        return $this->hasRecoverableManagedProcessHint($name) || $this->hasRecoverableConfiguredPortHint($name);
     }
 
     /**
