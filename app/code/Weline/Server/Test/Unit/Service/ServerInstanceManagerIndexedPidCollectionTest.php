@@ -64,4 +64,21 @@ final class ServerInstanceManagerIndexedPidCollectionTest extends TestCase
 
         self::assertSame([202, 1202, 1302, 2202, 3202, 3302], $pids);
     }
+
+    public function testBuildInstanceRuntimeRecordPreservesTopLevelLauncherPid(): void
+    {
+        $manager = new ServerInstanceManager();
+        $method = new \ReflectionMethod($manager, 'buildInstanceRuntimeRecord');
+        $method->setAccessible(true);
+
+        $record = $method->invoke($manager, [
+            'name' => 'default',
+            'pid' => 123,
+            'launcher_pid' => 456,
+            'master_pid' => 789,
+            'control_port' => 26895,
+        ]);
+
+        self::assertSame(456, $record['launcher_pid']);
+    }
 }

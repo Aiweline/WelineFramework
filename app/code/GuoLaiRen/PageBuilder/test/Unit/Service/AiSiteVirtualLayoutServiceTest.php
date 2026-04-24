@@ -99,7 +99,25 @@ final class AiSiteVirtualLayoutServiceTest extends TestCase
 
         $scope = [
             'page_types' => [Page::TYPE_HOME],
-            'virtual_pages_by_type' => [],
+            'virtual_pages_by_type' => [
+                Page::TYPE_HOME => [
+                    'page_type' => Page::TYPE_HOME,
+                    'title' => 'Existing',
+                    'handle' => 'home',
+                    'locale' => 'en_US',
+                    'style_code' => 'default',
+                    'style_settings' => [],
+                    'blocks' => [
+                        [
+                            'block_id' => 'home-site-header',
+                            'type' => 'site_header',
+                            'html' => '<header>keep</header>',
+                            'config' => ['site_title' => 'Existing'],
+                            'field_schema' => [],
+                        ],
+                    ],
+                ],
+            ],
         ];
         $out = $svc->saveVirtualPagePatch(42, 7, $scope, Page::TYPE_HOME, ['title' => 'Patched']);
 

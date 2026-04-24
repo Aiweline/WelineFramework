@@ -172,7 +172,7 @@ class WlsLogger
      */
     private function evaluateIpcSink(string $level): array
     {
-        if ($this->ipcLogSink === null || !LogConfig::isDevMode()) {
+        if ($this->ipcLogSink === null || !LogConfig::isDevMode() || !LogConfig::isVerboseWlsLog()) {
             return ['emit' => false, 'low_pri_ipc_rate_limited' => false];
         }
 
@@ -452,6 +452,8 @@ class WlsLogger
             } else {
                 $this->writeBuffer($line, $level);
             }
+        } elseif (LogLevel::isAtLeast($level, LogLevel::ERROR)) {
+            $this->writeErrorLog($line);
         }
 
         $this->writeDevDebugMirror($line);
@@ -718,6 +720,9 @@ class WlsLogger
     public function appendLineForMaster(string $line): void
     {
         if ($line === '') {
+            return;
+        }
+        if (!$this->fileEnabled) {
             return;
         }
 

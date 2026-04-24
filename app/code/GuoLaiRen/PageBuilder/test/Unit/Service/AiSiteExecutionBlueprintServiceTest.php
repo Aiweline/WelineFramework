@@ -1205,16 +1205,22 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('Website content locale: en_US', $capturedPrompts[1]);
         self::assertStringContainsString('Header/Footer labels, CTA labels, link labels, media text, and other customer-visible website copy MUST use Website content locale', $capturedPrompts[1]);
         self::assertStringContainsString('theme_design and shared_components.header/footer must be concrete implementation decisions', $capturedPrompts[1]);
+        self::assertStringContainsString('page_type_overviews', $capturedPrompts[1]);
+        self::assertStringContainsString('Anti-monotony rule', $capturedPrompts[1]);
         self::assertStringContainsString('Stage-1 PAGE planner', $capturedPrompts[2]);
         self::assertStringContainsString('Plan locale: zh_Hans_CN', $capturedPrompts[2]);
         self::assertStringContainsString('Website content locale: en_US', $capturedPrompts[2]);
         self::assertStringContainsString('Do not use Plan locale for website copy unless it is identical to Website content locale.', $capturedPrompts[2]);
         self::assertStringContainsString('Confirmed requirement expansion (non-negotiable):', $capturedPrompts[2]);
         self::assertStringContainsString('Shared theme_design (non-negotiable):', $capturedPrompts[2]);
+        self::assertStringContainsString('Theme-level page overview for this page', $capturedPrompts[2]);
+        self::assertStringContainsString('page_design_plan', $capturedPrompts[2]);
+        self::assertStringContainsString('color_layering', $capturedPrompts[2]);
         self::assertStringContainsString('Confirmed shared Header/Footer blocks (must frame this page when displayed):', $capturedPrompts[2]);
         self::assertStringContainsString('Baseline page shape to improve, keep compatible keys:', $capturedPrompts[2]);
         self::assertStringContainsString('Critical page differentiation rules:', $capturedPrompts[2]);
         self::assertStringContainsString('design_tags', $capturedPrompts[2]);
+        self::assertStringContainsString('never make the entire page one flat background color', $capturedPrompts[2]);
         self::assertStringContainsString('Hard rules: output 2-3 blocks only', $capturedPrompts[2]);
         $joinedPrompts = \implode("\n", $capturedPrompts);
         self::assertStringNotContainsString('"markdown":"string"', $joinedPrompts);
@@ -1355,6 +1361,9 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertSame(['brand_story', 'mission_values', 'community_cta'], $aboutBlocks);
         self::assertContains('5s fade in/out', $artifacts['structured']['page_plans'][Page::TYPE_HOME]['blocks'][0]['design_tags']['motion'] ?? []);
         self::assertContains('rounded image', $artifacts['structured']['page_plans'][Page::TYPE_HOME]['blocks'][0]['design_tags']['visual'] ?? []);
+        self::assertIsArray($artifacts['structured']['page_plans'][Page::TYPE_HOME]['page_design_plan'] ?? null);
+        self::assertNotSame('', (string)($artifacts['structured']['page_plans'][Page::TYPE_HOME]['page_design_plan']['color_layering'] ?? ''));
+        self::assertNotSame('', (string)($artifacts['structured']['page_plans'][Page::TYPE_HOME]['blocks'][0]['design_tags']['color_layering'] ?? ''));
         self::assertContains('timeline reveal', $artifacts['structured']['page_plans'][Page::TYPE_ABOUT]['blocks'][0]['design_tags']['motion'] ?? []);
     }
 

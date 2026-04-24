@@ -683,7 +683,7 @@ final class AiSiteVirtualThemePlanService
             $lines[] = \json_encode($this->compactTaskPlanPromptTasks($pageTasks), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
             $lines[] = 'Compact page JSON example to imitate (shape only; replace values with this batch context):';
             $lines[] = \json_encode($this->buildPageTaskPlanPromptExample($pageType, $batch), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
-            $lines[] = 'Each stage-2 block task MUST ground task_goal/content_plan/style_plan/planning_reason in its stage-1 cue fields: block_goal, realtime_content, style_direction, reason.';
+            $lines[] = 'Each stage-2 block task MUST ground task_goal/content_plan/style_plan/planning_reason in its stage-1 cue fields: block_goal, realtime_content, page_design_plan, page_flow_role, style_direction, reason.';
         }
 
         if ($planLocale !== '') {
@@ -705,10 +705,12 @@ final class AiSiteVirtualThemePlanService
         $lines[] = '- Every returned shared_tasks[] item must include planning_reason that explains why the shared block, field defaults, navigation/link grouping, style, and responsive plan follow the confirmed stage-1 shared cues.';
         $lines[] = '- Every returned page_tasks[] entry must include block_task with required fields: task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order.';
         $lines[] = '- block_task.task_goal is the visible block outcome; block_task.meta_fields is the exact editable field list; block_task.content_plan and block_task.style_plan are concrete arrays; block_task.planning_reason explains the stage-1 rationale; block_task.sort_order mirrors the task sort_order.';
-        $lines[] = '- For page block tasks, read the matching Relevant stage-1 page cues entry and explicitly use block_goal for task_goal, realtime_content for content_plan examples, design_tags/style_direction for style_plan, and reason for planning_reason.';
+        $lines[] = '- For page block tasks, read the matching Relevant stage-1 page cues entry and explicitly use block_goal for task_goal, realtime_content for content_plan examples, page_design_plan/page_flow_role/design_tags/style_direction for style_plan, and reason for planning_reason.';
         $lines[] = '- Never use task_key, page_type, section_code, block_key, component paths, or internal IDs as customer-visible copy.';
         $lines[] = '- Visible-language rule: customer-visible copy, field samples, CTA labels, link labels, and alt text must use content_locale/default_locale, which is the website requirement language. Do NOT use plan_locale as the website content language unless it is identical to default_locale. Keep internal IDs in task_key/section_code only.';
-        $lines[] = '- block_task.style_plan must preserve design_tags exactly enough for stage 3: visual tags, motion tags, interaction tags, texture tags, responsive tags, and implementation_note must appear in the style_plan values.';
+        $lines[] = '- block_task.style_plan must preserve page_design_plan and design_tags exactly enough for stage 3: page role, color_layering, section_flow, page_flow_role, visual tags, motion tags, interaction tags, texture tags, responsive tags, and implementation_note must appear in the style_plan values.';
+        $lines[] = '- block_task.style_plan.color must state the page-level color layering for this block: background/surface/card/CTA/accent usage and how it contrasts with adjacent blocks; do not let every block use the same full-bleed background.';
+        $lines[] = '- block_task.style_plan must read like a UI/interaction designer handoff: include section surface treatment, foreground/background relationship, interaction states, motion restraint, and mobile rhythm for this page role.';
         $lines[] = '- Every planning_reason must be concrete and traceable to stage-1 reason/implementation_detail; generic wording such as "needed for the page" is invalid.';
         $lines[] = '- block_task.style_plan MUST include concrete color, font, spacing, and responsive keys. Each key must be directly usable by stage 3: color names palette/hex usage, font names family/weight/scale, spacing names section padding/gap/radius rhythm, responsive names desktop/mobile behavior.';
         $lines[] = '- Every returned task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, and completion_rule-compatible detail.';
@@ -818,6 +820,12 @@ final class AiSiteVirtualThemePlanService
                         'stage1_style_direction' => 'Large headline, high contrast CTA, mobile stacked layout.',
                         'source_page_type' => $pageType !== '' ? $pageType : 'home_page',
                         'source_block_key' => $blockKey,
+                        'page_design_plan' => [
+                            'color_layering' => 'dark page base, elevated hero panel, ember CTA accent, lighter proof sections after hero',
+                            'section_flow' => ['opening impact', 'proof layer', 'final action'],
+                            'interaction_notes' => ['CTA hover glow', 'focus-visible outline'],
+                        ],
+                        'page_flow_role' => 'opening',
                     ],
                     'task_script' => [
                         'component_type' => 'hero_section',
@@ -845,10 +853,14 @@ final class AiSiteVirtualThemePlanService
                             'asset_plan' => [['slot' => 'hero_image', 'description' => 'Indian card game visual']],
                         ],
                         'style_plan' => [
-                            'color' => 'dark background with ember CTA',
+                            'color' => 'dark page base, elevated hero panel, ember CTA accent, and contrast against the following proof section',
                             'font' => 'bold display heading, readable body',
                             'spacing' => 'generous hero padding and CTA gap',
                             'responsive' => 'desktop two-column, mobile stacked',
+                            'page_design_plan' => [
+                                'color_layering' => 'dark page base, elevated hero panel, ember CTA accent, lighter proof sections after hero',
+                            ],
+                            'page_flow_role' => 'opening',
                         ],
                         'planning_reason' => 'Stage-one hero block requires immediate value communication and conversion.',
                         'sort_order' => 100,
@@ -879,6 +891,7 @@ final class AiSiteVirtualThemePlanService
         $stage1TaskCues = \is_array($structured['stage1_task_cues'] ?? null) ? $structured['stage1_task_cues'] : [];
         $styleTokens = \is_array($structured['style_tokens'] ?? null) ? $structured['style_tokens'] : [];
         $contentRules = \is_array($structured['content_rules'] ?? null) ? $structured['content_rules'] : [];
+        $pageDesignPlan = $pageType !== '' ? $this->resolveStageTwoPageDesignPlanForPrompt($scope, $structured, $pageType) : [];
 
         $relevantCues = [];
         $cueBucket = ($batch['type'] ?? '') === 'shared'
@@ -917,6 +930,7 @@ final class AiSiteVirtualThemePlanService
                 'fanout_group' => (string)($batch['fanout_group'] ?? ''),
                 'queue_job_key' => (string)($batch['queue_job_key'] ?? ''),
             ],
+            'page_design_plan' => $pageDesignPlan,
             'stage1_cues' => $relevantCues,
         ];
     }
@@ -968,12 +982,39 @@ final class AiSiteVirtualThemePlanService
             'block_key' => (string)($cue['block_key'] ?? $cue['source_block_key'] ?? ''),
             'section_code' => (string)($cue['section_code'] ?? $cue['component_kind'] ?? ''),
             'block_goal' => $this->excerptText((string)($cue['block_goal'] ?? $cue['stage1_goal'] ?? $cue['goal'] ?? ''), 260),
+            'page_design_plan' => \is_array($cue['page_design_plan'] ?? null) ? $this->compactPromptMap($cue['page_design_plan'], 8, 220) : [],
+            'page_flow_role' => $this->excerptText((string)($cue['page_flow_role'] ?? ''), 80),
             'realtime_content' => \is_array($cue['realtime_content'] ?? null) ? $this->compactPromptMap($cue['realtime_content'], 10, 180) : [],
             'style_direction' => $this->excerptText((string)($cue['style_direction'] ?? ''), 260),
             'design_tags' => \is_array($cue['design_tags'] ?? null) ? $this->compactPromptMap($cue['design_tags'], 8, 140) : [],
             'reason' => $this->excerptText((string)($cue['reason'] ?? $cue['implementation_detail'] ?? ''), 320),
             'editable_fields' => \array_values(\array_slice(\array_filter(\array_map('strval', \is_array($cue['editable_fields'] ?? null) ? $cue['editable_fields'] : [])), 0, 12)),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $structured
+     * @return array<string, mixed>
+     */
+    private function resolveStageTwoPageDesignPlanForPrompt(array $scope, array $structured, string $pageType): array
+    {
+        $candidates = [
+            $structured['page_design_plans'][$pageType] ?? null,
+            $structured['pages'][$pageType]['page_design_plan'] ?? null,
+            $scope['execution_blueprint']['page_plans'][$pageType]['page_design_plan'] ?? null,
+            $scope['execution_blueprint']['pages'][$pageType]['page_design_plan'] ?? null,
+            $scope['plan_json']['pages'][$pageType]['page_design_plan'] ?? null,
+            $scope['plan_structured']['pages'][$pageType]['page_design_plan'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_book']['structured']['pages'][$pageType]['page_design_plan'] ?? null,
+        ];
+        foreach ($candidates as $candidate) {
+            if (\is_array($candidate) && $candidate !== []) {
+                return $this->compactPromptMap($candidate, 10, 260);
+            }
+        }
+
+        return [];
     }
 
     /**
@@ -1055,6 +1096,7 @@ final class AiSiteVirtualThemePlanService
             '- Avoid generic AI aesthetics: no default Inter/Roboto/Arial/system-font look, no timid purple-gradient-on-white templates, no cookie-cutter card grids, no interchangeable SaaS hero patterns unless stage-1 explicitly demands that visual language.',
             '- Make each component memorable through a deliberate typography, color, spatial composition, motion, texture, and visual-detail decision that can be implemented by stage 3.',
             '- Match complexity to the chosen aesthetic: refined/minimal components need precise spacing, type scale, and restraint; expressive/maximal components need purposeful layering, motion, and atmosphere.',
+            '- Page-owned blocks must start from page_design_plan before component styling: use its color_layering, section_flow, and interaction_notes to make the page feel intentionally art-directed rather than theme-colored uniformly.',
             '- For each returned task, encode the skill outcome in block_task.style_plan and task_script.responsive_contract/accessibility_contract/asset_requirements; do not merely mention this skill in prose.',
             '- style_plan must include concrete typography, color/theme, motion, spatial composition, background/texture/detail, responsive behavior, and accessibility notes when relevant to the component.',
             '- Shared components must keep the same aesthetic system while adapting interaction density: header navigation clarity, footer trust/compliance structure, and mobile ergonomics are mandatory.',
@@ -2410,6 +2452,8 @@ final class AiSiteVirtualThemePlanService
                     'section_code' => (string)($task['section_code'] ?? ''),
                     'block_goal' => (string)($planContext['block_goal'] ?? ''),
                     'page_goal' => (string)($planContext['page_goal'] ?? ''),
+                    'page_design_plan' => \is_array($planContext['page_design_plan'] ?? null) ? $planContext['page_design_plan'] : [],
+                    'page_flow_role' => (string)($planContext['page_flow_role'] ?? ''),
                     'realtime_content' => \is_array($planContext['realtime_content'] ?? null) ? $planContext['realtime_content'] : [],
                     'design_tags' => \is_array($planContext['design_tags'] ?? null) ? $planContext['design_tags'] : [],
                     'style_direction' => (string)($planContext['style_direction'] ?? ''),
@@ -4424,6 +4468,7 @@ final class AiSiteVirtualThemePlanService
             }
             $pageTone[(string)$pageType] = [
                 'page_goal' => (string)($pagePlan['page_goal'] ?? ''),
+                'page_design_plan' => \is_array($pagePlan['page_design_plan'] ?? null) ? $this->compactPromptMap($pagePlan['page_design_plan'], 8, 220) : [],
                 'content_tone' => (string)($pagePlan['content_tone'] ?? $pagePlan['tone'] ?? ''),
                 'seo_brief' => \is_array($pagePlan['seo_brief'] ?? null) ? $pagePlan['seo_brief'] : [],
             ];
@@ -5111,10 +5156,13 @@ final class AiSiteVirtualThemePlanService
         );
 
         $stylePlan = \is_array($existing['style_plan'] ?? null) ? $existing['style_plan'] : [];
+        $pageDesignPlan = \is_array($planContext['page_design_plan'] ?? null) ? $planContext['page_design_plan'] : [];
+        $pageColorLayering = \trim((string)($pageDesignPlan['color_layering'] ?? ''));
         $stylePlan['color'] = $this->firstNonEmptyString([
             $stylePlan['color'] ?? null,
             $stylePlan['color_rule'] ?? null,
             $stylePlan['palette'] ?? null,
+            $pageColorLayering,
             $planContext['style_plan']['color'] ?? null,
             $planContext['style_brief']['color'] ?? null,
             $planContext['style_brief']['palette'] ?? null,
@@ -5145,6 +5193,16 @@ final class AiSiteVirtualThemePlanService
             $task['responsive_rule'] ?? null,
             'Keep the block usable on mobile and desktop breakpoints.',
         ]);
+        if ($pageDesignPlan !== [] && !\is_array($stylePlan['page_design_plan'] ?? null)) {
+            $stylePlan['page_design_plan'] = $pageDesignPlan;
+        }
+        $stylePlan['page_flow_role'] = $this->firstNonEmptyString([
+            $stylePlan['page_flow_role'] ?? null,
+            $planContext['page_flow_role'] ?? null,
+        ]);
+        if ($pageColorLayering !== '' && !\str_contains((string)$stylePlan['color'], $pageColorLayering)) {
+            $stylePlan['color'] .= ' Page color layering: ' . $pageColorLayering;
+        }
         $stylePlan['style_direction'] = $this->firstNonEmptyString([
             $stylePlan['style_direction'] ?? null,
             $planContext['style_direction'] ?? null,
@@ -5872,6 +5930,7 @@ final class AiSiteVirtualThemePlanService
                 }
                 $blockCode = $this->resolveTaskBlockCodeFromPlan($task, (string)$pageType, $blockPlanMatrix);
                 $pageGoal = (string)($pagePlans[$pageType]['page_goal'] ?? '');
+                $pageDesignPlan = \is_array($pagePlans[$pageType]['page_design_plan'] ?? null) ? $pagePlans[$pageType]['page_design_plan'] : [];
                 $blockMeta = \is_array($metaFieldMatrix[$pageType][$blockCode] ?? null) ? $metaFieldMatrix[$pageType][$blockCode] : [];
                 $blockPlan = \is_array($blockPlanMatrix[$pageType][$blockCode] ?? null) ? $blockPlanMatrix[$pageType][$blockCode] : [];
                 $blockReason = (string)($blockPlan['reason'] ?? $blockPlan['why'] ?? '');
@@ -5879,6 +5938,8 @@ final class AiSiteVirtualThemePlanService
                     'source_stage' => 'stage_1',
                     'page_type' => $pageType,
                     'page_goal' => $pageGoal,
+                    'page_design_plan' => $pageDesignPlan,
+                    'page_flow_role' => (string)($blockPlan['page_flow_role'] ?? ''),
                     'block_code' => $blockCode,
                     'section_code' => (string)($blockPlan['section_code'] ?? $task['section_code'] ?? ''),
                     'block_goal' => (string)($blockMeta['goal'] ?? ''),
@@ -6837,8 +6898,10 @@ final class AiSiteVirtualThemePlanService
             '- Every task must include enough content detail for direct implementation in stage 3: a builder must produce theme/HTML without guessing; reuse or improve concrete CTA labels, nav labels, hero strings, and footer link titles from stage-1—always spell them out again here.',
             '- Every shared_tasks[] item MUST include planning_reason that explains why the shared block structure, field defaults, navigation/link grouping, style rules, and responsive behavior follow the confirmed stage-1 shared cues.',
             '- Every page_tasks[] item MUST include block_task with required fields task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order; this block_task is the minimum structured source of truth for one stage-2 block task.',
-            '- For every page block task, use the matching extracted stage-1 task cue fields: block_goal drives task_goal, realtime_content drives content_plan examples, design_tags/style_direction drives style_plan, and reason drives planning_reason.',
-            '- Preserve stage-1 design_tags in block_task.style_plan so stage 3 can recreate effects, shadows, radius, image treatment, motion timing, hover/interaction behavior, and responsive behavior.',
+            '- For every page block task, use the matching extracted stage-1 task cue fields: block_goal drives task_goal, realtime_content drives content_plan examples, page_design_plan/page_flow_role/design_tags/style_direction drive style_plan, and reason drives planning_reason.',
+            '- Preserve stage-1 page_design_plan and design_tags in block_task.style_plan so stage 3 can recreate page-level color layering, section rhythm, effects, shadows, radius, image treatment, motion timing, hover/interaction behavior, and responsive behavior.',
+            '- Every page block style_plan.color must name background/surface/card/CTA/accent usage for this exact block and how it contrasts with adjacent blocks; never let all blocks become the same solid page color.',
+            '- Treat the style_plan as a UI/interaction designer handoff: section surface, visual hierarchy, foreground/background layering, hover/focus behavior, motion timing, and responsive rhythm must be concrete.',
             '- Every planning_reason field MUST be concrete and traceable to stage-1 reason/implementation_detail; generic wording such as "needed for the page" is invalid.',
             '- Every block_task.style_plan MUST include concrete color, font, spacing, and responsive keys. The color key names palette/hex usage; font names family/weight/scale; spacing names section padding, card gaps, and radius rhythm; responsive names desktop/mobile behavior from the confirmed stage-1 plan.',
             '- Every task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, completion_rule.',
