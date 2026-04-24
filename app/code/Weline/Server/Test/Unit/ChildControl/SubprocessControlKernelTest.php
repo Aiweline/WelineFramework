@@ -467,6 +467,8 @@ PHP);
         self::assertStringContainsString('LogConfig::isDevMode() || $isFrontend', $sessionSource);
         self::assertStringNotContainsString('!$sharedService && $orphanGuard->shouldExit(', $sessionSource);
         self::assertStringContainsString('$orphanGuard->shouldExit(', $sessionSource);
+        self::assertStringContainsString('$server->isSharedConsumerIdleWindowOpen()', $sessionSource);
+        self::assertStringContainsString('$shouldResolveControlPort = !$sharedService || $controlPort > 0 || $supervisorEnabled;', $sessionSource);
         self::assertStringContainsString("\\in_array('--frontend', \$argv, true) || \\in_array('-frontend', \$argv, true)", $redirectSource);
         self::assertStringContainsString('if ($isDev || $isFrontend)', $redirectSource);
     }
