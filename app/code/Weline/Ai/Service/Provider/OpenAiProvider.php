@@ -1481,6 +1481,8 @@ class OpenAiProvider implements ProviderInterface
             || str_contains($modelCode, 'openai') 
             || str_contains($modelCode, 'deepseek')
             || str_contains($modelCode, 'gemini')
+            || str_contains($modelCode, 'kimi')
+            || str_contains($modelCode, 'moonshot')
             || str_starts_with($modelCode, 'o1-')
             || str_starts_with($modelCode, 'o3-')
             || str_starts_with($modelCode, 'o4-');
