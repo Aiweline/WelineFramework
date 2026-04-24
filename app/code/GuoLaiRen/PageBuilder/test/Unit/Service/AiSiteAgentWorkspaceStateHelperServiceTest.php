@@ -404,6 +404,114 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         self::assertSame(['signature' => 'sig-1', 'page_tasks' => ['home_page' => [['title' => 'Hero']]], 'plan_signature' => 'sig-1'], $compacted['virtual_theme_plan']['confirmed']);
     }
 
+    public function testCompactConfirmedTaskPlanScopeSlimsBuildReadySnapshots(): void
+    {
+        $service = new AiSiteAgentWorkspaceStateHelperService();
+        $stage2ContextSnapshot = [
+            'context_hash' => 'stage2-context-hash',
+            'theme_context_snapshot' => ['palette' => ['primary' => '#0f172a']],
+            'shared_prompt_context' => ['nav_style' => 'compact trust nav'],
+        ];
+
+        $scope = [
+            'plan_confirmed' => 1,
+            'task_plan_confirmed' => 1,
+            'execution_blueprint' => [
+                'signature' => 'stage1-confirmed-signature',
+                'page_types' => ['home_page'],
+            ],
+            'execution_blueprint_draft' => [
+                'signature' => 'stale-draft-signature',
+                'page_types' => ['home_page'],
+            ],
+            'plan_structured' => ['pages' => ['home_page' => ['goal' => 'duplicate']]],
+            'plan_json' => ['pages' => ['home_page' => ['goal' => 'duplicate']]],
+            'task_plan_structured' => [
+                'signature' => 'task-plan-signature',
+                'page_tasks' => ['home_page' => [['task_key' => 'page:home_page:hero']]],
+                'execution_blueprint' => [
+                    'signature' => 'task-blueprint-signature',
+                    'tasks' => [['task_key' => 'page:home_page:hero']],
+                    'task_groups' => ['pages' => ['home_page' => []]],
+                ],
+            ],
+            'virtual_theme_plan' => [
+                'draft' => ['drop' => true],
+                'confirmed' => [
+                    'signature' => 'task-plan-signature',
+                    'page_tasks' => ['home_page' => [['task_key' => 'page:home_page:hero']]],
+                    'execution_blueprint' => [
+                        'signature' => 'task-blueprint-signature',
+                        'tasks' => [['task_key' => 'page:home_page:hero']],
+                        'task_groups' => ['pages' => ['home_page' => []]],
+                    ],
+                    'shared_block_tasks' => [['task_key' => 'shared:header']],
+                    'page_block_tasks' => ['home_page' => [['task_key' => 'page:home_page:hero']]],
+                    'virtual_theme_build_tree' => ['pages' => ['home_page' => []]],
+                ],
+                'confirmed_markdown' => '# Confirmed',
+            ],
+            'plan_workbench' => [
+                'confirmed' => [
+                    'signature' => 'plan-signature',
+                    'structured_plan' => ['pages' => ['home_page' => []]],
+                    'plan_json' => ['pages' => ['home_page' => []]],
+                    'plan_book' => ['structured' => ['source' => 'stage1.block_tree', 'pages' => ['home_page' => ['blocks' => []]]]],
+                ],
+            ],
+            'build_blueprint' => [
+                'source' => 'stage2_confirmed_task_plan',
+                'signature' => 'build-blueprint-signature',
+                'task_plan_signature' => 'task-plan-signature',
+                'page_types' => ['home_page'],
+                'tasks' => [
+                    [
+                        'task_key' => 'page:home_page:hero',
+                        'runtime_context' => [
+                            'block_key' => 'hero',
+                            'stage2_context_snapshot' => $stage2ContextSnapshot,
+                            'theme_context_snapshot' => $stage2ContextSnapshot['theme_context_snapshot'],
+                            'shared_prompt_context' => $stage2ContextSnapshot['shared_prompt_context'],
+                        ],
+                    ],
+                ],
+            ],
+            'build_tasks' => [
+                'page:home_page:hero' => [
+                    'task_key' => 'page:home_page:hero',
+                    'runtime_context' => ['block_key' => 'hero'],
+                    'task_script' => ['story_goal' => 'duplicate'],
+                    'status' => 'running',
+                    'message' => 'working',
+                    'result_ref' => ['component_code' => 'hero'],
+                ],
+            ],
+        ];
+
+        $compacted = $service->compactConfirmedTaskPlanScope($scope);
+
+        self::assertSame([], $compacted['task_plan_structured']);
+        self::assertSame(1, $compacted['virtual_theme_plan']['confirmed']['_storage_compacted'] ?? null);
+        self::assertSame(1, $compacted['virtual_theme_plan']['confirmed']['execution_blueprint_ref']['task_count'] ?? null);
+        self::assertArrayNotHasKey('execution_blueprint', $compacted['virtual_theme_plan']['confirmed']);
+        self::assertArrayNotHasKey('page_tasks', $compacted['virtual_theme_plan']['confirmed']);
+        self::assertArrayNotHasKey('shared_block_tasks', $compacted['virtual_theme_plan']['confirmed']);
+        self::assertArrayNotHasKey('page_block_tasks', $compacted['virtual_theme_plan']['confirmed']);
+        self::assertArrayNotHasKey('virtual_theme_build_tree', $compacted['virtual_theme_plan']['confirmed']);
+        self::assertArrayNotHasKey('structured_plan', $compacted['plan_workbench']['confirmed']);
+        self::assertArrayNotHasKey('plan_json', $compacted['plan_workbench']['confirmed']);
+        self::assertSame(1, $compacted['plan_workbench']['confirmed']['_storage_compacted'] ?? null);
+        self::assertSame([], $compacted['execution_blueprint_draft'] ?? null);
+        self::assertSame([], $compacted['plan_structured'] ?? null);
+        self::assertSame([], $compacted['plan_json'] ?? null);
+        self::assertSame($stage2ContextSnapshot, $compacted['stage2_context_snapshot'] ?? null);
+        self::assertSame(['block_key' => 'hero'], $compacted['build_blueprint']['tasks'][0]['runtime_context'] ?? null);
+        self::assertArrayNotHasKey('runtime_context', $compacted['build_tasks']['page:home_page:hero']);
+        self::assertArrayNotHasKey('task_script', $compacted['build_tasks']['page:home_page:hero']);
+        self::assertSame('running', $compacted['build_tasks']['page:home_page:hero']['status'] ?? null);
+        self::assertSame(['component_code' => 'hero'], $compacted['build_tasks']['page:home_page:hero']['result_ref'] ?? null);
+    }
+
     public function testSelectStatusQueueInfoPrefersExactKeyThenFallsBackOrDefaults(): void
     {
         $service = new AiSiteAgentWorkspaceStateHelperService();
