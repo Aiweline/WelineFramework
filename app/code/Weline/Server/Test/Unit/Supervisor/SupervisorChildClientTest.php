@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Supervisor;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Supervisor\Client\SupervisorChildClient;
 use Weline\Server\Supervisor\Endpoint\ControlEndpoint;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
@@ -128,6 +129,94 @@ final class SupervisorChildClientTest extends TestCase
         } finally {
             $client->close();
             $server?->close();
+        }
+    }
+
+    public function testCloseOnlyReleasesLeaseAfterShutdownMessage(): void
+    {
+        $runtime = $this->createRuntime('ut-instance');
+        $server = new SupervisorServer($runtime);
+        $endpoint = $server->start(ControlEndpoint::tcp('127.0.0.1', 0));
+
+        $client = new SupervisorChildClient(
+            instanceName: 'ut-instance',
+            channelId: 'channel-ut-instance',
+            endpointResolver: new ControlEndpointResolver(BP, 27000, 1000),
+            endpoint: $endpoint,
+            progressCallback: static function () use ($server): void {
+                $server->poll(0, 10000);
+            },
+        );
+
+        try {
+            self::assertTrue($client->connect('127.0.0.1', 0));
+            self::assertTrue($client->register(
+                role: 'worker',
+                pid: 12003,
+                port: 18083,
+                workerId: 3,
+                launchId: 'launch-3',
+                instanceCode: 'ut-instance',
+                msgId: 'hello-3',
+            ));
+            self::assertTrue($client->sendReady(
+                role: 'worker',
+                workerId: 3,
+                port: 18083,
+                launchId: 'launch-3',
+                msgId: 'ready-3',
+            ));
+
+            $lease = $runtime->supervisor()->leases()->get('worker#3');
+            self::assertNotNull($lease);
+
+            $client->close();
+            $server->poll(0, 10000);
+            self::assertNotNull($runtime->supervisor()->leases()->get('worker#3'));
+
+            self::assertTrue($client->connect('127.0.0.1', 0));
+            self::assertTrue($client->register(
+                role: 'worker',
+                pid: 12003,
+                port: 18083,
+                workerId: 3,
+                launchId: 'launch-3b',
+                instanceCode: 'ut-instance',
+                msgId: 'hello-3b',
+            ));
+            self::assertTrue($client->sendReady(
+                role: 'worker',
+                workerId: 3,
+                port: 18083,
+                launchId: 'launch-3b',
+                msgId: 'ready-3b',
+            ));
+
+            $sessionIds = \array_keys($server->sessions());
+            self::assertNotSame([], $sessionIds);
+            self::assertTrue($server->sendToSession((int)\end($sessionIds), ControlMessage::shutdown()));
+            for ($i = 0; $i < 10; $i++) {
+                $client->handleReadable();
+                if ($client->hasReceivedShutdown()) {
+                    break;
+                }
+                \usleep(10000);
+            }
+            self::assertTrue($client->hasReceivedShutdown());
+
+            $client->close();
+            for ($i = 0; $i < 10; $i++) {
+                $server->poll(0, 10000);
+                if ($runtime->supervisor()->leases()->get('worker#3') === null) {
+                    break;
+                }
+                \usleep(10000);
+            }
+
+            self::assertNull($runtime->supervisor()->leases()->get('worker#3'));
+        } finally {
+            $client->close();
+            $server->close();
         }
     }
 

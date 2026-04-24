@@ -145,6 +145,63 @@ final class SupervisorTest extends TestCase
         self::assertSame(9, $lease->heartbeatSeq);
     }
 
+    public function testLeaseReleaseOnlyRemovesCurrentLease(): void
+    {
+        $supervisor = $this->createSupervisor();
+
+        $old = SupervisorMessage::decode((string)$supervisor->handle([
+            'type' => SupervisorMessage::TYPE_HELLO,
+            'msg_id' => 'hello-old',
+            'instance' => 'default',
+            'channel' => 'channel-default',
+            'role' => 'worker',
+            'slot_id' => 'worker#1',
+            'pid' => 1001,
+            'port' => 18081,
+        ]));
+        $current = SupervisorMessage::decode((string)$supervisor->handle([
+            'type' => SupervisorMessage::TYPE_HELLO,
+            'msg_id' => 'hello-new',
+            'instance' => 'default',
+            'channel' => 'channel-default',
+            'role' => 'worker',
+            'slot_id' => 'worker#1',
+            'pid' => 1002,
+            'port' => 18081,
+        ]));
+
+        $staleAck = SupervisorMessage::decode((string)$supervisor->handle([
+            'type' => SupervisorMessage::TYPE_LEASE_RELEASE,
+            'msg_id' => 'release-old',
+            'channel' => 'channel-default',
+            'slot_id' => 'worker#1',
+            'lease_id' => $old['lease_id'],
+            'generation' => $old['generation'],
+        ]));
+
+        self::assertSame(SupervisorMessage::TYPE_LEASE_RELEASE_ACK, $staleAck['type']);
+        self::assertFalse($staleAck['accepted']);
+        self::assertSame('stale_or_unknown_lease', $staleAck['reason']);
+        self::assertTrue($supervisor->leases()->isCurrent(
+            'worker#1',
+            (string)$current['lease_id'],
+            (int)$current['generation']
+        ));
+
+        $releaseAck = SupervisorMessage::decode((string)$supervisor->handle([
+            'type' => SupervisorMessage::TYPE_LEASE_RELEASE,
+            'msg_id' => 'release-current',
+            'channel' => 'channel-default',
+            'slot_id' => 'worker#1',
+            'lease_id' => $current['lease_id'],
+            'generation' => $current['generation'],
+        ]));
+
+        self::assertSame(SupervisorMessage::TYPE_LEASE_RELEASE_ACK, $releaseAck['type']);
+        self::assertTrue($releaseAck['accepted']);
+        self::assertNull($supervisor->leases()->get('worker#1'));
+    }
+
     public function testWorkerPoolSnapshotOnlyContainsReadyWorkersInStableSlotOrder(): void
     {
         $supervisor = $this->createSupervisor();

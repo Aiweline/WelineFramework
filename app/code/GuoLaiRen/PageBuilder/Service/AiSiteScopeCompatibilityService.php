@@ -402,6 +402,33 @@ class AiSiteScopeCompatibilityService
     ): array {
         return $blocksBuilder->buildPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope);
     }
+
+    /**
+     * 判断 HTML 区块 workspace_track 是否满足"每个 page type 都已具备 blocks"的完整性条件。
+     * 控制器 publish checklist / task plan auto-dispatch 会用该判断决定是否允许跨阶段推进。
+     *
+     * @param array<string, array<string, mixed>> $virtualPagesByType
+     * @param list<string> $pageTypes
+     */
+    public function htmlTrackHasCompleteBlocks(array $virtualPagesByType, array $pageTypes): bool
+    {
+        if ($pageTypes === []) {
+            return false;
+        }
+        foreach ($pageTypes as $pageType) {
+            $record = $virtualPagesByType[$pageType] ?? null;
+            if (!\is_array($record)) {
+                return false;
+            }
+            $blocks = $record['blocks'] ?? null;
+            if (!\is_array($blocks) || $blocks === []) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /**
      * @param array<string, array{page_id:int,website_id:int,type:string,name:string,title:string,handle:string}> $pagesByType
      * @return list<array{value:int,page_id:int,type:string,label:string,title:string,handle:string}>

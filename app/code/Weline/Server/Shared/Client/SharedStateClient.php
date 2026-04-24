@@ -27,8 +27,9 @@ class SharedStateClient
             $port = 19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
         }
         if (!isset($options['min_idle']) && !isset($options['pool_min_idle'])) {
-            // 与 SessionClient 一致：默认保持至少 1 条空闲长连接，避免每请求 TCP 握手。
-            $options['min_idle'] = 1;
+            // 默认 0：不在建池阶段预建 TCP。多 Worker 同时 min_idle=1 会对 Session/Memory 单进程打连接风暴，
+            // 易导致共享服务事件循环阻塞、cmd 子进程风暴与访问卡死。首条业务 acquire 再建连；需要可显式传 pool_min_idle。
+            $options['min_idle'] = 0;
         }
         if (!isset($options['max_size']) && !isset($options['pool_size'])) {
             // 大并发场景下默认 8 往往不够用（池满后 acquire 只能等待/超时），提高默认上限以减少排队。

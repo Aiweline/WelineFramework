@@ -413,8 +413,8 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
             'scope' => 'business',
             'version' => 9,
             'workers' => [
-                ['slot_id' => 'worker#2', 'port' => 18082, 'state' => 'ready'],
-                ['slot_id' => 'worker#1', 'port' => 18081, 'state' => 'ready'],
+                ['slot_id' => 'worker#2', 'lease_id' => 'lease-2', 'generation' => 4, 'port' => 18082, 'state' => 'ready'],
+                ['slot_id' => 'worker#1', 'lease_id' => 'lease-1', 'generation' => 7, 'port' => 18081, 'state' => 'ready'],
                 ['slot_id' => 'worker#3', 'port' => 0, 'state' => 'ready'],
                 ['slot_id' => 'worker#4', 'port' => 18084, 'state' => 'leased'],
             ],
@@ -424,6 +424,24 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
             [
                 'type' => 'set_pool',
                 'ports' => [18082, 18081],
+                'workers' => [
+                    [
+                        'role' => ControlMessage::ROLE_WORKER,
+                        'slot_id' => 'worker#2',
+                        'lease_id' => 'lease-2',
+                        'generation' => 4,
+                        'port' => 18082,
+                        'state' => 'ready',
+                    ],
+                    [
+                        'role' => ControlMessage::ROLE_WORKER,
+                        'slot_id' => 'worker#1',
+                        'lease_id' => 'lease-1',
+                        'generation' => 7,
+                        'port' => 18081,
+                        'state' => 'ready',
+                    ],
+                ],
                 'role' => ControlMessage::ROLE_WORKER,
                 'pool_snapshot_version' => 9,
                 'pool_snapshot_scope' => 'business',
@@ -436,6 +454,71 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         self::assertSame(9, $ack['version'] ?? null);
         self::assertSame('business', $ack['scope'] ?? null);
         self::assertTrue($ack['accepted'] ?? false);
+    }
+
+    public function testWorkerPoolAckCarriesLeaseDescriptorIdentity(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->getMockBuilder(PassthroughCore::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getWorkerPorts'])
+            ->getMock();
+        $core->method('getWorkerPorts')->willReturn([18081]);
+
+        $client = new class implements ChildControlClientInterface {
+            public array $sent = [];
+
+            public function connect(string $host, int $port): bool { return true; }
+            public function isConnected(): bool { return true; }
+            public function getSocket() { return null; }
+            public function hasPendingWrites(): bool { return false; }
+            public function hasReceivedShutdown(): bool { return false; }
+            public function isReadyStateConfirmed(): bool { return true; }
+            public function onMessage(callable $handler): void {}
+            public function onDisconnect(callable $handler): void {}
+            public function setVerboseLog(bool $verbose): void {}
+            public function setSelfTag(string $tag): void {}
+            public function register(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): bool { return true; }
+            public function rememberRegistration(string $role, int $pid, int $port = 0, int $workerId = 0, int $epoch = 0, string $launchId = '', string $processKind = 'framework', string $moduleCode = '', string $instanceCode = '', string $msgId = ''): void {}
+            public function markReadyState(bool $isReady = true): void {}
+            public function sendReady(string $role = '', int $workerId = 0, int $port = 0, int $epoch = 0, string $launchId = '', string $msgId = ''): bool { return true; }
+            public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool { return true; }
+            public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool { return true; }
+            public function sendStatusReport(int $connections, int $memory, int $requests): bool { return true; }
+            public function sendLogLine(string $line, string $level, string $processTag): bool { return true; }
+            public function send(string $message, bool $disconnectOnWriteOverflow = true): bool { $this->sent[] = $message; return true; }
+            public function flushPendingWrites(float $timeBudgetSec = 0.0): bool { return true; }
+            public function handleReadable(): array { return []; }
+            public function handleWritable(): bool { return true; }
+            public function tryReconnect(): bool { return true; }
+            public function close(): void {}
+            public function getResurrectionPriority(): int { return 0; }
+        };
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'ipcClient', $client);
+        $this->setProperty($dispatcher, 'port', 9443);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'sendWorkerPoolAckForPorts');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher, [18081], [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'slot_id' => 'worker#1',
+            'lease_id' => 'lease-1',
+            'generation' => 7,
+            'port' => 18081,
+            'state' => 'ready',
+        ]]);
+
+        self::assertCount(1, $client->sent);
+        $ack = \json_decode(\trim($client->sent[0]), true);
+        self::assertSame(ControlMessage::TYPE_WORKER_POOL_ACK, $ack['type'] ?? null);
+        self::assertSame(ControlMessage::ROLE_WORKER, $ack['role'] ?? null);
+        self::assertSame(18081, $ack['port'] ?? null);
+        self::assertTrue((bool)($ack['in_pool'] ?? false));
+        self::assertSame('worker#1', $ack['slot_id'] ?? null);
+        self::assertSame('lease-1', $ack['lease_id'] ?? null);
+        self::assertSame(7, $ack['generation'] ?? null);
     }
 
     public function testStalePoolSnapshotVersionIsIgnored(): void

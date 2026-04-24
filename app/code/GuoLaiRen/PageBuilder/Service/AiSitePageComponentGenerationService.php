@@ -1594,12 +1594,14 @@ final class AiSitePageComponentGenerationService
             . "2. Write finished visitor-facing copy. Do not expose internal prompts, briefs, requirement wording, or phrases such as 'page focus' and 'site summary'.\n"
             . "3. The section must be meaningfully different for its page type and role; home, about, contact, policy, and blog sections should not read the same.\n"
             . "4. Use the style reference as visual/tone inspiration, but do not mention the style name in visible text.\n"
-            . "5. Art direction is mandatory: do not output a flat one-color strip. Give this block a clear foreground/background relationship, card or panel layering, hover/focus states, and at least one inline SVG or CSS visual when no real asset is supplied.\n"
+            . "5. Art direction is mandatory: do not output a flat one-color strip. Start from the provided page_design_plan/page_flow_role when present, then give this block a clear foreground/background relationship, card or panel layering, hover/focus states, and at least one inline SVG or CSS visual when no real asset is supplied.\n"
             . "6. Do not repeat the framework title/description in the body as empty h1/h2/p tags. The body must add useful content such as cards, trust points, game tiles, proof points, or CTA support.\n"
-            . "7. Set extra_fields, php_variables, and js_content to empty strings. Put final visible section body only in html_content.\n"
-            . "8. Return compact JSON only. No markdown. No explanation. Keep html_content under 1800 chars and css_extra under 1200 chars.\n"
-            . "9. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
-            . "10. If real blog data variables are provided, prefer them over invented articles or categories.\n"
+            . "7. Preserve page-level color layering: this block must have its own surface/contrast role and must not make the whole page feel like one solid theme color.\n"
+            . "8. Implement like a UI/interaction designer handoff: section-specific visual hierarchy, spatial rhythm, motion restraint, hover/focus states, and mobile stacking must be visible in html_content/css_extra.\n"
+            . "9. Set extra_fields, php_variables, and js_content to empty strings. Put final visible section body only in html_content.\n"
+            . "10. Return compact JSON only. No markdown. No explanation. Keep html_content under 1800 chars and css_extra under 1200 chars.\n"
+            . "11. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
+            . "12. If real blog data variables are provided, prefer them over invented articles or categories.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
 
@@ -1647,6 +1649,7 @@ final class AiSitePageComponentGenerationService
             . "- pagebuilder-style-templates: output must map to PageBuilder component fields/config, keep @fields/default_config alignment, scope all CSS under the component root id, and use data-glr-ref/GlrDownloadRegistry-compatible download or CTA links when applicable.\n"
             . "- theme-development: use confirmed theme palette tokens and CSS variables/inline scoped styles; no CDN, no global selectors, no unrelated hardcoded brand colors, no duplicate pixel/tracking snippets.\n"
             . "- frontend-components: generate one reusable component/block with editable fields and visitor-facing copy; do not emit full-page HTML, static placeholder sections, internal prompt text, generic substitute content, or page-type labels as visible eyebrow text.\n"
+            . "- page-design-plan: for page-owned blocks, page_design_plan is the design brief. Preserve its color_layering, section_flow, interaction_notes, and anti_monotony_rule in the final visual hierarchy.\n"
             . "- asset-rule: when a visual/image is needed but no verified uploaded asset URL exists, create a theme-colored inline SVG or CSS visual directly. Never render a broken <img>.\n"
             . "- ai-module-development: this is an audited AI scenario result; include only content that follows the provided stage-1 theme context and current stage-2 task contract.\n"
             . "- queue-usage/sse-streaming: long generation is already queued; return the final component JSON only, not progress narration or markdown.\n";
@@ -2265,10 +2268,15 @@ final class AiSitePageComponentGenerationService
         $acceptance = \is_array($implementationContract['acceptance'] ?? null) ? $implementationContract['acceptance'] : [];
         $contentPlan = \is_array($blockTask['content_plan'] ?? null) ? $blockTask['content_plan'] : [];
         $stylePlan = \is_array($blockTask['style_plan'] ?? null) ? $blockTask['style_plan'] : [];
+        $pageDesignPlan = \is_array($planContext['page_design_plan'] ?? null)
+            ? $planContext['page_design_plan']
+            : (\is_array($stylePlan['page_design_plan'] ?? null) ? $stylePlan['page_design_plan'] : []);
 
         return "Stage-2 task context for this {$contextLabel}:\n"
             . "- task_key: " . (string)($taskPlanTask['task_key'] ?? '') . "\n"
             . "- page_goal: " . (string)($planContext['page_goal'] ?? '') . "\n"
+            . "- page_design_plan: " . $this->jsonEncodeForPrompt($pageDesignPlan, 3000) . "\n"
+            . "- page_flow_role: " . (string)($planContext['page_flow_role'] ?? $stylePlan['page_flow_role'] ?? '') . "\n"
             . "- block_goal: " . (string)($planContext['block_goal'] ?? '') . "\n"
             . "- stage1_theme_summary: " . (string)($planContext['stage1_theme_summary'] ?? '') . "\n"
             . "- stage1_block_content: " . (string)($planContext['stage1_block_content'] ?? '') . "\n"
@@ -2285,6 +2293,7 @@ final class AiSitePageComponentGenerationService
             . "- block_task.content_plan: " . \json_encode($contentPlan, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- block_task.style_plan: " . \json_encode($stylePlan, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- block_task.planning_reason: " . (string)($blockTask['planning_reason'] ?? '') . "\n"
+            . "- design execution rule: apply page_design_plan.color_layering and section_flow before local block styling; this block must contrast with adjacent blocks through surfaces/cards/gradients/dividers/illustration while staying inside the confirmed palette.\n"
             . "- theme_context_snapshot: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
             . "- stage2_context_snapshot: " . $this->jsonEncodeForPrompt($stage2Context, 5000) . "\n"
             . "- acceptance: " . \json_encode($acceptance, \JSON_UNESCAPED_UNICODE) . "\n"

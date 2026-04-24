@@ -86,6 +86,9 @@ class ControlClient implements ChildControlClientInterface
     /** 是否已标记为就绪 */
     private bool $isReady = false;
 
+    /** READY 是否已收到 Master 闭环 ACK（worker 需等待 Dispatcher 入池确认） */
+    private bool $readyStateConfirmed = false;
+
     /**
      * 连接到 Master 控制端口
      *
@@ -100,6 +103,7 @@ class ControlClient implements ChildControlClientInterface
         $this->host = $host;
         $this->port = $port;
         $this->receivedShutdown = false;
+        $this->readyStateConfirmed = false;
 
         $errno  = 0;
         $errstr = '';
@@ -158,7 +162,7 @@ class ControlClient implements ChildControlClientInterface
 
     public function isReadyStateConfirmed(): bool
     {
-        return false;
+        return $this->readyStateConfirmed;
     }
 
     /**
@@ -323,6 +327,13 @@ class ControlClient implements ChildControlClientInterface
         string $msgId = ''
     ): bool
     {
+        $effectiveMsgId = $msgId !== '' ? $msgId : (string)($this->registerInfo['msg_id'] ?? '');
+        [$effectiveSlotId, $effectiveLeaseId, $effectiveGeneration] = $this->resolveLeaseIdentityFromRuntimeArgs(
+            $role,
+            $workerId,
+            $launchId,
+            $epoch
+        );
         // 保存注册信息，用于重连后自动重新注册
         $this->registerInfo = [
             'role'         => $role,
@@ -334,9 +345,27 @@ class ControlClient implements ChildControlClientInterface
             'process_kind' => $processKind,
             'module_code'  => $moduleCode,
             'instance_code' => $instanceCode,
+            'msg_id'       => $effectiveMsgId,
+            'slot_id'      => $effectiveSlotId,
+            'lease_id'     => $effectiveLeaseId,
+            'generation'   => $effectiveGeneration,
         ];
 
-        return $this->send(ControlMessage::register($role, $pid, $port, $workerId, $epoch, $launchId, $processKind, $moduleCode, $instanceCode, $msgId));
+        return $this->send(ControlMessage::register(
+            $role,
+            $pid,
+            $port,
+            $workerId,
+            $epoch,
+            $launchId,
+            $processKind,
+            $moduleCode,
+            $instanceCode,
+            $effectiveMsgId,
+            (string)$this->registerInfo['slot_id'],
+            (string)$this->registerInfo['lease_id'],
+            (int)$this->registerInfo['generation']
+        ));
     }
 
     public function rememberRegistration(
@@ -351,6 +380,12 @@ class ControlClient implements ChildControlClientInterface
         string $instanceCode = '',
         string $msgId = ''
     ): void {
+        [$slotId, $leaseId, $generation] = $this->resolveLeaseIdentityFromRuntimeArgs(
+            $role,
+            $workerId,
+            $launchId,
+            $epoch
+        );
         $this->registerInfo = [
             'role'          => $role,
             'pid'           => $pid,
@@ -362,12 +397,18 @@ class ControlClient implements ChildControlClientInterface
             'module_code'   => $moduleCode,
             'instance_code' => $instanceCode,
             'msg_id'        => $msgId,
+            'slot_id'       => $slotId,
+            'lease_id'      => $leaseId,
+            'generation'    => $generation,
         ];
     }
 
     public function markReadyState(bool $isReady = true): void
     {
         $this->isReady = $isReady;
+        if (!$isReady) {
+            $this->readyStateConfirmed = false;
+        }
     }
 
     /**
@@ -392,7 +433,16 @@ class ControlClient implements ChildControlClientInterface
         }
 
         $this->isReady = true;
-        return $this->send(ControlMessage::ready($role, $workerId, $port, $epoch, $launchId, $msgId));
+        $this->readyStateConfirmed = false;
+        $slotId = $this->buildSlotId($role, $workerId);
+        $leaseId = $launchId;
+        $generation = $epoch;
+        if ($this->registerInfo) {
+            $slotId = (string)($this->registerInfo['slot_id'] ?? $slotId);
+            $leaseId = (string)($this->registerInfo['lease_id'] ?? $leaseId);
+            $generation = (int)($this->registerInfo['generation'] ?? $generation);
+        }
+        return $this->send(ControlMessage::ready($role, $workerId, $port, $epoch, $launchId, $msgId, $slotId, $leaseId, $generation));
     }
 
     /**
@@ -433,6 +483,55 @@ class ControlClient implements ChildControlClientInterface
         $message = ControlMessage::logLine($line, $level, $processTag);
         // 日志类消息：写队列反压时丢弃，不断开 IPC（避免断连-重连风暴）
         return $this->send($message, false);
+    }
+
+    private function buildSlotId(string $role, int $workerId): string
+    {
+        return match ($role) {
+            ControlMessage::ROLE_WORKER => ControlMessage::ROLE_WORKER . '#' . ($workerId > 0 ? $workerId : 1),
+            ControlMessage::ROLE_MAINTENANCE => ControlMessage::ROLE_MAINTENANCE . '#' . ($workerId > 0 ? $workerId : 1),
+            default => ($role !== '' ? $role : 'unknown') . '#1',
+        };
+    }
+
+    /**
+     * @return array{0:string,1:string,2:int}
+     */
+    private function resolveLeaseIdentityFromRuntimeArgs(string $role, int $workerId, string $launchId, int $epoch): array
+    {
+        $slotId = $this->buildSlotId($role, $workerId);
+        $leaseId = $launchId !== '' ? $launchId : (string)($this->registerInfo['lease_id'] ?? '');
+        $generation = $epoch > 0 ? $epoch : (int)($this->registerInfo['generation'] ?? 0);
+        $argv = $GLOBALS['argv'] ?? ($_SERVER['argv'] ?? []);
+        if (!\is_array($argv)) {
+            return [$slotId, $leaseId, $generation];
+        }
+
+        foreach ($argv as $arg) {
+            $arg = (string)$arg;
+            if (\str_starts_with($arg, '--slot-id=')) {
+                $value = (string)\substr($arg, 10);
+                if ($value !== '') {
+                    $slotId = $value;
+                }
+                continue;
+            }
+            if (\str_starts_with($arg, '--lease-id=')) {
+                $value = (string)\substr($arg, 11);
+                if ($value !== '') {
+                    $leaseId = $value;
+                }
+                continue;
+            }
+            if (\str_starts_with($arg, '--slot-generation=')) {
+                $value = (int)\substr($arg, 18);
+                if ($value > 0) {
+                    $generation = $value;
+                }
+            }
+        }
+
+        return [$slotId, $leaseId, $generation];
     }
 
     /**
@@ -645,6 +744,12 @@ class ControlClient implements ChildControlClientInterface
                 $this->resurrectionPriority = (int) ($msg['resurrection_priority'] ?? 0);
                 break;
 
+            case ControlMessage::TYPE_ACK_READY:
+            case ControlMessage::TYPE_READY_ACK:
+                $accepted = !\array_key_exists('accepted', $msg) || (bool)($msg['accepted'] ?? false);
+                $this->readyStateConfirmed = $accepted;
+                break;
+
             case ControlMessage::TYPE_SHUTDOWN:
                 $this->receivedShutdown = true;
                 $this->ipcLog("[IPC-{$this->selfTag}] RECV <-- Master: SHUTDOWN 收到停止命令，准备退出...");
@@ -675,6 +780,7 @@ class ControlClient implements ChildControlClientInterface
         $this->socket = null;
         $this->buffer = '';
         $this->writeBuffer = '';
+        $this->readyStateConfirmed = false;
 
         // 回调外部处理器
         if ($this->disconnectHandler) {

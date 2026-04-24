@@ -3832,7 +3832,13 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         }
         if (!$isWelineProcess) {
             if (($portInspect['state'] ?? '') === 'orphan') {
-                $this->printer->error(__('%{1} 端口 %{2} 处于异常占用状态（系统返回的 PID 已失效），不执行杀进程', [$label, $port]));
+                $this->printer->warning(__('%{1} 端口 %{2} 处于异常占用状态（系统返回的 PID 已失效），尝试端口级兜底清壳...', [$label, $port]));
+                Processer::forceReleasePort($port);
+                if (!Processer::isPortInUse($port)) {
+                    $this->printer->success(__('%{1} 端口 %{2} 可用 ✓', [$label, $port]));
+                    return true;
+                }
+                $this->printer->error(__('端口 %{1} 异常占用兜底清壳后仍未释放', [$port]));
             } else {
                 $this->printer->error(__('%{1} 端口 %{2} 被非框架进程占用，不予杀死', [$label, $port]));
             }
@@ -3923,7 +3929,12 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             $portInspect = Processer::inspectPortOccupantWithHistory($p);
             if (!($portInspect['is_weline'] ?? false)) {
                 if (($portInspect['state'] ?? '') === 'orphan') {
-                    $this->printer->error(__('端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），不执行杀进程', [$p]));
+                    $this->printer->warning(__('端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），尝试端口级兜底清壳...', [$p]));
+                    Processer::forceReleasePort($p);
+                    if (!Processer::isPortInUse($p)) {
+                        continue;
+                    }
+                    $this->printer->error(__('端口 %{1} 异常占用兜底清壳后仍未释放', [$p]));
                 } else {
                     $this->printer->error(__('端口 %{1} 被非框架进程占用，不予杀死', [$p]));
                 }

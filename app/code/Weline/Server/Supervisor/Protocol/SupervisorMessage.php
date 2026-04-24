@@ -12,6 +12,8 @@ final class SupervisorMessage
     public const TYPE_READY = 'ready';
     public const TYPE_READY_ACK = 'ready_ack';
     public const TYPE_HEARTBEAT = 'heartbeat';
+    public const TYPE_LEASE_RELEASE = 'lease_release';
+    public const TYPE_LEASE_RELEASE_ACK = 'lease_release_ack';
     public const TYPE_POOL_SNAPSHOT = 'pool_snapshot';
     public const TYPE_POOL_SNAPSHOT_ACK = 'pool_snapshot_ack';
     public const TYPE_CHANNEL_REJECT = 'channel_reject';
@@ -159,6 +161,58 @@ final class SupervisorMessage
         ];
         if ($msgId !== '') {
             $payload['msg_id'] = $msgId;
+        }
+        if ($channel !== '') {
+            $payload['channel'] = $channel;
+        }
+
+        return self::encode($payload);
+    }
+
+    public static function leaseRelease(
+        string $slotId,
+        string $leaseId,
+        int $generation,
+        string $msgId = '',
+        string $channel = ''
+    ): string {
+        $payload = [
+            'type' => self::TYPE_LEASE_RELEASE,
+            'slot_id' => $slotId,
+            'lease_id' => $leaseId,
+            'generation' => $generation,
+        ];
+        if ($msgId !== '') {
+            $payload['msg_id'] = $msgId;
+        }
+        if ($channel !== '') {
+            $payload['channel'] = $channel;
+        }
+
+        return self::encode($payload);
+    }
+
+    public static function leaseReleaseAck(
+        string $slotId,
+        string $leaseId,
+        int $generation,
+        bool $accepted,
+        string $msgId = '',
+        string $reason = '',
+        string $channel = ''
+    ): string {
+        $payload = [
+            'type' => self::TYPE_LEASE_RELEASE_ACK,
+            'accepted' => $accepted,
+            'slot_id' => $slotId,
+            'lease_id' => $leaseId,
+            'generation' => $generation,
+        ];
+        if ($msgId !== '') {
+            $payload['msg_id'] = $msgId;
+        }
+        if ($reason !== '') {
+            $payload['reason'] = $reason;
         }
         if ($channel !== '') {
             $payload['channel'] = $channel;

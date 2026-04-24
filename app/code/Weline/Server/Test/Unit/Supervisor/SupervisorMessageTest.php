@@ -93,6 +93,41 @@ final class SupervisorMessageTest extends TestCase
         self::assertArrayHasKey('timestamp', $heartbeat);
     }
 
+    public function testLeaseReleaseAndAckCarryLeaseIdentity(): void
+    {
+        $release = SupervisorMessage::decode(SupervisorMessage::leaseRelease(
+            slotId: 'worker#1',
+            leaseId: 'lease-1',
+            generation: 3,
+            msgId: 'msg-release-1',
+            channel: 'channel-default',
+        ));
+
+        self::assertSame(SupervisorMessage::TYPE_LEASE_RELEASE, $release['type']);
+        self::assertSame('worker#1', $release['slot_id']);
+        self::assertSame('lease-1', $release['lease_id']);
+        self::assertSame(3, $release['generation']);
+        self::assertSame('msg-release-1', $release['msg_id']);
+        self::assertSame('channel-default', $release['channel']);
+
+        $ack = SupervisorMessage::decode(SupervisorMessage::leaseReleaseAck(
+            slotId: 'worker#1',
+            leaseId: 'lease-1',
+            generation: 3,
+            accepted: true,
+            msgId: 'msg-release-1',
+            channel: 'channel-default',
+        ));
+
+        self::assertSame(SupervisorMessage::TYPE_LEASE_RELEASE_ACK, $ack['type']);
+        self::assertTrue($ack['accepted']);
+        self::assertSame('worker#1', $ack['slot_id']);
+        self::assertSame('lease-1', $ack['lease_id']);
+        self::assertSame(3, $ack['generation']);
+        self::assertSame('msg-release-1', $ack['msg_id']);
+        self::assertSame('channel-default', $ack['channel']);
+    }
+
     public function testPoolSnapshotAndAckMessagesAreVersioned(): void
     {
         $snapshot = SupervisorMessage::decode(SupervisorMessage::poolSnapshot([

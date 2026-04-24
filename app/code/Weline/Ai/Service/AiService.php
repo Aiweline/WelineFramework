@@ -1459,8 +1459,8 @@ class AiService
     private function logUsage(AiModel $model, array $usage, array $params = []): void
     {
         try {
-            $this->usageLog->reset();
-            $this->usageLog->setData([
+            $usageLog = $this->newUsageLog();
+            $usageLog->setData([
                 'model_code' => $model->getModelCode(),
                 'vendor' => $model->getVendor(),
                 'prompt_tokens' => $usage['prompt_tokens'] ?? 0,
@@ -1476,11 +1476,53 @@ class AiService
                 'created_at' => date('Y-m-d H:i:s.u'),
                 'status' => AiUsageLog::STATUS_SUCCESS,
             ]);
-            $this->usageLog->save();
+            $usageLog->save();
         } catch (\Exception $e) {
+            if ($this->isDbConnectionLostException($e)) {
+                try {
+                    $usageLog = $this->newUsageLog();
+                    $usageLog->setData([
+                        'model_code' => $model->getModelCode(),
+                        'vendor' => $model->getVendor(),
+                        'prompt_tokens' => $usage['prompt_tokens'] ?? 0,
+                        'completion_tokens' => $usage['completion_tokens'] ?? 0,
+                        'total_tokens' => $usage['total_tokens'] ?? 0,
+                        'input_cost' => ($usage['prompt_tokens'] ?? 0) * $model->getData('token_price_input') / 1000,
+                        'output_cost' => ($usage['completion_tokens'] ?? 0) * $model->getData('token_price_output') / 1000,
+                        'total_cost' => (($usage['prompt_tokens'] ?? 0) * $model->getData('token_price_input') +
+                                ($usage['completion_tokens'] ?? 0) * $model->getData('token_price_output')) / 1000,
+                        'scenario_code' => $params['scenario_code'] ?? null,
+                        'locale' => $params['locale'] ?? null,
+                        'user_id' => $params['user_id'] ?? 0,
+                        'created_at' => date('Y-m-d H:i:s.u'),
+                        'status' => AiUsageLog::STATUS_SUCCESS,
+                    ]);
+                    $usageLog->save();
+                    return;
+                } catch (\Exception $retryException) {
+                    w_log_error("记录AI使用量失败(重试后): " . $retryException->getMessage());
+                    return;
+                }
+            }
             // 记录失败不影响主流程
             w_log_error("记录AI使用量失败: " . $e->getMessage());
         }
+    }
+
+    private function newUsageLog(): AiUsageLog
+    {
+        /** @var AiUsageLog $usageLog */
+        $usageLog = ObjectManager::make(AiUsageLog::class);
+        return $usageLog->reset();
+    }
+
+    private function isDbConnectionLostException(\Exception $e): bool
+    {
+        $message = strtolower($e->getMessage());
+        return str_contains($message, 'no connection to the server')
+            || str_contains($message, 'server has gone away')
+            || str_contains($message, 'lost connection')
+            || str_contains($message, 'broken pipe');
     }
 
     /**
