@@ -3754,9 +3754,17 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         }
 
         foreach ($this->getRestartCleanupProcessPrefixes($instanceName) as $prefix) {
-            foreach (Processer::getProcessNamesByPrefix($prefix) as $processName) {
-                $pid = Processer::getPid($processName);
-                if ($pid > 0 && Processer::isRunningByPid($pid)) {
+            foreach (Processer::getProcessNamesByPrefix($prefix) as $pname) {
+                $pname = (string) $pname;
+                if ($pname === '') {
+                    continue;
+                }
+
+                $processName = \str_starts_with($pname, '--name=')
+                    ? \substr($pname, 7)
+                    : $pname;
+                $pid = (int) Processer::getData($pname, 'pid');
+                if ($pid > 0 && Processer::isManagedProcessRunning($pid, $processName, '', $pname)) {
                     return true;
                 }
             }
