@@ -133,6 +133,14 @@ $supervisorEnabled = $supervisorEnabledRaw !== false
 
 $sessionConfig = (\is_array($envConfig) && \is_array($envConfig['wls']['session'] ?? null))
     ? $envConfig['wls']['session'] : [];
+$sharedServiceConfig = (\is_array($envConfig) && \is_array($envConfig['wls']['shared_service'] ?? null))
+    ? $envConfig['wls']['shared_service'] : [];
+foreach (['empty_token_exit_grace_sec', 'empty_token_check_interval_sec', 'startup_consumer_grace_sec'] as $sharedConfigKey) {
+    if (\array_key_exists($sharedConfigKey, $sharedServiceConfig)
+        && !\array_key_exists($sharedConfigKey, $sessionConfig)) {
+        $sessionConfig[$sharedConfigKey] = $sharedServiceConfig[$sharedConfigKey];
+    }
+}
 $sessionConfig['port'] = $port;
 $sessionConfig['role'] = $role;
 $sessionConfig['persist_path'] = BP . 'var' . DIRECTORY_SEPARATOR . 'session' . DIRECTORY_SEPARATOR;
@@ -212,12 +220,17 @@ $updateServicePortInInstanceJson = static function (string $serviceRole, int $se
 $ipcReceivedShutdown = false;
 $kernel = null;
 $orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
+$lastSharedOrphanSuppressedAt = 0;
 // IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
 // 优先使用命令行参数 --control-port=，否则从实例文件自动发现
-if ($controlPort <= 0) {
+// 共享侧车没有独立实例 JSON；无显式控制端口时跳过 30s 解析等待，交由 token/consumer 自治。
+$shouldResolveControlPort = !$sharedService || $controlPort > 0 || $supervisorEnabled;
+if ($shouldResolveControlPort && $controlPort <= 0) {
     $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 30);
 }
-$controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
+$controlPort = $shouldResolveControlPort
+    ? \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort)
+    : 0;
 if ($controlPort > 0 || $supervisorEnabled) {
     $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
         $role,
@@ -295,6 +308,7 @@ while ($server->isRunning()) {
         $kernel->tick();
         $kernel->flushWrites();
     }
+    $server->maintainSharedConsumerTokens();
 
     if ($kernel !== null && !$kernel->isConnected() && !$ipcReceivedShutdown) {
         $kernel->reconnect();
@@ -305,6 +319,17 @@ while ($server->isRunning()) {
         $ipcReceivedShutdown,
         'SessionServer'
     )) {
+        $sharedServiceHasConsumers = $sharedService && $server->hasActiveConsumers();
+        $sharedServiceIdleWindowOpen = $sharedService && $server->isSharedConsumerIdleWindowOpen();
+        if ($sharedServiceHasConsumers || $sharedServiceIdleWindowOpen) {
+            $now = \time();
+            if (($now - $lastSharedOrphanSuppressedAt) >= 30) {
+                $reason = $sharedServiceHasConsumers ? '仍有有效令牌' : '仍在启动/空令牌共识窗口内';
+                WlsLogger::warning_("Master PID {$masterPid} 已死亡，但共享服务{$reason}，继续运行并等待令牌自治清场");
+                $lastSharedOrphanSuppressedAt = $now;
+            }
+            continue;
+        }
         WlsLogger::warning_("Master PID {$masterPid} 已死亡，Session Server 自行退出（孤儿保护）");
         $server->setRunning(false);
     }
