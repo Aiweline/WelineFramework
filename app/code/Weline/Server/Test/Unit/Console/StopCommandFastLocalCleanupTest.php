@@ -57,6 +57,77 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         self::assertContains(444, $candidates);
     }
 
+    public function testFastLocalDoesNotCollectOtherInstanceSharedPortOccupants(): void
+    {
+        $stop = new class extends Stop {
+            public int $sharedPortInspections = 0;
+
+            public function candidates(ServerInstanceInfo $info): array
+            {
+                return $this->collectDirectForceStopCandidatePids($info);
+            }
+
+            protected function collectIndexedResidualPids(string $name, bool $includeSharedState = false): array
+            {
+                unset($name, $includeSharedState);
+
+                throw new \RuntimeException('direct force-stop must not scan PID indexes on the hot path');
+            }
+
+            protected function collectResidualPrefixPids(string $name): array
+            {
+                unset($name);
+
+                throw new \RuntimeException('direct force-stop must not scan process-name prefixes on the hot path');
+            }
+
+            protected function collectRecoverableManagedPids(string $name): array
+            {
+                unset($name);
+
+                return [];
+            }
+
+            protected function inspectRecoverablePortOccupant(int $port): array
+            {
+                if (\in_array($port, [26422, 26423], true)) {
+                    $this->sharedPortInspections++;
+
+                    return ['in_use' => true, 'pid' => 999, 'pid_running' => true, 'is_weline' => true, 'state' => 'weline'];
+                }
+
+                return ['in_use' => false, 'pid' => 0, 'pid_running' => false, 'is_weline' => false, 'state' => 'free'];
+            }
+        };
+
+        $info = new ServerInstanceInfo(
+            'codex-perf',
+            111,
+            26899,
+            '127.0.0.1',
+            9512,
+            false,
+            true,
+            1,
+            16895,
+            0,
+            '2026-04-24 10:00:00',
+            1777015200,
+            [
+                new ServiceInfo('session_server', 'Session Server', 1, 222, 26422, 'ready'),
+                new ServiceInfo('memory_server', 'Memory Service', 1, 333, 26423, 'ready'),
+                new ServiceInfo('worker', 'HTTP Worker', 1, 444, 16895, 'ready'),
+            ]
+        );
+
+        $candidates = $stop->candidates($info);
+
+        self::assertContains(222, $candidates);
+        self::assertContains(333, $candidates);
+        self::assertNotContains(999, $candidates);
+        self::assertSame(0, $stop->sharedPortInspections);
+    }
+
     public function testFastLocalCleanupSkipsIpcAndRunsLocalCleanupFlow(): void
     {
         $manager = new class extends ServerInstanceManager {
@@ -560,7 +631,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         self::assertSame(['show', 'residual', 'release:default', 'pid:default', 'unlock:default'], $stop->calls);
     }
 
-    public function testDirectForceStopCandidateKillAlsoRunsPrefixBatchKill(): void
+    public function testDirectForceStopCandidateKillDoesNotRunPrefixBatchTwice(): void
     {
         $info = new ServerInstanceInfo(
             'default',
@@ -602,8 +673,8 @@ final class StopCommandFastLocalCleanupTest extends TestCase
             }
         };
 
-        self::assertSame(5, $stop->terminate($info));
-        self::assertSame(['default'], $stop->prefixCleanupNames);
+        self::assertSame(0, $stop->terminate($info));
+        self::assertSame([], $stop->prefixCleanupNames);
     }
 
     public function testForceStopKeepsInstanceFileWhenResidualCleanupCannotFinish(): void
@@ -716,8 +787,10 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return [33780];
             }
 
-            protected function collectRunningResidualPids(array $pids): array
+            protected function collectRunningResidualPids(array $pids, array $trustedPids = []): array
             {
+                unset($trustedPids);
+
                 return $pids;
             }
 

@@ -60,6 +60,8 @@ class Stop extends CommandAbstract
     private array $recoverableManagedPidsCache = [];
     /** @var array<string, list<int>> */
     private array $residualPrefixPidsCache = [];
+    /** @var array<string, list<int>> */
+    private array $directForceStopCandidatePidsCache = [];
     private bool $lastResidualCleanupComplete = true;
     private bool $lastIpcStopFlowStillActive = false;
 
@@ -196,12 +198,14 @@ class Stop extends CommandAbstract
         $this->recoverablePortHeadersCache = [];
         $this->recoverableManagedPidsCache = [];
         $this->residualPrefixPidsCache = [];
+        $this->directForceStopCandidatePidsCache = [];
         $this->lastResidualCleanupComplete = true;
         $this->lastIpcStopFlowStillActive = false;
     }
 
     private function invalidateStopRuntimeState(): void
     {
+        Processer::clearPortCache();
         $this->stopPidRunningCache = [];
         $this->stopProcessCommandLineCache = [];
         $this->stopProcessNameCache = [];
@@ -228,7 +232,10 @@ class Stop extends CommandAbstract
         $runningWelineOnPort = (bool) ($portInspect['pid_running'] ?? false)
             && (bool) ($portInspect['is_weline'] ?? false);
         if (!$runningWelineOnPort) {
-            return $this->findConfiguredRunningInstanceNameByPort($port);
+            return null;
+        }
+        if ($this->isSharedStateIndexedPort($port)) {
+            return null;
         }
 
         $instanceName = $this->getInstanceManager()->findRunningInstanceNameByPort($port);
@@ -343,8 +350,32 @@ class Stop extends CommandAbstract
         if (!$this->isMasterProcessAvailableForStop($instanceInfo)) {
             $this->printer->warning(__('Master 进程不存在 (PID: %{1})', [$masterPid]));
             $this->showInstanceInfo($instanceInfo);
+            $includeSharedStateCleanup = $force
+                || $fastLocal
+                || $this->shouldBypassGracefulStopDuringBootstrap($startupPhase)
+                || $this->hasPendingStartupServices($instanceInfo);
+
+            if ($this->isControlPortAvailableForStop($instanceInfo)) {
+                $this->printer->note(__('Master PID 缺失但控制端口仍可用，先尝试通过 IPC 自停...'));
+                $ipcSuccess = $this->sendStopViaIpcAndWait($name, $controlPort, $masterPid, $force);
+                if ($ipcSuccess) {
+                    $this->printer->success(__('控制端口已接受 STOP，继续复核残留进程 ✓'));
+                    $this->runResidualCleanupPairWithRetry($name, $instanceInfo, $includeSharedStateCleanup);
+                    if (!$this->wasLastResidualCleanupComplete()) {
+                        $this->printer->warning(__('Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.', [$name]));
+                        return;
+                    }
+                    $this->releaseSharedStateConsumersForInstance($name);
+                    $manager->deleteInstance($name);
+                    $this->cleanupPidFiles($name, $instanceInfo);
+                    $this->releaseStartLock($name);
+                    $this->printer->success(__('实例元数据已标记停止并保留 ✓'));
+                    return;
+                }
+            }
+
             // 清理可能残留的进程和文件（含按 PID 与按名前缀，确保 Worker/Dispatcher 等全部退出）
-            $this->runResidualCleanupPairWithRetry($name, $instanceInfo, $force);
+            $this->runResidualCleanupPairWithRetry($name, $instanceInfo, $includeSharedStateCleanup);
             if (!$this->wasLastResidualCleanupComplete()) {
                 $this->printer->warning(__('Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.', [$name]));
                 return;
@@ -366,30 +397,27 @@ class Stop extends CommandAbstract
             $terminated = $this->terminateDirectForceStopCandidatePids($instanceInfo);
             if ($terminated > 0) {
                 SchedulerSystem::usleep(500000);
+                $this->cleanupStaleRecoverableProcessPidFilesForPids(
+                    $this->collectDirectForceStopCandidatePids($instanceInfo)
+                );
+                $this->releaseSharedStateConsumersForInstance($name);
+                $manager->deleteInstance($name);
+                $this->cleanupPidFiles($name, $instanceInfo);
+                $this->releaseStartLock($name);
+                echo "\n";
+                $this->printer->success(
+                    $force
+                        ? __('实例 [%{1}] 已停止（-f 强制模式） ✓', [$name])
+                        : __('实例 [%{1}] 已停止（快速清场） ✓', [$name])
+                );
+                $this->printGoodbye(true);
+                return;
             }
-            $directCandidates = $this->collectDirectForceStopCandidatePids($instanceInfo);
-            $remainingDirectPids = $this->collectRunningResidualPids($directCandidates);
-            if ($terminated === 0 && $remainingDirectPids !== []) {
-                $this->printer->warning(__('残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}', [
-                    implode(',', $remainingDirectPids),
-                    '',
-                ]));
+            $this->runResidualCleanupPairWithRetry($name, $instanceInfo, true);
+            if (!$this->wasLastResidualCleanupComplete()) {
                 echo "\n";
                 $this->printer->warning(__('实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。', [$name]));
                 return;
-            }
-            if (
-                $remainingDirectPids !== []
-                || $this->hasKnownRecoverablePortsInUse($name, $instanceInfo)
-            ) {
-                $this->runResidualCleanupPairWithRetry($name, $instanceInfo, true);
-                if (!$this->wasLastResidualCleanupComplete()) {
-                    echo "\n";
-                    $this->printer->warning(__('实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。', [$name]));
-                    return;
-                }
-            } else {
-                $this->cleanupStaleRecoverableProcessPidFiles();
             }
             $this->releaseSharedStateConsumersForInstance($name);
             $manager->deleteInstance($name);
@@ -418,7 +446,11 @@ class Stop extends CommandAbstract
                 Processer::killProcessTreeByPid($masterPid, true);
                 SchedulerSystem::usleep(500000);
             }
-            $this->runResidualCleanupPairWithRetry($name, $instanceInfo, $force);
+            $this->runResidualCleanupPairWithRetry($name, $instanceInfo, true);
+            if (!$this->wasLastResidualCleanupComplete()) {
+                $this->printer->warning(__('Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.', [$name]));
+                return;
+            }
             $this->releaseSharedStateConsumersForInstance($name);
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
@@ -437,7 +469,7 @@ class Stop extends CommandAbstract
         
         if ($ipcSuccess) {
             $this->printer->success(__('所有子进程已完整退出 ✓'));
-            $this->runResidualCleanupPairWithRetry($name, $instanceInfo, $force);
+            $this->runResidualCleanupPairWithRetry($name, $instanceInfo, false);
             if (!$this->wasLastResidualCleanupComplete()) {
                 $this->printer->warning(__('Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.', [$name]));
                 return;
@@ -545,6 +577,21 @@ class Stop extends CommandAbstract
         return $exists;
     }
 
+    protected function isControlPortAvailableForStop(ServerInstanceInfo $info): bool
+    {
+        if ($info->controlPort <= 0) {
+            return false;
+        }
+
+        $inspect = $this->inspectRecoverablePortOccupant($info->controlPort);
+        if (!($inspect['in_use'] ?? false)) {
+            return false;
+        }
+
+        return ((bool)($inspect['pid_running'] ?? false) && (bool)($inspect['is_weline'] ?? false))
+            || $this->isRecoverableManagedPort($info->controlPort, $inspect, $info);
+    }
+
     /**
      * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
      */
@@ -567,6 +614,17 @@ class Stop extends CommandAbstract
     protected function hasMasterExitedFast(int $masterPid): bool
     {
         return Processer::hasExitedFast($masterPid);
+    }
+
+    protected function isMasterPidMissingFromIndex(int $masterPid): bool
+    {
+        if ($masterPid <= 0) {
+            return true;
+        }
+
+        $pidIndex = Processer::readPidIndex();
+
+        return !isset($pidIndex[$masterPid]);
     }
 
     protected function masterProcessExists(int $masterPid): bool
@@ -675,6 +733,9 @@ class Stop extends CommandAbstract
             $knownCandidatePids = $this->collectResidualCleanupCandidatePids($name, $info, $includeSharedState);
             $killedThisAttempt = $this->runResidualCleanupPass($name, $info, true, true, $includeSharedState);
             $totalKilled += $killedThisAttempt;
+            if ($killedThisAttempt > 0) {
+                $this->invalidateStopRuntimeState();
+            }
 
             $remainingPids = $this->collectRunningResidualPids($knownCandidatePids);
             if (!empty($remainingPids)) {
@@ -687,12 +748,12 @@ class Stop extends CommandAbstract
                 continue;
             }
 
-            $totalKilled += $this->cleanupRecoverableConfiguredPorts(
-                $this->collectRemainingRecoverableWlsPorts($name, $info),
-                $info
-            );
-
-            $remainingPorts = $this->collectRemainingRecoverableWlsPorts($name, $info);
+            $remainingPorts = $this->collectRemainingRecoverableWlsPorts($name, $info, $includeSharedState);
+            $killedPorts = $this->cleanupRecoverableConfiguredPorts($remainingPorts, $info, $includeSharedState);
+            $totalKilled += $killedPorts;
+            if ($killedPorts > 0) {
+                $remainingPorts = $this->collectRemainingRecoverableWlsPorts($name, $info, $includeSharedState);
+            }
             $candidatePids = $this->collectResidualVerificationPids($name, $info, $remainingPorts, true, $includeSharedState);
             $remainingPids = $this->collectRunningResidualPids($candidatePids);
 
@@ -751,7 +812,7 @@ class Stop extends CommandAbstract
             ? $this->terminateCurrentInstanceProcessPrefixes($name, $includeSharedState)
             : 0;
 
-        $this->cleanupStaleRecoverableProcessPidFiles();
+        $this->cleanupStaleRecoverableProcessPidFilesForPids($pids);
 
         $totalKilled = $killedByPid + $killedByPrefix;
         if (!$quiet) {
@@ -767,7 +828,17 @@ class Stop extends CommandAbstract
 
     protected function terminateCurrentInstanceProcessPrefixes(string $name, bool $includeSharedState = false): int
     {
-        return Processer::killByProcessNamePrefixes($this->collectResidualCleanupPrefixes($name, $includeSharedState));
+        $pids = [];
+        foreach ($this->collectResidualCleanupPrefixes($name, $includeSharedState) as $prefix) {
+            foreach ($this->collectResidualPidsByPrefix($prefix) as $pid) {
+                $pid = (int) $pid;
+                if ($pid > 0) {
+                    $pids[$pid] = true;
+                }
+            }
+        }
+
+        return $this->terminateResidualProcesses(\array_map('intval', \array_keys($pids)), true);
     }
 
     /**
@@ -805,9 +876,13 @@ class Stop extends CommandAbstract
     /**
      * @return list<int>
      */
-    protected function collectRemainingRecoverableWlsPorts(string $name, ServerInstanceInfo $info): array
+    protected function collectRemainingRecoverableWlsPorts(
+        string $name,
+        ServerInstanceInfo $info,
+        bool $includeSharedState = false
+    ): array
     {
-        $ports = $this->collectRecoverableKnownPorts($name, $info);
+        $ports = $this->collectRecoverableKnownPorts($name, $info, $includeSharedState);
         $remaining = [];
 
         foreach ($ports as $port) {
@@ -816,7 +891,12 @@ class Stop extends CommandAbstract
                 continue;
             }
             if ($this->isSharedStatePortOccupant($inspect)) {
-                continue;
+                if (!$includeSharedState) {
+                    continue;
+                }
+                if (!$this->isSharedStatePortOwnedByInstance((int) $port, $inspect, $name)) {
+                    continue;
+                }
             }
 
             $recoverable = (bool) ($inspect['is_weline'] ?? false)
@@ -838,13 +918,17 @@ class Stop extends CommandAbstract
     /**
      * @return list<int>
      */
-    protected function collectRecoverableKnownPorts(string $name, ?ServerInstanceInfo $info = null): array
+    protected function collectRecoverableKnownPorts(
+        string $name,
+        ?ServerInstanceInfo $info = null,
+        bool $includeSharedState = false
+    ): array
     {
         $ports = $this->getRecoverableConfiguredPorts($name);
         if ($info !== null) {
-            $ports = \array_merge($ports, $this->collectRecoverablePortsFromInstance($info));
+            $ports = \array_merge($ports, $this->collectRecoverablePortsFromInstance($info, $includeSharedState));
         }
-        $ports = \array_merge($ports, $this->collectRecoverablePortsFromInstanceRecords($name));
+        $ports = \array_merge($ports, $this->collectRecoverablePortsFromInstanceRecords($name, $includeSharedState));
 
         $ports = \array_values(\array_unique(\array_filter(
             \array_map('intval', $ports),
@@ -1017,7 +1101,15 @@ class Stop extends CommandAbstract
 
     protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
     {
-        return $this->terminateCurrentInstanceProcessPrefixes($info->name, true);
+        $candidates = $this->collectDirectForceStopCandidatePids($info);
+        $trustedCurrentPids = $this->collectResidualPidsByInfo($info, true);
+        $killedByPid = $this->terminateResidualProcesses(
+            $candidates,
+            true,
+            $trustedCurrentPids
+        );
+
+        return $killedByPid;
     }
 
     /**
@@ -1025,22 +1117,36 @@ class Stop extends CommandAbstract
      */
     protected function collectDirectForceStopCandidatePids(ServerInstanceInfo $info): array
     {
-        $forcePorts = \array_values(\array_unique(\array_merge(
-            $this->collectRecoverablePortsFromInstance($info, true),
-            $this->collectRecoverablePortsFromInstanceRecords($info->name, true)
-        )));
-        return \array_values(\array_unique(\array_filter(
+        if (isset($this->directForceStopCandidatePidsCache[$info->name])) {
+            return $this->directForceStopCandidatePidsCache[$info->name];
+        }
+
+        $candidates = \array_values(\array_unique(\array_filter(
             \array_map(
                 'intval',
                 \array_merge(
-                    $this->collectBaseResidualPids($info->name, $info),
-                    $this->collectResidualPidsByInfo($info, true),
-                    $this->collectIndexedResidualPids($info->name, true),
-                    $this->collectRecoverablePortResidualPids($forcePorts),
+                    $this->collectDirectForceBaseResidualPids($info),
                     $this->collectRecoverableManagedPids($info->name)
                 )
             ),
             static fn (int $pid): bool => $pid > 0
+        )));
+        $this->directForceStopCandidatePidsCache[$info->name] = $candidates;
+
+        return $candidates;
+    }
+
+    /**
+     * Direct force-stop is the hot path used by --fast-local. Keep its first pass scoped to
+     * the current runtime snapshot and current indexes; append-only history remains in the
+     * retry/verification cleanup path where stale PID reuse can be filtered more carefully.
+     *
+     * @return list<int>
+     */
+    protected function collectDirectForceBaseResidualPids(ServerInstanceInfo $info): array
+    {
+        return \array_values(\array_unique(\array_merge(
+            $this->collectResidualPidsByInfo($info, true)
         )));
     }
 
@@ -1094,6 +1200,14 @@ class Stop extends CommandAbstract
     {
         if ($pid <= 0 || !$this->isStopPidRunning($pid)) {
             return $pid > 0 ? $pid : 0;
+        }
+
+        if ($this->isWindowsPlatform()) {
+            // Windows parent processes are often transient cmd/powershell launch
+            // wrappers. Querying their command line through CIM can hang during
+            // restart cleanup, while taskkill /T on the managed WLS PID is
+            // already sufficient to terminate that process tree.
+            return $pid;
         }
 
         $currentPid = $pid;
@@ -1343,7 +1457,8 @@ class Stop extends CommandAbstract
         
         // 连接 IPC
         $host = '127.0.0.1';
-        $this->ipcMsg("连接 Master (PID:{$masterPid}) 控制端口 {$host}:{$controlPort}...", 'info');
+        $masterPidLabel = $masterPid > 0 ? (string)$masterPid : 'unknown';
+        $this->ipcMsg("连接 Master (PID:{$masterPidLabel}) 控制端口 {$host}:{$controlPort}...", 'info');
         
         $errno = 0;
         $errstr = '';
@@ -1398,13 +1513,19 @@ class Stop extends CommandAbstract
         $totalInstances = 0; // 总实例数
         
         while (\microtime(true) < $hardDeadline) {
-            // 优先检查 Master 是否已退出（每次循环都检查）
-            if (!Processer::processExists($masterPid)) {
+            // 优先用 pid_index.json 状态文件判定 Master 是否已退出（毫秒级），
+            // 只有怀疑已退出时才用更重的 processExists/tasklist 二次确认。
+            // 这一改动避免了 0.5s 间隔的循环每次过 TTL 触发一次 ~2.6s 的全表 tasklist，
+            // 把 Windows 上 server:stop 的主循环开销从 N×全表扫描降到 0。
+            if ($masterPid > 0
+                && $this->isMasterPidMissingFromIndex($masterPid)
+                && !Processer::processExists($masterPid)
+            ) {
                 $this->ipcMsg("Master 进程已退出 ✓", 'success');
                 @\fclose($conn);
                 return true;
             }
-            
+
             $read = [$conn];
             $write = $except = null;
             // 缩短 select 超时到 0.5 秒，更快响应
@@ -1465,7 +1586,15 @@ class Stop extends CommandAbstract
             // 空闲超时仅作提示，不立即判定失败，避免长排水阶段误杀 Master
             $now = \microtime(true);
             if (($now - $lastActivityAt) >= $timeout) {
-                if (!Processer::processExists($masterPid)) {
+                if ($masterPid <= 0 && $observedStopStage === 0 && !$childrenFullyExited && !$masterAboutToExit) {
+                    $this->ipcMsg("No STOP progress from control port after {$timeout}s; switch to local cleanup.", 'error');
+                    @\fclose($conn);
+                    return false;
+                }
+                if ($masterPid > 0
+                    && $this->isMasterPidMissingFromIndex($masterPid)
+                    && !Processer::processExists($masterPid)
+                ) {
                     $this->ipcMsg("Master 进程已退出 ✓", 'success');
                     @\fclose($conn);
                     return true;
@@ -1495,7 +1624,7 @@ class Stop extends CommandAbstract
         @\fclose($conn);
         
         // 超时前最后一次检查 Master 状态
-        if (!Processer::processExists($masterPid)) {
+        if ($masterPid > 0 && !Processer::processExists($masterPid)) {
             $this->ipcMsg("Master 进程已退出 ✓", 'success');
             return true;
         }
@@ -1687,6 +1816,10 @@ class Stop extends CommandAbstract
      */
     protected function waitForMasterExit(int $masterPid): bool
     {
+        if ($masterPid <= 0) {
+            return true;
+        }
+
         $tag = $this->printer->colorize('[IPC]', self::IPC_COLOR_TAG);
         $waitMsg = $this->printer->colorize('等待 Master 进程退出', self::IPC_COLOR_INFO);
         echo "  {$tag} {$waitMsg}";
@@ -1701,7 +1834,7 @@ class Stop extends CommandAbstract
             SchedulerSystem::usleep(200000); // 200ms
             echo $this->printer->colorize('.', self::IPC_COLOR_INFO);
             // 快速路径 + 真实进程校验双确认，避免“索引先删、进程未退”的假退出。
-            if (Processer::hasExitedFast($masterPid) && !Processer::processExists($masterPid)) {
+            if ($this->isMasterPidMissingFromIndex($masterPid) && !Processer::processExists($masterPid)) {
                 $confirmed++;
             } else {
                 $confirmed = 0;
@@ -1713,7 +1846,7 @@ class Stop extends CommandAbstract
         }
         
         // 最后一次检查
-        if (Processer::hasExitedFast($masterPid) && !Processer::processExists($masterPid)) {
+        if (!Processer::processExists($masterPid)) {
             echo $this->printer->colorize(' 完成 ✓', self::IPC_COLOR_SUCCESS) . "\n";
             return true;
         }
@@ -1931,6 +2064,59 @@ class Stop extends CommandAbstract
     }
 
     /**
+     * Shared-state ports are common defaults (26422/26423), so includeSharedState
+     * must still prove the live port owner belongs to the instance being stopped.
+     */
+    private function isSharedStatePortOwnedByInstance(int $port, array $inspect, string $name): bool
+    {
+        unset($port);
+
+        $pid = (int) ($inspect['pid'] ?? 0);
+        if ($pid <= 0 || !$this->isStopPidRunning($pid)) {
+            return false;
+        }
+
+        foreach ([
+            $this->getProcessPnameByPid($pid),
+            $this->getStopProcessCommandLine($pid),
+        ] as $descriptor) {
+            if ($this->processDescriptorBelongsToInstance((string) $descriptor, $name)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function processDescriptorBelongsToInstance(string $descriptor, string $name): bool
+    {
+        $descriptor = \trim($descriptor);
+        if ($descriptor === '') {
+            return false;
+        }
+
+        try {
+            $taskName = Processer::getTaskName($descriptor);
+            if ($taskName !== '') {
+                $descriptor .= ' ' . $taskName;
+            }
+        } catch (\Throwable) {
+            // Best-effort guard only; raw command lines are still checked below.
+        }
+
+        $haystack = \strtolower($descriptor);
+        $instance = \strtolower($name);
+        $scoped = \strtolower(MasterProcess::getScopedInstanceName($name));
+
+        return \str_contains($haystack, '--instance-name=' . $instance)
+            || \str_contains($haystack, '--instance-name="' . $instance . '"')
+            || \str_contains($haystack, '"' . $instance . '"')
+            || \str_contains($haystack, ' ' . $instance . ' ')
+            || \str_contains($haystack, '-' . $scoped)
+            || \str_contains($haystack, '-' . $instance . '-');
+    }
+
+    /**
      * 从 name_index 中一次性收集指定实例的 WLS PID，避免逐前缀触发系统搜索。
      *
      * @return array<int>
@@ -2008,11 +2194,6 @@ class Stop extends CommandAbstract
                 continue;
             }
 
-            if ($jsonPath !== '' && \is_file($jsonPath)) {
-                $pids[$pid] = true;
-                continue;
-            }
-
             if (!$this->isResidualIndexedPidStillRunning($pid, $pname, $taskName)) {
                 continue;
             }
@@ -2041,7 +2222,7 @@ class Stop extends CommandAbstract
      *
      * @param array<int> $pids
      */
-    private function terminateResidualProcesses(array $pids, bool $skipCheck = true): int
+    private function terminateResidualProcesses(array $pids, bool $skipCheck = true, array $trustedPids = []): int
     {
         $currentPid = \getmypid();
         $uniquePids = \array_values(\array_unique(\array_filter(
@@ -2053,7 +2234,12 @@ class Stop extends CommandAbstract
             return 0;
         }
 
-        $result = Processer::batchKillProcessTrees($uniquePids, $skipCheck);
+        $runningPids = $this->collectRunningResidualPids($uniquePids, $trustedPids);
+        if ($runningPids === []) {
+            return 0;
+        }
+
+        $result = Processer::dispatchBatchKillProcessTrees($runningPids, $skipCheck);
         $this->invalidateStopRuntimeState();
 
         return (int) ($result['killed'] ?? 0);
@@ -2063,7 +2249,7 @@ class Stop extends CommandAbstract
      * @param array<int> $pids
      * @return array<int>
      */
-    protected function collectRunningResidualPids(array $pids): array
+    protected function collectRunningResidualPids(array $pids, array $trustedPids = []): array
     {
         $uniquePids = \array_values(\array_unique(\array_filter(
             \array_map('intval', $pids),
@@ -2072,15 +2258,26 @@ class Stop extends CommandAbstract
         if (empty($uniquePids)) {
             return [];
         }
+        $trustedPidMap = \array_fill_keys(\array_map('intval', $trustedPids), true);
 
-        if ($this->isWindowsPlatform()) {
-            return $this->collectRunningResidualPidsWindows($uniquePids);
-        }
-
-        $processInfo = Processer::batchGetProcessInfo($uniquePids);
+        // 统一走 Processer::batchGetProcessInfo（内部带进程内 TTL 缓存的 tasklist 全表 map）。
+        // 历史上 Windows 分支自己跑 `tasklist /FO CSV /NH`（约 2.6s/次）且每个残留清理 retry 都重复调用，
+        // 是 server:stop 在 Windows 上慢 10×+ 的主因；现在改为命中共享缓存即可。
+        $processInfo = $this->batchGetStopProcessInfo($uniquePids);
         $running = [];
         foreach ($uniquePids as $pid) {
-            if ((bool) ($processInfo[$pid]['exists'] ?? false)) {
+            $info = \is_array($processInfo[$pid] ?? null) ? $processInfo[$pid] : [];
+            if (!(bool) ($info['exists'] ?? false)) {
+                continue;
+            }
+            if (!$this->isLikelyResidualWlsProcessName((string) ($info['name'] ?? ''))) {
+                continue;
+            }
+            if (isset($trustedPidMap[$pid])) {
+                $running[] = $pid;
+                continue;
+            }
+            if ($this->isResidualPidStillOwnedByWls($pid)) {
                 $running[] = $pid;
             }
         }
@@ -2090,40 +2287,48 @@ class Stop extends CommandAbstract
 
     /**
      * @param list<int> $pids
+     * @return array<int, array<string, mixed>>
+     */
+    protected function batchGetStopProcessInfo(array $pids): array
+    {
+        return Processer::batchGetProcessInfo($pids);
+    }
+
+    protected function isResidualPidStillOwnedByWls(int $pid): bool
+    {
+        return $this->isStopWelineServerProcess($pid) || $this->isStopProcessManagerCreated($pid);
+    }
+
+    protected function isLikelyResidualWlsProcessName(string $processName): bool
+    {
+        $name = \strtolower(\trim($processName));
+        if ($name === '') {
+            return true;
+        }
+
+        return \str_contains($name, 'php')
+            || \str_contains($name, 'cmd.exe')
+            || \str_contains($name, 'powershell')
+            || \str_contains($name, 'pwsh');
+    }
+
+    /**
+     * 兼容历史调用点（含单元测试）：转发到统一的 collectRunningResidualPids。
+     *
+     * 历史实现里这里会直接执行 `tasklist /FO CSV /NH` 全表扫描（约 2.6s/次，
+     * 在 Windows 上是 server:stop 的主要慢源），现已统一走带进程内缓存的
+     * Processer::batchGetProcessInfo。
+     *
+     * @param list<int> $pids
      * @return list<int>
      */
     protected function collectRunningResidualPidsWindows(array $pids): array
     {
-        $ids = \array_values(\array_unique(\array_filter(
-            \array_map('intval', $pids),
-            static fn (int $pid): bool => $pid > 0
-        )));
-        if ($ids === []) {
-            return [];
-        }
-
-        $command = $this->buildWindowsCollectRunningPidsCommand($ids);
-        $output = [];
-        $returnCode = 0;
-        Processer::execute($command, $output, $returnCode);
-        if ($returnCode !== 0 || $output === []) {
-            return [];
-        }
-
-        $requested = \array_fill_keys($ids, true);
-        $running = [];
-        foreach ($output as $line) {
-            $columns = \str_getcsv((string) $line);
-            $pid = (int) ($columns[1] ?? 0);
-            if ($pid > 0 && isset($requested[$pid])) {
-                $running[$pid] = $pid;
-            }
-        }
-
-        return \array_values($running);
+        return $this->collectRunningResidualPids($pids);
     }
 
     /**
+     * @deprecated 仅保留兼容历史单测/外部脚本调用；新逻辑请使用 Processer::batchGetProcessInfo。
      * @param list<int> $pids
      */
     protected function buildWindowsCollectRunningPidsCommand(array $pids): string
@@ -2222,10 +2427,10 @@ class Stop extends CommandAbstract
     {
         $manager = $this->getInstanceManager();
         foreach ($manager->listPersistedInstanceNames() as $name) {
-            $ports = $this->collectRecoverablePortsFromInstanceRecords($name, true);
+            $ports = $this->collectRecoverablePortsFromInstanceRecords($name, false);
             $info = $manager->getInstanceInfo($name, false);
             if ($info !== null) {
-                $ports = \array_merge($ports, $this->collectRecoverablePortsFromInstance($info, true));
+                $ports = \array_merge($ports, $this->collectRecoverablePortsFromInstance($info, false));
             }
             $ports = \array_values(\array_unique(\array_filter(
                 \array_map('intval', $ports),
@@ -2237,6 +2442,18 @@ class Stop extends CommandAbstract
         }
 
         return null;
+    }
+
+    private function isSharedStateIndexedPort(int $port): bool
+    {
+        if ($port <= 0) {
+            return false;
+        }
+
+        $portIndex = Processer::readPortIndex();
+        $processName = (string) ($portIndex[(string) $port] ?? $portIndex[$port] ?? '');
+
+        return $processName !== '' && $this->isSharedStateProcessName($processName);
     }
 
     private function hasRecoverableManagedProcessHint(string $name): bool
@@ -2599,6 +2816,14 @@ class Stop extends CommandAbstract
         Processer::cleanupStalePidFiles();
     }
 
+    /**
+     * @param list<int>|array<int> $pids
+     */
+    protected function cleanupStaleRecoverableProcessPidFilesForPids(array $pids): void
+    {
+        Processer::cleanupStalePidFilesForPids($pids);
+    }
+
     protected function queryStopPidRunning(int $pid): bool
     {
         return Processer::isRunningByPid($pid);
@@ -2655,43 +2880,39 @@ class Stop extends CommandAbstract
             return false;
         }
 
-        $attempts = $tree ? 3 : 2;
-        for ($attempt = 0; $attempt < $attempts; $attempt++) {
-            $exitCode = $this->executeWindowsTaskkillForStop($pid, $tree);
-            SchedulerSystem::usleep(200000);
+        unset($skipCheck);
 
-            if ($exitCode === 0 || !$this->queryStopPidRunning($pid)) {
+        $maxAttempts = $tree ? 3 : 2;
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $exitCode = $this->executeWindowsTaskkillForStop($pid, $tree);
+            unset($this->stopPidRunningCache[$pid]);
+            if ($exitCode === 0 || !$this->isStopPidRunning($pid)) {
                 return true;
+            }
+
+            if ($attempt < $maxAttempts) {
+                SchedulerSystem::usleep(200000);
             }
         }
 
         if ($tree) {
-            for ($attempt = 0; $attempt < 2; $attempt++) {
-                $exitCode = $this->executeWindowsTaskkillForStop($pid, false);
-                SchedulerSystem::usleep(150000);
-
-                if ($exitCode === 0 || !$this->queryStopPidRunning($pid)) {
-                    return true;
-                }
-            }
+            $exitCode = $this->executeWindowsTaskkillForStop($pid, false);
+            unset($this->stopPidRunningCache[$pid]);
+            return $exitCode === 0 || !$this->isStopPidRunning($pid);
         }
 
-        if ($skipCheck) {
-            return !$this->queryStopPidRunning($pid);
-        }
-
-        return !$this->queryStopPidRunning($pid);
+        return false;
     }
 
     protected function executeWindowsTaskkillForStop(int $pid, bool $tree): int
     {
         $output = [];
         $returnCode = 0;
-        $command = 'cmd /d /c start "" /B cmd /d /c "taskkill /F '
+        $command = 'taskkill /F '
             . ($tree ? '/T ' : '')
             . '/PID '
             . $pid
-            . ' 1>NUL 2>NUL"';
+            . ' 1>NUL 2>NUL';
         Processer::execute($command, $output, $returnCode);
 
         return $returnCode;
@@ -2853,11 +3074,24 @@ class Stop extends CommandAbstract
     /**
      * @param list<int> $ports
      */
-    protected function cleanupRecoverableConfiguredPorts(array $ports, ?ServerInstanceInfo $info = null): int
+    protected function cleanupRecoverableConfiguredPorts(
+        array $ports,
+        ?ServerInstanceInfo $info = null,
+        bool $includeSharedState = false
+    ): int
     {
-        $candidates = $this->collectRecoverablePortKillCandidates($ports, $info);
+        $candidates = $this->collectRecoverablePortKillCandidates($ports, $info, $includeSharedState);
         if ($candidates === []) {
-            return 0;
+            if ($ports !== []) {
+                $this->invalidateStopRuntimeState();
+                SchedulerSystem::usleep(100000);
+            } else {
+                return 0;
+            }
+            $candidates = $this->collectRecoverablePortKillCandidates($ports, $info, $includeSharedState);
+            if ($candidates === []) {
+                return 0;
+            }
         }
 
         $this->printer->note($this->translateStopMessage(
@@ -2895,7 +3129,11 @@ class Stop extends CommandAbstract
      * @param list<int> $ports
      * @return list<array{port:int,pid:int,kill_pid:int}>
      */
-    protected function collectRecoverablePortKillCandidates(array $ports, ?ServerInstanceInfo $info = null): array
+    protected function collectRecoverablePortKillCandidates(
+        array $ports,
+        ?ServerInstanceInfo $info = null,
+        bool $includeSharedState = false
+    ): array
     {
         $candidates = [];
         $uniquePorts = \array_values(\array_unique(\array_filter(
@@ -2912,16 +3150,13 @@ class Stop extends CommandAbstract
                 continue;
             }
 
-            $pid = (int) ($inspect['pid'] ?? 0);
+            $pid = $this->resolveRecoverablePortProcessId($port, $inspect);
             if ($pid <= 0) {
-                $pid = $this->getPortProcessId($port);
-            }
-            if ($pid <= 0 || !$this->isStopPidRunning($pid)) {
                 continue;
             }
 
             $pname = $this->getProcessPnameByPid($pid);
-            if ($this->isSharedStateProcessName($pname)) {
+            if (!$includeSharedState && $this->isSharedStateProcessName($pname)) {
                 continue;
             }
             $isWls = \str_contains($pname, 'weline-wls')
@@ -2942,6 +3177,39 @@ class Stop extends CommandAbstract
         }
 
         return $candidates;
+    }
+
+    /**
+     * @param array{pid?:int,pid_running?:bool} $inspect
+     */
+    protected function resolveRecoverablePortProcessId(int $port, array $inspect): int
+    {
+        $pid = (int) ($inspect['pid'] ?? 0);
+        if ($pid > 0 && $this->isStopPidRunning($pid)) {
+            return $pid;
+        }
+
+        $pid = $this->getPortProcessId($port);
+        if ($pid > 0 && $this->isStopPidRunning($pid)) {
+            return $pid;
+        }
+
+        $this->invalidateStopRuntimeState();
+        Processer::clearPortCache($port);
+        SchedulerSystem::usleep(100000);
+
+        $freshInspect = $this->inspectRecoverablePortOccupant($port);
+        if (!($freshInspect['in_use'] ?? false)) {
+            return 0;
+        }
+
+        $pid = (int) ($freshInspect['pid'] ?? 0);
+        if ($pid > 0 && $this->isStopPidRunning($pid)) {
+            return $pid;
+        }
+
+        $pid = $this->getPortProcessId($port);
+        return $pid > 0 && $this->isStopPidRunning($pid) ? $pid : 0;
     }
 
     protected function readRecoverablePortHeaders(int $port, string $transport): string

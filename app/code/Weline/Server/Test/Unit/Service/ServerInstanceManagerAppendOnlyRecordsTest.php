@@ -168,6 +168,68 @@ final class ServerInstanceManagerAppendOnlyRecordsTest extends TestCase
         self::assertSame('deleted', $data['current_snapshot']['stopped_reason'] ?? null);
     }
 
+    public function testCurrentSnapshotWinsOverHistoricalRuntimeRecords(): void
+    {
+        $this->writeInstanceFile([
+            'name' => $this->instanceName,
+            'master_pid' => 99999991,
+            'control_port' => 1,
+            'host' => '127.0.0.1',
+            'port' => 9443,
+            'count' => 1,
+            'services' => [
+                'worker' => [
+                    'display_name' => 'HTTP Worker',
+                    'instances' => [[
+                        'role' => 'worker',
+                        'display_name' => 'HTTP Worker',
+                        'instance_id' => 1,
+                        'pid' => 99999992,
+                        'port' => 19001,
+                        'state' => ServiceInstance::STATE_READY,
+                        'launch_id' => 'old-launch',
+                    ]],
+                ],
+            ],
+            'instance_records' => [[
+                'master_pid' => 99999991,
+                'control_port' => 1,
+                'port' => 9443,
+                'count' => 1,
+                'started_timestamp' => 1,
+            ]],
+            'current_snapshot' => [
+                'master_pid' => 99999993,
+                'control_port' => 29000,
+                'host' => '127.0.0.1',
+                'port' => 9444,
+                'count' => 1,
+                'services' => [
+                    'worker' => [
+                        'display_name' => 'HTTP Worker',
+                        'instances' => [[
+                            'role' => 'worker',
+                            'display_name' => 'HTTP Worker',
+                            'instance_id' => 1,
+                            'pid' => 99999994,
+                            'port' => 29001,
+                            'state' => ServiceInstance::STATE_READY,
+                            'launch_id' => 'current-launch',
+                        ]],
+                    ],
+                ],
+            ],
+        ]);
+
+        $info = $this->manager->getInstanceInfo($this->instanceName, false);
+
+        self::assertNotNull($info);
+        self::assertSame(99999993, $info->masterPid);
+        self::assertSame(29000, $info->controlPort);
+        self::assertSame(9444, $info->port);
+        self::assertSame(29001, $info->getWorkers()[0]->port);
+    }
+
     /**
      * @param array<string, mixed> $data
      */
