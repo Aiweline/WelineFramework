@@ -208,6 +208,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
             $command .= " --defer-ssl";
         }
         
+        $command .= " --memory-limit={$config->workerMemoryLimit}";
         $command .= " --name={$processName}";
         
         if ($config->frontend) {
@@ -259,6 +260,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
         
         // 构建命令（参数格式: <host> <port> <worker_base_port> <worker_count> <instance_name>）
         $command = "\"{$config->phpBinary}\" \"{$dispatcherScript}\" {$config->host} {$config->port} {$config->workerBasePort} {$config->workerCount} {$config->instanceName}";
+        $command .= " --memory-limit={$config->dispatcherMemoryLimit}";
         $command .= " --name={$processName}";
         
         if ($config->frontend) {
@@ -395,6 +397,8 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
             'worker_pids' => $workerPids,
             'worker_port' => $workerPorts[0] ?? $config->workerBasePort,  // 第一个 Worker 端口
             'worker_ports' => $workerPorts,
+            'worker_memory_limit' => $config->workerMemoryLimit,
+            'dispatcher_memory_limit' => $config->dispatcherMemoryLimit,
             'dispatcher_enabled' => true,  // Dispatcher 模式
             'dispatcher_pid' => $dispatcherPid,
             'http_redirect_pid' => $httpRedirectPid,
