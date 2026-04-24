@@ -15,6 +15,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Database\Model\ModelManager;
 use Weline\Framework\Module\Model\Module;
+use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Setup\Data\Context;
 
 /**
@@ -40,13 +41,19 @@ class DatabaseUpdateStage extends AbstractStage
      * @var array 已执行的更新记录（用于回滚）
      */
     private array $executedUpdates = [];
+
+    private FiberTaskRunner $taskRunner;
+
+    private int $fiberConcurrency;
     
     /**
      * @param ModelManager $modelManager
      */
-    public function __construct(ModelManager $modelManager)
+    public function __construct(ModelManager $modelManager, ?FiberTaskRunner $taskRunner = null, int $fiberConcurrency = 0)
     {
         $this->modelManager = $modelManager;
+        $this->taskRunner = $taskRunner ?? new FiberTaskRunner();
+        $this->fiberConcurrency = $fiberConcurrency > 0 ? $fiberConcurrency : $this->resolveFiberConcurrency();
     }
     
     /**
@@ -136,37 +143,70 @@ class DatabaseUpdateStage extends AbstractStage
             return;
         }
         
-        // 批量执行所有更新任务
-        foreach ($this->updateTasks as $task) {
-            $module = $task['module'];
-            $context = $task['context'];
-            $type = $task['type'];
-            
-            try {
-                // 记录执行前的状态（用于回滚）
-                $this->executedUpdates[] = [
-                    'module' => $module->getName(),
-                    'type' => $type,
-                    'context' => $context,
-                ];
-                
-                // 执行模型更新
-                $this->modelManager->update($module, $context, $type);
-            } catch (\Exception $e) {
-                $this->addError(__('模块 %{1} 的 %{2} 更新失败：%{3}', [
-                    $module->getName(),
-                    $type,
-                    $e->getMessage()
-                ]));
-                
-                // 回滚已执行的更新
-                $this->rollback();
-                throw new Exception(__('数据库更新失败：%{1}', [$e->getMessage()]), 0, $e);
-            }
+        try {
+            $this->taskRunner->run($this->buildModuleUpdateRunners(), $this->fiberConcurrency);
+        } catch (\Throwable $e) {
+            $this->addError($e->getMessage());
+            $this->rollback();
+            throw new Exception(__('数据库更新失败：%{1}', [$e->getMessage()]), 0, $e);
         }
         
         $this->committed = true;
         $this->clearErrors();
+    }
+
+    /**
+     * @return array<string, callable(string|int): void>
+     */
+    private function buildModuleUpdateRunners(): array
+    {
+        $grouped = [];
+        foreach ($this->updateTasks as $task) {
+            /** @var Module $module */
+            $module = $task['module'];
+            $grouped[$module->getName()][] = $task;
+        }
+
+        $runners = [];
+        foreach ($grouped as $moduleName => $tasks) {
+            $runners[$moduleName] = function (string|int $taskKey) use ($tasks): void {
+                foreach ($tasks as $task) {
+                    /** @var Module $module */
+                    $module = $task['module'];
+                    /** @var Context $context */
+                    $context = $task['context'];
+                    $type = (string)$task['type'];
+
+                    try {
+                        $this->executedUpdates[] = [
+                            'module' => $module->getName(),
+                            'type' => $type,
+                            'context' => $context,
+                        ];
+
+                        $this->modelManager->update($module, $context, $type);
+                    } catch (\Throwable $e) {
+                        throw new Exception(__('模块 %{1} 的 %{2} 更新失败：%{3}', [
+                            $module->getName(),
+                            $type,
+                            $e->getMessage()
+                        ]), 0, $e);
+                    }
+                }
+            };
+        }
+
+        return $runners;
+    }
+
+    private function resolveFiberConcurrency(): int
+    {
+        $raw = \getenv('WELINE_SETUP_FIBER_CONCURRENCY');
+        if ($raw === false || $raw === '') {
+            return 4;
+        }
+
+        return \max(1, (int)$raw);
     }
     
     /**

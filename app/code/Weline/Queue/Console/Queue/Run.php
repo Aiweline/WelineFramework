@@ -37,6 +37,8 @@ class Run implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = []): string
     {
+        $this->disableCliExecutionTimeout();
+
         $id = $args['id'] ?? 0;
         $force = !empty($args['f']) || !empty($args['force']);
         if ($id == 0) {
@@ -158,6 +160,18 @@ class Run implements \Weline\Framework\Console\CommandInterface
     private function newQueueModel(): Queue
     {
         return (clone $this->queue)->clearData()->clearQuery();
+    }
+
+    private function disableCliExecutionTimeout(): void
+    {
+        if (\PHP_SAPI !== 'cli') {
+            return;
+        }
+
+        // Queue workers can run long AI/build tasks; do not inherit php.ini execution limits.
+        @\ini_set('max_execution_time', '0');
+        @\set_time_limit(0);
+        @\ignore_user_abort(true);
     }
 
     public function help(): array|string

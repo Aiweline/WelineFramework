@@ -33,6 +33,18 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
     private \Weline\Queue\Model\Queue $queue;
     private \Weline\Queue\Model\Queue\Type $type;
 
+    public function __init()
+    {
+        parent::__init();
+
+        if ($this->request->isIframe()) {
+            $method = (string)$this->request->getRouterData('class/method');
+            if (\in_array($method, ['show', 'form', 'getDetailResult', 'getDetailContent'], true)) {
+                $this->layoutType = 'default.blank';
+            }
+        }
+    }
+
     public function __construct(\Weline\Queue\Model\Queue $queue, \Weline\Queue\Model\Queue\Type $type)
     {
         $this->queue = $queue;
@@ -43,45 +55,96 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
     public function index()
     {
         $this->assign('title', __('消息队列'));
-        
+        $this->assignQueueListingState($this->buildQueueListingState());
+        return $this->fetch();
+    }
+
+    #[Acl('Weline_Queue::index', '队列列表快照', 'mdi mdi-refresh', '队列列表实时快照')]
+    public function getSnapshot(): string
+    {
+        $this->assignQueueListingState($this->buildQueueListingState());
+
+        return $this->fetchJson([
+            'success' => true,
+            'stats_html' => (string)$this->template('Weline_Queue::templates/Backend/Queue/partials/stats.phtml'),
+            'listing_html' => (string)$this->template('Weline_Queue::templates/Backend/Queue/partials/listing.phtml'),
+        ]);
+    }
+
+    /**
+     * @return array{
+     *   queues: array<int, mixed>,
+     *   module: mixed,
+     *   status: mixed,
+     *   q: mixed,
+     *   biz_key: string,
+     *   stats: array{all:int,pending:int,running:int,done:int,error:int,stop:int},
+     *   pagination: mixed
+     * }
+     */
+    private function buildQueueListingState(): array
+    {
         $module = $this->request->getGet('module');
         $status = $this->request->getGet('status');
         $search = $this->request->getGet('q');
         $id = $this->request->getGet('id');
         $bizKey = \trim((string)$this->request->getGet('biz_key', ''));
-        
-        $this->queue->joinModel(\Weline\Queue\Model\Queue\Type::class, 't', 'main_table.type_id=t.type_id', 'left');
-        
+
+        /** @var \Weline\Queue\Model\Queue $queueListing */
+        $queueListing = ObjectManager::make(\Weline\Queue\Model\Queue::class);
+        $queueListing->joinModel(\Weline\Queue\Model\Queue\Type::class, 't', 'main_table.type_id=t.type_id', 'left');
+
         if ($module) {
-            $this->queue->where('t.module_name', $module);
+            $queueListing->where('t.module_name', $module);
         }
         if ($search) {
-            $this->queue->where("concat(main_table.name,main_table.content,main_table.result) like '%$search%'");
+            $queueListing->where("concat(main_table.name,main_table.content,main_table.result) like '%$search%'");
         }
         if ($id) {
-            $this->queue->where('main_table.' . $this->queue::schema_fields_ID, $id);
+            $queueListing->where('main_table.' . $queueListing::schema_fields_ID, $id);
         }
         if ($bizKey !== '') {
-            $this->queue->where('main_table.' . \Weline\Queue\Model\Queue::schema_fields_BIZ_KEY, $bizKey);
+            $queueListing->where('main_table.' . \Weline\Queue\Model\Queue::schema_fields_BIZ_KEY, $bizKey);
         }
         if ($status) {
-            $this->queue->where('main_table.status', $status);
+            $queueListing->where('main_table.status', $status);
         }
-        
-        $this->queue->additional('AND (t.enable = 1 OR t.enable IS NULL)')
+
+        $queueListing->additional('AND (t.enable = 1 OR t.enable IS NULL)')
             ->order('main_table.queue_id', 'DESC');
-        $this->queue->pagination()->select()->fetch();
-        
-        $stats = $this->getQueueStats();
-        
-        $this->assign('queues', $this->queue->getItems());
-        $this->assign('module', $module);
-        $this->assign('status', $status);
-        $this->assign('q', $search);
-        $this->assign('biz_key', $bizKey);
-        $this->assign('stats', $stats);
-        $this->assign('pagination', $this->queue->getPagination());
-        return $this->fetch();
+        $queueListing->pagination()->select()->fetch();
+
+        return [
+            'queues' => $queueListing->getItems(),
+            'module' => $module,
+            'status' => $status,
+            'q' => $search,
+            'biz_key' => $bizKey,
+            'stats' => $this->getQueueStats(),
+            'pagination' => $queueListing->getPagination(),
+        ];
+    }
+
+    /**
+     * @param array{
+     *   queues: array<int, mixed>,
+     *   module: mixed,
+     *   status: mixed,
+     *   q: mixed,
+     *   biz_key: string,
+     *   stats: array{all:int,pending:int,running:int,done:int,error:int,stop:int},
+     *   pagination: mixed
+     * } $state
+     */
+    private function assignQueueListingState(array $state): void
+    {
+        $this->assign('queues', $state['queues']);
+        $this->assign('module', $state['module']);
+        $this->assign('status', $state['status']);
+        $this->assign('q', $state['q']);
+        $this->assign('biz_key', $state['biz_key']);
+        $this->assign('stats', $state['stats']);
+        $this->assign('pagination', $state['pagination']);
     }
     
     private function getQueueStats(): array
@@ -154,6 +217,37 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         return '<div style="padding:16px;"><pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:Consolas,Monaco,monospace;font-size:13px;line-height:1.6;">'
             . $escaped .
             '</pre></div>';
+    }
+
+    private function renderBackendBlankTemplate(string $contentTemplate): string
+    {
+        $contentHtml = (string)$this->template($contentTemplate);
+        $contentRenderKey = \Weline\Theme\Service\PreparedContentStore::put($contentHtml);
+        $template = $this->getTemplate();
+        $template->setData('contentTemplate', $contentTemplate);
+        $template->setData('contentRenderKey', $contentRenderKey);
+
+        $meta = $template->getData('meta');
+        if (!\is_array($meta)) {
+            $meta = [];
+        }
+        $meta['contentTemplate'] = $contentTemplate;
+        $meta['contentRenderKey'] = $contentRenderKey;
+        unset($meta['content']);
+        $template->setData('meta', $meta);
+
+        $childHtml = $template->getData('child_html');
+        if (!\is_array($childHtml)) {
+            $childHtml = [];
+        }
+        $childHtml['contentRenderKey'] = $contentRenderKey;
+        unset($childHtml['content']);
+        $template->setData('child_html', $childHtml);
+
+        return (string)$this->template('Weline_Theme::theme/backend/layouts/default/blank.phtml', [
+            'contentRenderKey' => $contentRenderKey,
+            'contentTemplate' => $contentTemplate,
+        ]);
     }
 
     #[Acl('Weline_Queue::form', '编辑或者新增', 'mdi mdi-form-textbox', '编辑或者新增')]
@@ -418,6 +512,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
     #[Acl('Weline_Queue::show', '查看', 'mdi mdi-monitor-eye', '查看')]
     function show()
     {
+        $this->layoutType = 'default.blank';
         $id = $this->request->getGet('id');
         if (empty($id)) {
             MessageManager::warning(__('请选择要查看的队列'));
@@ -448,6 +543,9 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                 $sieMb = round($resultSize / 1024 / 1024, 2);
                 $this->queue->setData('result', __('队列结果过大:%{1} Mb。 请<a href="%{2}">下载队列结果</a>查看。', [$sieMb, $dowloadUrl]));
             }
+        }
+        if ($this->request->isIframe()) {
+            return $this->renderBackendBlankTemplate('Weline_Queue::templates/Backend/Queue/show.phtml');
         }
         return $this->fetch();
     }

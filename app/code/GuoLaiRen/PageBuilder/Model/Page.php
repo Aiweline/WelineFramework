@@ -120,7 +120,7 @@ class Page extends Model
     public const RENDER_MODE_THEME = '';
     public const RENDER_MODE_AI_HTML = 'ai_html';
     /** 发布快照保留份数上限（与计划「最近 N」一致，可调） */
-    public const AI_PUBLISH_SNAPSHOT_MAX = 5;
+    public const AI_PUBLISH_SNAPSHOT_MAX = 1;
     
     /**
      * 获取所有页面类型
@@ -272,7 +272,11 @@ class Page extends Model
         }
         $decoded = \is_string($raw) ? \json_decode($raw, true) : null;
 
-        return \is_array($decoded) ? \array_values($decoded) : [];
+        if (!\is_array($decoded)) {
+            return [];
+        }
+
+        return \array_values(\array_slice($decoded, -self::AI_PUBLISH_SNAPSHOT_MAX));
     }
 
     /**

@@ -75,6 +75,34 @@ class AiSitePageBlueprintServiceTest extends TestCase
             (string)($heroSection['config']['description'] ?? '')
         );
     }
+
+    public function testBuildPageBlueprintUsesNativeBlogComponents(): void
+    {
+        $service = new AiSitePageBlueprintService();
+        $websiteProfile = [
+            'site_title' => 'Blog Site',
+            'brief_description' => 'A site with articles and category pages.',
+        ];
+
+        $expectations = [
+            Page::TYPE_BLOG_LIST => 'blog-list',
+            Page::TYPE_BLOG_CATEGORY => 'blog-category',
+            Page::TYPE_BLOG => 'blog-detail',
+        ];
+
+        foreach ($expectations as $pageType => $componentCode) {
+            $blueprint = $service->buildPageBlueprint($pageType, [], $websiteProfile);
+            $sections = $blueprint['sections'] ?? [];
+
+            self::assertCount(1, $sections);
+            self::assertSame('native-blog', $sections[0]['key'] ?? '');
+            self::assertSame($componentCode, $sections[0]['code'] ?? '');
+            self::assertSame('native-blog', $sections[0]['template'] ?? '');
+            self::assertArrayHasKey('config', $sections[0]);
+            self::assertStringNotContainsString('content/blog', $sections[0]['code'] ?? '');
+        }
+    }
+
     public function testBuildPageBlueprintDoesNotLeakInternalBriefOrPromptMarkers(): void
     {
         $service = new AiSitePageBlueprintService();
