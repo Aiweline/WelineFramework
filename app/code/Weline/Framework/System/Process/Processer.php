@@ -38,6 +38,19 @@ class Processer
      * PowerShell 可用性缓存（仅 Windows）
      */
     private static ?bool $powerShellAvailableCache = null;
+
+    /**
+     * Windows batchCreate 非等待模式下的后台 helper 资源。
+     *
+     * 这些 PowerShell helper 负责异步批量拉起子进程；必须保留资源句柄，
+     * 否则局部变量析构时可能触发阻塞性的 proc_close()。统一在后续调用或
+     * 进程退出前做最佳努力回收，避免重新退回 cmd.exe 中间层。
+     *
+     * @var array<int, array{process: resource, started_at: float, script_path: string, result_path: string, error_path: string}>
+     */
+    private static array $windowsDetachedBatchHelpers = [];
+
+    private static bool $windowsDetachedBatchHelperShutdownRegistered = false;
     
     /**
      * 已验证为受信任的 PID 缓存
@@ -394,10 +407,55 @@ class Processer
         if (self::$powerShellAvailableCache !== null) {
             return self::$powerShellAvailableCache;
         }
-        $output = [];
-        $code = 0;
-        @\exec('powershell -NoProfile -Command "$PSVersionTable.PSVersion.Major" 2>NUL', $output, $code);
-        self::$powerShellAvailableCache = ($code === 0);
+
+        $disabledFunctions = \array_map('trim', \explode(',', \ini_get('disable_functions') ?: ''));
+        if (!\function_exists('proc_open') || \in_array('proc_open', $disabledFunctions, true)) {
+            self::$powerShellAvailableCache = false;
+            return false;
+        }
+
+        $descriptors = [
+            0 => ['file', 'NUL', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $lastError = null;
+        \set_error_handler(static function ($type, $msg) use (&$lastError): bool {
+            $lastError = $msg;
+            return true;
+        });
+        try {
+            $process = @\proc_open(
+                ['powershell', '-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'],
+                $descriptors,
+                $pipes,
+                BP,
+                null,
+                ['bypass_shell' => true]
+            );
+        } finally {
+            \restore_error_handler();
+        }
+
+        if (!\is_resource($process)) {
+            self::$powerShellAvailableCache = false;
+            return false;
+        }
+
+        $stdout = isset($pipes[1]) ? (string) (\stream_get_contents($pipes[1]) ?: '') : '';
+        $stderr = isset($pipes[2]) ? (string) (\stream_get_contents($pipes[2]) ?: '') : '';
+        if (isset($pipes[1])) {
+            @\fclose($pipes[1]);
+        }
+        if (isset($pipes[2])) {
+            @\fclose($pipes[2]);
+        }
+        if (isset($pipes[0])) {
+            @\fclose($pipes[0]);
+        }
+        $code = @\proc_close($process);
+        $stdout = \trim(\preg_replace('/^\xEF\xBB\xBF/', '', $stdout) ?? $stdout);
+        self::$powerShellAvailableCache = ($code === 0 && $stdout !== '' && $stderr === '' && $lastError === null);
         return self::$powerShellAvailableCache;
     }
     
@@ -2347,10 +2405,11 @@ class Processer
      */
     private static function batchCreateWindows(array $commands): ?array
     {
+        self::reapWindowsDetachedBatchHelpers();
+
         $disabledFunctions = \array_map('trim', \explode(',', \ini_get('disable_functions') ?: ''));
         $procOpenAvailable = \function_exists('proc_open') && !\in_array('proc_open', $disabledFunctions, true);
-        $execAvailable = \function_exists('exec') && !\in_array('exec', $disabledFunctions, true);
-        if (!$procOpenAvailable && !$execAvailable) {
+        if (!$procOpenAvailable) {
             return null;
         }
 
@@ -2429,6 +2488,7 @@ class Processer
         $diagnostic = '';
         $output = '';
         $stderr = '';
+        $waitForResults = false;
 
         if ($batchLaunchItems !== []) {
             $resultPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-result-');
@@ -2446,6 +2506,7 @@ class Processer
             $nullDevice = 'NUL';
             $batchCommand = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File '
                 . \escapeshellarg($scriptPath);
+            $waitForResults = \defined('WELINE_BATCH_CREATE_WAIT_RESULTS') && WELINE_BATCH_CREATE_WAIT_RESULTS;
             $lastError = null;
 
             if ($procOpenAvailable) {
@@ -2486,43 +2547,20 @@ class Processer
 
                     return null;
                 }
-            } elseif ($execAvailable) {
-                \set_error_handler(function ($type, $msg) use (&$lastError) {
-                    $lastError = $msg;
-                    return true;
-                });
-                try {
-                    @\exec($batchCommand . ' > NUL 2>> ' . \escapeshellarg($errorPath), $outputLines, $exitCode);
-                } finally {
-                    \restore_error_handler();
-                }
-
-                if ($lastError !== null) {
-                    @\unlink($scriptPath);
-                    @\unlink($resultPath);
-                    @\unlink($errorPath);
-                    foreach ($batchLaunchItems as $item) {
-                        if (!empty($item['enable_log'])) {
-                            self::setOutput($item['command'], "[ERROR] batchCreate(exec powershell) failed: {$lastError}" . PHP_EOL, true);
-                        }
-                    }
-
-                    return null;
-                }
-                unset($outputLines, $exitCode);
             }
         }
 
         if ($batchLaunchItems !== []) {
-            $waitForResults = false;
             if (\is_resource($psProcess) && $resultPath !== null) {
                 // 对于 Master 的并发启动场景，不要等待所有进程完成报告，PowerShell 脚本已经启动了所有进程。
                 // 快速返回让 Master 立即进入主循环和 IPC 监听，否则子进程启动后无法连接 Master。
-                $waitForResults = \defined('WELINE_BATCH_CREATE_WAIT_RESULTS') && WELINE_BATCH_CREATE_WAIT_RESULTS;
                 if (!$waitForResults) {
-                    // 非等待模式：给 PowerShell 脚本一个极短的时间片来初始化，然后立即返回
-                    \usleep(50_000);  // 50ms - 足以让 PowerShell 脚本加载
-                    // 不调用 waitForWindowsBatchCreateHelper，让它在后台运行
+                    // 非等待模式：不等结果文件、不扫进程表、不做 PID 猜测。
+                    // Master 后续只以 IPC REGISTER/READY 回填的真实 PID 为准。
+                    // 这里保留 helper 资源，避免局部变量析构时退回阻塞性 proc_close()
+                    // 或再次引入 cmd.exe 中间层。
+                    self::rememberWindowsDetachedBatchHelper($psProcess, (string) $scriptPath, (string) $resultPath, (string) $errorPath);
+                    $psProcess = null;
                 } else {
                     // 等待模式：同步等待所有进程启动完成（仅在需要时启用）
                     self::waitForWindowsBatchCreateHelper($psProcess, $resultPath, \count($batchLaunchItems));
@@ -2546,6 +2584,20 @@ class Processer
             $diagnostic = \trim(\implode(' | ', \array_filter([$output, $stderr], static fn (string $text): bool => $text !== '')));
         }
 
+        if (!$waitForResults) {
+            foreach ($batchLaunchItems as $item) {
+                $results[$item['key']] = 0;
+            }
+            foreach ($commands as $key => $config) {
+                unset($config);
+                if (!\array_key_exists($key, $results)) {
+                    $results[$key] = 0;
+                }
+            }
+
+            return $results;
+        }
+
         $pidMap = [];
         $lines = \preg_split('/\r\n|\r|\n/', \trim($output)) ?: [];
         foreach ($lines as $line) {
@@ -2567,13 +2619,11 @@ class Processer
         $pidResolutionItems = self::collectLaunchItemsNeedingPidResolution(
             $batchLaunchItems,
             $pidMap,
-            $waitForResults
+            true
         );
         $resolvedPidMap = self::waitForManagedProcessLaunchBatch(
             $pidResolutionItems,
-            $waitForResults
-                ? 5.0
-                : self::resolveWindowsBatchCreateNonBlockingPidResolutionTimeout(\count($pidResolutionItems))
+            5.0
         );
 
         foreach ($batchLaunchItems as $item) {
@@ -3292,6 +3342,81 @@ POWERSHELL;
     }
 
     /**
+     * @param resource $process
+     */
+    private static function rememberWindowsDetachedBatchHelper($process, string $scriptPath, string $resultPath, string $errorPath): void
+    {
+        if (!\is_resource($process)) {
+            return;
+        }
+
+        self::registerWindowsDetachedBatchHelperShutdown();
+        self::$windowsDetachedBatchHelpers[] = [
+            'process' => $process,
+            'started_at' => \microtime(true),
+            'script_path' => $scriptPath,
+            'result_path' => $resultPath,
+            'error_path' => $errorPath,
+        ];
+    }
+
+    private static function registerWindowsDetachedBatchHelperShutdown(): void
+    {
+        if (self::$windowsDetachedBatchHelperShutdownRegistered) {
+            return;
+        }
+
+        self::$windowsDetachedBatchHelperShutdownRegistered = true;
+        \register_shutdown_function(static function (): void {
+            self::reapWindowsDetachedBatchHelpers(true);
+        });
+    }
+
+    private static function reapWindowsDetachedBatchHelpers(bool $force = false): void
+    {
+        if (self::$windowsDetachedBatchHelpers === []) {
+            return;
+        }
+
+        $now = \microtime(true);
+        foreach (self::$windowsDetachedBatchHelpers as $key => $helper) {
+            $process = $helper['process'] ?? null;
+            if (!\is_resource($process)) {
+                self::cleanupWindowsDetachedBatchHelperFiles($helper);
+                unset(self::$windowsDetachedBatchHelpers[$key]);
+                continue;
+            }
+
+            $status = @\proc_get_status($process);
+            $age = $now - (float) ($helper['started_at'] ?? $now);
+            if (!$force && ($status['running'] ?? false) === true && $age < 10.0) {
+                continue;
+            }
+
+            self::finishWindowsDetachedHelperProcess($process, $status);
+            self::cleanupWindowsDetachedBatchHelperFiles($helper);
+            unset(self::$windowsDetachedBatchHelpers[$key]);
+        }
+
+        if (self::$windowsDetachedBatchHelpers !== []) {
+            self::$windowsDetachedBatchHelpers = \array_values(self::$windowsDetachedBatchHelpers);
+        }
+    }
+
+    /**
+     * @param array{script_path?: string, result_path?: string, error_path?: string} $helper
+     */
+    private static function cleanupWindowsDetachedBatchHelperFiles(array $helper): void
+    {
+        foreach (['script_path', 'result_path', 'error_path'] as $field) {
+            $path = (string) ($helper[$field] ?? '');
+            if ($path !== '') {
+                @\unlink($path);
+            }
+        }
+    }
+
+    /**
      * @param array<int, array{key: string, command: string, php: string, arguments: string, argument_list?: list<string>, process_name: string, cwd: string, enable_log: bool, foreground: bool}> $launchItems
      */
     private static function buildWindowsBatchCreateScript(array $launchItems, string $resultPath, string $errorPath): ?string
@@ -3805,9 +3930,7 @@ POWERSHELL;
             }
         }
 
-        return 'cmd /d /c start "" /B cmd /d /c "taskkill /F '
-            . \implode(' ', $pidArgs)
-            . ' 1>NUL 2>NUL"';
+        return self::buildWindowsBatchSignalCommand($pids);
     }
 
     /**
@@ -3823,9 +3946,7 @@ POWERSHELL;
             }
         }
 
-        return 'cmd /d /c start "" /B cmd /d /c "taskkill /F /T '
-            . \implode(' ', $pidArgs)
-            . ' 1>NUL 2>NUL"';
+        return self::buildWindowsBatchTreeKillCommand($pids);
     }
 
     /**
@@ -5941,8 +6062,123 @@ POWERSHELL;
      * @param int &$returnCode 返回码（引用传递）
      * @return bool 是否执行成功
      */
+    private static function executeWindowsCommandBypassShell(string $command, array &$output, int &$returnCode): bool
+    {
+        $isWin = \defined('IS_WIN')
+            ? (bool) \constant('IS_WIN')
+            : (\strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN');
+        if (!$isWin || !\function_exists('proc_open')) {
+            return false;
+        }
+
+        [$command, $mergeStderr] = self::stripWindowsCommandRedirections($command);
+        if ($command === '' || self::containsWindowsShellSyntax($command)) {
+            return false;
+        }
+
+        $argv = self::tokenizeCommandLineArguments($command);
+        if ($argv === []) {
+            return false;
+        }
+
+        $program = \strtolower(\basename(\str_replace('\\', '/', (string) ($argv[0] ?? ''))));
+        $directPrograms = [
+            'powershell' => true,
+            'powershell.exe' => true,
+            'taskkill' => true,
+            'taskkill.exe' => true,
+            'tasklist' => true,
+            'tasklist.exe' => true,
+            'wmic' => true,
+            'wmic.exe' => true,
+            'netstat' => true,
+            'netstat.exe' => true,
+        ];
+        if (!isset($directPrograms[$program])) {
+            return false;
+        }
+
+        $descriptors = [
+            0 => ['file', 'NUL', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $process = @\proc_open($argv, $descriptors, $pipes, BP, null, ['bypass_shell' => true]);
+        if (!\is_resource($process)) {
+            return false;
+        }
+
+        $stdout = isset($pipes[1]) ? (string) (\stream_get_contents($pipes[1]) ?: '') : '';
+        $stderr = isset($pipes[2]) ? (string) (\stream_get_contents($pipes[2]) ?: '') : '';
+        foreach ([0, 1, 2] as $pipeIndex) {
+            if (isset($pipes[$pipeIndex]) && \is_resource($pipes[$pipeIndex])) {
+                @\fclose($pipes[$pipeIndex]);
+            }
+        }
+
+        $returnCode = @\proc_close($process);
+        if ($mergeStderr || $stderr !== '') {
+            if ($stdout !== '' && !\str_ends_with($stdout, "\n") && !\str_ends_with($stdout, "\r")) {
+                $stdout .= PHP_EOL;
+            }
+            $stdout .= $stderr;
+        }
+
+        $stdout = self::normalizeWindowsPowerShellPipeOutput($stdout);
+        $output = $stdout !== ''
+            ? (\preg_split('/\r\n|\r|\n/', \rtrim($stdout, "\r\n")) ?: [])
+            : [];
+
+        return true;
+    }
+
+    /**
+     * @return array{0:string,1:bool}
+     */
+    private static function stripWindowsCommandRedirections(string $command): array
+    {
+        $mergeStderr = false;
+        foreach (['/\s+2>\s*NUL\b/i', '/\s+1>\s*NUL\b/i', '/\s+>\s*NUL\b/i'] as $pattern) {
+            $command = \preg_replace($pattern, '', $command) ?? $command;
+        }
+        $command = \preg_replace_callback(
+            '/\s+2>\s*&1\b/i',
+            static function () use (&$mergeStderr): string {
+                $mergeStderr = true;
+                return '';
+            },
+            $command
+        ) ?? $command;
+
+        return [\trim($command), $mergeStderr];
+    }
+
+    private static function containsWindowsShellSyntax(string $command): bool
+    {
+        $inQuotes = false;
+        $length = \strlen($command);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $command[$i];
+            if ($char === '"') {
+                $inQuotes = !$inQuotes;
+                continue;
+            }
+
+            if (!$inQuotes && \in_array($char, ['|', '&', '<', '>'], true)) {
+                return true;
+            }
+        }
+
+        return $inQuotes;
+    }
+
     public static function execute(string $command, array &$output = [], int &$returnCode = 0): bool
     {
+        if (self::executeWindowsCommandBypassShell($command, $output, $returnCode)) {
+            return $returnCode === 0;
+        }
+
         // 检查可用的命令执行函数
         $availableFunctions = [
             'exec' => function_exists('exec'),

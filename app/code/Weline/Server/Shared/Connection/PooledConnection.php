@@ -23,9 +23,6 @@ class PooledConnection implements PooledConnectionInterface
     private int $authTokenVersion = 0; // Token 版本号
     private string $serviceType = ''; // 服务类型标识（Session/Memory/Cache）
 
-    private bool $helloRegistered = false;
-    private bool $shutdownSent = false;
-
     private float $nextConnectAttemptAt = 0.0;
     private int $consecutiveFailures = 0;
 
@@ -38,10 +35,6 @@ class PooledConnection implements PooledConnectionInterface
         private readonly bool $logConnectFailure = true,
         ?string $serviceType = null,
         private readonly bool $logLifecycleDetails = true,
-        private readonly string $consumerCode = '',
-        private readonly string $consumerInstanceName = '',
-        private readonly string $serviceRole = '',
-        private readonly string $ownerType = 'instance',
     ) {
         // 根据端口自动推断服务类型
         $this->serviceType = $serviceType ?? $this->detectServiceType($port);
@@ -101,8 +94,6 @@ class PooledConnection implements PooledConnectionInterface
         $this->socket = $socket;
         $this->buffer = '';
         $this->authenticated = false;
-        $this->helloRegistered = false;
-        $this->shutdownSent = false;
 
         if (!$this->authenticate()) {
             if ($this->logLifecycleDetails) {
@@ -117,11 +108,6 @@ class PooledConnection implements PooledConnectionInterface
         if ($this->logLifecycleDetails) {
             $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
             $this->log("[CONN-OK] {$timestamp} Connected and authenticated ({$this->serviceType})");
-        }
-        if (!$this->sendHello()) {
-            $this->close();
-            $this->registerFailure();
-            return false;
         }
         $this->resetFailureState();
         return true;
@@ -223,7 +209,6 @@ class PooledConnection implements PooledConnectionInterface
     public function close(): void
     {
         if ($this->socket !== null) {
-            $this->sendShutdownIfNeeded();
             if ($this->logLifecycleDetails) {
                 $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
                 $this->log("[CONN-CLOSE] {$timestamp} Closing connection to {$this->host}:{$this->port}");
@@ -233,8 +218,6 @@ class PooledConnection implements PooledConnectionInterface
         }
         $this->buffer = '';
         $this->authenticated = false;
-        $this->helloRegistered = false;
-        $this->shutdownSent = false;
     }
 
     private function authenticate(): bool
@@ -376,55 +359,6 @@ class PooledConnection implements PooledConnectionInterface
     {
         $this->consecutiveFailures = 0;
         $this->nextConnectAttemptAt = 0.0;
-    }
-
-    /**
-     * 根据端口号推断服务类型
-     */
-    private function sendHello(): bool
-    {
-        $consumerCode = \trim($this->consumerCode);
-        if ($consumerCode === '' || $this->helloRegistered) {
-            return true;
-        }
-
-        if (!$this->send(SessionProtocol::buildHello(
-            $consumerCode,
-            \trim($this->consumerInstanceName) !== '' ? $this->consumerInstanceName : $consumerCode,
-            $this->serviceRole,
-            $this->ownerType,
-        ))) {
-            return false;
-        }
-
-        $response = $this->read();
-        if (!\is_array($response) || !SessionProtocol::isSuccess($response)) {
-            return false;
-        }
-
-        $this->helloRegistered = true;
-        $this->shutdownSent = false;
-
-        return true;
-    }
-
-    private function sendShutdownIfNeeded(): void
-    {
-        if (!$this->authenticated || !$this->helloRegistered || $this->shutdownSent) {
-            return;
-        }
-
-        $consumerCode = \trim($this->consumerCode);
-        if ($consumerCode === '') {
-            return;
-        }
-
-        try {
-            @\fwrite($this->socket, SessionProtocol::buildShutdown($consumerCode));
-            $this->shutdownSent = true;
-        } catch (\Throwable) {
-            // best effort only
-        }
     }
 
     private function detectServiceType(int $port): string

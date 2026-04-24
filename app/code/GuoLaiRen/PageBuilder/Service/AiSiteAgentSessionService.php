@@ -178,10 +178,77 @@ class AiSiteAgentSessionService
             return false;
         }
 
-        $session->setData(AiSiteAgentSession::schema_fields_SCOPE_JSON, $scopeJson);
+        $session->setScopeJsonRaw($scopeJson);
         $this->touchUpdateTime($session);
         $session->save();
         return true;
+    }
+
+    /**
+     * Lightweight preview-switch snapshot for large scope_json rows.
+     *
+     * @return array{
+     *   scope_json_bytes:int,
+     *   page_types:list<string>,
+     *   pagebuilder_pages_by_type:array<string, array<string, mixed>>,
+     *   virtual_pages_by_type:array<string, array<string, mixed>>,
+     *   preview_page_id:int,
+     *   preview_page_type:string
+     * }|null
+     */
+    public function loadPreviewSwitchScopeSnapshot(int $sessionId, int $forAdminUserId): ?array
+    {
+        $session = $this->loadById($sessionId, $forAdminUserId);
+        if ($session === null) {
+            return null;
+        }
+
+        $pgsqlSnapshot = $this->loadPreviewSwitchScopeSnapshotFromPgsql($sessionId, $forAdminUserId);
+        if ($pgsqlSnapshot !== null) {
+            return $pgsqlSnapshot;
+        }
+
+        $raw = (string)($session->getData(AiSiteAgentSession::schema_fields_SCOPE_JSON) ?? '');
+        $scope = $session->getScopeArray();
+
+        return [
+            'scope_json_bytes' => \strlen($raw),
+            'page_types' => \array_values(\array_filter(
+                \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : [],
+                static fn(mixed $item): bool => \is_string($item) && \trim($item) !== ''
+            )),
+            'pagebuilder_pages_by_type' => \is_array($scope['pagebuilder_pages_by_type'] ?? null)
+                ? $scope['pagebuilder_pages_by_type']
+                : [],
+            'virtual_pages_by_type' => \is_array($scope['virtual_pages_by_type'] ?? null)
+                ? $scope['virtual_pages_by_type']
+                : [],
+            'preview_page_id' => (int)($scope['preview_page_id'] ?? 0),
+            'preview_page_type' => \trim((string)($scope['preview_page_type'] ?? '')),
+        ];
+    }
+
+    public function updatePreviewSelectionScope(int $sessionId, int $forAdminUserId, string $previewPageType, int $previewPageId): bool
+    {
+        $previewPageType = \trim($previewPageType);
+        if ($previewPageType === '') {
+            return false;
+        }
+
+        $pgsqlUpdated = $this->updatePreviewSelectionScopeInPgsql(
+            $sessionId,
+            $forAdminUserId,
+            $previewPageType,
+            $previewPageId
+        );
+        if ($pgsqlUpdated !== null) {
+            return $pgsqlUpdated;
+        }
+
+        return $this->mergeScope($sessionId, $forAdminUserId, [
+            'preview_page_type' => $previewPageType,
+            'preview_page_id' => \max(0, $previewPageId),
+        ]);
     }
 
     public function setStage(int $sessionId, int $forAdminUserId, string $stage): bool
@@ -397,6 +464,195 @@ class AiSiteAgentSessionService
             AiSiteAgentSession::schema_fields_UPDATE_TIME,
             \date('Y-m-d H:i:s')
         );
+    }
+
+    /**
+     * @return array{
+     *   scope_json_bytes:int,
+     *   page_types:list<string>,
+     *   pagebuilder_pages_by_type:array<string, array<string, mixed>>,
+     *   virtual_pages_by_type:array<string, array<string, mixed>>,
+     *   preview_page_id:int,
+     *   preview_page_type:string
+     * }|null
+     */
+    private function loadPreviewSwitchScopeSnapshotFromPgsql(int $sessionId, int $forAdminUserId): ?array
+    {
+        $pdo = $this->getPgsqlPdo();
+        if ($pdo === null) {
+            return null;
+        }
+
+        $table = $this->sessionModel->getTable();
+        $pk = AiSiteAgentSession::schema_fields_ID;
+        $adminField = AiSiteAgentSession::schema_fields_ADMIN_USER_ID;
+        $scopeField = AiSiteAgentSession::schema_fields_SCOPE_JSON;
+        $sql = <<<SQL
+SELECT
+    OCTET_LENGTH(COALESCE(scope_row.raw_scope_json, '')) AS scope_json_bytes,
+    COALESCE((scope_row.scope_doc -> 'page_types')::text, '[]') AS page_types_json,
+    COALESCE((scope_row.scope_doc -> 'pagebuilder_pages_by_type')::text, '{}') AS pagebuilder_pages_json,
+    COALESCE((scope_row.scope_doc -> 'virtual_pages_by_type')::text, '{}') AS virtual_pages_json,
+    COALESCE(scope_row.scope_doc ->> 'preview_page_type', '') AS preview_page_type,
+    COALESCE((scope_row.scope_doc ->> 'preview_page_id')::int, 0) AS preview_page_id
+FROM (
+    SELECT
+        {$scopeField} AS raw_scope_json,
+        COALESCE(NULLIF({$scopeField}, ''), '{}')::jsonb AS scope_doc
+    FROM {$table}
+    WHERE {$pk} = :session_id
+      AND {$adminField} = :admin_user_id
+    LIMIT 1
+) AS scope_row
+SQL;
+        $stmt = $pdo->prepare($sql);
+        if (!$stmt || !$stmt->execute([
+            'session_id' => $sessionId,
+            'admin_user_id' => $forAdminUserId,
+        ])) {
+            return null;
+        }
+
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!\is_array($row)) {
+            return null;
+        }
+
+        return [
+            'scope_json_bytes' => (int)($row['scope_json_bytes'] ?? 0),
+            'page_types' => $this->decodeJsonList((string)($row['page_types_json'] ?? '[]')),
+            'pagebuilder_pages_by_type' => $this->decodeJsonMap((string)($row['pagebuilder_pages_json'] ?? '{}')),
+            'virtual_pages_by_type' => $this->decodeJsonMap((string)($row['virtual_pages_json'] ?? '{}')),
+            'preview_page_id' => (int)($row['preview_page_id'] ?? 0),
+            'preview_page_type' => \trim((string)($row['preview_page_type'] ?? '')),
+        ];
+    }
+
+    private function updatePreviewSelectionScopeInPgsql(
+        int $sessionId,
+        int $forAdminUserId,
+        string $previewPageType,
+        int $previewPageId
+    ): ?bool {
+        $pdo = $this->getPgsqlPdo();
+        if ($pdo === null) {
+            return null;
+        }
+
+        $table = $this->sessionModel->getTable();
+        $pk = AiSiteAgentSession::schema_fields_ID;
+        $adminField = AiSiteAgentSession::schema_fields_ADMIN_USER_ID;
+        $scopeField = AiSiteAgentSession::schema_fields_SCOPE_JSON;
+        $updateField = AiSiteAgentSession::schema_fields_UPDATE_TIME;
+        $sql = <<<SQL
+UPDATE {$table} AS session_row
+SET
+    {$scopeField} = jsonb_set(
+        jsonb_set(
+            source.scope_doc,
+            '{preview_page_type}',
+            to_jsonb(CAST(:preview_page_type AS text)),
+            true
+        ),
+        '{preview_page_id}',
+        to_jsonb(CAST(:preview_page_id AS integer)),
+        true
+    )::text,
+    {$updateField} = :update_time
+FROM (
+    SELECT
+        {$pk} AS target_session_id,
+        COALESCE(NULLIF({$scopeField}, ''), '{}')::jsonb AS scope_doc
+    FROM {$table}
+    WHERE {$pk} = :source_session_id
+      AND {$adminField} = :source_admin_user_id
+    LIMIT 1
+) AS source
+WHERE session_row.{$pk} = source.target_session_id
+  AND session_row.{$adminField} = :target_admin_user_id
+SQL;
+        $stmt = $pdo->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+
+        $stmt->execute([
+            'preview_page_type' => $previewPageType,
+            'preview_page_id' => \max(0, $previewPageId),
+            'update_time' => \date('Y-m-d H:i:s'),
+            'source_session_id' => $sessionId,
+            'source_admin_user_id' => $forAdminUserId,
+            'target_admin_user_id' => $forAdminUserId,
+        ]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    private function getPgsqlPdo(): ?\PDO
+    {
+        $connector = ObjectManager::getInstance(ConnectionFactory::class)->getConnector();
+        if (!$connector instanceof PgsqlConnector || !\method_exists($connector, 'getWrappedConnection')) {
+            return null;
+        }
+
+        $pdo = $connector->getWrappedConnection()->getPdo();
+        if ($pdo->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'pgsql') {
+            return null;
+        }
+
+        return $pdo;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function decodeJsonList(string $json): array
+    {
+        if ($json === '') {
+            return [];
+        }
+
+        try {
+            $decoded = \json_decode($json, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+
+        if (!\is_array($decoded)) {
+            return [];
+        }
+
+        $items = [];
+        foreach ($decoded as $item) {
+            if (!\is_string($item)) {
+                continue;
+            }
+            $item = \trim($item);
+            if ($item === '') {
+                continue;
+            }
+            $items[] = $item;
+        }
+
+        return \array_values(\array_unique($items));
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function decodeJsonMap(string $json): array
+    {
+        if ($json === '') {
+            return [];
+        }
+
+        try {
+            $decoded = \json_decode($json, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+
+        return \is_array($decoded) ? $decoded : [];
     }
 
     private function getLocalWelineHostsSyncService(): LocalWelineHostsSyncService
