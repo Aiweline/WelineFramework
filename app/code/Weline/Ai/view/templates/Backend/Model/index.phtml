@@ -59,10 +59,10 @@ $currentSearch = $currentSearch ?? '';
                                 <strong><lang>先添加供应商账户</lang></strong>：切换到「<lang>供应商账户</lang>」Tab，点击「<lang>添加账户</lang>」，选择供应商并填写 API 密钥，保存后点击「连通性测试」，<strong><lang>测试通过后才能激活账户</lang></strong>。
                             </li>
                             <li class="mb-2">
-                                <strong><lang>在模型内启用模型</lang></strong>：在本页（模型 Tab）中，点击「编辑」进入模型配置，选择使用「供应商账户」或「自配置」填写密钥；<strong><lang>必须先完成配置，再点击「连通性测试」按钮，测试通过后才能启用/激活该模型</lang></strong>（启用按钮变为可用）。
+                                <strong><lang>快速选择模型</lang></strong>：点击「<lang>选择模型</lang>」，先选供应商再选模型；常用模型只需填写 API Key，系统会自动带出 Base URL、最大输出和价格参数。
                             </li>
                             <li class="mb-2">
-                                <strong><lang>适配器说明</lang></strong>：「<lang>适配器</lang>」Tab 用于管理各业务场景的适配器（如翻译、摘要等），可为适配器设置默认使用的 AI 模型；适配器调用时会优先使用该默认模型。
+                                <strong><lang>列表精简</lang></strong>：本页只显示已选择、已配置、已激活、已测试或自定义模型；供应商配置文件中的全量模型不会再自动铺满列表。
                             </li>
                         </ol>
                     </div>
@@ -100,10 +100,26 @@ $currentSearch = $currentSearch ?? '';
             
             <!-- 右侧按钮 -->
             <div class="d-flex gap-2">
-                <a href="<?= $this->getBackendUrl('*/backend/model/edit', ['id' => 0]) ?>" class="btn btn-success">
-                    <i class="mdi mdi-plus me-1"></i>
-                    <lang>新增模型</lang>
-                </a>
+                <block class='Weline\Component\Block\OffCanvas'
+                       template='Weline_Component::off-canvas.phtml'
+                       cache='0'
+                       id='model_quick_create'
+                       action="*/backend/model/editOffcanvas"
+                       action-params="{id: 0}"
+                       target-tag="button"
+                       target-button-class='btn btn-success'
+                       icon='mdi mdi-plus'
+                       title='<?= __("选择模型") ?>'
+                       target-button-text='<?= __("选择模型") ?>'
+                       close-button-show='1'
+                       close-button-text='<?= __("关闭") ?>'
+                       direction='right'
+                       class-names='w-50'
+                       flush='1'
+                       save='1'
+                       flush-button-text='<?= __("刷新") ?>'
+                       off-canvas-body-style=''
+                />
                 <a href="<?= $this->getBackendUrl('*/backend/defaultModel') ?>" class="btn btn-primary">
                     <i class="mdi mdi-star me-1"></i>
                     <lang>默认模型管理</lang>
@@ -182,7 +198,7 @@ $currentSearch = $currentSearch ?? '';
                 <?php if (empty($models)): ?>
                     <div class="alert alert-info">
                         <i class="mdi mdi-information me-2"></i>
-                        <lang>暂无数据，请点击"新增模型"按钮添加模型，或运行 php bin/w ai:model:collect 扫描配置。</lang>
+                        <lang>暂无已选择模型，请点击“选择模型”，选择供应商和模型后填写 API Key 保存。</lang>
                     </div>
                 <?php else: ?>
                     <div class="table-responsive">
@@ -250,8 +266,9 @@ $currentSearch = $currentSearch ?? '';
                                             </div>
                                         </td>
                                         <td>
-                                            <div><lang>输入</lang> $<?= number_format((float)($model['token_price_input'] ?? 0), 6) ?>/1K</div>
-                                            <div><lang>输出</lang> $<?= number_format((float)($model['token_price_output'] ?? 0), 6) ?>/1K</div>
+                                            <?php $currencySymbol = (($model['price_currency'] ?? 'USD') === 'CNY') ? '¥' : '$'; ?>
+                                            <div><lang>输入</lang> <?= $currencySymbol ?><?= number_format((float)($model['token_price_input'] ?? 0), 6) ?>/1K</div>
+                                            <div><lang>输出</lang> <?= $currencySymbol ?><?= number_format((float)($model['token_price_output'] ?? 0), 6) ?>/1K</div>
                                         </td>
                                         <td>
                                             <?php if (!empty($model['has_api_key'])): ?>

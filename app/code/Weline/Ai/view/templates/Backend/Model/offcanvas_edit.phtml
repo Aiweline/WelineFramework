@@ -194,15 +194,26 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
                         </div>
                         <div class="card-body">
                             <div class="row g-2">
-                                <div class="col-md-7">
-                                    <label for="common_model_preset" class="form-label">
-                                        <?= __('常用模型') ?>
+                                <div class="col-md-3">
+                                    <label for="common_provider_preset" class="form-label">
+                                        <?= __('供应商') ?>
                                     </label>
-                                    <select class="form-select" id="common_model_preset">
-                                        <option value=""><?= __('手动配置') ?></option>
+                                    <select class="form-select" id="common_provider_preset">
+                                        <option value=""><?= __('选择供应商') ?></option>
                                     </select>
                                     <div class="form-text">
-                                        <?= __('选择预设后会自动填充供应商、模型代码、Base URL、最大输出和价格参数。') ?>
+                                        <?= __('先选供应商，减少模型列表干扰。') ?>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="common_model_preset" class="form-label">
+                                        <?= __('模型') ?>
+                                    </label>
+                                    <select class="form-select" id="common_model_preset" disabled>
+                                        <option value=""><?= __('先选择供应商') ?></option>
+                                    </select>
+                                    <div class="form-text">
+                                        <?= __('自动填充模型代码、Base URL、最大输出和价格参数。') ?>
                                     </div>
                                 </div>
                                 <div class="col-md-5">
@@ -216,7 +227,7 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
                                            autocomplete="off"
                                            placeholder="<?= __('填入 API Key 即可保存常用模型') ?>">
                                     <div class="form-text">
-                                        <?= __('会写入当前模型自配置；也可以留空后使用供应商账户。') ?>
+                                        <?= __('常见模型填 API Key 即可；也可以留空后使用供应商账户。') ?>
                                     </div>
                                 </div>
                             </div>
@@ -514,10 +525,9 @@ if (!empty($displayConfig)) {
                                        value="<?= $costPerToken ?>" 
                                        step="0.000001"
                                        min="0"
-                                       placeholder="推荐: 0.0015 (GPT-3.5标准价格)">
+                                       placeholder="<?= __('按供应商官方价格自动填充') ?>">
                                 <div class="form-text">
-                                    <?= __('每1000个令牌的成本（美元）') ?> 
-                                    <span class="text-muted">· GPT-3.5: $0.0015 | GPT-4: $0.03</span>
+                                    <?= __('每1000个令牌的成本；常用模型会按供应商官方币种自动填充') ?>
                                 </div>
                             </div>
                         </div>
@@ -848,22 +858,64 @@ if (!empty($displayConfig)) {
             }
         },
 
-        initPresetSelector: function() {
+        fillModelPresetOptions: function(providerCode) {
             var select = document.getElementById('common_model_preset');
-            if (!select || !Array.isArray(commonModelPresets)) return;
+            if (!select) return;
 
-            commonModelPresets.forEach(function(preset) {
+            select.innerHTML = '';
+            var placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = providerCode ? '<?= addslashes(__('选择模型')) ?>' : '<?= addslashes(__('先选择供应商')) ?>';
+            select.appendChild(placeholder);
+            select.disabled = !providerCode;
+
+            if (!providerCode || !Array.isArray(commonModelPresets)) return;
+
+            var presets = commonModelPresets.filter(function(preset) {
+                return preset.provider === providerCode;
+            });
+            presets.forEach(function(preset) {
                 var option = document.createElement('option');
                 option.value = preset.key;
-                option.textContent = (preset.provider_name || preset.provider || '') + ' / ' + (preset.name || preset.model_code || '') + ' (' + (preset.model_code || '') + ')';
+                option.textContent = (preset.name || preset.model_code || '') + ' (' + (preset.model_code || '') + ')';
                 select.appendChild(option);
             });
 
+            if (presets.length === 1) {
+                select.value = presets[0].key;
+                this.applyPreset(presets[0]);
+            }
+        },
+
+        initPresetSelector: function() {
+            var providerSelect = document.getElementById('common_provider_preset');
+            var modelSelect = document.getElementById('common_model_preset');
+            if (!providerSelect || !modelSelect || !Array.isArray(commonModelPresets)) return;
+
             var self = this;
-            select.addEventListener('change', function() {
+            var providers = {};
+            commonModelPresets.forEach(function(preset) {
+                if (!preset.provider) return;
+                providers[preset.provider] = preset.provider_name || preset.provider;
+            });
+
+            Object.keys(providers).sort(function(a, b) {
+                return providers[a].localeCompare(providers[b]);
+            }).forEach(function(providerCode) {
+                var option = document.createElement('option');
+                option.value = providerCode;
+                option.textContent = providers[providerCode];
+                providerSelect.appendChild(option);
+            });
+
+            providerSelect.addEventListener('change', function() {
+                self.fillModelPresetOptions(this.value || '');
+            });
+
+            modelSelect.addEventListener('change', function() {
                 if (!this.value) return;
                 var preset = commonModelPresets.find(function(item) {
-                    return item.key === select.value;
+                    return item.key === modelSelect.value;
                 });
                 self.applyPreset(preset);
             });
