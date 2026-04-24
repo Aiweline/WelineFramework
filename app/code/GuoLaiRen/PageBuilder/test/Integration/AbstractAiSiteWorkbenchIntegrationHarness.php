@@ -409,6 +409,11 @@ class InMemorySseWriter extends \Weline\Framework\Http\Sse\SseWriter
         return $this;
     }
 
+    public function maybeHeartbeat(): self
+    {
+        return $this;
+    }
+
     public function sendEvent(string $event, mixed $data = null, ?int $id = null): static
     {
         $this->events[] = ['event' => $event, 'data' => $data];

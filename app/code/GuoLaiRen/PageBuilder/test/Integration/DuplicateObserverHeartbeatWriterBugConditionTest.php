@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Integration;
 
-use Closure;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Http\Sse\SseWriter;
+
+require_once __DIR__ . '/../Support/DuplicateObserverHeartbeatWriter.php';
 
 /**
  * Bug Condition Exploration Test for DuplicateObserverHeartbeatWriter

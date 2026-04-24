@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Integration;
 
-use Closure;
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\Page;
@@ -13,9 +12,11 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Runtime\RequestContext;
 
+require_once __DIR__ . '/../Support/DuplicateObserverHeartbeatWriter.php';
+
 final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWorkbenchIntegrationHarness
 {
-    public function testPhasePlanOperationsKeepQueuedObserverStreamOpen(): void
+    public function testLongRunningQueuedOperationsKeepObserverStreamOpen(): void
     {
         /** @var AiSiteAgent $controller */
         $controller = ObjectManager::getInstance(AiSiteAgent::class);
@@ -24,7 +25,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
 
         self::assertTrue((bool)$method->invoke($controller, 'plan'));
         self::assertTrue((bool)$method->invoke($controller, 'task_plan'));
-        self::assertFalse((bool)$method->invoke($controller, 'build'));
+        self::assertTrue((bool)$method->invoke($controller, 'build'));
         self::assertFalse((bool)$method->invoke($controller, 'publish'));
     }
 
@@ -695,7 +696,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             $messages[] = (string)($payload['message'] ?? '');
         }
         self::assertTrue(
-            \count(\array_filter($messages, static fn(string $message): bool => \str_contains($message, '队列已在后台启动 worker'))) > 0,
+            \count(\array_filter($messages, static fn(string $message): bool => \str_contains($message, '队列已在后台启动执行进程'))) > 0,
             \json_encode($messages, \JSON_UNESCAPED_UNICODE)
         );
 
@@ -811,7 +812,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             \json_encode($messages, \JSON_UNESCAPED_UNICODE)
         );
         self::assertTrue(
-            \count(\array_filter($messages, static fn(string $message): bool => \str_contains($message, '队列已在后台启动 worker'))) > 0,
+            \count(\array_filter($messages, static fn(string $message): bool => \str_contains($message, '队列已在后台启动执行进程'))) > 0,
             \json_encode($messages, \JSON_UNESCAPED_UNICODE)
         );
 
@@ -1050,7 +1051,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertSame('hero', (string)($payload['section_code'] ?? ''));
     }
 
-    public function testDuplicateOperationObserverForwardsPlanningInfoAndChunkEvents(): void
+    public function testDuplicateOperationObserverForwardsPlanningInfoAndSuppressesChunkContent(): void
     {
         $createPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-create-session',
@@ -1128,12 +1129,14 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertIsArray($infoPayload['state'] ?? null);
         self::assertSame('# Queue observer plan', (string)($infoPayload['state']['scope']['plan_markdown'] ?? ''));
 
-        $chunkEvents = $writer->eventsByName('chunk');
-        self::assertCount(1, $chunkEvents);
-        $chunkPayload = \is_array($chunkEvents[0]['data'] ?? null) ? $chunkEvents[0]['data'] : [];
-        self::assertSame('hero chunk visible', (string)($chunkPayload['message'] ?? ''));
-        self::assertSame('hero chunk visible', (string)($chunkPayload['chunk'] ?? ''));
-        self::assertSame('plan', (string)($chunkPayload['operation'] ?? ''));
+        $progressEvents = $writer->eventsByName('progress');
+        self::assertCount(1, $progressEvents);
+        $progressPayload = \is_array($progressEvents[0]['data'] ?? null) ? $progressEvents[0]['data'] : [];
+        self::assertSame('plan', (string)($progressPayload['operation'] ?? ''));
+        self::assertTrue((bool)($progressPayload['suppressed_content'] ?? false));
+        self::assertStringContainsString('省略', (string)($progressPayload['message'] ?? ''));
+        self::assertArrayNotHasKey('chunk', $progressPayload);
+        self::assertArrayNotHasKey('content', $progressPayload);
     }
 
     public function testWorkspaceEventMatchesTaskPlanOperationForTaskPlanStream(): void
@@ -1153,7 +1156,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         ], 'task_plan'));
     }
 
-    public function testDuplicateOperationObserverForwardsAiRawChunkEvents(): void
+    public function testDuplicateOperationObserverSuppressesAiRawChunkContent(): void
     {
         $createPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-create-session',
@@ -1204,12 +1207,13 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertIsArray($result);
         self::assertTrue((bool)($result['success'] ?? false), \json_encode($result, \JSON_UNESCAPED_UNICODE));
 
-        $chunkEvents = $writer->eventsByName('chunk');
-        self::assertCount(1, $chunkEvents);
-        $chunkPayload = \is_array($chunkEvents[0]['data'] ?? null) ? $chunkEvents[0]['data'] : [];
-        self::assertSame('plan', (string)($chunkPayload['operation'] ?? ''));
-        self::assertSame('{"markdown":"raw ai"}', (string)($chunkPayload['chunk'] ?? ''));
-        self::assertSame('{"markdown":"raw ai"}', (string)($chunkPayload['message'] ?? ''));
+        $progressEvents = $writer->eventsByName('progress');
+        self::assertCount(1, $progressEvents);
+        $progressPayload = \is_array($progressEvents[0]['data'] ?? null) ? $progressEvents[0]['data'] : [];
+        self::assertSame('plan', (string)($progressPayload['operation'] ?? ''));
+        self::assertTrue((bool)($progressPayload['suppressed_content'] ?? false));
+        self::assertStringContainsString('省略', (string)($progressPayload['message'] ?? ''));
+        self::assertArrayNotHasKey('chunk', $progressPayload);
     }
 
     public function testObservedQueueAiStreamLinesAreSkippedForPlanningOperations(): void
@@ -1270,70 +1274,5 @@ final class DummyTaskCompletedObserverWriter extends SseWriter
             $this->events,
             static fn(array $event): bool => $event['event'] === $eventName
         ));
-    }
-}
-
-final class DuplicateObserverHeartbeatWriter extends SseWriter
-{
-    private bool $heartbeatTriggered = false;
-    /** @var list<array{event:string,data:mixed}> */
-    private array $events = [];
-
-    public function __construct(
-        private readonly Closure $onFirstHeartbeat,
-    ) {
-    }
-
-    public function start(): static
-    {
-        return $this;
-    }
-
-    public function maybeHeartbeat(): self
-    {
-        if (!$this->heartbeatTriggered) {
-            $this->heartbeatTriggered = true;
-            ($this->onFirstHeartbeat)();
-        }
-
-        return $this;
-    }
-
-    public function sendEvent(string $event, mixed $data = null, ?int $id = null): static
-    {
-        $this->events[] = ['event' => $event, 'data' => $data];
-        return $this;
-    }
-
-    public function sendError(string $message, int $code = 500): static
-    {
-        $this->events[] = ['event' => 'error', 'data' => ['message' => $message, 'code' => $code]];
-        return $this;
-    }
-
-    public function complete(mixed $data = null): void
-    {
-        $this->events[] = ['event' => 'done', 'data' => $data];
-    }
-
-    public function isAlive(): bool
-    {
-        return true;
-    }
-
-    /**
-     * @return list<array{event:string,data:mixed}>
-     */
-    public function eventsByName(string $eventName): array
-    {
-        return \array_values(\array_filter(
-            $this->events,
-            static fn(array $event): bool => $event['event'] === $eventName
-        ));
-    }
-
-    public function countEvents(string $eventName): int
-    {
-        return \count($this->eventsByName($eventName));
     }
 }

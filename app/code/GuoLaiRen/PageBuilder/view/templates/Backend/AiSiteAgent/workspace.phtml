@@ -149,6 +149,9 @@ $pbAiPhaseOnePlanPresent = (int)($state['plan_confirmed'] ?? 0) === 1
     || $scopePlanJson !== []
     || $statePlanJson !== []
     || $scopePlanStructured !== [];
+/** 第二阶段任务方案是否存在：只认后台 buildWorkspaceState 下发的单一真相源。 */
+$pbAiPhaseTwoTaskPlanPresent = !empty($state['has_virtual_theme_plan'])
+    || (int)($state['task_plan_confirmed'] ?? 0) === 1;
 
 $pageTypes = $scope['page_types'] ?? [];
 $pageTypes = \is_array($pageTypes) ? $pageTypes : [];

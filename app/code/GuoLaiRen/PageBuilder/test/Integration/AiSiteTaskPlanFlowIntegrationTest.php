@@ -262,7 +262,8 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
         self::assertNotNull($fresh);
         $scope = $fresh->getScopeArray();
         self::assertSame(1, (int)($scope['task_plan_confirmed'] ?? 0));
-        self::assertNotSame([], $scope['virtual_theme_plan']['draft'] ?? []);
+        self::assertSame([], $scope['virtual_theme_plan']['draft'] ?? []);
+        self::assertSame('', \trim((string)($scope['virtual_theme_plan']['draft_markdown'] ?? '')));
         self::assertNotSame([], $scope['virtual_theme_plan']['confirmed'] ?? []);
         self::assertSame($markdown, (string)($scope['virtual_theme_plan']['confirmed_markdown'] ?? ''));
         self::assertSame('Persisted hero title', (string)($scope['virtual_theme_plan']['confirmed']['page_tasks'][Page::TYPE_HOME][0]['task_script']['field_content_requirements'][0]['sample'] ?? ''));
@@ -318,8 +319,13 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
             ]
         );
         self::assertTrue((bool)($startTaskPlanPayload['success'] ?? false), \json_encode($startTaskPlanPayload, \JSON_UNESCAPED_UNICODE));
-        self::assertIsArray($startTaskPlanPayload['task_plan'] ?? null);
-        self::assertNotSame('', (string)($startTaskPlanPayload['task_plan']['markdown'] ?? ''));
+        $initialTaskPlan = $startTaskPlanPayload['data']['task_plan'] ?? null;
+        self::assertIsArray($initialTaskPlan);
+        self::assertTrue(
+            \trim((string)($initialTaskPlan['markdown'] ?? '')) !== ''
+            || \is_array($initialTaskPlan['structured'] ?? null),
+            \json_encode($startTaskPlanPayload, \JSON_UNESCAPED_UNICODE)
+        );
         self::assertTrue((bool)($startTaskPlanPayload['data']['has_virtual_theme_plan'] ?? false));
         self::assertSame(0, (int)($startTaskPlanPayload['data']['task_plan_confirmed'] ?? 0));
         $draftSession = $this->sessionService->loadByPublicId($publicId, 1);
@@ -353,11 +359,14 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
         );
         self::assertTrue((bool)($confirmTaskPlanPayload['success'] ?? false), \json_encode($confirmTaskPlanPayload, \JSON_UNESCAPED_UNICODE));
         self::assertSame(1, (int)($confirmTaskPlanPayload['data']['task_plan_confirmed'] ?? 0));
+        self::assertArrayNotHasKey('scope', $confirmTaskPlanPayload['data'] ?? []);
+        self::assertArrayNotHasKey('events', $confirmTaskPlanPayload['data'] ?? []);
+        self::assertArrayNotHasKey('task_plan_structured', $confirmTaskPlanPayload['data'] ?? []);
 
         $session = $this->sessionService->loadByPublicId($publicId, 1);
         self::assertNotNull($session);
         $scope = $session->getScopeArray();
-        self::assertNotSame([], $scope['virtual_theme_plan']['draft'] ?? [], 'Confirmed task plan must keep the generated draft persisted.');
+        self::assertSame([], $scope['virtual_theme_plan']['draft'] ?? [], 'Confirmed task plan may compact the generated draft after persisting confirmed data.');
         self::assertNotSame([], $scope['virtual_theme_plan']['confirmed'] ?? [], 'Confirmed task plan must persist the confirmed structured plan before flipping the confirmed flag.');
         self::assertNotSame('', \trim((string)($scope['virtual_theme_plan']['confirmed_markdown'] ?? '')));
         $scope['task_plan_confirmed'] = 0;
