@@ -2,6 +2,8 @@
     "name": "Google",
     "code": "google",
     "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+    "price_unit": "per_1m_tokens",
+    "price_currency": "USD",
     "models_prefix": ["gemini-"],
     "allow_custom_models": true,
     "quick_create": true,

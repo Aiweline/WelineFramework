@@ -73,4 +73,24 @@ class ModelSyncServiceTest extends TestCore
         $this->assertSame('gpt-4', $providerConfigData['model'] ?? '');
         $this->assertSame(180, $providerConfigData['timeout'] ?? 0);
     }
+
+    public function testBuildModelConfigNormalizesPerMillionPricing(): void
+    {
+        $providerConfig = [
+            'base_url' => 'https://api.moonshot.cn/v1',
+            'model_field' => 'model',
+            'price_unit' => 'per_1m_tokens',
+        ];
+        $modelMeta = [
+            'code' => 'kimi-k2.6',
+            'name' => 'Kimi K2.6',
+            'input_price' => 6.50,
+            'output_price' => 27.00,
+        ];
+
+        $config = $this->service->buildModelConfig('kimi', $modelMeta, $providerConfig);
+
+        $this->assertEquals(0.0065, $config['token_price_input'] ?? null);
+        $this->assertEquals(0.027, $config['token_price_output'] ?? null);
+    }
 }
