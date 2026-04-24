@@ -268,7 +268,7 @@ try {
     $resolvedSessionPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveServicePort(
         $instanceName,
         'session_port',
-        6
+        0
     );
     if ($resolvedSessionPort > 0) {
         $sessionPort = $resolvedSessionPort;
@@ -280,7 +280,7 @@ try {
     $resolvedMemoryPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveServicePort(
         $instanceName,
         'memory_port',
-        6
+        0
     );
     if ($resolvedMemoryPort > 0) {
         $memoryPort = $resolvedMemoryPort;
@@ -758,7 +758,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                         if ($ipcClient !== null && $ipcClient->isConnected()) {
                             $ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason('master_rejected_ready:' . $reason, 0));
                         }
-                        WlsLogger::warning_("Master 拒绝 READY/槽位信任（reason={$reason}），Worker 自毁退出");
+                        WlsLogger::warning_("Master ACK 确认结果：失败（reason={$reason}），Worker 自毁退出");
                         break;
                     }
                     // 收到 Master ACK 确认，启动完成
@@ -767,7 +767,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     $dispatcherConfirmed = (bool)($msg['dispatcher_confirmed'] ?? false);
                     $ackPort = (int)($msg['port'] ?? 0);
                     WlsLogger::info_(
-                        "收到 Master ACK_READY 确认 (worker_id={$ackWorkerId}, dispatcher_confirmed="
+                        "收到 Master ACK_READY 确认，Master ACK 确认结果：成功 (worker_id={$ackWorkerId}, dispatcher_confirmed="
                         . ($dispatcherConfirmed ? '1' : '0') . ", port={$ackPort})，停止 READY 重报"
                     );
                     break;
@@ -903,8 +903,8 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $waitingForAck = !($ipcClient?->isReadyStateConfirmed() ?? false);
         WlsLogger::info_(
             $waitingForAck
-                ? "已上报就绪状态，等待 Master ACK 确认..."
-                : "已上报就绪状态，控制面已同步确认 READY"
+                ? "已上报就绪状态，Master ACK 确认结果：等待中"
+                : "已上报就绪状态，Master ACK 确认结果：成功（控制面已同步确认 READY）"
         );
         $readySentTime = \microtime(true);
         if ((\Weline\Server\Log\LogConfig::isDevMode() || $isFrontend) && $ipcClient !== null) {
@@ -1239,8 +1239,12 @@ while (true) {
         if ($kernel->connectAndRegister($controlPort)) {
             $ipcClient = $kernel->getClient();
             unset($ipcReconnectDueTime, $ipcReconnectAttempts, $ipcReconnectMaxAttempts);
-            WlsLogger::info_("[IPC] 成功重新连接到 Master，已上报就绪状态");
             $waitingForAck = !($ipcClient?->isReadyStateConfirmed() ?? false);
+            WlsLogger::info_(
+                $waitingForAck
+                    ? "[IPC] 成功重新连接到 Master，已重新上报就绪状态，Master ACK 确认结果：等待中"
+                    : "[IPC] 成功重新连接到 Master，已重新上报就绪状态，Master ACK 确认结果：成功"
+            );
             $readySentTime = \microtime(true);
         } else {
             $nextRetryDelay = 5 + \min($ipcReconnectAttempts, 10);
@@ -1265,7 +1269,7 @@ while (true) {
         if ($ackElapsed >= $ackTimeout) {
             $ackRetryCount++;
             // 直到收到闭环确认前持续重发 ready（不中断）
-            WlsLogger::warning_("ACK 等待超时（{$ackElapsed}s），第 {$ackRetryCount} 次重发 ready...");
+            WlsLogger::warning_("Master ACK 确认结果：超时未确认（{$ackElapsed}s），第 {$ackRetryCount} 次重发 ready...");
             $ipcClient->sendReady($ipcRole, $workerId, $port, $orchestratorEpoch, $orchestratorLaunchId);
             $readySentTime = \microtime(true);
         }
@@ -1597,7 +1601,7 @@ while (true) {
             if ($requestLogPrefix !== '') {
                 $method = $requestLogPrefix . $method;
             }
-            WlsLogger::info_("收到请求: {$method} {$uri} (connId: {$connId}, requestCount: {$requestCount})");
+            WlsLogger::debug_("收到请求: {$method} {$uri} (connId: {$connId}, requestCount: {$requestCount})");
         }
         
         wlsDispatchRequestFiberStep(
@@ -2866,7 +2870,7 @@ function sendResponseAndCleanup(
     $activeRequests = \max(0, $activeRequests - 1);
 
     $responseLenPre = \strlen($response);
-    WlsLogger::info_("Worker 即将写回响应 connId={$connId} len={$responseLenPre}");
+    WlsLogger::debug_("Worker 即将写回响应 connId={$connId} len={$responseLenPre}");
 
     $hasQueuedSsePayload = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
     $actualSseStarted = $isSseProtocolRequest
@@ -2908,7 +2912,7 @@ function sendResponseAndCleanup(
             // chunked encoding 处理，而不在 Worker 侧做跨请求拼接。
             $writeBuffers[$connId] = $response;
             $writableConnections[$connId] = $conn;
-            WlsLogger::info_("Worker 响应覆盖缓冲区（替换残留） connId={$connId} len={$responseLen}");
+            WlsLogger::debug_("Worker 响应覆盖缓冲区（替换残留） connId={$connId} len={$responseLen}");
             goto http_finalize_skip_write;
         }
 
@@ -2945,7 +2949,7 @@ function sendResponseAndCleanup(
         }
 
         if ($totalWritten >= $responseLen) {
-            WlsLogger::info_("Worker 已写完响应 connId={$connId} written={$totalWritten}");
+            WlsLogger::debug_("Worker 已写完响应 connId={$connId} written={$totalWritten}");
             $responseBytes = $totalWritten;
             goto http_finalize_skip_write;
         }
@@ -2953,7 +2957,7 @@ function sendResponseAndCleanup(
         $responseBytes = $totalWritten;
         $writeBuffers[$connId] = \substr($response, $totalWritten);
         $writableConnections[$connId] = $conn;
-        WlsLogger::info_(
+        WlsLogger::debug_(
             'Worker 响应入队 connId=' . $connId . ' written=' . $totalWritten . ' total=' . $responseLen
             . ' remaining=' . ($responseLen - $totalWritten)
         );
@@ -2971,6 +2975,20 @@ function sendResponseAndCleanup(
     \Weline\Framework\Http\Sse\SseContext::reset();
     $connectionLastActivity[$connId] = \time();
 
+    // 浏览器侧出现 7~8s 文档请求时，需要在 Worker 侧直接落点，避免只看前端 waterfall 无法分辨
+    // 是业务处理慢、队列等待，还是网络写回慢。默认阈值 1000ms，可由 env.php 配置覆盖。
+    $slowThresholdMs = (float) (\Weline\Framework\App\Env::get('wls.slow_request_threshold_ms', 1000) ?: 1000);
+    if ($handleDuration >= $slowThresholdMs) {
+        $requestLine = '';
+        if (\preg_match('/^([A-Z]+)\s+([^\s]+)\s+HTTP\/\d\.\d/i', $rawRequest, $matches)) {
+            $requestLine = (string) ($matches[1] ?? '') . ' ' . (string) ($matches[2] ?? '');
+        }
+        WlsLogger::warning_(
+            "Slow request detected (worker=http, connId={$connId}, status={$responseStatus}, "
+            . "duration_ms={$handleDuration}, host={$requestHost}, request=\"{$requestLine}\")"
+        );
+    }
+
     if ($ipcClient && $ipcClient->isConnected()) {
         $ipcClient->send(\Weline\Server\IPC\ControlMessage::telemetry(
             $instanceName,
@@ -2980,6 +2998,8 @@ function sendResponseAndCleanup(
             $responseBytes
         ));
     }
+
+    WlsLogger::flush_(true);
 
     $shouldClose = $isSseMode || !$keepAlive || $ipcDraining || $forceCloseAfterResponse;
     if ($shouldClose) {
