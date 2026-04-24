@@ -711,7 +711,7 @@ Component,Component
 "第 %{1}/%{2} 轮：AI 已返回，正在解析校验…","Round %{1}/%{2}: AI response received; validating parse…"
 "第 %{1}/%{2} 轮：AI 修复后解析成功。","Round %{1}/%{2}: AI repair produced valid JSON."
 "第 %{1}/%{2} 轮：解析仍失败，将继续下一轮（若仍有）。","Round %{1}/%{2}: parse still failing; continuing to the next round if any."
-"AI 缁勪欢鐢熸垚鏈€氳繃鏍￠獙锛屾鍦ㄤ娇鐢?AI 绠€鍖栨柟妗堥噸璇曪紙绗?%{1} 杞級锛?{2}","AI 缁勪欢鐢熸垚鏈€氳繃鏍￠獙锛屾鍦ㄤ娇鐢?AI 绠€鍖栨柟妗堥噸璇曪紙绗?%{1} 杞級锛?{2}"
+"AI 组件生成未通过校验，正在使用 AI 简化方案重试（第 %{1} 轮）：%{2}","AI component generation failed validation; retrying with a simplified AI fallback (attempt %{1}): %{2}"
 "Invalid generated content component payload","Invalid generated content component payload"
 "Invalid generated page layout payload","Invalid generated page layout payload"
 "Home | Pages | Contact","Home | Pages | Contact"

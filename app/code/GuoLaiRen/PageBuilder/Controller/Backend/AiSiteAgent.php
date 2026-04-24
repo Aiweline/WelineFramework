@@ -1579,6 +1579,22 @@ SCRIPT;
             ),
         ];
         $scopePatch['task_plan_confirmed'] = 1;
+        $confirmedScope = $this->scopeCompatibilityService->normalizeScope(\array_replace($scope, $scopePatch));
+        $confirmedScope = $this->buildTaskService->ensureTaskScope(
+            $confirmedScope,
+            \is_array($confirmedScope['website_profile'] ?? null) ? $confirmedScope['website_profile'] : [],
+            (string)($confirmedScope['workspace_track'] ?? '')
+        );
+        if (\is_array($confirmedScope['build_blueprint'] ?? null) && $confirmedScope['build_blueprint'] !== []) {
+            $scopePatch['build_blueprint'] = $confirmedScope['build_blueprint'];
+        }
+        if (\is_array($confirmedScope['build_tasks'] ?? null) && $confirmedScope['build_tasks'] !== []) {
+            $scopePatch['build_tasks'] = $confirmedScope['build_tasks'];
+        }
+        $scopePatch['build_summary'] = \array_replace(
+            \is_array($scopePatch['build_summary'] ?? null) ? $scopePatch['build_summary'] : [],
+            ['task_summary' => $this->buildTaskService->summarize($confirmedScope)]
+        );
         $scopePatch = $this->compactConfirmedTaskPlanScope($scopePatch);
         try {
             $saved = $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
@@ -7548,12 +7564,63 @@ SCRIPT;
             return true;
         }
 
+        if ($this->hasReusableConfirmedBuildBlueprintForCompaction($scope)) {
+            foreach ([
+                'execution_blueprint',
+                'shared_tasks',
+                'page_tasks',
+                'shared_block_tasks',
+                'page_block_tasks',
+                'virtual_theme_build_tree',
+            ] as $key) {
+                if (\is_array($confirmed[$key] ?? null) && $confirmed[$key] !== []) {
+                    return true;
+                }
+            }
+
+            $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
+            $workbenchConfirmed = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
+            if (\is_array($workbenchConfirmed['structured_plan'] ?? null) || \is_array($workbenchConfirmed['plan_json'] ?? null)) {
+                return true;
+            }
+
+            foreach (\is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [] as $taskState) {
+                if (!\is_array($taskState)) {
+                    continue;
+                }
+                foreach ([
+                    'runtime_context',
+                    'plan_context',
+                    'task_script',
+                    'block_task',
+                    'implementation_contract',
+                ] as $key) {
+                    if (\array_key_exists($key, $taskState)) {
+                        return true;
+                    }
+                }
+            }
+        }
+
         $confirmedMarkdown = \trim((string)($virtualThemePlan['confirmed_markdown'] ?? ''));
         $draftMarkdown = \trim((string)($virtualThemePlan['draft_markdown'] ?? ''));
 
         return $confirmedMarkdown !== ''
             && $draftMarkdown !== ''
             && $draftMarkdown === $confirmedMarkdown;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function hasReusableConfirmedBuildBlueprintForCompaction(array $scope): bool
+    {
+        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
+        $tasks = \is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [];
+
+        return (string)($buildBlueprint['source'] ?? '') === 'stage2_confirmed_task_plan'
+            && \trim((string)($buildBlueprint['signature'] ?? '')) !== ''
+            && $tasks !== [];
     }
 
     /**
