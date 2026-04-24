@@ -275,9 +275,6 @@ class Start extends CommandAbstract
                 }
             }
         }
-        if ($frontend) {
-            $enableLog = true;
-        }
         if ($enableLog) {
             Processer::setLogEnabled(true);
         }
@@ -348,10 +345,10 @@ class Start extends CommandAbstract
                 $this->printer->note(__('证书有效期至：%{1}', [$sslResult['expires_at']]));
             }
 
-            // 证书就绪后再生成 SNI 映射（getServerConfig 阶段生成的 map 可能早于 ensureSslCertificate，曾导致「有证但 map 未含主机名」）
+            // 证书就绪后再生成 SNI 映射；启动/重启路径马上会拉起新实例，不能在这里同步等待旧 Master 的 SSL reload ACK。
             /** @var SslCertificateService $sslMapSync */
             $sslMapSync = ObjectManager::getInstance(SslCertificateService::class);
-            $sslMapSync->regenerateCertificateMap();
+            $sslMapSync->regenerateCertificateMap(false);
         }
         
         // 检查是否强制重启（-r）及是否强制直接切换（-f：不等待 worker 空闲，直接停再启）
@@ -1190,12 +1187,15 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         
         $masterName = MasterProcess::getMasterProcessName($instanceName);
         $cmd = $this->buildMasterBackgroundCommand($phpBinary, $script, $instanceName, $masterName, $frontend);
+        $spawnedMasterPid = 0;
         if (IS_WIN) {
             if ($frontend) {
-                Processer::create($cmd, true, true, true);
+                $foregroundPid = $this->startForegroundManagedProcess($cmd);
+                $this->persistForegroundLauncherPid($instanceName, $cmd, $foregroundPid);
             } elseif (\method_exists(Processer::class, 'createWindowsDetachedPhpArgv')) {
                 $argv = $this->buildMasterBackgroundArgv($phpBinary, $script, $instanceName, $masterName, $frontend);
                 $pid = Processer::createWindowsDetachedPhpArgv($argv, BP, $cmd);
+                $spawnedMasterPid = \max(0, (int) $pid);
                 if ($pid <= 0) {
                     $bp = \str_replace("'", "''", BP);
                     $phpBin = \str_replace("'", "''", $phpBinary);
@@ -1220,7 +1220,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         // ========== 启动确认机制 ==========
         // 轮询检查后台 Master 是否成功启动
         $instanceFile = $this->getRuntimeInstanceFile($instanceName);
-        $maxWaitMs = 5000;      // 最大等待 5 秒
+        $maxWaitMs = $this->resolveBackgroundMasterConfirmWaitMs($spawnedMasterPid);
         $waitStepMs = 200;      // 每 200ms 检查一次
         $waited = 0;
         $masterStarted = false;
@@ -1289,17 +1289,25 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
                 $this->printer->note(__('  php bin/w server:status --all'));
             }
         } else {
-            // 启动确认失败：输出警告而非假成功
-            $this->printer->warning(__('后台启动已发起，但未能在 %{1} 秒内确认 Master 进程就绪。', [$maxWaitMs / 1000]));
-            $this->printer->note(__('可能原因：'));
-            $this->printer->note(__('  1. 框架加载耗时较长（首次启动或 opcache 未预热）'));
-            $this->printer->note(__('  2. 端口被占用导致启动失败'));
-            $this->printer->note(__('  3. 权限不足（特权端口需要 root/sudo）'));
-            $this->printer->note(__(''));
-            $this->printer->note(__('请执行以下命令检查状态：'));
-            $this->printer->note(__('  php bin/w server:status'));
-            $this->printer->note(__('  php bin/w server:status --all'));
-            
+            $spawnedMasterAlive = $spawnedMasterPid > 0 && $this->isSpawnedBackgroundMasterAlive($spawnedMasterPid);
+            if ($spawnedMasterAlive) {
+                $this->printer->warning(__('后台 Master 进程已创建（PID: %{1}），控制面仍在初始化；已停止阻塞等待。', [$spawnedMasterPid]));
+                $this->printer->note(__('稍后执行以下命令检查启动进度：'));
+                $this->printer->note(__('  php bin/w server:status %{1}', [$instanceName]));
+                $this->printer->note(__('  php bin/w server:status --all'));
+            } else {
+                // 启动确认失败：输出警告而非假成功
+                $this->printer->warning(__('后台启动已发起，但未能在 %{1} 秒内确认 Master 进程就绪。', [$maxWaitMs / 1000]));
+                $this->printer->note(__('可能原因：'));
+                $this->printer->note(__('  1. 框架加载耗时较长（首次启动或 opcache 未预热）'));
+                $this->printer->note(__('  2. 端口被占用导致启动失败'));
+                $this->printer->note(__('  3. 权限不足（特权端口需要 root/sudo）'));
+                $this->printer->note(__(''));
+                $this->printer->note(__('请执行以下命令检查状态：'));
+                $this->printer->note(__('  php bin/w server:status'));
+                $this->printer->note(__('  php bin/w server:status --all'));
+            }
+
             // 输出日志文件路径便于排查
             $logDir = WlsLogService::getLogDir($instanceName);
             $this->printer->note(__('日志目录：%{1}', [$logDir]));
@@ -1391,15 +1399,34 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         return \implode(',', $quoted);
     }
 
+    protected function resolveBackgroundMasterConfirmWaitMs(int $spawnedMasterPid = 0): int
+    {
+        $configuredSec = (float) ($this->getEnvironmentValue('wls.orchestrator.background_master_confirm_wait_sec', 0.0) ?? 0.0);
+        if ($configuredSec > 0.0) {
+            return (int) \round(\max(0.5, \min(60.0, $configuredSec)) * 1000);
+        }
+
+        // Once Windows Start-Process returns a concrete PID, the CLI has already handed off
+        // the background Master. Keep the metadata/control-plane wait short so a slow
+        // framework bootstrap does not make server:start look hung.
+        return $spawnedMasterPid > 0 ? 1200 : 5000;
+    }
+
+    protected function isSpawnedBackgroundMasterAlive(int $pid): bool
+    {
+        // createWindowsDetachedPhpArgv() only returns a positive PID after Windows
+        // Start-Process accepted the detached Master. Do not run processExists()
+        // here: on Windows it may trigger a slow tasklist/WMI pass and reintroduce
+        // the exact startup delay this fast handoff path avoids.
+        return $pid > 0;
+    }
+
     protected function resolveBackgroundStartupReadyWaitMs(array $instanceData = []): int
     {
         $configuredSec = (float) ($this->getEnvironmentValue('wls.orchestrator.background_ready_wait_sec', 0.0) ?? 0.0);
         if ($configuredSec > 0.0) {
             return (int) \round(\max(5.0, \min(900.0, $configuredSec)) * 1000);
         }
-
-        $startupTimeoutSec = (float) ($this->getEnvironmentValue('wls.orchestrator.startup_timeout_sec', 30.0) ?? 30.0);
-        $startupTimeoutSec = \max(10.0, \min(300.0, $startupTimeoutSec));
 
         $workerCount = \max(1, (int) ($instanceData['count'] ?? $instanceData['worker_count'] ?? 1));
         $dispatcherEnabled = (bool) ($instanceData['dispatcher_enabled'] ?? false);
@@ -1414,12 +1441,28 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             }
         }
 
-        $timeoutSec = $startupTimeoutSec
-            + \max(0, $workerCount - 1) * 4.0
-            + ($dispatcherEnabled ? 8.0 : 0.0)
-            + ($sslEnabled ? 5.0 : 0.0)
-            + $sharedServiceCount * 3.0;
-        $timeoutSec = \max(15.0, \min(180.0, $timeoutSec));
+        $startupTimeout = $this->getEnvironmentValue('wls.orchestrator.startup_timeout_sec', null);
+        if ($startupTimeout !== null && (float) $startupTimeout > 0.0) {
+            $startupTimeoutSec = \max(5.0, \min(300.0, (float) $startupTimeout));
+            $timeoutSec = $startupTimeoutSec
+                + \max(0, $workerCount - 1) * 4.0
+                + ($dispatcherEnabled ? 8.0 : 0.0)
+                + ($sslEnabled ? 5.0 : 0.0)
+                + $sharedServiceCount * 3.0;
+
+            return (int) \round(\max(5.0, \min(180.0, $timeoutSec)) * 1000);
+        }
+
+        // Background start should hand control back quickly once the Master is alive.
+        // Long "wait until every child is ready" behavior is opt-in through the env
+        // settings above; otherwise a broken/duplicating service table can make
+        // server:start appear hung for 90s+.
+        $timeoutSec = 1.5
+            + \max(0, $workerCount - 1) * 0.25
+            + ($dispatcherEnabled ? 0.5 : 0.0)
+            + ($sslEnabled ? 0.5 : 0.0)
+            + $sharedServiceCount * 0.25;
+        $timeoutSec = \max(1.5, \min(6.0, $timeoutSec));
 
         return (int) \round($timeoutSec * 1000);
     }
@@ -1433,6 +1476,14 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
 
         $idleWaitMs = $this->resolveBackgroundStartupReadyWaitMs($instanceData);
         $workerCount = \max(1, (int) ($instanceData['count'] ?? $instanceData['worker_count'] ?? 1));
+        $configuredReadySec = (float) ($this->getEnvironmentValue('wls.orchestrator.background_ready_wait_sec', 0.0) ?? 0.0);
+        $configuredStartupSec = (float) ($this->getEnvironmentValue('wls.orchestrator.startup_timeout_sec', 0.0) ?? 0.0);
+        if ($configuredReadySec <= 0.0 && $configuredStartupSec <= 0.0) {
+            $hardWaitSec = \max(3.0, \min(8.0, \ceil($idleWaitMs / 1000) * 2.0));
+
+            return (int) \round($hardWaitSec * 1000);
+        }
+
         $hardWaitSec = \max(
             90.0 + \max(0, $workerCount - 1) * 15.0,
             \ceil($idleWaitMs / 1000) * 2.0
@@ -1608,6 +1659,9 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
 
                 $state = \trim((string) ($instance['state'] ?? ''));
                 if ($state === '') {
+                    continue;
+                }
+                if (\in_array($state, ['stopped', 'exited'], true)) {
                     continue;
                 }
 
@@ -3667,12 +3721,14 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
     {
         $deadline = \microtime(true) + 12.0;
         do {
+            Processer::clearPortCache();
             if (!$this->hasRestartCleanupResidue($instanceName, $mainPort, $workerCount)) {
                 return true;
             }
             SchedulerSystem::usleep(300000);
         } while (\microtime(true) < $deadline);
 
+        Processer::clearPortCache();
         return !$this->hasRestartCleanupResidue($instanceName, $mainPort, $workerCount);
     }
 
@@ -4260,6 +4316,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             'started_at' => \date('Y-m-d H:i:s'),
             'started_timestamp' => \time(),
             'pid' => \getmypid(),
+            'launcher_pid' => 0,
             'worker_pids' => $workerPids,
             'master_enabled' => false,
             'master_pid' => 0,
@@ -4306,6 +4363,36 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         }
         
         $this->getInstanceManager()->saveInstance($instanceName, $instanceData);
+    }
+
+    protected function startForegroundManagedProcess(string $command): int
+    {
+        return Processer::create($command, true, true, true);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function getManagedProcessMetadata(string $command): array
+    {
+        $data = Processer::getData($command);
+
+        return \is_array($data) ? $data : [];
+    }
+
+    protected function persistForegroundLauncherPid(string $instanceName, string $command, int $fallbackPid = 0): int
+    {
+        $metadata = $this->getManagedProcessMetadata($command);
+        $launcherPid = (int) ($metadata['launcher_pid'] ?? 0);
+        if ($launcherPid <= 0 && $fallbackPid > 0) {
+            $launcherPid = $fallbackPid;
+        }
+
+        if ($launcherPid > 0) {
+            $this->getInstanceManager()->saveInstance($instanceName, ['launcher_pid' => $launcherPid]);
+        }
+
+        return $launcherPid;
     }
 
     /**
