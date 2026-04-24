@@ -23,6 +23,16 @@ final class AiSitePageComponentGenerationService
     private const JSON_REPAIR_MAX_ATTEMPTS = 3;
     private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
     private const COMPONENT_GENERATION_MAX_ATTEMPTS = 3;
+    private const AI_REQUEST_TIMEOUT_SECONDS = 180;
+    private const COMPONENT_CSS_CLASS_SCOPE_FALLBACK = 'pb-ai-site-component';
+    private const COMPONENT_CSS_SCOPE_PLACEHOLDER = '#componentId';
+    private const GENERIC_CSS_CLASS_TOKENS = [
+        'card', 'title', 'header', 'footer', 'content', 'wrapper', 'container',
+        'item', 'list', 'row', 'col', 'box', 'panel', 'section', 'main',
+        'nav', 'menu', 'btn', 'button', 'link', 'text', 'icon', 'image',
+        'form', 'input', 'label', 'group', 'active', 'disabled', 'hidden',
+        'show', 'hide', 'open', 'close', 'toggle', 'dropdown', 'modal',
+    ];
 
     public function __construct(
         private readonly ?FrameworkBuilder $frameworkBuilder = null,
@@ -171,6 +181,7 @@ final class AiSitePageComponentGenerationService
     public function buildPageSectionSpecs(string $pageType, array $websiteProfile, array $scope): array
     {
         $blueprint = $this->getPageBlueprintService()->buildPageBlueprint($pageType, $scope, $websiteProfile);
+        $blueprint = $this->mergeBuildTaskSectionsIntoBlueprint($pageType, $blueprint, $scope);
         $sections = [];
         foreach (($blueprint['sections'] ?? []) as $section) {
             if (!\is_array($section)) {
@@ -263,6 +274,167 @@ final class AiSitePageComponentGenerationService
      * }> $components region => component spec
      * @return \Generator yields [region => result] as each component finishes; result has same shape as generateComponent()
      */
+    /**
+     * @param array<string,mixed> $blueprint
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function mergeBuildTaskSectionsIntoBlueprint(string $pageType, array $blueprint, array $scope): array
+    {
+        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
+        $tasks = \is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [];
+        if ($tasks === []) {
+            return $blueprint;
+        }
+
+        $sections = \array_values(\array_filter(
+            \is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : [],
+            static fn($section): bool => \is_array($section)
+        ));
+        $known = [];
+        foreach ($sections as $section) {
+            foreach (['code', 'key', 'source_block_key'] as $field) {
+                $value = \trim((string)($section[$field] ?? ''));
+                if ($value !== '') {
+                    $known[$value] = true;
+                }
+            }
+        }
+
+        foreach ($tasks as $task) {
+            if (!\is_array($task) || \trim((string)($task['page_type'] ?? '')) !== $pageType) {
+                continue;
+            }
+            if (\trim((string)($task['task_type'] ?? '')) !== 'page_section') {
+                continue;
+            }
+
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            $blockKey = $this->resolveBuildTaskBlockKey($task);
+            $sectionCode = $this->normalizeBuildTaskSectionCode($pageType, (string)($task['section_code'] ?? ''), $blockKey, $taskKey);
+            if ($sectionCode === '') {
+                continue;
+            }
+
+            $sectionKey = \trim((string)($task['section_key'] ?? ''));
+            $sectionKey = $sectionKey !== '' ? $sectionKey : ($blockKey !== '' ? $blockKey : $sectionCode);
+            if (isset($known[$sectionCode]) || isset($known[$sectionKey])) {
+                continue;
+            }
+
+            $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
+            $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
+            $blockTask = \is_array($task['block_task'] ?? null) ? $task['block_task'] : [];
+            $implementationContract = \is_array($task['implementation_contract'] ?? null) ? $task['implementation_contract'] : [];
+            $label = $this->pickString(
+                $task['label'] ?? null,
+                $planContext['block_goal'] ?? null,
+                $blockTask['task_goal'] ?? null,
+                $sectionKey
+            );
+            $description = $this->pickString(
+                $taskScript['story_goal'] ?? null,
+                $taskScript['content_fill_rule'] ?? null,
+                $blockTask['task_goal'] ?? null,
+                $planContext['block_goal'] ?? null,
+                $implementationContract['implementation_detail'] ?? null,
+                $label
+            );
+
+            $sections[] = [
+                'key' => $sectionKey,
+                'code' => $sectionCode,
+                'name' => $label !== '' ? $label : $sectionCode,
+                'template' => $this->inferBuildTaskSectionTemplate($task, $sectionKey, \count($sections)),
+                'config' => [
+                    'section_title' => $label !== '' ? $label : $sectionKey,
+                    'description' => $description,
+                    'section_intro' => $description,
+                ],
+                'sort_order' => (int)($task['sort_order'] ?? (1000 + \count($sections) * 10)),
+                'source_block_key' => $blockKey !== '' ? $blockKey : $sectionKey,
+            ];
+            $known[$sectionCode] = true;
+            if ($sectionKey !== '') {
+                $known[$sectionKey] = true;
+            }
+        }
+
+        \usort($sections, static fn(array $left, array $right): int => ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0)));
+        $blueprint['sections'] = $sections;
+
+        return $blueprint;
+    }
+
+    /**
+     * @param array<string,mixed> $task
+     */
+    private function resolveBuildTaskBlockKey(array $task): string
+    {
+        foreach (['block_key', 'section_key', 'source_block_key'] as $field) {
+            $value = \trim((string)($task[$field] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        $taskKey = \trim((string)($task['task_key'] ?? ''));
+        if (\preg_match('/^[^:]+:[^:]+:(.+)$/', $taskKey, $matches) === 1) {
+            return \trim((string)($matches[1] ?? ''));
+        }
+
+        return '';
+    }
+
+    private function normalizeBuildTaskSectionCode(string $pageType, string $sectionCode, string $blockKey, string $taskKey): string
+    {
+        $sectionCode = \trim($sectionCode);
+        if ($sectionCode === '' || \in_array(\strtolower($sectionCode), ['section', 'content', 'block'], true)) {
+            $sectionCode = $blockKey;
+        }
+        if ($sectionCode === '' && \preg_match('/^[^:]+:[^:]+:(.+)$/', $taskKey, $matches) === 1) {
+            $sectionCode = \trim((string)($matches[1] ?? ''));
+        }
+        if ($sectionCode === '') {
+            return '';
+        }
+        if (\str_contains($sectionCode, '/')) {
+            return $sectionCode;
+        }
+
+        return 'content/' . $this->slugForGeneratedSectionCode($pageType) . '-' . $this->slugForGeneratedSectionCode($sectionCode);
+    }
+
+    /**
+     * @param array<string,mixed> $task
+     */
+    private function inferBuildTaskSectionTemplate(array $task, string $sectionKey, int $sectionIndex): string
+    {
+        $needle = \strtolower($sectionKey . ' ' . (string)($task['label'] ?? '') . ' ' . (string)($task['task_key'] ?? ''));
+        if ($sectionIndex === 0 || \str_contains($needle, 'hero') || \str_contains($needle, 'banner')) {
+            return 'hero';
+        }
+        if (\str_contains($needle, 'cta') || \str_contains($needle, 'contact')) {
+            return 'cta';
+        }
+        if (\str_contains($needle, 'grid') || \str_contains($needle, 'values') || \str_contains($needle, 'features')) {
+            return 'checklist';
+        }
+
+        return 'section';
+    }
+
+    private function slugForGeneratedSectionCode(string $value): string
+    {
+        $slug = \strtolower(\trim($value));
+        $slug = \str_replace(['_', '/', '\\'], '-', $slug);
+        $slug = \preg_replace('/[^a-z0-9-]+/', '-', $slug) ?? '';
+        $slug = \preg_replace('/-+/', '-', $slug) ?? $slug;
+        $slug = \trim($slug, '-');
+
+        return $slug !== '' ? $slug : 'section';
+    }
+
     public function generateComponentsConcurrently(array $components): \Generator
     {
         if ($components === []) {
@@ -497,6 +669,7 @@ final class AiSitePageComponentGenerationService
     public function generatePageSectionsConcurrently(string $pageType, array $websiteProfile, array $scope): array
     {
         $blueprint = $this->getPageBlueprintService()->buildPageBlueprint($pageType, $scope, $websiteProfile);
+        $blueprint = $this->mergeBuildTaskSectionsIntoBlueprint($pageType, $blueprint, $scope);
         $components = [];
         $sectionMeta = [];
 
@@ -572,14 +745,14 @@ final class AiSitePageComponentGenerationService
             'name_en' => $name,
             'description' => $prompt,
         ];
-        $attemptPrompt = $prompt;
+        $attemptPrompt = $this->appendComponentCssScopeInstruction($prompt, $componentCode);
         $lastThrowable = null;
 
         for ($attempt = 1; $attempt <= self::COMPONENT_GENERATION_MAX_ATTEMPTS; $attempt++) {
             $aiData = [];
             try {
                 $aiData = $this->runAiGeneration($region, $attemptPrompt);
-                $aiData = $this->ensureAiPayloadValid($aiData, $region);
+                $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode);
 
                 $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
 
@@ -738,11 +911,13 @@ final class AiSitePageComponentGenerationService
      */
     private function ensureAiPayloadValid(
         array $aiData,
-        string $region
+        string $region,
+        string $componentCode = ''
     ): array
     {
         $aiData = $this->getCodeFixer()->fixAiData($aiData);
         $aiData = $this->applyStrictVirtualThemeComponentPolicy($aiData, $region);
+        $aiData = $this->normalizeVirtualThemeCssClassScope($aiData, $componentCode);
 
         $validation = $this->getCodeValidator()->validateAiData($aiData, $region);
         if (!empty($validation['valid'])) {
@@ -778,7 +953,7 @@ final class AiSitePageComponentGenerationService
                 continue;
             }
             $this->assertNoBrokenGeneratedImageReferences($css);
-            $aiData[$cssKey] = $this->clipText($css, 1800);
+            $aiData[$cssKey] = $this->normalizeVirtualThemeCssForValidation($css, 1800);
         }
 
         if (\in_array($region, ['header', 'footer'], true)) {
@@ -802,11 +977,423 @@ final class AiSitePageComponentGenerationService
         return $aiData;
     }
 
+    private function normalizeVirtualThemeCssForValidation(string $css, int $limit): string
+    {
+        $css = \trim($this->getCodeFixer()->fixCss($css));
+        if ($css === '') {
+            return '';
+        }
+
+        $css = $this->normalizeVirtualThemeCssComponentScope($css);
+        $css = $this->clipCssAtRuleBoundary($css, $limit);
+        if ($css === '') {
+            return '';
+        }
+
+        $css = $this->normalizeVirtualThemeCssComponentScope($css);
+
+        return $this->balanceCssBraces(\trim($this->getCodeFixer()->fixCss($css)));
+    }
+
+    private function clipCssAtRuleBoundary(string $css, int $limit): string
+    {
+        $css = \trim($css);
+        if ($css === '') {
+            return '';
+        }
+
+        $length = \function_exists('mb_strlen') ? \mb_strlen($css) : \strlen($css);
+        if ($length <= $limit) {
+            return $css;
+        }
+
+        $slice = \function_exists('mb_substr')
+            ? \mb_substr($css, 0, \max(1, $limit))
+            : \substr($css, 0, \max(1, $limit));
+        $lastClose = \strrpos($slice, '}');
+        if ($lastClose === false) {
+            return '';
+        }
+
+        return \trim(\substr($slice, 0, $lastClose + 1));
+    }
+
+    private function balanceCssBraces(string $css): string
+    {
+        $balanced = '';
+        $depth = 0;
+        $length = \strlen($css);
+        for ($index = 0; $index < $length; $index++) {
+            $char = $css[$index];
+            if ($char === '{') {
+                $depth++;
+                $balanced .= $char;
+                continue;
+            }
+            if ($char === '}') {
+                if ($depth <= 0) {
+                    continue;
+                }
+                $depth--;
+                $balanced .= $char;
+                continue;
+            }
+            $balanced .= $char;
+        }
+
+        if ($depth > 0) {
+            $balanced .= \str_repeat('}', $depth);
+        }
+
+        return \trim($balanced);
+    }
+
+    private function normalizeVirtualThemeCssComponentScope(string $css): string
+    {
+        $css = \preg_replace('/#\s*<\?=\s*\$componentId\s*\?>/i', self::COMPONENT_CSS_SCOPE_PLACEHOLDER, $css) ?? $css;
+        $css = \preg_replace('/#componentId\b/i', self::COMPONENT_CSS_SCOPE_PLACEHOLDER, $css) ?? $css;
+        $css = \trim($css);
+        if ($css === '') {
+            return '';
+        }
+
+        if (!\str_contains($css, '{')) {
+            $declarations = \rtrim($css, " \t\r\n;");
+            return $declarations === ''
+                ? ''
+                : self::COMPONENT_CSS_SCOPE_PLACEHOLDER . ' { ' . $declarations . '; }';
+        }
+
+        return $this->scopeVirtualThemeCssBlock($css);
+    }
+
+    private function scopeVirtualThemeCssBlock(string $css, bool $insideKeyframes = false): string
+    {
+        $result = '';
+        $offset = 0;
+
+        while (($openPos = \strpos($css, '{', $offset)) !== false) {
+            $closePos = $this->findMatchingCssBrace($css, $openPos);
+            if ($closePos === null) {
+                $result .= \substr($css, $offset);
+                return \trim($result);
+            }
+
+            $prelude = \substr($css, $offset, $openPos - $offset);
+            $body = \substr($css, $openPos + 1, $closePos - $openPos - 1);
+            $trimmedPrelude = \trim($prelude);
+
+            if ($trimmedPrelude !== '' && $trimmedPrelude[0] === '@') {
+                if (\preg_match('/^@(?:media|supports|container|layer)\b/i', $trimmedPrelude) === 1) {
+                    $body = $this->scopeVirtualThemeCssBlock($body, false);
+                }
+                $result .= $prelude . '{' . $body . '}';
+            } elseif ($insideKeyframes) {
+                $result .= $prelude . '{' . $body . '}';
+            } else {
+                $result .= $this->scopeVirtualThemeCssSelectorPrelude($prelude) . '{' . $body . '}';
+            }
+
+            $offset = $closePos + 1;
+        }
+
+        $result .= \substr($css, $offset);
+
+        return \trim($result);
+    }
+
+    private function findMatchingCssBrace(string $css, int $openPos): ?int
+    {
+        $depth = 0;
+        $length = \strlen($css);
+        for ($index = $openPos; $index < $length; $index++) {
+            if ($css[$index] === '{') {
+                $depth++;
+                continue;
+            }
+            if ($css[$index] !== '}') {
+                continue;
+            }
+            $depth--;
+            if ($depth === 0) {
+                return $index;
+            }
+        }
+
+        return null;
+    }
+
+    private function scopeVirtualThemeCssSelectorPrelude(string $prelude): string
+    {
+        $leading = '';
+        $trailing = '';
+        if (\preg_match('/^\s*/', $prelude, $matches) === 1) {
+            $leading = (string)$matches[0];
+        }
+        if (\preg_match('/\s*$/', $prelude, $matches) === 1) {
+            $trailing = (string)$matches[0];
+        }
+
+        $selectorList = \trim($prelude);
+        if ($selectorList === '') {
+            return $prelude;
+        }
+
+        $selectors = [];
+        foreach ($this->splitCssSelectorList($selectorList) as $selector) {
+            $selector = \trim($selector);
+            if ($selector === '') {
+                continue;
+            }
+            $selector = \preg_replace('/#componentId\b/i', self::COMPONENT_CSS_SCOPE_PLACEHOLDER, $selector) ?? $selector;
+            if (\str_contains($selector, self::COMPONENT_CSS_SCOPE_PLACEHOLDER)) {
+                $selectors[] = $selector;
+                continue;
+            }
+            if (\str_starts_with($selector, '&')) {
+                $selectors[] = self::COMPONENT_CSS_SCOPE_PLACEHOLDER . \substr($selector, 1);
+                continue;
+            }
+            $selector = \preg_replace('/^(?:html\s+body|html|body|:root)(?=$|[\s.#:[>+~])/i', self::COMPONENT_CSS_SCOPE_PLACEHOLDER, $selector, 1) ?? $selector;
+            if (!\str_starts_with($selector, self::COMPONENT_CSS_SCOPE_PLACEHOLDER)) {
+                $selector = self::COMPONENT_CSS_SCOPE_PLACEHOLDER . ' ' . $selector;
+            }
+            $selectors[] = $selector;
+        }
+
+        if ($selectors === []) {
+            return $prelude;
+        }
+
+        return $leading . \implode(', ', $selectors) . $trailing;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function splitCssSelectorList(string $selectorList): array
+    {
+        $selectors = [];
+        $buffer = '';
+        $parenDepth = 0;
+        $bracketDepth = 0;
+        $quote = '';
+        $length = \strlen($selectorList);
+
+        for ($index = 0; $index < $length; $index++) {
+            $char = $selectorList[$index];
+            if ($quote !== '') {
+                $buffer .= $char;
+                if ($char === $quote && ($index === 0 || $selectorList[$index - 1] !== '\\')) {
+                    $quote = '';
+                }
+                continue;
+            }
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+                $buffer .= $char;
+                continue;
+            }
+            if ($char === '(') {
+                $parenDepth++;
+                $buffer .= $char;
+                continue;
+            }
+            if ($char === ')') {
+                $parenDepth = \max(0, $parenDepth - 1);
+                $buffer .= $char;
+                continue;
+            }
+            if ($char === '[') {
+                $bracketDepth++;
+                $buffer .= $char;
+                continue;
+            }
+            if ($char === ']') {
+                $bracketDepth = \max(0, $bracketDepth - 1);
+                $buffer .= $char;
+                continue;
+            }
+            if ($char === ',' && $parenDepth === 0 && $bracketDepth === 0) {
+                $selectors[] = $buffer;
+                $buffer = '';
+                continue;
+            }
+
+            $buffer .= $char;
+        }
+
+        $selectors[] = $buffer;
+
+        return $selectors;
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     * @return array<string,mixed>
+     */
+    private function normalizeVirtualThemeCssClassScope(array $aiData, string $componentCode): array
+    {
+        $prefix = $this->normalizeComponentCssPrefix($componentCode);
+        $renameMap = [];
+
+        foreach (['css_extra', 'css_responsive', 'css_content'] as $cssKey) {
+            if (!\is_string($aiData[$cssKey] ?? null)) {
+                continue;
+            }
+            foreach ($this->collectGenericCssSelectorClasses((string)$aiData[$cssKey]) as $genericClass) {
+                $renameMap[$genericClass] = $prefix . '-' . $genericClass;
+            }
+        }
+
+        foreach (['html_content', 'html_extra', 'html_extra_column', 'footer_extra_text'] as $htmlKey) {
+            if (!\is_string($aiData[$htmlKey] ?? null)) {
+                continue;
+            }
+            foreach ($this->collectGenericHtmlClassTokens((string)$aiData[$htmlKey]) as $genericClass) {
+                $renameMap[$genericClass] = $prefix . '-' . $genericClass;
+            }
+        }
+
+        if ($renameMap === []) {
+            return $aiData;
+        }
+
+        foreach (['css_extra', 'css_responsive', 'css_content'] as $cssKey) {
+            if (!\is_string($aiData[$cssKey] ?? null) || $aiData[$cssKey] === '') {
+                continue;
+            }
+            $aiData[$cssKey] = $this->rewriteGenericCssClassSelectors((string)$aiData[$cssKey], $renameMap);
+        }
+
+        foreach (['html_content', 'html_extra', 'html_extra_column', 'footer_extra_text'] as $htmlKey) {
+            if (!\is_string($aiData[$htmlKey] ?? null) || $aiData[$htmlKey] === '') {
+                continue;
+            }
+            $aiData[$htmlKey] = $this->rewriteHtmlClassTokens((string)$aiData[$htmlKey], $renameMap);
+        }
+
+        return $aiData;
+    }
+
+    private function normalizeComponentCssPrefix(string $componentCode): string
+    {
+        $slug = \strtolower(\trim($componentCode));
+        $slug = \str_replace(['\\', '/', '_'], '-', $slug);
+        $slug = \preg_replace('/[^a-z0-9-]+/', '-', $slug) ?? '';
+        $slug = \preg_replace('/-+/', '-', $slug) ?? $slug;
+        $slug = \trim($slug, '-');
+
+        return $slug !== '' ? 'pb-' . $slug : self::COMPONENT_CSS_CLASS_SCOPE_FALLBACK;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectGenericCssSelectorClasses(string $css): array
+    {
+        if (\trim($css) === '') {
+            return [];
+        }
+
+        $classes = [];
+        foreach (self::GENERIC_CSS_CLASS_TOKENS as $genericClass) {
+            if (\preg_match('/\.' . \preg_quote($genericClass, '/') . '\b(?![a-z0-9_-])/i', $css) === 1) {
+                $classes[] = $genericClass;
+            }
+        }
+
+        return $classes;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectGenericHtmlClassTokens(string $html): array
+    {
+        if (\trim($html) === '') {
+            return [];
+        }
+
+        $matched = \preg_match_all('/\bclass\s*=\s*(["\'])(.*?)\1/is', $html, $matches);
+        if ($matched === false || $matched === 0) {
+            return [];
+        }
+
+        $genericLookup = \array_fill_keys(self::GENERIC_CSS_CLASS_TOKENS, true);
+        $classes = [];
+        foreach ($matches[2] as $classValue) {
+            $tokens = \preg_split('/\s+/', \trim((string)$classValue)) ?: [];
+            foreach ($tokens as $token) {
+                $token = \strtolower(\trim((string)$token));
+                if ($token !== '' && isset($genericLookup[$token])) {
+                    $classes[$token] = true;
+                }
+            }
+        }
+
+        return \array_keys($classes);
+    }
+
+    /**
+     * @param array<string,string> $renameMap
+     */
+    private function rewriteGenericCssClassSelectors(string $css, array $renameMap): string
+    {
+        foreach ($renameMap as $genericClass => $scopedClass) {
+            $css = \preg_replace(
+                '/\.' . \preg_quote((string)$genericClass, '/') . '\b(?![a-z0-9_-])/i',
+                '.' . (string)$scopedClass,
+                $css
+            ) ?? $css;
+        }
+
+        return $css;
+    }
+
+    /**
+     * @param array<string,string> $renameMap
+     */
+    private function rewriteHtmlClassTokens(string $html, array $renameMap): string
+    {
+        return \preg_replace_callback(
+            '/\bclass\s*=\s*(["\'])(.*?)\1/is',
+            static function (array $matches) use ($renameMap): string {
+                $quote = (string)$matches[1];
+                $parts = \preg_split('/(\s+)/', (string)$matches[2], -1, \PREG_SPLIT_DELIM_CAPTURE) ?: [];
+                foreach ($parts as $index => $part) {
+                    if (\trim((string)$part) === '') {
+                        continue;
+                    }
+                    $lookup = \strtolower((string)$part);
+                    if (isset($renameMap[$lookup])) {
+                        $parts[$index] = $renameMap[$lookup];
+                    }
+                }
+
+                return 'class=' . $quote . \implode('', $parts) . $quote;
+            },
+            $html
+        ) ?? $html;
+    }
+
+    private function appendComponentCssScopeInstruction(string $prompt, string $componentCode): string
+    {
+        $prefix = $this->normalizeComponentCssPrefix($componentCode);
+
+        return \rtrim($prompt)
+            . "\n\nCSS class scope rule:\n"
+            . "- Never use generic custom classes such as .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active.\n"
+            . "- Any custom class in CSS and the matching HTML must use this component prefix: `{$prefix}-...`.\n"
+            . "- CSS selectors must be scoped with the safe placeholder `#componentId`; do not output PHP tags in JSON CSS fields.\n"
+            . "- Examples for this component: `#componentId .{$prefix}-card`, `#componentId .{$prefix}-icon`, `#componentId .{$prefix}-title`.\n";
+    }
+
     private function cleanAiHtmlFragment(string $html): string
     {
         $html = \preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $html) ?? $html;
         $html = \preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html) ?? $html;
-        $html = \preg_replace('/<\?(?:php|=)?[\s\S]*?\?>/i', '', $html) ?? $html;
+        $html = $this->stripPhpFragmentsFromHtml($html);
         $html = \preg_replace('/@(?:component|fields)_(?:start|end)\b/i', '', $html) ?? $html;
         $html = \preg_replace('/<div([^>]*class="[^"]*(?:eyebrow|subtitle|kicker|badge)[^"]*"[^>]*)>\s*(首页|主页|关于我们|关于|Home|About|About Us)\s*<\/div>/iu', '', $html) ?? $html;
         $html = \preg_replace('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', '', $html) ?? $html;
@@ -816,6 +1403,21 @@ final class AiSitePageComponentGenerationService
         $html = \trim($html);
 
         return $this->clipText($html, 5000);
+    }
+
+    private function stripPhpFragmentsFromHtml(string $html): string
+    {
+        if ($html === '') {
+            return '';
+        }
+
+        $html = \preg_replace('/\s+[a-zA-Z_:][a-zA-Z0-9_:.-]*\s*=\s*"[^"]*<\?(?:php|=)?[\s\S]*?(?:"|(?=>)|$)/i', '', $html) ?? $html;
+        $html = \preg_replace("/\s+[a-zA-Z_:][a-zA-Z0-9_:.-]*\s*=\s*'[^']*<\?(?:php|=)?[\s\S]*?(?:'|(?=>)|$)/i", '', $html) ?? $html;
+        $html = \preg_replace('/\s+[a-zA-Z_:][a-zA-Z0-9_:.-]*\s*=\s*[^\s>]*<\?(?:php|=)?[\s\S]*?(?=\s|>|$)/i', '', $html) ?? $html;
+        $html = \preg_replace('/<\?(?:php|=)?[\s\S]*?\?>/i', '', $html) ?? $html;
+        $html = \preg_replace('/<\?(?:php|=)?[\s\S]*?(?=>|$)/i', '', $html) ?? $html;
+
+        return \str_replace('?>', '', $html);
     }
 
     private function isLowQualityGeneratedSectionHtml(string $html): bool
@@ -990,13 +1592,13 @@ final class AiSitePageComponentGenerationService
             null,
             'pagebuilder_component_generation',
             null,
-            [
+            $this->buildAiRuntimeParams([
                 'allow_zero_balance_provider' => true,
                 'temperature' => 0.35,
                 'max_tokens' => 4096,
-                'timeout' => 180,
+                'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
                 'response_format' => ['type' => 'json_object'],
-            ]
+            ])
         );
         $flushChunkBuffer(true);
 
@@ -1234,16 +1836,32 @@ final class AiSitePageComponentGenerationService
             null,
             'pagebuilder_component_generation',
             null,
-            [
+            $this->buildAiRuntimeParams([
                 'temperature' => 0.2,
                 'max_tokens' => 8192,
-                'timeout' => 180,
+                'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
                 'response_format' => ['type' => 'json_object'],
                 'allow_zero_balance_provider' => true,
-            ]
+            ])
         );
 
         return \is_string($response) ? $response : null;
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
+    private function buildAiRuntimeParams(array $params): array
+    {
+        if (\PHP_SAPI !== 'cli') {
+            return $params;
+        }
+
+        $params['timeout'] = 0;
+        $params['disable_cli_timeout'] = true;
+
+        return $params;
     }
 
     /**
@@ -1617,7 +2235,8 @@ final class AiSitePageComponentGenerationService
             . "- Do not redeclare or break framework-provided variables (\$page, \$getConfig, \$componentId, \$cls, \$parseLinks, \$navItems, etc.) unless you know exactly how; prefer using them read-only.\n"
             . "- extra_fields and js_content: MUST be empty strings unless the task explicitly requires them.\n"
             . "- html_extra, html_extra_column, html_content: static HTML fragments only. No PHP tags, no <style>, no <script>, no @component_start/@fields_start metadata.\n"
-            . "- css_extra, css_responsive: CSS only. No <? ... ?> and no PHP. Prefer empty CSS because theme tokens are already applied through default_config.\n"
+            . "- css_extra, css_responsive: CSS only. No <? ... ?> and no PHP. Prefer empty CSS because theme tokens are already applied through default_config. If CSS is used, every rule and @media block must have balanced { } braces and be short enough to fit completely.\n"
+            . "- CSS class names: never use generic selectors like .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active. Use component-specific classes shaped like pb-{component-code}-{element}, scope selectors with #componentId, and keep CSS selectors and HTML class attributes in sync.\n"
             . "- Images: never output broken image placeholders. If no verified asset URL is provided, create the visual directly with inline SVG or CSS shapes inside html_content; do not use empty src, example.com, placeholder services, or unverified .jpg/.png/.webp URLs.\n"
             . "- js_content: MUST be an empty string for this virtual-theme build.\n";
     }
@@ -2773,12 +3392,16 @@ final class AiSitePageComponentGenerationService
         string $reason,
         int $attempt
     ): string {
+        $cssPrefix = $this->normalizeComponentCssPrefix($componentCode);
+
         return $basePrompt
             . "\n\nRetry mode (attempt {$attempt}/" . self::COMPONENT_GENERATION_MAX_ATTEMPTS . "):"
             . "\n- The previous AI output failed validation because: {$reason}"
             . "\n- Regenerate the SAME component with a safer implementation that is still production-quality and visually layered."
             . "\n- Keep the structure compact, but include real visitor-facing copy, panel/card depth, button states, and an inline SVG or CSS visual if no real asset URL is provided."
             . "\n- Keep `extra_fields`, `php_variables`, and `js_content` empty unless absolutely necessary."
+            . "\n- Do not use generic CSS classes such as .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active; use `{$cssPrefix}-...` classes in both CSS and HTML, and scope CSS selectors with #componentId."
+            . "\n- Keep CSS short and syntactically complete: every selector and @media block must close its braces before the JSON field ends."
             . "\n- Prefer one small section/root wrapper, practical cards/proof points, one short paragraph, and one optional CTA."
             . "\n- Avoid loops, complex PHP, embedded arrays, dynamic calculations, markdown fences, and long CSS."
             . "\n- Return pure JSON only for component `{$componentCode}`.";

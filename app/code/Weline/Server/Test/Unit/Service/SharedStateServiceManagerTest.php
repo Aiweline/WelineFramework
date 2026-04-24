@@ -574,7 +574,7 @@ final class SharedStateServiceManagerTest extends TestCase
         self::assertSame(1, $manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]['consumer_count'] ?? null);
     }
 
-    public function testReleaseInstanceConsumersSendsSharedServiceShutdownRequestWhenLastConsumerLeaves(): void
+    public function testReleaseInstanceConsumersOnlyNotifiesSharedServiceWhenLastConsumerLeaves(): void
     {
         $env = self::sessionPortEnv();
         $registry = new class extends SharedStateServiceRegistry {
@@ -668,13 +668,12 @@ final class SharedStateServiceManagerTest extends TestCase
         $manager->releaseInstanceConsumers('consumer-a');
 
         self::assertSame([[ControlMessage::ROLE_SESSION_SERVER, 'consumer-a', 4321]], $manager->shutdownCalls);
-        self::assertSame([], $registry->getConsumers(ControlMessage::ROLE_SESSION_SERVER));
+        self::assertSame(['consumer-a'], \array_keys($registry->getConsumers(ControlMessage::ROLE_SESSION_SERVER)));
         self::assertSame(4321, $manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]['pid'] ?? null);
-        self::assertSame(0, $manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]['consumer_count'] ?? null);
-        self::assertTrue((bool) ($manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]['registered'] ?? false));
+        self::assertArrayNotHasKey('consumer_count', $manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]);
     }
 
-    public function testReleaseInstanceConsumersKeepsSharedServiceWhenAnotherConsumerStillUsesIt(): void
+    public function testReleaseInstanceConsumersDoesNotLocallyDropOtherConsumers(): void
     {
         $env = self::sessionPortEnv();
         $registry = new class extends SharedStateServiceRegistry {
@@ -769,9 +768,11 @@ final class SharedStateServiceManagerTest extends TestCase
         $manager->releaseInstanceConsumers('consumer-a');
 
         self::assertSame([[ControlMessage::ROLE_SESSION_SERVER, 'consumer-a', 4321]], $manager->shutdownCalls);
-        self::assertSame(['consumer-b'], \array_keys($registry->getConsumers(ControlMessage::ROLE_SESSION_SERVER)));
-        self::assertSame(1, $manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]['consumer_count'] ?? null);
-        self::assertTrue((bool) ($manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]['registered'] ?? false));
+        self::assertSame(
+            ['consumer-a', 'consumer-b'],
+            \array_keys($registry->getConsumers(ControlMessage::ROLE_SESSION_SERVER))
+        );
+        self::assertArrayNotHasKey('consumer_count', $manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]);
     }
 
     public function testReleaseCompatibilityShellIsNoop(): void
