@@ -308,6 +308,9 @@ class ModelSyncService
         $modelField = $providerConfig['model_field'] ?? 'model';
         $baseUrl = $providerConfig['base_url'] ?? '';
         $timeout = (int)($defaults['timeout'] ?? 180);
+        $priceUnit = (string)($providerConfig['price_unit'] ?? 'per_1k_tokens');
+        $inputPrice = $this->normalizePricePerThousand((float)($modelMeta['input_price'] ?? 0), $priceUnit);
+        $outputPrice = $this->normalizePricePerThousand((float)($modelMeta['output_price'] ?? 0), $priceUnit);
 
         $config = array_merge([
             'api_key' => '',
@@ -333,8 +336,8 @@ class ModelSyncService
             'model_code' => $modelCode,
             'model_name' => $modelName,
             'model_version' => $modelMeta['version'] ?? '1.0',
-            'token_price_input' => $modelMeta['input_price'] ?? 0,
-            'token_price_output' => $modelMeta['output_price'] ?? 0,
+            'token_price_input' => $inputPrice,
+            'token_price_output' => $outputPrice,
             'max_tokens' => $modelMeta['max_tokens'] ?? ($defaults['max_tokens'] ?? 4096),
             'is_active' => 0,
             'is_default' => 0,
@@ -348,6 +351,17 @@ class ModelSyncService
                 'password' => '',
             ],
         ];
+    }
+
+    private function normalizePricePerThousand(float $price, string $priceUnit): float
+    {
+        if ($price <= 0) {
+            return 0.0;
+        }
+        if ($priceUnit === 'per_1m_tokens') {
+            return round($price / 1000, 6);
+        }
+        return round($price, 6);
     }
 
     /**

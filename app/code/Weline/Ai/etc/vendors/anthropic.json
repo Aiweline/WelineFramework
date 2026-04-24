@@ -2,6 +2,8 @@
     "name": "Anthropic",
     "code": "anthropic",
     "base_url": "https://api.anthropic.com/v1",
+    "price_unit": "per_1m_tokens",
+    "price_currency": "USD",
     "models_prefix": ["claude-"],
     "allow_custom_models": true,
     "quick_create": true,

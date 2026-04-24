@@ -44,6 +44,7 @@ if ($isEdit && $model->getData('provider_config')) {
 if (empty($providerConfig) && !empty($config)) {
     $providerConfig = $config;
 }
+$modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
 ?>
 
 <!-- 面包屑导航 -->
@@ -70,10 +71,59 @@ if (empty($providerConfig) && !empty($config)) {
     </div>
 </div>
 
-<div class="model-edit-container">
+<div class="model-edit-container<?= !$isEdit ? ' is-quick-create' : '' ?>">
     <form action="<?= $this->getBackendUrl('*/backend/model/save') ?>" method="post" id="model-form">
         <?php if ($isEdit): ?>
             <input type="hidden" name="id" value="<?= $model->getId() ?>">
+        <?php endif; ?>
+        <?php if (!$isEdit): ?>
+            <input type="hidden" id="provider_model_code" name="provider_model_code" value="">
+            <input type="hidden" id="record_max_tokens" name="max_tokens" value="4096">
+            <input type="hidden" id="cost_per_token" name="cost_per_token" value="0">
+
+            <div class="card mb-3 quick-model-create-card border-primary">
+                <div class="card-header">
+                    <h5><i class="mdi mdi-lightning-bolt me-2"></i><?= __('快速选择模型') ?></h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="common_provider_preset" class="form-label">
+                                <?= __('供应商') ?> <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="common_provider_preset">
+                                <option value=""><?= __('选择供应商') ?></option>
+                            </select>
+                            <small class="form-text text-muted"><?= __('先选供应商，模型列表只显示该供应商可用模型。') ?></small>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="common_model_preset" class="form-label">
+                                <?= __('模型') ?> <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="common_model_preset" disabled>
+                                <option value=""><?= __('先选择供应商') ?></option>
+                            </select>
+                            <small class="form-text text-muted"><?= __('选择后自动填充模型代码、Base URL、最大输出和价格。') ?></small>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="api_key_input" class="form-label">
+                                <?= __('API Key') ?>
+                            </label>
+                            <input type="password"
+                                   class="form-control"
+                                   id="api_key_input"
+                                   name="api_key_input"
+                                   autocomplete="off"
+                                   placeholder="<?= __('常见模型填 API Key 即可保存') ?>">
+                            <small class="form-text text-muted"><?= __('也可以留空，后续使用供应商账户。') ?></small>
+                        </div>
+                    </div>
+                    <div class="alert alert-light border mt-3 mb-0">
+                        <i class="mdi mdi-information-outline me-1"></i>
+                        <?= __('高级字段已自动处理；如需手动改 Base URL、代理或 JSON，保存后再进入编辑。') ?>
+                    </div>
+                </div>
+            </div>
         <?php endif; ?>
         
         <!-- 基本信息卡片 -->
@@ -640,6 +690,108 @@ if (!empty($displayConfig)) {
 <script>
 (function() {
     'use strict';
+
+    var commonModelPresets = <?= $modelPresetsJson ?>;
+
+    function setFieldValue(id, value) {
+        var element = document.getElementById(id);
+        if (!element) return;
+        element.value = value === undefined || value === null ? '' : value;
+    }
+
+    function setCheckboxValue(id, checked) {
+        var element = document.getElementById(id);
+        if (!element) return;
+        element.checked = !!checked;
+    }
+
+    function applyPreset(preset) {
+        if (!preset) return;
+
+        var config = Object.assign({}, preset.config || {});
+        setFieldValue('vendor', preset.provider || '');
+        setFieldValue('model_code', preset.model_code || '');
+        setFieldValue('provider_model_code', preset.provider_model_code || preset.model_code || '');
+        setFieldValue('model_name', preset.name || preset.model_code || '');
+        setFieldValue('model_version', preset.version || '1.0');
+        setFieldValue('api_url', config.base_url || '');
+        setFieldValue('max_tokens', preset.max_tokens || config.max_tokens || 4096);
+        setFieldValue('record_max_tokens', preset.max_tokens || config.max_tokens || 4096);
+        setFieldValue('temperature', preset.temperature !== undefined ? preset.temperature : (config.temperature || 0.7));
+        setFieldValue('top_p', preset.top_p !== undefined ? preset.top_p : (config.top_p || 1));
+        setFieldValue('timeout', preset.timeout || config.timeout || 180);
+        setCheckboxValue('stream', preset.stream !== false);
+        setFieldValue('token_price_input', preset.token_price_input || 0);
+        setFieldValue('token_price_output', preset.token_price_output || 0);
+        setFieldValue('cost_per_token', preset.cost_per_token || preset.token_price_input || 0);
+
+        var providerConfigTextarea = document.getElementById('provider_config_json');
+        if (providerConfigTextarea) {
+            providerConfigTextarea.value = JSON.stringify(config, null, 2);
+        }
+    }
+
+    function fillModelPresetOptions(providerCode) {
+        var select = document.getElementById('common_model_preset');
+        if (!select) return;
+
+        select.innerHTML = '';
+        var placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = providerCode ? '<?= addslashes(__('选择模型')) ?>' : '<?= addslashes(__('先选择供应商')) ?>';
+        select.appendChild(placeholder);
+        select.disabled = !providerCode;
+
+        if (!providerCode || !Array.isArray(commonModelPresets)) return;
+
+        var presets = commonModelPresets.filter(function(preset) {
+            return preset.provider === providerCode;
+        });
+        presets.forEach(function(preset) {
+            var option = document.createElement('option');
+            option.value = preset.key;
+            option.textContent = (preset.name || preset.model_code || '') + ' (' + (preset.model_code || '') + ')';
+            select.appendChild(option);
+        });
+
+        if (presets.length === 1) {
+            select.value = presets[0].key;
+            applyPreset(presets[0]);
+        }
+    }
+
+    (function initQuickCreate() {
+        var providerSelect = document.getElementById('common_provider_preset');
+        var modelSelect = document.getElementById('common_model_preset');
+        if (!providerSelect || !modelSelect || !Array.isArray(commonModelPresets)) return;
+
+        var providers = {};
+        commonModelPresets.forEach(function(preset) {
+            if (!preset.provider) return;
+            providers[preset.provider] = preset.provider_name || preset.provider;
+        });
+
+        Object.keys(providers).sort(function(a, b) {
+            return providers[a].localeCompare(providers[b]);
+        }).forEach(function(providerCode) {
+            var option = document.createElement('option');
+            option.value = providerCode;
+            option.textContent = providers[providerCode];
+            providerSelect.appendChild(option);
+        });
+
+        providerSelect.addEventListener('change', function() {
+            fillModelPresetOptions(this.value || '');
+        });
+
+        modelSelect.addEventListener('change', function() {
+            if (!this.value) return;
+            var preset = commonModelPresets.find(function(item) {
+                return item.key === modelSelect.value;
+            });
+            applyPreset(preset);
+        });
+    })();
     
     document.getElementById('model-form').addEventListener('submit', function(e) {
         var vendor = document.getElementById('vendor').value.trim();
@@ -811,5 +963,9 @@ if (!empty($displayConfig)) {
 
 .model-edit-container .card {
     margin-bottom: 1.5rem;
+}
+
+.model-edit-container.is-quick-create #model-form > .card.mb-3:not(.quick-model-create-card) {
+    display: none;
 }
 </style>
