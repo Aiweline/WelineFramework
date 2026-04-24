@@ -2095,7 +2095,8 @@ final class AiSitePageComponentGenerationService
         $sharedRefinement = $this->resolveSharedComponentRefinement($scope, 'header');
         $taskPlanPromptAddon = $this->buildTaskPlanPromptAddon(
             $this->resolveSharedTaskPlanTask($scope, 'header'),
-            'header'
+            'header',
+            $scope
         );
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $skillContract = $this->buildWelineSkillContractPromptAddon();
@@ -2135,7 +2136,8 @@ final class AiSitePageComponentGenerationService
         $sharedRefinement = $this->resolveSharedComponentRefinement($scope, 'footer');
         $taskPlanPromptAddon = $this->buildTaskPlanPromptAddon(
             $this->resolveSharedTaskPlanTask($scope, 'footer'),
-            'footer'
+            'footer',
+            $scope
         );
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $skillContract = $this->buildWelineSkillContractPromptAddon();
@@ -2185,7 +2187,8 @@ final class AiSitePageComponentGenerationService
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
         $taskPlanPromptAddon = $this->buildTaskPlanPromptAddon(
             $this->resolveSectionTaskPlanTask($scope, $pageType, (string)($section['code'] ?? ''), $sectionKey),
-            'section'
+            'section',
+            $scope
         );
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $skillContract = $this->buildWelineSkillContractPromptAddon();
@@ -2372,6 +2375,14 @@ final class AiSitePageComponentGenerationService
     {
         foreach ([
             $this->resolveTaskPlanRoot($scope),
+            \is_array($scope['stage2_context_snapshot'] ?? null) ? $scope['stage2_context_snapshot'] : [],
+            \is_array($scope['theme_context_snapshot'] ?? null) ? $scope['theme_context_snapshot'] : [],
+            \is_array($scope['confirmed_stage1_plan_book'] ?? null) ? $scope['confirmed_stage1_plan_book'] : [],
+            [
+                'theme_design' => \is_array($scope['theme_design'] ?? null) ? $scope['theme_design'] : [],
+                'theme_style' => \is_array($scope['theme_style'] ?? null) ? $scope['theme_style'] : [],
+                'palette' => \is_array($scope['palette'] ?? null) ? $scope['palette'] : [],
+            ],
             \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [],
             \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
             \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [],
@@ -2773,17 +2784,81 @@ final class AiSitePageComponentGenerationService
     private function resolveTaskPlanRoot(array $scope): array
     {
         $structured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
-        if ($structured !== [] && (int)($scope['task_plan_confirmed'] ?? 0) === 1) {
+        if (
+            $structured !== []
+            && (int)($scope['task_plan_confirmed'] ?? 0) === 1
+            && $this->taskPlanRootHasTasks($structured)
+        ) {
             return $structured;
         }
 
         $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
         $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
-        if ($confirmed !== [] && (int)($scope['task_plan_confirmed'] ?? 0) === 1) {
+        if (
+            $confirmed !== []
+            && (int)($scope['task_plan_confirmed'] ?? 0) === 1
+            && $this->taskPlanRootHasTasks($confirmed)
+        ) {
             return $confirmed;
         }
 
-        return [];
+        return (int)($scope['task_plan_confirmed'] ?? 0) === 1
+            ? $this->buildTaskPlanRootFromBuildBlueprint($scope)
+            : [];
+    }
+
+    /**
+     * @param array<string,mixed> $root
+     */
+    private function taskPlanRootHasTasks(array $root): bool
+    {
+        if (\is_array($root['shared_tasks'] ?? null) && $root['shared_tasks'] !== []) {
+            return true;
+        }
+        foreach (\is_array($root['page_tasks'] ?? null) ? $root['page_tasks'] : [] as $tasks) {
+            if (\is_array($tasks) && $tasks !== []) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function buildTaskPlanRootFromBuildBlueprint(array $scope): array
+    {
+        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
+        if ((string)($buildBlueprint['source'] ?? '') !== 'stage2_confirmed_task_plan') {
+            return [];
+        }
+
+        $sharedTasks = [];
+        $pageTasks = [];
+        foreach (\is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [] as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $pageType = \trim((string)($task['page_type'] ?? ''));
+            $taskType = \trim((string)($task['task_type'] ?? ''));
+            if ($pageType === '' || $taskType === 'shared_component') {
+                $sharedTasks[] = $task;
+                continue;
+            }
+            $pageTasks[$pageType][] = $task;
+        }
+
+        if ($sharedTasks === [] && $pageTasks === []) {
+            return [];
+        }
+
+        return [
+            'signature' => (string)($buildBlueprint['task_plan_signature'] ?? $buildBlueprint['signature'] ?? ''),
+            'shared_tasks' => $sharedTasks,
+            'page_tasks' => $pageTasks,
+        ];
     }
 
     /**
@@ -2861,7 +2936,7 @@ final class AiSitePageComponentGenerationService
     /**
      * @param array<string,mixed> $taskPlanTask
      */
-    private function buildTaskPlanPromptAddon(array $taskPlanTask, string $contextLabel): string
+    private function buildTaskPlanPromptAddon(array $taskPlanTask, string $contextLabel, array $scope = []): string
     {
         if ($taskPlanTask === []) {
             return '';
@@ -2881,6 +2956,39 @@ final class AiSitePageComponentGenerationService
             $sharedPromptContext = $taskPlanTask['shared_prompt_context'];
         }
         $stage2Context = \is_array($runtimeContext['stage2_context_snapshot'] ?? null) ? $runtimeContext['stage2_context_snapshot'] : [];
+        if ($stage2Context === [] && \is_array($scope['stage2_context_snapshot'] ?? null)) {
+            $stage2Context = $scope['stage2_context_snapshot'];
+        }
+        if ($stage2Context === [] && \is_array($scope['build_blueprint']['stage2_context_snapshot'] ?? null)) {
+            $stage2Context = $scope['build_blueprint']['stage2_context_snapshot'];
+        }
+        if ($stage2Context === [] && \is_array($scope['virtual_theme_plan']['confirmed']['stage2_context_snapshot'] ?? null)) {
+            $stage2Context = $scope['virtual_theme_plan']['confirmed']['stage2_context_snapshot'];
+        }
+        if ($themeContext === [] && \is_array($stage2Context['theme_context_snapshot'] ?? null)) {
+            $themeContext = $stage2Context['theme_context_snapshot'];
+        }
+        if ($themeContext === [] && \is_array($scope['theme_context_snapshot'] ?? null)) {
+            $themeContext = $scope['theme_context_snapshot'];
+        }
+        if ($themeContext === [] && \is_array($scope['execution_blueprint']['theme_context_snapshot'] ?? null)) {
+            $themeContext = $scope['execution_blueprint']['theme_context_snapshot'];
+        }
+        if ($sharedPromptContext === [] && \is_array($stage2Context['shared_prompt_context'] ?? null)) {
+            $sharedPromptContext = $stage2Context['shared_prompt_context'];
+        }
+        if ($sharedPromptContext === [] && \is_array($scope['shared_prompt_context'] ?? null)) {
+            $sharedPromptContext = $scope['shared_prompt_context'];
+        }
+        if ($sharedPromptContext === [] && \is_array($scope['execution_blueprint']['shared_prompt_context'] ?? null)) {
+            $sharedPromptContext = $scope['execution_blueprint']['shared_prompt_context'];
+        }
+        if ($sharedPromptContext === [] && \is_array($scope['confirmed_stage1_plan_book']['shared_prompt_context'] ?? null)) {
+            $sharedPromptContext = $scope['confirmed_stage1_plan_book']['shared_prompt_context'];
+        }
+        if ($sharedPromptContext === [] && \is_array($scope['plan_workbench']['confirmed']['shared_prompt_context'] ?? null)) {
+            $sharedPromptContext = $scope['plan_workbench']['confirmed']['shared_prompt_context'];
+        }
         $taskScriptDataContract = \is_array($taskScript['data_contract'] ?? null) ? $taskScript['data_contract'] : [];
         $implementationDataContract = \is_array($implementationContract['data_contract'] ?? null) ? $implementationContract['data_contract'] : [];
         $fieldRequirements = \is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [];
@@ -3375,7 +3483,7 @@ final class AiSitePageComponentGenerationService
             $sse->sendEvent('warning', [
                 'region' => $region,
                 'component_code' => $componentCode,
-                'message' => (string)__('AI 缁勪欢鐢熸垚鏈€氳繃鏍￠獙锛屾鍦ㄤ娇鐢?AI 绠€鍖栨柟妗堥噸璇曪紙绗?%{1} 杞級锛?{2}', [
+                'message' => (string)__('AI 组件生成未通过校验，正在使用 AI 简化方案重试（第 %{1} 轮）：%{2}', [
                     $attempt,
                     $reason,
                 ]),

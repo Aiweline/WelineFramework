@@ -483,6 +483,47 @@ HTML,
         self::assertSame('Launch faster with a focused hero message.', (string)($config['content.description'] ?? ''));
     }
 
+    public function testConfirmedTaskPlanRootFallsBackToBuildBlueprintWhenSnapshotIsCompacted(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $root = (function (array $scope): array {
+            return $this->resolveTaskPlanRoot($scope);
+        })->call($service, [
+            'task_plan_confirmed' => 1,
+            'virtual_theme_plan' => [
+                'confirmed' => [
+                    'signature' => 'task-plan-signature',
+                    '_storage_compacted' => 1,
+                    'execution_blueprint_ref' => ['task_count' => 1],
+                ],
+            ],
+            'build_blueprint' => [
+                'source' => 'stage2_confirmed_task_plan',
+                'signature' => 'build-blueprint-signature',
+                'task_plan_signature' => 'task-plan-signature',
+                'tasks' => [
+                    [
+                        'task_key' => 'page:home_page:content/home-page-hero',
+                        'task_type' => 'page_section',
+                        'page_type' => 'home_page',
+                        'section_code' => 'content/home-page-hero',
+                        'task_script' => [
+                            'story_goal' => 'Build a conversion-ready hero.',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        self::assertSame(
+            'Build a conversion-ready hero.',
+            (string)($root['page_tasks']['home_page'][0]['task_script']['story_goal'] ?? '')
+        );
+    }
+
     public function testSectionPromptIgnoresUnconfirmedTaskPlanDrafts(): void
     {
         $service = new AiSitePageComponentGenerationService(
