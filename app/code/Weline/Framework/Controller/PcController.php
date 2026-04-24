@@ -22,7 +22,6 @@ use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Manager\ResultManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Security\Token;
 use Weline\Framework\Ui\FormKey;
 use Weline\Framework\View\Data\DataInterface;
@@ -459,15 +458,12 @@ class PcController extends Core
             'layoutType' => $this?->layoutType
         ]);
         $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_before', $eventData);
-        SchedulerSystem::yield();
         /**@var DataObject $eventData */
         $fileName = $eventData->getData('fileName');
         $content = $this->getTemplate()->fetch($fileName);
-        SchedulerSystem::yield();
         // 触发Weline_Framework_Controller::fetch_file_after事件
         $eventData->setData('content', $content);
         $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_after', $eventData);
-        SchedulerSystem::yield();
         return $eventData->getData('content');
     }
 

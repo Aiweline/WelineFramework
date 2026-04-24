@@ -5380,7 +5380,7 @@ CNF;
      * 在证书签发、续签、启用/禁用后调用，确保证书映射文件包含最新的域名映射
      * 特别是处理泛域名证书的展开，使子域名能够正确匹配证书
      */
-    public function regenerateCertificateMap(): void
+    public function regenerateCertificateMap(bool $broadcastReload = true): void
     {
         $mapFile = Env::VAR_DIR . 'server' . DS . 'ssl_certificate_map.json';
         
@@ -5397,6 +5397,10 @@ CNF;
         \file_put_contents($mapFile, \json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
         
         w_log_debug('[SslCertificateService] 证书映射文件已重新生成，包含 ' . \count($map) . ' 个域名');
+
+        if (!$broadcastReload) {
+            return;
+        }
 
         // 通知所有运行中的实例热重载 SNI 证书映射（无需重启即可生效新证书）
         ObjectManager::getInstance(\Weline\Server\Service\Control\BroadcastControlDispatchService::class)

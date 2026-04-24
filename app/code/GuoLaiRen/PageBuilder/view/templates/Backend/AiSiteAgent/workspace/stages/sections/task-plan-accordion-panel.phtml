@@ -38,7 +38,7 @@ $phaseTwoInitialMarkdown = trim((string)(
                 </div>
                 <div class="alert alert-info border-0 rounded-0 mb-0">
                     <i class="mdi mdi-information-outline me-1"></i>
-                    <?= htmlspecialchars((string)__('第二阶段会基于第一阶段方案生成任务拆解，确认后再进入构建执行。'), ENT_QUOTES, 'UTF-8') ?>
+                    <?= htmlspecialchars((string)__('第二阶段基于已确认方案自动拆解任务；确认任务方案后会直接进入后台构建。'), ENT_QUOTES, 'UTF-8') ?>
                 </div>
                 <div class="p-4">
                     <div class="row g-3 mb-3">
@@ -53,60 +53,6 @@ $phaseTwoInitialMarkdown = trim((string)(
                             </div>
                         </div>
                         <div class="col-12">
-                            <div class="pb-ai-mode-workbench mb-3">
-                                <div class="pb-ai-mode-workbench__intro">
-                                    <div class="pb-ai-mode-workbench__intro-copy">
-                                        <div class="pb-ai-mode-workbench__eyebrow"><?= htmlspecialchars((string)__('任务方案模式'), ENT_QUOTES, 'UTF-8') ?></div>
-                                        <h6 class="pb-ai-mode-workbench__title mb-1"><?= htmlspecialchars((string)__('让第二阶段的任务拆解更贴近你的执行节奏'), ENT_QUOTES, 'UTF-8') ?></h6>
-                                        <p class="pb-ai-mode-workbench__summary mb-0"><?= htmlspecialchars((string)__('微调用来补强某些页面或任务块；重建适合整体执行顺序、范围或重点发生变化时使用。'), ENT_QUOTES, 'UTF-8') ?></p>
-                                    </div>
-                                    <span class="pb-ai-mode-workbench__badge"><?= htmlspecialchars((string)__('第二阶段'), ENT_QUOTES, 'UTF-8') ?></span>
-                                </div>
-                                <div class="pb-ai-mode-workbench__layout">
-                                    <div class="pb-ai-mode-choice-grid" role="group" aria-label="task-plan-mode">
-                                        <button type="button" class="btn pb-ai-mode-choice active" id="pb-ai-task-plan-mode-refine" data-task-plan-mode="refine_task_plan">
-                                            <span class="pb-ai-mode-choice__icon" aria-hidden="true"><i class="mdi mdi-playlist-edit"></i></span>
-                                            <span class="pb-ai-mode-choice__body">
-                                                <span class="pb-ai-mode-choice__title"><?= htmlspecialchars((string)__('微调任务方案'), ENT_QUOTES, 'UTF-8') ?></span>
-                                                <span class="pb-ai-mode-choice__desc"><?= htmlspecialchars((string)__('只调整你指定的任务位置，适合局部优化和小步修正。'), ENT_QUOTES, 'UTF-8') ?></span>
-                                            </span>
-                                            <span class="pb-ai-mode-choice__state"><?= htmlspecialchars((string)__('局部补强'), ENT_QUOTES, 'UTF-8') ?></span>
-                                        </button>
-                                        <button type="button" class="btn pb-ai-mode-choice" id="pb-ai-task-plan-mode-rebuild" data-task-plan-mode="rebuild_task_plan">
-                                            <span class="pb-ai-mode-choice__icon" aria-hidden="true"><i class="mdi mdi-file-replace-outline"></i></span>
-                                            <span class="pb-ai-mode-choice__body">
-                                                <span class="pb-ai-mode-choice__title"><?= htmlspecialchars((string)__('完全重新生成'), ENT_QUOTES, 'UTF-8') ?></span>
-                                                <span class="pb-ai-mode-choice__desc"><?= htmlspecialchars((string)__('重新生成整份任务方案，适合需要重排执行顺序或关键重点的情况。'), ENT_QUOTES, 'UTF-8') ?></span>
-                                            </span>
-                                            <span class="pb-ai-mode-choice__state"><?= htmlspecialchars((string)__('全局重排'), ENT_QUOTES, 'UTF-8') ?></span>
-                                        </button>
-                                    </div>
-                                    <div class="pb-ai-mode-workbench__body">
-                                        <div class="pb-ai-mode-callout" id="pb-ai-task-plan-mode-help-box" aria-live="polite">
-                                            <div class="pb-ai-mode-callout__label"><?= htmlspecialchars((string)__('当前模式说明'), ENT_QUOTES, 'UTF-8') ?></div>
-                                            <div class="small text-muted" id="pb-ai-task-plan-help-refine"><?= htmlspecialchars((string)__('只调整你指定的任务位置，适合局部优化。'), ENT_QUOTES, 'UTF-8') ?></div>
-                                            <div class="small text-muted d-none" id="pb-ai-task-plan-help-rebuild"><?= htmlspecialchars((string)__('重新生成整份任务方案，适合方向变化较大的场景。'), ENT_QUOTES, 'UTF-8') ?></div>
-                                        </div>
-                                        <div class="pb-ai-mode-field">
-                                            <label class="form-label small text-muted mb-2" for="pb-ai-task-plan-mode-prompt"><?= htmlspecialchars((string)__('补充说明（可选）'), ENT_QUOTES, 'UTF-8') ?></label>
-                                            <textarea class="form-control pb-ai-mode-textarea" id="pb-ai-task-plan-mode-prompt" rows="5" data-default-placeholder="<?= htmlspecialchars((string)__('例如：先锁定首页与产品页，再补充发布检查清单。'), ENT_QUOTES, 'UTF-8') ?>" placeholder="<?= htmlspecialchars((string)__('例如：先锁定首页与产品页，再补充发布检查清单。'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
-                                        </div>
-                                        <div class="pb-ai-mode-meta">
-                                            <div class="pb-ai-mode-meta-card">
-                                                <div class="pb-ai-mode-meta-label"><?= htmlspecialchars((string)__('当前动作'), ENT_QUOTES, 'UTF-8') ?></div>
-                                                <div class="small text-muted mb-0" id="pb-ai-task-plan-mode-context"><?= htmlspecialchars((string)__('未选择局部操作时，这里可选填整体任务调整说明。'), ENT_QUOTES, 'UTF-8') ?></div>
-                                            </div>
-                                            <div class="pb-ai-mode-meta-card">
-                                                <div class="pb-ai-mode-meta-label"><?= htmlspecialchars((string)__('执行状态'), ENT_QUOTES, 'UTF-8') ?></div>
-                                                <div class="small text-muted mb-0" id="pb-ai-task-plan-mode-status"><?= htmlspecialchars((string)__('可以继续微调或重建任务方案。'), ENT_QUOTES, 'UTF-8') ?></div>
-                                            </div>
-                                        </div>
-                                        <div class="pb-ai-mode-actions">
-                                            <button type="button" class="btn btn-primary pb-ai-mode-submit" id="pb-ai-task-plan-run-mode"><?= htmlspecialchars((string)__('执行当前模式'), ENT_QUOTES, 'UTF-8') ?></button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
                             <div class="border rounded p-2">
                                 <w:theme:sse-terminal id="pb-ai-task-plan-sse-terminal" title="@lang{第二阶段任务方案流}" height="200px" events="start,progress,chunk,total,done,error,warning,info" show-start-toggle="false" />
                             </div>
@@ -121,14 +67,14 @@ $phaseTwoInitialMarkdown = trim((string)(
                             <?= htmlspecialchars((string)__('收起第二阶段面板'), ENT_QUOTES, 'UTF-8') ?>
                         </button>
                         <div class="d-flex flex-wrap align-items-center gap-2">
-                            <button type="button" class="btn btn-outline-danger" id="pb-ai-task-plan-regenerate">
+                            <button type="button" class="btn btn-outline-danger d-none" id="pb-ai-task-plan-regenerate">
                                 <?= htmlspecialchars((string)__('重新生成'), ENT_QUOTES, 'UTF-8') ?>
                             </button>
-                            <button type="button" class="btn btn-outline-primary" id="pb-ai-save-task-plan-draft">
+                            <button type="button" class="btn btn-outline-primary d-none" id="pb-ai-save-task-plan-draft">
                                 <?= htmlspecialchars((string)__('保存方案'), ENT_QUOTES, 'UTF-8') ?>
                             </button>
                             <button type="button" class="btn btn-primary" id="pb-ai-confirm-task-plan" disabled>
-                                <?= htmlspecialchars((string)__('确认第二阶段任务计划'), ENT_QUOTES, 'UTF-8') ?>
+                                <?= htmlspecialchars((string)__('确认任务方案并开始构建'), ENT_QUOTES, 'UTF-8') ?>
                             </button>
                         </div>
                     </div>

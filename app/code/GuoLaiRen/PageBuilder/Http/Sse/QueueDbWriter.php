@@ -13,17 +13,25 @@ class QueueDbWriter extends SseWriter
 {
     private bool $alive = true;
 
-    /** AI 提供商回调传入的原始片段缓冲，按大小/时间刷入 weline_queue.result，供 operation-sse 轮询增量 */
-    private string $aiRawStreamBuffer = '';
+    private bool $queueResultCacheLoaded = false;
 
-    /** 当前缓冲首字节时间（用于最长等待后强制刷盘） */
-    private ?float $aiRawBufferStartedAt = null;
+    private string $queueResultCache = '';
 
-    private const AI_RAW_FLUSH_MIN_BYTES = 768;
+    private int $suppressedAiStreamChunks = 0;
 
-    private const AI_RAW_FLUSH_MAX_WAIT_SEC = 0.18;
+    private int $suppressedAiStreamBytes = 0;
 
-    private const AI_RAW_LINE_MAX_BYTES = 60000;
+    private int $lastAiStreamNoticeChunks = 0;
+
+    private int $lastAiStreamNoticeBytes = 0;
+
+    private const AI_STREAM_NOTICE_EVERY_CHUNKS = 64;
+
+    private const AI_STREAM_NOTICE_MIN_BYTES = 65536;
+
+    private const QUEUE_RESULT_MAX_BYTES = 262144;
+
+    private const QUEUE_RESULT_TRUNCATION_MARKER = '[... queue log truncated ...]';
 
     public function __construct(
         private readonly int $sessionId,
@@ -51,8 +59,7 @@ class QueueDbWriter extends SseWriter
         }
 
         try {
-            // 先刷尽 AI 原始流缓冲，再写 log/progress，避免观察 SSE 侧顺序错乱
-            $this->flushAiRawStreamBuffer(true);
+            $this->flushAiRawStreamBuffer(false);
 
             $payload = $this->normalizePayload($data);
             if (!isset($payload['operation']) || !\is_string($payload['operation']) || \trim($payload['operation']) === '') {
@@ -61,10 +68,12 @@ class QueueDbWriter extends SseWriter
             if (!isset($payload['stage']) || !\is_string($payload['stage']) || \trim($payload['stage']) === '') {
                 $payload['stage'] = $this->stage;
             }
+            $payload = $this->sanitizePayloadForQueueEvent($event, $payload);
 
             $message = \trim((string)($payload['message'] ?? ''));
             $this->appendQueueLog($event, $payload, $message);
             [$sessionEventType, $sessionEventPayload, $sessionEventLevel] = $this->resolveWorkspaceEventEnvelope($event, $payload);
+            $sessionEventPayload = $this->sanitizePayloadForQueueEvent($sessionEventType, $sessionEventPayload);
 
             /** @var AiSiteAgentSessionService $sessionService */
             $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
@@ -129,7 +138,7 @@ class QueueDbWriter extends SseWriter
     }
 
     /**
-     * 将模型流式回调中的原始片段写入队列日志（缓冲后落库，避免每 token 打一次 DB）。
+     * 记录模型流式回调进度，不再把 AI 正文片段写入 queue.result / session event。
      */
     public function recordRawAiStreamChunk(string $chunk): static
     {
@@ -138,19 +147,9 @@ class QueueDbWriter extends SseWriter
         }
 
         try {
-            if ($this->aiRawBufferStartedAt === null) {
-                $this->aiRawBufferStartedAt = \microtime(true);
-            }
-            $this->aiRawStreamBuffer .= $chunk;
-            $now = \microtime(true);
-            $bufLen = \strlen($this->aiRawStreamBuffer);
-            $wait = $this->aiRawBufferStartedAt !== null ? ($now - $this->aiRawBufferStartedAt) : 0.0;
-            if (
-                $bufLen >= self::AI_RAW_FLUSH_MIN_BYTES
-                || ($bufLen > 0 && $wait >= self::AI_RAW_FLUSH_MAX_WAIT_SEC)
-            ) {
-                $this->flushAiRawStreamBuffer(false);
-            }
+            $this->suppressedAiStreamChunks++;
+            $this->suppressedAiStreamBytes += \strlen($chunk);
+            $this->flushAiRawStreamBuffer(false);
         } catch (\Throwable) {
             // 与 sendEvent 一致：不因落库失败中断队列任务
         }
@@ -207,13 +206,9 @@ class QueueDbWriter extends SseWriter
             }
 
             $summary = $this->formatTokenUsageSummary($incoming, $merged);
-            $existing = (string)($row['result'] ?? '');
             $line = '[' . \date('H:i:s') . '] TOKEN_USAGE ' . $summary;
-            $patch = [
-                'content' => \json_encode($content, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR),
-                'process' => $summary,
-                'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
-            ];
+            $patch = $this->buildQueueResultPatch($line, $summary);
+            $patch['content'] = \json_encode($content, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR);
 
             w_query('queue', 'update', [
                 'queue_id' => $this->queueId,
@@ -248,45 +243,32 @@ class QueueDbWriter extends SseWriter
     }
 
     /**
-     * @param bool $force 为 true 时刷尽缓冲（任务结束/连接关闭）
+     * @param bool $force 为 true 时写入最终节流进度
      */
     private function flushAiRawStreamBuffer(bool $force): void
     {
-        if ($this->queueId <= 0) {
+        if ($this->queueId <= 0 || $this->suppressedAiStreamChunks <= 0) {
             return;
         }
-        if (!$force && $this->aiRawStreamBuffer === '') {
+        $chunkDelta = $this->suppressedAiStreamChunks - $this->lastAiStreamNoticeChunks;
+        $byteDelta = $this->suppressedAiStreamBytes - $this->lastAiStreamNoticeBytes;
+        if (
+            !$force
+            && $chunkDelta < self::AI_STREAM_NOTICE_EVERY_CHUNKS
+            && $byteDelta < self::AI_STREAM_NOTICE_MIN_BYTES
+        ) {
             return;
         }
-        if ($this->aiRawStreamBuffer === '') {
-            $this->aiRawBufferStartedAt = null;
-
-            return;
-        }
-
-        $piece = $this->aiRawStreamBuffer;
-        $this->aiRawStreamBuffer = '';
-        $this->aiRawBufferStartedAt = null;
-
-        if ($piece === '') {
+        if ($chunkDelta <= 0 && $byteDelta <= 0) {
             return;
         }
 
-        if (\strlen($piece) > self::AI_RAW_LINE_MAX_BYTES) {
-            $piece = \substr($piece, 0, self::AI_RAW_LINE_MAX_BYTES) . "\n…(truncated)";
-        }
-
-        $row = w_query('queue', 'get', ['queue_id' => $this->queueId]);
-        if (!\is_array($row) || $row === []) {
-            return;
-        }
-
-        $existing = (string)($row['result'] ?? '');
-        $line = '[' . \date('H:i:s') . '] AI_STREAM ' . $piece;
-        $patch = [
-            'process' => (string)__('AI 流式生成中…') . ' (+' . \strlen($piece) . ' B)',
-            'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
-        ];
+        $message = (string)__('AI 正在生成内容，正文流不写入队列日志（已接收 %{chunks} 段 / %{bytes} B）。', [
+            'chunks' => (string)$this->suppressedAiStreamChunks,
+            'bytes' => (string)$this->suppressedAiStreamBytes,
+        ]);
+        $line = '[' . \date('H:i:s') . '] AI_PROGRESS ' . $message;
+        $patch = $this->buildQueueResultPatch($line, $message);
 
         w_query('queue', 'update', [
             'queue_id' => $this->queueId,
@@ -300,14 +282,15 @@ class QueueDbWriter extends SseWriter
             $sessionService->appendEvent(
                 $this->sessionId,
                 $this->adminId,
-                'ai_raw_chunk',
+                'operation_progress',
                 [
-                    'message' => $piece,
-                    'chunk' => $piece,
-                    'content' => $piece,
+                    'message' => $message,
                     'operation' => $this->operation,
                     'stage' => $this->stage,
-                    'stream_stage' => 'ai_raw_chunk',
+                    'stream_stage' => 'ai_stream_progress',
+                    'suppressed_content' => true,
+                    'ai_stream_chunks' => $this->suppressedAiStreamChunks,
+                    'ai_stream_bytes' => $this->suppressedAiStreamBytes,
                 ],
                 $this->stage,
                 'info'
@@ -315,6 +298,9 @@ class QueueDbWriter extends SseWriter
         } catch (\Throwable) {
             // Ignore session-event side effects so queue execution keeps running.
         }
+
+        $this->lastAiStreamNoticeChunks = $this->suppressedAiStreamChunks;
+        $this->lastAiStreamNoticeBytes = $this->suppressedAiStreamBytes;
     }
 
 
@@ -551,6 +537,80 @@ class QueueDbWriter extends SseWriter
     }
 
     /**
+     * Queue rows and session events should only carry lifecycle telemetry.
+     * Generated markdown/JSON/content chunks are persisted in the final stage
+     * draft by business services, not duplicated into queue.result.
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function sanitizePayloadForQueueEvent(string $event, array $payload): array
+    {
+        if (!$this->isContentBearingStreamPayload($event, $payload)) {
+            return $payload;
+        }
+
+        $suppressedBytes = 0;
+        foreach (['message', 'chunk', 'content', 'raw', 'delta', 'text'] as $field) {
+            if (isset($payload[$field]) && \is_string($payload[$field])) {
+                $suppressedBytes += \strlen($payload[$field]);
+            }
+        }
+        if (\is_array($payload['payload'] ?? null)) {
+            foreach (['message', 'chunk', 'content', 'raw', 'delta', 'text'] as $field) {
+                if (isset($payload['payload'][$field]) && \is_string($payload['payload'][$field])) {
+                    $suppressedBytes += \strlen($payload['payload'][$field]);
+                    unset($payload['payload'][$field]);
+                }
+            }
+        }
+
+        unset(
+            $payload['chunk'],
+            $payload['content'],
+            $payload['raw'],
+            $payload['delta'],
+            $payload['text']
+        );
+
+        $payload['message'] = (string)__('AI 内容已生成并写入阶段草案，正文流已从队列 SSE 中省略。');
+        $payload['suppressed_content'] = true;
+        $payload['suppressed_content_bytes'] = \max(0, $suppressedBytes);
+        if (\trim((string)($payload['stream_stage'] ?? '')) === '') {
+            $payload['stream_stage'] = 'content_suppressed';
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function isContentBearingStreamPayload(string $event, array $payload): bool
+    {
+        $eventType = \strtolower(\trim((string)($payload['event_type'] ?? $event)));
+        if (\in_array($eventType, ['chunk', 'ai_raw_chunk', 'ai_chunk', 'plan_chunk'], true)) {
+            return true;
+        }
+
+        $streamStage = \strtolower(\trim((string)($payload['stream_stage'] ?? '')));
+        if (\in_array($streamStage, ['ai_raw_chunk', 'ai_chunk', 'plan_chunk', 'markdown_stream'], true)) {
+            return true;
+        }
+
+        $format = \strtolower(\trim((string)($payload['format'] ?? '')));
+        if ($format === 'markdown_stream') {
+            return true;
+        }
+
+        $nestedPayload = \is_array($payload['payload'] ?? null) ? $payload['payload'] : [];
+        $nestedFormat = \strtolower(\trim((string)($nestedPayload['format'] ?? '')));
+        $nestedStreamStage = \strtolower(\trim((string)($nestedPayload['stream_stage'] ?? '')));
+        return $nestedFormat === 'markdown_stream'
+            || \in_array($nestedStreamStage, ['ai_raw_chunk', 'ai_chunk', 'plan_chunk', 'markdown_stream'], true);
+    }
+
+    /**
      * @param array<string, mixed> $payload
      */
     private function appendQueueLog(string $event, array $payload, string $message): void
@@ -559,21 +619,9 @@ class QueueDbWriter extends SseWriter
             return;
         }
 
-        $row = w_query('queue', 'get', ['queue_id' => $this->queueId]);
-        if (!\is_array($row) || $row === []) {
-            return;
-        }
-
         $summary = $this->resolveSummary($event, $payload, $message);
         $line = $this->formatLogLine($event, $summary);
-        $patch = [];
-        if ($summary !== '') {
-            $patch['process'] = $summary;
-        }
-        if ($line !== '') {
-            $existing = (string)($row['result'] ?? '');
-            $patch['result'] = $existing === '' ? $line : $existing . PHP_EOL . $line;
-        }
+        $patch = $this->buildQueueResultPatch($line, $summary);
         if ($patch === []) {
             return;
         }
@@ -589,6 +637,67 @@ class QueueDbWriter extends SseWriter
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    private function buildQueueResultPatch(string $line = '', string $process = ''): array
+    {
+        $patch = [];
+        if ($process !== '') {
+            $patch['process'] = $process;
+        }
+        if ($line !== '') {
+            $this->ensureQueueResultCacheLoaded();
+            $this->queueResultCache = $this->appendLineToQueueResultCache($this->queueResultCache, $line);
+            $patch['result'] = $this->queueResultCache;
+        }
+
+        return $patch;
+    }
+
+    private function ensureQueueResultCacheLoaded(): void
+    {
+        if ($this->queueResultCacheLoaded || $this->queueId <= 0) {
+            return;
+        }
+
+        $row = w_query('queue', 'get', ['queue_id' => $this->queueId]);
+        $this->queueResultCache = \is_array($row) ? $this->trimQueueResultCache((string)($row['result'] ?? '')) : '';
+        $this->queueResultCacheLoaded = true;
+    }
+
+    private function appendLineToQueueResultCache(string $existing, string $line): string
+    {
+        if ($line === '') {
+            return $this->trimQueueResultCache($existing);
+        }
+
+        $next = $existing === '' ? $line : $existing . \PHP_EOL . $line;
+
+        return $this->trimQueueResultCache($next);
+    }
+
+    private function trimQueueResultCache(string $result): string
+    {
+        if (\strlen($result) <= self::QUEUE_RESULT_MAX_BYTES) {
+            return $result;
+        }
+
+        $marker = self::QUEUE_RESULT_TRUNCATION_MARKER;
+        $tailBudget = self::QUEUE_RESULT_MAX_BYTES - \strlen($marker) - \strlen(\PHP_EOL);
+        if ($tailBudget <= 0) {
+            return \substr($result, -self::QUEUE_RESULT_MAX_BYTES);
+        }
+
+        $tail = (string)\substr($result, -$tailBudget);
+        $newlinePos = \strpos($tail, \PHP_EOL);
+        if ($newlinePos !== false && ($newlinePos + \strlen(\PHP_EOL)) < \strlen($tail)) {
+            $tail = (string)\substr($tail, $newlinePos + \strlen(\PHP_EOL));
+        }
+
+        return $marker . \PHP_EOL . $tail;
+    }
+
+    /**
      * @param array<string, mixed> $payload
      */
     private function resolveSummary(string $event, array $payload, string $message): string
@@ -597,7 +706,7 @@ class QueueDbWriter extends SseWriter
             return $message;
         }
 
-        if ($event === 'chunk') {
+        if ($event === 'chunk' && !((bool)($payload['suppressed_content'] ?? false))) {
             $chunk = \trim((string)($payload['chunk'] ?? $payload['content'] ?? ''));
             if ($chunk !== '') {
                 return $chunk;
@@ -613,9 +722,6 @@ class QueueDbWriter extends SseWriter
     {
         if ($summary === '') {
             return '';
-        }
-        if ($event === 'chunk') {
-            return $summary;
         }
 
         return '[' . \date('H:i:s') . '] ' . \strtoupper($event) . ' ' . $summary;

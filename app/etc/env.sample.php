@@ -252,6 +252,12 @@ return [
             'memory_pressure_threshold' => 0.8,
             'memory_check_interval' => 30,
         ],
+        'memory_guard' => [
+            // WorkerResponseMemoryGuard 在内存占比达到 soft 阈值时，开始清理可重建的进程内热点缓存
+            'runtime_cache_pressure_threshold' => 0.70,
+            // 达到 hard 阈值时，会额外清理更激进的进程级缓存（如内存页缓存、进程探测缓存）
+            'runtime_cache_hard_pressure_threshold' => 0.85,
+        ],
         'pid' => null,
         'start_time' => null,
         'status' => 'stopped',
@@ -279,6 +285,11 @@ return [
                 'host' => '127.0.0.1',
                 'port' => 19970,
             ],
+        ],
+        // Session/Memory 共享服务：实例停机只卸载本实例令牌；令牌为空后由共享服务自治退出。
+        'shared_service' => [
+            'empty_token_exit_grace_sec' => 30,
+            'empty_token_check_interval_sec' => 120.0,
         ],
         // Fiber 调度器配置
         'fiber' => [
