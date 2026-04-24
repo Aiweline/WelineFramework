@@ -61,4 +61,50 @@ final class QueueDbWriterTest extends TestCase
         self::assertSame('warning', $result[2]);
         self::assertSame('task_plan', (string)($result[1]['operation'] ?? ''));
     }
+
+    public function testSanitizePayloadForQueueEventSuppressesGeneratedContent(): void
+    {
+        $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_PLAN, 'plan');
+        $method = new ReflectionMethod(QueueDbWriter::class, 'sanitizePayloadForQueueEvent');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($writer, 'chunk', [
+            'message' => '# 真实生成内容',
+            'chunk' => '# 真实生成内容',
+            'content' => '# 真实生成内容',
+            'operation' => 'plan',
+            'stage' => AiSiteAgentSession::STAGE_PLAN,
+        ]);
+
+        self::assertIsArray($result);
+        self::assertTrue((bool)($result['suppressed_content'] ?? false));
+        self::assertSame('plan', (string)($result['operation'] ?? ''));
+        self::assertSame(AiSiteAgentSession::STAGE_PLAN, (string)($result['stage'] ?? ''));
+        self::assertStringContainsString('省略', (string)($result['message'] ?? ''));
+        self::assertArrayNotHasKey('chunk', $result);
+        self::assertArrayNotHasKey('content', $result);
+        self::assertGreaterThan(0, (int)($result['suppressed_content_bytes'] ?? 0));
+    }
+
+    public function testAppendLineToQueueResultCacheKeepsRecentTailWithinLimit(): void
+    {
+        $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'task_plan');
+        $appendMethod = new ReflectionMethod(QueueDbWriter::class, 'appendLineToQueueResultCache');
+        $appendMethod->setAccessible(true);
+
+        $reflection = new \ReflectionClass(QueueDbWriter::class);
+        $maxBytes = $reflection->getConstant('QUEUE_RESULT_MAX_BYTES');
+        $marker = $reflection->getConstant('QUEUE_RESULT_TRUNCATION_MARKER');
+
+        self::assertIsInt($maxBytes);
+        self::assertIsString($marker);
+
+        $cache = '';
+        $cache = $appendMethod->invoke($writer, $cache, \str_repeat('A', (int)$maxBytes - 4));
+        $cache = $appendMethod->invoke($writer, $cache, 'tail-line');
+
+        self::assertLessThanOrEqual($maxBytes, \strlen($cache));
+        self::assertStringStartsWith($marker, $cache);
+        self::assertStringContainsString('tail-line', $cache);
+    }
 }

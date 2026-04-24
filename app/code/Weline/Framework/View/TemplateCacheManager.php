@@ -394,6 +394,14 @@ class TemplateCacheManager
     }
 
     /**
+     * 仅清理进程内 L1 缓存，保留磁盘缓存与 manifest。
+     */
+    public function clearMemoryCache(): void
+    {
+        self::$memoryCache = [];
+    }
+
+    /**
      * Clear cache for a specific source file
      */
     public function clearCache(string $sourceFile): void

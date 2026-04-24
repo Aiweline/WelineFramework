@@ -11,6 +11,7 @@ use Weline\Server\Supervisor\Protocol\SupervisorMessage;
 use Weline\Server\Supervisor\Supervisor;
 use Weline\Server\Supervisor\SupervisorRuntime;
 use Weline\Server\Supervisor\SupervisorServer;
+use Weline\Server\Supervisor\SupervisorSession;
 
 final class SupervisorServerTest extends TestCase
 {
@@ -98,6 +99,60 @@ final class SupervisorServerTest extends TestCase
             }
             $server->close();
         }
+    }
+
+    public function testClosingSessionDoesNotReleaseCurrentLease(): void
+    {
+        $runtime = $this->createRuntime('default');
+        $leaseAssign = SupervisorMessage::decode((string)$runtime->handle([
+            'type' => SupervisorMessage::TYPE_HELLO,
+            'msg_id' => 'hello-1',
+            'instance' => 'default',
+            'channel' => 'channel-default',
+            'role' => 'worker',
+            'slot_id' => 'worker#1',
+            'pid' => 12001,
+            'port' => 18081,
+            'launch_nonce' => 'launch-1',
+        ]));
+        self::assertTrue($runtime->supervisor()->leases()->isCurrent(
+            'worker#1',
+            (string)$leaseAssign['lease_id'],
+            (int)$leaseAssign['generation']
+        ));
+
+        $server = new SupervisorServer($runtime);
+        $socket = \fopen('php://temp', 'r+');
+        self::assertIsResource($socket);
+
+        $sessionsProp = new \ReflectionProperty($server, 'sessions');
+        $sessionsProp->setAccessible(true);
+        $sessionsProp->setValue($server, [
+            11 => new SupervisorSession(
+                id: 11,
+                peer: 'test',
+                socket: $socket,
+                instance: 'default',
+                channel: 'channel-default',
+                role: 'worker',
+                slotId: 'worker#1',
+                workerId: 1,
+                pid: 12001,
+                port: 18081,
+                launchNonce: 'launch-1',
+                leaseId: (string)$leaseAssign['lease_id'],
+                generation: (int)$leaseAssign['generation'],
+            ),
+        ]);
+
+        $server->closeSessionById(11);
+
+        self::assertTrue($runtime->supervisor()->leases()->isCurrent(
+            'worker#1',
+            (string)$leaseAssign['lease_id'],
+            (int)$leaseAssign['generation']
+        ));
+        self::assertFalse($server->hasSession(11));
     }
 
     /**

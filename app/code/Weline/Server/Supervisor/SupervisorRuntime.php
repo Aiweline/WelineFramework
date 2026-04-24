@@ -50,24 +50,28 @@ final class SupervisorRuntime
         }
 
         $before = $this->structuralDigest();
+        $poolBefore = $this->workerPoolDigest();
         $response = $this->supervisor->handle($message);
         $after = $this->structuralDigest();
+        $poolAfter = $this->workerPoolDigest();
 
         if ($after !== $before) {
             $this->slotSnapshotVersion++;
-            if (($message['type'] ?? '') === SupervisorMessage::TYPE_READY) {
-                $slotId = (string)($message['slot_id'] ?? '');
-                $lease = $slotId !== '' ? $this->supervisor->leases()->get($slotId) : null;
-                if ($lease instanceof SlotLease && $lease->role === 'worker' && $lease->state === SlotLease::STATE_READY) {
-                    $this->workerPoolSnapshotVersion++;
-                    $msgId = (string)($message['msg_id'] ?? '');
-                    $response = SupervisorMessage::readyAck(
-                        lease: $lease,
-                        msgId: $msgId,
-                        poolSnapshotVersion: $this->workerPoolSnapshotVersion,
-                        channel: $this->channelId,
-                    );
-                }
+        }
+        if ($poolAfter !== $poolBefore) {
+            $this->workerPoolSnapshotVersion++;
+        }
+        if (($message['type'] ?? '') === SupervisorMessage::TYPE_READY) {
+            $slotId = (string)($message['slot_id'] ?? '');
+            $lease = $slotId !== '' ? $this->supervisor->leases()->get($slotId) : null;
+            if ($lease instanceof SlotLease && $lease->role === 'worker' && $lease->state === SlotLease::STATE_READY) {
+                $msgId = (string)($message['msg_id'] ?? '');
+                $response = SupervisorMessage::readyAck(
+                    lease: $lease,
+                    msgId: $msgId,
+                    poolSnapshotVersion: $this->workerPoolSnapshotVersion,
+                    channel: $this->channelId,
+                );
             }
         }
 
@@ -116,6 +120,26 @@ final class SupervisorRuntime
                 . $lease->generation
                 . '|'
                 . $lease->state
+                . '|'
+                . $lease->port;
+        }
+        \sort($rows, \SORT_STRING);
+
+        return \implode("\n", $rows);
+    }
+
+    private function workerPoolDigest(): string
+    {
+        $rows = [];
+        foreach ($this->supervisor->leases()->all() as $slotId => $lease) {
+            if ($lease->role !== 'worker' || $lease->state !== SlotLease::STATE_READY) {
+                continue;
+            }
+            $rows[] = $slotId
+                . '|'
+                . $lease->leaseId
+                . '|'
+                . $lease->generation
                 . '|'
                 . $lease->port;
         }

@@ -289,15 +289,10 @@ try {
         WlsLogger::warning_("[Memory] Memory service port not found in instance json; temporarily using runtime/env fallback {$memoryHost}:{$memoryPort}");
     }
 
-    // 注意：Worker 启动阶段不进行任何服务发现或连接尝试
-    // 所有连接将由首个请求到达时按需进行（Lazy Initialization）
-    // 连接池的预热由框架内部在首次使用时自动完成
+    // Worker 启动后立即预热 Session/Memory 长连接，确保共享服务尽早拥有消费者令牌，
+    // 避免共享服务误入“空消费者”窗口。
     WlsLogger::info_("[Session] Session service address preconfigured {$sessionHost}:{$sessionPort}");
     WlsLogger::info_("[Memory] Memory service address preconfigured {$memoryHost}:{$memoryPort}");
-    WlsLogger::info_("[Worker] Worker 将快速启动并上报 READY，Session/Memory 连接由首个请求按需进行");
-
-    // 异步预热连接池：调用 getInstance 触发后台连接建立
-    // min_idle=1 确保连接池在后台异步建立到 Session/Memory 的长连接
     try {
         \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($sessionHost, $sessionPort, [
             'token_file_name' => $sessionTokenFileName,
@@ -309,9 +304,9 @@ try {
             'min_idle' => 1,
             'log_pool_lifecycle' => false,
         ]);
-        WlsLogger::info_('[ConnectionPool] 连接池已在后台异步预热，首次请求时即可用');
+        WlsLogger::info_('[ConnectionPool] Session/Memory 长连接预热完成（min_idle=1）');
     } catch (\Throwable $e) {
-        WlsLogger::warning_('[ConnectionPool] 预热失败，将在首次请求时重试: ' . $e->getMessage());
+        WlsLogger::warning_('[ConnectionPool] 预热失败，将在首次请求时自动重试: ' . $e->getMessage());
     }
 } catch (\Throwable $e) {
     $runtimeError = $e->getMessage();
@@ -903,7 +898,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $waitingForAck = !($ipcClient?->isReadyStateConfirmed() ?? false);
         WlsLogger::info_(
             $waitingForAck
-                ? "已上报就绪状态，Master ACK 确认结果：等待中"
+                ? "已上报就绪状态，等待 Master+Dispatcher 入池闭环 ACK（当前：等待中）"
                 : "已上报就绪状态，Master ACK 确认结果：成功（控制面已同步确认 READY）"
         );
         $readySentTime = \microtime(true);
