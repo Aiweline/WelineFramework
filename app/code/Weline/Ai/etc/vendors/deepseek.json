@@ -2,6 +2,8 @@
     "name": "DeepSeek",
     "code": "deepseek",
     "base_url": "https://api.deepseek.com",
+    "price_unit": "per_1m_tokens",
+    "price_currency": "USD",
     "models_prefix": ["deepseek-"],
     "allow_custom_models": true,
     "quick_create": true,
