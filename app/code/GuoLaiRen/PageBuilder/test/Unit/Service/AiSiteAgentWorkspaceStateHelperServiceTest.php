@@ -351,6 +351,8 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
 
         $scope = [
             'task_plan_confirmed' => 1,
+            'task_plan_structured' => ['keep' => 'yes'],
+            'task_plan_markdown' => 'same-md',
             'virtual_theme_plan' => [
                 'draft' => ['should_drop' => true],
                 'draft_markdown' => 'same-md',
@@ -365,12 +367,41 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         self::assertSame('', $compacted['virtual_theme_plan']['draft_markdown']);
         self::assertArrayNotHasKey('draft_generated_at', $compacted['virtual_theme_plan']);
         self::assertSame(['keep' => 'yes'], $compacted['virtual_theme_plan']['confirmed']);
+        self::assertSame([], $compacted['task_plan_structured']);
+        self::assertSame('', $compacted['task_plan_markdown']);
         self::assertSame('kept', $compacted['other']);
         self::assertSame(1, $compacted['task_plan_confirmed']);
 
         $emptyScope = [];
         $compactedEmpty = $service->compactConfirmedTaskPlanScope($emptyScope);
         self::assertSame(['draft' => []], $compactedEmpty['virtual_theme_plan']);
+    }
+
+    public function testCompactConfirmedTaskPlanScopeDropsSignatureOnlyDuplicateStructuredCopy(): void
+    {
+        $service = new AiSiteAgentWorkspaceStateHelperService();
+
+        $scope = [
+            'task_plan_confirmed' => 1,
+            'task_plan_structured' => [
+                'page_tasks' => ['home_page' => [['title' => 'Hero']]],
+                'plan_signature' => 'sig-1',
+            ],
+            'virtual_theme_plan' => [
+                'draft' => [],
+                'confirmed' => [
+                    'signature' => 'sig-1',
+                    'page_tasks' => ['home_page' => [['title' => 'Hero']]],
+                    'plan_signature' => 'sig-1',
+                ],
+                'confirmed_markdown' => '# Confirmed',
+            ],
+        ];
+
+        $compacted = $service->compactConfirmedTaskPlanScope($scope);
+
+        self::assertSame([], $compacted['task_plan_structured']);
+        self::assertSame(['signature' => 'sig-1', 'page_tasks' => ['home_page' => [['title' => 'Hero']]], 'plan_signature' => 'sig-1'], $compacted['virtual_theme_plan']['confirmed']);
     }
 
     public function testSelectStatusQueueInfoPrefersExactKeyThenFallsBackOrDefaults(): void

@@ -1476,6 +1476,60 @@ class PassthroughCore
         return ['accepted' => true, 'error' => ''];
     }
 
+    /**
+     * Master has already observed the worker process and received READY.
+     * Startup consensus must not wait for an additional in-dispatcher health probe.
+     *
+     * @return array{accepted: int[], rejected: array<int, string>}
+     */
+    public function setWorkerPortsFromMasterReady(array $ports): array
+    {
+        $candidatePorts = \array_values(\array_filter(
+            \array_unique(\array_map('intval', $ports)),
+            static fn(int $port): bool => $port > 0
+        ));
+        $acceptedHealth = [];
+        $now = \microtime(true);
+        foreach ($candidatePorts as $port) {
+            $acceptedHealth[$port] = [
+                'failures' => 0,
+                'blacklisted_at' => 0.0,
+                'last_success' => $now,
+                'total_failures' => (int)($this->workerHealth[$port]['total_failures'] ?? 0),
+            ];
+        }
+
+        $this->applyWorkerPoolTransition($candidatePorts, $acceptedHealth);
+        $this->writeStderr(
+            '[PassthroughCore] SET_WORKER_POOL 信任 Master READY，跳过启动探活，当前列表: '
+            . (\implode(',', $this->workerPorts) ?: '(空)') . "\n"
+        );
+
+        return [
+            'accepted' => $candidatePorts,
+            'rejected' => [],
+        ];
+    }
+
+    /**
+     * @return array{accepted: bool, error: string}
+     */
+    public function addWorkerPortFromMasterReady(int $port): array
+    {
+        if ($port <= 0) {
+            return ['accepted' => false, 'error' => 'invalid worker port'];
+        }
+
+        $ports = $this->workerPorts;
+        $ports[] = $port;
+        $result = $this->setWorkerPortsFromMasterReady($ports);
+
+        return [
+            'accepted' => \in_array($port, $result['accepted'], true),
+            'error' => '',
+        ];
+    }
+
     public function setWarmupCooperativeYield(?\Closure $yield): void
     {
         $this->warmupCooperativeYield = $yield;

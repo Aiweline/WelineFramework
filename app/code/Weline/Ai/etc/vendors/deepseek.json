@@ -1,17 +1,17 @@
 {
     "name": "DeepSeek",
     "code": "deepseek",
-    "base_url": "https://api.deepseek.com/v1",
-    "models_prefix": [
-        "deepseek-"
-    ],
-    "test_model": "deepseek-chat",
+    "base_url": "https://api.deepseek.com",
+    "models_prefix": ["deepseek-"],
+    "allow_custom_models": true,
+    "quick_create": true,
+    "test_model": "deepseek-v4-flash",
     "api_key_field": "api_key",
     "base_url_field": "base_url",
     "model_field": "model",
-    "description": "DeepSeek AI API服务",
+    "description": "DeepSeek OpenAI-compatible API service",
     "website": "https://www.deepseek.com",
-    "documentation": "https://platform.deepseek.com/api-docs",
+    "documentation": "https://api-docs.deepseek.com/quick_start/pricing",
     "supported_features": {
         "chat": true,
         "completion": true,
@@ -36,57 +36,54 @@
     "model_config_defaults": {
         "max_tokens": 4096,
         "temperature": 0.7,
-        "top_p": 1,
+        "top_p": 1.0,
         "stream": true,
         "timeout": 180,
         "max_retries": 3,
-        "capabilities": [
-            "chat",
-            "code"
-        ]
+        "capabilities": ["chat", "code"]
     },
     "models": [
         {
-            "code": "deepseek-chat",
-            "name": "deepseek-chat",
-            "description": "DeepSeek通用对话模型",
-            "max_tokens": 4096,
-            "context_window": 32768,
+            "code": "deepseek-v4-flash",
+            "name": "DeepSeek V4 Flash",
+            "description": "DeepSeek V4 Flash with OpenAI-compatible chat completions.",
+            "max_tokens": 384000,
+            "context_window": 1000000,
             "input_price": 0.14,
             "output_price": 0.28,
-            "capabilities": [
-                "chat",
-                "code"
-            ]
+            "capabilities": ["chat", "reasoning", "code", "function_calling", "structured_outputs"]
+        },
+        {
+            "code": "deepseek-v4-pro",
+            "name": "DeepSeek V4 Pro",
+            "description": "DeepSeek V4 Pro with OpenAI-compatible chat completions.",
+            "max_tokens": 384000,
+            "context_window": 1000000,
+            "input_price": 1.74,
+            "output_price": 3.48,
+            "capabilities": ["chat", "reasoning", "code", "function_calling", "structured_outputs"]
+        },
+        {
+            "code": "deepseek-chat",
+            "name": "DeepSeek Chat",
+            "description": "Compatibility alias for DeepSeek V4 Flash non-thinking mode.",
+            "max_tokens": 384000,
+            "context_window": 1000000,
+            "input_price": 0.14,
+            "output_price": 0.28,
+            "capabilities": ["chat", "code", "function_calling", "structured_outputs"]
         },
         {
             "code": "deepseek-reasoner",
-            "name": "deepseek-reasoner",
-            "description": "擅长复杂推理任务的模型",
-            "max_tokens": 8192,
-            "context_window": 64000,
-            "input_price": 0.55,
-            "output_price": 2.19,
-            "capabilities": [
-                "chat",
-                "reasoning",
-                "code"
-            ]
-        },
-        {
-            "code": "deepseek-v3",
-            "name": "DeepSeek V3",
-            "description": "DeepSeek V3 通用大模型",
-            "max_tokens": 8192,
-            "context_window": 64000,
-            "input_price": 0.55,
-            "output_price": 2.19,
-            "capabilities": [
-                "chat",
-                "reasoning",
-                "code"
-            ]
+            "name": "DeepSeek Reasoner",
+            "description": "Compatibility alias for DeepSeek V4 Flash thinking mode.",
+            "max_tokens": 384000,
+            "context_window": 1000000,
+            "input_price": 0.14,
+            "output_price": 0.28,
+            "capabilities": ["chat", "reasoning", "code", "function_calling", "structured_outputs"]
         }
     ],
-    "models_updated_at": 1770619721
+    "models_updated_at": "2026-04-24",
+    "models_source": "https://api-docs.deepseek.com/quick_start/pricing"
 }

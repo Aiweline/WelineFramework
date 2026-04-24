@@ -30,6 +30,31 @@ use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 class AiSiteAgentTaskPlanQueueRecoveryService
 {
     /**
+     * @param array<string, mixed> $normalized
+     * @param array<string, mixed> $activeOperation
+     * @return array<string, mixed>
+     */
+    private function buildActiveOperationScopePatch(array $normalized, array $activeOperation): array
+    {
+        $patch = ['active_operation' => $activeOperation];
+        $operation = \trim((string)($activeOperation['operation'] ?? ''));
+        if ($operation === '') {
+            return $patch;
+        }
+
+        $activeOperations = \is_array($normalized['active_operations'] ?? null)
+            ? $normalized['active_operations']
+            : [];
+        $previous = \is_array($activeOperations[$operation] ?? null) ? $activeOperations[$operation] : [];
+        $activeOperations[$operation] = \array_replace($previous, $activeOperation, [
+            'operation' => $operation,
+        ]);
+        $patch['active_operations'] = $activeOperations;
+
+        return $patch;
+    }
+
+    /**
      * 第二阶段队列自愈：queue done 但 draft 缺失 / 或 queue 完全不存在时触发恢复派发。
      *
      * 决策链（与原控制器 `autoRerunTaskPlanQueueWhenQueueDoneButDraftMissing` 一致）：
@@ -161,11 +186,12 @@ class AiSiteAgentTaskPlanQueueRecoveryService
                 ], $operationEnvelope, [
                     'queue_id' => (int)$newQueueId,
                 ]);
-                $normalized['active_operation'] = $activeOperation;
+                $scopePatch = $this->buildActiveOperationScopePatch($normalized, $activeOperation);
+                $normalized = \array_replace($normalized, $scopePatch);
                 ($ports->mergeSessionScope)(
                     (int)$session->getId(),
                     $adminId,
-                    ['active_operation' => $activeOperation]
+                    $scopePatch
                 );
                 $dispatch = ($ports->ensureWorkerDispatched)(
                     $session,
@@ -195,31 +221,23 @@ class AiSiteAgentTaskPlanQueueRecoveryService
                 ];
             }
 
-            // Branch B: queueId>0 且进入终态（成功或失败）→ 重置原 queue 复用
-            $queueRow = ($ports->findQueueRow)($session, 'task_plan', $queueId);
-            \assert($queueRow === null || \is_array($queueRow));
+            // Branch B: queueId>0 且进入终态（成功或失败）→ 通过统一入队路径复用当前阶段 queue
             $executionToken = \bin2hex(\random_bytes(16));
-            $queueContent = \array_replace(
-                ($ports->buildOperationEnvelope)($session, 'task_plan', $executionToken, 'queued'),
-                [
-                    'public_id' => $session->getPublicId(),
-                    'admin_id' => $adminId,
-                    'execution_token' => $executionToken,
-                    'operation' => 'task_plan',
-                    'stage' => ($ports->resolveQueueStage)('task_plan'),
-                    '_force_rebuild' => 1,
-                    'recovery_reason' => 'draft_missing',
-                ]
+            $newQueueId = ($ports->enqueueTask)(
+                $session,
+                $adminId,
+                'task_plan',
+                $executionToken,
+                ['_force_rebuild' => 1]
             );
-
-            ($ports->updateQueueRow)($queueId, [
-                'status' => \Weline\Queue\Model\Queue::status_pending,
-                'pid' => 0,
-                'content' => $queueContent,
-                'result' => '',
-                'finished' => 0,
-                'process' => (string)__('检测到第二阶段方案为空，已重置队列并准备重跑。'),
-            ]);
+            if ((int)$newQueueId <= 0) {
+                return [
+                    'normalized' => $normalized,
+                    'active_operation' => $activeOperation,
+                    'task_plan_queue_info' => $taskPlanQueueInfo,
+                ];
+            }
+            $queueId = (int)$newQueueId;
 
             $operationEnvelope = ($ports->buildOperationEnvelope)(
                 $session,
@@ -240,11 +258,12 @@ class AiSiteAgentTaskPlanQueueRecoveryService
             ], $operationEnvelope, [
                 'queue_id' => $queueId,
             ]);
-            $normalized['active_operation'] = $activeOperation;
+            $scopePatch = $this->buildActiveOperationScopePatch($normalized, $activeOperation);
+            $normalized = \array_replace($normalized, $scopePatch);
             ($ports->mergeSessionScope)(
                 (int)$session->getId(),
                 $adminId,
-                ['active_operation' => $activeOperation]
+                $scopePatch
             );
             $dispatch = ($ports->ensureWorkerDispatched)(
                 $session,

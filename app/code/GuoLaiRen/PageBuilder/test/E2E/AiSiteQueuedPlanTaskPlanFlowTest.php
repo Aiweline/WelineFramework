@@ -78,6 +78,13 @@ class AiSiteQueuedPlanTaskPlanFlowTest extends AbstractAiSiteWorkbenchIntegratio
         );
         self::assertTrue((bool)($confirmPlanPayload['success'] ?? false), \json_encode($confirmPlanPayload, \JSON_UNESCAPED_UNICODE));
         self::assertSame(1, (int)($confirmPlanPayload['data']['plan_confirmed'] ?? 0));
+        self::assertStringContainsString('public_id=' . $publicId, (string)($confirmPlanPayload['data']['workspace_url'] ?? ''));
+
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+        $scope = $session->getScopeArray();
+        $scope['plan_confirmed'] = 0;
+        $this->sessionService->replaceScope((int)$session->getId(), 1, $scope);
 
         $startTaskPlanPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-task-plan',
@@ -88,6 +95,13 @@ class AiSiteQueuedPlanTaskPlanFlowTest extends AbstractAiSiteWorkbenchIntegratio
         );
         self::assertTrue((bool)($startTaskPlanPayload['success'] ?? false), \json_encode($startTaskPlanPayload, \JSON_UNESCAPED_UNICODE));
         self::assertTrue((bool)($startTaskPlanPayload['start_sse'] ?? false), \json_encode($startTaskPlanPayload, \JSON_UNESCAPED_UNICODE));
+
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+        $scope = $session->getScopeArray();
+        self::assertSame(1, (int)($scope['plan_confirmed'] ?? 0));
+        $scope['plan_confirmed'] = 0;
+        $this->sessionService->replaceScope((int)$session->getId(), 1, $scope);
 
         $taskPlanQueue = $this->executeActiveQueue($publicId, 'task_plan');
         self::assertSame('done', (string)($taskPlanQueue['status'] ?? ''), (string)($taskPlanQueue['result'] ?? ''));

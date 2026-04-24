@@ -1,0 +1,250 @@
+<?php $queueResultModals = []; ?>
+<div class="table-responsive">
+    <table class="table table-hover align-middle weline-queue-table">
+        <thead>
+            <tr>
+                <th style="width: 40px;">
+                    <input type="checkbox" class="form-check-input" id="weline-queue-select-all">
+                </th>
+                <th style="width: 80px;"><lang>ID</lang></th>
+                <th><lang>队列信息</lang></th>
+                <th style="width: 100px;"><lang>状态</lang></th>
+                <th><lang>进度/结果</lang></th>
+                <th style="width: 160px;"><lang>时间</lang></th>
+                <th style="width: 180px;"><lang>操作</lang></th>
+            </tr>
+        </thead>
+        <tbody>
+        <foreach name="queues" item="queue" key="key">
+            <tr data-queue-id="{{queue.queue_id}}" data-status="{{queue.status}}">
+                <td>
+                    <input type="checkbox" class="form-check-input weline-queue-checkbox" value="{{queue.queue_id}}">
+                </td>
+                <td>
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="fw-semibold">{{queue.queue_id}}</span>
+                        <if condition="queue.auto">
+                            <span class="weline-queue-auto-badge" title="@lang{自动消费}">
+                                <i class="mdi mdi-brightness-auto"></i>
+                            </span>
+                        </if>
+                    </div>
+                </td>
+                <td>
+                    <div class="weline-queue-info">
+                        <div class="weline-queue-name" title="{{queue.name}}">
+                            <string>queue.name|30</string>
+                        </div>
+                        <if condition="queue.biz_key">
+                            <div class="text-muted small font-monospace" title="@lang{业务键}">{{queue.biz_key}}</div>
+                        </if>
+                        <if condition="queue.pid">
+                            <div class="weline-queue-pid">
+                                <i class="mdi mdi-cog-outline"></i>
+                                <span>PID: {{queue.pid}}</span>
+                            </div>
+                        </if>
+                    </div>
+                </td>
+                <td>
+                    <?php
+                    $statusClass = match ($queue['status'] ?? 'error') {
+                        'running' => 'weline-queue-status-running',
+                        'done' => 'weline-queue-status-done',
+                        'error' => 'weline-queue-status-error',
+                        'stop' => 'weline-queue-status-stop',
+                        default => 'weline-queue-status-pending',
+                    };
+                    $statusText = match ($queue['status'] ?? 'pending') {
+                        'running' => __('运行中'),
+                        'done' => __('已完成'),
+                        'error' => __('出错'),
+                        'stop' => __('已暂停'),
+                        default => __('等待中'),
+                    };
+                    $statusIcon = match ($queue['status'] ?? 'pending') {
+                        'running' => 'mdi-play-circle',
+                        'done' => 'mdi-check-circle',
+                        'error' => 'mdi-alert-circle',
+                        'stop' => 'mdi-pause-circle',
+                        default => 'mdi-clock',
+                    };
+                    ?>
+                    <span class="weline-queue-status <?= $statusClass ?>">
+                        <i class="mdi <?= $statusIcon ?>"></i>
+                        <?= $statusText ?>
+                    </span>
+                    <if condition="queue.finished">
+                        <span class="weline-queue-finished-badge" title="@lang{已结束}">
+                            <i class="mdi mdi-flag-checkered"></i>
+                        </span>
+                    </if>
+                </td>
+                <td>
+                    <php>
+                        $resultText = $queue['result'] ?? '';
+                        $hasLongResult = strlen($resultText) > 50;
+                    </php>
+                    <div class="weline-queue-result">
+                        <if condition="queue.status == 'pending'">
+                            <span class="text-muted"><i class="mdi mdi-clock-outline me-1"></i><lang>等待执行...</lang></span>
+                        <elseif condition="queue.status == 'running'"/>
+                            <span class="text-info"><i class="mdi mdi-loading mdi-spin me-1"></i><lang>正在执行...</lang></span>
+                        <else/>
+                            <if condition="hasLongResult">
+                                <php>
+                                    $queueResultModalId = 'weline_queue_result_modal_' . preg_replace('/[^\w-]+/', '', (string)($queue['queue_id'] ?? md5($resultText)));
+                                    $queueResultModals[$queueResultModalId] = (string)$resultText;
+                                </php>
+                                <string>queue.result|50</string>
+                                <button type="button"
+                                        class="weline-queue-view-more"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#<?= htmlspecialchars($queueResultModalId, ENT_QUOTES, 'UTF-8') ?>"
+                                        aria-controls="<?= htmlspecialchars($queueResultModalId, ENT_QUOTES, 'UTF-8') ?>"
+                                        aria-haspopup="dialog"
+                                        title="<?= htmlspecialchars((string)__('队列结果详情'), ENT_QUOTES, 'UTF-8') ?>">
+                                    <i class="mdi mdi-open-in-new"></i>
+                                    <lang>查看全部</lang>
+                                </button>
+                            <else/>
+                                {{queue.result}}
+                            </if>
+                        </if>
+                    </div>
+                </td>
+                <td>
+                    <div class="weline-queue-time">
+                        <div title="@lang{创建时间}">
+                            <i class="mdi mdi-calendar-plus-outline"></i>
+                            <span>{{queue.create_time}}</span>
+                        </div>
+                        <if condition="queue.end_at">
+                            <div title="@lang{结束时间}">
+                                <i class="mdi mdi-calendar-check-outline"></i>
+                                <span>{{queue.end_at}}</span>
+                            </div>
+                        </if>
+                    </div>
+                </td>
+                <td>
+                    <div class="weline-queue-actions">
+                        <block class='Weline\Component\Block\OffCanvas'
+                               action='queue/backend/queue/show'
+                               vars='queue'
+                               action-params='{id:queue.queue_id}'
+                               id='queue-show'
+                               target-button-text=''
+                               target-button-class='btn btn-outline-info weline-queue-action-btn'
+                               title='查看队列详情'
+                               target-tag='button'
+                               icon='mdi mdi-eye'
+                               flush='1'
+                               save='0'
+                        />
+                        <if condition="queue.status == 'running'">
+                            <button type="button" class="btn btn-outline-warning weline-queue-action-btn weline-queue-stop-btn"
+                                    data-queue-id="{{queue.queue_id}}" title="@lang{暂停}">
+                                <i class="mdi mdi-pause"></i>
+                            </button>
+                        </if>
+                        <if condition="queue.status == 'error'">
+                            <button type="button" class="btn btn-outline-primary weline-queue-action-btn weline-queue-retry-btn"
+                                    data-queue-id="{{queue.queue_id}}" title="@lang{重试}">
+                                <i class="mdi mdi-refresh"></i>
+                            </button>
+                        </if>
+                        <if condition="queue.status == 'stop'">
+                            <button type="button" class="btn btn-outline-success weline-queue-action-btn weline-queue-continue-btn"
+                                    data-queue-id="{{queue.queue_id}}" title="@lang{继续}">
+                                <i class="mdi mdi-play"></i>
+                            </button>
+                        </if>
+                        <if condition="queue.finished == 1">
+                            <button type="button" class="btn btn-outline-secondary weline-queue-action-btn weline-queue-reset-btn"
+                                    data-queue-id="{{queue.queue_id}}" title="@lang{重新执行}">
+                                <i class="mdi mdi-restart"></i>
+                            </button>
+                        </if>
+                        <if condition="queue.status == 'pending'">
+                            <block class='Weline\Component\Block\OffCanvas'
+                                   template='Weline_Component::off-canvas.phtml'
+                                   cache='0'
+                                   id='off_canvas_queue_edit'
+                                   action='*/backend/queue/form'
+                                   vars='queue'
+                                   action-params='{id:queue.queue_id}'
+                                   title='编辑队列'
+                                   close-button-show='1'
+                                   close-button-text='关闭'
+                                   direction='right'
+                                   class-names='w-75'
+                                   target-button-text=''
+                                   target-button-class='btn btn-outline-primary weline-queue-action-btn'
+                                   target-tag='button'
+                                   icon='mdi mdi-pencil'
+                                   save='0'
+                            />
+                        </if>
+                        <if condition="queue.status != 'running'">
+                            <button type="button" class="btn btn-outline-danger weline-queue-action-btn weline-queue-delete-btn"
+                                    data-queue-id="{{queue.queue_id}}" data-queue-name="{{queue.name}}" title="@lang{删除}">
+                                <i class="mdi mdi-delete"></i>
+                            </button>
+                        </if>
+                    </div>
+                </td>
+            </tr>
+        </foreach>
+        <empty name="queues">
+            <tr>
+                <td colspan="7" class="text-center py-5">
+                    <div class="weline-queue-empty">
+                        <i class="mdi mdi-inbox-outline"></i>
+                        <p><lang>暂无队列数据</lang></p>
+                    </div>
+                </td>
+            </tr>
+        </empty>
+        </tbody>
+    </table>
+</div>
+<?php if (!empty($queueResultModals)): ?>
+    <div class="weline-queue-result-modal-root">
+        <?php foreach ($queueResultModals as $queueResultModalId => $queueResultText): ?>
+            <div class="modal fade weline-queue-result-modal"
+                 data-live-managed="1"
+                 id="<?= htmlspecialchars($queueResultModalId, ENT_QUOTES, 'UTF-8') ?>"
+                 tabindex="-1"
+                 aria-labelledby="<?= htmlspecialchars($queueResultModalId, ENT_QUOTES, 'UTF-8') ?>Label"
+                 aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="<?= htmlspecialchars($queueResultModalId, ENT_QUOTES, 'UTF-8') ?>Label">
+                                <i class="mdi mdi-text-box-search-outline me-1"></i>
+                                <lang>队列结果详情</lang>
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= htmlspecialchars((string)__('关闭'), ENT_QUOTES, 'UTF-8') ?>"></button>
+                        </div>
+                        <div class="modal-body">
+                            <pre class="weline-queue-result-modal-body"><?= htmlspecialchars($queueResultText, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></pre>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-primary"
+                                    onclick="WelineQueueResultModal.copy('<?= htmlspecialchars($queueResultModalId, ENT_QUOTES, 'UTF-8') ?>')">
+                                <i class="mdi mdi-content-copy me-1"></i>
+                                <lang>复制内容</lang>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
+                                <lang>关闭</lang>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
+{{pagination}}

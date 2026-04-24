@@ -67,7 +67,7 @@ final class AiSitePageBlueprintService
             Page::TYPE_COOKIE_POLICY => $this->buildPolicySections($baseCode, $pageLabel, $pageTitle, $siteDisplayName, $aiDescription, $promptPoints, $heroRefinement, $middleRefinement, $detailRefinement, $ctaRefinement),
             Page::TYPE_BLOG,
             Page::TYPE_BLOG_CATEGORY,
-            Page::TYPE_BLOG_LIST => $this->buildBlogSections($baseCode, $pageLabel, $pageTitle, $siteDisplayName, $aiDescription, $promptPoints, $heroRefinement, $middleRefinement, $detailRefinement, $ctaRefinement),
+            Page::TYPE_BLOG_LIST => $this->buildBlogSections($pageType),
             default => $this->buildCustomSections($baseCode, $pageLabel, $pageTitle, $siteDisplayName, $aiDescription, $promptPoints, $heroRefinement, $middleRefinement, $detailRefinement, $ctaRefinement),
         };
 
@@ -159,7 +159,6 @@ final class AiSitePageBlueprintService
     }
 
     /**
-     * @param list<string> $promptPoints
      * @return list<array{
      *   key:string,
      *   code:string,
@@ -293,24 +292,57 @@ final class AiSitePageBlueprintService
      *   sort_order:int
      * }>
      */
-    private function buildBlogSections(
-        string $baseCode,
-        string $pageLabel,
-        string $pageTitle,
-        string $siteDisplayName,
-        string $aiDescription,
-        array $promptPoints,
-        string $heroRefinement,
-        string $middleRefinement,
-        string $detailRefinement,
-        string $ctaRefinement
-    ): array {
-        return [
-            $this->buildHeroSection($baseCode . '-hero', $pageLabel, $pageTitle, $siteDisplayName, $this->applyRefinement($aiDescription, $heroRefinement), $promptPoints, 10),
-            $this->buildCardsSection($baseCode . '-topics', '内容主题', '把博客页的栏目、主题或文章结构安排清楚。', ['栏目聚焦', '读者收益', '持续更新'], $promptPoints, $middleRefinement, 20),
-            $this->buildChecklistSection($baseCode . '-structure', '阅读路径', '让读者知道该从哪里开始，以及下一篇应该看什么。', $promptPoints, $detailRefinement, 30),
-            $this->buildCtaSection($baseCode . '-cta', '继续浏览内容', '博客类页面也需要承接关注或转化。', $this->resolveCtaLabel(Page::TYPE_BLOG_LIST), $ctaRefinement, 40),
-        ];
+    private function buildBlogSections(string $pageType): array
+    {
+        $componentCode = match ($pageType) {
+            Page::TYPE_BLOG => 'blog-detail',
+            Page::TYPE_BLOG_CATEGORY => 'blog-category',
+            default => 'blog-list',
+        };
+        $name = match ($pageType) {
+            Page::TYPE_BLOG => 'Blog Detail',
+            Page::TYPE_BLOG_CATEGORY => 'Blog Category',
+            default => 'Blog List',
+        };
+        $config = match ($pageType) {
+            Page::TYPE_BLOG => [
+                'show_author' => true,
+                'show_date' => true,
+                'show_categories' => true,
+                'show_tags' => true,
+                'show_share_buttons' => true,
+                'show_related_posts' => true,
+                'show_comments' => false,
+                'related_posts_count' => 3,
+            ],
+            Page::TYPE_BLOG_CATEGORY => [
+                'posts_per_page' => 10,
+                'show_sidebar' => true,
+                'show_categories' => true,
+                'show_recent_posts' => true,
+                'show_pagination' => true,
+                'layout' => 'grid',
+                'show_category_header' => true,
+                'show_category_description' => true,
+            ],
+            default => [
+                'posts_per_page' => 10,
+                'show_sidebar' => true,
+                'show_categories' => true,
+                'show_recent_posts' => true,
+                'show_pagination' => true,
+                'layout' => 'grid',
+            ],
+        };
+
+        return [[
+            'key' => 'native-blog',
+            'code' => $componentCode,
+            'name' => $name,
+            'template' => 'native-blog',
+            'config' => $config,
+            'sort_order' => 10,
+        ]];
     }
 
     /**

@@ -22,6 +22,33 @@ use Weline\Framework\Runtime\RequestContext;
  */
 final class AiSiteVirtualThemeGenerationTest extends TestCase
 {
+    public function testBuildNativeBlogPageLayoutUsesPageBuilderBlogComponents(): void
+    {
+        $service = new AiSiteVirtualThemeService(new AiSitePageBlueprintService());
+        $method = new \ReflectionMethod($service, 'buildNativeBlogPageLayout');
+        $method->setAccessible(true);
+
+        $layout = $method->invokeArgs($service, [
+            Page::TYPE_BLOG_LIST,
+            ['style_code' => 'default'],
+            [],
+            'header/ai-site-header',
+            ['site_title' => 'Blog Site'],
+            'footer/ai-site-footer',
+            ['site_title' => 'Blog Site'],
+            true,
+        ]);
+
+        self::assertIsArray($layout);
+        self::assertTrue((bool)($layout['native_blog_template'] ?? false));
+        self::assertSame('blog_list', $layout['blog_page_type'] ?? '');
+        self::assertSame('blog-list', $layout['blog_component_code'] ?? '');
+        self::assertSame('blog-list', $layout['content'][0]['code'] ?? '');
+        self::assertSame('header/ai-site-header', $layout['header']['component'] ?? '');
+        self::assertContains('blog_posts', $layout['blog_runtime_data_keys'] ?? []);
+        self::assertSame(true, $layout['content'][0]['config']['show_pagination'] ?? null);
+    }
+
     public function testEnsureAiGeneratedVirtualThemeCreatesThemeAndLayoutsUnderPhpUnit(): void
     {
         $suffix = \bin2hex(\random_bytes(4));
@@ -30,7 +57,7 @@ final class AiSiteVirtualThemeGenerationTest extends TestCase
         $scope = [
             'site_title' => $siteTitle,
             'brief_description' => 'Unit test virtual theme generation scope.',
-            'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT],
+            'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT, Page::TYPE_BLOG_LIST],
             'virtual_theme_id' => 0,
         ];
         $websiteProfile = [
@@ -38,7 +65,7 @@ final class AiSiteVirtualThemeGenerationTest extends TestCase
             'brief_description' => $scope['brief_description'],
             'site_tagline' => 'Tag',
         ];
-        $pageTypes = [Page::TYPE_HOME, Page::TYPE_ABOUT];
+        $pageTypes = [Page::TYPE_HOME, Page::TYPE_ABOUT, Page::TYPE_BLOG_LIST];
 
         $generation = new AiSitePageComponentGenerationService(
             frameworkBuilder: new FrameworkBuilder(),
@@ -59,12 +86,18 @@ final class AiSiteVirtualThemeGenerationTest extends TestCase
         self::assertArrayHasKey('page_type_layouts', $result);
         self::assertArrayHasKey(Page::TYPE_HOME, $result['page_type_layouts']);
         self::assertArrayHasKey(Page::TYPE_ABOUT, $result['page_type_layouts']);
+        self::assertArrayHasKey(Page::TYPE_BLOG_LIST, $result['page_type_layouts']);
 
         $homeLayout = $result['page_type_layouts'][Page::TYPE_HOME];
         self::assertSame('header/ai-site-header', \trim((string)($homeLayout['header']['component'] ?? '')));
         self::assertSame('footer/ai-site-footer', \trim((string)($homeLayout['footer']['component'] ?? '')));
         self::assertNotEmpty($homeLayout['content'] ?? []);
         self::assertSame('1.0', (string)($homeLayout['version'] ?? ''));
+
+        $blogLayout = $result['page_type_layouts'][Page::TYPE_BLOG_LIST];
+        self::assertSame('blog-list', $blogLayout['content'][0]['code'] ?? '');
+        self::assertTrue((bool)($blogLayout['native_blog_template'] ?? false));
+        self::assertContains('blog_posts', $blogLayout['blog_runtime_data_keys'] ?? []);
 
         /** @var VirtualTheme $themeModel */
         $themeModel = ObjectManager::getInstance(VirtualTheme::class);
