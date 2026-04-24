@@ -159,6 +159,44 @@ class ServiceContext
         return ($this->envConfig['wls'] ?? [])['worker_count'] ?? 'auto';
     }
 
+    public function getWorkerMemoryLimit(): string
+    {
+        return self::normalizeMemoryLimit($this->getConfig('wls.worker_memory_limit', '256M'));
+    }
+
+    public function getDispatcherMemoryLimit(): string
+    {
+        return self::normalizeMemoryLimit(
+            $this->getConfig('wls.dispatcher_memory_limit', $this->getWorkerMemoryLimit()),
+            $this->getWorkerMemoryLimit()
+        );
+    }
+
+    public static function normalizeMemoryLimit(mixed $value, string $default = '256M'): string
+    {
+        if (\is_int($value) || \is_float($value)) {
+            $value = (string) (int) $value;
+        }
+
+        $value = \strtoupper(\trim((string) $value));
+        $default = \strtoupper(\trim($default)) ?: '256M';
+
+        if ($value === '') {
+            return $default;
+        }
+        if ($value === '-1') {
+            return '-1';
+        }
+        if (\preg_match('/^[1-9]\d*$/', $value)) {
+            return $value . 'M';
+        }
+        if (\preg_match('/^[1-9]\d*(?:K|M|G)$/', $value)) {
+            return $value;
+        }
+
+        return $default;
+    }
+
     /**
      * 获取首个 Worker 端口
      * 

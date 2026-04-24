@@ -30,6 +30,8 @@ class ServiceContextTest extends TestCase
                 'wls' => [
                     'worker_count' => 4,
                     'worker_base_port' => 10443,
+                    'worker_memory_limit' => '512m',
+                    'dispatcher_memory_limit' => '1G',
                 ],
                 'database' => [
                     'host' => 'localhost',
@@ -73,5 +75,13 @@ class ServiceContextTest extends TestCase
     public function testGetWorkerCount(): void
     {
         $this->assertEquals(4, $this->context->getWorkerCount());
+    }
+
+    public function testGetMemoryLimits(): void
+    {
+        $this->assertSame('512M', $this->context->getWorkerMemoryLimit());
+        $this->assertSame('1G', $this->context->getDispatcherMemoryLimit());
+        $this->assertSame('384M', ServiceContext::normalizeMemoryLimit('384'));
+        $this->assertSame('-1', ServiceContext::normalizeMemoryLimit('-1'));
     }
 }
