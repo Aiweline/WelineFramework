@@ -49,6 +49,20 @@ final class MasterProcessSharedStateRuntimeTest extends TestCase
         self::assertSame('shared-memory-19971', $envConfig['wls']['shared_state']['runtime']['memory']['instance_name']);
     }
 
+    public function testApplyRuntimeWlsConfigExposesMemoryLimitsToServiceContext(): void
+    {
+        $master = new MasterProcess();
+        $this->writePrivate($master, 'config', [
+            'worker_memory_limit' => '768',
+            'dispatcher_memory_limit' => '1g',
+        ]);
+
+        $envConfig = $this->invokePrivate($master, 'applyRuntimeWlsConfig', []);
+
+        self::assertSame('768M', $envConfig['wls']['worker_memory_limit']);
+        self::assertSame('1G', $envConfig['wls']['dispatcher_memory_limit']);
+    }
+
     private function invokePrivate(object $object, string $method, mixed ...$args): mixed
     {
         $reflection = new \ReflectionMethod($object, $method);

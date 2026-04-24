@@ -22,8 +22,32 @@ if (PHP_SAPI !== 'cli') {
     exit('CLI only');
 }
 
-// 设置内存限制为 256M（推荐值）
-@\ini_set('memory_limit', '256M');
+if (!\function_exists('wlsNormalizeMemoryLimit')) {
+    function wlsNormalizeMemoryLimit(mixed $value, string $default = '256M'): string
+    {
+        if (\is_int($value) || \is_float($value)) {
+            $value = (string) (int) $value;
+        }
+        $value = \strtoupper(\trim((string) $value));
+        $default = \strtoupper(\trim($default)) ?: '256M';
+        if ($value === '') {
+            return $default;
+        }
+        if ($value === '-1') {
+            return '-1';
+        }
+        if (\preg_match('/^[1-9]\d*$/', $value)) {
+            return $value . 'M';
+        }
+        if (\preg_match('/^[1-9]\d*(?:K|M|G)$/', $value)) {
+            return $value;
+        }
+        return $default;
+    }
+}
+
+$wlsMemoryLimit = '256M';
+@\ini_set('memory_limit', $wlsMemoryLimit);
 
 // 获取参数
 $host = $argv[1] ?? '127.0.0.1';
@@ -58,8 +82,11 @@ foreach ($argv as $arg) {
         $orchestratorLaunchId = (string)\substr($arg, 12);
     } elseif (\str_starts_with($arg, '--wls-loop-driver=')) {
         $wlsLoopDriver = (string)\substr($arg, 18);
+    } elseif (\str_starts_with($arg, '--memory-limit=')) {
+        $wlsMemoryLimit = wlsNormalizeMemoryLimit(\substr($arg, 15));
     }
 }
+@\ini_set('memory_limit', $wlsMemoryLimit);
 
 // 检测根目录
 $bp = \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR;
