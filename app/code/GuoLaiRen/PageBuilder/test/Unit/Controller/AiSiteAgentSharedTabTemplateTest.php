@@ -114,7 +114,8 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertStringContainsString('id="pb-ai-task-progress-heading"', $layout);
         self::assertStringContainsString('data-task-progress-summary="stage2"', $layout);
         self::assertStringContainsString("taskPlanConfirmedState = true;", $script);
-        self::assertStringContainsString('window.BackendConfirm.show(messages.taskPlanConfirmStartBuildQuestion', $script);
+        self::assertStringNotContainsString('window.BackendConfirm.show(messages.taskPlanConfirmStartBuildQuestion', $script);
+        self::assertStringContainsString('startConfirmedBuild(triggerBtn || currentPlanTriggerButton, selectedTypes || currentPlanSelection, { allowTaskPlanRetry: false });', $script);
         self::assertStringContainsString("window.__pbPhase2TaskProgress.syncFromWorkspaceState(workspaceState);", $script);
         self::assertStringContainsString("window.__pbPhase2TaskProgress.syncFromSsePayload(operation, payload || {}, eventKind);", $runtime);
         self::assertStringContainsString("workspace/script-phase2-queue-progress.phtml", $workspace);

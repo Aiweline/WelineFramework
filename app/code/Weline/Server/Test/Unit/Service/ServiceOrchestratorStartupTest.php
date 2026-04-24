@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\System\Process\Processer;
+use Weline\Server\IPC\ControlClient;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\MasterControlServer;
 use Weline\Server\Log\WlsLogger;
@@ -16,6 +18,7 @@ use Weline\Server\Service\Provider\MaintenanceWorkerProvider;
 use Weline\Server\Service\Provider\MemoryServerProvider;
 use Weline\Server\Service\Provider\SessionServerProvider;
 use Weline\Server\Service\Provider\WorkerProvider;
+use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\ServiceOrchestrator;
 
 class ServiceOrchestratorStartupTest extends TestCase
@@ -114,6 +117,76 @@ class ServiceOrchestratorStartupTest extends TestCase
             'instanceName' => 'test',
             'totalServices' => 2,
         ]], $orchestrator->startupReadyMarks);
+    }
+
+    public function testCheckAndNotifyServerReadyKeepsFrontendReadyBoxWidthStableWithWideChineseLabels(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $orchestrator->getRegistry()->addInstance(new ServiceInstance(
+            role: 'dispatcher',
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+        ));
+
+        $context = new ServiceContext(
+            instanceName: 'ready-box-width',
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: 443,
+            sslEnabled: true,
+            sslCert: 'cert.pem',
+            sslKey: 'key.pem',
+            mode: 'legacy',
+            daemon: false,
+            debug: false,
+            frontend: true,
+            envConfig: [
+                'router' => [
+                    'area_routes' => [
+                        'backend' => ['prefix' => 'U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8'],
+                        'rest_frontend' => ['prefix' => 'api123'],
+                        'rest_backend' => ['prefix' => 'J3yXU3Y86zzJF0sbWd5S1PmDzPCc1mgE'],
+                    ],
+                ],
+            ],
+            httpRedirectPort: 80,
+            dispatcherEnabled: true,
+            workerCount: 1,
+            workerBasePort: 18080,
+            workerPort: 18080,
+            publicHost: 'p11005ce4.weline.test',
+        );
+
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'serverReadyNotificationArmed', true);
+
+        \ob_start();
+        try {
+            $this->invokePrivate($orchestrator, 'checkAndNotifyServerReady');
+            $output = (string) \ob_get_clean();
+        } catch (\Throwable $throwable) {
+            \ob_end_clean();
+            throw $throwable;
+        }
+
+        self::assertStringContainsString('J3yXU3Y86zzJF0sbWd5S1PmDzPCc1mgE/', $output);
+        self::assertStringContainsString('http://p11005ce4.weline.test:80/ → HTTPS', $output);
+
+        $boxLines = [];
+        foreach (\preg_split("/\r\n|\n|\r/", $this->stripAnsi($output)) as $line) {
+            if (\preg_match('/^  [╔╠╟╚║]/u', $line) === 1) {
+                $boxLines[] = $line;
+            }
+        }
+
+        self::assertGreaterThanOrEqual(8, \count($boxLines));
+
+        $expectedWidth = $this->displayWidth($boxLines[0]);
+        foreach ($boxLines as $line) {
+            self::assertSame($expectedWidth, $this->displayWidth($line), $line);
+        }
     }
 
     public function testResetServerReadyNotificationAlsoDisarmsStartupGate(): void
@@ -267,6 +340,31 @@ class ServiceOrchestratorStartupTest extends TestCase
         $orchestrator->bootstrapControlPlane($context);
 
         self::assertTrue($server->bridgeEnabled);
+    }
+
+    public function testForegroundSpawnTracksLauncherUntilRegisterAndThenSwitchesToServicePid(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $instance = new ServiceInstance(
+            role: ControlMessage::ROLE_MAINTENANCE,
+            instanceId: 1,
+            state: ServiceInstance::STATE_STARTING,
+        );
+        $instance->setMeta('spawn_transport', 'processer_create_foreground');
+
+        $this->invokePrivateWithArgs($orchestrator, 'applySpawnedProcessTree', [$instance, 1202]);
+
+        self::assertSame(0, $instance->pid);
+        self::assertSame(0, $instance->getRootPid());
+        self::assertSame(1202, $instance->getLauncherPid());
+        self::assertSame(1202, $instance->getTrackingPid());
+
+        $this->invokePrivateWithArgs($orchestrator, 'applyRegisteredServicePid', [$instance, 2202]);
+
+        self::assertSame(2202, $instance->pid);
+        self::assertSame(2202, $instance->getRootPid());
+        self::assertSame(1202, $instance->getLauncherPid());
+        self::assertSame(2202, $instance->getTrackingPid());
     }
 
     public function testCreateControlServerCanEnableSupervisorFromContextConfig(): void
@@ -739,7 +837,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(43210, $instance->getLauncherPid());
     }
 
-    public function testMarkSpawnedInstancePreservesLowLevelSpawnTransportAndRecordsTreePid(): void
+    public function testMarkSpawnedInstancePreservesLowLevelSpawnTransportAndKeepsForegroundPidAsLauncherOnly(): void
     {
         $orchestrator = new ServiceOrchestrator();
         $instance = new ServiceInstance(role: 'worker', instanceId: 1);
@@ -756,25 +854,25 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         self::assertSame('processer_create_foreground', $instance->getMeta('spawn_transport'));
         self::assertSame('providers_batch_create', $instance->getMeta('spawn_strategy'));
-        self::assertSame(43210, $instance->pid);
-        self::assertSame(43210, $instance->getRootPid());
+        self::assertSame(0, $instance->pid);
+        self::assertSame(0, $instance->getRootPid());
         self::assertSame(43210, $instance->getLauncherPid());
-        self::assertSame(43210, $instance->getMeta('service_pid'));
-        self::assertSame(43210, $instance->getMeta('root_pid'));
+        self::assertSame(0, $instance->getMeta('service_pid'));
+        self::assertSame(0, $instance->getMeta('root_pid'));
         self::assertSame(43210, $instance->getMeta('tracking_pid'));
     }
 
-    public function testRegisterInstanceIpcPreservesSpawnedRootPidWhenRuntimeReportsRealServicePid(): void
+    public function testRegisterInstanceIpcSwitchesForegroundTrackingPidToRuntimeServicePid(): void
     {
         $orchestrator = new ServiceOrchestrator();
         $instance = new ServiceInstance(
             role: ControlMessage::ROLE_WORKER,
             instanceId: 1,
             launchId: 'worker-launch',
-            pid: 4100,
             state: ServiceInstance::STATE_STARTING,
         );
-        $instance->setProcessTreePids(4100, 4100, 4100);
+        $instance->setMeta('spawn_transport', 'processer_create_foreground');
+        $this->invokePrivateWithArgs($orchestrator, 'applySpawnedProcessTree', [$instance, 4100]);
         $instance->setMeta('process_name', 'weline-wls-worker-test-1');
 
         self::assertTrue($this->invokePrivateWithArgs($orchestrator, 'registerInstanceIpc', [
@@ -789,11 +887,11 @@ class ServiceOrchestratorStartupTest extends TestCase
         ]));
 
         self::assertSame(4200, $instance->pid);
-        self::assertSame(4100, $instance->getRootPid());
+        self::assertSame(4200, $instance->getRootPid());
         self::assertSame(4100, $instance->getLauncherPid());
         self::assertSame(4200, $instance->getMeta('service_pid'));
-        self::assertSame(4100, $instance->getMeta('root_pid'));
-        self::assertSame(4100, $instance->getMeta('tracking_pid'));
+        self::assertSame(4200, $instance->getMeta('root_pid'));
+        self::assertSame(4200, $instance->getMeta('tracking_pid'));
     }
 
     public function testStartProvidersBatchAdoptsConfiguredSharedRuntimeWithoutLaunchingLocalSessionServer(): void
@@ -1200,6 +1298,297 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         self::assertSame([], $startable);
         self::assertInstanceOf(ServiceInstance::class, $registry->getInstance(ControlMessage::ROLE_WORKER, 1));
+    }
+
+    public function testSlotOccupancyTreatsServicePidWithoutWrapperAsOccupied(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $instance = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            pid: \getmypid(),
+            port: 0,
+            state: ServiceInstance::STATE_FAILED,
+            startedAt: \microtime(true) - 30.0,
+        );
+
+        $occupancy = $this->invokePrivateWithArgs($orchestrator, 'inspectSlotOccupancy', [$instance]);
+
+        self::assertFalse((bool)($occupancy['hasIpc'] ?? true));
+        self::assertTrue((bool)($occupancy['hasPidOrTree'] ?? false));
+        self::assertTrue((bool)($occupancy['pidAlive'] ?? false));
+        self::assertTrue((bool)($occupancy['occupied'] ?? false));
+    }
+
+    public function testSlotOccupancyTreatsValidatedPortOwnerWithoutPidAsOccupied(): void
+    {
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        self::assertIsResource($server, $errstr ?: 'failed to bind test port');
+        $address = (string)\stream_socket_get_name($server, false);
+        $port = (int)\substr((string)\strrchr($address, ':'), 1);
+        self::assertGreaterThan(0, $port);
+
+        $originalPortIndex = Processer::readPortIndex();
+        $portIndex = $originalPortIndex;
+        $portIndex[(string)$port] = 'weline-master-test-worker-1';
+        Processer::writePortIndex($portIndex);
+
+        try {
+            $orchestrator = new ServiceOrchestrator();
+            $instance = new ServiceInstance(
+                role: ControlMessage::ROLE_WORKER,
+                instanceId: 1,
+                pid: 0,
+                port: $port,
+                state: ServiceInstance::STATE_FAILED,
+                startedAt: \microtime(true) - 30.0,
+            );
+
+            $occupancy = $this->invokePrivateWithArgs($orchestrator, 'inspectSlotOccupancy', [$instance]);
+
+            self::assertFalse((bool)($occupancy['hasIpc'] ?? true));
+            self::assertFalse((bool)($occupancy['hasPidOrTree'] ?? true));
+            self::assertTrue((bool)($occupancy['hasPortOwner'] ?? false));
+            self::assertTrue((bool)($occupancy['occupied'] ?? false));
+        } finally {
+            Processer::writePortIndex($originalPortIndex);
+            @\fclose($server);
+        }
+    }
+
+    public function testSlotOccupancyReleasesLostLeaseWhenNoIpcPidOrPortOwnerExists(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $instance = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            pid: 0,
+            port: 0,
+            state: ServiceInstance::STATE_FAILED,
+            startedAt: \microtime(true) - 30.0,
+        );
+
+        $occupancy = $this->invokePrivateWithArgs($orchestrator, 'inspectSlotOccupancy', [$instance]);
+
+        self::assertFalse((bool)($occupancy['hasIpc'] ?? true));
+        self::assertFalse((bool)($occupancy['hasPidOrTree'] ?? true));
+        self::assertFalse((bool)($occupancy['hasPortOwner'] ?? true));
+        self::assertFalse((bool)($occupancy['occupied'] ?? true));
+    }
+
+    public function testBatchStartAssignsMonotonicSlotGenerationIndependentFromEpoch(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            /** @var list<array<string|int, array{command:string,block:bool,foreground:bool}>> */
+            public array $capturedCommands = [];
+
+            protected function batchCreateProcesses(array $commands): array
+            {
+                $this->capturedCommands[] = $commands;
+
+                return ['1' => 0];
+            }
+        };
+        $this->writePrivate($orchestrator, 'running', true);
+        $context = $this->createWorkerInfraContext()->withEpoch(50);
+        $provider = new WorkerProvider();
+
+        $first = $this->invokePrivateWithArgs($orchestrator, 'startInstanceIdsBatch', [$provider, [1], $context]);
+        self::assertCount(1, $first);
+        self::assertInstanceOf(ServiceInstance::class, $first[0]);
+        self::assertSame(1, (int)$first[0]->getMeta('generation'));
+        self::assertStringContainsString('--slot-generation=', $orchestrator->capturedCommands[0]['1']['command']);
+
+        $orchestrator->getRegistry()->removeInstance(ControlMessage::ROLE_WORKER, 1);
+        $second = $this->invokePrivateWithArgs($orchestrator, 'startInstanceIdsBatch', [$provider, [1], $context]);
+        self::assertCount(1, $second);
+        self::assertInstanceOf(ServiceInstance::class, $second[0]);
+        self::assertSame(2, (int)$second[0]->getMeta('generation'));
+        self::assertMatchesRegularExpression('/--slot-generation=(?:\'|")?2(?:\'|")?/', $orchestrator->capturedCommands[1]['1']['command']);
+    }
+
+    public function testBatchStartPersistsSlotGenerationAcrossOrchestratorInstances(): void
+    {
+        $manager = new ServerInstanceManager();
+        $instanceName = 'slot-generation-persist-' . \str_replace('.', '', \uniqid('', true));
+        $file = $manager->getInstanceFile($instanceName);
+        $manager->saveInstance($instanceName, [
+            'startup_phase' => 'starting',
+            'control_port' => 19981,
+            'master_pid' => 1234,
+        ]);
+
+        try {
+            $context = $this->createWorkerInfraContextForInstance($instanceName);
+            $provider = new WorkerProvider();
+
+            $firstOrchestrator = new class extends ServiceOrchestrator {
+                protected function batchCreateProcesses(array $commands): array
+                {
+                    return ['1' => 0];
+                }
+            };
+            $this->writePrivate($firstOrchestrator, 'context', $context);
+            $this->writePrivate($firstOrchestrator, 'running', true);
+            $first = $this->invokePrivateWithArgs($firstOrchestrator, 'startInstanceIdsBatch', [$provider, [1], $context]);
+            self::assertCount(1, $first);
+            self::assertSame(1, (int)$first[0]->getMeta('generation'));
+
+            $secondOrchestrator = new class extends ServiceOrchestrator {
+                protected function batchCreateProcesses(array $commands): array
+                {
+                    return ['1' => 0];
+                }
+            };
+            $this->writePrivate($secondOrchestrator, 'context', $context);
+            $this->writePrivate($secondOrchestrator, 'running', true);
+            $second = $this->invokePrivateWithArgs($secondOrchestrator, 'startInstanceIdsBatch', [$provider, [1], $context]);
+            self::assertCount(1, $second);
+            self::assertSame(2, (int)$second[0]->getMeta('generation'));
+
+            $persisted = $manager->getRawInstanceData($instanceName);
+            self::assertIsArray($persisted);
+            self::assertSame(2, (int)($persisted['slot_generations']['worker#1'] ?? 0));
+        } finally {
+            @\unlink($file);
+            @\unlink($file . '.lock');
+        }
+    }
+
+    public function testWorkerBatchStartUsesEmergencyPortWhenConfiguredPortIsBlocked(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            /** @var list<array<string|int, array{command:string,block:bool,foreground:bool}>> */
+            public array $capturedCommands = [];
+            /** @var list<array{role:string,instanceId:int,port:int,reason:string}> */
+            public array $cleanupRequests = [];
+
+            protected function batchCreateProcesses(array $commands): array
+            {
+                $this->capturedCommands[] = $commands;
+
+                return ['1' => 0];
+            }
+
+            protected function prepareLocalPortForStart(string $role, int $port): bool
+            {
+                return $port !== 18081;
+            }
+
+            protected function canUseEmergencyDynamicPort(string $role, int $configuredPort, ServiceContext $context): bool
+            {
+                return $role === ControlMessage::ROLE_WORKER && $configuredPort === 18081;
+            }
+
+            protected function allocateEmergencyDynamicPort(string $role, int $instanceId, int $configuredPort, ServiceContext $context): int
+            {
+                return 28081;
+            }
+
+            protected function scheduleEmergencyPortCleanup(string $role, int $instanceId, int $configuredPort, string $reason, int $attempt = 1): void
+            {
+                $this->cleanupRequests[] = [
+                    'role' => $role,
+                    'instanceId' => $instanceId,
+                    'port' => $configuredPort,
+                    'reason' => $reason,
+                ];
+            }
+        };
+        $this->writePrivate($orchestrator, 'running', true);
+        $provider = new WorkerProvider();
+        $context = new ServiceContext(
+            instanceName: 'emergency-port-test',
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: 8080,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: false,
+            envConfig: [],
+            dispatcherEnabled: true,
+            workerCount: 1,
+            workerBasePort: 18080,
+            workerPort: 18081,
+        );
+
+        $started = $this->invokePrivateWithArgs($orchestrator, 'startInstanceIdsBatch', [$provider, [1], $context]);
+
+        self::assertCount(1, $started);
+        self::assertInstanceOf(ServiceInstance::class, $started[0]);
+        self::assertSame(28081, $started[0]->port);
+        self::assertSame(18081, (int)$started[0]->getMeta('configured_port'));
+        self::assertSame(28081, (int)$started[0]->getMeta('emergency_dynamic_port'));
+        self::assertStringContainsString('28081', $orchestrator->capturedCommands[0]['1']['command']);
+        self::assertSame([[
+            'role' => ControlMessage::ROLE_WORKER,
+            'instanceId' => 1,
+            'port' => 18081,
+            'reason' => 'batch_start',
+        ]], $orchestrator->cleanupRequests);
+    }
+
+    public function testEmergencyPortCleanupKeepsRetryTaskSchedulable(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            public function exposeScheduleEmergencyPortCleanup(int $attempt = 1): void
+            {
+                $this->scheduleEmergencyPortCleanup(ControlMessage::ROLE_WORKER, 1, 18081, 'test', $attempt);
+            }
+        };
+
+        $orchestrator->exposeScheduleEmergencyPortCleanup(1);
+        $orchestrator->exposeScheduleEmergencyPortCleanup(1);
+        $orchestrator->exposeScheduleEmergencyPortCleanup(2);
+
+        $tasks = $this->readPrivate($orchestrator, 'mainLoopTasks');
+        self::assertIsArray($tasks);
+        self::assertArrayHasKey('emergency_port_cleanup:worker:1:18081:1', $tasks);
+        self::assertArrayHasKey('emergency_port_cleanup:worker:1:18081:2', $tasks);
+        self::assertCount(2, \array_filter(
+            \array_keys($tasks),
+            static fn(string $key): bool => \str_starts_with($key, 'emergency_port_cleanup:worker:1:18081:')
+        ));
+    }
+
+    public function testControlClientUsesRuntimeSlotGenerationInsteadOfEpoch(): void
+    {
+        $oldArgv = $GLOBALS['argv'] ?? null;
+        $GLOBALS['argv'] = [
+            'worker.php',
+            '--slot-id=worker#2',
+            '--lease-id=lease-worker-2',
+            '--slot-generation=7',
+        ];
+        try {
+            $client = new ControlClient();
+            self::assertFalse($client->register(
+                ControlMessage::ROLE_WORKER,
+                12002,
+                18082,
+                2,
+                50,
+                'launch-ignored'
+            ));
+
+            $registerInfo = $this->readPrivate($client, 'registerInfo');
+            self::assertIsArray($registerInfo);
+            self::assertSame('worker#2', $registerInfo['slot_id'] ?? null);
+            self::assertSame('lease-worker-2', $registerInfo['lease_id'] ?? null);
+            self::assertSame(7, $registerInfo['generation'] ?? null);
+        } finally {
+            if ($oldArgv === null) {
+                unset($GLOBALS['argv']);
+            } else {
+                $GLOBALS['argv'] = $oldArgv;
+            }
+        }
     }
 
     public function testProcessResurrectQueueDefersWorkerRecoveryWhileQueuedStartupPidStillAlive(): void
@@ -2057,6 +2446,235 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(9, $decoded['worker_id'] ?? null);
         self::assertSame(28099, $decoded['port'] ?? null);
         self::assertSame('stray-ready', $decoded['msg_id'] ?? null);
+    }
+
+    public function testStaleWorkerPoolAckCannotConfirmNewLeaseGeneration(): void
+    {
+        $mockControl = new class extends MasterControlServer {
+            /** @var list<array{clientId:int, message:string}> */
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = ['clientId' => $clientId, 'message' => $message];
+
+                return true;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        $context = $this->createWorkerInfraContext();
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $mockControl);
+
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'worker-lease-new',
+            pid: 3101,
+            port: 28001,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 301,
+        );
+        $worker->setMeta('worker_id', 1);
+        $worker->setMeta('slot_id', 'worker#1');
+        $worker->setMeta('lease_id', 'worker-lease-new');
+        $worker->setMeta('generation', 2);
+        $worker->setMeta('lease_state', 'ready_pending_pool');
+        $registry->addInstance($worker);
+
+        $this->invokePrivateWithArgs($orchestrator, 'handleWorkerPoolAck', [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'port' => 28001,
+            'in_pool' => true,
+            'slot_id' => 'worker#1',
+            'lease_id' => 'worker-lease-old',
+            'generation' => 1,
+        ], 401]);
+
+        $current = $registry->getInstance(ControlMessage::ROLE_WORKER, 1);
+        self::assertInstanceOf(ServiceInstance::class, $current);
+        self::assertNull($current->getMeta('dispatcher_pool_confirmed_at'));
+        self::assertSame([], $mockControl->sent);
+
+        $this->invokePrivateWithArgs($orchestrator, 'handleWorkerPoolAck', [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'port' => 28001,
+            'in_pool' => true,
+            'slot_id' => 'worker#1',
+            'lease_id' => 'worker-lease-new',
+            'generation' => 2,
+        ], 401]);
+
+        $current = $registry->getInstance(ControlMessage::ROLE_WORKER, 1);
+        self::assertInstanceOf(ServiceInstance::class, $current);
+        self::assertNotNull($current->getMeta('dispatcher_pool_confirmed_at'));
+        self::assertSame('in_pool', $current->getMeta('lease_state'));
+        self::assertCount(1, $mockControl->sent);
+
+        $decoded = \json_decode(\rtrim($mockControl->sent[0]['message'], "\n"), true);
+        self::assertIsArray($decoded);
+        self::assertSame(ControlMessage::TYPE_ACK_READY, $decoded['type'] ?? null);
+        self::assertSame('worker#1', $decoded['slot_id'] ?? null);
+        self::assertSame('worker-lease-new', $decoded['lease_id'] ?? null);
+        self::assertSame(2, $decoded['generation'] ?? null);
+    }
+
+    public function testWorkerRegisterWithoutCurrentLeaseIsRejectedForLeasedSlot(): void
+    {
+        $mockControl = new class extends MasterControlServer {
+            /** @var list<array{clientId:int, message:string}> */
+            public array $sent = [];
+            /** @var list<int> */
+            public array $closed = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = ['clientId' => $clientId, 'message' => $message];
+
+                return true;
+            }
+
+            public function closeClient(int $clientId): void
+            {
+                $this->closed[] = $clientId;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $context = $this->createWorkerInfraContext();
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $mockControl);
+
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'worker-lease',
+            pid: 0,
+            port: 28001,
+            state: ServiceInstance::STATE_STARTING,
+        );
+        $worker->setMeta('worker_id', 1);
+        $worker->setMeta('slot_id', 'worker#1');
+        $worker->setMeta('lease_id', 'worker-lease');
+        $worker->setMeta('generation', 3);
+
+        $accepted = $this->invokePrivateWithArgs($orchestrator, 'registerInstanceIpc', [
+            $worker,
+            302,
+            2302,
+            1,
+            $context->epoch,
+            'worker-lease',
+            ControlMessage::PROCESS_KIND_FRAMEWORK,
+            '',
+            '',
+            '',
+            0,
+        ]);
+
+        self::assertFalse($accepted);
+        self::assertSame([302], $mockControl->closed);
+        self::assertCount(1, $mockControl->sent);
+
+        $decoded = \json_decode(\rtrim($mockControl->sent[0]['message'], "\n"), true);
+        self::assertIsArray($decoded);
+        self::assertSame(ControlMessage::TYPE_READY_ACK, $decoded['type'] ?? null);
+        self::assertFalse((bool)($decoded['accepted'] ?? true));
+        self::assertSame('missing_or_stale_lease', $decoded['reason'] ?? null);
+        self::assertSame(1, $decoded['worker_id'] ?? null);
+        self::assertSame(28001, $decoded['port'] ?? null);
+    }
+
+    public function testReadyWorkerIpcDisconnectRemovesDispatcherPoolBeforeResurrection(): void
+    {
+        $mockControl = new class extends MasterControlServer {
+            /** @var list<array{clientId:int, message:string}> */
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = ['clientId' => $clientId, 'message' => $message];
+
+                return true;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        if (!$registry->hasProvider(ControlMessage::ROLE_WORKER)) {
+            $registry->registerProvider(new WorkerProvider());
+        }
+        if (!$registry->hasProvider(ControlMessage::ROLE_DISPATCHER)) {
+            $registry->registerProvider(new DispatcherProvider());
+        }
+
+        $context = $this->createWorkerInfraContext();
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $mockControl);
+        $this->writePrivate($orchestrator, 'running', true);
+
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'dispatcher-lease',
+            port: $context->mainPort,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 401,
+        ));
+
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'worker-lease',
+            pid: 0,
+            port: 28001,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 301,
+            startedAt: \microtime(true) - 30.0,
+        );
+        $worker->setMeta('worker_id', 1);
+        $worker->setMeta('slot_id', 'worker#1');
+        $worker->setMeta('lease_id', 'worker-lease');
+        $worker->setMeta('generation', 1);
+        $worker->setMeta('lease_state', 'in_pool');
+        $worker->setMeta('dispatcher_pool_confirmed_at', \microtime(true) - 1.0);
+        $registry->addInstance($worker);
+
+        $orchestrator->handleIpcDisconnect(301, [
+            'role' => ControlMessage::ROLE_WORKER,
+            'state' => ServiceInstance::STATE_READY,
+        ], $mockControl);
+
+        $removePool = null;
+        foreach ($mockControl->sent as $entry) {
+            if ($entry['clientId'] !== 401) {
+                continue;
+            }
+            $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
+            if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_REMOVE_WORKER) {
+                $removePool = $decoded;
+                break;
+            }
+        }
+
+        self::assertIsArray($removePool);
+        self::assertSame([28001], $removePool['ports'] ?? null);
+        self::assertSame('worker#1', $removePool['workers'][0]['slot_id'] ?? null);
+        self::assertSame('worker-lease', $removePool['workers'][0]['lease_id'] ?? null);
+        self::assertSame(1, $removePool['workers'][0]['generation'] ?? null);
+
+        $current = $registry->getInstance(ControlMessage::ROLE_WORKER, 1);
+        self::assertInstanceOf(ServiceInstance::class, $current);
+        self::assertNull($current->ipcClientId);
+        self::assertSame(ServiceInstance::STATE_FAILED, $current->state);
+        self::assertSame('disconnected_grace', $current->getMeta('lease_state'));
+        self::assertArrayHasKey('worker:1', $this->readPrivate($orchestrator, 'resurrectQueue'));
     }
 
     public function testAutoStartMaintenanceModeUsesRuntimeWorkerCount(): void
@@ -3374,6 +3992,34 @@ class ServiceOrchestratorStartupTest extends TestCase
         );
     }
 
+    private function createWorkerInfraContextForInstance(string $instanceName): ServiceContext
+    {
+        $base = $this->createWorkerInfraContext();
+
+        return new ServiceContext(
+            instanceName: $instanceName,
+            epoch: $base->epoch,
+            controlPort: $base->controlPort,
+            masterPid: $base->masterPid,
+            host: $base->host,
+            mainPort: $base->mainPort,
+            sslEnabled: $base->sslEnabled,
+            sslCert: $base->sslCert,
+            sslKey: $base->sslKey,
+            mode: $base->mode,
+            daemon: $base->daemon,
+            debug: $base->debug,
+            frontend: $base->frontend,
+            envConfig: $base->envConfig,
+            httpRedirectPort: $base->httpRedirectPort,
+            dispatcherEnabled: $base->dispatcherEnabled,
+            workerCount: $base->workerCount,
+            workerBasePort: $base->workerBasePort,
+            workerPort: $base->workerPort,
+            publicHost: $base->publicHost,
+        );
+    }
+
     /**
      * PHPUnit CLI 涓?Runtime::isWls() 甯镐负 false锛孲chedulerWaitObserver 涓嶄細娉ㄥ唽 yield 瀹氭椂鍣紝
      * 鎸傝捣鐨?stop_all Fiber 闇€鎵嬪姩 resume 鎵嶈兘鎵ц闂寘鍐呯殑 stopAll()銆?
@@ -3429,6 +4075,16 @@ class ServiceOrchestratorStartupTest extends TestCase
         $reflection = $this->findProperty($object, $property);
         $reflection->setAccessible(true);
         $reflection->setValue($object, $value);
+    }
+
+    private function stripAnsi(string $value): string
+    {
+        return (string) \preg_replace('/\e\[[\d;]*m/', '', $value);
+    }
+
+    private function displayWidth(string $value): int
+    {
+        return \mb_strwidth($value, 'UTF-8');
     }
 
     private function findProperty(object $object, string $property): \ReflectionProperty
