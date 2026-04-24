@@ -474,6 +474,27 @@ class ProcesserTest extends TestCore
         ], $resolved);
     }
 
+    public function testCollectLaunchItemsNeedingPidResolutionIncludesNonBlockingForFastPidAdoption(): void
+    {
+        $items = [
+            ['key' => 'phase-one-visible', 'block' => false],
+            ['key' => 'worker-hidden', 'block' => true],
+            ['key' => 'worker-already-has-pid', 'block' => false],
+        ];
+        $resolved = $this->invokePrivateStatic(Processer::class, 'collectLaunchItemsNeedingPidResolution', [
+            $items,
+            [
+                'worker-already-has-pid' => 4321,
+            ],
+            false,
+        ]);
+
+        self::assertSame([
+            ['key' => 'phase-one-visible', 'block' => false],
+            ['key' => 'worker-hidden', 'block' => true],
+        ], $resolved);
+    }
+
     public function testBuildWindowsBatchSignalCommandUsesSingleTaskkillInvocation(): void
     {
         $command = $this->invokePrivateStatic(Processer::class, 'buildWindowsBatchSignalCommand', [[101, 202, 303]]);
@@ -487,6 +508,16 @@ class ProcesserTest extends TestCore
 
         self::assertSame(
             'cmd /d /c start "" /B cmd /d /c "taskkill /F /PID 101 /PID 202 /PID 303 1>NUL 2>NUL"',
+            $command
+        );
+    }
+
+    public function testBuildWindowsAsyncBatchTreeKillCommandUsesDetachedStartWrapper(): void
+    {
+        $command = $this->invokePrivateStatic(Processer::class, 'buildWindowsAsyncBatchTreeKillCommand', [[101, 202, 303]]);
+
+        self::assertSame(
+            'cmd /d /c start "" /B cmd /d /c "taskkill /F /T /PID 101 /PID 202 /PID 303 1>NUL 2>NUL"',
             $command
         );
     }
