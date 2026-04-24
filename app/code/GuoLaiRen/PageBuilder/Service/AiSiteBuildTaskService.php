@@ -37,6 +37,7 @@ class AiSiteBuildTaskService
         'plan_last_round',
         'plan_rebuild_summary',
         'plan_change_scope_report',
+        'confirmed_stage1_plan_book',
         'virtual_theme_plan',
         'task_plan_structured',
         'task_plan_markdown',
@@ -51,6 +52,26 @@ class AiSiteBuildTaskService
         '_task_plan_rebuild_in_progress',
         'build_blueprint',
         'build_tasks',
+    ];
+    /**
+     * build_tasks is mutable execution state only; definition payload belongs to
+     * build_blueprint.tasks.
+     *
+     * @var array<string, true>
+     */
+    private const BUILD_TASK_STATE_DUPLICATE_KEYS = [
+        'task_type' => true,
+        'group_key' => true,
+        'page_type' => true,
+        'section_code' => true,
+        'dependencies' => true,
+        'can_parallel' => true,
+        'progress_weight' => true,
+        'runtime_context' => true,
+        'plan_context' => true,
+        'task_script' => true,
+        'block_task' => true,
+        'implementation_contract' => true,
     ];
 
     public function __construct(
@@ -70,12 +91,19 @@ class AiSiteBuildTaskService
         if (!$isTaskPlanRebuild) {
             $scope = $this->normalizeConfirmedTaskPlanFlag($scope);
         }
+        $existingBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
+        $existingTasks = \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [];
         $blueprint = $isTaskPlanRebuild ? [] : $this->buildBlueprintFromConfirmedTaskPlan($scope, $pageTypes, $workspaceTrack);
+        if (
+            $blueprint === []
+            && (int)($scope['task_plan_confirmed'] ?? 0) === 1
+            && $this->isReusableConfirmedBuildBlueprint($existingBlueprint)
+        ) {
+            $blueprint = $existingBlueprint;
+        }
         if ($blueprint === []) {
             $blueprint = $this->buildBlueprint($pageTypes, $scope, $websiteProfile, $workspaceTrack);
         }
-        $existingBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        $existingTasks = \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [];
         $signature = (string)($blueprint['signature'] ?? '');
 
         if ($signature === '' || (string)($existingBlueprint['signature'] ?? '') !== $signature) {
@@ -150,15 +178,31 @@ class AiSiteBuildTaskService
     {
         $confirmedPlan = $this->extractConfirmedTaskPlan($scope);
         if ($confirmedPlan === []) {
-            return false;
+            $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
+            return $this->isReusableConfirmedBuildBlueprint($buildBlueprint);
         }
 
         $executionBlueprint = \is_array($confirmedPlan['execution_blueprint'] ?? null)
             ? $confirmedPlan['execution_blueprint']
             : [];
         $executionTasks = \is_array($executionBlueprint['tasks'] ?? null) ? $executionBlueprint['tasks'] : [];
+        if ($executionTasks === []) {
+            $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
+            return $this->isReusableConfirmedBuildBlueprint($buildBlueprint);
+        }
 
-        return $executionTasks !== [];
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $blueprint
+     */
+    private function isReusableConfirmedBuildBlueprint(array $blueprint): bool
+    {
+        return (string)($blueprint['source'] ?? '') === 'stage2_confirmed_task_plan'
+            && \trim((string)($blueprint['signature'] ?? '')) !== ''
+            && \is_array($blueprint['tasks'] ?? null)
+            && $blueprint['tasks'] !== [];
     }
 
     /**
@@ -1041,8 +1085,15 @@ class AiSiteBuildTaskService
     private function extractTaskState(array $scope): array
     {
         $taskState = \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [];
+        $sanitized = [];
+        foreach ($taskState as $taskKey => $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $sanitized[(string)$taskKey] = $this->sanitizeBuildTaskStateRow($row, (string)$taskKey);
+        }
 
-        return \array_filter($taskState, static fn($row): bool => \is_array($row));
+        return $sanitized;
     }
 
     /**
@@ -1062,21 +1113,6 @@ class AiSiteBuildTaskService
             }
             $taskState[$taskKey] = [
                 'task_key' => $taskKey,
-                'task_type' => (string)($task['task_type'] ?? ''),
-                'group_key' => (string)($task['group_key'] ?? ''),
-                'page_type' => (string)($task['page_type'] ?? ''),
-                'section_code' => (string)($task['section_code'] ?? ''),
-                'dependencies' => \array_values(\array_filter(\array_map(
-                    'strval',
-                    \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : []
-                ))),
-                'can_parallel' => (bool)($task['can_parallel'] ?? true),
-                'progress_weight' => (float)($task['progress_weight'] ?? 1.0),
-                'runtime_context' => \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [],
-                'plan_context' => \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [],
-                'task_script' => \is_array($task['task_script'] ?? null) ? $task['task_script'] : [],
-                'block_task' => \is_array($task['block_task'] ?? null) ? $task['block_task'] : [],
-                'implementation_contract' => \is_array($task['implementation_contract'] ?? null) ? $task['implementation_contract'] : [],
                 'status' => self::TASK_STATUS_PENDING,
                 'attempt_no' => 0,
                 'message' => '',
@@ -1102,7 +1138,10 @@ class AiSiteBuildTaskService
             if (!\is_array($existingTasks[$taskKey] ?? null)) {
                 continue;
             }
-            $merged[$taskKey] = \array_replace($defaultState, $existingTasks[$taskKey]);
+            $merged[$taskKey] = \array_replace(
+                $defaultState,
+                $this->sanitizeBuildTaskStateRow($existingTasks[$taskKey], $taskKey)
+            );
         }
 
         return $merged;
@@ -1245,5 +1284,26 @@ class AiSiteBuildTaskService
         }
 
         return 'page_sections.' . $pageType;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function sanitizeBuildTaskStateRow(array $row, string $taskKey): array
+    {
+        foreach (self::BUILD_TASK_STATE_DUPLICATE_KEYS as $key => $_) {
+            unset($row[$key]);
+        }
+
+        $row['task_key'] = $taskKey !== '' ? $taskKey : (string)($row['task_key'] ?? '');
+        if (isset($row['message']) && !\is_scalar($row['message'])) {
+            $row['message'] = '';
+        }
+        if (isset($row['result_ref']) && !\is_array($row['result_ref'])) {
+            $row['result_ref'] = [];
+        }
+
+        return $row;
     }
 }

@@ -108,15 +108,21 @@ class AiSiteBuildTaskServiceTest extends TestCase
             ['shared:header', 'shared:footer', 'page:home_page:hero'],
             \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
         );
-        $this->assertSame('content/home-page-hero', $scope['build_tasks']['page:home_page:hero']['section_code'] ?? null);
-        $this->assertSame('home_page', $scope['build_tasks']['page:home_page:hero']['page_type'] ?? null);
-        $this->assertSame(
-            ['shared:header', 'shared:footer'],
-            $scope['build_tasks']['page:home_page:hero']['dependencies'] ?? []
-        );
+        $pageTaskDefinition = \array_values(\array_filter(
+            $scope['build_blueprint']['tasks'] ?? [],
+            static fn(array $task): bool => ($task['task_key'] ?? '') === 'page:home_page:hero'
+        ));
+        $this->assertCount(1, $pageTaskDefinition);
+        $this->assertSame('content/home-page-hero', $pageTaskDefinition[0]['section_code'] ?? null);
+        $this->assertSame('home_page', $pageTaskDefinition[0]['page_type'] ?? null);
+        $this->assertSame(['shared:header', 'shared:footer'], $pageTaskDefinition[0]['dependencies'] ?? []);
         $this->assertSame(
             ['block_key' => 'hero', 'origin' => 'stage2'],
-            $scope['build_tasks']['page:home_page:hero']['runtime_context'] ?? []
+            $pageTaskDefinition[0]['runtime_context'] ?? []
+        );
+        $this->assertSame(
+            ['task_key', 'status', 'attempt_no', 'message', 'result_ref', 'updated_at', 'started_at', 'finished_at'],
+            \array_keys($scope['build_tasks']['page:home_page:hero'] ?? [])
         );
     }
 
@@ -157,6 +163,68 @@ class AiSiteBuildTaskServiceTest extends TestCase
             ['shared:header', 'page:home_page:hero'],
             \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
         );
+    }
+
+    public function testEnsureTaskScopeReusesExistingConfirmedBuildBlueprintWhenConfirmedPlanWasCompacted(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+        $existingBlueprint = [
+            'version' => 'v1',
+            'source' => 'stage2_confirmed_task_plan',
+            'signature' => 'existing-blueprint-signature',
+            'task_plan_signature' => 'confirmed-task-plan-signature',
+            'workspace_track' => 'virtual_theme',
+            'page_types' => ['home_page'],
+            'tasks' => [
+                [
+                    'task_key' => 'page:home_page:hero',
+                    'task_type' => 'page_section',
+                    'page_type' => 'home_page',
+                    'section_code' => 'content/home-page-hero',
+                    'sort_order' => 20,
+                    'runtime_context' => ['block_key' => 'hero'],
+                ],
+            ],
+        ];
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page'],
+            'task_plan_confirmed' => 1,
+            'virtual_theme_plan' => [
+                'confirmed' => [
+                    'signature' => 'confirmed-task-plan-signature',
+                    '_storage_compacted' => 1,
+                    'execution_blueprint_ref' => [
+                        'signature' => 'existing-blueprint-signature',
+                        'task_count' => 1,
+                    ],
+                ],
+            ],
+            'build_blueprint' => $existingBlueprint,
+            'build_tasks' => [
+                'page:home_page:hero' => [
+                    'task_key' => 'page:home_page:hero',
+                    'runtime_context' => ['block_key' => 'stale-duplicate'],
+                    'task_script' => ['story_goal' => 'duplicate'],
+                    'status' => AiSiteBuildTaskService::TASK_STATUS_RUNNING,
+                    'attempt_no' => 2,
+                    'message' => 'working',
+                    'result_ref' => ['component_code' => 'hero'],
+                ],
+            ],
+        ], [
+            'site_title' => 'Example Site',
+            'brief_description' => 'Example site summary',
+        ], 'virtual_theme');
+
+        $this->assertTrue($service->hasConfirmedTaskPlanForBuild($scope));
+        $this->assertSame(1, (int)($scope['task_plan_confirmed'] ?? 0));
+        $this->assertSame($existingBlueprint, $scope['build_blueprint']);
+        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_RUNNING, $scope['build_tasks']['page:home_page:hero']['status'] ?? null);
+        $this->assertSame(2, $scope['build_tasks']['page:home_page:hero']['attempt_no'] ?? null);
+        $this->assertSame(['component_code' => 'hero'], $scope['build_tasks']['page:home_page:hero']['result_ref'] ?? null);
+        $this->assertArrayNotHasKey('runtime_context', $scope['build_tasks']['page:home_page:hero']);
+        $this->assertArrayNotHasKey('task_script', $scope['build_tasks']['page:home_page:hero']);
     }
 
     public function testSummarizeReflectsDoneAndPendingTasks(): void

@@ -100,6 +100,7 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
             '--maintenance',
             '--control-port=' . $context->controlPort,
             '--master-pid=' . $context->masterPid,
+            '--memory-limit=' . $context->getWorkerMemoryLimit(),
         ];
 
         if ($context->sslEnabled && $context->sslCert && $context->sslKey) {
