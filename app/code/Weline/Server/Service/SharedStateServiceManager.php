@@ -549,9 +549,19 @@ class SharedStateServiceManager
             ];
         }
 
-        $definition = $this->buildRoleDefinition($role, 'system', $config, $envConfig);
-        $probe = $this->probeDefinition($definition);
-        $runtime = \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
+        $role = $this->normalizeRoleName($role);
+        $runtime = $this->readRuntimeFile($role);
+        $definition = $this->buildStatusProbeDefinition($role, $config, $envConfig, $runtime);
+        $healthy = $this->probeRunningSharedService($definition, (string) $definition['token_file_name']);
+        $runtime = \array_merge(
+            $this->buildRuntimeMetadata(
+                $definition,
+                (int) ($runtime['pid'] ?? 0),
+                \is_string($runtime['started_at'] ?? null) ? (string) $runtime['started_at'] : null,
+                $healthy ? \date('c') : (\is_string($runtime['healthy_at'] ?? null) ? (string) $runtime['healthy_at'] : null)
+            ),
+            $runtime
+        );
 
         return [
             'role' => (string) $definition['role'],
@@ -559,12 +569,12 @@ class SharedStateServiceManager
             'port' => (int) ($runtime['port'] ?? $definition['port']),
             'token_file_name' => (string) ($runtime['token_file_name'] ?? $definition['token_file_name']),
             'pid' => (int) ($runtime['pid'] ?? 0),
-            'healthy' => (bool) ($probe['healthy'] ?? false),
+            'healthy' => $healthy,
             'started_at' => $runtime['started_at'] ?? null,
             'healthy_at' => $runtime['healthy_at'] ?? null,
             'process_name' => (string) ($runtime['process_name'] ?? $definition['process_name']),
             'instance_name' => (string) ($runtime['instance_name'] ?? $definition['service_instance_name']),
-            'message' => (string) ($probe['message'] ?? ''),
+            'message' => $healthy ? 'Shared service is healthy.' : 'Shared service is not responding.',
             'shared_service' => true,
         ];
     }
@@ -638,24 +648,36 @@ class SharedStateServiceManager
         ];
     }
 
-    public function releaseInstanceConsumers(string $instanceName): void
+    /**
+     * @return array<string, bool> role => IPC ACK received
+     */
+    public function releaseInstanceConsumers(string $instanceName): array
     {
+        $results = [
+            ControlMessage::ROLE_SESSION_SERVER => false,
+            ControlMessage::ROLE_MEMORY_SERVER => false,
+        ];
+
         if (!$this->shouldTrackConsumer($instanceName)) {
-            return;
+            return $results;
         }
 
         foreach ([ControlMessage::ROLE_SESSION_SERVER, ControlMessage::ROLE_MEMORY_SERVER] as $role) {
-            $this->withRoleLock($role, function () use ($role, $instanceName): void {
+            $results[$role] = (bool) $this->withRoleLock($role, function () use ($role, $instanceName): bool {
                 $registry = $this->createRegistry();
                 $runtime = $this->readRuntimeFile($role);
                 if ($runtime === []) {
                     $runtime = $registry->getRecord($role);
                 }
-                $this->sendSharedServiceConsumerShutdown($role, $instanceName, $runtime);
+                $ack = $this->sendSharedServiceConsumerShutdown($role, $instanceName, $runtime);
                 $registry->releaseConsumer($role, $instanceName);
                 $this->syncRuntimeRegistryMetadata($role, $registry);
+
+                return $ack;
             });
         }
+
+        return $results;
     }
 
     /**
@@ -1023,6 +1045,101 @@ class SharedStateServiceManager
             arguments: $arguments,
             processName: (string) $definition['process_name'],
         );
+    }
+
+    /**
+     * Status is read-only: it should not run port adoption or command-line ownership scans.
+     *
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $envConfig
+     * @param array<string, mixed> $runtime
+     * @return array<string, mixed>
+     */
+    protected function buildStatusProbeDefinition(
+        string $role,
+        array $config,
+        array $envConfig,
+        array $runtime
+    ): array {
+        $role = $this->normalizeRoleName($role);
+        $wlsConfig = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
+
+        if ($role === ControlMessage::ROLE_MEMORY_SERVER) {
+            $memoryConfig = \is_array($wlsConfig['memory_service'] ?? null) ? $wlsConfig['memory_service'] : [];
+            $defaultPort = 19971 + MasterProcess::getProjectPortOffset();
+            $port = (int) (
+                $runtime['port']
+                ?? $config['memory_server_port']
+                ?? $memoryConfig['port']
+                ?? $defaultPort
+            );
+            $tokenFileName = \trim((string) (
+                $runtime['token_file_name']
+                ?? $config['memory_server_token_file_name']
+                ?? $memoryConfig['token_file_name']
+                ?? 'memory_server.token'
+            ));
+            if ($tokenFileName === '') {
+                $tokenFileName = 'memory_server.token';
+            }
+
+            return [
+                'role' => $role,
+                'display_name' => 'Memory Service',
+                'host' => (string) ($runtime['host'] ?? '127.0.0.1'),
+                'port' => $port,
+                'token_file_name' => \basename($tokenFileName),
+                'process_name' => (string) (
+                    $runtime['process_name']
+                    ?? (MemoryServerProvider::PROCESS_NAME_PREFIX . '-' . MasterProcess::getProjectScopeToken() . '-shared-' . $port)
+                ),
+                'service_instance_name' => (string) (
+                    $runtime['service_instance_name']
+                    ?? $runtime['instance_name']
+                    ?? ('shared-memory-' . MasterProcess::getProjectScopeToken() . '-' . $port)
+                ),
+            ];
+        }
+
+        $sessionConfig = \is_array($envConfig['session'] ?? null) ? $envConfig['session'] : [];
+        $wlsSession = \is_array($wlsConfig['session'] ?? null) ? $wlsConfig['session'] : [];
+        $wlsServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
+        $defaultPort = 19970 + MasterProcess::getProjectPortOffset();
+        $port = (int) (
+            $runtime['port']
+            ?? $config['session_server_port']
+            ?? $wlsServer['port']
+            ?? $wlsSession['port']
+            ?? $sessionConfig['server_port']
+            ?? $defaultPort
+        );
+        $tokenFileName = \trim((string) (
+            $runtime['token_file_name']
+            ?? $config['session_server_token_file_name']
+            ?? $wlsServer['token_file_name']
+            ?? $wlsSession['token_file_name']
+            ?? 'session_server.token'
+        ));
+        if ($tokenFileName === '') {
+            $tokenFileName = 'session_server.token';
+        }
+
+        return [
+            'role' => $role,
+            'display_name' => 'Session Server',
+            'host' => (string) ($runtime['host'] ?? '127.0.0.1'),
+            'port' => $port,
+            'token_file_name' => \basename($tokenFileName),
+            'process_name' => (string) (
+                $runtime['process_name']
+                ?? (SessionServerProvider::PROCESS_NAME_PREFIX . '-' . MasterProcess::getProjectScopeToken() . '-shared-' . $port)
+            ),
+            'service_instance_name' => (string) (
+                $runtime['service_instance_name']
+                ?? $runtime['instance_name']
+                ?? ('shared-session-' . MasterProcess::getProjectScopeToken() . '-' . $port)
+            ),
+        ];
     }
 
     /**

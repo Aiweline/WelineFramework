@@ -104,15 +104,15 @@ final class StopCommandRuntimeCacheTest extends TestCase
         $first = $this->invokeProtected($stop, 'resolveManagedStopRootPid', 100);
         $second = $this->invokeProtected($stop, 'resolveManagedStopRootPid', 100);
 
-        self::assertSame(50, $first);
-        self::assertSame(50, $second);
+        self::assertSame(100, $first);
+        self::assertSame(100, $second);
         self::assertSame(
             [
-                'running' => 2,
-                'command' => 1,
-                'weline' => 1,
+                'running' => 1,
+                'command' => 0,
+                'weline' => 0,
                 'manager' => 0,
-                'parent' => 2,
+                'parent' => 0,
             ],
             $stop->calls
         );

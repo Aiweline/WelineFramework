@@ -158,6 +158,41 @@ final class SharedStateServiceManagerTest extends TestCase
         self::assertSame('memory_server.token', $runtime['token_file_name'] ?? null);
     }
 
+    public function testStatusUsesProtocolProbeWithoutPortInspection(): void
+    {
+        $manager = new class extends SharedStateServiceManager {
+            protected function readRuntimeFile(string $role): array
+            {
+                return [];
+            }
+
+            protected function probeRunningSharedService(array $definition, string $tokenFileName): bool
+            {
+                TestCase::assertSame(ControlMessage::ROLE_SESSION_SERVER, $definition['role'] ?? null);
+                TestCase::assertSame(19970, $definition['port'] ?? null);
+                TestCase::assertSame('session_server.token', $tokenFileName);
+
+                return true;
+            }
+
+            protected function probePortInUse(int $port): bool
+            {
+                throw new \RuntimeException('status should not run port adoption checks');
+            }
+
+            protected function inspectRunningSharedService(array $definition, string $expectedTokenFileName): array
+            {
+                throw new \RuntimeException('status should not inspect process ownership');
+            }
+        };
+
+        $status = $manager->status(ControlMessage::ROLE_SESSION_SERVER, [], self::sessionPortEnv());
+
+        self::assertTrue($status['healthy'] ?? false);
+        self::assertSame(19970, $status['port'] ?? null);
+        self::assertSame('session_server.token', $status['token_file_name'] ?? null);
+    }
+
     public function testEnsureRestartsUnhealthyReusableService(): void
     {
         $manager = new class extends SharedStateServiceManager {

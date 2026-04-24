@@ -180,7 +180,15 @@ class Processer
             return $inspect;
         }
 
-        if (($inspect['pid_running'] ?? false) || ($inspect['is_weline'] ?? false)) {
+        if ($inspect['is_weline'] ?? false) {
+            return $inspect;
+        }
+
+        // Historical name/port indexes are advisory only. A Windows LISTEN row
+        // can temporarily point at a PID that no longer exists; treating that
+        // stale row as a live WLS owner blocks restart cleanup on ghost control
+        // ports that cannot be killed.
+        if (!($inspect['pid_running'] ?? false)) {
             return $inspect;
         }
 
@@ -189,9 +197,7 @@ class Processer
         }
 
         $inspect['is_weline'] = true;
-        if (($inspect['state'] ?? '') === 'orphan') {
-            $inspect['state'] = 'weline';
-        }
+        $inspect['state'] = 'weline';
 
         return $inspect;
     }
@@ -1547,6 +1553,114 @@ class Processer
     }
 
     /**
+     * Cleanup only PID records touched by the current operation.
+     *
+     * The full cleanupStalePidFiles() path scans every *-pid.json and may need
+     * command-line identity checks for many live Windows processes. Stop/restart
+     * hot paths already know their candidate PID set, so they should avoid that
+     * global sweep and remove only records whose candidate process is gone.
+     *
+     * @param list<int>|array<int> $pids
+     */
+    public static function cleanupStalePidFilesForPids(array $pids): int
+    {
+        $uniquePids = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $pids),
+            static fn (int $pid): bool => $pid > 0
+        )));
+        if ($uniquePids === []) {
+            return 0;
+        }
+
+        $pidIndex = self::readPidIndex();
+        if ($pidIndex === []) {
+            return 0;
+        }
+
+        $processInfo = self::batchGetProcessInfo($uniquePids);
+        $removed = 0;
+        $removedPids = [];
+        $removedPorts = [];
+
+        foreach ($uniquePids as $pid) {
+            $record = \is_array($pidIndex[$pid] ?? null) ? $pidIndex[$pid] : [];
+            $jsonPath = (string) ($record['jsonPath'] ?? '');
+            if ($jsonPath === '' || !\is_file($jsonPath)) {
+                continue;
+            }
+
+            $info = \is_array($processInfo[$pid] ?? null) ? $processInfo[$pid] : [];
+            if ((bool) ($info['exists'] ?? false)) {
+                continue;
+            }
+
+            $raw = @\file_get_contents($jsonPath);
+            if ($raw !== false) {
+                $data = \json_decode($raw, true);
+                if (\is_array($data)) {
+                    foreach ((array) ($data['ports'] ?? []) as $port) {
+                        $port = (int) $port;
+                        if ($port > 0) {
+                            $removedPorts[$port] = true;
+                        }
+                    }
+                }
+            }
+
+            @\unlink($jsonPath);
+            unset($pidIndex[$pid]);
+            $removedPids[$pid] = true;
+            self::untrustPid($pid);
+            $removed++;
+        }
+
+        if ($removed === 0) {
+            return 0;
+        }
+
+        self::writePidIndex($pidIndex);
+
+        $removedPidMap = $removedPids;
+        self::atomicUpdateNameIndex(
+            static function (array $nameIndex) use ($removedPidMap): array {
+                foreach ($nameIndex as $pname => $entries) {
+                    $kept = [];
+                    foreach ((array) $entries as $entry) {
+                        $pid = (int) ($entry['pid'] ?? 0);
+                        if ($pid > 0 && !isset($removedPidMap[$pid])) {
+                            $kept[] = $entry;
+                        }
+                    }
+                    if ($kept === []) {
+                        unset($nameIndex[$pname]);
+                    } else {
+                        $nameIndex[$pname] = \array_values($kept);
+                    }
+                }
+
+                return $nameIndex;
+            }
+        );
+
+        if ($removedPorts !== []) {
+            $portIndex = self::readPortIndex();
+            $changed = false;
+            foreach (\array_keys($removedPorts) as $port) {
+                $key = (string) $port;
+                if (isset($portIndex[$key])) {
+                    unset($portIndex[$key]);
+                    $changed = true;
+                }
+            }
+            if ($changed) {
+                self::writePortIndex($portIndex);
+            }
+        }
+
+        return $removed;
+    }
+
+    /**
      * @DESC          # 杀死进程
      *
      * @AUTH  秋枫雁飞
@@ -2113,6 +2227,49 @@ class Processer
 
         return self::batchKillProcessTreesPosix(\array_values($validPids));
     }
+
+    /**
+     * Dispatch process-tree termination without waiting for Windows taskkill to
+     * finish walking every child. Callers must verify remaining PIDs separately.
+     *
+     * @param int[] $pids
+     * @return array{killed: int, failed: int, remaining: int[]}
+     */
+    public static function dispatchBatchKillProcessTrees(array $pids, bool $skipCheck = false): array
+    {
+        $result = [
+            'killed' => 0,
+            'failed' => 0,
+            'remaining' => [],
+        ];
+
+        if (empty($pids)) {
+            return $result;
+        }
+
+        $validPids = [];
+        foreach ($pids as $pid) {
+            $pid = (int) $pid;
+            if ($pid <= 0) {
+                continue;
+            }
+            if (!$skipCheck && !self::isProcessManagerCreated($pid)) {
+                $result['failed']++;
+                continue;
+            }
+            $validPids[$pid] = $pid;
+        }
+
+        if ($validPids === []) {
+            return $result;
+        }
+
+        if (IS_WIN) {
+            return self::dispatchBatchKillProcessTreesWindows(\array_values($validPids));
+        }
+
+        return self::batchKillProcessTrees(\array_values($validPids), true);
+    }
     
     /**
      * 批量并发创建进程（使用 Fiber）
@@ -2427,9 +2584,16 @@ class Processer
             }
         }
 
+        $pidResolutionItems = self::collectLaunchItemsNeedingPidResolution(
+            $batchLaunchItems,
+            $pidMap,
+            $waitForResults
+        );
         $resolvedPidMap = self::waitForManagedProcessLaunchBatch(
-            self::collectBlockingLaunchItemsNeedingPidResolution($batchLaunchItems, $pidMap),
-            5.0
+            $pidResolutionItems,
+            $waitForResults
+                ? 5.0
+                : self::resolveWindowsBatchCreateNonBlockingPidResolutionTimeout(\count($pidResolutionItems))
         );
 
         foreach ($batchLaunchItems as $item) {
@@ -2463,9 +2627,9 @@ class Processer
     }
 
     /**
-     * Non-blocking batch launches should not stall on best-effort managed PID
-     * resolution. They can continue and let later IPC register/ready updates
-     * fill in runtime state.
+     * Blocking callers may wait longer for managed PID resolution. Non-blocking
+     * WLS startup still needs a short best-effort PID pass, otherwise every
+     * child returns 0 and upper layers fall into slow recovery/adoption paths.
      *
      * @param array<int, array{key: string, block?: bool}> $launchItems
      * @param array<string, int> $pidMap
@@ -2473,11 +2637,39 @@ class Processer
      */
     private static function collectBlockingLaunchItemsNeedingPidResolution(array $launchItems, array $pidMap): array
     {
+        return self::collectLaunchItemsNeedingPidResolution($launchItems, $pidMap, true);
+    }
+
+    /**
+     * @param array<int, array{key: string, block?: bool}> $launchItems
+     * @param array<string, int> $pidMap
+     * @return array<int, array<string, mixed>>
+     */
+    private static function collectLaunchItemsNeedingPidResolution(
+        array $launchItems,
+        array $pidMap,
+        bool $blockingOnly
+    ): array
+    {
         return \array_values(\array_filter(
             $launchItems,
-            static fn (array $item): bool => (bool) ($item['block'] ?? false)
+            static fn (array $item): bool => (!$blockingOnly || (bool) ($item['block'] ?? false))
                 && (int) ($pidMap[(string) ($item['key'] ?? '')] ?? 0) <= 0
         ));
+    }
+
+    private static function resolveWindowsBatchCreateNonBlockingPidResolutionTimeout(int $pendingCount): float
+    {
+        if ($pendingCount <= 0) {
+            return 0.1;
+        }
+
+        $configured = (float) (Env::get('system.processer.windows_batch_create_nonblocking_pid_resolution_timeout_sec', 0) ?? 0);
+        if ($configured > 0.0) {
+            return \max(0.05, \min(3.0, $configured));
+        }
+
+        return \min(1.0, \max(0.2, 0.15 + ($pendingCount * 0.12)));
     }
 
     /**
@@ -2518,9 +2710,10 @@ class Processer
             $status = @\proc_get_status($process);
         }
 
-        if (($status['running'] ?? false) === false) {
-            @\proc_close($process);
-        }
+        // Intentionally skip proc_close(): on Windows the helper can be reported
+        // as exited while proc_close() still blocks behind the detached child
+        // process/console plumbing. The caller already closed pipes and only
+        // needs best-effort helper cleanup before the CLI exits.
     }
 
     private static function resolveWindowsBatchCreateHelperTimeout(int $expectedRows): float
@@ -2707,6 +2900,24 @@ class Processer
 
         [$phpBinary, $arguments] = self::splitPhpCommandForStartProcess($pname);
         $windowTitle = self::resolveWindowsForegroundWindowTitle($pname);
+        if (!empty($availableFunctions['proc_open'])) {
+            $result = self::launchWindowsForegroundPhpProcess($phpBinary, $arguments, BP, $windowTitle);
+            $directPid = (int) ($result['pid'] ?? 0);
+            if ($directPid > 0) {
+                return self::setPid($pname, $directPid);
+            }
+
+            $phpPid = self::waitForManagedProcessLaunch($pname, 5.0);
+            if ($phpPid > 0) {
+                return self::setPid($pname, $phpPid);
+            }
+            if ($enableLog && (string) ($result['error'] ?? '') !== '') {
+                self::setOutput($pname, "[WARN] windows foreground direct launch failed: " . (string) $result['error'] . PHP_EOL, true);
+            }
+
+            return 0;
+        }
+
         $scriptPath = self::writeWindowsForegroundLauncherScript($phpBinary, $arguments, BP, $windowTitle);
         if ($scriptPath === null) {
             if ($enableLog) {
@@ -2714,25 +2925,6 @@ class Processer
             }
 
             return 0;
-        }
-        if (!empty($availableFunctions['proc_open'])) {
-            $result = self::launchWindowsForegroundWrapperProcess($scriptPath, BP, $windowTitle);
-            $wrapperPid = (int) ($result['pid'] ?? 0);
-            // 即使 wrapper (cmd.exe) 启动成功，也需要等待真正的 PHP 进程出现并跟踪它。
-            // cmd.exe 可能是短期存在的（PHP 启动后它会等待 PHP 退出），
-            // 而 killProcessTree(cmd.exePID) 可能失败（cmd.exe 已退出，PHP 被 init 收养）。
-            // 所以必须找到 PHP Master 的 PID 并跟踪它。
-            $phpPid = self::waitForManagedProcessLaunch($pname, 5.0);
-            if ($phpPid > 0) {
-                return self::setPid($pname, $phpPid);
-            }
-            // 如果还没找到 PHP（可能还在启动），先用 wrapper PID 顶着
-            if ($wrapperPid > 0) {
-                return self::setPid($pname, $wrapperPid);
-            }
-            if ($enableLog && (string) ($result['error'] ?? '') !== '') {
-                self::setOutput($pname, "[WARN] foreground wrapper pid unavailable: " . (string) $result['error'] . PHP_EOL, true);
-            }
         }
 
         $launchCommand = self::buildWindowsForegroundStartCommand($scriptPath, BP, $windowTitle);
@@ -3656,7 +3848,7 @@ POWERSHELL;
         ];
 
         $pids = \array_values($pids);
-        $command = self::buildWindowsAsyncBatchTreeKillCommand($pids);
+        $command = self::buildWindowsBatchTreeKillCommand($pids);
         $output = [];
         $returnCode = 0;
         self::execute($command, $output, $returnCode);
@@ -3670,6 +3862,39 @@ POWERSHELL;
         foreach ($pids as $pid) {
             $result['killed']++;
             self::finalizeBatchGracefulKillPid($pid, 'force tree kill dispatched');
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param int[] $pids
+     * @return array{killed: int, failed: int, remaining: int[]}
+     */
+    private static function dispatchBatchKillProcessTreesWindows(array $pids): array
+    {
+        $result = [
+            'killed' => 0,
+            'failed' => 0,
+            'remaining' => [],
+        ];
+        if ($pids === []) {
+            return $result;
+        }
+
+        $command = self::buildWindowsAsyncBatchTreeKillCommand($pids);
+        $output = [];
+        $returnCode = 0;
+        self::execute($command, $output, $returnCode);
+        if ($returnCode !== 0) {
+            $result['failed'] += \count($pids);
+            $result['remaining'] = $pids;
+            return $result;
+        }
+
+        foreach ($pids as $pid) {
+            $result['killed']++;
+            self::finalizeBatchGracefulKillPid((int) $pid, 'force tree kill dispatched async');
         }
 
         return $result;
@@ -3796,22 +4021,6 @@ POWERSHELL;
     /**
      * @param int[] $pids
      */
-    private static function buildWindowsBatchTreeKillCommand(array $pids): string
-    {
-        $pidArgs = [];
-        foreach ($pids as $pid) {
-            $pid = (int) $pid;
-            if ($pid > 0) {
-                $pidArgs[] = '/PID ' . $pid;
-            }
-        }
-
-        return 'taskkill /F /T ' . \implode(' ', $pidArgs) . ' 2>NUL';
-    }
-
-    /**
-     * @param int[] $pids
-     */
     private static function buildWindowsAsyncBatchTreeKillCommand(array $pids): string
     {
         $pidArgs = [];
@@ -3825,6 +4034,22 @@ POWERSHELL;
         return 'cmd /d /c start "" /B cmd /d /c "taskkill /F /T '
             . \implode(' ', $pidArgs)
             . ' 1>NUL 2>NUL"';
+    }
+
+    /**
+     * @param int[] $pids
+     */
+    private static function buildWindowsBatchTreeKillCommand(array $pids): string
+    {
+        $pidArgs = [];
+        foreach ($pids as $pid) {
+            $pid = (int) $pid;
+            if ($pid > 0) {
+                $pidArgs[] = '/PID ' . $pid;
+            }
+        }
+
+        return 'taskkill /F /T ' . \implode(' ', $pidArgs) . ' 2>NUL';
     }
 
     /**
@@ -5511,29 +5736,27 @@ POWERSHELL;
 
         $pid = self::getProcessIdByPort($port);
         if ($pid <= 0) {
-            $ghostSuggestsWeline = $portIndexSuggestsWeline || self::nameIndexSuggestsWelinePort($port);
             return [
                 'in_use' => true,
                 'pid' => 0,
                 'pid_running' => false,
-                'is_weline' => $ghostSuggestsWeline,
-                'state' => $ghostSuggestsWeline ? 'weline' : 'orphan',
+                'is_weline' => false,
+                'state' => 'orphan',
             ];
         }
 
         $pidRunning = self::isRunningByPid($pid);
         if (!$pidRunning) {
-            $ghostSuggestsWeline = $portIndexSuggestsWeline || self::nameIndexSuggestsWelinePort($port);
             return [
                 'in_use' => true,
                 'pid' => $pid,
                 'pid_running' => false,
-                'is_weline' => $ghostSuggestsWeline,
-                'state' => $ghostSuggestsWeline ? 'weline' : 'orphan',
+                'is_weline' => false,
+                'state' => 'orphan',
             ];
         }
 
-        $isWeline = self::isWelineServerProcess($pid) || $portIndexSuggestsWeline;
+        $isWeline = $portIndexSuggestsWeline || self::isWelineServerProcess($pid);
         return [
             'in_use' => true,
             'pid' => $pid,

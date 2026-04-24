@@ -405,9 +405,9 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
                 return $this->collectDirectForceStopCandidatePids($info);
             }
 
-            protected function collectBaseResidualPids(string $name, ServerInstanceInfo $info): array
+            protected function collectDirectForceBaseResidualPids(ServerInstanceInfo $info): array
             {
-                unset($name, $info);
+                unset($info);
 
                 return [33780, 2604, 7704];
             }
@@ -502,7 +502,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
             }
         };
 
-        self::assertSame([101, 202, 303], $stop->collectDirectCandidates($info));
+        self::assertSame([101, 303], $stop->collectDirectCandidates($info));
         self::assertSame([101, 202, 303], $stop->collectCleanupCandidates($info->name, $info));
     }
 
@@ -548,8 +548,8 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
             }
         };
 
-        self::assertSame(7, $stop->terminate($info));
-        self::assertSame(['unit-prefix-terminate-4f7b'], $stop->prefixCleanupNames);
+        self::assertSame(0, $stop->terminate($info));
+        self::assertSame([], $stop->prefixCleanupNames);
     }
 
     private function invokeProtected(object $object, string $method, mixed ...$args): mixed

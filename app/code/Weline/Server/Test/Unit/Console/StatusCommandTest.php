@@ -23,7 +23,28 @@ final class StatusCommandTest extends TestCase
 {
     public function testFilterActiveInstancesIgnoresSharedExternalSidecarsForStoppedInstances(): void
     {
-        $status = new class extends Status {
+        $manager = new class extends \Weline\Server\Service\ServerInstanceManager {
+            public function getRawInstanceData(string $name): ?array
+            {
+                return match ($name) {
+                    'default' => [
+                        'master_enabled' => true,
+                        'services' => ['worker' => ['instances' => [['pid' => 1001]]]],
+                    ],
+                    'test' => [
+                        'master_enabled' => true,
+                        'services' => ['memory_server' => ['instances' => [['pid' => 2001]]]],
+                    ],
+                    default => null,
+                };
+            }
+        };
+
+        $status = new class($manager) extends Status {
+            public function __construct(private readonly \Weline\Server\Service\ServerInstanceManager $manager)
+            {
+            }
+
             /**
              * @param array<string, ServerInstanceInfo> $instances
              * @param array<int, array{pid: int, exists: bool, name?: string, command?: string, memory?: string, cpu?: string, start_time?: string}> $processInfoMap
@@ -32,6 +53,11 @@ final class StatusCommandTest extends TestCase
             public function filter(array $instances, array $processInfoMap): array
             {
                 return $this->filterActiveInstances($instances, $processInfoMap);
+            }
+
+            protected function getInstanceManager(): \Weline\Server\Service\ServerInstanceManager
+            {
+                return $this->manager;
             }
         };
 
@@ -63,6 +89,63 @@ final class StatusCommandTest extends TestCase
                 1001 => ['pid' => 1001, 'exists' => true],
                 2001 => ['pid' => 2001, 'exists' => true],
             ]
+        );
+
+        self::assertSame(['default'], \array_keys($active));
+    }
+
+    public function testFilterActiveInstancesKeepsStoppedMetadataWhenManagedServicePidStillExists(): void
+    {
+        $manager = new class extends \Weline\Server\Service\ServerInstanceManager {
+            public function getRawInstanceData(string $name): ?array
+            {
+                return match ($name) {
+                    'default' => [
+                        'lifecycle_state' => 'stopped',
+                        'master_enabled' => false,
+                        'pid' => 0,
+                        'services' => ['dispatcher' => ['instances' => [['pid' => 1001]]]],
+                    ],
+                    default => null,
+                };
+            }
+        };
+
+        $status = new class($manager) extends Status {
+            public function __construct(private readonly \Weline\Server\Service\ServerInstanceManager $manager)
+            {
+            }
+
+            /**
+             * @param array<string, ServerInstanceInfo> $instances
+             * @param array<int, array{pid: int, exists: bool, name?: string, command?: string, memory?: string, cpu?: string, start_time?: string}> $processInfoMap
+             * @return array<string, ServerInstanceInfo>
+             */
+            public function filter(array $instances, array $processInfoMap): array
+            {
+                return $this->filterActiveInstances($instances, $processInfoMap);
+            }
+
+            protected function getInstanceManager(): \Weline\Server\Service\ServerInstanceManager
+            {
+                return $this->manager;
+            }
+        };
+
+        $default = $this->createInstanceInfo('default', [
+            new ServiceInfo(
+                role: 'dispatcher',
+                displayName: 'Dispatcher',
+                instanceId: 1,
+                pid: 1001,
+                port: 443,
+                state: ServiceInstance::STATE_STOPPED
+            ),
+        ]);
+
+        $active = $status->filter(
+            ['default' => $default],
+            [1001 => ['pid' => 1001, 'exists' => true]]
         );
 
         self::assertSame(['default'], \array_keys($active));
@@ -158,7 +241,7 @@ final class StatusCommandTest extends TestCase
         ));
     }
 
-    public function testShowInstanceStatusUsesValidatedLookupForStaleCleanup(): void
+    public function testShowInstanceStatusUsesFastLookupAndLeavesLivenessToBatchProbe(): void
     {
         $manager = new class extends \Weline\Server\Service\ServerInstanceManager {
             /** @var array<int, array{name: string, validateStale: bool}> */
@@ -207,7 +290,7 @@ final class StatusCommandTest extends TestCase
         }
 
         self::assertSame(
-            [['name' => 'test', 'validateStale' => true]],
+            [['name' => 'test', 'validateStale' => false]],
             $manager->calls
         );
         self::assertTrue($status->showAllCalled);
