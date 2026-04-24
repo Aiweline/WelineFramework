@@ -31,6 +31,22 @@ namespace Weline\Framework\System\Process\Driver;
  */
 class WindowsProcessDriver extends AbstractProcessDriver
 {
+    /** @var array<string, true> */
+    private const DIRECT_BYPASS_SHELL_PROGRAMS = [
+        'powershell' => true,
+        'powershell.exe' => true,
+        'wmic' => true,
+        'wmic.exe' => true,
+        'taskkill' => true,
+        'taskkill.exe' => true,
+        'tasklist' => true,
+        'tasklist.exe' => true,
+        'netstat' => true,
+        'netstat.exe' => true,
+        'findstr' => true,
+        'findstr.exe' => true,
+    ];
+
     /**
      * 端口状态缓存 [port => ['inUse' => bool, 'time' => int]]
      */
@@ -116,6 +132,20 @@ class WindowsProcessDriver extends AbstractProcessDriver
     {
         return \strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN';
     }
+
+    /**
+     * Avoid routing core Windows process-management commands through
+     * cmd.exe /c. Some desktop sessions fail to initialize cmd.exe and show
+     * 0xc0000142 popups before the real process-management logic runs.
+     */
+    protected function executeCommand(string $command, array &$output = [], int &$exitCode = 0): bool
+    {
+        if ($this->tryExecuteCommandBypassShell($command, $output, $exitCode)) {
+            return true;
+        }
+
+        return parent::executeCommand($command, $output, $exitCode);
+    }
     
     /**
      * 检测 PowerShell 是否可用（结果缓存）
@@ -127,14 +157,14 @@ class WindowsProcessDriver extends AbstractProcessDriver
         }
         
         $functions = $this->detectAvailableFunctions();
-        if (!$functions['exec']) {
+        if (!$functions['proc_open']) {
             self::$powershellAvailable = false;
             return false;
         }
         
         $output = [];
         $exitCode = 0;
-        @\exec('powershell -NoProfile -Command "echo ok" 2>NUL', $output, $exitCode);
+        $this->executeCommand('powershell -NoProfile -Command "echo ok" 2>NUL', $output, $exitCode);
         self::$powershellAvailable = ($exitCode === 0 && !empty($output) && \trim($output[0]) === 'ok');
         
         return self::$powershellAvailable;
@@ -152,17 +182,268 @@ class WindowsProcessDriver extends AbstractProcessDriver
         }
         
         $functions = $this->detectAvailableFunctions();
-        if (!$functions['exec']) {
+        if (!$functions['proc_open']) {
             self::$wmicAvailable = false;
             return false;
         }
         
         $output = [];
         $exitCode = 0;
-        @\exec('wmic os get caption 2>NUL', $output, $exitCode);
+        $this->executeCommand('wmic os get caption 2>NUL', $output, $exitCode);
         self::$wmicAvailable = ($exitCode === 0 && !empty($output));
         
         return self::$wmicAvailable;
+    }
+
+    private function tryExecuteCommandBypassShell(string $command, array &$output, int &$exitCode): bool
+    {
+        $functions = $this->detectAvailableFunctions();
+        if (!$functions['proc_open']) {
+            return false;
+        }
+
+        $prepared = $this->prepareDirectBypassShellCommand($command);
+        if ($prepared === null) {
+            return false;
+        }
+
+        $descriptors = [
+            0 => ['file', 'NUL', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $lastError = null;
+        \set_error_handler(static function ($type, $msg) use (&$lastError): bool {
+            $lastError = $msg;
+            return true;
+        });
+        try {
+            $process = @\proc_open(
+                $prepared['argv'],
+                $descriptors,
+                $pipes,
+                null,
+                null,
+                ['bypass_shell' => true]
+            );
+        } finally {
+            \restore_error_handler();
+        }
+
+        if (!\is_resource($process)) {
+            return false;
+        }
+
+        $stdout = '';
+        $stderr = '';
+        if (isset($pipes[1])) {
+            $stdout = (string) (\stream_get_contents($pipes[1]) ?: '');
+            @\fclose($pipes[1]);
+        }
+        if (isset($pipes[2])) {
+            $stderr = (string) (\stream_get_contents($pipes[2]) ?: '');
+            @\fclose($pipes[2]);
+        }
+        if (isset($pipes[0])) {
+            @\fclose($pipes[0]);
+        }
+
+        $exitCode = @\proc_close($process);
+
+        if ($prepared['merge_stderr'] && $stderr !== '') {
+            if ($stdout !== '' && !\str_ends_with($stdout, "\n") && !\str_ends_with($stdout, "\r")) {
+                $stdout .= PHP_EOL;
+            }
+            $stdout .= $stderr;
+        }
+
+        if ($stdout === '') {
+            $output = [];
+        } else {
+            $output = \preg_split('/\r\n|\r|\n/', \rtrim($stdout, "\r\n")) ?: [];
+        }
+
+        if ($exitCode === -1 && $lastError !== null) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @return array{argv: list<string>, merge_stderr: bool}|null
+     */
+    private function prepareDirectBypassShellCommand(string $command): ?array
+    {
+        $command = \trim($command);
+        if ($command === '') {
+            return null;
+        }
+
+        [$command, $mergeStderr] = $this->stripBypassShellRedirections($command);
+        if ($command === '' || $this->containsUnsupportedShellSyntax($command)) {
+            return null;
+        }
+
+        $argv = $this->tokenizeDirectCommand($command);
+        if ($argv === []) {
+            return null;
+        }
+
+        $program = \strtolower(\basename(\str_replace('\\', '/', (string) ($argv[0] ?? ''))));
+        if (!isset(self::DIRECT_BYPASS_SHELL_PROGRAMS[$program])) {
+            return null;
+        }
+
+        return [
+            'argv' => $argv,
+            'merge_stderr' => $mergeStderr,
+        ];
+    }
+
+    /**
+     * @return array{0: string, 1: bool}
+     */
+    private function stripBypassShellRedirections(string $command): array
+    {
+        $mergeStderr = false;
+        $patterns = [
+            '/\s+2>\s*NUL\b/i',
+            '/\s+1>\s*NUL\b/i',
+            '/\s+>\s*NUL\b/i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            $command = \preg_replace($pattern, '', $command) ?? $command;
+        }
+
+        $command = \preg_replace_callback(
+            '/\s+2>\s*&1\b/i',
+            static function () use (&$mergeStderr): string {
+                $mergeStderr = true;
+                return '';
+            },
+            $command
+        ) ?? $command;
+
+        return [\trim($command), $mergeStderr];
+    }
+
+    private function containsUnsupportedShellSyntax(string $command): bool
+    {
+        $inQuotes = false;
+        $length = \strlen($command);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $command[$i];
+            if ($char === '"') {
+                $inQuotes = !$inQuotes;
+                continue;
+            }
+
+            if (!$inQuotes && (\in_array($char, ['|', '&', '<', '>'], true))) {
+                return true;
+            }
+        }
+
+        return $inQuotes;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function tokenizeDirectCommand(string $command): array
+    {
+        $tokens = [];
+        $buffer = '';
+        $inQuotes = false;
+        $length = \strlen($command);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $command[$i];
+            if ($char === '"') {
+                $inQuotes = !$inQuotes;
+                continue;
+            }
+
+            if (!$inQuotes && \ctype_space($char)) {
+                if ($buffer !== '') {
+                    $tokens[] = $buffer;
+                    $buffer = '';
+                }
+                continue;
+            }
+
+            $buffer .= $char;
+        }
+
+        if ($inQuotes) {
+            return [];
+        }
+
+        if ($buffer !== '') {
+            $tokens[] = $buffer;
+        }
+
+        return $tokens;
+    }
+
+    private function toPowerShellSingleQuoted(string $value): string
+    {
+        return "'" . \str_replace("'", "''", $value) . "'";
+    }
+
+    /**
+     * @param list<string> $values
+     */
+    private function buildPowerShellArrayLiteral(array $values): string
+    {
+        if ($values === []) {
+            return '@()';
+        }
+
+        return '@(' . \implode(',', \array_map(
+            fn (string $value): string => $this->toPowerShellSingleQuoted($value),
+            $values
+        )) . ')';
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function buildPowerShellStartProcessPidCommand(
+        string $filePath,
+        array $arguments,
+        string $workingDirectory = '',
+        string $windowStyle = 'Hidden',
+        string $stdoutLog = '',
+        string $stderrLog = ''
+    ): string {
+        $script = [
+            '$ErrorActionPreference = ' . $this->toPowerShellSingleQuoted('Stop'),
+            '$startArgs = @{}',
+            '$startArgs.FilePath = ' . $this->toPowerShellSingleQuoted($filePath),
+            '$startArgs.WindowStyle = ' . $this->toPowerShellSingleQuoted($windowStyle),
+            '$startArgs.PassThru = $true',
+            '$startArgs.ErrorAction = ' . $this->toPowerShellSingleQuoted('Stop'),
+            '$argList = ' . $this->buildPowerShellArrayLiteral($arguments),
+            'if ($argList.Count -gt 0) { $startArgs.ArgumentList = $argList }',
+        ];
+
+        if ($workingDirectory !== '') {
+            $script[] = '$startArgs.WorkingDirectory = ' . $this->toPowerShellSingleQuoted($workingDirectory);
+        }
+        if ($stdoutLog !== '') {
+            $script[] = '$startArgs.RedirectStandardOutput = ' . $this->toPowerShellSingleQuoted($stdoutLog);
+        }
+        if ($stderrLog !== '') {
+            $script[] = '$startArgs.RedirectStandardError = ' . $this->toPowerShellSingleQuoted($stderrLog);
+        }
+
+        $script[] = '$p = Start-Process @startArgs';
+        $script[] = '[Console]::Out.WriteLine([string]$p.Id)';
+
+        return 'powershell -NoProfile -Command "' . \implode('; ', $script) . '" 2>NUL';
     }
     
     /**
@@ -229,7 +510,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
         // 策略4：tasklist 全表扫描（最后手段，最慢但最通用）
         // 先搜索 weline- 前缀进程
         $output = [];
-        $this->executeCommand('tasklist /V /FO CSV 2>NUL | findstr /I "weline-"', $output);
+        $this->executeCommand('tasklist /V /FO CSV 2>NUL', $output);
         foreach ($output as $line) {
             if (\stripos($line, $pname) !== false) {
                 $parts = \str_getcsv($line, ',', '"', '');
@@ -243,10 +524,8 @@ class WindowsProcessDriver extends AbstractProcessDriver
         }
         
         // 再搜索 php 进程
-        $output = [];
-        $this->executeCommand('tasklist /V /FO CSV 2>NUL | findstr /I "php"', $output);
         foreach ($output as $line) {
-            if (\stripos($line, $pname) !== false) {
+            if (\stripos($line, 'php') !== false && \stripos($line, $pname) !== false) {
                 $parts = \str_getcsv($line, ',', '"', '');
                 if (\count($parts) > 1) {
                     $pid = $this->sanitizePid($parts[1]);
@@ -265,16 +544,22 @@ class WindowsProcessDriver extends AbstractProcessDriver
      */
     public function startBuiltInServer(string $docRoot, int $port, string $logFile): int
     {
-        $functions = $this->detectAvailableFunctions();
-        
-        if (!$functions['exec']) {
-            return 0;
+        $uniqueLog = \str_replace('.log', '_' . $port . '.log', $logFile);
+        $logDir = \dirname($uniqueLog);
+        if (!\is_dir($logDir)) {
+            @\mkdir($logDir, 0755, true);
         }
-        
+
         // 优先使用 PowerShell Start-Process -PassThru 获取 PID
         if ($this->isPowerShellAvailable()) {
-            $escapedDocRoot = \str_replace("'", "''", $docRoot);
-            $psCmd = "powershell -NoProfile -Command \"(\$p = Start-Process -FilePath 'php' -ArgumentList '-S','localhost:{$port}','-t','{$escapedDocRoot}' -WindowStyle Hidden -PassThru).Id\"";
+            $psCmd = $this->buildPowerShellStartProcessPidCommand(
+                PHP_BINARY,
+                ['-S', 'localhost:' . $port, '-t', $docRoot],
+                '',
+                'Hidden',
+                $uniqueLog,
+                $uniqueLog . '.err'
+            );
             $out = [];
             $code = 0;
             $this->executeCommand($psCmd, $out, $code);
@@ -283,29 +568,6 @@ class WindowsProcessDriver extends AbstractProcessDriver
                 if ($pid > 0) {
                     return $pid;
                 }
-            }
-        }
-        
-        // 回退：使用 start /B 并轮询 netstat 查找 pid
-        $uniqueLog = \str_replace('.log', '_' . $port . '.log', $logFile);
-        $logDir = \dirname($uniqueLog);
-        if (!\is_dir($logDir)) {
-            @\mkdir($logDir, 0755, true);
-        }
-        $cmd = \sprintf('start /B "" php -S localhost:%d -t "%s" > "%s" 2>&1', $port, $docRoot, $uniqueLog);
-        
-        if ($functions['popen']) {
-            @\pclose(@\popen($cmd, 'r'));
-        } else {
-            @\exec($cmd);
-        }
-        
-        // 轮询查找（最多等待 5 秒）
-        for ($i = 0; $i < 50; $i++) {
-            $this->waitMs(100);
-            $pid = $this->getProcessIdByPort($port);
-            if ($pid > 0) {
-                return $pid;
             }
         }
         
@@ -317,43 +579,31 @@ class WindowsProcessDriver extends AbstractProcessDriver
      */
     public function startBackgroundProcess(string $command, string $logFile, bool $block = false): int
     {
-        $functions = $this->detectAvailableFunctions();
-        
-        if (!$functions['exec']) {
-            return 0;
-        }
-        
         // 使用 PowerShell Start-Process -PassThru 获取 PID
         if ($this->isPowerShellAvailable()) {
-            // PowerShell 单引号中用 '' 转义单引号
-            $escapedCommand = \str_replace("'", "''", $command);
-            $escapedLog = \str_replace("'", "''", $logFile);
-            $psCmd = "powershell -NoProfile -Command \"(\$p = Start-Process -FilePath 'cmd' -ArgumentList '/c','{$escapedCommand}' -WindowStyle Hidden -PassThru -RedirectStandardOutput '{$escapedLog}').Id\"";
-            $out = [];
-            $code = 0;
-            $this->executeCommand($psCmd, $out, $code);
-            if ($code === 0 && !empty($out[0])) {
-                $pid = $this->sanitizePid($out[0]);
-                if ($pid > 0) {
-                    return $pid;
+            $argv = $this->tokenizeDirectCommand($command);
+            if ($argv !== []) {
+                $filePath = (string) \array_shift($argv);
+                $psCmd = $this->buildPowerShellStartProcessPidCommand(
+                    $filePath,
+                    \array_values($argv),
+                    BP,
+                    $block ? 'Hidden' : 'Minimized',
+                    $logFile,
+                    $logFile !== '' ? $logFile . '.err' : ''
+                );
+                $out = [];
+                $code = 0;
+                $this->executeCommand($psCmd, $out, $code);
+                if ($code === 0 && !empty($out[0])) {
+                    $pid = $this->sanitizePid($out[0]);
+                    if ($pid > 0) {
+                        return $pid;
+                    }
                 }
             }
         }
-        
-        // 回退：使用 start（通用）
-        $escapedBP = \str_replace('"', '', BP);
-        if ($block) {
-            $cmd = 'start /B /D "' . $escapedBP . '" ' . $command . ' > "' . $logFile . '" 2>&1';
-        } else {
-            $cmd = 'start /min /D "' . $escapedBP . '" ' . $command . ' > "' . $logFile . '" 2>&1';
-        }
-        
-        if ($functions['popen']) {
-            @\pclose(@\popen($cmd, 'r'));
-        } else {
-            @\exec($cmd);
-        }
-        
+
         return 0;
     }
     

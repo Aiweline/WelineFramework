@@ -309,13 +309,71 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
             'ports' => [19001],
         ]);
 
-        self::assertSame([['type' => 'audit_worker_health']], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
+        self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
         self::assertCount(1, $client->sent);
         $ack = \json_decode(\trim($client->sent[0]), true);
         self::assertSame(ControlMessage::TYPE_WORKER_POOL_ACK, $ack['type'] ?? null);
         self::assertSame(ControlMessage::ROLE_WORKER, $ack['role'] ?? null);
         self::assertSame(19001, $ack['port'] ?? null);
         self::assertTrue((bool) ($ack['in_pool'] ?? false));
+    }
+
+    public function testBusinessSetWorkerPoolTrustsMasterReadyAndAcknowledgesImmediately(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->getMockBuilder(PassthroughCore::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods([
+                'setWorkerPortsFromMasterReady',
+                'getWorkerCount',
+                'getWorkerPorts',
+                'getMaintenanceWorkerPorts',
+                'getWorkerHealthSummary',
+            ])
+            ->getMock();
+
+        $core->expects(self::once())
+            ->method('setWorkerPortsFromMasterReady')
+            ->with([19001, 19002])
+            ->willReturn(['accepted' => [19001, 19002], 'rejected' => []]);
+        $core->method('getWorkerCount')->willReturn(2);
+        $core->method('getWorkerPorts')->willReturn([19001, 19002]);
+        $core->method('getMaintenanceWorkerPorts')->willReturn([]);
+        $core->method('getWorkerHealthSummary')->willReturn(['healthy' => 2, 'total' => 2]);
+
+        $sent = [];
+        $client = $this->createMock(ChildControlClientInterface::class);
+        $client->method('isConnected')->willReturn(true);
+        $client->method('send')->willReturnCallback(static function (string $message, bool $disconnectOnWriteOverflow = true) use (&$sent): bool {
+            unset($disconnectOnWriteOverflow);
+            $sent[] = $message;
+            return true;
+        });
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'ipcClient', $client);
+        $this->setProperty($dispatcher, 'port', 9443);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', []);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'handleIpcMessage');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher, [
+            'type' => ControlMessage::TYPE_SET_WORKER_POOL,
+            'role' => ControlMessage::ROLE_WORKER,
+            'ports' => [19001, 19002],
+            'workers' => [
+                ['slot_id' => 'worker#1', 'lease_id' => 'lease-1', 'generation' => 1, 'port' => 19001, 'state' => 'ready'],
+                ['slot_id' => 'worker#2', 'lease_id' => 'lease-2', 'generation' => 1, 'port' => 19002, 'state' => 'ready'],
+            ],
+        ]);
+
+        self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
+        self::assertCount(2, $sent);
+        $ack = \json_decode(\trim($sent[0]), true);
+        self::assertSame(ControlMessage::TYPE_WORKER_POOL_ACK, $ack['type'] ?? null);
+        self::assertSame(19001, $ack['port'] ?? null);
+        self::assertTrue((bool)($ack['in_pool'] ?? false));
+        self::assertSame('worker#1', $ack['slot_id'] ?? null);
     }
 
     public function testDeferredSetWorkerPoolKeepsMaintenanceFallbackInactiveWhenPreviousPoolIsRetained(): void

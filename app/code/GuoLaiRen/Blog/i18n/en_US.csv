@@ -77,13 +77,13 @@ URL别名已存在，请更换一个,"URL slug already exists"
 "Blog AI 发文失败（关键词 %{keyword}，log_id %{log_id}）：%{error}","Blog AI publish failed (keyword %{keyword}, log_id %{log_id}): %{error}"
 该画像关键词均已用于发文，本次按配额复用关键词继续生成。,"All profile keywords were already used for posts; reusing keywords for this run to meet daily quota."
 "自动发文完成：本次发布 %{count} 篇","Auto publish done: %{count} posts published"
-生成异常：,"Generation errors: "
-部分关键词生成失败：,"Some keywords failed: "
+生成异常：,"Generation errors:"
+部分关键词生成失败：,"Some keywords failed:"
 "AI 发文已完成，但站点缓存清理失败，请检查缓存服务。","AI 发文已完成，但站点缓存清理失败，请检查缓存服务。"
 "AI 发文已完成，但部分 CDN 缓存清理失败，请检查 CDN 配置。","AI 发文已完成，但部分 CDN 缓存清理失败，请检查 CDN 配置。"
 "Blog AI 发文后清理 CDN 缓存失败：site_id=%{site_id} domain=%{domain} error=%{error}","Blog AI 发文后清理 CDN 缓存失败：site_id=%{site_id} domain=%{domain} error=%{error}"
 "AI 发文已完成，但缓存清理发生异常：%{error}","AI 发文已完成，但缓存清理发生异常：%{error}"
-"[站点#%{s} 画像#%{p}]"," [site #%{s} profile #%{p}]"
+"[站点#%{s} 画像#%{p}]","[site #%{s} profile #%{p}]"
 请先在「趋势站点配额」中配置：站点、画像、每日篇数、默认分类。,请先在「趋势站点配额」中配置：站点、画像、每日篇数、默认分类。
 配额未设置默认分类,配额未设置默认分类
 "默认分类不存在（请检查配额中的分类 ID）","Default category missing (check category ID on quota)"
@@ -271,8 +271,8 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 篇,posts
 "确定将选中的 %{n} 篇草稿审批发布吗？","确定将选中的 %{n} 篇草稿审批发布吗？"
 "确定删除选中的 %{n} 篇文章？此操作不可恢复。","确定删除选中的 %{n} 篇文章？此操作不可恢复。"
-确定删除选中的,"Delete "
-篇文章？此操作不可恢复。," selected posts? This cannot be undone."
+确定删除选中的,Delete
+篇文章？此操作不可恢复。,"selected posts? This cannot be undone."
 任务正在执行中，确定要关闭吗？,任务正在执行中，确定要关闭吗？
 生成中...,Generating...
 成功生成,成功生成

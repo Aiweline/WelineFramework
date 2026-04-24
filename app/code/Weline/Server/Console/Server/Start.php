@@ -3801,6 +3801,215 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
 
         return $args;
     }
+
+    /**
+     * Windows can briefly report a LISTENING port whose PID no longer exists.
+     * If that port is still recorded in this instance runtime, treat it as a
+     * recoverable WLS residue and let server:stop perform the instance cleanup.
+     *
+     * @param array<int> $ports
+     */
+    protected function releaseRuntimeRecordedOrphanPorts(string $instanceName, array $ports, string $label = 'Port'): bool
+    {
+        $recordedPorts = $this->filterRuntimeRecordedPortsForInstance($instanceName, $ports);
+        if ($recordedPorts === []) {
+            return false;
+        }
+
+        $this->printer->warning(__(
+            '%{1} 端口 %{2} 与旧实例 [%{3}] 运行态匹配，执行本实例残留清理...',
+            [$label, \implode(', ', $recordedPorts), $instanceName]
+        ));
+
+        $mainStop = ObjectManager::getInstance(MainStop::class);
+        $mainStop->execute($this->buildStopExistingServerArgs($instanceName, true), []);
+
+        return $this->waitForSpecificPortsReleased($recordedPorts, 15.0);
+    }
+
+    /**
+     * @param array<int> $ports
+     * @return list<int>
+     */
+    protected function filterRuntimeRecordedPortsForInstance(string $instanceName, array $ports): array
+    {
+        $recordedLookup = \array_fill_keys($this->collectRuntimeRecordedPortsForInstance($instanceName), true);
+        if ($recordedLookup === []) {
+            return [];
+        }
+
+        return \array_values(\array_unique(\array_filter(
+            \array_map('intval', $ports),
+            static fn (int $port): bool => $port > 0 && isset($recordedLookup[$port])
+        )));
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function collectRuntimeRecordedPortsForInstance(string $instanceName): array
+    {
+        $ports = [];
+
+        try {
+            $info = $this->getInstanceManager()->getInstanceInfo($instanceName, false);
+        } catch (\Throwable) {
+            $info = null;
+        }
+
+        if ($info !== null) {
+            foreach ([$info->port, $info->controlPort, $info->httpRedirectPort, $info->workerBasePort] as $port) {
+                $port = (int) $port;
+                if ($port > 0) {
+                    $ports[] = $port;
+                }
+            }
+
+            $workerCount = \max(1, (int) $info->workerCount);
+            if ($info->workerBasePort > 0 && $workerCount > 1) {
+                for ($offset = 1; $offset < $workerCount; $offset++) {
+                    $ports[] = $info->workerBasePort + $offset;
+                }
+            }
+
+            foreach ($info->services as $service) {
+                if ($this->isRuntimeSharedStateRole((string) $service->role)
+                    || (bool) ($service->metadata['shared_external'] ?? false)) {
+                    continue;
+                }
+                $port = (int) ($service->port ?? 0);
+                if ($port > 0) {
+                    $ports[] = $port;
+                }
+            }
+        }
+
+        $instanceFile = $this->getRuntimeInstanceFile($instanceName);
+        if (\is_file($instanceFile)) {
+            $raw = @\file_get_contents($instanceFile);
+            $data = \is_string($raw) ? \json_decode($raw, true) : null;
+            if (\is_array($data)) {
+                $ports = \array_merge($ports, $this->collectRuntimePortsFromArray($data));
+                if (\is_array($data['current_snapshot'] ?? null)) {
+                    $ports = \array_merge($ports, $this->collectRuntimePortsFromArray($data['current_snapshot']));
+                }
+                $records = \is_array($data['instance_records'] ?? null) ? $data['instance_records'] : [];
+                $latestRecord = $records !== [] ? \end($records) : null;
+                if (\is_array($latestRecord)) {
+                    $ports = \array_merge($ports, $this->collectRuntimePortsFromArray($latestRecord));
+                }
+            }
+        }
+
+        $ports = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $ports),
+            static fn (int $port): bool => $port > 0
+        )));
+        \sort($ports);
+
+        return $ports;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return list<int>
+     */
+    protected function collectRuntimePortsFromArray(array $data): array
+    {
+        $ports = [];
+        foreach (['port', 'worker_port', 'worker_base_port', 'control_port', 'dispatcher_port', 'http_redirect_port'] as $field) {
+            $port = (int) ($data[$field] ?? 0);
+            if ($port > 0) {
+                $ports[] = $port;
+            }
+        }
+
+        $workerPorts = $this->normalizeWorkerPorts($data['worker_ports'] ?? []);
+        if ($workerPorts !== []) {
+            $ports = \array_merge($ports, $workerPorts);
+        }
+
+        foreach (['worker_port', 'worker_base_port'] as $baseField) {
+            $basePort = (int) ($data[$baseField] ?? 0);
+            $count = \max(1, (int) ($data['count'] ?? 1));
+            if ($basePort <= 0 || $count <= 1) {
+                continue;
+            }
+            for ($offset = 1; $offset < $count; $offset++) {
+                $ports[] = $basePort + $offset;
+            }
+        }
+
+        $services = \is_array($data['services'] ?? null) ? $data['services'] : [];
+        foreach ($services as $role => $roleData) {
+            if ($this->isRuntimeSharedStateRole((string) $role)
+                || !\is_array($roleData)
+                || !\is_array($roleData['instances'] ?? null)) {
+                continue;
+            }
+            foreach ($roleData['instances'] as $serviceRecord) {
+                if (!\is_array($serviceRecord)) {
+                    continue;
+                }
+                $metadata = \is_array($serviceRecord['metadata'] ?? null) ? $serviceRecord['metadata'] : [];
+                if ((bool) ($metadata['shared_external'] ?? false)) {
+                    continue;
+                }
+                $port = (int) ($serviceRecord['port'] ?? 0);
+                if ($port > 0) {
+                    $ports[] = $port;
+                }
+            }
+        }
+
+        return \array_values(\array_unique(\array_filter(
+            \array_map('intval', $ports),
+            static fn (int $port): bool => $port > 0
+        )));
+    }
+
+    protected function isRuntimeSharedStateRole(string $role): bool
+    {
+        return \in_array($role, ['session_server', 'memory_server'], true);
+    }
+
+    /**
+     * @param array<int> $ports
+     */
+    protected function waitForSpecificPortsReleased(array $ports, float $timeoutSeconds = 12.0): bool
+    {
+        $ports = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $ports),
+            static fn (int $port): bool => $port > 0
+        )));
+        if ($ports === []) {
+            return true;
+        }
+
+        $deadline = \microtime(true) + \max(0.1, $timeoutSeconds);
+        do {
+            Processer::clearPortCache();
+            $remaining = [];
+            foreach ($ports as $port) {
+                if (Processer::isPortInUse($port)) {
+                    $remaining[] = $port;
+                }
+            }
+            if ($remaining === []) {
+                return true;
+            }
+            SchedulerSystem::usleep(300000);
+        } while (\microtime(true) < $deadline);
+
+        Processer::clearPortCache();
+        foreach ($ports as $port) {
+            if (Processer::isPortInUse($port)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
     
     /**
      * 检查并释放端口
@@ -3835,6 +4044,10 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
                 $this->printer->warning(__('%{1} 端口 %{2} 处于异常占用状态（系统返回的 PID 已失效），尝试端口级兜底清壳...', [$label, $port]));
                 Processer::forceReleasePort($port);
                 if (!Processer::isPortInUse($port)) {
+                    $this->printer->success(__('%{1} 端口 %{2} 可用 ✓', [$label, $port]));
+                    return true;
+                }
+                if ($this->releaseRuntimeRecordedOrphanPorts($instanceName, [$port], $label)) {
                     $this->printer->success(__('%{1} 端口 %{2} 可用 ✓', [$label, $port]));
                     return true;
                 }
@@ -3934,6 +4147,9 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
                     if (!Processer::isPortInUse($p)) {
                         continue;
                     }
+                    if ($this->releaseRuntimeRecordedOrphanPorts($instanceName, [$p], 'Worker')) {
+                        continue;
+                    }
                     $this->printer->error(__('端口 %{1} 异常占用兜底清壳后仍未释放', [$p]));
                 } else {
                     $this->printer->error(__('端口 %{1} 被非框架进程占用，不予杀死', [$p]));
@@ -3941,6 +4157,16 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
                 $this->printer->note(__('请手动停止占用该端口的进程，或更换端口'));
                 return false;
             }
+        }
+
+        $portsInUse = \array_values(\array_filter(
+            $portsInUse,
+            static fn (int $p): bool => Processer::isPortInUse($p)
+        ));
+        if (empty($portsInUse)) {
+            $this->printer->success(__('端口检查通过'));
+            echo "\n";
+            return true;
         }
 
         $maxAttempts = 3;

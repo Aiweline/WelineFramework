@@ -102,6 +102,55 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         $this->assertSame(11, $scope['preview_page_options'][0]['page_id']);
     }
 
+    public function testNormalizeConfirmedPlanFlagRestoresStaleFlagFromConfirmedBlueprint(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $scope = [
+            'plan_confirmed' => 0,
+            'execution_blueprint' => [
+                'signature' => 'stage-one-sig',
+                'tasks' => [['task_key' => 'home:hero']],
+            ],
+            'execution_blueprint_draft' => [
+                'signature' => 'stage-one-sig',
+                'tasks' => [['task_key' => 'home:hero']],
+            ],
+            'execution_blueprint_confirmed_signature' => 'stage-one-sig',
+            'execution_blueprint_confirmed_at' => '2026-04-24 12:00:00',
+        ];
+
+        $normalized = $service->normalizeConfirmedPlanFlag($scope);
+
+        self::assertTrue($service->hasConfirmedStageOnePlanForTaskPlan($normalized));
+        self::assertSame(1, (int)($normalized['plan_confirmed'] ?? 0));
+        self::assertSame('2026-04-24 12:00:00', (string)($normalized['plan_confirmed_at'] ?? ''));
+    }
+
+    public function testNormalizeConfirmedPlanFlagDoesNotRestoreWhenDraftDiffersFromConfirmedBlueprint(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $scope = [
+            'plan_confirmed' => 0,
+            'execution_blueprint' => [
+                'signature' => 'confirmed-sig',
+                'tasks' => [['task_key' => 'home:hero']],
+            ],
+            'execution_blueprint_draft' => [
+                'signature' => 'new-draft-sig',
+                'tasks' => [['task_key' => 'home:hero']],
+            ],
+            'execution_blueprint_confirmed_signature' => 'confirmed-sig',
+            'execution_blueprint_confirmed_at' => '2026-04-24 12:00:00',
+        ];
+
+        $normalized = $service->normalizeConfirmedPlanFlag($scope);
+
+        self::assertFalse($service->hasConfirmedStageOnePlanForTaskPlan($normalized));
+        self::assertSame(0, (int)($normalized['plan_confirmed'] ?? 0));
+    }
+
     public function testNormalizeScopeResolvesPreviewTypeFromVirtualPagesWhenMaterializedPageIsMissing(): void
     {
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());

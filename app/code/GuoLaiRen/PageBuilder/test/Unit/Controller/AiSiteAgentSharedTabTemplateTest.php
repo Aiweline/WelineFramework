@@ -98,6 +98,28 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertStringContainsString('TARGET_DOMAIN_REQUIRED', $controller);
     }
 
+    public function testConfirmUpdatePlanStartsPlanFlowWithoutBuildUrl(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 3);
+        $workspace = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace.phtml');
+        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $compiledScriptPath = $moduleRoot . '/view/tpl/zh_Hans_CN/templates/Backend/AiSiteAgent/workspace/com_script-main.phtml';
+        $compiledScript = \is_file($compiledScriptPath) ? \file_get_contents($compiledScriptPath) : null;
+
+        self::assertIsString($workspace);
+        self::assertIsString($script);
+        self::assertStringContainsString('$runVirtualThemeUrl = \'\';', $workspace);
+        self::assertStringNotContainsString('if (!runVirtualThemeUrl) { return; }', $script);
+        self::assertStringContainsString('if (!startPlanUrl) {', $script);
+        self::assertStringContainsString('toast(\'error\', messages.planStartUnavailable);', $script);
+        self::assertStringContainsString('startPlanGenerationForSelection(triggerBtn, pageTypes);', $script);
+        if (\is_string($compiledScript)) {
+            self::assertStringNotContainsString('if (!runVirtualThemeUrl) { return; }', $compiledScript);
+            self::assertStringContainsString('if (!startPlanUrl) {', $compiledScript);
+            self::assertStringContainsString('toast(\'error\', messages.planStartUnavailable);', $compiledScript);
+        }
+    }
+
     public function testStageTwoConfirmWorkspaceShowsTaskProgress(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);

@@ -293,32 +293,82 @@ class CodeValidator
         }
 
         // 创建临时文件
-        $tempFile = tempnam(sys_get_temp_dir(), 'php_syntax_check_');
-        if ($tempFile === false) {
+        $tempFile = sys_get_temp_dir()
+            . DIRECTORY_SEPARATOR
+            . 'php_syntax_check_'
+            . str_replace('.', '', uniqid('', true))
+            . '.php';
+        if (@file_put_contents($tempFile, $testCode) === false) {
             return ['valid' => true, 'error' => null];
         }
-
-        file_put_contents($tempFile, $testCode);
 
         // 执行语法检查
         $output = [];
         $returnCode = 0;
-        exec('php -l ' . escapeshellarg($tempFile) . ' 2>&1', $output, $returnCode);
+        $phpBinary = \PHP_BINARY !== '' ? \PHP_BINARY : 'php';
+        exec(escapeshellarg($phpBinary) . ' -d display_errors=1 -l ' . escapeshellarg($tempFile) . ' 2>&1', $output, $returnCode);
 
         // 删除临时文件
         @unlink($tempFile);
 
         if ($returnCode !== 0) {
-            $errorMessage = implode("\n", $output);
-            $errorMessage = preg_replace('/in\s+[^\s]+\s+on\s+line/', 'on line', $errorMessage);
-            $errorMessage = preg_replace('/Errors parsing [^\n]+/', '', $errorMessage);
+            $rawErrorMessage = trim(implode("\n", $output));
+            $errorMessage = $this->normalizePhpLintError($rawErrorMessage, $testCode, $returnCode);
             return [
                 'valid' => false,
-                'error' => 'PHP语法错误: ' . trim($errorMessage),
+                'error' => 'PHP语法错误: ' . $errorMessage,
             ];
         }
 
         return ['valid' => true, 'error' => null];
+    }
+
+    private function normalizePhpLintError(string $rawErrorMessage, string $code, int $returnCode): string
+    {
+        $lineNumber = 0;
+        if (preg_match('/on\s+line\s+(\d+)/i', $rawErrorMessage, $matches) === 1) {
+            $lineNumber = (int)($matches[1] ?? 0);
+        }
+
+        $errorMessage = preg_replace('/\s*Errors parsing [^\n]+/i', '', $rawErrorMessage) ?? $rawErrorMessage;
+        $errorMessage = preg_replace('/\s+in\s+.+?\s+on\s+line\s+/i', ' on line ', $errorMessage) ?? $errorMessage;
+        $errorMessage = trim($errorMessage);
+        if ($errorMessage === '') {
+            $errorMessage = $rawErrorMessage !== ''
+                ? $rawErrorMessage
+                : 'php -l returned code ' . $returnCode . ' without details';
+        }
+
+        $excerpt = $this->buildSyntaxLineExcerpt($code, $lineNumber);
+        if ($excerpt !== '' && !str_contains($errorMessage, $excerpt)) {
+            $errorMessage .= ' | near line ' . $lineNumber . ': ' . $excerpt;
+        }
+
+        return $errorMessage;
+    }
+
+    private function buildSyntaxLineExcerpt(string $code, int $lineNumber): string
+    {
+        if ($lineNumber <= 0) {
+            return '';
+        }
+
+        $lines = preg_split('/\R/u', $code);
+        if (!is_array($lines) || !isset($lines[$lineNumber - 1])) {
+            return '';
+        }
+
+        $line = trim((string)$lines[$lineNumber - 1]);
+        $line = preg_replace('/\s+/u', ' ', $line) ?? $line;
+        if ($line === '') {
+            return '';
+        }
+
+        if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+            return mb_strlen($line) > 180 ? mb_substr($line, 0, 180) : $line;
+        }
+
+        return strlen($line) > 180 ? substr($line, 0, 180) : $line;
     }
 
     /**
