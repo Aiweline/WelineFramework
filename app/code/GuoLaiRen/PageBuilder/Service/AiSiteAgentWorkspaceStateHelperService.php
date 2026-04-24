@@ -391,6 +391,27 @@ class AiSiteAgentWorkspaceStateHelperService
         unset($virtualThemePlan['draft_generated_at']);
         $scope['virtual_theme_plan'] = $virtualThemePlan;
 
+        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
+        if ($confirmed !== []) {
+            $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
+            $confirmedWithoutSignature = $confirmed;
+            unset($confirmedWithoutSignature['signature']);
+            if (
+                $taskPlanStructured === []
+                || $taskPlanStructured == $confirmed
+                || $taskPlanStructured == $confirmedWithoutSignature
+            ) {
+                $scope['task_plan_structured'] = [];
+            }
+        }
+
+        if ($confirmedMarkdown !== '') {
+            $taskPlanMarkdown = \trim((string)($scope['task_plan_markdown'] ?? ''));
+            if ($taskPlanMarkdown === '' || $taskPlanMarkdown === $confirmedMarkdown) {
+                $scope['task_plan_markdown'] = '';
+            }
+        }
+
         return $scope;
     }
 

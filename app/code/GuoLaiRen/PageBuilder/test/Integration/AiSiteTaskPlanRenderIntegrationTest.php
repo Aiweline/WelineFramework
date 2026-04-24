@@ -45,7 +45,7 @@ final class AiSiteTaskPlanRenderIntegrationTest extends AbstractAiSiteWorkbenchI
         self::assertStringContainsString('pb-ai-plan-sse-terminal', $html);
         self::assertStringContainsString('pb-ai-plan-mode-refine', $html);
         self::assertStringContainsString('pb-ai-plan-mode-rebuild', $html);
-        self::assertStringContainsString('function startPlanModeStream(mode)', $html);
+        self::assertStringContainsString('function startPlanModeStream(mode', $html);
         self::assertStringContainsString('function bindPlanSseTerminalHandlers()', $html);
         self::assertStringContainsString('refine', $html);
         self::assertStringContainsString('rebuild', $html);
@@ -67,10 +67,10 @@ final class AiSiteTaskPlanRenderIntegrationTest extends AbstractAiSiteWorkbenchI
         self::assertStringContainsString("workspaceTerminal.on('log', function (event) {", $html);
         self::assertStringContainsString('function normalizeQueuedStageWorkspaceLogEntry(entry)', $html);
         self::assertStringContainsString('function mirrorWorkspaceLogToQueuedStageUi(entry)', $html);
-        self::assertStringContainsString('function startTaskPlanModeStream(mode)', $html);
-        self::assertStringContainsString("var persistedTaskPlanStructured = (scope.task_plan_structured && typeof scope.task_plan_structured === 'object')", $html);
+        self::assertStringContainsString('function startTaskPlanModeStream(mode', $html);
+        self::assertStringContainsString("var persistedTaskPlanStructured = (workspaceState.task_plan_structured && typeof workspaceState.task_plan_structured === 'object')", $html);
         self::assertStringContainsString('if (isNonEmptyObject(payload.structured)) {', $html);
-        self::assertStringContainsString('var draftPlan = isNonEmptyObject(structured) ? structured : (isNonEmptyObject(vt.draft) ? vt.draft : {});', $html);
+        self::assertStringContainsString('var taskPlanDraftStructured = isNonEmptyObject(persistedTaskPlanStructured)', $html);
         self::assertStringContainsString('function isTaskPlanStructuredRoot(planRoot)', $html);
         self::assertStringContainsString('function renderTaskPlanStructuredPreviewHtml(planRoot)', $html);
         self::assertStringContainsString('function bindTaskPlanFieldEditors(container)', $html);
@@ -85,6 +85,6 @@ final class AiSiteTaskPlanRenderIntegrationTest extends AbstractAiSiteWorkbenchI
         self::assertStringContainsString('refine_task_plan', $html);
         self::assertStringContainsString('rebuild_task_plan', $html);
         self::assertStringContainsString('pb-ai-task-plan-sse-terminal', $html);
-        self::assertStringContainsString('确认阶段二任务计划', $html);
+        self::assertStringContainsString('确认任务方案并开始构建', $html);
     }
 }

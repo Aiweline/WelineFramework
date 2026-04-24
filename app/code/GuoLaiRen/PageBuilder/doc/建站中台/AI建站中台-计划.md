@@ -34,6 +34,18 @@
 - MUST `release_gate` 同时检查：任务状态、域名门禁、预览/正式 URL、E2E 证据、语言策略、AI 适配器与提示词版本审计。
 - MUST 真相源优先级固定为：`build_tasks[*].status`（任务完成真相） > `plan_workbench.confirmed.*` / `execution_plan_signature`（确认版真相） > `scope_json`/`result_ref`（持久化数据真相） > SSE/polling（展示同步） > `build_checkpoint`（恢复索引）。
 
+### 1A.0A 博客页面与 PageBuilder 模板兼容（MUST）
+
+> 本小节用于确保 AI 虚拟主题不会把博客页当普通自定义页生成。若站点包含博客能力，虚拟主题必须兼容 PageBuilder 现有博客页面类型、模板文件与运行时数据注入，否则博客分类页、博客详情页不会被虚拟主题生效。
+
+- MUST 博客页面类型统一使用 PageBuilder 现有常量语义：`blog_list`（博客列表页）、`blog_category`（博客分类页）、`blog_post`（博客详情页/文章详情页）；AI 输出中的 `blog`、`post`、`article`、`news_detail` 等别名必须在进入块树前归一化，不得作为新的正式 `page_type` 落库。
+- MUST 当用户选择或需求扩展命中博客能力时，阶段一/阶段二/虚拟主题至少覆盖 `blog_list + blog_category + blog_post` 三类页面。允许按站点需求隐藏某个入口，但不得只生成普通 `custom_page` 来替代博客页。
+- MUST 虚拟主题生成优先复用所选 PageBuilder style 下的博客布局与组件：`layouts/default/blog_list.json`、`layouts/default/blog_category.json`、`layouts/default/blog_post.json`、`layouts/blog_list.phtml`、`layouts/blog_category.phtml`、`layouts/blog_post.phtml`、`components/content/blog-list.phtml`、`components/content/blog-category.phtml`、`components/content/blog-detail.phtml`。当前 style 缺失任一必需博客模板时，必须按明确回退策略使用 `default` style 的等价模板，或阻断发布并给出缺失清单。
+- MUST 博客块不得写死文章列表、分类列表或文章正文；必须消费 PageBuilder 前台博客数据注入变量：`blog_posts`、`pagination`、`current_category`、`current_post`、`related_posts`、`blog_categories`、`recent_posts`、`all_tags`。AI 只规划组件配置、字段默认值、展示策略与空态文案。
+- MUST 博客列表页与分类页使用 `blog-list` / `blog-category` 组件承接列表、分类 rail、分页、侧栏和最近文章；博客详情页使用 `blog-detail` 组件承接正文、作者、日期、标签、分享、相关文章与空态。
+- MUST Header/Footer 导航规划只能把 `blog_list` 作为常规顶级入口；`blog_category` 与 `blog_post` 默认是内容驱动的动态页面，不得批量写入主导航，除非用户明确要求展示特定分类入口。
+- MUST 预览链接重写与发布链接必须保留博客运行时参数语义，包括 `slug`、`category`、`page` 及模板数据中已提供的 `url` 字段；不得把博客详情或分类链接静态替换成某个临时预览页面。
+
 ### 第一阶段：块化方案生成工作台（老板最新口径）
 
 - MUST 第一阶段不再使用方案弹窗；方案工作台直接写在第一阶段主区域下方，包含共享区、页面 Tab、总进度区、队列状态区、AI 操作区。
@@ -1058,6 +1070,12 @@ Atomic Task ID:
 - [ ] T33 第二阶段单测/集成测试（status=todo, progress=0%, owner=qa, note=共享块任务优先 + 上下文一致性校验）
 - [ ] T34 虚拟主题/恢复/E2E 验证（status=todo, progress=0%, owner=qa, note=页面 ready、块操作、发布门禁全链路覆盖）
 
+#### F. 博客虚拟页面兼容
+
+- [ ] T35 博客虚拟页面模板兼容（status=todo, progress=0%, owner=backend+pagebuilder, note=解析并复用 `blog_list/blog_category/blog_post` 的 layout/default JSON、layout phtml 与 blog-* 组件，缺失时回退或阻断）
+- [ ] T36 博客运行时数据契约接入（status=todo, progress=0%, owner=backend+frontend, note=虚拟主题博客页消费 `current_post/blog_posts/current_category/blog_categories/recent_posts/related_posts/pagination/all_tags`，不写死文章数据）
+- [ ] T37 博客预览、链接重写与发布探活（status=todo, progress=0%, owner=qa+backend, note=覆盖列表页、分类页、详情页 slug/category/page 参数与正式 URL 探活）
+
 ### 12.1A 智能体原子任务队列（按细节执行，新增）
 
 > 本节把 T01~T34 拆成更细的执行任务。智能体执行时优先使用本节任务，不允许只凭 T01/T14 这类大任务直接开工。
@@ -1219,6 +1237,14 @@ Atomic Task ID:
 - [ ] A106 virtual page patch 保存规则（status=todo, owner=backend, source=code-discovered, evidence=`AiSiteVirtualLayoutService::saveVirtualPagePatch`, covers=§10B-E2E-09, output=页面 patch 可持久化）
 - [ ] A107 可视化编辑保存后同步任务/块状态（status=todo, owner=backend+frontend, source=code-discovered, evidence=`AiSiteVirtualLayoutService/AiSiteBuildTaskService`, covers=§13.4/§12.5, output=编辑结果与任务/块状态一致）
 - [ ] A108 preview URL 与 production URL 分离测试（status=todo, owner=qa, source=code-discovered, evidence=`AiSiteVisualUrlService/AiSitePublishService`, covers=§14.6, output=预览地址与正式地址不会混用）
+
+#### P. 博客虚拟页面与 PageBuilder 模板兼容
+
+- [ ] A109 博客 page_type 归一化（status=todo, owner=backend-schema, source=code-discovered, evidence=`PageModel::TYPE_BLOG_LIST/TYPE_BLOG_CATEGORY/TYPE_BLOG`, covers=§1A.0A/§13.2.4, output=`blog/post/article` 等别名进入块树前统一为 `blog_list/blog_category/blog_post`）
+- [ ] A110 博客模板解析与回退（status=todo, owner=backend+pagebuilder, source=code-discovered, evidence=`view/templates/style/*/layouts/default/blog_*.json` + `components/content/blog-*.phtml`, covers=§1A.0A/§13.4.4, output=当前 style 博客模板缺失时回退 default 或阻断发布并记录缺失清单）
+- [ ] A111 博客运行时数据绑定（status=todo, owner=backend+frontend, source=code-discovered, evidence=`Controller/Frontend/Page::loadBlogData`, covers=§1A.0A/§13.7.4, output=博客模板读取 `blog_posts/current_post/current_category/blog_categories/recent_posts/related_posts/pagination/all_tags`，正式页不落静态样例）
+- [ ] A112 博客链接重写与探活测试（status=todo, owner=qa, source=code-discovered, evidence=`blog_list/blog_category/blog_post preview URL`, covers=§13.7.4/§14.5, output=列表分页、分类 category、详情 slug 在预览与发布 URL 中保留）
+
 ### 12.1C 任务-细节对齐规则（新增）
 
 - MUST 任何新增计划细节都在 12.1/12.1A 追加至少一条可执行任务，不允许“有细节无任务”。
@@ -1385,6 +1411,7 @@ Atomic Task ID:
 - `theme_design.theme_purpose`
 - `theme_design.selection_reason`
 - `page_type`
+- `canonical_page_type`（博客别名必须归一化为 `blog_list|blog_category|blog_post`）
 - `page_goal`
 - `locale`
 - `anti_hardcode_rules`
@@ -1393,6 +1420,7 @@ Atomic Task ID:
 `buildStageOnePagePlanPrompt(...)` 必须输出：
 
 - `page_key`
+- `canonical_page_type`
 - `page_goal`
 - `blocks[]`
 - `page_reason_summary`
@@ -1581,6 +1609,15 @@ Atomic Task ID:
 - 页面达到“可预览”条件就立即开放页面预览与编辑，不等待全站完成。
 - 页面重建时只重排当前页树与受影响共享节点，不全站回滚。
 
+#### 13.4.4 博客虚拟页面生成规则（MUST）
+
+- `blog_list`、`blog_category`、`blog_post` 必须作为虚拟主题的一等页面节点进入 `site -> page -> block -> component -> slot` 树，不得降级为普通内容块或单篇 Markdown 页面。
+- 博客页面的布局解析顺序固定为：当前 style 的 `layouts/default/<page_type>.json` -> 当前 style 的 `layouts/<page_type>.phtml` -> 当前 style 的 `components/content/blog-*.phtml`；任一缺失时才进入 `default` style 回退。回退结果必须写入构建日志与发布门禁证据。
+- 三类博客页面的默认组件映射固定为：`blog_list -> blog-list`、`blog_category -> blog-category`、`blog_post -> blog-detail`。AI 可调整组件配置与字段默认值，但不得把 `blog_post` 映射到普通文章静态组件。
+- 生成 `layout_config` 时必须保留博客默认 JSON 的 `inherit_regions.header/footer` 语义；Header/Footer 为空数组代表从首页继承，不得被 AI 清空为无导航/无页脚页面。
+- 博客模板字段必须进入第二阶段任务细化，例如 `posts_per_page`、`show_sidebar`、`show_categories`、`show_recent_posts`、`show_pagination`、`show_category_header`、`show_category_description`、`show_author`、`show_date`、`show_tags`、`show_share_buttons`、`show_related_posts`、`related_posts_count`。
+- 博客详情页必须依赖运行时 `current_post` 与 `related_posts`；博客分类页必须依赖 `current_category`、`blog_posts` 与 `pagination`；博客列表页必须依赖 `blog_posts`、`blog_categories`、`recent_posts` 与 `pagination`。预览模式可用结构化占位样例，但正式发布不得把占位样例写入博客真实数据源。
+
 ### 13.5 队列、SSE、轮询、恢复协议
 
 #### 13.5.1 队列任务类型
@@ -1598,7 +1635,9 @@ Atomic Task ID:
 - `stage2.block.refine`
 - `stage2.block.rebuild`
 - `virtual_theme.tree.build`
+- `virtual_theme.blog_template.resolve`
 - `virtual_theme.page.build`
+- `virtual_theme.blog_page.build`
 - `virtual_theme.page.rebuild`
 
 #### 13.5.2 进度事件协议
@@ -1710,6 +1749,13 @@ Atomic Task ID:
 - 页面生成顺序与块顺序必须匹配确认版任务树。
 - 页面 ready 时必须生成对应的编辑入口与预览入口。
 
+#### 13.7.4 博客页面校验
+
+- 若确认版页面集合包含任一博客页，虚拟主题门禁必须同时校验 `blog_list`、`blog_category`、`blog_post` 的 page node、layout_config、component code 与预览 URL。
+- 博客页面不得出现静态写死的文章数组、分类数组或正文 HTML；模板必须从运行时变量读取博客数据，预览占位必须带 `preview_only=true` 或等价标记。
+- 当前 style 缺少博客布局/组件且无有效回退时，`release_gate` 必须失败，错误信息列出缺失文件与受影响 page_type。
+- 博客详情页探活必须覆盖带 `slug` 的详情访问；博客分类页探活必须覆盖带 `category` 的分类访问；博客列表页探活必须覆盖分页参数。
+
 ### 13.8 本轮实施落点（建议函数/服务）
 
 - **已实现/对齐中的提示词入口（评审对照）**：`AiSiteExecutionBlueprintService`（阶段一聚合方案：`buildAiPlanPrompt` 等）、`AiSiteVirtualThemePlanService`（阶段二任务方案：`buildTaskPlanPromptBase`、`buildTaskPlanGenerationBatchPrompt` 等）。拆分式 `buildStageOneSharedPlanPrompt` / `buildStageOnePagePlanPrompt` 落地后须继承 **§13.2.6 / §1A** 与 **§13.3.6 / §1A** 契约。
@@ -1725,6 +1771,8 @@ Atomic Task ID:
 - `StageTwoBlockTaskOperationService`
 - `VirtualThemeBuildTreeBuilder`
 - `VirtualThemePageBuildOrchestrator`
+- `VirtualThemeBlogTemplateResolver`
+- `VirtualThemeBlogPageBuildOrchestrator`
 - `AiSiteProgressStreamService`
 - `AiSiteStatusPollingService`
 - `AiSiteBlockOperationController`
@@ -1739,6 +1787,7 @@ Atomic Task ID:
 - 验收 F：所有长流程都走后台队列；SSE 只负责进度与轻量局部重建；状态可通过轮询恢复。
 - 验收 G：所有块操作 API 都支持 `session_public_id|website_public_id` 双寻址。
 - 验收 H：虚拟主题按块树生成页面，页面完成即可预览与编辑，最终确认无误后才允许发布。
+- 验收 I：博客虚拟主题必须让 `blog_list`、`blog_category`、`blog_post` 三类页面使用 PageBuilder 现有博客模板和运行时数据源生效；任一博客模板缺失、链接参数丢失或静态写死博客数据均不得发布。
 
 ## 14. dev/ai 技能路由与执行闭环补强（2026-04-21）
 
@@ -1753,7 +1802,7 @@ Atomic Task ID:
 | `ai-module-development` | AI 能力必须通过场景适配器/可扫描入口纳入 `Weline_Ai` 体系，不能散落在 Controller 或临时脚本中。 | §7.1、§7.2、§13.2、§13.3、§13.8 |
 | `queue-usage` | 第一阶段、第二阶段、虚拟主题构建等长流程必须入队并持久化状态、进度与结果引用。 | §5.4、§7.4、§12.2、§13.5 |
 | `sse-streaming` | SSE 只做进度、就绪、轻量 chunk 与错误通知；完整结果以结构化持久化数据为准。 | §7.4、§13.5.2、§13.7、§10B |
-| `pagebuilder-style-templates` | AI 输出块必须能映射到 PageBuilder 模板字段、组件配置、颜色与下载/跳转约定。 | §5.3、§13.2.4、§13.3.4、§13.4 |
+| `pagebuilder-style-templates` | AI 输出块必须能映射到 PageBuilder 模板字段、组件配置、颜色与下载/跳转约定；博客虚拟页必须复用 PageBuilder 现有 `blog_list/blog_category/blog_post` 模板体系。 | §5.3、§1A.0A、§13.2.4、§13.3.4、§13.4、§13.7.4 |
 | `frontend-components` | Block/Taglib/Widget/DataTable 与块级编辑边界必须清晰；块操作要改结构化数据，不只改 Markdown。 | §1A、§7.1、§7.2、§13.4、§13.6、§10B-E2E-09 |
 | `theme-development` | 虚拟主题生成必须遵守主题目录、layout/partial/widget、变量、色盘、作用域样式与无 CDN 约束。 | §13.4、§13.7.3、§10A-F |
 | `service-development` | Controller 只负责请求编排与响应；阶段编排、校验、装配、状态读取必须沉到 Service。 | §3、§4、§7、§13.8 |
@@ -1790,6 +1839,7 @@ Atomic Task ID:
 5. **结构化输出与渲染层（`pagebuilder-style-templates` + `frontend-components` + `theme-development`）**
    - 阶段一/二输出的每个 block/task 都必须能映射到：组件类型、可编辑字段、默认值、样式 token、响应式规则、预览入口。
    - 虚拟主题建树固定映射：`site -> shared -> page -> block -> component -> slot`，其中 `component/slot` 必须能被 PageBuilder 可视化编辑器定位。
+   - 博客虚拟页面必须使用 PageBuilder 现有 `blog_list/blog_category/blog_post` 页面类型、`blog-list/blog-category/blog-detail` 组件和博客运行时数据注入变量，不得生成脱离博客查询的静态页面。
    - 新增组件/模板时必须遵守：组件根作用域、主题前缀、`@fields_start/@fields_end`、配置输出转义、颜色变量、下载跳转统一注册。
    - 用户可见文案必须走 i18n 机制；自定义标签属性内禁止 PHP 表达式。
 
@@ -1865,6 +1915,7 @@ Atomic Task ID:
 - **E2E-19 组件映射可编辑**：虚拟主题生成后，至少验证 Header、Footer、一个 Hero、一个表单/CTA 块能在可视化编辑器定位并编辑字段。
 - **E2E-20 i18n 与语言策略**：工作台按钮、错误提示、SSE 文案、AI 输出样例字段符合所选语言策略，不能混用默认语言。
 - **E2E-21 发布门禁双路径**：域名校验失败路径阻断发布并显示可恢复文案；域名校验成功路径生成正式站点并通过关键页 HTTP 探活。
+- **E2E-22 博客虚拟主题兼容**：站点包含博客能力时，虚拟主题生成后分别访问博客列表页、带 `category` 的分类页、带 `slug` 的详情页；断言三类页面使用 PageBuilder 博客模板、运行时博客数据变量生效、分页/分类/详情链接参数不丢失，且缺失博客模板时发布门禁阻断。
 
 执行口径：
 
@@ -1883,5 +1934,6 @@ Atomic Task ID:
 - `stage1/stage2/virtual_theme` 三段队列均支持断点恢复；
 - SSE 断线重连、polling 兜底、队列状态真相源一致；
 - 结构化块树可追溯到 PageBuilder 组件/slot/字段；
+- 博客列表页、博客分类页、博客详情页均可追溯到 PageBuilder 现有博客模板与运行时数据源；
 - 语言策略、域名门禁、预览/正式 URL 分离均通过 E2E 验证；
 - AI 场景适配器、提示词版本、输入/输出 hash 可审计。

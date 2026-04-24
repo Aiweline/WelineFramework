@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Console;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Start;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\ServerInstanceManager;
 
 final class StartWorkerPortAllocationTest extends TestCase
 {
@@ -124,6 +125,79 @@ final class StartWorkerPortAllocationTest extends TestCase
             19983,
             $this->invokeProtected($start, 'findAvailableWorkerPortBase', 19982, 2, 10, 'default', [19982])
         );
+    }
+
+    public function testRuntimeRecordedPortsIncludeInstancePortsAndSkipSharedStateServices(): void
+    {
+        $runtimeDir = $this->createTempDir();
+        $runtimeFile = $runtimeDir . DIRECTORY_SEPARATOR . 'default.json';
+        $this->pathsToDelete[] = $runtimeFile;
+        \file_put_contents(
+            $runtimeFile,
+            (string) \json_encode([
+                'port' => 443,
+                'control_port' => 26895,
+                'http_redirect_port' => 80,
+                'worker_port' => 16895,
+                'count' => 2,
+                'worker_ports' => [16895, 16896],
+                'services' => [
+                    'worker' => [
+                        'instances' => [
+                            ['port' => 16897, 'pid' => 11200, 'state' => 'stopped'],
+                        ],
+                    ],
+                    'session_server' => [
+                        'instances' => [
+                            ['port' => 26422, 'pid' => 3336, 'state' => 'ready'],
+                        ],
+                    ],
+                    'memory_server' => [
+                        'instances' => [
+                            ['port' => 26423, 'pid' => 9124, 'state' => 'ready'],
+                        ],
+                    ],
+                ],
+            ], JSON_PRETTY_PRINT)
+        );
+
+        $start = new class($runtimeDir) extends Start {
+            public function __construct(private readonly string $runtimeDir)
+            {
+            }
+
+            public function collect(string $instanceName): array
+            {
+                return $this->collectRuntimeRecordedPortsForInstance($instanceName);
+            }
+
+            public function filter(string $instanceName, array $ports): array
+            {
+                return $this->filterRuntimeRecordedPortsForInstance($instanceName, $ports);
+            }
+
+            protected function getInstanceRuntimeDir(): string
+            {
+                return $this->runtimeDir . DIRECTORY_SEPARATOR;
+            }
+
+            protected function getInstanceManager(): ServerInstanceManager
+            {
+                throw new \RuntimeException('Skip ObjectManager-backed instance lookup in this test.');
+            }
+        };
+
+        $ports = $start->collect('default');
+
+        self::assertContains(443, $ports);
+        self::assertContains(80, $ports);
+        self::assertContains(26895, $ports);
+        self::assertContains(16895, $ports);
+        self::assertContains(16896, $ports);
+        self::assertContains(16897, $ports);
+        self::assertNotContains(26422, $ports);
+        self::assertNotContains(26423, $ports);
+        self::assertSame([16895], $start->filter('default', [16895, 26422, 9]));
     }
 
     public function testWorkerPortAllocationLockPreventsConcurrentAcquisitionUntilReleased(): void

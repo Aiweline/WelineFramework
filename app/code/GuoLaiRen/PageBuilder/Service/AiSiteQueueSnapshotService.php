@@ -39,6 +39,9 @@ class AiSiteQueueSnapshotService
         $pid = (int)($queueRow['pid'] ?? 0);
         $typeId = (int)($queueRow['type_id'] ?? 0);
         $finished = (int)($queueRow['finished'] ?? 0);
+        if ($status === 'done') {
+            $finished = 1;
+        }
         $startAt = \trim((string)($queueRow['start_at'] ?? ''));
         $endAt = \trim((string)($queueRow['end_at'] ?? ''));
 

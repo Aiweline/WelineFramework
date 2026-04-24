@@ -1833,7 +1833,7 @@ DNS管理,DNS管理
 批量转存完成,"Batch transfer completed"
 跳过的域名（IP不匹配）,"Skipped domains (IP mismatch)"
 确定将,"Confirm resolving"
-个域名解析到本服务器？," domains to this server?"
+个域名解析到本服务器？,"domains to this server?"
 "将为每个域名添加 @ 和 www 的A记录指向本服务器公网IP。","A records for @ and www will be added pointing to this server's public IP."
 确认解析,"Confirm Resolve"
 正在批量解析到本地服务器...,"Batch resolving to local server..."

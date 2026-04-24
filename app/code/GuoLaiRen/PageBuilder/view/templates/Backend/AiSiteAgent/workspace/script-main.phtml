@@ -58,7 +58,11 @@
     var lastPhaseOnePlanPresent = <?= \json_encode((bool)($pbAiPhaseOnePlanPresent), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     /** 与 PHP 注入的 $pbAiPhaseTwoTaskPlanPresent 同步：是否存在可用的第二阶段任务方案。 */
     var lastPhaseTwoTaskPlanPresent = <?= \json_encode((bool)($pbAiPhaseTwoTaskPlanPresent), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var taskPlanStageEntryDecision = <?= \json_encode(\is_array($pbAiTaskPlanStageEntryDecision ?? null) ? $pbAiTaskPlanStageEntryDecision : [], \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var globalRunVirtualThemeDisabled = false;
+    var planGenerationActionLockActive = false;
+    var planGenerationLockedControls = [];
+    var planGenerationActionLockClickGuardBound = false;
     window.__pbTaskSummary = <?= \json_encode($buildTaskSummary, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var buildNavigationGuardActive = false;
     var buildStartupPending = false;
@@ -183,8 +187,158 @@
         return !!lastPhaseTwoTaskPlanPresent || !!hasVirtualThemePlanState || !!taskPlanConfirmedState;
     }
 
+    function getTaskPlanStageEntryDecision() {
+        return taskPlanStageEntryDecision && typeof taskPlanStageEntryDecision === 'object'
+            ? taskPlanStageEntryDecision
+            : {};
+    }
+
+    function hasServerPersistedPhaseTwoTaskPlan() {
+        var decision = getTaskPlanStageEntryDecision();
+        if (Object.prototype.hasOwnProperty.call(decision, 'has_phase_two_task_plan')) {
+            return !!decision.has_phase_two_task_plan;
+        }
+        return hasPersistedPhaseTwoTaskPlan();
+    }
+
+    function shouldPromptTaskPlanGenerateFromServer() {
+        var decision = getTaskPlanStageEntryDecision();
+        return !!decision.is_visual_edit_stage
+            && !!decision.has_phase_one_confirmed_plan
+            && !decision.has_phase_two_task_plan
+            && !decision.plan_queue_running
+            && !decision.task_plan_queue_running
+            && !decision.build_queue_running
+            && !!decision.should_prompt_generate;
+    }
+
     function getRunVirtualThemeButtons() {
         return document.querySelectorAll('.pb-ai-run-virtual-theme');
+    }
+
+    function getPlanGenerationActionLockRoot() {
+        return document.querySelector('.pb-guided') || document;
+    }
+
+    function getPlanGenerationActionControlSelector() {
+        return 'button, input[type="button"], input[type="submit"], a.btn, [role="button"]';
+    }
+
+    function getClosestPlanGenerationActionControl(target) {
+        if (!target || typeof target.closest !== 'function') {
+            return null;
+        }
+        return target.closest(getPlanGenerationActionControlSelector());
+    }
+
+    function bindPlanGenerationActionLockClickGuard() {
+        if (planGenerationActionLockClickGuardBound) {
+            return;
+        }
+        planGenerationActionLockClickGuardBound = true;
+        document.addEventListener('click', function (event) {
+            if (!planGenerationActionLockActive || !event || !event.target) {
+                return;
+            }
+            var root = getPlanGenerationActionLockRoot();
+            if (root && root !== document && !root.contains(event.target)) {
+                return;
+            }
+            var control = getClosestPlanGenerationActionControl(event.target);
+            if (!control || (control.dataset && control.dataset.pbPlanGenerationLockBypass === '1')) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof event.stopImmediatePropagation === 'function') {
+                event.stopImmediatePropagation();
+            }
+        }, true);
+    }
+
+    function setPlanGenerationActionControlLocked(el, locked) {
+        if (!el || !el.dataset) {
+            return;
+        }
+        if (locked) {
+            if (el.dataset.pbPlanGenerationLocked === '1') {
+                return;
+            }
+            el.dataset.pbPlanGenerationLocked = '1';
+            if ('disabled' in el) {
+                el.dataset.pbPlanGenerationPrevDisabled = el.disabled ? '1' : '0';
+                el.disabled = true;
+            }
+            el.dataset.pbPlanGenerationPrevAriaDisabled = el.hasAttribute('aria-disabled')
+                ? String(el.getAttribute('aria-disabled') || '')
+                : '__none__';
+            el.dataset.pbPlanGenerationPrevTabIndex = el.hasAttribute('tabindex')
+                ? String(el.getAttribute('tabindex') || '')
+                : '__none__';
+            el.dataset.pbPlanGenerationPrevPointerEvents = String(el.style.pointerEvents || '');
+            el.dataset.pbPlanGenerationPrevDisabledClass = (el.classList && el.classList.contains('disabled')) ? '1' : '0';
+            el.setAttribute('aria-disabled', 'true');
+            if (!('disabled' in el)) {
+                el.setAttribute('tabindex', '-1');
+                el.style.pointerEvents = 'none';
+            }
+            if (el.classList) {
+                el.classList.add('disabled');
+            }
+            planGenerationLockedControls.push(el);
+            return;
+        }
+        if (el.dataset.pbPlanGenerationLocked !== '1') {
+            return;
+        }
+        if ('disabled' in el && Object.prototype.hasOwnProperty.call(el.dataset, 'pbPlanGenerationPrevDisabled')) {
+            el.disabled = el.dataset.pbPlanGenerationPrevDisabled === '1';
+        }
+        if (el.dataset.pbPlanGenerationPrevAriaDisabled === '__none__') {
+            el.removeAttribute('aria-disabled');
+        } else if (Object.prototype.hasOwnProperty.call(el.dataset, 'pbPlanGenerationPrevAriaDisabled')) {
+            el.setAttribute('aria-disabled', el.dataset.pbPlanGenerationPrevAriaDisabled);
+        }
+        if (el.dataset.pbPlanGenerationPrevTabIndex === '__none__') {
+            el.removeAttribute('tabindex');
+        } else if (Object.prototype.hasOwnProperty.call(el.dataset, 'pbPlanGenerationPrevTabIndex')) {
+            el.setAttribute('tabindex', el.dataset.pbPlanGenerationPrevTabIndex);
+        }
+        if (Object.prototype.hasOwnProperty.call(el.dataset, 'pbPlanGenerationPrevPointerEvents')) {
+            el.style.pointerEvents = el.dataset.pbPlanGenerationPrevPointerEvents;
+        }
+        if (el.classList && el.dataset.pbPlanGenerationPrevDisabledClass !== '1') {
+            el.classList.remove('disabled');
+        }
+        delete el.dataset.pbPlanGenerationLocked;
+        delete el.dataset.pbPlanGenerationPrevDisabled;
+        delete el.dataset.pbPlanGenerationPrevAriaDisabled;
+        delete el.dataset.pbPlanGenerationPrevTabIndex;
+        delete el.dataset.pbPlanGenerationPrevPointerEvents;
+        delete el.dataset.pbPlanGenerationPrevDisabledClass;
+    }
+
+    function setPlanGenerationActionLock(locked) {
+        bindPlanGenerationActionLockClickGuard();
+        if (locked) {
+            planGenerationActionLockActive = true;
+            var root = getPlanGenerationActionLockRoot();
+            Array.from(root.querySelectorAll(getPlanGenerationActionControlSelector())).forEach(function (el) {
+                if (el.dataset && el.dataset.pbPlanGenerationLockBypass === '1') {
+                    return;
+                }
+                setPlanGenerationActionControlLocked(el, true);
+            });
+            applyRunVirtualThemeButtonsDisabledState();
+            return;
+        }
+        planGenerationActionLockActive = false;
+        planGenerationLockedControls.forEach(function (el) {
+            setPlanGenerationActionControlLocked(el, false);
+        });
+        planGenerationLockedControls = [];
+        applyRunVirtualThemeButtonsDisabledState();
+        syncConfirmPlanButtonEnabled();
     }
 
     function isTargetDomainRequiredForPlanActionSatisfied() {
@@ -194,11 +348,11 @@
     function applyRunVirtualThemeButtonsDisabledState() {
         var domainLocked = !isTargetDomainRequiredForPlanActionSatisfied();
         getRunVirtualThemeButtons().forEach(function (b) {
-            b.disabled = globalRunVirtualThemeDisabled || domainLocked;
+            b.disabled = planGenerationActionLockActive || globalRunVirtualThemeDisabled || domainLocked;
             b.setAttribute('aria-disabled', b.disabled ? 'true' : 'false');
         });
         document.querySelectorAll('[data-pb-gate-phase-one="1"]').forEach(function (b) {
-            var locked = globalRunVirtualThemeDisabled || !lastPhaseOnePlanPresent;
+            var locked = planGenerationActionLockActive || globalRunVirtualThemeDisabled || !lastPhaseOnePlanPresent;
             if (b.classList && b.classList.contains('accordion-button')) {
                 if (locked) {
                     b.setAttribute('disabled', 'disabled');
@@ -463,6 +617,9 @@
             // 忽略：仅用于队列面板复用最近工作区状态。
         }
         // 用后端/持久化返回的状态填充工作区：页面、方案、任务计划、SSE 地址与按钮状态等。
+        if (workspaceState.task_plan_stage_entry && typeof workspaceState.task_plan_stage_entry === 'object') {
+            taskPlanStageEntryDecision = workspaceState.task_plan_stage_entry;
+        }
         if (workspaceState.pagebuilder_pages_by_type && typeof workspaceState.pagebuilder_pages_by_type === 'object') {
             window.__pbWorkspacePagesByType = workspaceState.pagebuilder_pages_by_type;
         }
@@ -716,34 +873,54 @@
     }
 
     function promptGenerateTaskPlanOnStageEnter() {
-        if (!isTaskPlanWorkspaceStage(currentWorkspaceStage) || hasPersistedPhaseTwoTaskPlan()) {
+        if (!isTaskPlanWorkspaceStage(currentWorkspaceStage) || hasServerPersistedPhaseTwoTaskPlan()) {
             return Promise.resolve(false);
         }
-        return Promise.resolve(hasPhaseOnePlanReadyForTaskPlan()).then(function (ready) {
-            if (!ready) {
-                toast('warning', messages.phaseOnePlanMissingForTaskPlan || messages.planConfirmRequired);
+        if (!shouldPromptTaskPlanGenerateFromServer()) {
+            return Promise.resolve(false);
+        }
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            return window.BackendConfirm.show(messages.taskPlanGenerateConfirmMessage, {
+                title: messages.taskPlanGenerateConfirmTitle,
+                confirmText: messages.immediateGenerate,
+                cancelText: messages.laterGenerate
+            }).then(function (confirmed) {
+                if (!confirmed) {
+                    toast('info', messages.taskPlanGenerateCancelled);
+                    return false;
+                }
+                showTaskPlanPanel();
+                return !!startTaskPlanDetectBootstrapSse({ suppressStartFallback: true });
+            }).catch(function () {
                 return false;
-            }
+            });
+        }
+        return Promise.resolve().then(function () {
             showTaskPlanPanel();
             return !!startTaskPlanDetectBootstrapSse({ suppressStartFallback: true });
-        }).catch(function () {
-            toast('warning', messages.taskPlanGenerateConfirmMessage || messages.networkError);
-            return false;
         });
     }
 
-    function continueToTaskPlanAfterPlanConfirm() {
+    function resolveWorkspaceRedirectUrl(workspaceState) {
+        var nextState = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var redirectUrl = String(nextState.workspace_url || guidedUrl || window.location.href || '').trim();
+        return redirectUrl || window.location.href;
+    }
+
+    function shouldReloadWorkspaceForTaskPlanStage() {
+        var hasVisualEditPanel = !!document.querySelector('[data-stage-panel="visual_edit"]');
+        if (!hasVisualEditPanel) {
+            return true;
+        }
+        return !String(startTaskPlanUrl || '').trim() || !String(confirmTaskPlanUrl || '').trim();
+    }
+
+    function continueToTaskPlanAfterPlanConfirm(workspaceState) {
         planConfirmedState = true;
         lastPhaseOnePlanPresent = true;
-        switchWorkspaceStage('visual_edit');
-        showTaskPlanPanel();
-        if (hasPersistedPhaseTwoTaskPlan() || hasCachedTaskPlanForAccordion()) {
-            applyCachedTaskPlanToPanel();
-            return;
-        }
         window.setTimeout(function () {
-            startTaskPlanDetectBootstrapSse({ suppressStartFallback: true });
-        }, 200);
+            window.location.href = resolveWorkspaceRedirectUrl(workspaceState);
+        }, 120);
     }
 
     function syncConfirmPlanButtonEnabled() {
@@ -751,7 +928,7 @@
         if (!confirmBtn) {
             return;
         }
-        confirmBtn.disabled = !hasCurrentPhaseOnePlanDraft();
+        confirmBtn.disabled = planGenerationActionLockActive || !hasCurrentPhaseOnePlanDraft();
     }
     /**
      * 工作区流（非弹层 SSE）在 plan_generated 等节点回调：收敛按钮状态、写入方案 Markdown 并触发自动保存。
@@ -759,6 +936,7 @@
     workspaceApi.applyPlanGenerationCompletionFromWorkspaceStream = function (serverState) {
         try {
             planSseRunning = false;
+            setPlanGenerationActionLock(false);
             if (typeof setPlanModeRunButtonLoading === 'function') {
                 setPlanModeRunButtonLoading(false);
             }
@@ -4619,7 +4797,10 @@
             if (runVTBtn.disabled || globalRunVirtualThemeDisabled) {
                 return;
             }
-            if (!runVirtualThemeUrl) { return; }
+            if (!startPlanUrl) {
+                toast('error', messages.planStartUnavailable);
+                return;
+            }
             var pageTypes = selectedPageTypes();
             if (pageTypes.length === 0) {
                 toast('warning', messages.noPageType);
@@ -8166,7 +8347,7 @@
         }
         var shouldShow = !!visible;
         retryBtn.classList.toggle('d-none', !shouldShow);
-        retryBtn.disabled = !shouldShow || planStartRequestPending || planSseRunning;
+        retryBtn.disabled = planGenerationActionLockActive || !shouldShow || planStartRequestPending || planSseRunning;
     }
 
     function hidePlanGenerationModal(options) {
@@ -8228,7 +8409,7 @@
         }
         var runBtn = document.getElementById('pb-ai-plan-run-mode');
         if (runBtn && !planSseRunning) {
-            runBtn.disabled = false;
+            runBtn.disabled = planGenerationActionLockActive;
         }
     }
 
@@ -8252,7 +8433,7 @@
             runBtn.textContent = <?= \json_encode((string)__('处理中...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
             return;
         }
-        runBtn.disabled = false;
+        runBtn.disabled = planGenerationActionLockActive;
         runBtn.textContent = String(
             runBtn.dataset.originalText
             || runBtn.textContent
@@ -8391,6 +8572,7 @@
         }
         terminal.on('start', function () {
             planSseRunning = true;
+            setPlanGenerationActionLock(true);
             setPlanModeRunButtonLoading(true);
             setPlanModeStatus(messages.planModeRunning);
             setPlanModalProgress(messages.planModeRunning, 40, false);
@@ -8430,6 +8612,7 @@
         terminal.on('done', function (event) {
             planSseRunning = false;
             setPlanModeRunButtonLoading(false);
+            setPlanGenerationActionLock(false);
             var payload = parsePlanTerminalPayload(event);
             var nextPlan = (payload && payload.plan && typeof payload.plan === 'object') ? payload.plan : null;
             var payloadMarkdown = extractPlanMarkdownFromPayload(payload);
@@ -8489,6 +8672,7 @@
             setPlanModeStatus(message);
             setPlanModalProgress(message, 100, false);
             setPlanRetryButtonVisible(true);
+            setPlanGenerationActionLock(false);
             if (typeof terminal.log === 'function') {
                 markPlanTerminalConnected();
                 terminal.log(message, 'error', payload || {});
@@ -8512,6 +8696,7 @@
             setPlanModeStatus(message);
             setPlanModalProgress(message, 100, false);
             setPlanRetryButtonVisible(true);
+            setPlanGenerationActionLock(false);
             if (typeof terminal.log === 'function') {
                 markPlanTerminalConnected();
                 terminal.log(message, 'error', payload || {});
@@ -8544,6 +8729,7 @@
             return false;
         }
 
+        setPlanGenerationActionLock(true);
         setPlanModeRunButtonLoading(true);
         setPlanModeStatus(messages.planPageRefineRunning || messages.planModeRunning);
         setPlanModalProgress(messages.planPageRefineRunning || messages.planModeRunning, 50, false);
@@ -8554,6 +8740,7 @@
             target_scope: String(targetScope || context.targetScope || ('pages.' + pageType)).trim()
         }).then(function (data) {
             setPlanModeRunButtonLoading(false);
+            setPlanGenerationActionLock(false);
             if (data && data.success && data.data && typeof data.data === 'object') {
                 hydrateWorkspaceFromState(data.data);
                 setPlanModeStatus((data && data.message) ? String(data.message) : (messages.planPageRefineDone || messages.planModeDone));
@@ -8568,6 +8755,7 @@
             toast('warning', message);
         }).catch(function (error) {
             setPlanModeRunButtonLoading(false);
+            setPlanGenerationActionLock(false);
             var message = (error && error.message) ? String(error.message) : messages.networkError;
             setPlanModeStatus(message);
             setPlanModalProgress(message, 100, false);
@@ -8615,6 +8803,7 @@
         if (terminal.clear) {
             terminal.clear();
         }
+        setPlanGenerationActionLock(true);
         setPlanModeRunButtonLoading(true);
         planSseRunning = true;
         setPlanModeStatus(messages.planModeRunning);
@@ -8625,6 +8814,7 @@
             } catch (error) {
                 planSseRunning = false;
                 setPlanModeRunButtonLoading(false);
+                setPlanGenerationActionLock(false);
                 setPlanModeStatus((error && error.message) ? String(error.message) : messages.networkError);
                 setPlanModalProgress(messages.networkError, 100, false);
             }
@@ -8752,7 +8942,7 @@
             runBtn.textContent = <?= \json_encode((string)__('处理中...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
             return;
         }
-        runBtn.disabled = false;
+        runBtn.disabled = planGenerationActionLockActive;
         runBtn.textContent = String(
             runBtn.dataset.originalText
             || runBtn.textContent
@@ -8932,7 +9122,7 @@
             runBtn.textContent = nextMode === 'rebuild_task_plan'
                 ? messages.taskPlanModeRebuild
                 : messages.taskPlanModeRefine;
-            runBtn.disabled = taskPlanSseRunning || !String(taskPlanSseUrl || '').trim() || isThemeBuildGenerationRunning();
+            runBtn.disabled = planGenerationActionLockActive || taskPlanSseRunning || !String(taskPlanSseUrl || '').trim() || isThemeBuildGenerationRunning();
         }
         applyTaskPlanEditingLockFromActiveOperation();
         var taskHelpRefineEl = document.getElementById('pb-ai-task-plan-help-refine');
@@ -9571,9 +9761,13 @@
             }
             taskPlanAccordionDataCheckInFlight = true;
             Promise.resolve().then(function () {
-                var needConfirm = !hasCachedTaskPlanForAccordion();
-                if (!needConfirm && applyCachedTaskPlanToPanel()) {
+                var serverHasTaskPlan = hasServerPersistedPhaseTwoTaskPlan();
+                var needConfirm = !serverHasTaskPlan;
+                if (serverHasTaskPlan && applyCachedTaskPlanToPanel()) {
                     setTaskPlanModeStatus(taskPlanConfirmedState ? messages.taskPlanConfirmSaved : messages.taskPlanGenerated);
+                    return;
+                }
+                if (!needConfirm || !shouldPromptTaskPlanGenerateFromServer()) {
                     return;
                 }
                 if (needConfirm && window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
@@ -9748,6 +9942,7 @@
             window.applyTaskSummarySelectionFilter();
         }
 
+        setPlanGenerationActionLock(true);
         proceedToShowPlanModalAndRequestStart(previousPlanMarkdown);
     }
 
@@ -9790,6 +9985,7 @@
                     setPlanModeStatus(failMsg);
                     setPlanModalProgress(failMsg, 100, false);
                     setPlanRetryButtonVisible(true);
+                    setPlanGenerationActionLock(false);
                     toast('warning', failMsg);
                     return false;
                 }
@@ -9814,13 +10010,14 @@
         }
 
         planStartRequestPending = true;
-        requestStartPlan(false).then(function (data) {
+        requestStartPlan(true).then(function (data) {
             if (!data || !data.success) {
                 var startErrorMessage = normalizePlanFailureMessage((data && data.message) ? String(data.message) : messages.networkError);
                 setPlanModalProgress(startErrorMessage, 100, false);
                 setPlanRetryButtonVisible(true);
                 toast('error', startErrorMessage);
                 planStartRequestPending = false;
+                setPlanGenerationActionLock(false);
                 return;
             }
             if (data.data && typeof data.data === 'object') {
@@ -9838,6 +10035,7 @@
                     window.BackendConfirm.show(confirmMessage, { title: messages.resumePromptTitle }).then(function (confirmed) {
                         if (!confirmed) {
                             planStartRequestPending = false;
+                            setPlanGenerationActionLock(false);
                             return;
                         }
                         requestStartPlan(true).then(function (confirmData) {
@@ -9847,6 +10045,7 @@
                                 setPlanRetryButtonVisible(true);
                                 toast('error', confirmStartErrorMessage);
                                 planStartRequestPending = false;
+                                setPlanGenerationActionLock(false);
                                 return;
                             }
                             if (confirmData.data && typeof confirmData.data === 'object') {
@@ -9862,14 +10061,21 @@
                             setPlanRetryButtonVisible(false);
                             toast('success', confirmNextMessage);
                             planStartRequestPending = false;
+                            if (!jsonTruthyFlag(confirmData && confirmData.start_sse)) {
+                                setPlanGenerationActionLock(false);
+                            }
                         }).catch(function (error) {
                             var confirmErrMsg = normalizePlanFailureMessage((error && error.message) ? String(error.message) : messages.networkError);
                             setPlanModalProgress(confirmErrMsg, 100, false);
                             setPlanRetryButtonVisible(true);
                             toast('error', confirmErrMsg);
                             planStartRequestPending = false;
+                            setPlanGenerationActionLock(false);
                         });
                     });
+                } else {
+                    planStartRequestPending = false;
+                    setPlanGenerationActionLock(false);
                 }
                 return;
             }
@@ -9886,6 +10092,7 @@
                 setPlanRetryButtonVisible(false);
                 toast('success', keepMessage);
                 planStartRequestPending = false;
+                setPlanGenerationActionLock(false);
                 return;
             }
             if (jsonTruthyFlag(data && data.start_sse) && !reuseRunningPlan) {
@@ -9920,12 +10127,16 @@
             setPlanRetryButtonVisible(false);
             toast('success', nextMessage);
             planStartRequestPending = false;
+            if (!jsonTruthyFlag(data && data.start_sse) && !reuseRunningPlan) {
+                setPlanGenerationActionLock(false);
+            }
         }).catch(function (error) {
             var message = normalizePlanFailureMessage((error && error.message) ? String(error.message) : messages.networkError);
             setPlanModalProgress(message, 100, false);
             setPlanRetryButtonVisible(true);
             toast('error', message);
             planStartRequestPending = false;
+            setPlanGenerationActionLock(false);
         });
     }
 
@@ -10039,7 +10250,7 @@
             }
             hidePlanGenerationModal();
             toast('success', (data && data.message) ? String(data.message) : messages.planConfirmSaved);
-            continueToTaskPlanAfterPlanConfirm();
+            continueToTaskPlanAfterPlanConfirm(data && data.data && typeof data.data === 'object' ? data.data : null);
         }).catch(function (error) {
             toast('error', (error && error.message) ? String(error.message) : messages.networkError);
             syncConfirmPlanButtonEnabled();
