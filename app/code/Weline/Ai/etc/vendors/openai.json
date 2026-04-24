@@ -2,6 +2,8 @@
     "name": "OpenAI",
     "code": "openai",
     "base_url": "https://api.openai.com/v1",
+    "price_unit": "per_1m_tokens",
+    "price_currency": "USD",
     "models_prefix": ["gpt-", "o1-", "o3-", "o4-"],
     "allow_custom_models": true,
     "quick_create": true,

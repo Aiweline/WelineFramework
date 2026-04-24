@@ -1,0 +1,72 @@
+{
+    "name": "Kimi",
+    "code": "kimi",
+    "base_url": "https://api.moonshot.cn/v1",
+    "price_unit": "per_1m_tokens",
+    "price_currency": "CNY",
+    "models_prefix": ["kimi-", "moonshot-"],
+    "allow_custom_models": true,
+    "quick_create": true,
+    "test_model": "kimi-k2.6",
+    "api_key_field": "api_key",
+    "base_url_field": "base_url",
+    "model_field": "model",
+    "description": "Kimi / Moonshot OpenAI-compatible API service",
+    "website": "https://platform.kimi.com",
+    "documentation": "https://platform.kimi.com/docs/models",
+    "supported_features": {
+        "chat": true,
+        "completion": true,
+        "embedding": false,
+        "image": true,
+        "audio": false,
+        "video": true
+    },
+    "rate_limits": {
+        "requests_per_minute": 60,
+        "tokens_per_minute": 100000
+    },
+    "models_api": {
+        "path": "/models",
+        "auth_type": "bearer",
+        "data_key": "data",
+        "id_key": "id",
+        "name_key": "id",
+        "desc_key": "description",
+        "context_key": "context_window",
+        "max_tokens_key": "max_tokens"
+    },
+    "model_config_defaults": {
+        "max_tokens": 32768,
+        "temperature": 0.6,
+        "top_p": 1.0,
+        "stream": true,
+        "timeout": 180,
+        "max_retries": 3,
+        "capabilities": ["chat", "vision", "video", "reasoning", "code", "function_calling", "json_mode"]
+    },
+    "models": [
+        {
+            "code": "kimi-k2.6",
+            "name": "Kimi K2.6",
+            "description": "Kimi latest multimodal model for coding, long-context reasoning, agent tasks, image and video input.",
+            "max_tokens": 32768,
+            "context_window": 256000,
+            "input_price": 6.50,
+            "output_price": 27.00,
+            "capabilities": ["chat", "vision", "video", "reasoning", "code", "function_calling", "json_mode", "web_search"]
+        },
+        {
+            "code": "kimi-k2.5",
+            "name": "Kimi K2.5",
+            "description": "Kimi multimodal model for agent, coding, vision and general tasks.",
+            "max_tokens": 32768,
+            "context_window": 256000,
+            "input_price": 4.00,
+            "output_price": 21.00,
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "json_mode", "web_search"]
+        }
+    ],
+    "models_updated_at": "2026-04-24",
+    "models_source": "https://platform.kimi.com/docs/models"
+}
