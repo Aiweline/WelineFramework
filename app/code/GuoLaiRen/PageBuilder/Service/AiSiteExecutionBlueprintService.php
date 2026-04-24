@@ -443,7 +443,7 @@ final class AiSiteExecutionBlueprintService
     {
         $decoded = $this->normalizeAiPlanResponseShape($decoded);
         $source = \is_array($decoded['plan_json'] ?? null) ? $decoded['plan_json'] : $decoded;
-        foreach (['i18n', 'site_strategy', 'theme_style', 'palette', 'theme_design', 'navigation_plan', 'footer_plan', 'shared_components', 'seo_strategy'] as $key) {
+        foreach (['i18n', 'site_strategy', 'theme_style', 'palette', 'theme_design', 'page_type_overviews', 'navigation_plan', 'footer_plan', 'shared_components', 'seo_strategy'] as $key) {
             if (\is_array($source[$key] ?? null)) {
                 $planJson[$key] = $source[$key];
             }
@@ -467,6 +467,12 @@ final class AiSiteExecutionBlueprintService
             \is_array($planJson['i18n'] ?? null) ? $planJson['i18n'] : [],
             $planLocale,
             $this->isEnglishLocale($planLocale)
+        );
+        $planJson['page_type_overviews'] = $this->buildStageOnePageTypeOverviewContext(
+            \is_array($planJson['page_type_overviews'] ?? null) ? $planJson['page_type_overviews'] : [],
+            $pageTypes,
+            \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : [],
+            \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : []
         );
 
         return $planJson;
@@ -829,10 +835,10 @@ final class AiSiteExecutionBlueprintService
         $requirementExpansionJson = \json_encode($requirementExpansion, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         return \implode("\n", [
             'You are PageBuilder Stage-1 THEME planner.',
-            'Step 2 only: use the confirmed requirement expansion to generate the shared theme, Header, and Footer plan. Do not include page-specific block plans.',
+            'Step 2 only: use the confirmed requirement expansion to generate the shared theme, Header, Footer, and compact page-type design overviews. Do not include page-specific block plans.',
             'Return STRICT JSON only.',
             'Confirmed requirement expansion from step 1: ' . $requirementExpansionJson,
-            'Goal: confirm the shared theme/global plan and shared Header/Footer before page-specific plans are generated in separate fanout calls.',
+            'Goal: confirm the shared theme/global plan, shared Header/Footer, and each page type visual role before page-specific plans are generated in separate fanout calls.',
             'Plan locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
             'Website content locale: ' . ($contentLocale !== '' ? $contentLocale : ($planLocale !== '' ? $planLocale : 'zh_Hans_CN')),
             'Language rule: Header/Footer labels, CTA labels, link labels, media text, and other customer-visible website copy MUST use Website content locale. Do not use Plan locale for visible website copy unless both locales are identical.',
@@ -841,8 +847,9 @@ final class AiSiteExecutionBlueprintService
             'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
             'Selected page types: ' . \implode(', ', $pageTypes),
             'Schema:',
-            '{"i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},"site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},"theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"string"},"palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"string"},"theme_design":{"theme_purpose":"string","color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"must copy at least one exact noun/action phrase from Brief or Instruction and explain why the shared theme fits it"},"navigation_plan":{"header_items":[{"label":"string","href":"string"}]},"footer_plan":{"featured":[{"label":"string","href":"string"}],"policies":[{"label":"string","href":"string"}]},"shared_components":{"header":{"component":"header","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"},"footer":{"component":"footer","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"}},"seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"}}',
-            'Hard rules: theme_design and shared_components.header/footer must be concrete implementation decisions derived from the expanded requirement; theme_design.selection_reason must copy at least one exact noun/action phrase from Brief or Instruction and explain why the theme fits that one-line requirement; keep output compact.',
+            '{"i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},"site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},"theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"string"},"palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"string"},"theme_design":{"theme_purpose":"string","color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"must copy at least one exact noun/action phrase from Brief or Instruction and explain why the shared theme fits it"},"page_type_overviews":{"home_page":{"page_role":"string","content_focus":"string","theme_color_application":"string","section_layering_hint":"string","interaction_intent":"string","differentiation_note":"string"}},"navigation_plan":{"header_items":[{"label":"string","href":"string"}]},"footer_plan":{"featured":[{"label":"string","href":"string"}],"policies":[{"label":"string","href":"string"}]},"shared_components":{"header":{"component":"header","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"},"footer":{"component":"footer","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"}},"seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"}}',
+            'Hard rules: theme_design and shared_components.header/footer must be concrete implementation decisions derived from the expanded requirement; page_type_overviews must cover every selected page type with page role, content focus, theme color application, section layering hint, interaction intent, and differentiation note; these overviews are conceptual page planning only, not block lists; theme_design.selection_reason must copy at least one exact noun/action phrase from Brief or Instruction and explain why the theme fits that one-line requirement; keep output compact.',
+            'Anti-monotony rule: page_type_overviews.theme_color_application and section_layering_hint must prevent an entire page from becoming one flat color; describe alternating surfaces/cards/gradients/contrast zones using the approved palette.',
         ]);
     }
 
@@ -860,6 +867,7 @@ final class AiSiteExecutionBlueprintService
         $requirementExpansion = \json_encode($planJson['requirement_expansion'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         $themeDesign = \json_encode($planJson['theme_design'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         $sharedComponents = \json_encode($planJson['shared_components'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        $pageTypeOverview = \json_encode($this->resolveStageOnePageTypeOverview($planJson, $pageType), \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         $baselinePage = \json_encode($planJson['pages'][$pageType] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         $pageArchitectureGuide = $this->buildStageOnePageArchitectureGuide($pageType);
         return \implode("\n", [
@@ -876,8 +884,15 @@ final class AiSiteExecutionBlueprintService
             'Target scope: ' . ($targetScope !== '' ? $targetScope : '-'),
             'Confirmed requirement expansion (non-negotiable): ' . $requirementExpansion,
             'Shared theme_design (non-negotiable): ' . $themeDesign,
+            'Theme-level page overview for this page (use before choosing blocks): ' . $pageTypeOverview,
             'Confirmed shared Header/Footer blocks (must frame this page when displayed): ' . $sharedComponents,
             'Baseline page shape to improve, keep compatible keys: ' . $baselinePage,
+            'Page design planning rules:',
+            '- First create page_design_plan, then derive blocks from it. Blocks must not be chosen directly from theme_design alone.',
+            '- page_design_plan.color_layering must name which theme colors are used for page background, alternating section surfaces, cards/panels, text, and CTA/accent states.',
+            '- Prevent monotone pages: never make the entire page one flat background color unless the page_design_plan explicitly adds layered surfaces, cards, dividers, gradients, illustrations, or contrast bands.',
+            '- page_design_plan.section_flow must describe the visual rhythm across 2-3 blocks: opening impact, middle information/proof layer, and closing action or reassurance layer.',
+            '- page_design_plan.interaction_notes must describe hover/focus/mobile behavior that matches the page role, not just generic CTA hover.',
             'Critical page differentiation rules:',
             '- Design this page from its page_type intent, not by copying the home page and changing nouns.',
             '- home_page and about_page MUST have clearly different block_key sets, block order, content purpose, and design_tags.',
@@ -890,9 +905,31 @@ final class AiSiteExecutionBlueprintService
             '- design_tags examples: visual=["premium","card shadow","rounded image","large banner"], motion=["5s fade in/out","subtle parallax","hover lift"], interaction=["primary CTA hover","tabs","accordion"], texture=["soft gradient","glass surface","Indian pattern accent"], responsive=["mobile stacked cards","desktop two-column"].',
             '- These design_tags are source-of-truth for stage-2 and stage-3; make them specific enough to recreate effects, spacing, shadows, radius, image treatment, and interaction behavior.',
             'Schema:',
-            '{"page":{"page_goal":"string","theme_alignment_summary":"string","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"implementation_note":"string"},"field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}}',
-            'Hard rules: output 2-3 blocks only; each block exactly 3 field_plan rows; execution_script.feature_points max 3 and must be concrete customer-visible deliverables for this block, not writing/layout instructions like "section title"; content and core_copy must be final customer-visible implementation content in Website content locale, compact and not instruction-like; every block must have complete design_tags.',
+            '{"page":{"page_goal":"string","theme_alignment_summary":"string","page_design_plan":{"page_role":"string","content_narrative":"string","visual_hierarchy":"string","color_layering":"string","section_flow":["string"],"interaction_notes":["string"],"anti_monotony_rule":"string"},"primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","page_flow_role":"opening|proof|details|cta|support","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"color_layering":"string","implementation_note":"string"},"field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}}',
+            'Hard rules: output 2-3 blocks only; each block exactly 3 field_plan rows; execution_script.feature_points max 3 and must be concrete customer-visible deliverables for this block, not writing/layout instructions like "section title"; content and core_copy must be final customer-visible implementation content in Website content locale, compact and not instruction-like; every block must have complete design_tags; every block must state how it follows page_design_plan.color_layering and page_design_plan.section_flow.',
         ]);
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @return array<string, mixed>
+     */
+    private function resolveStageOnePageTypeOverview(array $planJson, string $pageType): array
+    {
+        $overviews = \is_array($planJson['page_type_overviews'] ?? null) ? $planJson['page_type_overviews'] : [];
+        if (\is_array($overviews[$pageType] ?? null)) {
+            return $overviews[$pageType];
+        }
+        foreach ($overviews as $overview) {
+            if (!\is_array($overview)) {
+                continue;
+            }
+            if (\trim((string)($overview['page_type'] ?? $overview['page_key'] ?? '')) === $pageType) {
+                return $overview;
+            }
+        }
+
+        return [];
     }
 
     private function buildStageOnePageArchitectureGuide(string $pageType): string
@@ -2045,6 +2082,7 @@ final class AiSiteExecutionBlueprintService
                 'site_strategy' => \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [],
                 'theme_style' => \is_array($planJson['theme_style'] ?? null) ? $planJson['theme_style'] : [],
                 'palette' => \is_array($planJson['palette'] ?? null) ? $planJson['palette'] : [],
+                'page_type_overviews' => \is_array($planJson['page_type_overviews'] ?? null) ? $planJson['page_type_overviews'] : [],
                 'navigation_plan' => \is_array($planJson['navigation_plan'] ?? null) ? $planJson['navigation_plan'] : [],
                 'footer_plan' => \is_array($planJson['footer_plan'] ?? null) ? $planJson['footer_plan'] : [],
                 'seo_strategy' => \is_array($planJson['seo_strategy'] ?? null) ? $planJson['seo_strategy'] : [],
@@ -2066,6 +2104,9 @@ final class AiSiteExecutionBlueprintService
             \is_array($executionBlueprint['theme_context_snapshot'] ?? null) ? $executionBlueprint['theme_context_snapshot'] : [],
             $themeDesign
         );
+        if (\is_array($planJson['page_type_overviews'] ?? null) && $planJson['page_type_overviews'] !== []) {
+            $themeContextSnapshot['page_type_overviews'] = $planJson['page_type_overviews'];
+        }
         $themeDesignQueueJob = $this->buildStageOneThemeDesignQueueJob($scope, $websiteProfile, $themeContextSnapshot, $planLocale);
         $stageOneQueueJobs = $this->upsertStageOneQueueJob(
             \is_array($executionBlueprint['queue_jobs'] ?? null)
@@ -2136,6 +2177,9 @@ final class AiSiteExecutionBlueprintService
             }
             if (\trim((string)($planJson['pages'][$pageType]['theme_alignment_summary'] ?? '')) === '') {
                 $planJson['pages'][$pageType]['theme_alignment_summary'] = (string)($pagePlan['theme_alignment_summary'] ?? '');
+            }
+            if (!\is_array($planJson['pages'][$pageType]['page_design_plan'] ?? null)) {
+                $planJson['pages'][$pageType]['page_design_plan'] = \is_array($pagePlan['page_design_plan'] ?? null) ? $pagePlan['page_design_plan'] : [];
             }
         }
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
@@ -5477,6 +5521,12 @@ final class AiSiteExecutionBlueprintService
             'theme_design' => [
                 ...$this->extractStageOneThemeDesign($themeContextSnapshot),
             ],
+            'page_type_overviews' => $this->buildStageOnePageTypeOverviewContext(
+                \is_array($themeContextSnapshot['page_type_overviews'] ?? null) ? $themeContextSnapshot['page_type_overviews'] : [],
+                $pageTypes,
+                $themeContextSnapshot,
+                $requirementExpansion
+            ),
             'header_plan' => \is_array($sharedComponents['header'] ?? null) ? $sharedComponents['header'] : [],
             'footer_plan' => \is_array($sharedComponents['footer'] ?? null) ? $sharedComponents['footer'] : [],
             'generation_rule' => $this->isEnglishLocale($contentLocale)
@@ -5486,6 +5536,54 @@ final class AiSiteExecutionBlueprintService
         $context['context_hash'] = \sha1((string)\json_encode($context, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
 
         return $context;
+    }
+
+    /**
+     * @param array<string, mixed> $rawOverviews
+     * @param list<string> $pageTypes
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildStageOnePageTypeOverviewContext(array $rawOverviews, array $pageTypes, array $themeContextSnapshot, array $requirementExpansion): array
+    {
+        $mapped = [];
+        foreach ($rawOverviews as $key => $overview) {
+            if (!\is_array($overview)) {
+                continue;
+            }
+            $pageType = \trim((string)(\is_string($key) ? $key : ($overview['page_type'] ?? $overview['page_key'] ?? '')));
+            if ($pageType === '') {
+                continue;
+            }
+            $mapped[$pageType] = $overview;
+        }
+
+        $themeDesign = $this->extractStageOneThemeDesign($themeContextSnapshot);
+        $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+        $visualKeywords = \is_array($themeDesign['visual_keywords'] ?? null) ? $this->normalizeStringList($themeDesign['visual_keywords']) : [];
+        $expandedBrief = \trim((string)($requirementExpansion['expanded_brief'] ?? $requirementExpansion['core_user_intent'] ?? ''));
+        $primary = \trim((string)($colorScheme['primary'] ?? 'primary'));
+        $surface = \trim((string)($colorScheme['background'] ?? $colorScheme['surface'] ?? 'surface'));
+        $accent = \trim((string)($colorScheme['accent'] ?? $colorScheme['button'] ?? 'accent'));
+
+        foreach ($pageTypes as $pageType) {
+            if (\is_array($mapped[$pageType] ?? null) && $mapped[$pageType] !== []) {
+                continue;
+            }
+            $role = $pageType === Page::TYPE_HOME
+                ? 'conversion entry page'
+                : ($pageType === Page::TYPE_ABOUT ? 'trust and story page' : 'page-specific support page');
+            $mapped[$pageType] = [
+                'page_type' => $pageType,
+                'page_role' => $role,
+                'content_focus' => $expandedBrief !== '' ? $expandedBrief : 'Use this page to support the selected website goal with concrete visitor-facing content.',
+                'theme_color_application' => 'Use ' . $surface . ' as base, ' . $primary . ' for strong page identity, and ' . $accent . ' for CTA/accent states.',
+                'section_layering_hint' => 'Alternate background, surface panels, cards, dividers, or illustration bands so this page is not one flat color.',
+                'interaction_intent' => $pageType === Page::TYPE_HOME ? 'Make the primary conversion path obvious with visible hover/focus feedback.' : 'Use page-appropriate interactive affordances without copying the home page rhythm.',
+                'differentiation_note' => $visualKeywords !== [] ? 'Keep ' . \implode(', ', \array_slice($visualKeywords, 0, 3)) . ' but vary block sequence and color layering for ' . $pageType . '.' : 'Keep the shared theme but vary block sequence and color layering for ' . $pageType . '.',
+            ];
+        }
+
+        return $mapped;
     }
 
     /**
@@ -5872,6 +5970,11 @@ final class AiSiteExecutionBlueprintService
             'assembly_version' => 1,
             'generation_method' => 'stage1.page_plan.generate',
         ]);
+        $assembledPagePlan['page_design_plan'] = $this->normalizeStageOnePageDesignPlan(
+            $pageType,
+            $assembledPagePlan,
+            $sharedPromptContext
+        );
         $blocks = [];
         foreach (\is_array($assembledPagePlan['blocks'] ?? null) ? $assembledPagePlan['blocks'] : [] as $index => $block) {
             if (!\is_array($block)) {
@@ -5948,7 +6051,12 @@ final class AiSiteExecutionBlueprintService
             'realtime_content' => $realtimeContent,
             'editable_fields' => $editableFields,
             'content_source' => $contentSource,
-            'design_tags' => $this->normalizeStageOneBlockDesignTags($block, $sharedPromptContext),
+            'page_flow_role' => (string)($block['page_flow_role'] ?? $this->inferStageOnePageFlowRole($index, $blockKey)),
+            'design_tags' => $this->normalizeStageOneBlockDesignTags(
+                $block,
+                $sharedPromptContext,
+                \is_array($pagePlan['page_design_plan'] ?? null) ? $pagePlan['page_design_plan'] : []
+            ),
             'style_direction' => (string)($block['style_direction'] ?? $block['execution_script']['style_tone'] ?? ''),
             'responsive_rule' => (string)($block['responsive_rule'] ?? $block['execution_script']['responsive_rule'] ?? ''),
             'seo_role' => (string)($block['seo_role'] ?? $block['seo_impact'] ?? ''),
@@ -5968,9 +6076,9 @@ final class AiSiteExecutionBlueprintService
     /**
      * @param array<string, mixed> $block
      * @param array<string, mixed> $sharedPromptContext
-     * @return array{visual:list<string>,motion:list<string>,interaction:list<string>,texture:list<string>,responsive:list<string>,implementation_note:string}
+     * @return array{visual:list<string>,motion:list<string>,interaction:list<string>,texture:list<string>,responsive:list<string>,color_layering:string,implementation_note:string}
      */
-    private function normalizeStageOneBlockDesignTags(array $block, array $sharedPromptContext): array
+    private function normalizeStageOneBlockDesignTags(array $block, array $sharedPromptContext, array $pageDesignPlan = []): array
     {
         $raw = \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [];
         $executionScript = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
@@ -5979,6 +6087,7 @@ final class AiSiteExecutionBlueprintService
         $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
         $typography = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
         $blockKey = \trim((string)($block['block_key'] ?? $block['section_code'] ?? 'block'));
+        $pageColorLayering = \trim((string)($pageDesignPlan['color_layering'] ?? ''));
 
         $normalizeList = static function (mixed $value): array {
             if (!\is_array($value)) {
@@ -6023,6 +6132,9 @@ final class AiSiteExecutionBlueprintService
                 $texture[] = $backgroundDirection;
             }
         }
+        if ($pageColorLayering !== '') {
+            $texture[] = $pageColorLayering;
+        }
 
         $responsive = $normalizeList($raw['responsive'] ?? []);
         if ($responsive === []) {
@@ -6040,6 +6152,9 @@ final class AiSiteExecutionBlueprintService
         if ($implementationNote === '') {
             $implementationNote = 'Carry these design tags into stage-2 and stage-3 so animation, texture, spacing, radius, and interaction behavior are implemented consistently.';
         }
+        if ($pageColorLayering !== '' && !\str_contains($implementationNote, $pageColorLayering)) {
+            $implementationNote .= ' Follow page color layering: ' . $pageColorLayering;
+        }
 
         return [
             'visual' => \array_values(\array_unique($visual)),
@@ -6047,8 +6162,96 @@ final class AiSiteExecutionBlueprintService
             'interaction' => \array_values(\array_unique($interaction)),
             'texture' => \array_values(\array_unique($texture)),
             'responsive' => \array_values(\array_unique($responsive)),
+            'color_layering' => \trim((string)($raw['color_layering'] ?? $pageColorLayering)),
             'implementation_note' => $implementationNote,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $pagePlan
+     * @param array<string, mixed> $sharedPromptContext
+     * @return array<string, mixed>
+     */
+    private function normalizeStageOnePageDesignPlan(string $pageType, array $pagePlan, array $sharedPromptContext): array
+    {
+        $raw = \is_array($pagePlan['page_design_plan'] ?? null)
+            ? $pagePlan['page_design_plan']
+            : (\is_array($pagePlan['visual_design_plan'] ?? null) ? $pagePlan['visual_design_plan'] : []);
+        $overviews = \is_array($sharedPromptContext['page_type_overviews'] ?? null) ? $sharedPromptContext['page_type_overviews'] : [];
+        $overview = \is_array($overviews[$pageType] ?? null) ? $overviews[$pageType] : [];
+        $themeDesign = \is_array($sharedPromptContext['theme_design'] ?? null) ? $sharedPromptContext['theme_design'] : [];
+        $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+        $primary = \trim((string)($colorScheme['primary'] ?? 'primary'));
+        $background = \trim((string)($colorScheme['background'] ?? $colorScheme['surface'] ?? 'background'));
+        $accent = \trim((string)($colorScheme['accent'] ?? $colorScheme['button'] ?? 'accent'));
+
+        $sectionFlow = $this->normalizeStringList($raw['section_flow'] ?? []);
+        if ($sectionFlow === []) {
+            $sectionFlow = $this->normalizeStringList($raw['content_flow'] ?? []);
+        }
+        if ($sectionFlow === []) {
+            $sectionFlow = [
+                'Opening block establishes the page-specific promise with a distinctive visual layer.',
+                'Middle block changes surface treatment for proof, detail, or reassurance.',
+                'Closing block uses CTA/accent treatment without repeating the opening composition.',
+            ];
+        }
+
+        $interactionNotes = $this->normalizeStringList($raw['interaction_notes'] ?? []);
+        if ($interactionNotes === []) {
+            $interactionNotes = $this->normalizeStringList($overview['interaction_intent'] ?? []);
+        }
+        if ($interactionNotes === []) {
+            $interactionNotes = ['Use hover, focus, and mobile states that reinforce this page role without generic CTA-only behavior.'];
+        }
+
+        $colorLayering = \trim((string)($raw['color_layering'] ?? $raw['theme_color_application'] ?? $overview['theme_color_application'] ?? ''));
+        if ($colorLayering === '') {
+            $colorLayering = 'Use ' . $background . ' as base, ' . $primary . ' for strong identity zones, and ' . $accent . ' for CTA/accent states with alternating section surfaces.';
+        }
+
+        return [
+            'page_role' => $this->firstNonEmptyString([
+                $raw['page_role'] ?? null,
+                $overview['page_role'] ?? null,
+                $pageType,
+            ]),
+            'content_narrative' => $this->firstNonEmptyString([
+                $raw['content_narrative'] ?? null,
+                $raw['content_focus'] ?? null,
+                $overview['content_focus'] ?? null,
+                $pagePlan['page_goal'] ?? null,
+            ]),
+            'visual_hierarchy' => $this->firstNonEmptyString([
+                $raw['visual_hierarchy'] ?? null,
+                $raw['section_layering_hint'] ?? null,
+                $overview['section_layering_hint'] ?? null,
+                'Build a clear opening, supporting middle layer, and conversion or reassurance close.',
+            ]),
+            'color_layering' => $colorLayering,
+            'section_flow' => $sectionFlow,
+            'interaction_notes' => $interactionNotes,
+            'anti_monotony_rule' => $this->firstNonEmptyString([
+                $raw['anti_monotony_rule'] ?? null,
+                'Do not render the whole page as one flat color; every block needs a distinct surface, card, divider, texture, illustration, or contrast band while staying inside the approved palette.',
+            ]),
+        ];
+    }
+
+    private function inferStageOnePageFlowRole(int $index, string $blockKey): string
+    {
+        $normalized = \mb_strtolower($blockKey);
+        if ($this->looksLikeHeroBlockKey($normalized) || $index === 0) {
+            return 'opening';
+        }
+        if (\str_contains($normalized, 'cta')) {
+            return 'cta';
+        }
+        if (\str_contains($normalized, 'proof') || \str_contains($normalized, 'trust') || \str_contains($normalized, 'testimonial')) {
+            return 'proof';
+        }
+
+        return $index >= 2 ? 'support' : 'details';
     }
 
     private function looksLikeHeroBlockKey(string $blockKey): bool
@@ -6773,6 +6976,7 @@ final class AiSiteExecutionBlueprintService
                 'content_locale' => $contentLocale,
                 'page_status' => (string)($pagePlan['page_status'] ?? 'done'),
                 'theme_alignment_summary' => \trim((string)($pagePlan['theme_alignment_summary'] ?? '')),
+                'page_design_plan' => \is_array($pagePlan['page_design_plan'] ?? null) ? $pagePlan['page_design_plan'] : [],
                 'shared_context_hash' => (string)($pagePlan['shared_context_hash'] ?? $sharedPromptContext['context_hash'] ?? ''),
                 'theme_context_hash' => (string)($pagePlan['theme_context_hash'] ?? $sharedPromptContext['theme_context_hash'] ?? ''),
                 'page_context_hash' => (string)($pagePlan['page_context_hash'] ?? ''),
@@ -6792,6 +6996,7 @@ final class AiSiteExecutionBlueprintService
             'requirement_expansion' => $requirementExpansion,
             'theme_context_snapshot' => $themeContextSnapshot,
             'shared_prompt_context' => $sharedPromptContext,
+            'page_type_overviews' => \is_array($sharedPromptContext['page_type_overviews'] ?? null) ? $sharedPromptContext['page_type_overviews'] : [],
             'theme_design' => $this->extractStageOneThemeDesign(
                 \is_array($structured['shared_plan']['theme_design'] ?? null)
                     ? $structured['shared_plan']['theme_design']
@@ -8792,6 +8997,24 @@ final class AiSiteExecutionBlueprintService
         }
 
         return \array_values($normalized);
+    }
+
+    /**
+     * @param list<mixed> $values
+     */
+    private function firstNonEmptyString(array $values): string
+    {
+        foreach ($values as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $text = \trim((string)$value);
+            if ($text !== '') {
+                return $text;
+            }
+        }
+
+        return '';
     }
 
     private function clipText(string $text, int $maxLength): string

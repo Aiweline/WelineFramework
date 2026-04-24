@@ -36,6 +36,16 @@ class StatusLogService
      * 记录间隔（秒）
      */
     private static int $logInterval = 60;
+
+    /**
+     * 状态写库失败后的冷却截止时间。
+     */
+    private static int $failureCooldownUntil = 0;
+
+    /**
+     * 状态日志是观测旁路，数据库不可用时不应持续拖慢 WLS 主链路。
+     */
+    private static int $failureCooldownSeconds = 300;
     
     /**
      * 模型实例
@@ -51,6 +61,10 @@ class StatusLogService
     public static function logWorkerStatus(array $workerInfo, bool $force = false): void
     {
         if (!self::$enabled) {
+            return;
+        }
+
+        if (self::isInFailureCooldown()) {
             return;
         }
         
@@ -84,7 +98,9 @@ class StatusLogService
             
             self::getModel()->clearQuery()->logStatus($data);
             self::$lastLogTime = $now;
+            self::clearFailureCooldown();
         } catch (\Throwable $e) {
+            self::enterFailureCooldown();
             // 静默失败，避免影响业务
             self::logError(
                 $e->getMessage(),
@@ -99,6 +115,10 @@ class StatusLogService
     public static function logDispatcherStatus(array $dispatcherInfo): void
     {
         if (!self::$enabled) {
+            return;
+        }
+
+        if (self::isInFailureCooldown()) {
             return;
         }
         
@@ -126,7 +146,9 @@ class StatusLogService
             ];
             
             self::getModel()->clearQuery()->logStatus($data);
+            self::clearFailureCooldown();
         } catch (\Throwable $e) {
+            self::enterFailureCooldown();
             self::logError(
                 $e->getMessage(),
                 \is_string($dispatcherInfo['instance'] ?? null) ? (string)$dispatcherInfo['instance'] : null
@@ -140,6 +162,10 @@ class StatusLogService
     public static function logMasterStatus(array $masterInfo): void
     {
         if (!self::$enabled) {
+            return;
+        }
+
+        if (self::isInFailureCooldown()) {
             return;
         }
         
@@ -167,7 +193,9 @@ class StatusLogService
             ];
             
             self::getModel()->clearQuery()->logStatus($data);
+            self::clearFailureCooldown();
         } catch (\Throwable $e) {
+            self::enterFailureCooldown();
             self::logError(
                 $e->getMessage(),
                 \is_string($masterInfo['instance'] ?? null) ? (string)$masterInfo['instance'] : null
@@ -184,6 +212,21 @@ class StatusLogService
             self::$model = ObjectManager::getInstance(ServerStatusLog::class);
         }
         return self::$model;
+    }
+
+    private static function isInFailureCooldown(): bool
+    {
+        return self::$failureCooldownUntil > \time();
+    }
+
+    private static function enterFailureCooldown(): void
+    {
+        self::$failureCooldownUntil = \time() + \max(1, self::$failureCooldownSeconds);
+    }
+
+    private static function clearFailureCooldown(): void
+    {
+        self::$failureCooldownUntil = 0;
     }
     
     /**

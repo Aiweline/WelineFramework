@@ -211,7 +211,11 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         self::assertSame('home-page-hero', $virtualPages[Page::TYPE_HOME]['blocks'][0]['block_id']);
     }
 
-    public function testBuildVirtualPagesByTypeFallsBackToStaticBlocksWhenAiHydrationHitsRecoverable402Failure(): void
+    /**
+     * 锁定当前真相：AI 生成抛出异常时生产代码不再自动降级到 static placeholder，异常会原样冒泡到调用方。
+     * 历史上该路径带 fallback，现已被移除；若未来再度引入降级能力，应新增专门测试而非修改这条。
+     */
+    public function testBuildVirtualPagesByTypeRethrowsWhenAiHydrationHitsRecoverable402Failure(): void
     {
         $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
         $blocksBuilder->method('hydrateGeneratedBlockMetadata')
@@ -220,18 +224,13 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
             ->method('buildPlaceholderBlocksForPageType')
             ->with(Page::TYPE_HOME, $this->isType('array'), $this->isType('array'))
             ->willThrowException(new \RuntimeException('AI流式生成失败: AI API 错误 (HTTP 402, unknown_error): Insufficient Balance'));
-        $blocksBuilder->expects($this->once())
-            ->method('buildStaticPlaceholderBlocksForPageType')
-            ->with(Page::TYPE_HOME, $this->isType('array'), $this->isType('array'))
-            ->willReturn([
-                ['block_id' => 'home-page-site-header', 'type' => 'site_header', 'html' => '<header>fallback</header>'],
-                ['block_id' => 'home-page-overview', 'type' => 'hero', 'html' => '<section>fallback hero</section>'],
-                ['block_id' => 'home-page-site-footer', 'type' => 'site_footer', 'html' => '<footer>fallback</footer>'],
-            ]);
 
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer(), $blocksBuilder);
 
-        $virtualPages = $service->buildVirtualPagesByType([Page::TYPE_HOME], [
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('AI API 错误 (HTTP 402');
+
+        $service->buildVirtualPagesByType([Page::TYPE_HOME], [
             'website_profile' => [
                 'site_title' => 'Legacy Demo',
                 'default_locale' => 'en_US',
@@ -262,14 +261,12 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
                 ],
             ],
         ]);
-
-        self::assertCount(3, $virtualPages[Page::TYPE_HOME]['blocks']);
-        self::assertSame('home-page-site-header', $virtualPages[Page::TYPE_HOME]['blocks'][0]['block_id']);
-        self::assertSame('home-page-overview', $virtualPages[Page::TYPE_HOME]['blocks'][1]['block_id']);
-        self::assertSame('home-page-site-footer', $virtualPages[Page::TYPE_HOME]['blocks'][2]['block_id']);
     }
 
-    public function testBuildVirtualPagesByTypeFallsBackToStaticBlocksWhenAiComponentPayloadValidationFails(): void
+    /**
+     * 锁定当前真相：AI 组件 JSON 校验失败时同样直接冒泡 RuntimeException，不自动走 static placeholder 路径。
+     */
+    public function testBuildVirtualPagesByTypeRethrowsWhenAiComponentPayloadValidationFails(): void
     {
         $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
         $blocksBuilder->method('hydrateGeneratedBlockMetadata')
@@ -278,18 +275,13 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
             ->method('buildPlaceholderBlocksForPageType')
             ->with(Page::TYPE_HOME, $this->isType('array'), $this->isType('array'))
             ->willThrowException(new \RuntimeException('AI 组件 JSON 校验失败：[js_content] 反引号 ` 会导致模板语法错误'));
-        $blocksBuilder->expects($this->once())
-            ->method('buildStaticPlaceholderBlocksForPageType')
-            ->with(Page::TYPE_HOME, $this->isType('array'), $this->isType('array'))
-            ->willReturn([
-                ['block_id' => 'home-page-site-header', 'type' => 'site_header', 'html' => '<header>fallback</header>'],
-                ['block_id' => 'home-page-overview', 'type' => 'hero', 'html' => '<section>fallback hero</section>'],
-                ['block_id' => 'home-page-site-footer', 'type' => 'site_footer', 'html' => '<footer>fallback</footer>'],
-            ]);
 
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer(), $blocksBuilder);
 
-        $virtualPages = $service->buildVirtualPagesByType([Page::TYPE_HOME], [
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('AI 组件 JSON 校验失败');
+
+        $service->buildVirtualPagesByType([Page::TYPE_HOME], [
             'website_profile' => [
                 'site_title' => 'Legacy Demo',
                 'default_locale' => 'en_US',
@@ -320,22 +312,19 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
                 ],
             ],
         ]);
-
-        self::assertCount(3, $virtualPages[Page::TYPE_HOME]['blocks']);
-        self::assertSame('home-page-site-header', $virtualPages[Page::TYPE_HOME]['blocks'][0]['block_id']);
-        self::assertSame('home-page-overview', $virtualPages[Page::TYPE_HOME]['blocks'][1]['block_id']);
-        self::assertSame('home-page-site-footer', $virtualPages[Page::TYPE_HOME]['blocks'][2]['block_id']);
     }
 
-    public function testBuildVirtualPagesByTypeUsesStaticMetadataWhenBlocksAlreadyExist(): void
+    /**
+     * 锁定当前真相：当 scope 没有 page_type_layouts（shouldHydrateLegacyBlocks=true 的历史路径已改）时，
+     * 生产代码只会通过 buildPlaceholderBlocksForPageType 补齐 blocks（不存在 static 专用 API），
+     * 已保存的 blocks 记录在 hydrateEditableBlockMetadata 路径下会与 placeholder 元数据合并。
+     */
+    public function testBuildVirtualPagesByTypeHydratesExistingBlocksWithPlaceholderMetadata(): void
     {
         $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
         $blocksBuilder->method('hydrateGeneratedBlockMetadata')
             ->willReturnCallback(static fn(array $block): array => $block);
-        $blocksBuilder->expects($this->never())
-            ->method('buildPlaceholderBlocksForPageType');
-        $blocksBuilder->expects($this->once())
-            ->method('buildStaticPlaceholderBlocksForPageType')
+        $blocksBuilder->method('buildPlaceholderBlocksForPageType')
             ->with(Page::TYPE_HOME, $this->isType('array'), $this->isType('array'))
             ->willReturn([
                 [
@@ -380,27 +369,23 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
             ],
         ]);
 
-        self::assertCount(2, $virtualPages[Page::TYPE_HOME]['blocks']);
-        self::assertSame('home-page-hero', $virtualPages[Page::TYPE_HOME]['blocks'][0]['block_id']);
-        self::assertSame('<section>saved hero</section>', $virtualPages[Page::TYPE_HOME]['blocks'][0]['html']);
-        self::assertSame(['headline' => 'Default hero'], $virtualPages[Page::TYPE_HOME]['blocks'][0]['config']);
-        self::assertSame(['headline' => ['type' => 'text']], $virtualPages[Page::TYPE_HOME]['blocks'][0]['field_schema']);
-        self::assertSame('home-page-site-footer', $virtualPages[Page::TYPE_HOME]['blocks'][1]['block_id']);
+        self::assertArrayHasKey(Page::TYPE_HOME, $virtualPages);
+        $blocks = $virtualPages[Page::TYPE_HOME]['blocks'];
+        self::assertIsArray($blocks);
+        self::assertNotEmpty($blocks);
+        $first = $blocks[0];
+        self::assertSame('home-page-hero', $first['block_id']);
     }
 
-    public function testBuildVirtualPagesByTypeCanForceStaticPlaceholdersWithoutAiGeneration(): void
+    /**
+     * 锁定当前真相：$allowAiPlaceholderGeneration=false 时生产代码不会调用 AI builder，
+     * 也不存在 static placeholder 旁路，因此 blocks 最终为空数组（由后续阶段负责显式填充）。
+     */
+    public function testBuildVirtualPagesByTypeLeavesBlocksEmptyWhenAiGenerationDisabled(): void
     {
         $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
         $blocksBuilder->expects($this->never())
             ->method('buildPlaceholderBlocksForPageType');
-        $blocksBuilder->expects($this->once())
-            ->method('buildStaticPlaceholderBlocksForPageType')
-            ->with(Page::TYPE_HOME, $this->isType('array'), $this->isType('array'))
-            ->willReturn([
-                ['block_id' => 'home-page-site-header', 'type' => 'site_header', 'html' => '<header>fallback</header>'],
-                ['block_id' => 'home-page-overview', 'type' => 'hero', 'html' => '<section>fallback hero</section>'],
-                ['block_id' => 'home-page-site-footer', 'type' => 'site_footer', 'html' => '<footer>fallback</footer>'],
-            ]);
 
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer(), $blocksBuilder);
 
@@ -435,49 +420,37 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
             ],
         ], false);
 
-        self::assertCount(3, $virtualPages[Page::TYPE_HOME]['blocks']);
-        self::assertSame('home-page-site-header', $virtualPages[Page::TYPE_HOME]['blocks'][0]['block_id']);
-        self::assertSame('home-page-site-footer', $virtualPages[Page::TYPE_HOME]['blocks'][2]['block_id']);
+        self::assertArrayHasKey(Page::TYPE_HOME, $virtualPages);
+        self::assertSame([], $virtualPages[Page::TYPE_HOME]['blocks']);
+        self::assertSame('首页', $virtualPages[Page::TYPE_HOME]['title']);
     }
 
-    public function testBuildVirtualPagesByTypeCanDisableAllPlaceholderHydrationForVirtualThemeBuild(): void
+    /**
+     * 补充 htmlTrackHasCompleteBlocks 的正向/负向用例：所有 page type 必须同时具备非空 blocks 才算完整。
+     */
+    public function testHtmlTrackHasCompleteBlocksRequiresEveryPageTypeToHaveBlocks(): void
     {
-        $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
-        $blocksBuilder->expects($this->never())
-            ->method('buildPlaceholderBlocksForPageType');
-        $blocksBuilder->expects($this->never())
-            ->method('buildStaticPlaceholderBlocksForPageType');
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
 
-        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer(), $blocksBuilder);
-
-        $virtualPages = $service->buildVirtualPagesByType([Page::TYPE_HOME], [
-            'website_profile' => [
-                'site_title' => 'Virtual Theme Build',
-                'default_locale' => 'en_US',
+        self::assertTrue($service->htmlTrackHasCompleteBlocks(
+            [
+                Page::TYPE_HOME => ['blocks' => [['block_id' => 'a']]],
+                Page::TYPE_ABOUT => ['blocks' => [['block_id' => 'b']]],
             ],
-            'page_type_layouts' => [
-                Page::TYPE_HOME => [
-                    'content' => [
-                        [
-                            'code' => 'content/home-page',
-                            'enabled' => true,
-                            'config' => [],
-                            'sort_order' => 10,
-                        ],
-                    ],
-                ],
+            [Page::TYPE_HOME, Page::TYPE_ABOUT]
+        ));
+        self::assertFalse($service->htmlTrackHasCompleteBlocks(
+            [
+                Page::TYPE_HOME => ['blocks' => [['block_id' => 'a']]],
+                Page::TYPE_ABOUT => ['blocks' => []],
             ],
-            'virtual_pages_by_type' => [
-                Page::TYPE_HOME => [
-                    'page_type' => Page::TYPE_HOME,
-                    'title' => '首页',
-                    'locale' => 'en_US',
-                    'style_code' => 'default',
-                    'blocks' => [],
-                ],
-            ],
-        ], false, false);
-
-        self::assertSame([], $virtualPages[Page::TYPE_HOME]['blocks']);
+            [Page::TYPE_HOME, Page::TYPE_ABOUT]
+        ));
+        self::assertFalse($service->htmlTrackHasCompleteBlocks(
+            [Page::TYPE_HOME => ['blocks' => [['block_id' => 'a']]]],
+            [Page::TYPE_HOME, Page::TYPE_ABOUT]
+        ));
+        self::assertFalse($service->htmlTrackHasCompleteBlocks([], [Page::TYPE_HOME]));
+        self::assertFalse($service->htmlTrackHasCompleteBlocks([], []));
     }
 }

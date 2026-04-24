@@ -34,6 +34,11 @@ class Partials extends Block
      */
     private static array $partialsMetaCache = [];
 
+    public static function clearMetaCache(): void
+    {
+        self::$partialsMetaCache = [];
+    }
+
     /**
      * 初始化 Block
      */
@@ -359,4 +364,3 @@ class Partials extends Block
         }
     }
 }
-
