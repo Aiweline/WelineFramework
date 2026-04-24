@@ -34,6 +34,7 @@ use Weline\Framework\Setup\Stage\FrameworkDbBootstrapStage;
 use Weline\Framework\Setup\Stage\ModuleSetupStage;
 use Weline\Framework\Setup\Stage\EavSchemaStage;
 use Weline\Framework\Setup\Stage\SchemaDiffStage;
+use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\System\Text;
@@ -1771,45 +1772,53 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 如果是仅更新路由模式，跳过数据库更新任务收集
         if (!$isRouteOnly && $databaseStage !== null) {
             $this->printing->note(__('   - 批量收集数据库更新任务...'));
+            $moduleHelper = ObjectManager::getInstance(\Weline\Framework\Module\Helper\Data::class);
+            $oldModules = $module_handle->getModules();
+            $databaseTaskCollectors = [];
             foreach ($modules as $module_name => $module) {
                 if ($argsModule and !in_array($module_name, $argsModule)) {
                     continue;
                 }
-                
-                $moduleObj = new Module($module);
-                $setupContext = ObjectManager::make(SetupContext::class, [
-                    'module_name' => $moduleObj->getName(),
-                    'module_version' => $moduleObj->getVersion(),
-                    'module_description' => $moduleObj->getDescription()
-                ], '__construct');
-                
-                // 根据模块状态决定更新类型
-                /**@var \Weline\Framework\Module\Helper\Data $moduleHelper */
-                $moduleHelper = ObjectManager::getInstance(\Weline\Framework\Module\Helper\Data::class);
-                $oldModules = $module_handle->getModules(); // 获取旧模块列表（在注册前）
-                
-                if (isset($module['installing']) and $module['installing']) {
-                    // 新安装的模块
-                    $databaseStage->addUpdateTask($moduleObj, $setupContext, 'install');
-                    if (DEV) {
-                        $databaseStage->addUpdateTask($moduleObj, $setupContext, 'setup');
+
+                $databaseTaskCollectors[$module_name] = static function (string|int $taskKey) use ($module, $moduleHelper, $oldModules): array {
+                    $moduleObj = new Module($module);
+                    $setupContext = ObjectManager::make(SetupContext::class, [
+                        'module_name' => $moduleObj->getName(),
+                        'module_version' => $moduleObj->getVersion(),
+                        'module_description' => $moduleObj->getDescription()
+                    ], '__construct');
+
+                    $tasks = [];
+                    if (isset($module['installing']) and $module['installing']) {
+                        $tasks[] = [$moduleObj, $setupContext, 'install'];
+                        if (DEV) {
+                            $tasks[] = [$moduleObj, $setupContext, 'setup'];
+                        }
+                    } elseif (isset($module['upgrading']) and $module['upgrading']) {
+                        $old_version = $moduleHelper->isInstalled($oldModules, $moduleObj->getName())
+                            ? ($oldModules[$moduleObj->getName()]['version'] ?? '1.0.0')
+                            : '1.0.0';
+                        if ($moduleHelper->isUpgrade($old_version, $moduleObj->getVersion())) {
+                            $tasks[] = [$moduleObj, $setupContext, 'upgrade'];
+                        }
+                        if (DEV) {
+                            $tasks[] = [$moduleObj, $setupContext, 'setup'];
+                        }
+                    } else {
+                        if (DEV) {
+                            $tasks[] = [$moduleObj, $setupContext, 'setup'];
+                        }
                     }
-                } elseif (isset($module['upgrading']) and $module['upgrading']) {
-                    // 升级的模块
-                    $old_version = $moduleHelper->isInstalled($oldModules, $moduleObj->getName()) 
-                        ? ($oldModules[$moduleObj->getName()]['version'] ?? '1.0.0')
-                        : '1.0.0';
-                    if ($moduleHelper->isUpgrade($old_version, $moduleObj->getVersion())) {
-                        $databaseStage->addUpdateTask($moduleObj, $setupContext, 'upgrade');
-                    }
-                    if (DEV) {
-                        $databaseStage->addUpdateTask($moduleObj, $setupContext, 'setup');
-                    }
-                } else {
-                    // 已存在的模块，只执行 setup（开发模式）
-                    if (DEV) {
-                        $databaseStage->addUpdateTask($moduleObj, $setupContext, 'setup');
-                    }
+
+                    return $tasks;
+                };
+            }
+
+            $fiberConcurrency = max(1, (int)(getenv('WELINE_SETUP_FIBER_CONCURRENCY') ?: 4));
+            $taskRunner = new FiberTaskRunner($fiberConcurrency);
+            foreach ($taskRunner->run($databaseTaskCollectors, $fiberConcurrency) as $moduleTasks) {
+                foreach ($moduleTasks as [$moduleObj, $setupContext, $type]) {
+                    $databaseStage->addUpdateTask($moduleObj, $setupContext, $type);
                 }
             }
         } else {

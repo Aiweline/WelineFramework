@@ -7,14 +7,12 @@ namespace Weline\Server\Shared\Client;
 use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Shared\Connection\ConnectionPoolManager;
 use Weline\Server\Shared\Contract\ConnectionPoolInterface;
-use Weline\Server\Shared\Contract\LocalConsumerRegistryInterface;
 use Weline\Server\Shared\Contract\PooledConnectionInterface;
 
 class SharedStateClient
 {
     private ConnectionPoolInterface $pool;
     private float $acquireTimeout;
-    private string $consumerCode = '';
     private bool $released = false;
 
     public function __construct(
@@ -27,7 +25,7 @@ class SharedStateClient
             $port = 19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
         }
         if (!isset($options['min_idle']) && !isset($options['pool_min_idle'])) {
-            // 默认 0：不在建池阶段预建 TCP。多 Worker 同时 min_idle=1 会对 Session/Memory 单进程打连接风暴，
+            // 默认 0：不在建池阶段预建 TCP。多 Worker 同时预建连接会对 Session/Memory 单进程打连接风暴，
             // 易导致共享服务事件循环阻塞、cmd 子进程风暴与访问卡死。首条业务 acquire 再建连；需要可显式传 pool_min_idle。
             $options['min_idle'] = 0;
         }
@@ -46,16 +44,6 @@ class SharedStateClient
         }
         $this->pool = ConnectionPoolManager::getInstance($host, $port, $options);
         $this->acquireTimeout = (float)($options['acquire_timeout'] ?? $options['pool_acquire_timeout'] ?? 0.2);
-        $this->consumerCode = \trim((string) ($options['consumer_code'] ?? ''));
-
-        if ($this->consumerCode !== '' && $this->pool instanceof LocalConsumerRegistryInterface) {
-            $this->pool->registerLocalConsumer(
-                $this->consumerCode,
-                \trim((string) ($options['instance_name'] ?? $this->consumerCode)),
-                \trim((string) ($options['service_role'] ?? '')),
-                \trim((string) ($options['owner_type'] ?? 'instance')),
-            );
-        }
     }
 
     public function request(string $cmd, array $params = []): ?array
@@ -93,10 +81,7 @@ class SharedStateClient
             return;
         }
 
-        if ($this->consumerCode !== '' && $this->pool instanceof LocalConsumerRegistryInterface) {
-            $this->pool->unregisterLocalConsumer($this->consumerCode);
-        }
-
+        // Shared-service consumers are owned by Master IPC, not by per-worker TCP clients.
         $this->released = true;
     }
 

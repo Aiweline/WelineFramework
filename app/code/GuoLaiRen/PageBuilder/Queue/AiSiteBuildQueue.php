@@ -114,16 +114,18 @@ class AiSiteBuildQueue implements QueueInterface
             );
 
             $scope = $scopeService->normalizeScope($session->getScopeArray());
+            $confirmedScope = $scope;
+            $scopePatch = $buildTaskService->stripBuildPlanMutationScopePatch($scopePatch, $confirmedScope);
             if ($scopePatch !== []) {
                 $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
             }
+            $scope = $buildTaskService->restoreBuildPlanContract($scope, $confirmedScope);
             $normalizedScope = $buildTaskService->normalizeConfirmedTaskPlanFlag($scope);
-            if ((int)($normalizedScope['task_plan_confirmed'] ?? 0) !== (int)($scope['task_plan_confirmed'] ?? 0)) {
-                $scope = $normalizedScope;
+            $scopeChanged = $normalizedScope !== $confirmedScope;
+            $scope = $normalizedScope;
+            if ($scopeChanged) {
                 $sessionService->replaceScope((int)$session->getId(), $adminId, $scope);
                 $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-            } else {
-                $scope = $normalizedScope;
             }
             if ((int)($scope['task_plan_confirmed'] ?? 0) !== 1) {
                 throw new \RuntimeException('请先确认第二阶段任务方案，再开始执行构建。');
@@ -215,8 +217,15 @@ class AiSiteBuildQueue implements QueueInterface
         /** @var AiSiteBuildTaskService $buildTaskService */
         $buildTaskService = ObjectManager::getInstance(AiSiteBuildTaskService::class);
         $scope = $scopeService->normalizeScope($fresh->getScopeArray());
+        $workspaceTrack = $scopeService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
+        $scope = $buildTaskService->ensureTaskScope(
+            $scope,
+            \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
+            $workspaceTrack !== '' ? $workspaceTrack : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
+        );
         $scope = $buildTaskService->resetBuildTasksToPendingForRebuild($scope);
         $sessionService->mergeScope((int)$fresh->getId(), $adminId, [
+            'build_blueprint' => \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [],
             'build_tasks' => \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [],
             '_queue_force_build' => [
                 'active' => 1,

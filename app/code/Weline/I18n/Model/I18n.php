@@ -15,6 +15,8 @@ use Weline\I18n\Service\TranslationCollector;
 
 class I18n
 {
+    private const MODULE_COLLECTION_FIBER_LIMIT = 6;
+
     private static array $local_words = [];
     private Reader $reader;
     public CachePoolInterface $i18nCache;
@@ -210,6 +212,293 @@ class I18n
 
         $this->i18nCache->set($cache_key, [], 0);
         return [];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function getActiveModuleDirectories(?string $moduleName = null): array
+    {
+        $directories = [];
+        foreach (Env::getInstance()->getActiveModules() as $module) {
+            if ($moduleName !== null && $module['name'] !== $moduleName) {
+                continue;
+            }
+            $directories[$module['name']] = $module['base_path'];
+        }
+
+        return $directories;
+    }
+
+    /**
+     * @param array<string, string> $directories
+     * @return array<string, string>
+     */
+    private function collectModuleTranslations(array $directories, TranslationCollector $collector): array
+    {
+        if ($directories === []) {
+            return [];
+        }
+
+        if (!class_exists(\Fiber::class) || count($directories) <= 1) {
+            return $this->collectModuleTranslationsSerial($directories, $collector);
+        }
+
+        $translations = [];
+        foreach (array_chunk($directories, self::MODULE_COLLECTION_FIBER_LIMIT, true) as $batch) {
+            foreach ($this->collectModuleTranslationsFiberBatch($batch, $collector) as $word => $translation) {
+                $translations[$word] = $translation;
+            }
+        }
+
+        return $translations;
+    }
+
+    /**
+     * @param array<string, string> $directories
+     * @return array<string, string>
+     */
+    private function collectModuleTranslationsSerial(array $directories, TranslationCollector $collector): array
+    {
+        $translations = [];
+        foreach ($directories as $module => $directory) {
+            foreach ($this->collectSingleModuleTranslations($module, $directory, $collector) as $word => $translation) {
+                $translations[$word] = $translation;
+            }
+        }
+
+        return $translations;
+    }
+
+    /**
+     * @param array<string, string> $directories
+     * @return array<string, string>
+     */
+    private function collectModuleTranslationsFiberBatch(array $directories, TranslationCollector $collector): array
+    {
+        /** @var array<string, \Fiber> $fibers */
+        $fibers = [];
+        $results = [];
+        $errors = [];
+        $settled = [];
+
+        foreach ($directories as $module => $directory) {
+            $fibers[$module] = new \Fiber(function () use ($module, $directory, $collector): array {
+                return $this->collectSingleModuleTranslations($module, $directory, $collector);
+            });
+        }
+
+        foreach ($fibers as $module => $fiber) {
+            try {
+                $fiber->start();
+                if ($fiber->isTerminated()) {
+                    $results[$module] = $fiber->getReturn();
+                    $settled[$module] = true;
+                }
+            } catch (\Throwable $throwable) {
+                $errors[$module] = $throwable;
+                $settled[$module] = true;
+            }
+        }
+
+        while (count($settled) < count($fibers)) {
+            $madeProgress = false;
+
+            foreach ($fibers as $module => $fiber) {
+                if (isset($settled[$module])) {
+                    continue;
+                }
+
+                try {
+                    if ($fiber->isSuspended()) {
+                        $fiber->resume();
+                        $madeProgress = true;
+                    }
+
+                    if ($fiber->isTerminated()) {
+                        $results[$module] = $fiber->getReturn();
+                        $settled[$module] = true;
+                        $madeProgress = true;
+                    }
+                } catch (\Throwable $throwable) {
+                    $errors[$module] = $throwable;
+                    $settled[$module] = true;
+                    $madeProgress = true;
+                }
+            }
+
+            if (!$madeProgress) {
+                break;
+            }
+        }
+
+        if ($errors !== []) {
+            $firstError = reset($errors);
+            if ($firstError instanceof \Throwable) {
+                throw $firstError;
+            }
+        }
+
+        $translations = [];
+        foreach ($results as $moduleTranslations) {
+            foreach ($moduleTranslations as $word => $translation) {
+                $translations[$word] = $translation;
+            }
+        }
+
+        return $translations;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function collectSingleModuleTranslations(string $module, string $directory, TranslationCollector $collector): array
+    {
+        $moduleWords = [];
+        foreach ($collector->collectLazy($directory, $module) as $original => $info) {
+            $moduleWords[$original] = $original;
+        }
+
+        $this->refreshModuleLanguageCsvFiles($directory, $moduleWords);
+        return $moduleWords;
+    }
+
+    /**
+     * @param array<string, string> $moduleWords
+     */
+    private function refreshModuleLanguageCsvFiles(string $directory, array $moduleWords): void
+    {
+        $i18nDir = $directory . '/i18n';
+        if (!is_dir($i18nDir)) {
+            return;
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($i18nDir, \RecursiveDirectoryIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $file) {
+            if (!$file->isFile() || $file->getExtension() !== 'csv') {
+                continue;
+            }
+
+            $fileWords = $this->readModuleLanguageCsvFile($file->getPathname());
+            $fileTranslations = [];
+            foreach ($moduleWords as $key => $defaultValue) {
+                $value = $fileWords[$key] ?? $defaultValue;
+                if (self::isLikelyCorruptedTranslation($value)) {
+                    $value = $defaultValue;
+                }
+                $fileTranslations[$key] = $value;
+            }
+
+            $this->writeModuleLanguageCsvFile($file->getPathname(), $fileTranslations);
+        }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function readModuleLanguageCsvFile(string $filePath): array
+    {
+        $translations = [];
+        $handle = @fopen($filePath, 'r');
+        if ($handle === false) {
+            return $translations;
+        }
+
+        $line = 1;
+        while (($data = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
+            $data = $this->normalizeCsvRow($data, $line);
+            $line += 1;
+
+            if ($this->isEffectivelyEmptyCsvRow($data)) {
+                continue;
+            }
+
+            if (!isset($data[0], $data[1]) || $data[0] === '') {
+                continue;
+            }
+
+            $translations[$data[0]] = $data[1];
+        }
+
+        fclose($handle);
+        return $translations;
+    }
+
+    /**
+     * @param array<string, string> $translations
+     */
+    private function writeModuleLanguageCsvFile(string $filePath, array $translations): void
+    {
+        $csvFile = @fopen($filePath, 'w+');
+        if ($csvFile === false) {
+            return;
+        }
+
+        if ($translations !== []) {
+            fwrite($csvFile, "\xEF\xBB\xBF");
+            foreach ($translations as $key => $value) {
+                fputcsv($csvFile, [$key, $value], ',', '"', '\\');
+            }
+        }
+
+        fclose($csvFile);
+    }
+
+    /**
+     * @param array<int, mixed> $data
+     * @return array<int, mixed>
+     */
+    private function normalizeCsvRow(array $data, int $line): array
+    {
+        foreach ($data as $index => $value) {
+            if (!is_string($value)) {
+                continue;
+            }
+
+            $data[$index] = $this->normalizeCsvCell($value, $line === 1 && $index === 0);
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param array<int, mixed> $data
+     */
+    private function isEffectivelyEmptyCsvRow(array $data): bool
+    {
+        foreach ($data as $index => $value) {
+            if (!is_scalar($value)) {
+                continue;
+            }
+
+            $normalized = $this->normalizeCsvCell((string)$value, (int)$index === 0);
+            if ($normalized !== '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function normalizeCsvCell(string $value, bool $stripBom = false): string
+    {
+        if ($stripBom) {
+            $value = $this->stripUtf8Bom($value);
+        }
+
+        return trim($value);
+    }
+
+    private function stripUtf8Bom(string $value): string
+    {
+        if (strncmp($value, "\xEF\xBB\xBF", 3) === 0) {
+            return substr($value, 3);
+        }
+
+        return preg_replace('/^\x{FEFF}/u', '', $value) ?? $value;
     }
 
     /**
@@ -482,7 +771,13 @@ class I18n
                     $relative_path = ltrim(str_replace(BP, '', $i18n_file), '/');
                     
                     while (($data = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
-                        if (!isset($data[0]) || empty(trim($data[0]))) {
+                        $data = $this->normalizeCsvRow($data, $line);
+                        if ($this->isEffectivelyEmptyCsvRow($data)) {
+                            $line += 1;
+                            continue;
+                        }
+
+                        if (!isset($data[0]) || $data[0] === '') {
                             if ($first_error && php_sapi_name() === 'cli') {
                                 echo "\n" . str_repeat("=", 80) . "\n";
                                 echo "i18n 文件格式问题\n";
@@ -498,9 +793,6 @@ class I18n
                             $line += 1;
                             continue;
                         }
-                        
-                        $data[0] = trim($data[0]);
-                        
                         if (!isset($data[1])) {
                             if ($first_error && php_sapi_name() === 'cli') {
                                 echo "\n" . str_repeat("=", 80) . "\n";
@@ -517,8 +809,6 @@ class I18n
                             $line += 1;
                             continue;
                         }
-                        
-                        $data[1] = trim($data[1]);
                         $word_module = isset($data[2]) && !empty(trim($data[2])) ? trim($data[2]) : $full_module_name;
                         
                         if (!$is_utf8) {
@@ -603,17 +893,11 @@ class I18n
             echo str_repeat("=", 80) . "\n\n";
         }
 
-        $directories = [];
-        foreach (Env::getInstance()->getActiveModules() as $module) {
-            if ($moduleName !== null && $module['name'] !== $moduleName) {
-                continue;
-            }
-            $directories[$module['name']] = $module['base_path'];
-        }
-        $translations = [];
+        $directories = $this->getActiveModuleDirectories($moduleName);
         $collector = ObjectManager::getInstance(TranslationCollector::class);
+        $translations = $this->collectModuleTranslations($directories, $collector);
         
-        foreach ($directories as $module => $directory) {
+        if (false) { foreach ($directories as $module => $directory) {
             $full_module_name = $this->getFullModuleName($module);
             
             // 使用 collectLazy() 惰性生成器，逐条消费翻译字符串，避免内存中累积完整数组
@@ -665,6 +949,8 @@ class I18n
             unset($module_words); // 每个模块处理完后释放
         }
         
+        }
+
         if ($translations or isset($locals_words[Env::default_LANGUAGE_CODE])) {
             $default_local_words = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE] ?? []);
             $default_local_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;

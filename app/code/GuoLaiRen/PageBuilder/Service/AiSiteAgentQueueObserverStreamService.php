@@ -74,7 +74,7 @@ class AiSiteAgentQueueObserverStreamService
     ): array {
         if (
             \trim((string)($activeOperation['operation'] ?? '')) !== $operation
-            || !\in_array(\trim((string)($activeOperation['status'] ?? '')), ['queued', 'running'], true)
+            || !\in_array(\trim((string)($activeOperation['status'] ?? '')), ['queued', 'running', 'done', 'error', 'cancelled'], true)
             || !\is_array($queueInfo['snapshot'] ?? null)
         ) {
             return $activeOperation;
@@ -93,6 +93,10 @@ class AiSiteAgentQueueObserverStreamService
             $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
         } elseif (\in_array($queueStatus, ['done', 'stop', 'cancelled'], true)) {
             $activeOperation['status'] = 'done';
+            if ($queueStatus === 'done') {
+                $queueProcess = \trim((string)($queueInfo['process'] ?? ''));
+                $activeOperation['message'] = $queueProcess !== '' ? $queueProcess : 'Queue operation completed.';
+            }
             if (\trim((string)($activeOperation['message'] ?? '')) === '') {
                 $activeOperation['message'] = match ($operation) {
                     'task_plan' => (string)__('第二阶段任务方案队列已完成。'),
