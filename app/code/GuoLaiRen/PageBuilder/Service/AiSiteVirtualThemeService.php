@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service;
 
+use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\VirtualTheme;
 use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
 use GuoLaiRen\PageBuilder\Model\VirtualThemeComponentVersion;
@@ -16,6 +17,60 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class AiSiteVirtualThemeService
 {
+    private const BLOG_PAGE_COMPONENTS = [
+        Page::TYPE_BLOG_LIST => 'blog-list',
+        Page::TYPE_BLOG_CATEGORY => 'blog-category',
+        Page::TYPE_BLOG => 'blog-detail',
+    ];
+
+    private const BLOG_PAGE_COMPONENT_NAMES = [
+        Page::TYPE_BLOG_LIST => 'Blog List',
+        Page::TYPE_BLOG_CATEGORY => 'Blog Category',
+        Page::TYPE_BLOG => 'Blog Detail',
+    ];
+
+    private const BLOG_PAGE_DEFAULT_CONFIG = [
+        Page::TYPE_BLOG_LIST => [
+            'posts_per_page' => 10,
+            'show_sidebar' => true,
+            'show_categories' => true,
+            'show_recent_posts' => true,
+            'show_pagination' => true,
+            'layout' => 'grid',
+        ],
+        Page::TYPE_BLOG_CATEGORY => [
+            'posts_per_page' => 10,
+            'show_sidebar' => true,
+            'show_categories' => true,
+            'show_recent_posts' => true,
+            'show_pagination' => true,
+            'layout' => 'grid',
+            'show_category_header' => true,
+            'show_category_description' => true,
+        ],
+        Page::TYPE_BLOG => [
+            'show_author' => true,
+            'show_date' => true,
+            'show_categories' => true,
+            'show_tags' => true,
+            'show_share_buttons' => true,
+            'show_related_posts' => true,
+            'show_comments' => false,
+            'related_posts_count' => 3,
+        ],
+    ];
+
+    private const BLOG_RUNTIME_DATA_KEYS = [
+        'blog_categories',
+        'current_category',
+        'current_post',
+        'related_posts',
+        'blog_posts',
+        'pagination',
+        'recent_posts',
+        'all_tags',
+    ];
+
     public function __construct(
         private readonly ?AiSitePageBlueprintService $pageBlueprintService = null,
         private readonly ?AiSitePageComponentGenerationService $pageComponentGenerationService = null,
@@ -213,6 +268,17 @@ class AiSiteVirtualThemeService
         $themeId = (int)$theme->getId();
         $headerCode = 'header/ai-site-header';
         $footerCode = 'footer/ai-site-footer';
+        $headerConfig = [
+            'site_title' => $siteDisplayName,
+            'site_tagline' => (string)($websiteProfile['site_tagline'] ?? ''),
+            'logo' => (string)($websiteProfile['logo'] ?? ''),
+            'nav_hint' => (string)__('Home | Pages | Contact'),
+        ];
+        $footerConfig = [
+            'site_title' => $siteDisplayName,
+            'brief_description' => (string)($websiteProfile['brief_description'] ?? ''),
+            'target_domain' => (string)($websiteProfile['target_domain'] ?? ''),
+        ];
 
         $this->saveThemeComponent(
             $themeId,
@@ -221,12 +287,7 @@ class AiSiteVirtualThemeService
             VirtualThemeComponent::CATEGORY_HEADER,
             'AI Site Header',
             $this->buildHeaderTemplate(),
-            [
-                'site_title' => $siteDisplayName,
-                'site_tagline' => (string)($websiteProfile['site_tagline'] ?? ''),
-                'logo' => (string)($websiteProfile['logo'] ?? ''),
-                'nav_hint' => (string)__('Home | Pages | Contact'),
-            ],
+            $headerConfig,
             ['position' => ['header'], 'page_layouts' => ['*'], 'sort_order' => 10]
         );
 
@@ -237,16 +298,29 @@ class AiSiteVirtualThemeService
             VirtualThemeComponent::CATEGORY_FOOTER,
             'AI Site Footer',
             $this->buildFooterTemplate(),
-            [
-                'site_title' => $siteDisplayName,
-                'brief_description' => (string)($websiteProfile['brief_description'] ?? ''),
-                'target_domain' => (string)($websiteProfile['target_domain'] ?? ''),
-            ],
+            $footerConfig,
             ['position' => ['footer'], 'page_layouts' => ['*'], 'sort_order' => 20]
         );
 
         $resolvedLayouts = [];
         foreach ($pageTypes as $pageType) {
+            if ($this->isBlogPageType($pageType)) {
+                $layout = $this->buildNativeBlogPageLayout(
+                    $pageType,
+                    $scope,
+                    \is_array($pageTypeLayouts[$pageType] ?? null) ? $pageTypeLayouts[$pageType] : [],
+                    $headerCode,
+                    $headerConfig,
+                    $footerCode,
+                    $footerConfig,
+                    false
+                );
+                $this->saveNativeBlogContentComponent($themeId, $pageType, $scope);
+                $resolvedLayouts[$pageType] = $layout;
+                $this->saveThemeLayout($themeId, $pageType, $layout);
+                continue;
+            }
+
             $blueprint = $pageBlueprintService->buildPageBlueprint($pageType, $scope, $websiteProfile);
             $generatedContent = [];
 
@@ -395,6 +469,23 @@ class AiSiteVirtualThemeService
 
         $resolvedLayouts = [];
         foreach ($pageTypes as $pageType) {
+            if ($this->isBlogPageType($pageType)) {
+                $layout = $this->buildNativeBlogPageLayout(
+                    $pageType,
+                    $scope,
+                    \is_array($pageTypeLayouts[$pageType] ?? null) ? $pageTypeLayouts[$pageType] : [],
+                    $headerCode,
+                    $headerConfig,
+                    $footerCode,
+                    $footerConfig,
+                    true
+                );
+                $this->saveNativeBlogContentComponent($themeId, $pageType, $scope);
+                $resolvedLayouts[$pageType] = $layout;
+                $this->saveThemeLayout($themeId, $pageType, $layout);
+                continue;
+            }
+
             $pageSections = $pageComponentGenerationService->generatePageSections($pageType, $websiteProfile, $scope);
             $blueprint = \is_array($pageSections['blueprint'] ?? null)
                 ? $pageSections['blueprint']
@@ -473,6 +564,411 @@ class AiSiteVirtualThemeService
             'page_type_layouts' => $resolvedLayouts,
             'theme' => $theme,
         ];
+    }
+
+    private function isBlogPageType(string $pageType): bool
+    {
+        return isset(self::BLOG_PAGE_COMPONENTS[$pageType]);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $existingLayout
+     * @param array<string, mixed> $headerConfig
+     * @param array<string, mixed> $footerConfig
+     * @return array<string, mixed>
+     */
+    private function buildNativeBlogPageLayout(
+        string $pageType,
+        array $scope,
+        array $existingLayout,
+        string $headerCode,
+        array $headerConfig,
+        string $footerCode,
+        array $footerConfig,
+        bool $replaceSharedRegions
+    ): array {
+        $preferredStyleCode = $this->resolvePromptStyleCode($scope, $pageType);
+        $layoutRelativePath = 'layouts/default/' . $pageType . '.json';
+        $layoutStyleCode = $this->resolveNativeBlogTemplateStyleCode($preferredStyleCode, $layoutRelativePath);
+        $layoutPayload = $layoutStyleCode !== ''
+            ? $this->readStyleTemplateJson($layoutStyleCode, $layoutRelativePath)
+            : [];
+
+        $layout = $existingLayout;
+        $layout['header'] = \is_array($layout['header'] ?? null) ? $layout['header'] : ['component' => '', 'config' => []];
+        $layout['footer'] = \is_array($layout['footer'] ?? null) ? $layout['footer'] : ['component' => '', 'config' => []];
+
+        if ($replaceSharedRegions || \trim((string)($layout['header']['component'] ?? '')) === '') {
+            $layout['header'] = ['component' => $headerCode, 'config' => $headerConfig];
+        }
+        if ($replaceSharedRegions || \trim((string)($layout['footer']['component'] ?? '')) === '') {
+            $layout['footer'] = ['component' => $footerCode, 'config' => $footerConfig];
+        }
+
+        $layout['content'] = $this->buildNativeBlogContentRows($pageType, $preferredStyleCode, $layoutPayload);
+        $layout['version'] = '1.0';
+        $layout['page_id'] = (int)($layout['page_id'] ?? 0);
+        $layout['use_original_template'] = false;
+        $layout['native_blog_template'] = true;
+        $layout['blog_page_type'] = $pageType;
+        $layout['blog_component_code'] = self::BLOG_PAGE_COMPONENTS[$pageType];
+        $layout['blog_runtime_data_keys'] = self::BLOG_RUNTIME_DATA_KEYS;
+        if ($layoutStyleCode !== '') {
+            $layout['native_blog_layout_template_code'] = $layoutStyleCode;
+        }
+        if (\is_array($layoutPayload['inherit_regions'] ?? null)) {
+            $layout['inherit_regions'] = $layoutPayload['inherit_regions'];
+        }
+
+        return $layout;
+    }
+
+    /**
+     * @param array<string, mixed> $layoutPayload
+     * @return list<array<string, mixed>>
+     */
+    private function buildNativeBlogContentRows(string $pageType, string $preferredStyleCode, array $layoutPayload): array
+    {
+        $componentCode = self::BLOG_PAGE_COMPONENTS[$pageType];
+        $componentRelativePath = 'components/content/' . $componentCode . '.phtml';
+        $componentStyleCode = $this->resolveNativeBlogTemplateStyleCode($preferredStyleCode, $componentRelativePath);
+        $layoutConfig = \is_array($layoutPayload['layout_config'] ?? null) ? $layoutPayload['layout_config'] : [];
+        $contentRows = \is_array($layoutConfig['content'] ?? null) ? $layoutConfig['content'] : [];
+        $rows = [];
+        $sortOrder = 10;
+
+        foreach ($contentRows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $code = \trim((string)($row['code'] ?? $row['component'] ?? ''));
+            if ($code === '') {
+                $code = $componentCode;
+            }
+            if ($code !== $componentCode) {
+                continue;
+            }
+
+            $config = \array_replace(
+                self::BLOG_PAGE_DEFAULT_CONFIG[$pageType] ?? [],
+                \is_array($row['config'] ?? null) ? $row['config'] : []
+            );
+            $contentRow = [
+                'code' => $componentCode,
+                'enabled' => (bool)($row['enabled'] ?? true),
+                'config' => $config,
+                'instance_id' => (string)($row['instance_id'] ?? $componentCode . '-native'),
+                'sort_order' => (int)($row['sort_order'] ?? $sortOrder),
+                'native_blog_template' => true,
+            ];
+            if ($componentStyleCode !== '') {
+                $contentRow['template_code'] = $componentStyleCode;
+            }
+            $rows[] = $contentRow;
+            $sortOrder += 10;
+        }
+
+        if ($rows === []) {
+            $row = [
+                'code' => $componentCode,
+                'enabled' => true,
+                'config' => self::BLOG_PAGE_DEFAULT_CONFIG[$pageType] ?? [],
+                'instance_id' => $componentCode . '-native',
+                'sort_order' => 10,
+                'native_blog_template' => true,
+            ];
+            if ($componentStyleCode !== '') {
+                $row['template_code'] = $componentStyleCode;
+            }
+            $rows[] = $row;
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function saveNativeBlogContentComponent(int $themeId, string $pageType, array $scope): void
+    {
+        $componentCode = self::BLOG_PAGE_COMPONENTS[$pageType] ?? '';
+        if ($themeId <= 0 || $componentCode === '') {
+            return;
+        }
+
+        $preferredStyleCode = $this->resolvePromptStyleCode($scope, $pageType);
+        $componentRelativePath = 'components/content/' . $componentCode . '.phtml';
+        $componentStyleCode = $this->resolveNativeBlogTemplateStyleCode($preferredStyleCode, $componentRelativePath);
+        $templateContent = $componentStyleCode !== ''
+            ? $this->readStyleTemplateContent($componentStyleCode, $componentRelativePath)
+            : '';
+        if ($templateContent === '') {
+            $templateContent = $this->buildFallbackNativeBlogComponentTemplate($pageType);
+        }
+
+        $this->saveThemeComponent(
+            $themeId,
+            $componentCode,
+            VirtualThemeComponent::AREA_FRONTEND,
+            VirtualThemeComponent::CATEGORY_CONTENT,
+            self::BLOG_PAGE_COMPONENT_NAMES[$pageType] ?? $componentCode,
+            $templateContent,
+            self::BLOG_PAGE_DEFAULT_CONFIG[$pageType] ?? [],
+            [
+                'position' => ['content'],
+                'page_layouts' => [$pageType],
+                'sort_order' => 10,
+                'section_key' => 'native-blog:' . $pageType,
+                'native_blog_template' => true,
+                'runtime_data_keys' => self::BLOG_RUNTIME_DATA_KEYS,
+                'source_style_code' => $componentStyleCode !== '' ? $componentStyleCode : null,
+            ]
+        );
+    }
+
+    private function resolvePromptStyleCode(array $scope, string $pageType): string
+    {
+        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
+        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
+        $styleCode = \trim((string)($virtualPage['style_code'] ?? $scope['style_code'] ?? 'default'));
+
+        return $styleCode !== '' ? $styleCode : 'default';
+    }
+
+    private function resolveNativeBlogTemplateStyleCode(string $preferredStyleCode, string $relativePath): string
+    {
+        $candidates = [];
+        foreach ([$preferredStyleCode, 'default'] as $styleCode) {
+            $styleCode = \trim($styleCode);
+            if ($styleCode !== '' && !\in_array($styleCode, $candidates, true)) {
+                $candidates[] = $styleCode;
+            }
+        }
+
+        foreach ($candidates as $styleCode) {
+            if (\is_file($this->buildStyleTemplatePath($styleCode, $relativePath))) {
+                return $styleCode;
+            }
+        }
+
+        $styleRoot = $this->getStyleTemplateRoot();
+        if (!\is_dir($styleRoot)) {
+            return '';
+        }
+
+        $entries = \scandir($styleRoot);
+        if (!\is_array($entries)) {
+            return '';
+        }
+
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..' || $entry === 'default' || $entry === $preferredStyleCode) {
+                continue;
+            }
+            if (\str_starts_with($entry, '.')) {
+                continue;
+            }
+            $candidatePath = $styleRoot . $entry . '/' . $relativePath;
+            if (\is_file($candidatePath)) {
+                return $entry;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function readStyleTemplateJson(string $styleCode, string $relativePath): array
+    {
+        $path = $this->buildStyleTemplatePath($styleCode, $relativePath);
+        if (!\is_file($path)) {
+            return [];
+        }
+
+        $decoded = \json_decode((string)\file_get_contents($path), true);
+
+        return \is_array($decoded) ? $decoded : [];
+    }
+
+    private function readStyleTemplateContent(string $styleCode, string $relativePath): string
+    {
+        $path = $this->buildStyleTemplatePath($styleCode, $relativePath);
+        if (!\is_file($path)) {
+            return '';
+        }
+
+        return (string)\file_get_contents($path);
+    }
+
+    private function buildStyleTemplatePath(string $styleCode, string $relativePath): string
+    {
+        return $this->getStyleTemplateRoot() . \trim($styleCode, '/\\') . '/' . \ltrim($relativePath, '/\\');
+    }
+
+    private function getStyleTemplateRoot(): string
+    {
+        return BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/style/';
+    }
+
+    private function buildFallbackNativeBlogComponentTemplate(string $pageType): string
+    {
+        return match ($pageType) {
+            Page::TYPE_BLOG => $this->buildFallbackBlogDetailTemplate(),
+            Page::TYPE_BLOG_CATEGORY => $this->buildFallbackBlogCategoryTemplate(),
+            default => $this->buildFallbackBlogListTemplate(),
+        };
+    }
+
+    private function buildFallbackBlogListTemplate(): string
+    {
+        return <<<'PHTML'
+<?php
+$posts = is_array($blog_posts ?? null) ? $blog_posts : [];
+$categories = is_array($blog_categories ?? null) ? $blog_categories : [];
+$recentPosts = is_array($recent_posts ?? null) ? $recent_posts : [];
+$paginationData = is_array($pagination ?? null) ? $pagination : [];
+?>
+<section class="pb-native-blog pb-native-blog-list" style="padding:48px 24px;background:#ffffff;color:#0f172a;">
+    <div style="max-width:1120px;margin:0 auto;display:grid;gap:28px;">
+        <header style="display:grid;gap:10px;">
+            <span style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;">Blog</span>
+            <h1 style="margin:0;font-size:38px;line-height:1.12;">Latest Articles</h1>
+        </header>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:28px;align-items:start;">
+            <main style="display:grid;gap:18px;">
+                <?php if ($posts === []): ?>
+                    <p style="margin:0;color:#64748b;">No blog posts are available yet.</p>
+                <?php endif; ?>
+                <?php foreach ($posts as $post): ?>
+                    <?php if (!is_array($post)) { continue; } ?>
+                    <?php $url = (string)($post['url'] ?? (!empty($post['slug']) ? '/blog?slug=' . rawurlencode((string)$post['slug']) : '#')); ?>
+                    <article style="padding:22px;border:1px solid #e5e7eb;border-radius:20px;background:#f8fafc;">
+                        <h2 style="margin:0 0 8px;font-size:24px;line-height:1.2;"><a href="<?= htmlspecialchars($url, ENT_QUOTES, 'UTF-8') ?>" style="color:inherit;text-decoration:none;"><?= htmlspecialchars((string)($post['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></a></h2>
+                        <?php if (!empty($post['excerpt'])): ?>
+                            <p style="margin:0;color:#475569;line-height:1.7;"><?= htmlspecialchars((string)$post['excerpt'], ENT_QUOTES, 'UTF-8') ?></p>
+                        <?php endif; ?>
+                    </article>
+                <?php endforeach; ?>
+                <?php if (!empty($paginationData['total_pages']) && (int)$paginationData['total_pages'] > 1): ?>
+                    <nav style="font-size:14px;color:#64748b;">Page <?= (int)($paginationData['current_page'] ?? 1) ?> / <?= (int)$paginationData['total_pages'] ?></nav>
+                <?php endif; ?>
+            </main>
+            <aside style="display:grid;gap:18px;">
+                <?php if ($categories !== []): ?>
+                    <section style="padding:18px;border:1px solid #e5e7eb;border-radius:18px;">
+                        <strong>Categories</strong>
+                        <ul style="margin:12px 0 0;padding-left:18px;display:grid;gap:8px;">
+                            <?php foreach ($categories as $category): ?>
+                                <?php if (!is_array($category)) { continue; } ?>
+                                <li><?= htmlspecialchars((string)($category['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </section>
+                <?php endif; ?>
+                <?php if ($recentPosts !== []): ?>
+                    <section style="padding:18px;border:1px solid #e5e7eb;border-radius:18px;">
+                        <strong>Recent Posts</strong>
+                        <ul style="margin:12px 0 0;padding-left:18px;display:grid;gap:8px;">
+                            <?php foreach ($recentPosts as $post): ?>
+                                <?php if (!is_array($post)) { continue; } ?>
+                                <li><?= htmlspecialchars((string)($post['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </section>
+                <?php endif; ?>
+            </aside>
+        </div>
+    </div>
+</section>
+PHTML;
+    }
+
+    private function buildFallbackBlogCategoryTemplate(): string
+    {
+        return <<<'PHTML'
+<?php
+$category = is_array($current_category ?? null) ? $current_category : [];
+$posts = is_array($blog_posts ?? null) ? $blog_posts : [];
+?>
+<section class="pb-native-blog pb-native-blog-category" style="padding:48px 24px;background:#ffffff;color:#0f172a;">
+    <div style="max-width:1080px;margin:0 auto;display:grid;gap:24px;">
+        <header style="padding:24px;border-radius:24px;background:#f8fafc;border:1px solid #e5e7eb;">
+            <span style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;">Category</span>
+            <h1 style="margin:8px 0 0;font-size:36px;line-height:1.12;"><?= htmlspecialchars((string)($category['name'] ?? 'Blog Category'), ENT_QUOTES, 'UTF-8') ?></h1>
+            <?php if (!empty($category['description'])): ?>
+                <p style="margin:10px 0 0;color:#475569;line-height:1.7;"><?= htmlspecialchars((string)$category['description'], ENT_QUOTES, 'UTF-8') ?></p>
+            <?php endif; ?>
+        </header>
+        <main style="display:grid;gap:18px;">
+            <?php if ($posts === []): ?>
+                <p style="margin:0;color:#64748b;">No posts are available in this category yet.</p>
+            <?php endif; ?>
+            <?php foreach ($posts as $post): ?>
+                <?php if (!is_array($post)) { continue; } ?>
+                <?php $url = (string)($post['url'] ?? (!empty($post['slug']) ? '/blog?slug=' . rawurlencode((string)$post['slug']) : '#')); ?>
+                <article style="padding:22px;border:1px solid #e5e7eb;border-radius:20px;background:#ffffff;">
+                    <h2 style="margin:0 0 8px;font-size:24px;line-height:1.2;"><a href="<?= htmlspecialchars($url, ENT_QUOTES, 'UTF-8') ?>" style="color:inherit;text-decoration:none;"><?= htmlspecialchars((string)($post['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></a></h2>
+                    <?php if (!empty($post['excerpt'])): ?>
+                        <p style="margin:0;color:#475569;line-height:1.7;"><?= htmlspecialchars((string)$post['excerpt'], ENT_QUOTES, 'UTF-8') ?></p>
+                    <?php endif; ?>
+                </article>
+            <?php endforeach; ?>
+        </main>
+    </div>
+</section>
+PHTML;
+    }
+
+    private function buildFallbackBlogDetailTemplate(): string
+    {
+        return <<<'PHTML'
+<?php
+$post = is_array($current_post ?? null) ? $current_post : [];
+$relatedPosts = is_array($related_posts ?? null) ? $related_posts : [];
+$tags = is_array($post['tags'] ?? null) ? $post['tags'] : [];
+?>
+<article class="pb-native-blog pb-native-blog-detail" style="padding:48px 24px;background:#ffffff;color:#0f172a;">
+    <div style="max-width:860px;margin:0 auto;display:grid;gap:24px;">
+        <header style="display:grid;gap:12px;">
+            <span style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;">Article</span>
+            <h1 style="margin:0;font-size:42px;line-height:1.08;"><?= htmlspecialchars((string)($post['title'] ?? 'Blog Article'), ENT_QUOTES, 'UTF-8') ?></h1>
+            <?php if (!empty($post['published_at']) || !empty($post['author_name'])): ?>
+                <p style="margin:0;color:#64748b;"><?= htmlspecialchars(trim((string)($post['author_name'] ?? '') . ' ' . (string)($post['published_at'] ?? '')), ENT_QUOTES, 'UTF-8') ?></p>
+            <?php endif; ?>
+        </header>
+        <div style="font-size:17px;line-height:1.8;color:#334155;">
+            <?php if (!empty($post['content'])): ?>
+                <?= (string)$post['content'] ?>
+            <?php elseif (!empty($post['excerpt'])): ?>
+                <p><?= htmlspecialchars((string)$post['excerpt'], ENT_QUOTES, 'UTF-8') ?></p>
+            <?php else: ?>
+                <p>This article is not available yet.</p>
+            <?php endif; ?>
+        </div>
+        <?php if ($tags !== []): ?>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                <?php foreach ($tags as $tag): ?>
+                    <span style="padding:6px 10px;border-radius:999px;background:#f1f5f9;color:#334155;font-size:13px;"><?= htmlspecialchars((string)$tag, ENT_QUOTES, 'UTF-8') ?></span>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+        <?php if ($relatedPosts !== []): ?>
+            <section style="padding-top:20px;border-top:1px solid #e5e7eb;">
+                <h2 style="margin:0 0 12px;font-size:24px;">Related Posts</h2>
+                <ul style="margin:0;padding-left:18px;display:grid;gap:8px;">
+                    <?php foreach ($relatedPosts as $related): ?>
+                        <?php if (!is_array($related)) { continue; } ?>
+                        <li><?= htmlspecialchars((string)($related['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </section>
+        <?php endif; ?>
+    </div>
+</article>
+PHTML;
     }
 
     /**

@@ -48,7 +48,7 @@ class SessionStateFacade implements SessionStateFacadeInterface
             ControlMessage::ROLE_SESSION_SERVER,
             $config,
             [],
-            $this->consumerCode,
+            $this->resolveManagerRequesterInstanceName(),
             SharedStateServiceManager::resolveEnsureFrontendFlag($config)
         );
         $this->runtime['consumer_code'] = $this->consumerCode;
@@ -173,9 +173,6 @@ class SessionStateFacade implements SessionStateFacadeInterface
             'token_file_name' => (string) ($runtime['token_file_name'] ?? $this->resolveConfiguredRuntime($config)['token_file_name']),
             'service_type' => 'Session',
             'service_role' => ControlMessage::ROLE_SESSION_SERVER,
-            'consumer_code' => $this->consumerCode,
-            'instance_name' => $this->consumerCode,
-            'owner_type' => 'instance',
         ];
     }
 
@@ -215,6 +212,11 @@ class SessionStateFacade implements SessionStateFacadeInterface
         }
 
         $this->released = true;
+    }
+
+    private function resolveManagerRequesterInstanceName(): string
+    {
+        return \defined('WLS_MODE') && WLS_MODE ? 'system' : $this->consumerCode;
     }
 
     private function attemptDirectBootstrap(

@@ -427,50 +427,6 @@ class SessionService
             return;
         }
 
-        $pk = AiSiteBuilderSession::schema_fields_ID;
-        $declared = [
-            'name' => $pk,
-            'type' => 'int',
-            'length' => null,
-            'nullable' => false,
-            'primaryKey' => true,
-            'autoIncrement' => true,
-            'default' => null,
-            'comment' => '',
-            'unique' => false,
-        ];
-        $existingCol = null;
-        foreach ($connector->getTableColumns($this->sessionModel->getTable()) as $row) {
-            if (!\is_array($row) || (string)($row['name'] ?? '') !== $pk) {
-                continue;
-            }
-            $existingCol = [
-                'name' => (string)($row['name'] ?? ''),
-                'type' => (string)($row['type'] ?? ''),
-                'length' => \array_key_exists('length', $row) ? $row['length'] : null,
-                'nullable' => (bool)($row['nullable'] ?? true),
-                'primaryKey' => (bool)($row['primary_key'] ?? false),
-                'autoIncrement' => (bool)($row['auto_increment'] ?? false),
-                'default' => $row['default'] ?? null,
-                'comment' => (string)($row['comment'] ?? ''),
-                'unique' => (bool)($row['unique'] ?? false),
-            ];
-            break;
-        }
-
-        $quotedTable = $connector->quoteTable($this->sessionModel->getTable());
-        $ddl = $connector->buildAlterModifyColumnSql($quotedTable, $declared, $existingCol);
-        foreach (\preg_split('/;\s*\R/m', \trim($ddl)) ?: [] as $piece) {
-            $sql = \trim((string)$piece);
-            if ($sql === '') {
-                continue;
-            }
-            if (!\str_ends_with($sql, ';')) {
-                $sql .= ';';
-            }
-            $connector->query($sql)->fetch();
-        }
-
         $pdo = $connector->getWrappedConnection()->getPdo();
         if ($pdo->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'pgsql') {
             return;
@@ -482,46 +438,241 @@ class SessionService
             }
         }
 
-        $tableSql = $this->sessionModel->getTable();
+        $pk = AiSiteBuilderSession::schema_fields_ID;
+        [$schema, $tableName] = $this->resolvePgsqlSchemaAndTable($pdo, (string)$this->sessionModel->getTable());
+        if ($tableName === '') {
+            return;
+        }
+
+        $tableSql = $this->quotePgsqlIdentifier($schema) . '.' . $this->quotePgsqlIdentifier($tableName);
+        $columnSql = $this->quotePgsqlIdentifier($pk);
+        $tableRef = $schema . '.' . $tableName;
+        $columnRef = $tableSql . '.' . $columnSql;
+
         $stmt = $pdo->query('SELECT COALESCE(MAX("' . $pk . '"), 0) AS mx FROM ' . $tableSql);
         if ($stmt === false) {
             return;
         }
         $maxId = (int)($stmt->fetch(\PDO::FETCH_ASSOC)['mx'] ?? 0);
 
+        $defaultSequence = $this->fetchPgsqlDefaultSequenceReference($pdo, $schema, $tableName, $pk);
+        $serialSequence = $this->fetchPgsqlSerialSequenceReference($pdo, $tableRef, $pk, $schema);
+        $ownedSequences = $this->fetchPgsqlOwnedSequenceReferences($pdo, $schema, $tableName, $pk);
+
+        $sequenceCandidates = [];
+        foreach (\array_merge([$defaultSequence, $serialSequence], $ownedSequences) as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if ($candidate === '' || \in_array($candidate, $sequenceCandidates, true)) {
+                continue;
+            }
+            $sequenceCandidates[] = $candidate;
+        }
+
+        $canonicalSequence = $defaultSequence !== ''
+            ? $defaultSequence
+            : ($serialSequence !== '' ? $serialSequence : ($ownedSequences[0] ?? ''));
+        if ($canonicalSequence === '') {
+            $canonicalSequence = $this->createPgsqlFallbackSequence($pdo, $schema, $tableName, $pk);
+        }
+        if (!\in_array($canonicalSequence, $sequenceCandidates, true)) {
+            $sequenceCandidates[] = $canonicalSequence;
+        }
+
+        foreach ($sequenceCandidates as $sequence) {
+            $this->syncPgsqlSequenceValue($pdo, $sequence, $maxId);
+        }
+
+        $pdo->exec(
+            'ALTER TABLE ' . $tableSql
+            . ' ALTER COLUMN ' . $columnSql
+            . ' SET DEFAULT nextval(' . $pdo->quote($canonicalSequence) . '::regclass)'
+        );
+        $pdo->exec(
+            'ALTER SEQUENCE ' . $this->quotePgsqlQualifiedName($canonicalSequence)
+            . ' OWNED BY ' . $columnRef
+        );
+
+        foreach ($ownedSequences as $ownedSequence) {
+            if ($ownedSequence === $canonicalSequence) {
+                continue;
+            }
+            $pdo->exec(
+                'ALTER SEQUENCE ' . $this->quotePgsqlQualifiedName($ownedSequence)
+                . ' OWNED BY NONE'
+            );
+        }
+    }
+
+    /**
+     * @return array{0:string,1:string}
+     */
+    private function resolvePgsqlSchemaAndTable(\PDO $pdo, string $table): array
+    {
+        $normalized = \trim(\str_replace('"', '', $table));
+        if ($normalized === '') {
+            return ['public', ''];
+        }
+
+        $parts = \array_values(\array_filter(\explode('.', $normalized), static fn(string $part): bool => $part !== ''));
+        if (\count($parts) >= 2) {
+            return [$parts[\count($parts) - 2], $parts[\count($parts) - 1]];
+        }
+
+        $schemaStmt = $pdo->query('SELECT current_schema()');
+        $schema = (string)($schemaStmt !== false ? ($schemaStmt->fetchColumn() ?: 'public') : 'public');
+
+        return [$schema, $parts[0] ?? $normalized];
+    }
+
+    private function fetchPgsqlDefaultSequenceReference(\PDO $pdo, string $schema, string $tableName, string $column): string
+    {
+        $stmt = $pdo->prepare(
+            'SELECT column_default FROM information_schema.columns
+             WHERE table_schema = :schema
+               AND table_name = :table
+               AND column_name = :column'
+        );
+        if (!$stmt || !$stmt->execute(['schema' => $schema, 'table' => $tableName, 'column' => $column])) {
+            return '';
+        }
+
+        $defaultExpr = (string)($stmt->fetchColumn() ?: '');
+        if ($defaultExpr === '' || !\preg_match("/nextval\\('([^']+)'::regclass\\)/i", $defaultExpr, $matches)) {
+            return '';
+        }
+
+        return $this->resolvePgsqlSequenceReference($pdo, (string)$matches[1], $schema);
+    }
+
+    private function fetchPgsqlSerialSequenceReference(\PDO $pdo, string $tableRef, string $column, string $schema): string
+    {
+        $stmt = $pdo->prepare('SELECT pg_get_serial_sequence(:table_ref, :column_name)');
+        if (!$stmt || !$stmt->execute(['table_ref' => $tableRef, 'column_name' => $column])) {
+            return '';
+        }
+
+        $sequence = $stmt->fetchColumn();
+        if (!\is_string($sequence) || $sequence === '') {
+            return '';
+        }
+
+        return $this->resolvePgsqlSequenceReference($pdo, $sequence, $schema);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function fetchPgsqlOwnedSequenceReferences(\PDO $pdo, string $schema, string $tableName, string $column): array
+    {
+        $stmt = $pdo->prepare(
+            "SELECT ns.nspname AS sequence_schema, seq.relname AS sequence_name
+             FROM pg_class tbl
+             JOIN pg_namespace tbl_ns ON tbl_ns.oid = tbl.relnamespace
+             JOIN pg_attribute attr ON attr.attrelid = tbl.oid AND attr.attname = :column
+             JOIN pg_depend dep ON dep.refobjid = tbl.oid
+                 AND dep.refobjsubid = attr.attnum
+                 AND dep.classid = 'pg_class'::regclass
+                 AND dep.deptype = 'a'
+             JOIN pg_class seq ON seq.oid = dep.objid AND seq.relkind = 'S'
+             JOIN pg_namespace ns ON ns.oid = seq.relnamespace
+             WHERE tbl_ns.nspname = :schema
+               AND tbl.relname = :table_name"
+        );
+        if (!$stmt || !$stmt->execute(['schema' => $schema, 'table_name' => $tableName, 'column' => $column])) {
+            return [];
+        }
+
         $sequences = [];
-        $defaultStmt = $pdo->query(
-            "SELECT column_default FROM information_schema.columns
-             WHERE table_schema = 'weline'
-               AND table_name = 'm_weline_websites_ai_site_builder_session'
-               AND column_name = " . $pdo->quote($pk)
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [] as $row) {
+            $sequenceSchema = \trim((string)($row['sequence_schema'] ?? ''));
+            $sequenceName = \trim((string)($row['sequence_name'] ?? ''));
+            if ($sequenceSchema === '' || $sequenceName === '') {
+                continue;
+            }
+            $sequences[] = $sequenceSchema . '.' . $sequenceName;
+        }
+
+        return \array_values(\array_unique($sequences));
+    }
+
+    private function resolvePgsqlSequenceReference(\PDO $pdo, string $sequence, string $defaultSchema): string
+    {
+        $sequence = \trim(\str_replace('"', '', $sequence));
+        if ($sequence === '') {
+            return '';
+        }
+
+        $candidates = [$sequence];
+        if (!\str_contains($sequence, '.')) {
+            $candidates[] = $defaultSchema . '.' . $sequence;
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT ns.nspname AS schema_name, cls.relname AS sequence_name
+             FROM pg_class cls
+             JOIN pg_namespace ns ON ns.oid = cls.relnamespace
+             WHERE cls.oid = to_regclass(:sequence_ref)
+               AND cls.relkind = \'S\''
         );
-        if ($defaultStmt !== false) {
-            $defaultExpr = (string)($defaultStmt->fetchColumn() ?: '');
-            if (\preg_match("/nextval\\('([^']+)'/i", $defaultExpr, $matches)) {
-                $sequence = (string)$matches[1];
-                $sequences[] = \str_contains($sequence, '.') ? $sequence : ('weline.' . $sequence);
+        if (!$stmt) {
+            return '';
+        }
+
+        foreach ($candidates as $candidate) {
+            if (!$stmt->execute(['sequence_ref' => $candidate])) {
+                continue;
+            }
+            $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+            if (!\is_array($row)) {
+                continue;
+            }
+
+            $schemaName = \trim((string)($row['schema_name'] ?? ''));
+            $sequenceName = \trim((string)($row['sequence_name'] ?? ''));
+            if ($schemaName !== '' && $sequenceName !== '') {
+                return $schemaName . '.' . $sequenceName;
             }
         }
 
-        $tableForSeq = \str_replace('"', '', $tableSql);
-        $seqStmt = $pdo->query(
-            'SELECT pg_get_serial_sequence(' . $pdo->quote($tableForSeq) . ", '" . $pk . "')"
+        return '';
+    }
+
+    private function createPgsqlFallbackSequence(\PDO $pdo, string $schema, string $tableName, string $column): string
+    {
+        $baseName = $tableName . '_' . $column . '_seq';
+        if (\strlen($baseName) > 63) {
+            $hash = \substr(\md5($baseName), 0, 8);
+            $baseName = \substr($tableName, 0, 30) . '_' . \substr($column, 0, 18) . '_' . $hash . '_seq';
+            $baseName = \substr($baseName, 0, 63);
+        }
+
+        $sequence = $schema . '.' . $baseName;
+        $pdo->exec('CREATE SEQUENCE IF NOT EXISTS ' . $this->quotePgsqlQualifiedName($sequence));
+
+        return $sequence;
+    }
+
+    private function syncPgsqlSequenceValue(\PDO $pdo, string $sequence, int $maxId): void
+    {
+        $targetValue = $maxId > 0 ? $maxId : 1;
+        $isCalled = $maxId > 0 ? 'true' : 'false';
+        $pdo->exec(
+            'SELECT setval(' . $pdo->quote($sequence) . ', ' . $targetValue . ', ' . $isCalled . ')'
         );
-        if ($seqStmt !== false) {
-            $sequence = $seqStmt->fetchColumn();
-            if (\is_string($sequence) && $sequence !== '') {
-                $sequences[] = $sequence;
-            }
+    }
+
+    private function quotePgsqlQualifiedName(string $qualifiedName): string
+    {
+        $parts = \array_values(\array_filter(\explode('.', \str_replace('"', '', $qualifiedName)), static fn(string $part): bool => $part !== ''));
+        if ($parts === []) {
+            return $this->quotePgsqlIdentifier($qualifiedName);
         }
 
-        if ($sequences === []) {
-            $base = \preg_replace('/^.*\./', '', \str_replace('"', '', $tableSql));
-            $sequences[] = 'weline.' . $base . '_' . $pk . '_seq';
-        }
+        return \implode('.', \array_map([$this, 'quotePgsqlIdentifier'], $parts));
+    }
 
-        foreach (\array_values(\array_unique($sequences)) as $sequence) {
-            $pdo->exec('SELECT setval(' . $pdo->quote($sequence) . ', ' . \max(0, $maxId) . ', true)');
-        }
+    private function quotePgsqlIdentifier(string $identifier): string
+    {
+        return '"' . \str_replace('"', '""', $identifier) . '"';
     }
 }

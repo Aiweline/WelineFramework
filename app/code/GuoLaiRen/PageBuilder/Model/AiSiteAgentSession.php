@@ -23,6 +23,7 @@ class AiSiteAgentSession extends Model
 {
     private const SCOPE_LOG_MAX_ITEMS = 80;
     private const SCOPE_LOG_MESSAGE_MAX_LEN = 800;
+    private const WORKSPACE_TRACK_VIRTUAL_THEME = 'virtual_theme';
 
     private ?string $scopeJsonDecodeCacheRaw = null;
     /** @var array<string, mixed> */
@@ -163,19 +164,209 @@ class AiSiteAgentSession extends Model
         return $this->setData(self::schema_fields_SCOPE_JSON, $json);
     }
 
+    public function setScopeJsonRaw(string $scopeJson): static
+    {
+        $scopeJson = \trim($scopeJson);
+        if ($scopeJson === '') {
+            $scopeJson = '{}';
+        }
+
+        $this->scopeJsonDecodeCacheRaw = null;
+        $this->scopeJsonDecodeCacheData = [];
+
+        return $this->setData(self::schema_fields_SCOPE_JSON, $scopeJson);
+    }
+
     /**
      * 仅裁剪日志类冗余数据，避免 scope_json 在 worker 常驻进程中持续膨胀。
      *
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    private function compactScopeBeforeStorage(array $scope): array
+    public function compactScopeForStorage(array $scope): array
     {
         foreach (['events', 'top_logs'] as $field) {
             $scope[$field] = $this->compactScopeLogEntries($scope[$field] ?? []);
         }
 
+        $scope = $this->compactBuildArtifactsBeforeStorage($scope);
+
         return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function compactScopeBeforeStorage(array $scope): array
+    {
+        return $this->compactScopeForStorage($scope);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function compactBuildArtifactsBeforeStorage(array $scope): array
+    {
+        if (\trim((string)($scope['workspace_track'] ?? '')) !== self::WORKSPACE_TRACK_VIRTUAL_THEME) {
+            return $scope;
+        }
+
+        foreach (['shared_components', '_ai_generated_shared_components'] as $field) {
+            if (!\is_array($scope[$field] ?? null)) {
+                continue;
+            }
+            foreach ($scope[$field] as $key => $component) {
+                if (!\is_array($component)) {
+                    continue;
+                }
+                $scope[$field][$key] = $this->compactGeneratedComponentForStorage($component);
+            }
+        }
+
+        if (\is_array($scope['virtual_pages_by_type'] ?? null)) {
+            foreach ($scope['virtual_pages_by_type'] as $pageType => $virtualPage) {
+                if (!\is_array($virtualPage)) {
+                    continue;
+                }
+                if (\is_array($virtualPage['blocks'] ?? null) && $virtualPage['blocks'] !== []) {
+                    $virtualPage['blocks'] = [];
+                    $scope['virtual_pages_by_type'][$pageType] = $virtualPage;
+                }
+            }
+        }
+
+        $scope = $this->compactPlanWorkbenchSnapshotsForStorage($scope);
+        $scope = $this->compactConfirmedTaskPlanSnapshotsForStorage($scope);
+
+        return $scope;
+    }
+
+    /**
+     * Keep only the latest confirmed stage-one snapshot plus the request summary
+     * needed by later stages.
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function compactPlanWorkbenchSnapshotsForStorage(array $scope): array
+    {
+        $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
+        $confirmed = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
+        $stageOne = \is_array($planWorkbench['stage1'] ?? null) ? $planWorkbench['stage1'] : [];
+        if ($confirmed === [] || $stageOne === []) {
+            return $scope;
+        }
+
+        $slimStageOne = [];
+        $requestSummary = \is_array($stageOne['request_summary'] ?? null) ? $stageOne['request_summary'] : [];
+        if ($requestSummary !== []) {
+            $slimStageOne['request_summary'] = $requestSummary;
+        }
+        $progress = \is_array($stageOne['progress'] ?? null) ? $stageOne['progress'] : [];
+        if ($progress !== []) {
+            $slimStageOne['progress'] = $progress;
+        }
+
+        $planWorkbench['stage1'] = $slimStageOne;
+        $scope['plan_workbench'] = $planWorkbench;
+
+        return $scope;
+    }
+
+    /**
+     * Once a task plan is confirmed, keep only the latest confirmed snapshot and
+     * drop duplicated top-level copies.
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function compactConfirmedTaskPlanSnapshotsForStorage(array $scope): array
+    {
+        if ((int)($scope['task_plan_confirmed'] ?? 0) !== 1) {
+            return $scope;
+        }
+
+        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
+        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
+        if ($confirmed === []) {
+            return $scope;
+        }
+
+        $virtualThemePlan['draft'] = [];
+        $confirmedMarkdown = \trim((string)($virtualThemePlan['confirmed_markdown'] ?? ''));
+        $draftMarkdown = \trim((string)($virtualThemePlan['draft_markdown'] ?? ''));
+        if ($confirmedMarkdown !== '' && ($draftMarkdown === '' || $draftMarkdown === $confirmedMarkdown)) {
+            $virtualThemePlan['draft_markdown'] = '';
+        }
+        unset($virtualThemePlan['draft_generated_at']);
+        $scope['virtual_theme_plan'] = $virtualThemePlan;
+
+        $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
+        if ($taskPlanStructured === [] || $this->isEquivalentConfirmedTaskPlanSnapshot($taskPlanStructured, $confirmed)) {
+            $scope['task_plan_structured'] = [];
+        }
+
+        $taskPlanMarkdown = \trim((string)($scope['task_plan_markdown'] ?? ''));
+        if ($confirmedMarkdown !== '' && ($taskPlanMarkdown === '' || $taskPlanMarkdown === $confirmedMarkdown)) {
+            $scope['task_plan_markdown'] = '';
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $taskPlanStructured
+     * @param array<string, mixed> $confirmed
+     */
+    private function isEquivalentConfirmedTaskPlanSnapshot(array $taskPlanStructured, array $confirmed): bool
+    {
+        if ($taskPlanStructured == $confirmed) {
+            return true;
+        }
+
+        $confirmedWithoutSignature = $confirmed;
+        unset($confirmedWithoutSignature['signature']);
+
+        return $taskPlanStructured == $confirmedWithoutSignature;
+    }
+
+    /**
+     * @param array<string, mixed> $component
+     * @return array<string, mixed>
+     */
+    private function compactGeneratedComponentForStorage(array $component): array
+    {
+        unset($component['phtml'], $component['html'], $component['ai_data']);
+
+        foreach (['default_config', 'config'] as $field) {
+            if (\is_array($component[$field] ?? null)) {
+                $component[$field] = $this->compactGeneratedComponentConfigForStorage($component[$field]);
+            }
+        }
+
+        return $component;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function compactGeneratedComponentConfigForStorage(array $config): array
+    {
+        foreach ($config as $key => $value) {
+            $stringKey = (string)$key;
+            if ($stringKey === 'html_content' || \str_starts_with($stringKey, '_pb_server_')) {
+                unset($config[$key]);
+                continue;
+            }
+            if (\is_array($value)) {
+                $config[$key] = $this->compactGeneratedComponentConfigForStorage($value);
+            }
+        }
+
+        return $config;
     }
 
     /**
