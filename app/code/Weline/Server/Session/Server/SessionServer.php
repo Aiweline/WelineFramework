@@ -62,6 +62,10 @@ final class SessionServer
     private string $serviceRole = 'session_server';
     private SharedStateServiceRegistry $sharedRegistry;
     private int $sharedConsumerLeaseTtlSec = 300;
+    private int $emptyTokenExitGraceSec = 30;
+    private int $startupConsumerGraceSec = 300;
+    private float $emptyTokenCheckIntervalSec = 120.0;
+    private float $lastEmptyTokenCheckAt = 0.0;
     private ?int $idleShutdownDueAt = null;
 
     /** 上次 bind 失败原因（供入口脚本输出到日志） */
@@ -86,6 +90,9 @@ final class SessionServer
         $this->serviceRole = (string) ($config['role'] ?? 'session_server');
         $this->sharedRegistry = new SharedStateServiceRegistry();
         $this->sharedConsumerLeaseTtlSec = \max(1, (int) ($config['shared_consumer_lease_ttl_sec'] ?? 300));
+        $this->emptyTokenExitGraceSec = \max(1, (int) ($config['empty_token_exit_grace_sec'] ?? 30));
+        $this->startupConsumerGraceSec = \max(1, (int) ($config['startup_consumer_grace_sec'] ?? $this->sharedConsumerLeaseTtlSec));
+        $this->emptyTokenCheckIntervalSec = \max(0.1, (float) ($config['empty_token_check_interval_sec'] ?? 120.0));
         $this->port = (int)($config['port'] ?? (19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset()));
         $this->gcInterval = (int)($config['gc_interval'] ?? 300);
         $this->store = new SessionStore($config);
@@ -203,19 +210,37 @@ final class SessionServer
         }
 
         $this->store->loadFromFile();
-        $this->idleShutdownDueAt = \time() + $this->sharedConsumerLeaseTtlSec;
-        $this->sharedRegistry->putRecord($this->serviceRole, [
+        $startupShutdownDueAt = \time() + $this->startupConsumerGraceSec;
+        $serviceRecord = [
             'role' => $this->serviceRole,
             'host' => $this->host,
             'port' => $this->port,
             'pid' => \getmypid(),
             'token_file_name' => \basename($this->tokenFilePath),
-            'consumers' => $this->sharedRegistry->getConsumers($this->serviceRole),
             'started_at' => \date('c'),
             'healthy_at' => \date('c'),
             'shared_service' => true,
-            'shutdown_due_at' => \date('c', $this->idleShutdownDueAt),
-        ]);
+        ];
+        $publishedRecord = $this->sharedRegistry->updateRecord(
+            $this->serviceRole,
+            static function (array $record) use ($serviceRecord, $startupShutdownDueAt): array {
+                $consumers = \is_array($record['consumers'] ?? null) ? $record['consumers'] : [];
+                $nextRecord = \array_merge($record, $serviceRecord);
+                $nextRecord['consumers'] = $consumers;
+                if ($consumers === []) {
+                    $nextRecord['shutdown_due_at'] = \date('c', $startupShutdownDueAt);
+                } else {
+                    unset($nextRecord['shutdown_due_at'], $nextRecord['shutdown_requested_at']);
+                }
+
+                return $nextRecord;
+            }
+        );
+        $existingConsumers = \is_array($publishedRecord['consumers'] ?? null) ? $publishedRecord['consumers'] : [];
+        $publishedShutdownDueAt = \strtotime((string) ($publishedRecord['shutdown_due_at'] ?? ''));
+        $this->idleShutdownDueAt = $existingConsumers === []
+            ? ($publishedShutdownDueAt !== false && $publishedShutdownDueAt > 0 ? $publishedShutdownDueAt : $startupShutdownDueAt)
+            : null;
 
         $this->running = true;
         $this->log("Started on {$this->host}:{$this->port}");
@@ -672,9 +697,25 @@ final class SessionServer
             $this->lastLeakCheckTime = $nowFloat;
         }
 
+        $this->maintainSharedConsumerTokens();
+    }
+
+    public function maintainSharedConsumerTokens(): void
+    {
+        $this->enforceScheduledIdleShutdown();
+        if (!$this->running) {
+            return;
+        }
+
+        $nowFloat = \microtime(true);
+        if (($nowFloat - $this->lastEmptyTokenCheckAt) < $this->emptyTokenCheckIntervalSec) {
+            return;
+        }
+
         $this->refreshConnectedConsumerLeases();
         $this->pruneExpiredConsumerLeases();
         $this->syncIdleShutdownWindow();
+        $this->lastEmptyTokenCheckAt = $nowFloat;
     }
 
     /**
@@ -768,6 +809,7 @@ final class SessionServer
         $this->clients[$clientId]['shutdown_requested'] = true;
         $this->clients[$clientId]['consumer_code'] = '';
         $this->clients[$clientId]['hello_completed'] = false;
+        $this->releaseConsumerClients($consumerCode, $clientId);
         $this->removeConsumerLease($consumerCode);
         $this->syncIdleShutdownWindow(true);
 
@@ -814,27 +856,9 @@ final class SessionServer
 
     private function pruneExpiredConsumerLeases(): void
     {
-        $now = \time();
-        $removedAny = false;
-        $this->sharedRegistry->withRoleLock($this->serviceRole, function () use ($now, &$removedAny): void {
-            $record = $this->sharedRegistry->getRecord($this->serviceRole);
-            $consumers = $record['consumers'] ?? [];
-            if (!\is_array($consumers)) {
-                return;
-            }
-
-            foreach ($consumers as $consumerCode => $consumer) {
-                $leaseExpiresAt = \strtotime((string) ($consumer['lease_expires_at'] ?? ''));
-                if ($leaseExpiresAt !== false && $leaseExpiresAt > 0 && $leaseExpiresAt <= $now) {
-                    $this->sharedRegistry->removeConsumer($this->serviceRole, (string) $consumerCode);
-                    $removedAny = true;
-                }
-            }
-        });
-
-        if ($removedAny) {
-            $this->syncIdleShutdownWindow();
-        }
+        // 共享服务不再基于 lease 过期自行移除消费者令牌。
+        // 令牌生命周期由消费者显式 HELLO/SHUTDOWN 管理：只有消费者主动 SHUTDOWN 才释放。
+        // 这样可避免短时抖动/GC 延迟导致的误删令牌，引发 Session/Memory 进程被误判空闲后退出并反复拉起。
     }
 
     private function upsertConsumerLease(string $consumerCode, string $instanceName, string $ownerType, int $leaseTtl): void
@@ -853,6 +877,21 @@ final class SessionServer
         $this->sharedRegistry->removeConsumer($this->serviceRole, $consumerCode);
     }
 
+    private function releaseConsumerClients(string $consumerCode, int $exceptClientId): void
+    {
+        foreach (\array_keys($this->clients) as $clientId) {
+            if ($clientId === $exceptClientId || !isset($this->clients[$clientId])) {
+                continue;
+            }
+            if (\trim((string) ($this->clients[$clientId]['consumer_code'] ?? '')) !== $consumerCode) {
+                continue;
+            }
+
+            @\fclose($this->clients[$clientId]['socket']);
+            unset($this->clients[$clientId]);
+        }
+    }
+
     private function hasActiveHelloClients(): bool
     {
         foreach ($this->clients as $client) {
@@ -864,17 +903,26 @@ final class SessionServer
         return false;
     }
 
+    public function hasActiveConsumers(): bool
+    {
+        return $this->sharedRegistry->getConsumers($this->serviceRole) !== [] || $this->hasActiveHelloClients();
+    }
+
+    public function isSharedConsumerIdleWindowOpen(): bool
+    {
+        return $this->idleShutdownDueAt !== null && \time() < $this->idleShutdownDueAt;
+    }
+
     private function syncIdleShutdownWindow(bool $explicitConsumerShutdown = false): void
     {
-        $consumers = $this->sharedRegistry->getConsumers($this->serviceRole);
-        if ($consumers !== [] || $this->hasActiveHelloClients()) {
+        if ($this->hasActiveConsumers()) {
             $this->idleShutdownDueAt = null;
             $this->sharedRegistry->setShutdownDueAt($this->serviceRole, null);
             return;
         }
 
         if ($explicitConsumerShutdown) {
-            $this->idleShutdownDueAt = \time() + $this->sharedConsumerLeaseTtlSec;
+            $this->idleShutdownDueAt = \time() + $this->emptyTokenExitGraceSec;
             $this->sharedRegistry->setShutdownDueAt($this->serviceRole, \date('c', $this->idleShutdownDueAt));
             return;
         }
@@ -884,7 +932,7 @@ final class SessionServer
             $shutdownDueAt = \strtotime((string) ($record['shutdown_due_at'] ?? ''));
             $this->idleShutdownDueAt = $shutdownDueAt !== false && $shutdownDueAt > 0
                 ? $shutdownDueAt
-                : (\time() + $this->sharedConsumerLeaseTtlSec);
+                : (\time() + $this->emptyTokenExitGraceSec);
             $this->sharedRegistry->setShutdownDueAt($this->serviceRole, \date('c', $this->idleShutdownDueAt));
         }
 
@@ -892,6 +940,22 @@ final class SessionServer
             $this->log('No shared-service consumers remain; idle shutdown reached, stopping server');
             $this->setRunning(false);
         }
+    }
+
+    private function enforceScheduledIdleShutdown(): void
+    {
+        if ($this->idleShutdownDueAt === null || \time() < $this->idleShutdownDueAt) {
+            return;
+        }
+
+        if ($this->hasActiveConsumers()) {
+            $this->idleShutdownDueAt = null;
+            $this->sharedRegistry->setShutdownDueAt($this->serviceRole, null);
+            return;
+        }
+
+        $this->log('No shared-service consumers remain; scheduled idle shutdown reached, stopping server');
+        $this->setRunning(false);
     }
 
     /**
