@@ -432,7 +432,7 @@ class AccountService
             // 根据供应商代码返回对应的Provider实例
             $providerClass = match ($providerCode) {
                 'anthropic' => AnthropicProvider::class,
-                'openai', 'deepseek' => OpenAiProvider::class,
+                'openai', 'deepseek', 'google', 'kimi' => OpenAiProvider::class,
                 default => OpenAiProvider::class, // 默认使用OpenAI兼容的Provider
             };
             
