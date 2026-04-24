@@ -94,6 +94,7 @@ class WorkerProvider extends AbstractServiceProvider
 
         $arguments[] = '--control-port=' . $context->controlPort;
         $arguments[] = '--master-pid=' . $context->masterPid;
+        $arguments[] = '--memory-limit=' . $context->getWorkerMemoryLimit();
 
         if ($context->frontend) {
             $arguments[] = '--frontend';

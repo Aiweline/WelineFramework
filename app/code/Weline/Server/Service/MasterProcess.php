@@ -517,6 +517,7 @@ class MasterProcess
             $envConfig = [];
         }
         $envConfig = $this->applySharedStateRuntimeConfig($envConfig);
+        $envConfig = $this->applyRuntimeWlsConfig($envConfig);
 
         $publicHostRaw = $this->config['public_host'] ?? null;
         $publicHost = \is_string($publicHostRaw) && $publicHostRaw !== '' ? $publicHostRaw : null;
@@ -544,6 +545,33 @@ class MasterProcess
             workerPort: $this->workerPort,
             publicHost: $publicHost,
         );
+    }
+
+    /**
+     * Keep start-time WLS options available to providers without mutating env.php.
+     *
+     * @param array<string, mixed> $envConfig
+     * @return array<string, mixed>
+     */
+    private function applyRuntimeWlsConfig(array $envConfig): array
+    {
+        $wls = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
+
+        if (isset($this->config['worker_memory_limit'])) {
+            $wls['worker_memory_limit'] = ServiceContext::normalizeMemoryLimit($this->config['worker_memory_limit']);
+        }
+        if (isset($this->config['dispatcher_memory_limit'])) {
+            $wls['dispatcher_memory_limit'] = ServiceContext::normalizeMemoryLimit(
+                $this->config['dispatcher_memory_limit'],
+                ServiceContext::normalizeMemoryLimit($wls['worker_memory_limit'] ?? '256M')
+            );
+        }
+
+        if ($wls !== []) {
+            $envConfig['wls'] = $wls;
+        }
+
+        return $envConfig;
     }
 
     /**
