@@ -14,6 +14,44 @@ class AiSiteBuildTaskService
     public const TASK_STATUS_DONE = 'done';
     public const TASK_STATUS_FAILED = 'failed';
     public const TASK_STATUS_CANCELLED = 'cancelled';
+    private const BUILD_LOCKED_PLAN_SCOPE_KEYS = [
+        'page_types',
+        'page_types_user_customized',
+        'execution_blueprint',
+        'execution_blueprint_draft',
+        'execution_blueprint_confirmed_at',
+        'execution_blueprint_confirmed_signature',
+        'plan_confirmed',
+        'plan_confirmed_at',
+        'plan_json',
+        'plan_markdown',
+        'plan_structured',
+        'plan_workbench',
+        'plan_generated_at',
+        'plan_generated_locale',
+        'plan_generated_page_types',
+        'plan_generated_source_signature',
+        'plan_ai_generated',
+        'plan_last_prompt_mode',
+        'plan_last_target_scope',
+        'plan_last_round',
+        'plan_rebuild_summary',
+        'plan_change_scope_report',
+        'virtual_theme_plan',
+        'task_plan_structured',
+        'task_plan_markdown',
+        'task_plan_generated_at',
+        'task_plan_directory_tree',
+        'task_plan_summary',
+        'task_plan_confirmed',
+        'task_plan_confirmed_at',
+        'task_plan_rebuild_summary',
+        'task_plan_change_scope_report',
+        '_task_plan_sse_request',
+        '_task_plan_rebuild_in_progress',
+        'build_blueprint',
+        'build_tasks',
+    ];
 
     public function __construct(
         private readonly AiSitePageBlueprintService $pageBlueprintService,
@@ -65,7 +103,38 @@ class AiSiteBuildTaskService
         if ($tasks === []) {
             return $scope;
         }
-        $scope['build_tasks'] = $this->buildDefaultTaskState($blueprint);
+        $existingTasks = $this->extractTaskState($scope);
+        $nextTasks = $this->buildDefaultTaskState($blueprint);
+        foreach ($nextTasks as $taskKey => $defaultState) {
+            $existing = \is_array($existingTasks[$taskKey] ?? null) ? $existingTasks[$taskKey] : [];
+            $status = $this->normalizeTaskStatus((string)($existing['status'] ?? self::TASK_STATUS_PENDING));
+            $resultRef = \is_array($existing['result_ref'] ?? null) ? $existing['result_ref'] : [];
+            if ($status === self::TASK_STATUS_DONE && $resultRef !== []) {
+                $nextTasks[$taskKey] = \array_replace($defaultState, $existing, [
+                    'status' => self::TASK_STATUS_DONE,
+                    'result_ref' => $resultRef,
+                ]);
+                continue;
+            }
+
+            if ($status === self::TASK_STATUS_CANCELLED) {
+                $nextTasks[$taskKey] = \array_replace($defaultState, $existing, [
+                    'status' => self::TASK_STATUS_CANCELLED,
+                ]);
+                continue;
+            }
+
+            $nextTasks[$taskKey] = \array_replace($defaultState, [
+                'status' => self::TASK_STATUS_PENDING,
+                'attempt_no' => 0,
+                'message' => '',
+                'result_ref' => [],
+                'updated_at' => \date('Y-m-d H:i:s'),
+                'started_at' => '',
+                'finished_at' => '',
+            ]);
+        }
+        $scope['build_tasks'] = $nextTasks;
 
         return $scope;
     }
@@ -103,6 +172,58 @@ class AiSiteBuildTaskService
         }
 
         return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    public function shouldLockBuildPlanContract(array $scope): bool
+    {
+        return (int)($scope['task_plan_confirmed'] ?? 0) === 1
+            || $this->hasConfirmedTaskPlanForBuild($scope);
+    }
+
+    /**
+     * Build consumes the confirmed stage plan. Request or queue scope_patch must
+     * not rewrite plans after confirmation.
+     *
+     * @param array<string, mixed> $scopePatch
+     * @param array<string, mixed> $currentScope
+     * @return array<string, mixed>
+     */
+    public function stripBuildPlanMutationScopePatch(array $scopePatch, array $currentScope): array
+    {
+        if (!$this->shouldLockBuildPlanContract($currentScope)) {
+            return $scopePatch;
+        }
+
+        foreach (self::BUILD_LOCKED_PLAN_SCOPE_KEYS as $key) {
+            unset($scopePatch[$key]);
+        }
+
+        return $scopePatch;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $confirmedScope
+     * @return array<string, mixed>
+     */
+    public function restoreBuildPlanContract(array $scope, array $confirmedScope): array
+    {
+        if (!$this->shouldLockBuildPlanContract($confirmedScope)) {
+            return $scope;
+        }
+
+        foreach (self::BUILD_LOCKED_PLAN_SCOPE_KEYS as $key) {
+            if (\array_key_exists($key, $confirmedScope)) {
+                $scope[$key] = $confirmedScope[$key];
+            } else {
+                unset($scope[$key]);
+            }
+        }
+
+        return $this->normalizeConfirmedTaskPlanFlag($scope);
     }
 
     /**
@@ -222,6 +343,7 @@ class AiSiteBuildTaskService
 
         $pageTypeMap = [];
         $tasks = [];
+        $seenTaskKeys = [];
         foreach ($executionTasks as $task) {
             if (!\is_array($task)) {
                 continue;
@@ -230,6 +352,10 @@ class AiSiteBuildTaskService
             if ($taskKey === '') {
                 continue;
             }
+            if (isset($seenTaskKeys[$taskKey])) {
+                continue;
+            }
+            $seenTaskKeys[$taskKey] = true;
 
             $pageType = \trim((string)($task['page_type'] ?? ''));
             if ($pageType !== '') {
@@ -450,9 +576,15 @@ class AiSiteBuildTaskService
      */
     private function isTaskPlanRebuildScope(array $scope): bool
     {
+        if ((int)($scope['task_plan_confirmed'] ?? 0) === 1 && $this->hasConfirmedTaskPlanForBuild($scope)) {
+            return false;
+        }
+        if ((int)($scope['_task_plan_rebuild_in_progress'] ?? 0) === 1) {
+            return true;
+        }
+
         $request = \is_array($scope['_task_plan_sse_request'] ?? null) ? $scope['_task_plan_sse_request'] : [];
-        return (int)($scope['_task_plan_rebuild_in_progress'] ?? 0) === 1
-            || (string)($request['prompt_mode'] ?? '') === 'rebuild_task_plan'
+        return (string)($request['prompt_mode'] ?? '') === 'rebuild_task_plan'
             || (int)($request['forced_by_queue_run'] ?? 0) === 1;
     }
 
@@ -694,6 +826,33 @@ class AiSiteBuildTaskService
             'updated_at' => \date('Y-m-d H:i:s'),
             'message' => \trim($message),
         ], false);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function markTaskPendingForRetry(array $scope, string $taskKey, string $message): array
+    {
+        return $this->setTaskState($scope, $taskKey, [
+            'status' => self::TASK_STATUS_PENDING,
+            'message' => \trim($message),
+            'result_ref' => [],
+            'started_at' => '',
+            'finished_at' => '',
+            'updated_at' => \date('Y-m-d H:i:s'),
+        ], false);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    public function getTaskAttemptNo(array $scope, string $taskKey): int
+    {
+        $taskState = $this->extractTaskState($scope);
+        $state = \is_array($taskState[$taskKey] ?? null) ? $taskState[$taskKey] : [];
+
+        return \max(0, (int)($state['attempt_no'] ?? 0));
     }
 
     /**
@@ -1050,11 +1209,20 @@ class AiSiteBuildTaskService
     private function resolveSectionCodeFromTask(string $taskKey, array $meta): string
     {
         $sectionCode = \trim((string)($meta['section_code'] ?? ''));
-        if ($sectionCode !== '') {
+        $sectionKey = \trim((string)($meta['section_key'] ?? $meta['block_key'] ?? ''));
+        $taskKeyTail = '';
+        if (\preg_match('/^[^:]+:[^:]+:(.+)$/', $taskKey, $matches) === 1) {
+            $taskKeyTail = \trim((string)($matches[1] ?? ''));
+        }
+
+        if ($sectionCode !== '' && !\in_array(\strtolower($sectionCode), ['section', 'content', 'block'], true)) {
             return $sectionCode;
         }
-        if (\preg_match('/^[^:]+:[^:]+:(.+)$/', $taskKey, $matches) === 1) {
-            return \trim((string)($matches[1] ?? ''));
+        if ($sectionKey !== '') {
+            return $sectionKey;
+        }
+        if ($taskKeyTail !== '') {
+            return $taskKeyTail;
         }
 
         return \trim((string)($meta['block_key'] ?? ''));

@@ -632,14 +632,6 @@ class SharedStateServiceManager
      */
     public function release(string $role, string $consumerCode = '', array $options = []): array
     {
-        if ($this->shouldTrackConsumer($consumerCode)) {
-            $this->withRoleLock($this->normalizeRoleName($role), function () use ($role, $consumerCode): void {
-                $registry = $this->createRegistry();
-                $registry->releaseConsumer($role, $consumerCode);
-                $this->syncRuntimeRegistryMetadata($role, $registry);
-            });
-        }
-
         return [
             'released' => true,
             'local_ref_count' => 0,
@@ -649,7 +641,44 @@ class SharedStateServiceManager
     }
 
     /**
-     * @return array<string, bool> role => IPC ACK received
+     * @param list<string>|null $roles
+     * @return array<string, bool> role => renewed
+     */
+    public function renewInstanceConsumers(string $instanceName, ?array $roles = null): array
+    {
+        $results = [
+            ControlMessage::ROLE_SESSION_SERVER => false,
+            ControlMessage::ROLE_MEMORY_SERVER => false,
+        ];
+
+        if (!$this->shouldTrackConsumer($instanceName)) {
+            return $results;
+        }
+
+        $targetRoles = $this->normalizeSharedConsumerRoles($roles);
+        foreach ($targetRoles as $role) {
+            $results[$role] = (bool) $this->tryWithRoleLock($role, function () use ($role, $instanceName): bool {
+                $registry = $this->createRegistry();
+                $registry->touchConsumer($role, $instanceName);
+                $this->syncRuntimeRegistryMetadata($role, $registry);
+
+                return true;
+            }, false);
+        }
+
+        return $results;
+    }
+
+    /**
+     * @return array<string, bool> role => registered
+     */
+    public function registerInstanceConsumers(string $instanceName): array
+    {
+        return $this->renewInstanceConsumers($instanceName);
+    }
+
+    /**
+     * @return array<string, bool> role => shared service ACK received
      */
     public function releaseInstanceConsumers(string $instanceName): array
     {
@@ -663,21 +692,48 @@ class SharedStateServiceManager
         }
 
         foreach ([ControlMessage::ROLE_SESSION_SERVER, ControlMessage::ROLE_MEMORY_SERVER] as $role) {
-            $results[$role] = (bool) $this->withRoleLock($role, function () use ($role, $instanceName): bool {
+            try {
                 $registry = $this->createRegistry();
                 $runtime = $this->readRuntimeFile($role);
                 if ($runtime === []) {
                     $runtime = $registry->getRecord($role);
                 }
-                $ack = $this->sendSharedServiceConsumerShutdown($role, $instanceName, $runtime);
-                $registry->releaseConsumer($role, $instanceName);
-                $this->syncRuntimeRegistryMetadata($role, $registry);
 
-                return $ack;
-            });
+                $results[$role] = $this->sendSharedServiceConsumerShutdown($role, $instanceName, $runtime);
+            } catch (\Throwable $throwable) {
+                WlsLogger::warning_(
+                    "[SharedStateServiceManager] 共享服务 {$role} consumer token 卸载通知异常: "
+                    . $throwable->getMessage()
+                );
+                $results[$role] = false;
+            }
         }
 
         return $results;
+    }
+
+    /**
+     * @param list<string>|null $roles
+     * @return list<string>
+     */
+    private function normalizeSharedConsumerRoles(?array $roles): array
+    {
+        $defaultRoles = [ControlMessage::ROLE_SESSION_SERVER, ControlMessage::ROLE_MEMORY_SERVER];
+        if ($roles === null) {
+            return $defaultRoles;
+        }
+
+        $allowed = \array_fill_keys($defaultRoles, true);
+        $normalized = [];
+        foreach ($roles as $role) {
+            $role = $this->normalizeRoleName((string) $role);
+            if (!isset($allowed[$role])) {
+                continue;
+            }
+            $normalized[$role] = $role;
+        }
+
+        return \array_values($normalized);
     }
 
     /**
@@ -1313,6 +1369,38 @@ class SharedStateServiceManager
             return $callback();
         } finally {
             \flock($handle, LOCK_UN);
+            @\fclose($handle);
+        }
+    }
+
+    /**
+     * @param callable(): mixed $callback
+     */
+    protected function tryWithRoleLock(string $role, callable $callback, mixed $fallback = null): mixed
+    {
+        $lockPath = $this->getRuntimeFilePath($role) . '.ensure.lock';
+        $dir = \dirname($lockPath);
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0755, true);
+        }
+
+        $handle = @\fopen($lockPath, 'c+');
+        if ($handle === false) {
+            return $fallback;
+        }
+
+        $locked = false;
+        try {
+            if (!\flock($handle, LOCK_EX | LOCK_NB)) {
+                return $fallback;
+            }
+            $locked = true;
+
+            return $callback();
+        } finally {
+            if ($locked) {
+                \flock($handle, LOCK_UN);
+            }
             @\fclose($handle);
         }
     }

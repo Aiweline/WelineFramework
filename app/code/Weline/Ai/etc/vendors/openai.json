@@ -2,14 +2,16 @@
     "name": "OpenAI",
     "code": "openai",
     "base_url": "https://api.openai.com/v1",
-    "models_prefix": ["gpt-", "text-", "davinci", "curie", "babbage", "ada", "o1-", "o3-"],
-    "test_model": "gpt-3.5-turbo",
+    "models_prefix": ["gpt-", "o1-", "o3-", "o4-"],
+    "allow_custom_models": true,
+    "quick_create": true,
+    "test_model": "gpt-5.4-mini",
     "api_key_field": "api_key",
     "base_url_field": "base_url",
     "model_field": "model",
-    "description": "OpenAI官方API服务",
+    "description": "OpenAI official API service",
     "website": "https://openai.com",
-    "documentation": "https://platform.openai.com/docs",
+    "documentation": "https://platform.openai.com/docs/models",
     "supported_features": {
         "chat": true,
         "completion": true,
@@ -38,78 +40,90 @@
         "stream": true,
         "timeout": 180,
         "max_retries": 3,
-        "capabilities": ["chat", "code"]
+        "capabilities": ["chat", "vision", "code", "function_calling", "structured_outputs"]
     },
     "models": [
         {
+            "code": "gpt-5.4",
+            "name": "GPT-5.4",
+            "description": "OpenAI flagship reasoning model for complex agentic, coding, and professional workflows.",
+            "max_tokens": 128000,
+            "context_window": 1050000,
+            "input_price": 2.50,
+            "output_price": 15.00,
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "structured_outputs"]
+        },
+        {
+            "code": "gpt-5.4-mini",
+            "name": "GPT-5.4 Mini",
+            "description": "Lower-latency GPT-5.4 variant for coding, computer use, and subagent workloads.",
+            "max_tokens": 128000,
+            "context_window": 400000,
+            "input_price": 0.75,
+            "output_price": 4.50,
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "structured_outputs"]
+        },
+        {
+            "code": "gpt-5.4-nano",
+            "name": "GPT-5.4 Nano",
+            "description": "Lowest-cost GPT-5.4 class model for simple high-volume tasks.",
+            "max_tokens": 128000,
+            "context_window": 400000,
+            "input_price": 0.20,
+            "output_price": 1.25,
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "structured_outputs"]
+        },
+        {
+            "code": "gpt-4.1",
+            "name": "GPT-4.1",
+            "description": "Smart non-reasoning model with strong instruction following and tool calling.",
+            "max_tokens": 32768,
+            "context_window": 1047576,
+            "input_price": 2.00,
+            "output_price": 8.00,
+            "capabilities": ["chat", "vision", "code", "function_calling", "structured_outputs"]
+        },
+        {
+            "code": "gpt-4.1-mini",
+            "name": "GPT-4.1 Mini",
+            "description": "Smaller and faster GPT-4.1 variant.",
+            "max_tokens": 32768,
+            "context_window": 1047576,
+            "input_price": 0.40,
+            "output_price": 1.60,
+            "capabilities": ["chat", "vision", "code", "function_calling", "structured_outputs"]
+        },
+        {
+            "code": "gpt-4.1-nano",
+            "name": "GPT-4.1 Nano",
+            "description": "Fastest and most cost-efficient GPT-4.1 variant.",
+            "max_tokens": 32768,
+            "context_window": 1047576,
+            "input_price": 0.10,
+            "output_price": 0.40,
+            "capabilities": ["chat", "vision", "code", "function_calling", "structured_outputs"]
+        },
+        {
             "code": "gpt-4o",
             "name": "GPT-4o",
-            "description": "OpenAI最新的多模态模型，支持文本和视觉",
+            "description": "Versatile GPT model for text and image input with text output.",
             "max_tokens": 16384,
             "context_window": 128000,
             "input_price": 2.50,
             "output_price": 10.00,
-            "capabilities": ["chat", "vision", "code", "function_calling"]
+            "capabilities": ["chat", "vision", "code", "function_calling", "structured_outputs"]
         },
         {
             "code": "gpt-4o-mini",
             "name": "GPT-4o Mini",
-            "description": "GPT-4o的精简版，更快更便宜",
+            "description": "Fast and affordable GPT-4o variant for focused tasks.",
             "max_tokens": 16384,
             "context_window": 128000,
             "input_price": 0.15,
             "output_price": 0.60,
-            "capabilities": ["chat", "vision", "code", "function_calling"]
-        },
-        {
-            "code": "gpt-4-turbo",
-            "name": "GPT-4 Turbo",
-            "description": "GPT-4的增强版本，更快响应",
-            "max_tokens": 4096,
-            "context_window": 128000,
-            "input_price": 10.00,
-            "output_price": 30.00,
-            "capabilities": ["chat", "vision", "code", "function_calling"]
-        },
-        {
-            "code": "gpt-4",
-            "name": "GPT-4",
-            "description": "强大的推理和分析能力",
-            "max_tokens": 8192,
-            "context_window": 8192,
-            "input_price": 30.00,
-            "output_price": 60.00,
-            "capabilities": ["chat", "code", "function_calling"]
-        },
-        {
-            "code": "gpt-3.5-turbo",
-            "name": "GPT-3.5 Turbo",
-            "description": "快速且经济的对话模型",
-            "max_tokens": 4096,
-            "context_window": 16385,
-            "input_price": 0.50,
-            "output_price": 1.50,
-            "capabilities": ["chat", "code", "function_calling"]
-        },
-        {
-            "code": "o1-preview",
-            "name": "o1 Preview",
-            "description": "新一代推理模型预览版，擅长复杂推理任务",
-            "max_tokens": 32768,
-            "context_window": 128000,
-            "input_price": 15.00,
-            "output_price": 60.00,
-            "capabilities": ["chat", "reasoning", "code"]
-        },
-        {
-            "code": "o1-mini",
-            "name": "o1 Mini",
-            "description": "o1的精简版，适合编程和数学任务",
-            "max_tokens": 65536,
-            "context_window": 128000,
-            "input_price": 3.00,
-            "output_price": 12.00,
-            "capabilities": ["chat", "reasoning", "code"]
+            "capabilities": ["chat", "vision", "code", "function_calling", "structured_outputs"]
         }
-    ]
+    ],
+    "models_updated_at": "2026-04-24",
+    "models_source": "https://platform.openai.com/docs/models"
 }
