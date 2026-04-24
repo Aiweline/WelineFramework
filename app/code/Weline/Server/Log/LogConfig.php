@@ -114,7 +114,7 @@ class LogConfig
 
     public static function isEnabled(): bool
     {
-        return (bool)self::getValue('enabled', true);
+        return self::isVerboseWlsLog() && (bool)self::getValue('enabled', true);
     }
 
     public static function isStdoutEnabled(bool $isFrontend = false, bool $isDev = false): bool

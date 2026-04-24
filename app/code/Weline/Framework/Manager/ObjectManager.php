@@ -12,6 +12,7 @@ namespace Weline\Framework\Manager;
 use ReflectionClass;
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Exception;
+use Weline\Framework\Cache\Contract\MemoryStoreInterface;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Adapter\FileAdapter;
 use Weline\Framework\Cache\Pool\CachePool;
@@ -799,6 +800,100 @@ class ObjectManager implements ManagerInterface
             self::$fiberInstances = null;
             self::$fiberOriginInstances = null;
         }
+    }
+
+    /**
+     * 在长生命周期 Worker 内存压力升高时，释放可重建的进程内缓存。
+     *
+     * 仅清理：
+     * - 实现了 MemoryStoreInterface 的 L1 内存缓存
+     * - ObjectManager 自身的元数据缓存
+     *
+     * 不移除业务对象实例，避免影响正在运行的请求。
+     *
+     * @return array{memory_store_clears:int, metadata_entries_cleared:int}
+     */
+    public static function relieveMemoryPressure(bool $aggressive = false): array
+    {
+        $seenObjects = [];
+        $memoryStoreClears = 0;
+
+        foreach (self::getAllScopedInstanceBuckets() as $bucket) {
+            foreach ($bucket as $instance) {
+                if (!$instance instanceof MemoryStoreInterface) {
+                    continue;
+                }
+
+                $objectId = \spl_object_id($instance);
+                if (isset($seenObjects[$objectId])) {
+                    continue;
+                }
+                $seenObjects[$objectId] = true;
+
+                $instance->clearMemory();
+                $memoryStoreClears++;
+            }
+        }
+
+        $metadataEntries = \count(self::$reflections)
+            + \count(self::$methodParamsMetadata)
+            + \count(self::$staticClassCache)
+            + \count(self::$classExistsCache)
+            + \count(self::$constructorCache)
+            + \count(self::$interfaceCache)
+            + \count(self::$parsedClasses)
+            + \count(self::$initMethodCache)
+            + \count(self::$createMethodCache);
+
+        if ($metadataEntries > 0 || $aggressive) {
+            self::$reflections = [];
+            self::$methodParamsMetadata = [];
+            self::$staticClassCache = [];
+            self::$classExistsCache = [];
+            self::$constructorCache = [];
+            self::$interfaceCache = [];
+            self::$parsedClasses = [];
+            self::$initMethodCache = [];
+            self::$createMethodCache = [];
+        }
+
+        return [
+            'memory_store_clears' => $memoryStoreClears,
+            'metadata_entries_cleared' => $metadataEntries,
+        ];
+    }
+
+    /**
+     * @return list<array<string, object>>
+     */
+    private static function getAllScopedInstanceBuckets(): array
+    {
+        $buckets = [];
+
+        if (self::$instances !== []) {
+            $buckets[] = self::$instances;
+        }
+        if (self::$origin_instances !== []) {
+            $buckets[] = self::$origin_instances;
+        }
+
+        if (self::$fiberInstances !== null) {
+            foreach (self::$fiberInstances as $instances) {
+                if ($instances !== []) {
+                    $buckets[] = $instances;
+                }
+            }
+        }
+
+        if (self::$fiberOriginInstances !== null) {
+            foreach (self::$fiberOriginInstances as $instances) {
+                if ($instances !== []) {
+                    $buckets[] = $instances;
+                }
+            }
+        }
+
+        return $buckets;
     }
     
     /**

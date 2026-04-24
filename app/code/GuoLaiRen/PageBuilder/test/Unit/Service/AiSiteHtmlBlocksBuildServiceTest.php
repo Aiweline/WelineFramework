@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 
 class AiSiteHtmlBlocksBuildServiceTest extends TestCase
 {
-    public function testBuildPlaceholderBlocksUsesStructuredHeaderFooterAndGroupedFooterLinks(): void
+    public function testBuildSharedHeaderAndFooterUseStructuredNavAndGroupedFooterLinks(): void
     {
         $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService());
 
@@ -34,13 +34,13 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
             ],
         ];
 
-        $blocks = $service->buildPlaceholderBlocksForPageType(Page::TYPE_HOME, $websiteProfile, $scope);
+        $headerBlock = $service->buildSharedHeaderBlock(Page::TYPE_HOME, $websiteProfile, $scope);
+        $footerBlock = $service->buildSharedFooterBlock(Page::TYPE_HOME, $websiteProfile, $scope);
 
-        self::assertGreaterThanOrEqual(3, \count($blocks));
-        self::assertSame('site_header', (string)($blocks[0]['type'] ?? ''));
-        self::assertSame('site_footer', (string)($blocks[\count($blocks) - 1]['type'] ?? ''));
+        self::assertSame('site_header', (string)($headerBlock['type'] ?? ''));
+        self::assertSame('site_footer', (string)($footerBlock['type'] ?? ''));
 
-        $headerNav = $blocks[0]['config']['nav_items'] ?? [];
+        $headerNav = $headerBlock['config']['nav_items'] ?? [];
         self::assertIsArray($headerNav);
         self::assertLessThanOrEqual(6, \count($headerNav));
         $headerHrefs = \array_column($headerNav, 'href');
@@ -53,7 +53,6 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
             'Header nav should surface at least one policy-related page.'
         );
 
-        $footerBlock = $blocks[\count($blocks) - 1];
         $footerConfig = \is_array($footerBlock['config'] ?? null) ? $footerBlock['config'] : [];
         self::assertSame('Featured Pages', (string)($footerConfig['links.column1_title'] ?? ''));
         self::assertSame('Policy Info', (string)($footerConfig['links.column2_title'] ?? ''));

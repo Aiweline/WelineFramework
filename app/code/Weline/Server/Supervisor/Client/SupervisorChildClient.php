@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Supervisor\Client;
 
 use Weline\Server\IPC\ChildControl\ChildControlClientInterface;
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Supervisor\Endpoint\ControlEndpoint;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
 use Weline\Server\Supervisor\Protocol\SupervisorMessage;
@@ -44,6 +45,7 @@ final class SupervisorChildClient implements ChildControlClientInterface
     private string $leaseId = '';
     private int $generation = 0;
     private int $poolSnapshotVersion = 0;
+    private bool $releaseSent = false;
 
     public function __construct(
         private readonly string $instanceName,
@@ -161,6 +163,7 @@ final class SupervisorChildClient implements ChildControlClientInterface
         $this->leaseId = (string)($response['lease_id'] ?? '');
         $this->generation = (int)($response['generation'] ?? 0);
         $this->readyConfirmed = false;
+        $this->releaseSent = false;
 
         return $this->leaseId !== '' && $this->generation > 0;
     }
@@ -363,6 +366,7 @@ final class SupervisorChildClient implements ChildControlClientInterface
 
     public function close(): void
     {
+        $this->sendLeaseReleaseIfShutdownReceived();
         if (\is_resource($this->socket)) {
             @\fclose($this->socket);
         }
@@ -443,6 +447,13 @@ final class SupervisorChildClient implements ChildControlClientInterface
                 $this->readyConfirmed = (bool)($decoded['accepted'] ?? false);
                 $this->poolSnapshotVersion = (int)($decoded['pool_snapshot_version'] ?? $this->poolSnapshotVersion);
             }
+            if (($decoded['type'] ?? '') === ControlMessage::TYPE_SHUTDOWN) {
+                $this->receivedShutdown = true;
+            }
+            if (($decoded['type'] ?? '') === SupervisorMessage::TYPE_LEASE_RELEASE_ACK
+                && ($decoded['accepted'] ?? false)) {
+                $this->releaseSent = true;
+            }
             if ($this->messageHandler !== null) {
                 ($this->messageHandler)($decoded, $this);
             }
@@ -500,5 +511,29 @@ final class SupervisorChildClient implements ChildControlClientInterface
         if ($this->disconnectHandler !== null) {
             ($this->disconnectHandler)($this->receivedShutdown, $this);
         }
+    }
+
+    private function sendLeaseReleaseIfShutdownReceived(): void
+    {
+        if (!$this->receivedShutdown
+            || $this->releaseSent
+            || $this->registerInfo === null
+            || $this->leaseId === ''
+            || $this->generation <= 0
+            || !$this->isConnected()) {
+            return;
+        }
+
+        $role = (string)$this->registerInfo['role'];
+        $workerId = (int)$this->registerInfo['worker_id'];
+        $message = SupervisorMessage::leaseRelease(
+            slotId: $this->buildSlotId($role, $workerId),
+            leaseId: $this->leaseId,
+            generation: $this->generation,
+            msgId: $this->leaseId,
+            channel: $this->channelId,
+        );
+        $this->releaseSent = true;
+        $this->sendRaw($message);
     }
 }

@@ -147,6 +147,50 @@ final class SupervisorRuntimeTest extends TestCase
         self::assertSame(3, $after['slots'][0]['heartbeat_seq']);
     }
 
+    public function testLeaseReleaseAdvancesSlotAndWorkerPoolSnapshots(): void
+    {
+        $runtime = $this->createRuntime('default');
+
+        $leaseAssign = SupervisorMessage::decode((string)$runtime->handle([
+            'type' => SupervisorMessage::TYPE_HELLO,
+            'msg_id' => 'hello-1',
+            'instance' => 'default',
+            'channel' => 'channel-default',
+            'role' => 'worker',
+            'slot_id' => 'worker#1',
+            'pid' => 2001,
+            'port' => 18081,
+        ]));
+        $runtime->handle([
+            'type' => SupervisorMessage::TYPE_READY,
+            'msg_id' => 'ready-1',
+            'channel' => 'channel-default',
+            'slot_id' => 'worker#1',
+            'lease_id' => $leaseAssign['lease_id'],
+            'generation' => $leaseAssign['generation'],
+            'listen' => ['port' => 18081],
+        ]);
+
+        self::assertSame(2, $runtime->slotSnapshot()['version']);
+        self::assertSame(1, $runtime->workerPoolSnapshot()['version']);
+
+        $releaseAck = SupervisorMessage::decode((string)$runtime->handle([
+            'type' => SupervisorMessage::TYPE_LEASE_RELEASE,
+            'msg_id' => 'release-1',
+            'channel' => 'channel-default',
+            'slot_id' => 'worker#1',
+            'lease_id' => $leaseAssign['lease_id'],
+            'generation' => $leaseAssign['generation'],
+        ]));
+
+        self::assertSame(SupervisorMessage::TYPE_LEASE_RELEASE_ACK, $releaseAck['type']);
+        self::assertTrue($releaseAck['accepted']);
+        self::assertSame(3, $runtime->slotSnapshot()['version']);
+        self::assertSame([], $runtime->slotSnapshot()['slots']);
+        self::assertSame(2, $runtime->workerPoolSnapshot()['version']);
+        self::assertSame([], $runtime->workerPoolSnapshot()['workers']);
+    }
+
     public function testMismatchedChannelIsRejectedWithoutMutatingSnapshots(): void
     {
         $runtime = $this->createRuntime('default');
