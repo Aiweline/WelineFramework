@@ -23,7 +23,6 @@ use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Sse\SseContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FiberOutputBuffer;
-use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 class Core
@@ -319,11 +318,9 @@ class Core
             RequestLifecycleTrace::popCurrentParent();
             RequestLifecycleTrace::recordSpan('controller_chain::router_before_start', (microtime(true) - $t0) * 1000, 'controller');
         }
-        SchedulerSystem::yield();
 
         # 获取URL
         $this->url = $url = $this->processUrl();
-        SchedulerSystem::yield();
 
         // 诊断日志：记录路由开始时的关键状态
         $originalUri = (string) (\w_env('full_request_uri', \w_env('request.uri', '')) ?? '');
@@ -363,7 +360,6 @@ class Core
                 $this->clearCurrentRequestRouteCaches();
             } else {
                 $this->router = $cachedRouter;
-                SchedulerSystem::yield();
                 return $this->route();
             }
         }
@@ -375,7 +371,6 @@ class Core
                 $this->clearCurrentRequestRouteCaches();
             } else {
                 $this->router = $router;
-                SchedulerSystem::yield();
                 return $this->route();
             }
         }
@@ -1080,7 +1075,6 @@ class Core
             RequestLifecycleTrace::popCurrentParent();
             RequestLifecycleTrace::recordSpan('controller_chain::route_before', (microtime(true) - $t0) * 1000, 'controller');
         }
-        SchedulerSystem::yield();
 
         $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
         $dispatch = ObjectManager::getInstance((string)$dispatch);
@@ -1088,7 +1082,6 @@ class Core
         if (RequestLifecycleTrace::isEnabled()) {
             RequestLifecycleTrace::recordSpan('controller_chain::controller_init', (microtime(true) - $t0) * 1000, 'controller');
         }
-        SchedulerSystem::yield();
         # 检测控制器方法
         if (!method_exists($dispatch, $method)) {
             $dispatch_class = $dispatch::class;
@@ -1102,9 +1095,7 @@ class Core
             RequestLifecycleTrace::pushCurrentParent('controller_chain::action_execute');
         }
         try {
-            SchedulerSystem::yield();
             $result = call_user_func([$dispatch, $method], /*...$this->request->getParams()*/);
-            SchedulerSystem::yield();
             // 检测是否是流式响应（SSE）- 如果是，直接返回，不进行后续处理
             // 仅依赖 headers_list 在部分 FPM 场景会失效，因此优先检查 SseContext 开关。
             if (SseContext::isSseEnabled()) {
@@ -1137,7 +1128,6 @@ class Core
                 RequestLifecycleTrace::recordSpan('controller_chain::route_after', (microtime(true) - $t0) * 1000, 'controller');
             }
             // 获取输出缓冲区内容（控制器可能直接输出而不是返回）
-            SchedulerSystem::yield();
             $output = FiberOutputBuffer::endCapture();
             // 如果控制器返回了结果，优先使用返回值；否则使用输出缓冲区内容
             $fpcHtml = !empty($result) ? (is_string($result) ? $result : $output) : $output;

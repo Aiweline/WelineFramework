@@ -7,6 +7,8 @@ namespace GuoLaiRen\PageBuilder\Test\Integration;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Http\Sse\SseWriter;
 
+require_once __DIR__ . '/../Support/DuplicateObserverHeartbeatWriter.php';
+
 /**
  * Bug Condition Exploration Test
  * 

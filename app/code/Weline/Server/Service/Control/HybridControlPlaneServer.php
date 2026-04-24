@@ -328,6 +328,9 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             'worker_id' => (int)($sessionInfo['worker_id'] ?? 0),
             'epoch' => 0,
             'launch_id' => (string)($sessionInfo['launch_nonce'] ?? ''),
+            'slot_id' => (string)($sessionInfo['slot_id'] ?? ''),
+            'lease_id' => (string)($sessionInfo['lease_id'] ?? ''),
+            'generation' => (int)($sessionInfo['generation'] ?? 0),
             'process_kind' => ControlMessage::PROCESS_KIND_FRAMEWORK,
             'module_code' => '',
             'instance_code' => (string)($sessionInfo['instance'] ?? $this->expectedInstanceCode ?? ''),
@@ -348,6 +351,9 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             'epoch' => 0,
             'launch_id' => (string)($sessionInfo['launch_nonce'] ?? ''),
             'msg_id' => (string)($sessionInfo['lease_id'] ?? ''),
+            'slot_id' => (string)($sessionInfo['slot_id'] ?? ''),
+            'lease_id' => (string)($sessionInfo['lease_id'] ?? ''),
+            'generation' => (int)($sessionInfo['generation'] ?? 0),
         ];
     }
 
@@ -452,6 +458,27 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
     private function translateLegacyPoolPortsToSnapshotWorkers(array $message): array
     {
         $workers = [];
+        if (\is_array($message['workers'] ?? null)) {
+            foreach ($message['workers'] as $worker) {
+                if (!\is_array($worker)) {
+                    continue;
+                }
+                $port = (int)($worker['port'] ?? 0);
+                if ($port <= 0) {
+                    continue;
+                }
+                $workers[] = [
+                    'slot_id' => (string)($worker['slot_id'] ?? ''),
+                    'lease_id' => (string)($worker['lease_id'] ?? ''),
+                    'generation' => (int)($worker['generation'] ?? 0),
+                    'port' => $port,
+                    'state' => (string)($worker['state'] ?? 'ready'),
+                ];
+            }
+            if ($workers !== []) {
+                return $workers;
+            }
+        }
         foreach (\is_array($message['ports'] ?? null) ? $message['ports'] : [] as $port) {
             $p = (int)$port;
             if ($p <= 0) {

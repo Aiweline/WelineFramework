@@ -117,7 +117,11 @@ class ServiceInfo
             return $this->rootPid;
         }
 
-        return $this->pid > 0 ? $this->pid : 0;
+        if ($this->pid > 0) {
+            return $this->pid;
+        }
+
+        return $this->launcherPid > 0 ? $this->launcherPid : 0;
     }
 
     /**

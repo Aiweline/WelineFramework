@@ -12,6 +12,77 @@ use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
 
 final class MasterProcessControlPlaneRuntimeTest extends TestCase
 {
+    public function testFirstCtrlCRequestsDrainingStop(): void
+    {
+        $master = new MasterProcess();
+        $orchestrator = new class extends ServiceOrchestrator {
+            public array $requestStopCalls = [];
+
+            public function requestStop(
+                string $reason = 'shutdown',
+                ?int $progressClientId = null,
+                bool $exclusiveIpc = false,
+                bool $skipDrain = false
+            ): bool {
+                $this->requestStopCalls[] = [
+                    'reason' => $reason,
+                    'progressClientId' => $progressClientId,
+                    'exclusiveIpc' => $exclusiveIpc,
+                    'skipDrain' => $skipDrain,
+                ];
+
+                return true;
+            }
+        };
+
+        $this->writePrivate($master, 'orchestrator', $orchestrator);
+
+        $master->stopWithProgress('Ctrl+C (Windows)');
+
+        self::assertSame([[
+            'reason' => 'Ctrl+C (Windows)',
+            'progressClientId' => null,
+            'exclusiveIpc' => false,
+            'skipDrain' => false,
+        ]], $orchestrator->requestStopCalls);
+    }
+
+    public function testRepeatCtrlCForcesStopInsteadOfPendingNudge(): void
+    {
+        $master = new MasterProcess();
+        $orchestrator = new class extends ServiceOrchestrator {
+            public bool $repeatNudgeCalled = false;
+
+            public function applyRepeatTerminationNudge(): bool
+            {
+                $this->repeatNudgeCalled = true;
+
+                return true;
+            }
+
+            public function forceTerminateMasterAndChildren(string $reason = 'force'): void
+            {
+                throw new \RuntimeException('forced:' . $reason);
+            }
+        };
+
+        $this->writePrivate($master, 'stopRequested', true);
+        $this->writePrivate($master, 'orchestrator', $orchestrator);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('forced:repeat_signal:Ctrl+C (Windows)');
+
+        try {
+            $this->invokePrivate(
+                $master,
+                'handleTerminationSignal',
+                ['Ctrl+C (Windows)', 'ignored']
+            );
+        } finally {
+            self::assertFalse($orchestrator->repeatNudgeCalled);
+        }
+    }
+
     public function testSaveMasterInfoPersistsHybridSupervisorRuntimeMetadata(): void
     {
         $instanceName = 'ut-master-runtime-' . \bin2hex(\random_bytes(4));
@@ -68,5 +139,13 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
         $reflection = new \ReflectionProperty($object, $property);
         $reflection->setAccessible(true);
         $reflection->setValue($object, $value);
+    }
+
+    private function invokePrivate(object $object, string $method, array $args = []): mixed
+    {
+        $reflection = new \ReflectionMethod($object, $method);
+        $reflection->setAccessible(true);
+
+        return $reflection->invokeArgs($object, $args);
     }
 }
