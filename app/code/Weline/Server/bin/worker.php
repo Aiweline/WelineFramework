@@ -289,22 +289,25 @@ try {
         WlsLogger::warning_("[Memory] Memory service port not found in instance json; temporarily using runtime/env fallback {$memoryHost}:{$memoryPort}");
     }
 
-    // Worker 启动后立即预热 Session/Memory 长连接，确保共享服务尽早拥有消费者令牌，
-    // 避免共享服务误入“空消费者”窗口。
     WlsLogger::info_("[Session] Session service address preconfigured {$sessionHost}:{$sessionPort}");
     WlsLogger::info_("[Memory] Memory service address preconfigured {$memoryHost}:{$memoryPort}");
+    // Worker 仍保持 Session/Memory 预热长连接；消费者令牌由 Master 管理，连接池只负责 TCP 复用。
     try {
         \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($sessionHost, $sessionPort, [
             'token_file_name' => $sessionTokenFileName,
             'min_idle' => 1,
+            'connect_timeout' => 0.2,
+            'timeout' => 0.5,
             'log_pool_lifecycle' => false,
         ]);
         \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($memoryHost, $memoryPort, [
             'token_file_name' => $memoryTokenFileName,
             'min_idle' => 1,
+            'connect_timeout' => 0.2,
+            'timeout' => 0.5,
             'log_pool_lifecycle' => false,
         ]);
-        WlsLogger::info_('[ConnectionPool] Session/Memory 长连接预热完成（min_idle=1）');
+        WlsLogger::info_('[ConnectionPool] Session/Memory 预热长连接完成（min_idle=1，consumer token 由 Master 管理）');
     } catch (\Throwable $e) {
         WlsLogger::warning_('[ConnectionPool] 预热失败，将在首次请求时自动重试: ' . $e->getMessage());
     }

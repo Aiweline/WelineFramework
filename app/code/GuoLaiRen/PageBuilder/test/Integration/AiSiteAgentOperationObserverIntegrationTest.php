@@ -29,6 +29,23 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertFalse((bool)$method->invoke($controller, 'publish'));
     }
 
+    public function testStageQueueSlotsAreIsolatedPerOperation(): void
+    {
+        /** @var AiSiteAgent $controller */
+        $controller = ObjectManager::getInstance(AiSiteAgent::class);
+        $method = new ReflectionMethod(AiSiteAgent::class, 'buildAiSiteQueueBizKey');
+        $method->setAccessible(true);
+
+        $planKey = (string)$method->invoke($controller, 123, 'plan');
+        $taskPlanKey = (string)$method->invoke($controller, 123, 'task_plan');
+        $buildKey = (string)$method->invoke($controller, 123, 'build');
+
+        self::assertSame('glr_aisite:session:123:queue_slot:plan', $planKey);
+        self::assertSame('glr_aisite:session:123:queue_slot:task_plan', $taskPlanKey);
+        self::assertSame('glr_aisite:session:123:queue_slot:build', $buildKey);
+        self::assertNotSame($planKey, $taskPlanKey);
+    }
+
     public function testDuplicateOperationObserverIdleTimeoutIsDisabled(): void
     {
         /** @var AiSiteAgent $controller */
@@ -37,6 +54,84 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         $method->setAccessible(true);
 
         self::assertSame(0, (int)$method->invoke($controller));
+    }
+
+    public function testEnqueueOperationQueueTaskReusesOldestCanonicalQueueRow(): void
+    {
+        $createPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-create-session',
+            'POST',
+            'postCreateSession'
+        );
+        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
+
+        $publicId = (string)($createPayload['public_id'] ?? '');
+        self::assertNotSame('', $publicId);
+
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+
+        $bizKey = 'glr_aisite:session:' . $session->getId() . ':queue_slot:plan';
+        $baseContent = [
+            'public_id' => $publicId,
+            'admin_id' => 1,
+            'operation' => 'plan',
+            'stage' => AiSiteAgentSession::STAGE_PLAN,
+        ];
+
+        $first = w_query('queue', 'create', [
+            'class' => \GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue::class,
+            'name' => 'First canonical queue',
+            'module' => 'GuoLaiRen_PageBuilder',
+            'content' => \array_replace($baseContent, ['execution_token' => 'first-canonical-token']),
+            'status' => 'done',
+            'auto' => true,
+            'biz_key' => $bizKey,
+        ]);
+        $second = w_query('queue', 'create', [
+            'class' => \GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue::class,
+            'name' => 'Second duplicate queue',
+            'module' => 'GuoLaiRen_PageBuilder',
+            'content' => \array_replace($baseContent, ['execution_token' => 'second-duplicate-token']),
+            'status' => 'error',
+            'auto' => true,
+            'biz_key' => $bizKey,
+        ]);
+        self::assertIsArray($first);
+        self::assertIsArray($second);
+        $firstQueueId = (int)($first['queue_id'] ?? 0);
+        $secondQueueId = (int)($second['queue_id'] ?? 0);
+        self::assertGreaterThan(0, $firstQueueId);
+        self::assertGreaterThan($firstQueueId, $secondQueueId);
+
+        /** @var AiSiteAgent $controller */
+        $controller = ObjectManager::getInstance(AiSiteAgent::class);
+        $method = new ReflectionMethod(AiSiteAgent::class, 'enqueueOperationQueueTask');
+        $method->setAccessible(true);
+
+        $queueId = (int)$method->invoke(
+            $controller,
+            $session,
+            1,
+            'plan',
+            'canonical-reuse-token',
+            []
+        );
+
+        self::assertSame($firstQueueId, $queueId);
+
+        $canonical = w_query('queue', 'get', ['queue_id' => $queueId]);
+        self::assertIsArray($canonical);
+        self::assertSame('pending', (string)($canonical['status'] ?? ''));
+        self::assertSame('PageBuilder plan #canonical-re', (string)($canonical['name'] ?? ''));
+
+        $rows = w_query('queue', 'list', [
+            'module' => 'GuoLaiRen_PageBuilder',
+            'biz_key' => $bizKey,
+            'page_size' => 10,
+        ]);
+        self::assertIsArray($rows);
+        self::assertCount(1, \is_array($rows['items'] ?? null) ? $rows['items'] : []);
     }
 
     public function testStagePlanningOperationsSkipStaleReclaim(): void
@@ -152,7 +247,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertTrue((bool)$method->invoke($controller, 'build'));
     }
 
-    public function testSessionKeepsTwoReusableQueuesForPlanningAndBuild(): void
+    public function testSessionKeepsReusableQueuePerOperation(): void
     {
         $createPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-create-session',
@@ -166,10 +261,10 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
 
         $scopePatch = [
             'site_title' => 'Session queue reuse',
-            'site_tagline' => 'Planning queue and build queue should each be reused',
+            'site_tagline' => 'Each operation queue should be isolated and reused only for the same operation',
             'target_domain' => 'session-queue-reuse.local.test',
-            'brief_description' => 'Ensure plan/task_plan share one queue row and build keeps its own reusable queue row.',
-            'user_description' => 'Ensure plan/task_plan share one queue row and build keeps its own reusable queue row.',
+            'brief_description' => 'Ensure plan, task_plan, and build each keep their own reusable queue row.',
+            'user_description' => 'Ensure plan, task_plan, and build each keep their own reusable queue row.',
             'page_types' => [Page::TYPE_HOME],
         ];
         $mergePayload = $this->invokeJsonAction(
@@ -253,7 +348,8 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             );
             self::assertTrue((bool)($taskPlanPayload['success'] ?? false), \json_encode($taskPlanPayload, \JSON_UNESCAPED_UNICODE));
             $taskPlanQueueId = (int)($taskPlanPayload['queue_id'] ?? 0);
-            self::assertSame($planQueueId, $taskPlanQueueId, 'Task plan should reuse the planning queue row.');
+            self::assertGreaterThan(0, $taskPlanQueueId);
+            self::assertNotSame($planQueueId, $taskPlanQueueId, 'Task plan should not reuse the plan queue row.');
 
             w_query('queue', 'update', [
                 'queue_id' => $taskPlanQueueId,
@@ -326,15 +422,25 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             self::assertTrue((bool)($buildAgainPayload['success'] ?? false), \json_encode($buildAgainPayload, \JSON_UNESCAPED_UNICODE));
             self::assertSame($buildQueueId, (int)($buildAgainPayload['queue_id'] ?? 0), 'Repeated build should reuse the build queue row.');
 
-            $planningQueue = w_query('queue', 'get', ['queue_id' => $taskPlanQueueId]);
-            self::assertIsArray($planningQueue);
-            self::assertSame('glr_aisite:session:' . $sessionId . ':queue_slot:planning', (string)($planningQueue['biz_key'] ?? ''));
-            $planningQueueContent = \is_array($planningQueue['content'] ?? null)
-                ? $planningQueue['content']
-                : \json_decode((string)($planningQueue['content'] ?? ''), true);
-            self::assertIsArray($planningQueueContent);
-            self::assertSame('task_plan', (string)($planningQueueContent['operation'] ?? ''));
-            self::assertSame('stage2.shared.tasks', (string)($planningQueueContent['job_type'] ?? ''));
+            $planQueue = w_query('queue', 'get', ['queue_id' => $planQueueId]);
+            self::assertIsArray($planQueue);
+            self::assertSame('glr_aisite:session:' . $sessionId . ':queue_slot:plan', (string)($planQueue['biz_key'] ?? ''));
+            $planQueueContent = \is_array($planQueue['content'] ?? null)
+                ? $planQueue['content']
+                : \json_decode((string)($planQueue['content'] ?? ''), true);
+            self::assertIsArray($planQueueContent);
+            self::assertSame('plan', (string)($planQueueContent['operation'] ?? ''));
+            self::assertSame('stage1.requirement_expand', (string)($planQueueContent['job_type'] ?? ''));
+
+            $taskPlanQueue = w_query('queue', 'get', ['queue_id' => $taskPlanQueueId]);
+            self::assertIsArray($taskPlanQueue);
+            self::assertSame('glr_aisite:session:' . $sessionId . ':queue_slot:task_plan', (string)($taskPlanQueue['biz_key'] ?? ''));
+            $taskPlanQueueContent = \is_array($taskPlanQueue['content'] ?? null)
+                ? $taskPlanQueue['content']
+                : \json_decode((string)($taskPlanQueue['content'] ?? ''), true);
+            self::assertIsArray($taskPlanQueueContent);
+            self::assertSame('task_plan', (string)($taskPlanQueueContent['operation'] ?? ''));
+            self::assertSame('stage2.shared.tasks', (string)($taskPlanQueueContent['job_type'] ?? ''));
 
             $buildQueue = w_query('queue', 'get', ['queue_id' => $buildQueueId]);
             self::assertIsArray($buildQueue);
@@ -430,6 +536,72 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertSame((string)($queueContent['job_key'] ?? ''), (string)($activeOperation['job_key'] ?? ''));
         self::assertSame((string)($queueContent['job_type'] ?? ''), (string)($activeOperation['job_type'] ?? ''));
         self::assertSame((string)($queueContent['token'] ?? ''), (string)($activeOperation['token'] ?? ''));
+    }
+
+    public function testStartPlanRebuildsWhenCoreSiteInputsChangeWithoutLocaleOrPageTypeChanges(): void
+    {
+        $createPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-create-session',
+            'POST',
+            'postCreateSession'
+        );
+        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
+
+        $publicId = (string)($createPayload['public_id'] ?? '');
+        self::assertNotSame('', $publicId);
+
+        $initialScopePatch = [
+            'site_title' => 'Original planning title',
+            'site_tagline' => 'Original planning tagline',
+            'target_domain' => 'rebuild-on-input-change.local.test',
+            'brief_description' => 'Original planning brief used to seed the first stage blueprint.',
+            'user_description' => 'Original planning brief used to seed the first stage blueprint.',
+            'default_locale' => 'zh_Hans_CN',
+            'plan_locale' => 'zh_Hans_CN',
+            'page_types' => [Page::TYPE_HOME],
+        ];
+        $this->generateAndConfirmPlan($publicId, $initialScopePatch);
+
+        RequestContext::set('pagebuilder.ai.queue.dispatcher', static function (string $processName, array $meta): array {
+            self::assertStringContainsString('queue:run --id=', $processName);
+            self::assertSame('plan', (string)($meta['operation'] ?? ''));
+
+            return ['started' => true, 'pid' => 97531];
+        });
+
+        try {
+            $rebuildPayload = $this->invokeJsonAction(
+                '/pagebuilder/backend/ai-site-agent/post-start-plan',
+                'POST',
+                'postStartPlan',
+                [],
+                [
+                    'public_id' => $publicId,
+                    'scope_patch' => [
+                        'site_title' => 'Updated planning title',
+                        'site_tagline' => 'Original planning tagline',
+                        'target_domain' => 'rebuild-on-input-change.local.test',
+                        'brief_description' => 'Updated planning brief should force stage-one regeneration immediately.',
+                        'user_description' => 'Updated planning brief should force stage-one regeneration immediately.',
+                        'default_locale' => 'zh_Hans_CN',
+                        'plan_locale' => 'zh_Hans_CN',
+                        'page_types' => [Page::TYPE_HOME],
+                    ],
+                    'confirm_regenerate' => '1',
+                ]
+            );
+        } finally {
+            RequestContext::remove('pagebuilder.ai.queue.dispatcher');
+        }
+
+        self::assertTrue((bool)($rebuildPayload['success'] ?? false), \json_encode($rebuildPayload, \JSON_UNESCAPED_UNICODE));
+        self::assertTrue((bool)($rebuildPayload['start_sse'] ?? false), \json_encode($rebuildPayload, \JSON_UNESCAPED_UNICODE));
+        self::assertSame('rebuild', (string)($rebuildPayload['plan_action'] ?? ''));
+        self::assertFalse((bool)($rebuildPayload['plan_page_types_changed'] ?? false));
+        self::assertFalse((bool)($rebuildPayload['plan_locale_changed'] ?? false));
+        self::assertTrue((bool)($rebuildPayload['plan_source_changed'] ?? false), \json_encode($rebuildPayload, \JSON_UNESCAPED_UNICODE));
+        self::assertGreaterThan(0, (int)($rebuildPayload['queue_id'] ?? 0));
+        self::assertSame(97531, (int)($rebuildPayload['queue_dispatch']['pid'] ?? 0));
     }
 
     public function testStartPlanPersistsActiveOperationBeforeQueueCreationCanBeObserved(): void

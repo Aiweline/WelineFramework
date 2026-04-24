@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Integration;
 
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
+use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\Page;
 use Weline\Backend\Model\BackendUser;
 use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
@@ -17,6 +18,7 @@ use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\UnitTest\TestCore;
 use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
+use Weline\Queue\Model\Queue;
 
 /**
  * AI 建站工作台集成测共享：后台登录 + 模拟 HTTP 上下文 + JSON/SSE 调用。
@@ -25,8 +27,13 @@ use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
  */
 abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
 {
+    private const TEST_SCOPE_MARKER_KEY = '_phpunit_pagebuilder_integration';
+    private const TEST_SCOPE_MARKER_VALUE = '1';
+
     protected AiSiteAgentSessionService $sessionService;
     private int $outputBufferBaseline = 0;
+    /** @var array<int, array{session_id:int, admin_id:int, public_id:string}> */
+    private array $trackedSessions = [];
 
     protected function setUp(): void
     {
@@ -34,6 +41,7 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
         \ob_start();
         parent::setUp();
         $this->sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
+        $this->cleanupMarkedHarnessArtifacts();
         $this->loginAsBackendAdmin();
         RequestContext::set('pagebuilder.ai.queue.dispatcher', static fn(string $processName, array $meta = []): array => [
             'started' => false,
@@ -46,6 +54,7 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
     protected function tearDown(): void
     {
         try {
+            $this->cleanupTrackedHarnessArtifacts();
             RequestContext::remove('pagebuilder.ai.queue.dispatcher');
             RequestContext::remove(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST);
             parent::tearDown();
@@ -94,8 +103,157 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
 
         $decoded = \json_decode((string)$result, true);
         self::assertIsArray($decoded, 'Controller JSON response must decode to array: ' . $result);
+        if (
+            $controllerMethod === 'postCreateSession'
+            && (bool)($decoded['success'] ?? false)
+            && !empty($decoded['public_id'])
+        ) {
+            $this->trackHarnessSession((string)$decoded['public_id'], 1);
+        }
 
         return $decoded;
+    }
+
+    private function trackHarnessSession(string $publicId, int $adminId): void
+    {
+        $publicId = \trim($publicId);
+        if ($publicId === '' || $adminId <= 0) {
+            return;
+        }
+
+        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if (!$session instanceof AiSiteAgentSession) {
+            return;
+        }
+
+        $scope = $session->getScopeArray();
+        if ((string)($scope[self::TEST_SCOPE_MARKER_KEY] ?? '') !== self::TEST_SCOPE_MARKER_VALUE) {
+            $scope[self::TEST_SCOPE_MARKER_KEY] = self::TEST_SCOPE_MARKER_VALUE;
+            $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+            $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        }
+
+        $this->trackedSessions[(int)$session->getId()] = [
+            'session_id' => (int)$session->getId(),
+            'admin_id' => $adminId,
+            'public_id' => $session->getPublicId(),
+        ];
+    }
+
+    private function cleanupMarkedHarnessArtifacts(): void
+    {
+        $sessionModel = clone ObjectManager::getInstance(AiSiteAgentSession::class);
+        $sessionModel->clearData()
+            ->reset()
+            ->where(
+                AiSiteAgentSession::schema_fields_SCOPE_JSON,
+                '%"' . self::TEST_SCOPE_MARKER_KEY . '":"' . self::TEST_SCOPE_MARKER_VALUE . '"%',
+                'like'
+            )
+            ->select()
+            ->fetch();
+        $items = $sessionModel->getItems();
+        if (!\is_array($items) || $items === []) {
+            return;
+        }
+
+        foreach ($items as $item) {
+            $row = \is_object($item) && \method_exists($item, 'getData')
+                ? $item->getData()
+                : (\is_array($item) ? $item : []);
+            $sessionId = (int)($row[AiSiteAgentSession::schema_fields_ID] ?? 0);
+            $adminId = (int)($row[AiSiteAgentSession::schema_fields_ADMIN_USER_ID] ?? 0);
+            $publicId = (string)($row[AiSiteAgentSession::schema_fields_PUBLIC_ID] ?? '');
+            $this->cleanupHarnessSessionArtifacts($sessionId, $adminId, $publicId);
+        }
+    }
+
+    private function cleanupTrackedHarnessArtifacts(): void
+    {
+        foreach ($this->trackedSessions as $sessionMeta) {
+            $this->cleanupHarnessSessionArtifacts(
+                (int)($sessionMeta['session_id'] ?? 0),
+                (int)($sessionMeta['admin_id'] ?? 0),
+                (string)($sessionMeta['public_id'] ?? ''),
+            );
+        }
+        $this->trackedSessions = [];
+    }
+
+    private function cleanupHarnessSessionArtifacts(int $sessionId, int $adminId, string $publicId): void
+    {
+        if ($sessionId <= 0 || $adminId <= 0) {
+            return;
+        }
+
+        foreach ($this->collectHarnessQueueIds($sessionId, $publicId) as $queueId) {
+            try {
+                $queue = clone ObjectManager::getInstance(Queue::class);
+                $queue->clearData()->load($queueId);
+                if ((int)$queue->getId() > 0) {
+                    $queue->delete()->fetch();
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        try {
+            $this->sessionService->deleteSession($sessionId, $adminId);
+        } catch (\Throwable) {
+        }
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function collectHarnessQueueIds(int $sessionId, string $publicId): array
+    {
+        $queueIds = $this->collectHarnessQueueIdsByLike(
+            Queue::schema_fields_BIZ_KEY,
+            'glr_aisite:session:' . $sessionId . ':%'
+        );
+        if ($publicId !== '') {
+            $queueIds = \array_merge(
+                $queueIds,
+                $this->collectHarnessQueueIdsByLike(
+                    Queue::schema_fields_content,
+                    '%"public_id":"' . $publicId . '"%'
+                )
+            );
+        }
+
+        return \array_values(\array_unique(\array_filter(\array_map('intval', $queueIds), static fn(int $id): bool => $id > 0)));
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function collectHarnessQueueIdsByLike(string $field, string $pattern): array
+    {
+        $queueModel = clone ObjectManager::getInstance(Queue::class);
+        $queueModel->clearData()
+            ->reset()
+            ->where(Queue::schema_fields_module, 'GuoLaiRen_PageBuilder')
+            ->where($field, $pattern, 'like')
+            ->select()
+            ->fetch();
+        $items = $queueModel->getItems();
+        if (!\is_array($items) || $items === []) {
+            return [];
+        }
+
+        $queueIds = [];
+        foreach ($items as $item) {
+            $row = \is_object($item) && \method_exists($item, 'getData')
+                ? $item->getData()
+                : (\is_array($item) ? $item : []);
+            $queueId = (int)($row[Queue::schema_fields_ID] ?? 0);
+            if ($queueId > 0) {
+                $queueIds[] = $queueId;
+            }
+        }
+
+        return $queueIds;
     }
 
     /**
@@ -142,6 +300,7 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
                 'plan_generated_at' => \date('Y-m-d H:i:s'),
                 'plan_generated_locale' => (string)($scope['plan_locale'] ?? $scope['default_locale'] ?? $scope['default_language'] ?? ''),
                 'plan_generated_page_types' => \is_array($scope['page_types'] ?? null) ? \array_values(\array_map('strval', $scope['page_types'])) : [],
+                'plan_generated_source_signature' => $executionBlueprintService->buildSourceSignature($scope),
                 'plan_confirmed' => 0,
                 'workspace_status' => AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING,
                 'active_operation' => [
@@ -163,6 +322,11 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
             ]
         );
         self::assertTrue((bool)($confirmPlanPayload['success'] ?? false), \json_encode($confirmPlanPayload, \JSON_UNESCAPED_UNICODE));
+        self::assertStringContainsString(
+            'public_id=' . $publicId,
+            (string)($confirmPlanPayload['data']['workspace_url'] ?? ''),
+            'post-confirm-plan should return the workspace URL for second-stage reloads'
+        );
 
         return [
             'start_plan' => $startPlanPayload,

@@ -531,7 +531,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         );
     }
 
-    public function testWaitForStartupAcceptanceSchedulesEarlyRecoveryForStuckCriticalEntrypoint(): void
+    public function testWaitForStartupAcceptanceDoesNotScheduleEarlyRecoveryForStuckCriticalEntrypoint(): void
     {
         $server = new class extends MasterControlServer {
             public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
@@ -540,7 +540,15 @@ class ServiceOrchestratorStartupTest extends TestCase
             }
         };
 
-        $orchestrator = new ServiceOrchestrator();
+        $orchestrator = new class extends ServiceOrchestrator {
+            public bool $startupTimeoutHandled = false;
+
+            protected function handleStartupAcceptanceTimeout(array $startupAcceptance, ServiceContext $context, float $elapsed): void
+            {
+                unset($startupAcceptance, $context, $elapsed);
+                $this->startupTimeoutHandled = true;
+            }
+        };
         $registry = $orchestrator->getRegistry();
         if (!$registry->hasProvider(ControlMessage::ROLE_DISPATCHER)) {
             $registry->registerProvider(new DispatcherProvider());
@@ -572,14 +580,15 @@ class ServiceOrchestratorStartupTest extends TestCase
             ],
         ], $context]);
 
+        self::assertTrue($orchestrator->startupTimeoutHandled);
+
         $queue = $this->readPrivate($orchestrator, 'resurrectQueue');
-        self::assertArrayHasKey('dispatcher:1', $queue);
-        self::assertSame(0.0, $queue['dispatcher:1']['restartDelay'] ?? null);
+        self::assertArrayNotHasKey('dispatcher:1', $queue);
 
         $dispatcher = $registry->getInstance(ControlMessage::ROLE_DISPATCHER, 1);
         self::assertInstanceOf(ServiceInstance::class, $dispatcher);
-        self::assertSame(ServiceInstance::STATE_FAILED, $dispatcher->state);
-        self::assertSame('pid_not_running_after_threshold', $dispatcher->getMeta('startup_acceptance_recovery_reason'));
+        self::assertSame(ServiceInstance::STATE_STARTING, $dispatcher->state);
+        self::assertNull($dispatcher->getMeta('startup_acceptance_recovery_reason'));
     }
 
     public function testWaitForStartupAcceptanceDoesNotRecoverFreshCriticalEntrypointTooEarly(): void
@@ -591,7 +600,15 @@ class ServiceOrchestratorStartupTest extends TestCase
             }
         };
 
-        $orchestrator = new ServiceOrchestrator();
+        $orchestrator = new class extends ServiceOrchestrator {
+            public bool $startupTimeoutHandled = false;
+
+            protected function handleStartupAcceptanceTimeout(array $startupAcceptance, ServiceContext $context, float $elapsed): void
+            {
+                unset($startupAcceptance, $context, $elapsed);
+                $this->startupTimeoutHandled = true;
+            }
+        };
         $registry = $orchestrator->getRegistry();
         if (!$registry->hasProvider(ControlMessage::ROLE_DISPATCHER)) {
             $registry->registerProvider(new DispatcherProvider());
@@ -622,6 +639,8 @@ class ServiceOrchestratorStartupTest extends TestCase
                 'minReady' => 2,
             ],
         ], $context]);
+
+        self::assertTrue($orchestrator->startupTimeoutHandled);
 
         $queue = $this->readPrivate($orchestrator, 'resurrectQueue');
         self::assertArrayNotHasKey('dispatcher:1', $queue);
@@ -1980,7 +1999,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->invokePrivateWithArgs($orchestrator, 'startAllChildServicesBody', [$context]);
 
         self::assertSame('concurrent_batch', $orchestrator->events[0] ?? null);
-        self::assertSame('wait:maintenance', $orchestrator->events[1] ?? null);
+        self::assertSame('wait:dispatcher,maintenance,worker', $orchestrator->events[1] ?? null);
         self::assertCount(2, $orchestrator->events);
     }
 

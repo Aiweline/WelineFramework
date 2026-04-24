@@ -886,6 +886,7 @@ CMS页面,"CMS Page"
 容器部件,容器部件
 基础部件,基础部件
 主题旧部件,主题旧部件
+"Theme does not support %{1} area.","Theme does not support %{1} area."
 生成主题预览图失败：%{1},生成主题预览图失败：%{1}
 "Chrome or Chromium browser was not found.","Chrome or Chromium browser was not found."
 "开始 [%{1}] %{2} 预览图...","开始 [%{1}] %{2} 预览图..."

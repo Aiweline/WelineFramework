@@ -82,6 +82,72 @@ class AiSiteScopeCompatibilityService
         return $normalized;
     }
 
+    /**
+     * @param array<string, mixed> $scope
+     */
+    public function hasConfirmedStageOnePlanForTaskPlan(array $scope): bool
+    {
+        $confirmedBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        if ($confirmedBlueprint === []) {
+            return false;
+        }
+
+        $confirmedSignature = \trim((string)($scope['execution_blueprint_confirmed_signature'] ?? ''));
+        if ($confirmedSignature === '') {
+            $confirmedSignature = \trim((string)($confirmedBlueprint['signature'] ?? ''));
+        }
+
+        if ((int)($scope['plan_confirmed'] ?? 0) === 1) {
+            return true;
+        }
+
+        $confirmedAt = \trim((string)($scope['execution_blueprint_confirmed_at'] ?? $scope['plan_confirmed_at'] ?? ''));
+        if ($confirmedAt === '' && $confirmedSignature === '') {
+            return false;
+        }
+
+        $draftBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null) ? $scope['execution_blueprint_draft'] : [];
+        return $this->stageOneDraftMatchesConfirmedBlueprint($draftBlueprint, $confirmedBlueprint, $confirmedSignature);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function normalizeConfirmedPlanFlag(array $scope): array
+    {
+        if ($this->hasConfirmedStageOnePlanForTaskPlan($scope)) {
+            $scope['plan_confirmed'] = 1;
+            $confirmedAt = \trim((string)($scope['execution_blueprint_confirmed_at'] ?? ''));
+            if ($confirmedAt !== '' && \trim((string)($scope['plan_confirmed_at'] ?? '')) === '') {
+                $scope['plan_confirmed_at'] = $confirmedAt;
+            }
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $draftBlueprint
+     * @param array<string, mixed> $confirmedBlueprint
+     */
+    private function stageOneDraftMatchesConfirmedBlueprint(
+        array $draftBlueprint,
+        array $confirmedBlueprint,
+        string $confirmedSignature
+    ): bool {
+        if ($draftBlueprint === []) {
+            return true;
+        }
+
+        $draftSignature = \trim((string)($draftBlueprint['signature'] ?? ''));
+        if ($draftSignature !== '' && $confirmedSignature !== '') {
+            return $draftSignature === $confirmedSignature;
+        }
+
+        return $draftBlueprint == $confirmedBlueprint;
+    }
+
     public const WORKSPACE_TRACK_VIRTUAL_THEME = 'virtual_theme';
     public const WORKSPACE_TRACK_HTML_BLOCKS = 'html_blocks';
 

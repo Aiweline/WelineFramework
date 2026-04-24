@@ -102,6 +102,7 @@ final class AiSiteAgentTaskPlanQueueRecoveryServiceTest extends TestCase
                     'admin_id' => $adminId,
                     'patch_keys' => \array_keys($patch),
                     'active_operation' => $patch['active_operation'] ?? null,
+                    'active_operations' => $patch['active_operations'] ?? null,
                 ];
                 if (($overrides['throwOn'] ?? '') === 'mergeScope') {
                     throw new \RuntimeException('simulated mergeScope failure');
@@ -352,7 +353,8 @@ final class AiSiteAgentTaskPlanQueueRecoveryServiceTest extends TestCase
         self::assertCount(1, $calls['mergeScope']);
         self::assertSame(7777, $calls['mergeScope'][0]['session_id']);
         self::assertSame(100, $calls['mergeScope'][0]['admin_id']);
-        self::assertSame(['active_operation'], $calls['mergeScope'][0]['patch_keys']);
+        self::assertSame(['active_operation', 'active_operations'], $calls['mergeScope'][0]['patch_keys']);
+        self::assertSame(555, $calls['mergeScope'][0]['active_operations']['task_plan']['queue_id']);
 
         // dispatch 调 1 次，qid=555 force=true
         self::assertCount(1, $calls['ensureDispatched']);
@@ -387,6 +389,7 @@ final class AiSiteAgentTaskPlanQueueRecoveryServiceTest extends TestCase
 
         // normalized 中的 active_operation 也被更新
         self::assertSame(555, $result['normalized']['active_operation']['queue_id']);
+        self::assertSame(555, $result['normalized']['active_operations']['task_plan']['queue_id']);
     }
 
     public function testBranchAReturnsOriginalWhenEnqueueReturnsZero(): void
@@ -426,6 +429,7 @@ final class AiSiteAgentTaskPlanQueueRecoveryServiceTest extends TestCase
                 'status' => 'done',
                 'content' => \json_encode(['execution_token' => 'old-tok']),
             ],
+            'enqueueTask' => 42,
             'loadSession' => $freshSession,
             'buildQueueInfoPayload' => [
                 'queue_id' => 42,
@@ -450,20 +454,19 @@ final class AiSiteAgentTaskPlanQueueRecoveryServiceTest extends TestCase
 
         // 由于 snapshot 提供了 qid+status，findQueueRow 的第一次回退不触发
         // 但 Branch B 内部会调 findQueueRow(qid=42) 取 row
-        self::assertCount(1, $calls['findQueueRow']);
-        self::assertSame(42, $calls['findQueueRow'][0]['queue_id']);
+        self::assertSame([], $calls['findQueueRow']);
+        self::assertCount(1, $calls['enqueueTask']);
+        self::assertSame('task_plan', $calls['enqueueTask'][0]['operation']);
+        self::assertSame(['_force_rebuild' => 1], $calls['enqueueTask'][0]['extras']);
 
         // Branch B 调 buildEnvelope 2 次（一次构 queueContent，一次给 active_operation）
-        self::assertCount(2, $calls['buildEnvelope']);
+        self::assertCount(1, $calls['buildEnvelope']);
 
         // resolveQueueStage 调 1 次（生成 queueContent.stage）
-        self::assertCount(1, $calls['resolveQueueStage']);
+        self::assertSame([], $calls['resolveQueueStage']);
 
         // updateQueueRow 调 1 次，status=pending pid=0
-        self::assertCount(1, $calls['updateQueueRow']);
-        self::assertSame(42, $calls['updateQueueRow'][0]['queue_id']);
-        self::assertSame(\Weline\Queue\Model\Queue::status_pending, $calls['updateQueueRow'][0]['status']);
-        self::assertSame(0, $calls['updateQueueRow'][0]['pid']);
+        self::assertSame([], $calls['updateQueueRow']);
 
         // mergeScope + dispatch + loadSession + buildQueueInfoPayload 各一次
         self::assertCount(1, $calls['mergeScope']);
@@ -500,6 +503,7 @@ final class AiSiteAgentTaskPlanQueueRecoveryServiceTest extends TestCase
                 'status' => 'done',
                 'content' => '',
             ],
+            'enqueueTask' => 9,
             'loadSession' => $freshSession,
             'buildQueueInfoPayload' => [
                 'snapshot' => ['status' => 'done', 'queue_id' => 9],
@@ -519,13 +523,13 @@ final class AiSiteAgentTaskPlanQueueRecoveryServiceTest extends TestCase
         );
 
         // findQueueRow 被调 2 次：fallback(qid=0) + Branch B(qid=9)
-        self::assertGreaterThanOrEqual(2, \count($calls['findQueueRow']));
+        self::assertCount(1, $calls['findQueueRow']);
         self::assertSame(0, $calls['findQueueRow'][0]['queue_id'], '首次是 fallback 无 qid');
-        self::assertSame(9, $calls['findQueueRow'][1]['queue_id'], '第二次用 Branch B 回查');
+        self::assertCount(1, $calls['enqueueTask']);
+        self::assertSame('task_plan', $calls['enqueueTask'][0]['operation']);
+        self::assertSame(['_force_rebuild' => 1], $calls['enqueueTask'][0]['extras']);
 
-        // updateQueueRow 调一次（reuse queue qid=9）
-        self::assertCount(1, $calls['updateQueueRow']);
-        self::assertSame(9, $calls['updateQueueRow'][0]['queue_id']);
+        self::assertSame([], $calls['updateQueueRow']);
 
         // logSse reason=reuse_queue
         self::assertCount(1, $calls['logSse']);
@@ -541,6 +545,7 @@ final class AiSiteAgentTaskPlanQueueRecoveryServiceTest extends TestCase
                 'status' => 'error',
                 'content' => '',
             ],
+            'enqueueTask' => 42,
             'buildQueueInfoPayload' => [
                 'queue_id' => 42,
                 'snapshot' => ['status' => 'error', 'queue_id' => 42],
@@ -562,9 +567,9 @@ final class AiSiteAgentTaskPlanQueueRecoveryServiceTest extends TestCase
             $ports
         );
 
-        self::assertCount(1, $calls['updateQueueRow']);
-        self::assertSame(42, $calls['updateQueueRow'][0]['queue_id']);
-        self::assertSame(\Weline\Queue\Model\Queue::status_pending, $calls['updateQueueRow'][0]['status']);
+        self::assertCount(1, $calls['enqueueTask']);
+        self::assertSame('task_plan', $calls['enqueueTask'][0]['operation']);
+        self::assertSame([], $calls['updateQueueRow']);
         self::assertSame('queue_failed_or_stopped_and_draft_missing_reuse_queue', $calls['logSse'][0]['data']['reason']);
         self::assertSame('reused_queue', $result['active_operation']['task_plan_recovery_action']);
     }
@@ -612,6 +617,7 @@ final class AiSiteAgentTaskPlanQueueRecoveryServiceTest extends TestCase
         $calls = [];
         $ports = $this->makePorts([
             'findQueueRow' => ['queue_id' => 42, 'status' => 'done', 'content' => ''],
+            'enqueueTask' => 42,
             'throwOn' => 'ensureDispatched',
         ], $calls);
 
@@ -626,7 +632,8 @@ final class AiSiteAgentTaskPlanQueueRecoveryServiceTest extends TestCase
             $ports
         );
 
-        self::assertCount(1, $calls['updateQueueRow']);
+        self::assertSame([], $calls['updateQueueRow']);
+        self::assertCount(1, $calls['enqueueTask']);
         self::assertCount(1, $calls['mergeScope']);
         self::assertCount(1, $calls['ensureDispatched'], 'dispatch 抛出');
         self::assertSame([], $calls['buildQueueInfoPayload'], '抛出后不应继续');

@@ -77,6 +77,7 @@ class AccountService
      */
     public function supportsModel(string $providerCode, string $modelCode): bool
     {
+        $providerConfig = VendorConfigManager::getProviderConfig($providerCode);
         $providerModels = VendorConfigManager::getProviderModels($providerCode);
         if (is_array($providerModels) && !empty($providerModels)) {
             foreach ($providerModels as $item) {
@@ -84,6 +85,9 @@ class AccountService
                 if ($code === $modelCode) {
                     return true;
                 }
+            }
+            if (!empty($providerConfig['allow_custom_models']) && VendorConfigManager::isModelFromProvider($modelCode, $providerCode)) {
+                return true;
             }
             return false;
         }

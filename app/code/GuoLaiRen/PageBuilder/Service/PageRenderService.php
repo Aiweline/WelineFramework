@@ -303,7 +303,7 @@ class PageRenderService
             return null;
         }
         try {
-            $instanceConfig = array_merge($config, [
+            $instanceConfig = array_merge($this->templateVars, $config, [
                 'page' => $page,
                 'style' => $styleSettings,
                 'style_settings' => $styleSettings,
