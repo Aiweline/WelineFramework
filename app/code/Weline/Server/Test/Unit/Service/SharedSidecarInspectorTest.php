@@ -101,4 +101,50 @@ final class SharedSidecarInspectorTest extends TestCase
 
         self::assertTrue((bool) $isShared);
     }
+
+    public function testBuildReusableResultFromIndexedCommandLine(): void
+    {
+        $inspector = new SharedSidecarInspector();
+        $method = new \ReflectionMethod($inspector, 'buildReusableResultFromCommandLine');
+        $method->setAccessible(true);
+        $scope = \Weline\Server\Service\MasterProcess::getProjectScopeToken();
+
+        $result = $method->invoke(
+            $inspector,
+            [
+                'in_use' => true,
+                'reusable' => false,
+                'pid' => 0,
+                'port' => 26422,
+                'role' => '',
+                'instance_name' => '',
+                'token_file_name' => 'session_server.token',
+                'process_name' => '',
+                'command_line' => '',
+            ],
+            12345,
+            '--name=weline-wls-session-default-' . $scope . ' --token-file-name=session_server.custom.token',
+            ControlMessage::ROLE_SESSION_SERVER,
+            'session_server.token'
+        );
+
+        self::assertTrue($result['reusable']);
+        self::assertSame(12345, $result['pid']);
+        self::assertSame(ControlMessage::ROLE_SESSION_SERVER, $result['role']);
+        self::assertSame('session_server.custom.token', $result['token_file_name']);
+        self::assertSame('weline-wls-session-default-' . $scope, $result['process_name']);
+    }
+
+    public function testBuildCommandLineFromIndexedProcessNameAddsSharedMarker(): void
+    {
+        $inspector = new SharedSidecarInspector();
+        $method = new \ReflectionMethod($inspector, 'buildCommandLineFromIndexedProcessName');
+        $method->setAccessible(true);
+        $scope = \Weline\Server\Service\MasterProcess::getProjectScopeToken();
+
+        self::assertSame(
+            '--name=weline-wls-memory-default-' . $scope . ' --shared-service=1',
+            $method->invoke($inspector, '--name=weline-wls-memory-default-' . $scope)
+        );
+    }
 }

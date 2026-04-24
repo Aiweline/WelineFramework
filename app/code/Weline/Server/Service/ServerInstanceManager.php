@@ -804,7 +804,7 @@ class ServerInstanceManager
         $pids = [];
         $ignoredPids = $this->collectSharedExternalTrackedPids($rawData);
 
-        foreach (['pid', 'master_pid', 'dispatcher_pid', 'redirect_pid', 'session_server_pid'] as $field) {
+        foreach (['pid', 'launcher_pid', 'master_pid', 'dispatcher_pid', 'redirect_pid', 'session_server_pid'] as $field) {
             $pid = (int) ($rawData[$field] ?? 0);
             if ($pid > 0 && !isset($ignoredPids[$pid])) {
                 $pids[$pid] = true;
@@ -1044,10 +1044,11 @@ class ServerInstanceManager
      */
     private function buildInstanceInfo(string $name, array $rawData): ServerInstanceInfo
     {
-        if (\is_array($rawData[self::CURRENT_SNAPSHOT_KEY] ?? null)) {
+        $hasCurrentSnapshot = \is_array($rawData[self::CURRENT_SNAPSHOT_KEY] ?? null);
+        if ($hasCurrentSnapshot) {
             $rawData = \array_replace($rawData, $rawData[self::CURRENT_SNAPSHOT_KEY]);
         }
-        $runtimeData = $this->resolveConsensusInstanceRuntimeData($rawData);
+        $runtimeData = $hasCurrentSnapshot ? $rawData : $this->resolveConsensusInstanceRuntimeData($rawData);
         $services = $this->parseServices($rawData);
         $httpRedirectPort = $this->resolveHttpRedirectPort($runtimeData, $services);
 
@@ -1158,6 +1159,11 @@ class ServerInstanceManager
 
         $selected = [];
         foreach ($groups as $records) {
+            if (\count($records) === 1) {
+                $selected[] = $records[0];
+                continue;
+            }
+
             $fallback = null;
             for ($i = \count($records) - 1; $i >= 0; $i--) {
                 $record = $records[$i];
@@ -1779,6 +1785,7 @@ class ServerInstanceManager
         $fields = [
             'name',
             'pid',
+            'launcher_pid',
             'master_pid',
             'control_port',
             'host',

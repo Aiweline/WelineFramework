@@ -69,6 +69,58 @@ final class StartBackgroundStartupReadyTest extends TestCase
         self::assertGreaterThan($singleWorkerWait, $multiServiceWait);
     }
 
+    public function testResolveBackgroundMasterConfirmWaitShortensWhenSpawnPidKnown(): void
+    {
+        $start = new class extends Start {
+            protected function getEnvironmentValue(string $path, mixed $default = null): mixed
+            {
+                unset($path);
+                return $default;
+            }
+        };
+
+        self::assertSame(5000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 0));
+        self::assertSame(1200, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+    }
+
+    public function testResolveBackgroundMasterConfirmWaitHonorsEnvironmentOverride(): void
+    {
+        $start = new class extends Start {
+            protected function getEnvironmentValue(string $path, mixed $default = null): mixed
+            {
+                unset($default);
+                return $path === 'wls.orchestrator.background_master_confirm_wait_sec' ? 2.5 : null;
+            }
+        };
+
+        self::assertSame(2500, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+    }
+
+    public function testStartupProgressSummaryIgnoresStoppedHistoricalServices(): void
+    {
+        $start = new Start();
+
+        $summary = $this->invokeProtected($start, 'summarizeBackgroundStartupServices', [
+            'services' => [
+                'worker' => [
+                    'display_name' => 'HTTP Worker',
+                    'instances' => [
+                        ['state' => 'stopped'],
+                        ['state' => 'ready'],
+                    ],
+                ],
+                'memory_server' => [
+                    'display_name' => 'Memory Service',
+                    'instances' => [
+                        ['state' => 'exited'],
+                    ],
+                ],
+            ],
+        ]);
+
+        self::assertSame(['ready' => 1, 'total' => 1, 'pending_detail' => ''], $summary);
+    }
+
     public function testWaitForBackgroundStartupReadyExtendsIdleDeadlineWhenProgressAdvances(): void
     {
         $start = new class extends Start {
