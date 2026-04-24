@@ -34,6 +34,8 @@ class ProviderTest extends TestCase
                 'wls' => [
                     'worker_count' => 4,
                     'worker_base_port' => 10443,
+                    'worker_memory_limit' => '512M',
+                    'dispatcher_memory_limit' => '768M',
                     'dispatcher_port' => 18080,
                     'loop' => [
                         'driver' => 'event',
@@ -69,6 +71,7 @@ class ProviderTest extends TestCase
         $this->assertContains('test-instance', $command->arguments);
         $this->assertStringStartsWith('weline-wls-worker-test-instance', $command->getProcessName());
         $this->assertContains('--wls-loop-driver=event', $command->arguments);
+        $this->assertContains('--memory-limit=512M', $command->arguments);
     }
 
     public function testWorkerProviderPort(): void
@@ -104,6 +107,7 @@ class ProviderTest extends TestCase
         $this->assertContains('test-instance', $command->arguments);
         $this->assertContains('--control-port=19000', $command->arguments);
         $this->assertContains('--master-pid=12345', $command->arguments);
+        $this->assertContains('--memory-limit=768M', $command->arguments);
     }
 
     public function testDispatcherProviderPort(): void

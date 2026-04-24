@@ -200,6 +200,7 @@ class LinuxDirectStrategy implements ServerStrategyInterface
         
         // 添加 SO_REUSEPORT 标志
         $command .= " --reuseport";
+        $command .= " --memory-limit={$config->workerMemoryLimit}";
         $command .= " --name={$processName}";
         
         if ($config->frontend) {
@@ -306,6 +307,8 @@ class LinuxDirectStrategy implements ServerStrategyInterface
             'worker_pids' => $workerPids,
             'worker_port' => $config->port,  // Linux 模式使用主端口
             'worker_ports' => [$config->port], // 直连模式所有 Worker 监听同一端口
+            'worker_memory_limit' => $config->workerMemoryLimit,
+            'dispatcher_memory_limit' => $config->dispatcherMemoryLimit,
             'dispatcher_enabled' => false,  // 直连模式无 Dispatcher
             'dispatcher_pid' => null, // 直连模式无 Dispatcher
             'ssl_enabled' => $config->sslEnabled,

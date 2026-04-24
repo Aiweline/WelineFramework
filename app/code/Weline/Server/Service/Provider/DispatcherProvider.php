@@ -82,6 +82,7 @@ class DispatcherProvider extends AbstractServiceProvider
             $context->instanceName,
             '--control-port=' . $context->controlPort,
             '--master-pid=' . $context->masterPid,
+            '--memory-limit=' . $context->getDispatcherMemoryLimit(),
         ];
 
         if ($context->frontend) {

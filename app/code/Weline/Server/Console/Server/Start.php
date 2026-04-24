@@ -24,6 +24,7 @@ use Weline\Server\Service\CliServerService;
 use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Server\Service\SslCertificateService;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\SharedSidecarInspector;
 use Weline\Server\Service\SharedStateRuntimeResolver;
 use Weline\Server\Service\ServerInstanceManager;
@@ -805,7 +806,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             // 保存实例信息（Master 将从这里读取配置并启动所有进程）
             $workerScript = $this->ensureWorkerScript($workerSslEnabled);
             $orchestratorRuntimeOptions = $this->buildOrchestratorRuntimeOptions($frontend);
-            $this->saveInstanceInfo($instanceName, $host, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime, $orchestratorRuntimeOptions);
+            $this->saveInstanceInfo($instanceName, $host, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime, $orchestratorRuntimeOptions, (string) ($config['worker_memory_limit'] ?? '256M'), (string) ($config['dispatcher_memory_limit'] ?? ''));
         } finally {
             if ($workerPortAllocationLocked) {
                 $this->releaseWorkerPortAllocationLock();
@@ -1127,6 +1128,11 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             'dispatcher_enabled' => $dispatcherEnabled,
             'worker_port' => $workerPort,
             'worker_base_port' => $workerBasePort,
+            'worker_memory_limit' => ServiceContext::normalizeMemoryLimit($data['worker_memory_limit'] ?? '256M'),
+            'dispatcher_memory_limit' => ServiceContext::normalizeMemoryLimit(
+                $data['dispatcher_memory_limit'] ?? ($data['worker_memory_limit'] ?? '256M'),
+                ServiceContext::normalizeMemoryLimit($data['worker_memory_limit'] ?? '256M')
+            ),
             'session_server_port' => (int) ($data['session_server_port'] ?? (19970 + MasterProcess::getProjectPortOffset())),
             'session_server_token_file_name' => (string) ($data['session_server_token_file_name'] ?? 'session_server.token'),
             'memory_server_port' => (int) ($data['memory_server_port'] ?? (19971 + MasterProcess::getProjectPortOffset())),
@@ -2372,6 +2378,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             'ssl_cert' => '',  // SSL 证书路径
             'ssl_key' => '',   // SSL 私钥路径
             'worker_base_port' => 10000 + MasterProcess::getProjectPortOffset(),  // Dispatcher 模式下 Worker 内网端口基数 + 项目偏移
+            'worker_memory_limit' => '256M',
             'source' => __('默认值'),
         ];
         
@@ -2442,6 +2449,26 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             $config['source'] = __('命令行参数');
             $hasCliOverride = true;
         }
+        $workerMemoryLimitArg = $args['worker-memory-limit']
+            ?? $args['worker_memory_limit']
+            ?? $args['worker-memory']
+            ?? $args['worker_memory']
+            ?? null;
+        if ($workerMemoryLimitArg !== null) {
+            $config['worker_memory_limit'] = $workerMemoryLimitArg;
+            $config['source'] = __('命令行参数');
+            $hasCliOverride = true;
+        }
+        $dispatcherMemoryLimitArg = $args['dispatcher-memory-limit']
+            ?? $args['dispatcher_memory_limit']
+            ?? $args['dispatcher-memory']
+            ?? $args['dispatcher_memory']
+            ?? null;
+        if ($dispatcherMemoryLimitArg !== null) {
+            $config['dispatcher_memory_limit'] = $dispatcherMemoryLimitArg;
+            $config['source'] = __('命令行参数');
+            $hasCliOverride = true;
+        }
         // 默认一律后台运行；仅显式传入 --no-daemon 时前台运行（忽略 env 中的 daemon 配置）
         // 带 -r/--restart 时强制后台，避免被框架或 env 误判为前台
         $requestNoDaemon = (isset($args['no-daemon']) || isset($args['no_daemon']))
@@ -2505,6 +2532,13 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             $config['worker_count'],
             $config['mode'] ?? 'io'
         );
+        $config['worker_memory_limit'] = ServiceContext::normalizeMemoryLimit($config['worker_memory_limit'] ?? '256M');
+        if (isset($config['dispatcher_memory_limit'])) {
+            $config['dispatcher_memory_limit'] = ServiceContext::normalizeMemoryLimit(
+                $config['dispatcher_memory_limit'],
+                $config['worker_memory_limit']
+            );
+        }
 
         return $config;
     }
@@ -2980,7 +3014,21 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         }
         // 选项值（需要跳过的）
         $optionValues = [];
-        $valueOptions = ['port', 'p', 'host', 'count', 'c'];
+        $valueOptions = [
+            'port',
+            'p',
+            'host',
+            'count',
+            'c',
+            'worker-memory-limit',
+            'worker_memory_limit',
+            'worker-memory',
+            'worker_memory',
+            'dispatcher-memory-limit',
+            'dispatcher_memory_limit',
+            'dispatcher-memory',
+            'dispatcher_memory',
+        ];
         foreach ($valueOptions as $opt) {
             if (isset($args[$opt])) {
                 $optionValues[] = (string) $args[$opt];
@@ -4547,7 +4595,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
     /**
      * 保存实例信息
      */
-    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000, array $sharedStateRuntime = [], array $orchestratorRuntimeOptions = []): void
+    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000, array $sharedStateRuntime = [], array $orchestratorRuntimeOptions = [], string $workerMemoryLimit = '256M', string $dispatcherMemoryLimit = ''): void
     {
         $instanceData = [
             'name' => $instanceName,
@@ -4572,6 +4620,11 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             'worker_port' => $workerPort ?: $port,  // Worker 实际监听的端口（Dispatcher 模式下为内网端口）
             'worker_ports' => $this->buildPersistedWorkerPorts($workerPort ?: $port, $count, $useDirectMode),
             'worker_base_port' => $workerBasePort,   // Worker 基础端口（用于计算各 Worker 端口）
+            'worker_memory_limit' => ServiceContext::normalizeMemoryLimit($workerMemoryLimit),
+            'dispatcher_memory_limit' => ServiceContext::normalizeMemoryLimit(
+                $dispatcherMemoryLimit !== '' ? $dispatcherMemoryLimit : $workerMemoryLimit,
+                ServiceContext::normalizeMemoryLimit($workerMemoryLimit)
+            ),
             'session_server_port' => (int) ($sharedStateRuntime['session']['port'] ?? (19970 + MasterProcess::getProjectPortOffset())),
             'session_server_token_file_name' => (string) ($sharedStateRuntime['session']['token_file_name'] ?? 'session_server.token'),
             'memory_server_port' => (int) ($sharedStateRuntime['memory']['port'] ?? (19971 + MasterProcess::getProjectPortOffset())),
@@ -4770,7 +4823,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         
         // 从当前合并后的配置中提取可复用项
         // 注意：不保存 no_ssl，这是临时参数，HTTPS 偏好应以 wls.https 为准
-        $persistKeys = ['host', 'port', 'mode', 'ssl_cert', 'ssl_key', 'ssl_domain', 'worker_base_port'];
+        $persistKeys = ['host', 'port', 'mode', 'ssl_cert', 'ssl_key', 'ssl_domain', 'worker_base_port', 'worker_memory_limit', 'dispatcher_memory_limit'];
         foreach ($persistKeys as $key) {
             if (isset($config[$key])) {
                 $savedConfig[$key] = $config[$key];
@@ -5871,6 +5924,8 @@ PHP;
                 '--no-ssl' => __('仅 HTTP，不启用 HTTPS（Windows 下可不装 event 扩展）'),
                 '--ssl-cert <path>' => __('SSL 证书文件路径（启用 HTTPS）'),
                 '--ssl-key <path>' => __('SSL 私钥文件路径（启用 HTTPS）'),
+                '--worker-memory-limit <size>' => __('Worker 进程 PHP memory_limit（如 512M，数字按 MB 处理，-1 为不限）'),
+                '--dispatcher-memory-limit <size>' => __('Dispatcher 进程 PHP memory_limit（默认跟随 Worker）'),
                 '--direct' => __('直连模式：多 Worker 直接监听同一端口（Linux/Mac SO_REUSEPORT）'),
                 '--no-dispatcher' => __('独立端口模式：禁用 Dispatcher，每个 Worker 使用独立端口'),
                 '--dispatcher' => __('强制 Dispatcher 模式（默认）'),
@@ -5889,6 +5944,7 @@ PHP;
                 __('Master 进程') => __('默认启用，持续监控 Worker 状态，Worker 崩溃自动重启；HTTPS 时自动启动 HTTP 重定向进程'),
                 __('80/443 端口') => __('默认监听 80/443 省去 Nginx；HTTPS 时自动用 443，可 -p 9981 等改端口；Linux/Mac 特权端口需 root/setcap'),
                 __('HTTP 重定向端口') => __('固定规则：仅 HTTPS 主端口为 443 时启动 HTTP:80 重定向 Worker；非 443 时不启动独立重定向 Worker'),
+                __('Worker 内存') => __('可通过 wls.worker_memory_limit 或 --worker-memory-limit 设置；wls.dispatcher_memory_limit 未设置时跟随 Worker'),
             ],
             [
                 __('启动默认实例') => 'php bin/w server:start',
@@ -5902,6 +5958,7 @@ PHP;
                 __('强制重启（停机型更新）') => 'php bin/w server:start -r -f',
                 __('启用 HTTPS') => 'php bin/w server:start --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem',
                 __('Windows 无 HTTPS 运行') => 'php bin/w server:start --no-ssl',
+                __('设置 Worker 内存') => 'php bin/w server:start --worker-memory-limit=512M',
                 __('策略模式（跨平台优化）') => 'php bin/w server:start --strategy',
                 __('查看所有实例状态') => 'php bin/w server:status --all',
                 __('停止指定实例') => 'php bin/w server:stop api',
@@ -6243,6 +6300,8 @@ PHP;
             'port' => $strategyMainPort,
             'worker_count' => (int) ($config['worker_count'] ?? 4),
             'worker_base_port' => (int) ($config['worker_base_port'] ?? $defaultWorkerBasePort),
+            'worker_memory_limit' => $config['worker_memory_limit'] ?? '256M',
+            'dispatcher_memory_limit' => $config['dispatcher_memory_limit'] ?? ($config['worker_memory_limit'] ?? '256M'),
             'ssl_cert' => $sslCert,
             'ssl_key' => $sslKey,
             'frontend' => $frontend,

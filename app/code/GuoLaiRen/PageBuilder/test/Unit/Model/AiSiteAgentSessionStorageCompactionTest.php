@@ -155,4 +155,194 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
         self::assertArrayNotHasKey('page_plans', $stored['plan_workbench']['stage1'] ?? []);
         self::assertArrayNotHasKey('interaction_state', $stored['plan_workbench']['stage1'] ?? []);
     }
+
+    public function testConfirmedExecutionBlueprintAndBuildTaskStateAreCompactedBeforeStorage(): void
+    {
+        $session = new AiSiteAgentSession();
+        $stage2ContextSnapshot = [
+            'context_hash' => 'stage2-context-hash',
+            'theme_context_snapshot' => ['palette' => ['primary' => '#0f172a']],
+            'shared_prompt_context' => ['nav_style' => 'compact trust nav'],
+        ];
+
+        $session->setScopeArray([
+            'workspace_track' => 'virtual_theme',
+            'plan_confirmed' => 1,
+            'execution_blueprint' => [
+                'signature' => 'stage1-confirmed-signature',
+                'page_types' => ['home_page'],
+            ],
+            'execution_blueprint_confirmed_signature' => 'stage1-confirmed-signature',
+            'execution_blueprint_draft' => [
+                'signature' => 'stale-draft-signature',
+                'page_types' => ['home_page'],
+            ],
+            'plan_workbench' => [
+                'stage1' => [
+                    'request_summary' => ['raw_requirement' => 'Need a marketing homepage'],
+                ],
+                'confirmed' => [
+                    'execution_blueprint' => ['signature' => 'duplicate-stage1-confirmed'],
+                    'structured_plan' => ['pages' => ['home_page' => ['goal' => 'Keep me']]],
+                    'plan_json' => ['pages' => ['home_page' => ['goal' => 'Keep me']]],
+                    'plan_book' => ['structured' => ['source' => 'stage1.block_tree', 'pages' => ['home_page' => ['blocks' => []]]]],
+                    'shared_prompt_context' => ['context_hash' => 'shared-hash'],
+                ],
+            ],
+            'task_plan_confirmed' => 1,
+            'task_plan_structured' => [
+                'signature' => 'task-plan-signature',
+                'page_tasks' => [
+                    'home_page' => [
+                        [
+                            'task_key' => 'page:home_page:hero',
+                            'label' => 'Hero',
+                        ],
+                    ],
+                ],
+                'execution_blueprint' => [
+                    'signature' => 'task-blueprint-signature',
+                    'tasks' => [
+                        ['task_key' => 'page:home_page:hero'],
+                    ],
+                    'task_groups' => [
+                        'pages' => [
+                            'home_page' => [
+                                ['task_key' => 'page:home_page:hero'],
+                            ],
+                        ],
+                    ],
+                ],
+                'shared_block_tasks' => [
+                    ['task_key' => 'shared:header'],
+                ],
+                'page_block_tasks' => [
+                    'home_page' => [
+                        ['task_key' => 'page:home_page:hero'],
+                    ],
+                ],
+                'virtual_theme_build_tree' => [
+                    'pages' => ['home_page' => ['blocks' => []]],
+                ],
+            ],
+            'virtual_theme_plan' => [
+                'draft' => [],
+                'confirmed' => [
+                    'signature' => 'task-plan-signature',
+                    'page_tasks' => [
+                        'home_page' => [
+                            [
+                                'task_key' => 'page:home_page:hero',
+                                'label' => 'Hero',
+                            ],
+                        ],
+                    ],
+                    'execution_blueprint' => [
+                        'signature' => 'task-blueprint-signature',
+                        'tasks' => [
+                            ['task_key' => 'page:home_page:hero'],
+                        ],
+                        'task_groups' => [
+                            'pages' => [
+                                'home_page' => [
+                                    ['task_key' => 'page:home_page:hero'],
+                                ],
+                            ],
+                        ],
+                    ],
+                    'shared_block_tasks' => [
+                        ['task_key' => 'shared:header'],
+                    ],
+                    'page_block_tasks' => [
+                        'home_page' => [
+                            ['task_key' => 'page:home_page:hero'],
+                        ],
+                    ],
+                    'virtual_theme_build_tree' => [
+                        'pages' => ['home_page' => ['blocks' => []]],
+                    ],
+                ],
+                'confirmed_markdown' => '# Confirmed task plan',
+            ],
+            'build_blueprint' => [
+                'source' => 'stage2_confirmed_task_plan',
+                'signature' => 'build-blueprint-signature',
+                'task_plan_signature' => 'task-plan-signature',
+                'page_types' => ['home_page'],
+                'tasks' => [
+                    [
+                        'task_key' => 'page:home_page:hero',
+                        'runtime_context' => [
+                            'block_key' => 'hero',
+                            'stage2_context_snapshot' => $stage2ContextSnapshot,
+                            'theme_context_snapshot' => $stage2ContextSnapshot['theme_context_snapshot'],
+                            'shared_prompt_context' => $stage2ContextSnapshot['shared_prompt_context'],
+                        ],
+                    ],
+                ],
+            ],
+            'build_tasks' => [
+                'page:home_page:hero' => [
+                    'task_key' => 'page:home_page:hero',
+                    'task_type' => 'page_section',
+                    'group_key' => 'home_page',
+                    'page_type' => 'home_page',
+                    'section_code' => 'content/home-page-hero',
+                    'dependencies' => ['shared:header', 'shared:footer'],
+                    'can_parallel' => true,
+                    'progress_weight' => 2.5,
+                    'runtime_context' => ['block_key' => 'hero'],
+                    'plan_context' => ['goal' => 'duplicate'],
+                    'task_script' => ['story_goal' => 'duplicate'],
+                    'block_task' => ['task_goal' => 'duplicate'],
+                    'implementation_contract' => ['acceptance' => ['duplicate']],
+                    'status' => 'running',
+                    'attempt_no' => 2,
+                    'message' => 'working',
+                    'result_ref' => ['component_code' => 'hero'],
+                ],
+            ],
+        ]);
+
+        $stored = $session->getScopeArray();
+
+        self::assertSame([], $stored['execution_blueprint_draft'] ?? null);
+        self::assertSame([], $stored['plan_structured'] ?? null);
+        self::assertSame([], $stored['plan_json'] ?? null);
+        self::assertArrayNotHasKey('execution_blueprint', $stored['plan_workbench']['confirmed'] ?? []);
+        self::assertArrayNotHasKey('structured_plan', $stored['plan_workbench']['confirmed'] ?? []);
+        self::assertArrayNotHasKey('plan_json', $stored['plan_workbench']['confirmed'] ?? []);
+        self::assertArrayNotHasKey('plan_book', $stored['plan_workbench']['confirmed'] ?? []);
+        self::assertSame(1, $stored['plan_workbench']['confirmed']['_storage_compacted'] ?? null);
+        self::assertSame(
+            ['source' => 'stage1.block_tree', 'pages' => ['home_page' => ['blocks' => []]]],
+            $stored['confirmed_stage1_plan_book'] ?? null
+        );
+        self::assertSame(
+            ['field' => 'confirmed_stage1_plan_book'],
+            $stored['plan_workbench']['confirmed']['plan_book_ref'] ?? null
+        );
+
+        self::assertSame([], $stored['task_plan_structured'] ?? null);
+        self::assertArrayNotHasKey('execution_blueprint', $stored['virtual_theme_plan']['confirmed'] ?? []);
+        self::assertArrayNotHasKey('page_tasks', $stored['virtual_theme_plan']['confirmed'] ?? []);
+        self::assertArrayNotHasKey('shared_block_tasks', $stored['virtual_theme_plan']['confirmed'] ?? []);
+        self::assertArrayNotHasKey('page_block_tasks', $stored['virtual_theme_plan']['confirmed'] ?? []);
+        self::assertArrayNotHasKey('virtual_theme_build_tree', $stored['virtual_theme_plan']['confirmed'] ?? []);
+        self::assertSame(1, $stored['virtual_theme_plan']['confirmed']['_storage_compacted'] ?? null);
+        self::assertSame(1, $stored['virtual_theme_plan']['confirmed']['execution_blueprint_ref']['task_count'] ?? null);
+        self::assertSame($stage2ContextSnapshot, $stored['stage2_context_snapshot'] ?? null);
+        self::assertSame(['block_key' => 'hero'], $stored['build_blueprint']['tasks'][0]['runtime_context'] ?? null);
+
+        $buildTaskState = $stored['build_tasks']['page:home_page:hero'] ?? [];
+        self::assertSame('running', $buildTaskState['status'] ?? null);
+        self::assertSame(2, $buildTaskState['attempt_no'] ?? null);
+        self::assertSame('working', $buildTaskState['message'] ?? null);
+        self::assertSame(['component_code' => 'hero'], $buildTaskState['result_ref'] ?? null);
+        self::assertArrayNotHasKey('task_script', $buildTaskState);
+        self::assertArrayNotHasKey('plan_context', $buildTaskState);
+        self::assertArrayNotHasKey('block_task', $buildTaskState);
+        self::assertArrayNotHasKey('implementation_contract', $buildTaskState);
+        self::assertArrayNotHasKey('runtime_context', $buildTaskState);
+    }
 }
