@@ -216,7 +216,7 @@ class Status extends CommandAbstract
     protected function showInstanceStatus(string $name): void
     {
         $manager = $this->getInstanceManager();
-        $info = $manager->getInstanceInfo($name);
+        $info = $manager->getInstanceInfo($name, false);
 
         if ($info === null) {
             $this->printer->warning(__('实例 [%{1}] 不存在', [$name]));
@@ -395,14 +395,16 @@ class Status extends CommandAbstract
             $masterRunning = $this->isMasterRunning($info, $processInfoMap);
             $state = (string)($rawData['lifecycle_state'] ?? $rawData['startup_phase'] ?? '');
             $starterPid = (int)($rawData['pid'] ?? 0);
+            $serviceStats = $this->getServiceStats($info, $processInfoMap, false);
             if (!$masterRunning
+                && $serviceStats['running'] <= 0
                 && (
                     \in_array($state, ['stopped', 'stale_cleanup'], true)
                     || (empty($rawData['services']) && empty($rawData['master_enabled']) && ($starterPid <= 0 || !Processer::processExists($starterPid)))
                 )) {
                 continue;
             }
-            if ($masterRunning || $this->getServiceStats($info, $processInfoMap, false)['running'] > 0) {
+            if ($masterRunning || $serviceStats['running'] > 0) {
                 $active[$name] = $info;
             }
         }
@@ -448,10 +450,6 @@ class Status extends CommandAbstract
      */
     protected function isServiceRunning(ServiceInfo $service, array $processInfoMap): bool
     {
-        if (!$service->isExpectedRunningState()) {
-            return false;
-        }
-
         $trackingPid = $service->getTrackingPid();
         if ($trackingPid > 0) {
             if ((bool) ($processInfoMap[$trackingPid]['exists'] ?? false)) {
@@ -462,6 +460,10 @@ class Status extends CommandAbstract
                 return (bool) ($processInfoMap[$service->pid]['exists'] ?? false);
             }
 
+            return false;
+        }
+
+        if (!$service->isExpectedRunningState()) {
             return false;
         }
 
