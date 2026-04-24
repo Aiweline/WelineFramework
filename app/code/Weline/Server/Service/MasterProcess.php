@@ -201,10 +201,10 @@ class MasterProcess
         $this->logger->setProcessTag('Master@' . $instanceName);
 
         // 始终启用文件日志（后台模式也需要日志）
-        $this->logger->setFileEnabled(true);
+        $this->logger->setFileEnabled(LogConfig::isEnabled());
 
         // 前台模式或全量调试 (-log)：控制台输出；默认后台仅写文件
-        if (LogConfig::isStdoutEnabled($frontend, LogConfig::isDevMode())) {
+        if (LogConfig::isVerboseWlsLog() && LogConfig::isStdoutEnabled($frontend, LogConfig::isDevMode())) {
             $this->logger->setStdoutEnabled(true);
         }
 
@@ -239,6 +239,10 @@ class MasterProcess
         Runtime::resetModeCache();
 
         $this->applyProcessTitle();
+
+        // 当前 Master 进程 PID；finally 中 finalizeInstanceRuntimeAfterMasterExit() 需要此值，
+        // 若 run() 早期 throw，getmypid() 仍能返回当前进程 PID（不会是 false，Master 必然在进程中运行）。
+        $masterPid = (int) \getmypid();
 
         // 强制刷新日志缓冲区，确保后台模式下日志能写入
         $this->logger->flush(true);
@@ -368,6 +372,11 @@ class MasterProcess
             $this->logger->flush(true);
             $this->saveMasterInfo('bootstrapping');
             $this->log(__('Master 启动阶段：bootstrapping 实例信息已写入'));
+            $this->logger->flush(true);
+
+            // 打印当前 Master 自愈（子进程复活）HA 模式，便于部署方快速判断行为
+            $selfHealMode = $this->resolveSelfHealModeForLog();
+            $this->log(__('Master 自愈模式：%{1}', [$selfHealMode]));
             $this->logger->flush(true);
 
             // 进入主循环；子服务在 Fiber 中拉起，等待期间仍可 poll 控制面 IPC（启动完成后再释放启动锁，方案 B）
@@ -714,11 +723,7 @@ class MasterProcess
     private function handleTerminationSignal(string $signal, string $message): void
     {
         if ($this->stopRequested) {
-            // 首次 Ctrl+C 已入队，但主循环可能尚未 consume（例如卡在启动 Fiber 的同步 batchCreate）；
-            // 第二次信号先尝试同步并入队 stop_all，仍失败再强杀。
-            if ($this->orchestrator !== null && $this->orchestrator->applyRepeatTerminationNudge()) {
-                return;
-            }
+            // Ctrl+C 的语义：第一次进入带排水的统一停机；连续点击直接升级强制清场。
             $this->escalateTerminationToForceExit($signal);
             return;
         }
@@ -732,7 +737,7 @@ class MasterProcess
      */
     private function escalateTerminationToForceExit(string $signal): void
     {
-        $this->log(__('停机流程进行中，再次收到终止信号：将强制结束子进程并退出 Master（signal=%{1}）', [$signal]), 'warning');
+        $this->log("停机流程进行中，再次收到终止信号：将强制结束子进程并退出 Master（signal={$signal}）", 'warning');
         $this->logger?->flush(true);
         if ($this->orchestrator !== null) {
             $this->orchestrator->forceTerminateMasterAndChildren('repeat_signal:' . $signal);
@@ -758,6 +763,9 @@ class MasterProcess
         }
 
         if ($this->orchestrator?->requestStop($signal)) {
+            // Windows 前台 Ctrl+C 期望“按一次就生效”：
+            // requestStop 仅设置 pending 标记，这里补一次同步 nudge，尽快将 stop_all 入队。
+            $this->orchestrator?->applyRepeatTerminationNudge();
             return;
         }
 
@@ -1465,11 +1473,40 @@ class MasterProcess
 
     /**
      * 设置服务异常标记
+     *
+     * @param string $instanceName 实例名
+     * @param string $reason       异常原因（人类可读，会落盘）
+     * @param int    $attempts     相关重试次数（>0 时追加到内容，便于排障；=0 时忽略）
      */
-    public static function setServiceException(string $instanceName, string $reason = ''): void
+    public static function setServiceException(string $instanceName, string $reason = '', int $attempts = 0): void
     {
         $file = self::getServiceExceptionFile($instanceName);
-        @\file_put_contents($file, $reason ?: 'unknown');
+        $payload = $reason !== '' ? $reason : 'unknown';
+        if ($attempts > 0) {
+            $payload .= ' [attempts=' . $attempts . ']';
+        }
+        @\file_put_contents($file, $payload);
+    }
+
+    /**
+     * 启动日志展示用：当前 Master 自愈模式
+     *
+     * 依据 env.php 的 `wls.orchestrator.allow_child_resurrection`：
+     *   - 未配置 → 默认开启（2026-04-23 起）
+     *   - 显式 false → 关闭
+     */
+    protected function resolveSelfHealModeForLog(): string
+    {
+        try {
+            $config = Env::getInstance()->getConfig() ?: [];
+            $raw = $config['wls']['orchestrator']['allow_child_resurrection'] ?? null;
+            if ($raw === null) {
+                return 'on (默认)';
+            }
+            return ((bool)$raw) ? 'on (env.php)' : 'off (env.php)';
+        } catch (\Throwable) {
+            return 'on (默认)';
+        }
     }
 
     /**

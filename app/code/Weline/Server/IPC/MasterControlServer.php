@@ -519,6 +519,9 @@ class MasterControlServer implements ControlPlaneServerInterface
             'worker_id'             => 0,
             'epoch'                 => 0,
             'launch_id'             => '',
+            'slot_id'               => '',
+            'lease_id'              => '',
+            'generation'            => 0,
             'state'                 => null,
             'resurrection_priority' => ControlMessage::RESURRECTION_NONE,
             'peer_name'             => $peerName,
@@ -569,6 +572,9 @@ class MasterControlServer implements ControlPlaneServerInterface
                 'worker_id'             => 0,
                 'epoch'                 => 0,
                 'launch_id'             => '',
+                'slot_id'               => '',
+                'lease_id'              => '',
+                'generation'            => 0,
                 'state'                 => null,
                 'resurrection_priority' => ControlMessage::RESURRECTION_NONE,
                 'peer_name'             => $peerName,
@@ -737,6 +743,9 @@ class MasterControlServer implements ControlPlaneServerInterface
         $workerId    = (int) ($msg['worker_id'] ?? 0);
         $epoch       = (int) ($msg['epoch'] ?? 0);
         $launchId    = (string) ($msg['launch_id'] ?? '');
+        $slotId      = (string) ($msg['slot_id'] ?? '');
+        $leaseId     = (string) ($msg['lease_id'] ?? '');
+        $generation  = (int) ($msg['generation'] ?? 0);
         $processKind = (string) ($msg['process_kind'] ?? ControlMessage::PROCESS_KIND_FRAMEWORK);
         $moduleCode  = (string) ($msg['module_code'] ?? '');
         $instanceCode = \trim((string) ($msg['instance_code'] ?? ''));
@@ -758,6 +767,9 @@ class MasterControlServer implements ControlPlaneServerInterface
         $this->clients[$clientId]['worker_id']    = $workerId;
         $this->clients[$clientId]['epoch']        = $epoch;
         $this->clients[$clientId]['launch_id']    = $launchId;
+        $this->clients[$clientId]['slot_id']      = $slotId;
+        $this->clients[$clientId]['lease_id']     = $leaseId;
+        $this->clients[$clientId]['generation']   = $generation;
         $this->clients[$clientId]['process_kind'] = $processKind;
         $this->clients[$clientId]['module_code']  = $moduleCode;
         $this->clients[$clientId]['instance_code'] = $instanceCode;
@@ -1096,6 +1108,9 @@ class MasterControlServer implements ControlPlaneServerInterface
                 'worker_id'             => $client['worker_id'],
                 'epoch'                 => (int)($client['epoch'] ?? 0),
                 'launch_id'             => (string)($client['launch_id'] ?? ''),
+                'slot_id'               => (string)($client['slot_id'] ?? ''),
+                'lease_id'              => (string)($client['lease_id'] ?? ''),
+                'generation'            => (int)($client['generation'] ?? 0),
                 'state'                 => $client['state'],
                 'resurrection_priority' => $client['resurrection_priority'],
             ];

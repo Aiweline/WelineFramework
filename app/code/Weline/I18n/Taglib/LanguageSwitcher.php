@@ -7,7 +7,7 @@ use Weline\Framework\App\State;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
-use Weline\I18n\Model\Locals;
+use Weline\I18n\Service\ActiveLocaleCodeProvider;
 use Weline\Taglib\TaglibInterface;
 
 class LanguageSwitcher implements TaglibInterface
@@ -62,23 +62,9 @@ class LanguageSwitcher implements TaglibInterface
             if ($isBackendArea) {
                 // 后台：读取 i18n 模块已安装且已激活语言
                 try {
-                    /** @var Locals $localsModel */
-                    $localsModel = ObjectManager::getInstance(Locals::class);
-                    $activeInstalledRows = $localsModel->clearQuery()
-                        ->where(Locals::schema_fields_IS_INSTALL, 1)
-                        ->where(Locals::schema_fields_IS_ACTIVE, 1)
-                        ->select([Locals::schema_fields_CODE])
-                        ->fetchArray();
-                    $allowedMap = [];
-                    foreach ($activeInstalledRows as $row) {
-                        if (!\is_array($row)) {
-                            continue;
-                        }
-                        $code = (string)($row[Locals::schema_fields_CODE] ?? '');
-                        if ($code !== '') {
-                            $allowedMap[$code] = true;
-                        }
-                    }
+                    /** @var ActiveLocaleCodeProvider $activeLocaleCodeProvider */
+                    $activeLocaleCodeProvider = ObjectManager::getInstance(ActiveLocaleCodeProvider::class);
+                    $allowedMap = $activeLocaleCodeProvider->getInstalledActiveCodeMap();
                     if ($allowedMap !== []) {
                         $allowedMapLower = [];
                         foreach (\array_keys($allowedMap) as $allowedCode) {

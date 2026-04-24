@@ -356,7 +356,10 @@ class ControlMessage
         string $processKind = self::PROCESS_KIND_FRAMEWORK,
         string $moduleCode = '',
         string $instanceCode = '',
-        string $msgId = ''
+        string $msgId = '',
+        string $slotId = '',
+        string $leaseId = '',
+        int $generation = 0
     ): string
     {
         $data = [
@@ -384,6 +387,7 @@ class ControlMessage
         if ($instanceCode !== '') {
             $data['instance_code'] = $instanceCode;
         }
+        self::appendLeaseIdentity($data, $slotId, $leaseId, $generation);
         return self::encode($data);
     }
 
@@ -412,7 +416,10 @@ class ControlMessage
         int $port = 0,
         int $epoch = 0,
         string $launchId = '',
-        string $msgId = ''
+        string $msgId = '',
+        string $slotId = '',
+        string $leaseId = '',
+        int $generation = 0
     ): string
     {
         $data = [
@@ -430,6 +437,7 @@ class ControlMessage
         if ($launchId !== '') {
             $data['launch_id'] = $launchId;
         }
+        self::appendLeaseIdentity($data, $slotId, $leaseId, $generation);
         return self::encode($data);
     }
 
@@ -476,13 +484,20 @@ class ControlMessage
     /**
      * @param int[] $ports
      */
-    public static function setWorkerPool(array $ports, string $role = self::ROLE_WORKER): string
+    public static function setWorkerPool(array $ports, string $role = self::ROLE_WORKER, array $workers = [], int $version = 0): string
     {
-        return self::encode([
+        $data = [
             'type'  => self::TYPE_SET_WORKER_POOL,
             'ports' => \array_values(\array_map('intval', $ports)),
             'role' => $role,
-        ]);
+        ];
+        if ($workers !== []) {
+            $data['workers'] = self::normalizeWorkerDescriptors($workers, $role);
+        }
+        if ($version > 0) {
+            $data['version'] = $version;
+        }
+        return self::encode($data);
     }
 
     /**
@@ -575,23 +590,39 @@ class ControlMessage
     /**
      * 构建 add_worker 消息
      */
-    public static function addWorker(array $ports): string
+    public static function addWorker(array $ports, string $role = self::ROLE_WORKER, array $workers = [], int $version = 0): string
     {
-        return self::encode([
+        $data = [
             'type'  => self::TYPE_ADD_WORKER,
             'ports' => $ports,
-        ]);
+            'role' => $role,
+        ];
+        if ($workers !== []) {
+            $data['workers'] = self::normalizeWorkerDescriptors($workers, $role);
+        }
+        if ($version > 0) {
+            $data['version'] = $version;
+        }
+        return self::encode($data);
     }
 
     /**
      * 构建 remove_worker 消息
      */
-    public static function removeWorker(array $ports): string
+    public static function removeWorker(array $ports, string $role = self::ROLE_WORKER, array $workers = [], int $version = 0): string
     {
-        return self::encode([
+        $data = [
             'type'  => self::TYPE_REMOVE_WORKER,
             'ports' => $ports,
-        ]);
+            'role' => $role,
+        ];
+        if ($workers !== []) {
+            $data['workers'] = self::normalizeWorkerDescriptors($workers, $role);
+        }
+        if ($version > 0) {
+            $data['version'] = $version;
+        }
+        return self::encode($data);
     }
 
     /**
@@ -816,7 +847,15 @@ class ControlMessage
      * @param int $workerId Worker ID
      * @return string NDJSON 消息
      */
-    public static function ackReady(int $workerId, bool $dispatcherConfirmed = false, int $port = 0, string $msgId = ''): string
+    public static function ackReady(
+        int $workerId,
+        bool $dispatcherConfirmed = false,
+        int $port = 0,
+        string $msgId = '',
+        string $slotId = '',
+        string $leaseId = '',
+        int $generation = 0
+    ): string
     {
         $data = [
             'type'      => self::TYPE_ACK_READY,
@@ -829,6 +868,7 @@ class ControlMessage
         if ($port > 0) {
             $data['port'] = $port;
         }
+        self::appendLeaseIdentity($data, $slotId, $leaseId, $generation);
         return self::encode($data);
     }
 
@@ -852,7 +892,16 @@ class ControlMessage
         return self::encode($data);
     }
 
-    public static function readyAck(string $leaseId, int $generation, bool $accepted = true, string $reason = '', int $workerId = 0, int $port = 0, string $msgId = ''): string
+    public static function readyAck(
+        string $leaseId,
+        int $generation,
+        bool $accepted = true,
+        string $reason = '',
+        int $workerId = 0,
+        int $port = 0,
+        string $msgId = '',
+        string $slotId = ''
+    ): string
     {
         $data = [
             'type' => self::TYPE_READY_ACK,
@@ -871,6 +920,9 @@ class ControlMessage
         }
         if ($port > 0) {
             $data['port'] = $port;
+        }
+        if ($slotId !== '') {
+            $data['slot_id'] = $slotId;
         }
         return self::encode($data);
     }
@@ -911,7 +963,7 @@ class ControlMessage
         return self::encode($payload);
     }
 
-    public static function heartbeat(string $leaseId, int $seq, int $generation = 0, string $msgId = ''): string
+    public static function heartbeat(string $leaseId, int $seq, int $generation = 0, string $msgId = '', string $slotId = ''): string
     {
         $data = [
             'type' => self::TYPE_HEARTBEAT,
@@ -923,8 +975,8 @@ class ControlMessage
         if ($msgId !== '') {
             $data['msg_id'] = $msgId;
         }
-        if ($msgId !== '') {
-            $data['msg_id'] = $msgId;
+        if ($slotId !== '') {
+            $data['slot_id'] = $slotId;
         }
 
         return self::encode($data);
@@ -933,14 +985,76 @@ class ControlMessage
     /**
      * 构建 worker_pool_ack 消息（Dispatcher → Master：告知 Worker 是否已在池内）
      */
-    public static function workerPoolAck(int $port, bool $inPool, string $role = self::ROLE_WORKER): string
+    public static function workerPoolAck(
+        int $port,
+        bool $inPool,
+        string $role = self::ROLE_WORKER,
+        string $slotId = '',
+        string $leaseId = '',
+        int $generation = 0,
+        string $msgId = ''
+    ): string
     {
-        return self::encode([
+        $data = [
             'type' => self::TYPE_WORKER_POOL_ACK,
             'port' => $port,
             'role' => $role,
             'in_pool' => $inPool,
-        ]);
+        ];
+        if ($msgId !== '') {
+            $data['msg_id'] = $msgId;
+        }
+        self::appendLeaseIdentity($data, $slotId, $leaseId, $generation);
+        return self::encode($data);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private static function appendLeaseIdentity(array &$data, string $slotId, string $leaseId, int $generation): void
+    {
+        if ($slotId !== '') {
+            $data['slot_id'] = $slotId;
+        }
+        if ($leaseId !== '') {
+            $data['lease_id'] = $leaseId;
+        }
+        if ($generation > 0) {
+            $data['generation'] = $generation;
+        }
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $workers
+     * @return array<int, array<string, mixed>>
+     */
+    public static function normalizeWorkerDescriptors(array $workers, string $defaultRole = self::ROLE_WORKER): array
+    {
+        $normalized = [];
+        foreach ($workers as $worker) {
+            if (!\is_array($worker)) {
+                continue;
+            }
+            $port = (int)($worker['port'] ?? 0);
+            if ($port <= 0) {
+                continue;
+            }
+            $role = (string)($worker['role'] ?? $defaultRole);
+            $slotId = (string)($worker['slot_id'] ?? '');
+            $leaseId = (string)($worker['lease_id'] ?? '');
+            $generation = (int)($worker['generation'] ?? 0);
+            $state = (string)($worker['state'] ?? 'ready');
+            $normalized[] = [
+                'role' => $role !== '' ? $role : $defaultRole,
+                'slot_id' => $slotId,
+                'lease_id' => $leaseId,
+                'generation' => $generation,
+                'port' => $port,
+                'state' => $state !== '' ? $state : 'ready',
+            ];
+        }
+
+        return $normalized;
     }
 
     /**

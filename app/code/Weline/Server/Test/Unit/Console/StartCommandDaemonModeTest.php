@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Console;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Start;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\ServerInstanceManager;
 
 final class StartCommandDaemonModeTest extends TestCase
 {
@@ -90,5 +91,50 @@ final class StartCommandDaemonModeTest extends TestCase
         self::assertNotContains('--window-title=' . MasterProcess::getMasterProcessDisplayName('default', true), $argv);
         self::assertStringNotContainsString('--frontend', $command);
         self::assertStringNotContainsString('--window-title=', $command);
+    }
+
+    public function testPersistForegroundLauncherPidStoresWrapperPidFromProcessMetadata(): void
+    {
+        $manager = new class extends ServerInstanceManager {
+            public array $saved = [];
+
+            public function __construct()
+            {
+            }
+
+            public function saveInstance(string $name, array $info): void
+            {
+                $this->saved[] = [$name, $info];
+            }
+        };
+
+        $start = new class($manager) extends Start {
+            public function __construct(private readonly ServerInstanceManager $manager)
+            {
+            }
+
+            protected function getInstanceManager(): ServerInstanceManager
+            {
+                return $this->manager;
+            }
+
+            protected function getManagedProcessMetadata(string $command): array
+            {
+                unset($command);
+
+                return ['launcher_pid' => 45678];
+            }
+
+            public function persistLauncherPid(string $instanceName, string $command, int $fallbackPid = 0): int
+            {
+                return $this->persistForegroundLauncherPid($instanceName, $command, $fallbackPid);
+            }
+        };
+        $start->__init();
+
+        self::assertSame(45678, $start->persistLauncherPid('default', 'php bin/w server:start --frontend'));
+        self::assertSame([
+            ['default', ['launcher_pid' => 45678]],
+        ], $manager->saved);
     }
 }

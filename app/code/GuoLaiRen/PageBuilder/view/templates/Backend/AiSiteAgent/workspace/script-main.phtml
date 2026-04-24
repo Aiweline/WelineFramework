@@ -10,6 +10,7 @@
     var currentStageCode = <?= \json_encode($currentStage, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var initialWorkspaceState = <?= \json_encode($state, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var latestWorkspaceState = initialWorkspaceState;
+    var initialWorkspaceStateHydrated = false;
     var hasGeneratedPages = <?= \json_encode($displayPagesByType !== [], \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var isOperationRunning = <?= \json_encode(\in_array($activeOperationStatus, ['queued', 'running'], true), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var currentActiveOperationState = <?= \json_encode($activeOperation, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -29,6 +30,7 @@
     var mutatePlanBlockUrl = <?= \json_encode((string)($mutatePlanBlockUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var refinePlanPageUrl = <?= \json_encode((string)($refinePlanPageUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var sortTaskPlanTasksUrl = <?= \json_encode((string)($sortTaskPlanTasksUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var mutateTaskPlanTaskUrl = <?= \json_encode((string)($mutateTaskPlanTaskUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var resumeBuildUrl = <?= \json_encode($resumeBuildUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var runVirtualThemeUrl = <?= \json_encode($runVirtualThemeUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startRegeneratePageUrl = <?= \json_encode($startRegeneratePageUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -48,12 +50,14 @@
     var currentPreviewDevice = 'desktop';
     var currentWorkspaceStage = <?= \json_encode($currentStage, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var planConfirmedState = <?= \json_encode((bool)($state['plan_confirmed'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
-    var hasVirtualThemePlanState = <?= \json_encode((bool)($state['has_virtual_theme_plan'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var hasVirtualThemePlanState = <?= \json_encode((bool)($pbAiPhaseTwoTaskPlanPresent), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var taskPlanConfirmedState = <?= \json_encode((bool)($state['task_plan_confirmed'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var hasExecutionBlueprintState = <?= \json_encode((bool)($state['has_execution_blueprint'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var hasPendingBuildTasksState = <?= \json_encode((bool)($state['has_pending_build_tasks'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     /** 与 PHP 注入的 $pbAiPhaseOnePlanPresent 同步：是否存在可用的第一阶段方案（用于按钮禁用等）。 */
     var lastPhaseOnePlanPresent = <?= \json_encode((bool)($pbAiPhaseOnePlanPresent), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    /** 与 PHP 注入的 $pbAiPhaseTwoTaskPlanPresent 同步：是否存在可用的第二阶段任务方案。 */
+    var lastPhaseTwoTaskPlanPresent = <?= \json_encode((bool)($pbAiPhaseTwoTaskPlanPresent), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var globalRunVirtualThemeDisabled = false;
     window.__pbTaskSummary = <?= \json_encode($buildTaskSummary, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var buildNavigationGuardActive = false;
@@ -156,6 +160,29 @@
         return false;
     }
 
+    /**
+     * 第二阶段方案存在性只认后台状态位：
+     * - has_virtual_theme_plan
+     * - task_plan_confirmed
+     * 前端 markdown/structured 仅用于展示，不参与“是否存在”的判定。
+     */
+    function phaseTwoTaskPlanPresentFromWorkspaceState(workspaceState) {
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return false;
+        }
+        if (Object.prototype.hasOwnProperty.call(workspaceState, 'has_virtual_theme_plan')) {
+            return !!workspaceState.has_virtual_theme_plan || !!workspaceState.task_plan_confirmed;
+        }
+        if (Object.prototype.hasOwnProperty.call(workspaceState, 'task_plan_confirmed')) {
+            return !!workspaceState.task_plan_confirmed;
+        }
+        return false;
+    }
+
+    function hasPersistedPhaseTwoTaskPlan() {
+        return !!lastPhaseTwoTaskPlanPresent || !!hasVirtualThemePlanState || !!taskPlanConfirmedState;
+    }
+
     function getRunVirtualThemeButtons() {
         return document.querySelectorAll('.pb-ai-run-virtual-theme');
     }
@@ -219,60 +246,60 @@
                 el.setAttribute('placeholder', text);
             }
         }
-        setHtml('.pb-guided-header h4', '<i class="mdi mdi-robot-outline me-1"></i>AI 快速建站');
+        setHtml('.pb-guided-header h4', '<i class="mdi mdi-robot-outline me-1"></i>' + <?= \json_encode((string)__('AI 快速建站'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         var headerButtons = guidedRoot.querySelectorAll('.pb-guided-header a.btn.btn-soft-secondary.btn-sm');
         if (headerButtons.length > 0) {
-            headerButtons[headerButtons.length - 1].innerHTML = '<i class="mdi mdi-arrow-left me-1"></i>返回';
+            headerButtons[headerButtons.length - 1].innerHTML = '<i class="mdi mdi-arrow-left me-1"></i>' + <?= \json_encode((string)__('返回'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
-        setText('.pb-guided > .card.bg-soft-info .small.fw-semibold.text-primary', '阶段 2 工作区轨道');
+        setText('.pb-guided > .card.bg-soft-info .small.fw-semibold.text-primary', <?= \json_encode((string)__('阶段 2 工作区轨道'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         var trackBadges = guidedRoot.querySelectorAll('.pb-guided > .card.bg-soft-info .badge');
         if (trackBadges[0]) {
-            trackBadges[0].textContent = <?= \json_encode($workspaceTrack === \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS ? '当前：HTML 区块轨道' : '当前：虚拟主题轨道', \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            trackBadges[0].textContent = <?= \json_encode($workspaceTrack === \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS ? (string)__('当前：HTML 区块轨道') : (string)__('当前：虚拟主题轨道'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
         if (trackBadges[1]) {
-            trackBadges[1].textContent = <?= \json_encode($siteReadyFlag !== 1 ? '域名未就绪：仅可草稿，发布将被阻止' : '域名已就绪', \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            trackBadges[1].textContent = <?= \json_encode($siteReadyFlag !== 1 ? (string)__('域名未就绪：仅可草稿，发布将被阻止') : (string)__('域名已就绪'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
         var trackButtons = guidedRoot.querySelectorAll('.pb-ai-workspace-track-btn');
         trackButtons.forEach(function (btn) {
             if (String(btn.getAttribute('data-track') || '') === <?= \json_encode(\GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>) {
-                btn.textContent = '虚拟主题轨道';
+                btn.textContent = <?= \json_encode((string)__('虚拟主题轨道'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
                 return;
             }
             if (String(btn.getAttribute('data-track') || '') === <?= \json_encode(\GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>) {
-                btn.textContent = 'HTML 区块轨道';
+                btn.textContent = <?= \json_encode((string)__('HTML 区块轨道'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
             }
         });
-        setText('#pb-ai-site-ready-dev', '开发：标记域名已就绪');
-        setText('#pb-guided-needs-section h5', '我的需求');
-        setText('#pb-guided-needs-section > p.text-muted.small', '站点名称、主语言、域名、描述与页面类型会直接影响生成结果，请优先填写完整。');
-        setText('label[for="pb-ai-site-title"]', '站点名称');
-        setText('label[for="pb-ai-target-domain"]', '目标域名（可选）');
-        setText('label[for="pb-ai-default-locale"]', '主语言');
-        setText('label[for="pb-ai-plan-locale"]', '方案语言（可选）');
-        setText('label[for="pb-ai-brief-description"]', '一句话描述你的网站');
-        setText('#pb-guided-needs-section .form-text', '默认沿用当前工作台语言，需要时可单独切换。');
-        setText('#pb-guided-needs-section .form-label.mb-0', '需要的页面');
-        setText('.pb-ai-clear-page-type-selection', '取消选择');
-        setHtml('#pb-ai-target-domain-ai-refresh', '<i class="mdi mdi-refresh-auto me-1" aria-hidden="true"></i>AI 推荐');
-        setPlaceholder('#pb-ai-site-title', '例如：时尚精品店');
-        setPlaceholder('#pb-ai-target-domain', '如已有域名可填入；留空可由 AI 自动推荐');
-        setPlaceholder('#pb-ai-brief-description', '描述网站的主题、风格和主要功能，越详细 AI 生成效果越好');
+        setText('#pb-ai-site-ready-dev', <?= \json_encode((string)__('开发：标记域名已就绪'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('#pb-guided-needs-section h5', <?= \json_encode((string)__('我的需求'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('#pb-guided-needs-section > p.text-muted.small', <?= \json_encode((string)__('站点名称、主语言、域名、描述与页面类型会直接影响生成结果，请优先填写完整。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('label[for="pb-ai-site-title"]', <?= \json_encode((string)__('站点名称'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('label[for="pb-ai-target-domain"]', <?= \json_encode((string)__('目标域名（可选）'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('label[for="pb-ai-default-locale"]', <?= \json_encode((string)__('主语言'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('label[for="pb-ai-plan-locale"]', <?= \json_encode((string)__('方案语言（可选）'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('label[for="pb-ai-brief-description"]', <?= \json_encode((string)__('一句话描述你的网站'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('#pb-guided-needs-section .form-text', <?= \json_encode((string)__('默认沿用当前工作台语言，需要时可单独切换。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('#pb-guided-needs-section .form-label.mb-0', <?= \json_encode((string)__('需要的页面'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('.pb-ai-clear-page-type-selection', <?= \json_encode((string)__('取消选择'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setHtml('#pb-ai-target-domain-ai-refresh', '<i class="mdi mdi-refresh-auto me-1" aria-hidden="true"></i>' + <?= \json_encode((string)__('AI 推荐'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setPlaceholder('#pb-ai-site-title', <?= \json_encode((string)__('例如：时尚精品店'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setPlaceholder('#pb-ai-target-domain', <?= \json_encode((string)__('如已有域名可填入；留空可由 AI 自动推荐'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setPlaceholder('#pb-ai-brief-description', <?= \json_encode((string)__('描述网站的主题、风格和主要功能，越详细 AI 生成效果越好'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         var profileMeta = guidedRoot.querySelectorAll('.border.rounded.p-3.mt-3 .text-muted.small');
         if (profileMeta[0] && profileMeta[0].childNodes[0]) {
-            profileMeta[0].childNodes[0].textContent = 'SEO 标题：';
+            profileMeta[0].childNodes[0].textContent = <?= \json_encode((string)__('SEO 标题：'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
         if (profileMeta[1] && profileMeta[1].childNodes[0]) {
-            profileMeta[1].childNodes[0].textContent = 'SEO 描述：';
+            profileMeta[1].childNodes[0].textContent = <?= \json_encode((string)__('SEO 描述：'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
         guidedRoot.querySelectorAll('.pb-ai-run-virtual-theme').forEach(function (btn) {
             var isLarge = btn.classList.contains('btn-lg');
             btn.innerHTML = isLarge
-                ? '<i class="mdi mdi-creation-outline me-1"></i>确认&更新方案'
-                : '<i class="mdi mdi-refresh me-1"></i>确认&更新方案';
+                ? ('<i class="mdi mdi-creation-outline me-1"></i>' + <?= \json_encode((string)__('确认&更新方案'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
+                : ('<i class="mdi mdi-refresh me-1"></i>' + <?= \json_encode((string)__('确认&更新方案'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         });
-        setText('.pb-ai-primary-action-hint', '表单会自动保存。第一阶段生成在后台队列中执行，这里会持续显示状态与草稿更新。');
-        setText('#pb-ai-task-progress-heading', '任务进度');
-        setText('#pb-ai-task-running-indicator', '进行中...');
+        setText('.pb-ai-primary-action-hint', <?= \json_encode((string)__('表单会自动保存。第一阶段生成在后台队列中执行，这里会持续显示状态与草稿更新。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('#pb-ai-task-progress-heading', <?= \json_encode((string)__('任务进度'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('#pb-ai-task-running-indicator', <?= \json_encode((string)__('进行中...'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         var taskMetricTitles = guidedRoot.querySelectorAll('.pb-guided-sidebar .row.g-2.small.mb-3 .text-muted');
         [
             '总任务',
@@ -290,35 +317,35 @@
         });
         var sidebarHeaders = guidedRoot.querySelectorAll('.pb-guided-sidebar h6.fw-semibold');
         if (sidebarHeaders[1]) {
-            sidebarHeaders[1].childNodes[sidebarHeaders[1].childNodes.length - 1].textContent = '阶段状态';
+            sidebarHeaders[1].childNodes[sidebarHeaders[1].childNodes.length - 1].textContent = <?= \json_encode((string)__('阶段状态'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
         if (sidebarHeaders[2]) {
-            sidebarHeaders[2].childNodes[sidebarHeaders[2].childNodes.length - 1].textContent = '域名与注册商';
+            sidebarHeaders[2].childNodes[sidebarHeaders[2].childNodes.length - 1].textContent = <?= \json_encode((string)__('域名与注册商'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
         if (sidebarHeaders[3]) {
-            sidebarHeaders[3].childNodes[sidebarHeaders[3].childNodes.length - 1].textContent = '当前会话信息';
+            sidebarHeaders[3].childNodes[sidebarHeaders[3].childNodes.length - 1].textContent = <?= \json_encode((string)__('当前会话信息'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
-        setText('#pb-ai-stage-status-plan-badge', '待开始');
-        setText('#pb-ai-stage-status-task-plan-badge', '待开始');
-        setText('#pb-ai-stage-status-build-badge', '待开始');
+        setText('#pb-ai-stage-status-plan-badge', <?= \json_encode((string)__('待开始'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('#pb-ai-stage-status-task-plan-badge', <?= \json_encode((string)__('待开始'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('#pb-ai-stage-status-build-badge', <?= \json_encode((string)__('待开始'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         var stageCards = guidedRoot.querySelectorAll('#pb-ai-stage-status-summary .border.rounded.p-2 strong');
         if (stageCards[0]) {
-            stageCards[0].textContent = '阶段一方案';
+            stageCards[0].textContent = <?= \json_encode((string)__('阶段一方案'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
         if (stageCards[1]) {
-            stageCards[1].textContent = '阶段二任务方案';
+            stageCards[1].textContent = <?= \json_encode((string)__('阶段二任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
         if (stageCards[2]) {
-            stageCards[2].textContent = '虚拟主题构建';
+            stageCards[2].textContent = <?= \json_encode((string)__('虚拟主题构建'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
-        setText('#pb-ai-stage-status-plan-message', '等待生成第一阶段建站方案。');
-        setText('#pb-ai-stage-status-task-plan-message', '等待第一阶段确认后生成任务方案。');
-        setText('#pb-ai-stage-status-build-message', '等待第二阶段确认后进入构建。');
-        setText('label[for="pb-ai-registrar-account_trigger"]', '注册商账户');
-        setText('#pb-ai-registrar-help', <?= \json_encode($recommendedRegistrarLabel !== '' ? 'AI 推荐：' . $recommendedRegistrarLabel : '如果没有选择注册商账户，AI 会使用默认可用账户。', \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
-        setText('.pb-guided-domain-sidebar .fw-semibold.mt-2.small', '购买域名');
-        setText('#pb-ai-recommend-domain-btn', '推荐域名');
-        setText('#pb-ai-purchase-domain-btn', '购买域名');
+        setText('#pb-ai-stage-status-plan-message', <?= \json_encode((string)__('等待生成第一阶段建站方案。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('#pb-ai-stage-status-task-plan-message', <?= \json_encode((string)__('等待第一阶段确认后生成任务方案。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('#pb-ai-stage-status-build-message', <?= \json_encode((string)__('等待第二阶段确认后进入构建。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('label[for="pb-ai-registrar-account_trigger"]', <?= \json_encode((string)__('注册商账户'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('#pb-ai-registrar-help', <?= \json_encode($recommendedRegistrarLabel !== '' ? (string)__('AI 推荐：') . $recommendedRegistrarLabel : (string)__('如果没有选择注册商账户，AI 会使用默认可用账户。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('.pb-guided-domain-sidebar .fw-semibold.mt-2.small', <?= \json_encode((string)__('购买域名'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('#pb-ai-recommend-domain-btn', <?= \json_encode((string)__('推荐域名'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        setText('#pb-ai-purchase-domain-btn', <?= \json_encode((string)__('购买域名'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         setText('label[for="pb-ai-target-domain"]', messages.targetDomainRequiredLabel);
         setPlaceholder('#pb-ai-target-domain', messages.targetDomainRequiredPlaceholder);
         var sessionBox = guidedRoot.querySelector('.pb-guided-sidebar .summary-grid');
@@ -327,64 +354,111 @@
             if (sessionCard) {
                 var sessionTitle = sessionCard.querySelector('h6.mb-1');
                 if (sessionTitle) {
-                    sessionTitle.textContent = '当前会话信息';
+                    sessionTitle.textContent = <?= \json_encode((string)__('当前会话信息'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
                 }
                 var sessionHint = sessionCard.querySelector('p.text-muted.small.mb-0');
                 if (sessionHint) {
-                    sessionHint.textContent = '与当前表单同步的只读摘要，便于对照。新建会话不会继承上次会话内容。';
+                    sessionHint.textContent = <?= \json_encode((string)__('与当前表单同步的只读摘要，便于对照。新建会话不会继承上次会话内容。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
                 }
             }
             var sessionLabels = sessionBox.querySelectorAll('.summary-label');
             if (sessionLabels[0]) {
-                sessionLabels[0].textContent = '站点名称';
+                sessionLabels[0].textContent = <?= \json_encode((string)__('站点名称'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
             }
             if (sessionLabels[1]) {
-                sessionLabels[1].textContent = '一句话定位';
+                sessionLabels[1].textContent = <?= \json_encode((string)__('一句话定位'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
             }
             if (sessionLabels[2]) {
-                sessionLabels[2].textContent = '目标域名';
+                sessionLabels[2].textContent = <?= \json_encode((string)__('目标域名'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
             }
             if (sessionLabels[3]) {
-                sessionLabels[3].textContent = '主语言';
+                sessionLabels[3].textContent = <?= \json_encode((string)__('主语言'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
             }
             if (sessionLabels[4]) {
-                sessionLabels[4].textContent = '方案语言';
+                sessionLabels[4].textContent = <?= \json_encode((string)__('方案语言'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
             }
             if (sessionLabels[5]) {
-                sessionLabels[5].textContent = '页面类型';
+                sessionLabels[5].textContent = <?= \json_encode((string)__('页面类型'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
             }
             sessionBox.querySelectorAll('.summary-value.is-empty').forEach(function (el) {
-                el.textContent = '未填写';
+                el.textContent = <?= \json_encode((string)__('未填写'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
             });
         }
         var confirmedWrap = document.querySelector('.summary-confirmed-plans');
         if (confirmedWrap) {
             var title = confirmedWrap.querySelector('.fw-semibold');
             if (title) {
-                title.textContent = '已确认方案（只读）';
+                title.textContent = <?= \json_encode((string)__('已确认方案（只读）'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
             }
             var stage1Btn = confirmedWrap.querySelector('.pb-ai-view-confirmed-plan[data-plan-type="stage1"]');
             if (stage1Btn) {
-                stage1Btn.innerHTML = '<i class="mdi mdi-file-document-outline me-1"></i>查看第一阶段方案 <span class="badge bg-success ms-1">已确认</span>';
+                stage1Btn.innerHTML = '<i class="mdi mdi-file-document-outline me-1"></i>' + <?= \json_encode((string)__('查看第一阶段方案'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?> + ' <span class="badge bg-success ms-1">' + <?= \json_encode((string)__('已确认'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?> + '</span>';
             }
             var stage2Btn = confirmedWrap.querySelector('.pb-ai-view-confirmed-plan[data-plan-type="stage2"]');
             if (stage2Btn) {
-                stage2Btn.innerHTML = '<i class="mdi mdi-file-chart-outline me-1"></i>查看第二阶段任务方案 <span class="badge bg-success ms-1">已确认</span>';
+                stage2Btn.innerHTML = '<i class="mdi mdi-file-chart-outline me-1"></i>' + <?= \json_encode((string)__('查看第二阶段任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?> + ' <span class="badge bg-success ms-1">' + <?= \json_encode((string)__('已确认'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?> + '</span>';
             }
             var hint = confirmedWrap.querySelector('.small.text-muted.mt-2');
             if (hint) {
-                hint.textContent = '历史方案仅供查看，不可编辑。';
+                hint.textContent = <?= \json_encode((string)__('历史方案仅供查看，不可编辑。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
             }
         }
+    }
+
+    function isPlainWorkspaceObject(value) {
+        return !!value && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function mergePlainWorkspaceObject(base, patch) {
+        if (patch === null) {
+            return null;
+        }
+        if (!isPlainWorkspaceObject(base)) {
+            return isPlainWorkspaceObject(patch) ? Object.assign({}, patch) : {};
+        }
+        if (!isPlainWorkspaceObject(patch)) {
+            return Object.assign({}, base);
+        }
+        return Object.assign({}, base, patch);
+    }
+
+    function mergeWorkspaceStatePatch(patch) {
+        if (!isPlainWorkspaceObject(patch)) {
+            return patch;
+        }
+        var base = isPlainWorkspaceObject(latestWorkspaceState)
+            ? latestWorkspaceState
+            : (isPlainWorkspaceObject(window.__pbLastWorkspaceState) ? window.__pbLastWorkspaceState : {});
+        var merged = Object.assign({}, base, patch);
+        [
+            'scope',
+            'active_operation',
+            'plan',
+            'task_plan',
+            'plan_queue_info',
+            'task_plan_queue_info',
+            'build_queue_info',
+            'build_task_summary',
+            'build_summary',
+            'workspace_entry_queue_notice',
+            'pre_publish_visual_urls'
+        ].forEach(function (key) {
+            if (Object.prototype.hasOwnProperty.call(patch, key)) {
+                merged[key] = mergePlainWorkspaceObject(base[key], patch[key]);
+            }
+        });
+        return merged;
     }
 
     function hydrateWorkspaceFromState(workspaceState) {
         if (!workspaceState || typeof workspaceState !== 'object') {
             return;
         }
+        workspaceState = mergeWorkspaceStatePatch(workspaceState);
         latestWorkspaceState = workspaceState;
         try {
             window.__pbLastWorkspaceState = workspaceState;
+            window.__pbWorkspaceState = workspaceState;
         } catch (e) {
             // 忽略：仅用于队列面板复用最近工作区状态。
         }
@@ -414,20 +488,6 @@
             : ((scope.task_plan_structured && typeof scope.task_plan_structured === 'object')
                 ? scope.task_plan_structured
                 : {});
-        window.__pbWorkspaceConfirmedTaskPlan = {
-            markdown: String(vtPlan.confirmed_markdown || ''),
-            confirmed_markdown: String(vtPlan.confirmed_markdown || ''),
-            confirmed_at: String(workspaceState.task_plan_confirmed_at || vtPlan.confirmed_at || ''),
-            signature: String(vtPlan.confirmed_signature || vtPlan.plan_signature || ''),
-            task_plan_signature: String(vtPlan.confirmed_signature || vtPlan.plan_signature || ''),
-            plan_locale: String((scope.plan_locale || (scope.website_profile && scope.website_profile.plan_locale) || '')),
-            structured: isNonEmptyObject(persistedTaskPlanStructured)
-                ? persistedTaskPlanStructured
-                : (vtPlan.confirmed && typeof vtPlan.confirmed === 'object' ? vtPlan.confirmed : {}),
-        };
-        var hasConfirmedTaskPlanEntity = String(window.__pbWorkspaceConfirmedTaskPlan.confirmed_at || window.__pbWorkspaceConfirmedTaskPlan.signature || '').trim() !== ''
-            || String(window.__pbWorkspaceConfirmedTaskPlan.markdown || window.__pbWorkspaceConfirmedTaskPlan.confirmed_markdown || '').trim() !== ''
-            || isNonEmptyObject(window.__pbWorkspaceConfirmedTaskPlan.structured);
         var taskPlanDraftMarkdown = String(workspaceTaskPlan.markdown || workspaceState.task_plan_markdown || vtPlan.draft_markdown || '').trim();
         var taskPlanConfirmedMarkdown = String(vtPlan.confirmed_markdown || '').trim();
         var taskPlanDraftStructured = isNonEmptyObject(persistedTaskPlanStructured)
@@ -436,6 +496,25 @@
                 ? workspaceTaskPlan.structured
                 : (vtPlan.draft && typeof vtPlan.draft === 'object' ? vtPlan.draft : {}));
         var taskPlanConfirmedStructured = vtPlan.confirmed && typeof vtPlan.confirmed === 'object' ? vtPlan.confirmed : {};
+        var taskPlanPreferredMarkdown = taskPlanDraftMarkdown !== '' ? taskPlanDraftMarkdown : taskPlanConfirmedMarkdown;
+        var taskPlanPreferredStructured = isNonEmptyObject(taskPlanDraftStructured)
+            ? taskPlanDraftStructured
+            : taskPlanConfirmedStructured;
+        window.__pbWorkspaceConfirmedTaskPlan = {
+            markdown: taskPlanPreferredMarkdown,
+            draft_markdown: taskPlanDraftMarkdown,
+            confirmed_markdown: String(vtPlan.confirmed_markdown || ''),
+            confirmed_at: String(workspaceState.task_plan_confirmed_at || vtPlan.confirmed_at || ''),
+            signature: String(vtPlan.confirmed_signature || vtPlan.plan_signature || ''),
+            task_plan_signature: String(vtPlan.confirmed_signature || vtPlan.plan_signature || ''),
+            plan_locale: String((scope.plan_locale || (scope.website_profile && scope.website_profile.plan_locale) || '')),
+            structured: taskPlanPreferredStructured,
+            draft_structured: taskPlanDraftStructured,
+            confirmed_structured: taskPlanConfirmedStructured,
+        };
+        var hasConfirmedTaskPlanEntity = String(window.__pbWorkspaceConfirmedTaskPlan.confirmed_at || window.__pbWorkspaceConfirmedTaskPlan.signature || '').trim() !== ''
+            || String(window.__pbWorkspaceConfirmedTaskPlan.markdown || window.__pbWorkspaceConfirmedTaskPlan.confirmed_markdown || '').trim() !== ''
+            || isNonEmptyObject(window.__pbWorkspaceConfirmedTaskPlan.structured);
         if (
             taskPlanDraftMarkdown !== ''
             || taskPlanConfirmedMarkdown !== ''
@@ -487,8 +566,14 @@
         if (Object.prototype.hasOwnProperty.call(workspaceState, 'refine_plan_page_url')) {
             refinePlanPageUrl = String(workspaceState.refine_plan_page_url || '');
         }
-        if (Object.prototype.hasOwnProperty.call(workspaceState, 'has_virtual_theme_plan')) {
-            hasVirtualThemePlanState = !!workspaceState.has_virtual_theme_plan;
+        var hasPersistedTaskPlan = phaseTwoTaskPlanPresentFromWorkspaceState(workspaceState);
+        if (
+            hasPersistedTaskPlan
+            || Object.prototype.hasOwnProperty.call(workspaceState, 'has_virtual_theme_plan')
+            || Object.prototype.hasOwnProperty.call(workspaceState, 'task_plan_confirmed')
+        ) {
+            hasVirtualThemePlanState = hasPersistedTaskPlan;
+            lastPhaseTwoTaskPlanPresent = hasPersistedTaskPlan;
         }
         if (Object.prototype.hasOwnProperty.call(workspaceState, 'task_plan_confirmed')) {
             taskPlanConfirmedState = !!workspaceState.task_plan_confirmed || hasConfirmedTaskPlanEntity;
@@ -540,6 +625,15 @@
         syncConfirmPlanButtonEnabled();
         applyTaskPlanEditingLockFromActiveOperation();
     }
+
+    function hydrateInitialWorkspaceStateOnce() {
+        if (initialWorkspaceStateHydrated || !initialWorkspaceState || typeof initialWorkspaceState !== 'object') {
+            return;
+        }
+        hydrateWorkspaceFromState(initialWorkspaceState);
+        initialWorkspaceStateHydrated = true;
+    }
+
     // 组装并挂到 window.__pbWorkspaceApi 的对外 API，供其它脚本或内嵌页回调。
     var workspaceApi = window.__pbWorkspaceApi;
     if (!workspaceApi || typeof workspaceApi !== 'object') {
@@ -614,6 +708,42 @@
             return true;
         }
         return false;
+    }
+
+    function isTaskPlanWorkspaceStage(stage) {
+        var normalized = String(stage || '').trim().toLowerCase();
+        return normalized === 'visual_edit' || normalized === 'task_plan' || normalized === 'task-plan';
+    }
+
+    function promptGenerateTaskPlanOnStageEnter() {
+        if (!isTaskPlanWorkspaceStage(currentWorkspaceStage) || hasPersistedPhaseTwoTaskPlan()) {
+            return Promise.resolve(false);
+        }
+        return Promise.resolve(hasPhaseOnePlanReadyForTaskPlan()).then(function (ready) {
+            if (!ready) {
+                toast('warning', messages.phaseOnePlanMissingForTaskPlan || messages.planConfirmRequired);
+                return false;
+            }
+            showTaskPlanPanel();
+            return !!startTaskPlanDetectBootstrapSse({ suppressStartFallback: true });
+        }).catch(function () {
+            toast('warning', messages.taskPlanGenerateConfirmMessage || messages.networkError);
+            return false;
+        });
+    }
+
+    function continueToTaskPlanAfterPlanConfirm() {
+        planConfirmedState = true;
+        lastPhaseOnePlanPresent = true;
+        switchWorkspaceStage('visual_edit');
+        showTaskPlanPanel();
+        if (hasPersistedPhaseTwoTaskPlan() || hasCachedTaskPlanForAccordion()) {
+            applyCachedTaskPlanToPanel();
+            return;
+        }
+        window.setTimeout(function () {
+            startTaskPlanDetectBootstrapSse({ suppressStartFallback: true });
+        }, 200);
     }
 
     function syncConfirmPlanButtonEnabled() {
@@ -738,6 +868,23 @@
         planPageRefineRunning: <?= \json_encode((string)__('正在微调当前页面块树...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planPageRefineDone: <?= \json_encode((string)__('当前页面块树微调已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planPageRefineUnavailable: <?= \json_encode((string)__('微调当前页面接口暂不可用。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        stageOneBadge: <?= \json_encode((string)__('第一阶段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        stageTwoBadge: <?= \json_encode((string)__('第二阶段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpCreate: <?= \json_encode((string)__('新增块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpRefine: <?= \json_encode((string)__('微调块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpRebuild: <?= \json_encode((string)__('局部重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpDelete: <?= \json_encode((string)__('删除块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpTargetPage: <?= \json_encode((string)__('页面'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpTargetBlock: <?= \json_encode((string)__('块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpIntentPrompt: <?= \json_encode((string)__('告诉 AI 你希望这个块怎么改'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpCreatePrompt: <?= \json_encode((string)__('告诉 AI 新增什么内容、放在哪里'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpDeleteReason: <?= \json_encode((string)__('可选：说明删除原因（留空表示直接删除）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpCommonHelp: <?= \json_encode((string)__('提交后进入后台队列异步执行，进度会同步到预览与队列信息区。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpDeleteHelp: <?= \json_encode((string)__('删除后该块从结构化数据中移除，Markdown 与预览会同步刷新。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpDeleteWarning: <?= \json_encode((string)__('删除操作不可直接撤销，建议先导出方案备份。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpQueued: <?= \json_encode((string)__('块级操作已入队，进度会同步到队列信息区。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpSuccess: <?= \json_encode((string)__('块级操作已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpFailed: <?= \json_encode((string)__('块级操作未能完成，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planFriendlyInvalidAiJson: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planStructuredPreviewTitle: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planStructuredPreviewEmpty: <?= \json_encode((string)__('方案等待确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -858,6 +1005,16 @@
         rebuildAction: <?= \json_encode((string)__('重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         deleteAction: <?= \json_encode((string)__('删除'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         addBlockAction: <?= \json_encode((string)__('新增块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        moveAction: <?= \json_encode((string)__('跳位'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        reorderModalRange: <?= \json_encode((string)__('（当前第 %{current} 位 / 共 %{total} 项）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        reorderContextMetaPlan: <?= \json_encode((string)__('阶段：方案块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        reorderContextMetaTaskShared: <?= \json_encode((string)__('阶段：任务方案 · 共享任务'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        reorderContextMetaTaskPage: <?= \json_encode((string)__('阶段：任务方案 · 页面任务'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        reorderInvalidTarget: <?= \json_encode((string)__('请输入有效的位置（正整数）。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        reorderSameTarget: <?= \json_encode((string)__('当前已在该位置，无需移动。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        reorderClampedTarget: <?= \json_encode((string)__('目标位置已自动限制为 %{target}。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        reorderTargetLost: <?= \json_encode((string)__('找不到要移动的对象，请刷新列表后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        reorderQueued: <?= \json_encode((string)__('排序已提交，稍后刷新。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         sortHandle: <?= \json_encode((string)__('拖动排序'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editAction: <?= \json_encode((string)__('编辑'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         aiRefineAction: <?= \json_encode((string)__('AI 微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -888,7 +1045,15 @@
         headerPlan: <?= \json_encode((string)__('页头规划'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         footerPlan: <?= \json_encode((string)__('页脚规划'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishCheckPassed: <?= \json_encode((string)__('发布检查通过'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        publishCheckFailed: <?= \json_encode((string)__('发布检查未通过，请先处理阻塞项。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+        publishCheckFailed: <?= \json_encode((string)__('发布检查未通过，请先处理阻塞项。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishCheckModalTitle: <?= \json_encode((string)__('发布前预检清单'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishCheckAllPassedAlert: <?= \json_encode((string)__('全部检查项已通过，可以放心点击「确认发布」。发布后站点立即对外可访问。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishCheckFailedAlert: <?= \json_encode((string)__('仍有未完成项，请按下方清单逐一修复后再重试。只要存在任意未通过项，都无法发布以保护线上体验。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishCheckNoItems: <?= \json_encode((string)__('服务端暂未返回可读的检查项，请在「重新运行检查」后再试；如果问题持续，请联系技术支持。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishCheckItemOk: <?= \json_encode((string)__('已通过'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishCheckItemFail: <?= \json_encode((string)__('仍需修复'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishCheckConfirmStarting: <?= \json_encode((string)__('正在提交发布请求，请稍候...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishCheckConfirmPrompt: <?= \json_encode((string)__('确认将当前站点正式发布？发布后会覆盖原有线上站点内容。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
     };
 
     var lastToastByKey = {};
@@ -940,7 +1105,9 @@
         }).then(function (response) {
             if (!response.ok) {
                 return response.text().then(function (text) {
-                    var errMsg = '请求失败：' + response.status + ' ' + response.statusText;
+                    var errMsg = (<?= \json_encode((string)__('请求失败：%{status} %{text}'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
+                        .replace('%{status}', String(response.status || ''))
+                        .replace('%{text}', String(response.statusText || ''));
                     try {
                         var j = JSON.parse(text);
                         if (j && (j.message || j.error)) {
@@ -985,7 +1152,9 @@
         }).then(function (response) {
             if (!response.ok) {
                 return response.text().then(function (text) {
-                    var errMsg = '请求失败：' + response.status + ' ' + response.statusText;
+                    var errMsg = (<?= \json_encode((string)__('请求失败：%{status} %{text}'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
+                        .replace('%{status}', String(response.status || ''))
+                        .replace('%{text}', String(response.statusText || ''));
                     try {
                         var j = JSON.parse(text);
                         if (j && (j.message || j.error)) {
@@ -1585,7 +1754,7 @@
         card = document.createElement('div');
         card.className = 'border rounded p-3 d-none';
         card.id = 'pb-ai-materialized-pages-card';
-        card.innerHTML = '<div class="fw-semibold mb-2">已生成页面</div><div class="d-flex flex-wrap gap-2" id="pb-ai-materialized-pages-list"></div>';
+        card.innerHTML = '<div class="fw-semibold mb-2">' + <?= \json_encode((string)__('已生成页面'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?> + '</div><div class="d-flex flex-wrap gap-2" id="pb-ai-materialized-pages-list"></div>';
         container.insertBefore(card, anchor || null);
         return card;
     }
@@ -1936,11 +2105,11 @@
             domainEl.textContent = String(domainPurchaseState.domain || getTargetDomainTrimmed());
         }
         if (stageEl) {
-            stageEl.textContent = String(domainPurchaseState.stage_label || '处理中');
+            stageEl.textContent = String(domainPurchaseState.stage_label || <?= \json_encode((string)__('处理中'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         }
         if (orderEl) {
             var orderId = parseInt(String(domainPurchaseState.order_id || 0), 10) || parseInt(String(domainPurchaseState.purchase_order_id || 0), 10) || 0;
-            orderEl.textContent = orderId > 0 ? String(orderId) : '待分配';
+            orderEl.textContent = orderId > 0 ? String(orderId) : <?= \json_encode((string)__('待分配'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
         if (buttonEl) {
             buttonEl.disabled = ['queued', 'running'].indexOf(String(domainPurchaseState.status || 'idle')) !== -1;
@@ -2330,7 +2499,9 @@
         bindPlanPreviewFullscreenClick();
         bindTaskPlanPreviewFullscreenClick();
         bindPlanModalViewSwitchers();
-        bindPlanPrimaryPaneSwitchers();
+        bindBlockOperationModalSubmit();
+        bindBlockOperationModalRouter();
+        bindReorderModalSubmit();
         bindTaskPlanModeSwitchers();
         setPlanViewMode('pb-ai-plan-preview-content');
         // 绑定「查看已确认方案」按钮。
@@ -3169,7 +3340,7 @@
                     ? <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
                     : <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
         }
-        tab.textContent = suffix !== '' ? (baseLabel + ' 鐠?' + suffix) : baseLabel;
+        tab.textContent = suffix !== '' ? (baseLabel + ' / ' + suffix) : baseLabel;
         tab.classList.toggle('text-success', status === 'done');
         tab.classList.toggle('text-warning', status === 'running' || status === 'ready');
     }
@@ -3290,12 +3461,12 @@
         }
         var region = String(payload.region || '');
         var componentCode = String(payload.component || '');
-        var regionLabelMap = {
-            header: '页头',
-            content: '内容区',
-            footer: '页脚'
-        };
-        var regionLabel = regionLabelMap[region] || '区块';
+        var regionLabelMap = <?= \json_encode([
+            'header'  => (string)__('页头'),
+            'content' => (string)__('内容区'),
+            'footer'  => (string)__('页脚'),
+        ], \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
+        var regionLabel = regionLabelMap[region] || <?= \json_encode((string)__('区块'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         var shortCode = componentCode;
         if (shortCode.indexOf('/') >= 0) {
             shortCode = shortCode.split('/').pop() || shortCode;
@@ -3617,7 +3788,7 @@
         }
 
         if (titleEl) {
-            titleEl.textContent = String(title || '区块生成详情');
+            titleEl.textContent = String(title || <?= \json_encode((string)__('区块生成详情'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         }
         if (contextEl) {
             contextEl.textContent = String(contextText || '');
@@ -3780,7 +3951,7 @@
         refineComponentState.pageType = pageType;
         refineComponentState.componentCode = componentCode;
         refineComponentState.componentLabel = buildComponentLabel(payload);
-        contextEl.textContent = (normalizePageTypeLabel(pageType) || pageType) + ' 鐠?' + (refineComponentState.componentLabel || messages.refineContextFallback);
+        contextEl.textContent = (normalizePageTypeLabel(pageType) || pageType) + ' / ' + (refineComponentState.componentLabel || messages.refineContextFallback);
         instructionEl.value = '';
         var modalInstance = resolveBootstrapModalInstance(modalEl);
         if (!modalInstance || typeof modalInstance.show !== 'function') {
@@ -3819,7 +3990,7 @@
         blockEditorState.blockLabel = buildComponentLabel(payload);
         blockEditorState.blockConfig = cloneJson(block.config || {});
         blockEditorState.fieldSchema = cloneJson(block.field_schema || {});
-        contextEl.textContent = (normalizePageTypeLabel(pageType) || pageType) + ' 鐠?' + blockEditorState.blockLabel;
+        contextEl.textContent = (normalizePageTypeLabel(pageType) || pageType) + ' / ' + blockEditorState.blockLabel;
         renderBlockEditorFields(blockEditorState.fieldSchema, blockEditorState.blockConfig);
 
         var modalInstance = resolveBootstrapModalInstance(modalEl);
@@ -4276,6 +4447,8 @@
             }).catch(function () { toast('error', messages.networkError); });
         });
     });
+    hydrateInitialWorkspaceStateOnce();
+    promptGenerateTaskPlanOnStageEnter();
 
     var extraToggle = document.getElementById('pb-guided-toggle-extra-types');
     var extraPanel = document.getElementById('pb-guided-extra-types-panel');
@@ -4586,74 +4759,74 @@
             return '';
         }
         var normalized = text.toLowerCase().replace(/[\s-]+/g, '_');
-        var known = {
-            theme: '主题',
-            shared: '主题',
-            global: '主题',
-            shared_theme: '主题',
-            home_page: '首页',
-            about_page: '关于页',
-            contact_page: '联系页',
-            privacy_policy: '隐私政策',
-            terms_of_service: '服务条款',
-            refund_policy: '退款政策',
-            shipping_policy: '配送政策',
-            cookie_policy: 'Cookie 政策',
-            blog_post: '博客文章',
-            blog_category: '博客分类',
-            blog_list: '博客列表',
-            custom_page: '自定义页面',
-            hero: '首屏',
-            intro: '介绍区',
-            features: '功能区',
-            feature: '功能区',
-            benefit: '价值点',
-            benefits: '价值点',
-            testimonial: '用户评价',
-            testimonials: '用户评价',
-            faq: '常见问题',
-            cta: '行动引导',
-            contact: '联系方式',
-            partner: '合作伙伴',
-            partners: '合作伙伴',
-            header: '页头',
-            footer: '页脚',
-            title: '标题',
-            subtitle: '副标题',
-            description: '描述',
-            content: '内容',
-            button_text: '按钮文案',
-            button_label: '按钮文案',
-            button_link: '按钮链接',
-            image: '图片',
-            images: '图片',
-            icon: '图标',
-            background: '背景',
-            background_direction: '背景方向',
-            core_copy: '核心文案',
-            typography: '排版',
-            style_tone: '风格语气',
-            visual_style: '视觉风格',
-            color_palette: '配色',
-            theme_palette: '主题配色',
-            primary: '主色',
-            secondary: '辅色',
-            accent: '强调色',
-            surface: '表面色',
-            text: '文本色',
-            implementation_note: '实现说明',
-            reason: '说明原因',
-            planning_reason: '规划原因',
-            page_goal: '页面目标',
-            block_goal: '区块目标',
-            content_fill_rule: '内容填充规则',
-            stage3_directive: '第三阶段指令',
-            media_assets: '媒体素材',
-            task: '任务',
-            task_key: '任务键',
-            field: '字段',
-            fields: '字段'
-        };
+        var known = <?= \json_encode([
+            'theme'                => (string)__('主题'),
+            'shared'               => (string)__('主题'),
+            'global'               => (string)__('主题'),
+            'shared_theme'         => (string)__('主题'),
+            'home_page'            => (string)__('首页'),
+            'about_page'           => (string)__('关于页'),
+            'contact_page'         => (string)__('联系页'),
+            'privacy_policy'       => (string)__('隐私政策'),
+            'terms_of_service'     => (string)__('服务条款'),
+            'refund_policy'        => (string)__('退款政策'),
+            'shipping_policy'      => (string)__('配送政策'),
+            'cookie_policy'        => (string)__('Cookie 政策'),
+            'blog_post'            => (string)__('博客文章'),
+            'blog_category'        => (string)__('博客分类'),
+            'blog_list'            => (string)__('博客列表'),
+            'custom_page'          => (string)__('自定义页面'),
+            'hero'                 => (string)__('首屏'),
+            'intro'                => (string)__('介绍区'),
+            'features'             => (string)__('功能区'),
+            'feature'              => (string)__('功能区'),
+            'benefit'              => (string)__('价值点'),
+            'benefits'             => (string)__('价值点'),
+            'testimonial'          => (string)__('用户评价'),
+            'testimonials'         => (string)__('用户评价'),
+            'faq'                  => (string)__('常见问题'),
+            'cta'                  => (string)__('行动引导'),
+            'contact'              => (string)__('联系方式'),
+            'partner'              => (string)__('合作伙伴'),
+            'partners'             => (string)__('合作伙伴'),
+            'header'               => (string)__('页头'),
+            'footer'               => (string)__('页脚'),
+            'title'                => (string)__('标题'),
+            'subtitle'             => (string)__('副标题'),
+            'description'          => (string)__('描述'),
+            'content'              => (string)__('内容'),
+            'button_text'          => (string)__('按钮文案'),
+            'button_label'         => (string)__('按钮文案'),
+            'button_link'          => (string)__('按钮链接'),
+            'image'                => (string)__('图片'),
+            'images'               => (string)__('图片'),
+            'icon'                 => (string)__('图标'),
+            'background'           => (string)__('背景'),
+            'background_direction' => (string)__('背景方向'),
+            'core_copy'            => (string)__('核心文案'),
+            'typography'           => (string)__('排版'),
+            'style_tone'           => (string)__('风格语气'),
+            'visual_style'         => (string)__('视觉风格'),
+            'color_palette'        => (string)__('配色'),
+            'theme_palette'        => (string)__('主题配色'),
+            'primary'              => (string)__('主色'),
+            'secondary'            => (string)__('辅色'),
+            'accent'               => (string)__('强调色'),
+            'surface'              => (string)__('表面色'),
+            'text'                 => (string)__('文本色'),
+            'implementation_note'  => (string)__('实现说明'),
+            'reason'               => (string)__('说明原因'),
+            'planning_reason'      => (string)__('规划原因'),
+            'page_goal'            => (string)__('页面目标'),
+            'block_goal'           => (string)__('区块目标'),
+            'content_fill_rule'    => (string)__('内容填充规则'),
+            'stage3_directive'     => (string)__('第三阶段指令'),
+            'media_assets'         => (string)__('媒体素材'),
+            'task'                 => (string)__('任务'),
+            'task_key'             => (string)__('任务键'),
+            'field'                => (string)__('字段'),
+            'fields'               => (string)__('字段'),
+        ], \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         if (Object.prototype.hasOwnProperty.call(known, normalized)) {
             return known[normalized];
         }
@@ -4677,11 +4850,11 @@
             return false;
         }
         return [
-            '请填写',
-            '填写说明',
-            '写作提示',
-            '不要描述',
-            '仅说明方向',
+            '请填写', // i18n: matcher-source
+            '填写说明', // i18n: matcher-source
+            '写作提示', // i18n: matcher-source
+            '不要描述', // i18n: matcher-source
+            '仅说明方向', // i18n: matcher-source
             'block direction',
             'direction only',
             'first-screen promise',
@@ -4699,44 +4872,48 @@
         if (label) {
             return label;
         }
-        return String(pageTypeLabelMap[pageType] || humanizePreviewKey(pageType) || pageType || '页面');
+        return String(pageTypeLabelMap[pageType] || humanizePreviewKey(pageType) || pageType || <?= \json_encode((string)__('页面'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
     }
 
     function fallbackBlockLabel(blockKey) {
         var key = String(blockKey || '').trim().toLowerCase();
-        var known = {
-            hero: '首屏',
-            intro: '介绍区',
-            features: '功能区',
-            benefit: '价值点',
-            benefits: '价值点',
-            testimonial: '用户评价',
-            testimonials: '用户评价',
-            faq: '常见问题',
-            cta: '行动引导',
-            contact: '联系方式',
-            partner: '合作伙伴',
-            about_intro: '关于介绍',
-            why_choose_us: '为什么选择我们'
-        };
-        return String(known[key] || humanizePreviewKey(key) || '区块');
+        var known = <?= \json_encode([
+            'hero'          => (string)__('首屏'),
+            'intro'         => (string)__('介绍区'),
+            'features'      => (string)__('功能区'),
+            'benefit'       => (string)__('价值点'),
+            'benefits'      => (string)__('价值点'),
+            'testimonial'   => (string)__('用户评价'),
+            'testimonials'  => (string)__('用户评价'),
+            'faq'           => (string)__('常见问题'),
+            'cta'           => (string)__('行动引导'),
+            'contact'       => (string)__('联系方式'),
+            'partner'       => (string)__('合作伙伴'),
+            'about_intro'   => (string)__('关于介绍'),
+            'why_choose_us' => (string)__('为什么选择我们'),
+        ], \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
+        return String(known[key] || humanizePreviewKey(key) || <?= \json_encode((string)__('区块'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
     }
 
     function fallbackPlanPageGoal(pageType, pageLabel) {
         var label = String(pageLabel || fallbackPageLabel(pageType, '')).trim();
-        return label + '页面目标：明确本页核心价值，帮助用户快速理解并继续浏览。';
+        return (<?= \json_encode((string)__('%{label}页面目标：明确本页核心价值，帮助用户快速理解并继续浏览。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{label}', label);
     }
 
     function fallbackPlanBlockGoal(pageType, pageLabel, blockKey) {
-        return '在“' + String(pageLabel || fallbackPageLabel(pageType, '')) + '”页面中，明确“' + fallbackBlockLabel(blockKey) + '”区块承担的信息目标与行动目标（如 CTA）。';
+        var pageName = String(pageLabel || fallbackPageLabel(pageType, ''));
+        var blockName = fallbackBlockLabel(blockKey);
+        return (<?= \json_encode((string)__('在“%{page}”页面中，明确“%{block}”区块承担的信息目标与行动目标（如 CTA）。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{page}', pageName).replace('%{block}', blockName);
     }
 
     function fallbackPlanBlockContent(pageType, pageLabel, blockKey) {
-        return '为“' + String(pageLabel || fallbackPageLabel(pageType, '')) + '”页面的“' + fallbackBlockLabel(blockKey) + '”区块生成可直接展示的文案与结构。';
+        var pageName = String(pageLabel || fallbackPageLabel(pageType, ''));
+        var blockName = fallbackBlockLabel(blockKey);
+        return (<?= \json_encode((string)__('为“%{page}”页面的“%{block}”区块生成可直接展示的文案与结构。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{page}', pageName).replace('%{block}', blockName);
     }
 
     function fallbackFieldReason(field) {
-        var label = humanizePreviewKey(field) || '字段';
+        var label = humanizePreviewKey(field) || <?= \json_encode((string)__('字段'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         return '“' + label + '”用于说明该项在当前区块中的必要性与业务意图。';
     }
 
@@ -4749,18 +4926,18 @@
 
     function fallbackExecutionValue(key, pageLabel, blockKey) {
         var blockLabel = fallbackBlockLabel(blockKey);
-        var pageText = String(pageLabel || '页面').trim();
+        var pageText = String(pageLabel || <?= \json_encode((string)__('页面'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).trim();
         if (key === 'core_copy') {
-            return '围绕“' + pageText + '”中的“' + blockLabel + '”输出一句核心价值表达，并补充对应 CTA。';
+            return (<?= \json_encode((string)__('围绕“%{page}”中的“%{block}”输出一句核心价值表达，并补充对应 CTA。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{page}', pageText).replace('%{block}', blockLabel);
         }
         if (key === 'typography') {
-            return '建议使用易读的标题层级与正文节奏，突出信息主次。';
+            return <?= \json_encode((string)__('建议使用易读的标题层级与正文节奏，突出信息主次。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
         if (key === 'style_tone') {
-            return '文案语气保持一致，匹配品牌定位和目标用户。';
+            return <?= \json_encode((string)__('文案语气保持一致，匹配品牌定位和目标用户。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
         if (key === 'background_direction') {
-            return '背景风格应服务内容可读性，避免喧宾夺主。';
+            return <?= \json_encode((string)__('背景风格应服务内容可读性，避免喧宾夺主。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         }
         return '';
     }
@@ -5244,6 +5421,34 @@
         }).join('') + '</ul></div>';
     }
 
+    function extractHexColorsFromText(text) {
+        var source = String(text || '');
+        if (!source) {
+            return [];
+        }
+        var matches = source.match(/#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})\b/g) || [];
+        var uniq = [];
+        matches.forEach(function (item) {
+            var key = String(item || '').toLowerCase();
+            if (key && uniq.indexOf(key) === -1) {
+                uniq.push(key);
+            }
+        });
+        return uniq;
+    }
+
+    function renderThemeColorSwatches(text) {
+        var colors = extractHexColorsFromText(text);
+        if (colors.length === 0) {
+            return '';
+        }
+        var swatches = colors.slice(0, 6).map(function (color) {
+            return '<span class="d-inline-block align-middle ms-1" title="' + escapeHtml(color) + '" aria-label="' + escapeHtml(color) + '"'
+                + ' style="width:12px;height:12px;border-radius:2px;border:1px solid #d1d5db;background:' + escapeHtml(color) + ';"></span>';
+        }).join('');
+        return '<span class="ms-1">' + swatches + '</span>';
+    }
+
     function renderThemeColorSchemeSection(value) {
         var colorScheme = omitPreviewMetaKeys(value);
         if (colorScheme && typeof colorScheme === 'object' && !Array.isArray(colorScheme)) {
@@ -5253,8 +5458,9 @@
                 if (!text) {
                     return '';
                 }
+                var swatches = renderThemeColorSwatches(text);
                 return '<li class="small"><span class="text-muted">' + escapeHtml(humanizePreviewKey(key) || String(key)) + '</span>: '
-                    + '<code>' + escapeHtml(text) + '</code></li>';
+                    + '<code>' + escapeHtml(text) + '</code>' + swatches + '</li>';
             }).filter(Boolean).join('');
             if (rows) {
                 return '<div class="mt-2"><div class="fw-semibold small">' + escapeHtml(previewLabels.colorSystem || previewLabels.palette) + '</div><ul class="mb-0 ps-3">' + rows + '</ul></div>';
@@ -5405,30 +5611,22 @@
             'page-label': payload.pageLabel || '',
             'target-scope': payload.targetScope || ''
         };
+        var normalizedScope = String(scopeKind || '').trim().toLowerCase();
+        var moveBtnHtml = normalizedScope === 'block'
+            ? buildPreviewActionButton('move', previewLabels.moveAction, 'btn-outline-info', attrs)
+            : '';
         return ''
             + '<div class="pb-ai-plan-preview-actions">'
             + buildPreviewActionButton('refine', previewLabels.refineAction, 'btn-outline-primary', attrs)
             + buildPreviewActionButton('rebuild', previewLabels.rebuildAction, 'btn-outline-warning', attrs)
             + buildPreviewActionButton('delete', previewLabels.deleteAction, 'btn-outline-danger', attrs)
             + buildPreviewActionButton('add-block', previewLabels.addBlockAction, 'btn-outline-success', attrs)
+            + moveBtnHtml
             + '</div>';
     }
 
     function buildPreviewStageToolbar(stage) {
-        return ''
-            + '<div class="pb-ai-plan-preview-stage-toolbar mb-3">'
-            + '<div class="small text-muted">' + escapeHtml(previewLabels.stageToolbarHint) + '</div>'
-            + '<div class="d-flex flex-wrap gap-2">'
-            + buildPreviewActionButton('refine-stage', previewLabels.refineStage, 'btn-outline-primary', {
-                'pb-preview-stage': stage,
-                'pb-scope-kind': 'stage'
-            })
-            + buildPreviewActionButton('rebuild-stage', previewLabels.rebuildStage, 'btn-outline-danger', {
-                'pb-preview-stage': stage,
-                'pb-scope-kind': 'stage'
-            })
-            + '</div>'
-            + '</div>';
+        return '';
     }
 
     function buildPreviewTabId(stage, rawKey) {
@@ -5444,7 +5642,7 @@
     function resolvePreviewTabPageLabel(pageType, rawLabel) {
         var normalized = String(pageType || '').trim().toLowerCase();
         if (normalized === 'theme' || normalized === 'shared' || normalized === 'global' || normalized === 'shared_theme') {
-            return String(previewLabels.themeTab || '主题');
+            return String(previewLabels.themeTab || <?= \json_encode((string)__('主题'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         }
         return fallbackPageLabel(pageType, rawLabel);
     }
@@ -5476,7 +5674,7 @@
         var buttonsHtml = normalizedTabs.map(function (tab, idx) {
             var rawKey = String(Object.prototype.hasOwnProperty.call(tab, 'key') ? tab.key : ('tab_' + (idx + 1))).trim() || ('tab_' + (idx + 1));
             var tabId = buildPreviewTabId(normalizedStage, rawKey);
-            var label = sanitizePreviewText(tab.label, humanizePreviewKey(rawKey) || ('閸掑棛绮?' + (idx + 1)));
+            var label = sanitizePreviewText(tab.label, humanizePreviewKey(rawKey) || ((<?= \json_encode((string)__('标签 %{index}'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{index}', String(idx + 1))));
             var active = rawKey === activeKey;
             return ''
                 + '<button type="button" class="btn btn-sm ' + escapeHtml(active ? 'btn-primary active' : 'btn-outline-secondary') + ' pb-ai-preview-tab-btn"'
@@ -5754,7 +5952,7 @@
         }
         var rawTitle = String(task.label || task.task_key || ('task_' + (idx + 1)));
         var safePageLabel = resolvePreviewTabPageLabel(pageType || 'shared', '');
-        var title = escapeHtml(sanitizePreviewText(rawTitle, humanizePreviewKey(rawTitle) || ('娴犺濮?' + (idx + 1))));
+        var title = escapeHtml(sanitizePreviewText(rawTitle, humanizePreviewKey(rawTitle) || ((<?= \json_encode((string)__('任务 %{index}'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{index}', String(idx + 1)))));
         var rawTaskKey = String(task.task_key || '');
         var taskKey = escapeHtml(rawTaskKey);
         var groupKey = escapeHtml(String(task.group_key || pageType || 'shared'));
@@ -5762,12 +5960,12 @@
         var taskScript = (task.task_script && typeof task.task_script === 'object') ? task.task_script : {};
         var implementationContract = (task.implementation_contract && typeof task.implementation_contract === 'object') ? task.implementation_contract : {};
         var blockTask = (task.block_task && typeof task.block_task === 'object') ? task.block_task : {};
-        var pageGoal = escapeHtml(sanitizePreviewText(planContext.page_goal || '', safePageLabel + ' 页面目标：明确本页价值与转化意图。')).replace(/\n/g, '<br>');
-        var blockGoal = escapeHtml(sanitizePreviewText(planContext.block_goal || '', '区块目标：说明该区块承担的信息与行动目标。')).replace(/\n/g, '<br>');
+        var pageGoal = escapeHtml(sanitizePreviewText(planContext.page_goal || '', (<?= \json_encode((string)__('%{label} 页面目标：明确本页价值与转化意图。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{label}', safePageLabel))).replace(/\n/g, '<br>');
+        var blockGoal = escapeHtml(sanitizePreviewText(planContext.block_goal || '', <?= \json_encode((string)__('区块目标：说明该区块承担的信息与行动目标。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)).replace(/\n/g, '<br>');
         var scene = escapeHtml(sanitizePreviewText(taskScript.scene || '', rawTaskKey || safePageLabel)).replace(/\n/g, '<br>');
-        var storyGoal = escapeHtml(sanitizePreviewText(taskScript.story_goal || '', '叙事目标：让用户理解品牌价值并愿意继续操作。')).replace(/\n/g, '<br>');
-        var fillRule = escapeHtml(sanitizePreviewText(taskScript.content_fill_rule || '', '内容填充规则：保证文案完整、准确、可执行。')).replace(/\n/g, '<br>');
-        var stage3Directive = escapeHtml(sanitizePreviewText(taskScript.stage3_directive || '', '第三阶段执行指令：按任务拆分逐步落地，确保可验收。')).replace(/\n/g, '<br>');
+        var storyGoal = escapeHtml(sanitizePreviewText(taskScript.story_goal || '', <?= \json_encode((string)__('叙事目标：让用户理解品牌价值并愿意继续操作。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)).replace(/\n/g, '<br>');
+        var fillRule = escapeHtml(sanitizePreviewText(taskScript.content_fill_rule || '', <?= \json_encode((string)__('内容填充规则：保证文案完整、准确、可执行。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)).replace(/\n/g, '<br>');
+        var stage3Directive = escapeHtml(sanitizePreviewText(taskScript.stage3_directive || '', <?= \json_encode((string)__('第三阶段执行指令：按任务拆分逐步落地，确保可验收。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)).replace(/\n/g, '<br>');
         var acceptance = normalizeStructuredItems(implementationContract.acceptance || []);
         var fieldRequirements = Array.isArray(taskScript.field_content_requirements) ? taskScript.field_content_requirements : [];
         var fieldTable = renderFieldPlanTable(fieldRequirements, {
@@ -6344,9 +6542,9 @@
 
     function getPlanStructuredPreviewEmptyText() {
         if (isPlanGenerationRunningNow()) {
-            return String(messages.planStructuredPreviewEmptyRunning || '方案正在生成中');
+            return String(messages.planStructuredPreviewEmptyRunning || <?= \json_encode((string)__('方案正在生成中'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         }
-        return String(messages.planStructuredPreviewEmpty || '方案等待确认');
+        return String(messages.planStructuredPreviewEmpty || <?= \json_encode((string)__('方案等待确认'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
     }
 
     function renderPlanPreviewEmptyStateHtml() {
@@ -6506,21 +6704,21 @@
     function getPreviewActionLabel(action) {
         var normalized = String(action || '').trim();
         if (normalized === 'rebuild-stage') {
-            return String(previewLabels.rebuildStage || previewLabels.rebuildAction || '重建阶段');
+            return String(previewLabels.rebuildStage || previewLabels.rebuildAction || <?= \json_encode((string)__('重建阶段'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         }
         if (normalized === 'refine-stage') {
-            return String(previewLabels.refineStage || previewLabels.refineAction || '微调阶段');
+            return String(previewLabels.refineStage || previewLabels.refineAction || <?= \json_encode((string)__('微调阶段'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         }
         if (normalized === 'rebuild') {
-            return String(previewLabels.rebuildAction || '重建');
+            return String(previewLabels.rebuildAction || <?= \json_encode((string)__('重建'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         }
         if (normalized === 'delete') {
-            return String(previewLabels.deleteAction || '删除');
+            return String(previewLabels.deleteAction || <?= \json_encode((string)__('删除'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         }
         if (normalized === 'add-block') {
-            return String(previewLabels.addBlockAction || '新增区块');
+            return String(previewLabels.addBlockAction || <?= \json_encode((string)__('新增区块'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         }
-        return String(previewLabels.refineAction || '微调');
+        return String(previewLabels.refineAction || <?= \json_encode((string)__('微调'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
     }
 
     function getPreviewActionContextFingerprint(context) {
@@ -6598,22 +6796,24 @@
     }
 
     function buildPreviewActionPrompt(stage, action, scopeKind, pageLabel, blockLabel) {
-        var pageText = String(pageLabel || '页面').trim();
-        var blockText = String(blockLabel || '区块').trim();
-        var stageText = stage === 'task-plan' ? '第二阶段任务方案' : '第一阶段方案';
+        var pageText = String(pageLabel || <?= \json_encode((string)__('页面'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).trim();
+        var blockText = String(blockLabel || <?= \json_encode((string)__('区块'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).trim();
+        var stageText = stage === 'task-plan'
+            ? <?= \json_encode((string)__('第二阶段任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>
+            : <?= \json_encode((string)__('第一阶段方案'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         var scope = String(scopeKind || 'block').trim();
         var actionText = getPreviewActionLabel(action);
 
         if (scope === 'stage') {
-            return '请' + actionText + '“' + stageText + '”，并保持页面结构完整、逻辑一致。';
+            return (<?= \json_encode((string)__('请%{action}“%{stage}”，并保持页面结构完整、逻辑一致。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{action}', actionText).replace('%{stage}', stageText);
         }
         if (scope === 'page') {
-            return '请在“' + pageText + '”范围内执行“' + actionText + '”，并确保该页与站点整体风格一致。';
+            return (<?= \json_encode((string)__('请在“%{page}”范围内执行“%{action}”，并确保该页与站点整体风格一致。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{page}', pageText).replace('%{action}', actionText);
         }
-        return '请在“' + pageText + '”的“' + blockText + '”区块执行“' + actionText + '”，输出可直接发布的内容。';
+        return (<?= \json_encode((string)__('请在“%{page}”的“%{block}”区块执行“%{action}”，输出可直接发布的内容。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{page}', pageText).replace('%{block}', blockText).replace('%{action}', actionText);
     }
 
-    function buildPreviewActionContext(stage, action, scopeKind, pageLabel, blockLabel, targetScope, pageType, blockKey) {
+    function buildPreviewActionContext(stage, action, scopeKind, pageLabel, blockLabel, targetScope, pageType, blockKey, taskKey) {
         var normalizedStage = String(stage || 'plan').trim();
         var normalizedScopeKind = String(scopeKind || 'block').trim();
         var pageText = String(pageLabel || '').trim();
@@ -6622,11 +6822,13 @@
         var subject = '';
 
         if (normalizedScopeKind === 'stage') {
-            subject = normalizedStage === 'task-plan' ? '第二阶段任务方案' : '第一阶段方案';
+            subject = normalizedStage === 'task-plan'
+                ? <?= \json_encode((string)__('第二阶段任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>
+                : <?= \json_encode((string)__('第一阶段方案'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
         } else if (normalizedScopeKind === 'page') {
-            subject = '页面“' + (pageText || '未命名页面') + '”';
+            subject = (<?= \json_encode((string)__('页面“%{page}”'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{page}', pageText || <?= \json_encode((string)__('未命名页面'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         } else {
-            subject = '页面“' + (pageText || '未命名页面') + '”的区块“' + (blockText || '未命名区块') + '”';
+            subject = (<?= \json_encode((string)__('页面“%{page}”的区块“%{block}”'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{page}', pageText || <?= \json_encode((string)__('未命名页面'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{block}', blockText || <?= \json_encode((string)__('未命名区块'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         }
 
         return {
@@ -6636,10 +6838,11 @@
             targetScope: String(targetScope || '').trim(),
             pageType: String(pageType || '').trim(),
             blockKey: String(blockKey || '').trim(),
+            taskKey: String(taskKey || '').trim(),
             pageLabel: pageText,
             blockLabel: blockText,
             promptHint: buildPreviewActionPrompt(normalizedStage, action, normalizedScopeKind, pageText, blockText),
-            summary: '准备执行“' + actionLabel + '”，作用范围：' + subject + '。'
+            summary: (<?= \json_encode((string)__('准备执行“%{action}”，作用范围：%{subject}。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>).replace('%{action}', actionLabel).replace('%{subject}', subject)
         };
     }
 
@@ -6761,6 +6964,9 @@
         if (!currentTaskPlanModeActionContext && !hasPendingPreviewActionDomState('task-plan')) {
             return true;
         }
+        if (currentTaskPlanModeActionContext && String(currentTaskPlanModeActionContext.action || '').trim() === 'delete') {
+            return true;
+        }
         var promptInput = document.getElementById('pb-ai-task-plan-mode-prompt');
         var promptText = String(promptInput ? promptInput.value : '').trim();
         if (promptText !== '') {
@@ -6784,13 +6990,12 @@
 
     function showPlanPreviewActionFlow(mode, actionContext) {
         bindPlanModalViewSwitchers();
-        bindPlanPrimaryPaneSwitchers();
         bindPlanModeSwitchers();
         setPlanMode(mode);
         preparePlanPreviewActionContext(actionContext);
         updatePlanModalContent(String((currentPlanPayload && currentPlanPayload.markdown) || ''));
         setPlanViewMode('pb-ai-plan-preview-content');
-        setPlanPrimaryPane('controls');
+        setPlanPrimaryPane('preview');
         scrollIntoPlanInlinePanel();
         var promptInput = document.getElementById('pb-ai-plan-mode-prompt');
         if (promptInput && typeof promptInput.focus === 'function') {
@@ -6828,9 +7033,10 @@
             var targetScope = String(button.getAttribute('data-target-scope') || '').trim();
             var pageType = String(button.getAttribute('data-page-type') || '').trim();
             var blockKey = String(button.getAttribute('data-block-key') || '').trim();
+            var taskKey = String(button.getAttribute('data-task-key') || '').trim();
             var pageLabel = String(button.getAttribute('data-page-label') || button.getAttribute('data-page-type') || '').trim();
             var blockLabel = String(button.getAttribute('data-block-label') || button.getAttribute('data-block-key') || button.getAttribute('data-task-key') || '').trim();
-            var actionContext = buildPreviewActionContext(stage, action, scopeKind, pageLabel, blockLabel, targetScope, pageType, blockKey);
+            var actionContext = buildPreviewActionContext(stage, action, scopeKind, pageLabel, blockLabel, targetScope, pageType, blockKey, taskKey);
             window.__pbPreviewActionDebug = {
                 ok: true,
                 stage: stage,
@@ -6841,7 +7047,50 @@
                 blockLabel: blockLabel,
                 summary: actionContext && actionContext.summary ? String(actionContext.summary) : ''
             };
+            if (scopeKind === 'stage') {
+                window.__pbPreviewActionDebug.mode = 'stage-panel-removed';
+                toast('info', <?= \json_encode((string)__('阶段级微调/重建面板已移除，请在具体页面区块中执行新增、微调或删除。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+                return true;
+            }
+            // 老板 2026-04-23 口径：块级"跳到某位置"走独立的轻量弹窗，复用 persist*Sort。
+            if (action === 'move' && scopeKind === 'block') {
+                var moveKey = taskKey || blockKey;
+                if (moveKey === '') {
+                    window.__pbPreviewActionDebug.mode = 'move-missing-key';
+                    toast('warning', previewLabels.reorderTargetLost || messages.networkError);
+                    return true;
+                }
+                if (typeof window.__pbOpenReorderModal !== 'function') {
+                    window.__pbPreviewActionDebug.mode = 'reorder-modal-unavailable';
+                    toast('warning', previewLabels.reorderTargetLost || messages.networkError);
+                    return true;
+                }
+                var opened = window.__pbOpenReorderModal({
+                    stage: stage,
+                    pageType: pageType,
+                    blockKey: moveKey,
+                    taskKey: taskKey,
+                    blockTitle: blockLabel || moveKey
+                });
+                window.__pbPreviewActionDebug.mode = opened ? 'reorder-modal' : 'reorder-modal-rejected';
+                return true;
+            }
             if (stage === 'task-plan') {
+                // 老板 2026-04-23 口径：第二阶段块级 refine/rebuild/delete/add-block 也走统一弹窗。
+                if (scopeKind === 'block' && ['refine', 'rebuild', 'delete', 'add-block'].indexOf(action) !== -1) {
+                    if (typeof window.__pbOpenBlockOperationModal === 'function') {
+                        window.__pbOpenBlockOperationModal({
+                            stage: 'stage2',
+                            action: action === 'add-block' ? 'create' : action,
+                            pageKey: pageType,
+                            blockKey: taskKey || blockKey,
+                            blockTitle: blockLabel,
+                            contextLabel: actionContext && actionContext.summary ? String(actionContext.summary) : ''
+                        });
+                        window.__pbPreviewActionDebug.mode = 'block-mutation-stage2';
+                        return true;
+                    }
+                }
                 var taskMode = (action === 'rebuild' || action === 'rebuild-stage') ? 'rebuild_task_plan' : 'refine_task_plan';
                 if (action === 'refine-stage' || action === 'rebuild-stage') {
                     actionContext.targetScope = '';
@@ -6876,47 +7125,67 @@
     window.PbAiWorkspacePreviewAction = handlePreviewActionClick;
 
     function handlePlanBlockMutationAction(action, scopeKind, pageType, blockKey, blockLabel, actionContext) {
+        // 老板 2026-04-23 口径：块级 refine/rebuild/create/delete 全部通过统一弹窗
+        // `pb-ai-block-op-modal` 捕获用户意图文本，这里只做「路由到弹窗」或
+        // 「已经带了 instruction 时直接调用 API」两种分支，禁止再走 window.confirm/prompt。
         var normalizedAction = String(action || '').trim();
-        if (['add-block', 'delete', 'rebuild'].indexOf(normalizedAction) === -1) {
+        if (['add-block', 'delete', 'rebuild', 'refine'].indexOf(normalizedAction) === -1) {
             return false;
         }
-        if (!String(mutatePlanBlockUrl || '').trim() || !pageType) {
+        if (!String(mutatePlanBlockUrl || '').trim() && normalizedAction !== 'refine') {
             return false;
         }
-        if ((normalizedAction === 'delete' || normalizedAction === 'rebuild') && (!blockKey || scopeKind !== 'block')) {
+        if (!pageType) {
             return false;
+        }
+        if ((normalizedAction === 'delete' || normalizedAction === 'rebuild' || normalizedAction === 'refine') && (!blockKey || scopeKind !== 'block')) {
+            return false;
+        }
+
+        var ctx = actionContext && typeof actionContext === 'object' ? actionContext : {};
+        var inlineInstruction = typeof ctx.instruction === 'string' ? String(ctx.instruction).trim() : '';
+
+        // 未携带 instruction 时先走统一弹窗，让用户填写意图；点击提交后再回到这里执行真正的 API 调用。
+        if (inlineInstruction === '' && ctx.skipModal !== true) {
+            if (typeof window.__pbOpenBlockOperationModal === 'function') {
+                window.__pbOpenBlockOperationModal({
+                    stage: 'stage1',
+                    action: normalizedAction === 'add-block' ? 'create' : normalizedAction,
+                    pageKey: pageType,
+                    blockKey: blockKey,
+                    blockTitle: blockLabel || blockKey,
+                    contextLabel: (ctx.summary || '')
+                });
+                return true;
+            }
+            return false;
+        }
+
+        if (normalizedAction === 'refine') {
+            return performStage1BlockRefine(pageType, blockKey, blockLabel, inlineInstruction, ctx);
         }
 
         var mutationAction = normalizedAction === 'add-block' ? 'create' : (normalizedAction === 'delete' ? 'delete' : 'rebuild');
-        if (mutationAction === 'delete' && typeof window.confirm === 'function') {
-            var label = blockLabel || blockKey;
-            if (!window.confirm('Delete this plan block: ' + label + '?')) {
-                return true;
-            }
-        }
-
         var blockConfig = {};
         if (mutationAction === 'create') {
-            var title = '';
-            if (typeof window.prompt === 'function') {
-                title = String(window.prompt(previewLabels.addBlockAction || 'Add block', blockLabel || '') || '').trim();
-            }
-            if (!title) {
-                title = blockLabel ? (blockLabel + ' follow-up') : 'New plan block';
-            }
+            var title = inlineInstruction || (blockLabel ? (blockLabel + ' follow-up') : <?= \json_encode((string)__('新区块'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
             blockConfig = {
                 title: title,
                 goal: title,
-                instruction: actionContext && actionContext.summary ? String(actionContext.summary) : title
+                instruction: inlineInstruction || title
             };
             if (blockKey) {
                 blockConfig.after_block_key = blockKey;
             }
         } else if (mutationAction === 'rebuild') {
+            var rebuildNote = inlineInstruction || (ctx.summary ? String(ctx.summary) : <?= \json_encode((string)__('本地块级重建请求。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
             blockConfig = {
-                mutation_note: actionContext && actionContext.summary ? String(actionContext.summary) : 'Local stage-one block rebuild requested.',
-                reason: actionContext && actionContext.summary ? String(actionContext.summary) : 'Local stage-one block rebuild requested.'
+                mutation_note: rebuildNote,
+                reason: rebuildNote,
+                instruction: inlineInstruction
             };
+        } else if (mutationAction === 'delete' && inlineInstruction !== '') {
+            blockConfig = { reason: inlineInstruction };
         }
 
         postForm(mutatePlanBlockUrl, {
@@ -6924,17 +7193,18 @@
             page_type: pageType,
             action: mutationAction,
             block_key: blockKey,
-            block_config: JSON.stringify(blockConfig)
+            block_config: JSON.stringify(blockConfig),
+            instruction: inlineInstruction
         }).then(function (data) {
             if (data && data.data && typeof data.data === 'object') {
                 hydrateWorkspaceFromState(data.data);
             }
             if (data && data.success && window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function' && window.PbAiOperationRunner.startFromResponse(data, 'plan')) {
-                toast('success', data.message ? String(data.message) : 'Stage-1 plan block operation queued.');
+                toast('success', data.message ? String(data.message) : (messages.blockOpQueued || <?= \json_encode((string)__('块级操作已入队，进度会同步到队列信息区。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>));
                 return;
             }
             if (data && data.success && data.data && typeof data.data === 'object') {
-                toast('success', data.message ? String(data.message) : 'Stage-1 plan block updated.');
+                toast('success', data.message ? String(data.message) : (messages.blockOpSuccess || <?= \json_encode((string)__('块级操作已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>));
                 return;
             }
             toast('warning', data && data.message ? String(data.message) : messages.networkError);
@@ -6944,6 +7214,118 @@
 
         return true;
     }
+
+    // 阶段一单块 refine：通过 `refinePlanPageUrl + target_scope` 实现局部微调。
+    function performStage1BlockRefine(pageType, blockKey, blockLabel, instruction, extras) {
+        if (!pageType || !blockKey) {
+            return false;
+        }
+        if (!String(refinePlanPageUrl || '').trim()) {
+            toast('warning', messages.planPageRefineUnavailable || messages.planModeUnavailable);
+            return false;
+        }
+        if (!instruction || instruction === '') {
+            toast('warning', messages.planActionPromptRequired || <?= \json_encode((string)__('请填写微调意图。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+            return false;
+        }
+        var targetScope = (extras && typeof extras.targetScope === 'string' && extras.targetScope !== '')
+            ? extras.targetScope
+            : ('pages.' + pageType + '.blocks.' + blockKey);
+        postForm(refinePlanPageUrl, {
+            public_id: publicId,
+            page_type: pageType,
+            instruction: instruction,
+            target_scope: targetScope
+        }).then(function (data) {
+            if (data && data.data && typeof data.data === 'object') {
+                hydrateWorkspaceFromState(data.data);
+            }
+            if (data && data.success) {
+                toast('success', (data && data.message) ? String(data.message) : (messages.planPageRefineDone || messages.blockOpSuccess || 'Block refined.'));
+                return;
+            }
+            toast('warning', (data && data.message) ? String(data.message) : messages.networkError);
+        }).catch(function (error) {
+            toast('error', (error && error.message) ? String(error.message) : messages.networkError);
+        });
+        return true;
+    }
+
+    // 阶段二块级任务操作：封装为统一入口，便于弹窗提交事件直接调用。
+    function performStage2BlockOperation(action, pageType, taskKey, taskLabel, instruction, extras) {
+        var normalizedAction = String(action || '').trim();
+        var mutationAction = normalizedAction === 'add-block' ? 'create'
+            : (['refine', 'rebuild', 'delete', 'create'].indexOf(normalizedAction) !== -1 ? normalizedAction : '');
+        if (!mutationAction) {
+            return false;
+        }
+        if (!String(mutateTaskPlanTaskUrl || '').trim()) {
+            toast('warning', messages.taskPlanModeUnavailable || messages.networkError);
+            return false;
+        }
+        if (mutationAction !== 'create' && !taskKey) {
+            toast('warning', messages.blockOpFailed || messages.networkError);
+            return false;
+        }
+        var normalizedPageType = String(pageType || '').trim();
+        var bucket = normalizedPageType.toLowerCase() === 'shared' ? 'shared' : 'page';
+        var payload = {
+            public_id: publicId,
+            bucket: bucket,
+            page_type: bucket === 'shared' ? '' : normalizedPageType,
+            action: mutationAction,
+            task_key: mutationAction === 'create' ? '' : taskKey,
+            instruction: instruction || '',
+            target_scope: (extras && extras.targetScope) ? String(extras.targetScope) : (taskKey || (bucket === 'shared' ? 'shared_tasks' : 'task_plan'))
+        };
+        if (mutationAction === 'create') {
+            var labelSeed = (instruction || taskLabel || taskKey || <?= \json_encode((string)__('新任务'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+            payload.task_config = JSON.stringify({
+                label: labelSeed,
+                section_code: (bucket === 'shared' ? 'shared/' : 'content/') + slugifyTaskPlanMutationFragment(labelSeed),
+                after_task_key: taskKey || ''
+            });
+        }
+        postForm(mutateTaskPlanTaskUrl, payload).then(function (data) {
+            if (data && data.data && typeof data.data === 'object') {
+                hydrateWorkspaceFromState(data.data);
+            }
+            if (data && data.success && window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function' && window.PbAiOperationRunner.startFromResponse(data, 'task_plan')) {
+                toast('success', (data && data.message) ? String(data.message) : (messages.blockOpQueued || 'Task operation queued.'));
+                return;
+            }
+            if (data && data.success && data.data && typeof data.data === 'object') {
+                toast('success', (data && data.message) ? String(data.message) : (messages.blockOpSuccess || 'Task operation completed.'));
+                return;
+            }
+            toast('warning', (data && data.message) ? String(data.message) : messages.networkError);
+        }).catch(function (error) {
+            toast('error', (error && error.message) ? String(error.message) : messages.networkError);
+        });
+        return true;
+    }
+    window.__pbPerformStage1BlockOp = function (opts) {
+        if (!opts || typeof opts !== 'object') { return false; }
+        return handlePlanBlockMutationAction(
+            String(opts.action || ''),
+            'block',
+            String(opts.pageKey || ''),
+            String(opts.blockKey || ''),
+            String(opts.blockTitle || ''),
+            { instruction: String(opts.instruction || ''), skipModal: true, summary: String(opts.contextLabel || '') }
+        );
+    };
+    window.__pbPerformStage2BlockOp = function (opts) {
+        if (!opts || typeof opts !== 'object') { return false; }
+        return performStage2BlockOperation(
+            String(opts.action || ''),
+            String(opts.pageKey || ''),
+            String(opts.blockKey || ''),
+            String(opts.blockTitle || ''),
+            String(opts.instruction || ''),
+            { targetScope: String(opts.targetScope || '') }
+        );
+    };
 
     function bindPreviewActionButtons(container) {
         var root = typeof container === 'string' ? document.getElementById(container) : container;
@@ -7073,48 +7455,465 @@
     }
 
     /**
-     * 阶段一主面板：切换预览区与控制区（方案模式 / 快速模式）显示。
+     * 阶段一主面板兼容层：预览区常驻，旧的 controls 面板已移除。
      */
     function setPlanPrimaryPane(which) {
-        var normalized = String(which || 'preview').trim().toLowerCase();
-        var showControls = normalized === 'controls';
-        var previewPane = document.getElementById('pb-ai-plan-primary-pane-preview');
-        var controlsPane = document.getElementById('pb-ai-plan-primary-pane-controls');
-        var previewTab = document.getElementById('pb-ai-plan-primary-tab-preview');
-        var controlsTab = document.getElementById('pb-ai-plan-primary-tab-controls');
-        if (previewPane) {
-            previewPane.classList.toggle('d-none', showControls);
-        }
-        if (controlsPane) {
-            controlsPane.classList.toggle('d-none', !showControls);
-        }
-        if (previewTab) {
-            previewTab.classList.toggle('active', !showControls);
-            previewTab.setAttribute('aria-selected', !showControls ? 'true' : 'false');
-        }
-        if (controlsTab) {
-            controlsTab.classList.toggle('active', showControls);
-            controlsTab.setAttribute('aria-selected', showControls ? 'true' : 'false');
-        }
+        void which;
     }
 
-    function bindPlanPrimaryPaneSwitchers() {
-        var previewTab = document.getElementById('pb-ai-plan-primary-tab-preview');
-        var controlsTab = document.getElementById('pb-ai-plan-primary-tab-controls');
-        if (!previewTab || !controlsTab) {
+    /**
+     * 统一块级操作弹窗 `pb-ai-block-op-modal` 控制器。
+     *
+     * 设计目标（老板 2026-04-23 口径）：
+     *  - 取代「调整与执行」面板内的块级操作散点按钮。
+     *  - 统一 `stage1|stage2` 下的 `refine/rebuild/create/delete` 四类意图入口。
+     *  - 弹窗本身只负责捕获「用户意图文本 + 目标块信息」，并通过 CustomEvent
+     *    让现有业务 JS 接管真正的 API 调用。这样可以最小化主 JS 的改动。
+     *
+     * 参数：
+     *   options = {
+     *     stage: 'stage1' | 'stage2',
+     *     action: 'create' | 'refine' | 'rebuild' | 'delete',
+     *     pageKey?: string,
+     *     blockKey?: string,
+     *     blockTitle?: string,
+     *     promptPlaceholder?: string,
+     *     destructiveText?: string,
+     *     contextLabel?: string
+     *   }
+     *
+     * 提交时派发 `pb:ai:block-op:submit` 事件，detail 中包含上下文与 promptText。
+     * 业务侧监听该事件即可发起块级 API 调用；若监听器调用 preventDefault，
+     * 弹窗保持打开（例如用户输入不合法）。
+     */
+    function openBlockOperationModal(options) {
+        var modalEl = document.getElementById('pb-ai-block-op-modal');
+        if (!modalEl) {
+            return null;
+        }
+        var config = Object.assign({
+            stage: 'stage1',
+            action: 'create',
+            pageKey: '',
+            blockKey: '',
+            blockTitle: '',
+            promptPlaceholder: '',
+            destructiveText: '',
+            contextLabel: ''
+        }, options || {});
+
+        modalEl.dataset.stage = config.stage;
+        modalEl.dataset.action = config.action;
+        modalEl.dataset.pageKey = config.pageKey || '';
+        modalEl.dataset.blockKey = config.blockKey || '';
+        modalEl.dataset.blockTitle = config.blockTitle || '';
+        modalEl.dataset.contextLabel = config.contextLabel || '';
+
+        var modalTitleEl = document.getElementById('pb-ai-block-op-modal-title');
+        var stageBadge = document.getElementById('pb-ai-block-op-stage-badge');
+        var actionBadge = document.getElementById('pb-ai-block-op-action-badge');
+        var contextLabel = document.getElementById('pb-ai-block-op-context-label');
+        var targetEl = document.getElementById('pb-ai-block-op-target');
+        var promptEl = document.getElementById('pb-ai-block-op-prompt');
+        var promptLabel = document.getElementById('pb-ai-block-op-prompt-label');
+        var promptHelp = document.getElementById('pb-ai-block-op-prompt-help');
+        var destructiveEl = document.getElementById('pb-ai-block-op-destructive-notice');
+        var destructiveText = document.getElementById('pb-ai-block-op-destructive-text');
+        var submitBtn = document.getElementById('pb-ai-block-op-submit');
+
+        var stageLabelMap = {
+            stage1: (messages.stageOneBadge || <?= \json_encode((string)__('第一阶段'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>),
+            stage2: (messages.stageTwoBadge || <?= \json_encode((string)__('第二阶段'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
+        };
+        var actionLabelMap = {
+            create: (messages.blockOpCreate || <?= \json_encode((string)__('新增块'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>),
+            refine: (messages.blockOpRefine || <?= \json_encode((string)__('微调块'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>),
+            rebuild: (messages.blockOpRebuild || <?= \json_encode((string)__('局部重建'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>),
+            delete: (messages.blockOpDelete || <?= \json_encode((string)__('删除块'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
+        };
+
+        if (stageBadge) {
+            stageBadge.textContent = stageLabelMap[config.stage] || stageLabelMap.stage1;
+        }
+        if (actionBadge) {
+            actionBadge.textContent = actionLabelMap[config.action] || actionLabelMap.create;
+        }
+        if (modalTitleEl) {
+            modalTitleEl.textContent = (actionLabelMap[config.action] || actionLabelMap.create);
+        }
+        if (contextLabel) {
+            contextLabel.textContent = config.contextLabel || '';
+        }
+        if (targetEl) {
+            var parts = [];
+            if (config.pageKey) { parts.push((messages.blockOpTargetPage || <?= \json_encode((string)__('页面'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>) + ': ' + config.pageKey); }
+            if (config.blockKey) { parts.push((messages.blockOpTargetBlock || <?= \json_encode((string)__('块'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>) + ': ' + (config.blockTitle || config.blockKey)); }
+            targetEl.textContent = parts.join('  ·  ');
+        }
+        if (promptEl) {
+            promptEl.value = '';
+            if (config.promptPlaceholder) {
+                promptEl.setAttribute('placeholder', config.promptPlaceholder);
+            }
+        }
+        if (promptLabel) {
+            if (config.action === 'delete') {
+                promptLabel.textContent = (messages.blockOpDeleteReason || <?= \json_encode((string)__('可选：说明删除原因（留空表示直接删除）'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+            } else if (config.action === 'create') {
+                promptLabel.textContent = (messages.blockOpCreatePrompt || <?= \json_encode((string)__('告诉 AI 新增什么内容、放在哪里'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+            } else {
+                promptLabel.textContent = (messages.blockOpIntentPrompt || <?= \json_encode((string)__('告诉 AI 你希望这个块怎么改'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+            }
+        }
+        if (promptHelp) {
+            promptHelp.textContent = config.action === 'delete'
+                ? (messages.blockOpDeleteHelp || <?= \json_encode((string)__('删除后该块从结构化数据中移除，Markdown 与预览会同步刷新。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
+                : (messages.blockOpCommonHelp || <?= \json_encode((string)__('提交后进入后台队列异步执行，进度会同步到预览与队列信息区。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        }
+        if (destructiveEl && destructiveText) {
+            if (config.action === 'delete') {
+                destructiveText.textContent = config.destructiveText || (messages.blockOpDeleteWarning || <?= \json_encode((string)__('删除操作不可直接撤销，建议先导出方案备份。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+                destructiveEl.classList.remove('d-none');
+            } else {
+                destructiveEl.classList.add('d-none');
+            }
+        }
+        if (submitBtn) {
+            var nextLabel = submitBtn.getAttribute('data-label-' + config.action) || submitBtn.getAttribute('data-label-default') || submitBtn.textContent;
+            submitBtn.textContent = nextLabel;
+            submitBtn.classList.toggle('btn-danger', config.action === 'delete');
+            submitBtn.classList.toggle('btn-primary', config.action !== 'delete');
+        }
+        if (window.bootstrap && window.bootstrap.Modal) {
+            window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        } else {
+            modalEl.classList.add('show');
+            modalEl.style.display = 'block';
+            modalEl.removeAttribute('aria-hidden');
+            modalEl.setAttribute('aria-modal', 'true');
+        }
+        return modalEl;
+    }
+
+    function closeBlockOperationModal() {
+        var modalEl = document.getElementById('pb-ai-block-op-modal');
+        if (!modalEl) {
             return;
         }
-        if (previewTab.dataset.pbPrimaryBound === '1') {
+        if (window.bootstrap && window.bootstrap.Modal) {
+            var instance = window.bootstrap.Modal.getInstance(modalEl);
+            if (instance) {
+                instance.hide();
+                return;
+            }
+        }
+        modalEl.classList.remove('show');
+        modalEl.style.display = 'none';
+        modalEl.setAttribute('aria-hidden', 'true');
+    }
+
+    function bindBlockOperationModalSubmit() {
+        var submitBtn = document.getElementById('pb-ai-block-op-submit');
+        if (!submitBtn || submitBtn.dataset.pbBound === '1') {
             return;
         }
-        previewTab.dataset.pbPrimaryBound = '1';
-        previewTab.addEventListener('click', function () {
-            setPlanPrimaryPane('preview');
-        });
-        controlsTab.addEventListener('click', function () {
-            setPlanPrimaryPane('controls');
+        submitBtn.dataset.pbBound = '1';
+        submitBtn.addEventListener('click', function () {
+            var modalEl = document.getElementById('pb-ai-block-op-modal');
+            var promptEl = document.getElementById('pb-ai-block-op-prompt');
+            if (!modalEl) {
+                return;
+            }
+            var detail = {
+                stage: modalEl.dataset.stage || 'stage1',
+                action: modalEl.dataset.action || 'create',
+                pageKey: modalEl.dataset.pageKey || '',
+                blockKey: modalEl.dataset.blockKey || '',
+                promptText: promptEl ? String(promptEl.value || '').trim() : ''
+            };
+            // 为业务层提供一个可取消的事件钩子。
+            var event = new CustomEvent('pb:ai:block-op:submit', {
+                detail: detail,
+                cancelable: true
+            });
+            var allowed = modalEl.dispatchEvent(event);
+            if (!allowed) {
+                // 业务层希望保持弹窗以便用户修正输入。
+                return;
+            }
+            closeBlockOperationModal();
         });
     }
+
+    window.__pbOpenBlockOperationModal = openBlockOperationModal;
+    window.__pbCloseBlockOperationModal = closeBlockOperationModal;
+
+    // 统一块级弹窗提交分发器：默认监听 `pb:ai:block-op:submit`，
+    // 把用户意图转发到对应阶段的真正 API 调用，保证弹窗骨架与业务逻辑解耦。
+    function bindBlockOperationModalRouter() {
+        var modalEl = document.getElementById('pb-ai-block-op-modal');
+        if (!modalEl || modalEl.dataset.pbRouterBound === '1') {
+            return;
+        }
+        modalEl.dataset.pbRouterBound = '1';
+        modalEl.addEventListener('pb:ai:block-op:submit', function (event) {
+            var detail = (event && event.detail) || {};
+            var stage = String(detail.stage || 'stage1').trim();
+            var action = String(detail.action || '').trim();
+            var pageKey = String(detail.pageKey || '').trim();
+            var blockKey = String(detail.blockKey || '').trim();
+            var promptText = String(detail.promptText || '').trim();
+            if (action !== 'delete' && promptText === '') {
+                // 除了 delete 以外其他操作都必须带意图文本，避免空提交造成 AI 结果漂移。
+                var promptEl = document.getElementById('pb-ai-block-op-prompt');
+                if (promptEl) {
+                    setPromptInputInvalidState(promptEl, true);
+                    if (typeof promptEl.focus === 'function') { promptEl.focus(); }
+                }
+                toast('warning', messages.planActionPromptRequired || <?= \json_encode((string)__('请填写意图文本。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+                if (typeof event.preventDefault === 'function') { event.preventDefault(); }
+                return;
+            }
+            var blockTitle = '';
+            if (modalEl && modalEl.dataset && modalEl.dataset.blockTitle) {
+                blockTitle = String(modalEl.dataset.blockTitle);
+            }
+            var ok = false;
+            if (stage === 'stage2') {
+                ok = performStage2BlockOperation(action, pageKey, blockKey, blockTitle, promptText, {});
+            } else {
+                ok = handlePlanBlockMutationAction(
+                    action === 'create' ? 'add-block' : action,
+                    'block',
+                    pageKey,
+                    blockKey,
+                    blockTitle,
+                    { instruction: promptText, skipModal: true }
+                );
+            }
+            if (!ok) {
+                toast('warning', messages.blockOpFailed || messages.networkError);
+                if (typeof event.preventDefault === 'function') { event.preventDefault(); }
+            }
+        });
+    }
+
+    // R3.2 跳到某位置：读取当前 sortable-list 的顺序，让用户输入 1-based 目标位置，
+    // 然后复用既有 persistPlanBlockSort / persistTaskPlanSort 走后端已有路由。
+    function interpolateMessageTemplate(template, params) {
+        var text = String(template || '');
+        var dict = params && typeof params === 'object' ? params : {};
+        return text.replace(/%\{(\w+)\}/g, function (match, key) {
+            if (Object.prototype.hasOwnProperty.call(dict, key)) {
+                return String(dict[key]);
+            }
+            return match;
+        });
+    }
+
+    function resolveReorderListForSortKey(sortKey) {
+        var key = String(sortKey || '').trim();
+        if (key === '') {
+            return null;
+        }
+        var lists = document.querySelectorAll('[data-pb-sort-list="1"]');
+        for (var i = 0; i < lists.length; i += 1) {
+            var list = lists[i];
+            if (!list) {
+                continue;
+            }
+            var items = getSortableItems(list);
+            for (var j = 0; j < items.length; j += 1) {
+                var itemKey = String(items[j].getAttribute('data-pb-sort-key') || '').trim();
+                if (itemKey === key) {
+                    return list;
+                }
+            }
+        }
+        return null;
+    }
+
+    function describeReorderContext(list) {
+        if (!list) {
+            return '';
+        }
+        var stage = String(list.getAttribute('data-pb-sort-stage') || 'plan').trim();
+        var bucket = String(list.getAttribute('data-pb-sort-bucket') || '').trim();
+        if (stage === 'task-plan') {
+            return bucket === 'shared'
+                ? String(previewLabels.reorderContextMetaTaskShared || '')
+                : String(previewLabels.reorderContextMetaTaskPage || '');
+        }
+        return String(previewLabels.reorderContextMetaPlan || '');
+    }
+
+    function openReorderModal(options) {
+        var modalEl = document.getElementById('pb-ai-reorder-modal');
+        if (!modalEl) {
+            return false;
+        }
+        var opts = options && typeof options === 'object' ? options : {};
+        var sortKey = String(opts.blockKey || opts.taskKey || '').trim();
+        var list = resolveReorderListForSortKey(sortKey);
+        if (!list) {
+            toast('warning', previewLabels.reorderTargetLost || messages.networkError);
+            return false;
+        }
+        var orderedKeys = collectSortableKeys(list);
+        var currentIdx = orderedKeys.indexOf(sortKey);
+        if (currentIdx < 0 || orderedKeys.length < 2) {
+            toast('warning', previewLabels.reorderTargetLost || messages.networkError);
+            return false;
+        }
+        var stage = String(list.getAttribute('data-pb-sort-stage') || 'plan').trim();
+        var bucket = String(list.getAttribute('data-pb-sort-bucket') || '').trim();
+        var pageType = String(list.getAttribute('data-pb-sort-page-type') || '').trim();
+
+        modalEl.dataset.stage = stage;
+        modalEl.dataset.bucket = bucket;
+        modalEl.dataset.pageType = pageType;
+        modalEl.dataset.sortKey = sortKey;
+        modalEl.dataset.current = String(currentIdx + 1);
+        modalEl.dataset.total = String(orderedKeys.length);
+
+        var titleEl = document.getElementById('pb-ai-reorder-context-title');
+        if (titleEl) {
+            titleEl.textContent = String(opts.blockTitle || sortKey || '-');
+        }
+        var metaEl = document.getElementById('pb-ai-reorder-context-meta');
+        if (metaEl) {
+            metaEl.textContent = describeReorderContext(list);
+        }
+        var rangeEl = document.getElementById('pb-ai-reorder-range');
+        if (rangeEl) {
+            rangeEl.textContent = interpolateMessageTemplate(previewLabels.reorderModalRange || '', {
+                current: currentIdx + 1,
+                total: orderedKeys.length
+            });
+        }
+        var input = document.getElementById('pb-ai-reorder-target-input');
+        if (input) {
+            input.value = String(currentIdx + 1);
+            input.setAttribute('min', '1');
+            input.setAttribute('max', String(orderedKeys.length));
+        }
+        var warn = document.getElementById('pb-ai-reorder-warning');
+        if (warn) {
+            warn.classList.add('d-none');
+            warn.textContent = '';
+        }
+
+        if (window.bootstrap && window.bootstrap.Modal) {
+            var instance = window.bootstrap.Modal.getOrCreateInstance(modalEl);
+            instance.show();
+        } else {
+            modalEl.classList.add('show');
+            modalEl.style.display = 'block';
+            modalEl.setAttribute('aria-hidden', 'false');
+        }
+        if (input && typeof input.focus === 'function') {
+            setTimeout(function () { input.focus(); input.select && input.select(); }, 80);
+        }
+        return true;
+    }
+
+    function closeReorderModal() {
+        var modalEl = document.getElementById('pb-ai-reorder-modal');
+        if (!modalEl) {
+            return;
+        }
+        if (window.bootstrap && window.bootstrap.Modal) {
+            var instance = window.bootstrap.Modal.getInstance(modalEl);
+            if (instance) {
+                instance.hide();
+                return;
+            }
+        }
+        modalEl.classList.remove('show');
+        modalEl.style.display = 'none';
+        modalEl.setAttribute('aria-hidden', 'true');
+    }
+
+    function bindReorderModalSubmit() {
+        var btn = document.getElementById('pb-ai-reorder-apply-btn');
+        if (!btn || btn.dataset.pbBound === '1') {
+            return;
+        }
+        btn.dataset.pbBound = '1';
+        btn.addEventListener('click', function () {
+            var modalEl = document.getElementById('pb-ai-reorder-modal');
+            if (!modalEl) {
+                return;
+            }
+            var sortKey = String(modalEl.dataset.sortKey || '').trim();
+            var stage = String(modalEl.dataset.stage || 'plan').trim();
+            var bucket = String(modalEl.dataset.bucket || '').trim();
+            var pageType = String(modalEl.dataset.pageType || '').trim();
+            var list = resolveReorderListForSortKey(sortKey);
+            var warn = document.getElementById('pb-ai-reorder-warning');
+            if (!list) {
+                if (warn) {
+                    warn.textContent = String(previewLabels.reorderTargetLost || '');
+                    warn.classList.remove('d-none');
+                }
+                return;
+            }
+            var orderedKeys = collectSortableKeys(list);
+            var currentIdx = orderedKeys.indexOf(sortKey);
+            if (currentIdx < 0 || orderedKeys.length < 2) {
+                if (warn) {
+                    warn.textContent = String(previewLabels.reorderTargetLost || '');
+                    warn.classList.remove('d-none');
+                }
+                return;
+            }
+            var input = document.getElementById('pb-ai-reorder-target-input');
+            var rawValue = input ? String(input.value || '').trim() : '';
+            var numeric = Number(rawValue);
+            if (rawValue === '' || !Number.isFinite(numeric) || numeric < 1 || Math.floor(numeric) !== numeric) {
+                if (warn) {
+                    warn.textContent = String(previewLabels.reorderInvalidTarget || '');
+                    warn.classList.remove('d-none');
+                }
+                if (input && typeof input.focus === 'function') { input.focus(); }
+                return;
+            }
+            var targetIdx = Math.max(0, Math.min(orderedKeys.length - 1, Math.floor(numeric) - 1));
+            if (targetIdx === currentIdx) {
+                if (warn) {
+                    warn.textContent = String(previewLabels.reorderSameTarget || '');
+                    warn.classList.remove('d-none');
+                }
+                return;
+            }
+            if ((targetIdx + 1) !== Math.floor(numeric)) {
+                if (warn) {
+                    warn.textContent = interpolateMessageTemplate(previewLabels.reorderClampedTarget || '', {
+                        target: targetIdx + 1
+                    });
+                    warn.classList.remove('d-none');
+                }
+            } else if (warn) {
+                warn.classList.add('d-none');
+                warn.textContent = '';
+            }
+            var nextOrder = orderedKeys.slice();
+            nextOrder.splice(currentIdx, 1);
+            nextOrder.splice(targetIdx, 0, sortKey);
+
+            previewSortState.pending = true;
+            if (stage === 'task-plan') {
+                persistTaskPlanSort(bucket || 'page', pageType, nextOrder);
+            } else {
+                persistPlanBlockSort(pageType, nextOrder);
+            }
+            toast('info', previewLabels.reorderQueued || messages.planSortPending || messages.savingDraft || '');
+            closeReorderModal();
+        });
+    }
+
+    window.__pbOpenReorderModal = openReorderModal;
+    window.__pbCloseReorderModal = closeReorderModal;
 
     function ensurePlanPreviewFullscreenOverlay() {
         var existing = document.getElementById('pb-ai-plan-preview-fullscreen-overlay');
@@ -7529,9 +8328,9 @@
         var text = String(message || parsed.message || '').toLowerCase();
         return code === '409'
             && (
-                text.indexOf('正在生成阶段一方案') >= 0
-                || text.indexOf('正在执行的第一阶段') >= 0
-                || text.indexOf('第一阶段主题规划') >= 0
+                text.indexOf('正在生成阶段一方案') >= 0 // i18n: match-with-backend
+                || text.indexOf('正在执行的第一阶段') >= 0 // i18n: match-with-backend
+                || text.indexOf('第一阶段主题规划') >= 0 // i18n: match-with-backend
                 || text.indexOf('stage-1') >= 0
                 || text.indexOf('stage 1') >= 0
                 || text.indexOf('already running') >= 0
@@ -7725,8 +8524,7 @@
     function shouldUsePlanPageRefineApi(mode, actionContext) {
         var context = actionContext && typeof actionContext === 'object' ? actionContext : {};
         return String(mode || '').trim() === 'refine'
-            && String(context.scopeKind || '').trim() === 'page'
-            && String(context.pageType || '').trim() !== '';
+            && String(context.scopeKind || '').trim() === 'page';
     }
 
     function startPlanPageRefineRequest(promptText, targetScope, actionContext) {
@@ -7963,10 +8761,16 @@
     }
 
     function hasTaskPlanDraft() {
-        return !!String((currentTaskPlanPayload && currentTaskPlanPayload.markdown) || '').trim();
+        if (!!String((currentTaskPlanPayload && currentTaskPlanPayload.markdown) || '').trim()) {
+            return true;
+        }
+        return isNonEmptyObject(pickStructuredPlanRoot(currentTaskPlanPayload || {}));
     }
 
     function hasCachedTaskPlanForAccordion() {
+        if (hasPersistedPhaseTwoTaskPlan()) {
+            return true;
+        }
         if (hasTaskPlanDraft()) {
             return true;
         }
@@ -8455,6 +9259,116 @@
         return true;
     }
 
+    function isTaskPlanBlockMutationActionContext(actionContext) {
+        var ctx = actionContext && typeof actionContext === 'object' ? actionContext : null;
+        if (!ctx) {
+            return false;
+        }
+        if (String(ctx.stage || '').trim() !== 'task-plan') {
+            return false;
+        }
+        if (String(ctx.scopeKind || '').trim() !== 'block') {
+            return false;
+        }
+        return ['refine', 'rebuild', 'delete', 'add-block'].indexOf(String(ctx.action || '').trim()) !== -1;
+    }
+
+    function normalizeTaskPlanMutationAction(action) {
+        var normalized = String(action || '').trim();
+        if (normalized === 'add-block') {
+            return 'create';
+        }
+        if (['refine', 'rebuild', 'delete', 'create'].indexOf(normalized) !== -1) {
+            return normalized;
+        }
+        return '';
+    }
+
+    function slugifyTaskPlanMutationFragment(value) {
+        var normalized = String(value || '').toLowerCase().trim();
+        normalized = normalized.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        return normalized || ('task-' + Date.now());
+    }
+
+    function buildTaskPlanMutationRequest(actionContext, promptText, targetScope) {
+        var ctx = actionContext && typeof actionContext === 'object' ? actionContext : {};
+        var mutationAction = normalizeTaskPlanMutationAction(ctx.action || '');
+        var pageType = String(ctx.pageType || '').trim();
+        var bucket = pageType.toLowerCase() === 'shared' ? 'shared' : 'page';
+        var taskKey = String(ctx.taskKey || '').trim();
+        var instruction = String(promptText || '').trim();
+        var derivedTargetScope = String(targetScope || ctx.targetScope || taskKey || (bucket === 'shared' ? 'shared_tasks' : 'task_plan')).trim();
+        var payload = {
+            public_id: publicId,
+            bucket: bucket,
+            page_type: bucket === 'shared' ? '' : pageType,
+            action: mutationAction,
+            task_key: mutationAction === 'create' ? '' : taskKey,
+            instruction: instruction,
+            target_scope: derivedTargetScope
+        };
+        if (mutationAction === 'create') {
+            var labelSeed = instruction || String(ctx.blockLabel || ctx.taskKey || 'New task').trim();
+            payload.task_config = JSON.stringify({
+                label: labelSeed,
+                section_code: (bucket === 'shared' ? 'shared/' : 'content/') + slugifyTaskPlanMutationFragment(labelSeed),
+                after_task_key: taskKey
+            });
+        }
+        return payload;
+    }
+
+    function startTaskPlanTaskMutationStream(mode, options) {
+        var opts = options && typeof options === 'object' ? options : {};
+        var actionContext = currentTaskPlanModeActionContext && typeof currentTaskPlanModeActionContext === 'object'
+            ? currentTaskPlanModeActionContext
+            : null;
+        var mutationAction = normalizeTaskPlanMutationAction(actionContext && actionContext.action);
+        if (!actionContext || !mutationAction || !String(mutateTaskPlanTaskUrl || '').trim()) {
+            return false;
+        }
+        if (mutationAction !== 'create' && !String(actionContext.taskKey || '').trim()) {
+            return false;
+        }
+
+        var promptText = String(Object.prototype.hasOwnProperty.call(opts, 'promptText') ? opts.promptText : '').trim();
+        var targetScope = String(Object.prototype.hasOwnProperty.call(opts, 'targetScope') ? opts.targetScope : currentTaskPlanModeTargetScope).trim();
+        var payload = buildTaskPlanMutationRequest(actionContext, promptText, targetScope);
+
+        setTaskPlanModeRunButtonLoading(true);
+        taskPlanSseRunning = true;
+        setTaskPlanModeStatus(messages.taskPlanModeRunning);
+        setTaskPlanModalProgress(messages.taskPlanModeRunning, 28, false);
+
+        return postForm(mutateTaskPlanTaskUrl, payload).then(function (data) {
+            if (data && data.data && typeof data.data === 'object') {
+                hydrateWorkspaceFromState(data.data);
+            }
+            if (data && data.success && window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function' && window.PbAiOperationRunner.startFromResponse(data, 'task_plan')) {
+                clearTaskPlanPreviewActionContext({ preserveValue: false, restoreStatus: false });
+                if (data.message) {
+                    toast('success', String(data.message));
+                }
+                return true;
+            }
+            taskPlanSseRunning = false;
+            setTaskPlanModeRunButtonLoading(false);
+            var message = (data && data.message) ? String(data.message) : messages.operationStreamMissing;
+            setTaskPlanModeStatus(message);
+            setTaskPlanModalProgress(message, 100, hasTaskPlanDraft());
+            toast((data && data.success) ? 'warning' : 'error', message);
+            return false;
+        }).catch(function (error) {
+            taskPlanSseRunning = false;
+            setTaskPlanModeRunButtonLoading(false);
+            var message = (error && error.message) ? String(error.message) : messages.networkError;
+            setTaskPlanModeStatus(message);
+            setTaskPlanModalProgress(message, 100, hasTaskPlanDraft());
+            toast('error', message);
+            return false;
+        });
+    }
+
     function startTaskPlanModeStream(mode, options) {
         var opts = options && typeof options === 'object' ? options : {};
         if (isThemeBuildGenerationRunning()) {
@@ -8503,6 +9417,12 @@
         var promptText = String(Object.prototype.hasOwnProperty.call(opts, 'promptText') ? opts.promptText : (promptInput ? promptInput.value : '')).trim();
         var payloadMode = normalizedMode;
         var targetScope = String(Object.prototype.hasOwnProperty.call(opts, 'targetScope') ? opts.targetScope : currentTaskPlanModeTargetScope).trim();
+        if (isTaskPlanBlockMutationActionContext(currentTaskPlanModeActionContext)) {
+            return startTaskPlanTaskMutationStream(payloadMode, {
+                promptText: promptText,
+                targetScope: targetScope
+            });
+        }
         var sseUrl = buildTaskPlanSseGetUrl(streamUrl, payloadMode, promptText, targetScope);
         if (!sseUrl) {
             toast('warning', messages.taskPlanStartUnavailable);
@@ -8833,7 +9753,6 @@
 
     function proceedToShowPlanModalAndRequestStart(previousPlanMarkdown) {
         bindPlanModalViewSwitchers();
-        bindPlanPrimaryPaneSwitchers();
         bindPlanModeSwitchers();
         clearPlanPreviewActionContext({ preserveValue: false, restoreStatus: false });
         setPlanMode(currentPlanMode);
@@ -9048,25 +9967,7 @@
                 taskPlanConfirmedState = true;
                 hideTaskPlanGenerationModal();
                 toast('success', messages.taskPlanConfirmSaved);
-                // T26：任务方案确认成功后询问是否立即开始构建（使用 BackendConfirm）。
-                if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-                    window.BackendConfirm.show(messages.taskPlanConfirmStartBuildQuestion, {
-                        title: messages.taskPlanConfirmSaved,
-                        confirmText: messages.immediateGenerate,
-                        cancelText: messages.laterGenerate
-                    }).then(function (confirmed) {
-                        if (confirmed) {
-                            startConfirmedBuild(triggerBtn || currentPlanTriggerButton, selectedTypes || currentPlanSelection, { allowTaskPlanRetry: false });
-                        } else {
-                            toast('info', messages.taskPlanDeferred);
-                        }
-                    }).catch(function () {
-                        toast('info', messages.taskPlanDeferred);
-                    });
-                } else {
-                    // 无 BackendConfirm 时仅提示「稍后继续」。
-                    toast('info', messages.taskPlanDeferred);
-                }
+                startConfirmedBuild(triggerBtn || currentPlanTriggerButton, selectedTypes || currentPlanSelection, { allowTaskPlanRetry: false });
                 return true;
             }).catch(function (error) {
                 if (confirmBtn) {
@@ -9138,13 +10039,7 @@
             }
             hidePlanGenerationModal();
             toast('success', (data && data.message) ? String(data.message) : messages.planConfirmSaved);
-            // 阶段一确认后跳转引导页（若配置了 guidedUrl），否则整页刷新以同步阶段与 DOM。
-            var guidedHref = typeof guidedUrl === 'string' ? guidedUrl.trim() : '';
-            if (guidedHref !== '') {
-                window.location.href = guidedHref;
-            } else {
-                window.location.reload();
-            }
+            continueToTaskPlanAfterPlanConfirm();
         }).catch(function (error) {
             toast('error', (error && error.message) ? String(error.message) : messages.networkError);
             syncConfirmPlanButtonEnabled();
@@ -9152,6 +10047,9 @@
     }
 
     function bindPlanStageLogic() {
+        bindTaskPlanAccordionOnce();
+        applyCachedTaskPlanToPanel();
+
         var planCloseBtn = document.getElementById('pb-ai-plan-close');
         if (planCloseBtn && planCloseBtn.dataset.pbBound !== '1') {
             planCloseBtn.dataset.pbBound = '1';
@@ -9581,6 +10479,159 @@
     };
     previewBridge = resolvePreviewBridge();
 
+    function renderPublishChecklistModal(payload) {
+        var modal = document.getElementById('pb-ai-publish-checklist-modal');
+        if (!modal) { return null; }
+        var alertEl = modal.querySelector('#pb-ai-publish-checklist-alert');
+        var loadingEl = modal.querySelector('#pb-ai-publish-checklist-loading');
+        var listEl = modal.querySelector('#pb-ai-publish-checklist-items');
+        var rawEl = modal.querySelector('#pb-ai-publish-checklist-raw');
+        var rawWrap = modal.querySelector('#pb-ai-publish-checklist-raw-wrap');
+        var confirmBtn = modal.querySelector('#pb-ai-publish-checklist-confirm');
+        if (loadingEl) { loadingEl.classList.add('d-none'); }
+        if (listEl) { listEl.innerHTML = ''; }
+        var payloadObj = (payload && typeof payload === 'object') ? payload : {};
+        var items = Array.isArray(payloadObj.items) ? payloadObj.items : [];
+        var passed = !!payloadObj.passed;
+        if (alertEl) {
+            alertEl.classList.remove('d-none', 'alert-success', 'alert-warning', 'alert-info');
+            if (!items.length) {
+                alertEl.classList.add('alert-info');
+                alertEl.textContent = messages.publishCheckNoItems || '';
+            } else if (passed) {
+                alertEl.classList.add('alert-success');
+                alertEl.innerHTML = '<i class="mdi mdi-check-circle-outline me-1"></i>' + (messages.publishCheckAllPassedAlert || '');
+            } else {
+                alertEl.classList.add('alert-warning');
+                alertEl.innerHTML = '<i class="mdi mdi-alert-outline me-1"></i>' + (messages.publishCheckFailedAlert || '');
+            }
+        }
+        if (listEl) {
+            items.forEach(function (item) {
+                if (!item || typeof item !== 'object') { return; }
+                var ok = !!item.ok;
+                var li = document.createElement('li');
+                li.className = 'list-group-item d-flex align-items-start gap-2';
+                if (!ok) { li.classList.add('bg-warning', 'bg-opacity-10'); }
+                var iconWrap = document.createElement('span');
+                iconWrap.className = ok ? 'text-success fs-5 lh-1' : 'text-danger fs-5 lh-1';
+                iconWrap.innerHTML = ok
+                    ? '<i class="mdi mdi-check-circle" aria-hidden="true"></i>'
+                    : '<i class="mdi mdi-close-circle" aria-hidden="true"></i>';
+                li.appendChild(iconWrap);
+                var bodyWrap = document.createElement('div');
+                bodyWrap.className = 'flex-fill';
+                var titleEl = document.createElement('div');
+                titleEl.className = 'fw-semibold';
+                titleEl.textContent = String(item.label || item.key || '');
+                bodyWrap.appendChild(titleEl);
+                var descEl = document.createElement('div');
+                descEl.className = 'small text-muted mt-1';
+                var descText = '';
+                if (typeof item.detail === 'string' && item.detail !== '') {
+                    descText = item.detail;
+                } else if (typeof item.message === 'string' && item.message !== '') {
+                    descText = item.message;
+                } else if (typeof item.hint === 'string' && item.hint !== '') {
+                    descText = item.hint;
+                }
+                if (!descText) {
+                    descText = ok ? (messages.publishCheckItemOk || '') : (messages.publishCheckItemFail || '');
+                }
+                descEl.textContent = descText;
+                bodyWrap.appendChild(descEl);
+                if (item.value !== undefined && item.value !== null && item.value !== '' && typeof item.value !== 'object') {
+                    var valueEl = document.createElement('code');
+                    valueEl.className = 'small d-inline-block mt-1';
+                    valueEl.textContent = String(item.value);
+                    bodyWrap.appendChild(valueEl);
+                }
+                li.appendChild(bodyWrap);
+                var badge = document.createElement('span');
+                badge.className = ok ? 'badge bg-success-subtle text-success align-self-center' : 'badge bg-danger-subtle text-danger align-self-center';
+                badge.textContent = ok ? (messages.publishCheckItemOk || '') : (messages.publishCheckItemFail || '');
+                li.appendChild(badge);
+                listEl.appendChild(li);
+            });
+        }
+        if (rawEl) { rawEl.textContent = JSON.stringify(payloadObj, null, 2); }
+        if (rawWrap) { rawWrap.open = false; }
+        if (confirmBtn) { confirmBtn.disabled = !passed; }
+        return passed;
+    }
+
+    function openPublishChecklistModalLoading() {
+        var modal = document.getElementById('pb-ai-publish-checklist-modal');
+        if (!modal) { return null; }
+        var loadingEl = modal.querySelector('#pb-ai-publish-checklist-loading');
+        var alertEl = modal.querySelector('#pb-ai-publish-checklist-alert');
+        var listEl = modal.querySelector('#pb-ai-publish-checklist-items');
+        var confirmBtn = modal.querySelector('#pb-ai-publish-checklist-confirm');
+        if (loadingEl) { loadingEl.classList.remove('d-none'); }
+        if (listEl) { listEl.innerHTML = ''; }
+        if (alertEl) { alertEl.classList.add('d-none'); }
+        if (confirmBtn) { confirmBtn.disabled = true; }
+        try {
+            if (window.bootstrap && window.bootstrap.Modal) {
+                var inst = window.bootstrap.Modal.getOrCreateInstance(modal);
+                inst.show();
+                return inst;
+            }
+        } catch (err) { /* fallthrough */ }
+        modal.classList.add('show');
+        modal.style.display = 'block';
+        return null;
+    }
+
+    function closePublishChecklistModal() {
+        var modal = document.getElementById('pb-ai-publish-checklist-modal');
+        if (!modal) { return; }
+        try {
+            if (window.bootstrap && window.bootstrap.Modal) {
+                var inst = window.bootstrap.Modal.getOrCreateInstance(modal);
+                inst.hide();
+                return;
+            }
+        } catch (err) { /* fallthrough */ }
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+    }
+
+    function runPublishChecklistFetchAndRender(forceOpen) {
+        if (!publishCheckUrl) {
+            toast('error', messages.networkError);
+            return Promise.resolve(false);
+        }
+        var modalOpened = false;
+        if (forceOpen) {
+            openPublishChecklistModalLoading();
+            modalOpened = true;
+        }
+        return postForm(publishCheckUrl, { public_id: publicId }).then(function (data) {
+            if (!data || !data.success) {
+                if (modalOpened) { closePublishChecklistModal(); }
+                toast('error', (data && data.message) ? String(data.message) : messages.networkError);
+                return false;
+            }
+            var payload = (data.data && typeof data.data === 'object') ? data.data : {};
+            var passed = renderPublishChecklistModal(payload);
+            var oldOutput = document.getElementById('pb-ai-publish-check-output');
+            if (oldOutput) {
+                oldOutput.textContent = JSON.stringify(payload, null, 2);
+                oldOutput.classList.add('d-none');
+            }
+            toast(passed ? 'success' : 'warning', passed ? (messages.publishCheckPassed || '') : (messages.publishCheckFailed || ''));
+            return passed;
+        }).catch(function () {
+            if (modalOpened) { closePublishChecklistModal(); }
+            toast('error', messages.networkError);
+            return false;
+        });
+    }
+
+    window.__pbOpenPublishChecklistModal = function () { return runPublishChecklistFetchAndRender(true); };
+    window.__pbClosePublishChecklistModal = closePublishChecklistModal;
+
     function bindPublishStageLogic() {
         var openPublishPreviewBtn = document.getElementById('pb-ai-open-publish-preview');
         if (openPublishPreviewBtn && openPublishPreviewBtn.dataset.pbBound !== '1') {
@@ -9596,25 +10647,59 @@
         }
 
         var publishBtn = document.getElementById('pb-ai-run-publish-check');
-        var publishOutput = document.getElementById('pb-ai-publish-check-output');
-        if (publishBtn && publishOutput && publishBtn.dataset.pbBound !== '1') {
+        if (publishBtn && publishBtn.dataset.pbBound !== '1') {
             publishBtn.dataset.pbBound = '1';
             publishBtn.addEventListener('click', function () {
                 if (!publishCheckUrl) { return; }
-                postForm(publishCheckUrl, { public_id: publicId }).then(function (data) {
-                    if (data && data.success) {
-                        publishOutput.textContent = JSON.stringify(data.data || {}, null, 2);
-                        publishOutput.classList.remove('d-none');
-                        publishOutput.style.display = 'block';
-                        var passed = data.data && data.data.passed;
-                        toast(passed ? 'success' : 'warning', passed
-                            ? <?= \json_encode((string)__('发布检查通过'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
-                            : <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
-                        );
+                runPublishChecklistFetchAndRender(true);
+            });
+        }
+
+        var refreshBtn = document.getElementById('pb-ai-publish-checklist-refresh');
+        if (refreshBtn && refreshBtn.dataset.pbBound !== '1') {
+            refreshBtn.dataset.pbBound = '1';
+            refreshBtn.addEventListener('click', function () {
+                var modal = document.getElementById('pb-ai-publish-checklist-modal');
+                if (modal) {
+                    var loadingEl = modal.querySelector('#pb-ai-publish-checklist-loading');
+                    var listEl = modal.querySelector('#pb-ai-publish-checklist-items');
+                    var alertEl = modal.querySelector('#pb-ai-publish-checklist-alert');
+                    var confirmBtn = modal.querySelector('#pb-ai-publish-checklist-confirm');
+                    if (loadingEl) { loadingEl.classList.remove('d-none'); }
+                    if (listEl) { listEl.innerHTML = ''; }
+                    if (alertEl) { alertEl.classList.add('d-none'); }
+                    if (confirmBtn) { confirmBtn.disabled = true; }
+                }
+                runPublishChecklistFetchAndRender(false);
+            });
+        }
+
+        var confirmBtn = document.getElementById('pb-ai-publish-checklist-confirm');
+        if (confirmBtn && confirmBtn.dataset.pbBound !== '1') {
+            confirmBtn.dataset.pbBound = '1';
+            confirmBtn.addEventListener('click', function () {
+                if (confirmBtn.disabled) { return; }
+                function proceed() {
+                    toast('info', messages.publishCheckConfirmStarting || '');
+                    closePublishChecklistModal();
+                    var startBtn = document.getElementById('pb-ai-start-publish');
+                    if (startBtn) {
+                        startBtn.click();
                     } else {
-                        toast('error', (data && data.message) ? String(data.message) : messages.networkError);
+                        toast('error', messages.publishStartUnavailable || messages.networkError);
                     }
-                }).catch(function () { toast('error', messages.networkError); });
+                }
+                if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+                    window.BackendConfirm.show({
+                        title: messages.publishCheckModalTitle || '',
+                        message: messages.publishCheckConfirmPrompt || '',
+                        confirmLabel: messages.publishCheckModalTitle || '',
+                        type: 'warning',
+                        onConfirm: proceed
+                    });
+                } else if (window.confirm(messages.publishCheckConfirmPrompt || '')) {
+                    proceed();
+                }
             });
         }
     }
@@ -9654,7 +10739,7 @@
             return;
         }
         var level = String(notice.level || 'info');
-        var title = String(notice.title || '队列状态');
+        var title = String(notice.title || <?= \json_encode((string)__('队列状态'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         var message = String(notice.message || '');
         if (!message) {
             return;
@@ -9664,7 +10749,7 @@
         var operation = String(notice.operation_label || notice.operation || '');
         var processText = String(notice.process || '').trim();
         var resultText = String(notice.result_excerpt || '').trim();
-        var confirmLabel = String(notice.confirm_label || '知道了');
+        var confirmLabel = String(notice.confirm_label || <?= \json_encode((string)__('知道了'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         var badgeClass = level === 'error'
             ? 'text-bg-danger'
             : (level === 'success' ? 'text-bg-success' : (level === 'warning' ? 'text-bg-warning' : 'text-bg-info'));
@@ -9691,8 +10776,8 @@
             + (queueId ? '<span class="badge text-bg-secondary">#' + escapeHtml(queueId) + '</span>' : '')
             + '</div>'
             + '<p class="mb-2">' + escapeHtml(message) + '</p>'
-            + (processText ? '<div class="small text-muted mb-1">进程状态</div><pre class="small bg-light border rounded p-2 mb-2 text-break" style="white-space:pre-wrap;max-height:7rem;overflow:auto;">' + escapeHtml(processText) + '</pre>' : '')
-            + (resultText ? '<div class="small text-muted mb-1">队列日志</div><pre class="small bg-light border rounded p-2 mb-0 text-break" style="white-space:pre-wrap;max-height:8rem;overflow:auto;">' + escapeHtml(resultText) + '</pre>' : '')
+            + (processText ? '<div class="small text-muted mb-1">' + <?= \json_encode((string)__('进程状态'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?> + '</div><pre class="small bg-light border rounded p-2 mb-2 text-break" style="white-space:pre-wrap;max-height:7rem;overflow:auto;">' + escapeHtml(processText) + '</pre>' : '')
+            + (resultText ? '<div class="small text-muted mb-1">' + <?= \json_encode((string)__('队列日志'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?> + '</div><pre class="small bg-light border rounded p-2 mb-0 text-break" style="white-space:pre-wrap;max-height:8rem;overflow:auto;">' + escapeHtml(resultText) + '</pre>' : '')
             + '</div>'
             + '<div class="modal-footer">'
             + '<button type="button" class="btn btn-primary" data-bs-dismiss="modal">' + escapeHtml(confirmLabel) + '</button>'
@@ -9724,7 +10809,7 @@
     }
 
     if (initialWorkspaceState && typeof initialWorkspaceState === 'object') {
-        hydrateWorkspaceFromState(initialWorkspaceState);
+        hydrateInitialWorkspaceStateOnce();
         showWorkspaceEntryQueueNotice(initialWorkspaceState);
     }
 })();

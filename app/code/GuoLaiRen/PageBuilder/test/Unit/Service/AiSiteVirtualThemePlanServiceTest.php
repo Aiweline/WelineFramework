@@ -40,6 +40,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                     'pages' => [
                         'page:home_page:hero' => [
                             'block_goal' => 'Make the analytics product memorable in the first viewport.',
+                            'page_design_plan' => ['color_layering' => 'ink base, glass panel, lime CTA, lighter metrics band'],
                             'style_direction' => 'editorial dashboard with bold contrast',
                         ],
                     ],
@@ -62,6 +63,8 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('https://github.com/anthropics/claude-code/blob/main/plugins/frontend-design/skills/frontend-design/SKILL.md', $prompt);
         self::assertStringContainsString('Avoid generic AI aesthetics', $prompt);
         self::assertStringContainsString('block_task.style_plan', $prompt);
+        self::assertStringContainsString('page_design_plan', $prompt);
+        self::assertStringContainsString('color_layering', $prompt);
         self::assertStringContainsString('task_script.responsive_contract', $prompt);
         self::assertStringContainsString('Never use task_key, page_type, section_code, block_key, component paths, or internal IDs as customer-visible copy.', $prompt);
         self::assertStringContainsString('Visible-language rule', $prompt);
@@ -707,6 +710,10 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('task_goal, meta_fields, content_plan, style_plan, planning_reason, sort_order', $allPrompts);
         self::assertStringContainsString('Every planning_reason must be concrete and traceable to stage-1', $allPrompts);
         self::assertStringContainsString('concrete color, font, spacing, and responsive keys', $allPrompts);
+        self::assertStringContainsString('page_design_plan', $allPrompts);
+        self::assertStringContainsString('page-level color layering', $allPrompts);
+        self::assertStringContainsString('UI/interaction designer handoff', $allPrompts);
+        self::assertStringContainsString('hero panel over slate base', $allPrompts);
         self::assertStringNotContainsString('Stage-1 compact context summary:', $allPrompts);
         self::assertStringNotContainsString('Stage-1 plan_json:', $allPrompts);
         self::assertStringNotContainsString('Baseline virtual_theme_plan compatibility snapshot:', $allPrompts);
@@ -1011,6 +1018,12 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 'pages' => [
                     'home_page' => [
                         'page_goal' => 'Explain value',
+                        'page_design_plan' => [
+                            'page_role' => 'conversion entry page',
+                            'color_layering' => 'hero panel over slate base, proof cards on light surface, ember CTA accent',
+                            'section_flow' => ['hero impact', 'proof layer', 'final CTA'],
+                            'interaction_notes' => ['CTA hover glow', 'card lift on proof'],
+                        ],
                         'blocks' => [
                             [
                                 'block_key' => 'hero',
@@ -2008,6 +2021,12 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                                     'page_key' => 'home_page',
                                     'page_label' => 'Home',
                                     'page_goal' => 'Explain value',
+                                    'page_design_plan' => [
+                                        'page_role' => 'conversion entry page',
+                                        'color_layering' => 'hero panel over slate base, proof cards on light surface, ember CTA accent',
+                                        'section_flow' => ['hero impact', 'proof layer', 'final CTA'],
+                                        'interaction_notes' => ['CTA hover glow', 'card lift on proof'],
+                                    ],
                                     'shared_context_hash' => 'stage1-shared-hash',
                                     'theme_context_hash' => 'stage1-theme-hash',
                                     'page_context_hash' => 'stage1-home-hash',

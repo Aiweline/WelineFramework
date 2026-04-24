@@ -5,6 +5,9 @@ namespace Weline\Server\Test\Unit;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
+use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\SslCertificateService;
 
 class SslCertificateServiceTest extends TestCase
@@ -120,6 +123,48 @@ class SslCertificateServiceTest extends TestCase
             $this->assertContains('*.weline.test', $c);
         } else {
             $this->assertSame(['*.weline.test'], $c);
+        }
+    }
+
+    public function testRegenerateCertificateMapCanSkipBroadcastForStartupRefresh(): void
+    {
+        $mapFile = Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
+        $hadMap = \is_file($mapFile);
+        $previousMap = $hadMap ? (string) \file_get_contents($mapFile) : null;
+
+        $broadcast = $this->createMock(BroadcastControlDispatchService::class);
+        $broadcast->expects($this->never())->method('reloadSslCert');
+        ObjectManager::setInstance(BroadcastControlDispatchService::class, $broadcast);
+
+        $service = new class extends SslCertificateService {
+            public function __construct()
+            {
+            }
+
+            public function getCertificateMap(): array
+            {
+                return [
+                    'unit.test' => [
+                        'cert' => '/tmp/unit.crt',
+                        'key' => '/tmp/unit.key',
+                    ],
+                ];
+            }
+        };
+
+        try {
+            $service->regenerateCertificateMap(false);
+            $map = \json_decode((string) \file_get_contents($mapFile), true);
+
+            $this->assertSame('/tmp/unit.crt', $map['unit.test']['cert'] ?? null);
+            $this->assertSame('/tmp/unit.key', $map['unit.test']['key'] ?? null);
+        } finally {
+            if ($hadMap) {
+                \file_put_contents($mapFile, (string) $previousMap);
+            } elseif (\is_file($mapFile)) {
+                @\unlink($mapFile);
+            }
+            ObjectManager::removeInstance(BroadcastControlDispatchService::class);
         }
     }
 
