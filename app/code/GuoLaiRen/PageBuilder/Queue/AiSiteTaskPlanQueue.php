@@ -104,7 +104,20 @@ class AiSiteTaskPlanQueue implements QueueInterface
             $this->appendQueueLifecycleLine($queue, '已同步 active_operation=queued operation=task_plan execution_token=' . \substr($effectiveExecutionToken, 0, 12) . '…');
 
             $scope = $scopeService->normalizeScope($session->getScopeArray());
-            if ((int)($scope['plan_confirmed'] ?? 0) !== 1) {
+            $normalizedScope = $scopeService->normalizeConfirmedPlanFlag($scope);
+            $scopePatch = [];
+            if ((int)($normalizedScope['plan_confirmed'] ?? 0) !== (int)($scope['plan_confirmed'] ?? 0)
+            ) {
+                $scopePatch['plan_confirmed'] = (int)($normalizedScope['plan_confirmed'] ?? 0);
+            }
+            if ((string)($normalizedScope['plan_confirmed_at'] ?? '') !== (string)($scope['plan_confirmed_at'] ?? '')) {
+                $scopePatch['plan_confirmed_at'] = (string)($normalizedScope['plan_confirmed_at'] ?? '');
+            }
+            if ($scopePatch !== []) {
+                $sessionService->mergeScope((int)$session->getId(), $adminId, $scopePatch);
+            }
+            $scope = $normalizedScope;
+            if (!$scopeService->hasConfirmedStageOnePlanForTaskPlan($scope)) {
                 throw new \RuntimeException('请先确认第一阶段方案，再生成第二阶段任务方案。');
             }
             $this->appendQueueLifecycleLine($queue, '已校验 plan_confirmed=1');

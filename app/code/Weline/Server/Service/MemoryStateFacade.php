@@ -50,7 +50,7 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
             ControlMessage::ROLE_MEMORY_SERVER,
             $config,
             [],
-            $this->consumerCode,
+            $this->resolveManagerRequesterInstanceName(),
             SharedStateServiceManager::resolveEnsureFrontendFlag($config)
         );
         $this->runtime['consumer_code'] = $this->consumerCode;
@@ -276,9 +276,6 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
             ),
             'service_type' => 'Memory',
             'service_role' => ControlMessage::ROLE_MEMORY_SERVER,
-            'consumer_code' => $this->consumerCode,
-            'instance_name' => $this->consumerCode,
-            'owner_type' => 'instance',
             // Master/CLI 门面默认静默逐条 CONN-*，避免与 Memory 侧车/token 就绪竞态时刷屏；排障可设 log_pool_lifecycle=true
             'log_pool_lifecycle' => (bool) ($config['log_pool_lifecycle'] ?? false),
         ];
@@ -315,6 +312,11 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
         }
 
         $this->released = true;
+    }
+
+    private function resolveManagerRequesterInstanceName(): string
+    {
+        return \defined('WLS_MODE') && WLS_MODE ? 'system' : $this->consumerCode;
     }
 
     private function attemptDirectBootstrap(
