@@ -162,6 +162,23 @@ class Dispatcher
      * 最大 Master 不存在次数
      */
     private int $maxMasterMissing = 6;
+
+    /**
+     * Master 首次被观察到 missing 的 microtime（0 表示当前健康）。
+     *
+     * P1-2 修复：仅凭 missingCount 达阈值就退出易受瞬时 tasklist 超时 / IPC 抖动误判。
+     * 引入「连续观测窗口」，要求 count >= 阈值 且 now - masterMissingSince >= masterMissingGraceSec。
+     */
+    private float $masterMissingSince = 0.0;
+
+    /**
+     * 需要连续观测多久才能判定 Master 真的已脱离（秒）。
+     *
+     * 默认 (maxMasterMissing - 1) * masterCheckInterval = 25s（5s × 5），
+     * 与 IPC 断开后 checkMasterPidAlive 的 MASTER_PID_DEAD_THRESHOLD 行为一致，
+     * 避免 Windows tasklist 瞬时卡顿导致误判。
+     */
+    private float $masterMissingGraceSec = 25.0;
     
     /**
      * 上次连接清理时间
@@ -259,6 +276,45 @@ class Dispatcher
      * 是否启用维护页兜底
      */
     private bool $maintenanceFallbackActive = false;
+
+    /**
+     * 是否曾经观察到至少 1 个健康 Worker。
+     *
+     * P1-4 修复：替代旧的「uptime <= startupProtectionWindowSec=45s」硬窗口判定，
+     * 只要从未观察过健康 Worker，就视为"仍在启动"，持续返回启动中维护页；
+     * 一旦有过健康 Worker，再次全挂时改由 healthy==0 持续阈值 + startup 保护判定走维护页。
+     */
+    private bool $hasEverObservedHealthyWorker = false;
+
+    /**
+     * healthy==0 且 total>0 持续开始时间戳。
+     * P1-5 修复：区分瞬时抖动 vs 真正全挂；仅当持续时长 >= 阈值时才走维护页兜底。
+     */
+    private float $healthyZeroSince = 0.0;
+
+    /** healthy==0 && total>0 触发维护页兜底的持续时长阈值（秒） */
+    private float $healthyZeroMaintenanceThresholdSec = 2.0;
+
+    /**
+     * 首字节尚未到达的 pending 维护页连接等待超时（秒）。
+     *
+     * P0-5 修复：对新 accept 的 non-blocking socket，MSG_PEEK 第一次即无数据时
+     * 不再立即 close（浏览器会看到 ERR_EMPTY_RESPONSE），而是入队等待首字节；
+     * 超过此阈值仍未到首字节（或对端断开）才 close。
+     */
+    private float $pendingMaintenanceWaitTimeoutSec = 2.0;
+
+    /**
+     * 等待首字节的 pending 维护页连接。
+     *
+     * key = socketId($clientSocket)
+     *
+     * @var array<int, array{socket: mixed, clientIp: string, acceptedAt: float, allWorkersUnavailable: bool}>
+     */
+    private array $pendingMaintenancePageQueue = [];
+
+    /** pending 维护页队列容量上限，防内存膨胀；溢出时直接关闭新连接 */
+    private int $pendingMaintenancePageQueueMax = 4096;
 
     /**
      * SET_WORKER_POOL / ADD_WORKER / Worker health audit unified queue.
@@ -468,6 +524,16 @@ class Dispatcher
         }
         if ($this->backendRouteWaitTimeoutSec < 0.0) {
             $this->backendRouteWaitTimeoutSec = 0.0;
+        }
+
+        if (isset($config['healthy_zero_maintenance_threshold_sec'])) {
+            $this->healthyZeroMaintenanceThresholdSec = \max(0.0, (float)$config['healthy_zero_maintenance_threshold_sec']);
+        }
+        if (isset($config['pending_maintenance_wait_timeout_sec'])) {
+            $this->pendingMaintenanceWaitTimeoutSec = \max(0.1, (float)$config['pending_maintenance_wait_timeout_sec']);
+        }
+        if (isset($config['pending_maintenance_page_queue_max'])) {
+            $this->pendingMaintenancePageQueueMax = \max(128, (int)$config['pending_maintenance_page_queue_max']);
         }
     }
     
@@ -689,8 +755,19 @@ class Dispatcher
                 $this->log('Master 连接断开（已收到 shutdown，不复活）', 'INFO');
                 return;
             }
-            $this->log('Master 连接意外断开，控制面已收口，不执行子进程复活。', 'WARN');
+            $this->log('Master 连接意外断开，准备自愈协调 + 持续重连', 'WARN');
             $client->tryReconnect();
+
+            // Master 自愈（由 MasterResurrectionCoordinator 编排 grace + attempt）
+            try {
+                $priority = $client->getResurrectionPriority();
+                if ($priority > 0 && $this->instanceName !== '' && $this->controlPort > 0) {
+                    (new \Weline\Server\IPC\MasterResurrectionCoordinator())
+                        ->handleDisconnect($priority, $this->instanceName, $this->controlPort, $receivedShutdown);
+                }
+            } catch (\Throwable $e) {
+                $this->log('[Dispatcher] Master 自愈触发失败: ' . $e->getMessage(), 'WARN');
+            }
         });
         if (!$this->ipcClient->connect('127.0.0.1', $this->controlPort)) {
             $this->log("IPC 控制通道初次连接失败 (端口: {$this->controlPort})，将在启动宽限期内自动重连", 'WARN');
@@ -972,6 +1049,7 @@ class Dispatcher
         }
 
         $ports = [];
+        $acceptedWorkers = [];
         foreach ($workers as $worker) {
             $state = (string)($worker['state'] ?? '');
             $port = (int)($worker['port'] ?? 0);
@@ -979,12 +1057,14 @@ class Dispatcher
                 continue;
             }
             $ports[$port] = $port;
+            $acceptedWorkers[] = $this->normalizeWorkerDescriptor($worker, ControlMessage::ROLE_WORKER);
         }
 
         $normalizedPorts = \array_values($ports);
         $this->deferredWorkerPoolJobs[] = [
             'type' => 'set_pool',
             'ports' => $normalizedPorts,
+            'workers' => $acceptedWorkers,
             'role' => ControlMessage::ROLE_WORKER,
             'pool_snapshot_version' => $version,
             'pool_snapshot_scope' => $scope,
@@ -1048,7 +1128,8 @@ class Dispatcher
             }
             if ($role === ControlMessage::ROLE_WORKER) {
                 $requestedPorts = \is_array($job['ports'] ?? null) ? $job['ports'] : [];
-                $this->sendWorkerPoolAckForPorts($requestedPorts);
+                $requestedWorkers = \is_array($job['workers'] ?? null) ? $job['workers'] : [];
+                $this->sendWorkerPoolAckForPorts($requestedPorts, $requestedWorkers);
             }
 
             return;
@@ -1074,7 +1155,8 @@ class Dispatcher
                 );
             }
             $requestedPorts = \is_array($job['ports'] ?? null) ? $job['ports'] : [];
-            $this->sendWorkerPoolAckForPorts($requestedPorts);
+            $requestedWorkers = \is_array($job['workers'] ?? null) ? $job['workers'] : [];
+            $this->sendWorkerPoolAckForPorts($requestedPorts, $requestedWorkers);
 
             return;
         }
@@ -1165,25 +1247,83 @@ class Dispatcher
      * 即使端口已存在也会回执，便于 Worker 侧停止重报。
      *
      * @param int[] $ports
+     * @param array<int, array<string, mixed>> $workers
      */
-    private function sendWorkerPoolAckForPorts(array $ports): void
+    private function sendWorkerPoolAckForPorts(array $ports, array $workers = []): void
     {
         if ($this->ipcClient === null || !$this->ipcClient->isConnected()) {
             return;
         }
         $pool = $this->passthroughCore->getWorkerPorts();
+        $workersByPort = [];
+        foreach ($workers as $worker) {
+            if (!\is_array($worker)) {
+                continue;
+            }
+            $descriptor = $this->normalizeWorkerDescriptor($worker, ControlMessage::ROLE_WORKER);
+            $p = (int)($descriptor['port'] ?? 0);
+            if ($p > 0) {
+                $workersByPort[$p] = $descriptor;
+            }
+        }
         foreach ($ports as $port) {
             $p = (int)$port;
             if ($p <= 0) {
                 continue;
             }
             $inPool = \in_array($p, $pool, true);
-            $this->ipcClient->send(ControlMessage::workerPoolAck($p, $inPool, ControlMessage::ROLE_WORKER));
+            $worker = $workersByPort[$p] ?? [];
+            $this->ipcClient->send(ControlMessage::workerPoolAck(
+                $p,
+                $inPool,
+                (string)($worker['role'] ?? ControlMessage::ROLE_WORKER),
+                (string)($worker['slot_id'] ?? ''),
+                (string)($worker['lease_id'] ?? ''),
+                (int)($worker['generation'] ?? 0)
+            ));
             $this->log(
                 "Worker 入池回执: port={$p}, in_pool=" . ($inPool ? '1' : '0') . ", dispatcher_port={$this->port}",
                 'DEBUG'
             );
         }
+    }
+
+    /**
+     * @param array<string, mixed> $worker
+     * @return array<string, mixed>
+     */
+    private function normalizeWorkerDescriptor(array $worker, string $defaultRole): array
+    {
+        return [
+            'role' => (string)($worker['role'] ?? $defaultRole),
+            'slot_id' => (string)($worker['slot_id'] ?? ''),
+            'lease_id' => (string)($worker['lease_id'] ?? ''),
+            'generation' => (int)($worker['generation'] ?? 0),
+            'port' => (int)($worker['port'] ?? 0),
+            'state' => (string)($worker['state'] ?? 'ready'),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $msg
+     * @return array<int, array<string, mixed>>
+     */
+    private function extractWorkerDescriptors(array $msg, string $defaultRole): array
+    {
+        $workers = \is_array($msg['workers'] ?? null) ? $msg['workers'] : [];
+        $normalized = [];
+        foreach ($workers as $worker) {
+            if (!\is_array($worker)) {
+                continue;
+            }
+            $descriptor = $this->normalizeWorkerDescriptor($worker, $defaultRole);
+            if ((int)($descriptor['port'] ?? 0) <= 0) {
+                continue;
+            }
+            $normalized[] = $descriptor;
+        }
+
+        return $normalized;
     }
 
     private function handleIpcMessage(array $msg): void
@@ -1233,6 +1373,7 @@ class Dispatcher
             case ControlMessage::TYPE_ADD_WORKER:
                 $ports = $msg['ports'] ?? [];
                 $role = $msg['role'] ?? ControlMessage::ROLE_WORKER;
+                $workerDescriptors = $this->extractWorkerDescriptors($msg, (string)$role);
                 $this->log('收到 ADD_WORKER 消息（已入队异步入池）: ' . \json_encode($ports) . ' role: ' . $role, 'INFO');
                 $norm = [];
                 foreach (\is_array($ports) ? $ports : [] as $port) {
@@ -1241,6 +1382,16 @@ class Dispatcher
                         $norm[] = $p;
                     }
                 }
+                foreach ($workerDescriptors as $worker) {
+                    if ((string)($worker['state'] ?? 'ready') !== 'ready') {
+                        continue;
+                    }
+                    $p = (int)($worker['port'] ?? 0);
+                    if ($p > 0) {
+                        $norm[] = $p;
+                    }
+                }
+                $norm = \array_values(\array_unique($norm));
                 if ($norm !== []) {
                     if ($role === ControlMessage::ROLE_MAINTENANCE) {
                         // 维护 Worker 注册
@@ -1261,7 +1412,7 @@ class Dispatcher
                                 . \implode(',', $duplicatePorts),
                                 'WARN'
                             );
-                            $this->sendWorkerPoolAckForPorts($duplicatePorts);
+                            $this->sendWorkerPoolAckForPorts($duplicatePorts, $workerDescriptors);
                             $this->deferredWorkerPoolJobs[] = ['type' => 'audit_worker_health'];
                             $norm = \array_values(\array_diff($norm, $duplicatePorts));
                         }
@@ -1269,7 +1420,7 @@ class Dispatcher
                             break;
                         }
                         // 业务 Worker 注册（原有逻辑）
-                        $this->deferredWorkerPoolJobs[] = ['type' => 'add_workers', 'ports' => $norm];
+                        $this->deferredWorkerPoolJobs[] = ['type' => 'add_workers', 'ports' => $norm, 'workers' => $workerDescriptors];
                     }
                 }
                 break;
@@ -1300,6 +1451,7 @@ class Dispatcher
             case ControlMessage::TYPE_SET_WORKER_POOL:
                 $ports = $msg['ports'] ?? [];
                 $role = (string)($msg['role'] ?? ControlMessage::ROLE_WORKER);
+                $workerDescriptors = $this->extractWorkerDescriptors($msg, $role);
                 if (\is_array($ports)) {
                     if ($role === ControlMessage::ROLE_MAINTENANCE) {
                         $normalizedPorts = [];
@@ -1342,7 +1494,19 @@ class Dispatcher
                         );
                         break;
                     }
-                    $this->deferredWorkerPoolJobs[] = ['type' => 'set_pool', 'ports' => $ports, 'role' => $role];
+                    if ($workerDescriptors !== []) {
+                        foreach ($workerDescriptors as $worker) {
+                            if ((string)($worker['state'] ?? 'ready') !== 'ready') {
+                                continue;
+                            }
+                            $p = (int)($worker['port'] ?? 0);
+                            if ($p > 0) {
+                                $ports[] = $p;
+                            }
+                        }
+                        $ports = \array_values(\array_unique(\array_map('intval', $ports)));
+                    }
+                    $this->deferredWorkerPoolJobs[] = ['type' => 'set_pool', 'ports' => $ports, 'workers' => $workerDescriptors, 'role' => $role];
                     $this->log('收到 SET_WORKER_POOL（已入队异步入池），候选端口数: ' . \count($ports) . ', role: ' . $role, 'INFO');
                 }
                 break;
@@ -1460,7 +1624,10 @@ class Dispatcher
                 
                 // 连接超时清理
                 $this->cleanupExpiredConnections();
-                
+
+                // 推进首字节未到的 pending 维护页队列（P0-5）
+                $this->pumpPendingMaintenancePageQueue();
+
                 // 事件处理
                 $this->selectAndProcess();
                 
@@ -1488,7 +1655,15 @@ class Dispatcher
     }
     
     /**
-     * 检查 Master 心跳
+     * 检查 Master 心跳。
+     *
+     * P1-1 修复：优先使用 IPC 连接状态作为 Master 存活信号；仅在 IPC 断开时才
+     * 回退到 Processer::isRunningByPid（Windows 下 tasklist 可能阻塞），
+     * 大幅减少 Windows 主循环阻塞次数。
+     *
+     * P1-2 修复：增加连续观测窗口（masterMissingGraceSec），必须同时满足
+     *   (masterMissingCount >= maxMasterMissing) 且 (持续观测 missing 的时长 >= graceSec)
+     * 才判定 Master 真正脱离，抵御 tasklist 瞬时超时 / IPC 抖动造成的误判。
      */
     private function checkMasterHeartbeat(): void
     {
@@ -1512,18 +1687,45 @@ class Dispatcher
         $masterPid = (int) ($instData['master_pid'] ?? 0);
         $masterEnabled = (bool) ($instData['master_enabled'] ?? false);
         
-        if ($masterEnabled && $masterPid > 0) {
-            $masterAlive = Processer::isRunningByPid($masterPid);
-            if (!$masterAlive) {
-                $this->masterMissingCount++;
-                if ($this->masterMissingCount >= $this->maxMasterMissing) {
-                    $this->log('Master 已退出，Dispatcher 自动停止', 'ERROR');
-                    $this->running = false;
-                }
-            } else {
-                $this->masterMissingCount = 0;
-            }
+        if (!($masterEnabled && $masterPid > 0)) {
+            return;
         }
+
+        // P1-1：IPC 连接正常即视为 Master 存活，跳过昂贵的 PID 检测
+        $ipcAlive = $this->ipcClient !== null && $this->ipcClient->isConnected();
+        $masterAlive = $ipcAlive ? true : Processer::isRunningByPid($masterPid);
+
+        if ($masterAlive) {
+            // 观察到存活即重置计数与持续时间窗
+            $this->masterMissingCount = 0;
+            $this->masterMissingSince = 0.0;
+            return;
+        }
+
+        // P1-2：首次记录 missing 起点
+        $this->masterMissingCount++;
+        if ($this->masterMissingSince <= 0.0) {
+            $this->masterMissingSince = \microtime(true);
+        }
+
+        $sustainedSec = \microtime(true) - $this->masterMissingSince;
+        if ($this->masterMissingCount < $this->maxMasterMissing) {
+            return;
+        }
+        if ($sustainedSec < $this->masterMissingGraceSec) {
+            // 次数到了但持续时间未达，继续观察
+            return;
+        }
+
+        $this->log(
+            \sprintf(
+                'Master 已退出，Dispatcher 自动停止（连续缺席 %d 次 / %.1fs）',
+                $this->masterMissingCount,
+                $sustainedSec
+            ),
+            'ERROR'
+        );
+        $this->running = false;
     }
     
     /**
@@ -1916,7 +2118,7 @@ class Dispatcher
                 $allWorkersUnavailable = $this->passthroughCore->lastNewConnectionEndedInAllWorkersDown();
                 if ($allWorkersUnavailable) {
                     $this->reportAllWorkersUnavailableToMaster();
-                    if (!$this->tryRespondWithStartupProtection($clientSocket, true)) {
+                    if (!$this->tryRespondWithStartupProtection($clientSocket, true, $clientIp, $connId)) {
                         @\socket_close($clientSocket);
                     }
                     $accepted++;
@@ -1924,7 +2126,7 @@ class Dispatcher
                 }
                 // 业务 Worker 与维护 Worker 均不可用时，立即返回 503（WLS 启动中），不再等待路由重试。
                 if ($this->shouldReturnStartup503Immediately()) {
-                    if (!$this->tryRespondWithStartupProtection($clientSocket)) {
+                    if (!$this->tryRespondWithStartupProtection($clientSocket, false, $clientIp, $connId)) {
                         @\socket_close($clientSocket);
                     }
                     $accepted++;
@@ -1939,7 +2141,7 @@ class Dispatcher
                     continue;
                 }
                 if ($this->shouldRespondWithStartupProtectionBeforeMaintenanceRouting()) {
-                    if (!$this->tryRespondWithStartupProtection($clientSocket)) {
+                    if (!$this->tryRespondWithStartupProtection($clientSocket, false, $clientIp, $connId)) {
                         @\socket_close($clientSocket);
                     }
                     $accepted++;
@@ -1986,14 +2188,14 @@ class Dispatcher
                     }
                 }
                 if ($this->shouldServeMaintenanceFallback()) {
-                    if (!$this->tryRespondWithStartupProtection($clientSocket, $allWorkersUnavailable)) {
+                    if (!$this->tryRespondWithStartupProtection($clientSocket, $allWorkersUnavailable, $clientIp, $connId)) {
                         @\socket_close($clientSocket);
                     }
-                } elseif (!$this->tryRespondServiceUnavailable($clientSocket, $allWorkersUnavailable)) {
+                } elseif (!$this->tryRespondServiceUnavailable($clientSocket, $allWorkersUnavailable, $clientIp, $connId)) {
                     // HTTPS/TLS 原始流无法返回明文 503，只能关闭连接
                     @\socket_close($clientSocket);
                 } else {
-                    // 已返回 503 并关闭连接
+                    // 已返回 503、关闭连接，或已入队等待首字节（pump 负责后续回写）
                 }
             }
             
@@ -2013,6 +2215,14 @@ class Dispatcher
         $this->connectionLastActivity[$connId] = \microtime(true);
         $this->connectionBytes[$connId] = ['in' => 0, 'out' => 0];
         $this->requestCount++;
+        // P2 观测性埋点：此 hook 是 Dispatcher 三条"成功转发到 Worker"路径的汇合点，
+        // 计入一次即覆盖「直接命中 / 维护 Worker 接管 / 重试后命中」全部子路径，避免重复计数。
+        \Weline\Server\Observability\MetricsRegistry::inc('dispatcher.connection.dispatched');
+        // 连接成功路由到 Worker 也意味着"至少有 1 个健康 Worker"事实成立（P1-4 latch）
+        if (!$this->hasEverObservedHealthyWorker) {
+            $this->hasEverObservedHealthyWorker = true;
+            $this->healthyZeroSince = 0.0;
+        }
 
         $workerPort = $this->passthroughCore->getConnectionWorkerPort($clientSocket);
         if ($this->isDevMode) {
@@ -2101,18 +2311,22 @@ class Dispatcher
 
     private function shouldApplyStartupProtection(): bool
     {
-        if (!$this->startupProtectionEnabled || $this->startupProtectionWindowSec <= 0.0) {
-            return false;
-        }
-
-        $uptime = \time() - $this->startTime;
-        if ($uptime < 0 || $uptime > $this->startupProtectionWindowSec) {
+        if (!$this->startupProtectionEnabled) {
             return false;
         }
 
         $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
         $healthy = (int)($healthSummary['healthy'] ?? 0);
         $dynamicTotal = (int)($healthSummary['total'] ?? 0);
+        $this->latchHealthyObservation($healthy);
+
+        // P1-4 修复：替代旧的「uptime <= startupProtectionWindowSec=45s」硬窗口判定。
+        // 只要从未观察过健康 Worker，就视为"仍在启动中"，持续返回启动中维护页；
+        // 避免冷启动超过 45 秒的场景直接丢维护页变成裸 503/断开。
+        if (!$this->hasEverObservedHealthyWorker) {
+            return true;
+        }
+
         $poolSize = $this->passthroughCore->getWorkerCount();
         $expected = $this->expectedWorkerCount > 0 ? $this->expectedWorkerCount : $dynamicTotal;
         // 仅维护 Worker 先入池时，期望业务 Worker 数会大于当前池大小；若不封顶会长期误判「未就绪」而只返回 503
@@ -2142,20 +2356,50 @@ class Dispatcher
 
         $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
         $total = (int)($healthSummary['total'] ?? 0);
+        $healthy = (int)($healthSummary['healthy'] ?? 0);
+        $this->latchHealthyObservation($healthy);
+
         if ($total <= 0) {
             // 还没有任何可路由后端（启动窗口/池未下发）→ 返回维护页而非断开连接
             return true;
         }
 
+        // P1-5 修复：healthy==0 且 total>0（Worker 全挂但注册表尚未清理）持续 >= 阈值时，
+        // 走维护页兜底而非裸 503 / 裸关断。
+        $now = \microtime(true);
+        if ($healthy <= 0) {
+            if ($this->healthyZeroSince <= 0.0) {
+                $this->healthyZeroSince = $now;
+            }
+            if (($now - $this->healthyZeroSince) >= $this->healthyZeroMaintenanceThresholdSec) {
+                return true;
+            }
+        } else {
+            $this->healthyZeroSince = 0.0;
+        }
+
         // 增强：如果业务 Worker 健康数量为 0，且存在维护 Worker 端口（已注册但可能未就绪），
-        // 且在启动保护窗口内，应返回维护页面友好提示，而非关闭连接
-        $healthy = (int)($healthSummary['healthy'] ?? 0);
+        // 且启动保护触发，应返回维护页面友好提示，而非关闭连接
         $maintenancePorts = $this->passthroughCore->getMaintenanceWorkerPorts();
         if ($healthy <= 0 && $maintenancePorts !== [] && $this->shouldApplyStartupProtection()) {
             return true;
         }
 
         return $this->shouldApplyStartupProtection();
+    }
+
+    /**
+     * 捕获并持久化「曾经观察到至少 1 个健康 Worker」这一事实。
+     *
+     * 用于 {@see shouldApplyStartupProtection()} 在没有硬 uptime 窗口的前提下
+     * 判断系统是否曾进入"正常服务"状态；一旦 latch 为 true，即从"启动中维护页"切换到"业务降级维护页"。
+     */
+    private function latchHealthyObservation(int $healthy): void
+    {
+        if ($healthy > 0 && !$this->hasEverObservedHealthyWorker) {
+            $this->hasEverObservedHealthyWorker = true;
+            $this->healthyZeroSince = 0.0;
+        }
     }
 
     private function shouldRespondWithStartupProtectionBeforeMaintenanceRouting(): bool
@@ -2377,45 +2621,208 @@ HTML;
     /**
      * 启动保护响应：在可控窗口内明确返回 503，避免客户端表现为随机断连。
      *
+     * P0-5 修复：刚 accept 的 non-blocking socket 首字节未到时不再立即 close
+     * （浏览器会看到 ERR_EMPTY_RESPONSE），而是入队由主循环 pumpPendingMaintenancePageQueue
+     * 稍后再 peek；首字节到达后再写维护页，超时（pendingMaintenanceWaitTimeoutSec）才关闭。
+     *
+     * 返回值语义：
+     *   true  — 已写维护页并关闭，或已入队（调用方无需 close）
+     *   false — 检测到 TLS 握手（0x16）或入队已满，调用方应自行 close
+     *
      * @param \Socket|resource $clientSocket
      */
-    private function tryRespondWithStartupProtection($clientSocket, bool $allWorkersUnavailable = false): bool
-    {
-        $peek = '';
-        $peekLen = @\socket_recv($clientSocket, $peek, 8, \MSG_PEEK);
-        if ($peekLen === false || $peekLen <= 0 || $peek === '') {
-            return false;
-        }
-
-        if ($this->isTlsHandshakePeek($peek)) {
-            return false;
-        }
-
-        @\socket_write($clientSocket, $this->resolveFallbackMaintenancePage($allWorkersUnavailable));
-        @\socket_close($clientSocket);
-        return true;
+    private function tryRespondWithStartupProtection(
+        $clientSocket,
+        bool $allWorkersUnavailable = false,
+        string $clientIp = '',
+        int $connId = 0
+    ): bool {
+        return $this->respondOrEnqueueMaintenancePage($clientSocket, $allWorkersUnavailable, $clientIp, $connId);
     }
 
     /**
      * 在非 TLS 的 HTTP 请求上返回 503，避免浏览器表现为 ERR_CONNECTION_CLOSED。
      *
+     * 语义与 {@see tryRespondWithStartupProtection()} 一致；两者均统一走
+     * {@see respondOrEnqueueMaintenancePage()} 以保证新 accept 的 non-blocking socket
+     * 可以被可靠地回写维护页（P0-5）。
+     *
      * @param \Socket|resource $clientSocket
      */
-    private function tryRespondServiceUnavailable($clientSocket, bool $allWorkersUnavailable = false): bool
-    {
+    private function tryRespondServiceUnavailable(
+        $clientSocket,
+        bool $allWorkersUnavailable = false,
+        string $clientIp = '',
+        int $connId = 0
+    ): bool {
+        return $this->respondOrEnqueueMaintenancePage($clientSocket, $allWorkersUnavailable, $clientIp, $connId);
+    }
+
+    /**
+     * 统一的维护页写入 / 入队策略（P0-5 核心）。
+     *
+     * 行为：
+     *   1) peek 首字节为 TLS(0x16) → 返回 false，由调用方关闭（TLS 无法写明文 503）。
+     *   2) peek 到非 TLS 首字节 → 立即写维护页并关闭，返回 true。
+     *   3) peek 返回 0（对端已关闭）→ 关闭 socket，返回 true。
+     *   4) peek 返回 false（非阻塞 EAGAIN，首字节尚未到达）→ 入队等待，返回 true。
+     *   5) 队列已满 → 返回 false，让调用方关闭。
+     *
+     * @param \Socket|resource $clientSocket
+     */
+    private function respondOrEnqueueMaintenancePage(
+        $clientSocket,
+        bool $allWorkersUnavailable,
+        string $clientIp,
+        int $connId
+    ): bool {
+        // P2 观测性埋点：所有进入"维护页 / 503 启动保护 / all-workers-down"兜底路径的连接都在此汇合。
+        // 和 `registerAcceptedClientConnection` 中的 dispatched 计数互斥（要么成功路由要么兜底），
+        // 运维侧 "dispatched vs. degraded" 比值 = 当前 Dispatcher 健康度。
+        \Weline\Server\Observability\MetricsRegistry::inc(
+            $allWorkersUnavailable
+                ? 'dispatcher.connection.all_workers_down'
+                : 'dispatcher.connection.startup_protected'
+        );
+
         $peek = '';
         $peekLen = @\socket_recv($clientSocket, $peek, 8, \MSG_PEEK);
-        if ($peekLen === false || $peekLen <= 0 || $peek === '') {
+
+        if ($peekLen !== false && $peekLen > 0 && $peek !== '' && $this->isTlsHandshakePeek($peek)) {
             return false;
         }
 
-        if ($this->isTlsHandshakePeek($peek)) {
-            return false;
+        if ($peekLen !== false && $peekLen > 0 && $peek !== '') {
+            $this->writeMaintenancePageAndClose($clientSocket, $allWorkersUnavailable);
+            return true;
         }
 
+        if ($peekLen === 0) {
+            // 对端已关闭写端或已 RST；直接回收即可
+            @\socket_close($clientSocket);
+            return true;
+        }
+
+        // peekLen === false：非阻塞 socket 上首字节尚未到达。
+        // 旧实现会在此直接关闭连接，导致客户端收到 ERR_EMPTY_RESPONSE（P0-5）。
+        // 现改为入队由主循环异步推进，首字节到达或超时后再写页/关闭。
+        return $this->enqueuePendingMaintenancePage($clientSocket, $allWorkersUnavailable, $clientIp, $connId);
+    }
+
+    /**
+     * 写维护页 + 优雅关闭。
+     *
+     * Windows 下 closesocket() 时若接收缓冲仍有未读字节（例如刚 peek 了请求首字节），
+     * 内核会发 **RST** 而非 FIN，浏览器表现为 ERR_CONNECTION_RESET 读不到 503 页面。
+     * 这里在写完响应后：
+     *   1) `socket_shutdown($sock, 1)` 发送 FIN，通知对端"响应已发完"；
+     *   2) 短暂 drain 对端剩余请求数据（最多 50ms，遇到 EAGAIN 立刻返回），消除 RST 风险；
+     *   3) `socket_close` 回收。
+     *
+     * 此路径只在维护页兜底时走，低吞吐路径可以容忍 drain 开销；
+     * 正常业务连接由 PassthroughCore 转发，不会走这里。
+     *
+     * @param \Socket|resource $clientSocket
+     */
+    private function writeMaintenancePageAndClose($clientSocket, bool $allWorkersUnavailable): void
+    {
         @\socket_write($clientSocket, $this->resolveFallbackMaintenancePage($allWorkersUnavailable));
+
+        // SHUT_WR = 1：发送 FIN 但保留读端继续抽干，避免 Windows 下 closesocket 发 RST
+        @\socket_shutdown($clientSocket, 1);
+
+        $drainDeadline = \microtime(true) + 0.05;
+        while (\microtime(true) < $drainDeadline) {
+            $read = [$clientSocket];
+            $write = null;
+            $except = null;
+            $ready = @\socket_select($read, $write, $except, 0, 5_000);
+            if ($ready === false || $ready === 0) {
+                break;
+            }
+            $buf = '';
+            $n = @\socket_recv($clientSocket, $buf, 4096, 0);
+            if ($n === false || $n <= 0) {
+                break;
+            }
+        }
+
         @\socket_close($clientSocket);
+    }
+
+    /**
+     * 把首字节未到的连接入 pending 维护页队列。
+     *
+     * @param \Socket|resource $clientSocket
+     */
+    private function enqueuePendingMaintenancePage(
+        $clientSocket,
+        bool $allWorkersUnavailable,
+        string $clientIp,
+        int $connId
+    ): bool {
+        if (\count($this->pendingMaintenancePageQueue) >= $this->pendingMaintenancePageQueueMax) {
+            return false;
+        }
+        $key = $connId > 0 ? $connId : $this->socketId($clientSocket);
+        if (isset($this->pendingMaintenancePageQueue[$key])) {
+            // 防止同一 connId 重复入队（同一 socket 指针）
+            return true;
+        }
+        $this->pendingMaintenancePageQueue[$key] = [
+            'socket' => $clientSocket,
+            'clientIp' => $clientIp !== '' ? $clientIp : '0.0.0.0',
+            'acceptedAt' => \microtime(true),
+            'allWorkersUnavailable' => $allWorkersUnavailable,
+        ];
         return true;
+    }
+
+    /**
+     * 主循环每 tick 推进 pending 维护页队列：
+     *   - 首字节到达且非 TLS → 写维护页并关闭
+     *   - 首字节是 TLS(0x16) → 直接关闭（TLS 原始流无法写明文 503）
+     *   - 对端断开（peekLen===0）→ 关闭
+     *   - 超时（pendingMaintenanceWaitTimeoutSec）→ 关闭
+     *   - 其余（EAGAIN）→ 保留等下一 tick
+     */
+    private function pumpPendingMaintenancePageQueue(): void
+    {
+        if ($this->pendingMaintenancePageQueue === []) {
+            return;
+        }
+
+        $now = \microtime(true);
+        foreach ($this->pendingMaintenancePageQueue as $key => $entry) {
+            $sock = $entry['socket'];
+
+            $peek = '';
+            $peekLen = @\socket_recv($sock, $peek, 8, \MSG_PEEK);
+
+            if ($peekLen !== false && $peekLen > 0 && $peek !== '' && $this->isTlsHandshakePeek($peek)) {
+                @\socket_close($sock);
+                unset($this->pendingMaintenancePageQueue[$key]);
+                continue;
+            }
+
+            if ($peekLen !== false && $peekLen > 0 && $peek !== '') {
+                $this->writeMaintenancePageAndClose($sock, $entry['allWorkersUnavailable']);
+                unset($this->pendingMaintenancePageQueue[$key]);
+                continue;
+            }
+
+            if ($peekLen === 0) {
+                @\socket_close($sock);
+                unset($this->pendingMaintenancePageQueue[$key]);
+                continue;
+            }
+
+            // peekLen === false（EAGAIN）→ 超时检查
+            if (($now - $entry['acceptedAt']) >= $this->pendingMaintenanceWaitTimeoutSec) {
+                @\socket_close($sock);
+                unset($this->pendingMaintenancePageQueue[$key]);
+            }
+        }
     }
 
     private function isTlsHandshakePeek(string $peek): bool
@@ -2905,7 +3312,13 @@ HTML;
         foreach ($this->clientConnections as $connId => $socket) {
             $this->closeConnection($connId, 'socket_select_exception_or_read_error');
         }
-        
+
+        // 关闭 pending 维护页队列中未完成的连接（P0-5）
+        foreach ($this->pendingMaintenancePageQueue as $entry) {
+            @\socket_close($entry['socket']);
+        }
+        $this->pendingMaintenancePageQueue = [];
+
         // 关闭透传核心中的所有连接
         $this->passthroughCore->closeAllConnections();
         

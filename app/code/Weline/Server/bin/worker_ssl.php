@@ -781,18 +781,14 @@ WlsLogger::info_(
     "EventLoop 已初始化 requested={$eventLoopMeta['requested']} resolved={$eventLoopMeta['resolved']} backend={$coroutineRuntime->getLoopBackend()}"
 );
 
-// Worker 不进行连接池预热
-// 连接池将在首次被使用时自动初始化并预热到 min_idle 个连接
+// Worker 启动后立即预热 Session/Memory 长连接（min_idle=1），
+// 让共享服务尽快获得消费者令牌，避免误入空消费者退出窗口。
 $configuredLongLivedMaxActive = (int)($wlsInstance['fiber']['long_lived_max_active'] ?? $wls['fiber']['long_lived_max_active'] ?? 4);
 if ($configuredLongLivedMaxActive >= 0) {
     $longLivedMaxActive = $configuredLongLivedMaxActive;
 }
 
 if ($runtimeError === null && isset($sessionHost, $sessionPort, $memoryHost, $memoryPort)) {
-    // 异步预热连接池：调用 getInstance 触发后台连接建立
-    // min_idle=1 确保连接池在后台异步建立到 Session/Memory 的长连接
-    WlsLogger::info_('[ConnectionPool] Session 连接池配置: host=' . $sessionHost . ' port=' . $sessionPort);
-    WlsLogger::info_('[ConnectionPool] Memory 连接池配置: host=' . $memoryHost . ' port=' . $memoryPort);
     try {
         \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($sessionHost, $sessionPort, [
             'token_file_name' => $sessionTokenFileName,
@@ -804,9 +800,9 @@ if ($runtimeError === null && isset($sessionHost, $sessionPort, $memoryHost, $me
             'min_idle' => 1,
             'log_pool_lifecycle' => false,
         ]);
-        WlsLogger::info_('[ConnectionPool] 连接池已在后台异步预热，首次请求时即可用');
+        WlsLogger::info_('[ConnectionPool] Session/Memory 长连接预热完成（min_idle=1）');
     } catch (\Throwable $e) {
-        WlsLogger::warning_('[ConnectionPool] 预热失败，将在首次请求时重试: ' . $e->getMessage());
+        WlsLogger::warning_('[ConnectionPool] 预热失败，将在首次请求时自动重试: ' . $e->getMessage());
     }
 }
 
@@ -1633,7 +1629,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $waitingForAck = !($ipcClient?->isReadyStateConfirmed() ?? false);
         WlsLogger::info_(
             $waitingForAck
-                ? "已上报就绪状态，Master ACK 确认结果：等待中"
+                ? "已上报就绪状态，等待 Master+Dispatcher 入池闭环 ACK（当前：等待中）"
                 : "已上报就绪状态，Master ACK 确认结果：成功（控制面已同步确认 READY）"
         );
         $readySentTime = \microtime(true);

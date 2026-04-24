@@ -120,6 +120,9 @@ class AiSiteQueuedPlanTaskPlanFlowTest extends AbstractAiSiteWorkbenchIntegratio
         );
         self::assertTrue((bool)($confirmTaskPlanPayload['success'] ?? false), \json_encode($confirmTaskPlanPayload, \JSON_UNESCAPED_UNICODE));
         self::assertSame(1, (int)($confirmTaskPlanPayload['data']['task_plan_confirmed'] ?? 0));
+        self::assertArrayNotHasKey('scope', $confirmTaskPlanPayload['data'] ?? []);
+        self::assertArrayNotHasKey('events', $confirmTaskPlanPayload['data'] ?? []);
+        self::assertArrayNotHasKey('task_plan_structured', $confirmTaskPlanPayload['data'] ?? []);
     }
 
     /**

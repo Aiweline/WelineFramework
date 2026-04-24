@@ -156,7 +156,11 @@ class ServiceInstance
             return $rootPid;
         }
 
-        return $this->pid > 0 ? $this->pid : 0;
+        if ($this->pid > 0) {
+            return $this->pid;
+        }
+
+        return $this->getLauncherPid();
     }
 
     /**

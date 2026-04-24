@@ -506,8 +506,8 @@ class Processer
         
         # ========== 前端模式：显示进程输出 ==========
         if ($foreground) {
-            // On Windows, non-interactive PowerShell Start-Process can create headless
-            // conhost instances. Use cmd/start so frontend workers get a real console.
+            // Windows foreground launches must bypass cmd.exe; cmd can fail with
+            // 0xc0000142 on some desktop sessions and block WLS startup.
             if (IS_WIN) {
                 $pid = self::createWindowsForeground($pname, $enableLog, $availableFunctions);
                 if ($pid > 0) {
@@ -2402,21 +2402,6 @@ class Processer
                 $argumentList = self::tokenizeCommandLineArguments($arguments);
             }
             $processName = self::extractCommandLineArg($processCommand, 'name');
-            $foregroundScript = null;
-            if ($foreground) {
-                $foregroundScript = self::writeWindowsForegroundLauncherScript($phpBinary, $arguments, BP);
-                if ($foregroundScript === null) {
-                    if ($enableLog) {
-                        self::setOutput(
-                            $processCommand,
-                            "[ERROR] failed to prepare windows foreground batch launcher" . PHP_EOL,
-                            true
-                        );
-                    }
-                    $results[$key] = 0;
-                    continue;
-                }
-            }
             $item = [
                 'key' => (string) $key,
                 'command' => $processCommand,
@@ -2428,7 +2413,6 @@ class Processer
                 'enable_log' => $enableLog,
                 'block' => $block,
                 'foreground' => $foreground,
-                'foreground_script' => $foregroundScript,
             ];
 
             $batchLaunchItems[] = $item;
@@ -2450,19 +2434,17 @@ class Processer
             $resultPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-result-');
             $errorPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-error-');
             if ($resultPath === false || $resultPath === '' || $errorPath === false || $errorPath === '') {
-                self::cleanupWindowsForegroundLaunchers($batchLaunchItems);
                 return null;
             }
             $scriptPath = self::writeWindowsBatchCreateScript($batchLaunchItems, $resultPath, $errorPath);
             if ($scriptPath === null) {
-                self::cleanupWindowsForegroundLaunchers($batchLaunchItems);
                 @\unlink($resultPath);
                 @\unlink($errorPath);
                 return null;
             }
 
             $nullDevice = 'NUL';
-            $batchCommand = 'cmd /d /c '
+            $batchCommand = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File '
                 . \escapeshellarg($scriptPath);
             $lastError = null;
 
@@ -2479,7 +2461,7 @@ class Processer
                 });
                 try {
                     $psProcess = @\proc_open(
-                        self::buildWindowsCmdProcOpenCommand($scriptPath),
+                        self::buildWindowsPowerShellProcOpenCommand($scriptPath),
                         $descriptorspec,
                         $psPipes,
                         BP,
@@ -2491,7 +2473,6 @@ class Processer
                 }
 
                 if (!\is_resource($psProcess)) {
-                    self::cleanupWindowsForegroundLaunchers($batchLaunchItems);
                     @\unlink($scriptPath);
                     @\unlink($resultPath);
                     @\unlink($errorPath);
@@ -2517,7 +2498,6 @@ class Processer
                 }
 
                 if ($lastError !== null) {
-                    self::cleanupWindowsForegroundLaunchers($batchLaunchItems);
                     @\unlink($scriptPath);
                     @\unlink($resultPath);
                     @\unlink($errorPath);
@@ -2777,7 +2757,7 @@ class Processer
     }
 
     /**
-     * @param array<int, array{key: string, command: string, php: string, arguments: string, process_name: string, cwd: string, enable_log: bool, foreground: bool, foreground_script?: string|null}> $launchItems
+     * @param array<int, array{key: string, command: string, php: string, arguments: string, process_name: string, cwd: string, enable_log: bool, foreground: bool}> $launchItems
      */
     private static function writeWindowsBatchCreateScript(array $launchItems, string $resultPath, string $errorPath): ?string
     {
@@ -2791,28 +2771,15 @@ class Processer
             return null;
         }
 
-        $scriptPath = $tmpBase . '.cmd';
+        $scriptPath = $tmpBase . '.ps1';
         @\unlink($tmpBase);
 
-        if (@\file_put_contents($scriptPath, $script) === false) {
+        if (@\file_put_contents($scriptPath, self::WINDOWS_PS1_UTF8_BOM . $script) === false) {
             @\unlink($scriptPath);
             return null;
         }
 
         return $scriptPath;
-    }
-
-    /**
-     * @param array<int, array{foreground_script?: string|null}> $launchItems
-     */
-    private static function cleanupWindowsForegroundLaunchers(array $launchItems): void
-    {
-        foreach ($launchItems as $item) {
-            $foregroundScript = (string) ($item['foreground_script'] ?? '');
-            if ($foregroundScript !== '' && \is_file($foregroundScript)) {
-                @\unlink($foregroundScript);
-            }
-        }
     }
 
     /**
@@ -2881,18 +2848,14 @@ class Processer
     }
 
     /**
-     * Launch a visible Windows console for frontend workers, then poll by
-     * command line identity because cmd/start does not expose the child PID.
+     * Launch a visible Windows console for frontend workers without routing
+     * through cmd.exe, then poll by command-line identity if PID echo is delayed.
      */
     private static function createWindowsForeground(string $pname, bool $enableLog, array $availableFunctions): int
     {
-        if (
-            empty($availableFunctions['proc_open'])
-            && empty($availableFunctions['popen'])
-            && empty($availableFunctions['exec'])
-        ) {
+        if (empty($availableFunctions['proc_open'])) {
             if ($enableLog) {
-                self::setOutput($pname, "[ERROR] windows foreground launch requires proc_open, popen, or exec" . PHP_EOL, true);
+                self::setOutput($pname, "[ERROR] windows foreground launch requires proc_open to bypass cmd.exe" . PHP_EOL, true);
             }
 
             return 0;
@@ -2900,84 +2863,18 @@ class Processer
 
         [$phpBinary, $arguments] = self::splitPhpCommandForStartProcess($pname);
         $windowTitle = self::resolveWindowsForegroundWindowTitle($pname);
-        if (!empty($availableFunctions['proc_open'])) {
-            $result = self::launchWindowsForegroundPhpProcess($phpBinary, $arguments, BP, $windowTitle);
-            $directPid = (int) ($result['pid'] ?? 0);
-            if ($directPid > 0) {
-                return self::setPid($pname, $directPid);
-            }
-
-            $phpPid = self::waitForManagedProcessLaunch($pname, 5.0);
-            if ($phpPid > 0) {
-                return self::setPid($pname, $phpPid);
-            }
-            if ($enableLog && (string) ($result['error'] ?? '') !== '') {
-                self::setOutput($pname, "[WARN] windows foreground direct launch failed: " . (string) $result['error'] . PHP_EOL, true);
-            }
-
-            return 0;
+        $result = self::launchWindowsForegroundPhpProcess($phpBinary, $arguments, BP, $windowTitle);
+        $directPid = (int) ($result['pid'] ?? 0);
+        if ($directPid > 0) {
+            return self::setPid($pname, $directPid);
         }
 
-        $scriptPath = self::writeWindowsForegroundLauncherScript($phpBinary, $arguments, BP, $windowTitle);
-        if ($scriptPath === null) {
-            if ($enableLog) {
-                self::setOutput($pname, "[ERROR] failed to prepare windows foreground launcher" . PHP_EOL, true);
-            }
-
-            return 0;
+        $phpPid = self::waitForManagedProcessLaunch($pname, 5.0);
+        if ($phpPid > 0) {
+            return self::setPid($pname, $phpPid);
         }
-
-        $launchCommand = self::buildWindowsForegroundStartCommand($scriptPath, BP, $windowTitle);
-        $lastError = null;
-        $launched = false;
-
-        if (!empty($availableFunctions['popen'])) {
-            \set_error_handler(function ($type, $msg) use (&$lastError) {
-                $lastError = $msg;
-                return true;
-            });
-            try {
-                $handle = @\popen($launchCommand, 'r');
-            } finally {
-                \restore_error_handler();
-            }
-
-            if (\is_resource($handle)) {
-                @\pclose($handle);
-                $launched = true;
-            }
-        }
-
-        if (!$launched && !empty($availableFunctions['exec'])) {
-            \set_error_handler(function ($type, $msg) use (&$lastError) {
-                $lastError = $msg;
-                return true;
-            });
-            try {
-                @\exec($launchCommand . ' > NUL 2>NUL', $outputLines, $exitCode);
-            } finally {
-                \restore_error_handler();
-            }
-            unset($outputLines, $exitCode);
-            $launched = $lastError === null;
-        }
-
-        if (!$launched) {
-            @\unlink($scriptPath);
-            if ($enableLog && $lastError !== null) {
-                self::setOutput($pname, "[ERROR] windows foreground launch failed: {$lastError}" . PHP_EOL, true);
-            }
-
-            return 0;
-        }
-
-        $pid = self::waitForManagedProcessLaunch($pname, 5.0);
-        if ($pid > 0) {
-            return $pid;
-        }
-
-        if ($enableLog) {
-            self::setOutput($pname, "[WARN] windows foreground launch started without PID confirmation" . PHP_EOL, true);
+        if ($enableLog && (string) ($result['error'] ?? '') !== '') {
+            self::setOutput($pname, "[WARN] windows foreground direct launch failed: " . (string) $result['error'] . PHP_EOL, true);
         }
 
         return 0;
@@ -2989,6 +2886,23 @@ class Processer
     private static function toPowerShellSingleQuoted(string $value): string
     {
         return "'" . \str_replace("'", "''", $value) . "'";
+    }
+
+    /**
+     * @param list<string> $values
+     */
+    private static function buildPowerShellArrayLiteral(array $values): string
+    {
+        if ($values === []) {
+            return '@()';
+        }
+
+        return "@(\n"
+            . \implode(",\n", \array_map(
+                static fn (string $value): string => '    ' . self::toPowerShellSingleQuoted($value),
+                $values
+            ))
+            . "\n)";
     }
 
     /**
@@ -3116,75 +3030,29 @@ POWERSHELL;
         return $scriptPath;
     }
 
-    private static function writeWindowsForegroundLauncherScript(
+    /**
+     * @param list<string> $arguments
+     */
+    private static function writeWindowsForegroundPhpStartScript(
         string $phpBinary,
-        string $arguments,
+        array $arguments,
         string $workingDir,
         string $windowTitle = ''
-    ): ?string
-    {
-        $arguments = self::normalizeWindowsForegroundArguments($arguments);
+    ): ?string {
         $windowTitle = self::normalizeWindowsForegroundWindowTitle($windowTitle);
-        $template = <<<'CMD'
-@echo off
-setlocal DisableDelayedExpansion
-chcp 65001 >NUL
-title __WINDOW_TITLE__
-cd /d "__WORKING_DIR__"
-"__PHP_BINARY__" __ARGUMENTS__
-set "exit_code=%ERRORLEVEL%"
-del "%~f0" >NUL 2>&1
-exit /b %exit_code%
-CMD;
-
-        $script = \str_replace(
-            ['__WINDOW_TITLE__', '__WORKING_DIR__', '__PHP_BINARY__', '__ARGUMENTS__'],
-            [
-                self::escapeWindowsBatchLiteral($windowTitle),
-                self::escapeWindowsBatchLiteral($workingDir),
-                self::escapeWindowsBatchLiteral($phpBinary),
-                self::escapeWindowsBatchArgumentLiteral($arguments),
-            ],
-            $template
-        );
-
-        $tmpBase = \tempnam(\sys_get_temp_dir(), 'weline-foreground-');
-        if ($tmpBase === false || $tmpBase === '') {
-            return null;
-        }
-
-        $scriptPath = $tmpBase . '.cmd';
-        @\unlink($tmpBase);
-
-        if (@\file_put_contents($scriptPath, $script) === false) {
-            @\unlink($scriptPath);
-            return null;
-        }
-
-        return $scriptPath;
-    }
-
-    private static function writeWindowsForegroundStartScript(
-        string $scriptPath,
-        string $workingDir,
-        string $windowTitle = ''
-    ): ?string
-    {
-        $cmdLine = self::buildWindowsForegroundCmdLine($scriptPath, $windowTitle);
-        // PowerShell 直接用 & 调用 cmd.exe（保持父子关系），不用 Start-Process（会分离进程）。
-        // cmd.exe /d /c <script> 会启动 PHP，PHP 是 WLS Master。
-        // PHP 进程将成为 PowerShell 的子进程，PowerShell 是 proc_open 的子进程。
-        // 这样 proc_close 等待 PowerShell 时会一起等待整个进程树。
-        // 但 WLS Master 是长期运行的，不会退出。
-        // 因此需要：不等待 PowerShell 退出，而是立即返回 cmd.exe 的 PID。
-        // 方案：后台启动 PowerShell，PowerShell 启动 cmd.exe 后立即输出 cmd.exe PID 并退出，
-        // cmd.exe 作为孤儿继续运行（但它的父进程是 PowerShell，PowerShell 已退出）。
-        // 更好的方案：直接用 cmd.exe 作为 proc_open 的子进程，不用 PowerShell 中转。
+        $argList = self::buildPowerShellArrayLiteral($arguments);
         $template = <<<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
-$scriptPath = __SCRIPT__
+$phpExe = __PHP__
 $wd = __WD__
-$cmdLine = __CMD_LINE__
+$windowTitle = __WINDOW_TITLE__
+$argList = __ARGS__
+try {
+    if ($windowTitle -ne '') {
+        $Host.UI.RawUI.WindowTitle = $windowTitle
+    }
+} catch {
+}
 try {
     Set-Location -LiteralPath $wd -ErrorAction Stop
 } catch {
@@ -3192,21 +3060,18 @@ try {
     exit 1
 }
 $startArgs = @{
-    FilePath = 'cmd.exe'
+    FilePath = $phpExe
     WorkingDirectory = $wd
     WindowStyle = 'Normal'
     PassThru = $true
     ErrorAction = 'Stop'
-    ArgumentList = @('/d','/c', $cmdLine)
+}
+if ($argList.Count -gt 0) {
+    $startArgs.ArgumentList = $argList
 }
 try {
     $p = Start-Process @startArgs
-    # 立即输出 cmd.exe PID，让 PHP proc_open 能读到
     [Console]::Out.WriteLine([string]$p.Id)
-    # 等待 cmd.exe 进程退出（这样 PHP proc_close 时整个树都能被清理）
-    # 但 WLS 是长期运行的，会一直等待...
-    # 解决方案：不在这里等待，而是在 PHP 端通过 waitForManagedProcessLaunch 找到真正的 PHP 进程
-    # 关键：必须保持 cmd.exe 是 PowerShell 的子进程，这样 taskkill /T 才能杀掉整个树
 } catch {
     [Console]::Error.WriteLine($_.Exception.Message)
     exit 1
@@ -3214,16 +3079,17 @@ try {
 POWERSHELL;
 
         $script = \str_replace(
-            ['__SCRIPT__', '__WD__', '__CMD_LINE__'],
+            ['__PHP__', '__WD__', '__WINDOW_TITLE__', '__ARGS__'],
             [
-                self::toPowerShellSingleQuoted($scriptPath),
+                self::toPowerShellSingleQuoted($phpBinary),
                 self::toPowerShellSingleQuoted($workingDir),
-                self::toPowerShellSingleQuoted($cmdLine),
+                self::toPowerShellSingleQuoted($windowTitle),
+                $argList,
             ],
             $template
         );
 
-        $tmpBase = \tempnam(\sys_get_temp_dir(), 'weline-foreground-start-');
+        $tmpBase = \tempnam(\sys_get_temp_dir(), 'weline-foreground-php-');
         if ($tmpBase === false || $tmpBase === '') {
             return null;
         }
@@ -3242,15 +3108,16 @@ POWERSHELL;
     /**
      * @return array{pid:int,error:string}
      */
-    private static function launchWindowsForegroundWrapperProcess(
-        string $scriptPath,
+    private static function launchWindowsForegroundPhpProcess(
+        string $phpBinary,
+        string $arguments,
         string $workingDir,
         string $windowTitle = ''
-    ): array
-    {
-        $startScriptPath = self::writeWindowsForegroundStartScript($scriptPath, $workingDir, $windowTitle);
+    ): array {
+        $argv = self::tokenizeCommandLineArguments($arguments);
+        $startScriptPath = self::writeWindowsForegroundPhpStartScript($phpBinary, $argv, $workingDir, $windowTitle);
         if ($startScriptPath === null) {
-            return ['pid' => 0, 'error' => 'failed to prepare foreground start script'];
+            return ['pid' => 0, 'error' => 'failed to prepare foreground php start script'];
         }
 
         $descriptorspec = [
@@ -3336,27 +3203,15 @@ POWERSHELL;
 
         @\unlink($startScriptPath);
 
-        $error = $stderr;
-        if ($error === '' && $lastError !== null) {
-            $error = $lastError;
-        }
+        $error = \trim(\implode(' | ', \array_filter([
+            (string) $lastError,
+            $stderr,
+        ], static fn (string $value): bool => $value !== '')));
         if ($error === '' && $pid <= 0) {
             $error = 'no pid returned';
         }
 
         return ['pid' => $pid, 'error' => $error];
-    }
-
-    private static function buildWindowsForegroundStartCommand(string $scriptPath, string $workingDir, string $windowTitle): string
-    {
-        $windowTitle = self::normalizeWindowsForegroundWindowTitle($windowTitle);
-
-        return 'start "'
-            . $windowTitle
-            . '" /D '
-            . \escapeshellarg($workingDir)
-            . ' cmd.exe /d /c '
-            . \escapeshellarg(self::buildWindowsForegroundCmdLine($scriptPath, $windowTitle));
     }
 
     private static function waitForManagedProcessLaunch(string $pname, float $timeoutSeconds = 5.0): int
@@ -3389,47 +3244,6 @@ POWERSHELL;
         return 0;
     }
 
-    private static function normalizeWindowsForegroundArguments(string $arguments): string
-    {
-        if ($arguments === '') {
-            return '';
-        }
-
-        $normalized = \preg_replace_callback(
-            '/--([A-Za-z0-9-]+)=(["\'])([^"\']+)\2/',
-            static function (array $matches): string {
-                $value = (string) ($matches[3] ?? '');
-                if ($value === '' || \preg_match('/\s/', $value)) {
-                    return (string) $matches[0];
-                }
-
-                return '--' . $matches[1] . '=' . $value;
-            },
-            $arguments
-        );
-
-        return \is_string($normalized) ? $normalized : $arguments;
-    }
-
-    private static function escapeWindowsBatchLiteral(string $value): string
-    {
-        return \str_replace('%', '%%', $value);
-    }
-
-    private static function escapeWindowsBatchArgumentLiteral(string $value): string
-    {
-        return \str_replace(
-            ['%', "\r", "\n"],
-            ['%%', ' ', ' '],
-            $value
-        );
-    }
-
-    private static function quoteWindowsBatchArgument(string $value): string
-    {
-        return '"' . \str_replace('"', '""', self::escapeWindowsBatchArgumentLiteral($value)) . '"';
-    }
-
     private static function normalizeWindowsForegroundWindowTitle(string $windowTitle): string
     {
         $windowTitle = \trim(\str_replace(["\r", "\n"], ' ', $windowTitle));
@@ -3456,14 +3270,6 @@ POWERSHELL;
         return self::normalizeWindowsForegroundWindowTitle($windowTitle);
     }
 
-    private static function buildWindowsForegroundCmdLine(string $scriptPath, string $windowTitle): string
-    {
-        $title = self::normalizeWindowsForegroundWindowTitle($windowTitle);
-        $scriptPath = \str_replace('"', '""', $scriptPath);
-
-        return 'title ' . $title . ' & "' . $scriptPath . '"';
-    }
-
     private static function escapePowerShellLiteral(string $value): string
     {
         return \str_replace("'", "''", $value);
@@ -3486,64 +3292,50 @@ POWERSHELL;
     }
 
     /**
-     * @return list<string>
-     */
-    private static function buildWindowsCmdProcOpenCommand(string $scriptPath): array
-    {
-        return [
-            'cmd',
-            '/d',
-            '/c',
-            $scriptPath,
-        ];
-    }
-
-    /**
-     * @param array<int, array{key: string, command: string, php: string, arguments: string, argument_list?: list<string>, process_name: string, cwd: string, enable_log: bool, foreground: bool, foreground_script?: string|null}> $launchItems
+     * @param array<int, array{key: string, command: string, php: string, arguments: string, argument_list?: list<string>, process_name: string, cwd: string, enable_log: bool, foreground: bool}> $launchItems
      */
     private static function buildWindowsBatchCreateScript(array $launchItems, string $resultPath, string $errorPath): ?string
     {
-        $resultFile = self::escapeWindowsBatchLiteral($resultPath);
-        $errorFile = self::escapeWindowsBatchLiteral($errorPath);
         $lines = [
-            '@echo off',
-            'setlocal DisableDelayedExpansion',
-            'chcp 65001 >NUL',
-            'type NUL > "' . $resultFile . '"',
-            'type NUL > "' . $errorFile . '"',
+            '$ErrorActionPreference = ' . self::toPowerShellSingleQuoted('Continue'),
+            '$resultFile = ' . self::toPowerShellSingleQuoted($resultPath),
+            '$errorFile = ' . self::toPowerShellSingleQuoted($errorPath),
+            'Set-Content -LiteralPath $resultFile -Value ' . self::toPowerShellSingleQuoted('') . ' -NoNewline -Encoding UTF8',
+            'Set-Content -LiteralPath $errorFile -Value ' . self::toPowerShellSingleQuoted('') . ' -NoNewline -Encoding UTF8',
+            'function Add-WelineResult([string]$key, [int]$pid) { Add-Content -LiteralPath $resultFile -Value ($key + "`t" + [string]$pid) -Encoding UTF8 }',
+            'function Add-WelineError([string]$key, [string]$message) { if ($message -ne ' . self::toPowerShellSingleQuoted('') . ') { Add-Content -LiteralPath $errorFile -Value ($key + ": " + $message) -Encoding UTF8 } }',
         ];
 
         foreach ($launchItems as $item) {
-            $key = self::escapeWindowsBatchLiteral((string) ($item['key'] ?? ''));
-            $php = self::escapeWindowsBatchLiteral((string) ($item['php'] ?? ''));
-            $cwd = self::escapeWindowsBatchLiteral((string) ($item['cwd'] ?? BP));
+            $key = (string) ($item['key'] ?? '');
+            $php = (string) ($item['php'] ?? '');
+            $cwd = (string) ($item['cwd'] ?? BP);
             $argumentList = $item['argument_list'] ?? self::tokenizeCommandLineArguments((string) ($item['arguments'] ?? ''));
-            $arguments = $argumentList !== []
-                ? \implode(' ', \array_map(
-                    static fn (mixed $argument): string => self::quoteWindowsBatchArgument((string) $argument),
-                    $argumentList
-                ))
-                : self::escapeWindowsBatchArgumentLiteral((string) ($item['arguments'] ?? ''));
+            $arguments = \array_map(static fn (mixed $argument): string => (string) $argument, $argumentList);
             $foreground = !empty($item['foreground']);
-            $foregroundScript = self::escapeWindowsBatchLiteral((string) ($item['foreground_script'] ?? ''));
 
-            if ($key === '' || (!$foreground && $php === '') || ($foreground && $foregroundScript === '')) {
+            if ($key === '' || $php === '') {
                 return null;
             }
 
-            if ($foreground) {
-                $windowTitle = self::normalizeWindowsForegroundWindowTitle(
-                    (string) ($item['process_name'] ?? $item['key'] ?? 'weline-process')
-                );
-                $windowTitle = self::escapeWindowsBatchLiteral($windowTitle);
-                $lines[] = 'start "' . $windowTitle . '" /D "' . $cwd . '" cmd.exe /d /c "' . $foregroundScript . '"';
-            } else {
-                $lines[] = 'start "" /B /D "' . $cwd . '" "' . $php . '" ' . $arguments;
-            }
-            $lines[] = '>> "' . $resultFile . '" echo ' . $key . "\t0";
+            $lines[] = 'try {';
+            $lines[] = '    $startArgs = @{';
+            $lines[] = '        FilePath = ' . self::toPowerShellSingleQuoted($php);
+            $lines[] = '        WorkingDirectory = ' . self::toPowerShellSingleQuoted($cwd);
+            $lines[] = '        WindowStyle = ' . self::toPowerShellSingleQuoted($foreground ? 'Normal' : 'Hidden');
+            $lines[] = '        PassThru = $true';
+            $lines[] = '        ErrorAction = ' . self::toPowerShellSingleQuoted('Stop');
+            $lines[] = '    }';
+            $lines[] = '    $argList = ' . self::buildPowerShellArrayLiteral($arguments);
+            $lines[] = '    if ($argList.Count -gt 0) { $startArgs.ArgumentList = $argList }';
+            $lines[] = '    $p = Start-Process @startArgs';
+            $lines[] = '    Add-WelineResult ' . self::toPowerShellSingleQuoted($key) . ' ([int]$p.Id)';
+            $lines[] = '} catch {';
+            $lines[] = '    Add-WelineError ' . self::toPowerShellSingleQuoted($key) . ' ([string]$_.Exception.Message)';
+            $lines[] = '    Add-WelineResult ' . self::toPowerShellSingleQuoted($key) . ' 0';
+            $lines[] = '}';
         }
-
-        $lines[] = 'del "%~f0" >NUL 2>NUL';
+        $lines[] = 'Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue';
 
         return \implode(PHP_EOL, $lines) . PHP_EOL;
     }
