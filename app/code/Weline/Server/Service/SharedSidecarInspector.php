@@ -61,6 +61,11 @@ final class SharedSidecarInspector
             return $result;
         }
 
+        $indexedResult = $this->inspectIndexedPortOccupant($port, $expectedRole, $defaultTokenFileName, $result);
+        if ($indexedResult['reusable'] || ($indexedResult['in_use'] && $indexedResult['pid'] > 0)) {
+            return $indexedResult;
+        }
+
         $occupant = Processer::inspectPortOccupantWithHistory($port);
         if (!($occupant['in_use'] ?? false)) {
             return $result;
@@ -95,6 +100,132 @@ final class SharedSidecarInspector
         $result['instance_name'] = $this->resolveInstanceName($commandLine);
 
         return $result;
+    }
+
+    /**
+     * @param array{
+     *   in_use: bool,
+     *   reusable: bool,
+     *   pid: int,
+     *   port: int,
+     *   role: string,
+     *   instance_name: string,
+     *   token_file_name: string,
+     *   process_name: string,
+     *   command_line: string
+     * } $baseResult
+     * @return array{
+     *   in_use: bool,
+     *   reusable: bool,
+     *   pid: int,
+     *   port: int,
+     *   role: string,
+     *   instance_name: string,
+     *   token_file_name: string,
+     *   process_name: string,
+     *   command_line: string
+     * }
+     */
+    private function inspectIndexedPortOccupant(
+        int $port,
+        string $expectedRole,
+        string $defaultTokenFileName,
+        array $baseResult
+    ): array {
+        $pid = Processer::getProcessIdByPort($port);
+        if ($pid <= 0) {
+            return $baseResult;
+        }
+
+        $baseResult['in_use'] = true;
+        $baseResult['pid'] = $pid;
+
+        $pidIndex = Processer::readPidIndex();
+        $commandLine = (string) ($pidIndex[$pid]['pname'] ?? '');
+        if ($commandLine === '') {
+            $portIndex = Processer::readPortIndex();
+            $commandLine = $this->buildCommandLineFromIndexedProcessName((string) ($portIndex[(string) $port] ?? ''));
+        }
+        if ($commandLine === '') {
+            return $baseResult;
+        }
+
+        return $this->buildReusableResultFromCommandLine(
+            $baseResult,
+            $pid,
+            $commandLine,
+            $expectedRole,
+            $defaultTokenFileName
+        );
+    }
+
+    /**
+     * @param array{
+     *   in_use: bool,
+     *   reusable: bool,
+     *   pid: int,
+     *   port: int,
+     *   role: string,
+     *   instance_name: string,
+     *   token_file_name: string,
+     *   process_name: string,
+     *   command_line: string
+     * } $result
+     * @return array{
+     *   in_use: bool,
+     *   reusable: bool,
+     *   pid: int,
+     *   port: int,
+     *   role: string,
+     *   instance_name: string,
+     *   token_file_name: string,
+     *   process_name: string,
+     *   command_line: string
+     * }
+     */
+    private function buildReusableResultFromCommandLine(
+        array $result,
+        int $pid,
+        string $commandLine,
+        string $expectedRole,
+        string $defaultTokenFileName
+    ): array {
+        $role = $this->resolveRoleFromCommandLine($commandLine);
+        if ($role !== $expectedRole) {
+            return $result;
+        }
+
+        if (!$this->isSharedServiceProcess($commandLine, $role)) {
+            return $result;
+        }
+
+        $result['reusable'] = true;
+        $result['pid'] = $pid;
+        $result['role'] = $role;
+        $result['command_line'] = $commandLine;
+        $result['token_file_name'] = $this->extractOptionValue($commandLine, 'token-file-name') ?: $defaultTokenFileName;
+        $result['process_name'] = $this->extractOptionValue($commandLine, 'name');
+        $result['instance_name'] = $this->resolveInstanceName($commandLine);
+
+        return $result;
+    }
+
+    private function buildCommandLineFromIndexedProcessName(string $processName): string
+    {
+        $processName = \trim($processName);
+        if ($processName === '') {
+            return '';
+        }
+
+        if (\str_starts_with($processName, '--name=')) {
+            $processName = \substr($processName, 7);
+        }
+        $processName = $this->normalizeCommandValue($processName);
+        if ($processName === '') {
+            return '';
+        }
+
+        return '--name=' . $processName . ' --shared-service=1';
     }
 
     private function resolveRoleFromCommandLine(string $commandLine): string
