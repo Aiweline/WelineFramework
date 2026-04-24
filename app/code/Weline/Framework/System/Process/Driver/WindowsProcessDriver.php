@@ -50,6 +50,56 @@ class WindowsProcessDriver extends AbstractProcessDriver
      * PowerShell 是否可用（缓存检测结果）
      */
     private static ?bool $powershellAvailable = null;
+
+    /**
+     * 进程内 `netstat -ano` LISTENING 全表缓存（port => pid）
+     *
+     * 背景：`isPortInUse` / `getProcessIdByPort` 在 server:status / server:stop / SharedStateServiceManager
+     * 等路径上会被密集调用；过去每次都会重新跑一次 `netstat -ano`（本机实测 ~840ms/次），
+     * 一次 status 命令累计十余次 netstat，把 CLI 总耗时拉到 70s+。
+     *
+     * 这里在驱动层做"进程内全表快照"：第一次调用时跑 1 次 netstat 解析全部 LISTENING 行，
+     * 后续短 TTL 内（默认 1.5s）任意端口查询都直接读 map，不再触发系统命令。
+     *
+     * @var array<int, int>|null
+     */
+    private static ?array $listeningPortPidMap = null;
+    private static float $listeningPortPidMapAt = 0.0;
+    private static float $listeningPortPidMapTtl = 1.5;
+
+    /**
+     * 进程内 `tasklist /FO CSV /NH` 全表缓存（pid => info）
+     *
+     * 背景：`isRunningByPid` / `processExists` / `batchGetProcessInfo` 在 status / stop / 自愈检测路径上
+     * 同样被反复调用；单次 `tasklist /FO CSV /NH` 本机实测 ~2630ms，单次 PowerShell `Get-Process` ~1040ms。
+     * 不缓存就会把任何"扫一遍服务列表"都拖到几十秒。
+     *
+     * 这里在驱动层做"进程内全表快照"：第一次调用时跑 1 次 tasklist 解析全部行，后续短 TTL 内
+     * （默认 1.5s）任意 PID 查询都直接读 map（O(1)），完全跳过系统命令。
+     *
+     * @var array<int, array{name:string, memory_kb:int}>|null
+     */
+    private static ?array $taskListPidMap = null;
+    private static float $taskListPidMapAt = 0.0;
+    private static float $taskListPidMapTtl = 1.5;
+
+    /**
+     * 进程内 `Get-CimInstance Win32_Process` 全表缓存（pid => commandLine）
+     *
+     * 背景：`getProcessCommandLine($pid)` 是 `isWelineServerProcess` / `isProcessManagerCreated`
+     * 等"己方进程鉴权"路径的核心调用；单次 PowerShell CIM 按 PID 查询 ~1s，status / stop
+     * 反复鉴权时会堆 5-10 次 ≈ 5-10s。
+     *
+     * 这里也走"全表 + 短 TTL + per-pid 兜底"策略：
+     * - fetchAllProcessCommandLines() 一次拉全表（~2-3s）填满 map；
+     * - 每个 PID 真正被查询时优先读 map，未命中再跑 per-pid PowerShell 并把结果回写（避免反复单查）。
+     * - 这与"为命令行做 per-pid 单查的零碎 PowerShell"相比，最坏一次性，最好直接命中。
+     *
+     * @var array<int, string>
+     */
+    private static array $commandLineCache = [];
+    private static float $commandLineCacheAt = 0.0;
+    private static float $commandLineCacheTtl = 1.5;
     
     /**
      * @inheritDoc
@@ -332,7 +382,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
             $exitCode = 0;
             $this->executeCommand("taskkill /F /PID {$pid} 2>NUL", $output, $exitCode);
 
-            if ($exitCode === 0 || !$this->isRunningByPid($pid)) {
+            if ($exitCode === 0) {
                 return true;
             }
 
@@ -351,7 +401,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
                     $output,
                     $exitCode
                 );
-                if ($exitCode === 0 || !$this->isRunningByPid($pid)) {
+                if ($exitCode === 0) {
                     return true;
                 }
 
@@ -365,15 +415,16 @@ class WindowsProcessDriver extends AbstractProcessDriver
         if ($this->isWmicAvailable()) {
             for ($retry = 0; $retry < $maxRetries; $retry++) {
                 $output = [];
-                $this->executeCommand("wmic process where ProcessId={$pid} call terminate 2>NUL", $output);
-                $this->waitMs($retryDelayMs);
-                if (!$this->isRunningByPid($pid)) {
+                $exitCode = 0;
+                $this->executeCommand("wmic process where ProcessId={$pid} call terminate 2>NUL", $output, $exitCode);
+                if ($exitCode === 0) {
                     return true;
                 }
+                $this->waitMs($retryDelayMs);
             }
         }
 
-        return !$this->isRunningByPid($pid);
+        return false;
     }
     
     /**
@@ -401,7 +452,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
             $exitCode = 0;
             $this->executeCommand("taskkill /F /T /PID {$pid} 2>NUL", $output, $exitCode);
 
-            if ($exitCode === 0 || !$this->isRunningByPid($pid)) {
+            if ($exitCode === 0) {
                 return true;
             }
 
@@ -433,7 +484,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
                 $this->executeCommand($psCmd, $output, $exitCode);
 
                 $this->waitMs($retryDelayMs);
-                if (!$this->isRunningByPid($pid)) {
+                if ($exitCode === 0) {
                     return true;
                 }
             }
@@ -443,15 +494,16 @@ class WindowsProcessDriver extends AbstractProcessDriver
         if ($this->isWmicAvailable()) {
             for ($retry = 0; $retry < $maxRetries; $retry++) {
                 $output = [];
-                $this->executeCommand("wmic process where ProcessId={$pid} call terminate 2>NUL", $output);
-                $this->waitMs($retryDelayMs);
-                if (!$this->isRunningByPid($pid)) {
+                $exitCode = 0;
+                $this->executeCommand("wmic process where ProcessId={$pid} call terminate 2>NUL", $output, $exitCode);
+                if ($exitCode === 0) {
                     return true;
                 }
+                $this->waitMs($retryDelayMs);
             }
         }
 
-        return !$this->isRunningByPid($pid);
+        return false;
     }
     
     /**
@@ -488,23 +540,29 @@ class WindowsProcessDriver extends AbstractProcessDriver
         // Windows 上优先基于 LISTENING 状态判定。
         // 某些“幽灵监听”端口不会正确响应 TCP connect，若先用 socket 探测会被误判成空闲，
         // 导致 Master 复用同一个坏控制端口并永久起不来。
-        // 回退1：netstat（通用，所有 Windows 版本支持）
-        $output = [];
-        $this->executeCommand("netstat -ano 2>NUL", $output);
-        
-        foreach ($output as $line) {
-            if (\strpos($line, 'LISTENING') !== false) {
-                // 精确匹配端口：:PORT 后面紧跟空格
-                if (\preg_match('/[:\.]' . $port . '\s/', $line)) {
-                    self::$portCache[$port] = ['inUse' => true, 'time' => \time()];
-                    return true;
-                }
+        //
+        // 优化：通过 fetchListeningPortPidMap() 复用进程内 netstat 全表快照（短 TTL）；
+        // 这样同一 CLI 内多次 isPortInUse / getProcessIdByPort 调用只会触发 1 次 netstat，
+        // 而不是过去的 N 次（status/stop 路径上 N 可达 10+ → CLI 耗时从 70s 降到秒级）。
+        $portPidMap = $this->fetchListeningPortPidMap();
+        if ($portPidMap !== null) {
+            $inUse = isset($portPidMap[$port]);
+            if ($inUse) {
+                self::$portCache[$port] = ['inUse' => true, 'time' => \time()];
+                return true;
+            }
+            // netstat 全表已知但本端口不在表里——若 netstat 本身返回行非空，
+            // 则可信任"未占用"判定，跳过下面 PowerShell + socket 两个慢回退；
+            // 仅在 netstat 整张表为空（异常或权限丢失）时才落到回退路径。
+            if ($portPidMap !== []) {
+                self::$portCache[$port] = ['inUse' => false, 'time' => \time()];
+                return false;
             }
         }
 
-        // 回退2：PowerShell Get-NetTCPConnection（Windows 8+/Server 2012+）
-        // 当 netstat 输出为空或异常时使用
-        if (empty($output) && $this->isPowerShellAvailable()) {
+        // 回退1：PowerShell Get-NetTCPConnection（Windows 8+/Server 2012+）
+        // 仅在 netstat 全表为空（exec 失败/权限缺失）时才使用
+        if ($this->isPowerShellAvailable()) {
             $psOutput = [];
             $exitCode = 0;
             $this->executeCommand(
@@ -524,7 +582,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
             }
         }
 
-        // 最后才使用 socket 探测作为兜底，避免将不响应 connect 的 LISTENING 端口判空。
+        // 回退2：socket 探测（最慢但最通用）
         $socketResult = $this->socketPortCheck($port);
         if ($socketResult !== null) {
             self::$portCache[$port] = ['inUse' => $socketResult, 'time' => \time()];
@@ -534,9 +592,108 @@ class WindowsProcessDriver extends AbstractProcessDriver
         self::$portCache[$port] = ['inUse' => false, 'time' => \time()];
         return false;
     }
+
+    /**
+     * 跑一次 `netstat -ano` 解析全部 LISTENING 行，得到 port=>pid 全表，并按 TTL 缓存到进程内静态变量。
+     *
+     * 设计要点：
+     * - 命中缓存直接返回 map，不触发任何系统命令，调用方平摊到 O(1)。
+     * - 缓存为 null 表示从未尝试或被显式清理；空数组 [] 表示"已尝试但 netstat 没有输出可解析的行"。
+     *   后续 isPortInUse / getProcessIdByPort 把"空数组"视为权限/环境异常，自动落回 PowerShell/socket 路径。
+     * - TTL 默认 1.5s，足够覆盖 status / stop / start 等 CLI 命令在同一秒内的多次重复探测；
+     *   守护进程主循环中的相邻探测需要"较新"数据时可调 clearPortCache() 主动失效。
+     *
+     * @return array<int, int>|null
+     */
+    protected function fetchListeningPortPidMap(): ?array
+    {
+        if (self::$listeningPortPidMap !== null
+            && (\microtime(true) - self::$listeningPortPidMapAt) < self::$listeningPortPidMapTtl
+        ) {
+            return self::$listeningPortPidMap;
+        }
+
+        $output = [];
+        $exitCode = 0;
+        $this->executeCommand('netstat -ano 2>NUL', $output, $exitCode);
+
+        $map = [];
+        if ($exitCode === 0 && !empty($output)) {
+            foreach ($output as $line) {
+                if (\strpos($line, 'LISTENING') === false) {
+                    continue;
+                }
+                // 典型行：  TCP    127.0.0.1:9501       0.0.0.0:0        LISTENING       12345
+                if (\preg_match('/[:\.](\d+)\s+\S+\s+LISTENING\s+(\d+)/', $line, $m)) {
+                    $port = (int) $m[1];
+                    $pid = $this->sanitizePid($m[2]);
+                    if ($port > 0 && $pid > 0 && !isset($map[$port])) {
+                        $map[$port] = $pid;
+                    }
+                }
+            }
+        }
+
+        self::$listeningPortPidMap = $map;
+        self::$listeningPortPidMapAt = \microtime(true);
+        return $map;
+    }
+
+    /**
+     * 跑一次 `tasklist /FO CSV /NH` 解析全部进程行，得到 pid=>info 全表，并按 TTL 缓存到进程内静态变量。
+     *
+     * 同样的"全表一次扫描 + 短 TTL"思路：让 isRunningByPid / processExists / batchGetProcessInfo
+     * 在同一 CLI 命令周期内只触发 1 次 tasklist（~2.6s）而不是 N 次。
+     *
+     * @return array<int, array{name:string, memory_kb:int}>|null
+     */
+    protected function fetchTaskListPidMap(): ?array
+    {
+        if (self::$taskListPidMap !== null
+            && (\microtime(true) - self::$taskListPidMapAt) < self::$taskListPidMapTtl
+        ) {
+            return self::$taskListPidMap;
+        }
+
+        $output = [];
+        $exitCode = 0;
+        $this->executeCommand('tasklist /FO CSV /NH 2>NUL', $output, $exitCode);
+
+        $map = [];
+        if ($exitCode === 0 && !empty($output)) {
+            foreach ($output as $line) {
+                $line = \trim($line);
+                if ($line === '') {
+                    continue;
+                }
+                $parts = \str_getcsv($line, ',', '"', '');
+                if (\count($parts) < 5) {
+                    continue;
+                }
+                $pid = $this->sanitizePid($parts[1] ?? '');
+                if ($pid <= 0) {
+                    continue;
+                }
+                $memKb = (int) \preg_replace('/[^\d]/', '', (string) ($parts[4] ?? ''));
+                $map[$pid] = [
+                    'name' => (string) ($parts[0] ?? ''),
+                    'memory_kb' => $memKb,
+                ];
+            }
+        }
+
+        self::$taskListPidMap = $map;
+        self::$taskListPidMapAt = \microtime(true);
+        return $map;
+    }
     
     /**
      * 清除端口缓存
+     *
+     * 同时失效 netstat / tasklist 全表快照——这是必需的：
+     * Stop / Start / SharedStateServiceManager 调用方在杀进程或拉起进程后
+     * 会显式调用 clearPortCache() 期望"下一次 isPortInUse 反映最新状态"，
+     * 如果只清 portCache 而保留 listeningPortPidMap，刚关闭的端口仍会被判为"占用"。
      */
     public function clearPortCache(?int $port = null): void
     {
@@ -545,6 +702,14 @@ class WindowsProcessDriver extends AbstractProcessDriver
         } else {
             self::$portCache = [];
         }
+
+        // 全表快照按"全部失效"处理：单端口失效与全表失效语义相同（下一次访问会重新扫描全表）。
+        self::$listeningPortPidMap = null;
+        self::$listeningPortPidMapAt = 0.0;
+        self::$taskListPidMap = null;
+        self::$taskListPidMapAt = 0.0;
+        self::$commandLineCache = [];
+        self::$commandLineCacheAt = 0.0;
     }
     
     /**
@@ -556,21 +721,15 @@ class WindowsProcessDriver extends AbstractProcessDriver
      */
     public function getProcessIdByPort(int $port): int
     {
-        // 方案1：netstat -ano（最快，所有 Windows 版本支持）
-        $output = [];
-        $this->executeCommand("netstat -ano 2>NUL", $output);
-        
-        foreach ($output as $line) {
-            if (\strpos($line, 'LISTENING') !== false && \preg_match('/[:\.]' . $port . '\s/', $line)) {
-                if (\preg_match('/LISTENING\s+(\d+)/', $line, $matches)) {
-                    $pid = $this->sanitizePid($matches[1]);
-                    if ($pid > 0) {
-                        return $pid;
-                    }
-                }
-            }
+        // 方案1：复用进程内 netstat 全表快照（短 TTL）。
+        // 过去这里每次都会重跑 `netstat -ano`（~840ms），同一 CLI 命令调几十次就把 status 拖到 70s；
+        // 现在与 isPortInUse 共用一份 map，多次调用全部 O(1)。
+        $portPidMap = $this->fetchListeningPortPidMap();
+        if ($portPidMap !== null && $portPidMap !== []) {
+            return (int) ($portPidMap[$port] ?? 0);
         }
-        
+        // map 为空（netstat 没产出可解析的行）时，落到 PowerShell 兜底；不再重跑 netstat。
+
         // 方案2：PowerShell Get-NetTCPConnection（Windows 8+/Server 2012+）
         if ($this->isPowerShellAvailable()) {
             $output = [];
@@ -610,8 +769,18 @@ class WindowsProcessDriver extends AbstractProcessDriver
         if (!$this->isValidPid($pid)) {
             return false;
         }
-        
-        // 方案1：PowerShell Get-Process（优先快速判断）
+
+        // 方案1：复用进程内 tasklist 全表快照（短 TTL）。
+        // status / stop / 自愈检测等路径上需要批量判定一组 PID 是否存活；
+        // 全表查询 O(1)，且与 batchGetProcessInfo / processExists 共用同一份缓存，
+        // 把过去每次单独跑 PowerShell（~1s）或单条 tasklist /FI（~2.6s）压成 1 次。
+        $taskListMap = $this->fetchTaskListPidMap();
+        if ($taskListMap !== null && $taskListMap !== []) {
+            return isset($taskListMap[$pid]);
+        }
+        // 全表为空（exec 失败/权限缺失等异常）时落回逐 PID 检测路径，保持原语义不变。
+
+        // 方案2：PowerShell Get-Process（兜底）
         if ($this->isPowerShellAvailable()) {
             $output = [];
             $exitCode = 0;
@@ -626,10 +795,9 @@ class WindowsProcessDriver extends AbstractProcessDriver
             }
         }
         
-        // 方案2：tasklist /FI（兼容兜底，所有 Windows 版本支持）
+        // 方案3：tasklist /FI（最末端兜底）
         $output = [];
         $exitCode = 0;
-        // 使用 /FO CSV 格式输出，便于解析且不受本地化影响
         $this->executeCommand("tasklist /FI \"PID eq {$pid}\" /FO CSV /NH 2>NUL", $output, $exitCode);
         
         if (!empty($output)) {
@@ -638,7 +806,6 @@ class WindowsProcessDriver extends AbstractProcessDriver
                 if ($line === '') {
                     continue;
                 }
-                // 解析 CSV 并检查 PID 字段，避免依赖本地化提示文案
                 $parts = \str_getcsv($line, ',', '"', '');
                 if (\count($parts) >= 2) {
                     $parsedPid = $this->sanitizePid($parts[1]);
@@ -731,8 +898,28 @@ class WindowsProcessDriver extends AbstractProcessDriver
         if (!$this->isValidPid($pid)) {
             return '';
         }
-        
-        // 方案1：PowerShell CIM（推荐，wmic 的官方替代品）
+
+        // 命中进程内 commandLine per-pid 缓存。
+        //
+        // 之前曾经在这里主动 bootstrap "Get-CimInstance Win32_Process 全表"，但实测
+        // 发现 status 这种命令通常只需要鉴权 1~3 个 PID（共享服务端口占用方），
+        // 全表 PowerShell CIM 自身就 ~3s，反而比 per-pid 单查还贵。
+        //
+        // 因此改为纯 per-pid 缓存：第一次单查（~1s）后所有重复鉴权 O(1)。
+        // 仅当 commandLine 缓存项已经过 TTL 时才会让单条查询重新落到 PowerShell。
+        $now = \microtime(true);
+        if (self::$commandLineCacheAt > 0
+            && ($now - self::$commandLineCacheAt) >= self::$commandLineCacheTtl
+        ) {
+            // TTL 过期：清空已缓存条目，让本次以及后续单查都拿到最新结果
+            self::$commandLineCache = [];
+            self::$commandLineCacheAt = 0.0;
+        }
+        if (\array_key_exists($pid, self::$commandLineCache)) {
+            return self::$commandLineCache[$pid];
+        }
+
+        // 方案1：PowerShell CIM（per-pid 兜底；查询结果回写缓存避免重复单查同一 PID）
         if ($this->isPowerShellAvailable()) {
             $out = [];
             $exitCode = 0;
@@ -741,15 +928,16 @@ class WindowsProcessDriver extends AbstractProcessDriver
                 $out,
                 $exitCode
             );
-            
+
             if ($exitCode === 0 && !empty($out)) {
                 $cmdLine = \trim(\implode(' ', $out));
                 if ($cmdLine !== '' && \stripos($cmdLine, 'No Instance') === false) {
+                    $this->rememberCommandLine($pid, $cmdLine);
                     return $cmdLine;
                 }
             }
         }
-        
+
         // 方案2：wmic（兼容旧系统，已废弃但某些环境仍可用）
         if ($this->isWmicAvailable()) {
             $out = [];
@@ -757,12 +945,26 @@ class WindowsProcessDriver extends AbstractProcessDriver
             foreach ($out as $line) {
                 $line = \trim($line);
                 if ($line !== '' && \strtoupper($line) !== 'COMMANDLINE') {
+                    $this->rememberCommandLine($pid, $line);
                     return $line;
                 }
             }
         }
-        
+
+        // 显式记录为空字符串，避免下次再走 per-pid 慢路径
+        $this->rememberCommandLine($pid, '');
         return '';
+    }
+
+    /**
+     * 把 per-pid 单查得到的 commandLine 回写进程内 TTL 缓存，并在第一次回写时锚定 TTL 起点。
+     */
+    protected function rememberCommandLine(int $pid, string $cmdLine): void
+    {
+        self::$commandLineCache[$pid] = $cmdLine;
+        if (self::$commandLineCacheAt <= 0) {
+            self::$commandLineCacheAt = \microtime(true);
+        }
     }
     
     /**
@@ -891,32 +1093,27 @@ class WindowsProcessDriver extends AbstractProcessDriver
         foreach ($pids as $pid) {
             $result[$pid] = $this->getDefaultProcessInfo($pid);
         }
-        
-        // 方案1：tasklist 批量查询（最快，单次调用约 200-500ms）
-        $output = [];
-        $this->executeCommand('tasklist /FO CSV /NH 2>NUL', $output);
-        
-        $pidSet = \array_flip($validPids);
-        $foundCount = 0;
-        foreach ($output as $line) {
-            $parts = \str_getcsv(\trim($line), ',', '"', '');
-            if (\count($parts) >= 5) {
-                $parsedPid = $this->sanitizePid($parts[1]);
-                if ($parsedPid > 0 && isset($pidSet[$parsedPid]) && isset($result[$parsedPid])) {
-                    $result[$parsedPid]['name'] = $parts[0] ?? '';
-                    $result[$parsedPid]['exists'] = true;
-                    $memStr = $parts[4] ?? '';
-                    $memKb = (int) \preg_replace('/[^\d]/', '', $memStr);
+
+        // 方案1：复用进程内 tasklist 全表快照（短 TTL）。
+        // 同一 CLI 命令周期内 status 会反复需要"批量进程存在/内存信息"——
+        // 让 batchGetProcessInfo 与 isRunningByPid / processExists 共用一份 map，
+        // 第一次调用真跑 tasklist（~2.6s），后续 1.5s 内全部 O(1)。
+        $taskListMap = $this->fetchTaskListPidMap();
+        if ($taskListMap !== null && $taskListMap !== []) {
+            foreach ($validPids as $pid) {
+                if (isset($taskListMap[$pid])) {
+                    $info = $taskListMap[$pid];
+                    $result[$pid]['name'] = (string) $info['name'];
+                    $result[$pid]['exists'] = true;
+                    $memKb = (int) $info['memory_kb'];
                     if ($memKb > 0) {
-                        $result[$parsedPid]['memory'] = \round($memKb / 1024, 2) . ' MB';
+                        $result[$pid]['memory'] = \round($memKb / 1024, 2) . ' MB';
                     }
-                    $foundCount++;
                 }
             }
-        }
-        
-        // tasklist 已找到所有进程，直接返回（无需 PowerShell）
-        if ($foundCount === \count($validPids)) {
+            // tasklist 全表是 Windows 上"进程存活"的权威来源——
+            // 一个有效 PID 不在全表里就是真的不存在，没必要再跑一次 ~3s 的 PowerShell CIM 全表去重复确认。
+            // 之前会触发 CIM 兜底，是 server:status 在 master 已退出时仍要 6-10s 的关键来源之一。
             return $result;
         }
         
