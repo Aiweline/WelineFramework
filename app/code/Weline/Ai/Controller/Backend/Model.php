@@ -176,6 +176,67 @@ class Model extends BackendController
         });
     }
 
+    private function decodeStoredConfig(mixed $config): array
+    {
+        if (is_array($config)) {
+            return $config;
+        }
+        if (!is_string($config) || trim($config) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($config, true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function isSelectedModelRow(array $row, array $supportedProviders): bool
+    {
+        if (!empty($row[AiModel::schema_fields_IS_ACTIVE]) || !empty($row[AiModel::schema_fields_IS_DEFAULT])) {
+            return true;
+        }
+        if (!empty($row['is_copy']) || !empty($row['is_copied'])) {
+            return true;
+        }
+
+        $supplier = trim((string)($row[AiModel::schema_fields_SUPPLIER] ?? ($row['vendor'] ?? '')));
+        $modelSource = (string)($row[AiModel::schema_fields_MODEL_SOURCE] ?? '');
+        if ($modelSource === AiModel::SOURCE_LOCAL || ($supplier !== '' && !isset($supportedProviders[$supplier]))) {
+            return true;
+        }
+
+        $config = $this->decodeStoredConfig($row[AiModel::schema_fields_CONFIG] ?? null);
+        $providerConfig = $this->decodeStoredConfig($row[AiModel::schema_fields_PROVIDER_CONFIG] ?? null);
+        if ($this->hasApiCredential($config) || $this->hasApiCredential($providerConfig)) {
+            return true;
+        }
+        if (!empty($config['selected_model_preset']) || !empty($providerConfig['selected_model_preset'])) {
+            return true;
+        }
+        if (!empty($providerConfig['account_id'])) {
+            return true;
+        }
+
+        foreach (['connection_test_status', 'self_config_test_status', 'provider_test_status'] as $statusField) {
+            $status = (string)($row[$statusField] ?? '');
+            if ($status === 'success' || $status === 'failed') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizePricePerThousand(float $price, string $priceUnit): float
+    {
+        if ($price <= 0) {
+            return 0.0;
+        }
+        if ($priceUnit === 'per_1m_tokens') {
+            return round($price / 1000, 6);
+        }
+        return round($price, 6);
+    }
+
     private function buildIncomingConfigData(array $data): array
     {
         $config = [];
@@ -306,7 +367,7 @@ class Model extends BackendController
     #[Acl('Weline_Ai::ai_model_list', '查看AI模型列表', 'mdi-view-list', '查看AI模型列表')]
     public function index(): string
     {
-        $this->ensureVendorModelsAvailable();
+        // The static vendor catalog is only used as quick-create presets; do not flood the list with every vendor model.
         if ($this->request->isAjax() || $this->request->getGet('format') === 'json') {
             return $this->indexJson();
         }
@@ -334,6 +395,11 @@ class Model extends BackendController
                 ->select()
                 ->fetchArray();
 
+            $supportedProviders = VendorConfigManager::getSupportedProviders();
+            $allFilteredRows = array_values(array_filter($allFilteredRows, function (array $row) use ($supportedProviders): bool {
+                return $this->isSelectedModelRow($row, $supportedProviders);
+            }));
+
             if ($searchFilter !== '') {
                 $needle = mb_strtolower($searchFilter);
                 $allFilteredRows = array_values(array_filter($allFilteredRows, static function (array $row) use ($needle): bool {
@@ -359,7 +425,6 @@ class Model extends BackendController
             $modelData = array_slice($allFilteredRows, $offset, $pageSize);
 
             $models = [];
-            $supportedProviders = VendorConfigManager::getSupportedProviders();
             foreach ($modelData as $data) {
                 // 检查配置状态
                 $config = $data['config'] ?? '';
@@ -391,6 +456,7 @@ class Model extends BackendController
                 $modelSource = (string)($data[AiModel::schema_fields_MODEL_SOURCE] ?? '');
                 $isCustomSupplier = ($supplier !== '' && !isset($supportedProviders[$supplier]));
                 $isCustomModel = $isCustomSupplier || $modelSource === AiModel::SOURCE_LOCAL;
+                $priceCurrency = (string)($supportedProviders[$supplier]['price_currency'] ?? 'USD');
 
                 $models[] = [
                     'id' => $data['id'] ?? '',
@@ -407,6 +473,7 @@ class Model extends BackendController
                     'is_copied' => $data['is_copied'] ?? 0,
                     'token_price_input' => $data['token_price_input'] ?? 0,
                     'token_price_output' => $data['token_price_output'] ?? 0,
+                    'price_currency' => $priceCurrency,
                     'has_api_key' => $hasApiKey,
                     'has_config' => !empty($config) || !empty($providerConfig),
                     'connection_test_status' => $data['connection_test_status'] ?? 'pending',
@@ -465,12 +532,15 @@ class Model extends BackendController
 
     private function indexJson(): string
     {
-        $this->ensureVendorModelsAvailable();
         try {
             $models = $this->getAiModel()->reset()
                 ->order(\Weline\Ai\Model\AiModel::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetchArray();
+            $supportedProviders = VendorConfigManager::getSupportedProviders();
+            $models = array_values(array_filter($models, function (array $row) use ($supportedProviders): bool {
+                return $this->isSelectedModelRow($row, $supportedProviders);
+            }));
             usort($models, function ($a, $b) {
                 $aid = (int)($a['id'] ?? 0);
                 $bid = (int)($b['id'] ?? 0);
@@ -1137,6 +1207,9 @@ class Model extends BackendController
             // 新建模型
             $this->assign('model', null);
         }
+
+        $modelPresetsJson = json_encode($this->getCommonModelPresets(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $this->assign('modelPresetsJson', $modelPresetsJson ?: '[]');
         
         return $this->fetch();
     }
@@ -1164,6 +1237,8 @@ class Model extends BackendController
                 $providerName = (string)($providerConfig['name'] ?? $providerCode);
                 $baseUrl = (string)($providerConfig['base_url'] ?? '');
                 $modelField = (string)($providerConfig['model_field'] ?? 'model');
+                $priceUnit = (string)($providerConfig['price_unit'] ?? 'per_1k_tokens');
+                $priceCurrency = (string)($providerConfig['price_currency'] ?? 'USD');
 
                 foreach ($models as $modelMeta) {
                     if (!is_array($modelMeta)) {
@@ -1193,14 +1268,15 @@ class Model extends BackendController
                         'stream' => $stream,
                         'timeout' => $timeout,
                         'max_retries' => $maxRetries,
+                        'selected_model_preset' => true,
                         'provider_model_code' => $modelCode,
                         'model' => $modelCode,
                         'model_id' => $modelCode,
                     ];
                     $providerRuntimeConfig[$modelField] = $modelCode;
 
-                    $inputPrice = (float)($modelMeta['input_price'] ?? 0);
-                    $outputPrice = (float)($modelMeta['output_price'] ?? 0);
+                    $inputPrice = $this->normalizePricePerThousand((float)($modelMeta['input_price'] ?? 0), $priceUnit);
+                    $outputPrice = $this->normalizePricePerThousand((float)($modelMeta['output_price'] ?? 0), $priceUnit);
                     $presets[] = [
                         'key' => $providerCode . ':' . $modelCode,
                         'provider' => $providerCode,
@@ -1213,7 +1289,8 @@ class Model extends BackendController
                         'context_window' => (int)($modelMeta['context_window'] ?? 0),
                         'token_price_input' => $inputPrice,
                         'token_price_output' => $outputPrice,
-                        'cost_per_token' => $inputPrice > 0 ? round($inputPrice / 1000, 8) : 0,
+                        'price_currency' => $priceCurrency,
+                        'cost_per_token' => $inputPrice,
                         'temperature' => $temperature,
                         'top_p' => $topP,
                         'stream' => (bool)$stream,
@@ -2225,10 +2302,14 @@ class Model extends BackendController
         $vendors = [];
 
         try {
+            $supportedProviders = VendorConfigManager::getSupportedProviders();
             $rows = $this->getAiModel()->reset()
                 ->select()
                 ->fetchArray();
             foreach ($rows as $row) {
+                if (!$this->isSelectedModelRow($row, $supportedProviders)) {
+                    continue;
+                }
                 $candidateVendors = [
                     trim((string)($row['vendor'] ?? '')),
                     trim((string)($row['supplier'] ?? '')),
@@ -2241,18 +2322,6 @@ class Model extends BackendController
             }
         } catch (\Throwable $e) {
             Env::log('ai_model.log', '[Model::collectAllVendorsForFilter][db] ' . $e->getMessage(), 'WARNING');
-        }
-
-        try {
-            $supportedProviders = VendorConfigManager::getSupportedProviders();
-            foreach (array_keys($supportedProviders) as $providerCode) {
-                $providerCode = trim((string)$providerCode);
-                if ($providerCode !== '' && !in_array($providerCode, $vendors, true)) {
-                    $vendors[] = $providerCode;
-                }
-            }
-        } catch (\Throwable $e) {
-            Env::log('ai_model.log', '[Model::collectAllVendorsForFilter][provider] ' . $e->getMessage(), 'WARNING');
         }
 
         sort($vendors);
