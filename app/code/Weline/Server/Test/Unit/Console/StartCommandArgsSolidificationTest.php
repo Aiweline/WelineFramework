@@ -49,6 +49,29 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertSame(5, (int)($shortFlagConfig['worker_count'] ?? 0));
     }
 
+    public function testWorkerMemoryLimitAcceptsEnvAndCliFlags(): void
+    {
+        $envConfig = $this->createProbe(null, ['wls' => ['worker_memory_limit' => '384m']])
+            ->resolveConfig('default', []);
+        self::assertSame('384M', (string)($envConfig['worker_memory_limit'] ?? ''));
+
+        $cliConfig = $this->createProbe(null, ['wls' => ['worker_memory_limit' => '384M']])
+            ->resolveConfig('default', ['worker-memory-limit' => '768']);
+        self::assertSame('768M', (string)($cliConfig['worker_memory_limit'] ?? ''));
+    }
+
+    public function testDispatcherMemoryLimitDefaultsToWorkerWhenSolidified(): void
+    {
+        $manager = new StartInstanceManagerProbe();
+        $start = new StartInstanceInfoProbe($manager);
+
+        $start->persistInstanceInfo('unit-memory');
+
+        $info = $manager->savedInstances[0]['info'];
+        self::assertSame('512M', $info['worker_memory_limit'] ?? null);
+        self::assertSame('512M', $info['dispatcher_memory_limit'] ?? null);
+    }
+
     public function testSslCertAndKeyCanBeProvidedViaCliFlags(): void
     {
         $start = $this->createProbe();
@@ -279,7 +302,8 @@ final class StartInstanceInfoProbe extends Start
             false,
             19443,
             [],
-            ['frontend_process_mode' => true]
+            ['frontend_process_mode' => true],
+            '512M'
         );
     }
 

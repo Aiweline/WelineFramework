@@ -999,6 +999,7 @@ final class AiSiteVirtualThemePlanService
      */
     private function resolveStageTwoPageDesignPlanForPrompt(array $scope, array $structured, string $pageType): array
     {
+        $confirmedPlanBook = $this->resolveConfirmedStageOnePlanBook($scope);
         $candidates = [
             $structured['page_design_plans'][$pageType] ?? null,
             $structured['pages'][$pageType]['page_design_plan'] ?? null,
@@ -1006,6 +1007,7 @@ final class AiSiteVirtualThemePlanService
             $scope['execution_blueprint']['pages'][$pageType]['page_design_plan'] ?? null,
             $scope['plan_json']['pages'][$pageType]['page_design_plan'] ?? null,
             $scope['plan_structured']['pages'][$pageType]['page_design_plan'] ?? null,
+            $confirmedPlanBook['pages'][$pageType]['page_design_plan'] ?? null,
             $scope['plan_workbench']['confirmed']['plan_book']['structured']['pages'][$pageType]['page_design_plan'] ?? null,
         ];
         foreach ($candidates as $candidate) {
@@ -1117,6 +1119,23 @@ final class AiSiteVirtualThemePlanService
             ? $confirmedWorkbench['structured_plan']
             : (\is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : []);
         $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        $stage2ContextSnapshot = \is_array($scope['stage2_context_snapshot'] ?? null) ? $scope['stage2_context_snapshot'] : [];
+        $themeContextSnapshot = \is_array($planStructured['theme_context_snapshot'] ?? null)
+            ? $planStructured['theme_context_snapshot']
+            : (\is_array($planWorkbench['stage1']['theme_context_snapshot'] ?? null)
+                ? $planWorkbench['stage1']['theme_context_snapshot']
+                : (\is_array($executionBlueprint['theme_context_snapshot'] ?? null)
+                    ? $executionBlueprint['theme_context_snapshot']
+                    : (\is_array($stage2ContextSnapshot['theme_context_snapshot'] ?? null)
+                        ? $stage2ContextSnapshot['theme_context_snapshot']
+                        : (\is_array($scope['theme_context_snapshot'] ?? null) ? $scope['theme_context_snapshot'] : []))));
+        $sharedPromptContext = \is_array($planWorkbench['confirmed']['shared_prompt_context'] ?? null)
+            ? $planWorkbench['confirmed']['shared_prompt_context']
+            : (\is_array($executionBlueprint['shared_prompt_context'] ?? null)
+                ? $executionBlueprint['shared_prompt_context']
+                : (\is_array($stage2ContextSnapshot['shared_prompt_context'] ?? null)
+                    ? $stage2ContextSnapshot['shared_prompt_context']
+                    : (\is_array($scope['shared_prompt_context'] ?? null) ? $scope['shared_prompt_context'] : [])));
 
         $summary = [
             'site_title' => (string)($scope['site_title'] ?? ''),
@@ -1126,19 +1145,24 @@ final class AiSiteVirtualThemePlanService
             'default_locale' => (string)($scope['default_locale'] ?? ''),
             'page_types' => \array_values(\array_map('strval', \is_array($executionBlueprint['page_types'] ?? null) ? $executionBlueprint['page_types'] : [])),
             'confirmed_signature' => (string)($scope['execution_blueprint_confirmed_signature'] ?? ''),
-            'theme_context_snapshot' => \is_array($planStructured['theme_context_snapshot'] ?? null)
-                ? $planStructured['theme_context_snapshot']
-                : (\is_array($planWorkbench['stage1']['theme_context_snapshot'] ?? null) ? $planWorkbench['stage1']['theme_context_snapshot'] : []),
+            'theme_context_snapshot' => $themeContextSnapshot,
             'site_strategy' => \is_array($planStructured['site_strategy'] ?? null) ? $planStructured['site_strategy'] : [],
-            'palette' => \is_array($planStructured['palette'] ?? null) ? $planStructured['palette'] : [],
-            'theme_style' => \is_array($planStructured['theme_style'] ?? null) ? $planStructured['theme_style'] : [],
+            'palette' => \is_array($planStructured['palette'] ?? null)
+                ? $planStructured['palette']
+                : (\is_array($scope['palette'] ?? null) ? $scope['palette'] : []),
+            'theme_style' => \is_array($planStructured['theme_style'] ?? null)
+                ? $planStructured['theme_style']
+                : (\is_array($scope['theme_style'] ?? null) ? $scope['theme_style'] : []),
+            'theme_design' => \is_array($planStructured['theme_design'] ?? null)
+                ? $planStructured['theme_design']
+                : (\is_array($scope['theme_design'] ?? null)
+                    ? $scope['theme_design']
+                    : (\is_array($themeContextSnapshot['theme_design'] ?? null) ? $themeContextSnapshot['theme_design'] : $themeContextSnapshot)),
             'seo_strategy' => \is_array($planStructured['seo_strategy'] ?? null) ? $planStructured['seo_strategy'] : [],
             'navigation_plan' => \is_array($planStructured['navigation_plan'] ?? null) ? $planStructured['navigation_plan'] : [],
             'footer_plan' => \is_array($planStructured['footer_plan'] ?? null) ? $planStructured['footer_plan'] : [],
-            'shared_prompt_context' => \is_array($planWorkbench['confirmed']['shared_prompt_context'] ?? null)
-                ? $planWorkbench['confirmed']['shared_prompt_context']
-                : [],
-            'confirmed_block_tree_source' => $confirmedPlanBook !== [] ? 'plan_workbench.confirmed.plan_book.structured' : '',
+            'shared_prompt_context' => $sharedPromptContext,
+            'confirmed_block_tree_source' => $confirmedPlanBook !== [] ? 'confirmed_stage1_plan_book' : '',
             'confirmed_plan_book_context_hash' => (string)($confirmedPlanBook['context_hash'] ?? ''),
             'confirmed_plan_book' => $this->compactConfirmedPlanBookForPrompt($confirmedPlanBook, $pageType),
             'plan_markdown_excerpt' => $confirmedPlanBook === [] ? $this->excerptText((string)($scope['plan_markdown'] ?? ''), 1200) : '',
@@ -2339,15 +2363,43 @@ final class AiSiteVirtualThemePlanService
         }
         $planStructured = \is_array($confirmedWorkbench['structured_plan'] ?? null)
             ? $confirmedWorkbench['structured_plan']
-            : (\is_array($confirmedWorkbench['plan_json'] ?? null)
-                ? $confirmedWorkbench['plan_json']
-                : []);
+            : (\is_array($scope['plan_structured'] ?? null)
+                ? $scope['plan_structured']
+                : (\is_array($confirmedWorkbench['plan_json'] ?? null)
+                    ? $confirmedWorkbench['plan_json']
+                    : (\is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [])));
+        $storedStage2ContextSnapshot = \is_array($scope['stage2_context_snapshot'] ?? null) ? $scope['stage2_context_snapshot'] : [];
         $themeContextSnapshot = \is_array($stage1Workbench['theme_context_snapshot'] ?? null)
             ? $stage1Workbench['theme_context_snapshot']
-            : (\is_array($executionBlueprint['theme_context_snapshot'] ?? null) ? $executionBlueprint['theme_context_snapshot'] : []);
+            : (\is_array($executionBlueprint['theme_context_snapshot'] ?? null)
+                ? $executionBlueprint['theme_context_snapshot']
+                : (\is_array($storedStage2ContextSnapshot['theme_context_snapshot'] ?? null)
+                    ? $storedStage2ContextSnapshot['theme_context_snapshot']
+                    : (\is_array($scope['theme_context_snapshot'] ?? null) ? $scope['theme_context_snapshot'] : [])));
         $sharedPromptContext = \is_array($confirmedWorkbench['shared_prompt_context'] ?? null)
             ? $confirmedWorkbench['shared_prompt_context']
-            : (\is_array($executionBlueprint['shared_prompt_context'] ?? null) ? $executionBlueprint['shared_prompt_context'] : []);
+            : (\is_array($executionBlueprint['shared_prompt_context'] ?? null)
+                ? $executionBlueprint['shared_prompt_context']
+                : (\is_array($storedStage2ContextSnapshot['shared_prompt_context'] ?? null)
+                    ? $storedStage2ContextSnapshot['shared_prompt_context']
+                    : (\is_array($scope['shared_prompt_context'] ?? null) ? $scope['shared_prompt_context'] : [])));
+        if ($planStructured === []) {
+            $planStructured = [
+                'site_strategy' => [
+                    'summary' => (string)($scope['brief_description'] ?? $scope['site_tagline'] ?? ''),
+                    'site_display_name' => (string)($scope['site_title'] ?? ''),
+                ],
+                'theme_context_snapshot' => $themeContextSnapshot,
+                'palette' => \is_array($scope['palette'] ?? null) ? $scope['palette'] : [],
+                'theme_style' => \is_array($scope['theme_style'] ?? null) ? $scope['theme_style'] : [],
+                'theme_design' => \is_array($scope['theme_design'] ?? null)
+                    ? $scope['theme_design']
+                    : (\is_array($themeContextSnapshot['theme_design'] ?? null) ? $themeContextSnapshot['theme_design'] : $themeContextSnapshot),
+                'seo_strategy' => \is_array($executionBlueprint['seo_strategy'] ?? null) ? $executionBlueprint['seo_strategy'] : [],
+                'navigation_plan' => \is_array($executionBlueprint['navigation_plan'] ?? null) ? $executionBlueprint['navigation_plan'] : [],
+                'footer_plan' => \is_array($executionBlueprint['footer_plan'] ?? null) ? $executionBlueprint['footer_plan'] : [],
+            ];
+        }
         $pageTypes = \array_values(\array_filter(\array_map(
             static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
             \is_array($executionBlueprint['page_types'] ?? null) ? $executionBlueprint['page_types'] : ($scope['page_types'] ?? [])
@@ -3881,6 +3933,11 @@ final class AiSiteVirtualThemePlanService
      */
     private function resolveConfirmedStageOnePlanBook(array $scope): array
     {
+        $candidate = $scope['confirmed_stage1_plan_book'] ?? null;
+        if (\is_array($candidate) && $this->looksLikeConfirmedStageOnePlanBook($candidate)) {
+            return $candidate;
+        }
+
         $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
         $confirmedWorkbench = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
         $candidate = $confirmedWorkbench['plan_book']['structured'] ?? null;
@@ -4154,7 +4211,7 @@ final class AiSiteVirtualThemePlanService
             'sort_order' => (int)($block['sort_order'] ?? 0),
             'dependencies' => \array_values(\array_filter(\array_map('strval', \is_array($block['dependencies'] ?? null) ? $block['dependencies'] : []))),
             'result_ref' => [
-                'source' => 'plan_workbench.confirmed.plan_book.structured',
+                'source' => 'confirmed_stage1_plan_book',
                 'scope_path' => 'shared_blocks.' . $taskKey,
                 'context_hash' => (string)($block['context_hash'] ?? ''),
             ],
@@ -4188,7 +4245,7 @@ final class AiSiteVirtualThemePlanService
             'sort_order' => (int)($block['sort_order'] ?? 0),
             'dependencies' => \array_values(\array_filter(\array_map('strval', \is_array($block['dependencies'] ?? null) ? $block['dependencies'] : []))),
             'result_ref' => [
-                'source' => 'plan_workbench.confirmed.plan_book.structured',
+                'source' => 'confirmed_stage1_plan_book',
                 'scope_path' => 'pages.' . $pageKey . '.blocks.' . $sourceBlockKey,
                 'context_hash' => (string)($block['context_hash'] ?? ''),
             ],
@@ -4245,7 +4302,7 @@ final class AiSiteVirtualThemePlanService
         $sourceBlockKey = $this->resolvePlanBookSourceBlockKey($block);
         $sectionCode = \trim((string)($block['component_kind'] ?? $block['title'] ?? $sourceBlockKey));
         $resultRef = [
-            'source' => 'plan_workbench.confirmed.plan_book.structured',
+            'source' => 'confirmed_stage1_plan_book',
             'scope_path' => 'pages.' . $pageKey . '.blocks.' . $sourceBlockKey,
             'context_hash' => (string)($block['context_hash'] ?? ''),
         ];
@@ -4476,7 +4533,7 @@ final class AiSiteVirtualThemePlanService
 
         $snapshot = [
             'source_confirmed_signature' => $sourceSignature,
-            'confirmed_stage1_source' => $confirmedPlanBook !== [] ? 'plan_workbench.confirmed.plan_book.structured' : 'execution_blueprint',
+            'confirmed_stage1_source' => $confirmedPlanBook !== [] ? 'confirmed_stage1_plan_book' : 'execution_blueprint',
             'confirmed_plan_book_context_hash' => (string)($confirmedPlanBook['context_hash'] ?? ''),
             'content_locale' => $this->resolveStageTwoContentLocale($scope),
             'plan_locale' => \trim((string)($scope['plan_locale'] ?? '')),
