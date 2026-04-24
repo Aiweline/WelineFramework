@@ -48,6 +48,10 @@
     var currentPreviewPageType = <?= \json_encode($previewPageType, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var currentPreviewPageId = <?= \json_encode($previewPageId, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var currentPreviewDevice = 'desktop';
+    previewFullUrl = normalizeLocalPreviewUrlForCurrentHost(previewFullUrl);
+    visualPreviewUrl = normalizeLocalPreviewUrlForCurrentHost(visualPreviewUrl);
+    visualEditBaseUrl = normalizeLocalPreviewUrlForCurrentHost(visualEditBaseUrl);
+    currentEmbeddedVisualUrl = normalizeLocalPreviewUrlForCurrentHost(currentEmbeddedVisualUrl);
     var currentWorkspaceStage = <?= \json_encode($currentStage, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var planConfirmedState = <?= \json_encode((bool)($state['plan_confirmed'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var hasVirtualThemePlanState = <?= \json_encode((bool)($pbAiPhaseTwoTaskPlanPresent), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -1705,6 +1709,32 @@
         });
     }
 
+    function normalizeLocalPreviewUrlForCurrentHost(rawUrl) {
+        var raw = String(rawUrl || '').trim();
+        if (!raw) {
+            return '';
+        }
+        try {
+            var currentUrl = new URL(window.location.href);
+            var parsed = new URL(raw, currentUrl.origin);
+            var redirectHost = String(parsed.hostname || '').toLowerCase();
+            var currentHost = String(currentUrl.hostname || '').toLowerCase();
+            var localHosts = {
+                '127.0.0.1': true,
+                'localhost': true,
+                '::1': true,
+                '[::1]': true,
+            };
+            if (localHosts[redirectHost] && currentHost && currentHost !== redirectHost) {
+                parsed.protocol = currentUrl.protocol;
+                parsed.host = currentUrl.host;
+            }
+            return parsed.toString();
+        } catch (error) {
+            return raw;
+        }
+    }
+
     function buildCacheBustedPreviewUrl(url, key) {
         var s = String(url || '').trim();
         if (!s) {
@@ -1968,8 +1998,12 @@
         if (!actionBar) {
             return;
         }
-        var visualUrl = workspaceState && workspaceState.visual_preview_url ? String(workspaceState.visual_preview_url) : '';
-        var previewUrl = workspaceState && workspaceState.preview_full_url ? String(workspaceState.preview_full_url) : '';
+        var visualUrl = normalizeLocalPreviewUrlForCurrentHost(
+            workspaceState && workspaceState.visual_preview_url ? String(workspaceState.visual_preview_url) : ''
+        );
+        var previewUrl = normalizeLocalPreviewUrlForCurrentHost(
+            workspaceState && workspaceState.preview_full_url ? String(workspaceState.preview_full_url) : ''
+        );
         var focusBtn = document.getElementById('pb-ai-focus-embedded-editor-btn');
         var previewLink = document.getElementById('pb-ai-open-preview-full-link');
         if (!focusBtn) {
@@ -3401,11 +3435,12 @@
     }
 
     function setVisualEditorUrl(url) {
-        if (!url) {
+        var normalizedUrl = normalizeLocalPreviewUrlForCurrentHost(url);
+        if (!normalizedUrl) {
             visualEditBaseUrl = '';
             return;
         }
-        visualEditBaseUrl = String(url);
+        visualEditBaseUrl = normalizedUrl;
     }
 
     function normalizeEmbeddedEditorTriggers() {
@@ -3426,10 +3461,16 @@
         if (workspaceState.visual_edit_url) {
             setVisualEditorUrl(String(workspaceState.visual_edit_url));
         }
+        if (workspaceState.preview_full_url) {
+            previewFullUrl = normalizeLocalPreviewUrlForCurrentHost(workspaceState.preview_full_url);
+        }
         if (workspaceState.visual_preview_url) {
-            currentEmbeddedVisualUrl = String(workspaceState.visual_preview_url);
+            visualPreviewUrl = normalizeLocalPreviewUrlForCurrentHost(workspaceState.visual_preview_url);
+        }
+        if (workspaceState.visual_preview_url) {
+            currentEmbeddedVisualUrl = normalizeLocalPreviewUrlForCurrentHost(workspaceState.visual_preview_url);
         } else if (workspaceState.visual_edit_url) {
-            currentEmbeddedVisualUrl = String(workspaceState.visual_edit_url);
+            currentEmbeddedVisualUrl = normalizeLocalPreviewUrlForCurrentHost(workspaceState.visual_edit_url);
         } else {
             currentEmbeddedVisualUrl = '';
         }
@@ -4572,6 +4613,14 @@
     bindPreviewDeviceButtons();
     bindVisualPreviewFullscreenControls();
     applyPreviewDeviceMode(currentPreviewDevice);
+    if (currentEmbeddedVisualUrl) {
+        renderVisualPreviewHost(currentEmbeddedVisualUrl);
+        setPreviewFrameUrl(currentEmbeddedVisualUrl);
+    }
+    syncVisualActionBar({
+        visual_preview_url: visualPreviewUrl || currentEmbeddedVisualUrl,
+        preview_full_url: previewFullUrl,
+    });
     var pageTypesInitialized = ensureDefaultPageTypes();
     bindWorkspacePreviewMessages();
     bindEmbeddedPreviewFrameBridge();

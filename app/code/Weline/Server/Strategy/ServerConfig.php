@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Strategy;
 
+use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\WlsLogService;
 
 /**
@@ -46,6 +47,10 @@ final class ServerConfig
      * Worker 基础端口（用于 Dispatcher 模式，Worker 从此端口开始分配）
      */
     public readonly int $workerBasePort;
+
+    public readonly string $workerMemoryLimit;
+
+    public readonly string $dispatcherMemoryLimit;
     
     /**
      * SSL 证书路径
@@ -106,6 +111,11 @@ final class ServerConfig
         // 默认端口 10000 + 项目偏移量，确保多项目不冲突
         $defaultWorkerBasePort = 10000 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
         $this->workerBasePort = (int) ($config['worker_base_port'] ?? $defaultWorkerBasePort);
+        $this->workerMemoryLimit = ServiceContext::normalizeMemoryLimit($config['worker_memory_limit'] ?? '256M');
+        $this->dispatcherMemoryLimit = ServiceContext::normalizeMemoryLimit(
+            $config['dispatcher_memory_limit'] ?? $this->workerMemoryLimit,
+            $this->workerMemoryLimit
+        );
         $this->sslCert = $config['ssl_cert'] ?? '';
         $this->sslKey = $config['ssl_key'] ?? '';
         $this->sslEnabled = !empty($this->sslCert) && !empty($this->sslKey);
@@ -226,6 +236,8 @@ final class ServerConfig
             'port' => $this->port,
             'worker_count' => $this->workerCount,
             'worker_base_port' => $this->workerBasePort,
+            'worker_memory_limit' => $this->workerMemoryLimit,
+            'dispatcher_memory_limit' => $this->dispatcherMemoryLimit,
             'ssl_cert' => $this->sslCert,
             'ssl_key' => $this->sslKey,
             'ssl_enabled' => $this->sslEnabled,
