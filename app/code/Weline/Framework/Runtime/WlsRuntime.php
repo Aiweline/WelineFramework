@@ -271,8 +271,6 @@ class WlsRuntime implements RuntimeInterface
                 RequestLifecycleTrace::popCurrentParent();
                 RequestLifecycleTrace::recordSpan('run_before', $timing['run_before_ms'], 'framework');
             }
-            SchedulerSystem::yield();
-            
             // 如果run_before事件耗时过长，记录警告
             if ($timing['run_before_ms'] > 100) {
                 w_log_warning('[WLS Performance Warning] run_before event took ' . $timing['run_before_ms'] . 'ms');
@@ -292,8 +290,6 @@ class WlsRuntime implements RuntimeInterface
                 $processUrlEnd = \microtime(true);
                 $timing['process_url_parse_ms'] = \round(($processUrlEnd - $processUrlStart) * 1000, 2);
             }
-            SchedulerSystem::yield();
-            
             // 关键修复：Url::parser() 修改了 $_SERVER['REQUEST_URI']（去除了区域/货币/语言前缀）
             // 如果在 parser 之前有代码调用了 Request::getUri()（如 run_before 事件观察者），
             // 原始 URI 已被缓存在 Request 对象上，必须清除，否则 Router 会使用旧 URI 导致间歇性 404
@@ -314,7 +310,6 @@ class WlsRuntime implements RuntimeInterface
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::recordSpan('router_init', $timing['router_init_ms'], 'framework');
             }
-            SchedulerSystem::yield();
             // 请求早期统一启动 Session（与 App::run 一致）；静态资源不启动，避免 Set-Cookie 与无意义 IO
             $app->startSessionIfNeeded();
             // 路由处理（含控制器、视图，通常为主要耗时）；push 使控制器链路与事件挂到 router_start 下
@@ -333,8 +328,6 @@ class WlsRuntime implements RuntimeInterface
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::recordSpan('router_start', $timing['router_start_ms'], 'framework');
             }
-            SchedulerSystem::yield();
-            
             // 触发 run_after 事件
             $runAfterStart = \microtime(true);
             if (RequestLifecycleTrace::isEnabled()) {
@@ -347,7 +340,6 @@ class WlsRuntime implements RuntimeInterface
                 RequestLifecycleTrace::popCurrentParent();
                 RequestLifecycleTrace::recordSpan('run_after', $timing['run_after_ms'], 'framework');
             }
-            SchedulerSystem::yield();
             $t5 = \microtime(true);
             
             // 如果run_after事件耗时过长，记录警告
@@ -398,8 +390,6 @@ class WlsRuntime implements RuntimeInterface
             $timing['telemetry_ms'] = \round((\microtime(true) - $telemetryStart) * 1000, 2);
             $timing['dev_tool_ms'] = RequestLifecycleTrace::sumDurationsByName('dev_tool_panel');
             $timing['total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
-            SchedulerSystem::yield();
-
             $isDev = \defined('DEV') && DEV;
             $performanceConfig = $this->getPerformanceConfig();
             $slowThreshold = (float)($performanceConfig['slow_request_threshold_ms'] ?? 500.0);
@@ -565,6 +555,9 @@ class WlsRuntime implements RuntimeInterface
             WelineEnv::set('server.remote_addr', $timing['ip'], 'WlsRuntime finally');
             WelineEnv::set('wls.redirect_count', (string) $timing['redirect_count'], 'WlsRuntime finally');
             $this->recordPerformanceTiming($timing, $isDev);
+            if (\class_exists(\Weline\Server\Log\WlsLogger::class, false)) {
+                \Weline\Server\Log\WlsLogger::flush_(true);
+            }
             Context::leave();
         }
     }

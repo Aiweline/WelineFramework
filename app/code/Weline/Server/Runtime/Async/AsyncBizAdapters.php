@@ -37,7 +37,10 @@ final class AsyncBizAdapters
     }
 
     /**
-     * 包装业务分发调用，前后各做一次协作式让出。
+     * 包装业务分发调用并记录慢路径。
+     *
+     * 这里包住的是完整框架 dispatch；不能在边界处主动 yield，
+     * 否则普通请求会先进入调度队列，响应发送前也可能再次排队。
      *
      * @template T
      * @param callable():T $callback
@@ -46,9 +49,6 @@ final class AsyncBizAdapters
     public function dispatch(callable $callback): mixed
     {
         $startedAt = \microtime(true);
-        if (\Weline\Framework\Runtime\SchedulerSystem::isSchedulerActive()) {
-            \Weline\Framework\Runtime\SchedulerSystem::yield();
-        }
         try {
             return $callback();
         } finally {
@@ -57,9 +57,6 @@ final class AsyncBizAdapters
                 \Weline\Server\Log\WlsLogger::warning_(
                     'AsyncBizAdapters dispatch slow path elapsed_ms=' . \round($elapsedMs, 2)
                 );
-            }
-            if (\Weline\Framework\Runtime\SchedulerSystem::isSchedulerActive()) {
-                \Weline\Framework\Runtime\SchedulerSystem::yield();
             }
         }
     }

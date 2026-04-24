@@ -55,6 +55,7 @@ final class Supervisor
             SupervisorMessage::TYPE_HELLO => $this->handleHello($message),
             SupervisorMessage::TYPE_READY => $this->handleReady($message),
             SupervisorMessage::TYPE_HEARTBEAT => $this->handleHeartbeat($message),
+            SupervisorMessage::TYPE_LEASE_RELEASE => $this->handleLeaseRelease($message),
             default => null,
         };
     }
@@ -116,6 +117,39 @@ final class Supervisor
         $this->leases->heartbeat($slotId, $leaseId, $generation, $seq);
 
         return null;
+    }
+
+    private function handleLeaseRelease(array $message): string
+    {
+        $slotId = $this->requireString($message, 'slot_id');
+        $leaseId = $this->requireString($message, 'lease_id');
+        $generation = (int)($message['generation'] ?? 0);
+        $msgId = (string)($message['msg_id'] ?? '');
+        $channel = (string)($message['channel'] ?? '');
+
+        if ($generation <= 0) {
+            return SupervisorMessage::leaseReleaseAck(
+                $slotId,
+                $leaseId,
+                $generation,
+                false,
+                $msgId,
+                'invalid_release_payload',
+                $channel
+            );
+        }
+
+        $released = $this->leases->release($slotId, $leaseId, $generation);
+
+        return SupervisorMessage::leaseReleaseAck(
+            $slotId,
+            $leaseId,
+            $generation,
+            $released,
+            $msgId,
+            $released ? '' : 'stale_or_unknown_lease',
+            $channel
+        );
     }
 
     private function requireString(array $message, string $key): string

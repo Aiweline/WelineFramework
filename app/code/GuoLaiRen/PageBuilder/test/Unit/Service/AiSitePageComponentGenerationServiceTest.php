@@ -342,6 +342,12 @@ HTML,
                                     'section_code' => 'content/home-page-hero',
                                     'plan_context' => [
                                         'page_goal' => 'Explain value',
+                                        'page_design_plan' => [
+                                            'color_layering' => 'hero panel over dark base, proof cards on lighter surface, amber CTA accent',
+                                            'section_flow' => ['hero impact', 'proof layer', 'final CTA'],
+                                            'interaction_notes' => ['CTA hover glow', 'card lift'],
+                                        ],
+                                        'page_flow_role' => 'opening',
                                         'block_goal' => 'Open with a clear value proposition.',
                                     ],
                                     'task_script' => [
@@ -362,6 +368,10 @@ HTML,
                                         ],
                                         'style_plan' => [
                                             'visual' => 'Use a layered neon card visual with CSS depth.',
+                                            'page_design_plan' => [
+                                                'color_layering' => 'hero panel over dark base, proof cards on lighter surface, amber CTA accent',
+                                            ],
+                                            'page_flow_role' => 'opening',
                                         ],
                                     ],
                                     'runtime_context' => [
@@ -389,6 +399,9 @@ HTML,
         );
 
         self::assertStringContainsString('Stage-2 task context for this section:', $prompt);
+        self::assertStringContainsString('page_design_plan', $prompt);
+        self::assertStringContainsString('hero panel over dark base', $prompt);
+        self::assertStringContainsString('page_flow_role: opening', $prompt);
         self::assertStringContainsString('Follow the confirmed hero task contract.', $prompt);
         self::assertStringContainsString('Grow faster with our service', $prompt);
         self::assertStringContainsString('Hero must render value proposition and CTA.', $prompt);
@@ -402,7 +415,9 @@ HTML,
         self::assertStringContainsString('Use a launch-ready hero promise from the block plan.', $prompt);
         self::assertStringContainsString('block_task.style_plan', $prompt);
         self::assertStringContainsString('Use a layered neon card visual with CSS depth.', $prompt);
+        self::assertStringContainsString('apply page_design_plan.color_layering and section_flow before local block styling', $prompt);
         self::assertStringContainsString('Weline/PageBuilder skill contract / frontend skill contract', $prompt);
+        self::assertStringContainsString('page-design-plan', $prompt);
         self::assertStringContainsString('frontend-components', $prompt);
         self::assertStringContainsString('content_locale/default_locale: zh_Hans_CN', $prompt);
         self::assertStringContainsString('plan_locale: en_US is only an internal planning language hint', $prompt);
