@@ -1,10 +1,21 @@
 <?php
 /**
- * 第二阶段：按阶段一建站方案拆解任务，并以内联面板形式展示。
+ * 第二阶段：按阶段一已确认方案拆解任务，并以内联面板形式展示。
  *
- * @var bool $pbAiPhaseOnePlanPresent
+ * @var bool $pbAiPhaseOneConfirmedForTaskPlan
+ * @var bool $pbAiPhaseTwoTaskPlanPresent
+ * @var bool $pbAiTaskPlanQueueRunning
  */
-$phaseOneOk = !empty($pbAiPhaseOnePlanPresent);
+$phaseOneOk = !empty($pbAiPhaseOneConfirmedForTaskPlan);
+$phaseTwoTaskPlanPresent = !empty($pbAiPhaseTwoTaskPlanPresent);
+$phaseTwoQueueRunning = !empty($pbAiTaskPlanQueueRunning);
+$phaseTwoPanelOpen = $phaseTwoTaskPlanPresent || $phaseTwoQueueRunning;
+$phaseTwoTriggerLabel = $phaseTwoTaskPlanPresent
+    ? (string)__('查看第二阶段任务方案')
+    : (string)__('生成第二阶段任务方案');
+$phaseTwoEmptyText = $phaseTwoQueueRunning
+    ? (string)__('任务规划生成中…')
+    : (string)__('尚未生成第二阶段任务方案。');
 $phaseTwoInitialMarkdown = trim((string)(
     ($state['task_plan']['markdown'] ?? '')
     ?: ($state['task_plan_markdown'] ?? '')
@@ -16,18 +27,18 @@ $phaseTwoInitialMarkdown = trim((string)(
     <div class="accordion-item border rounded overflow-hidden shadow-sm">
         <h2 class="accordion-header m-0" id="pb-ai-task-plan-accordion-heading">
             <button type="button"
-                class="accordion-button collapsed fw-semibold py-3"
+                class="accordion-button<?= $phaseTwoPanelOpen ? '' : ' collapsed' ?> fw-semibold py-3"
                 id="pb-ai-task-plan-accordion-trigger"
                 data-pb-gate-phase-one="1"
                 <?= $phaseOneOk ? 'data-bs-toggle="collapse"' : '' ?>
                 data-bs-target="#pb-ai-task-plan-panel-collapse"
-                aria-expanded="false"
+                aria-expanded="<?= $phaseTwoPanelOpen ? 'true' : 'false' ?>"
                 aria-controls="pb-ai-task-plan-panel-collapse"<?= $phaseOneOk ? '' : ' disabled aria-disabled="true"' ?>>
-                <i class="mdi mdi-format-list-checks me-2"></i><?= htmlspecialchars((string)__('生成第二阶段任务方案'), ENT_QUOTES, 'UTF-8') ?>
+                <i class="mdi mdi-format-list-checks me-2"></i><?= htmlspecialchars($phaseTwoTriggerLabel, ENT_QUOTES, 'UTF-8') ?>
             </button>
         </h2>
         <div id="pb-ai-task-plan-panel-collapse"
-            class="accordion-collapse collapse"
+            class="accordion-collapse collapse<?= $phaseTwoPanelOpen ? ' show' : '' ?>"
             aria-labelledby="pb-ai-task-plan-accordion-heading"
             data-bs-parent="#pb-ai-task-plan-accordion">
             <div class="accordion-body p-0">
@@ -46,7 +57,7 @@ $phaseTwoInitialMarkdown = trim((string)(
                             <div class="d-flex flex-column">
                                 <div class="border rounded pb-ai-task-plan-preview-outer">
                                     <div id="pb-ai-task-plan-preview-content" class="p-3 flex-grow-1 overflow-auto min-h-0" title="<?= htmlspecialchars((string)__('单击任务方案预览区可全屏查看'), ENT_QUOTES, 'UTF-8') ?>">
-                                        <div id="pb-ai-task-plan-rendered-content"<?= $phaseTwoInitialMarkdown !== '' ? ' style="white-space: pre-wrap;"' : '' ?>><?= $phaseTwoInitialMarkdown !== '' ? nl2br(htmlspecialchars($phaseTwoInitialMarkdown, ENT_QUOTES, 'UTF-8')) : htmlspecialchars((string)__('任务规划生成中…'), ENT_QUOTES, 'UTF-8') ?></div>
+                                        <div id="pb-ai-task-plan-rendered-content"<?= $phaseTwoInitialMarkdown !== '' ? ' style="white-space: pre-wrap;"' : '' ?>><?= $phaseTwoInitialMarkdown !== '' ? nl2br(htmlspecialchars($phaseTwoInitialMarkdown, ENT_QUOTES, 'UTF-8')) : htmlspecialchars($phaseTwoEmptyText, ENT_QUOTES, 'UTF-8') ?></div>
                                     </div>
                                     <textarea id="pb-ai-task-plan-markdown" class="d-none" aria-hidden="true" tabindex="-1"><?= htmlspecialchars($phaseTwoInitialMarkdown, ENT_QUOTES, 'UTF-8') ?></textarea>
                                 </div>

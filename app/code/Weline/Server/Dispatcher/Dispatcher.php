@@ -1289,6 +1289,66 @@ class Dispatcher
     }
 
     /**
+     * Startup consensus is based on Master READY, not dispatcher-side probes.
+     *
+     * @param int[] $ports
+     * @param array<int, array<string, mixed>> $workers
+     */
+    private function acceptWorkerPoolFromMasterReady(array $ports, array $workers, string $source): void
+    {
+        $result = $this->passthroughCore->setWorkerPortsFromMasterReady($ports);
+        $acceptedPorts = \is_array($result['accepted'] ?? null) ? $result['accepted'] : [];
+        $rejectedPorts = \is_array($result['rejected'] ?? null) ? $result['rejected'] : [];
+        $this->lastWorkerProbeTime = \microtime(true);
+        $currentWorkerPoolSize = $this->passthroughCore->getWorkerCount();
+        $this->updateMaintenanceFallbackState(
+            $currentWorkerPoolSize === 0,
+            $source . ' trusted_master_ready accepted=' . \count($acceptedPorts)
+            . ', rejected=' . \count($rejectedPorts)
+            . ', current_pool=' . $currentWorkerPoolSize
+        );
+        $this->log(
+            $source . ' 信任 Master READY 直接入池，跳过启动探活: ' . (\implode(',', $acceptedPorts) ?: '(空)'),
+            'INFO'
+        );
+        $this->sendWorkerPoolAckForPorts($ports, $workers);
+    }
+
+    /**
+     * @param int[] $ports
+     * @param array<int, array<string, mixed>> $workers
+     */
+    private function addWorkerPortsFromMasterReady(array $ports, array $workers, string $source): void
+    {
+        $acceptedPorts = [];
+        $rejectedParts = [];
+        foreach ($ports as $port) {
+            $p = (int)$port;
+            $result = $this->passthroughCore->addWorkerPortFromMasterReady($p);
+            if (!empty($result['accepted'])) {
+                $acceptedPorts[] = $p;
+                continue;
+            }
+            $rejectedParts[] = $p . ': ' . (string)($result['error'] ?? 'invalid worker port');
+        }
+
+        $this->lastWorkerProbeTime = \microtime(true);
+        $this->updateMaintenanceFallbackState(
+            $this->passthroughCore->getWorkerCount() === 0,
+            $source . ' trusted_master_ready accepted=' . \count($acceptedPorts)
+            . ', rejected=' . \count($rejectedParts)
+        );
+        $this->log(
+            $source . ' 信任 Master READY 直接入池，跳过启动探活: ' . (\implode(',', $acceptedPorts) ?: '(空)'),
+            'INFO'
+        );
+        if ($rejectedParts !== []) {
+            $this->log($source . ' 直接入池拒绝: ' . \implode('; ', $rejectedParts), 'WARN');
+        }
+        $this->sendWorkerPoolAckForPorts($ports, $workers);
+    }
+
+    /**
      * @param array<string, mixed> $worker
      * @return array<string, mixed>
      */
@@ -1413,14 +1473,13 @@ class Dispatcher
                                 'WARN'
                             );
                             $this->sendWorkerPoolAckForPorts($duplicatePorts, $workerDescriptors);
-                            $this->deferredWorkerPoolJobs[] = ['type' => 'audit_worker_health'];
                             $norm = \array_values(\array_diff($norm, $duplicatePorts));
                         }
                         if ($norm === []) {
                             break;
                         }
-                        // 业务 Worker 注册（原有逻辑）
-                        $this->deferredWorkerPoolJobs[] = ['type' => 'add_workers', 'ports' => $norm, 'workers' => $workerDescriptors];
+                        // Startup consensus trusts Master READY; health probes run later.
+                        $this->addWorkerPortsFromMasterReady($norm, $workerDescriptors, 'ADD_WORKER');
                     }
                 }
                 break;
@@ -1506,8 +1565,8 @@ class Dispatcher
                         }
                         $ports = \array_values(\array_unique(\array_map('intval', $ports)));
                     }
-                    $this->deferredWorkerPoolJobs[] = ['type' => 'set_pool', 'ports' => $ports, 'workers' => $workerDescriptors, 'role' => $role];
-                    $this->log('收到 SET_WORKER_POOL（已入队异步入池），候选端口数: ' . \count($ports) . ', role: ' . $role, 'INFO');
+                    $this->acceptWorkerPoolFromMasterReady($ports, $workerDescriptors, 'SET_WORKER_POOL');
+                    $this->log('收到 SET_WORKER_POOL（信任 Master READY 直接入池），候选端口数: ' . \count($ports) . ', role: ' . $role, 'INFO');
                 }
                 break;
 

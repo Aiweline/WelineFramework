@@ -31,6 +31,17 @@ class TranslationCollector
         return iterator_to_array($this->collectLazy($modulePath, $moduleName));
     }
 
+    private function yieldFiberCheckpoint(int $processedFiles): void
+    {
+        if ($processedFiles % self::FIBER_CHECKPOINT_INTERVAL !== 0 || !class_exists(\Fiber::class)) {
+            return;
+        }
+
+        if (\Fiber::getCurrent() !== null) {
+            \Fiber::suspend();
+        }
+    }
+
     /**
      * 从指定目录或模块收集翻译字符串（惰性 Generator 版本）
      * 逐条产出翻译字符串，不在内存中累积完整数组，适合大规模扫描场景
@@ -92,6 +103,8 @@ class TranslationCollector
         'bower_components', '.idea', '.vscode', '.cursor',
     ];
 
+    private const FIBER_CHECKPOINT_INTERVAL = 8;
+
     /**
      * 读取文件的最大大小（字节），超过此大小的文件跳过（512KB）
      * 正常的翻译源文件不会超过这个大小，大文件通常是打包产物
@@ -120,6 +133,7 @@ class TranslationCollector
                 return true;
             });
             $iterator = new \RecursiveIteratorIterator($filterIterator);
+            $processedFiles = 0;
             
             foreach ($iterator as $file) {
                 if (!$file->isFile() || !in_array($file->getExtension(), ['php', 'phtml', 'js'])) {
@@ -216,6 +230,8 @@ class TranslationCollector
                 // Generator 自然释放：$content 在下次循环迭代时被覆盖
                 // 显式 unset 确保大文件立即释放
                 unset($content);
+                $processedFiles++;
+                $this->yieldFiberCheckpoint($processedFiles);
             }
         } catch (\Exception $e) {
             // 静默处理错误，避免中断收集过程

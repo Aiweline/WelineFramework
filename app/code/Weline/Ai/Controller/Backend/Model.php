@@ -191,6 +191,11 @@ class Model extends BackendController
             $config = array_replace($config, $data['config']);
         }
 
+        $quickApiKey = trim((string)($data['api_key_input'] ?? $data['api_key'] ?? ''));
+        if ($quickApiKey !== '') {
+            $config['api_key'] = $quickApiKey;
+        }
+
         $config = $this->filterConfigValues($config);
 
         if (array_key_exists('stream', $config)) {
@@ -203,6 +208,10 @@ class Model extends BackendController
 
         if (isset($config['api_url'])) {
             $config['api_url'] = trim((string)$config['api_url']);
+        }
+
+        if (isset($config['base_url'])) {
+            $config['base_url'] = trim((string)$config['base_url']);
         }
 
         return $config;
@@ -235,6 +244,10 @@ class Model extends BackendController
 
         if (!empty($config['api_url'])) {
             $providerConfig['base_url'] = trim((string)$config['api_url']);
+        }
+
+        if (!empty($config['base_url'])) {
+            $providerConfig['base_url'] = trim((string)$config['base_url']);
         }
 
         if (array_key_exists('stream', $providerConfig)) {
@@ -1128,6 +1141,95 @@ class Model extends BackendController
         return $this->fetch();
     }
 
+    private function getCommonModelPresets(): array
+    {
+        $presets = [];
+
+        try {
+            $providers = VendorConfigManager::getSupportedProviders();
+            foreach ($providers as $providerCode => $providerConfig) {
+                if (isset($providerConfig['quick_create']) && !$providerConfig['quick_create']) {
+                    continue;
+                }
+
+                $models = $providerConfig['models'] ?? [];
+                if (!is_array($models) || empty($models)) {
+                    continue;
+                }
+
+                $defaults = is_array($providerConfig['model_config_defaults'] ?? null)
+                    ? $providerConfig['model_config_defaults']
+                    : [];
+                $providerCode = (string)$providerCode;
+                $providerName = (string)($providerConfig['name'] ?? $providerCode);
+                $baseUrl = (string)($providerConfig['base_url'] ?? '');
+                $modelField = (string)($providerConfig['model_field'] ?? 'model');
+
+                foreach ($models as $modelMeta) {
+                    if (!is_array($modelMeta)) {
+                        continue;
+                    }
+                    if (isset($modelMeta['preset']) && !$modelMeta['preset']) {
+                        continue;
+                    }
+
+                    $modelCode = trim((string)($modelMeta['code'] ?? ''));
+                    if ($modelCode === '') {
+                        continue;
+                    }
+
+                    $maxTokens = (int)($modelMeta['max_tokens'] ?? ($defaults['max_tokens'] ?? 4096));
+                    $temperature = $defaults['temperature'] ?? 0.7;
+                    $topP = $defaults['top_p'] ?? 1.0;
+                    $stream = $defaults['stream'] ?? true;
+                    $timeout = (int)($defaults['timeout'] ?? 180);
+                    $maxRetries = (int)($defaults['max_retries'] ?? 3);
+
+                    $providerRuntimeConfig = [
+                        'base_url' => $baseUrl,
+                        'max_tokens' => $maxTokens,
+                        'temperature' => $temperature,
+                        'top_p' => $topP,
+                        'stream' => $stream,
+                        'timeout' => $timeout,
+                        'max_retries' => $maxRetries,
+                        'provider_model_code' => $modelCode,
+                        'model' => $modelCode,
+                        'model_id' => $modelCode,
+                    ];
+                    $providerRuntimeConfig[$modelField] = $modelCode;
+
+                    $inputPrice = (float)($modelMeta['input_price'] ?? 0);
+                    $outputPrice = (float)($modelMeta['output_price'] ?? 0);
+                    $presets[] = [
+                        'key' => $providerCode . ':' . $modelCode,
+                        'provider' => $providerCode,
+                        'provider_name' => $providerName,
+                        'model_code' => $modelCode,
+                        'provider_model_code' => $modelCode,
+                        'name' => (string)($modelMeta['name'] ?? $modelCode),
+                        'version' => (string)($modelMeta['version'] ?? '1.0'),
+                        'max_tokens' => $maxTokens,
+                        'context_window' => (int)($modelMeta['context_window'] ?? 0),
+                        'token_price_input' => $inputPrice,
+                        'token_price_output' => $outputPrice,
+                        'cost_per_token' => $inputPrice > 0 ? round($inputPrice / 1000, 8) : 0,
+                        'temperature' => $temperature,
+                        'top_p' => $topP,
+                        'stream' => (bool)$stream,
+                        'timeout' => $timeout,
+                        'capabilities' => $modelMeta['capabilities'] ?? ($defaults['capabilities'] ?? []),
+                        'config' => $this->filterConfigValues($providerRuntimeConfig),
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {
+            Env::log('ai_model.log', '[Model::getCommonModelPresets] ' . $e->getMessage(), 'WARNING');
+        }
+
+        return $presets;
+    }
+
     /**
      * Offcanvas 编辑模型（侧边栏）
      * 
@@ -1179,6 +1281,8 @@ class Model extends BackendController
             $opts[] = $code . ':' . $name;
         }
         $this->assign('providerOptionsStr', implode(',', $opts));
+        $modelPresetsJson = json_encode($this->getCommonModelPresets(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $this->assign('modelPresetsJson', $modelPresetsJson ?: '[]');
         
         return $this->fetch('offcanvas_edit');
     }

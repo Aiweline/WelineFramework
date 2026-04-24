@@ -231,6 +231,13 @@ $visualEditUrl = (string)($state['visual_edit_url'] ?? '');
 $embeddedVisualUrl = $visualPreviewUrl !== '' ? $visualPreviewUrl : $visualEditUrl;
 $activeOperation = \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [];
 $activeOperationStatus = \trim((string)($activeOperation['status'] ?? ''));
+$pbAiTaskPlanStageEntryDecision = \is_array($state['task_plan_stage_entry'] ?? null) ? $state['task_plan_stage_entry'] : [];
+$pbAiPhaseOneConfirmedForTaskPlan = !empty($pbAiTaskPlanStageEntryDecision['has_phase_one_confirmed_plan'])
+    || ((int)($state['plan_confirmed'] ?? 0) === 1 && !empty($state['has_execution_blueprint']));
+$pbAiPhaseTwoTaskPlanPresent = !empty($pbAiTaskPlanStageEntryDecision['has_phase_two_task_plan'])
+    || $pbAiPhaseTwoTaskPlanPresent;
+$pbAiTaskPlanQueueRunning = !empty($pbAiTaskPlanStageEntryDecision['task_plan_queue_running']);
+$pbAiPhaseTwoShouldPromptGenerate = !empty($pbAiTaskPlanStageEntryDecision['should_prompt_generate']);
 $canPublish = !empty($state['can_publish']);
 $events = \is_array($state['top_logs'] ?? null) ? $state['top_logs'] : (\is_array($state['events'] ?? null) ? $state['events'] : []);
 $initialVirtualPagesByTypeState = [];
