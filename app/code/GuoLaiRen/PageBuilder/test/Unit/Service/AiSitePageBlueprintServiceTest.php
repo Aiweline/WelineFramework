@@ -135,4 +135,21 @@ class AiSitePageBlueprintServiceTest extends TestCase
         self::assertStringNotContainsString('我想做', $heroDescription);
         self::assertStringNotContainsString('推广apk', $heroDescription);
     }
+
+    public function testBuildPageBlueprintLocalizesDefaultPageLabelForEnglishLocale(): void
+    {
+        $service = new AiSitePageBlueprintService();
+
+        $blueprint = $service->buildPageBlueprint(Page::TYPE_ABOUT, [
+            'default_locale' => 'en_US',
+        ], [
+            'site_title' => 'Teenipiya',
+            'default_locale' => 'en_US',
+            'brief_description' => 'A card game apk website for India users.',
+        ]);
+
+        self::assertSame('About', $blueprint['page_label']);
+        self::assertSame('About', $blueprint['page_title']);
+        self::assertSame('About | Teenipiya', $blueprint['meta_title']);
+    }
 }
