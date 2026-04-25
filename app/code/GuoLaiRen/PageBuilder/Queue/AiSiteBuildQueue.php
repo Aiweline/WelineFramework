@@ -176,7 +176,7 @@ class AiSiteBuildQueue implements QueueInterface
             // mergeScope 只更新库内 scope；内存中的 $session 可能仍带旧 build_tasks，会导致 ensureTaskScope 继续合并为 done 从而秒结束。
             $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
             $operationContext = $operation === 'block_regenerate'
-                ? $this->resolveQueuedOperationContext($content, $session, $scopeService)
+                ? $this->resolveQueuedOperationContext($content, $sessionService, $session, $scopeService)
                 : [];
 
             if ($allowStubAiInTest) {
@@ -248,6 +248,7 @@ class AiSiteBuildQueue implements QueueInterface
      */
     private function resolveQueuedOperationContext(
         array $content,
+        AiSiteAgentSessionService $sessionService,
         AiSiteAgentSession $session,
         AiSiteScopeCompatibilityService $scopeService
     ): array {
@@ -258,9 +259,26 @@ class AiSiteBuildQueue implements QueueInterface
         $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
         $activeDetails = \is_array($active['details'] ?? null) ? $active['details'] : [];
 
-        $pageType = \trim((string)($content['page_type'] ?? $details['page_type'] ?? $active['page_type'] ?? $activeDetails['page_type'] ?? ''));
-        $componentCode = \trim((string)($content['component_code'] ?? $details['component_code'] ?? $active['component_code'] ?? $activeDetails['component_code'] ?? ''));
-        $instruction = \trim((string)($content['instruction'] ?? $details['instruction'] ?? $active['instruction'] ?? $activeDetails['instruction'] ?? ''));
+        $pageType = $this->firstNonEmptyString([$content['page_type'] ?? null, $details['page_type'] ?? null, $active['page_type'] ?? null, $activeDetails['page_type'] ?? null]);
+        $componentCode = $this->firstNonEmptyString([
+            $content['component_code'] ?? null,
+            $details['component_code'] ?? null,
+            $active['component_code'] ?? null,
+            $activeDetails['component_code'] ?? null,
+            $content['block_key'] ?? null,
+            $details['block_key'] ?? null,
+            $active['block_key'] ?? null,
+            $activeDetails['block_key'] ?? null,
+            $content['section_code'] ?? null,
+            $details['section_code'] ?? null,
+            $active['section_code'] ?? null,
+            $activeDetails['section_code'] ?? null,
+            $content['task_key'] ?? null,
+            $details['task_key'] ?? null,
+            $active['task_key'] ?? null,
+            $activeDetails['task_key'] ?? null,
+        ]);
+        $instruction = $this->firstNonEmptyString([$content['instruction'] ?? null, $details['instruction'] ?? null, $active['instruction'] ?? null, $activeDetails['instruction'] ?? null]);
 
         if ($pageType === '' || $componentCode === '') {
             throw new \RuntimeException('Block queue context is missing page_type or component_code.');
@@ -271,6 +289,24 @@ class AiSiteBuildQueue implements QueueInterface
             'component_code' => $componentCode,
             'instruction' => $instruction,
         ];
+    }
+
+    /**
+     * @param list<mixed> $values
+     */
+    private function firstNonEmptyString(array $values): string
+    {
+        foreach ($values as $value) {
+            if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
+                continue;
+            }
+            $candidate = \trim((string)$value);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return '';
     }
 
     private function applyForceBuildQueuePreset(

@@ -111,6 +111,28 @@ class AiSiteScopeCompatibilityService
     }
 
     /**
+     * Backend-owned existence check for a persisted stage-one plan.
+     *
+     * @param array<string, mixed> $scope
+     */
+    public function hasPersistedStageOnePlan(array $scope): bool
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+        $executionBlueprintDraft = \is_array($scope['execution_blueprint_draft'] ?? null) ? $scope['execution_blueprint_draft'] : [];
+        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        $generatedAt = \trim((string)($scope['plan_generated_at'] ?? ''));
+        $markdown = \trim((string)($scope['plan_markdown'] ?? ''));
+
+        return $planJson !== []
+            || $planStructured !== []
+            || $executionBlueprintDraft !== []
+            || $executionBlueprint !== []
+            || $generatedAt !== ''
+            || $markdown !== '';
+    }
+
+    /**
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */

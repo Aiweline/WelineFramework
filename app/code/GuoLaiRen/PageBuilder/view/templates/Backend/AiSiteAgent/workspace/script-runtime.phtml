@@ -33,6 +33,7 @@
     var runningOperationKey = '';
     var runningOperationType = '';
     var runningStartAtByOperationKey = Object.create(null);
+    var queueCompletionReloadTimer = null;
     var observerSyncStatusPulseTimer = null;
     var observerSyncDotPhase = 0;
     var lastOperationTerminalFingerprint = '';
@@ -546,7 +547,7 @@
         return 0;
     }
 
-    function payloadIndicatesQueuedStageDraft(operation, payload) {
+    function payloadIndicatesQueuedStageDraft(operation, payload, eventKind) {
         var normalized = String(operation || '').toLowerCase();
         var state = payload && payload.state && typeof payload.state === 'object' ? payload.state : {};
         var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
@@ -557,30 +558,8 @@
             return Array.isArray(value) ? value.length > 0 : Object.keys(value).length > 0;
         }
         if (normalized === 'plan') {
-            var plan = state.plan && typeof state.plan === 'object' ? state.plan : {};
-            if (state.has_execution_blueprint || payload.has_execution_blueprint) {
-                return true;
-            }
-            if (String(plan.markdown || '').trim() !== '') {
-                return true;
-            }
-            if (String(scope.plan_markdown || '').trim() !== '') {
-                return true;
-            }
-            if (
-                hasPlanArtifact(plan.json)
-                || hasPlanArtifact(plan.structured)
-                || hasPlanArtifact(plan.execution_blueprint)
-                || hasPlanArtifact(state.plan_json)
-                || hasPlanArtifact(state.plan_structured)
-                || hasPlanArtifact(state.execution_blueprint)
-                || hasPlanArtifact(state.execution_blueprint_draft)
-                || hasPlanArtifact(scope.plan_json)
-                || hasPlanArtifact(scope.plan_structured)
-                || hasPlanArtifact(scope.execution_blueprint)
-                || hasPlanArtifact(scope.execution_blueprint_draft)
-            ) {
-                return true;
+            if (Object.prototype.hasOwnProperty.call(state, 'has_stage_one_plan')) {
+                return !!state.has_stage_one_plan || !!state.plan_confirmed;
             }
             return !!state.plan_confirmed || !!payload.plan_confirmed;
         }
@@ -588,9 +567,59 @@
             return !!state.has_virtual_theme_plan
                 || !!state.task_plan_confirmed
                 || !!payload.has_virtual_theme_plan
-                || !!payload.task_plan_confirmed;
+                || !!payload.task_plan_confirmed
+                || (String(eventKind || '') === 'done' && (!payload || payload.success !== false));
         }
         return false;
+    }
+
+    function readQueueStatusFromPayload(operation, payload) {
+        if (!payload || typeof payload !== 'object') {
+            return '';
+        }
+        var status = String(payload.queue_status || '').trim().toLowerCase();
+        if (status !== '') {
+            return status;
+        }
+        var snapshot = payload.queue_snapshot && typeof payload.queue_snapshot === 'object'
+            ? payload.queue_snapshot
+            : null;
+        if (snapshot) {
+            status = String(snapshot.status || snapshot.job_status || snapshot.queue_status || '').trim().toLowerCase();
+            if (status !== '') {
+                return status;
+            }
+        }
+        var state = payload.state && typeof payload.state === 'object' ? payload.state : {};
+        var key = String(operation || '').toLowerCase() === 'task_plan'
+            ? 'task_plan_queue_info'
+            : (String(operation || '').toLowerCase() === 'build' ? 'build_queue_info' : 'plan_queue_info');
+        var queueInfo = state[key] && typeof state[key] === 'object' ? state[key] : {};
+        snapshot = queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : null;
+        return String(
+            (snapshot ? (snapshot.status || snapshot.job_status || snapshot.queue_status || '') : '')
+            || queueInfo.queue_status
+            || ''
+        ).trim().toLowerCase();
+    }
+
+    function scheduleReloadAfterQueueCompleted(operation, payload) {
+        var normalizedOperation = String(operation || '').toLowerCase();
+        var status = readQueueStatusFromPayload(operation, payload);
+        var completed = ['done', 'complete', 'completed'].indexOf(status) !== -1;
+        if (
+            !completed
+            && normalizedOperation === 'task_plan'
+            && (!payload || payload.success !== false)
+        ) {
+            completed = true;
+        }
+        if (!completed || queueCompletionReloadTimer) {
+            return;
+        }
+        queueCompletionReloadTimer = window.setTimeout(function () {
+            window.location.reload();
+        }, 650);
     }
 
     function syncQueuedStageUi(operation, eventKind, payload, options) {
@@ -634,7 +663,7 @@
                     message,
                     percent,
                     eventKind === 'done'
-                        ? payloadIndicatesQueuedStageDraft(operation, payload) && !(typeof binding.getConfirmedState === 'function' && binding.getConfirmedState())
+                        ? payloadIndicatesQueuedStageDraft(operation, payload, eventKind) && !(typeof binding.getConfirmedState === 'function' && binding.getConfirmedState())
                         : false,
                     level
                 );
@@ -1474,7 +1503,9 @@
         var workspaceStatus = String(state.workspace_status || '').toLowerCase();
         var planConfirmed = !!state.plan_confirmed;
         var taskPlanConfirmed = !!state.task_plan_confirmed;
-        var hasPlanDraft = !!(state.has_execution_blueprint || (state.plan && typeof state.plan === 'object' && (state.plan.markdown || state.plan.json || state.plan.structured)));
+        var hasPlanDraft = Object.prototype.hasOwnProperty.call(state, 'has_stage_one_plan')
+            ? !!state.has_stage_one_plan
+            : !!state.has_execution_blueprint;
         var hasTaskPlanDraft = !!state.has_virtual_theme_plan;
 
         function make(label, badgeClass, message) {
@@ -1517,7 +1548,6 @@
                 if (activeOp === 'plan') {
                     activeStatus = 'done';
                 }
-                hasPlanDraft = true;
             }
             if (activeOp === 'plan' && activeStatus === 'queued') {
                 return make('排队中', 'text-bg-warning', activeMessage || '第一阶段方案已进入后台队列。');
@@ -1799,6 +1829,7 @@
                 }
                 updateTaskSummaryFromState(payload);
                 logOperationToWorkspaceTerminal('info', payload, 'info', String(payload.message || ''));
+                scheduleReloadAfterQueueCompleted(operation, payload);
             });
 
             source.addEventListener('error', function (event) {
@@ -1869,6 +1900,7 @@
                     logOperationToWorkspaceTerminal('total', payload, 'total', totalMessage);
                     toast('info', totalMessage);
                 }
+                scheduleReloadAfterQueueCompleted(operation, payload);
             });
 
             source.addEventListener('environment_ready', function (event) {
@@ -1900,6 +1932,7 @@
                 updateTaskSummaryFromState(payload.state);
             }
             updateTaskSummaryFromState(payload);
+            scheduleReloadAfterQueueCompleted(operation, payload);
             var progressMessage = String(payload.message || '');
             if (progressMessage) {
                 logOperationToWorkspaceTerminal('progress', payload, 'progress', progressMessage);
@@ -2083,6 +2116,7 @@
             settled = true;
             var payload = parsePayload(event);
             closeOperationSource(source);
+            scheduleReloadAfterQueueCompleted(operation, payload);
 
             var success = !payload || payload.success !== false;
             var normalizedDonePayload = Object.assign({}, payload || {}, {
