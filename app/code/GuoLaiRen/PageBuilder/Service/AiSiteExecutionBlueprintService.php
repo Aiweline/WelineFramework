@@ -313,7 +313,13 @@ final class AiSiteExecutionBlueprintService
         $scope = \array_replace($scope, ['content_locale' => $contentLocale]);
         $siteDisplayName = $this->pageBlueprintService->resolveSiteDisplayName($websiteProfile, $scope);
         $siteSummary = $this->pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope);
-        $oneLineRequirement = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? $siteSummary));
+        $oneLineRequirement = $this->resolveStageOneRequirementSeed(
+            $scope,
+            $websiteProfile,
+            $pageTypes,
+            $siteDisplayName,
+            $siteSummary
+        );
         $planJson = [];
 
         try {
@@ -412,6 +418,47 @@ final class AiSiteExecutionBlueprintService
         }
 
         return $decoded;
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     */
+    private function resolveStageOneRequirementSeed(
+        array $scope,
+        array $websiteProfile,
+        array $pageTypes,
+        string $siteDisplayName,
+        string $siteSummary
+    ): string {
+        foreach ([
+            $scope['brief_description'] ?? null,
+            $scope['user_description'] ?? null,
+            $websiteProfile['brief_description'] ?? null,
+            $siteSummary,
+        ] as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        $siteName = \trim((string)(
+            $siteDisplayName
+            ?: ($scope['site_title'] ?? $websiteProfile['site_title'] ?? $scope['website_profile']['site_title'] ?? '')
+        ));
+        $pageText = \implode(', ', \array_values(\array_filter(\array_map('strval', $pageTypes))));
+
+        if ($siteName !== '' && $pageText !== '') {
+            return 'Create a complete website plan for ' . $siteName . ' covering: ' . $pageText . '.';
+        }
+        if ($siteName !== '') {
+            return 'Create a complete website plan for ' . $siteName . '.';
+        }
+        if ($pageText !== '') {
+            return 'Create a complete website plan covering: ' . $pageText . '.';
+        }
+
+        return 'Create a complete website plan with clear positioning, navigation, content strategy, and conversion goals.';
     }
 
     /**
@@ -812,7 +859,7 @@ final class AiSiteExecutionBlueprintService
         string $siteDisplayName,
         string $siteSummary
     ): string {
-        $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? $siteSummary));
+        $brief = $this->resolveStageOneRequirementSeed($scope, $websiteProfile, $pageTypes, $siteDisplayName, $siteSummary);
         return \implode("\n", [
             'You are PageBuilder Stage-1 REQUIREMENT EXPANSION planner.',
             'Step 1 only: expand the user one-line requirement into a concrete website planning brief. Do not generate theme, Header/Footer, or page blocks.',
@@ -844,7 +891,7 @@ final class AiSiteExecutionBlueprintService
         string $siteSummary,
         array $requirementExpansion
     ): string {
-        $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? $siteSummary));
+        $brief = $this->resolveStageOneRequirementSeed($scope, $websiteProfile, $pageTypes, $siteDisplayName, $siteSummary);
         $requirementExpansionJson = \json_encode($requirementExpansion, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         return \implode("\n", [
             'You are PageBuilder Stage-1 THEME planner.',
