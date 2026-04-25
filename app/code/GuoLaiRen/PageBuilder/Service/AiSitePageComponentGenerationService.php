@@ -762,6 +762,7 @@ final class AiSitePageComponentGenerationService
                 }
 
                 $html = $this->renderTemplateToHtml($phtml, $defaultConfig, $renderContext);
+                $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
 
                 return [
                     'code' => $componentCode,
@@ -1880,6 +1881,7 @@ final class AiSitePageComponentGenerationService
             'style' => $styleSettings,
             'component_config' => $defaultConfig,
             'is_preview' => true,
+            '_content_locale' => $this->resolvePrimaryLocale($websiteProfile, $scope),
         ], $blogContext);
     }
 
@@ -1921,6 +1923,7 @@ final class AiSitePageComponentGenerationService
     private function buildNavigationPages(array $scope): array
     {
         $pageTypes = $this->resolveScopedPageTypes($scope);
+        $locale = $this->resolveScopePrimaryLocale($scope);
         $labels = Page::getPageTypes();
         $items = [];
 
@@ -1930,8 +1933,15 @@ final class AiSitePageComponentGenerationService
             }
 
             $handle = Page::getDefaultHandleForType($pageType);
+            $title = $this->localizePageTypeTitle($pageType, $locale);
+            if ($title === '') {
+                $title = $this->filterVisibleCopyForLocale((string)($labels[$pageType] ?? $pageType), $locale);
+            }
+            if ($title === '') {
+                $title = $this->humanizeIdentifier($pageType);
+            }
             $items[] = [
-                'title' => (string)($labels[$pageType] ?? $pageType),
+                'title' => $title,
                 'handle' => $handle,
                 'url' => $pageType === Page::TYPE_HOME ? '/' : '/' . $handle,
                 'type' => $pageType,
@@ -1948,6 +1958,22 @@ final class AiSitePageComponentGenerationService
      */
     private function buildHeaderNavigationPages(array $scope): array
     {
+        $locale = $this->resolveScopePrimaryLocale($scope);
+        $sharedPromptContext = $this->resolveSharedPromptContext($scope);
+        $sharedHeaderItems = $this->normalizePromptLinkItems($sharedPromptContext['header_items'] ?? []);
+        if ($sharedHeaderItems !== []) {
+            return \array_slice(\array_values(\array_map(function (array $item): array {
+                $href = \trim((string)($item['href'] ?? '#'));
+                return [
+                    'title' => (string)($item['label'] ?? ''),
+                    'handle' => $this->deriveHandleFromHref($href),
+                    'url' => $href !== '' ? $href : '#',
+                    'type' => (string)($item['type'] ?? ''),
+                    'page_id' => 0,
+                ];
+            }, $sharedHeaderItems)), 0, 5);
+        }
+
         $navigationPages = $this->buildNavigationPages($scope);
         $byType = [];
 
@@ -1973,7 +1999,7 @@ final class AiSitePageComponentGenerationService
                 continue;
             }
             $items[] = [
-                'title' => 'Policy Info',
+                'title' => $this->localizeBuildText('policy_info', $locale),
                 'handle' => (string)($byType[$type]['handle'] ?? ''),
                 'url' => (string)($byType[$type]['url'] ?? '#'),
                 'type' => 'policy_info',
@@ -2083,10 +2109,15 @@ final class AiSitePageComponentGenerationService
     {
         $siteSummary = $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope);
         $pageTypes = $this->resolveScopedPageTypes($scope);
+        $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
         $pageTypeLabels = Page::getPageTypes();
         $pageList = [];
         foreach ($pageTypes as $pageType) {
-            $pageList[] = (string)($pageTypeLabels[$pageType] ?? $pageType);
+            $pageList[] = $this->normalizePromptVisibleLabel(
+                (string)($pageTypeLabels[$pageType] ?? ''),
+                $this->localizePageTypeTitle($pageType, $locale),
+                $locale
+            );
         }
 
         $styleCode = $this->resolvePromptStyleCode($scope, Page::TYPE_HOME);
@@ -2176,8 +2207,21 @@ final class AiSitePageComponentGenerationService
         $siteSummary = $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope);
         $pageInstructionMap = Page::getPageTypePromptInstructionsMap();
         $pageInstruction = (string)($pageInstructionMap[$pageType] ?? '');
-        $sectionName = (string)($section['name'] ?? $section['code'] ?? '');
+        $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
         $sectionKey = (string)($section['key'] ?? '');
+        $taskPlanTask = $this->resolveSectionTaskPlanTask($scope, $pageType, (string)($section['code'] ?? ''), $sectionKey);
+        $planContext = \is_array($taskPlanTask['plan_context'] ?? null) ? $taskPlanTask['plan_context'] : [];
+        $blockTask = \is_array($taskPlanTask['block_task'] ?? null) ? $taskPlanTask['block_task'] : [];
+        $sectionName = $this->normalizePromptVisibleLabel(
+            $this->pickString(
+                $planContext['block_goal'] ?? null,
+                $blockTask['task_goal'] ?? null,
+                $section['name'] ?? null,
+                $section['code'] ?? null
+            ),
+            $sectionKey !== '' ? $sectionKey : (string)($section['code'] ?? 'section'),
+            $locale
+        );
         $sectionTemplate = (string)($section['template'] ?? 'hero');
         $sectionConfig = \json_encode($section['config'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT);
         $refinement = $this->resolveSectionRefinement($scope, $pageType, (string)($section['code'] ?? ''), $sectionKey);
@@ -2185,18 +2229,19 @@ final class AiSitePageComponentGenerationService
         $styleCode = $this->resolvePromptStyleCode($scope, $pageType);
         $styleDirection = $this->describeStyleDirection($styleCode);
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
-        $taskPlanPromptAddon = $this->buildTaskPlanPromptAddon(
-            $this->resolveSectionTaskPlanTask($scope, $pageType, (string)($section['code'] ?? ''), $sectionKey),
-            'section',
-            $scope
-        );
+        $taskPlanPromptAddon = $this->buildTaskPlanPromptAddon($taskPlanTask, 'section', $scope);
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $skillContract = $this->buildWelineSkillContractPromptAddon();
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
+        $pageLabel = $this->normalizePromptVisibleLabel(
+            (string)($blueprint['page_label'] ?? ''),
+            $this->localizePageTypeTitle($pageType, $locale),
+            $locale
+        );
 
         return $langRule
             . "You are generating a PageBuilder content component.\n"
-            . "Page type: " . (string)($blueprint['page_label'] ?? $pageType) . " ({$pageType})\n"
+            . "Page type: " . $pageLabel . " ({$pageType})\n"
             . "Section name: {$sectionName}\n"
             . "Section role: {$sectionKey}\n"
             . "Suggested structure: {$sectionTemplate}\n"
@@ -2291,6 +2336,7 @@ final class AiSitePageComponentGenerationService
             . "- content_locale/default_locale: " . ($contentLocale !== '' ? $contentLocale : 'not provided') . ($defaultLocale !== '' && $defaultLocale !== $contentLocale ? " (default_locale {$defaultLocale})" : '') . "\n"
             . "- plan_locale: " . ($planLocale !== '' ? $planLocale : 'not provided') . " is only an internal planning language hint, never a visitor-facing language source.\n"
             . "- Visitor-visible copy must use content_locale/default_locale. Do not use plan_locale unless it is the same locale.\n"
+            . "- Planned content is not exempt: if task_script, block_task.content_plan, field samples, nav labels, CTA labels, SEO snippets, or stage-1 plan text use another language, translate/rewrite them into content_locale/default_locale before rendering html_content/footer/header text.\n"
             . "- Never render internal identifiers or paths as visible copy: plan_locale, page_type, section_code, task_key, block_key, runtime_context, app/code paths, var/ paths, content/... component paths, shared:* keys, or page:* keys.\n"
             . "- Never render broken image placeholders. If a verified uploaded asset URL is absent, create the visual with inline SVG or CSS shapes.\n";
     }
@@ -2662,8 +2708,16 @@ final class AiSitePageComponentGenerationService
      */
     private function buildFooterDefaultConfig(array $websiteProfile, array $scope, string $siteDisplayName): array
     {
+        $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
+        $sharedPromptContext = $this->resolveSharedPromptContext($scope);
         $navigationPages = $this->buildNavigationPages($scope);
-        $brandSummary = $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope);
+        $brandSummary = $this->filterVisibleCopyForLocale(
+            $this->pickString(
+                $sharedPromptContext['site_positioning'] ?? null,
+                $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope)
+            ),
+            $locale
+        );
         $legalLines = [];
         $featuredLines = [];
         $allLines = [];
@@ -2674,6 +2728,13 @@ final class AiSitePageComponentGenerationService
             Page::TYPE_BLOG_LIST,
             Page::TYPE_CUSTOM,
         ]);
+
+        foreach ($this->normalizePromptLinkItems($sharedPromptContext['footer_featured'] ?? []) as $item) {
+            $featuredLines[] = (string)($item['label'] ?? '') . '=>' . (string)($item['href'] ?? '#');
+        }
+        foreach ($this->normalizePromptLinkItems($sharedPromptContext['footer_policies'] ?? []) as $item) {
+            $legalLines[] = (string)($item['label'] ?? '') . '=>' . (string)($item['href'] ?? '#');
+        }
 
         foreach ($navigationPages as $item) {
             if (!\is_array($item)) {
@@ -2701,13 +2762,13 @@ final class AiSitePageComponentGenerationService
             'brand.name' => $siteDisplayName,
             'brand.logo' => (string)($websiteProfile['logo'] ?? ''),
             'brand.description' => $brandSummary,
-            'links.column1_title' => 'Featured Pages',
+            'links.column1_title' => $this->localizeBuildText('featured_pages', $locale),
             'links.column1_items' => \implode("\n", $featuredLines),
-            'links.column2_title' => 'Policy Info',
+            'links.column2_title' => $this->localizeBuildText('policy_info', $locale),
             'links.column2_items' => \implode("\n", $legalLines),
-            'links.column3_title' => 'All Pages',
+            'links.column3_title' => $this->localizeBuildText('all_pages', $locale),
             'links.column3_items' => \implode("\n", $allLines),
-            'copyright.text' => 'All rights reserved.',
+            'copyright.text' => $this->localizeBuildText('all_rights_reserved', $locale),
             'copyright.year' => \date('Y'),
         ];
         $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'footer'));
@@ -2724,24 +2785,25 @@ final class AiSitePageComponentGenerationService
      */
     private function buildSectionDefaultConfig(string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): array
     {
+        $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
         $sectionConfig = \is_array($section['config'] ?? null) ? $section['config'] : [];
 
-        $title = $this->pickString(
+        $title = $this->filterVisibleCopyForLocale($this->pickString(
             $sectionConfig['section_title'] ?? null,
             $sectionConfig['headline'] ?? null,
             $blueprint['page_title'] ?? null,
             (string)($section['name'] ?? '')
-        );
-        $subtitle = $this->pickString(
+        ), $locale);
+        $subtitle = $this->filterVisibleCopyForLocale($this->pickString(
             $sectionConfig['eyebrow'] ?? null,
             $sectionConfig['subtitle'] ?? null
-        );
-        $description = $this->pickString(
+        ), $locale);
+        $description = $this->filterVisibleCopyForLocale($this->pickString(
             $sectionConfig['section_intro'] ?? null,
             $sectionConfig['description'] ?? null,
             $sectionConfig['section_text'] ?? null,
             $blueprint['ai_description'] ?? null
-        );
+        ), $locale);
 
         $bgType = 'color';
         $bgColor = '#ffffff';
@@ -3021,6 +3083,7 @@ final class AiSitePageComponentGenerationService
             . "- block_task.style_plan: " . \json_encode($stylePlan, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- block_task.planning_reason: " . (string)($blockTask['planning_reason'] ?? '') . "\n"
             . "- design execution rule: apply page_design_plan.color_layering and section_flow before local block styling; this block must contrast with adjacent blocks through surfaces/cards/gradients/dividers/illustration while staying inside the confirmed palette.\n"
+            . "- stage2 language rule: treat stage-2 planned text as source intent, not copy authority; rewrite any planned text that is not in the website content language before placing it in visible component output.\n"
             . "- theme_context_snapshot: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
             . "- stage2_context_snapshot: " . $this->jsonEncodeForPrompt($stage2Context, 5000) . "\n"
             . "- acceptance: " . \json_encode($acceptance, \JSON_UNESCAPED_UNICODE) . "\n"
@@ -3050,6 +3113,10 @@ final class AiSitePageComponentGenerationService
                 continue;
             }
             if (\in_array(\strtolower($sample), ['header', 'footer'], true)) {
+                continue;
+            }
+            if (\str_contains($field, 'navigation') || \str_contains($field, 'featured_links') || \str_contains($field, 'policy_links')) {
+                $defaultConfig = $this->applyTaskPlanLinkFieldDefaults($defaultConfig, $field, $sample);
                 continue;
             }
 
@@ -3083,6 +3150,42 @@ final class AiSitePageComponentGenerationService
         return $this->sanitizeDefaultConfigVisibleCopy(
             $this->applyTaskPlanDataContractDefaults($defaultConfig, $taskPlanTask)
         );
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @return array<string,mixed>
+     */
+    private function applyTaskPlanLinkFieldDefaults(array $defaultConfig, string $field, string $sample): array
+    {
+        $fallbackItems = \is_array($defaultConfig['nav_items'] ?? null) ? $defaultConfig['nav_items'] : [];
+        $items = $this->normalizePromptLinkItems($this->decodeLinkItemsSample($sample), $fallbackItems);
+        if ($items === []) {
+            return $defaultConfig;
+        }
+
+        if (\str_contains($field, 'navigation')) {
+            if (\array_key_exists('nav_items', $defaultConfig)) {
+                $defaultConfig['nav_items'] = \array_map(static fn(array $item): array => [
+                    'text' => (string)($item['label'] ?? ''),
+                    'href' => (string)($item['href'] ?? '#'),
+                ], $items);
+            }
+            if (\array_key_exists('navigation.items', $defaultConfig)) {
+                $defaultConfig['navigation.items'] = $this->buildLinkLines($items);
+            }
+
+            return $defaultConfig;
+        }
+
+        if (\str_contains($field, 'featured_links') && \array_key_exists('links.column1_items', $defaultConfig)) {
+            $defaultConfig['links.column1_items'] = $this->buildLinkLines($items);
+        }
+        if (\str_contains($field, 'policy_links') && \array_key_exists('links.column2_items', $defaultConfig)) {
+            $defaultConfig['links.column2_items'] = $this->buildLinkLines($items);
+        }
+
+        return $defaultConfig;
     }
 
     /**
@@ -3336,15 +3439,25 @@ final class AiSitePageComponentGenerationService
      */
     private function resolvePrimaryCtaText(array $scope): string
     {
-        $pageTypes = $this->resolveScopedPageTypes($scope);
-        if (\in_array(Page::TYPE_CONTACT, $pageTypes, true)) {
-            return 'Contact Us';
-        }
-        if (\in_array(Page::TYPE_BLOG_LIST, $pageTypes, true)) {
-            return 'Explore More';
+        $locale = $this->resolveScopePrimaryLocale($scope);
+        $sharedPromptContext = $this->resolveSharedPromptContext($scope);
+        $sharedAction = $this->filterVisibleCopyForLocale(
+            \trim((string)($sharedPromptContext['shared_cta_strategy']['primary_action'] ?? '')),
+            $locale
+        );
+        if ($sharedAction !== '') {
+            return $sharedAction;
         }
 
-        return 'Get Started';
+        $pageTypes = $this->resolveScopedPageTypes($scope);
+        if (\in_array(Page::TYPE_CONTACT, $pageTypes, true)) {
+            return $this->localizeBuildText('contact_us', $locale);
+        }
+        if (\in_array(Page::TYPE_BLOG_LIST, $pageTypes, true)) {
+            return $this->localizeBuildText('explore_more', $locale);
+        }
+
+        return $this->localizeBuildText('get_started', $locale);
     }
 
     private function pickString(mixed ...$values): string
@@ -3440,6 +3553,298 @@ final class AiSitePageComponentGenerationService
                 ?? $websiteProfile['default_locale']
                 ?? ''
         ));
+    }
+
+    private function resolveScopePrimaryLocale(array $scope): string
+    {
+        return $this->resolvePrimaryLocale([], $scope);
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function resolveSharedPromptContext(array $scope): array
+    {
+        foreach ([
+            $this->extractSharedPromptContextFromTask($this->resolveSharedTaskPlanTask($scope, 'header')),
+            $this->extractSharedPromptContextFromTask($this->resolveSharedTaskPlanTask($scope, 'footer')),
+            \is_array($scope['stage2_context_snapshot']['shared_prompt_context'] ?? null) ? $scope['stage2_context_snapshot']['shared_prompt_context'] : [],
+            \is_array($scope['build_blueprint']['stage2_context_snapshot']['shared_prompt_context'] ?? null) ? $scope['build_blueprint']['stage2_context_snapshot']['shared_prompt_context'] : [],
+            \is_array($scope['virtual_theme_plan']['confirmed']['stage2_context_snapshot']['shared_prompt_context'] ?? null) ? $scope['virtual_theme_plan']['confirmed']['stage2_context_snapshot']['shared_prompt_context'] : [],
+            \is_array($scope['execution_blueprint']['shared_prompt_context'] ?? null) ? $scope['execution_blueprint']['shared_prompt_context'] : [],
+            \is_array($scope['confirmed_stage1_plan_book']['shared_prompt_context'] ?? null) ? $scope['confirmed_stage1_plan_book']['shared_prompt_context'] : [],
+            \is_array($scope['plan_workbench']['confirmed']['shared_prompt_context'] ?? null) ? $scope['plan_workbench']['confirmed']['shared_prompt_context'] : [],
+        ] as $candidate) {
+            if (!\is_array($candidate) || $candidate === []) {
+                continue;
+            }
+            if (
+                \is_array($candidate['header_items'] ?? null)
+                || \is_array($candidate['footer_featured'] ?? null)
+                || \is_array($candidate['footer_policies'] ?? null)
+                || \is_array($candidate['shared_cta_strategy'] ?? null)
+            ) {
+                return $candidate;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $task
+     * @return array<string,mixed>
+     */
+    private function extractSharedPromptContextFromTask(array $task): array
+    {
+        $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
+
+        return \is_array($runtimeContext['shared_prompt_context'] ?? null)
+            ? $runtimeContext['shared_prompt_context']
+            : [];
+    }
+
+    private function normalizePromptVisibleLabel(string $candidate, string $fallback, string $locale): string
+    {
+        $candidate = $this->filterVisibleCopyForLocale(\trim($candidate), $locale);
+        if ($candidate !== '') {
+            return $candidate;
+        }
+
+        $fallback = \trim($fallback);
+        return $fallback !== '' ? $fallback : 'Section';
+    }
+
+    private function filterVisibleCopyForLocale(string $value, string $locale): string
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return '';
+        }
+        if ($locale !== '' && $this->isNonCjkLocale($locale) && $this->hasMeaningfulCjkContent($value)) {
+            return '';
+        }
+
+        return $value;
+    }
+
+    private function localizePageTypeTitle(string $pageType, string $locale): string
+    {
+        $isZh = $this->isChineseLocale($locale);
+        $isJa = $this->isJapaneseLocale($locale);
+        $isKo = $this->isKoreanLocale($locale);
+
+        return match ($pageType) {
+            Page::TYPE_HOME => $isZh ? '首页' : ($isJa ? 'ホーム' : ($isKo ? '홈' : 'Home')),
+            Page::TYPE_ABOUT => $isZh ? '关于我们' : ($isJa ? '私たちについて' : ($isKo ? '회사 소개' : 'About')),
+            Page::TYPE_CONTACT => $isZh ? '联系我们' : ($isJa ? 'お問い合わせ' : ($isKo ? '문의하기' : 'Contact')),
+            Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => $isZh ? '博客' : ($isJa ? 'ブログ' : ($isKo ? '블로그' : 'Blog')),
+            Page::TYPE_PRIVACY_POLICY => $isZh ? '隐私政策' : ($isJa ? 'プライバシーポリシー' : ($isKo ? '개인정보처리방침' : 'Privacy Policy')),
+            Page::TYPE_TERMS_OF_SERVICE => $isZh ? '服务条款' : ($isJa ? '利用規約' : ($isKo ? '이용약관' : 'Terms of Service')),
+            Page::TYPE_REFUND_POLICY => $isZh ? '退款政策' : ($isJa ? '返金ポリシー' : ($isKo ? '환불 정책' : 'Refund Policy')),
+            Page::TYPE_SHIPPING_POLICY => $isZh ? '配送政策' : ($isJa ? '配送ポリシー' : ($isKo ? '배송 정책' : 'Shipping Policy')),
+            Page::TYPE_COOKIE_POLICY => $isZh ? 'Cookie 政策' : ($isJa ? 'Cookie ポリシー' : ($isKo ? '쿠키 정책' : 'Cookie Policy')),
+            default => '',
+        };
+    }
+
+    private function localizeBuildText(string $key, string $locale): string
+    {
+        $isZh = $this->isChineseLocale($locale);
+        $isJa = $this->isJapaneseLocale($locale);
+        $isKo = $this->isKoreanLocale($locale);
+
+        return match ($key) {
+            'policy_info' => $isZh ? '政策信息' : ($isJa ? 'ポリシー' : ($isKo ? '정책 정보' : 'Policy Info')),
+            'featured_pages' => $isZh ? '重点页面' : ($isJa ? '注目ページ' : ($isKo ? '주요 페이지' : 'Featured Pages')),
+            'all_pages' => $isZh ? '全部页面' : ($isJa ? 'すべてのページ' : ($isKo ? '모든 페이지' : 'All Pages')),
+            'all_rights_reserved' => $isZh ? '保留所有权利。' : ($isJa ? 'All rights reserved.' : ($isKo ? 'All rights reserved.' : 'All rights reserved.')),
+            'contact_us' => $isZh ? '联系我们' : ($isJa ? 'お問い合わせ' : ($isKo ? '문의하기' : 'Contact Us')),
+            'explore_more' => $isZh ? '了解更多' : ($isJa ? '詳しく見る' : ($isKo ? '더 알아보기' : 'Explore More')),
+            'get_started' => $isZh ? '立即开始' : ($isJa ? '始める' : ($isKo ? '시작하기' : 'Get Started')),
+            default => $key,
+        };
+    }
+
+    private function humanizeIdentifier(string $value): string
+    {
+        $value = \trim(\str_replace(['-', '_'], ' ', $value));
+        $value = \preg_replace('/\s+/u', ' ', $value) ?? $value;
+        return $value !== '' ? \ucwords($value) : '';
+    }
+
+    /**
+     * @param mixed $items
+     * @param list<array<string,mixed>> $fallbackItems
+     * @return list<array{label:string,href:string,type?:string}>
+     */
+    private function normalizePromptLinkItems(mixed $items, array $fallbackItems = []): array
+    {
+        if (!\is_array($items)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($items as $index => $item) {
+            if (\is_array($item)) {
+                $label = \trim((string)($item['label'] ?? $item['title'] ?? $item['text'] ?? ''));
+                $href = \trim((string)($item['href'] ?? $item['url'] ?? $item['target'] ?? ''));
+                if ($href === '') {
+                    $href = \trim((string)($fallbackItems[$index]['href'] ?? '#'));
+                }
+                if ($label === '') {
+                    continue;
+                }
+                $normalized[] = [
+                    'label' => $label,
+                    'href' => $href !== '' ? $href : '#',
+                    'type' => \trim((string)($item['type'] ?? '')),
+                ];
+                continue;
+            }
+
+            if (\is_scalar($item)) {
+                $label = \trim((string)$item);
+                if ($label === '') {
+                    continue;
+                }
+                $normalized[] = [
+                    'label' => $label,
+                    'href' => \trim((string)($fallbackItems[$index]['href'] ?? '#')),
+                ];
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @return list<array<string,mixed>>|null
+     */
+    private function decodeLinkItemsSample(string $sample): ?array
+    {
+        $sample = \trim($sample);
+        if ($sample === '') {
+            return null;
+        }
+
+        if (\str_starts_with($sample, '[') || \str_starts_with($sample, '{')) {
+            $decoded = \json_decode($sample, true);
+            return \is_array($decoded) ? $decoded : null;
+        }
+
+        $items = [];
+        if (\str_contains($sample, '=>')) {
+            foreach (\preg_split('/\r?\n/', $sample) ?: [] as $row) {
+                $row = \trim($row);
+                if ($row === '') {
+                    continue;
+                }
+                [$label, $href] = \explode('=>', $row, 2);
+                $items[] = ['label' => \trim($label), 'href' => \trim($href)];
+            }
+            return $items;
+        }
+
+        foreach (\preg_split('/\s*\/\s*/u', $sample) ?: [] as $label) {
+            $label = \trim($label);
+            if ($label === '') {
+                continue;
+            }
+            $items[] = ['label' => $label, 'href' => '#'];
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param list<array{label:string,href:string,type?:string}> $items
+     */
+    private function buildLinkLines(array $items): string
+    {
+        $lines = [];
+        foreach ($items as $item) {
+            $label = \trim((string)($item['label'] ?? ''));
+            if ($label === '') {
+                continue;
+            }
+            $lines[] = $label . '=>' . \trim((string)($item['href'] ?? '#'));
+        }
+
+        return \implode("\n", $lines);
+    }
+
+    private function deriveHandleFromHref(string $href): string
+    {
+        $href = \trim($href);
+        if ($href === '' || $href === '/' || $href === '#') {
+            return '';
+        }
+
+        $href = \preg_replace('/^[a-z]+:\/\/[^\/]+/i', '', $href) ?? $href;
+        $path = (string)(\parse_url($href, \PHP_URL_PATH) ?? $href);
+        return \trim($path, '/');
+    }
+
+    private function isChineseLocale(string $locale): bool
+    {
+        return \str_starts_with(\strtolower(\trim($locale)), 'zh');
+    }
+
+    private function isJapaneseLocale(string $locale): bool
+    {
+        $locale = \strtolower(\trim($locale));
+        return $locale === 'ja' || \str_starts_with($locale, 'ja_') || \str_starts_with($locale, 'ja-');
+    }
+
+    private function isKoreanLocale(string $locale): bool
+    {
+        $locale = \strtolower(\trim($locale));
+        return $locale === 'ko' || \str_starts_with($locale, 'ko_') || \str_starts_with($locale, 'ko-');
+    }
+
+    private function isNonCjkLocale(string $locale): bool
+    {
+        return $locale !== ''
+            && !$this->isChineseLocale($locale)
+            && !$this->isJapaneseLocale($locale)
+            && !$this->isKoreanLocale($locale);
+    }
+
+    private function hasMeaningfulCjkContent(string $text): bool
+    {
+        $matches = [];
+        if (\preg_match_all('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]+/u', $text, $matches) <= 0) {
+            return false;
+        }
+
+        $total = 0;
+        foreach ($matches[0] as $segment) {
+            $length = \function_exists('mb_strlen') ? \mb_strlen((string)$segment) : \strlen((string)$segment);
+            $total += $length;
+            if ($length >= 4) {
+                return true;
+            }
+        }
+
+        return $total >= 6;
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     */
+    private function assertRenderedHtmlMatchesLocale(string $html, array $renderContext): void
+    {
+        $locale = \trim((string)($renderContext['_content_locale'] ?? ''));
+        if ($locale === '' || !$this->isNonCjkLocale($locale)) {
+            return;
+        }
+
+        $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($html)));
+        if ($plain !== '' && $this->hasMeaningfulCjkContent($plain)) {
+            throw new \RuntimeException('Rendered component visible copy does not match website content locale.');
+        }
     }
 
     /**

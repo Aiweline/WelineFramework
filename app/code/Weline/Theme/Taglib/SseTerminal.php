@@ -521,6 +521,9 @@ function start(url, options) {
             if (eventSource !== source || sourceSeq !== eventSourceSeq) {
                 return;
             }
+            if (eventName === 'error' && (typeof e.data !== 'string' || e.data === '')) {
+                return;
+            }
             try {
                 var data = JSON.parse(e.data || '{}');
                 dispatchSseEvent(eventName, data, e);

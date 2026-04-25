@@ -61,11 +61,9 @@ class Component extends BackendController
      */
     public function list()
     {
-        // 清除之前可能存在的输出缓冲（防止PHP警告/错误混入JSON响应）
-        while (ob_get_level() > 0) {
-            ob_end_clean();
-        }
-        ob_start();
+        // Capture noisy scan output without clearing WLS global buffers.
+        $bufferLevel = \ob_get_level();
+        \ob_start();
         
         try {
             $styleCode = $this->request->getParam('style_code', '');
@@ -101,21 +99,19 @@ class Component extends BackendController
                 $themeComponentArea
             );
             
-            // 清除缓冲区中可能存在的PHP警告/错误输出
-            ob_get_clean();
-            
             return $this->fetchJson([
                 'success' => true,
                 'data' => $data,
             ]);
         } catch (\Exception $e) {
-            // 清除缓冲区
-            $unexpectedOutput = ob_get_clean();
-            
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
             ]);
+        } finally {
+            while (\ob_get_level() > $bufferLevel) {
+                \ob_end_clean();
+            }
         }
     }
     

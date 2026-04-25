@@ -193,7 +193,8 @@ class AiSiteAgentSessionService
      *   pagebuilder_pages_by_type:array<string, array<string, mixed>>,
      *   virtual_pages_by_type:array<string, array<string, mixed>>,
      *   preview_page_id:int,
-     *   preview_page_type:string
+     *   preview_page_type:string,
+     *   workspace_track:string
      * }|null
      */
     public function loadPreviewSwitchScopeSnapshot(int $sessionId, int $forAdminUserId): ?array
@@ -225,6 +226,7 @@ class AiSiteAgentSessionService
                 : [],
             'preview_page_id' => (int)($scope['preview_page_id'] ?? 0),
             'preview_page_type' => \trim((string)($scope['preview_page_type'] ?? '')),
+            'workspace_track' => \trim((string)($scope['workspace_track'] ?? '')),
         ];
     }
 
@@ -473,7 +475,8 @@ class AiSiteAgentSessionService
      *   pagebuilder_pages_by_type:array<string, array<string, mixed>>,
      *   virtual_pages_by_type:array<string, array<string, mixed>>,
      *   preview_page_id:int,
-     *   preview_page_type:string
+     *   preview_page_type:string,
+     *   workspace_track:string
      * }|null
      */
     private function loadPreviewSwitchScopeSnapshotFromPgsql(int $sessionId, int $forAdminUserId): ?array
@@ -494,7 +497,8 @@ SELECT
     COALESCE((scope_row.scope_doc -> 'pagebuilder_pages_by_type')::text, '{}') AS pagebuilder_pages_json,
     COALESCE((scope_row.scope_doc -> 'virtual_pages_by_type')::text, '{}') AS virtual_pages_json,
     COALESCE(scope_row.scope_doc ->> 'preview_page_type', '') AS preview_page_type,
-    COALESCE((scope_row.scope_doc ->> 'preview_page_id')::int, 0) AS preview_page_id
+    COALESCE((scope_row.scope_doc ->> 'preview_page_id')::int, 0) AS preview_page_id,
+    COALESCE(scope_row.scope_doc ->> 'workspace_track', '') AS workspace_track
 FROM (
     SELECT
         {$scopeField} AS raw_scope_json,
@@ -525,6 +529,7 @@ SQL;
             'virtual_pages_by_type' => $this->decodeJsonMap((string)($row['virtual_pages_json'] ?? '{}')),
             'preview_page_id' => (int)($row['preview_page_id'] ?? 0),
             'preview_page_type' => \trim((string)($row['preview_page_type'] ?? '')),
+            'workspace_track' => \trim((string)($row['workspace_track'] ?? '')),
         ];
     }
 
