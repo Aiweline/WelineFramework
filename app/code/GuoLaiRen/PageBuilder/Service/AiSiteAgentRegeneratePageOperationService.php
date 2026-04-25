@@ -6,6 +6,7 @@ namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\Page;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Sse\SseWriter;
 
 class AiSiteAgentRegeneratePageOperationService
@@ -24,7 +25,11 @@ class AiSiteAgentRegeneratePageOperationService
         if ($pageType === '') {
             throw new \RuntimeException((string)__('缺少要重建的页面类型'));
         }
-        $scope = ($ports->normalizeScope)($session->getScopeArray());
+        /** @var AiSiteAgentSessionService $sessionService */
+        $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
+        $scope = ($ports->normalizeScope)(
+            $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $pageTypes = ($ports->resolveScopedPageTypes)($scope);
         if (!\in_array($pageType, $pageTypes, true)) {
             throw new \RuntimeException((string)__('页面类型不在当前工作区中'));
