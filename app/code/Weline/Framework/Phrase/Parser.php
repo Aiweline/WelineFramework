@@ -230,104 +230,7 @@ class Parser
                         // 后加载的模块词典会覆盖先加载的（优先级：后添加的模块 > 先添加的模块）
                         $module_words = array_merge($module_words, $words);
                     }
-                    // 从总词典读取（words.php，按模块组织）
-                    $all_words_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
-                    $all_words = [];
-                    
-                    if (is_file($all_words_file)) {
-                        try {
-                            $all_words_data = (array)include $all_words_file;
-                            // 新格式：['all_words' => [...], 'locale' => ['Weline_I18n' => [...], ...]]
-                            
-                            // 先加载全局唯一词（顶层的 all_words）
-                            if (isset($all_words_data['all_words']) && is_array($all_words_data['all_words'])) {
-                                $all_words = array_merge($all_words, $all_words_data['all_words']);
-                            }
-                            
-                            // 然后加载当前语言的模块词（支持多模块）
-                            if (isset($all_words_data[$lang])) {
-                                $lang_words = $all_words_data[$lang];
-                                
-                                // 如果没有指定模块（如编译期），加载所有模块的词
-                                if (empty($modules)) {
-                                    foreach ($lang_words as $module_name => $module_words_data) {
-                                        if (is_array($module_words_data)) {
-                                            $all_words = array_merge($all_words, $module_words_data);
-                                        }
-                                    }
-                                } else {
-                                    // 遍历所有关联模块，加载它们的词
-                                    foreach ($modules as $module_name) {
-                                        $full_module_name = self::getFullModuleName($module_name);
-                                        // 尝试完整模块名和简短模块名
-                                        if (isset($lang_words[$full_module_name]) && is_array($lang_words[$full_module_name])) {
-                                            $all_words = array_merge($all_words, $lang_words[$full_module_name]);
-                                        } elseif (isset($lang_words[$module_name]) && is_array($lang_words[$module_name])) {
-                                            $all_words = array_merge($all_words, $lang_words[$module_name]);
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (Exception $exception) {
-                            // 如果总词典读取失败，尝试从语言文件读取（语言文件不包含 all_words）
-                            $words_file = Env::path_TRANSLATE_FILES_PATH . $lang . '.php';
-                            if (is_file($words_file)) {
-                                try {
-                                    $lang_words = (array)include $words_file;
-                                    // 语言文件格式：['Weline_I18n' => [...], 'Weline_Cdn' => [...], ...]
-                                    if (empty($modules)) {
-                                        // 加载所有模块的词
-                                        foreach ($lang_words as $module_name => $module_words_data) {
-                                            if (is_array($module_words_data)) {
-                                                $all_words = array_merge($all_words, $module_words_data);
-                                            }
-                                        }
-                                    } else {
-                                        // 遍历所有关联模块，加载它们的词
-                                        foreach ($modules as $module_name) {
-                                            $full_module_name = self::getFullModuleName($module_name);
-                                            if (isset($lang_words[$full_module_name]) && is_array($lang_words[$full_module_name])) {
-                                                $all_words = array_merge($all_words, $lang_words[$full_module_name]);
-                                            } elseif (isset($lang_words[$module_name]) && is_array($lang_words[$module_name])) {
-                                                $all_words = array_merge($all_words, $lang_words[$module_name]);
-                                            }
-                                        }
-                                    }
-                                } catch (Exception $e) {
-                                    // 静默处理
-                                }
-                            }
-                        }
-                    } else {
-                        // 如果总词典不存在，从语言文件读取（语言文件不包含 all_words）
-                        $words_file = Env::path_TRANSLATE_FILES_PATH . $lang . '.php';
-                        if (is_file($words_file)) {
-                            try {
-                                $lang_words = (array)include $words_file;
-                                // 语言文件格式：['Weline_I18n' => [...], 'Weline_Cdn' => [...], ...]
-                                if (empty($modules)) {
-                                    // 加载所有模块的词
-                                    foreach ($lang_words as $module_name => $module_words_data) {
-                                        if (is_array($module_words_data)) {
-                                            $all_words = array_merge($all_words, $module_words_data);
-                                        }
-                                    }
-                                } else {
-                                    // 遍历所有关联模块，加载它们的词
-                                    foreach ($modules as $module_name) {
-                                        $full_module_name = self::getFullModuleName($module_name);
-                                        if (isset($lang_words[$full_module_name]) && is_array($lang_words[$full_module_name])) {
-                                            $all_words = array_merge($all_words, $lang_words[$full_module_name]);
-                                        } elseif (isset($lang_words[$module_name]) && is_array($lang_words[$module_name])) {
-                                            $all_words = array_merge($all_words, $lang_words[$module_name]);
-                                        }
-                                    }
-                                }
-                            } catch (Exception $e) {
-                                // 静默处理
-                            }
-                        }
-                    }
+                    $all_words = self::loadLocaleWords($lang, $modules);
                     
                     // 合并：模块词典优先，总词典作为补充（模块词典覆盖总词典）
                     // 先加载总词典，再加载模块词典，这样模块词典会覆盖总词典
@@ -425,5 +328,72 @@ class Parser
         
         // 默认格式：Weline_模块名
         return 'Weline_' . $module_name;
+    }
+
+    /**
+     * 优先按语言文件加载，避免常规请求直接 include 巨大的总词典文件。
+     * 仅当语言文件缺失时，才回退到 words.php。
+     */
+    private static function loadLocaleWords(string $lang, array $modules): array
+    {
+        $words_file = Env::path_TRANSLATE_FILES_PATH . $lang . '.php';
+        if (is_file($words_file)) {
+            try {
+                $lang_words = (array)include $words_file;
+                return self::extractModuleWords($lang_words, $modules);
+            } catch (\Throwable) {
+                // 回退到总词典
+            }
+        }
+
+        $all_words_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
+        if (!is_file($all_words_file)) {
+            return [];
+        }
+
+        try {
+            $all_words_data = (array)include $all_words_file;
+            $all_words = [];
+
+            if (isset($all_words_data['all_words']) && is_array($all_words_data['all_words'])) {
+                $all_words = array_merge($all_words, $all_words_data['all_words']);
+            }
+
+            if (isset($all_words_data[$lang]) && is_array($all_words_data[$lang])) {
+                $all_words = array_merge($all_words, self::extractModuleWords($all_words_data[$lang], $modules));
+            }
+
+            return $all_words;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * 从按模块组织的语言数组中提取当前请求所需词条。
+     */
+    private static function extractModuleWords(array $lang_words, array $modules): array
+    {
+        $all_words = [];
+
+        if (empty($modules)) {
+            foreach ($lang_words as $module_words_data) {
+                if (is_array($module_words_data)) {
+                    $all_words = array_merge($all_words, $module_words_data);
+                }
+            }
+            return $all_words;
+        }
+
+        foreach ($modules as $module_name) {
+            $full_module_name = self::getFullModuleName($module_name);
+            if (isset($lang_words[$full_module_name]) && is_array($lang_words[$full_module_name])) {
+                $all_words = array_merge($all_words, $lang_words[$full_module_name]);
+            } elseif (isset($lang_words[$module_name]) && is_array($lang_words[$module_name])) {
+                $all_words = array_merge($all_words, $lang_words[$module_name]);
+            }
+        }
+
+        return $all_words;
     }
 }
