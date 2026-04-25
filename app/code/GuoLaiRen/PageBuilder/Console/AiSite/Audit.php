@@ -45,7 +45,9 @@ final class Audit implements CommandInterface
             ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PRETTY_PRINT) . "\n");
         }
 
-        $scope = $scopeService->normalizeScope($session->getScopeArray());
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($session, $scopeService->normalizeStage($session->getStage()))
+        );
         $report = $qualityGate->inspectScope($scope);
         $queueRows = $this->findQueuesForPublicId($publicId);
 
