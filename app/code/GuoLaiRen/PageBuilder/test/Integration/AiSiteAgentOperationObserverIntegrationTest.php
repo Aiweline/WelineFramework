@@ -878,6 +878,122 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertSame(13579, (int)($queue['pid'] ?? 0));
     }
 
+    public function testDuplicateOperationObserverDefersErrorEventsUntilQueueSettlesDone(): void
+    {
+        $createPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-create-session',
+            'POST',
+            'postCreateSession'
+        );
+        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
+
+        $publicId = (string)($createPayload['public_id'] ?? '');
+        self::assertNotSame('', $publicId);
+
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+
+        $executionToken = 'observer-defer-error-until-done-token';
+        $queueCreated = w_query('queue', 'create', [
+            'class' => \GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue::class,
+            'name' => 'Running observer plan queue with transient error event',
+            'module' => 'GuoLaiRen_PageBuilder',
+            'content' => [
+                'public_id' => $publicId,
+                'admin_id' => 1,
+                'execution_token' => $executionToken,
+                'operation' => 'plan',
+                'stage' => AiSiteAgentSession::STAGE_PLAN,
+            ],
+            'status' => 'running',
+            'pid' => 24681,
+            'auto' => true,
+            'biz_key' => 'glr_aisite:test:observer:defer-error:' . \substr(\sha1($publicId), 0, 12),
+        ]);
+        self::assertIsArray($queueCreated);
+        $queueId = (int)($queueCreated['queue_id'] ?? 0);
+        self::assertGreaterThan(0, $queueId);
+
+        $startedAt = \date('Y-m-d H:i:s');
+        $scope = $session->getScopeArray();
+        $scope['active_operation'] = [
+            'operation' => 'plan',
+            'execution_token' => $executionToken,
+            'status' => 'running',
+            'message' => 'waiting for queue status settle',
+            'started_at' => $startedAt,
+            'updated_at' => $startedAt,
+            'queue_id' => $queueId,
+        ];
+        $this->sessionService->replaceScope($session->getId(), 1, $scope);
+        $session = $this->sessionService->loadById($session->getId(), 1);
+        self::assertNotNull($session);
+
+        $this->sessionService->appendEvent(
+            $session->getId(),
+            1,
+            'operation_failed',
+            [
+                'message' => 'transient failure should wait for queue truth',
+                'operation' => 'plan',
+                'execution_token' => $executionToken,
+                'queue_id' => $queueId,
+                'details' => [
+                    'execution_token' => $executionToken,
+                    'queue_id' => $queueId,
+                ],
+            ],
+            AiSiteAgentSession::STAGE_PLAN
+        );
+
+        RequestContext::set('pagebuilder.ai.observer.queue_settle_delay_ms', 0);
+        try {
+            $writer = new DuplicateObserverHeartbeatWriter(function () use ($session, $executionToken, $queueId): void {
+                $fresh = $this->sessionService->loadById($session->getId(), 1);
+                self::assertNotNull($fresh);
+
+                $scope = $fresh->getScopeArray();
+                $scope['active_operation'] = \array_replace(
+                    \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
+                    [
+                        'operation' => 'plan',
+                        'execution_token' => $executionToken,
+                        'status' => 'done',
+                        'message' => 'plan done after queue settle',
+                        'updated_at' => \date('Y-m-d H:i:s'),
+                    ]
+                );
+                $this->sessionService->replaceScope($fresh->getId(), 1, $scope);
+                w_query('queue', 'update', [
+                    'queue_id' => $queueId,
+                    'patch' => [
+                        'status' => 'done',
+                        'pid' => 24681,
+                        'finished' => 1,
+                        'process' => 'plan done after queue settle',
+                        'result' => 'plan done after queue settle',
+                    ],
+                ]);
+            });
+
+            /** @var AiSiteAgent $controller */
+            $controller = ObjectManager::getInstance(AiSiteAgent::class);
+            $method = new ReflectionMethod(AiSiteAgent::class, 'observeDuplicateOperationStream');
+            $method->setAccessible(true);
+            $result = $method->invoke($controller, $writer, $session, 1, 'plan', $executionToken);
+        } finally {
+            RequestContext::remove('pagebuilder.ai.observer.queue_settle_delay_ms');
+        }
+
+        self::assertIsArray($result);
+        self::assertTrue((bool)($result['success'] ?? false), \json_encode($result, \JSON_UNESCAPED_UNICODE));
+        self::assertSame(0, $writer->countEvents('error'), \json_encode($writer->eventsByName('error'), \JSON_UNESCAPED_UNICODE));
+
+        $queue = w_query('queue', 'get', ['queue_id' => $queueId]);
+        self::assertIsArray($queue);
+        self::assertSame('done', (string)($queue['status'] ?? ''));
+    }
+
     public function testDuplicateOperationObserverAutoRecoversErroredPlanQueue(): void
     {
         $createPayload = $this->invokeJsonAction(
