@@ -85,6 +85,9 @@ final class AiSiteTaskPlanRenderIntegrationTest extends AbstractAiSiteWorkbenchI
         self::assertStringContainsString('refine_task_plan', $html);
         self::assertStringContainsString('rebuild_task_plan', $html);
         self::assertStringContainsString('pb-ai-task-plan-sse-terminal', $html);
+        self::assertStringContainsString('pb-ai-go-publish-stage', $html);
+        self::assertStringContainsString('pb-ai-publish-stage-entry-hint', $html);
+        self::assertStringContainsString('function syncPublishStageEntryFromWorkspaceState(workspaceState)', $html);
         self::assertStringContainsString('确认任务方案并开始构建', $html);
     }
 }
