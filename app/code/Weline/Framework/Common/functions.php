@@ -207,6 +207,41 @@ if (!function_exists('w_resolve_model_class')) {
     }
 }
 
+if (!function_exists('w_model')) {
+    /**
+     * 兼容旧版全局 model helper。
+     *
+     * 支持：
+     * - w_model('Vendor\\Module\\Model\\Entity')
+     * - w_model('Module_Name', 'entity_name')
+     * - w_model('Module_Name', 'entity_name', ['data' => [...]])
+     *
+     * @param string $moduleOrClass 完整类名，或模块名（如 WeShop_Product）
+     * @param string|array|null $model model 简名，或直接传入构造参数
+     * @param array $arguments ObjectManager 构造参数
+     * @return mixed
+     */
+    function w_model(string $moduleOrClass, string|array|null $model = null, array $arguments = []): mixed
+    {
+        $class = $moduleOrClass;
+
+        if (is_array($model)) {
+            $arguments = $model;
+            $model = null;
+        }
+
+        if ($model !== null && $model !== '') {
+            $class = w_resolve_model_class($moduleOrClass, $model);
+        }
+
+        if (empty($arguments)) {
+            return ObjectManager::getInstance($class);
+        }
+
+        return ObjectManager::make($class, $arguments);
+    }
+}
+
 if (!function_exists('w_query')) {
     /**
      * 统一查询器全局函数
