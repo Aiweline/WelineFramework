@@ -12,25 +12,30 @@ namespace GuoLaiRen\PageBuilder\Controller\Frontend;
 use GuoLaiRen\PageBuilder\Helper\PageHelper;
 use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Style;
+use GuoLaiRen\PageBuilder\Model\VirtualTheme;
 use GuoLaiRen\PageBuilder\Service\PageRenderService;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Manager\ObjectManager;
 class Page extends FrontendController
 {
     private PageModel $pageModel;
     private PageHelper $pageHelper;
     private Style $styleModel;
     private PageRenderService $pageRenderService;
+    private VirtualTheme $virtualThemeModel;
 
     public function __construct(
         PageModel $pageModel,
         PageHelper $pageHelper,
         Style $styleModel,
-        PageRenderService $pageRenderService
+        PageRenderService $pageRenderService,
+        ?VirtualTheme $virtualThemeModel = null
     ) {
         $this->pageModel = $pageModel;
         $this->pageHelper = $pageHelper;
         $this->styleModel = $styleModel;
         $this->pageRenderService = $pageRenderService;
+        $this->virtualThemeModel = $virtualThemeModel ?? ObjectManager::getInstance(VirtualTheme::class);
     }
 
     /**
@@ -305,7 +310,8 @@ class Page extends FrontendController
             $page,
             $renderMode,
             $currentLocale,
-            $tempStyleCode
+            $tempStyleCode,
+            $this->resolveLiveVirtualThemeId($websiteId, $isPreview)
         );
 
         echo $html;
@@ -313,6 +319,25 @@ class Page extends FrontendController
             echo $this->renderLanguageSwitcher($page, $availableLocales, $currentLocale);
         }
         return;
+    }
+
+    private function resolveLiveVirtualThemeId(int $websiteId, bool $isPreview): ?int
+    {
+        if ($isPreview || $websiteId <= 0) {
+            return null;
+        }
+
+        $theme = clone $this->virtualThemeModel;
+        $theme->clearData()->clearQuery()
+            ->where(VirtualTheme::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(VirtualTheme::schema_fields_SOURCE, VirtualTheme::SOURCE_PAGEBUILDER_AI)
+            ->where(VirtualTheme::schema_fields_IS_ACTIVE, 1)
+            ->order(VirtualTheme::schema_fields_ID, 'DESC')
+            ->find()
+            ->fetch();
+
+        $themeId = (int)$theme->getId();
+        return $themeId > 0 ? $themeId : null;
     }
     
     /**

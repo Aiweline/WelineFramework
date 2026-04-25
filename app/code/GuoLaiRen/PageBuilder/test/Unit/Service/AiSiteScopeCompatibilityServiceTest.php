@@ -209,6 +209,19 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         $this->assertSame(1, $scope[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY]);
     }
 
+    public function testNormalizeScopeKeepsRequiredHomeOnlyWhenCustomizedSelectionIsEmpty(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $scope = $service->normalizeScope([
+            'page_types' => [],
+            AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY => 1,
+        ]);
+
+        $this->assertSame([Page::TYPE_HOME], $scope['page_types']);
+        $this->assertSame(1, $scope[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY]);
+    }
+
     public function testBuildVirtualPagesByTypeHydratesLegacySingleContentPageIntoBlocks(): void
     {
         $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
@@ -258,6 +271,27 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
 
         self::assertCount(2, $virtualPages[Page::TYPE_HOME]['blocks']);
         self::assertSame('home-page-hero', $virtualPages[Page::TYPE_HOME]['blocks'][0]['block_id']);
+    }
+
+    public function testBuildVirtualPagesByTypeLocalizesFallbackTitlesForEnglishLocale(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $virtualPages = $service->buildVirtualPagesByType(
+            [Page::TYPE_HOME, Page::TYPE_ABOUT, Page::TYPE_TERMS_OF_SERVICE],
+            [
+                'website_profile' => [
+                    'site_title' => 'Teenipiya',
+                    'default_locale' => 'en_US',
+                ],
+                'default_locale' => 'en_US',
+            ],
+            false
+        );
+
+        self::assertSame('Teenipiya', (string)($virtualPages[Page::TYPE_HOME]['title'] ?? ''));
+        self::assertSame('About', (string)($virtualPages[Page::TYPE_ABOUT]['title'] ?? ''));
+        self::assertSame('Terms of Service', (string)($virtualPages[Page::TYPE_TERMS_OF_SERVICE]['title'] ?? ''));
     }
 
     /**
@@ -471,7 +505,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
 
         self::assertArrayHasKey(Page::TYPE_HOME, $virtualPages);
         self::assertSame([], $virtualPages[Page::TYPE_HOME]['blocks']);
-        self::assertSame('首页', $virtualPages[Page::TYPE_HOME]['title']);
+        self::assertSame('Legacy Demo', $virtualPages[Page::TYPE_HOME]['title']);
     }
 
     /**

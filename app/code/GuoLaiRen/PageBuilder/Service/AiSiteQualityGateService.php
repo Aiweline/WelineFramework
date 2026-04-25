@@ -35,6 +35,7 @@ final class AiSiteQualityGateService
     {
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $pagesByType = $this->resolvePagesByType($scope);
+        $renderVirtualThemeId = $this->resolveRenderVirtualThemeId($scope);
         $pageReports = [];
 
         $allTasksDone = !$this->buildTaskService->hasPendingTasks($scope);
@@ -58,7 +59,13 @@ final class AiSiteQualityGateService
                     $page->clearData()->clearQuery()->load($pageId);
                     if ($page->getId() > 0) {
                         $layout = $page->getAiLayoutArray();
-                        $html = $this->pageRenderService->render($page);
+                        $html = $this->pageRenderService->render(
+                            $page,
+                            PageRenderService::MODE_LIVE,
+                            null,
+                            null,
+                            $renderVirtualThemeId > 0 ? $renderVirtualThemeId : null
+                        );
                     }
                 } catch (\Throwable $throwable) {
                     $renderError = $throwable->getMessage();
@@ -171,6 +178,16 @@ final class AiSiteQualityGateService
         }
 
         return [];
+    }
+
+    private function resolveRenderVirtualThemeId(array $scope): int
+    {
+        $track = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
+        if ($track === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
+            return 0;
+        }
+
+        return \max(0, (int)($scope['virtual_theme_id'] ?? 0));
     }
 
     /**

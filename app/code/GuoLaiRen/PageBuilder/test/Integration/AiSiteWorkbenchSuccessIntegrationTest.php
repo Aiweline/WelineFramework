@@ -9,6 +9,7 @@ use GuoLaiRen\PageBuilder\Controller\Backend\Preview as PreviewController;
 use GuoLaiRen\PageBuilder\Controller\Frontend\Page as FrontendPageController;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Model\VirtualTheme;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Data\WebsiteData;
@@ -204,6 +205,16 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         $publishedPreviewPageId = (int)($publishState['preview_page_id'] ?? 0);
         self::assertGreaterThan(0, $publishedPreviewPageId);
 
+        $activeTheme = clone ObjectManager::getInstance(VirtualTheme::class);
+        $activeTheme->clearData()->clearQuery()
+            ->where(VirtualTheme::schema_fields_WEBSITE_ID, $draftWebsiteId)
+            ->where(VirtualTheme::schema_fields_SOURCE, VirtualTheme::SOURCE_PAGEBUILDER_AI)
+            ->where(VirtualTheme::schema_fields_IS_ACTIVE, 1)
+            ->order(VirtualTheme::schema_fields_ID, 'DESC')
+            ->find()
+            ->fetch();
+        self::assertSame($virtualThemeId, (int)$activeTheme->getId(), 'Published website should use the generated virtual theme as the live active theme.');
+
         $this->prepareBackendRequest(
             '/pagebuilder/backend/preview/full',
             'GET',
@@ -270,6 +281,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertNotSame('', \trim($liveHtml), 'Published home should render non-empty HTML on frontend live view.');
         self::assertStringContainsString('<!DOCTYPE', $liveHtml);
         self::assertStringNotContainsString('Component not found:', $liveHtml);
+        self::assertStringContainsString('theme_id=' . $virtualThemeId, $liveHtml);
     }
 
     public function testWorkbenchBuildCanOpenVirtualPreviewAndEditorRoutesDirectly(): void

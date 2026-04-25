@@ -46,4 +46,15 @@ final class AiSiteAgentSharedComponentResolutionTest extends TestCase
         self::assertSame('', $this->method->invoke($controller, 'home_page', 'content/home-page-hero'));
         self::assertSame('', $this->method->invoke($controller, 'contact_page', 'content/contact-page-form'));
     }
+
+    public function testSharedComponentRegenerationPersistsGeneratedLayoutsForAllAffectedPages(): void
+    {
+        $controllerSource = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php');
+        self::assertIsString($controllerSource);
+
+        self::assertStringContainsString('$affectedPageTypes = $pageTypesAll;', $controllerSource);
+        self::assertStringContainsString('$this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypesAll, $pageTypeLayouts);', $controllerSource);
+        self::assertStringContainsString('$this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypes, $pageTypeLayouts);', $controllerSource);
+        self::assertStringContainsString('$this->virtualThemeService->saveGeneratedPageLayout($virtualThemeId, $pageType, $pageTypeLayouts[$pageType]);', $controllerSource);
+    }
 }

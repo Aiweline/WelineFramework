@@ -80,6 +80,7 @@ class AiSitePublishService
         $this->ensureWebsiteDomainBinding($websiteId, $websiteProfile);
 
         if ($virtualThemeId > 0) {
+            $this->deactivateOtherActiveVirtualThemes($websiteId, $virtualThemeId);
             // 重新加载虚拟主题
             $theme = clone $this->virtualThemeModel;
             $theme->clearData()->clearQuery()->load($virtualThemeId);
@@ -87,6 +88,8 @@ class AiSitePublishService
             if ($theme->getId() > 0) {
                 $config = $theme->getConfig();
                 $config['published_at'] = \date('Y-m-d H:i:s');
+                $config['published_virtual_theme_id'] = $virtualThemeId;
+                $config['publish_workspace_track'] = $workspaceTrack;
                 $config['materialized_pages_by_type'] = $materialized['pagebuilder_pages_by_type'] ?? [];
 
                 // 链式 query->update()->fetch() 在部分 Model 委托路径下可能未执行；save() 走标准变更落库
@@ -104,9 +107,40 @@ class AiSitePublishService
             [
                 'materialized_pages_by_type' => $materialized['pagebuilder_pages_by_type'] ?? [],
                 'published_at' => \date('Y-m-d H:i:s'),
+                'published_virtual_theme_id' => $virtualThemeId,
             ],
             $this->visualUrlService->resolveUrls($previewPageId, $virtualThemeId)
         );
+    }
+
+    private function deactivateOtherActiveVirtualThemes(int $websiteId, int $keepVirtualThemeId): void
+    {
+        if ($websiteId <= 0 || $keepVirtualThemeId <= 0) {
+            return;
+        }
+
+        $activeThemes = clone $this->virtualThemeModel;
+        $activeThemes->clearData()->clearQuery()
+            ->where(VirtualTheme::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(VirtualTheme::schema_fields_SOURCE, VirtualTheme::SOURCE_PAGEBUILDER_AI)
+            ->where(VirtualTheme::schema_fields_IS_ACTIVE, 1)
+            ->select()
+            ->fetch();
+
+        $items = $activeThemes->getItems();
+        if (!\is_array($items)) {
+            return;
+        }
+
+        foreach ($items as $item) {
+            if (!$item instanceof VirtualTheme) {
+                continue;
+            }
+            if ((int)$item->getId() === $keepVirtualThemeId) {
+                continue;
+            }
+            $item->setIsActive(false)->save(true);
+        }
     }
 
     /**
