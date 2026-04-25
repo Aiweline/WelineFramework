@@ -405,7 +405,7 @@ HTML,
         self::assertStringContainsString('Follow the confirmed hero task contract.', $prompt);
         self::assertStringContainsString('Grow faster with our service', $prompt);
         self::assertStringContainsString('Hero must render value proposition and CTA.', $prompt);
-        self::assertStringContainsString('stage1.theme_context_snapshot', $prompt);
+        self::assertStringContainsString('stage1.theme_context', $prompt);
         self::assertStringContainsString('Festival Neon', $prompt);
         self::assertStringContainsString('stage1.shared_prompt_context', $prompt);
         self::assertStringContainsString('Fast game discovery with trusted checkout.', $prompt);
@@ -540,10 +540,12 @@ HTML,
             'task_script' => [
                 'story_goal' => 'Create a credible conversion hero.',
             ],
+            'runtime_context' => [
+                'stage2_context_hash' => 'stage2-context-hash',
+            ],
         ];
         $scope = [
-            'stage2_context_snapshot' => [
-                'context_hash' => 'stage2-context-hash',
+            'execution_blueprint' => [
                 'theme_context_snapshot' => [
                     'visual_tone' => 'Measured premium trust',
                     'palette' => ['primary' => '#0f172a'],
@@ -902,7 +904,7 @@ HTML,
             [
                 'default_locale' => 'en_US',
                 'page_types' => ['home_page', 'about_page', 'contact_page'],
-                'stage2_context_snapshot' => [
+                'execution_blueprint' => [
                     'shared_prompt_context' => [
                         'header_items' => [
                             ['label' => '首页', 'href' => '/', 'type' => 'home_page'],
