@@ -2529,9 +2529,6 @@ final class AiSitePageComponentGenerationService
     {
         foreach ([
             $this->resolveTaskPlanRoot($scope),
-            \is_array($scope['stage2_context_snapshot'] ?? null) ? $scope['stage2_context_snapshot'] : [],
-            \is_array($scope['theme_context_snapshot'] ?? null) ? $scope['theme_context_snapshot'] : [],
-            \is_array($scope['confirmed_stage1_plan_book'] ?? null) ? $scope['confirmed_stage1_plan_book'] : [],
             [
                 'theme_design' => \is_array($scope['theme_design'] ?? null) ? $scope['theme_design'] : [],
                 'theme_style' => \is_array($scope['theme_style'] ?? null) ? $scope['theme_style'] : [],
@@ -2781,6 +2778,7 @@ final class AiSitePageComponentGenerationService
      */
     private function buildHeaderDefaultConfig(array $websiteProfile, array $scope, string $siteDisplayName): array
     {
+        $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
         $navItems = $this->buildHeaderNavigationPages($scope);
         $navTextLines = [];
         foreach ($navItems as $item) {
@@ -3133,21 +3131,9 @@ final class AiSitePageComponentGenerationService
         if ($sharedPromptContext === [] && \is_array($taskPlanTask['shared_prompt_context'] ?? null)) {
             $sharedPromptContext = $taskPlanTask['shared_prompt_context'];
         }
-        $stage2Context = \is_array($runtimeContext['stage2_context_snapshot'] ?? null) ? $runtimeContext['stage2_context_snapshot'] : [];
-        if ($stage2Context === [] && \is_array($scope['stage2_context_snapshot'] ?? null)) {
-            $stage2Context = $scope['stage2_context_snapshot'];
-        }
-        if ($stage2Context === [] && \is_array($scope['build_blueprint']['stage2_context_snapshot'] ?? null)) {
-            $stage2Context = $scope['build_blueprint']['stage2_context_snapshot'];
-        }
-        if ($stage2Context === [] && \is_array($scope['virtual_theme_plan']['confirmed']['stage2_context_snapshot'] ?? null)) {
-            $stage2Context = $scope['virtual_theme_plan']['confirmed']['stage2_context_snapshot'];
-        }
+        $stage2Context = [];
         if ($themeContext === [] && \is_array($stage2Context['theme_context_snapshot'] ?? null)) {
             $themeContext = $stage2Context['theme_context_snapshot'];
-        }
-        if ($themeContext === [] && \is_array($scope['theme_context_snapshot'] ?? null)) {
-            $themeContext = $scope['theme_context_snapshot'];
         }
         if ($themeContext === [] && \is_array($scope['execution_blueprint']['theme_context_snapshot'] ?? null)) {
             $themeContext = $scope['execution_blueprint']['theme_context_snapshot'];
@@ -3155,14 +3141,8 @@ final class AiSitePageComponentGenerationService
         if ($sharedPromptContext === [] && \is_array($stage2Context['shared_prompt_context'] ?? null)) {
             $sharedPromptContext = $stage2Context['shared_prompt_context'];
         }
-        if ($sharedPromptContext === [] && \is_array($scope['shared_prompt_context'] ?? null)) {
-            $sharedPromptContext = $scope['shared_prompt_context'];
-        }
         if ($sharedPromptContext === [] && \is_array($scope['execution_blueprint']['shared_prompt_context'] ?? null)) {
             $sharedPromptContext = $scope['execution_blueprint']['shared_prompt_context'];
-        }
-        if ($sharedPromptContext === [] && \is_array($scope['confirmed_stage1_plan_book']['shared_prompt_context'] ?? null)) {
-            $sharedPromptContext = $scope['confirmed_stage1_plan_book']['shared_prompt_context'];
         }
         if ($sharedPromptContext === [] && \is_array($scope['plan_workbench']['confirmed']['shared_prompt_context'] ?? null)) {
             $sharedPromptContext = $scope['plan_workbench']['confirmed']['shared_prompt_context'];
@@ -3191,7 +3171,7 @@ final class AiSitePageComponentGenerationService
             . "- stage3_directive: " . (string)($taskScript['stage3_directive'] ?? '') . "\n"
             . "- data_contract: " . $this->jsonEncodeForPrompt(\array_replace_recursive($implementationDataContract, $taskScriptDataContract), 4000) . "\n"
             . "- field_content_requirements: " . \json_encode($fieldRequirements, \JSON_UNESCAPED_UNICODE) . "\n"
-            . "- stage1.theme_context_snapshot: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
+            . "- stage1.theme_context: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
             . "- stage1.shared_prompt_context: " . $this->jsonEncodeForPrompt($sharedPromptContext, 5000) . "\n"
             . "- stage2.task_script: " . $this->jsonEncodeForPrompt($taskScript, 7000) . "\n"
             . "- stage2.block_task: " . $this->jsonEncodeForPrompt($blockTask, 7000) . "\n"
@@ -3200,8 +3180,7 @@ final class AiSitePageComponentGenerationService
             . "- block_task.planning_reason: " . (string)($blockTask['planning_reason'] ?? '') . "\n"
             . "- design execution rule: apply page_design_plan.color_layering and section_flow before local block styling; this block must contrast with adjacent blocks through surfaces/cards/gradients/dividers/illustration while staying inside the confirmed palette.\n"
             . "- stage2 language rule: treat stage-2 planned text as source intent, not copy authority; rewrite any planned text that is not in the website content language before placing it in visible component output.\n"
-            . "- theme_context_snapshot: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
-            . "- stage2_context_snapshot: " . $this->jsonEncodeForPrompt($stage2Context, 5000) . "\n"
+            . "- theme_context: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
             . "- acceptance: " . \json_encode($acceptance, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- runtime_context: " . \json_encode($runtimeContext, \JSON_UNESCAPED_UNICODE) . "\n";
     }
@@ -3688,11 +3667,7 @@ final class AiSitePageComponentGenerationService
         foreach ([
             $this->extractSharedPromptContextFromTask($this->resolveSharedTaskPlanTask($scope, 'header')),
             $this->extractSharedPromptContextFromTask($this->resolveSharedTaskPlanTask($scope, 'footer')),
-            \is_array($scope['stage2_context_snapshot']['shared_prompt_context'] ?? null) ? $scope['stage2_context_snapshot']['shared_prompt_context'] : [],
-            \is_array($scope['build_blueprint']['stage2_context_snapshot']['shared_prompt_context'] ?? null) ? $scope['build_blueprint']['stage2_context_snapshot']['shared_prompt_context'] : [],
-            \is_array($scope['virtual_theme_plan']['confirmed']['stage2_context_snapshot']['shared_prompt_context'] ?? null) ? $scope['virtual_theme_plan']['confirmed']['stage2_context_snapshot']['shared_prompt_context'] : [],
             \is_array($scope['execution_blueprint']['shared_prompt_context'] ?? null) ? $scope['execution_blueprint']['shared_prompt_context'] : [],
-            \is_array($scope['confirmed_stage1_plan_book']['shared_prompt_context'] ?? null) ? $scope['confirmed_stage1_plan_book']['shared_prompt_context'] : [],
             \is_array($scope['plan_workbench']['confirmed']['shared_prompt_context'] ?? null) ? $scope['plan_workbench']['confirmed']['shared_prompt_context'] : [],
         ] as $candidate) {
             if (!\is_array($candidate) || $candidate === []) {

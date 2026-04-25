@@ -23,6 +23,7 @@ class AiSiteAgentSessionService
     /** @var list<string> */
     private const COMMON_STAGE_SCOPE_KEYS = [
         '_artifact_refs',
+        '_workspace_stream_lease',
         'active_operation',
         'active_operations',
         'brief_description',
@@ -71,7 +72,6 @@ class AiSiteAgentSessionService
 
     /** @var list<string> */
     private const PLAN_STAGE_SCOPE_KEYS = [
-        'confirmed_stage1_plan_book',
         'execution_blueprint',
         'execution_blueprint_confirmed_at',
         'execution_blueprint_confirmed_signature',
@@ -105,7 +105,6 @@ class AiSiteAgentSessionService
         'section_refinements',
         'shared_component_refinements',
         'shared_components',
-        'stage2_context_snapshot',
         'task_plan_confirmed',
         'task_plan_confirmed_at',
         'task_plan_generated_at',
@@ -237,9 +236,6 @@ class AiSiteAgentSessionService
     }
 
     /**
-     * @param array<string, mixed> $patch 顶层键与 scope 合并（array_replace）
-     */
-    /**
      * @param list<string> $artifactKeys
      * @return array<string, mixed>
      */
@@ -256,7 +252,7 @@ class AiSiteAgentSessionService
 
         return $this->artifactStorage()->hydrateScope(
             (int)$session->getId(),
-            $session->getScopeArray(),
+            $this->decodeSessionScopeData($session),
             $artifactKeys
         );
     }
@@ -278,9 +274,38 @@ class AiSiteAgentSessionService
 
         return $this->artifactStorage()->hydrateScopeForStage(
             (int)$session->getId(),
-            $session->getScopeArray(),
+            $this->decodeSessionScopeData($session),
             $stageCode
         );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeSessionScopeData(AiSiteAgentSession $session): array
+    {
+        $raw = \trim((string)($session->getData(AiSiteAgentSession::schema_fields_SCOPE_JSON) ?? ''));
+        if ($raw === '') {
+            return [];
+        }
+
+        try {
+            $decoded = \json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+
+        return \is_array($decoded) ? $decoded : [];
+    }
+
+    private function normalizeStageCode(string $stageCode): string
+    {
+        $stageCode = \trim($stageCode);
+        return \in_array($stageCode, [
+            AiSiteAgentSession::STAGE_PLAN,
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            AiSiteAgentSession::STAGE_PUBLISH,
+        ], true) ? $stageCode : '';
     }
 
     public function mergeScope(int $sessionId, int $forAdminUserId, array $patch): bool
@@ -382,7 +407,7 @@ class AiSiteAgentSessionService
         }
 
         $raw = (string)($session->getData(AiSiteAgentSession::schema_fields_SCOPE_JSON) ?? '');
-        $scope = $session->getScopeArray();
+        $scope = $this->loadScopeForStage($session, $this->normalizeStageCode($session->getStage()));
 
         return [
             'scope_json_bytes' => \strlen($raw),
@@ -1193,7 +1218,7 @@ SQL;
 
     private function injectEligibleLocalWelineDomainHosts(AiSiteAgentSession $session): void
     {
-        $scope = $session->getScopeArray();
+        $scope = $this->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT);
         $domain = \strtolower(\trim((string)($scope['target_domain'] ?? $scope['selected_domain'] ?? '')));
         if ($domain === '') {
             return;
@@ -1211,7 +1236,7 @@ SQL;
 
     private function ensureEligibleLocalWelineWildcardCertificate(AiSiteAgentSession $session, int $websiteId): void
     {
-        $scope = $session->getScopeArray();
+        $scope = $this->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT);
         $domain = \strtolower(\trim((string)($scope['target_domain'] ?? $scope['selected_domain'] ?? '')));
         if ($domain === '') {
             return;
@@ -1267,7 +1292,7 @@ SQL;
                 continue;
             }
             // 加载 scope 获取 workspace_status 和 active_operation.queue_id
-            $scope = $m->getScopeArray();
+            $scope = $this->loadScopeForStage($m, $this->normalizeStageCode($m->getStage()));
             $activeOp = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
             $activeStatus = \trim((string)($activeOp['status'] ?? ''));
             $workspaceStatus = \trim((string)($scope['workspace_status'] ?? ''));

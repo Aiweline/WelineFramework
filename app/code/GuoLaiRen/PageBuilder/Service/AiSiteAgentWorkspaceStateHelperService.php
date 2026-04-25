@@ -494,7 +494,7 @@ class AiSiteAgentWorkspaceStateHelperService
             $scope = $this->compactPlanWorkbenchConfirmedForScope($scope);
         }
 
-        return $scope;
+        return $this->removePersistentSnapshotBackupsForScope($scope);
     }
 
     /**
@@ -893,19 +893,6 @@ class AiSiteAgentWorkspaceStateHelperService
      */
     private function compactConfirmedStageOnePlanPayloadsForScope(array $scope): array
     {
-        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        $confirmedPlanBook = \is_array($scope['confirmed_stage1_plan_book'] ?? null) ? $scope['confirmed_stage1_plan_book'] : [];
-        if ($executionBlueprint === [] || !$this->looksLikeConfirmedStageOnePlanBook($confirmedPlanBook)) {
-            return $scope;
-        }
-
-        if (\is_array($scope['plan_structured'] ?? null) && $scope['plan_structured'] !== []) {
-            $scope['plan_structured'] = [];
-        }
-        if (\is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
-            $scope['plan_json'] = [];
-        }
-
         return $scope;
     }
 
@@ -921,25 +908,6 @@ class AiSiteAgentWorkspaceStateHelperService
             return $scope;
         }
 
-        $stage2Context = $this->resolveBuildBlueprintStageTwoContextSnapshot($scope, $buildBlueprint);
-        if ($stage2Context !== [] && (!\is_array($scope['stage2_context_snapshot'] ?? null) || $scope['stage2_context_snapshot'] === [])) {
-            $scope['stage2_context_snapshot'] = $stage2Context;
-        }
-
-        $themeContext = $this->resolveBuildBlueprintThemeContextSnapshot($scope, $buildBlueprint, $stage2Context);
-        if ($themeContext !== [] && !$this->hasReusableThemeContextFallback($scope, $stage2Context)) {
-            $scope['theme_context_snapshot'] = $themeContext;
-        }
-
-        $sharedPromptContext = $this->resolveBuildBlueprintSharedPromptContext($scope, $buildBlueprint, $stage2Context);
-        if ($sharedPromptContext !== [] && !$this->hasReusableSharedPromptContextFallback($scope, $stage2Context)) {
-            $scope['shared_prompt_context'] = $sharedPromptContext;
-        }
-
-        $hasStage2Fallback = $stage2Context !== []
-            || (\is_array($scope['stage2_context_snapshot'] ?? null) && $scope['stage2_context_snapshot'] !== []);
-        $hasThemeFallback = $this->hasReusableThemeContextFallback($scope, $stage2Context);
-        $hasSharedFallback = $this->hasReusableSharedPromptContextFallback($scope, $stage2Context);
         $changed = false;
         foreach (self::TASK_RUNTIME_SHARED_CONTEXT_KEYS as $key => $_) {
             if (\array_key_exists($key, $buildBlueprint)) {
@@ -960,12 +928,7 @@ class AiSiteAgentWorkspaceStateHelperService
 
             $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
             if ($runtimeContext !== []) {
-                $runtimeContext = $this->stripTaskRuntimeSharedContextForScope(
-                    $runtimeContext,
-                    $hasStage2Fallback,
-                    $hasThemeFallback,
-                    $hasSharedFallback
-                );
+                $runtimeContext = $this->stripTaskRuntimeSharedContextForScope($runtimeContext);
                 if ($runtimeContext === []) {
                     unset($task['runtime_context']);
                 } else {
@@ -1010,14 +973,6 @@ class AiSiteAgentWorkspaceStateHelperService
             && $confirmed['plan_json'] !== []
         ) {
             $scope['plan_json'] = $confirmed['plan_json'];
-        }
-
-        $planBook = $this->extractConfirmedStageOnePlanBook($confirmed);
-        if (
-            $planBook !== []
-            && (!\is_array($scope['confirmed_stage1_plan_book'] ?? null) || $scope['confirmed_stage1_plan_book'] === [])
-        ) {
-            $scope['confirmed_stage1_plan_book'] = $planBook;
         }
 
         return $scope;
@@ -1081,13 +1036,102 @@ class AiSiteAgentWorkspaceStateHelperService
             $slim['structured_plan_ref'] = ['storage_compacted' => 1];
         }
         if (\is_array($confirmed['plan_book'] ?? null)) {
-            $slim['plan_book_ref'] = ['field' => 'confirmed_stage1_plan_book'];
+            $slim['plan_book_ref'] = ['field' => 'plan_json'];
         }
         $slim['_storage_compacted'] = 1;
         $planWorkbench['confirmed'] = $slim;
         $scope['plan_workbench'] = $planWorkbench;
 
         return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function removePersistentSnapshotBackupsForScope(array $scope): array
+    {
+        unset(
+            $scope['confirmed_stage1_plan_book'],
+            $scope['stage2_context_snapshot'],
+            $scope['theme_context_snapshot'],
+            $scope['shared_prompt_context']
+        );
+
+        foreach (['build_blueprint', 'task_plan_structured'] as $rootKey) {
+            if (\is_array($scope[$rootKey] ?? null)) {
+                $scope[$rootKey] = $this->stripSnapshotBackupsFromPlanTree($scope[$rootKey]);
+            }
+        }
+
+        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
+        foreach (['draft', 'confirmed'] as $key) {
+            if (\is_array($virtualThemePlan[$key] ?? null)) {
+                $virtualThemePlan[$key] = $this->stripSnapshotBackupsFromPlanTree($virtualThemePlan[$key]);
+            }
+        }
+        if ($virtualThemePlan !== []) {
+            $scope['virtual_theme_plan'] = $virtualThemePlan;
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $tree
+     * @return array<string, mixed>
+     */
+    private function stripSnapshotBackupsFromPlanTree(array $tree): array
+    {
+        unset(
+            $tree['stage2_context_snapshot'],
+            $tree['theme_context_snapshot'],
+            $tree['shared_prompt_context'],
+            $tree['confirmed_stage1_plan_book']
+        );
+
+        if (\is_array($tree['runtime_context'] ?? null)) {
+            $tree['runtime_context'] = $this->stripTaskRuntimeSharedContextForScope($tree['runtime_context']);
+            if ($tree['runtime_context'] === []) {
+                unset($tree['runtime_context']);
+            }
+        }
+
+        foreach (['tasks', 'shared_tasks'] as $listKey) {
+            if (!\is_array($tree[$listKey] ?? null)) {
+                continue;
+            }
+            foreach ($tree[$listKey] as $idx => $item) {
+                if (\is_array($item)) {
+                    $tree[$listKey][$idx] = $this->stripSnapshotBackupsFromPlanTree($item);
+                }
+            }
+        }
+
+        foreach (['page_tasks', 'pages'] as $mapKey) {
+            if (!\is_array($tree[$mapKey] ?? null)) {
+                continue;
+            }
+            foreach ($tree[$mapKey] as $key => $value) {
+                if (\is_array($value)) {
+                    $tree[$mapKey][$key] = $this->stripSnapshotBackupsFromPlanTree($value);
+                }
+            }
+        }
+
+        if (\is_array($tree['execution_blueprint']['tasks'] ?? null)) {
+            foreach ($tree['execution_blueprint']['tasks'] as $idx => $task) {
+                if (\is_array($task)) {
+                    $tree['execution_blueprint']['tasks'][$idx] = $this->stripSnapshotBackupsFromPlanTree($task);
+                }
+            }
+        }
+
+        if (\is_array($tree['execution_blueprint']['task_groups'] ?? null)) {
+            $tree['execution_blueprint']['task_groups'] = $this->stripSnapshotBackupsFromPlanTree($tree['execution_blueprint']['task_groups']);
+        }
+
+        return $tree;
     }
 
     /**
@@ -1104,171 +1148,16 @@ class AiSiteAgentWorkspaceStateHelperService
     }
 
     /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $buildBlueprint
-     * @return array<string, mixed>
-     */
-    private function resolveBuildBlueprintStageTwoContextSnapshot(array $scope, array $buildBlueprint): array
-    {
-        foreach ([
-            $scope['stage2_context_snapshot'] ?? null,
-            $buildBlueprint['stage2_context_snapshot'] ?? null,
-            $scope['virtual_theme_plan']['confirmed']['stage2_context_snapshot'] ?? null,
-        ] as $candidate) {
-            if (\is_array($candidate) && $candidate !== []) {
-                return $candidate;
-            }
-        }
-
-        foreach (\is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [] as $task) {
-            if (!\is_array($task)) {
-                continue;
-            }
-            $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
-            $candidate = $runtimeContext['stage2_context_snapshot'] ?? null;
-            if (\is_array($candidate) && $candidate !== []) {
-                return $candidate;
-            }
-        }
-
-        return [];
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $buildBlueprint
-     * @param array<string, mixed> $stage2Context
-     * @return array<string, mixed>
-     */
-    private function resolveBuildBlueprintThemeContextSnapshot(array $scope, array $buildBlueprint, array $stage2Context): array
-    {
-        foreach ([
-            $stage2Context['theme_context_snapshot'] ?? null,
-            $scope['stage2_context_snapshot']['theme_context_snapshot'] ?? null,
-            $scope['theme_context_snapshot'] ?? null,
-            $buildBlueprint['theme_context_snapshot'] ?? null,
-            $scope['execution_blueprint']['theme_context_snapshot'] ?? null,
-            $scope['virtual_theme_plan']['confirmed']['theme_context_snapshot'] ?? null,
-        ] as $candidate) {
-            if (\is_array($candidate) && $candidate !== []) {
-                return $candidate;
-            }
-        }
-
-        foreach (\is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [] as $task) {
-            if (!\is_array($task)) {
-                continue;
-            }
-            $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
-            $candidate = $runtimeContext['theme_context_snapshot'] ?? null;
-            if (\is_array($candidate) && $candidate !== []) {
-                return $candidate;
-            }
-        }
-
-        return [];
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $buildBlueprint
-     * @param array<string, mixed> $stage2Context
-     * @return array<string, mixed>
-     */
-    private function resolveBuildBlueprintSharedPromptContext(array $scope, array $buildBlueprint, array $stage2Context): array
-    {
-        foreach ([
-            $stage2Context['shared_prompt_context'] ?? null,
-            $scope['stage2_context_snapshot']['shared_prompt_context'] ?? null,
-            $scope['shared_prompt_context'] ?? null,
-            $buildBlueprint['shared_prompt_context'] ?? null,
-            $scope['execution_blueprint']['shared_prompt_context'] ?? null,
-            $scope['plan_workbench']['confirmed']['shared_prompt_context'] ?? null,
-            $scope['virtual_theme_plan']['confirmed']['shared_prompt_context'] ?? null,
-            $scope['confirmed_stage1_plan_book']['shared_prompt_context'] ?? null,
-        ] as $candidate) {
-            if (\is_array($candidate) && $candidate !== []) {
-                return $candidate;
-            }
-        }
-
-        foreach (\is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [] as $task) {
-            if (!\is_array($task)) {
-                continue;
-            }
-            $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
-            $candidate = $runtimeContext['shared_prompt_context'] ?? null;
-            if (\is_array($candidate) && $candidate !== []) {
-                return $candidate;
-            }
-        }
-
-        return [];
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $stage2Context
-     */
-    private function hasReusableThemeContextFallback(array $scope, array $stage2Context): bool
-    {
-        foreach ([
-            $stage2Context['theme_context_snapshot'] ?? null,
-            $scope['stage2_context_snapshot']['theme_context_snapshot'] ?? null,
-            $scope['theme_context_snapshot'] ?? null,
-            $scope['execution_blueprint']['theme_context_snapshot'] ?? null,
-            $scope['virtual_theme_plan']['confirmed']['theme_context_snapshot'] ?? null,
-        ] as $candidate) {
-            if (\is_array($candidate) && $candidate !== []) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $stage2Context
-     */
-    private function hasReusableSharedPromptContextFallback(array $scope, array $stage2Context): bool
-    {
-        foreach ([
-            $stage2Context['shared_prompt_context'] ?? null,
-            $scope['stage2_context_snapshot']['shared_prompt_context'] ?? null,
-            $scope['shared_prompt_context'] ?? null,
-            $scope['execution_blueprint']['shared_prompt_context'] ?? null,
-            $scope['plan_workbench']['confirmed']['shared_prompt_context'] ?? null,
-            $scope['virtual_theme_plan']['confirmed']['shared_prompt_context'] ?? null,
-            $scope['confirmed_stage1_plan_book']['shared_prompt_context'] ?? null,
-        ] as $candidate) {
-            if (\is_array($candidate) && $candidate !== []) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * @param array<string, mixed> $runtimeContext
      * @return array<string, mixed>
      */
-    private function stripTaskRuntimeSharedContextForScope(
-        array $runtimeContext,
-        bool $hasStage2Fallback,
-        bool $hasThemeFallback,
-        bool $hasSharedFallback
-    ): array {
-        if ($hasStage2Fallback) {
-            unset($runtimeContext['stage2_context_snapshot']);
-        }
-        if ($hasThemeFallback) {
-            unset($runtimeContext['theme_context_snapshot']);
-        }
-        if ($hasSharedFallback) {
-            unset($runtimeContext['shared_prompt_context']);
-        }
+    private function stripTaskRuntimeSharedContextForScope(array $runtimeContext): array
+    {
+        unset(
+            $runtimeContext['stage2_context_snapshot'],
+            $runtimeContext['theme_context_snapshot'],
+            $runtimeContext['shared_prompt_context']
+        );
 
         return $runtimeContext;
     }
