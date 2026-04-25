@@ -37,7 +37,6 @@ class AiSiteBuildTaskService
         'plan_last_round',
         'plan_rebuild_summary',
         'plan_change_scope_report',
-        'confirmed_stage1_plan_book',
         'virtual_theme_plan',
         'task_plan_structured',
         'task_plan_markdown',
