@@ -9605,11 +9605,11 @@ final class AiSiteExecutionBlueprintService
         $pageType = \trim($pageType);
         $action = \strtolower(\trim($action));
         $blockKey = \trim($blockKey);
-        if ($pageType === '' || !\in_array($action, ['create', 'delete', 'rebuild'], true)) {
-            throw new \RuntimeException('Stage-1 block mutation requires page_type and action=create|delete|rebuild.');
+        if ($pageType === '' || !\in_array($action, ['create', 'delete', 'refine', 'rebuild'], true)) {
+            throw new \RuntimeException('Stage-1 block mutation requires page_type and action=create|delete|refine|rebuild.');
         }
         if ($action !== 'create' && $blockKey === '') {
-            throw new \RuntimeException('Stage-1 block mutation requires block_key for delete/rebuild.');
+            throw new \RuntimeException('Stage-1 block mutation requires block_key for refine/rebuild/delete.');
         }
         if ($pageType === 'shared') {
             return $this->mutateDraftSharedPlanBlock($scope, $action, $blockKey, $blockPatch);
@@ -9686,7 +9686,7 @@ final class AiSiteExecutionBlueprintService
                 break;
             }
             if ($mutatedBlock === null) {
-                throw new \RuntimeException('Stage-1 block not found for rebuild: ' . $blockKey);
+                throw new \RuntimeException('Stage-1 block not found for mutation: ' . $blockKey);
             }
         }
 
@@ -9969,7 +9969,7 @@ final class AiSiteExecutionBlueprintService
         } else {
             $component = $this->findStageOneSharedComponentKey($sharedComponents, $blockKey);
             if ($component === '') {
-                throw new \RuntimeException('Stage-1 shared block not found for rebuild: ' . $blockKey);
+                throw new \RuntimeException('Stage-1 shared block not found for mutation: ' . $blockKey);
             }
             $currentBlock = \is_array($sharedComponents[$component] ?? null) ? $sharedComponents[$component] : [];
             unset(
