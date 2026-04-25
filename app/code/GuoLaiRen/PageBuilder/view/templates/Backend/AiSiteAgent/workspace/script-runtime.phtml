@@ -591,6 +591,7 @@
         var message = String((payload && payload.message) || getQueuedStageDefaultMessage(operation, eventKind) || '').trim();
         var percent = getQueuedStageProgressPercent(operation, payload, eventKind);
         var observerBg = payload && (payload.observer_mode || payload.background_mode);
+        var level = opts.level || (eventKind === 'error' ? 'error' : ((eventKind === 'done' || eventKind === 'total') ? eventKind : (eventKind === 'progress' ? 'progress' : (eventKind === 'warning' ? 'warning' : 'info'))));
         if (eventKind !== 'info') {
             if (typeof binding.setLoading === 'function') {
                 binding.setLoading(
@@ -601,7 +602,7 @@
                 );
             }
             if ((eventKind === 'start' || eventKind === 'progress' || eventKind === 'total' || eventKind === 'done' || eventKind === 'error' || eventKind === 'warning') && typeof binding.setStatus === 'function') {
-                binding.setStatus(message);
+                binding.setStatus(message, level);
             }
             if ((eventKind === 'start' || eventKind === 'progress' || eventKind === 'total' || eventKind === 'done' || eventKind === 'error' || eventKind === 'warning') && typeof binding.setProgress === 'function') {
                 binding.setProgress(
@@ -609,12 +610,12 @@
                     percent,
                     eventKind === 'done'
                         ? payloadIndicatesQueuedStageDraft(operation, payload) && !(typeof binding.getConfirmedState === 'function' && binding.getConfirmedState())
-                        : false
+                        : false,
+                    level
                 );
             }
         }
         if (binding.terminal && typeof binding.terminal.log === 'function') {
-            var level = opts.level || (eventKind === 'error' ? 'error' : ((eventKind === 'done' || eventKind === 'total') ? eventKind : (eventKind === 'progress' ? 'progress' : (eventKind === 'warning' ? 'warning' : 'info'))));
             if (eventKind === 'chunk') {
                 var chunkText = String((payload && (payload.content || payload.chunk || payload.message)) || '');
                 if (chunkText !== '') {
@@ -1455,7 +1456,44 @@
             return { label: label, badgeClass: badgeClass, message: message };
         }
 
+        function readStageQueueStatus(queueInfo) {
+            var snapshot = queueInfo && typeof queueInfo === 'object' && queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
+                ? queueInfo.snapshot
+                : null;
+            return String(
+                (snapshot ? (snapshot.status || snapshot.job_status || '') : '')
+                || (queueInfo && typeof queueInfo === 'object' ? (queueInfo.queue_status || '') : '')
+                || ''
+            ).trim().toLowerCase();
+        }
+
+        function readStageQueueMessage(queueInfo) {
+            return String(queueInfo && typeof queueInfo === 'object' ? (queueInfo.process || queueInfo.message || '') : '').trim();
+        }
+
+        function isStageQueueInProgress(queueStatus) {
+            return ['pending', 'queued', 'running'].indexOf(String(queueStatus || '').toLowerCase()) !== -1;
+        }
+
+        function isStageQueueDone(queueStatus) {
+            return ['done', 'complete', 'completed'].indexOf(String(queueStatus || '').toLowerCase()) !== -1;
+        }
+
         if (kind === 'plan') {
+            var planQueueStatus = readStageQueueStatus(state.plan_queue_info);
+            if (isStageQueueInProgress(planQueueStatus)) {
+                return make(
+                    planQueueStatus === 'running' ? '生成中' : '排队中',
+                    planQueueStatus === 'running' ? 'text-bg-primary' : 'text-bg-warning',
+                    readStageQueueMessage(state.plan_queue_info) || activeMessage || '第一阶段方案正在后台队列执行。'
+                );
+            }
+            if (isStageQueueDone(planQueueStatus)) {
+                if (activeOp === 'plan') {
+                    activeStatus = 'done';
+                }
+                hasPlanDraft = true;
+            }
             if (activeOp === 'plan' && activeStatus === 'queued') {
                 return make('排队中', 'text-bg-warning', activeMessage || '第一阶段方案已进入后台队列。');
             }
@@ -1475,6 +1513,20 @@
         }
 
         if (kind === 'task_plan') {
+            var taskPlanQueueStatus = readStageQueueStatus(state.task_plan_queue_info);
+            if (planConfirmed && isStageQueueInProgress(taskPlanQueueStatus)) {
+                return make(
+                    taskPlanQueueStatus === 'running' ? '生成中' : '排队中',
+                    taskPlanQueueStatus === 'running' ? 'text-bg-primary' : 'text-bg-warning',
+                    readStageQueueMessage(state.task_plan_queue_info) || activeMessage || '第二阶段任务方案正在后台队列执行。'
+                );
+            }
+            if (isStageQueueDone(taskPlanQueueStatus)) {
+                if (activeOp === 'task_plan') {
+                    activeStatus = 'done';
+                }
+                hasTaskPlanDraft = true;
+            }
             if (!planConfirmed) {
                 return make('未解锁', 'text-bg-secondary', '请先确认第一阶段方案。');
             }
@@ -1498,6 +1550,22 @@
 
         if (!taskPlanConfirmed) {
             return make('未解锁', 'text-bg-secondary', '请先确认第二阶段任务方案。');
+        }
+        var buildQueueStatus = readStageQueueStatus(state.build_queue_info);
+        if (isStageQueueInProgress(buildQueueStatus)) {
+            return make(
+                buildQueueStatus === 'running' ? '构建中' : '排队中',
+                buildQueueStatus === 'running' ? 'text-bg-primary' : 'text-bg-warning',
+                readStageQueueMessage(state.build_queue_info) || activeMessage || '虚拟主题正在后台队列执行。'
+            );
+        }
+        if (isStageQueueDone(buildQueueStatus)) {
+            if (activeOp === 'build') {
+                activeStatus = 'done';
+            }
+            if (!workspaceStatus || workspaceStatus === 'building') {
+                workspaceStatus = 'can_publish';
+            }
         }
         if (activeOp === 'build' && activeStatus === 'queued') {
             return make('排队中', 'text-bg-warning', activeMessage || '虚拟主题构建已进入后台队列。');
@@ -2110,7 +2178,7 @@
             }
             if (
                 blockRefreshState.active
-                && String(operation || '') === 'regenerate_page'
+                && ['regenerate_page', 'block_regenerate'].indexOf(String(operation || '')) !== -1
                 && payload
                 && payload.state
                 && payload.state.virtual_pages_by_type

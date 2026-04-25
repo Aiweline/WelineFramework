@@ -50,7 +50,6 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
             new AiSiteAgentQueueObserverHelperService()
         );
     }
-
     // ------------------------------------------------------------------
     // reconcileActiveOperationWithQueueInfo
     // ------------------------------------------------------------------
@@ -126,6 +125,28 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         self::assertNotSame('', (string)$withNothing['message'], '兜底 i18n 文案应非空');
     }
 
+    public function testReconcileMapsInProgressQueueStatusOverStaleError(): void
+    {
+        $service = $this->service();
+
+        $running = $service->reconcileActiveOperationWithQueueInfo(
+            ['operation' => 'plan', 'status' => 'error', 'message' => 'stale frontend failure', 'queue_id' => 12],
+            ['queue_id' => 344, 'snapshot' => ['status' => 'running', 'queue_id' => 344], 'process' => 'AI body is still streaming'],
+            'plan'
+        );
+        self::assertSame('running', $running['status']);
+        self::assertSame(344, $running['queue_id']);
+        self::assertSame('AI body is still streaming', $running['message']);
+
+        $queued = $service->reconcileActiveOperationWithQueueInfo(
+            ['operation' => 'task_plan', 'status' => 'error', 'message' => 'stale frontend failure'],
+            ['snapshot' => ['status' => 'pending']],
+            'task_plan'
+        );
+        self::assertSame('queued', $queued['status']);
+        self::assertSame('Stage-2 task-plan queue is running.', $queued['message']);
+    }
+
     public function testReconcileMapsDoneFamilyStatusesToDoneWithOperationSpecificFallback(): void
     {
         $service = $this->service();
@@ -147,6 +168,14 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         );
         self::assertSame('done', $buildResult['status']);
         self::assertNotSame('', (string)$buildResult['message']);
+
+        $recovered = $service->reconcileActiveOperationWithQueueInfo(
+            ['operation' => 'plan', 'status' => 'error', 'message' => 'stale frontend failure'],
+            ['snapshot' => ['status' => 'done'], 'process' => 'queue completed successfully'],
+            'plan'
+        );
+        self::assertSame('done', $recovered['status']);
+        self::assertSame('queue completed successfully', $recovered['message']);
 
         // 已有非空 message 不应被兜底覆盖
         $preserved = $service->reconcileActiveOperationWithQueueInfo(
