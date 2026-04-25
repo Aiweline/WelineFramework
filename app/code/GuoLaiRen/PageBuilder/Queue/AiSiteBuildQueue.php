@@ -60,8 +60,9 @@ class AiSiteBuildQueue implements QueueInterface
         $publicId = \trim((string)($content['public_id'] ?? ''));
         $adminId = (int)($content['admin_id'] ?? 0);
         $executionToken = \trim((string)($content['execution_token'] ?? ''));
+        $operation = $this->normalizeQueuedOperation((string)($content['operation'] ?? 'build'));
         $scopePatch = \is_array($content['scope_patch'] ?? null) ? $content['scope_patch'] : [];
-        $forceRebuild = (int)($content['_force_rebuild'] ?? 0) === 1;
+        $forceRebuild = $operation === 'build' && (int)($content['_force_rebuild'] ?? 0) === 1;
         $effectiveExecutionToken = $executionToken;
         if ($forceRebuild) {
             $effectiveExecutionToken = \sprintf(
@@ -105,7 +106,7 @@ class AiSiteBuildQueue implements QueueInterface
                 $session,
                 $adminId,
                 $queueId,
-                'build',
+                $operation,
                 $effectiveExecutionToken
             );
             $this->appendQueueLifecycleLine(
@@ -115,14 +116,21 @@ class AiSiteBuildQueue implements QueueInterface
 
             $scope = $scopeService->normalizeScope($session->getScopeArray());
             $confirmedScope = $scope;
-            $scopePatch = $buildTaskService->stripBuildPlanMutationScopePatch($scopePatch, $confirmedScope);
-            if ($scopePatch !== []) {
+            if ($operation === 'build') {
+                $scopePatch = $buildTaskService->stripBuildPlanMutationScopePatch($scopePatch, $confirmedScope);
+                if ($scopePatch !== []) {
+                    $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
+                }
+                $scope = $buildTaskService->restoreBuildPlanContract($scope, $confirmedScope);
+                $normalizedScope = $buildTaskService->normalizeConfirmedTaskPlanFlag($scope);
+                $scopeChanged = $normalizedScope !== $confirmedScope;
+                $scope = $normalizedScope;
+            } elseif ($operation === 'block_regenerate' && $scopePatch !== []) {
                 $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
+                $scopeChanged = $scope !== $confirmedScope;
+            } else {
+                $scopeChanged = false;
             }
-            $scope = $buildTaskService->restoreBuildPlanContract($scope, $confirmedScope);
-            $normalizedScope = $buildTaskService->normalizeConfirmedTaskPlanFlag($scope);
-            $scopeChanged = $normalizedScope !== $confirmedScope;
-            $scope = $normalizedScope;
             if ($scopeChanged) {
                 $sessionService->replaceScope((int)$session->getId(), $adminId, $scope);
                 $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
@@ -138,7 +146,7 @@ class AiSiteBuildQueue implements QueueInterface
                 $adminId,
                 $queueId,
                 AiSiteAgentSession::STAGE_VISUAL_EDIT,
-                'build'
+                $operation
             );
             $previousSseContextExists = RequestContext::has(RequestContext::SSE_WRITER_KEY);
             $previousSseContext = RequestContext::get(RequestContext::SSE_WRITER_KEY);
@@ -148,7 +156,7 @@ class AiSiteBuildQueue implements QueueInterface
 
             /** @var AiSiteAgent $controller */
             $controller = AiSiteAgentForQueue::create();
-            $claim = $this->invokePrivate($controller, 'claimActiveOperationExecution', [$session, $adminId, $effectiveExecutionToken, 'build']);
+            $claim = $this->invokePrivate($controller, 'claimActiveOperationExecution', [$session, $adminId, $effectiveExecutionToken, $operation]);
             if (!\is_array($claim) || !($claim['ok'] ?? false)) {
                 if ((string)($claim['reason'] ?? '') === 'duplicate_stream') {
                     $this->queueTrace($sse, '认领跳过：duplicate_stream（仍视为重复构建，可加 -f 换新令牌）');
@@ -162,12 +170,26 @@ class AiSiteBuildQueue implements QueueInterface
 
             // mergeScope 只更新库内 scope；内存中的 $session 可能仍带旧 build_tasks，会导致 ensureTaskScope 继续合并为 done 从而秒结束。
             $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+            $operationContext = $operation === 'block_regenerate'
+                ? $this->resolveQueuedOperationContext($content, $session, $scopeService)
+                : [];
 
             if ($allowStubAiInTest) {
                 RequestContext::set(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST, true);
             }
             try {
-                $this->invokePrivate($controller, 'runBuildOperation', [$sse, $session, $adminId]);
+                if ($operation === 'block_regenerate') {
+                    $this->invokePrivate($controller, 'runRegenerateBlockOperation', [
+                        $sse,
+                        $session,
+                        $adminId,
+                        (string)($operationContext['page_type'] ?? ''),
+                        (string)($operationContext['component_code'] ?? ''),
+                        (string)($operationContext['instruction'] ?? ''),
+                    ]);
+                } else {
+                    $this->invokePrivate($controller, 'runBuildOperation', [$sse, $session, $adminId]);
+                }
             } finally {
                 if ($allowStubAiInTest) {
                     RequestContext::remove(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST);
@@ -207,6 +229,41 @@ class AiSiteBuildQueue implements QueueInterface
     /**
      * -f：换新 execution_token + 将 build_tasks 全部置回 pending，否则任务已 done 会秒结束且不调 AI。
      */
+    private function normalizeQueuedOperation(string $operation): string
+    {
+        $operation = \trim($operation);
+
+        return \in_array($operation, ['build', 'block_regenerate'], true) ? $operation : 'build';
+    }
+
+    /**
+     * @return array{page_type: string, component_code: string, instruction: string}
+     */
+    private function resolveQueuedOperationContext(
+        array $content,
+        AiSiteAgentSession $session,
+        AiSiteScopeCompatibilityService $scopeService
+    ): array {
+        $scope = $scopeService->normalizeScope($session->getScopeArray());
+        $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
+        $activeDetails = \is_array($active['details'] ?? null) ? $active['details'] : [];
+
+        $pageType = \trim((string)($content['page_type'] ?? $details['page_type'] ?? $active['page_type'] ?? $activeDetails['page_type'] ?? ''));
+        $componentCode = \trim((string)($content['component_code'] ?? $details['component_code'] ?? $active['component_code'] ?? $activeDetails['component_code'] ?? ''));
+        $instruction = \trim((string)($content['instruction'] ?? $details['instruction'] ?? $active['instruction'] ?? $activeDetails['instruction'] ?? ''));
+
+        if ($pageType === '' || $componentCode === '') {
+            throw new \RuntimeException('Block queue context is missing page_type or component_code.');
+        }
+
+        return [
+            'page_type' => $pageType,
+            'component_code' => $componentCode,
+            'instruction' => $instruction,
+        ];
+    }
+
     private function applyForceBuildQueuePreset(
         AiSiteAgentSessionService $sessionService,
         AiSiteScopeCompatibilityService $scopeService,

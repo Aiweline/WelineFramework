@@ -48,4 +48,30 @@ final class FiberOutputBufferTest extends TestCase
         self::assertTrue($fiberA->isTerminated());
         self::assertSame('fiber-a-1fiber-a-2', $fiberA->getReturn());
     }
+
+    public function testReinstallsWhenGlobalBufferWasExternallyRemoved(): void
+    {
+        \ob_end_clean();
+
+        FiberOutputBuffer::beginCapture();
+        echo 'after-reinstall';
+
+        self::assertSame('after-reinstall', FiberOutputBuffer::endCapture());
+    }
+
+    public function testEnsureInstalledRestoresAtRequestBoundary(): void
+    {
+        self::assertTrue(FiberOutputBuffer::isActive());
+
+        \ob_end_clean();
+        self::assertFalse(FiberOutputBuffer::isActive());
+
+        FiberOutputBuffer::ensureInstalled('unit_request_start');
+
+        self::assertTrue(FiberOutputBuffer::isActive());
+        FiberOutputBuffer::beginCapture();
+        echo 'request-boundary';
+
+        self::assertSame('request-boundary', FiberOutputBuffer::endCapture());
+    }
 }
