@@ -159,6 +159,8 @@ class WlsRuntime implements RuntimeInterface
             throw new \LogicException('WLS: WlsRuntime::handle() requires a Request instance for fiber-local context isolation.');
         }
 
+        FiberOutputBuffer::ensureInstalled('request_start');
+
         Context::enter(Context::fromRequest($request, [
             'mode' => RuntimeInterface::MODE_WLS,
             'type' => 'request',
@@ -537,6 +539,7 @@ class WlsRuntime implements RuntimeInterface
             $this->snapshotPendingResponseState($hc);
             // 确保总是重置状态（存在挂起 Fiber 时仍执行完整 reset，见 WlsConcurrency 类说明）
             $this->reset();
+            FiberOutputBuffer::ensureInstalled('request_end');
             if ($globalsEmulator !== null) {
                 $globalsEmulator->reset();
             }
