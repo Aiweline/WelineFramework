@@ -1575,21 +1575,110 @@ final class AiSitePageComponentGenerationService
             $lastChunkFlushAt = $now;
         };
 
-        $this->getAiService()->generateStream(
+        try {
+            $this->getAiService()->generateStream(
+                $prompt,
+                static function (string $chunk) use (&$fullContent, &$chunkBuffer, $flushChunkBuffer, $sse, $region): bool {
+                    $fullContent .= $chunk;
+                    $chunkBuffer .= $chunk;
+                    $flushChunkBuffer(false);
+                    // 实时转发 AI chunks 到 SSE 客户端，不等待完整响应
+                    if ($sse !== null && \is_object($sse) && \method_exists($sse, 'sendEvent')) {
+                        $sse->sendEvent('ai_chunk', [
+                            'region' => $region,
+                            'chunk' => $chunk,
+                        ]);
+                    }
+                    return true;
+                },
+                null,
+                'pagebuilder_component_generation',
+                null,
+                $this->buildAiRuntimeParams([
+                    'allow_zero_balance_provider' => true,
+                    'temperature' => 0.35,
+                    'max_tokens' => 4096,
+                    'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
+                    'response_format' => ['type' => 'json_object'],
+                ])
+            );
+        } catch (\Throwable $streamThrowable) {
+            $flushChunkBuffer(true);
+            return $this->recoverAiGenerationAfterStreamFailure($region, $prompt, $fullContent, $streamThrowable);
+        }
+        $flushChunkBuffer(true);
+
+        return $this->decodeAndNormalizeComponentContent(
+            $fullContent,
+            $region,
+            'AI did not return a valid component JSON payload'
+        );
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function recoverAiGenerationAfterStreamFailure(
+        string $region,
+        string $prompt,
+        string $streamContent,
+        \Throwable $streamThrowable
+    ): array {
+        $partialPayload = $this->tryDecodePartialStreamPayload($streamContent);
+        if (\is_array($partialPayload)) {
+            $this->emitComponentStreamFallbackNotice(
+                $region,
+                'stream disconnected after a parseable JSON payload was received; continuing with the parsed payload'
+            );
+            return $this->normalizeComponentPayload($partialPayload);
+        }
+
+        if (!$this->isRetryableAiStreamTransportFailure($streamThrowable)) {
+            throw $streamThrowable;
+        }
+
+        $streamReason = $this->summarizeThrowable($streamThrowable);
+        $this->emitComponentStreamFallbackNotice($region, $streamReason);
+
+        try {
+            return $this->runAiGenerationWithoutStream($region, $prompt);
+        } catch (\Throwable $fallbackThrowable) {
+            throw new \RuntimeException(
+                'AI stream failed and non-stream fallback also failed: '
+                . $this->summarizeThrowable($fallbackThrowable)
+                . '; stream failure: '
+                . $streamReason,
+                0,
+                $fallbackThrowable
+            );
+        }
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function tryDecodePartialStreamPayload(string $streamContent): ?array
+    {
+        if (\trim($streamContent) === '') {
+            return null;
+        }
+
+        try {
+            $decoded = $this->getResponseJsonParser()->extractAndDecode($streamContent);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return \is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function runAiGenerationWithoutStream(string $region, string $prompt): array
+    {
+        $response = $this->getAiService()->generate(
             $prompt,
-            static function (string $chunk) use (&$fullContent, &$chunkBuffer, $flushChunkBuffer, $sse, $region): bool {
-                $fullContent .= $chunk;
-                $chunkBuffer .= $chunk;
-                $flushChunkBuffer(false);
-                // 实时转发 AI chunks 到 SSE 客户端，不等待完整响应
-                if ($sse !== null) {
-                    $sse->sendEvent('ai_chunk', [
-                        'region' => $region,
-                        'chunk' => $chunk,
-                    ]);
-                }
-                return true;
-            },
             null,
             'pagebuilder_component_generation',
             null,
@@ -1601,14 +1690,114 @@ final class AiSitePageComponentGenerationService
                 'response_format' => ['type' => 'json_object'],
             ])
         );
-        $flushChunkBuffer(true);
 
-        $payload = $this->decodeComponentPayloadWithRepair($fullContent, $region);
+        return $this->decodeAndNormalizeComponentContent(
+            \is_string($response) ? $response : '',
+            $region,
+            'AI non-stream fallback did not return a valid component JSON payload'
+        );
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function decodeAndNormalizeComponentContent(string $content, string $region, string $message): array
+    {
+        $payload = $this->decodeComponentPayloadWithRepair($content, $region);
         if ($payload === null) {
-            throw new \RuntimeException((string)__('AI 未返回有效的组件 JSON 结果'));
+            throw new \RuntimeException($message);
         }
 
         return $this->normalizeComponentPayload($payload);
+    }
+
+    private function isRetryableAiStreamTransportFailure(\Throwable $throwable): bool
+    {
+        if (!$this->shouldRetryComponentGeneration($throwable)) {
+            return false;
+        }
+
+        $message = \strtolower($this->collectThrowableMessages($throwable));
+        foreach ([
+            'http 401',
+            'http 402',
+            'http 403',
+            'api key',
+            'insufficient balance',
+            'quota',
+        ] as $nonRetryableMarker) {
+            if (\str_contains($message, $nonRetryableMarker)) {
+                return false;
+            }
+        }
+
+        foreach ([
+            'tls connect error',
+            'ssl routines',
+            'unexpected eof',
+            'eof while reading',
+            'curl error 35',
+            'curl error 56',
+            'connection reset',
+            'connection refused',
+            'connection aborted',
+            'empty reply',
+            'operation timed out',
+            'timeout was reached',
+            'timed out',
+            'network is unreachable',
+            'could not resolve host',
+            'failed to connect',
+            'stream ended early',
+            'upstream stream',
+            'peer closed',
+        ] as $transportMarker) {
+            if (\str_contains($message, $transportMarker)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function collectThrowableMessages(\Throwable $throwable): string
+    {
+        $messages = [];
+        for ($current = $throwable; $current !== null; $current = $current->getPrevious()) {
+            $messages[] = $current->getMessage();
+        }
+
+        return \implode(' | ', $messages);
+    }
+
+    private function emitComponentStreamFallbackNotice(string $region, string $reason): void
+    {
+        $message = 'AI component stream interrupted; switching to non-stream recovery: ' . $this->clipText($reason, 180);
+
+        $chunkForwarder = RequestContext::get(self::REQUEST_CTX_AI_CHUNK_FORWARDER);
+        if (\is_callable($chunkForwarder)) {
+            try {
+                $chunkForwarder([
+                    'region' => $region !== '' ? ($region . '_stream_recovery') : 'stream_recovery',
+                    'chunk' => $message,
+                ]);
+            } catch (\Throwable) {
+            }
+        }
+
+        $sse = RequestContext::get(RequestContext::SSE_WRITER_KEY);
+        if (!$sse || !\is_object($sse) || !\method_exists($sse, 'sendEvent')) {
+            return;
+        }
+
+        try {
+            $sse->sendEvent('warning', [
+                'region' => $region,
+                'message' => $message,
+                'stream_recovery' => true,
+            ]);
+        } catch (\Throwable) {
+        }
     }
 
     /**
