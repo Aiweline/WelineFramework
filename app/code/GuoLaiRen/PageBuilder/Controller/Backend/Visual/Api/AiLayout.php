@@ -7,6 +7,7 @@ namespace GuoLaiRen\PageBuilder\Controller\Backend\Visual\Api;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AiHtmlSanitizerService;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -19,9 +20,7 @@ class AiLayout extends BackendController
      */
     public function save(): string
     {
-        while (\ob_get_level() > 0) {
-            \ob_end_clean();
-        }
+        $bufferLevel = \ob_get_level();
         \ob_start();
         try {
             $pageId = (int)$this->request->getPost('page_id', 0);
@@ -60,8 +59,14 @@ class AiLayout extends BackendController
             $page->save(true);
 
             return $this->fetchJson(['success' => true, 'data' => ['page_id' => $pageId, 'ai_layout' => $page->getAiLayoutArray()]]);
+        } catch (ResponseTerminateException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             return $this->fetchJson(['success' => false, 'message' => $e->getMessage()]);
+        } finally {
+            while (\ob_get_level() > $bufferLevel) {
+                \ob_end_clean();
+            }
         }
     }
 

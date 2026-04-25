@@ -20,6 +20,9 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             [
                 'site_title' => 'Frontend Skill Site',
                 'brief_description' => 'Build a distinctive landing page for a premium analytics product.',
+                'content_locale' => 'en_US',
+                'default_locale' => 'en_US',
+                'plan_locale' => 'zh_Hans_CN',
                 'plan_structured' => [
                     'theme_context_snapshot' => ['site_positioning' => 'premium analytics'],
                     'palette' => ['name' => 'Deep graphite with electric lime'],
@@ -68,6 +71,37 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('task_script.responsive_contract', $prompt);
         self::assertStringContainsString('Never use task_key, page_type, section_code, block_key, component paths, or internal IDs as customer-visible copy.', $prompt);
         self::assertStringContainsString('Visible-language rule', $prompt);
+        self::assertStringContainsString('Website content locale: en_US', $prompt);
+        self::assertStringContainsString('Planned-content language lock', $prompt);
+        self::assertStringContainsString('task_script.story_goal, task_script.content_fill_rule', $prompt);
+        self::assertStringContainsString('translate/adapt it instead of copying it', $prompt);
+    }
+
+    public function testStageTwoFullTaskPlanPromptLocksPlannedContentToWebsiteLanguage(): void
+    {
+        $service = new AiSiteVirtualThemePlanService();
+        $method = new \ReflectionMethod($service, 'buildTaskPlanGenerationPrompt');
+        $method->setAccessible(true);
+
+        $scope = $this->buildPromptScope();
+        $scope['content_locale'] = 'en_US';
+        $scope['default_locale'] = 'en_US';
+        $scope['plan_locale'] = 'zh_Hans_CN';
+
+        $prompt = $method->invokeArgs($service, [
+            $scope,
+            $this->buildPromptBlueprint(),
+            ['stage1_task_cues' => []],
+            [],
+        ]);
+
+        self::assertIsString($prompt);
+        self::assertStringContainsString('Website content locale: en_US', $prompt);
+        self::assertStringContainsString('content_locale/default_locale is the website language for both final copy and planned content', $prompt);
+        self::assertStringContainsString('plan_locale is only an internal planning hint', $prompt);
+        self::assertStringContainsString('Planned-content language lock', $prompt);
+        self::assertStringContainsString('markdown task-plan descriptions, task_script.story_goal, task_script.content_fill_rule', $prompt);
+        self::assertStringContainsString('translate/adapt it before writing the task plan', $prompt);
     }
 
     public function testBuildTaskPlanArtifactsProducesStructuredPlan(): void
@@ -511,7 +545,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertSame('Confirmed hero headline', (string)($artifacts['structured']['stage1_task_cues']['pages']['page:home_page:confirmed_hero']['realtime_content']['headline'] ?? ''));
         self::assertSame('Use confirmed style direction.', (string)($artifacts['structured']['stage1_task_cues']['pages']['page:home_page:confirmed_hero']['style_direction'] ?? ''));
         self::assertSame('confirmed-hero-hash', (string)($pageTasks[0]['plan_context']['result_ref']['context_hash'] ?? ''));
-        self::assertSame('plan_workbench.confirmed.plan_book.structured', (string)($artifacts['structured']['stage2_context_snapshot']['confirmed_stage1_source'] ?? ''));
+        self::assertSame('confirmed_stage1_plan_book', (string)($artifacts['structured']['stage2_context_snapshot']['confirmed_stage1_source'] ?? ''));
         self::assertSame('confirmed-plan-book-hash', (string)($artifacts['structured']['stage2_context_snapshot']['confirmed_plan_book_context_hash'] ?? ''));
         self::assertStringNotContainsString('stale_markdown_only', \json_encode($artifacts['structured']['page_tasks'], \JSON_UNESCAPED_UNICODE));
     }
