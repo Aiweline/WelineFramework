@@ -502,9 +502,9 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         self::assertArrayNotHasKey('plan_json', $compacted['plan_workbench']['confirmed']);
         self::assertSame(1, $compacted['plan_workbench']['confirmed']['_storage_compacted'] ?? null);
         self::assertSame([], $compacted['execution_blueprint_draft'] ?? null);
-        self::assertSame([], $compacted['plan_structured'] ?? null);
-        self::assertSame([], $compacted['plan_json'] ?? null);
-        self::assertSame($stage2ContextSnapshot, $compacted['stage2_context_snapshot'] ?? null);
+        self::assertSame(['pages' => ['home_page' => ['goal' => 'duplicate']]], $compacted['plan_structured'] ?? null);
+        self::assertSame(['pages' => ['home_page' => ['goal' => 'duplicate']]], $compacted['plan_json'] ?? null);
+        self::assertArrayNotHasKey('stage2_context_snapshot', $compacted);
         self::assertSame(['block_key' => 'hero'], $compacted['build_blueprint']['tasks'][0]['runtime_context'] ?? null);
         self::assertArrayNotHasKey('runtime_context', $compacted['build_tasks']['page:home_page:hero']);
         self::assertArrayNotHasKey('task_script', $compacted['build_tasks']['page:home_page:hero']);

@@ -250,23 +250,17 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             $artifacts['structured']['stage1_task_cues']['pages']['page:home_page:content/home-page-hero'] ?? []
         );
         self::assertSame('Build a reusable header with primary navigation.', (string)($artifacts['structured']['stage1_task_cues']['shared']['shared:header']['stage1_goal'] ?? ''));
-        self::assertIsArray($artifacts['structured']['stage2_context_snapshot'] ?? null);
-        self::assertSame('stage1-theme-hash', (string)($artifacts['structured']['stage2_context_snapshot']['theme_context_snapshot']['context_hash'] ?? ''));
-        self::assertSame('stage1-shared-hash', (string)($artifacts['structured']['stage2_context_snapshot']['shared_prompt_context']['context_hash'] ?? ''));
-        self::assertIsArray($artifacts['structured']['stage2_context_snapshot']['shared_task_summary']['shared:header'] ?? null);
-        self::assertIsArray($artifacts['structured']['stage2_context_snapshot']['page_content_tone']['home_page'] ?? null);
-        self::assertSame('stage2-block-task-plan-v2', (string)($artifacts['structured']['stage2_context_snapshot']['prompt_version'] ?? ''));
-        self::assertNotSame('', (string)($artifacts['structured']['stage2_context_snapshot']['context_hash'] ?? ''));
+        self::assertArrayNotHasKey('stage2_context_snapshot', $artifacts['structured']);
         self::assertSame(
-            (string)($artifacts['structured']['stage2_context_snapshot']['context_hash'] ?? ''),
+            (string)($artifacts['structured']['plan_signature'] ?? ''),
             (string)($artifacts['structured']['page_tasks']['home_page'][0]['runtime_context']['stage2_context_hash'] ?? '')
         );
         self::assertSame(
-            (string)($artifacts['structured']['stage2_context_snapshot']['context_hash'] ?? ''),
+            (string)($artifacts['structured']['plan_signature'] ?? ''),
             (string)($artifacts['structured']['execution_blueprint']['tasks'][2]['runtime_context']['stage2_context_hash'] ?? '')
         );
         self::assertSame(
-            (string)($artifacts['structured']['stage2_context_snapshot']['context_hash'] ?? ''),
+            (string)($artifacts['structured']['plan_signature'] ?? ''),
             (string)($artifacts['virtual_theme_plan']['page_tasks']['home_page'][0]['runtime_context']['stage2_context_hash'] ?? '')
         );
     }
@@ -545,8 +539,8 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertSame('Confirmed hero headline', (string)($artifacts['structured']['stage1_task_cues']['pages']['page:home_page:confirmed_hero']['realtime_content']['headline'] ?? ''));
         self::assertSame('Use confirmed style direction.', (string)($artifacts['structured']['stage1_task_cues']['pages']['page:home_page:confirmed_hero']['style_direction'] ?? ''));
         self::assertSame('confirmed-hero-hash', (string)($pageTasks[0]['plan_context']['result_ref']['context_hash'] ?? ''));
-        self::assertSame('confirmed_stage1_plan_book', (string)($artifacts['structured']['stage2_context_snapshot']['confirmed_stage1_source'] ?? ''));
-        self::assertSame('confirmed-plan-book-hash', (string)($artifacts['structured']['stage2_context_snapshot']['confirmed_plan_book_context_hash'] ?? ''));
+        self::assertArrayNotHasKey('stage2_context_snapshot', $artifacts['structured']);
+        self::assertSame('stage1_plan_source', (string)($pageTasks[0]['plan_context']['result_ref']['source'] ?? ''));
         self::assertStringNotContainsString('stale_markdown_only', \json_encode($artifacts['structured']['page_tasks'], \JSON_UNESCAPED_UNICODE));
     }
 
