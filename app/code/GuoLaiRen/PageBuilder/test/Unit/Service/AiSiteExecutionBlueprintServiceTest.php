@@ -1462,6 +1462,57 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertContains('timeline reveal', $artifacts['structured']['page_plans'][Page::TYPE_ABOUT]['blocks'][0]['design_tags']['motion'] ?? []);
     }
 
+    public function testBuildPlanArtifactsByAiStreamUsesFallbackRequirementWhenBriefIsEmpty(): void
+    {
+        $calls = [];
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::exactly(3))
+            ->method('generateStream')
+            ->willReturnCallback(function (
+                string $prompt,
+                callable $callback,
+                $modelCode,
+                string $scenarioCode,
+                $locale,
+                array $params
+            ) use (&$calls): void {
+                $calls[] = [
+                    'prompt' => $prompt,
+                    'scenario' => $scenarioCode,
+                    'params' => $params,
+                ];
+                $callback(match (\count($calls)) {
+                    1 => \json_encode(['requirement_expansion' => []], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}',
+                    3 => $this->buildStagedPageAiResponse(Page::TYPE_HOME),
+                    default => $this->buildValidAiPlanResponse(),
+                });
+            });
+
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $aiService
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => '',
+            'brief_description' => '',
+            'user_description' => '',
+            'page_types' => [Page::TYPE_HOME],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'zh_Hans_CN',
+        ], [
+            'site_title' => '',
+            'brief_description' => '',
+        ]);
+
+        self::assertStringNotContainsString('User one-line requirement: -', (string)($calls[0]['prompt'] ?? ''));
+        self::assertStringNotContainsString('Brief: -', (string)($calls[1]['prompt'] ?? ''));
+        $originalBrief = (string)($artifacts['plan_json']['requirement_expansion']['original_brief'] ?? '');
+        self::assertNotSame('', $originalBrief);
+        self::assertNotSame('', (string)($artifacts['plan_json']['requirement_expansion']['expanded_brief'] ?? ''));
+        self::assertNotEmpty($artifacts['plan_json']['requirement_expansion']['page_strategy'] ?? []);
+    }
+
     public function testBuildPlanArtifactsByAiStreamAcceptsTopLevelPlanObjectShape(): void
     {
         $service = new AiSiteExecutionBlueprintService(

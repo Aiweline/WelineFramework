@@ -43,12 +43,45 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         self::assertSame('<div>AI generated header</div>', $payload['html_extra'] ?? null);
     }
 
+    public function testRunAiGenerationFallsBackToNonStreamForTransientTlsStreamFailure(): void
+    {
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generateStream')
+            ->willThrowException(new \RuntimeException('AI流式生成失败: 流式API调用失败: TLS connect error: error:0A000126:SSL routines::unexpected eof while reading'));
+        $aiService->expects(self::once())
+            ->method('generate')
+            ->with(
+                self::stringContains('Generate a simple header'),
+                null,
+                'pagebuilder_component_generation',
+                null,
+                self::callback(static function (array $params): bool {
+                    return ($params['response_format']['type'] ?? null) === 'json_object'
+                        && ($params['allow_zero_balance_provider'] ?? null) === true;
+                })
+            )
+            ->willReturn('{"html_extra":"<div>Recovered header</div>","css_extra":"","php_variables":"","extra_fields":"","js_content":""}');
+
+        $service = new AiSitePageComponentGenerationService(
+            aiService: $aiService,
+        );
+
+        $payload = (function (string $region, string $prompt): array {
+            return $this->runAiGeneration($region, $prompt);
+        })->call($service, 'header', 'Generate a simple header');
+
+        self::assertSame('<div>Recovered header</div>', $payload['html_extra'] ?? null);
+    }
+
     public function testGenerateComponentThrowsAfterAiRetriesInsteadOfReturningStubFallback(): void
     {
         $aiService = $this->createMock(AiService::class);
         $aiService->expects(self::exactly(3))
             ->method('generateStream')
             ->willThrowException(new \RuntimeException('model unavailable'));
+        $aiService->expects(self::never())
+            ->method('generate');
 
         $service = new AiSitePageComponentGenerationService(
             frameworkBuilder: new FrameworkBuilder(),
@@ -123,6 +156,8 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         $aiService->expects(self::once())
             ->method('generateStream')
             ->willThrowException(new \RuntimeException('AI API error (HTTP 402, unknown_error): Insufficient Balance'));
+        $aiService->expects(self::never())
+            ->method('generate');
 
         $service = new AiSitePageComponentGenerationService(
             frameworkBuilder: new FrameworkBuilder(),
