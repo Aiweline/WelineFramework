@@ -233,4 +233,61 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
         self::assertCount(1, $filtered, '只应保留 operation=plan 且 event_id>15 的唯一一条');
         self::assertSame(30, $filtered[0]['event_id']);
     }
+
+    public function testFilterOperationEventsRejectsMismatchedCorrelation(): void
+    {
+        $service = new AiSiteAgentQueueObserverHelperService();
+
+        $events = [
+            [
+                'event_id' => 31,
+                'event_type' => 'progress',
+                'payload' => ['operation' => 'plan', 'execution_token' => 'old-token', 'queue_id' => 10],
+                'create_time' => '',
+            ],
+            [
+                'event_id' => 32,
+                'event_type' => 'progress',
+                'payload' => ['operation' => 'plan', 'execution_token' => 'new-token', 'queue_id' => 20],
+                'create_time' => '',
+            ],
+        ];
+
+        $filtered = $service->filterOperationEvents($events, 'plan', '', 0, [
+            'execution_token' => 'new-token',
+            'queue_id' => 20,
+        ]);
+
+        self::assertCount(1, $filtered);
+        self::assertSame(32, $filtered[0]['event_id']);
+    }
+
+    public function testFilterOperationEventsSuppressesUncorrelatedErrorWhenQueueContextExists(): void
+    {
+        $service = new AiSiteAgentQueueObserverHelperService();
+
+        $events = [
+            [
+                'event_id' => 41,
+                'event_type' => 'operation_failed',
+                'payload' => ['operation' => 'plan'],
+                'create_time' => '',
+            ],
+            [
+                'event_id' => 42,
+                'event_type' => 'operation_failed',
+                'payload' => ['operation' => 'plan', 'execution_token' => 'new-token', 'queue_id' => 20],
+                'create_time' => '',
+            ],
+        ];
+
+        $filtered = $service->filterOperationEvents($events, 'plan', '', 0, [
+            'execution_token' => 'new-token',
+            'queue_id' => 20,
+            'require_error_correlation' => true,
+        ]);
+
+        self::assertCount(1, $filtered);
+        self::assertSame(42, $filtered[0]['event_id']);
+    }
 }

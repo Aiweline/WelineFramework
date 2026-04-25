@@ -68,6 +68,8 @@
     /** 与 PHP 注入的 $pbAiPhaseTwoTaskPlanPresent 同步：是否存在可用的第二阶段任务方案。 */
     var lastPhaseTwoTaskPlanPresent = <?= \json_encode((bool)($pbAiPhaseTwoTaskPlanPresent), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var taskPlanStageEntryDecision = <?= \json_encode(\is_array($pbAiTaskPlanStageEntryDecision ?? null) ? $pbAiTaskPlanStageEntryDecision : [], \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var taskPlanGeneratePromptInFlight = false;
+    var taskPlanGeneratePromptHandled = false;
     var globalRunVirtualThemeDisabled = false;
     var planGenerationActionLockActive = false;
     var planGenerationLockedControls = [];
@@ -146,6 +148,13 @@
         return !!(obj && typeof obj === 'object' && !Array.isArray(obj) && Object.keys(obj).length > 0);
     }
 
+    function hasNonEmptyPlanArtifact(value) {
+        if (!value || typeof value !== 'object') {
+            return false;
+        }
+        return Array.isArray(value) ? value.length > 0 : Object.keys(value).length > 0;
+    }
+
     /**
      * 根据工作区状态判断是否已有可用的第一阶段方案（已确认、Markdown、JSON/结构化草稿等）。
      */
@@ -153,24 +162,38 @@
         if (!workspaceState || typeof workspaceState !== 'object') {
             return false;
         }
-        if (workspaceState.plan_confirmed) {
+        if (workspaceState.plan_confirmed || workspaceState.has_execution_blueprint) {
             return true;
         }
         var planBlock = workspaceState.plan && typeof workspaceState.plan === 'object' ? workspaceState.plan : {};
         if (String(planBlock.markdown || '').trim() !== '') {
             return true;
         }
-        if (isPlainObjectNonEmpty(planBlock.json)) {
+        if (
+            hasNonEmptyPlanArtifact(planBlock.json)
+            || hasNonEmptyPlanArtifact(planBlock.structured)
+            || hasNonEmptyPlanArtifact(planBlock.execution_blueprint)
+        ) {
+            return true;
+        }
+        if (
+            hasNonEmptyPlanArtifact(workspaceState.plan_json)
+            || hasNonEmptyPlanArtifact(workspaceState.plan_structured)
+            || hasNonEmptyPlanArtifact(workspaceState.execution_blueprint)
+            || hasNonEmptyPlanArtifact(workspaceState.execution_blueprint_draft)
+        ) {
             return true;
         }
         var sc = workspaceState.scope && typeof workspaceState.scope === 'object' ? workspaceState.scope : {};
         if (String(sc.plan_markdown || '').trim() !== '') {
             return true;
         }
-        if (isPlainObjectNonEmpty(sc.plan_json)) {
-            return true;
-        }
-        if (isPlainObjectNonEmpty(sc.plan_structured)) {
+        if (
+            hasNonEmptyPlanArtifact(sc.plan_json)
+            || hasNonEmptyPlanArtifact(sc.plan_structured)
+            || hasNonEmptyPlanArtifact(sc.execution_blueprint)
+            || hasNonEmptyPlanArtifact(sc.execution_blueprint_draft)
+        ) {
             return true;
         }
         return false;
@@ -878,6 +901,15 @@
         if (isNonEmptyObject(scopePlan.plan_json) || isNonEmptyObject(scopePlan.structured)) {
             return true;
         }
+        if (lastPhaseOnePlanPresent || hasExecutionBlueprintState) {
+            return true;
+        }
+        var workspaceState = (window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object')
+            ? window.__pbWorkspaceState
+            : (latestWorkspaceState && typeof latestWorkspaceState === 'object' ? latestWorkspaceState : initialWorkspaceState);
+        if (phaseOnePlanPresentFromWorkspaceState(workspaceState)) {
+            return true;
+        }
         return false;
     }
 
@@ -886,19 +918,27 @@
         return normalized === 'visual_edit' || normalized === 'task_plan' || normalized === 'task-plan';
     }
 
+    function shouldOpenTaskPlanGeneratePromptOnce() {
+        return !taskPlanGeneratePromptInFlight
+            && !taskPlanGeneratePromptHandled
+            && shouldPromptTaskPlanGenerateFromServer();
+    }
+
     function promptGenerateTaskPlanOnStageEnter() {
         if (!isTaskPlanWorkspaceStage(currentWorkspaceStage) || hasServerPersistedPhaseTwoTaskPlan()) {
             return Promise.resolve(false);
         }
-        if (!shouldPromptTaskPlanGenerateFromServer()) {
+        if (!shouldOpenTaskPlanGeneratePromptOnce()) {
             return Promise.resolve(false);
         }
+        taskPlanGeneratePromptInFlight = true;
         if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
             return window.BackendConfirm.show(messages.taskPlanGenerateConfirmMessage, {
                 title: messages.taskPlanGenerateConfirmTitle,
                 confirmText: messages.immediateGenerate,
                 cancelText: messages.laterGenerate
             }).then(function (confirmed) {
+                taskPlanGeneratePromptHandled = true;
                 if (!confirmed) {
                     toast('info', messages.taskPlanGenerateCancelled);
                     return false;
@@ -907,11 +947,16 @@
                 return !!startTaskPlanDetectBootstrapSse({ suppressStartFallback: true });
             }).catch(function () {
                 return false;
+            }).finally(function () {
+                taskPlanGeneratePromptInFlight = false;
             });
         }
         return Promise.resolve().then(function () {
+            taskPlanGeneratePromptHandled = true;
             showTaskPlanPanel();
             return !!startTaskPlanDetectBootstrapSse({ suppressStartFallback: true });
+        }).finally(function () {
+            taskPlanGeneratePromptInFlight = false;
         });
     }
 
@@ -942,7 +987,7 @@
         if (!confirmBtn) {
             return;
         }
-        confirmBtn.disabled = planGenerationActionLockActive || !hasCurrentPhaseOnePlanDraft();
+        confirmBtn.disabled = planGenerationActionLockActive || planConfirmedState || !hasCurrentPhaseOnePlanDraft();
     }
     /**
      * 工作区流（非弹层 SSE）在 plan_generated 等节点回调：收敛按钮状态、写入方案 Markdown 并触发自动保存。
@@ -9426,6 +9471,9 @@
         if (progressBar) {
             progressBar.style.width = String(Math.max(0, Math.min(100, percent || 0))) + '%';
         }
+        if (enableConfirm === true) {
+            lastPhaseOnePlanPresent = true;
+        }
         syncConfirmPlanButtonEnabled();
     }
 
@@ -10981,15 +11029,17 @@
                     setTaskPlanModeStatus(taskPlanConfirmedState ? messages.taskPlanConfirmSaved : messages.taskPlanGenerated);
                     return;
                 }
-                if (!needConfirm || !shouldPromptTaskPlanGenerateFromServer()) {
+                if (!needConfirm || !shouldOpenTaskPlanGeneratePromptOnce()) {
                     return;
                 }
+                taskPlanGeneratePromptInFlight = true;
                 if (needConfirm && window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
                     return window.BackendConfirm.show(messages.taskPlanGenerateConfirmMessage, {
                         title: messages.taskPlanGenerateConfirmTitle,
                         confirmText: messages.immediateGenerate,
                         cancelText: messages.laterGenerate
                     }).then(function (confirmed) {
+                        taskPlanGeneratePromptHandled = true;
                         if (!confirmed) {
                             toast('info', messages.taskPlanGenerateCancelled);
                             var c = (typeof bootstrap !== 'undefined' && bootstrap.Collapse)
@@ -11001,8 +11051,12 @@
                             return;
                         }
                         startTaskPlanDetectBootstrapSse();
-                    }).catch(function () {});
+                    }).catch(function () {}).finally(function () {
+                        taskPlanGeneratePromptInFlight = false;
+                    });
                 }
+                taskPlanGeneratePromptHandled = true;
+                taskPlanGeneratePromptInFlight = false;
                 startTaskPlanDetectBootstrapSse();
             }).finally(function () {
                 taskPlanAccordionDataCheckInFlight = false;
