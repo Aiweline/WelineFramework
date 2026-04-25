@@ -113,7 +113,10 @@ class AiSitePlanQueue implements QueueInterface
                 $adminId,
                 $queueId,
                 AiSiteAgentSession::STAGE_PLAN,
-                'plan'
+                'plan',
+                $effectiveExecutionToken,
+                \trim((string)($content['job_key'] ?? '')),
+                \trim((string)($content['job_type'] ?? ''))
             );
             $previousSseContextExists = RequestContext::has(RequestContext::SSE_WRITER_KEY);
             $previousSseContext = RequestContext::get(RequestContext::SSE_WRITER_KEY);
@@ -137,8 +140,8 @@ class AiSitePlanQueue implements QueueInterface
             $this->invokePrivate($controller, 'runPlanOperation', [$sse, $session, $adminId]);
             $this->queueTrace($sse, 'runPlanOperation 已返回。');
             $this->queueTrace($sse, '队列执行成功：第一阶段方案生成完成。');
-            $sse->complete();
             $this->markQueueDone($queue, '第一阶段方案生成完成。');
+            $sse->complete();
 
             return '第一阶段方案生成完成。';
         } catch (\Throwable $throwable) {
@@ -184,7 +187,9 @@ class AiSitePlanQueue implements QueueInterface
         int $adminId
     ): AiSiteAgentSession {
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-        $scope = $scopeService->normalizeScope($fresh->getScopeArray());
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
+        );
         $currentReq = \is_array($scope['_plan_sse_request'] ?? null) ? $scope['_plan_sse_request'] : [];
         $nextRound = \max(1, (int)($currentReq['round'] ?? 0) + 1);
 
@@ -216,7 +221,9 @@ class AiSitePlanQueue implements QueueInterface
                 return;
             }
 
-            $scope = $scopeService->normalizeScope($session->getScopeArray());
+            $scope = $scopeService->normalizeScope(
+                $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
+            );
             $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
             if ((string)($active['execution_token'] ?? '') !== $executionToken) {
                 return;
@@ -242,7 +249,9 @@ class AiSitePlanQueue implements QueueInterface
         string $executionToken
     ): AiSiteAgentSession {
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-        $scope = $scopeService->normalizeScope($fresh->getScopeArray());
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
+        );
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeStatus = \trim((string)($active['status'] ?? ''));
         $activeQueueId = (int)($active['queue_id'] ?? 0);
