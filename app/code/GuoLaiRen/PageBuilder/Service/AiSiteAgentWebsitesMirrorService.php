@@ -66,7 +66,9 @@ class AiSiteAgentWebsitesMirrorService
      */
     public function ensureMirrorSession(AiSiteAgentSession $session, int $adminId): ?WebsitesAiSiteBuilderSession
     {
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScope($session)
+        );
         $linkedPublicId = \trim((string)($scope['handoff_workspace_public_id'] ?? ''));
         $websitesSessionService = $this->getWebsitesSessionService();
         $linkedSession = $linkedPublicId !== ''
@@ -97,7 +99,9 @@ class AiSiteAgentWebsitesMirrorService
      */
     public function buildScopeFromSource(AiSiteAgentSession $session): array
     {
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScope($session)
+        );
         $targetDomain = \strtolower(\trim((string)($scope['target_domain'] ?? '')));
         $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? ''));
         $preferredRegistrarAccountId = (int)($scope['preferred_registrar_account_id'] ?? $scope['registrar_account_id'] ?? 0);

@@ -550,14 +550,39 @@
         var normalized = String(operation || '').toLowerCase();
         var state = payload && payload.state && typeof payload.state === 'object' ? payload.state : {};
         var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        function hasPlanArtifact(value) {
+            if (!value || typeof value !== 'object') {
+                return false;
+            }
+            return Array.isArray(value) ? value.length > 0 : Object.keys(value).length > 0;
+        }
         if (normalized === 'plan') {
-            if (state.plan && typeof state.plan === 'object' && String(state.plan.markdown || '').trim() !== '') {
+            var plan = state.plan && typeof state.plan === 'object' ? state.plan : {};
+            if (state.has_execution_blueprint || payload.has_execution_blueprint) {
+                return true;
+            }
+            if (String(plan.markdown || '').trim() !== '') {
                 return true;
             }
             if (String(scope.plan_markdown || '').trim() !== '') {
                 return true;
             }
-            return !!state.plan_confirmed;
+            if (
+                hasPlanArtifact(plan.json)
+                || hasPlanArtifact(plan.structured)
+                || hasPlanArtifact(plan.execution_blueprint)
+                || hasPlanArtifact(state.plan_json)
+                || hasPlanArtifact(state.plan_structured)
+                || hasPlanArtifact(state.execution_blueprint)
+                || hasPlanArtifact(state.execution_blueprint_draft)
+                || hasPlanArtifact(scope.plan_json)
+                || hasPlanArtifact(scope.plan_structured)
+                || hasPlanArtifact(scope.execution_blueprint)
+                || hasPlanArtifact(scope.execution_blueprint_draft)
+            ) {
+                return true;
+            }
+            return !!state.plan_confirmed || !!payload.plan_confirmed;
         }
         if (normalized === 'task_plan') {
             return !!state.has_virtual_theme_plan
@@ -1791,9 +1816,7 @@
                     var benignMessage = lastServerError;
                     logOperationToWorkspaceTerminal('warning', payload, 'warning', benignMessage);
                     if (!settled) {
-                        settled = true;
                         lastServerError = '';
-                        closeOperationSource(source);
                         toast('warning', benignMessage);
                     }
                     if (typeof previewBridge.resumeWorkspaceStream === 'function') {
@@ -1805,11 +1828,7 @@
                 if (settled) {
                     return;
                 }
-                // 收到服务端 error 事件后立即终止当前操作流，避免继续处理后续 done 造成错误覆盖。
-                settled = true;
-                closeOperationSource(source);
                 toast('error', lastServerError);
-                resetOperationUiOnFailure(operation);
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
                 }
@@ -2225,7 +2244,6 @@
             if (lastServerError) {
                 toast('error', lastServerError);
                 settled = true;
-                closeOperationSource(source);
                 resetOperationUiOnFailure(operation);
                 // 操作错误，恢复导航按钮
                 if (typeof enableNavigationAfterOperation === 'function') {

@@ -345,4 +345,53 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
         self::assertArrayNotHasKey('implementation_contract', $buildTaskState);
         self::assertArrayNotHasKey('runtime_context', $buildTaskState);
     }
+
+    public function testUnconfirmedStageTwoDraftKeepsSingleStructuredStorageCopy(): void
+    {
+        $session = new AiSiteAgentSession();
+        $structured = [
+            'plan_signature' => 'stage-two-signature',
+            'shared_tasks' => [
+                ['task_key' => 'shared:header', 'label' => 'Header'],
+            ],
+            'page_tasks' => [
+                'home_page' => [
+                    ['task_key' => 'page:home_page:hero', 'label' => 'Hero'],
+                ],
+            ],
+            'execution_blueprint' => [
+                'signature' => 'stage-two-blueprint',
+                'tasks' => [
+                    ['task_key' => 'page:home_page:hero'],
+                ],
+                'task_groups' => [
+                    'home_page' => [
+                        ['task_key' => 'page:home_page:hero', 'duplicated' => true],
+                    ],
+                ],
+            ],
+        ];
+        $draft = \array_replace($structured, ['signature' => 'stage-two-signature']);
+
+        $session->setScopeArray([
+            'workspace_track' => 'virtual_theme',
+            'task_plan_confirmed' => 0,
+            'task_plan_structured' => $structured,
+            'task_plan_markdown' => '# Stage two draft',
+            'virtual_theme_plan' => [
+                'draft' => $draft,
+                'draft_markdown' => '# Stage two draft',
+                'draft_generated_at' => '2026-04-25 15:50:00',
+                'plan_signature' => 'stage-two-signature',
+            ],
+        ]);
+
+        $stored = $session->getScopeArray();
+
+        self::assertSame([], $stored['task_plan_structured'] ?? null);
+        self::assertSame('stage-two-signature', $stored['virtual_theme_plan']['draft']['signature'] ?? null);
+        self::assertArrayNotHasKey('task_groups', $stored['virtual_theme_plan']['draft']['execution_blueprint'] ?? []);
+        self::assertSame('# Stage two draft', (string)($stored['task_plan_markdown'] ?? ''));
+        self::assertSame('# Stage two draft', (string)($stored['virtual_theme_plan']['draft_markdown'] ?? ''));
+    }
 }

@@ -68,10 +68,6 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
 
         self::assertSame(
             'Edited hero H1 from inline field editor',
-            (string)($scope['task_plan_structured']['page_tasks'][Page::TYPE_HOME][0]['task_script']['field_content_requirements'][0]['sample'] ?? '')
-        );
-        self::assertSame(
-            'Edited hero H1 from inline field editor',
             (string)($scope['virtual_theme_plan']['draft']['page_tasks'][Page::TYPE_HOME][0]['task_script']['field_content_requirements'][0]['sample'] ?? '')
         );
         self::assertSame(0, (int)($scope['task_plan_summary']['shared_task_count'] ?? -1));
@@ -333,7 +329,6 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
         $draftScope = $draftSession->getScopeArray();
         self::assertNotSame([], $draftScope['virtual_theme_plan']['draft'] ?? [], 'Generated second-stage draft must be persisted before the next render.');
         self::assertNotSame('', \trim((string)($draftScope['virtual_theme_plan']['draft_markdown'] ?? '')));
-        self::assertNotSame([], $draftScope['task_plan_structured'] ?? []);
 
         $blockedBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',

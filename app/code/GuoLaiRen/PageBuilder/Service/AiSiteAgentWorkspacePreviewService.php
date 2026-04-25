@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service;
 
+use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\Page;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
@@ -124,7 +125,9 @@ final class AiSiteAgentWorkspacePreviewService
             $session = $this->sessionService->loadByPublicId($publicId, $adminId);
             if ($session !== null) {
                 $sessionAccessible = true;
-                $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+                $scope = $this->scopeCompatibilityService->normalizeScope(
+                    $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                );
                 $taskPlanConfirmed = (int)($scope['task_plan_confirmed'] ?? 0) === 1;
             }
         }

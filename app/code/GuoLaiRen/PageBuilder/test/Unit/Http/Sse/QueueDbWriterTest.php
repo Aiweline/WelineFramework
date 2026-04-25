@@ -62,6 +62,29 @@ final class QueueDbWriterTest extends TestCase
         self::assertSame('task_plan', (string)($result[1]['operation'] ?? ''));
     }
 
+    public function testEnrichOperationCorrelationPayloadAddsQueueContext(): void
+    {
+        $writer = new QueueDbWriter(
+            1,
+            1,
+            77,
+            AiSiteAgentSession::STAGE_PLAN,
+            'plan',
+            'token-abc',
+            'job-key-abc',
+            'stage1.requirement_expand'
+        );
+        $method = new ReflectionMethod(QueueDbWriter::class, 'enrichOperationCorrelationPayload');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($writer, ['operation' => 'plan']);
+
+        self::assertSame(77, (int)($result['queue_id'] ?? 0));
+        self::assertSame('token-abc', (string)($result['execution_token'] ?? ''));
+        self::assertSame('job-key-abc', (string)($result['job_key'] ?? ''));
+        self::assertSame('stage1.requirement_expand', (string)($result['job_type'] ?? ''));
+    }
+
     public function testSanitizePayloadForQueueEventSuppressesGeneratedContent(): void
     {
         $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_PLAN, 'plan');

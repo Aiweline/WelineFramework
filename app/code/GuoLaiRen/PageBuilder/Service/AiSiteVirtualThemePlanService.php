@@ -67,6 +67,7 @@ final class AiSiteVirtualThemePlanService
         }
         $totalBatches = \count($effectiveBatches);
         $completedBatches = 0;
+        $fanoutBatches = [];
 
         foreach ($effectiveBatches as $batchIndex => $batch) {
             $fanoutBatches[] = ['batch' => $batch, 'batch_index' => $batchIndex];
@@ -505,6 +506,142 @@ final class AiSiteVirtualThemePlanService
         return \is_array($task['block_task'] ?? null)
             || \is_array($task['task_script'] ?? null)
             || \is_array($task['field_content_requirements'] ?? null);
+    }
+
+    /**
+     * @return array{
+     *   structured:array<string,mixed>,
+     *   virtual_theme_plan:array<string,mixed>,
+     *   completed_batch_ids:list<string>,
+     *   pending_batch_ids:list<string>
+     * }
+     */
+    private function mergeStageTwoTaskPlanResumeProgress(
+        array $structured,
+        array $virtualThemePlan,
+        array $scope
+    ): array {
+        $resumeStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
+        $resumeDraft = \is_array($scope['virtual_theme_plan']['draft'] ?? null) ? $scope['virtual_theme_plan']['draft'] : [];
+        if ($resumeStructured === [] && $resumeDraft !== []) {
+            $resumeStructured = $resumeDraft;
+        }
+        if ($resumeStructured === []) {
+            return [
+                'structured' => $structured,
+                'virtual_theme_plan' => $virtualThemePlan,
+                'completed_batch_ids' => [],
+                'pending_batch_ids' => \array_values(\array_map(
+                    fn(array $batch): string => $this->buildTaskPlanBatchId($batch),
+                    $this->buildTaskPlanGenerationBatches($structured)
+                )),
+            ];
+        }
+
+        $baselineSignature = \trim((string)($structured['plan_signature'] ?? ''));
+        $resumeSignature = \trim((string)($resumeStructured['plan_signature'] ?? ''));
+        if ($baselineSignature !== '' && $resumeSignature !== '' && $baselineSignature !== $resumeSignature) {
+            return [
+                'structured' => $structured,
+                'virtual_theme_plan' => $virtualThemePlan,
+                'completed_batch_ids' => [],
+                'pending_batch_ids' => \array_values(\array_map(
+                    fn(array $batch): string => $this->buildTaskPlanBatchId($batch),
+                    $this->buildTaskPlanGenerationBatches($structured)
+                )),
+            ];
+        }
+
+        $allBatches = $this->buildTaskPlanGenerationBatches($structured);
+        $completedBatchIds = [];
+        $pendingBatchIds = [];
+        foreach ($allBatches as $batch) {
+            $batchId = $this->buildTaskPlanBatchId($batch);
+            $resumeTask = $this->findStageTwoResumeTaskForBatch($resumeStructured, $batch);
+            if ($resumeTask !== [] && $this->isStageTwoTaskPlanBatchComplete($resumeTask)) {
+                $structured = $this->mergeStageTwoResumeTaskIntoBatch($structured, $batch, $resumeTask);
+                $virtualThemePlan = $this->mergeStageTwoResumeTaskIntoBatch($virtualThemePlan, $batch, $resumeTask);
+                $completedBatchIds[] = $batchId;
+                continue;
+            }
+            $pendingBatchIds[] = $batchId;
+        }
+
+        if ($completedBatchIds !== []) {
+            $structured['_stage2_resume'] = [
+                'completed_batch_ids' => $completedBatchIds,
+                'pending_batch_ids' => $pendingBatchIds,
+                'resumed_at' => \date('Y-m-d H:i:s'),
+            ];
+            $virtualThemePlan['_stage2_resume'] = $structured['_stage2_resume'];
+        }
+
+        return [
+            'structured' => $structured,
+            'virtual_theme_plan' => $virtualThemePlan,
+            'completed_batch_ids' => $completedBatchIds,
+            'pending_batch_ids' => $pendingBatchIds,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $structured
+     * @param array<string, mixed> $batch
+     * @return array<string, mixed>
+     */
+    private function findStageTwoResumeTaskForBatch(array $structured, array $batch): array
+    {
+        $taskKeys = \array_values(\array_filter(\array_map('strval', \is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : [])));
+        if ($taskKeys === []) {
+            return [];
+        }
+        $targetTaskKey = $taskKeys[0];
+        $tasks = [];
+        if (($batch['type'] ?? '') === 'shared') {
+            $tasks = \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [];
+        } else {
+            $pageType = (string)($batch['key'] ?? '');
+            $tasks = \is_array($structured['page_tasks'][$pageType] ?? null) ? $structured['page_tasks'][$pageType] : [];
+        }
+
+        foreach ($tasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            if (\trim((string)($task['task_key'] ?? '')) === $targetTaskKey) {
+                return $task;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $structured
+     * @param array<string, mixed> $batch
+     * @param array<string, mixed> $resumeTask
+     * @return array<string, mixed>
+     */
+    private function mergeStageTwoResumeTaskIntoBatch(array $structured, array $batch, array $resumeTask): array
+    {
+        if (($batch['type'] ?? '') === 'shared') {
+            $structured['shared_tasks'] = $this->mergeTaskListByKey(
+                \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [],
+                [$resumeTask],
+                'shared'
+            );
+            return $structured;
+        }
+
+        $pageType = (string)($batch['key'] ?? '');
+        $structured['page_tasks'] = \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [];
+        $structured['page_tasks'][$pageType] = $this->mergeTaskListByKey(
+            \is_array($structured['page_tasks'][$pageType] ?? null) ? $structured['page_tasks'][$pageType] : [],
+            [$resumeTask],
+            'page:' . $pageType
+        );
+
+        return $structured;
     }
 
     /**
@@ -2805,6 +2942,11 @@ final class AiSiteVirtualThemePlanService
 
         $virtualThemePlan = $structured;
         $virtualThemePlan['signature'] = \sha1((string)\json_encode($structured, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+        $resumeState = $this->mergeStageTwoTaskPlanResumeProgress($structured, $virtualThemePlan, $scope);
+        $structured = $resumeState['structured'];
+        $virtualThemePlan = $resumeState['virtual_theme_plan'];
+        $resumeCompletedBatchIds = \array_values(\array_filter(\array_map('strval', \is_array($resumeState['completed_batch_ids'] ?? null) ? $resumeState['completed_batch_ids'] : [])));
+        $resumePendingBatchIds = \array_values(\array_filter(\array_map('strval', \is_array($resumeState['pending_batch_ids'] ?? null) ? $resumeState['pending_batch_ids'] : [])));
 
         if ((int)($scope['fake_mode'] ?? 0) === 1) {
             $deterministic = $this->buildDeterministicTaskPlanStructured($structured);
@@ -2831,6 +2973,35 @@ final class AiSiteVirtualThemePlanService
             ];
         }
 
+        if ($resumeCompletedBatchIds !== [] && $resumePendingBatchIds === []) {
+            $structured = $this->sanitizePromptLikeTaskPlanStructured($structured);
+            $structured = $this->applyBlockTaskSchemaToStructured($structured);
+            $this->assertAiTaskPlanIsContentful($structured);
+            $structured = $this->ensureTaskDirectoryHierarchy($structured);
+            $structured = $this->syncStageTwoRuntimeContexts($structured);
+            $structured = $this->syncStageTwoTaskSortArtifacts($structured, $pageTypes);
+            $virtualThemePlan = \array_replace_recursive($virtualThemePlan, [
+                'block_task_schema' => $structured['block_task_schema'] ?? [],
+                'task_directory_tree' => $structured['task_directory_tree'] ?? [],
+                'task_tree' => $structured['task_tree'] ?? [],
+                'shared_tasks' => $structured['shared_tasks'] ?? [],
+                'page_tasks' => $structured['page_tasks'] ?? [],
+                'execution_blueprint' => $structured['execution_blueprint'] ?? [],
+            ]);
+            $virtualThemePlan['signature'] = $this->buildSignature($structured);
+            return [
+                'markdown' => $this->buildStageTwoMarkdown(
+                    $pageTypes,
+                    \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [],
+                    \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [],
+                    $structured
+                ),
+                'structured' => $structured,
+                'virtual_theme_plan' => $virtualThemePlan,
+                'generation_source' => 'ai',
+            ];
+        }
+
         $aiTaskPlan = $this->buildTaskPlanArtifactsByAi(
             $scope,
             $buildBlueprint,
@@ -2838,7 +3009,8 @@ final class AiSiteVirtualThemePlanService
             $virtualThemePlan,
             $chunkCallback,
             $heartbeatCallback,
-            $progressCallback
+            $progressCallback,
+            $resumeCompletedBatchIds !== [] ? $resumePendingBatchIds : null
         );
         $markdown = \trim((string)($aiTaskPlan['markdown'] ?? ''));
         $aiVirtualThemePlan = \is_array($aiTaskPlan['virtual_theme_plan'] ?? null) ? $aiTaskPlan['virtual_theme_plan'] : [];
@@ -6686,7 +6858,8 @@ final class AiSiteVirtualThemePlanService
         array $virtualThemePlan,
         ?callable $chunkCallback = null,
         ?callable $heartbeatCallback = null,
-        ?callable $progressCallback = null
+        ?callable $progressCallback = null,
+        ?array $selectedBatchIds = null
     ): array {
         return $this->buildTaskPlanArtifactsByAiInBatches(
             $scope,
@@ -6698,7 +6871,7 @@ final class AiSiteVirtualThemePlanService
             'generate_task_plan',
             '',
             '',
-            null,
+            $selectedBatchIds,
             $progressCallback
         );
 
