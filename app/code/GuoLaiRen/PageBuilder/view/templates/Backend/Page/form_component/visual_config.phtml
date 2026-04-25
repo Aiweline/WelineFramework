@@ -1717,9 +1717,99 @@ body.visual-config-editor-open .swal2-popup .card:hover {
 <!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
-window.visualVirtualThemeId = window.visualVirtualThemeId || <?= (int)$virtualThemeIdForVisual ?>;
+window.visualVirtualThemeId = <?= (int)$virtualThemeIdForVisual ?>;
 window.visualPublicId = <?= json_encode($visualPublicId, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
 window.visualPageType = <?= json_encode($visualPageTypeForPreview, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
+window.visualIsVirtualMode = <?= $isVisualVirtualMode ? 'true' : 'false' ?>;
+
+window.hasVisualVirtualContext = function () {
+    return !!(
+        window.visualIsVirtualMode
+        && typeof window.visualPublicId === 'string'
+        && window.visualPublicId.trim() !== ''
+        && typeof window.visualPageType === 'string'
+        && window.visualPageType.trim() !== ''
+    );
+};
+
+window.buildVisualRequestPayload = function (payload, options) {
+    var nextPayload = Object.assign({}, payload || {});
+    var opts = options || {};
+    if (typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext()) {
+        delete nextPayload.page_id;
+        nextPayload.public_id = String(window.visualPublicId || '').trim();
+        nextPayload.page_type = String(window.visualPageType || '').trim();
+        if (opts.styleCode) {
+            nextPayload.style_code = String(opts.styleCode);
+        }
+        var virtualThemeId = Number(window.visualVirtualThemeId || 0);
+        if (virtualThemeId > 0) {
+            nextPayload.virtual_theme_id = virtualThemeId;
+        }
+        return nextPayload;
+    }
+
+    var fallbackPageId = Number(nextPayload.page_id || window.visualPageId || window.pageId || 0);
+    if (fallbackPageId > 0) {
+        nextPayload.page_id = fallbackPageId;
+    }
+    return nextPayload;
+};
+
+window.appendVisualRequestIdentityToFormData = function (formData, options) {
+    if (!(formData instanceof FormData)) {
+        return formData;
+    }
+    var opts = options || {};
+    if (typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext()) {
+        formData.delete('page_id');
+        formData.set('public_id', String(window.visualPublicId || '').trim());
+        formData.set('page_type', String(window.visualPageType || '').trim());
+        if (opts.styleCode) {
+            formData.set('style_code', String(opts.styleCode));
+        }
+        var virtualThemeId = Number(window.visualVirtualThemeId || 0);
+        if (virtualThemeId > 0) {
+            formData.set('virtual_theme_id', String(virtualThemeId));
+        } else {
+            formData.delete('virtual_theme_id');
+        }
+        return formData;
+    }
+
+    var fallbackPageId = Number(opts.pageId || formData.get('page_id') || window.visualPageId || window.pageId || 0);
+    if (fallbackPageId > 0) {
+        formData.set('page_id', String(fallbackPageId));
+    }
+    return formData;
+};
+
+window.buildVisualRequestUrl = function (baseUrl, params) {
+    var url = new URL(baseUrl, window.location.origin);
+    var searchParams = url.searchParams;
+    var nextParams = params || {};
+    Object.keys(nextParams).forEach(function (key) {
+        var value = nextParams[key];
+        if (value === undefined || value === null || value === '') {
+            return;
+        }
+        searchParams.set(key, String(value));
+    });
+
+    if (typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext()) {
+        searchParams.delete('page_id');
+        searchParams.set('public_id', String(window.visualPublicId || '').trim());
+        searchParams.set('page_type', String(window.visualPageType || '').trim());
+        var virtualThemeId = Number(window.visualVirtualThemeId || 0);
+        if (virtualThemeId > 0) {
+            searchParams.set('virtual_theme_id', String(virtualThemeId));
+        } else {
+            searchParams.delete('virtual_theme_id');
+        }
+    }
+
+    return url.toString();
+};
 </script>
 <!-- 早期挂载一个全局入口，确保表单可调用，即使主脚本延迟/异常 -->
 <script>
@@ -1846,12 +1936,13 @@ if (typeof window.openVisualConfig === 'undefined') {
         }
         
         // 如果 pageId 为空，尝试从全局变量获取
-        if (!pageId && typeof window.visualPageId !== 'undefined' && window.visualPageId) {
+        const useVirtualIdentity = typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext();
+        if (!pageId && !useVirtualIdentity && typeof window.visualPageId !== 'undefined' && window.visualPageId) {
             pageId = window.visualPageId;
         }
         
         // 如果只有 handle 没有 pageId，需要通过 API 获取
-        if (handle && !pageId) {
+        if (handle && !pageId && !useVirtualIdentity) {
             var url = '<?= $this->getBackendUrl('*/backend/page/getPageByHandle') ?>?handle=' + encodeURIComponent(handle);
                         var req = window.Weline.Api.get(url, { silent: true });
             req.then(function(res) {
@@ -1874,7 +1965,7 @@ if (typeof window.openVisualConfig === 'undefined') {
                     }
                 });
         } else {
-            window.visualPageId = pageId;
+            window.visualPageId = pageId || null;
             window.visualConfigHandle = handle;
             window.visualConfigInitialized = true;
         }
@@ -2168,6 +2259,9 @@ window.updateSaveStatus = function(status, text) {
                 if (window.currentVisualLanguage) {
                     requestBody.locale = window.currentVisualLanguage;
                 }
+                if (typeof window.buildVisualRequestPayload === 'function') {
+                    requestBody = window.buildVisualRequestPayload(requestBody, { styleCode: currentStyleCode || '' });
+                }
             }
             
             var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(requestBody) };
@@ -2350,7 +2444,8 @@ window.saveSeoConfig = async function () {
         }
 
         const pageId = window.visualPageId || window.pageId || 0;
-        if (!pageId) {
+        const useVirtualSeo = typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext();
+        if (!pageId && !useVirtualSeo) {
             return;
         }
 
@@ -2360,13 +2455,16 @@ window.saveSeoConfig = async function () {
             window.updateSaveStatus('saving', '<?= __('保存中...') ?>');
         }
 
-        const payload = {
+        let payload = {
             page_id: pageId,
             locale: locale,
             meta_title: metaTitleInput.value || '',
             meta_description: metaDescInput.value || '',
             meta_keywords: metaKeywordsInput.value || ''
         };
+        if (typeof window.buildVisualRequestPayload === 'function') {
+            payload = window.buildVisualRequestPayload(payload);
+        }
 
         var url = '<?= $this->getBackendUrl('*/backend/page/autoSaveSeo') ?>';
         var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(payload) };
@@ -3280,12 +3378,21 @@ async function loadVisualStyleConfig() {
             configPanel.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><div class="mt-2"><?= __('正在加载配置...') ?></div></div>';
         }
 
-        // 复用模板配置的获取接口
-        let url = '<?= $this->getBackendUrl('*/backend/template/getStyleConfig') ?>' +
-            '?style_code=' + encodeURIComponent(styleCode) +
-            '&page_id=' + encodeURIComponent(currentPageId);
-        if (locale) {
-            url += '&locale=' + encodeURIComponent(locale);
+        let url;
+        if (typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext() && typeof window.buildVisualRequestUrl === 'function') {
+            url = window.buildVisualRequestUrl('<?= $this->getBackendUrl('*/backend/page/getStyleConfig') ?>', {
+                style_code: styleCode,
+                page_id: currentPageId,
+                locale: locale || ''
+            });
+        } else {
+            // 复用模板配置的获取接口
+            url = '<?= $this->getBackendUrl('*/backend/template/getStyleConfig') ?>' +
+                '?style_code=' + encodeURIComponent(styleCode) +
+                '&page_id=' + encodeURIComponent(currentPageId);
+            if (locale) {
+                url += '&locale=' + encodeURIComponent(locale);
+            }
         }
 
         var res = await window.Weline.Api.get(url, { silent: true });
@@ -3951,13 +4058,16 @@ window.resetAllVisualConfig = function() {
                     url = '<?= $this->getBackendUrl('*/backend/preview/resetFieldsToDefault') ?>';
                     const styleSelect = document.getElementById('style');
                     let styleCode = styleSelect ? styleSelect.value : '';
-                    requestData = {
-                        page_id: window.visualPageId || window.pageId || 0,
-                        style_code: styleCode,
-                        config_keys: configKeys,
-                        locale: window.currentVisualLanguage || ''
-                    };
+                requestData = {
+                    page_id: window.visualPageId || window.pageId || 0,
+                    style_code: styleCode,
+                    config_keys: configKeys,
+                    locale: window.currentVisualLanguage || ''
+                };
+                if (typeof window.buildVisualRequestPayload === 'function') {
+                    requestData = window.buildVisualRequestPayload(requestData, { styleCode: styleCode });
                 }
+            }
                 
                 var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(requestData) };
                 var res = await window.Weline.Api.request(url, opts);
@@ -4049,13 +4159,16 @@ window.resetVisualConfigGroup = function(section) {
                     url = '<?= $this->getBackendUrl('*/backend/preview/resetFieldsToDefault') ?>';
                     const styleSelect = document.getElementById('style');
                     let styleCode = styleSelect ? styleSelect.value : '';
-                    requestData = {
-                        page_id: window.visualPageId || window.pageId || 0,
-                        style_code: styleCode,
-                        config_keys: configKeys,
-                        locale: window.currentVisualLanguage || ''
-                    };
+                requestData = {
+                    page_id: window.visualPageId || window.pageId || 0,
+                    style_code: styleCode,
+                    config_keys: configKeys,
+                    locale: window.currentVisualLanguage || ''
+                };
+                if (typeof window.buildVisualRequestPayload === 'function') {
+                    requestData = window.buildVisualRequestPayload(requestData, { styleCode: styleCode });
                 }
+            }
                 
                 var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(requestData) };
                 var res = await window.Weline.Api.request(url, opts);
@@ -5228,7 +5341,8 @@ async function saveComponentOrder() {
         });
         
         const pageId = window.visualPageId || 0;
-        if (!pageId) {
+        const useVirtualLayout = typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext();
+        if (!pageId && !useVirtualLayout) {
             console.error('页面ID未定义');
             return;
         }
@@ -5245,7 +5359,10 @@ async function saveComponentOrder() {
         
         // 调用 API 保存新顺序
         var url = '<?= $this->getBackendUrl('*/backend/visual/api/component/reorder') ?>';
-        var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ page_id: pageId, region: 'content', order: newOrder }) };
+        var requestData = typeof window.buildVisualRequestPayload === 'function'
+            ? window.buildVisualRequestPayload({ page_id: pageId, region: 'content', order: newOrder })
+            : { page_id: pageId, region: 'content', order: newOrder };
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(requestData) };
         var res = await window.Weline.Api.request(url, opts);
         const result = (res && res.data) || res;
         
@@ -5290,13 +5407,14 @@ window.addComponentToLayout = async function(componentData, region, replace = fa
         // 忽略
     }
     
-    if (!pageId) {
+    const useVirtualAdd = typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext();
+    if (!pageId && !useVirtualAdd) {
         BackendToast.error('<?= __('错误：页面ID未定义，请刷新页面重试') ?>');
         return;
     }
     
     try {
-        const requestData = {
+        let requestData = {
             page_id: pageId,
             component_code: componentData.code,
             region: region,
@@ -5307,6 +5425,9 @@ window.addComponentToLayout = async function(componentData, region, replace = fa
         // 如果是 content 区域且指定了位置，添加 position 参数
         if (region === 'content' && position !== null && position !== undefined) {
             requestData.position = position;
+        }
+        if (typeof window.buildVisualRequestPayload === 'function') {
+            requestData = window.buildVisualRequestPayload(requestData);
         }
         
         var url = '<?= $this->getBackendUrl('*/backend/visual/api/component/add') ?>';
@@ -5337,6 +5458,7 @@ window.editComponentInPreview = async function(wrapper) {
     const region = wrapper.getAttribute('data-region');
     const index = parseInt(wrapper.getAttribute('data-index') || '0', 10);
     const pageId = window.visualPageId || 0;
+    const useVirtualComponent = typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext();
     
     
     // 在弹窗显示前保存滚动位置
@@ -5352,7 +5474,7 @@ window.editComponentInPreview = async function(wrapper) {
         console.warn('无法获取滚动位置:', e);
     }
     
-    if (!pageId) {
+    if (!pageId && !useVirtualComponent) {
         BackendToast.error('<?= __('错误：页面ID未定义') ?>');
         return;
     }
@@ -5390,8 +5512,9 @@ window.editComponentInPreview = async function(wrapper) {
         }
         
         // 获取当前布局配置中的组件配置
-        const layoutUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/layoutFields') ?>' + 
-            '?page_id=' + pageId;
+        const layoutUrl = typeof window.buildVisualRequestUrl === 'function'
+            ? window.buildVisualRequestUrl('<?= $this->getBackendUrl('*/backend/visual/api/component/layoutFields') ?>', { page_id: pageId, style_code: styleCode })
+            : '<?= $this->getBackendUrl('*/backend/visual/api/component/layoutFields') ?>?page_id=' + pageId;
         
         var layoutRes = await window.Weline.Api.get(layoutUrl, { silent: true });
         const layoutResult = (layoutRes && layoutRes.data) || layoutRes;
@@ -5573,6 +5696,9 @@ window.editComponentInPreview = async function(wrapper) {
                         formData.append('region', region);
                         formData.append('index', index);
                         formData.append('ai_prompt', aiPromptValue);
+                        if (typeof window.appendVisualRequestIdentityToFormData === 'function') {
+                            window.appendVisualRequestIdentityToFormData(formData, { pageId: pageId, styleCode: styleCode });
+                        }
                         // 点击生成时更新并保存组件 AI 提示词到页面数据（与组件配置一起存放）
                         const collectModalConfig = () => {
                             const cfg = {};
@@ -5592,7 +5718,10 @@ window.editComponentInPreview = async function(wrapper) {
                             const configToSave = collectModalConfig();
                             configToSave._ai_prompt = aiPromptValue;
                             const saveUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/updateConfig') ?>';
-                            await window.Weline.Api.request(saveUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ page_id: pageId, component_code: componentCode, region: region, index: index, config: configToSave }) });
+                            const savePayload = typeof window.buildVisualRequestPayload === 'function'
+                                ? window.buildVisualRequestPayload({ page_id: pageId, component_code: componentCode, region: region, index: index, config: configToSave }, { styleCode: styleCode })
+                                : { page_id: pageId, component_code: componentCode, region: region, index: index, config: configToSave };
+                            await window.Weline.Api.request(saveUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(savePayload) });
                         } catch (e) { /* 保存提示词失败不影响本次生成 */ }
                         const streamUrl = '<?= $this->getBackendUrl("*/backend/ai-generate/component-config-stream") ?>';
                         const sseContent = document.querySelector('.weline-component-config-modal #aiComponentConfigSseTerminal_content');
@@ -5794,7 +5923,10 @@ window.editComponentInPreview = async function(wrapper) {
             
             // 调用API保存配置
             var saveUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/updateConfig') ?>';
-            var saveOpts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ page_id: pageId, component_code: componentCode, region: region, index: index, config: newConfig }) };
+            var savePayload = typeof window.buildVisualRequestPayload === 'function'
+                ? window.buildVisualRequestPayload({ page_id: pageId, component_code: componentCode, region: region, index: index, config: newConfig }, { styleCode: styleCode })
+                : { page_id: pageId, component_code: componentCode, region: region, index: index, config: newConfig };
+            var saveOpts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(savePayload) };
             var saveRes = await window.Weline.Api.request(saveUrl, saveOpts);
             const saveResult = (saveRes && saveRes.data) || saveRes;
             
@@ -5886,6 +6018,7 @@ window.removeComponentInPreview = async function(wrapper) {
     const region = wrapper.getAttribute('data-region');
     const index = wrapper.getAttribute('data-index');
     const pageId = window.visualPageId || 0;
+    const useVirtualComponent = typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext();
     
     
     // 在弹窗显示前保存滚动位置
@@ -5911,10 +6044,14 @@ window.removeComponentInPreview = async function(wrapper) {
     if (!confirmed) return;
     
     try {
+        if (!pageId && !useVirtualComponent) {
+            BackendToast.error('<?= __('错误：页面ID未定义') ?>');
+            return;
+        }
         // 显示加载提示
         BackendToast.info('<?= __('删除中...') ?>', 2000);
         
-        const requestData = {
+        let requestData = {
             page_id: pageId,
             component_code: componentCode,
             region: region
@@ -5923,6 +6060,9 @@ window.removeComponentInPreview = async function(wrapper) {
         // 如果有索引，添加到请求中（用于精确删除）
         if (index !== null && index !== undefined) {
             requestData.index = parseInt(index, 10);
+        }
+        if (typeof window.buildVisualRequestPayload === 'function') {
+            requestData = window.buildVisualRequestPayload(requestData);
         }
         
         

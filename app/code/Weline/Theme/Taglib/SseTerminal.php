@@ -213,6 +213,7 @@ var isRunning = false;
 var currentUrl = initialUrl;
 var eventSourceSeq = 0;
 var manualStopRequested = false;
+var terminalCompleted = false;
 
 // 公共 API 暴露到 window
 window.WelineSseTerminal = window.WelineSseTerminal || {};
@@ -352,6 +353,10 @@ function setStatus(status, text) {
 }
 
 function dispatchSseEvent(eventName, data, rawEvent) {
+    var shouldFinalizeStream = eventName === 'done';
+    if (shouldFinalizeStream) {
+        terminalCompleted = true;
+    }
     try {
         var callbackEvent = rawEvent || { data: JSON.stringify(data) };
         if (eventName === 'chunk' && data.content !== undefined) {
@@ -381,16 +386,18 @@ function dispatchSseEvent(eventName, data, rawEvent) {
         if (data.progress !== undefined) {
             setProgress(data.progress);
         }
-        // Use total for a stage-complete prompt when the backend will keep the stream open.
+        // Stream finalization is handled in finally so callbacks cannot skip close().
         // done 表示服务端流已结束：必须关闭原生 EventSource，否则 TCP 关闭后浏览器会
         // 自动重连同一 URL，状态栏长期显示「连接重试中...」且可能重复打后端。
         // 回调仍先于 stop() 执行；若需在完成后立刻发起新流，请在回调里 setTimeout(0, () => term.start(...))。
-        if (eventName === 'done') {
-            stop();
-        }
     } catch (err) {
         log(typeof data === 'string' ? data : eventName, eventName);
         // catch 中不再重复调用 callback，避免重复调用
+    } finally {
+        // done is terminal. Always close EventSource, even if consumer callbacks throw.
+        if (shouldFinalizeStream) {
+            stop({ internal: true });
+        }
     }
 }
 
@@ -443,6 +450,7 @@ function start(url, options) {
     currentUrl = resolvedUrl;
     isRunning = true;
     manualStopRequested = false;
+    terminalCompleted = false;
     
     if (btnToggle) {
         btnToggle.innerHTML = '<i class="mdi mdi-stop"></i>';
@@ -470,6 +478,10 @@ function start(url, options) {
     
     source.onerror = function(e) {
         if (eventSource !== source || sourceSeq !== eventSourceSeq) {
+            return;
+        }
+        if (terminalCompleted) {
+            stop({ keepStatus: true, internal: true });
             return;
         }
         var isBenignTransition = false;
@@ -530,6 +542,11 @@ function start(url, options) {
             } catch (err) {
                 log(e.data || eventName, eventName);
                 if (eventCallbacks[eventName]) eventCallbacks[eventName](e);
+            } finally {
+                if (eventName === 'done' && eventSource === source && sourceSeq === eventSourceSeq) {
+                    terminalCompleted = true;
+                    stop({ internal: true });
+                }
             }
         });
     });
