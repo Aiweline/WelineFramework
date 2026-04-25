@@ -15,6 +15,8 @@ final class FiberOutputBuffer
 {
     private static bool $installed = false;
 
+    private static int $installedLevel = 0;
+
     /** @var \WeakMap<\Fiber, string>|null */
     private static ?\WeakMap $fiberBuffers = null;
 
@@ -27,12 +29,43 @@ final class FiberOutputBuffer
 
     public static function install(): void
     {
-        if (self::$installed || !Runtime::isPersistent()) {
+        self::ensureInstalled('install');
+    }
+
+    public static function ensureInstalled(string $reason = ''): void
+    {
+        if (!Runtime::isPersistent()) {
             return;
         }
 
-        \ob_start(static fn(string $chunk): string => self::handleChunk($chunk), 1);
+        if (self::$installed && self::isInstalledBufferActive()) {
+            return;
+        }
+
+        $wasMarkedInstalled = self::$installed;
+        $previousLevel = self::$installedLevel;
+
+        if ($wasMarkedInstalled) {
+            self::resetInstalledState();
+        }
+
+        \ob_start([self::class, 'handleOutputChunk'], 1);
         self::$installed = true;
+        self::$installedLevel = \ob_get_level();
+
+        if ($wasMarkedInstalled) {
+            self::logRecovered($reason, $previousLevel);
+        }
+    }
+
+    public static function isActive(): bool
+    {
+        return Runtime::isPersistent() && self::isInstalledBufferActive();
+    }
+
+    public static function handleOutputChunk(string $chunk): string
+    {
+        return self::handleChunk($chunk);
     }
 
     public static function uninstall(): void
@@ -41,13 +74,13 @@ final class FiberOutputBuffer
             return;
         }
 
-        self::$installed = false;
-        self::$fiberBuffers = null;
-        self::$fiberDepths = null;
-        self::$mainBuffer = '';
-        self::$mainDepth = 0;
+        $shouldCloseActiveBuffer = self::isInstalledBufferActive()
+            && self::$installedLevel > 0
+            && \ob_get_level() === self::$installedLevel;
 
-        if (\ob_get_level() > 0) {
+        self::resetInstalledState();
+
+        if ($shouldCloseActiveBuffer) {
             \ob_end_clean();
         }
     }
@@ -59,7 +92,7 @@ final class FiberOutputBuffer
             return;
         }
 
-        self::install();
+        self::ensureInstalled('begin_capture');
         $fiber = \Fiber::getCurrent();
         if ($fiber === null) {
             if (self::$mainDepth === 0) {
@@ -166,5 +199,58 @@ final class FiberOutputBuffer
         }
 
         return '';
+    }
+
+    private static function isInstalledBufferActive(): bool
+    {
+        if (!self::$installed || self::$installedLevel <= 0) {
+            return false;
+        }
+
+        if (\ob_get_level() < self::$installedLevel) {
+            return false;
+        }
+
+        $statuses = \ob_get_status(true);
+        $status = $statuses[self::$installedLevel - 1] ?? null;
+        if (!\is_array($status)) {
+            return false;
+        }
+
+        return (string)($status['name'] ?? '') === self::handlerName();
+    }
+
+    private static function resetInstalledState(): void
+    {
+        self::$installed = false;
+        self::$installedLevel = 0;
+        self::$fiberBuffers = null;
+        self::$fiberDepths = null;
+        self::$mainBuffer = '';
+        self::$mainDepth = 0;
+    }
+
+    private static function handlerName(): string
+    {
+        return self::class . '::handleOutputChunk';
+    }
+
+    private static function logRecovered(string $reason, int $previousLevel): void
+    {
+        if (!\class_exists(\Weline\Server\Log\WlsLogger::class, false)) {
+            return;
+        }
+
+        try {
+            \Weline\Server\Log\WlsLogger::warning_(
+                '[FiberOutputBufferRecovered] reason=' . ($reason !== '' ? $reason : 'unknown')
+                . ' uri=' . (string)($_SERVER['REQUEST_URI'] ?? '(none)')
+                . ' previous_level=' . $previousLevel
+                . ' current_ob_level=' . \ob_get_level()
+                . ' new_level=' . self::$installedLevel
+            );
+        } catch (\Throwable) {
+            // Recovery must not fail because diagnostics are unavailable.
+        }
     }
 }
