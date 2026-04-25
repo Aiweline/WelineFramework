@@ -162,41 +162,10 @@
         if (!workspaceState || typeof workspaceState !== 'object') {
             return false;
         }
-        if (workspaceState.plan_confirmed || workspaceState.has_execution_blueprint) {
-            return true;
+        if (Object.prototype.hasOwnProperty.call(workspaceState, 'has_stage_one_plan')) {
+            return !!workspaceState.has_stage_one_plan || !!workspaceState.plan_confirmed;
         }
-        var planBlock = workspaceState.plan && typeof workspaceState.plan === 'object' ? workspaceState.plan : {};
-        if (String(planBlock.markdown || '').trim() !== '') {
-            return true;
-        }
-        if (
-            hasNonEmptyPlanArtifact(planBlock.json)
-            || hasNonEmptyPlanArtifact(planBlock.structured)
-            || hasNonEmptyPlanArtifact(planBlock.execution_blueprint)
-        ) {
-            return true;
-        }
-        if (
-            hasNonEmptyPlanArtifact(workspaceState.plan_json)
-            || hasNonEmptyPlanArtifact(workspaceState.plan_structured)
-            || hasNonEmptyPlanArtifact(workspaceState.execution_blueprint)
-            || hasNonEmptyPlanArtifact(workspaceState.execution_blueprint_draft)
-        ) {
-            return true;
-        }
-        var sc = workspaceState.scope && typeof workspaceState.scope === 'object' ? workspaceState.scope : {};
-        if (String(sc.plan_markdown || '').trim() !== '') {
-            return true;
-        }
-        if (
-            hasNonEmptyPlanArtifact(sc.plan_json)
-            || hasNonEmptyPlanArtifact(sc.plan_structured)
-            || hasNonEmptyPlanArtifact(sc.execution_blueprint)
-            || hasNonEmptyPlanArtifact(sc.execution_blueprint_draft)
-        ) {
-            return true;
-        }
-        return false;
+        return !!workspaceState.plan_confirmed || !!workspaceState.has_execution_blueprint;
     }
 
     /**
@@ -374,6 +343,7 @@
         planGenerationLockedControls = [];
         applyRunVirtualThemeButtonsDisabledState();
         syncConfirmPlanButtonEnabled();
+        syncPlanRebuildButtonVisibility();
     }
 
     function isTargetDomainRequiredForPlanActionSatisfied() {
@@ -816,6 +786,8 @@
         syncPublishStageEntryFromWorkspaceState(workspaceState);
         normalizeGuidedStaticLabels();
         syncConfirmPlanButtonEnabled();
+        syncPlanRebuildButtonVisibility();
+        syncTaskPlanRegenerateButtonVisibility();
         applyTaskPlanEditingLockFromActiveOperation();
         applyTaskPlanBuildDefaultCollapse();
     }
@@ -989,6 +961,16 @@
         }
         confirmBtn.disabled = planGenerationActionLockActive || planConfirmedState || !hasCurrentPhaseOnePlanDraft();
     }
+
+    function syncPlanRebuildButtonVisibility() {
+        var btn = document.getElementById('pb-ai-plan-rebuild-full');
+        if (!btn) {
+            return;
+        }
+        var visible = hasCurrentPhaseOnePlanDraft();
+        btn.classList.toggle('d-none', !visible);
+        btn.disabled = !visible || planGenerationActionLockActive || planStartRequestPending || planSseRunning;
+    }
     /**
      * 工作区流（非弹层 SSE）在 plan_generated 等节点回调：收敛按钮状态、写入方案 Markdown 并触发自动保存。
      */
@@ -1072,6 +1054,10 @@
         targetDomainRequiredLabel: <?= \json_encode((string)__('目标域名（必填）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         targetDomainRequiredPlaceholder: <?= \json_encode((string)__('请填写要绑定的目标域名'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         noPageType: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        schemeRebuildButton: <?= \json_encode((string)__('方案重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planSchemeRebuildConfirmTitle: <?= \json_encode((string)__('重建整个方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planSchemeRebuildConfirmMessage: <?= \json_encode((string)__('方案重建会舍弃当前第一阶段方案、第二阶段任务方案以及待构建任务，并重新生成完整方案。是否继续？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planSchemeRebuilding: <?= \json_encode((string)__('正在重建整个方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         briefRequired: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         siteTitleRequired: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         domainRequiredForPlanAction: <?= \json_encode((string)__('请先填写目标域名，再确认&更新方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1123,10 +1109,14 @@
         blockOpSuccess: <?= \json_encode((string)__('块级操作已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockOpFailed: <?= \json_encode((string)__('块级操作未能完成，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planFriendlyInvalidAiJson: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanSchemeRebuildConfirmTitle: <?= \json_encode((string)__('重建整个任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanSchemeRebuildConfirmMessage: <?= \json_encode((string)__('方案重建会舍弃当前第二阶段任务方案、确认状态以及待构建任务，并重新生成完整任务方案。是否继续？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanSchemeRebuilding: <?= \json_encode((string)__('正在重建第二阶段任务方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planStructuredPreviewTitle: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planStructuredPreviewEmpty: <?= \json_encode((string)__('方案等待确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planStructuredPreviewEmptyRunning: <?= \json_encode((string)__('方案正在生成中'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planStructuredPreviewNote: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        taskPlanRegenerating: <?= \json_encode((string)__('正在重新生成第二阶段任务方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanStartUnavailable: <?= \json_encode((string)__('第二阶段任务方案入口暂不可用，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanGenerating: <?= \json_encode((string)__('正在准备第二阶段任务方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanDetecting: <?= \json_encode((string)__('正在检查并生成第二阶段任务方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -8421,7 +8411,7 @@
             return false;
         }
         var isSharedPlanBlock = String(pageType || '').trim().toLowerCase() === 'shared';
-        if (!String(mutatePlanBlockUrl || '').trim() && (normalizedAction !== 'refine' || isSharedPlanBlock)) {
+        if (!String(mutatePlanBlockUrl || '').trim()) {
             return false;
         }
         if (!pageType) {
@@ -8450,11 +8440,8 @@
             return false;
         }
 
-        if (normalizedAction === 'refine' && !isSharedPlanBlock) {
-            return performStage1BlockRefine(pageType, blockKey, blockLabel, inlineInstruction, ctx);
-        }
-
-        var mutationAction = normalizedAction === 'add-block' ? 'create' : (normalizedAction === 'delete' ? 'delete' : 'rebuild');
+        var mutationAction = normalizedAction === 'add-block' ? 'create'
+            : (normalizedAction === 'delete' ? 'delete' : (normalizedAction === 'refine' ? 'refine' : 'rebuild'));
         var blockConfig = {};
         if (mutationAction === 'create') {
             var title = inlineInstruction || (blockLabel ? (blockLabel + ' follow-up') : <?= \json_encode((string)__('新区块'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
@@ -8466,7 +8453,7 @@
             if (blockKey) {
                 blockConfig.after_block_key = blockKey;
             }
-        } else if (mutationAction === 'rebuild') {
+        } else if (mutationAction === 'rebuild' || mutationAction === 'refine') {
             var rebuildNote = inlineInstruction || (ctx.summary ? String(ctx.summary) : <?= \json_encode((string)__('本地块级重建请求。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
             blockConfig = {
                 mutation_note: rebuildNote,
@@ -8483,7 +8470,10 @@
             action: mutationAction,
             block_key: blockKey,
             block_config: JSON.stringify(blockConfig),
-            instruction: inlineInstruction
+            instruction: inlineInstruction,
+            target_scope: (ctx && typeof ctx.targetScope === 'string' && ctx.targetScope !== '')
+                ? ctx.targetScope
+                : ('pages.' + pageType + '.blocks.' + (blockKey || 'new'))
         }).then(function (data) {
             if (data && data.data && typeof data.data === 'object') {
                 hydrateWorkspaceFromState(data.data);
@@ -8509,7 +8499,7 @@
         if (!pageType || !blockKey) {
             return false;
         }
-        if (!String(refinePlanPageUrl || '').trim()) {
+        if (!String(mutatePlanBlockUrl || '').trim()) {
             toast('warning', messages.planPageRefineUnavailable || messages.planModeUnavailable);
             return false;
         }
@@ -8520,14 +8510,25 @@
         var targetScope = (extras && typeof extras.targetScope === 'string' && extras.targetScope !== '')
             ? extras.targetScope
             : ('pages.' + pageType + '.blocks.' + blockKey);
-        postForm(refinePlanPageUrl, {
+        postForm(mutatePlanBlockUrl, {
             public_id: publicId,
             page_type: pageType,
+            action: 'refine',
+            block_key: blockKey,
+            block_config: JSON.stringify({
+                mutation_note: instruction,
+                reason: instruction,
+                instruction: instruction
+            }),
             instruction: instruction,
             target_scope: targetScope
         }).then(function (data) {
             if (data && data.data && typeof data.data === 'object') {
                 hydrateWorkspaceFromState(data.data);
+            }
+            if (data && data.success && window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function' && window.PbAiOperationRunner.startFromResponse(data, 'plan')) {
+                toast('success', (data && data.message) ? String(data.message) : (messages.blockOpQueued || messages.planPageRefineDone || 'Block refine queued.'));
+                return;
             }
             if (data && data.success) {
                 toast('success', (data && data.message) ? String(data.message) : (messages.planPageRefineDone || messages.blockOpSuccess || 'Block refined.'));
@@ -9384,8 +9385,11 @@
         var previewContent = document.getElementById('pb-ai-plan-rendered-content');
         var markdownField = document.getElementById('pb-ai-plan-markdown');
         var markdownContent = document.getElementById('pb-ai-plan-md-content');
+        var renderPayload = opts.payload && typeof opts.payload === 'object'
+            ? opts.payload
+            : (currentPlanPayload || {});
         if (previewContent) {
-            previewContent.innerHTML = buildPlanPreviewHtml(markdownText, currentPlanPayload || {});
+            previewContent.innerHTML = buildPlanPreviewHtml(markdownText, renderPayload);
             bindPreviewActionButtons(previewContent);
             bindPreviewTabButtons(previewContent);
             bindPreviewSortables(previewContent);
@@ -9398,6 +9402,7 @@
             markdownContent.textContent = markdownText;
         }
         syncConfirmPlanButtonEnabled();
+        syncPlanRebuildButtonVisibility();
     }
 
     function normalizePlanMarkdownText(raw) {
@@ -9475,6 +9480,7 @@
             lastPhaseOnePlanPresent = true;
         }
         syncConfirmPlanButtonEnabled();
+        syncPlanRebuildButtonVisibility();
     }
 
     function normalizePlanFailureMessage(rawMessage) {
@@ -10237,8 +10243,33 @@
         return false;
     }
 
+    function isTaskPlanQueueOperationRunning() {
+        var active = currentActiveOperationState && typeof currentActiveOperationState === 'object'
+            ? currentActiveOperationState
+            : {};
+        var op = String(active.operation || '').toLowerCase();
+        var status = String(active.status || '').toLowerCase();
+        return op === 'task_plan' && (status === 'queued' || status === 'running');
+    }
+
+    function syncTaskPlanRegenerateButtonVisibility() {
+        var btn = document.getElementById('pb-ai-task-plan-regenerate');
+        if (!btn) {
+            return;
+        }
+        var visible = hasCachedTaskPlanForAccordion();
+        btn.classList.toggle('d-none', !visible);
+        if (visible) {
+            btn.disabled = isThemeBuildGenerationRunning()
+                || taskPlanStartRequestInFlight
+                || taskPlanSseRunning
+                || isTaskPlanQueueOperationRunning();
+        }
+    }
+
     function applyCachedTaskPlanToPanel() {
         if (!hasCachedTaskPlanForAccordion()) {
+            syncTaskPlanRegenerateButtonVisibility();
             return false;
         }
         var cp = window.__pbWorkspaceConfirmedTaskPlan && typeof window.__pbWorkspaceConfirmedTaskPlan === 'object'
@@ -10258,6 +10289,7 @@
         }
         updateTaskPlanModalContent(String((currentTaskPlanPayload && currentTaskPlanPayload.markdown) || ''));
         setTaskPlanModalProgress(messages.taskPlanGenerated, 100, true);
+        syncTaskPlanRegenerateButtonVisibility();
         return true;
     }
 
@@ -10284,6 +10316,22 @@
             });
         }
         return Promise.resolve(window.confirm(messages.taskPlanRunningMutationWarningMessage));
+    }
+
+    function confirmSchemeRebuild(message, title) {
+        var confirmMessage = String(message || '');
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            return window.BackendConfirm.show(confirmMessage, {
+                title: String(title || ''),
+                confirmText: messages.schemeRebuildButton || '方案重建',
+                cancelText: messages.continueGenerateLater || messages.laterGenerate
+            }).then(function (confirmed) {
+                return !!confirmed;
+            }).catch(function () {
+                return false;
+            });
+        }
+        return Promise.resolve(window.confirm(confirmMessage));
     }
 
     function saveTaskPlanDraftThen(callback) {
@@ -10391,6 +10439,62 @@
         }
     }
 
+    function startTaskPlanQueueRegenerationFromPanel(triggerBtn) {
+        var btn = triggerBtn || document.getElementById('pb-ai-task-plan-regenerate');
+        if (isThemeBuildGenerationRunning()) {
+            applyTaskPlanEditingLockFromActiveOperation();
+            toast('warning', <?= \json_encode((string)__('生成主题进行中，禁止修改第二阶段方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+            return Promise.resolve(false);
+        }
+        if (taskPlanStartRequestInFlight || taskPlanSseRunning) {
+            return Promise.resolve(false);
+        }
+        if (isTaskPlanQueueOperationRunning()) {
+            syncTaskPlanRegenerateButtonVisibility();
+            return Promise.resolve(false);
+        }
+        return confirmSchemeRebuild(messages.taskPlanSchemeRebuildConfirmMessage, messages.taskPlanSchemeRebuildConfirmTitle).then(function (rebuildConfirmed) {
+            if (!rebuildConfirmed) {
+                toast('info', messages.resumeDeferred);
+                return false;
+            }
+            return confirmTaskPlanMutationRiskIfNeeded();
+        }).then(function (confirmed) {
+            if (!confirmed) {
+                return false;
+            }
+            var previousConfirmedState = taskPlanConfirmedState;
+            var originalText = btn ? String(btn.textContent || '') : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = messages.taskPlanSchemeRebuilding || messages.taskPlanRegenerating;
+            }
+            taskPlanConfirmedState = false;
+            setTaskPlanMode('rebuild_task_plan');
+            clearTaskPlanPreviewActionContext({ preserveValue: false, restoreStatus: false });
+            updateTaskPlanModalContent('', { persistField: false, payload: {} });
+            setTaskPlanModalProgress(messages.taskPlanSchemeRebuilding || messages.taskPlanRegenerating, 20, false);
+
+            return startTaskPlanGenerationForBuild(btn || currentPlanTriggerButton, currentPlanSelection || selectedPageTypes(), {
+                promptMode: 'rebuild_task_plan',
+                silentSuccessToast: false,
+                silentFailure: false
+            }).then(function (started) {
+                if (!started) {
+                    taskPlanConfirmedState = previousConfirmedState;
+                }
+                return !!started;
+            }).finally(function () {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = originalText || messages.schemeRebuildButton || <?= \json_encode((string)__('方案重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+                }
+                syncTaskPlanRegenerateButtonVisibility();
+                applyTaskPlanEditingLockFromActiveOperation();
+            });
+        });
+    }
+
     function bindTaskPlanModeSwitchers() {
         var refineBtn = document.getElementById('pb-ai-task-plan-mode-refine');
         var rebuildBtn = document.getElementById('pb-ai-task-plan-mode-rebuild');
@@ -10424,9 +10528,7 @@
         if (regenerateBtn && regenerateBtn.dataset.pbBound !== '1') {
             regenerateBtn.dataset.pbBound = '1';
             regenerateBtn.addEventListener('click', function () {
-                setTaskPlanMode('rebuild_task_plan');
-                clearTaskPlanPreviewActionContext({ preserveValue: true, restoreStatus: false });
-                startTaskPlanModeStream('rebuild_task_plan', { promptText: '' });
+                startTaskPlanQueueRegenerationFromPanel(this);
             });
         }
     }
@@ -10906,8 +11008,11 @@
         var markdownText = normalizePlanMarkdownText(markdown);
         var previewContent = document.getElementById('pb-ai-task-plan-rendered-content');
         var markdownField = document.getElementById('pb-ai-task-plan-markdown');
+        var renderPayload = opts.payload && typeof opts.payload === 'object'
+            ? opts.payload
+            : (currentTaskPlanPayload || {});
         if (previewContent) {
-            previewContent.innerHTML = buildPlanPreviewHtml(markdownText, currentTaskPlanPayload || {});
+            previewContent.innerHTML = buildPlanPreviewHtml(markdownText, renderPayload);
             bindPreviewActionButtons(previewContent);
             bindPreviewTabButtons(previewContent);
             bindPreviewSortables(previewContent);
@@ -10931,6 +11036,7 @@
         if (confirmBtn) {
             confirmBtn.disabled = isThemeBuildGenerationRunning() || !enableConfirm;
         }
+        syncTaskPlanRegenerateButtonVisibility();
         applyTaskPlanEditingLockFromActiveOperation();
     }
 
@@ -11095,6 +11201,10 @@
     function startTaskPlanGenerationForBuild(triggerBtn, selectedTypes, options) {
         var normalizedTypes = ensureRequiredPageTypeSelected(selectedTypes);
         var opts = options && typeof options === 'object' ? options : {};
+        var requestedPromptMode = String(opts.promptMode || opts.prompt_mode || '').trim();
+        if (['detect_bootstrap_task_plan', 'refine_task_plan', 'rebuild_task_plan'].indexOf(requestedPromptMode) === -1) {
+            requestedPromptMode = TASK_PLAN_PROMPT_MODE_DETECT_BOOTSTRAP;
+        }
         if (!startTaskPlanUrl) {
             toast('error', messages.taskPlanStartUnavailable);
             return Promise.resolve(false);
@@ -11111,8 +11221,11 @@
         clearTaskPlanPreviewActionContext({ preserveValue: false, restoreStatus: false });
         setTaskPlanMode(currentTaskPlanMode);
         setTaskPlanModeStatus(String(taskPlanSseUrl || '').trim() ? messages.taskPlanModeReady : messages.taskPlanModeUnavailable);
-        updateTaskPlanModalContent(messages.taskPlanGenerating, { persistField: false });
-        setTaskPlanModalProgress(messages.taskPlanGenerating, 20, false);
+        var startingMessage = requestedPromptMode === 'rebuild_task_plan'
+            ? messages.taskPlanRegenerating
+            : messages.taskPlanGenerating;
+        updateTaskPlanModalContent(startingMessage, { persistField: false });
+        setTaskPlanModalProgress(startingMessage, 20, false);
 
         if (!opts.suppressAutoShowPanel) {
             showTaskPlanPanel();
@@ -11151,7 +11264,9 @@
 
         return postForm(startTaskPlanUrl, {
             public_id: publicId,
-            scope_patch: JSON.stringify(buildVirtualThemePatch())
+            scope_patch: JSON.stringify(buildVirtualThemePatch()),
+            prompt_mode: requestedPromptMode,
+            round: requestedPromptMode === 'rebuild_task_plan' ? '1' : ''
         }).then(function (data) {
             if (!data || !data.success) {
                 setTaskPlanModalProgress((data && data.message) ? String(data.message) : messages.networkError, 100, false);
@@ -11192,7 +11307,29 @@
         }).finally(settleInFlight);
     }
 
-    function startPlanGenerationForSelection(triggerBtn, selectedTypes) {
+    function startWholeSchemePlanRebuildFromPanel(triggerBtn) {
+        if (planStartRequestPending || planSseRunning) {
+            return Promise.resolve(false);
+        }
+        if (!hasCurrentPhaseOnePlanDraft()) {
+            toast('warning', messages.planStartUnavailable);
+            return Promise.resolve(false);
+        }
+        return confirmSchemeRebuild(messages.planSchemeRebuildConfirmMessage, messages.planSchemeRebuildConfirmTitle).then(function (confirmed) {
+            if (!confirmed) {
+                toast('info', messages.resumeDeferred);
+                return false;
+            }
+            var selectedTypes = Array.isArray(currentPlanSelection) && currentPlanSelection.length > 0
+                ? currentPlanSelection.slice()
+                : selectedPageTypes();
+            startPlanGenerationForSelection(triggerBtn || currentPlanTriggerButton, selectedTypes, { forceRebuild: true });
+            return true;
+        });
+    }
+
+    function startPlanGenerationForSelection(triggerBtn, selectedTypes, options) {
+        var opts = options && typeof options === 'object' ? options : {};
         var normalizedTypes = ensureRequiredPageTypeSelected(selectedTypes);
         if (!startPlanUrl) {
             toast('error', messages.planStartUnavailable);
@@ -11201,7 +11338,12 @@
         if (planStartRequestPending) {
             return;
         }
-        var previousPlanMarkdown = String((currentPlanPayload && currentPlanPayload.markdown) || '');
+        var forceRebuild = !!opts.forceRebuild;
+        var previousPlanMarkdown = forceRebuild ? '' : String((currentPlanPayload && currentPlanPayload.markdown) || '');
+        if (forceRebuild) {
+            setPlanMode('rebuild');
+            planConfirmedState = false;
+        }
         currentPlanSelection = normalizedTypes.slice();
         currentPlanTriggerButton = triggerBtn || null;
         pageTypesUserCustomized = true;
@@ -11213,26 +11355,32 @@
         }
 
         setPlanGenerationActionLock(true);
-        proceedToShowPlanModalAndRequestStart(previousPlanMarkdown);
+        proceedToShowPlanModalAndRequestStart(previousPlanMarkdown, opts);
     }
 
-    function proceedToShowPlanModalAndRequestStart(previousPlanMarkdown) {
+    function proceedToShowPlanModalAndRequestStart(previousPlanMarkdown, options) {
+        var opts = options && typeof options === 'object' ? options : {};
+        var forceRebuild = !!opts.forceRebuild;
         bindPlanModalViewSwitchers();
         bindPlanModeSwitchers();
         clearPlanPreviewActionContext({ preserveValue: false, restoreStatus: false });
-        setPlanMode(currentPlanMode);
+        setPlanMode(forceRebuild ? 'rebuild' : currentPlanMode);
         setPlanModeStatus(String(planSseUrl || '').trim() ? messages.planModeReady : messages.planModeUnavailable);
-        updatePlanModalContent(previousPlanMarkdown !== '' ? previousPlanMarkdown : messages.planGenerating, {
-            persistField: previousPlanMarkdown !== ''
+        updatePlanModalContent(forceRebuild ? '' : (previousPlanMarkdown !== '' ? previousPlanMarkdown : messages.planGenerating), {
+            persistField: !forceRebuild && previousPlanMarkdown !== '',
+            payload: forceRebuild ? {} : undefined
         });
         setPlanViewMode('pb-ai-plan-preview-content');
         setPlanPrimaryPane('preview');
-        setPlanModeStatus(messages.planSaving);
-        setPlanModalProgress(messages.planSaving, 20, false);
+        setPlanModeStatus(forceRebuild ? messages.planSchemeRebuilding : messages.planSaving);
+        setPlanModalProgress(forceRebuild ? messages.planSchemeRebuilding : messages.planSaving, 20, false);
         setPlanRetryButtonVisible(false);
         scrollIntoPlanInlinePanel();
 
         function resolveInitialPlanPromptMode() {
+            if (forceRebuild) {
+                return 'rebuild';
+            }
             var hasDraft = hasCurrentPhaseOnePlanDraft();
             if (!hasDraft) {
                 return 'rebuild';
@@ -11526,6 +11674,7 @@
         }).catch(function (error) {
             toast('error', (error && error.message) ? String(error.message) : messages.networkError);
             syncConfirmPlanButtonEnabled();
+            syncPlanRebuildButtonVisibility();
         });
     }
 
@@ -11557,6 +11706,15 @@
             });
         }
         syncConfirmPlanButtonEnabled();
+        syncPlanRebuildButtonVisibility();
+
+        var rebuildPlanBtn = document.getElementById('pb-ai-plan-rebuild-full');
+        if (rebuildPlanBtn && rebuildPlanBtn.dataset.pbBound !== '1') {
+            rebuildPlanBtn.dataset.pbBound = '1';
+            rebuildPlanBtn.addEventListener('click', function () {
+                startWholeSchemePlanRebuildFromPanel(this);
+            });
+        }
 
         var retryPlanBtn = document.getElementById('pb-ai-plan-retry-generate');
         if (retryPlanBtn && retryPlanBtn.dataset.pbBound !== '1') {

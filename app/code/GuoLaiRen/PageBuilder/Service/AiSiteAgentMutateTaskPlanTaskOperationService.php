@@ -36,6 +36,13 @@ class AiSiteAgentMutateTaskPlanTaskOperationService
                     ? 'shared_tasks'
                     : ($pageType !== '' ? 'page_tasks.' . $pageType : 'task_plan'));
         }
+        $mutation = [
+            'action' => $action,
+            'bucket' => $normalizedBucket,
+            'page_type' => $pageType,
+            'task_key' => $taskKey,
+            'task_config' => $taskConfig,
+        ];
 
         $result = ($ports->startOperation)(
             $session,
@@ -50,17 +57,24 @@ class AiSiteAgentMutateTaskPlanTaskOperationService
                     'instruction' => $instruction,
                     'target_scope' => $resolvedTargetScope,
                     'round' => $round,
-                    'mutation' => [
-                        'action' => $action,
-                        'bucket' => $normalizedBucket,
-                        'page_type' => $pageType,
-                        'task_key' => $taskKey,
-                        'task_config' => $taskConfig,
-                    ],
+                    'mutation' => $mutation,
                 ],
             ],
             '',
-            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING
+            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING,
+            [
+                'stage_scope' => 'task_plan',
+                'prompt_mode' => 'mutate_task_plan_task',
+                'action' => $action,
+                'bucket' => $normalizedBucket,
+                'page_type' => $pageType,
+                'task_key' => $taskKey,
+                'target_scope' => $resolvedTargetScope,
+                'instruction' => $instruction,
+                'round' => $round,
+                'mutation' => $mutation,
+                'task_config' => $taskConfig,
+            ]
         );
 
         if (empty($result['success'])) {
@@ -102,4 +116,3 @@ class AiSiteAgentMutateTaskPlanTaskOperationService
         ];
     }
 }
-
