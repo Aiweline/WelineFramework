@@ -563,6 +563,11 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         $pageTypes = $artifacts['execution_blueprint']['page_types'] ?? [];
         self::assertSame(['home_page', 'about_page'], $pageTypes);
         self::assertNotContains(Page::TYPE_BLOG_LIST, $pageTypes);
+        self::assertArrayNotHasKey(
+            'page_types',
+            \is_array($artifacts['derived_scope_patch'] ?? null) ? $artifacts['derived_scope_patch'] : [],
+            'Generated plan artifacts must not overwrite the user-selected page type scope.'
+        );
     }
 
     public function testRefineAddsPartnerBlockWhenInstructionRequestsPartners(): void
@@ -842,6 +847,96 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             \is_array($deleted['structured']['block_index']['flat'] ?? null) ? $deleted['structured']['block_index']['flat'] : []
         );
         self::assertStringNotContainsString('#### guarantee_block', (string)$deleted['markdown']);
+    }
+
+    public function testPlanBlockMutationSupportsSharedBlocks(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $artifacts = $service->buildPlanArtifacts([
+            'site_title' => 'Shared Mutation Test',
+            'brief_description' => 'Need shared chrome blocks that can be edited from the stage-one workbench.',
+            'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+        ], [
+            'site_title' => 'Shared Mutation Test',
+            'brief_description' => 'Need shared chrome blocks that can be edited from the stage-one workbench.',
+        ]);
+        $scopeFrom = static fn(array $payload): array => [
+            'plan_locale' => 'en_US',
+            'plan_json' => $payload['plan_json'],
+            'plan_markdown' => $payload['markdown'],
+            'plan_structured' => $payload['structured'],
+            'plan_workbench' => $payload['plan_workbench'],
+            'execution_blueprint_draft' => $payload['execution_blueprint'],
+        ];
+
+        $rebuilt = $service->mutateDraftPlanBlock($scopeFrom($artifacts), 'shared', 'rebuild', 'shared:header', [
+            'goal' => 'Updated shared header goal.',
+            'field_plan' => [
+                ['field' => 'nav_label', 'sample' => 'Updated navigation', 'reason' => 'Header copy changed'],
+            ],
+        ]);
+
+        self::assertSame('shared', (string)($rebuilt['mutation_summary']['page_type'] ?? ''));
+        self::assertSame('shared:header', (string)($rebuilt['mutation_summary']['block_key'] ?? ''));
+        self::assertSame('Updated shared header goal.', (string)($rebuilt['structured']['shared_components']['header']['goal'] ?? ''));
+        self::assertSame('Updated shared header goal.', (string)($rebuilt['block']['goal'] ?? ''));
+        self::assertArrayHasKey(
+            'shared:header',
+            \is_array($rebuilt['structured']['block_index']['flat'] ?? null) ? $rebuilt['structured']['block_index']['flat'] : []
+        );
+        $sharedContextHash = (string)($rebuilt['execution_blueprint']['shared_prompt_context']['context_hash'] ?? '');
+        self::assertNotSame('', $sharedContextHash);
+        self::assertSame(
+            $sharedContextHash,
+            (string)($rebuilt['structured']['shared_plan']['shared_prompt_context']['context_hash'] ?? '')
+        );
+
+        $created = $service->mutateDraftPlanBlock($scopeFrom($rebuilt), 'shared', 'create', '', [
+            'title' => 'Announcement Bar',
+            'goal' => 'Show a site-wide launch notice above the page content.',
+            'after_block_key' => 'shared:header',
+        ]);
+
+        self::assertSame('shared:announcement_bar', (string)($created['mutation_summary']['block_key'] ?? ''));
+        self::assertArrayHasKey('announcement_bar', $created['structured']['shared_components'] ?? []);
+        self::assertArrayHasKey(
+            'shared:announcement_bar',
+            \is_array($created['structured']['block_index']['flat'] ?? null) ? $created['structured']['block_index']['flat'] : []
+        );
+        $sharedBlockKeys = \array_values(\array_map(
+            static fn(array $block): string => (string)($block['block_key'] ?? ''),
+            \is_array($created['plan_json']['shared_blocks'] ?? null) ? $created['plan_json']['shared_blocks'] : []
+        ));
+        self::assertContains('shared:announcement_bar', $sharedBlockKeys);
+        $sharedTaskKeys = \array_values(\array_map(
+            static fn(array $task): string => (string)($task['task_key'] ?? ''),
+            \array_values(\array_filter(
+                \is_array($created['execution_blueprint']['tasks'] ?? null) ? $created['execution_blueprint']['tasks'] : [],
+                static fn(array $task): bool => (string)($task['task_type'] ?? '') === 'shared_component'
+            ))
+        ));
+        self::assertContains('shared:announcement_bar', $sharedTaskKeys);
+        $homeDisplayBlockKeys = \array_values(\array_map(
+            static fn(array $block): string => (string)($block['block_key'] ?? ''),
+            \is_array($created['plan_json']['pages'][Page::TYPE_HOME]['display_blocks'] ?? null)
+                ? $created['plan_json']['pages'][Page::TYPE_HOME]['display_blocks']
+                : []
+        ));
+        self::assertContains('shared:announcement_bar', $homeDisplayBlockKeys);
+
+        $deleted = $service->mutateDraftPlanBlock($scopeFrom($created), 'shared', 'delete', 'shared:announcement_bar');
+        self::assertArrayNotHasKey('announcement_bar', $deleted['structured']['shared_components'] ?? []);
+        self::assertArrayNotHasKey(
+            'shared:announcement_bar',
+            \is_array($deleted['structured']['block_index']['flat'] ?? null) ? $deleted['structured']['block_index']['flat'] : []
+        );
+        $deletedSharedBlockKeys = \array_values(\array_map(
+            static fn(array $block): string => (string)($block['block_key'] ?? ''),
+            \is_array($deleted['plan_json']['shared_blocks'] ?? null) ? $deleted['plan_json']['shared_blocks'] : []
+        ));
+        self::assertNotContains('shared:announcement_bar', $deletedSharedBlockKeys);
     }
 
     public function testPageBlockReorderWritesStructuredSortOrderMarkdownAndStageTwoSplitOrder(): void
@@ -1442,6 +1537,56 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertNotSame('Modern, premium, clean, and simple.', $selectionReason);
     }
 
+    public function testBuildPlanArtifactsByAiStreamRepairsEmptyThemeSelectionReason(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildAiPlanResponseWithThemeSelectionReason(''))
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+
+        $selectionReason = (string)($artifacts['plan_json']['theme_design']['selection_reason'] ?? '');
+
+        self::assertSame(1, (int)($artifacts['ai_generated'] ?? 0));
+        self::assertNotSame('', \trim($selectionReason));
+        self::assertStringContainsString('Need home and about pages with strong CTA.', $selectionReason);
+    }
+
+    public function testBuildPlanArtifactsByAiStreamRepairsInstructionLikeThemeSelectionReason(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildAiPlanResponseWithThemeSelectionReason(
+                'Explain why this theme fits the requirement.'
+            ))
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+
+        $selectionReason = (string)($artifacts['plan_json']['theme_design']['selection_reason'] ?? '');
+
+        self::assertSame(1, (int)($artifacts['ai_generated'] ?? 0));
+        self::assertStringContainsString('Need home and about pages with strong CTA.', $selectionReason);
+        self::assertNotSame('Explain why this theme fits the requirement.', $selectionReason);
+    }
+
     public function testBuildPlanArtifactsByAiStreamRepairsMissingFieldImplementationNote(): void
     {
         $service = new AiSiteExecutionBlueprintService(
@@ -1659,17 +1804,14 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         ]);
     }
 
-    public function testBuildPlanArtifactsByAiStreamRejectsHomepageHeroThatIgnoresBriefSignals(): void
+    public function testBuildPlanArtifactsByAiStreamRepairsHomepageHeroThatIgnoresBriefSignals(): void
     {
         $service = new AiSiteExecutionBlueprintService(
             new AiSitePageBlueprintService(),
             $this->createStreamingAiServiceStub($this->buildGenericAiPlanResponse())
         );
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('homepage hero does not reuse concrete nouns from the brief');
-
-        $service->buildPlanArtifactsByAiStream([
+        $artifacts = $service->buildPlanArtifactsByAiStream([
             'site_title' => 'Teenipiya websiteProfile',
             'brief_description' => '面向印度市场的棋牌游戏网站，推广热门棋牌游戏 APK 下载与玩法内容。',
             'page_types' => ['home_page'],
@@ -1680,6 +1822,12 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             'site_title' => 'Teenipiya websiteProfile',
             'brief_description' => '面向印度市场的棋牌游戏网站，推广热门棋牌游戏 APK 下载与玩法内容。',
         ]);
+
+        self::assertIsArray($artifacts['plan_json'] ?? null);
+        $heroBlock = $artifacts['plan_json']['pages']['home_page']['blocks'][0] ?? [];
+        self::assertIsArray($heroBlock);
+        $heroText = (string)\json_encode($heroBlock, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        self::assertStringContainsString('APK', $heroText);
     }
 
     private static function assertStageOneThemeDesignSchema(mixed $themeDesign): void
