@@ -888,6 +888,39 @@ HTML,
         self::assertStringContainsString("Home=>/\nAbout=>/about", (string)($config['navigation.items'] ?? ''));
     }
 
+    public function testHeaderDefaultConfigRelocalizesSharedPromptContextNavigationWhenLabelsUseWrongLanguage(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $config = (function (array $websiteProfile, array $scope, string $siteDisplayName): array {
+            return $this->buildHeaderDefaultConfig($websiteProfile, $scope, $siteDisplayName);
+        })->call(
+            $service,
+            ['site_title' => 'Teenipiya', 'default_locale' => 'en_US'],
+            [
+                'default_locale' => 'en_US',
+                'page_types' => ['home_page', 'about_page', 'contact_page'],
+                'stage2_context_snapshot' => [
+                    'shared_prompt_context' => [
+                        'header_items' => [
+                            ['label' => '首页', 'href' => '/', 'type' => 'home_page'],
+                            ['label' => '关于我们', 'href' => '/about', 'type' => 'about_page'],
+                            ['label' => '联系我们', 'href' => '/contact', 'type' => 'contact_page'],
+                        ],
+                    ],
+                ],
+            ],
+            'Teenipiya'
+        );
+
+        self::assertSame('Home', (string)($config['nav_items'][0]['text'] ?? ''));
+        self::assertSame('About', (string)($config['nav_items'][1]['text'] ?? ''));
+        self::assertSame('Contact', (string)($config['nav_items'][2]['text'] ?? ''));
+        self::assertStringContainsString("Home=>/\nAbout=>/about\nContact=>/contact", (string)($config['navigation.items'] ?? ''));
+    }
+
     public function testSectionDefaultConfigPrefersEnglishTaskPlanSamplesOverChineseBlueprintCopy(): void
     {
         $service = new AiSitePageComponentGenerationService(

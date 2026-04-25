@@ -35,7 +35,11 @@ final class AiSitePageBlueprintService
     {
         $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
         $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        $pageLabel = (string)(Page::getPageTypes()[$pageType] ?? $pageType);
+        $contentLocale = $this->resolveContentLocale($scope, $websiteProfile);
+        $pageLabel = $this->localizePageTypeLabel($pageType, $contentLocale);
+        if ($pageLabel === '') {
+            $pageLabel = (string)(Page::getPageTypes()[$pageType] ?? $pageType);
+        }
         $siteDisplayName = $this->resolveSiteDisplayName($websiteProfile, $scope);
         $pageTitle = \trim((string)($virtualPage['title'] ?? ''));
         if ($pageTitle === '') {
@@ -962,5 +966,56 @@ final class AiSitePageBlueprintService
         $domain = \trim((string)\preg_replace('/\s+/', ' ', $domain));
 
         return $domain !== '' ? $this->clipText(\ucwords($domain), 18) : '';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     */
+    private function resolveContentLocale(array $scope, array $websiteProfile): string
+    {
+        return \trim((string)(
+            $scope['content_locale']
+                ?? $websiteProfile['content_locale']
+                ?? $scope['default_locale']
+                ?? $scope['default_language']
+                ?? $websiteProfile['default_locale']
+                ?? ''
+        ));
+    }
+
+    private function localizePageTypeLabel(string $pageType, string $locale): string
+    {
+        $isZh = $this->isChineseLocale($locale);
+        $isJa = $this->isJapaneseLocale($locale);
+        $isKo = $this->isKoreanLocale($locale);
+
+        return match ($pageType) {
+            Page::TYPE_HOME => $isZh ? '首页' : ($isJa ? 'ホーム' : ($isKo ? '홈' : 'Home')),
+            Page::TYPE_ABOUT => $isZh ? '关于我们' : ($isJa ? '私たちについて' : ($isKo ? '회사 소개' : 'About')),
+            Page::TYPE_CONTACT => $isZh ? '联系我们' : ($isJa ? 'お問い合わせ' : ($isKo ? '문의하기' : 'Contact')),
+            Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => $isZh ? '博客' : ($isJa ? 'ブログ' : ($isKo ? '블로그' : 'Blog')),
+            Page::TYPE_PRIVACY_POLICY => $isZh ? '隐私政策' : ($isJa ? 'プライバシーポリシー' : ($isKo ? '개인정보처리방침' : 'Privacy Policy')),
+            Page::TYPE_TERMS_OF_SERVICE => $isZh ? '服务条款' : ($isJa ? '利用規約' : ($isKo ? '이용약관' : 'Terms of Service')),
+            Page::TYPE_REFUND_POLICY => $isZh ? '退款政策' : ($isJa ? '返金ポリシー' : ($isKo ? '환불 정책' : 'Refund Policy')),
+            Page::TYPE_SHIPPING_POLICY => $isZh ? '配送政策' : ($isJa ? '配送ポリシー' : ($isKo ? '배송 정책' : 'Shipping Policy')),
+            Page::TYPE_COOKIE_POLICY => $isZh ? 'Cookie 政策' : ($isJa ? 'Cookie ポリシー' : ($isKo ? '쿠키 정책' : 'Cookie Policy')),
+            default => '',
+        };
+    }
+
+    private function isChineseLocale(string $locale): bool
+    {
+        return \preg_match('/^(zh|zh[_-]hans|zh[_-]cn|zh[_-]sg)/i', $locale) === 1;
+    }
+
+    private function isJapaneseLocale(string $locale): bool
+    {
+        return \preg_match('/^ja(?:[_-]|$)/i', $locale) === 1;
+    }
+
+    private function isKoreanLocale(string $locale): bool
+    {
+        return \preg_match('/^ko(?:[_-]|$)/i', $locale) === 1;
     }
 }

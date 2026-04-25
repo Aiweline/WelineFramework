@@ -260,7 +260,7 @@ class AiSiteHtmlBlocksBuildService
             [
                 'site_title' => (string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
                 'site_tagline' => (string)($websiteProfile['site_tagline'] ?? $scope['site_tagline'] ?? ''),
-                'current_page_label' => (string)(Page::getPageTypes()[$pageType] ?? $pageType),
+                'current_page_label' => $this->resolveScopedPageTypeLabel($scope, $pageType),
                 'nav_items' => $this->buildNavItems($scope),
             ],
             $websiteProfile,
@@ -1175,6 +1175,7 @@ class AiSiteHtmlBlocksBuildService
     private function buildFooterLinkGroups(array $scope): array
     {
         $allItems = $this->buildScopedNavItems($scope, false);
+        $locale = $this->resolveContentLocale($scope);
         $legalTypes = [
             Page::TYPE_PRIVACY_POLICY,
             Page::TYPE_TERMS_OF_SERVICE,
@@ -1211,11 +1212,11 @@ class AiSiteHtmlBlocksBuildService
         }
 
         return [
-            'column1_title' => 'Featured Pages',
+            'column1_title' => $this->localizeBuildText('featured_pages', $locale),
             'column1_items' => $featured,
-            'column2_title' => 'Policy Info',
+            'column2_title' => $this->localizeBuildText('policy_info', $locale),
             'column2_items' => $legal,
-            'column3_title' => 'All Pages',
+            'column3_title' => $this->localizeBuildText('all_pages', $locale),
             'column3_items' => $allItems,
         ];
     }
@@ -1227,7 +1228,7 @@ class AiSiteHtmlBlocksBuildService
     private function buildScopedNavItems(array $scope, bool $headerOnly): array
     {
         $pageTypes = \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : [Page::TYPE_HOME, Page::TYPE_ABOUT, Page::TYPE_CONTACT];
-        $labels = Page::getPageTypes();
+        $locale = $this->resolveContentLocale($scope);
         $items = [];
 
         foreach ($pageTypes as $pageType) {
@@ -1240,7 +1241,7 @@ class AiSiteHtmlBlocksBuildService
 
             $href = $pageType === Page::TYPE_HOME ? '/' : '/' . Page::getDefaultHandleForType($pageType);
             $items[] = [
-                'label' => (string)($labels[$pageType] ?? $pageType),
+                'label' => $this->resolveScopedPageTypeLabel($scope, $pageType),
                 'href' => $href,
                 'active' => $pageType === Page::TYPE_HOME,
                 'type' => $pageType,
@@ -1248,7 +1249,7 @@ class AiSiteHtmlBlocksBuildService
         }
 
         if ($items === []) {
-            $items[] = ['label' => '首页', 'href' => '/', 'active' => true, 'type' => Page::TYPE_HOME];
+            $items[] = ['label' => $this->localizePageTypeLabel(Page::TYPE_HOME, $locale) ?: 'Home', 'href' => '/', 'active' => true, 'type' => Page::TYPE_HOME];
         }
 
         if (!$headerOnly) {
@@ -1280,7 +1281,7 @@ class AiSiteHtmlBlocksBuildService
         }
         if ($policyTarget !== null) {
             $headerItems[] = [
-                'label' => 'Policy Info',
+                'label' => $this->localizeBuildText('policy_info', $locale),
                 'href' => (string)($policyTarget['href'] ?? '#'),
                 'active' => false,
                 'type' => 'policy_info',
@@ -1311,6 +1312,101 @@ class AiSiteHtmlBlocksBuildService
         }
 
         return \array_slice($headerItems !== [] ? $headerItems : $items, 0, 5);
+    }
+
+    private function resolveScopedPageTypeLabel(array $scope, string $pageType): string
+    {
+        $locale = $this->resolveContentLocale($scope);
+        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
+        $title = \trim((string)($virtualPages[$pageType]['title'] ?? ''));
+        if ($title !== '' && !($this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($title))) {
+            return $title;
+        }
+
+        $localized = $this->localizePageTypeLabel($pageType, $locale);
+        if ($localized !== '') {
+            return $localized;
+        }
+
+        return (string)(Page::getPageTypes()[$pageType] ?? $pageType);
+    }
+
+    private function resolveContentLocale(array $scope): string
+    {
+        $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+
+        return \trim((string)(
+            $scope['content_locale']
+                ?? $websiteProfile['content_locale']
+                ?? $scope['default_locale']
+                ?? $scope['default_language']
+                ?? $websiteProfile['default_locale']
+                ?? ''
+        ));
+    }
+
+    private function localizePageTypeLabel(string $pageType, string $locale): string
+    {
+        $isZh = $this->isChineseLocale($locale);
+        $isJa = $this->isJapaneseLocale($locale);
+        $isKo = $this->isKoreanLocale($locale);
+
+        return match ($pageType) {
+            Page::TYPE_HOME => $isZh ? '首页' : ($isJa ? 'ホーム' : ($isKo ? '홈' : 'Home')),
+            Page::TYPE_ABOUT => $isZh ? '关于我们' : ($isJa ? '私たちについて' : ($isKo ? '회사 소개' : 'About')),
+            Page::TYPE_CONTACT => $isZh ? '联系我们' : ($isJa ? 'お問い合わせ' : ($isKo ? '문의하기' : 'Contact')),
+            Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => $isZh ? '博客' : ($isJa ? 'ブログ' : ($isKo ? '블로그' : 'Blog')),
+            Page::TYPE_PRIVACY_POLICY => $isZh ? '隐私政策' : ($isJa ? 'プライバシーポリシー' : ($isKo ? '개인정보처리방침' : 'Privacy Policy')),
+            Page::TYPE_TERMS_OF_SERVICE => $isZh ? '服务条款' : ($isJa ? '利用規約' : ($isKo ? '이용약관' : 'Terms of Service')),
+            Page::TYPE_REFUND_POLICY => $isZh ? '退款政策' : ($isJa ? '返金ポリシー' : ($isKo ? '환불 정책' : 'Refund Policy')),
+            Page::TYPE_SHIPPING_POLICY => $isZh ? '配送政策' : ($isJa ? '配送ポリシー' : ($isKo ? '배송 정책' : 'Shipping Policy')),
+            Page::TYPE_COOKIE_POLICY => $isZh ? 'Cookie 政策' : ($isJa ? 'Cookie ポリシー' : ($isKo ? '쿠키 정책' : 'Cookie Policy')),
+            default => '',
+        };
+    }
+
+    private function localizeBuildText(string $key, string $locale): string
+    {
+        $isZh = $this->isChineseLocale($locale);
+        $isJa = $this->isJapaneseLocale($locale);
+        $isKo = $this->isKoreanLocale($locale);
+
+        return match ($key) {
+            'policy_info' => $isZh ? '政策信息' : ($isJa ? 'ポリシー' : ($isKo ? '정책 정보' : 'Policy Info')),
+            'featured_pages' => $isZh ? '重点页面' : ($isJa ? '注目ページ' : ($isKo ? '주요 페이지' : 'Featured Pages')),
+            'all_pages' => $isZh ? '全部页面' : ($isJa ? 'すべてのページ' : ($isKo ? '모든 페이지' : 'All Pages')),
+            default => $key,
+        };
+    }
+
+    private function isChineseLocale(string $locale): bool
+    {
+        return \preg_match('/^(zh|zh[_-]hans|zh[_-]cn|zh[_-]sg)/i', $locale) === 1;
+    }
+
+    private function isJapaneseLocale(string $locale): bool
+    {
+        return \preg_match('/^ja(?:[_-]|$)/i', $locale) === 1;
+    }
+
+    private function isKoreanLocale(string $locale): bool
+    {
+        return \preg_match('/^ko(?:[_-]|$)/i', $locale) === 1;
+    }
+
+    private function isNonCjkLocale(string $locale): bool
+    {
+        return $locale !== '' && !$this->isChineseLocale($locale) && !$this->isJapaneseLocale($locale) && !$this->isKoreanLocale($locale);
+    }
+
+    private function hasMeaningfulCjkContent(string $value): bool
+    {
+        return \preg_match('/[\x{3040}-\x{30ff}\x{3400}-\x{9fff}\x{ac00}-\x{d7af}]/u', $value) === 1;
+    }
+
+    private function hasAnyCjkContent(string $value): bool
+    {
+        return \preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $value) === 1;
     }
 
     /**

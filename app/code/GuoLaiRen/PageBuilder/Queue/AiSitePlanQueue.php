@@ -123,7 +123,7 @@ class AiSitePlanQueue implements QueueInterface
 
             /** @var AiSiteAgent $controller */
             $controller = AiSiteAgentForQueue::create();
-            $claim = $this->invokePrivate($controller, 'claimActiveOperationExecution', [$session, $adminId, $effectiveExecutionToken, 'plan']);
+            $claim = $this->invokePrivate($controller, 'claimActiveOperationExecution', [$session, $adminId, $effectiveExecutionToken, 'plan', 'queue']);
             if (!\is_array($claim) || !($claim['ok'] ?? false)) {
                 if ((string)($claim['reason'] ?? '') === 'duplicate_stream') {
                     $this->queueTrace($sse, '认领跳过：duplicate_stream（重复阶段一生成）');
@@ -137,6 +137,8 @@ class AiSitePlanQueue implements QueueInterface
             $this->invokePrivate($controller, 'runPlanOperation', [$sse, $session, $adminId]);
             $this->queueTrace($sse, 'runPlanOperation 已返回。');
             $this->queueTrace($sse, '队列执行成功：第一阶段方案生成完成。');
+            $sse->complete();
+            $this->markQueueDone($queue, '第一阶段方案生成完成。');
 
             return '第一阶段方案生成完成。';
         } catch (\Throwable $throwable) {
@@ -242,9 +244,13 @@ class AiSitePlanQueue implements QueueInterface
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
         $scope = $scopeService->normalizeScope($fresh->getScopeArray());
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $activeStatus = \trim((string)($active['status'] ?? ''));
+        $activeQueueId = (int)($active['queue_id'] ?? 0);
         if (
             (string)($active['operation'] ?? '') === $operation
             && (string)($active['execution_token'] ?? '') === $executionToken
+            && \in_array($activeStatus, ['queued', 'running'], true)
+            && ($activeQueueId === $queueId || $queueId <= 0)
         ) {
             return $fresh;
         }
@@ -291,6 +297,33 @@ class AiSitePlanQueue implements QueueInterface
         w_query('queue', 'update', [
             'queue_id' => $queueId,
             'patch' => [
+                'process' => $message,
+                'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
+            ],
+        ]);
+        $this->mirrorToCli($line);
+    }
+
+    private function markQueueDone(Queue &$queue, string $message): void
+    {
+        $queueId = (int)$queue->getId();
+        if ($queueId <= 0) {
+            return;
+        }
+
+        $row = w_query('queue', 'get', ['queue_id' => $queueId]);
+        if (!\is_array($row) || $row === []) {
+            return;
+        }
+
+        $line = '[' . \date('H:i:s') . '] QUEUE_DONE ' . $message;
+        $existing = (string)($row['result'] ?? '');
+        w_query('queue', 'update', [
+            'queue_id' => $queueId,
+            'patch' => [
+                'status' => Queue::status_done,
+                'pid' => 0,
+                'finished' => 1,
                 'process' => $message,
                 'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
             ],

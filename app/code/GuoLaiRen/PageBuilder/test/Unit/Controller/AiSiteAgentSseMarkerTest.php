@@ -315,6 +315,30 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame(780, $panelUpdateEvents[0]['data']['queue_info']['snapshot']['token_usage']['total_tokens']);
     }
 
+    public function testDoneQueueSuppressesReplayedObservedFailureEvents(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(AiSiteAgent::class, 'shouldSuppressObservedErrorEventForDoneQueue');
+        $method->setAccessible(true);
+
+        self::assertTrue((bool)$method->invoke($controller, ['event_type' => 'operation_failed'], 'error', ['status' => 'done']));
+        self::assertTrue((bool)$method->invoke($controller, ['event_type' => 'error'], 'error', ['status' => 'done']));
+        self::assertFalse((bool)$method->invoke($controller, ['event_type' => 'progress'], 'info', ['status' => 'done']));
+        self::assertFalse((bool)$method->invoke($controller, ['event_type' => 'operation_failed'], 'error', ['status' => 'running']));
+        self::assertFalse((bool)$method->invoke($controller, ['event_type' => 'operation_failed'], 'error', null));
+
+        $controllerSource = \file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        self::assertIsString($controllerSource);
+        self::assertStringContainsString(
+            'forwardObservedOperationEvents($sse, $session, $adminId, $recentEvents, $lastEventId, $initialQueueRow)',
+            $controllerSource
+        );
+        self::assertStringContainsString(
+            'forwardObservedOperationEvents($sse, $session, $adminId, $newEvents, $lastEventId, $queueRow)',
+            $controllerSource
+        );
+    }
+
     public function testOperationSseClaimedDispatcherIncludesPlanBranch(): void
     {
         $controllerSource = \file_get_contents(
@@ -356,6 +380,64 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('__pbPhase1TaskProgress.syncFromSsePayload(operation, payload || {}, eventKind)', $runtimeScript);
     }
 
+    public function testRuntimeStagePresentationLetsDoneQueueOverrideStaleActiveFailure(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 3);
+        $scriptPaths = [
+            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml',
+            $moduleRoot . '/view/tpl/zh_Hans_CN/templates/Backend/AiSiteAgent/workspace/com_script-runtime.phtml',
+        ];
+
+        foreach ($scriptPaths as $scriptPath) {
+            $runtimeScript = \file_get_contents($scriptPath);
+
+            self::assertIsString($runtimeScript);
+            self::assertStringContainsString("['done', 'complete', 'completed']", $runtimeScript);
+
+            $planDonePos = \strpos($runtimeScript, 'if (isStageQueueDone(planQueueStatus))');
+            $planErrorPos = \strpos($runtimeScript, "if (activeOp === 'plan' && activeStatus === 'error')");
+            $taskDonePos = \strpos($runtimeScript, 'if (isStageQueueDone(taskPlanQueueStatus))');
+            $taskErrorPos = \strpos($runtimeScript, "if (activeOp === 'task_plan' && activeStatus === 'error')");
+            $buildDonePos = \strpos($runtimeScript, 'if (isStageQueueDone(buildQueueStatus))');
+            $buildErrorPos = \strpos($runtimeScript, "if (activeOp === 'build' && activeStatus === 'error')");
+
+            self::assertNotFalse($planDonePos, $scriptPath);
+            self::assertNotFalse($planErrorPos, $scriptPath);
+            self::assertNotFalse($taskDonePos, $scriptPath);
+            self::assertNotFalse($taskErrorPos, $scriptPath);
+            self::assertNotFalse($buildDonePos, $scriptPath);
+            self::assertNotFalse($buildErrorPos, $scriptPath);
+
+            self::assertLessThan($planErrorPos, $planDonePos, $scriptPath);
+            self::assertLessThan($taskErrorPos, $taskDonePos, $scriptPath);
+            self::assertLessThan($buildErrorPos, $buildDonePos, $scriptPath);
+        }
+    }
+
+    public function testPageTypeSelectionDoesNotLetDefaultServerStateOverwriteLocalCustomChoice(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 3);
+        $mainScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $controllerSource = \file_get_contents($moduleRoot . '/Controller/Backend/AiSiteAgent.php');
+
+        self::assertIsString($mainScript);
+        self::assertIsString($controllerSource);
+        self::assertStringContainsString('var pageTypesSelectionLocallyCustomized = !!pageTypesUserCustomized;', $mainScript);
+        self::assertStringContainsString('var skipServerOverwrite = pageTypesSelectionLocallyCustomized && !incomingMatchesCurrentSelection;', $mainScript);
+        self::assertStringContainsString("page_types_user_customized: (pageTypesUserCustomized || pageTypesSelectionLocallyCustomized) ? 1 : 0", $mainScript);
+        self::assertStringContainsString('serverPageTypesFallback = normalizedTypes.slice();', $mainScript);
+        self::assertStringContainsString('$scopePatch[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;', $controllerSource);
+        self::assertStringNotContainsString("\$scopePatch['page_types'] = \$executionBlueprintDraft['page_types'];", $controllerSource);
+        $flagPos = \strpos($controllerSource, '$scopePatch[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;');
+        $normalizePos = \strpos($controllerSource, '$scope = $this->scopeCompatibilityService->normalizeScope', $flagPos);
+        self::assertNotFalse($flagPos);
+        self::assertNotFalse($normalizePos);
+        self::assertLessThan(
+            $normalizePos,
+            $flagPos
+        );
+    }
+
     public function testQueueInfoListsExposeTokenUsageColumns(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
@@ -375,6 +457,21 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('pb-ai-plan-queue-token-summary', $phaseOneScript);
         self::assertStringContainsString('pb-ai-phase2-queue-token-summary', $phaseTwoScript);
         self::assertStringContainsString('pickTokenCount(usage, [\'input_tokens\', \'prompt_tokens\'])', $phaseTwoScript);
+    }
+
+    public function testPlanQueueDuplicateStreamRequiresPersistedStageOnePlan(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 3);
+        $controllerSource = \file_get_contents($moduleRoot . '/Controller/Backend/AiSiteAgent.php');
+        $planQueueSource = \file_get_contents($moduleRoot . '/Queue/AiSitePlanQueue.php');
+
+        self::assertIsString($controllerSource);
+        self::assertIsString($planQueueSource);
+        self::assertStringContainsString("string \$claimSource = 'operation_sse'", $controllerSource);
+        self::assertStringContainsString("&& \$claimSource === 'queue'", $controllerSource);
+        self::assertStringContainsString('&& !$this->scopeHasPersistedStageOnePlan($scope)', $controllerSource);
+        self::assertStringContainsString("'claimed_by' => \$claimSource", $controllerSource);
+        self::assertStringContainsString('[$session, $adminId, $effectiveExecutionToken, \'plan\', \'queue\']', $planQueueSource);
     }
 
     public function testStageTwoTaskProgressUiSupportsRealtimeSemanticStatuses(): void
@@ -425,10 +522,9 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('window.PbAiWorkspacePreview.switchPreviewByType(pageType);', $runtimeScript);
         self::assertStringContainsString('$groupSummaryLabel = (string)__(\'待处理\');', $layout);
         self::assertStringContainsString('htmlspecialchars($groupSummaryLabel', $layout);
-        self::assertStringContainsString(
-            "'总任务',\n            '待处理',\n            '排队中',\n            '进行中',\n            '已完成'",
-            $mainScript
-        );
+        foreach (['总任务', '待处理', '排队中', '进行中', '已完成'] as $taskMetricLabel) {
+            self::assertStringContainsString("'" . $taskMetricLabel . "'", $mainScript);
+        }
         self::assertStringContainsString('if (doneEl) { doneEl.textContent = String(counts.done || 0); }', $runtimeScript);
         self::assertStringContainsString('private function emitObservedBuildTaskProgressSnapshot', $controllerSource);
         self::assertStringContainsString('private function buildTaskProgressSnapshotPayload', $controllerSource);
@@ -583,7 +679,12 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             'virtual_theme_id' => 11,
             'draft_website_id' => 9,
             'preview_page_type' => 'home_page',
+            'plan_confirmed' => 0,
+            'plan_confirmed_at' => '',
+            'has_execution_blueprint' => true,
             'task_plan_confirmed' => 0,
+            'task_plan_confirmed_at' => '',
+            'has_virtual_theme_plan' => false,
             'active_operation' => [
                 'operation' => 'plan',
                 'status' => 'running',
@@ -653,6 +754,12 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame(1200, $pollingPayload['token_usage']['input_tokens']);
         self::assertSame(340, $pollingPayload['token_usage']['output_tokens']);
         self::assertSame(1540, $pollingPayload['token_usage']['total_tokens']);
+        self::assertSame(0, $ssePayload['plan_confirmed']);
+        self::assertSame('', $ssePayload['plan_confirmed_at']);
+        self::assertTrue($ssePayload['has_execution_blueprint']);
+        self::assertSame(0, $ssePayload['task_plan_confirmed']);
+        self::assertSame('', $ssePayload['task_plan_confirmed_at']);
+        self::assertFalse($ssePayload['has_virtual_theme_plan']);
     }
 
     public function testTaskPlanRecoveryNoticeOverridesSettledDoneQueue(): void
