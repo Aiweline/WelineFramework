@@ -21,6 +21,10 @@ final class AiSiteWorkbenchBlockSseChatIntegrationTest extends AbstractAiSiteWor
         $publicId = (string)($createPayload['public_id'] ?? '');
         self::assertNotSame('', $publicId);
 
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+        self::assertTrue($this->sessionService->setStage($session->getId(), 1, 'visual_edit'));
+
         $this->prepareBackendRequest(
             '/pagebuilder/backend/ai-site-agent/workspace',
             'GET',
@@ -34,8 +38,15 @@ final class AiSiteWorkbenchBlockSseChatIntegrationTest extends AbstractAiSiteWor
 
         self::assertIsString($html);
         self::assertStringContainsString('var pendingBlockSseResult = null;', $html);
+        self::assertStringContainsString('var pendingBlockSseStart = null;', $html);
         self::assertStringContainsString('blockSseDoneConfirm', $html);
+        self::assertStringContainsString('id="pb-ai-block-sse-confirm-start"', $html);
         self::assertStringContainsString('id="pb-ai-block-sse-apply"', $html);
+        self::assertStringContainsString('function confirmPendingBlockSseStart()', $html);
+        self::assertStringContainsString("startBtn.addEventListener('click', confirmPendingBlockSseStart);", $html);
+        self::assertStringContainsString("terminal.on('open', function ()", $html);
+        self::assertStringContainsString('confirmLabel: messages.blockSseConfirmRebuild', $html);
+        self::assertStringContainsString('confirmLabel: messages.blockSseConfirmRefine', $html);
         self::assertStringContainsString("pendingBlockSseResult = payload && typeof payload === 'object' ? payload : null;", $html);
         self::assertStringContainsString("applyBtn.classList.remove('d-none');", $html);
         self::assertStringContainsString("contextEl.textContent = messages.blockSseDoneConfirm;", $html);

@@ -30,6 +30,10 @@ class SseTerminalTaglibTest extends TestCore
         $this->assertStringContainsString('keepStatus', $html);
         $this->assertStringContainsString('manualStopRequested', $html);
         $this->assertStringContainsString("setStatus('connecting'", $html);
+        $this->assertStringContainsString(
+            "if (eventName === 'error' && (typeof e.data !== 'string' || e.data === ''))",
+            $html
+        );
     }
 
     public function testSseTerminalMarkupRoutesEventsThroughSingleDispatchPath(): void

@@ -1014,7 +1014,9 @@ PHTML;
         $component->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $themeId)
             ->where(VirtualThemeComponent::schema_fields_COMPONENT_CODE, $componentCode)
             ->where(VirtualThemeComponent::schema_fields_AREA, $area)
-            ->find();
+            ->order(VirtualThemeComponent::schema_fields_ID, 'DESC')
+            ->find()
+            ->fetch();
 
         return (int)$component->getId() > 0;
     }
@@ -1027,8 +1029,9 @@ PHTML;
         $component->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $themeId)
             ->where(VirtualThemeComponent::schema_fields_AREA, VirtualThemeComponent::AREA_FRONTEND)
             ->where(VirtualThemeComponent::schema_fields_CATEGORY, $category)
-            ->order(VirtualThemeComponent::schema_fields_ID, 'ASC')
-            ->find();
+            ->order(VirtualThemeComponent::schema_fields_ID, 'DESC')
+            ->find()
+            ->fetch();
 
         return $component->getId() ? $component : null;
     }
@@ -1049,7 +1052,9 @@ PHTML;
         $component->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $themeId)
             ->where(VirtualThemeComponent::schema_fields_COMPONENT_CODE, $componentCode)
             ->where(VirtualThemeComponent::schema_fields_AREA, $area)
-            ->find();
+            ->order(VirtualThemeComponent::schema_fields_ID, 'DESC')
+            ->find()
+            ->fetch();
 
         if (!$component->getId()) {
             $component->setVirtualThemeId($themeId)
@@ -1092,7 +1097,8 @@ PHTML;
         $lastVersion->clearData()->clearQuery();
         $lastVersion->where(VirtualThemeComponentVersion::schema_fields_COMPONENT_ID, $component->getId())
             ->order(VirtualThemeComponentVersion::schema_fields_VERSION_NO, 'DESC')
-            ->find();
+            ->find()
+            ->fetch();
         if ($lastVersion->getId()) {
             $lastVersionNo = $lastVersion->getVersionNo() + 1;
         }
@@ -1119,7 +1125,9 @@ PHTML;
         $themeLayout->where(VirtualThemeLayout::schema_fields_VIRTUAL_THEME_ID, $themeId)
             ->where(VirtualThemeLayout::schema_fields_PAGE_TYPE, $pageType)
             ->where(VirtualThemeLayout::schema_fields_AREA, 'frontend')
-            ->find();
+            ->order(VirtualThemeLayout::schema_fields_ID, 'DESC')
+            ->find()
+            ->fetch();
 
         $themeLayout->setVirtualThemeId($themeId)
             ->setPageType($pageType)
