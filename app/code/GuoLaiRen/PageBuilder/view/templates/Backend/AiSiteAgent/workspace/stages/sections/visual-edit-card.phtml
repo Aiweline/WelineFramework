@@ -85,6 +85,54 @@
 
         </div>
 
+        <?php
+        $pbAiVisualEditCanEnterPublish = !empty($state['can_publish']);
+        $pbAiVisualEditPublishBadge = $pbAiVisualEditCanEnterPublish
+            ? (string)__('可进入第三阶段')
+            : (string)__('等待构建完成');
+        $pbAiVisualEditPublishTitle = $pbAiVisualEditCanEnterPublish
+            ? (string)__('虚拟主题已就绪，下一步进入确认发布')
+            : (string)__('第三阶段确认发布入口会在虚拟主题就绪后开放');
+        $pbAiVisualEditPublishHint = $pbAiVisualEditCanEnterPublish
+            ? (string)__('进入第三阶段后可先运行发布前预检，再确认准备发布。')
+            : (string)__('当前仍可继续预览和编辑；当虚拟主题构建完成后，这里会直接提供进入第三阶段的按钮。');
+        ?>
+
+        <div class="border rounded p-3 mb-3 bg-light" id="pb-ai-publish-stage-entry-card">
+
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+
+                <div class="min-w-0">
+
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+
+                        <span class="badge <?= $pbAiVisualEditCanEnterPublish ? 'bg-success' : 'bg-secondary' ?>" id="pb-ai-publish-stage-entry-badge"><?= htmlspecialchars($pbAiVisualEditPublishBadge, ENT_QUOTES, 'UTF-8') ?></span>
+
+                        <span class="small text-muted"><?= htmlspecialchars((string)__('阶段三'), ENT_QUOTES, 'UTF-8') ?></span>
+
+                    </div>
+
+                    <div class="fw-semibold mb-1" id="pb-ai-publish-stage-entry-title"><?= htmlspecialchars($pbAiVisualEditPublishTitle, ENT_QUOTES, 'UTF-8') ?></div>
+
+                    <div class="small text-muted" id="pb-ai-publish-stage-entry-hint"><?= htmlspecialchars($pbAiVisualEditPublishHint, ENT_QUOTES, 'UTF-8') ?></div>
+
+                </div>
+
+                <div class="d-flex flex-wrap align-items-center gap-2">
+
+                    <button type="button"
+                            class="btn btn-primary"
+                            id="pb-ai-go-publish-stage"
+                            data-stage="publish"<?= $pbAiVisualEditCanEnterPublish ? '' : ' disabled aria-disabled="true"' ?>>
+                        <i class="mdi mdi-flag-checkered me-1"></i><?= htmlspecialchars((string)__('进入第三阶段确认发布'), ENT_QUOTES, 'UTF-8') ?>
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
         <?php if ($pagesByType !== []): ?>
 
         <div class="border rounded p-3 mb-3">

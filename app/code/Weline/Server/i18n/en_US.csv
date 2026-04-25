@@ -745,6 +745,8 @@ env.wls,env.wls
 "仅 HTTP，不启用 HTTPS（Windows 下可不装 event 扩展）","仅 HTTP，不启用 HTTPS（Windows 下可不装 event 扩展）"
 "SSL 证书文件路径（启用 HTTPS）","SSL 证书文件路径（启用 HTTPS）"
 "SSL 私钥文件路径（启用 HTTPS）","SSL 私钥文件路径（启用 HTTPS）"
+"Worker 进程 PHP memory_limit（如 512M，数字按 MB 处理，-1 为不限）","Worker 进程 PHP memory_limit（如 512M，数字按 MB 处理，-1 为不限）"
+"Dispatcher 进程 PHP memory_limit（默认跟随 Worker）","Dispatcher 进程 PHP memory_limit（默认跟随 Worker）"
 "直连模式：多 Worker 直接监听同一端口（Linux/Mac SO_REUSEPORT）","直连模式：多 Worker 直接监听同一端口（Linux/Mac SO_REUSEPORT）"
 "独立端口模式：禁用 Dispatcher，每个 Worker 使用独立端口","独立端口模式：禁用 Dispatcher，每个 Worker 使用独立端口"
 "强制 Dispatcher 模式（默认）","强制 Dispatcher 模式（默认）"
@@ -771,6 +773,8 @@ env.wls,env.wls
 "默认监听 80/443 省去 Nginx；HTTPS 时自动用 443，可 -p 9981 等改端口；Linux/Mac 特权端口需 root/setcap","默认监听 80/443 省去 Nginx；HTTPS 时自动用 443，可 -p 9981 等改端口；Linux/Mac 特权端口需 root/setcap"
 "HTTP 重定向端口","HTTP 重定向端口"
 "固定规则：仅 HTTPS 主端口为 443 时启动 HTTP:80 重定向 Worker；非 443 时不启动独立重定向 Worker","固定规则：仅 HTTPS 主端口为 443 时启动 HTTP:80 重定向 Worker；非 443 时不启动独立重定向 Worker"
+"Worker 内存","Worker 内存"
+"可通过 wls.worker_memory_limit 或 --worker-memory-limit 设置；wls.dispatcher_memory_limit 未设置时跟随 Worker","可通过 wls.worker_memory_limit 或 --worker-memory-limit 设置；wls.dispatcher_memory_limit 未设置时跟随 Worker"
 启动默认实例,"Start default instance"
 "使用 CLI 服务器","Use CLI server"
 启动命名实例（首次需指定端口）,启动命名实例（首次需指定端口）
@@ -781,6 +785,7 @@ CPU密集模式,CPU密集模式
 强制重启（停机型更新）,强制重启（停机型更新）
 "启用 HTTPS","启用 HTTPS"
 "Windows 无 HTTPS 运行","Windows 无 HTTPS 运行"
+"设置 Worker 内存","设置 Worker 内存"
 策略模式（跨平台优化）,策略模式（跨平台优化）
 查看所有实例状态,查看所有实例状态
 停止指定实例,"Stop specific instance"
