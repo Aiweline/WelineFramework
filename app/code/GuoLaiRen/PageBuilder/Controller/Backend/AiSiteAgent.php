@@ -308,8 +308,8 @@ class AiSiteAgent extends BaseController
         $this->assign('start_build_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-build'));
         $this->assign('start_regenerate_page_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-regenerate-page'));
         $this->assign('start_refine_component_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-refine-component'));
-        $this->assign('start_block_refine_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-block-refine-sse'));
-        $this->assign('start_block_regenerate_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-block-regenerate-sse'));
+        $this->assign('start_block_refine_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/block-refine-sse'));
+        $this->assign('start_block_regenerate_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/block-regenerate-sse'));
         $this->assign('update_block_config_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-update-block-config'));
         $this->assign('start_publish_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-publish'));
         $this->assign('operation_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/operation-sse', ['public_id' => $publicId]));
@@ -724,8 +724,12 @@ SCRIPT;
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '区块 AI 微调（SSE）', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postBlockRefineSse(): void { $this->handleBlockRegenerateSse(true); }
+    public function getBlockRefineSse(): void { $this->handleBlockRegenerateSse(true); }
+    public function getPostBlockRefineSse(): void { $this->handleBlockRegenerateSse(true); }
 
     public function postBlockRegenerateSse(): void { $this->handleBlockRegenerateSse(false); }
+    public function getBlockRegenerateSse(): void { $this->handleBlockRegenerateSse(false); }
+    public function getPostBlockRegenerateSse(): void { $this->handleBlockRegenerateSse(false); }
 
     public function postUpdateBlockConfig(): string { return $this->handleUpdateBlockConfig(); }
 
@@ -2528,12 +2532,23 @@ SCRIPT;
             return $this->jsonError('INVALID_PARAMS', (string)__('所选页面类型不在当前工作区中'), self::PARAMS_REGENERATE);
         }
 
-        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope, false);
-        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        $sectionRefinements = \is_array($virtualPage['section_refinements'] ?? null) ? $virtualPage['section_refinements'] : [];
-        $sectionRefinements[$componentCode] = $instruction;
-        $virtualPage['section_refinements'] = $sectionRefinements;
-        $virtualPages[$pageType] = $virtualPage;
+        $sharedRegion = $this->resolveSharedComponentRegionForComponentCode($pageType, $componentCode);
+        $scopePatch = [];
+        if ($sharedRegion !== '') {
+            $sharedRefinements = \is_array($scope['shared_component_refinements'] ?? null)
+                ? $scope['shared_component_refinements']
+                : [];
+            $sharedRefinements[$sharedRegion] = $instruction;
+            $scopePatch['shared_component_refinements'] = $sharedRefinements;
+        } else {
+            $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope, false);
+            $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
+            $sectionRefinements = \is_array($virtualPage['section_refinements'] ?? null) ? $virtualPage['section_refinements'] : [];
+            $sectionRefinements[$componentCode] = $instruction;
+            $virtualPage['section_refinements'] = $sectionRefinements;
+            $virtualPages[$pageType] = $virtualPage;
+            $scopePatch['virtual_pages_by_type'] = $virtualPages;
+        }
 
         $label = $componentLabel !== '' ? $componentLabel : $componentCode;
         $this->appendWorkspaceEvent(
@@ -2543,11 +2558,12 @@ SCRIPT;
             'component_refine_requested',
             (string)__('已记录区块微调：%{component}', ['component' => $label]),
             [
-                'operation' => 'regenerate_page',
+                'operation' => 'block_regenerate',
                 'page_type' => $pageType,
                 'details' => [
                     'component_code' => $componentCode,
                     'instruction' => $instruction,
+                    'shared_region' => $sharedRegion,
                 ],
             ]
         );
@@ -2555,11 +2571,18 @@ SCRIPT;
         return $this->fetchJson($this->startOperation(
             $session,
             $adminId,
-            'regenerate_page',
+            'block_regenerate',
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            ['virtual_pages_by_type' => $virtualPages],
+            $scopePatch,
             $pageType,
-            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING
+            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING,
+            [
+                'page_type' => $pageType,
+                'component_code' => $componentCode,
+                'component_label' => $label,
+                'instruction' => $instruction,
+                'shared_region' => $sharedRegion,
+            ]
         ));
     }
 
@@ -2604,18 +2627,27 @@ SCRIPT;
         }
 
         $stageCode = AiSiteAgentSession::STAGE_VISUAL_EDIT;
+        $sharedRegion = $this->resolveSharedComponentRegionForComponentCode($pageType, $componentCode);
         $originalActiveOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $originalWorkspaceStatus = $this->scopeCompatibilityService->normalizeWorkspaceStatus((string)($scope['workspace_status'] ?? ''));
         $preserveOriginalOperation = \in_array(\trim((string)($originalActiveOperation['status'] ?? '')), ['queued', 'running'], true);
 
         if ($refine) {
-            $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
-            $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-            $sectionRefinements = \is_array($virtualPage['section_refinements'] ?? null) ? $virtualPage['section_refinements'] : [];
-            $sectionRefinements[$componentCode] = $instruction;
-            $virtualPage['section_refinements'] = $sectionRefinements;
-            $virtualPages[$pageType] = $virtualPage;
-            $scope['virtual_pages_by_type'] = $virtualPages;
+            if ($sharedRegion !== '') {
+                $sharedRefinements = \is_array($scope['shared_component_refinements'] ?? null)
+                    ? $scope['shared_component_refinements']
+                    : [];
+                $sharedRefinements[$sharedRegion] = $instruction;
+                $scope['shared_component_refinements'] = $sharedRefinements;
+            } else {
+                $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
+                $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
+                $sectionRefinements = \is_array($virtualPage['section_refinements'] ?? null) ? $virtualPage['section_refinements'] : [];
+                $sectionRefinements[$componentCode] = $instruction;
+                $virtualPage['section_refinements'] = $sectionRefinements;
+                $virtualPages[$pageType] = $virtualPage;
+                $scope['virtual_pages_by_type'] = $virtualPages;
+            }
             $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
             $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         }
@@ -2625,6 +2657,7 @@ SCRIPT;
             'operation' => $operationLabel,
             'page_type' => $pageType,
             'component_code' => $componentCode,
+            'shared_region' => $sharedRegion,
             'message' => $refine ? 'Starting AI block refine' : 'Starting AI block regenerate',
         ]);
 
@@ -2683,35 +2716,25 @@ SCRIPT;
             return ['task_key' => '', 'section_code' => '', 'shared_region' => ''];
         }
 
-        $normalizedBlockId = $componentCode;
-        if (\str_starts_with($normalizedBlockId, 'content/')) {
-            $normalizedBlockId = \substr($normalizedBlockId, \strlen('content/'));
-        }
-
-        $pageSlug = \str_replace('_', '-', \trim($pageType));
-        if (
-            $componentCode === 'header/ai-site-header'
-            || $normalizedBlockId === 'header-ai-site-header'
-            || $normalizedBlockId === $pageSlug . '-site-header'
-            || \str_ends_with($normalizedBlockId, '-site-header')
-        ) {
+        $sharedRegion = $this->resolveSharedComponentRegionForComponentCode($pageType, $componentCode);
+        if ($sharedRegion === 'header') {
             return [
                 'task_key' => 'shared:header',
-                'section_code' => $normalizedBlockId !== '' ? $normalizedBlockId : 'shared:header',
+                'section_code' => 'shared:header',
                 'shared_region' => 'header',
             ];
         }
-        if (
-            $componentCode === 'footer/ai-site-footer'
-            || $normalizedBlockId === 'footer-ai-site-footer'
-            || $normalizedBlockId === $pageSlug . '-site-footer'
-            || \str_ends_with($normalizedBlockId, '-site-footer')
-        ) {
+        if ($sharedRegion === 'footer') {
             return [
                 'task_key' => 'shared:footer',
-                'section_code' => $normalizedBlockId !== '' ? $normalizedBlockId : 'shared:footer',
+                'section_code' => 'shared:footer',
                 'shared_region' => 'footer',
             ];
+        }
+
+        $normalizedBlockId = $componentCode;
+        if (\str_starts_with($normalizedBlockId, 'content/')) {
+            $normalizedBlockId = \substr($normalizedBlockId, \strlen('content/'));
         }
 
         foreach ($this->buildTaskService->listTaskKeysByPageType($scope, $pageType) as $taskKey) {
@@ -2730,6 +2753,39 @@ SCRIPT;
         }
 
         throw new \RuntimeException((string)__('未找到组件对应的构建任务：%{1}', [$componentCode]));
+    }
+
+    private function resolveSharedComponentRegionForComponentCode(string $pageType, string $componentCode): string
+    {
+        $componentCode = \trim($componentCode);
+        if ($componentCode === '') {
+            return '';
+        }
+
+        $normalizedBlockId = $componentCode;
+        if (\str_starts_with($normalizedBlockId, 'content/')) {
+            $normalizedBlockId = \substr($normalizedBlockId, \strlen('content/'));
+        }
+
+        $pageSlug = \str_replace('_', '-', \trim($pageType));
+        if (
+            $componentCode === 'header/ai-site-header'
+            || $normalizedBlockId === 'header-ai-site-header'
+            || ($pageSlug !== '' && $normalizedBlockId === $pageSlug . '-site-header')
+            || \str_ends_with($normalizedBlockId, '-site-header')
+        ) {
+            return 'header';
+        }
+        if (
+            $componentCode === 'footer/ai-site-footer'
+            || $normalizedBlockId === 'footer-ai-site-footer'
+            || ($pageSlug !== '' && $normalizedBlockId === $pageSlug . '-site-footer')
+            || \str_ends_with($normalizedBlockId, '-site-footer')
+        ) {
+            return 'footer';
+        }
+
+        return '';
     }
 
     private function runRegenerateBlockOperation(
@@ -2962,7 +3018,7 @@ SCRIPT;
             [
                 'operation' => $instruction !== '' ? 'block_refine' : 'block_regenerate',
                 'page_type' => $pageType,
-                'details' => ['task_key' => $taskKey, 'section_code' => $sectionCode],
+                'details' => ['task_key' => $taskKey, 'section_code' => $sectionCode, 'shared_region' => $sharedRegion],
             ]
         );
 
@@ -2970,6 +3026,7 @@ SCRIPT;
             'message' => $instruction !== '' ? (string)__('区块微调完成') : (string)__('区块重建完成'),
             'page_type' => $pageType,
             'section_code' => $sectionCode,
+            'shared_region' => $sharedRegion,
             'state' => $state,
         ];
     }
@@ -3292,6 +3349,7 @@ SCRIPT;
         if (!$this->sessionService->updatePreviewSelectionScope($session->getId(), $adminId, $previewPageType, $previewPageId)) {
             return $this->fetchJson(['success' => false, 'message' => 'Preview page switch failed.']);
         }
+        $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($snapshot['workspace_track'] ?? ''));
 
         $this->appendWorkspaceEvent(
             $session->getId(),
@@ -3309,7 +3367,8 @@ SCRIPT;
                 $pagesByType,
                 $virtualPages,
                 $previewPageType,
-                $previewPageId
+                $previewPageId,
+                $workspaceTrack
             ),
         ]);
     }
@@ -3324,7 +3383,8 @@ SCRIPT;
         array $pagesByType,
         array $virtualPagesByType,
         string $previewPageType,
-        int $previewPageId
+        int $previewPageId,
+        string $workspaceTrack
     ): array {
         $virtualThemeId = $session->getVirtualThemeId();
         $selectedVirtualPages = [];
@@ -3347,9 +3407,13 @@ SCRIPT;
         $prePublishVisualUrls = $previewPageType !== ''
             ? $this->visualUrlService->resolveVirtualUrls($session->getPublicId(), $previewPageType, $virtualThemeId)
             : ['preview_full_url' => '', 'visual_preview_url' => '', 'visual_edit_url' => ''];
-        $resolvedUrls = $previewPageId > 0
-            ? $this->visualUrlService->resolveUrls($previewPageId, $virtualThemeId)
-            : $prePublishVisualUrls;
+        $resolvedUrls = $this->shouldUseWorkspacePreviewUrls($session, $workspaceTrack, $previewPageType)
+            ? $prePublishVisualUrls
+            : (
+                $previewPageId > 0
+                    ? $this->visualUrlService->resolveUrls($previewPageId, $virtualThemeId)
+                    : $prePublishVisualUrls
+            );
 
         return [
             'preview_page_id' => $previewPageId,
@@ -3360,6 +3424,16 @@ SCRIPT;
             'pagebuilder_pages_by_type' => $minimalPagesByType,
             'virtual_pages_by_type' => $selectedVirtualPages,
         ];
+    }
+
+    private function shouldUseWorkspacePreviewUrls(
+        AiSiteAgentSession $session,
+        string $workspaceTrack,
+        string $previewPageType
+    ): bool {
+        return $previewPageType !== ''
+            && $workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
+            && $session->getPublishStatus() !== AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED;
     }
 
     private function handlePublishChecklist(): string
@@ -5298,11 +5372,19 @@ SCRIPT;
         return match ($operation) {
             'plan' => $this->runPlanOperationSseBranch($sse, $session, $adminId),
             'build' => $this->runBuildOperation($sse, $session, $adminId),
+            'block_regenerate' => $this->runRegenerateBlockOperation(
+                $sse,
+                $session,
+                $adminId,
+                (string)($activeOperation['page_type'] ?? ''),
+                (string)($activeOperation['component_code'] ?? ($activeOperation['details']['component_code'] ?? '')),
+                (string)($activeOperation['instruction'] ?? ($activeOperation['details']['instruction'] ?? ''))
+            ),
             'regenerate_page' => $this->runRegeneratePageOperation($sse, $session, $adminId, (string)($activeOperation['page_type'] ?? '')),
             'publish' => $this->runPublishOperation($sse, $session, $adminId),
             default => throw new \RuntimeException((string)__('未知操作：%{operation}（允许：%{allowed}）', [
                 'operation' => $operation !== '' ? $operation : '(empty)',
-                'allowed' => 'plan, build, regenerate_page, publish',
+                'allowed' => 'plan, build, block_regenerate, regenerate_page, publish',
             ])),
         };
     }
@@ -6914,9 +6996,11 @@ SCRIPT;
             : ['preview_full_url' => '', 'visual_preview_url' => '', 'visual_edit_url' => ''];
         $normalized['pre_publish_visual_urls'] = $prePublishVisualUrls;
 
-        // 已物化出 Page 时始终走 preview/full（与是否已发布无关）。workspace-preview 仅依赖 scope 内虚拟 blocks，
-        // 若落库内容与 scope 不同步会仍显示主题静态占位，而任务进度已显示完成。
-        if ((int)$normalized['preview_page_id'] > 0) {
+        // Draft virtual-theme workspaces render from session scope; materialized Page URLs are only authoritative
+        // after publishing or for non-virtual-theme tracks.
+        if ($this->shouldUseWorkspacePreviewUrls($session, $workspaceTrack, $previewPageType)) {
+            $normalized = \array_replace($normalized, $prePublishVisualUrls);
+        } elseif ((int)$normalized['preview_page_id'] > 0) {
             $normalized = \array_replace(
                 $normalized,
                 $this->visualUrlService->resolveUrls((int)$normalized['preview_page_id'], $virtualThemeId)
@@ -8002,7 +8086,8 @@ SCRIPT;
         string $stage,
         array $scopePatch = [],
         string $pageType = '',
-        string $workspaceStatus = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING
+        string $workspaceStatus = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING,
+        array $operationDetails = []
     ): array {
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
@@ -8081,6 +8166,14 @@ SCRIPT;
             'updated_at' => \date('Y-m-d H:i:s'),
             'message' => (string)__('等待开始'),
         ], $operationEnvelope);
+        if ($operationDetails !== []) {
+            $scope['active_operation']['details'] = $operationDetails;
+            foreach (['component_code', 'component_label', 'instruction', 'shared_region'] as $detailKey) {
+                if (\array_key_exists($detailKey, $operationDetails)) {
+                    $scope['active_operation'][$detailKey] = $operationDetails[$detailKey];
+                }
+            }
+        }
         if ($operation === 'plan') {
             $scope['active_operation']['details'] = [
                 'plan_locale' => (string)($scope['plan_locale'] ?? ''),
@@ -8099,7 +8192,7 @@ SCRIPT;
         $freshForQueue = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         if ($this->shouldEnqueueOperation($operation)) {
             try {
-                $queueId = $this->enqueueOperationQueueTask($freshForQueue, $adminId, $operation, $executionToken, $scopePatch);
+                $queueId = $this->enqueueOperationQueueTask($freshForQueue, $adminId, $operation, $executionToken, $scopePatch, $operationDetails);
             } catch (\Throwable $throwable) {
                 $failedWorkspaceStatus = $operation === 'publish'
                     ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED
@@ -8158,12 +8251,12 @@ SCRIPT;
 
     private function shouldEnqueueOperation(string $operation): bool
     {
-        return \in_array($operation, ['plan', 'task_plan', 'build'], true);
+        return \in_array($operation, ['plan', 'task_plan', 'build', 'block_regenerate'], true);
     }
 
     private function shouldSelfDispatchAiSiteQueueOperation(string $operation): bool
     {
-        return \in_array($operation, ['plan', 'task_plan', 'build'], true);
+        return \in_array($operation, ['plan', 'task_plan', 'build', 'block_regenerate'], true);
     }
 
     /**
@@ -8174,7 +8267,8 @@ SCRIPT;
         int $adminId,
         string $operation,
         string $executionToken,
-        array $scopePatch = []
+        array $scopePatch = [],
+        array $operationDetails = []
     ): int {
         $queueClass = $this->resolveAiSiteQueueClass($operation);
         if ($queueClass === '') {
@@ -8191,7 +8285,15 @@ SCRIPT;
         if ((int)($scopePatch['_force_rebuild'] ?? 0) === 1) {
             $content['_force_rebuild'] = 1;
         }
-        if ($operation === 'build') {
+        if ($operationDetails !== []) {
+            $content['details'] = $operationDetails;
+            foreach (['page_type', 'component_code', 'component_label', 'instruction', 'shared_region'] as $detailKey) {
+                if (\array_key_exists($detailKey, $operationDetails)) {
+                    $content[$detailKey] = $operationDetails[$detailKey];
+                }
+            }
+        }
+        if (\in_array($operation, ['build', 'block_regenerate'], true)) {
             $content['scope_patch'] = $scopePatch;
         }
 
@@ -8266,6 +8368,7 @@ SCRIPT;
             'plan' => \GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue::class,
             'task_plan' => \GuoLaiRen\PageBuilder\Queue\AiSiteTaskPlanQueue::class,
             'build' => \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class,
+            'block_regenerate' => \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class,
             default => '',
         };
     }
@@ -8720,7 +8823,7 @@ SCRIPT;
     {
         return match ($operation) {
             'plan' => AiSiteAgentSession::STAGE_PLAN,
-            'task_plan', 'build' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'task_plan', 'build', 'block_regenerate' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'publish' => AiSiteAgentSession::STAGE_PUBLISH,
             default => 'workspace',
         };
@@ -11300,12 +11403,12 @@ SCRIPT;
 
     private function supportsBackgroundOperation(string $operation): bool
     {
-        return \in_array($operation, ['plan', 'task_plan', 'build', 'regenerate_page', 'publish'], true);
+        return \in_array($operation, ['plan', 'task_plan', 'build', 'block_regenerate', 'regenerate_page', 'publish'], true);
     }
 
     private function shouldKeepQueuedObserverStreamOpen(string $operation): bool
     {
-        return \in_array($operation, ['plan', 'task_plan', 'build'], true);
+        return \in_array($operation, ['plan', 'task_plan', 'build', 'block_regenerate'], true);
     }
 
     /**

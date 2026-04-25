@@ -42,7 +42,9 @@ class PageBuilderThemeComponentBridge
         $component->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $themeId)
             ->where(VirtualThemeComponent::schema_fields_COMPONENT_CODE, $componentCode)
             ->where(VirtualThemeComponent::schema_fields_AREA, $area)
-            ->find();
+            ->order(VirtualThemeComponent::schema_fields_ID, 'DESC')
+            ->find()
+            ->fetch();
 
         if (!$component->getId()) {
             return null;
