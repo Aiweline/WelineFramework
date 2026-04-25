@@ -61,6 +61,7 @@ class AiSiteAgent extends BaseController
     private const REQUEST_CTX_AI_CHUNK_FORWARDER = 'pagebuilder.ai.chunk.forwarder';
     private const REQUEST_CTX_QUEUE_DISPATCHER = 'pagebuilder.ai.queue.dispatcher';
     private const REQUEST_CTX_QUEUE_CREATED_HOOK = 'pagebuilder.ai.queue.created';
+    private const REQUEST_CTX_OBSERVER_QUEUE_SETTLE_DELAY_MS = 'pagebuilder.ai.observer.queue_settle_delay_ms';
     private const PARAMS_PUBLIC_ID = ['public_id'];
     private const PARAMS_OPERATION_SSE = ['public_id', 'execution_token'];
     private const PARAMS_REGENERATE = ['public_id', 'page_type'];
@@ -82,6 +83,7 @@ class AiSiteAgent extends BaseController
      * 当前设置为 600 秒（10分钟），以支持复杂的 AI 内容生成场景。
      */
     private const STALE_ACTIVE_OPERATION_TTL_SEC = 600;
+    private const OBSERVER_QUEUE_SETTLE_DELAY_MS = 3000;
     private const BUILD_TASK_MAX_GENERATION_ATTEMPTS = 3;
 
     private readonly AiSiteAgentSessionService $sessionService;
@@ -1123,7 +1125,9 @@ SCRIPT;
             return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
 
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
+        );
         $executionBlueprintDraft = \is_array($scope['execution_blueprint_draft'] ?? null) ? $scope['execution_blueprint_draft'] : [];
         if ($executionBlueprintDraft === []) {
             return $this->jsonError('PLAN_NOT_READY', (string)__('尚未生成方案，请先完成方案生成'), ['public_id']);
@@ -1204,7 +1208,9 @@ SCRIPT;
             return;
         }
 
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
+        );
         $requestedPlanLocaleInput = \trim((string)$this->getRequestBodyValue('plan_locale', ''));
         if ($requestedPlanLocaleInput !== '') {
             $scope['plan_locale'] = $requestedPlanLocaleInput;
@@ -1452,7 +1458,9 @@ SCRIPT;
             return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
 
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $scope = $this->normalizePlanConfirmationForTaskPlan($session, $adminId, $scope);
         if (!$this->isPlanConfirmedForTaskPlan($scope)) {
             return $this->jsonError('PLAN_REQUIRED_BEFORE_TASK_PLAN', (string)__('请先确认第一阶段方案，再生成第二阶段任务方案'), ['public_id', 'plan_confirmed']);
@@ -1543,7 +1551,9 @@ SCRIPT;
             return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
 
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $scope = $this->normalizePlanConfirmationForTaskPlan($session, $adminId, $scope);
         $taskPlanForConfirm = $this->resolveStageTwoTaskPlanForConfirmation($scope);
         $draftTaskPlan = \is_array($taskPlanForConfirm['structured'] ?? null) ? $taskPlanForConfirm['structured'] : [];
@@ -1660,7 +1670,7 @@ SCRIPT;
         $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
         $taskPlanMarkdown = \trim((string)($scope['task_plan_markdown'] ?? ''));
 
-        if ($draft !== [] && $draftMarkdown !== '' && $taskPlanStructured !== [] && $taskPlanMarkdown !== '') {
+        if ($draft !== [] && $draftMarkdown !== '') {
             return $fresh;
         }
 
@@ -1670,24 +1680,24 @@ SCRIPT;
         if ($draftMarkdown === '' && $taskPlanMarkdown !== '') {
             $draftMarkdown = $taskPlanMarkdown;
         }
-        if ($taskPlanStructured === [] && $draft !== []) {
-            $taskPlanStructured = $draft;
-        }
         if ($taskPlanMarkdown === '' && $draftMarkdown !== '') {
             $taskPlanMarkdown = $draftMarkdown;
         }
 
-        if ($draft !== [] && $draftMarkdown !== '' && $taskPlanStructured !== [] && $taskPlanMarkdown !== '') {
+        if ($draft !== [] && $draftMarkdown !== '') {
             $virtualThemePlan['draft'] = $draft;
             $virtualThemePlan['draft_markdown'] = $draftMarkdown;
             if (\trim((string)($virtualThemePlan['draft_generated_at'] ?? '')) === '') {
                 $virtualThemePlan['draft_generated_at'] = \date('Y-m-d H:i:s');
             }
-            $repairSaved = $this->sessionService->mergeScope($fresh->getId(), $adminId, [
+            $repairPatch = [
                 'virtual_theme_plan' => $virtualThemePlan,
-                'task_plan_structured' => $taskPlanStructured,
                 'task_plan_markdown' => $taskPlanMarkdown,
-            ]);
+            ];
+            if ($taskPlanStructured !== []) {
+                $repairPatch['task_plan_structured'] = $taskPlanStructured;
+            }
+            $repairSaved = $this->sessionService->mergeScope($fresh->getId(), $adminId, $repairPatch);
             if ($repairSaved) {
                 $fresh = $this->sessionService->loadById($fresh->getId(), $adminId) ?? $fresh;
                 $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
@@ -1696,7 +1706,7 @@ SCRIPT;
                 $draftMarkdown = \trim((string)($virtualThemePlan['draft_markdown'] ?? ''));
                 $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
                 $taskPlanMarkdown = \trim((string)($scope['task_plan_markdown'] ?? ''));
-                if ($draft !== [] && $draftMarkdown !== '' && $taskPlanStructured !== [] && $taskPlanMarkdown !== '') {
+                if ($draft !== [] && $draftMarkdown !== '') {
                     return $fresh;
                 }
             }
@@ -1717,15 +1727,14 @@ SCRIPT;
         int $adminId,
         string $source
     ): AiSiteAgentSession {
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
         $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
         $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
         if ($draft === [] && $taskPlanStructured !== []) {
             $draft = $taskPlanStructured;
-        }
-        if ($taskPlanStructured === [] && $draft !== []) {
-            $taskPlanStructured = $draft;
         }
 
         $draftMarkdown = \trim((string)($virtualThemePlan['draft_markdown'] ?? ''));
@@ -1737,7 +1746,7 @@ SCRIPT;
             $taskPlanMarkdown = $draftMarkdown;
         }
 
-        if ($draft === [] || $draftMarkdown === '' || $taskPlanStructured === [] || $taskPlanMarkdown === '') {
+        if ($draft === [] || $draftMarkdown === '') {
             throw new \RuntimeException(
                 'Second-stage task plan draft is not ready to save'
                 . ' source=' . $source
@@ -1756,7 +1765,6 @@ SCRIPT;
 
         return $this->persistTaskPlanDraftOrThrow($session, $adminId, [
             'virtual_theme_plan' => $virtualThemePlan,
-            'task_plan_structured' => $taskPlanStructured,
             'task_plan_markdown' => $taskPlanMarkdown,
         ], $source);
     }
@@ -2793,7 +2801,9 @@ SCRIPT;
         string $instruction = ''
     ): array {
         $this->assertActiveStreamLeaseAlive($session, $adminId);
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $scope['website_profile'] = $this->profileGenerationService->generate($scope);
         $scope = $this->buildTaskService->ensureTaskScope($scope, \is_array($scope['website_profile']) ? $scope['website_profile'] : [], (string)($scope['workspace_track'] ?? ''));
 
@@ -3140,7 +3150,9 @@ SCRIPT;
             return $this->fetchJson(['success' => false, 'message' => $error]);
         }
 
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         if (!\in_array($pageType, $pageTypes, true)) {
             return $this->jsonError('INVALID_PARAMS', (string)__('所选页面类型不在当前工作区中'), self::PARAMS_UPDATE_BLOCK);
@@ -3871,7 +3883,9 @@ SCRIPT;
     private function runQueuedPlanOperationFromWorkspaceStream(SseWriter $sse, AiSiteAgentSession $session, int $adminId): void
     {
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
+        );
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         if (\trim((string)($activeOperation['operation'] ?? '')) !== 'plan') {
             return;
@@ -4315,7 +4329,9 @@ SCRIPT;
     private function runTaskPlanOperation(SseWriter $sse, AiSiteAgentSession $session, int $adminId): void
     {
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $scope = $this->normalizePlanConfirmationForTaskPlan($fresh, $adminId, $scope);
         if (!$this->isPlanConfirmedForTaskPlan($scope)) {
             throw new \RuntimeException((string)__('请先确认第一阶段方案，再生成第二阶段任务方案。'));
@@ -4845,13 +4861,19 @@ SCRIPT;
                     \is_array($generationProgress[$batchId] ?? null) ? $generationProgress[$batchId] : [],
                     $batchProgress
                 );
+                $existingSummary = \is_array($scope['task_plan_generation_summary'] ?? null)
+                    ? $scope['task_plan_generation_summary']
+                    : [];
+                $summaryTotal = \max($total, (int)($existingSummary['total_batches'] ?? 0), \count($generationProgress));
+                $summaryCompleted = \count(\array_filter($generationProgress, static fn($item): bool => \is_array($item) && (string)($item['status'] ?? '') === 'batch_done'));
+                $summaryFailed = \count(\array_filter($generationProgress, static fn($item): bool => \is_array($item) && (string)($item['status'] ?? '') === 'batch_failed'));
 
                 $patch = [
                     'task_plan_generation_progress' => $generationProgress,
                     'task_plan_generation_summary' => [
-                        'total_batches' => $total,
-                        'completed_batches' => $completed,
-                        'failed_batches' => \count(\array_filter($generationProgress, static fn($item): bool => \is_array($item) && (string)($item['status'] ?? '') === 'batch_failed')),
+                        'total_batches' => $summaryTotal,
+                        'completed_batches' => $summaryCompleted,
+                        'failed_batches' => $summaryFailed,
                         'prompt_mode' => $promptMode,
                         'updated_at' => \date('Y-m-d H:i:s'),
                     ],
@@ -5503,7 +5525,9 @@ SCRIPT;
         $state = $this->buildWorkspaceEventStatePayload(
             $this->buildWorkspaceState($fresh, $adminId, 80, true)
         );
-        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
+        );
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $status = \trim((string)($activeOperation['status'] ?? ''));
         $message = \trim((string)($activeOperation['message'] ?? ''));
@@ -5555,12 +5579,19 @@ SCRIPT;
         $queueDispatchAttempted = false;
         $lastTaskProgressSnapshotSignature = '';
         $initialQueueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId);
+        $eventCorrelation = $this->buildObservedOperationEventCorrelation(
+            $operation,
+            $executionToken,
+            $activeOperation,
+            $initialQueueRow
+        );
 
         $recentEvents = $this->filterObservedOperationEvents(
             $this->sessionService->listRecentEvents($session->getId(), $adminId, 160),
             $operation,
             $startedAtRaw,
-            $lastEventId
+            $lastEventId,
+            $eventCorrelation
         );
         $lastEventId = $this->forwardObservedOperationEvents($sse, $session, $adminId, $recentEvents, $lastEventId, $initialQueueRow);
         $dispatchProbe = $this->maybeAutoDispatchObservedPendingQueue(
@@ -5635,11 +5666,18 @@ SCRIPT;
                 $queueDispatchAttempted = true;
                 $queueRow = \is_array($dispatchProbe['queue'] ?? null) ? $dispatchProbe['queue'] : $queueRow;
             }
+            $eventCorrelation = $this->buildObservedOperationEventCorrelation(
+                $operation,
+                $executionToken,
+                $activeOperation,
+                $queueRow
+            );
             $newEvents = $this->filterObservedOperationEvents(
                 $this->sessionService->listEventsAfterId($session->getId(), $adminId, $lastEventId, 80),
                 $operation,
                 $startedAtRaw,
-                $lastEventId
+                $lastEventId,
+                $eventCorrelation
             );
             if ($newEvents !== []) {
                 $freshAfterEvents = $this->sessionService->loadById($session->getId(), $adminId) ?? $fresh;
@@ -5691,10 +5729,25 @@ SCRIPT;
         }
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
         $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, (int)($activeOperation['queue_id'] ?? $queueId));
         $queueStatus = \trim((string)($queueRow['status'] ?? ''));
+        [$fresh, $scope, $activeOperation, $queueRow, $queueStatus] = $this->settleObservedQueueStateIfNeeded(
+            $sse,
+            $session,
+            $adminId,
+            $operation,
+            $executionToken,
+            $queueId,
+            $fresh,
+            $scope,
+            $activeOperation,
+            $queueRow,
+            $queueStatus
+        );
         if ($queueStatus === 'done') {
             $operationToken = \trim((string)($activeOperation['execution_token'] ?? ''));
             if ($operationToken === '') {
@@ -5781,6 +5834,64 @@ SCRIPT;
             'state' => $state,
             'http_code' => $success ? 200 : 409,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $activeOperation
+     * @param array<string, mixed>|null $queueRow
+     * @return array{AiSiteAgentSession, array<string, mixed>, array<string, mixed>, array<string, mixed>|null, string}
+     */
+    private function settleObservedQueueStateIfNeeded(
+        SseWriter $sse,
+        AiSiteAgentSession $session,
+        int $adminId,
+        string $operation,
+        string $executionToken,
+        int $queueId,
+        AiSiteAgentSession $fresh,
+        array $scope,
+        array $activeOperation,
+        ?array $queueRow,
+        string $queueStatus
+    ): array {
+        if (!$this->supportsBackgroundOperation($operation)) {
+            return [$fresh, $scope, $activeOperation, $queueRow, $queueStatus];
+        }
+
+        $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+        if (
+            \in_array($activeStatus, ['queued', 'running'], true)
+            || !\in_array($queueStatus, ['pending', 'queued', 'running'], true)
+        ) {
+            return [$fresh, $scope, $activeOperation, $queueRow, $queueStatus];
+        }
+
+        $delayMs = $this->getObservedQueueSettleDelayMs();
+        if ($delayMs > 0) {
+            $sse->maybeHeartbeat();
+            SchedulerSystem::yieldDelay($delayMs);
+        }
+
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $fresh;
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
+        );
+        $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
+        $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, (int)($activeOperation['queue_id'] ?? $queueId));
+        $queueStatus = \trim((string)($queueRow['status'] ?? ''));
+
+        return [$fresh, $scope, $activeOperation, $queueRow, $queueStatus];
+    }
+
+    private function getObservedQueueSettleDelayMs(): int
+    {
+        $override = RequestContext::get(self::REQUEST_CTX_OBSERVER_QUEUE_SETTLE_DELAY_MS);
+        if (\is_numeric($override)) {
+            return \max(0, (int)$override);
+        }
+
+        return self::OBSERVER_QUEUE_SETTLE_DELAY_MS;
     }
 
     /**
@@ -6602,9 +6713,16 @@ SCRIPT;
         array $events,
         string $operation,
         string $startedAtRaw,
-        int $afterEventId
+        int $afterEventId,
+        array $correlation = []
     ): array {
-        return $this->queueObserverHelperService()->filterOperationEvents($events, $operation, $startedAtRaw, $afterEventId);
+        return $this->queueObserverHelperService()->filterOperationEvents(
+            $events,
+            $operation,
+            $startedAtRaw,
+            $afterEventId,
+            $correlation
+        );
     }
 
     /**
@@ -6613,6 +6731,70 @@ SCRIPT;
     private function isObservedOperationEventRelevant(array $event, string $operation, int $startedAtTs): bool
     {
         return $this->queueObserverHelperService()->isOperationEventRelevant($event, $operation, $startedAtTs);
+    }
+
+    /**
+     * @param array<string, mixed> $activeOperation
+     * @param array<string, mixed>|null $queueRow
+     * @return array<string, mixed>
+     */
+    private function buildObservedOperationEventCorrelation(
+        string $operation,
+        string $executionToken,
+        array $activeOperation,
+        ?array $queueRow
+    ): array {
+        $queueContent = $this->decodeAiSiteQueueRowContent($queueRow);
+        $operationToken = \trim((string)($activeOperation['execution_token'] ?? $activeOperation['token'] ?? ''));
+        if ($operationToken === '') {
+            $operationToken = \trim($executionToken);
+        }
+        if ($operationToken === '') {
+            $operationToken = \trim((string)($queueContent['execution_token'] ?? $queueContent['token'] ?? ''));
+        }
+
+        $queueId = (int)($activeOperation['queue_id'] ?? 0);
+        if ($queueId <= 0 && \is_array($queueRow)) {
+            $queueId = (int)($queueRow['queue_id'] ?? 0);
+        }
+
+        $jobKey = \trim((string)($activeOperation['job_key'] ?? $queueContent['job_key'] ?? ''));
+        $jobType = \trim((string)($activeOperation['job_type'] ?? $queueContent['job_type'] ?? ''));
+        if ($jobType === '') {
+            $jobType = $this->resolveAiSiteQueueJobType($operation);
+        }
+
+        return [
+            'execution_token' => $operationToken,
+            'queue_id' => $queueId,
+            'job_key' => $jobKey,
+            'job_type' => $jobType,
+            'require_error_correlation' => $this->supportsBackgroundOperation($operation)
+                && ($operationToken !== '' || $queueId > 0 || $jobKey !== '' || $jobType !== ''),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed>|null $queueRow
+     * @return array<string, mixed>
+     */
+    private function decodeAiSiteQueueRowContent(?array $queueRow): array
+    {
+        if (!\is_array($queueRow) || $queueRow === []) {
+            return [];
+        }
+
+        $content = $queueRow['content'] ?? null;
+        if (\is_array($content)) {
+            return $content;
+        }
+        if (!\is_string($content) || \trim($content) === '') {
+            return [];
+        }
+
+        $decoded = \json_decode($content, true);
+
+        return \is_array($decoded) ? $decoded : [];
     }
 
     /**
@@ -6633,6 +6815,9 @@ SCRIPT;
                 continue;
             }
             $eventId = (int)($event['event_id'] ?? 0);
+            if ($this->shouldDeferObservedErrorEventForInProgressQueue($eventName, $settledQueueRow)) {
+                break;
+            }
             if ($this->shouldSuppressObservedErrorEventForDoneQueue($event, $eventName, $settledQueueRow)) {
                 if ($eventId > $lastEventId) {
                     $lastEventId = $eventId;
@@ -6650,6 +6835,25 @@ SCRIPT;
         }
 
         return $lastEventId;
+    }
+
+    /**
+     * Queue rows are the source of truth for background operations. If an error
+     * event is observed while the queue row is still non-terminal, keep it
+     * pending until the queue reports done/error; otherwise the browser can show
+     * a false failure during the queue status write-back window.
+     *
+     * @param array<string, mixed>|null $queueRow
+     */
+    private function shouldDeferObservedErrorEventForInProgressQueue(string $eventName, ?array $queueRow): bool
+    {
+        if ($eventName !== 'error') {
+            return false;
+        }
+
+        $queueStatus = \trim((string)($queueRow['status'] ?? ''));
+
+        return \in_array($queueStatus, ['pending', 'queued', 'running'], true);
     }
 
     /**
@@ -7066,7 +7270,9 @@ SCRIPT;
         bool $persist = false
     ): array {
         $startedAt = \microtime(true);
-        $normalized = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $normalized = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, $session->getStage())
+        );
         $normalized = $this->scopeCompatibilityService->normalizeConfirmedPlanFlag($normalized);
         // 读取工作区状态时避免触发外部 AI 生成，防止首开/轮询被远程调用阻塞。
         $profileStartedAt = \microtime(true);
@@ -10228,7 +10434,9 @@ SCRIPT;
             (string)__('正在执行，请稍候...'),
             1
         );
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
         if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
             return $this->runHtmlBlocksBuildOperationV3($sse, $session, $adminId, $scope);
@@ -11052,6 +11260,7 @@ SCRIPT;
         array $payload = [],
         string $level = AiSiteAgentSessionEvent::LEVEL_INFO
     ): void {
+        $payload = $this->enrichWorkspaceEventQueueCorrelation($payload);
         $details = \is_array($payload['details'] ?? null) ? $payload['details'] : [];
         $eventPayload = \array_replace([
             'message' => $message,
@@ -11061,6 +11270,36 @@ SCRIPT;
             'details' => $details,
         ], $payload);
         $this->sessionService->appendEvent($sessionId, $adminId, $eventType, $eventPayload, $stageCode, $level);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function enrichWorkspaceEventQueueCorrelation(array $payload): array
+    {
+        $writer = RequestContext::get(RequestContext::SSE_WRITER_KEY);
+        if (!$writer instanceof QueueDbWriter) {
+            return $payload;
+        }
+
+        if (\trim((string)($payload['operation'] ?? '')) === '') {
+            $payload['operation'] = $writer->getOperation();
+        }
+        if ((int)($payload['queue_id'] ?? 0) <= 0 && $writer->getQueueId() > 0) {
+            $payload['queue_id'] = $writer->getQueueId();
+        }
+        if (\trim((string)($payload['execution_token'] ?? '')) === '' && $writer->getExecutionToken() !== '') {
+            $payload['execution_token'] = $writer->getExecutionToken();
+        }
+        if (\trim((string)($payload['job_key'] ?? '')) === '' && $writer->getJobKey() !== '') {
+            $payload['job_key'] = $writer->getJobKey();
+        }
+        if (\trim((string)($payload['job_type'] ?? '')) === '' && $writer->getJobType() !== '') {
+            $payload['job_type'] = $writer->getJobType();
+        }
+
+        return $payload;
     }
 
     private function mutateScope(bool $merge): string
