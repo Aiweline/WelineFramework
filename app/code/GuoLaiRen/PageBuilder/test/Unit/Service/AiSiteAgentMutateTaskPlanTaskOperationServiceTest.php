@@ -61,6 +61,13 @@ final class AiSiteAgentMutateTaskPlanTaskOperationServiceTest extends TestCase
         self::assertSame(['state' => 'direct'], $result['data']);
         $scopePatch = $state['start_operation_calls'][0][4];
         self::assertSame('task.home.hero', $scopePatch['_task_plan_sse_request']['target_scope']);
+        $operationDetails = $state['start_operation_calls'][0][7];
+        self::assertSame('task_plan', $operationDetails['stage_scope']);
+        self::assertSame('mutate_task_plan_task', $operationDetails['prompt_mode']);
+        self::assertSame('refine', $operationDetails['action']);
+        self::assertSame('task.home.hero', $operationDetails['task_key']);
+        self::assertSame('task.home.hero', $operationDetails['target_scope']);
+        self::assertSame($scopePatch['_task_plan_sse_request']['mutation'], $operationDetails['mutation']);
     }
 
     public function testUsesSharedTasksAsDefaultTargetScopeForSharedCreate(): void
@@ -246,4 +253,3 @@ final class AiSiteAgentMutateTaskPlanTaskOperationServiceTest extends TestCase
         self::assertCount(1, $state['build_workspace_state_calls']);
     }
 }
-

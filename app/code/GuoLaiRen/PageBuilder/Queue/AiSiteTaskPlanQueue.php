@@ -90,6 +90,8 @@ class AiSiteTaskPlanQueue implements QueueInterface
             if ($forceRebuild) {
                 $session = $this->applyForceTaskPlanRebuildPreset($sessionService, $scopeService, $session, $adminId);
                 $this->appendQueueLifecycleLine($queue, '检测到 _force_rebuild=1，已切换为 rebuild_task_plan 强制重建，execution_token=' . \substr($effectiveExecutionToken, 0, 20) . '…');
+            } else {
+                $session = $this->applyQueuedTaskPlanRequest($sessionService, $scopeService, $session, $adminId, $content);
             }
 
             $session = $this->ensureQueuedActiveOperation(
@@ -358,6 +360,134 @@ class AiSiteTaskPlanQueue implements QueueInterface
         );
     }
 
+    /**
+     * @param array<string, mixed> $content
+     */
+    private function applyQueuedTaskPlanRequest(
+        AiSiteAgentSessionService $sessionService,
+        AiSiteScopeCompatibilityService $scopeService,
+        AiSiteAgentSession $session,
+        int $adminId,
+        array $content
+    ): AiSiteAgentSession {
+        $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
+        $request = $this->buildQueuedTaskPlanSseRequest($content, $scope);
+        if ($request === []) {
+            return $fresh;
+        }
+
+        $patch = [
+            '_task_plan_sse_request' => $request,
+            'task_plan_generation_last_error' => [],
+        ];
+        if (\in_array((string)($request['prompt_mode'] ?? ''), ['mutate_task_plan_task', 'refine_task_plan', 'rebuild_task_plan'], true)) {
+            $patch['task_plan_confirmed'] = 0;
+        }
+
+        $sessionService->mergeScope((int)$fresh->getId(), $adminId, $patch);
+
+        return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildQueuedTaskPlanSseRequest(array $content, array $scope): array
+    {
+        $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
+        $scopePatch = \is_array($content['scope_patch'] ?? null) ? $content['scope_patch'] : [];
+        $request = \array_replace(
+            \is_array($scopePatch['_task_plan_sse_request'] ?? null) ? $scopePatch['_task_plan_sse_request'] : [],
+            \is_array($content['_task_plan_sse_request'] ?? null) ? $content['_task_plan_sse_request'] : [],
+            \is_array($details['_task_plan_sse_request'] ?? null) ? $details['_task_plan_sse_request'] : []
+        );
+        $mutation = \is_array($request['mutation'] ?? null)
+            ? $request['mutation']
+            : (\is_array($content['mutation'] ?? null)
+                ? $content['mutation']
+                : (\is_array($details['mutation'] ?? null) ? $details['mutation'] : []));
+        $taskConfig = \is_array($mutation['task_config'] ?? null)
+            ? $mutation['task_config']
+            : (\is_array($content['task_config'] ?? null)
+                ? $content['task_config']
+                : (\is_array($details['task_config'] ?? null) ? $details['task_config'] : []));
+        $action = $this->firstNonEmptyString([$content['action'] ?? null, $details['action'] ?? null, $mutation['action'] ?? null]);
+        $bucket = $this->firstNonEmptyString([$content['bucket'] ?? null, $details['bucket'] ?? null, $mutation['bucket'] ?? null]);
+        $bucket = \strtolower($bucket) === 'shared' ? 'shared' : 'page';
+        $pageType = $this->firstNonEmptyString([$content['page_type'] ?? null, $details['page_type'] ?? null, $mutation['page_type'] ?? null, $request['page_type'] ?? null]);
+        $taskKey = $this->firstNonEmptyString([$content['task_key'] ?? null, $details['task_key'] ?? null, $mutation['task_key'] ?? null, $request['task_key'] ?? null]);
+        if ($mutation === [] && ($action !== '' || $taskKey !== '' || $pageType !== '')) {
+            $mutation = [
+                'action' => $action,
+                'bucket' => $bucket,
+                'page_type' => $pageType,
+                'task_key' => $taskKey,
+                'task_config' => $taskConfig,
+            ];
+        }
+        if ($mutation !== [] && !\is_array($mutation['task_config'] ?? null)) {
+            $mutation['task_config'] = $taskConfig;
+        }
+
+        $promptMode = $this->firstNonEmptyString([$content['prompt_mode'] ?? null, $details['prompt_mode'] ?? null, $request['prompt_mode'] ?? null]);
+        if ($promptMode === '' && $mutation !== []) {
+            $promptMode = 'mutate_task_plan_task';
+        }
+        if ($promptMode === '') {
+            return [];
+        }
+
+        $targetScope = $this->firstNonEmptyString([$content['target_scope'] ?? null, $details['target_scope'] ?? null, $request['target_scope'] ?? null]);
+        if ($targetScope === '') {
+            $targetScope = $taskKey !== ''
+                ? $taskKey
+                : ($bucket === 'shared' ? 'shared_tasks' : ($pageType !== '' ? 'page_tasks.' . $pageType : 'task_plan'));
+        }
+        $roundValue = $this->firstNonEmptyString([$content['round'] ?? null, $details['round'] ?? null, $request['round'] ?? null]);
+        $round = \max(1, (int)($roundValue !== '' ? $roundValue : ((int)($scope['virtual_theme_plan']['last_round'] ?? 0) + 1)));
+        $instruction = $this->firstNonEmptyString([
+            $content['instruction'] ?? null,
+            $details['instruction'] ?? null,
+            $request['instruction'] ?? null,
+            $taskConfig['instruction'] ?? null,
+        ]);
+
+        $request = \array_replace($request, [
+            'prompt_mode' => $promptMode,
+            'instruction' => $instruction,
+            'target_scope' => $targetScope,
+            'round' => $round,
+        ]);
+        if ($mutation !== []) {
+            $request['mutation'] = $mutation;
+        }
+
+        return $request;
+    }
+
+    /**
+     * @param list<mixed> $values
+     */
+    private function firstNonEmptyString(array $values): string
+    {
+        foreach ($values as $value) {
+            if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
+                continue;
+            }
+            $candidate = \trim((string)$value);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
     private function applyForceTaskPlanRebuildPreset(
         AiSiteAgentSessionService $sessionService,
         AiSiteScopeCompatibilityService $scopeService,
@@ -371,7 +501,7 @@ class AiSiteTaskPlanQueue implements QueueInterface
         $currentReq = \is_array($scope['_task_plan_sse_request'] ?? null) ? $scope['_task_plan_sse_request'] : [];
         $nextRound = \max(1, (int)($currentReq['round'] ?? 0) + 1);
 
-        $sessionService->mergeScope((int)$fresh->getId(), $adminId, [
+        $sessionService->mergeScope((int)$fresh->getId(), $adminId, \array_replace($this->buildTaskPlanForceRebuildResetPatch(), [
             '_task_plan_sse_request' => [
                 'prompt_mode' => 'rebuild_task_plan',
                 'instruction' => '[FORCE] queue:run -f 强制重建第二阶段任务方案',
@@ -380,12 +510,45 @@ class AiSiteTaskPlanQueue implements QueueInterface
                 'forced_by_queue_run' => 1,
             ],
             '_task_plan_rebuild_in_progress' => 1,
-            'build_blueprint' => [],
-            'build_tasks' => [],
-            'task_plan_confirmed' => 0,
-        ]);
+        ]));
 
         return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildTaskPlanForceRebuildResetPatch(): array
+    {
+        return [
+            'virtual_theme_plan' => [
+                'draft' => [],
+                'draft_markdown' => '',
+                'draft_generated_at' => '',
+                'confirmed' => [],
+                'confirmed_markdown' => '',
+                'confirmed_at' => '',
+                'confirmed_signature' => '',
+                'plan_signature' => '',
+                'last_prompt_mode' => 'rebuild_task_plan',
+                'last_target_scope' => '',
+                'last_round' => 1,
+            ],
+            'task_plan_markdown' => '',
+            'task_plan_generated_at' => '',
+            'task_plan_structured' => [],
+            'task_plan_directory_tree' => [],
+            'task_plan_summary' => [],
+            'task_plan_confirmed' => 0,
+            'task_plan_confirmed_at' => '',
+            'task_plan_rebuild_summary' => [],
+            'task_plan_change_scope_report' => [],
+            'task_plan_generation_progress' => [],
+            'task_plan_generation_summary' => [],
+            'task_plan_generation_last_error' => '',
+            'build_blueprint' => [],
+            'build_tasks' => [],
+        ];
     }
 
     private function invokePrivate(object $object, string $method, array $arguments = []): mixed
