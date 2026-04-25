@@ -20,6 +20,8 @@ class BroadcastControlDispatchService
      *     attempted:array<int,string>,
      *     succeeded:array<int,string>,
      *     failed_by_instance:array<string,string>,
+     *     skipped_by_instance:array<string,string>,
+     *     results_by_instance:array<string,array{success:bool,message:string,data?:array}>,
      *     message:string
      * }
      */
@@ -44,6 +46,8 @@ class BroadcastControlDispatchService
      *     attempted:array<int,string>,
      *     succeeded:array<int,string>,
      *     failed_by_instance:array<string,string>,
+     *     skipped_by_instance:array<string,string>,
+     *     results_by_instance:array<string,array{success:bool,message:string,data?:array}>,
      *     message:string
      * }
      */
@@ -58,12 +62,13 @@ class BroadcastControlDispatchService
     }
 
     /**
-     * @param string[] $domains
      * @return array{
      *     success:bool,
      *     attempted:array<int,string>,
      *     succeeded:array<int,string>,
      *     failed_by_instance:array<string,string>,
+     *     skipped_by_instance:array<string,string>,
+     *     results_by_instance:array<string,array{success:bool,message:string,data?:array}>,
      *     message:string
      * }
      */
@@ -85,6 +90,8 @@ class BroadcastControlDispatchService
      *     attempted:array<int,string>,
      *     succeeded:array<int,string>,
      *     failed_by_instance:array<string,string>,
+     *     skipped_by_instance:array<string,string>,
+     *     results_by_instance:array<string,array{success:bool,message:string,data?:array}>,
      *     message:string
      * }
      */
@@ -102,6 +109,18 @@ class BroadcastControlDispatchService
         );
     }
 
+    /**
+     * @param string[] $domains
+     * @return array{
+     *     success:bool,
+     *     attempted:array<int,string>,
+     *     succeeded:array<int,string>,
+     *     failed_by_instance:array<string,string>,
+     *     skipped_by_instance:array<string,string>,
+     *     results_by_instance:array<string,array{success:bool,message:string,data?:array}>,
+     *     message:string
+     * }
+     */
     public function reloadSslCert(array $domains = [], ?string $instanceName = null): array
     {
         return $this->dispatchToRunningInstances(
@@ -113,19 +132,15 @@ class BroadcastControlDispatchService
     }
 
     /**
-     * P0-3 修复：支持批量并发派发。
-     *
-     * - `$dispatcher` 仍用于单实例场景（目标数 == 1）以保持旧行为和测试兼容性。
-     * - `$batchDispatcher` 存在且目标数 >= 2 时，走并发路径；由 IpcControlGateway::*Many 系列实现
-     *   一次 open-fwrite + stream_select 多路复用等待 ACK，总耗时从 N × timeout 降到 ≈ timeout。
-     *
      * @param callable(string): array{success:bool,message:string,data?:array} $dispatcher
-     * @param null|callable(array<int,string>): array<string, array{success:bool,message:string,data?:array}> $batchDispatcher
+     * @param null|callable(array<int,string>): array<string,array{success:bool,message:string,data?:array}> $batchDispatcher
      * @return array{
      *     success:bool,
      *     attempted:array<int,string>,
      *     succeeded:array<int,string>,
      *     failed_by_instance:array<string,string>,
+     *     skipped_by_instance:array<string,string>,
+     *     results_by_instance:array<string,array{success:bool,message:string,data?:array}>,
      *     message:string
      * }
      */
@@ -138,18 +153,18 @@ class BroadcastControlDispatchService
         $attempted = [];
         $succeeded = [];
         $failedByInstance = [];
+        $skippedByInstance = [];
         $resultsByInstance = [];
-        $targetInstances = $this->resolveRunningInstances($instanceName, $failedByInstance);
+        $targetInstances = $this->resolveRunningInstances($instanceName, $failedByInstance, $skippedByInstance);
 
         $useBatch = $batchDispatcher !== null && \count($targetInstances) >= 2;
 
         if ($useBatch) {
             $batchResults = null;
             try {
-                /** @var array<string, array{success:bool,message:string,data?:array}> $batchResults */
+                /** @var array<string,array{success:bool,message:string,data?:array}> $batchResults */
                 $batchResults = $batchDispatcher($targetInstances);
             } catch (\Throwable $throwable) {
-                // 批量派发器整体崩溃：把全部目标登记为 attempted + failed，保持对等可观测性。
                 foreach ($targetInstances as $name) {
                     $attempted[] = $name;
                     $failedByInstance[$name] = $throwable->getMessage();
@@ -163,12 +178,15 @@ class BroadcastControlDispatchService
                         $failedByInstance[$targetInstance] = (string) __('批量派发遗漏该实例');
                         continue;
                     }
+
                     $result = $batchResults[$targetInstance];
                     $resultsByInstance[$targetInstance] = $result;
+
                     if (!empty($result['success'])) {
                         $succeeded[] = $targetInstance;
                         continue;
                     }
+
                     $failedByInstance[$targetInstance] = (string) ($result['message'] ?? 'unknown');
                 }
             }
@@ -198,17 +216,29 @@ class BroadcastControlDispatchService
             'attempted' => $attempted,
             'succeeded' => $succeeded,
             'failed_by_instance' => $failedByInstance,
+            'skipped_by_instance' => $skippedByInstance,
             'results_by_instance' => $resultsByInstance,
-            'message' => $this->buildMessage($actionLabel, $attempted, $succeeded, $failedByInstance, $instanceName),
+            'message' => $this->buildMessage(
+                $actionLabel,
+                $attempted,
+                $succeeded,
+                $failedByInstance,
+                $skippedByInstance,
+                $instanceName
+            ),
         ];
     }
 
     /**
      * @param array<string,string> $failedByInstance
+     * @param array<string,string> $skippedByInstance
      * @return string[]
      */
-    private function resolveRunningInstances(?string $instanceName, array &$failedByInstance): array
-    {
+    private function resolveRunningInstances(
+        ?string $instanceName,
+        array &$failedByInstance,
+        array &$skippedByInstance
+    ): array {
         $instanceName = $instanceName !== null ? \trim($instanceName) : null;
         if ($instanceName !== null && $instanceName !== '') {
             if (!$this->serverInstanceManager->hasInstance($instanceName)) {
@@ -224,9 +254,6 @@ class BroadcastControlDispatchService
             return [$instanceName];
         }
 
-        // P1-8 修复：广播场景下不再静默跳过「存在但无 IPC」的实例，
-        // 将其显式登记到 failedByInstance，避免运维误以为「什么都没发生」。
-        // （相比之下历史行为是仅对「指定单实例」的场景报错，广播全部时悄悄丢弃。）
         $instances = [];
         foreach ($this->serverInstanceManager->listPersistedInstanceNames() as $name) {
             if ($this->serverInstanceManager->isInstanceIpcControllable($name)) {
@@ -235,11 +262,10 @@ class BroadcastControlDispatchService
             }
 
             if (!$this->serverInstanceManager->hasInstance($name)) {
-                // 已过时的登记信息（实例已彻底不存在），无需告警
                 continue;
             }
 
-            $failedByInstance[$name] = (string) __('Master 未运行，跳过该实例（请检查 server:start 或 Master 复活状态）。');
+            $skippedByInstance[$name] = (string) __('Master 未运行，跳过该实例（请检查 server:start 或 Master 复活状态）。');
         }
 
         return $instances;
@@ -249,12 +275,14 @@ class BroadcastControlDispatchService
      * @param string[] $attempted
      * @param string[] $succeeded
      * @param array<string,string> $failedByInstance
+     * @param array<string,string> $skippedByInstance
      */
     private function buildMessage(
         string $actionLabel,
         array $attempted,
         array $succeeded,
         array $failedByInstance,
+        array $skippedByInstance,
         ?string $instanceName
     ): string {
         if ($attempted === []) {
@@ -262,10 +290,17 @@ class BroadcastControlDispatchService
                 return (string) __('WLS 实例 %{1} 未运行：%{2}', [$instanceName, $failedByInstance[$instanceName]]);
             }
 
+            if ($skippedByInstance !== []) {
+                return (string) __('未发现可接收 %{1} 的运行中 WLS 实例，已跳过：%{2}', [
+                    $actionLabel,
+                    $this->formatInstanceReasonSummary($skippedByInstance),
+                ]);
+            }
+
             return (string) __('未发现运行中的 WLS 实例，已跳过 %{1}', [$actionLabel]);
         }
 
-        if ($failedByInstance === []) {
+        if ($failedByInstance === [] && $skippedByInstance === []) {
             if ($instanceName !== null && $instanceName !== '' && \count($succeeded) === 1) {
                 return (string) __('已向 WLS 实例 %{1} 发送 %{2}', [$succeeded[0], $actionLabel]);
             }
@@ -273,21 +308,57 @@ class BroadcastControlDispatchService
             return (string) __('已向 %{1} 个运行中的 WLS 实例发送 %{2}', [\count($succeeded), $actionLabel]);
         }
 
-        $failedParts = [];
-        foreach ($failedByInstance as $failedInstance => $reason) {
-            $failedParts[] = $failedInstance . ': ' . $reason;
+        if ($failedByInstance === []) {
+            return (string) __('已向 %{1} 个可控 WLS 实例发送 %{2}，跳过：%{3}', [
+                \count($succeeded),
+                $actionLabel,
+                $this->formatInstanceReasonSummary($skippedByInstance),
+            ]);
         }
-        $failedSummary = \implode('；', $failedParts);
+
+        $failedSummary = $this->formatInstanceReasonSummary($failedByInstance);
+        $skippedSummary = $this->formatInstanceReasonSummary($skippedByInstance);
 
         if ($succeeded === []) {
+            if ($skippedByInstance !== []) {
+                return (string) __('WLS 在运行，但 %{1} 派发失败：%{2}；跳过：%{3}', [
+                    $actionLabel,
+                    $failedSummary,
+                    $skippedSummary,
+                ]);
+            }
+
             return (string) __('WLS 在运行，但 %{1} 派发失败：%{2}', [$actionLabel, $failedSummary]);
         }
 
-        return (string) __('已向 %{1}/%{2} 个运行中的 WLS 实例发送 %{3}，失败：%{4}', [
+        if ($skippedByInstance !== []) {
+            return (string) __('已向 %{1}/%{2} 个可控 WLS 实例发送 %{3}，失败：%{4}；跳过：%{5}', [
+                \count($succeeded),
+                \count($attempted),
+                $actionLabel,
+                $failedSummary,
+                $skippedSummary,
+            ]);
+        }
+
+        return (string) __('已向 %{1}/%{2} 个可控 WLS 实例发送 %{3}，失败：%{4}', [
             \count($succeeded),
             \count($attempted),
             $actionLabel,
             $failedSummary,
         ]);
+    }
+
+    /**
+     * @param array<string,string> $reasons
+     */
+    private function formatInstanceReasonSummary(array $reasons): string
+    {
+        $parts = [];
+        foreach ($reasons as $instance => $reason) {
+            $parts[] = $instance . ': ' . $reason;
+        }
+
+        return \implode('，', $parts);
     }
 }

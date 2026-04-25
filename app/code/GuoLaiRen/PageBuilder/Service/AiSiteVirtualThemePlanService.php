@@ -611,6 +611,7 @@ final class AiSiteVirtualThemePlanService
         $stage1TaskCues = \is_array($structured['stage1_task_cues'] ?? null) ? $structured['stage1_task_cues'] : [];
         $planLocale = \trim((string)($scope['plan_locale'] ?? ($scope['plan_workbench']['plan_locale'] ?? '')));
         $defaultLocale = \trim((string)($scope['default_locale'] ?? ''));
+        $contentLocale = $this->resolveStageTwoPromptContentLocale($scope);
         $pageCoverage = \is_array($scope['page_coverage'] ?? null) ? $scope['page_coverage'] : [];
         $pageType = $batch['type'] === 'page' ? (string)$batch['key'] : '';
 
@@ -692,6 +693,9 @@ final class AiSiteVirtualThemePlanService
         if ($defaultLocale !== '') {
             $lines[] = 'Default locale: ' . $defaultLocale;
         }
+        if ($contentLocale !== '') {
+            $lines[] = 'Website content locale: ' . $contentLocale . ' (required language for website copy and planned content).';
+        }
 
         $lines[] = 'Filtered build_blueprint tasks for this batch:';
         $lines[] = \json_encode($this->filterBuildBlueprintForTaskKeys($buildBlueprint, $batch['task_keys']), \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
@@ -708,6 +712,7 @@ final class AiSiteVirtualThemePlanService
         $lines[] = '- For page block tasks, read the matching Relevant stage-1 page cues entry and explicitly use block_goal for task_goal, realtime_content for content_plan examples, page_design_plan/page_flow_role/design_tags/style_direction for style_plan, and reason for planning_reason.';
         $lines[] = '- Never use task_key, page_type, section_code, block_key, component paths, or internal IDs as customer-visible copy.';
         $lines[] = '- Visible-language rule: customer-visible copy, field samples, CTA labels, link labels, and alt text must use content_locale/default_locale, which is the website requirement language. Do NOT use plan_locale as the website content language unless it is identical to default_locale. Keep internal IDs in task_key/section_code only.';
+        $lines[] = '- Planned-content language lock: task_script.story_goal, task_script.content_fill_rule, task_script.field_content_requirements[].sample/reason, block_task.task_goal, block_task.meta_fields[].sample/default/reason, block_task.content_plan copy/CTA/link/asset text, nav/footer labels, SEO copy, and every user-reviewable planning sentence must also use the website content locale. If stage-1 text, user brief, or existing plan text is in another language, translate/adapt it instead of copying it.';
         $lines[] = '- block_task.style_plan must preserve page_design_plan and design_tags exactly enough for stage 3: page role, color_layering, section_flow, page_flow_role, visual tags, motion tags, interaction tags, texture tags, responsive tags, and implementation_note must appear in the style_plan values.';
         $lines[] = '- block_task.style_plan.color must state the page-level color layering for this block: background/surface/card/CTA/accent usage and how it contrasts with adjacent blocks; do not let every block use the same full-bleed background.';
         $lines[] = '- block_task.style_plan must read like a UI/interaction designer handoff: include section surface treatment, foreground/background relationship, interaction states, motion restraint, and mobile rhythm for this page role.';
@@ -6860,11 +6865,16 @@ final class AiSiteVirtualThemePlanService
         string $targetScope = ''
     ): string {
         $stage1PlanJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $confirmedPlanBook = $this->resolveConfirmedStageOnePlanBook($scope);
+        $stage1PlanSource = $stage1PlanJson !== []
+            ? $stage1PlanJson
+            : $this->compactConfirmedPlanBookForPrompt($confirmedPlanBook);
         $stage1PlanMarkdown = \trim((string)($scope['plan_markdown'] ?? ''));
         $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
         $stage1TaskCues = \is_array($structured['stage1_task_cues'] ?? null) ? $structured['stage1_task_cues'] : [];
         $planLocale = \trim((string)($scope['plan_locale'] ?? ($scope['plan_workbench']['plan_locale'] ?? '')));
         $defaultLocale = \trim((string)($scope['default_locale'] ?? ''));
+        $contentLocale = $this->resolveStageTwoPromptContentLocale($scope);
         $pageCoverage = \is_array($scope['page_coverage'] ?? null) ? $scope['page_coverage'] : [];
         $modeRules = match ($mode) {
             'refine_task_plan' => [
@@ -6969,8 +6979,9 @@ final class AiSiteVirtualThemePlanService
             '- Concurrent tasks may run in parallel across pages/components, but they must not share streaming buffers or stateful caches.',
             '- Page completion may materialize a page immediately and open its visual editing SSE.',
             '- Component-level generation may also run concurrently in isolated SSE sessions.',
-            '- Shared tasks and page tasks must preserve the confirmed locale rules: plan_locale for plan text, default_locale for content generation.',
-            '- Stage-2 contract: derive ONLY from confirmed stage-1 markdown + plan_json + execution_blueprint; never invent requirements absent from stage-1.',
+            '- Shared tasks and page tasks must preserve the confirmed locale rules: content_locale/default_locale is the website language for both final copy and planned content; plan_locale is only an internal planning hint and must not override website-language output.',
+            '- Planned-content language lock: markdown task-plan descriptions, task_script.story_goal, task_script.content_fill_rule, task_script.field_content_requirements[].sample/reason, block_task.task_goal, block_task.meta_fields[].sample/default/reason, block_task.content_plan copy/CTA/link/asset text, nav/footer labels, and SEO copy must all use content_locale/default_locale. If confirmed stage-1 text or user brief text is in another language, translate/adapt it before writing the task plan.',
+            '- Stage-2 contract: derive ONLY from confirmed stage-1 markdown + confirmed_stage1_plan_book + execution_blueprint; never invent requirements absent from stage-1.',
             '- Produce virtual_theme_plan fields: plan_signature, virtual_theme_strategy, shared_tasks, page_tasks, block_task_schema, task_tree, meta_field_matrix, style_tokens, content_rules, responsive_rules, execution_order, risk_notes.',
             '- shared:header must specify visuals, nav structure, brand slot, CTA slots, variable fields, defaults, responsive collapse rules, SEO/internal-link rationale; list each nav item as label + target page_type or href—no empty "nav TBD".',
             '- shared:footer must specify information groups, policy links, trust blocks, social/contact slots, variable fields, defaults, SEO/crawl rationale; each group MUST name the exact link labels users see.',
@@ -6991,6 +7002,9 @@ final class AiSiteVirtualThemePlanService
         if ($defaultLocale !== '') {
             $lines[] = 'Default locale: ' . $defaultLocale;
         }
+        if ($contentLocale !== '') {
+            $lines[] = 'Website content locale: ' . $contentLocale . ' (required language for website copy and planned content).';
+        }
         if ($pageCoverage !== []) {
             $lines[] = 'Page coverage report:';
             $lines[] = \json_encode($pageCoverage, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '[]';
@@ -7004,8 +7018,8 @@ final class AiSiteVirtualThemePlanService
         if ($targetScope !== '') {
             $lines[] = 'Target scope: ' . $targetScope;
         }
-        $lines[] = 'Stage-1 plan_json:';
-        $lines[] = \json_encode($stage1PlanJson, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
+        $lines[] = 'Stage-1 confirmed plan source (plan_json or compacted confirmed_stage1_plan_book):';
+        $lines[] = \json_encode($stage1PlanSource, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
         $lines[] = 'Stage-1 plan_markdown:';
         $lines[] = $stage1PlanMarkdown !== '' ? $stage1PlanMarkdown : '-';
         $lines[] = 'Confirmed execution_blueprint:';
@@ -7628,6 +7642,33 @@ final class AiSiteVirtualThemePlanService
                 }
             }
         }
+    }
+
+    private function resolveStageTwoPromptContentLocale(array $scope): string
+    {
+        foreach ([
+            $scope['content_locale'] ?? null,
+            $scope['website_profile']['content_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+            $scope['website_profile']['default_locale'] ?? null,
+            $scope['plan_json']['content_locale'] ?? null,
+            $scope['execution_blueprint']['content_locale'] ?? null,
+            $scope['confirmed_stage1_plan_book']['content_locale'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_book']['structured']['content_locale'] ?? null,
+            $scope['plan_workbench']['confirmed']['structured_plan']['content_locale'] ?? null,
+            $scope['stage2_context_snapshot']['content_locale'] ?? null,
+        ] as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $locale = \trim((string)$value);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return '';
     }
 
     private function resolveStageTwoStructuredContentLocale(array $structured): string

@@ -70,6 +70,8 @@
     window.__pbTaskSummary = <?= \json_encode($buildTaskSummary, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var buildNavigationGuardActive = false;
     var buildStartupPending = false;
+    var taskPlanPanelDefaultCollapsedForBuild = false;
+    var taskPlanPanelManuallyOpenedDuringBuild = false;
     if (typeof window.__pbWorkspaceStreamPaused === 'undefined') {
         window.__pbWorkspaceStreamPaused = false;
     }
@@ -102,6 +104,7 @@
     }
     var blockRefreshState = getSharedBlockRefreshState();
     var pendingBlockSseResult = null;
+    var pendingBlockSseStart = null;
     var virtualPagesByTypeState = <?= \json_encode($initialVirtualPagesByTypeState, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
 
     function resolvePreviewBridge() {
@@ -782,9 +785,11 @@
         if (window.__pbPhase2TaskProgress && typeof window.__pbPhase2TaskProgress.syncFromWorkspaceState === 'function') {
             window.__pbPhase2TaskProgress.syncFromWorkspaceState(workspaceState);
         }
+        syncPublishStageEntryFromWorkspaceState(workspaceState);
         normalizeGuidedStaticLabels();
         syncConfirmPlanButtonEnabled();
         applyTaskPlanEditingLockFromActiveOperation();
+        applyTaskPlanBuildDefaultCollapse();
     }
 
     function hydrateInitialWorkspaceStateOnce() {
@@ -1124,6 +1129,24 @@
         refineUnavailable: <?= \json_encode((string)__('当前区块暂时无法发起 AI 微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineQueued: <?= \json_encode((string)__('已提交区块微调，正在重新生成当前页面'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineContextFallback: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        refineStreaming: <?= \json_encode((string)__('已开始区块微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        regenerateStreaming: <?= \json_encode((string)__('已开始区块重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        regenerateQueued: <?= \json_encode((string)__('已确认区块重建，正在重新生成当前页面'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        sharedComponentNotice: <?= \json_encode((string)__('共享区块，修改会同步到所有页面'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseUnavailable: <?= \json_encode((string)__('区块生成流终端尚未就绪'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseConfirmRefine: <?= \json_encode((string)__('确认微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseConfirmRebuild: <?= \json_encode((string)__('确认重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseConfirmDefault: <?= \json_encode((string)__('确认执行'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseStartPending: <?= \json_encode((string)__('控制台已准备，等待确认后连接生成流。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseWaitingConnection: <?= \json_encode((string)__('等待连接区块生成流，连接建立后将自动开始。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseRefinePendingContext: <?= \json_encode((string)__('请确认微调，确认后将连接生成流并开始微调当前区块。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseRebuildPendingContext: <?= \json_encode((string)__('请确认重建，确认后将连接生成流并开始重建当前区块。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseRefineConnecting: <?= \json_encode((string)__('已确认微调，正在连接生成流...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseRebuildConnecting: <?= \json_encode((string)__('已确认重建，正在连接生成流...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseRefineStarted: <?= \json_encode((string)__('连接已建立，开始微调当前区块。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseRebuildStarted: <?= \json_encode((string)__('连接已建立，开始重建当前区块。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseRefineAwaitingConfirm: <?= \json_encode((string)__('区块微调等待确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseRebuildAwaitingConfirm: <?= \json_encode((string)__('区块重建等待确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editUnavailable: <?= \json_encode((string)__('当前区块没有可直接编辑的字段，已尝试打开页面编辑器。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editSaved: <?= \json_encode((string)__('区块字段已更新，已刷新当前块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseDoneConfirm: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1147,6 +1170,19 @@
         publishChecking: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishRunning: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishPreviewUnavailable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryPendingBadge: <?= \json_encode((string)__('等待构建完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryPendingTitle: <?= \json_encode((string)__('第三阶段确认发布入口会在虚拟主题就绪后开放'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryPendingHint: <?= \json_encode((string)__('当前仍可继续预览和编辑；当虚拟主题构建完成后，这里会直接提供进入第三阶段的按钮。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryBuildingBadge: <?= \json_encode((string)__('正在构建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryBuildingTitle: <?= \json_encode((string)__('虚拟主题构建进行中，完成后即可进入第三阶段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryBuildingHint: <?= \json_encode((string)__('后台仍在处理页面和区块，当前入口先锁定；构建结束后会自动变为可点击。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryReadyBadge: <?= \json_encode((string)__('可进入第三阶段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryReadyTitle: <?= \json_encode((string)__('虚拟主题已就绪，下一步进入确认发布'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryReadyHint: <?= \json_encode((string)__('进入第三阶段后可先运行发布前预检，再确认准备发布。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryPublishedBadge: <?= \json_encode((string)__('已发布'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryPublishedTitle: <?= \json_encode((string)__('站点已经发布，仍可进入第三阶段查看发布状态'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryPublishedHint: <?= \json_encode((string)__('如果需要复查发布前清单、预览或发布结果，可以从这里进入第三阶段。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryButton: <?= \json_encode((string)__('进入第三阶段确认发布'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         visualPreviewFullscreenTitle: <?= \json_encode((string)__('主题预览放大查看'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         visualPreviewFullscreenOpen: <?= \json_encode((string)__('放大预览'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         visualPreviewFullscreenClose: <?= \json_encode((string)__('关闭'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -3694,6 +3730,42 @@
         return regionLabel + ' / ' + (shortCode || componentCode || 'block');
     }
 
+    function resolveSharedComponentRegionFromCode(pageType, componentCode) {
+        var code = String(componentCode || '').trim();
+        if (!code) {
+            return '';
+        }
+        var normalizedBlockId = code;
+        if (normalizedBlockId.indexOf('content/') === 0) {
+            normalizedBlockId = normalizedBlockId.slice('content/'.length);
+        }
+        var pageSlug = String(pageType || '').trim().replace(/_/g, '-');
+        if (
+            code === 'header/ai-site-header'
+            || normalizedBlockId === 'header-ai-site-header'
+            || (pageSlug && normalizedBlockId === pageSlug + '-site-header')
+            || /-site-header$/.test(normalizedBlockId)
+        ) {
+            return 'header';
+        }
+        if (
+            code === 'footer/ai-site-footer'
+            || normalizedBlockId === 'footer-ai-site-footer'
+            || (pageSlug && normalizedBlockId === pageSlug + '-site-footer')
+            || /-site-footer$/.test(normalizedBlockId)
+        ) {
+            return 'footer';
+        }
+        return '';
+    }
+
+    function buildBlockContextText(pageType, componentLabel, componentCode) {
+        var base = (normalizePageTypeLabel(pageType) || pageType) + ' / ' + (componentLabel || componentCode);
+        return resolveSharedComponentRegionFromCode(pageType, componentCode)
+            ? (base + ' · ' + messages.sharedComponentNotice)
+            : base;
+    }
+
     function cloneJson(value) {
         try {
             return JSON.parse(JSON.stringify(value || {}));
@@ -3995,22 +4067,24 @@
         return new bootstrap.Modal(modalEl);
     }
 
-    function openBlockSseModal(title, contextText, url, formData) {
+    function openBlockSseModal(title, contextText, url, formData, options) {
         var modalEl = document.getElementById('pb-ai-block-sse-modal');
         var titleEl = document.getElementById('pb-ai-block-sse-modal-title');
         var contextEl = document.getElementById('pb-ai-block-sse-context');
+        var startBtn = document.getElementById('pb-ai-block-sse-confirm-start');
         var applyBtn = document.getElementById('pb-ai-block-sse-apply');
         var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-block-sse-terminal'] : null;
         if (!modalEl || !terminal) {
             toast('error', messages.blockSseUnavailable);
             return false;
         }
+        options = options || {};
 
         if (titleEl) {
             titleEl.textContent = String(title || <?= \json_encode((string)__('区块生成详情'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         }
         if (contextEl) {
-            contextEl.textContent = String(contextText || '');
+            contextEl.textContent = String(options.pendingContext || contextText || '');
         }
 
         if (terminal.stop) {
@@ -4020,9 +4094,33 @@
             terminal.clear();
         }
         pendingBlockSseResult = null;
+        pendingBlockSseStart = {
+            url: url,
+            formData: formData,
+            terminal: terminal,
+            contextEl: contextEl,
+            startBtn: startBtn,
+            startMessage: options.startMessage || messages.blockSseWaitingConnection,
+            openMessage: options.openMessage || '',
+            runningContext: options.runningContext || contextText || '',
+            streamingMessage: options.streamingMessage || '',
+            toastMessage: options.toastMessage || '',
+            started: false
+        };
+        if (startBtn) {
+            startBtn.textContent = String(options.confirmLabel || messages.blockSseConfirmDefault);
+            startBtn.classList.remove('d-none');
+            startBtn.disabled = false;
+        }
         if (applyBtn) {
             applyBtn.classList.add('d-none');
             applyBtn.disabled = true;
+        }
+        if (terminal.log) {
+            terminal.log(options.pendingLogMessage || messages.blockSseStartPending, 'info');
+        }
+        if (terminal.setStatus) {
+            terminal.setStatus('connecting', options.pendingStatusText || messages.blockSseStartPending);
         }
 
         terminal.on('done', function (event) {
@@ -4034,6 +4132,11 @@
                 mergeVirtualPagesByTypeState(payload.state.virtual_pages_by_type);
             }
             pendingBlockSseResult = payload && typeof payload === 'object' ? payload : null;
+            pendingBlockSseStart = null;
+            if (startBtn) {
+                startBtn.classList.add('d-none');
+                startBtn.disabled = true;
+            }
             if (applyBtn) {
                 applyBtn.classList.remove('d-none');
                 applyBtn.disabled = false;
@@ -4053,14 +4156,27 @@
             }
         });
 
+        terminal.on('open', function () {
+            var pending = pendingBlockSseStart;
+            if (!pending || pending.terminal !== terminal || !pending.started) {
+                return;
+            }
+            if (pending.openMessage && terminal.log) {
+                terminal.log(pending.openMessage, 'success');
+            }
+            if (contextEl && pending.runningContext) {
+                contextEl.textContent = String(pending.runningContext);
+            }
+        });
+
         var modalInstance = resolveBootstrapModalInstance(modalEl);
         if (modalInstance && typeof modalInstance.show === 'function') {
             modalInstance.show();
         }
 
-        window.setTimeout(function () {
-            terminal.start(url, { method: 'POST', body: formData });
-        }, PB_SSE_CONNECT_DELAY_MS);
+        if (!startBtn) {
+            confirmPendingBlockSseStart();
+        }
 
         return true;
     }
@@ -4104,11 +4220,51 @@
         }
     }
 
+    function confirmPendingBlockSseStart() {
+        var pending = pendingBlockSseStart;
+        if (!pending || pending.started || !pending.terminal) {
+            return;
+        }
+        pending.started = true;
+        if (pending.startBtn) {
+            pending.startBtn.disabled = true;
+            pending.startBtn.classList.add('d-none');
+        }
+        if (pending.contextEl && pending.runningContext) {
+            pending.contextEl.textContent = String(pending.runningContext);
+        }
+        if (typeof renderBlockStreamingState === 'function' && pending.streamingMessage) {
+            renderBlockStreamingState(pending.streamingMessage);
+        }
+        if (pending.terminal.log) {
+            pending.terminal.log(String(pending.startMessage || messages.blockSseWaitingConnection || ''), 'info');
+        }
+        if (pending.terminal.setStatus) {
+            pending.terminal.setStatus('connecting', String(messages.blockSseWaitingConnection || ''));
+        }
+        window.setTimeout(function () {
+            if (pendingBlockSseStart !== pending || !pending.terminal) {
+                return;
+            }
+            if (pending.terminal.isRunning && pending.terminal.isRunning()) {
+                return;
+            }
+            pending.terminal.start(pending.url, { method: 'POST', body: pending.formData });
+        }, PB_SSE_CONNECT_DELAY_MS);
+        if (pending.toastMessage) {
+            toast('success', pending.toastMessage);
+        }
+    }
+
     (function initBlockSseModal() {
         var modalEl = document.getElementById('pb-ai-block-sse-modal');
+        var startBtn = document.getElementById('pb-ai-block-sse-confirm-start');
         var applyBtn = document.getElementById('pb-ai-block-sse-apply');
         if (!modalEl) {
             return;
+        }
+        if (startBtn) {
+            startBtn.addEventListener('click', confirmPendingBlockSseStart);
         }
         if (applyBtn) {
             applyBtn.addEventListener('click', function () {
@@ -4145,6 +4301,11 @@
                 terminal.stop();
             }
             pendingBlockSseResult = null;
+            pendingBlockSseStart = null;
+            if (startBtn) {
+                startBtn.classList.add('d-none');
+                startBtn.disabled = true;
+            }
             if (applyBtn) {
                 applyBtn.classList.add('d-none');
                 applyBtn.disabled = true;
@@ -4170,7 +4331,11 @@
         refineComponentState.pageType = pageType;
         refineComponentState.componentCode = componentCode;
         refineComponentState.componentLabel = buildComponentLabel(payload);
-        contextEl.textContent = (normalizePageTypeLabel(pageType) || pageType) + ' / ' + (refineComponentState.componentLabel || messages.refineContextFallback);
+        contextEl.textContent = buildBlockContextText(
+            pageType,
+            refineComponentState.componentLabel || messages.refineContextFallback,
+            componentCode
+        );
         instructionEl.value = '';
         var modalInstance = resolveBootstrapModalInstance(modalEl);
         if (!modalInstance || typeof modalInstance.show !== 'function') {
@@ -4209,7 +4374,7 @@
         blockEditorState.blockLabel = buildComponentLabel(payload);
         blockEditorState.blockConfig = cloneJson(block.config || {});
         blockEditorState.fieldSchema = cloneJson(block.field_schema || {});
-        contextEl.textContent = (normalizePageTypeLabel(pageType) || pageType) + ' / ' + blockEditorState.blockLabel;
+        contextEl.textContent = buildBlockContextText(pageType, blockEditorState.blockLabel, blockId);
         renderBlockEditorFields(blockEditorState.fieldSchema, blockEditorState.blockConfig);
 
         var modalInstance = resolveBootstrapModalInstance(modalEl);
@@ -4316,18 +4481,34 @@
         blockRefreshState.pageType = refineComponentState.pageType;
         blockRefreshState.blockId = refineComponentState.componentCode;
         if (typeof renderBlockStreamingState === 'function') {
-            renderBlockStreamingState(messages.refineQueued);
+            renderBlockStreamingState(messages.blockSseRefineAwaitingConfirm);
         }
-        openBlockSseModal(
-            'AI Block Refine',
-            (normalizePageTypeLabel(refineComponentState.pageType) || refineComponentState.pageType) + ' / ' + (refineComponentState.componentLabel || refineComponentState.componentCode),
-            startBlockRefineSseUrl,
-            formData
+        var refineContextText = buildBlockContextText(
+            refineComponentState.pageType,
+            refineComponentState.componentLabel || refineComponentState.componentCode,
+            refineComponentState.componentCode
         );
+        var opened = openBlockSseModal(
+            'AI Block Refine',
+            refineContextText,
+            startBlockRefineSseUrl,
+            formData,
+            {
+                confirmLabel: messages.blockSseConfirmRefine,
+                pendingContext: messages.blockSseRefinePendingContext + ' ' + refineContextText,
+                runningContext: refineContextText,
+                startMessage: messages.blockSseRefineConnecting,
+                openMessage: messages.blockSseRefineStarted,
+                streamingMessage: messages.refineQueued,
+                toastMessage: messages.refineStreaming
+            }
+        );
+        if (!opened) {
+            clearBlockStreamingState();
+        }
         if (submitBtn) {
             submitBtn.disabled = false;
         }
-        toast('success', messages.refineStreaming);
     }
 
     function startBlockRegenerate(payload) {
@@ -4347,15 +4528,27 @@
         blockRefreshState.pageType = pageType;
         blockRefreshState.blockId = componentCode;
         if (typeof renderBlockStreamingState === 'function') {
-            renderBlockStreamingState(messages.generating);
+            renderBlockStreamingState(messages.blockSseRebuildAwaitingConfirm);
         }
-        openBlockSseModal(
+        var rebuildContextText = buildBlockContextText(pageType, buildComponentLabel(payload), componentCode);
+        var opened = openBlockSseModal(
             'AI Block Regenerate',
-            (normalizePageTypeLabel(pageType) || pageType) + ' / ' + buildComponentLabel(payload),
+            rebuildContextText,
             startBlockRegenerateSseUrl,
-            formData
+            formData,
+            {
+                confirmLabel: messages.blockSseConfirmRebuild,
+                pendingContext: messages.blockSseRebuildPendingContext + ' ' + rebuildContextText,
+                runningContext: rebuildContextText,
+                startMessage: messages.blockSseRebuildConnecting,
+                openMessage: messages.blockSseRebuildStarted,
+                streamingMessage: messages.regenerateQueued,
+                toastMessage: messages.regenerateStreaming
+            }
         );
-        toast('success', messages.regenerateStreaming);
+        if (!opened) {
+            clearBlockStreamingState();
+        }
     }
 
     function submitBlockEditor() {
@@ -8918,6 +9111,114 @@
         return operation === 'build' && (status === 'queued' || status === 'running');
     }
 
+    function hasBuildTaskActivity() {
+        var summary = window.__pbTaskSummary && typeof window.__pbTaskSummary === 'object'
+            ? window.__pbTaskSummary
+            : {};
+        var decision = getTaskPlanStageEntryDecision();
+        var stage = String(currentWorkspaceStage || currentStageCode || '').toLowerCase();
+        return !!hasPendingBuildTasksState
+            || !!taskPlanConfirmedState
+            || stage === 'build'
+            || !!decision.build_queue_running
+            || ((Number(summary.queued || 0) + Number(summary.running || 0)) > 0)
+            || isThemeBuildGenerationRunning();
+    }
+
+    function canEnterPublishStageFromWorkspaceState(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var workspaceStatus = String(state.workspace_status || '').toLowerCase();
+        var publishStatus = String(state.publish_status || '').toLowerCase();
+        return !!state.can_publish
+            || workspaceStatus === 'can_publish'
+            || workspaceStatus === 'published'
+            || publishStatus === 'published';
+    }
+
+    function syncPublishStageEntryFromWorkspaceState(workspaceState) {
+        var card = document.getElementById('pb-ai-publish-stage-entry-card');
+        var badgeEl = document.getElementById('pb-ai-publish-stage-entry-badge');
+        var titleEl = document.getElementById('pb-ai-publish-stage-entry-title');
+        var hintEl = document.getElementById('pb-ai-publish-stage-entry-hint');
+        var btn = document.getElementById('pb-ai-go-publish-stage');
+        if (!card || !badgeEl || !titleEl || !hintEl || !btn) {
+            return;
+        }
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : (latestWorkspaceState && typeof latestWorkspaceState === 'object' ? latestWorkspaceState : {});
+        var workspaceStatus = String(state.workspace_status || '').toLowerCase();
+        var publishStatus = String(state.publish_status || '').toLowerCase();
+        var active = state.active_operation && typeof state.active_operation === 'object'
+            ? state.active_operation
+            : {};
+        var activeOperation = String(active.operation || '').toLowerCase();
+        var activeStatus = String(active.status || '').toLowerCase();
+        var building = workspaceStatus === 'building'
+            || (activeOperation === 'build' && (activeStatus === 'queued' || activeStatus === 'running'));
+        var published = publishStatus === 'published' || workspaceStatus === 'published';
+        var ready = canEnterPublishStageFromWorkspaceState(state) && !building;
+        var badgeClass = 'badge bg-secondary';
+        var badgeText = messages.publishStageEntryPendingBadge || '';
+        var titleText = messages.publishStageEntryPendingTitle || '';
+        var hintText = messages.publishStageEntryPendingHint || '';
+
+        if (published) {
+            badgeClass = 'badge bg-success';
+            badgeText = messages.publishStageEntryPublishedBadge || '';
+            titleText = messages.publishStageEntryPublishedTitle || '';
+            hintText = messages.publishStageEntryPublishedHint || '';
+        } else if (ready) {
+            badgeClass = 'badge bg-success';
+            badgeText = messages.publishStageEntryReadyBadge || '';
+            titleText = messages.publishStageEntryReadyTitle || '';
+            hintText = messages.publishStageEntryReadyHint || '';
+        } else if (building) {
+            badgeClass = 'badge bg-warning text-dark';
+            badgeText = messages.publishStageEntryBuildingBadge || '';
+            titleText = messages.publishStageEntryBuildingTitle || '';
+            hintText = messages.publishStageEntryBuildingHint || '';
+        }
+
+        badgeEl.className = badgeClass;
+        badgeEl.textContent = String(badgeText || '');
+        titleEl.textContent = String(titleText || '');
+        hintEl.textContent = String(hintText || '');
+        btn.innerHTML = '<i class="mdi mdi-flag-checkered me-1"></i>' + escapeHtml(String(messages.publishStageEntryButton || ''));
+        btn.disabled = !ready;
+        if (btn.disabled) {
+            btn.setAttribute('aria-disabled', 'true');
+        } else {
+            btn.removeAttribute('aria-disabled');
+        }
+        card.dataset.publishReady = ready ? '1' : '0';
+    }
+
+    function applyTaskPlanBuildDefaultCollapse() {
+        if (!hasBuildTaskActivity()) {
+            taskPlanPanelDefaultCollapsedForBuild = false;
+            taskPlanPanelManuallyOpenedDuringBuild = false;
+            return;
+        }
+        if (taskPlanPanelManuallyOpenedDuringBuild) {
+            return;
+        }
+        var el = getTaskPlanPanelCollapseEl();
+        if (!el) {
+            return;
+        }
+        taskPlanPanelDefaultCollapsedForBuild = true;
+        if (!el.classList.contains('show')) {
+            return;
+        }
+        var c = getBootstrapCollapseInstance(el, { toggle: false });
+        if (c && typeof c.hide === 'function') {
+            c.hide();
+        } else {
+            el.classList.remove('show');
+        }
+    }
+
     function setElementLockedForThemeBuild(el, locked) {
         if (!el) {
             return;
@@ -9805,6 +10106,9 @@
             }, true);
         }
         panel.addEventListener('show.bs.collapse', function () {
+            if (taskPlanPanelDefaultCollapsedForBuild && hasBuildTaskActivity()) {
+                taskPlanPanelManuallyOpenedDuringBuild = true;
+            }
             if (taskPlanStartRequestInFlight || taskPlanSseRunning || taskPlanAccordionDataCheckInFlight) {
                 return;
             }
@@ -10376,6 +10680,25 @@
     function bindVisualEditStageLogic() {
         bindPlanStageLogic();
         bindTaskPlanAccordionOnce();
+        syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
+        var publishStageBtn = document.getElementById('pb-ai-go-publish-stage');
+        if (publishStageBtn && publishStageBtn.dataset.pbBound !== '1') {
+            publishStageBtn.dataset.pbBound = '1';
+            publishStageBtn.addEventListener('click', function () {
+                if (publishStageBtn.disabled || !setStageUrl) {
+                    return;
+                }
+                postForm(setStageUrl, { public_id: publicId, stage: 'publish' }).then(function (data) {
+                    if (data && data.success) {
+                        window.location.reload();
+                        return;
+                    }
+                    toast('error', (data && data.message) ? String(data.message) : messages.networkError);
+                }).catch(function () {
+                    toast('error', messages.networkError);
+                });
+            });
+        }
         scheduleVisualEditResumePrompt();
     }
 

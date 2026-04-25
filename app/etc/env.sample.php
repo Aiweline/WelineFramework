@@ -222,6 +222,10 @@ return [
             'timing_log_file' => 'var/log/wls/timing.log',
         ],
         'worker_count' => 'auto',
+        // Worker/维护 Worker 子进程 PHP memory_limit。纯数字按 MB 处理；支持 512M、1G、-1。
+        'worker_memory_limit' => '256M',
+        // Dispatcher 子进程 PHP memory_limit；不配置时默认跟随 worker_memory_limit。
+        'dispatcher_memory_limit' => '256M',
         // EventLoop 后端：auto=优先 event 扩展，不可用回退 select
         'loop' => [
             'driver' => 'auto', // auto|select|event
