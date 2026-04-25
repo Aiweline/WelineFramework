@@ -307,19 +307,16 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
         $stored = $session->getScopeArray();
 
         self::assertSame([], $stored['execution_blueprint_draft'] ?? null);
-        self::assertSame([], $stored['plan_structured'] ?? null);
-        self::assertSame([], $stored['plan_json'] ?? null);
+        self::assertSame(['pages' => ['home_page' => ['goal' => 'Keep me']]], $stored['plan_structured'] ?? null);
+        self::assertSame(['pages' => ['home_page' => ['goal' => 'Keep me']]], $stored['plan_json'] ?? null);
         self::assertArrayNotHasKey('execution_blueprint', $stored['plan_workbench']['confirmed'] ?? []);
         self::assertArrayNotHasKey('structured_plan', $stored['plan_workbench']['confirmed'] ?? []);
         self::assertArrayNotHasKey('plan_json', $stored['plan_workbench']['confirmed'] ?? []);
         self::assertArrayNotHasKey('plan_book', $stored['plan_workbench']['confirmed'] ?? []);
         self::assertSame(1, $stored['plan_workbench']['confirmed']['_storage_compacted'] ?? null);
+        self::assertArrayNotHasKey('confirmed_stage1_plan_book', $stored);
         self::assertSame(
-            ['source' => 'stage1.block_tree', 'pages' => ['home_page' => ['blocks' => []]]],
-            $stored['confirmed_stage1_plan_book'] ?? null
-        );
-        self::assertSame(
-            ['field' => 'confirmed_stage1_plan_book'],
+            ['field' => 'plan_json'],
             $stored['plan_workbench']['confirmed']['plan_book_ref'] ?? null
         );
 
@@ -331,7 +328,7 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
         self::assertArrayNotHasKey('virtual_theme_build_tree', $stored['virtual_theme_plan']['confirmed'] ?? []);
         self::assertSame(1, $stored['virtual_theme_plan']['confirmed']['_storage_compacted'] ?? null);
         self::assertSame(1, $stored['virtual_theme_plan']['confirmed']['execution_blueprint_ref']['task_count'] ?? null);
-        self::assertSame($stage2ContextSnapshot, $stored['stage2_context_snapshot'] ?? null);
+        self::assertArrayNotHasKey('stage2_context_snapshot', $stored);
         self::assertSame(['block_key' => 'hero'], $stored['build_blueprint']['tasks'][0]['runtime_context'] ?? null);
 
         $buildTaskState = $stored['build_tasks']['page:home_page:hero'] ?? [];
