@@ -38,7 +38,9 @@ class AiSiteVirtualLayoutService
             return null;
         }
 
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $virtualThemeId = \max(
             (int)($scope['virtual_theme_id'] ?? 0),
             (int)$session->getVirtualThemeId()
