@@ -439,7 +439,13 @@ final class AiSiteExecutionBlueprintService
      * @param list<string> $pageTypes
      * @return array<string, mixed>
      */
-    private function mergeStageOneThemeAiPlanJson(array $planJson, array $decoded, string $planLocale, array $pageTypes, array $scope): array
+    private function mergeStageOneThemeAiPlanJson(
+        array $planJson,
+        array $decoded,
+        string $planLocale,
+        array $pageTypes,
+        array $scope
+    ): array
     {
         $decoded = $this->normalizeAiPlanResponseShape($decoded);
         $source = \is_array($decoded['plan_json'] ?? null) ? $decoded['plan_json'] : $decoded;
@@ -474,6 +480,13 @@ final class AiSiteExecutionBlueprintService
             \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : [],
             \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : []
         );
+        if (\is_array($planJson['theme_design'] ?? null)) {
+            $planJson['theme_design'] = $this->repairAiStageOneThemeSelectionReasonBeforeValidation(
+                $planJson['theme_design'],
+                \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $scope['website_profile']['brief_description'] ?? '')),
+                $planLocale
+            );
+        }
 
         return $planJson;
     }
@@ -1782,6 +1795,7 @@ final class AiSiteExecutionBlueprintService
             '- theme_style.selection_reason and palette.selection_reason are REQUIRED customer-readable explanations of why the color system, font family, and voice/tone were selected.',
             '- theme_design.selection_reason must explicitly mention the user one-line requirement and copy at least one exact noun/action phrase from it so validation can prove the theme is tied to the brief.',
             '- selection_reason must connect the color/font/tone choices to the user one-line requirement; do not use generic claims like "modern/professional/simple" as the whole reason.',
+            '- theme_design.selection_reason must never be empty. If uncertain, still output one concrete sentence that quotes the requirement phrase and explains how palette/font/tone support it.',
             '- Never write process wording such as "标题围绕核心价值展开", "正文说明主要亮点", "CTA 保持单一动作", or "字体与排版指定".',
             '- Never write blueprint guidance such as "围绕...说明", "首页先讲清...", "阶段一仅给方向", "List 2-4 points", or "Specify heading font".',
             '- For each block, content must read like real website copy that can be shown to a client immediately.',
@@ -2347,15 +2361,7 @@ final class AiSiteExecutionBlueprintService
             if ($pageType === Page::TYPE_HOME && $briefSignals !== []) {
                 $heroBlock = $this->findStageOneHeroBlock($blocks);
                 if ($heroBlock !== null) {
-                    $heroText = (string)\json_encode($heroBlock, \JSON_UNESCAPED_UNICODE);
-                    $containsBriefSignal = false;
-                    foreach ($briefSignals as $signal) {
-                        if ($signal !== '' && \mb_stripos($heroText, $signal) !== false) {
-                            $containsBriefSignal = true;
-                            break;
-                        }
-                    }
-                    if (!$containsBriefSignal) {
+                    if (!$this->stageOneBlockContainsBriefSignal($heroBlock, $briefSignals)) {
                         throw new \RuntimeException('AI stage-1 plan invalid: homepage hero does not reuse concrete nouns from the brief.');
                     }
                 }
@@ -2474,6 +2480,63 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param list<array<string, mixed>|mixed> $blocks
+     */
+    private function findStageOneHeroBlockIndex(array $blocks): ?int
+    {
+        foreach ($blocks as $index => $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $blockKey = \mb_strtolower(\trim((string)($block['block_key'] ?? '')));
+            $sectionCode = \mb_strtolower(\trim((string)($block['section_code'] ?? '')));
+            if (\str_contains($blockKey, 'hero') || \str_contains($sectionCode, 'hero')) {
+                return (int)$index;
+            }
+        }
+
+        foreach ($blocks as $index => $block) {
+            if (\is_array($block)) {
+                return (int)$index;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param list<string> $briefSignals
+     */
+    private function stageOneBlockContainsBriefSignal(array $block, array $briefSignals): bool
+    {
+        return $this->stageOneTextContainsBriefSignal(
+            (string)\json_encode($block, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR),
+            $briefSignals
+        );
+    }
+
+    /**
+     * @param list<string> $briefSignals
+     */
+    private function stageOneTextContainsBriefSignal(string $text, array $briefSignals): bool
+    {
+        $text = \trim($text);
+        if ($text === '' || $briefSignals === []) {
+            return false;
+        }
+
+        foreach ($briefSignals as $signal) {
+            $signal = \trim((string)$signal);
+            if ($signal !== '' && \mb_stripos($text, $signal) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @param array<string, mixed> $themeDesign
      */
     private function assertAiStageOneThemeSelectionReason(array $themeDesign, string $briefDescription): void
@@ -2544,7 +2607,7 @@ final class AiSiteExecutionBlueprintService
         }
 
         $signals = $this->extractStageOneBriefSignalTokens($brief);
-        if (\preg_match_all('/[a-z0-9][a-z0-9+#.\'-]{2,}/iu', $brief, $matches) === 1) {
+        if (\preg_match_all('/[a-z0-9][a-z0-9+#.\'-]{2,}/iu', $brief, $matches) > 0) {
             $stopWords = [
                 'and' => true,
                 'are' => true,
@@ -2567,7 +2630,7 @@ final class AiSiteExecutionBlueprintService
             }
         }
 
-        if (\preg_match_all('/[\p{Han}]{2,}/u', $brief, $matches) === 1) {
+        if (\preg_match_all('/[\p{Han}]{2,}/u', $brief, $matches) > 0) {
             foreach ($matches[0] as $candidate) {
                 $candidate = \trim((string)$candidate);
                 if ($candidate !== '') {
@@ -2723,11 +2786,140 @@ final class AiSiteExecutionBlueprintService
                 (string)$pageType,
                 $planLocale
             );
+            if ((string)$pageType === Page::TYPE_HOME) {
+                $page = $this->repairStageOneHomeHeroBriefSignals(
+                    $page,
+                    $this->extractStageOneBriefSignalTokens($briefDescription),
+                    $planLocale
+                );
+            }
 
             $normalized['pages'][$pageType] = $page;
         }
 
         return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     * @param list<string> $briefSignals
+     * @return array<string, mixed>
+     */
+    private function repairStageOneHomeHeroBriefSignals(array $page, array $briefSignals, string $planLocale): array
+    {
+        if ($briefSignals === [] || !\is_array($page['blocks'] ?? null)) {
+            return $page;
+        }
+
+        $blocks = $page['blocks'];
+        $heroIndex = $this->findStageOneHeroBlockIndex($blocks);
+        if ($heroIndex === null || !\is_array($blocks[$heroIndex] ?? null)) {
+            return $page;
+        }
+
+        $heroBlock = $blocks[$heroIndex];
+        if ($this->stageOneBlockContainsBriefSignal($heroBlock, $briefSignals)) {
+            return $page;
+        }
+
+        $signalPhrase = $this->buildStageOneBriefSignalPhrase($briefSignals, $planLocale);
+        if ($signalPhrase === '') {
+            return $page;
+        }
+
+        $blocks[$heroIndex] = $this->injectStageOneBriefSignalsIntoHeroBlock($heroBlock, $signalPhrase, $planLocale);
+        $page['blocks'] = \array_values($blocks);
+
+        return $page;
+    }
+
+    /**
+     * @param list<string> $briefSignals
+     */
+    private function buildStageOneBriefSignalPhrase(array $briefSignals, string $planLocale): string
+    {
+        $signals = [];
+        foreach ($briefSignals as $signal) {
+            $signal = \trim((string)$signal);
+            if ($signal === '' || \in_array($signal, $signals, true)) {
+                continue;
+            }
+            $signals[] = $signal;
+            if (\count($signals) >= 4) {
+                break;
+            }
+        }
+
+        if ($signals === []) {
+            return '';
+        }
+
+        return \implode($this->isEnglishLocale($planLocale) ? ', ' : ' / ', $signals);
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    private function injectStageOneBriefSignalsIntoHeroBlock(array $block, string $signalPhrase, string $planLocale): array
+    {
+        $content = \trim((string)($block['content'] ?? ''));
+        if ($content !== '') {
+            $block['content'] = $signalPhrase . ': ' . $content;
+        }
+
+        $blockKey = \trim((string)($block['block_key'] ?? $block['section_code'] ?? 'home_hero'));
+        $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
+        $updatedFirstTextField = false;
+        foreach ($fieldPlan as $index => $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $field = \trim((string)($row['field'] ?? ''));
+            $sample = \trim((string)($row['sample'] ?? ''));
+            if ($sample === '' || $this->stageOneTextContainsBriefSignal($sample, [$signalPhrase])) {
+                continue;
+            }
+            $fieldLower = \mb_strtolower($field);
+            if (
+                !$updatedFirstTextField
+                || \str_contains($fieldLower, 'title')
+                || \str_contains($fieldLower, 'headline')
+                || \str_contains($fieldLower, 'subtitle')
+                || \str_contains($fieldLower, 'description')
+            ) {
+                $sample = $signalPhrase . ' - ' . $sample;
+                $row['sample'] = $sample;
+                $row = $this->syncStageOneFieldImplementationNote(
+                    $row,
+                    $this->buildStageOneFieldImplementationNoteFromSample($field, $sample, $blockKey, Page::TYPE_HOME, $planLocale)
+                );
+                $fieldPlan[$index] = $row;
+                $updatedFirstTextField = true;
+            }
+        }
+        if ($fieldPlan !== []) {
+            $block['field_plan'] = $fieldPlan;
+        }
+
+        $executionScript = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
+        $coreCopy = \trim((string)($executionScript['core_copy'] ?? ''));
+        if ($coreCopy !== '' && !$this->stageOneTextContainsBriefSignal($coreCopy, [$signalPhrase])) {
+            $executionScript['core_copy'] = $signalPhrase . ': ' . $coreCopy;
+        }
+        $featurePoints = \is_array($executionScript['feature_points'] ?? null) ? $executionScript['feature_points'] : [];
+        if ($featurePoints !== []) {
+            $firstPoint = \is_scalar($featurePoints[0] ?? null) ? \trim((string)$featurePoints[0]) : '';
+            if (!$this->stageOneTextContainsBriefSignal($firstPoint, [$signalPhrase])) {
+                $featurePoints[0] = $signalPhrase . ' - ' . ($firstPoint !== '' ? $firstPoint : 'hero promise');
+                $executionScript['feature_points'] = \array_values($featurePoints);
+            }
+        }
+        if ($executionScript !== []) {
+            $block['execution_script'] = $executionScript;
+        }
+
+        return $block;
     }
 
     /**
@@ -3302,21 +3494,18 @@ final class AiSiteExecutionBlueprintService
         string $planLocale
     ): array {
         $selectionReason = \trim((string)($themeDesign['selection_reason'] ?? ''));
-        if (
-            $selectionReason === ''
+        $needsRepair = $selectionReason === ''
             || $this->isPromptLikeStageOneText($selectionReason, 'selection_reason')
-        ) {
-            return $themeDesign;
-        }
-
-        if (
-            $this->stageOneSelectionReasonReferencesRequirement($selectionReason, $briefDescription)
-            && !$this->isGenericThemeSelectionReason($selectionReason)
-        ) {
+            || !$this->stageOneSelectionReasonReferencesRequirement($selectionReason, $briefDescription)
+            || $this->isGenericThemeSelectionReason($selectionReason);
+        if (!$needsRepair) {
             return $themeDesign;
         }
 
         $requirementReference = \trim($briefDescription);
+        if ($requirementReference === '') {
+            $requirementReference = \trim((string)($themeDesign['theme_purpose'] ?? ''));
+        }
         if ($requirementReference === '') {
             return $themeDesign;
         }
@@ -5307,7 +5496,6 @@ final class AiSiteExecutionBlueprintService
         return [
             'site_title' => (string)($scope['site_title'] ?? $websiteProfile['site_title'] ?? ''),
             'site_tagline' => (string)($scope['site_tagline'] ?? $websiteProfile['site_tagline'] ?? ''),
-            'page_types' => \array_values(\array_map('strval', \is_array($executionBlueprint['page_types'] ?? null) ? $executionBlueprint['page_types'] : [])),
             'theme_style' => $structured['theme_style'] ?? [],
             'palette' => $structured['palette'] ?? [],
             'theme_design' => $this->extractStageOneThemeDesign(
@@ -7347,6 +7535,7 @@ final class AiSiteExecutionBlueprintService
     private function buildStageOnePageDisplayBlocks(array $sharedBlocks, array $pageBlocks): array
     {
         $headerBlocks = [];
+        $globalSharedBlocks = [];
         $footerBlocks = [];
         foreach ($sharedBlocks as $sharedBlock) {
             if (!\is_array($sharedBlock)) {
@@ -7357,6 +7546,8 @@ final class AiSiteExecutionBlueprintService
                 $headerBlocks[] = \array_replace($sharedBlock, ['display_role' => 'shared_header']);
             } elseif ($component === 'footer') {
                 $footerBlocks[] = \array_replace($sharedBlock, ['display_role' => 'shared_footer']);
+            } else {
+                $globalSharedBlocks[] = \array_replace($sharedBlock, ['display_role' => 'shared_global']);
             }
         }
 
@@ -7367,7 +7558,7 @@ final class AiSiteExecutionBlueprintService
             }
         }
 
-        return \array_values(\array_merge($headerBlocks, $pageRows, $footerBlocks));
+        return \array_values(\array_merge($headerBlocks, $globalSharedBlocks, $pageRows, $footerBlocks));
     }
 
     /**
@@ -9370,11 +9561,11 @@ final class AiSiteExecutionBlueprintService
         if ($pageType === '' || !\in_array($action, ['create', 'delete', 'rebuild'], true)) {
             throw new \RuntimeException('Stage-1 block mutation requires page_type and action=create|delete|rebuild.');
         }
-        if ($pageType === 'shared') {
-            throw new \RuntimeException('Stage-1 create/delete/rebuild only supports page blocks.');
-        }
         if ($action !== 'create' && $blockKey === '') {
             throw new \RuntimeException('Stage-1 block mutation requires block_key for delete/rebuild.');
+        }
+        if ($pageType === 'shared') {
+            return $this->mutateDraftSharedPlanBlock($scope, $action, $blockKey, $blockPatch);
         }
 
         $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
@@ -9562,9 +9753,9 @@ final class AiSiteExecutionBlueprintService
     private function buildStageOneTasksFromBlocks(array $sharedComponents, array $pagePlans): array
     {
         $tasks = [];
-        foreach (['header', 'footer'] as $sharedKey) {
-            if (\is_array($sharedComponents[$sharedKey] ?? null)) {
-                $tasks[] = $sharedComponents[$sharedKey];
+        foreach ($this->normalizeStageOneSharedComponents($sharedComponents) as $sharedComponent) {
+            if (\is_array($sharedComponent)) {
+                $tasks[] = $sharedComponent;
             }
         }
         foreach ($pagePlans as $pageType => $pagePlan) {
@@ -9685,6 +9876,328 @@ final class AiSiteExecutionBlueprintService
         }
 
         return null;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $blockPatch
+     * @return array{
+     *     plan_json:array<string, mixed>,
+     *     structured:array<string, mixed>,
+     *     execution_blueprint:array<string, mixed>,
+     *     markdown:string,
+     *     plan_workbench:array<string, mixed>,
+     *     mutation_summary:array<string, mixed>,
+     *     block:array<string, mixed>|null
+     * }
+     */
+    private function mutateDraftSharedPlanBlock(
+        array $scope,
+        string $action,
+        string $blockKey = '',
+        array $blockPatch = []
+    ): array {
+        $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+        $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null)
+            ? $scope['execution_blueprint_draft']
+            : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
+        $sharedComponents = $this->resolveStageOneSharedComponents($structured, $executionBlueprint);
+        $mutatedComponent = '';
+        $mutatedBlock = null;
+        $removedBlock = null;
+
+        if ($action === 'delete') {
+            $component = $this->findStageOneSharedComponentKey($sharedComponents, $blockKey);
+            if ($component === '') {
+                throw new \RuntimeException('Stage-1 shared block not found for delete: ' . $blockKey);
+            }
+            $removedBlock = $sharedComponents[$component] ?? null;
+            unset($sharedComponents[$component]);
+            $mutatedComponent = $component;
+        } elseif ($action === 'create') {
+            $mutatedBlock = $this->buildStageOneCreatedSharedBlock($blockPatch, \array_keys($sharedComponents));
+            $mutatedComponent = (string)($mutatedBlock['component'] ?? '');
+            $afterComponent = $this->findStageOneSharedComponentKey($sharedComponents, \trim((string)($blockPatch['after_block_key'] ?? '')));
+            $sharedComponents = $this->insertStageOneSharedComponent($sharedComponents, $mutatedComponent, $mutatedBlock, $afterComponent);
+        } else {
+            $component = $this->findStageOneSharedComponentKey($sharedComponents, $blockKey);
+            if ($component === '') {
+                throw new \RuntimeException('Stage-1 shared block not found for rebuild: ' . $blockKey);
+            }
+            $currentBlock = \is_array($sharedComponents[$component] ?? null) ? $sharedComponents[$component] : [];
+            unset(
+                $blockPatch['block_key'],
+                $blockPatch['block_type'],
+                $blockPatch['task_key'],
+                $blockPatch['component'],
+                $blockPatch['after_block_key']
+            );
+            $mutatedBlock = \array_replace_recursive($currentBlock, $blockPatch);
+            $mutatedBlock['component'] = $component;
+            $mutatedBlock['task_key'] = 'shared:' . $component;
+            $mutatedBlock['block_key'] = 'shared:' . $component;
+            $mutatedBlock['block_type'] = 'shared:' . $component;
+            $mutatedBlock['version'] = (int)($currentBlock['version'] ?? 1) + 1;
+            $mutatedBlock['mutation_source'] = 'stage1_shared_block_mutation_api';
+            $mutatedBlock['mutated_at'] = \date('c');
+            if (\trim((string)($mutatedBlock['reason'] ?? $mutatedBlock['why'] ?? '')) === '') {
+                $mutatedBlock['reason'] = 'Shared block was locally rebuilt from the stage-one block operation API.';
+                $mutatedBlock['why'] = $mutatedBlock['reason'];
+            }
+            $sharedComponents[$component] = $mutatedBlock;
+            $mutatedComponent = $component;
+        }
+
+        $sharedComponents = $this->normalizeStageOneSharedComponentOrder($sharedComponents);
+        $mutatedBlockKey = $action === 'create'
+            ? 'shared:' . $mutatedComponent
+            : ($action === 'delete'
+                ? (string)($removedBlock['task_key'] ?? ('shared:' . $mutatedComponent))
+                : (string)($mutatedBlock['task_key'] ?? ('shared:' . $mutatedComponent)));
+        $sharedTreeVersion = \max(
+            (int)($structured['shared_plan']['block_tree_version'] ?? 1),
+            (int)($executionBlueprint['shared_block_tree_version'] ?? 1)
+        ) + 1;
+        $assemblyVersion = \max(
+            (int)($structured['shared_plan']['assembly_version'] ?? 1),
+            (int)($executionBlueprint['assembly_version'] ?? 1)
+        ) + 1;
+
+        $structured['shared_components'] = $sharedComponents;
+        $themeContextSnapshot = \is_array($structured['theme_context_snapshot'] ?? null)
+            ? $structured['theme_context_snapshot']
+            : (\is_array($executionBlueprint['theme_context_snapshot'] ?? null) ? $executionBlueprint['theme_context_snapshot'] : []);
+        $pageTypes = \is_array($structured['page_types'] ?? null)
+            ? \array_values(\array_map('strval', $structured['page_types']))
+            : (\is_array($executionBlueprint['page_types'] ?? null) ? \array_values(\array_map('strval', $executionBlueprint['page_types'])) : []);
+        $planLocale = \trim((string)($scope['plan_locale'] ?? $scope['default_language'] ?? $scope['default_locale'] ?? $structured['i18n']['locale'] ?? ''));
+        $sharedPromptContext = $this->buildStageOneSharedPromptContext($themeContextSnapshot, $sharedComponents, $pageTypes, $planLocale);
+        $structured['shared_plan'] = \array_replace(
+            \is_array($structured['shared_plan'] ?? null) ? $structured['shared_plan'] : [],
+            [
+                'theme_design' => \is_array($structured['shared_plan']['theme_design'] ?? null)
+                    ? $structured['shared_plan']['theme_design']
+                    : $themeContextSnapshot,
+                'header_block' => \is_array($sharedComponents['header'] ?? null) ? $sharedComponents['header'] : [],
+                'footer_block' => \is_array($sharedComponents['footer'] ?? null) ? $sharedComponents['footer'] : [],
+                'shared_blocks' => $this->buildStageOneSharedBlocksPlanJson($sharedComponents),
+                'shared_prompt_context' => $sharedPromptContext,
+                'block_tree_version' => $sharedTreeVersion,
+                'assembly_version' => $assemblyVersion,
+                'last_block_mutation' => [
+                    'action' => $action,
+                    'block_key' => $mutatedBlockKey,
+                    'mutated_at' => \date('c'),
+                ],
+            ]
+        );
+        $executionBlueprint['shared_components'] = $sharedComponents;
+        $executionBlueprint['shared_prompt_context'] = $sharedPromptContext;
+        $executionBlueprint['theme_context_snapshot'] = $themeContextSnapshot;
+        $executionBlueprint['shared_block_tree_version'] = $sharedTreeVersion;
+        $executionBlueprint['assembly_version'] = $assemblyVersion;
+        [$structured, $executionBlueprint] = $this->markStageOnePageWorkStaleForSharedContextChange(
+            $structured,
+            $executionBlueprint,
+            \trim((string)($sharedPromptContext['context_hash'] ?? ''))
+        );
+        $pages = \is_array($executionBlueprint['pages'] ?? null)
+            ? $executionBlueprint['pages']
+            : (\is_array($structured['pages'] ?? null) ? $structured['pages'] : []);
+        $pagePlans = $this->buildStageOnePagePlans($pages, $sharedPromptContext);
+        $structured['page_plans'] = $pagePlans;
+        $executionBlueprint['pages'] = $pages;
+        $executionBlueprint['page_plans'] = $pagePlans;
+        $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
+        $structured['block_index'] = $blockIndex;
+        $executionBlueprint['block_index'] = $blockIndex;
+        $tasks = \is_array($executionBlueprint['tasks'] ?? null) ? $executionBlueprint['tasks'] : [];
+        $executionBlueprint['tasks'] = $this->rebuildStageOneSharedTaskList($tasks, $sharedComponents);
+        $structured['execution_steps'] = $this->buildExecutionSteps($executionBlueprint['tasks']);
+        $executionBlueprint['signature'] = $this->buildExecutionBlueprintSignature($executionBlueprint);
+        $planJson = $this->buildPlanJson($structured);
+        $markdown = $this->buildMarkdownPlan($planJson, $planLocale);
+        $planWorkbench = $this->buildPlanWorkbenchArtifacts($scope, $structured, $executionBlueprint, $planJson, $markdown, $planLocale);
+        $assembled = [
+            'plan_json' => $planJson,
+            'structured' => $structured,
+            'execution_blueprint' => $executionBlueprint,
+            'markdown' => $markdown,
+            'plan_workbench' => $planWorkbench,
+        ];
+        $summary = [
+            'action' => $action,
+            'page_type' => 'shared',
+            'block_key' => $mutatedBlockKey,
+            'block_count' => \count($sharedComponents),
+            'block_tree_version' => $sharedTreeVersion,
+            'assembly_version' => $assemblyVersion,
+        ];
+        $assembled['mutation_summary'] = $summary;
+        $assembled['block'] = $action === 'delete'
+            ? null
+            : $this->findStageOneSharedComponent($assembled['structured']['shared_components'] ?? [], $mutatedBlockKey);
+
+        return $assembled;
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $sharedComponents
+     */
+    private function findStageOneSharedComponentKey(array $sharedComponents, string $blockKey): string
+    {
+        $blockKey = \trim($blockKey);
+        if ($blockKey === '') {
+            return '';
+        }
+        $componentKey = \str_starts_with($blockKey, 'shared:') ? \substr($blockKey, \strlen('shared:')) : $blockKey;
+        foreach ($sharedComponents as $component => $componentPlan) {
+            if (!\is_array($componentPlan)) {
+                continue;
+            }
+            $component = \trim((string)$component);
+            $candidates = [
+                $component,
+                'shared:' . $component,
+                \trim((string)($componentPlan['component'] ?? '')),
+                \trim((string)($componentPlan['task_key'] ?? '')),
+                \trim((string)($componentPlan['block_key'] ?? '')),
+                \trim((string)($componentPlan['block_type'] ?? '')),
+            ];
+            if (\in_array($blockKey, $candidates, true) || \in_array($componentKey, $candidates, true)) {
+                return $component;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $sharedComponents
+     * @return array<string, mixed>|null
+     */
+    private function findStageOneSharedComponent(array $sharedComponents, string $blockKey): ?array
+    {
+        $component = $this->findStageOneSharedComponentKey(
+            \array_filter($sharedComponents, static fn($componentPlan): bool => \is_array($componentPlan)),
+            $blockKey
+        );
+
+        return $component !== '' && \is_array($sharedComponents[$component] ?? null)
+            ? $sharedComponents[$component]
+            : null;
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $sharedComponents
+     * @param array<string, mixed> $componentPlan
+     * @return array<string, array<string, mixed>>
+     */
+    private function insertStageOneSharedComponent(
+        array $sharedComponents,
+        string $component,
+        array $componentPlan,
+        string $afterComponent = ''
+    ): array {
+        $result = [];
+        $inserted = false;
+        foreach ($sharedComponents as $currentComponent => $currentPlan) {
+            $result[$currentComponent] = $currentPlan;
+            if ($afterComponent !== '' && (string)$currentComponent === $afterComponent) {
+                $result[$component] = $componentPlan;
+                $inserted = true;
+            }
+        }
+        if (!$inserted) {
+            $result[$component] = $componentPlan;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $sharedComponents
+     * @return array<string, array<string, mixed>>
+     */
+    private function normalizeStageOneSharedComponentOrder(array $sharedComponents): array
+    {
+        $normalized = [];
+        foreach (\array_values($sharedComponents) as $index => $componentPlan) {
+            if (!\is_array($componentPlan)) {
+                continue;
+            }
+            $component = \trim((string)($componentPlan['component'] ?? ''));
+            if ($component === '') {
+                $taskKey = \trim((string)($componentPlan['task_key'] ?? $componentPlan['block_key'] ?? ''));
+                $component = \str_starts_with($taskKey, 'shared:') ? \substr($taskKey, \strlen('shared:')) : $taskKey;
+            }
+            $component = $this->sanitizeStageOneBlockKey($component);
+            $componentPlan['component'] = $component;
+            $componentPlan['task_key'] = 'shared:' . $component;
+            $componentPlan['block_key'] = 'shared:' . $component;
+            $componentPlan['block_type'] = 'shared:' . $component;
+            $componentPlan['sort_order'] = ($index + 1) * 10;
+            $normalized[$component] = $this->normalizeStageOneSharedBlock($component, $componentPlan);
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $blockPatch
+     * @param list<string> $existingComponents
+     * @return array<string, mixed>
+     */
+    private function buildStageOneCreatedSharedBlock(array $blockPatch, array $existingComponents): array
+    {
+        $rawKey = \trim((string)($blockPatch['component'] ?? $blockPatch['block_key'] ?? $blockPatch['task_key'] ?? $blockPatch['title'] ?? $blockPatch['label'] ?? 'shared_block'));
+        if (\str_starts_with($rawKey, 'shared:')) {
+            $rawKey = \substr($rawKey, \strlen('shared:'));
+        }
+        $component = $this->uniqueStageOneBlockKey($this->sanitizeStageOneBlockKey($rawKey), $existingComponents);
+        $taskKey = 'shared:' . $component;
+        $title = \trim((string)($blockPatch['title'] ?? $blockPatch['label'] ?? \str_replace(['_', '-'], ' ', $component)));
+        $goal = \trim((string)($blockPatch['goal'] ?? $blockPatch['instruction'] ?? 'Add a reusable shared block that supports the site-wide experience.'));
+        $content = \trim((string)($blockPatch['content'] ?? $blockPatch['content_brief']['summary'] ?? $goal));
+        $fieldPlan = \is_array($blockPatch['field_plan'] ?? null) ? $blockPatch['field_plan'] : [
+            ['field' => 'headline', 'sample' => $title, 'reason' => 'Shared block headline for the stage-one plan.'],
+            ['field' => 'supporting_copy', 'sample' => $content, 'reason' => 'Reusable shared copy that can be edited before build.'],
+        ];
+
+        return \array_replace_recursive([
+            'component' => $component,
+            'task_key' => $taskKey,
+            'block_key' => $taskKey,
+            'block_type' => $taskKey,
+            'task_type' => 'shared_component',
+            'title' => $title,
+            'goal' => $goal,
+            'content_brief' => ['summary' => $content],
+            'realtime_content' => [
+                'headline' => $title,
+                'supporting_copy' => [$content],
+                'cta' => [],
+                'media' => [],
+                'editable_slots' => [],
+            ],
+            'field_plan' => $fieldPlan,
+            'implementation_detail' => 'Render the new shared block as reusable site chrome with editable copy, links, responsive behavior, and page-safe defaults.',
+            'reason' => 'The user requested a new shared block in the current stage-one plan.',
+            'why' => 'The user requested a new shared block in the current stage-one plan.',
+            'completion_rule' => 'Shared block is complete when copy, links, editable fields, and responsive behavior are ready for all relevant pages.',
+            'editable_fields' => ['headline', 'supporting_copy'],
+            'content_source' => ['user_instruction', 'theme_context_snapshot', 'shared_prompt_context', 'editable_field'],
+            'responsive_rule' => 'Keep the shared block readable on mobile and avoid obscuring page content.',
+            'status' => 'done',
+            'mutation_source' => 'stage1_shared_block_mutation_api',
+            'version' => 1,
+        ], $blockPatch, [
+            'component' => $component,
+            'task_key' => $taskKey,
+            'block_key' => $taskKey,
+            'block_type' => $taskKey,
+            'task_type' => 'shared_component',
+        ]);
     }
 
     /**
