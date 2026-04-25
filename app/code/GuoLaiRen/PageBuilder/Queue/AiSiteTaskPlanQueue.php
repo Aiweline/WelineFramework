@@ -103,7 +103,9 @@ class AiSiteTaskPlanQueue implements QueueInterface
             );
             $this->appendQueueLifecycleLine($queue, '已同步 active_operation=queued operation=task_plan execution_token=' . \substr($effectiveExecutionToken, 0, 12) . '…');
 
-            $scope = $scopeService->normalizeScope($session->getScopeArray());
+            $scope = $scopeService->normalizeScope(
+                $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            );
             $normalizedScope = $scopeService->normalizeConfirmedPlanFlag($scope);
             $scopePatch = [];
             if ((int)($normalizedScope['plan_confirmed'] ?? 0) !== (int)($scope['plan_confirmed'] ?? 0)
@@ -127,7 +129,10 @@ class AiSiteTaskPlanQueue implements QueueInterface
                 $adminId,
                 $queueId,
                 AiSiteAgentSession::STAGE_VISUAL_EDIT,
-                'task_plan'
+                'task_plan',
+                $effectiveExecutionToken,
+                \trim((string)($content['job_key'] ?? '')),
+                \trim((string)($content['job_type'] ?? ''))
             );
             $previousSseContextExists = RequestContext::has(RequestContext::SSE_WRITER_KEY);
             $previousSseContext = RequestContext::get(RequestContext::SSE_WRITER_KEY);
@@ -156,8 +161,8 @@ class AiSiteTaskPlanQueue implements QueueInterface
             $this->queueTrace($sse, 'ensureTaskPlanDraftPersisted 已完成（草案已就绪或已补全）');
 
             $this->queueTrace($sse, '队列执行成功：第二阶段任务方案生成完成');
-            $sse->complete();
             $this->markQueueDone($queue, '第二阶段任务方案生成完成。');
+            $sse->complete();
 
             return '第二阶段任务方案生成完成。';
         } catch (\Throwable $throwable) {
@@ -195,7 +200,9 @@ class AiSiteTaskPlanQueue implements QueueInterface
                 return;
             }
 
-            $scope = $scopeService->normalizeScope($session->getScopeArray());
+            $scope = $scopeService->normalizeScope(
+                $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            );
             $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
             if ((string)($active['execution_token'] ?? '') !== $executionToken) {
                 return;
@@ -221,7 +228,9 @@ class AiSiteTaskPlanQueue implements QueueInterface
         string $executionToken
     ): AiSiteAgentSession {
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-        $scope = $scopeService->normalizeScope($fresh->getScopeArray());
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeStatus = \trim((string)($active['status'] ?? ''));
         $activeQueueId = (int)($active['queue_id'] ?? 0);
@@ -262,7 +271,9 @@ class AiSiteTaskPlanQueue implements QueueInterface
             $this->queueTrace($sse, '开始校验任务方案草案是否已落库');
         }
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-        $scope = $scopeService->normalizeScope($fresh->getScopeArray());
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $draft = \is_array($scope['virtual_theme_plan']['draft'] ?? null) ? $scope['virtual_theme_plan']['draft'] : [];
         $draftMarkdown = \trim((string)($scope['virtual_theme_plan']['draft_markdown'] ?? ''));
         $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
@@ -270,10 +281,6 @@ class AiSiteTaskPlanQueue implements QueueInterface
         $taskPlanGeneratedAt = \trim((string)($scope['task_plan_generated_at'] ?? ''));
         $needsRepair = false;
 
-        if ($taskPlanStructured === [] && $draft !== []) {
-            $taskPlanStructured = $draft;
-            $needsRepair = true;
-        }
         if ($taskPlanMarkdown === '' && $draftMarkdown !== '') {
             $taskPlanMarkdown = $draftMarkdown;
             $needsRepair = true;
@@ -294,25 +301,27 @@ class AiSiteTaskPlanQueue implements QueueInterface
             if (!isset($summary['generation_source']) || \trim((string)$summary['generation_source']) === '') {
                 $summary['generation_source'] = 'ai';
             }
+            $summaryPlan = $taskPlanStructured !== [] ? $taskPlanStructured : $draft;
             if (!isset($summary['shared_task_count'])) {
-                $summary['shared_task_count'] = \count(\is_array($taskPlanStructured['shared_tasks'] ?? null) ? $taskPlanStructured['shared_tasks'] : []);
+                $summary['shared_task_count'] = \count(\is_array($summaryPlan['shared_tasks'] ?? null) ? $summaryPlan['shared_tasks'] : []);
             }
             if (!isset($summary['page_task_count'])) {
                 $summary['page_task_count'] = \array_sum(\array_map(
                     static fn($items): int => \is_array($items) ? \count($items) : 0,
-                    \is_array($taskPlanStructured['page_tasks'] ?? null) ? $taskPlanStructured['page_tasks'] : []
+                    \is_array($summaryPlan['page_tasks'] ?? null) ? $summaryPlan['page_tasks'] : []
                 ));
             }
 
             $sessionService->mergeScope((int)$fresh->getId(), $adminId, [
-                'task_plan_structured' => $taskPlanStructured,
                 'task_plan_markdown' => $taskPlanMarkdown,
                 'task_plan_generated_at' => $taskPlanGeneratedAt,
                 'task_plan_summary' => $summary,
             ]);
 
             $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-            $scope = $scopeService->normalizeScope($fresh->getScopeArray());
+            $scope = $scopeService->normalizeScope(
+                $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            );
             $draft = \is_array($scope['virtual_theme_plan']['draft'] ?? null) ? $scope['virtual_theme_plan']['draft'] : [];
             $draftMarkdown = \trim((string)($scope['virtual_theme_plan']['draft_markdown'] ?? ''));
             $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
@@ -356,7 +365,9 @@ class AiSiteTaskPlanQueue implements QueueInterface
         int $adminId
     ): AiSiteAgentSession {
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-        $scope = $scopeService->normalizeScope($fresh->getScopeArray());
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $currentReq = \is_array($scope['_task_plan_sse_request'] ?? null) ? $scope['_task_plan_sse_request'] : [];
         $nextRound = \max(1, (int)($currentReq['round'] ?? 0) + 1);
 
