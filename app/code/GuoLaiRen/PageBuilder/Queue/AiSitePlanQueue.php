@@ -16,6 +16,8 @@ use Weline\Queue\QueueInterface;
 
 class AiSitePlanQueue implements QueueInterface
 {
+    private const MAX_PLAN_QUEUE_ATTEMPTS = 3;
+
     public function name(): string
     {
         return 'PageBuilder AI 第一阶段方案生成队列';
@@ -86,12 +88,23 @@ class AiSitePlanQueue implements QueueInterface
             }
             $this->appendQueueLifecycleLine($queue, '已加载会话 session_id=' . (int)$session->getId());
 
+            $hasQueuedPlanMutation = $this->hasQueuedPlanMutationRequest($content);
+            $guard = $this->guardPlanQueueExecution($sessionService, $scopeService, $session, $adminId, $forceRebuild, $hasQueuedPlanMutation);
+            if (!($guard['ok'] ?? false)) {
+                $message = (string)($guard['message'] ?? 'Stage-one plan queue stopped.');
+                $this->appendQueueLifecycleLine($queue, $message);
+                $this->markQueueStopped($queue, $message);
+                return $message;
+            }
+
             if ($forceRebuild) {
                 $session = $this->applyForcePlanRebuildPreset($sessionService, $scopeService, $session, $adminId);
                 $this->appendQueueLifecycleLine(
                     $queue,
                     '检测到 _force_rebuild=1，已切换为 rebuild 强制重建阶段一，execution_token=' . \substr($effectiveExecutionToken, 0, 20)
                 );
+            } else {
+                $session = $this->applyQueuedPlanRequest($sessionService, $scopeService, $session, $adminId, $content);
             }
 
             $session = $this->ensureQueuedActiveOperation(
@@ -203,9 +216,166 @@ class AiSitePlanQueue implements QueueInterface
                 'forced_by_queue_run' => 1,
             ],
             'plan_confirmed' => 0,
+            'plan_generation_last_error' => [],
         ]);
 
         return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     */
+    private function hasQueuedPlanMutationRequest(array $content): bool
+    {
+        $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
+        $scopePatch = \is_array($content['scope_patch'] ?? null) ? $content['scope_patch'] : [];
+        $request = \array_replace(
+            \is_array($scopePatch['_plan_sse_request'] ?? null) ? $scopePatch['_plan_sse_request'] : [],
+            \is_array($content['_plan_sse_request'] ?? null) ? $content['_plan_sse_request'] : [],
+            \is_array($details['_plan_sse_request'] ?? null) ? $details['_plan_sse_request'] : []
+        );
+        $mutation = \is_array($request['mutation'] ?? null)
+            ? $request['mutation']
+            : (\is_array($content['mutation'] ?? null)
+                ? $content['mutation']
+                : (\is_array($details['mutation'] ?? null) ? $details['mutation'] : []));
+        $promptMode = $this->firstNonEmptyString([$content['prompt_mode'] ?? null, $details['prompt_mode'] ?? null, $request['prompt_mode'] ?? null]);
+        $action = $this->firstNonEmptyString([$content['action'] ?? null, $details['action'] ?? null, $mutation['action'] ?? null]);
+        $blockKey = $this->firstNonEmptyString([$content['block_key'] ?? null, $details['block_key'] ?? null, $mutation['block_key'] ?? null]);
+        $targetScope = $this->firstNonEmptyString([$content['target_scope'] ?? null, $details['target_scope'] ?? null, $request['target_scope'] ?? null]);
+
+        return $promptMode === 'mutate_plan_block'
+            || $action !== ''
+            || $blockKey !== ''
+            || $mutation !== []
+            || \str_contains($targetScope, '.blocks.');
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     */
+    private function applyQueuedPlanRequest(
+        AiSiteAgentSessionService $sessionService,
+        AiSiteScopeCompatibilityService $scopeService,
+        AiSiteAgentSession $session,
+        int $adminId,
+        array $content
+    ): AiSiteAgentSession {
+        $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
+        );
+        $request = $this->buildQueuedPlanSseRequest($content, $scope);
+        if ($request === []) {
+            return $fresh;
+        }
+
+        $patch = [
+            '_plan_sse_request' => $request,
+            'plan_last_prompt_mode' => (string)($request['prompt_mode'] ?? ''),
+            'plan_last_target_scope' => (string)($request['target_scope'] ?? ''),
+            'plan_last_round' => (int)($request['round'] ?? 1),
+            'plan_generation_last_error' => [],
+        ];
+        if (\in_array((string)($request['prompt_mode'] ?? ''), ['mutate_plan_block', 'refine', 'rebuild'], true)) {
+            $patch['plan_confirmed'] = 0;
+        }
+
+        $sessionService->mergeScope((int)$fresh->getId(), $adminId, $patch);
+
+        return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildQueuedPlanSseRequest(array $content, array $scope): array
+    {
+        $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
+        $scopePatch = \is_array($content['scope_patch'] ?? null) ? $content['scope_patch'] : [];
+        $request = \array_replace(
+            \is_array($scopePatch['_plan_sse_request'] ?? null) ? $scopePatch['_plan_sse_request'] : [],
+            \is_array($content['_plan_sse_request'] ?? null) ? $content['_plan_sse_request'] : [],
+            \is_array($details['_plan_sse_request'] ?? null) ? $details['_plan_sse_request'] : []
+        );
+        $mutation = \is_array($request['mutation'] ?? null)
+            ? $request['mutation']
+            : (\is_array($content['mutation'] ?? null)
+                ? $content['mutation']
+                : (\is_array($details['mutation'] ?? null) ? $details['mutation'] : []));
+        $blockConfig = \is_array($mutation['block_config'] ?? null)
+            ? $mutation['block_config']
+            : (\is_array($content['block_config'] ?? null)
+                ? $content['block_config']
+                : (\is_array($details['block_config'] ?? null) ? $details['block_config'] : []));
+        $action = $this->firstNonEmptyString([$content['action'] ?? null, $details['action'] ?? null, $mutation['action'] ?? null]);
+        $pageType = $this->firstNonEmptyString([$content['page_type'] ?? null, $details['page_type'] ?? null, $mutation['page_type'] ?? null, $request['page_type'] ?? null]);
+        $blockKey = $this->firstNonEmptyString([$content['block_key'] ?? null, $details['block_key'] ?? null, $mutation['block_key'] ?? null, $request['block_key'] ?? null]);
+        if ($mutation === [] && ($action !== '' || $pageType !== '' || $blockKey !== '')) {
+            $mutation = [
+                'action' => $action,
+                'page_type' => $pageType,
+                'block_key' => $blockKey,
+                'block_config' => $blockConfig,
+            ];
+        }
+        if ($mutation !== [] && !\is_array($mutation['block_config'] ?? null)) {
+            $mutation['block_config'] = $blockConfig;
+        }
+
+        $promptMode = $this->firstNonEmptyString([$content['prompt_mode'] ?? null, $details['prompt_mode'] ?? null, $request['prompt_mode'] ?? null]);
+        if ($promptMode === '' && $mutation !== []) {
+            $promptMode = 'mutate_plan_block';
+        }
+        if ($promptMode === '') {
+            return [];
+        }
+
+        $targetScope = $this->firstNonEmptyString([$content['target_scope'] ?? null, $details['target_scope'] ?? null, $request['target_scope'] ?? null]);
+        if ($targetScope === '' && $pageType !== '') {
+            $targetScope = 'pages.' . $pageType . '.blocks.' . ($blockKey !== '' ? $blockKey : 'new');
+        }
+        $roundValue = $this->firstNonEmptyString([$content['round'] ?? null, $details['round'] ?? null, $request['round'] ?? null]);
+        $round = \max(1, (int)($roundValue !== '' ? $roundValue : ((int)($scope['plan_last_round'] ?? 0) + 1)));
+        $instruction = $this->firstNonEmptyString([
+            $content['instruction'] ?? null,
+            $details['instruction'] ?? null,
+            $request['instruction'] ?? null,
+            $blockConfig['instruction'] ?? null,
+        ]);
+
+        $request = \array_replace($request, [
+            'prompt_mode' => $promptMode,
+            'instruction' => $instruction,
+            'target_scope' => $targetScope,
+            'round' => $round,
+            'plan_locale' => $this->firstNonEmptyString([$content['plan_locale'] ?? null, $details['plan_locale'] ?? null, $request['plan_locale'] ?? null, $scope['plan_locale'] ?? null]),
+        ]);
+        if ($mutation !== []) {
+            $request['mutation'] = $mutation;
+        }
+
+        return $request;
+    }
+
+    /**
+     * @param list<mixed> $values
+     */
+    private function firstNonEmptyString(array $values): string
+    {
+        foreach ($values as $value) {
+            if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
+                continue;
+            }
+            $candidate = \trim((string)$value);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return '';
     }
 
     private function updateSessionError(string $publicId, int $adminId, string $executionToken, string $message): void
@@ -229,10 +399,18 @@ class AiSitePlanQueue implements QueueInterface
                 return;
             }
 
+            $attemptNo = \max(0, (int)($active['attempt_no'] ?? 0)) + 1;
             $active['status'] = 'error';
             $active['message'] = $message;
+            $active['attempt_no'] = $attemptNo;
             $active['updated_at'] = \date('Y-m-d H:i:s');
             $scope['active_operation'] = $active;
+            $scope['plan_generation_last_error'] = [
+                'message' => $message,
+                'attempt_no' => $attemptNo,
+                'max_attempts' => self::MAX_PLAN_QUEUE_ATTEMPTS,
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ];
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING;
             $sessionService->replaceScope((int)$session->getId(), $adminId, $scope);
         } catch (\Throwable) {
@@ -270,6 +448,7 @@ class AiSitePlanQueue implements QueueInterface
             'status' => 'queued',
             'queue_id' => $queueId,
             'message' => '等待开始',
+            'attempt_no' => \max(0, (int)($active['attempt_no'] ?? 0)),
             'started_at' => (string)($active['started_at'] ?? \date('Y-m-d H:i:s')),
             'updated_at' => \date('Y-m-d H:i:s'),
         ]);
@@ -279,6 +458,66 @@ class AiSitePlanQueue implements QueueInterface
         $sessionService->replaceScope((int)$fresh->getId(), $adminId, $scope);
 
         return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
+    }
+
+    /**
+     * @return array{ok: bool, message?: string}
+     */
+    private function guardPlanQueueExecution(
+        AiSiteAgentSessionService $sessionService,
+        AiSiteScopeCompatibilityService $scopeService,
+        AiSiteAgentSession $session,
+        int $adminId,
+        bool $forceRebuild,
+        bool $allowExistingPlan
+    ): array {
+        $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
+        );
+
+        if (!$forceRebuild && !$allowExistingPlan && $scopeService->hasPersistedStageOnePlan($scope)) {
+            $message = (string)__('第一阶段方案已存在；队列已跳过重复生成。若需重新生成，请使用强制重建。');
+            $this->persistPlanQueueStopState($sessionService, (int)$fresh->getId(), $adminId, $scope, $message);
+            return ['ok' => false, 'message' => $message];
+        }
+
+        $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $attemptNo = \max(0, (int)($active['attempt_no'] ?? 0));
+        if (!$forceRebuild && !$allowExistingPlan && $attemptNo >= self::MAX_PLAN_QUEUE_ATTEMPTS) {
+            $message = (string)__('第一阶段方案生成已失败 %{1} 次，队列不再自动重试；如需继续，请手动强制重建。', [self::MAX_PLAN_QUEUE_ATTEMPTS]);
+            $this->persistPlanQueueStopState($sessionService, (int)$fresh->getId(), $adminId, $scope, $message);
+            return ['ok' => false, 'message' => $message];
+        }
+
+        return ['ok' => true];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function persistPlanQueueStopState(
+        AiSiteAgentSessionService $sessionService,
+        int $sessionId,
+        int $adminId,
+        array $scope,
+        string $message
+    ): void {
+        $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        if ($active !== []) {
+            $active['status'] = 'stop';
+            $active['message'] = $message;
+            $active['updated_at'] = \date('Y-m-d H:i:s');
+            $scope['active_operation'] = $active;
+        }
+        $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING;
+        $scope['plan_generation_last_error'] = [
+            'message' => $message,
+            'attempt_no' => \max(0, (int)($active['attempt_no'] ?? 0)),
+            'max_attempts' => self::MAX_PLAN_QUEUE_ATTEMPTS,
+            'updated_at' => \date('Y-m-d H:i:s'),
+        ];
+        $sessionService->replaceScope($sessionId, $adminId, $scope);
     }
 
     private function invokePrivate(object $object, string $method, array $arguments = []): mixed
@@ -331,6 +570,33 @@ class AiSitePlanQueue implements QueueInterface
             'queue_id' => $queueId,
             'patch' => [
                 'status' => Queue::status_done,
+                'pid' => 0,
+                'finished' => 1,
+                'process' => $message,
+                'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
+            ],
+        ]);
+        $this->mirrorToCli($line);
+    }
+
+    private function markQueueStopped(Queue &$queue, string $message): void
+    {
+        $queueId = (int)$queue->getId();
+        if ($queueId <= 0) {
+            return;
+        }
+
+        $row = w_query('queue', 'get', ['queue_id' => $queueId]);
+        if (!\is_array($row) || $row === []) {
+            return;
+        }
+
+        $line = '[' . \date('H:i:s') . '] QUEUE_STOP ' . $message;
+        $existing = (string)($row['result'] ?? '');
+        w_query('queue', 'update', [
+            'queue_id' => $queueId,
+            'patch' => [
+                'status' => Queue::status_stop,
                 'pid' => 0,
                 'finished' => 1,
                 'process' => $message,
