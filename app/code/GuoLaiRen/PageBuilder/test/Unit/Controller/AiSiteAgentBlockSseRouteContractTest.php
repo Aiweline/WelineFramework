@@ -33,4 +33,15 @@ final class AiSiteAgentBlockSseRouteContractTest extends TestCase
             );
         }
     }
+
+    public function testBlockSseApplyMatchesSharedComponentBlocksAndReplacesPreviewWrapper(): void
+    {
+        $scriptSource = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        self::assertIsString($scriptSource);
+
+        self::assertStringContainsString('function blockMatchesComponentCode(pageType, block, componentCode)', $scriptSource);
+        self::assertStringContainsString('findVirtualBlockInList(targetPageType, pageState.blocks, targetBlockId)', $scriptSource);
+        self::assertStringContainsString("resolveSharedComponentRegionFromCode(pageType, candidates[i].getAttribute('data-component') || '')", $scriptSource);
+        self::assertStringContainsString('updateVirtualBlockState(targetPageType, nextBlock)', $scriptSource);
+    }
 }

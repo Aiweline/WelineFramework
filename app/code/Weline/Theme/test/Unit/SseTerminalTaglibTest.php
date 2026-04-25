@@ -29,11 +29,13 @@ class SseTerminalTaglibTest extends TestCore
         $this->assertStringContainsString('setStatus: setStatus', $html);
         $this->assertStringContainsString('keepStatus', $html);
         $this->assertStringContainsString('manualStopRequested', $html);
+        $this->assertStringContainsString('terminalCompleted', $html);
         $this->assertStringContainsString("setStatus('connecting'", $html);
         $this->assertStringContainsString(
             "if (eventName === 'error' && (typeof e.data !== 'string' || e.data === ''))",
             $html
         );
+        $this->assertStringContainsString('if (terminalCompleted)', $html);
     }
 
     public function testSseTerminalMarkupRoutesEventsThroughSingleDispatchPath(): void
@@ -58,7 +60,9 @@ class SseTerminalTaglibTest extends TestCore
         $this->assertStringNotContainsString('dispatchSseEvent(eventName, data);', $html);
         $this->assertStringContainsString('"total"', $html);
         $this->assertStringContainsString('.weline-sse-terminal-line.total', $html);
-        $this->assertStringContainsString("if (eventName === 'done')", $html);
+        $this->assertStringContainsString("var shouldFinalizeStream = eventName === 'done';", $html);
+        $this->assertStringContainsString('finally {', $html);
+        $this->assertStringContainsString('stop({ internal: true });', $html);
         $this->assertStringNotContainsString(
             "if (eventName === 'done' || eventName === 'failed' || eventName === 'error')",
             $html
