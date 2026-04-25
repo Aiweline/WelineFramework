@@ -940,6 +940,11 @@ class AiSiteAgentWorkspaceStateHelperService
         $hasThemeFallback = $this->hasReusableThemeContextFallback($scope, $stage2Context);
         $hasSharedFallback = $this->hasReusableSharedPromptContextFallback($scope, $stage2Context);
         $changed = false;
+        foreach (self::TASK_RUNTIME_SHARED_CONTEXT_KEYS as $key => $_) {
+            if (\array_key_exists($key, $buildBlueprint)) {
+                $changed = true;
+            }
+        }
         foreach ($tasks as $idx => $task) {
             if (!\is_array($task)) {
                 continue;

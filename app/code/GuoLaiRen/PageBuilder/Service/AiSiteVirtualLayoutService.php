@@ -147,7 +147,9 @@ class AiSiteVirtualLayoutService
             ->where(VirtualThemeLayout::schema_fields_VIRTUAL_THEME_ID, $virtualThemeId)
             ->where(VirtualThemeLayout::schema_fields_PAGE_TYPE, $pageType)
             ->where(VirtualThemeLayout::schema_fields_AREA, 'frontend')
-            ->find();
+            ->order(VirtualThemeLayout::schema_fields_ID, 'DESC')
+            ->find()
+            ->fetch();
 
         if (!$layout->getId()) {
             return $this->scopeCompatibilityService->normalizeLayoutConfig([], $pageType);
@@ -166,7 +168,9 @@ class AiSiteVirtualLayoutService
             ->where(VirtualThemeLayout::schema_fields_VIRTUAL_THEME_ID, $virtualThemeId)
             ->where(VirtualThemeLayout::schema_fields_PAGE_TYPE, $pageType)
             ->where(VirtualThemeLayout::schema_fields_AREA, 'frontend')
-            ->find();
+            ->order(VirtualThemeLayout::schema_fields_ID, 'DESC')
+            ->find()
+            ->fetch();
 
         $layout = $this->scopeCompatibilityService->normalizeLayoutConfig($layout, $pageType);
         $record->setVirtualThemeId($virtualThemeId)
