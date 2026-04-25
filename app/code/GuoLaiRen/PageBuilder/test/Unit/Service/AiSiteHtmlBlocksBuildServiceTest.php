@@ -164,6 +164,42 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
         self::assertSame('nav-lines', $schema['navigation']['fields']['navigation.items']['format'] ?? null);
     }
 
+    public function testBuildSharedHeaderAndFooterLocalizeFallbackNavigationForEnglishLocale(): void
+    {
+        $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService());
+
+        $websiteProfile = [
+            'site_title' => 'Teenipiya',
+            'default_locale' => 'en_US',
+            'brief_description' => 'Card game apk platform for Indian players.',
+        ];
+        $scope = [
+            'default_locale' => 'en_US',
+            'website_profile' => $websiteProfile,
+            'page_types' => [
+                Page::TYPE_HOME,
+                Page::TYPE_ABOUT,
+                Page::TYPE_TERMS_OF_SERVICE,
+                Page::TYPE_CONTACT,
+            ],
+            'virtual_pages_by_type' => [
+                Page::TYPE_ABOUT => ['title' => '关于我们'],
+                Page::TYPE_TERMS_OF_SERVICE => ['title' => '服务条款'],
+                Page::TYPE_CONTACT => ['title' => '联系我们'],
+            ],
+        ];
+
+        $headerBlock = $service->buildSharedHeaderBlock(Page::TYPE_HOME, $websiteProfile, $scope);
+        $footerBlock = $service->buildSharedFooterBlock(Page::TYPE_HOME, $websiteProfile, $scope);
+
+        self::assertSame('Home', (string)($headerBlock['config']['nav_items'][0]['label'] ?? ''));
+        self::assertContains('About', \array_column($headerBlock['config']['nav_items'] ?? [], 'label'));
+        self::assertContains('Contact', \array_column($headerBlock['config']['nav_items'] ?? [], 'label'));
+        self::assertSame('Policy Info', (string)($footerBlock['config']['links.column2_title'] ?? ''));
+        self::assertStringContainsString('About', (string)($footerBlock['html'] ?? ''));
+        self::assertStringNotContainsString('关于我们', (string)($footerBlock['html'] ?? ''));
+    }
+
     private function buildGeneratedHeaderPhtml(): string
     {
         return <<<'PHTML'

@@ -1959,8 +1959,13 @@ final class AiSitePageComponentGenerationService
     private function buildHeaderNavigationPages(array $scope): array
     {
         $locale = $this->resolveScopePrimaryLocale($scope);
+        $navigationPages = $this->buildNavigationPages($scope);
         $sharedPromptContext = $this->resolveSharedPromptContext($scope);
-        $sharedHeaderItems = $this->normalizePromptLinkItems($sharedPromptContext['header_items'] ?? []);
+        $sharedHeaderItems = $this->localizePromptLinkItemsForLocale(
+            $this->normalizePromptLinkItems($sharedPromptContext['header_items'] ?? []),
+            $navigationPages,
+            $locale
+        );
         if ($sharedHeaderItems !== []) {
             return \array_slice(\array_values(\array_map(function (array $item): array {
                 $href = \trim((string)($item['href'] ?? '#'));
@@ -1973,8 +1978,6 @@ final class AiSitePageComponentGenerationService
                 ];
             }, $sharedHeaderItems)), 0, 5);
         }
-
-        $navigationPages = $this->buildNavigationPages($scope);
         $byType = [];
 
         foreach ($navigationPages as $item) {
@@ -2034,6 +2037,111 @@ final class AiSitePageComponentGenerationService
         }
 
         return $items !== [] ? $items : $navigationPages;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $items
+     * @param list<array<string,mixed>> $fallbackItems
+     * @return list<array{label:string,href:string,type?:string}>
+     */
+    private function localizePromptLinkItemsForLocale(array $items, array $fallbackItems, string $locale): array
+    {
+        if ($items === []) {
+            return [];
+        }
+
+        $fallbackByHref = [];
+        $fallbackByType = [];
+        foreach ($fallbackItems as $fallbackItem) {
+            if (!\is_array($fallbackItem)) {
+                continue;
+            }
+            $fallbackHref = \trim((string)($fallbackItem['href'] ?? $fallbackItem['url'] ?? ''));
+            $fallbackType = \trim((string)($fallbackItem['type'] ?? ''));
+            if ($fallbackHref !== '') {
+                $fallbackByHref[$fallbackHref] = $fallbackItem;
+            }
+            if ($fallbackType !== '') {
+                $fallbackByType[$fallbackType] = $fallbackItem;
+            }
+        }
+
+        $localized = [];
+        foreach ($items as $index => $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $href = \trim((string)($item['href'] ?? $item['url'] ?? '#'));
+            $type = \trim((string)($item['type'] ?? ''));
+            $fallback = $fallbackItems[$index] ?? [];
+            if ($type !== '' && isset($fallbackByType[$type])) {
+                $fallback = $fallbackByType[$type];
+            } elseif ($href !== '' && isset($fallbackByHref[$href])) {
+                $fallback = $fallbackByHref[$href];
+            }
+
+            $label = $this->filterVisibleCopyForLocale(
+                \trim((string)($item['label'] ?? $item['title'] ?? $item['text'] ?? '')),
+                $locale
+            );
+            if ($label !== '' && $this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($label)) {
+                $label = '';
+            }
+            if ($label === '' && \is_array($fallback)) {
+                $label = $this->filterVisibleCopyForLocale(
+                    \trim((string)($fallback['label'] ?? $fallback['title'] ?? $fallback['text'] ?? '')),
+                    $locale
+                );
+            }
+            if ($label === '' && $type !== '') {
+                $label = $this->localizePageTypeTitle($type, $locale);
+            }
+            if ($label === '') {
+                continue;
+            }
+
+            $resolvedHref = $href !== ''
+                ? $href
+                : \trim((string)((\is_array($fallback) ? ($fallback['href'] ?? $fallback['url'] ?? '#') : '#')));
+
+            $normalized = [
+                'label' => $label,
+                'href' => $resolvedHref !== '' ? $resolvedHref : '#',
+            ];
+            if ($type !== '') {
+                $normalized['type'] = $type;
+            } elseif (\is_array($fallback) && \trim((string)($fallback['type'] ?? '')) !== '') {
+                $normalized['type'] = \trim((string)$fallback['type']);
+            }
+            $localized[] = $normalized;
+        }
+
+        return $localized;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @return list<array<string,mixed>>
+     */
+    private function resolveDefaultConfigLinkFallbackItems(array $defaultConfig, string $field): array
+    {
+        if (\str_contains($field, 'navigation')) {
+            if (\is_array($defaultConfig['nav_items'] ?? null)) {
+                return $defaultConfig['nav_items'];
+            }
+
+            return $this->decodeLinkItemsSample((string)($defaultConfig['navigation.items'] ?? '')) ?? [];
+        }
+
+        if (\str_contains($field, 'featured_links')) {
+            return $this->decodeLinkItemsSample((string)($defaultConfig['links.column1_items'] ?? '')) ?? [];
+        }
+
+        if (\str_contains($field, 'policy_links')) {
+            return $this->decodeLinkItemsSample((string)($defaultConfig['links.column2_items'] ?? '')) ?? [];
+        }
+
+        return [];
     }
 
     /**
@@ -2698,7 +2806,7 @@ final class AiSitePageComponentGenerationService
         ];
         $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'header'));
 
-        return $this->applyTaskPlanDefaults($defaultConfig, $this->resolveSharedTaskPlanTask($scope, 'header'));
+        return $this->applyTaskPlanDefaults($defaultConfig, $this->resolveSharedTaskPlanTask($scope, 'header'), $locale);
     }
 
     /**
@@ -2729,10 +2837,18 @@ final class AiSitePageComponentGenerationService
             Page::TYPE_CUSTOM,
         ]);
 
-        foreach ($this->normalizePromptLinkItems($sharedPromptContext['footer_featured'] ?? []) as $item) {
+        foreach ($this->localizePromptLinkItemsForLocale(
+            $this->normalizePromptLinkItems($sharedPromptContext['footer_featured'] ?? []),
+            $navigationPages,
+            $locale
+        ) as $item) {
             $featuredLines[] = (string)($item['label'] ?? '') . '=>' . (string)($item['href'] ?? '#');
         }
-        foreach ($this->normalizePromptLinkItems($sharedPromptContext['footer_policies'] ?? []) as $item) {
+        foreach ($this->localizePromptLinkItemsForLocale(
+            $this->normalizePromptLinkItems($sharedPromptContext['footer_policies'] ?? []),
+            $navigationPages,
+            $locale
+        ) as $item) {
             $legalLines[] = (string)($item['label'] ?? '') . '=>' . (string)($item['href'] ?? '#');
         }
 
@@ -2773,7 +2889,7 @@ final class AiSitePageComponentGenerationService
         ];
         $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'footer'));
 
-        return $this->applyTaskPlanDefaults($defaultConfig, $this->resolveSharedTaskPlanTask($scope, 'footer'));
+        return $this->applyTaskPlanDefaults($defaultConfig, $this->resolveSharedTaskPlanTask($scope, 'footer'), $locale);
     }
 
     /**
@@ -2836,7 +2952,7 @@ final class AiSitePageComponentGenerationService
             (string)($section['key'] ?? '')
         );
 
-        return $this->applyTaskPlanDefaults($defaultConfig, $taskPlanTask);
+        return $this->applyTaskPlanDefaults($defaultConfig, $taskPlanTask, $locale);
     }
 
     /**
@@ -3095,7 +3211,7 @@ final class AiSitePageComponentGenerationService
      * @param array<string,mixed> $taskPlanTask
      * @return array<string,mixed>
      */
-    private function applyTaskPlanDefaults(array $defaultConfig, array $taskPlanTask): array
+    private function applyTaskPlanDefaults(array $defaultConfig, array $taskPlanTask, string $locale = ''): array
     {
         if ($taskPlanTask === []) {
             return $defaultConfig;
@@ -3116,7 +3232,7 @@ final class AiSitePageComponentGenerationService
                 continue;
             }
             if (\str_contains($field, 'navigation') || \str_contains($field, 'featured_links') || \str_contains($field, 'policy_links')) {
-                $defaultConfig = $this->applyTaskPlanLinkFieldDefaults($defaultConfig, $field, $sample);
+                $defaultConfig = $this->applyTaskPlanLinkFieldDefaults($defaultConfig, $field, $sample, $locale);
                 continue;
             }
 
@@ -3156,10 +3272,13 @@ final class AiSitePageComponentGenerationService
      * @param array<string,mixed> $defaultConfig
      * @return array<string,mixed>
      */
-    private function applyTaskPlanLinkFieldDefaults(array $defaultConfig, string $field, string $sample): array
+    private function applyTaskPlanLinkFieldDefaults(array $defaultConfig, string $field, string $sample, string $locale = ''): array
     {
-        $fallbackItems = \is_array($defaultConfig['nav_items'] ?? null) ? $defaultConfig['nav_items'] : [];
+        $fallbackItems = $this->resolveDefaultConfigLinkFallbackItems($defaultConfig, $field);
         $items = $this->normalizePromptLinkItems($this->decodeLinkItemsSample($sample), $fallbackItems);
+        if ($items !== [] && $locale !== '') {
+            $items = $this->localizePromptLinkItemsForLocale($items, $fallbackItems, $locale);
+        }
         if ($items === []) {
             return $defaultConfig;
         }
@@ -3829,6 +3948,11 @@ final class AiSitePageComponentGenerationService
         }
 
         return $total >= 6;
+    }
+
+    private function hasAnyCjkContent(string $text): bool
+    {
+        return \preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $text) === 1;
     }
 
     /**

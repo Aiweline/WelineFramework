@@ -80,8 +80,30 @@ class AiSiteAgentQueueObserverStreamService
             return $activeOperation;
         }
 
+        $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
         $queueStatus = \trim((string)($queueInfo['snapshot']['status'] ?? ''));
-        if ($queueStatus === 'error') {
+        if ($activeStatus === 'done' && $queueStatus !== 'done') {
+            return $activeOperation;
+        }
+        if (\in_array($queueStatus, ['pending', 'queued', 'running'], true)) {
+            $activeOperation['status'] = $queueStatus === 'running' ? 'running' : 'queued';
+            $queueId = (int)($queueInfo['queue_id'] ?? $queueInfo['snapshot']['queue_id'] ?? 0);
+            if ($queueId > 0) {
+                $activeOperation['queue_id'] = $queueId;
+            }
+            $queueProcess = \trim((string)($queueInfo['process'] ?? ''));
+            $currentMessage = \trim((string)($activeOperation['message'] ?? ''));
+            if ($queueProcess !== '') {
+                $activeOperation['message'] = $queueProcess;
+            } elseif ($activeStatus === 'error' || $currentMessage === '') {
+                $activeOperation['message'] = match ($operation) {
+                    'task_plan' => 'Stage-2 task-plan queue is running.',
+                    'build' => 'Build queue is running.',
+                    default => 'Stage-1 plan queue is running.',
+                };
+            }
+            $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
+        } elseif ($queueStatus === 'error') {
             $queueProcess = \trim((string)($queueInfo['process'] ?? ''));
             $queueResult = \trim((string)($queueInfo['result_log'] ?? ''));
             $activeOperation['status'] = 'error';
@@ -94,6 +116,11 @@ class AiSiteAgentQueueObserverStreamService
         } elseif (\in_array($queueStatus, ['done', 'stop', 'cancelled'], true)) {
             $activeOperation['status'] = 'done';
             if ($queueStatus === 'done') {
+                $currentMessage = \trim((string)($activeOperation['message'] ?? ''));
+                if ($currentMessage !== '' && $activeStatus !== 'error') {
+                    $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
+                    return $activeOperation;
+                }
                 $queueProcess = \trim((string)($queueInfo['process'] ?? ''));
                 $activeOperation['message'] = $queueProcess !== '' ? $queueProcess : 'Queue operation completed.';
             }
