@@ -38,13 +38,36 @@ class QueueDbWriter extends SseWriter
         private readonly int $adminId,
         private readonly int $queueId = 0,
         private readonly string $stage = AiSiteAgentSession::STAGE_VISUAL_EDIT,
-        private readonly string $operation = 'build'
+        private readonly string $operation = 'build',
+        private readonly string $executionToken = '',
+        private readonly string $jobKey = '',
+        private readonly string $jobType = ''
     ) {
     }
 
     public function getQueueId(): int
     {
         return $this->queueId;
+    }
+
+    public function getOperation(): string
+    {
+        return $this->operation;
+    }
+
+    public function getExecutionToken(): string
+    {
+        return $this->executionToken;
+    }
+
+    public function getJobKey(): string
+    {
+        return $this->jobKey;
+    }
+
+    public function getJobType(): string
+    {
+        return $this->jobType;
     }
 
     public function start(): static
@@ -68,6 +91,7 @@ class QueueDbWriter extends SseWriter
             if (!isset($payload['stage']) || !\is_string($payload['stage']) || \trim($payload['stage']) === '') {
                 $payload['stage'] = $this->stage;
             }
+            $payload = $this->enrichOperationCorrelationPayload($payload);
             $payload = $this->sanitizePayloadForQueueEvent($event, $payload);
 
             $message = \trim((string)($payload['message'] ?? ''));
@@ -90,6 +114,34 @@ class QueueDbWriter extends SseWriter
         }
 
         return $this;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function enrichOperationCorrelationPayload(array $payload): array
+    {
+        if ($this->queueId > 0 && (int)($payload['queue_id'] ?? 0) <= 0) {
+            $payload['queue_id'] = $this->queueId;
+        }
+
+        $executionToken = \trim($this->executionToken);
+        if ($executionToken !== '' && \trim((string)($payload['execution_token'] ?? '')) === '') {
+            $payload['execution_token'] = $executionToken;
+        }
+
+        $jobKey = \trim($this->jobKey);
+        if ($jobKey !== '' && \trim((string)($payload['job_key'] ?? '')) === '') {
+            $payload['job_key'] = $jobKey;
+        }
+
+        $jobType = \trim($this->jobType);
+        if ($jobType !== '' && \trim((string)($payload['job_type'] ?? '')) === '') {
+            $payload['job_type'] = $jobType;
+        }
+
+        return $payload;
     }
 
     public function sendData(mixed $data): static

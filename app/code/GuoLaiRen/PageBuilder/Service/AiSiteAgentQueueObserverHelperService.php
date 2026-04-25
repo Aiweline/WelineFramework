@@ -146,7 +146,7 @@ class AiSiteAgentQueueObserverHelperService
      *
      * @param array<string, mixed> $event
      */
-    public function isOperationEventRelevant(array $event, string $operation, int $startedAtTs): bool
+    public function isOperationEventRelevant(array $event, string $operation, int $startedAtTs, array $correlation = []): bool
     {
         $eventType = \trim((string)($event['event_type'] ?? ''));
         if (!\in_array($eventType, [
@@ -181,12 +181,14 @@ class AiSiteAgentQueueObserverHelperService
             return false;
         }
 
-        if ($startedAtTs <= 0) {
-            return true;
+        if ($startedAtTs > 0) {
+            $eventTs = \strtotime(\trim((string)($event['create_time'] ?? '')));
+            if ($eventTs !== false && $eventTs < $startedAtTs) {
+                return false;
+            }
         }
 
-        $eventTs = \strtotime(\trim((string)($event['create_time'] ?? '')));
-        return $eventTs === false || $eventTs >= $startedAtTs;
+        return $this->isOperationEventCorrelationRelevant($event, $correlation);
     }
 
     /**
@@ -201,7 +203,8 @@ class AiSiteAgentQueueObserverHelperService
         array $events,
         string $operation,
         string $startedAtRaw,
-        int $afterEventId
+        int $afterEventId,
+        array $correlation = []
     ): array {
         $startedAtTs = $startedAtRaw !== '' ? (\strtotime($startedAtRaw) ?: 0) : 0;
         $filtered = [];
@@ -213,13 +216,126 @@ class AiSiteAgentQueueObserverHelperService
             if ($eventId <= $afterEventId) {
                 continue;
             }
-            if (!$this->isOperationEventRelevant($event, $operation, $startedAtTs)) {
+            if (!$this->isOperationEventRelevant($event, $operation, $startedAtTs, $correlation)) {
                 continue;
             }
             $filtered[] = $event;
         }
 
         return $filtered;
+    }
+
+    /**
+     * @param array<string, mixed> $event
+     * @param array<string, mixed> $correlation
+     */
+    private function isOperationEventCorrelationRelevant(array $event, array $correlation): bool
+    {
+        if ($correlation === []) {
+            return true;
+        }
+
+        $payload = \is_array($event['payload'] ?? null) ? $event['payload'] : [];
+        $details = \is_array($payload['details'] ?? null) ? $payload['details'] : [];
+        $eventToken = $this->firstNonEmptyString($payload, $details, ['execution_token', 'token']);
+        $expectedToken = \trim((string)($correlation['execution_token'] ?? $correlation['token'] ?? ''));
+        if ($eventToken !== '' && $expectedToken !== '' && !$this->executionTokensMatch($eventToken, $expectedToken)) {
+            return false;
+        }
+
+        $eventQueueId = $this->firstPositiveInt($payload, $details, ['queue_id']);
+        $expectedQueueId = (int)($correlation['queue_id'] ?? 0);
+        if ($eventQueueId > 0 && $expectedQueueId > 0 && $eventQueueId !== $expectedQueueId) {
+            return false;
+        }
+
+        $eventJobKey = $this->firstNonEmptyString($payload, $details, ['job_key']);
+        $expectedJobKey = \trim((string)($correlation['job_key'] ?? ''));
+        if ($eventJobKey !== '' && $expectedJobKey !== '' && $eventJobKey !== $expectedJobKey) {
+            return false;
+        }
+
+        $eventJobType = $this->firstNonEmptyString($payload, $details, ['job_type']);
+        $expectedJobType = \trim((string)($correlation['job_type'] ?? ''));
+        if ($eventJobType !== '' && $expectedJobType !== '' && $eventJobType !== $expectedJobType) {
+            return false;
+        }
+
+        $hasEventCorrelation = $eventToken !== '' || $eventQueueId > 0 || $eventJobKey !== '' || $eventJobType !== '';
+        $eventType = \trim((string)($event['event_type'] ?? ''));
+        if ((bool)($correlation['require_error_correlation'] ?? false)
+            && \in_array($eventType, ['error', 'operation_failed'], true)) {
+            if ($expectedToken !== '' && $eventToken === '') {
+                return false;
+            }
+
+            return $hasEventCorrelation;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $details
+     * @param list<string> $keys
+     */
+    private function firstNonEmptyString(array $payload, array $details, array $keys): string
+    {
+        foreach ($keys as $key) {
+            $value = \trim((string)($payload[$key] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+        foreach ($keys as $key) {
+            $value = \trim((string)($details[$key] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $details
+     * @param list<string> $keys
+     */
+    private function firstPositiveInt(array $payload, array $details, array $keys): int
+    {
+        foreach ($keys as $key) {
+            $value = (int)($payload[$key] ?? 0);
+            if ($value > 0) {
+                return $value;
+            }
+        }
+        foreach ($keys as $key) {
+            $value = (int)($details[$key] ?? 0);
+            if ($value > 0) {
+                return $value;
+            }
+        }
+
+        return 0;
+    }
+
+    private function executionTokensMatch(string $actualToken, string $expectedToken): bool
+    {
+        $actualToken = \trim($actualToken);
+        $expectedToken = \trim($expectedToken);
+        if ($actualToken === '' || $expectedToken === '') {
+            return false;
+        }
+        if ($actualToken === $expectedToken) {
+            return true;
+        }
+
+        $actualBase = \explode('-force-', $actualToken, 2)[0] ?? $actualToken;
+        $expectedBase = \explode('-force-', $expectedToken, 2)[0] ?? $expectedToken;
+
+        return $actualBase !== '' && $actualBase === $expectedBase;
     }
 
     /**

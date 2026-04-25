@@ -114,7 +114,9 @@ class AiSiteBuildQueue implements QueueInterface
                 '已同步 active_operation=queued operation=build execution_token=' . \substr($effectiveExecutionToken, 0, 12) . '…'
             );
 
-            $scope = $scopeService->normalizeScope($session->getScopeArray());
+            $scope = $scopeService->normalizeScope(
+                $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            );
             $confirmedScope = $scope;
             if ($operation === 'build') {
                 $scopePatch = $buildTaskService->stripBuildPlanMutationScopePatch($scopePatch, $confirmedScope);
@@ -146,7 +148,10 @@ class AiSiteBuildQueue implements QueueInterface
                 $adminId,
                 $queueId,
                 AiSiteAgentSession::STAGE_VISUAL_EDIT,
-                $operation
+                $operation,
+                $effectiveExecutionToken,
+                \trim((string)($content['job_key'] ?? '')),
+                \trim((string)($content['job_type'] ?? ''))
             );
             $previousSseContextExists = RequestContext::has(RequestContext::SSE_WRITER_KEY);
             $previousSseContext = RequestContext::get(RequestContext::SSE_WRITER_KEY);
@@ -202,8 +207,8 @@ class AiSiteBuildQueue implements QueueInterface
             }
 
             $this->queueTrace($sse, '队列执行成功：构建完成');
-            $sse->complete();
             $this->markQueueDone($queue, '构建完成。');
+            $sse->complete();
 
             return '构建完成。';
         } catch (\Throwable $throwable) {
@@ -246,7 +251,9 @@ class AiSiteBuildQueue implements QueueInterface
         AiSiteAgentSession $session,
         AiSiteScopeCompatibilityService $scopeService
     ): array {
-        $scope = $scopeService->normalizeScope($session->getScopeArray());
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
         $activeDetails = \is_array($active['details'] ?? null) ? $active['details'] : [];
@@ -275,7 +282,9 @@ class AiSiteBuildQueue implements QueueInterface
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
         /** @var AiSiteBuildTaskService $buildTaskService */
         $buildTaskService = ObjectManager::getInstance(AiSiteBuildTaskService::class);
-        $scope = $scopeService->normalizeScope($fresh->getScopeArray());
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $workspaceTrack = $scopeService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
         $scope = $buildTaskService->ensureTaskScope(
             $scope,
@@ -321,7 +330,9 @@ class AiSiteBuildQueue implements QueueInterface
                 return;
             }
 
-            $scope = $scopeService->normalizeScope($session->getScopeArray());
+            $scope = $scopeService->normalizeScope(
+                $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            );
             $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
             if ((string)($active['execution_token'] ?? '') !== $executionToken) {
                 return;
@@ -347,7 +358,9 @@ class AiSiteBuildQueue implements QueueInterface
         string $executionToken
     ): AiSiteAgentSession {
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-        $scope = $scopeService->normalizeScope($fresh->getScopeArray());
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeStatus = \trim((string)($active['status'] ?? ''));
         $activeQueueId = (int)($active['queue_id'] ?? 0);
