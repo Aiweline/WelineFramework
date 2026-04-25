@@ -1261,23 +1261,18 @@ final class AiSiteVirtualThemePlanService
             ? $confirmedWorkbench['structured_plan']
             : (\is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : []);
         $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        $stage2ContextSnapshot = \is_array($scope['stage2_context_snapshot'] ?? null) ? $scope['stage2_context_snapshot'] : [];
         $themeContextSnapshot = \is_array($planStructured['theme_context_snapshot'] ?? null)
             ? $planStructured['theme_context_snapshot']
             : (\is_array($planWorkbench['stage1']['theme_context_snapshot'] ?? null)
                 ? $planWorkbench['stage1']['theme_context_snapshot']
                 : (\is_array($executionBlueprint['theme_context_snapshot'] ?? null)
                     ? $executionBlueprint['theme_context_snapshot']
-                    : (\is_array($stage2ContextSnapshot['theme_context_snapshot'] ?? null)
-                        ? $stage2ContextSnapshot['theme_context_snapshot']
-                        : (\is_array($scope['theme_context_snapshot'] ?? null) ? $scope['theme_context_snapshot'] : []))));
+                    : []));
         $sharedPromptContext = \is_array($planWorkbench['confirmed']['shared_prompt_context'] ?? null)
             ? $planWorkbench['confirmed']['shared_prompt_context']
             : (\is_array($executionBlueprint['shared_prompt_context'] ?? null)
                 ? $executionBlueprint['shared_prompt_context']
-                : (\is_array($stage2ContextSnapshot['shared_prompt_context'] ?? null)
-                    ? $stage2ContextSnapshot['shared_prompt_context']
-                    : (\is_array($scope['shared_prompt_context'] ?? null) ? $scope['shared_prompt_context'] : [])));
+                : []);
 
         $summary = [
             'site_title' => (string)($scope['site_title'] ?? ''),
@@ -1304,7 +1299,7 @@ final class AiSiteVirtualThemePlanService
             'navigation_plan' => \is_array($planStructured['navigation_plan'] ?? null) ? $planStructured['navigation_plan'] : [],
             'footer_plan' => \is_array($planStructured['footer_plan'] ?? null) ? $planStructured['footer_plan'] : [],
             'shared_prompt_context' => $sharedPromptContext,
-            'confirmed_block_tree_source' => $confirmedPlanBook !== [] ? 'confirmed_stage1_plan_book' : '',
+            'confirmed_block_tree_source' => $confirmedPlanBook !== [] ? 'stage1_plan_source' : '',
             'confirmed_plan_book_context_hash' => (string)($confirmedPlanBook['context_hash'] ?? ''),
             'confirmed_plan_book' => $this->compactConfirmedPlanBookForPrompt($confirmedPlanBook, $pageType),
             'plan_markdown_excerpt' => $confirmedPlanBook === [] ? $this->excerptText((string)($scope['plan_markdown'] ?? ''), 1200) : '',
@@ -2500,9 +2495,6 @@ final class AiSiteVirtualThemePlanService
         $stage1Workbench = \is_array($planWorkbench['stage1'] ?? null) ? $planWorkbench['stage1'] : [];
         $confirmedWorkbench = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
         $confirmedPlanBook = $this->resolveConfirmedStageOnePlanBook($scope);
-        if ($confirmedPlanBook === []) {
-            throw new \RuntimeException('Stage-2 task plan requires confirmed stage-1 plan_book.structured.');
-        }
         $planStructured = \is_array($confirmedWorkbench['structured_plan'] ?? null)
             ? $confirmedWorkbench['structured_plan']
             : (\is_array($scope['plan_structured'] ?? null)
@@ -2510,21 +2502,16 @@ final class AiSiteVirtualThemePlanService
                 : (\is_array($confirmedWorkbench['plan_json'] ?? null)
                     ? $confirmedWorkbench['plan_json']
                     : (\is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [])));
-        $storedStage2ContextSnapshot = \is_array($scope['stage2_context_snapshot'] ?? null) ? $scope['stage2_context_snapshot'] : [];
         $themeContextSnapshot = \is_array($stage1Workbench['theme_context_snapshot'] ?? null)
             ? $stage1Workbench['theme_context_snapshot']
             : (\is_array($executionBlueprint['theme_context_snapshot'] ?? null)
                 ? $executionBlueprint['theme_context_snapshot']
-                : (\is_array($storedStage2ContextSnapshot['theme_context_snapshot'] ?? null)
-                    ? $storedStage2ContextSnapshot['theme_context_snapshot']
-                    : (\is_array($scope['theme_context_snapshot'] ?? null) ? $scope['theme_context_snapshot'] : [])));
+                : []);
         $sharedPromptContext = \is_array($confirmedWorkbench['shared_prompt_context'] ?? null)
             ? $confirmedWorkbench['shared_prompt_context']
             : (\is_array($executionBlueprint['shared_prompt_context'] ?? null)
                 ? $executionBlueprint['shared_prompt_context']
-                : (\is_array($storedStage2ContextSnapshot['shared_prompt_context'] ?? null)
-                    ? $storedStage2ContextSnapshot['shared_prompt_context']
-                    : (\is_array($scope['shared_prompt_context'] ?? null) ? $scope['shared_prompt_context'] : [])));
+                : []);
         if ($planStructured === []) {
             $planStructured = [
                 'site_strategy' => [
@@ -2551,7 +2538,7 @@ final class AiSiteVirtualThemePlanService
         $buildTasks = $this->resolveStageTwoBuildTasks($buildBlueprint, $confirmedPlanBook);
         \usort($buildTasks, static fn(array $left, array $right): int => ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0)));
         if ($buildTasks === []) {
-            throw new \RuntimeException('Stage-2 task plan requires confirmed stage-1 shared/page blocks.');
+            throw new \RuntimeException('Stage-2 task plan requires confirmed stage-1 plan_json or execution_blueprint tasks.');
         }
 
         $sharedTasks = [];
@@ -2884,9 +2871,6 @@ final class AiSiteVirtualThemePlanService
 
         $structured = [
             'plan_signature' => $sourceSignature,
-            'stage2_context_snapshot' => $stage2ContextSnapshot,
-            'theme_context_snapshot' => $themeContextSnapshot,
-            'shared_prompt_context' => $sharedPromptContext,
             'content_locale' => $this->resolveStageTwoContentLocale($scope),
             'plan_locale' => \trim((string)($scope['plan_locale'] ?? '')),
             'virtual_theme_strategy' => [
@@ -4110,16 +4094,21 @@ final class AiSiteVirtualThemePlanService
      */
     private function resolveConfirmedStageOnePlanBook(array $scope): array
     {
-        $candidate = $scope['confirmed_stage1_plan_book'] ?? null;
-        if (\is_array($candidate) && $this->looksLikeConfirmedStageOnePlanBook($candidate)) {
-            return $candidate;
-        }
-
         $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
         $confirmedWorkbench = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
         $candidate = $confirmedWorkbench['plan_book']['structured'] ?? null;
         if (\is_array($candidate) && $this->looksLikeConfirmedStageOnePlanBook($candidate)) {
             return $candidate;
+        }
+
+        foreach ([
+            $scope['plan_structured'] ?? null,
+            $scope['execution_blueprint'] ?? null,
+            $scope['plan_json'] ?? null,
+        ] as $candidate) {
+            if (\is_array($candidate) && $this->looksLikeConfirmedStageOnePlanBook($candidate)) {
+                return $candidate;
+            }
         }
 
         return [];
@@ -4269,6 +4258,33 @@ final class AiSiteVirtualThemePlanService
             }
         }
 
+        if ($tasks !== []) {
+            return $tasks;
+        }
+
+        foreach (\is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [] as $task) {
+            if (\is_array($task)) {
+                $tasks[] = $task;
+            }
+        }
+
+        $groups = \is_array($buildBlueprint['task_groups'] ?? null) ? $buildBlueprint['task_groups'] : [];
+        foreach (\is_array($groups['shared']['tasks'] ?? null) ? $groups['shared']['tasks'] : [] as $task) {
+            if (\is_array($task)) {
+                $tasks[] = $task;
+            }
+        }
+        foreach (\is_array($groups['pages'] ?? null) ? $groups['pages'] : [] as $pageTasks) {
+            if (!\is_array($pageTasks)) {
+                continue;
+            }
+            foreach (\is_array($pageTasks['tasks'] ?? null) ? $pageTasks['tasks'] : $pageTasks as $task) {
+                if (\is_array($task)) {
+                    $tasks[] = $task;
+                }
+            }
+        }
+
         return $tasks;
     }
 
@@ -4388,7 +4404,7 @@ final class AiSiteVirtualThemePlanService
             'sort_order' => (int)($block['sort_order'] ?? 0),
             'dependencies' => \array_values(\array_filter(\array_map('strval', \is_array($block['dependencies'] ?? null) ? $block['dependencies'] : []))),
             'result_ref' => [
-                'source' => 'confirmed_stage1_plan_book',
+                'source' => 'stage1_plan_source',
                 'scope_path' => 'shared_blocks.' . $taskKey,
                 'context_hash' => (string)($block['context_hash'] ?? ''),
             ],
@@ -4422,7 +4438,7 @@ final class AiSiteVirtualThemePlanService
             'sort_order' => (int)($block['sort_order'] ?? 0),
             'dependencies' => \array_values(\array_filter(\array_map('strval', \is_array($block['dependencies'] ?? null) ? $block['dependencies'] : []))),
             'result_ref' => [
-                'source' => 'confirmed_stage1_plan_book',
+                'source' => 'stage1_plan_source',
                 'scope_path' => 'pages.' . $pageKey . '.blocks.' . $sourceBlockKey,
                 'context_hash' => (string)($block['context_hash'] ?? ''),
             ],
@@ -4478,8 +4494,23 @@ final class AiSiteVirtualThemePlanService
     {
         $sourceBlockKey = $this->resolvePlanBookSourceBlockKey($block);
         $sectionCode = \trim((string)($block['component_kind'] ?? $block['title'] ?? $sourceBlockKey));
+        $goal = $this->firstNonEmptyString([
+            $block['goal'] ?? null,
+            $block['seo_brief']['intent'] ?? null,
+            $block['why'] ?? null,
+            $block['reason'] ?? null,
+            $block['content'] ?? null,
+            $block['title'] ?? null,
+            $sourceBlockKey,
+        ]);
+        $reason = $this->firstNonEmptyString([
+            $block['reason'] ?? null,
+            $block['why'] ?? null,
+            $block['implementation_detail'] ?? null,
+            $goal,
+        ]);
         $resultRef = [
-            'source' => 'confirmed_stage1_plan_book',
+            'source' => 'stage1_plan_source',
             'scope_path' => 'pages.' . $pageKey . '.blocks.' . $sourceBlockKey,
             'context_hash' => (string)($block['context_hash'] ?? ''),
         ];
@@ -4489,8 +4520,8 @@ final class AiSiteVirtualThemePlanService
             'section_code' => $sectionCode !== '' ? $sectionCode : $sourceBlockKey,
             'component_kind' => (string)($block['component_kind'] ?? ''),
             'sort_order' => (int)($block['sort_order'] ?? 0),
-            'goal' => (string)($block['goal'] ?? ''),
-            'why' => (string)($block['reason'] ?? ''),
+            'goal' => $goal,
+            'why' => $reason,
             'implementation_detail' => (string)($block['implementation_detail'] ?? ''),
             'realtime_content' => \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [],
             'editable_fields' => \array_values(\array_filter(\array_map('strval', \is_array($block['editable_fields'] ?? null) ? $block['editable_fields'] : []))),
@@ -4654,8 +4685,6 @@ final class AiSiteVirtualThemePlanService
             'target_scope' => (string)($task['page_type'] ?? ''),
             'sse_scope' => $sseScope,
             'stream_session_key' => $sessionScope !== '' && $taskKey !== '' ? ($sessionScope . ':' . $taskKey) : $taskKey,
-            'theme_context_snapshot' => \is_array($stage2ContextSnapshot['theme_context_snapshot'] ?? null) ? $stage2ContextSnapshot['theme_context_snapshot'] : [],
-            'stage2_context_snapshot' => $stage2ContextSnapshot,
             'stage2_context_hash' => (string)($stage2ContextSnapshot['context_hash'] ?? ''),
         ];
     }
@@ -4710,7 +4739,7 @@ final class AiSiteVirtualThemePlanService
 
         $snapshot = [
             'source_confirmed_signature' => $sourceSignature,
-            'confirmed_stage1_source' => $confirmedPlanBook !== [] ? 'confirmed_stage1_plan_book' : 'execution_blueprint',
+            'confirmed_stage1_source' => $confirmedPlanBook !== [] ? 'stage1_plan_source' : 'execution_blueprint',
             'confirmed_plan_book_context_hash' => (string)($confirmedPlanBook['context_hash'] ?? ''),
             'content_locale' => $this->resolveStageTwoContentLocale($scope),
             'plan_locale' => \trim((string)($scope['plan_locale'] ?? '')),
@@ -4976,14 +5005,10 @@ final class AiSiteVirtualThemePlanService
      */
     private function syncStageTwoRuntimeContexts(array $structured): array
     {
-        $stage2ContextSnapshot = \is_array($structured['stage2_context_snapshot'] ?? null) ? $structured['stage2_context_snapshot'] : [];
-        $themeContextSnapshot = \is_array($stage2ContextSnapshot['theme_context_snapshot'] ?? null) ? $stage2ContextSnapshot['theme_context_snapshot'] : [];
-        $contextHash = (string)($stage2ContextSnapshot['context_hash'] ?? '');
+        $contextHash = (string)($structured['plan_signature'] ?? '');
 
         $structured['shared_tasks'] = $this->syncStageTwoRuntimeContextList(
             \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [],
-            $stage2ContextSnapshot,
-            $themeContextSnapshot,
             $contextHash
         );
 
@@ -4992,7 +5017,7 @@ final class AiSiteVirtualThemePlanService
             if (!\is_array($tasks)) {
                 continue;
             }
-            $pageTasks[$pageType] = $this->syncStageTwoRuntimeContextList($tasks, $stage2ContextSnapshot, $themeContextSnapshot, $contextHash);
+            $pageTasks[$pageType] = $this->syncStageTwoRuntimeContextList($tasks, $contextHash);
         }
         $structured['page_tasks'] = $pageTasks;
 
@@ -5002,9 +5027,9 @@ final class AiSiteVirtualThemePlanService
                     continue;
                 }
                 $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
-                $runtimeContext['theme_context_snapshot'] = $themeContextSnapshot;
-                $runtimeContext['stage2_context_snapshot'] = $stage2ContextSnapshot;
-                $runtimeContext['stage2_context_hash'] = $contextHash;
+                if ($contextHash !== '') {
+                    $runtimeContext['stage2_context_hash'] = $contextHash;
+                }
                 $structured['execution_blueprint']['tasks'][$idx]['runtime_context'] = $runtimeContext;
             }
         }
@@ -5016,8 +5041,6 @@ final class AiSiteVirtualThemePlanService
             if ($groupKey === 'shared') {
                 $structured['execution_blueprint']['task_groups'][$groupKey] = $this->syncStageTwoRuntimeContextList(
                     $structured['execution_blueprint']['task_groups'][$groupKey],
-                    $stage2ContextSnapshot,
-                    $themeContextSnapshot,
                     $contextHash
                 );
                 continue;
@@ -5028,8 +5051,6 @@ final class AiSiteVirtualThemePlanService
                 }
                 $structured['execution_blueprint']['task_groups'][$groupKey][$pageType] = $this->syncStageTwoRuntimeContextList(
                     $tasks,
-                    $stage2ContextSnapshot,
-                    $themeContextSnapshot,
                     $contextHash
                 );
             }
@@ -5042,7 +5063,7 @@ final class AiSiteVirtualThemePlanService
      * @param array<int, mixed> $tasks
      * @return list<array<string, mixed>>
      */
-    private function syncStageTwoRuntimeContextList(array $tasks, array $stage2ContextSnapshot, array $themeContextSnapshot, string $contextHash): array
+    private function syncStageTwoRuntimeContextList(array $tasks, string $contextHash): array
     {
         $synced = [];
         foreach ($tasks as $task) {
@@ -5050,9 +5071,9 @@ final class AiSiteVirtualThemePlanService
                 continue;
             }
             $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
-            $runtimeContext['theme_context_snapshot'] = $themeContextSnapshot;
-            $runtimeContext['stage2_context_snapshot'] = $stage2ContextSnapshot;
-            $runtimeContext['stage2_context_hash'] = $contextHash;
+            if ($contextHash !== '') {
+                $runtimeContext['stage2_context_hash'] = $contextHash;
+            }
             $task['runtime_context'] = $runtimeContext;
             $synced[] = $task;
         }
@@ -7154,7 +7175,7 @@ final class AiSiteVirtualThemePlanService
             '- Component-level generation may also run concurrently in isolated SSE sessions.',
             '- Shared tasks and page tasks must preserve the confirmed locale rules: content_locale/default_locale is the website language for both final copy and planned content; plan_locale is only an internal planning hint and must not override website-language output.',
             '- Planned-content language lock: markdown task-plan descriptions, task_script.story_goal, task_script.content_fill_rule, task_script.field_content_requirements[].sample/reason, block_task.task_goal, block_task.meta_fields[].sample/default/reason, block_task.content_plan copy/CTA/link/asset text, nav/footer labels, and SEO copy must all use content_locale/default_locale. If confirmed stage-1 text or user brief text is in another language, translate/adapt it before writing the task plan.',
-            '- Stage-2 contract: derive ONLY from confirmed stage-1 markdown + confirmed_stage1_plan_book + execution_blueprint; never invent requirements absent from stage-1.',
+            '- Stage-2 contract: derive ONLY from confirmed stage-1 markdown + plan_json/plan_structured + execution_blueprint; never invent requirements absent from stage-1.',
             '- Produce virtual_theme_plan fields: plan_signature, virtual_theme_strategy, shared_tasks, page_tasks, block_task_schema, task_tree, meta_field_matrix, style_tokens, content_rules, responsive_rules, execution_order, risk_notes.',
             '- shared:header must specify visuals, nav structure, brand slot, CTA slots, variable fields, defaults, responsive collapse rules, SEO/internal-link rationale; list each nav item as label + target page_type or href—no empty "nav TBD".',
             '- shared:footer must specify information groups, policy links, trust blocks, social/contact slots, variable fields, defaults, SEO/crawl rationale; each group MUST name the exact link labels users see.',
@@ -7191,7 +7212,7 @@ final class AiSiteVirtualThemePlanService
         if ($targetScope !== '') {
             $lines[] = 'Target scope: ' . $targetScope;
         }
-        $lines[] = 'Stage-1 confirmed plan source (plan_json or compacted confirmed_stage1_plan_book):';
+        $lines[] = 'Stage-1 confirmed plan source (canonical plan_json/plan_structured):';
         $lines[] = \json_encode($stage1PlanSource, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}';
         $lines[] = 'Stage-1 plan_markdown:';
         $lines[] = $stage1PlanMarkdown !== '' ? $stage1PlanMarkdown : '-';
@@ -7827,10 +7848,8 @@ final class AiSiteVirtualThemePlanService
             $scope['website_profile']['default_locale'] ?? null,
             $scope['plan_json']['content_locale'] ?? null,
             $scope['execution_blueprint']['content_locale'] ?? null,
-            $scope['confirmed_stage1_plan_book']['content_locale'] ?? null,
             $scope['plan_workbench']['confirmed']['plan_book']['structured']['content_locale'] ?? null,
             $scope['plan_workbench']['confirmed']['structured_plan']['content_locale'] ?? null,
-            $scope['stage2_context_snapshot']['content_locale'] ?? null,
         ] as $value) {
             if (!\is_scalar($value)) {
                 continue;
@@ -7847,7 +7866,6 @@ final class AiSiteVirtualThemePlanService
     private function resolveStageTwoStructuredContentLocale(array $structured): string
     {
         foreach ([
-            $structured['stage2_context_snapshot']['content_locale'] ?? null,
             $structured['content_locale'] ?? null,
             $structured['site_context']['content_locale'] ?? null,
             $structured['virtual_theme_strategy']['content_locale'] ?? null,
