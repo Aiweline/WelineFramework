@@ -133,15 +133,15 @@
 
         </div>
 
-        <?php if ($pagesByType !== []): ?>
-
-        <div class="border rounded p-3 mb-3">
+        <div class="border rounded p-3 mb-3<?= $pagesByType !== [] ? '' : ' d-none' ?>" id="pb-ai-materialized-pages-card">
 
             <div class="fw-semibold mb-2"><?= htmlspecialchars((string)__('已生成页面'), ENT_QUOTES, 'UTF-8') ?></div>
 
-            <div class="d-flex flex-wrap gap-2">
+            <div class="d-flex flex-wrap gap-2" id="pb-ai-materialized-pages-list">
 
                 <?php foreach ($pagesByType as $pt => $pageData): ?>
+
+                    <?php if ((int)($pageData['page_id'] ?? 0) <= 0) { continue; } ?>
 
                     <span class="badge bg-soft-info text-info"><?= htmlspecialchars((string)($pageTypeLabels[$pt] ?? $pt), ENT_QUOTES, 'UTF-8') ?>#<?= (int)($pageData['page_id'] ?? 0) ?></span>
 
@@ -150,8 +150,6 @@
             </div>
 
         </div>
-
-        <?php endif; ?>
 
         <div class="alert alert-info mb-0<?= $embeddedVisualUrl !== '' ? ' d-none' : '' ?>" id="pb-ai-visual-edit-empty-state"><?= htmlspecialchars((string)__('当前还没有可用的可视化预览地址，请先完成虚拟主题构建。'), ENT_QUOTES, 'UTF-8') ?></div>
 
