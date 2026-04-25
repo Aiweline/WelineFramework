@@ -529,7 +529,9 @@ class AiSiteAgent extends BaseController
             $session = $this->sessionService->loadByPublicId($publicId, $adminId);
             if ($session !== null) {
                 $sessionAccessible = true;
-                $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+                $scope = $this->scopeCompatibilityService->normalizeScope(
+                    $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                );
                 $taskPlanConfirmed = (int)($scope['task_plan_confirmed'] ?? 0) === 1;
             }
         }
@@ -945,7 +947,10 @@ SCRIPT;
         if (isset($scopePatch['page_types'])) {
             $scopePatch[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
         }
-        $scope = $this->scopeCompatibilityService->normalizeScope(\array_replace($session->getScopeArray(), $scopePatch));
+        $scope = $this->scopeCompatibilityService->normalizeScope(\array_replace(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN),
+            $scopePatch
+        ));
         if (\trim((string)($scope['target_domain'] ?? '')) === '') {
             return $this->jsonError(
                 'TARGET_DOMAIN_REQUIRED',
@@ -966,7 +971,9 @@ SCRIPT;
         ]);
         $this->sessionService->mergeScope($session->getId(), $adminId, $persistPatch);
         $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $currentScope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $currentScope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
+        );
         $planStartDecision = $this->resolvePlanStartDecision($currentScope);
         $planIsEmpty = $this->isPlanContentEmpty($currentScope);
         $hasPlanDraft = !$planIsEmpty;
@@ -1019,7 +1026,9 @@ SCRIPT;
         ) {
             $this->cancelActivePlanOperationForScopeChange($session, $adminId);
             $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-            $currentScope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+            $currentScope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
+            );
             $planStartDecision = $this->resolvePlanStartDecision($currentScope);
         }
         if ((string)($planStartDecision['action'] ?? '') === 'reuse' && $hasPlanDraft) {
@@ -1612,7 +1621,9 @@ SCRIPT;
                 throw new \RuntimeException('Second-stage task plan confirm persist failed: mergeScope returned false.');
             }
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-            $freshScope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+            $freshScope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            );
             $freshVirtualThemePlan = \is_array($freshScope['virtual_theme_plan'] ?? null) ? $freshScope['virtual_theme_plan'] : [];
             $confirmed = \is_array($freshVirtualThemePlan['confirmed'] ?? null) ? $freshVirtualThemePlan['confirmed'] : [];
             $confirmedMarkdown = \trim((string)($freshVirtualThemePlan['confirmed_markdown'] ?? ''));
@@ -1663,7 +1674,9 @@ SCRIPT;
         }
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
         $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
         $draftMarkdown = \trim((string)($virtualThemePlan['draft_markdown'] ?? ''));
@@ -1700,7 +1713,9 @@ SCRIPT;
             $repairSaved = $this->sessionService->mergeScope($fresh->getId(), $adminId, $repairPatch);
             if ($repairSaved) {
                 $fresh = $this->sessionService->loadById($fresh->getId(), $adminId) ?? $fresh;
-                $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+                $scope = $this->scopeCompatibilityService->normalizeScope(
+                    $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                );
                 $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
                 $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
                 $draftMarkdown = \trim((string)($virtualThemePlan['draft_markdown'] ?? ''));
@@ -1774,7 +1789,9 @@ SCRIPT;
         int $adminId,
         string $source
     ): AiSiteAgentSession {
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
+        );
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
         if ($planStructured === [] && $planJson !== []) {
@@ -1808,7 +1825,9 @@ SCRIPT;
         }
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $freshScope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $freshScope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
+        );
         $freshPlanJson = \is_array($freshScope['plan_json'] ?? null) ? $freshScope['plan_json'] : [];
         $freshPlanStructured = \is_array($freshScope['plan_structured'] ?? null) ? $freshScope['plan_structured'] : [];
         $freshPlanMarkdown = \trim((string)($freshScope['plan_markdown'] ?? ''));
@@ -1845,7 +1864,9 @@ SCRIPT;
             return;
         }
 
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $scope = $this->normalizePlanConfirmationForTaskPlan($session, $adminId, $scope);
         if (!$this->isPlanConfirmedForTaskPlan($scope)) {
             $this->sendSseContractError($sse, 'PLAN_REQUIRED_BEFORE_TASK_PLAN', (string)__('请先确认阶段一方案，再继续调整第二阶段任务方案'), ['public_id', 'plan_confirmed'], 409);
@@ -2393,7 +2414,9 @@ SCRIPT;
         if ($siteProfileManual !== []) {
             $scopePatch['site_profile_manual'] = $siteProfileManual;
         }
-        $currentScope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $currentScope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $scopePatch = $this->buildTaskService->stripBuildPlanMutationScopePatch($scopePatch, $currentScope);
         $mergedScope = $this->scopeCompatibilityService->normalizeScope(\array_replace($currentScope, $scopePatch));
         $mergedScope = $this->buildTaskService->restoreBuildPlanContract($mergedScope, $currentScope);
@@ -2530,7 +2553,9 @@ SCRIPT;
             return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
 
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         if (!\in_array($pageType, $pageTypes, true)) {
             return $this->jsonError('INVALID_PARAMS', (string)__('所选页面类型不在当前工作区中'), self::PARAMS_REGENERATE);
@@ -2622,7 +2647,9 @@ SCRIPT;
             return;
         }
 
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         if (!\in_array($pageType, $pageTypes, true)) {
             $this->sendSseContractError($sse, 'INVALID_PAGE_TYPE', 'Page type is not in the current workspace', self::PARAMS_REGENERATE, 400);
@@ -2678,7 +2705,9 @@ SCRIPT;
             );
             if ($preserveOriginalOperation) {
                 $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-                $freshScope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+                $freshScope = $this->scopeCompatibilityService->normalizeScope(
+                    $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                );
                 $freshScope['active_operation'] = $originalActiveOperation;
                 $freshScope['workspace_status'] = $originalWorkspaceStatus;
                 $this->sessionService->replaceScope($fresh->getId(), $adminId, $freshScope);
@@ -2697,7 +2726,9 @@ SCRIPT;
         } catch (\Throwable $throwable) {
             if ($preserveOriginalOperation) {
                 $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-                $freshScope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+                $freshScope = $this->scopeCompatibilityService->normalizeScope(
+                    $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                );
                 $freshScope['active_operation'] = $originalActiveOperation;
                 $freshScope['workspace_status'] = $originalWorkspaceStatus;
                 $this->sessionService->replaceScope($fresh->getId(), $adminId, $freshScope);
@@ -3294,7 +3325,7 @@ SCRIPT;
 
         // 前端 Tab 可能对应已勾选但尚未完成 mergeScope（防抖）的页面类型；若不写入 scope，resolvePreviewPageType 会回退到首页，预览看似「切不过去」。
         if ($requestedPageType !== '' && \array_key_exists($requestedPageType, Page::getPageTypes())) {
-            $scopeArr = $session->getScopeArray();
+            $scopeArr = $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT);
             $existingTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scopeArr);
             if (!\in_array($requestedPageType, $existingTypes, true)) {
                 $existingTypes[] = $requestedPageType;
@@ -3825,7 +3856,9 @@ SCRIPT;
      */
     private function buildWorkspaceStreamOperationState(AiSiteAgentSession $session): array
     {
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, $this->scopeCompatibilityService->normalizeStage($session->getStage()))
+        );
         return [
             'active_operation' => \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
         ];
@@ -3942,7 +3975,10 @@ SCRIPT;
         ]);
 
         try {
-            $scope = $this->scopeCompatibilityService->normalizeScope(($this->sessionService->loadById($fresh->getId(), $adminId) ?? $fresh)->getScopeArray());
+            $planFresh = $this->sessionService->loadById($fresh->getId(), $adminId) ?? $fresh;
+            $scope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForStage($planFresh, AiSiteAgentSession::STAGE_PLAN)
+            );
             $scope['plan_locale'] = $this->resolvePlanLocale($scope);
             $websiteProfile = $this->profileGenerationService->generate($scope, false);
             $currentPageTypes = \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : [];
@@ -4311,7 +4347,9 @@ SCRIPT;
         }
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
+        );
         $scope = $this->writeActiveOperationStateToScope($scope, $nextOperation);
         if (($nextOperation['status'] ?? '') === 'done') {
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
@@ -4853,7 +4891,9 @@ SCRIPT;
 
             try {
                 $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-                $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+                $scope = $this->scopeCompatibilityService->normalizeScope(
+                    $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                );
                 $generationProgress = \is_array($scope['task_plan_generation_progress'] ?? null)
                     ? $scope['task_plan_generation_progress']
                     : [];
@@ -5031,9 +5071,12 @@ SCRIPT;
         string $operation,
         string $claimSource = 'operation_sse'
     ): array {
+        $stageCode = $this->resolveAiSiteQueueStage($operation);
         for ($attempt = 0; $attempt < 4; $attempt++) {
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-            $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+            $scope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForStage($fresh, $stageCode)
+            );
             $active = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
             $op = \trim((string)($active['operation'] ?? ''));
             $tok = \trim((string)($active['execution_token'] ?? ''));
@@ -5080,7 +5123,9 @@ SCRIPT;
             $this->sessionService->replaceScope($fresh->getId(), $adminId, $scope);
 
             $verify = $this->sessionService->loadById($session->getId(), $adminId) ?? $fresh;
-            $vScope = $this->scopeCompatibilityService->normalizeScope($verify->getScopeArray());
+            $vScope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForStage($verify, $stageCode)
+            );
             $vActive = $this->resolveActiveOperationForExecutionToken($vScope, $executionToken);
             if ($this->executionTokenMatches((string)($vActive['execution_token'] ?? ''), $executionToken)
                 && \trim((string)($vActive['status'] ?? '')) === 'running') {
@@ -5221,7 +5266,9 @@ SCRIPT;
             return;
         }
 
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, $this->scopeCompatibilityService->normalizeStage($session->getStage()))
+        );
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
         $operation = \trim((string)($activeOperation['operation'] ?? ''));
@@ -5282,7 +5329,9 @@ SCRIPT;
                     if ($newQueueId <= 0) {
                         throw new \RuntimeException('enqueue_queue_id');
                     }
-                    $healScope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+                    $healScope = $this->scopeCompatibilityService->normalizeScope(
+                        $this->sessionService->loadScopeForStage($session, $this->resolveAiSiteQueueStage($operation))
+                    );
                     $healActive = $this->resolveActiveOperationForExecutionToken($healScope, $executionToken);
                     $healScope = $this->writeActiveOperationStateToScope($healScope, \array_replace($healActive, [
                         'operation' => $operation,
@@ -5409,7 +5458,9 @@ SCRIPT;
         }
 
         $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, $this->resolveAiSiteQueueStage($operation))
+        );
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
 
@@ -5566,9 +5617,12 @@ SCRIPT;
         $maxIdleLoops = $this->getObserverMaxIdleLoops();
         $pollIntervalMs = 1000;
         $idleLoops = 0;
+        $stageCode = $this->resolveAiSiteQueueStage($operation);
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($fresh, $stageCode)
+        );
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
         $startedAtRaw = \trim((string)($activeOperation['started_at'] ?? ''));
@@ -5649,7 +5703,9 @@ SCRIPT;
         // Keep observing until the connection closes or the operation settles.
         while ($sse->isAlive()) {
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-            $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+            $scope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForStage($fresh, $stageCode)
+            );
             $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
             $queueId = (int)($activeOperation['queue_id'] ?? $queueId);
             $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId);
@@ -5684,7 +5740,9 @@ SCRIPT;
                 $queueRowAfterEvents = $this->findAiSiteOperationQueueRow($freshAfterEvents, $operation, $queueId);
                 if (\is_array($queueRowAfterEvents) && $queueRowAfterEvents !== []) {
                     $fresh = $freshAfterEvents;
-                    $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+                    $scope = $this->scopeCompatibilityService->normalizeScope(
+                        $this->sessionService->loadScopeForStage($fresh, $stageCode)
+                    );
                     $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
                     $queueId = (int)($activeOperation['queue_id'] ?? $queueId);
                     $queueRow = $queueRowAfterEvents;
@@ -7271,7 +7329,7 @@ SCRIPT;
     ): array {
         $startedAt = \microtime(true);
         $normalized = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, $session->getStage())
+            $this->sessionService->loadScopeForStage($session, $this->scopeCompatibilityService->normalizeStage($session->getStage()))
         );
         $normalized = $this->scopeCompatibilityService->normalizeConfirmedPlanFlag($normalized);
         // 读取工作区状态时避免触发外部 AI 生成，防止首开/轮询被远程调用阻塞。
@@ -8468,7 +8526,10 @@ SCRIPT;
         string $workspaceStatus = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING,
         array $operationDetails = []
     ): array {
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $stage = $this->scopeCompatibilityService->normalizeStage($stage);
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, $stage)
+        );
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
         if (
@@ -8588,7 +8649,9 @@ SCRIPT;
             $queueDispatch['queue_id'] = $queueId;
 
             $freshForQueue = $this->sessionService->loadById($session->getId(), $adminId) ?? $freshForQueue;
-            $queueScope = $this->scopeCompatibilityService->normalizeScope($freshForQueue->getScopeArray());
+            $queueScope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForStage($freshForQueue, $stage)
+            );
             $queueActiveOperation = \is_array($queueScope['active_operation'] ?? null) ? $queueScope['active_operation'] : [];
             if (
                 \trim((string)($queueActiveOperation['operation'] ?? '')) === $operation
@@ -8806,7 +8869,9 @@ SCRIPT;
         ?array $queueRow,
         bool $alreadyAttempted
     ): array {
-        $normalizedScope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $normalizedScope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, $this->resolveAiSiteQueueStage($operation))
+        );
 
         $dispatchPort = function (
             AiSiteAgentSession $s,
@@ -10949,7 +11014,9 @@ SCRIPT;
     private function runPublishOperation(SseWriter $sse, AiSiteAgentSession $session, int $adminId): array
     {
         $this->assertActiveStreamLeaseAlive($session, $adminId);
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PUBLISH)
+        );
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
         $websiteProfile = $this->profileGenerationService->generate($scope);
@@ -11019,7 +11086,9 @@ SCRIPT;
         $this->assertActiveStreamLeaseAlive($session, $adminId);
         if ($operationStatus === 'running' && $progressPercent >= 100) {
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-            $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+            $scope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForStage($fresh, $this->resolveAiSiteQueueStage($operation))
+            );
             $resolvedWorkspaceStatus = $this->scopeCompatibilityService->normalizeWorkspaceStatus((string)($scope['workspace_status'] ?? ''));
 
             if (
@@ -11052,7 +11121,9 @@ SCRIPT;
         ];
         if (\in_array($operation, ['build', 'regenerate_page', 'block_regenerate'], true)) {
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-            $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+            $scope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForStage($fresh, $this->resolveAiSiteQueueStage($operation))
+            );
             $summary = $this->buildTaskService->summarize($scope);
             if ((int)($summary['total'] ?? 0) > 0) {
                 $payload = \array_replace(
@@ -11140,7 +11211,9 @@ SCRIPT;
         ?string $publishStatus = null
     ): void {
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($fresh, $this->scopeCompatibilityService->normalizeStage($fresh->getStage()))
+        );
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
         $updatedAt = \date('Y-m-d H:i:s');
@@ -11168,7 +11241,9 @@ SCRIPT;
 
     private function touchStreamLeaseState(AiSiteAgentSession $session, int $adminId, string $leaseToken, string $tabToken = ''): int
     {
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, $this->scopeCompatibilityService->normalizeStage($session->getStage()))
+        );
         $lease = \is_array($scope[self::STREAM_LEASE_SCOPE_KEY] ?? null) ? $scope[self::STREAM_LEASE_SCOPE_KEY] : [];
         $expiresAt = \time() + self::STREAM_LEASE_TTL_SEC;
         $lease['token'] = $leaseToken;
@@ -11184,7 +11259,9 @@ SCRIPT;
     private function isStreamLeaseAlive(AiSiteAgentSession $session, int $adminId, string $leaseToken = ''): bool
     {
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($fresh, $this->scopeCompatibilityService->normalizeStage($fresh->getStage()))
+        );
         $lease = \is_array($scope[self::STREAM_LEASE_SCOPE_KEY] ?? null) ? $scope[self::STREAM_LEASE_SCOPE_KEY] : [];
         if ($lease === []) {
             return true;
@@ -11212,7 +11289,9 @@ SCRIPT;
         }
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($fresh, $this->scopeCompatibilityService->normalizeStage($fresh->getStage()))
+        );
         $lease = \is_array($scope[self::STREAM_LEASE_SCOPE_KEY] ?? null) ? $scope[self::STREAM_LEASE_SCOPE_KEY] : [];
         if ((string)($lease['token'] ?? '') !== $leaseToken) {
             return;
@@ -11482,7 +11561,9 @@ SCRIPT;
             return $this->jsonError('SESSION_NOT_FOUND', 'Session not found.', self::PARAMS_PUBLIC_ID);
         }
 
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
+        );
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         if (!\is_array($planJson['pages'][$pageType] ?? null)) {
             return $this->jsonError('PAGE_PLAN_NOT_FOUND', 'Stage-1 page plan not found.', ['public_id', 'page_type']);
@@ -11571,7 +11652,9 @@ SCRIPT;
             return $this->jsonError('SESSION_NOT_FOUND', 'Session not found.', self::PARAMS_PUBLIC_ID);
         }
 
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
+        );
         try {
             $artifacts = $this->executionBlueprintService->reorderDraftPlanBlocks($scope, $pageType, $orderedBlockKeys);
         } catch (\Throwable $throwable) {
@@ -11641,7 +11724,9 @@ SCRIPT;
             return $this->jsonError('SESSION_NOT_FOUND', 'Session not found.', self::PARAMS_PUBLIC_ID);
         }
 
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
+        );
         $round = \max(1, (int)$this->getRequestBodyValue('round', ((int)($scope['plan_last_round'] ?? 0)) + 1));
         $scopePatch = [
             'plan_confirmed' => 0,
@@ -11697,7 +11782,9 @@ SCRIPT;
             return $this->jsonError('SESSION_NOT_FOUND', 'Session not found.', self::PARAMS_PUBLIC_ID);
         }
 
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         try {
             $artifacts = $this->virtualThemePlanService->reorderDraftTaskPlanTasks($scope, $bucket, $orderedTaskKeys, $pageType);
         } catch (\Throwable $throwable) {
@@ -11798,7 +11885,9 @@ SCRIPT;
             return $this->jsonError('SESSION_NOT_FOUND', 'Session not found.', self::PARAMS_PUBLIC_ID);
         }
 
-        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $round = \max(1, (int)$this->getRequestBodyValue('round', ((int)($scope['virtual_theme_plan']['last_round'] ?? 0)) + 1));
         $targetScope = \trim((string)$this->getRequestBodyValue('target_scope', ''));
         $ports = new AiSiteAgentMutateTaskPlanTaskOperationPorts(

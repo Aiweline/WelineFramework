@@ -29,11 +29,6 @@ class AiSiteAgentSessionArtifactService
             'path' => ['plan_structured'],
             'empty' => [],
         ],
-        'confirmed_stage1_plan_book' => [
-            'stage' => AiSiteAgentSession::STAGE_PLAN,
-            'path' => ['confirmed_stage1_plan_book'],
-            'empty' => [],
-        ],
         'task_plan_structured' => [
             'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'path' => ['task_plan_structured'],
@@ -78,12 +73,10 @@ class AiSiteAgentSessionArtifactService
         AiSiteAgentSession::STAGE_PLAN => [
             'plan_json',
             'plan_structured',
-            'confirmed_stage1_plan_book',
         ],
         AiSiteAgentSession::STAGE_VISUAL_EDIT => [
             'plan_json',
             'plan_structured',
-            'confirmed_stage1_plan_book',
             'task_plan_structured',
             'task_plan_markdown',
             'task_plan_draft',
@@ -95,7 +88,6 @@ class AiSiteAgentSessionArtifactService
         AiSiteAgentSession::STAGE_PUBLISH => [
             'plan_json',
             'plan_structured',
-            'confirmed_stage1_plan_book',
             'task_plan_structured',
             'task_plan_markdown',
             'task_plan_draft',
@@ -122,6 +114,7 @@ class AiSiteAgentSessionArtifactService
             return ['scope' => $scope, 'artifacts' => []];
         }
 
+        $scope = $this->removeSnapshotBackupsFromScope($scope);
         $refs = \is_array($scope[self::REF_KEY] ?? null) ? $scope[self::REF_KEY] : [];
         $touchedMap = \array_fill_keys($touchedArtifactKeys, true);
         $artifacts = [];
@@ -174,6 +167,99 @@ class AiSiteAgentSessionArtifactService
         }
 
         return ['scope' => $scope, 'artifacts' => $artifacts];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function removeSnapshotBackupsFromScope(array $scope): array
+    {
+        unset(
+            $scope['confirmed_stage1_plan_book'],
+            $scope['stage2_context_snapshot'],
+            $scope['theme_context_snapshot'],
+            $scope['shared_prompt_context']
+        );
+
+        foreach (['build_blueprint', 'task_plan_structured'] as $key) {
+            if (\is_array($scope[$key] ?? null)) {
+                $scope[$key] = $this->stripSnapshotBackupsFromTree($scope[$key]);
+            }
+        }
+
+        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
+        foreach (['draft', 'confirmed'] as $key) {
+            if (\is_array($virtualThemePlan[$key] ?? null)) {
+                $virtualThemePlan[$key] = $this->stripSnapshotBackupsFromTree($virtualThemePlan[$key]);
+            }
+        }
+        if ($virtualThemePlan !== []) {
+            $scope['virtual_theme_plan'] = $virtualThemePlan;
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $tree
+     * @return array<string, mixed>
+     */
+    private function stripSnapshotBackupsFromTree(array $tree): array
+    {
+        unset(
+            $tree['confirmed_stage1_plan_book'],
+            $tree['stage2_context_snapshot'],
+            $tree['theme_context_snapshot'],
+            $tree['shared_prompt_context']
+        );
+
+        if (\is_array($tree['runtime_context'] ?? null)) {
+            unset(
+                $tree['runtime_context']['stage2_context_snapshot'],
+                $tree['runtime_context']['theme_context_snapshot'],
+                $tree['runtime_context']['shared_prompt_context']
+            );
+            if ($tree['runtime_context'] === []) {
+                unset($tree['runtime_context']);
+            }
+        }
+
+        foreach (['tasks', 'shared_tasks'] as $listKey) {
+            if (!\is_array($tree[$listKey] ?? null)) {
+                continue;
+            }
+            foreach ($tree[$listKey] as $idx => $item) {
+                if (\is_array($item)) {
+                    $tree[$listKey][$idx] = $this->stripSnapshotBackupsFromTree($item);
+                }
+            }
+        }
+
+        foreach (['page_tasks', 'pages'] as $mapKey) {
+            if (!\is_array($tree[$mapKey] ?? null)) {
+                continue;
+            }
+            foreach ($tree[$mapKey] as $key => $value) {
+                if (\is_array($value)) {
+                    $tree[$mapKey][$key] = $this->stripSnapshotBackupsFromTree($value);
+                }
+            }
+        }
+
+        if (\is_array($tree['execution_blueprint']['tasks'] ?? null)) {
+            foreach ($tree['execution_blueprint']['tasks'] as $idx => $task) {
+                if (\is_array($task)) {
+                    $tree['execution_blueprint']['tasks'][$idx] = $this->stripSnapshotBackupsFromTree($task);
+                }
+            }
+        }
+
+        if (\is_array($tree['execution_blueprint']['task_groups'] ?? null)) {
+            $tree['execution_blueprint']['task_groups'] = $this->stripSnapshotBackupsFromTree($tree['execution_blueprint']['task_groups']);
+        }
+
+        return $tree;
     }
 
     /**
@@ -303,7 +389,7 @@ class AiSiteAgentSessionArtifactService
     public function resolveTouchedArtifactKeysFromPatch(array $patch): array
     {
         $keys = [];
-        foreach (['plan_json', 'plan_structured', 'confirmed_stage1_plan_book', 'task_plan_structured', 'task_plan_markdown', 'build_blueprint'] as $topLevelKey) {
+        foreach (['plan_json', 'plan_structured', 'task_plan_structured', 'task_plan_markdown', 'build_blueprint'] as $topLevelKey) {
             if (\array_key_exists($topLevelKey, $patch)) {
                 $keys[] = $topLevelKey;
             }
