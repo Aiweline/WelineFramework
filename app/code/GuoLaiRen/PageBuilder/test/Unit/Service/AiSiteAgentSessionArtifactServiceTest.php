@@ -41,7 +41,7 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
 
         self::assertSame([], $scope['plan_json']);
         self::assertSame([], $scope['plan_structured']);
-        self::assertSame([], $scope['confirmed_stage1_plan_book']);
+        self::assertArrayNotHasKey('confirmed_stage1_plan_book', $scope);
         self::assertSame([], $scope['task_plan_structured']);
         self::assertSame('', $scope['task_plan_markdown']);
         self::assertSame([], $scope['virtual_theme_plan']['draft']);
@@ -50,6 +50,7 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
         self::assertSame('', $scope['virtual_theme_plan']['confirmed_markdown']);
         self::assertSame([], $scope['build_blueprint']);
         self::assertContains('plan_json', $artifactKeys);
+        self::assertNotContains('confirmed_stage1_plan_book', $artifactKeys);
         self::assertContains('task_plan_draft', $artifactKeys);
         self::assertContains('task_plan_confirmed', $artifactKeys);
         self::assertContains('build_blueprint', $artifactKeys);
