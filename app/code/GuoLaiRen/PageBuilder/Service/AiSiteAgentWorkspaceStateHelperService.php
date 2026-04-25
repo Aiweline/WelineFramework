@@ -650,6 +650,7 @@ class AiSiteAgentWorkspaceStateHelperService
             'plan' => 'stage1.requirement_expand',
             'task_plan' => 'stage2.shared.tasks',
             'build' => 'virtual_theme.tree.build',
+            'block_regenerate' => 'virtual_theme.block.regenerate',
             default => '',
         };
     }
