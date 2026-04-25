@@ -857,6 +857,99 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertSame('all_blocks_parallel_after_stage1_theme', (string)($artifacts['structured']['stage2_queue']['fanout']['dispatch_policy'] ?? ''));
     }
 
+    public function testBuildTaskPlanArtifactsResumesOnlyIncompleteStageTwoBatches(): void
+    {
+        $scope = $this->buildPromptScope();
+        $blueprint = $this->buildPromptBlueprint();
+        $baseline = (new AiSiteVirtualThemePlanService())->buildTaskPlanArtifacts(
+            \array_replace($scope, ['fake_mode' => 1]),
+            $blueprint
+        );
+        $partialStructured = \is_array($baseline['structured'] ?? null) ? $baseline['structured'] : [];
+        foreach ($partialStructured['shared_tasks'] ?? [] as $index => $task) {
+            if ($index === 0 || !\is_array($task)) {
+                continue;
+            }
+            $partialStructured['shared_tasks'][$index]['status'] = 'pending';
+            unset(
+                $partialStructured['shared_tasks'][$index]['task_status'],
+                $partialStructured['shared_tasks'][$index]['task_script'],
+                $partialStructured['shared_tasks'][$index]['block_task'],
+                $partialStructured['shared_tasks'][$index]['field_content_requirements']
+            );
+        }
+        foreach ($partialStructured['page_tasks'] ?? [] as $pageType => $tasks) {
+            if (!\is_array($tasks)) {
+                continue;
+            }
+            foreach ($tasks as $index => $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $partialStructured['page_tasks'][$pageType][$index]['status'] = 'pending';
+                unset(
+                    $partialStructured['page_tasks'][$pageType][$index]['task_status'],
+                    $partialStructured['page_tasks'][$pageType][$index]['task_script'],
+                    $partialStructured['page_tasks'][$pageType][$index]['block_task'],
+                    $partialStructured['page_tasks'][$pageType][$index]['field_content_requirements']
+                );
+            }
+        }
+        $decoded = \json_decode($this->buildTaskPlanResponse(), true);
+        $virtualThemePlan = \is_array($decoded['virtual_theme_plan'] ?? null) ? $decoded['virtual_theme_plan'] : [];
+        $headerTask = \is_array($virtualThemePlan['shared_tasks'][0] ?? null) ? $virtualThemePlan['shared_tasks'][0] : [];
+        $headerTask['status'] = 'done';
+        $headerTask['task_status'] = 'done';
+        $headerTask['attempt_no'] = 1;
+        $partialStructured['shared_tasks'][0] = \array_replace_recursive(
+            \is_array($partialStructured['shared_tasks'][0] ?? null) ? $partialStructured['shared_tasks'][0] : [],
+            $headerTask
+        );
+        $scope['task_plan_structured'] = $partialStructured;
+        $scope['virtual_theme_plan'] = [
+            'draft' => $partialStructured,
+        ];
+        $scope['task_plan_generation_progress'] = [
+            'shared:header' => ['status' => 'batch_done'],
+        ];
+
+        $capturedPrompts = [];
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::exactly(2))
+            ->method('generate')
+            ->willReturnCallback(function (string $prompt) use (&$capturedPrompts, $virtualThemePlan): string {
+                $capturedPrompts[] = $prompt;
+                if (\str_contains($prompt, 'Task keys in this batch: shared:footer')) {
+                    return \json_encode([
+                        'virtual_theme_plan' => [
+                            'shared_tasks' => [$virtualThemePlan['shared_tasks'][1]],
+                        ],
+                    ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+                }
+                if (\str_contains($prompt, 'Task keys in this batch: page:home_page:content/home-page-hero')) {
+                    return \json_encode([
+                        'virtual_theme_plan' => [
+                            'page_tasks' => [
+                                'home_page' => [$virtualThemePlan['page_tasks']['home_page'][0]],
+                            ],
+                        ],
+                    ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+                }
+
+                return '{}';
+            });
+
+        $artifacts = (new AiSiteVirtualThemePlanService($aiService))->buildTaskPlanArtifacts($scope, $blueprint);
+        $promptText = \implode("\n---batch---\n", $capturedPrompts);
+
+        self::assertStringNotContainsString('Task keys in this batch: shared:header', $promptText);
+        self::assertStringContainsString('Task keys in this batch: shared:footer', $promptText);
+        self::assertStringContainsString('Task keys in this batch: page:home_page:content/home-page-hero', $promptText);
+        self::assertSame('done', (string)($artifacts['structured']['shared_tasks'][0]['status'] ?? ''));
+        self::assertSame('Build a reusable header.', (string)($artifacts['structured']['shared_tasks'][0]['task_script']['story_goal'] ?? ''));
+        self::assertSame(['shared:header'], $artifacts['structured']['_stage2_resume']['completed_batch_ids'] ?? []);
+    }
+
     public function testBuildTaskPlanArtifactsStreamEnforcesTimeoutAndFallsBackToJsonGenerateWhenStreamResponseIsInvalid(): void
     {
         $capturedStreamParams = [];

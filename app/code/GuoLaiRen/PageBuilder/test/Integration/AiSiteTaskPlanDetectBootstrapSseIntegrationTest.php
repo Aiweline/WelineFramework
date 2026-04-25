@@ -66,8 +66,7 @@ final class AiSiteTaskPlanDetectBootstrapSseIntegrationTest extends AbstractAiSi
 
         $fresh = $this->sessionService->loadById((int)$session->getId(), 1);
         self::assertNotNull($fresh);
-        $freshScope = $fresh->getScopeArray();
-        self::assertIsArray($freshScope['task_plan_structured'] ?? null);
+        $freshScope = $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT);
         self::assertIsArray($freshScope['virtual_theme_plan']['draft'] ?? null);
         self::assertSame('ai', (string)($freshScope['task_plan_summary']['generation_source'] ?? ''));
     }
@@ -128,9 +127,9 @@ final class AiSiteTaskPlanDetectBootstrapSseIntegrationTest extends AbstractAiSi
 
         $fresh = $this->sessionService->loadById((int)$session->getId(), 1);
         self::assertNotNull($fresh);
-        $freshScope = $fresh->getScopeArray();
+        $freshScope = $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT);
         self::assertContains((string)($freshScope['task_plan_summary']['generation_source'] ?? ''), ['ai', 'deterministic']);
-        self::assertIsArray($freshScope['task_plan_structured'] ?? null);
+        self::assertIsArray($freshScope['virtual_theme_plan']['draft'] ?? null);
     }
 
     /**
@@ -180,7 +179,9 @@ final class AiSiteTaskPlanDetectBootstrapSseIntegrationTest extends AbstractAiSi
         /** @var AiSiteBuildTaskService $buildTaskService */
         $buildTaskService = ObjectManager::getInstance(AiSiteBuildTaskService::class);
 
-        $scope = $scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $scope = $buildTaskService->ensureTaskScope(
             $scope,
             \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],

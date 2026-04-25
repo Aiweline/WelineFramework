@@ -126,7 +126,7 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
             return;
         }
 
-        $scope = $session->getScopeArray();
+        $scope = $this->sessionService->loadScope($session);
         if ((string)($scope[self::TEST_SCOPE_MARKER_KEY] ?? '') !== self::TEST_SCOPE_MARKER_VALUE) {
             $scope[self::TEST_SCOPE_MARKER_KEY] = self::TEST_SCOPE_MARKER_VALUE;
             $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
@@ -283,7 +283,9 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
         $profileService = ObjectManager::getInstance(AiSiteProfileGenerationService::class);
         /** @var AiSiteExecutionBlueprintService $executionBlueprintService */
         $executionBlueprintService = ObjectManager::getInstance(AiSiteExecutionBlueprintService::class);
-        $scope = $scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
+        );
         $websiteProfile = $profileService->generate($scope, false);
         $artifacts = $executionBlueprintService->buildPlanArtifacts($scope, \is_array($websiteProfile) ? $websiteProfile : []);
         $this->sessionService->mergeScope($session->getId(), 1, \array_replace(
@@ -384,7 +386,9 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
 
         /** @var AiSiteScopeCompatibilityService $scopeCompatibilityService */
         $scopeCompatibilityService = ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
-        $scope = $scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $scope = $scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
         $scope = \array_replace($scope, $scopePatch);
         $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
         self::assertNotSame([], $buildBlueprint, 'build_blueprint must exist before seeding task plan.');
@@ -627,7 +631,7 @@ class InMemorySseWriter extends \Weline\Framework\Http\Sse\SseWriter
         if ($session === null) {
             return [];
         }
-        $scope = $session->getScopeArray();
+        $scope = $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT);
         return [
             'publish_status' => (string)($scope['publish_status'] ?? ''),
             'workspace_status' => (string)($scope['workspace_status'] ?? ''),

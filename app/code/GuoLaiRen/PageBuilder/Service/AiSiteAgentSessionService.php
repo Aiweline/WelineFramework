@@ -20,11 +20,114 @@ use Weline\Websites\Service\LocalWelineWildcardCertificateService;
 
 class AiSiteAgentSessionService
 {
+    /** @var list<string> */
+    private const COMMON_STAGE_SCOPE_KEYS = [
+        '_artifact_refs',
+        'active_operation',
+        'active_operations',
+        'brief_description',
+        'build_summary',
+        'can_publish',
+        'default_language',
+        'default_locale',
+        'draft_website_id',
+        'events',
+        'fake_mode',
+        'locales',
+        'page_type_layouts',
+        'page_types',
+        'page_types_user_customized',
+        'pagebuilder_pages_by_type',
+        'pending_generation_page_types',
+        'plan_locale',
+        'preferred_registrar_account_id',
+        'preview_full_url',
+        'preview_page_id',
+        'preview_page_type',
+        'pre_publish_visual_urls',
+        'publish_status',
+        'recommended_domain_list',
+        'recommended_pages',
+        'recommended_registrar_label',
+        'registrar_account_id',
+        'selected_domain',
+        'selected_website_id',
+        'site_profile_manual',
+        'site_ready',
+        'site_tagline',
+        'site_title',
+        'target_domain',
+        'top_logs',
+        'user_description',
+        'virtual_pages_by_type',
+        'virtual_theme_id',
+        'visual_edit_url',
+        'visual_preview_url',
+        'website_id',
+        'website_profile',
+        'workspace_status',
+        'workspace_track',
+    ];
+
+    /** @var list<string> */
+    private const PLAN_STAGE_SCOPE_KEYS = [
+        'confirmed_stage1_plan_book',
+        'execution_blueprint',
+        'execution_blueprint_confirmed_at',
+        'execution_blueprint_confirmed_signature',
+        'execution_blueprint_draft',
+        'plan_confirmed',
+        'plan_confirmed_at',
+        'plan_generated_at',
+        'plan_generated_locale',
+        'plan_generated_page_types',
+        'plan_json',
+        'plan_markdown',
+        'plan_structured',
+        'plan_workbench',
+        '_plan_sse_request',
+    ];
+
+    /** @var list<string> */
+    private const VISUAL_EDIT_STAGE_SCOPE_KEYS = [
+        'build_blueprint',
+        'build_task_summary',
+        'build_tasks',
+        'component_refinements',
+        'execution_blueprint',
+        'execution_blueprint_confirmed_at',
+        'execution_blueprint_confirmed_signature',
+        'execution_blueprint_draft',
+        'plan_confirmed',
+        'plan_confirmed_at',
+        'plan_markdown',
+        'plan_workbench',
+        'section_refinements',
+        'shared_component_refinements',
+        'shared_components',
+        'stage2_context_snapshot',
+        'task_plan_confirmed',
+        'task_plan_confirmed_at',
+        'task_plan_generated_at',
+        'task_plan_generation_last_error',
+        'task_plan_generation_progress',
+        'task_plan_generation_summary',
+        'task_plan_markdown',
+        'task_plan_structured',
+        'task_plan_summary',
+        'virtual_theme_plan',
+        '_ai_generated_shared_components',
+        '_queue_force_build',
+        '_task_plan_rebuild_in_progress',
+        '_task_plan_sse_request',
+    ];
+
     public function __construct(
         private readonly AiSiteAgentSession $sessionModel,
         private readonly AiSiteAgentSessionEvent $eventModel,
         private readonly ?LocalWelineHostsSyncService $localWelineHostsSyncService = null,
         private readonly ?LocalWelineWildcardCertificateService $localWelineWildcardCertificateService = null,
+        private readonly ?AiSiteAgentSessionArtifactService $artifactService = null,
     ) {
     }
 
@@ -78,6 +181,10 @@ class AiSiteAgentSessionService
         if ($publicId === '' || $forAdminUserId <= 0) {
             return null;
         }
+        $pgsqlSession = $this->loadSessionMetadataFromPgsql($publicId, $forAdminUserId, true);
+        if ($pgsqlSession !== false) {
+            return $pgsqlSession;
+        }
         $session = clone $this->sessionModel;
         $session->clearData()->clearQuery()
             ->where(AiSiteAgentSession::schema_fields_PUBLIC_ID, $publicId)
@@ -91,6 +198,10 @@ class AiSiteAgentSessionService
     {
         if ($sessionId <= 0 || $forAdminUserId <= 0) {
             return null;
+        }
+        $pgsqlSession = $this->loadSessionMetadataFromPgsql($sessionId, $forAdminUserId, false);
+        if ($pgsqlSession !== false) {
+            return $pgsqlSession;
         }
         $session = clone $this->sessionModel;
         $session->clearData()->clearQuery()
@@ -128,6 +239,50 @@ class AiSiteAgentSessionService
     /**
      * @param array<string, mixed> $patch 顶层键与 scope 合并（array_replace）
      */
+    /**
+     * @param list<string> $artifactKeys
+     * @return array<string, mixed>
+     */
+    public function loadScope(AiSiteAgentSession $session, array $artifactKeys = []): array
+    {
+        $scope = $this->loadScopeFragmentFromPgsql($session, '');
+        if ($scope !== null) {
+            return $this->artifactStorage()->hydrateScope(
+                (int)$session->getId(),
+                $scope,
+                $artifactKeys
+            );
+        }
+
+        return $this->artifactStorage()->hydrateScope(
+            (int)$session->getId(),
+            $session->getScopeArray(),
+            $artifactKeys
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function loadScopeForStage(AiSiteAgentSession $session, string $stageCode): array
+    {
+        $scope = $this->loadScopeFragmentFromPgsql($session, $stageCode);
+        if ($scope !== null) {
+            $scope = $this->hydrateLegacyArtifactsForStage($session, $scope, $stageCode);
+            return $this->artifactStorage()->hydrateScopeForStage(
+                (int)$session->getId(),
+                $scope,
+                $stageCode
+            );
+        }
+
+        return $this->artifactStorage()->hydrateScopeForStage(
+            (int)$session->getId(),
+            $session->getScopeArray(),
+            $stageCode
+        );
+    }
+
     public function mergeScope(int $sessionId, int $forAdminUserId, array $patch): bool
     {
         $session = $this->loadById($sessionId, $forAdminUserId);
@@ -138,9 +293,13 @@ class AiSiteAgentSessionService
             $td = \trim((string)$patch['target_domain']);
             $patch['target_domain'] = $td === '' ? '' : \strtolower($td);
         }
-        $scope = $session->getScopeArray();
-        $merged = \array_replace($scope, $patch);
-        $session->setScopeArray($merged);
+        $touchedArtifactKeys = $this->artifactStorage()->resolveTouchedArtifactKeysFromPatch($patch);
+        $hydrateKeys = $this->artifactStorage()->expandArtifactKeysForMerge($touchedArtifactKeys);
+        $scope = $this->loadScope($session, $hydrateKeys);
+        $merged = $this->mergeScopePatch($scope, $patch);
+        $storage = $this->artifactStorage()->prepareScopeForStorage((int)$session->getId(), $merged, $touchedArtifactKeys);
+        $this->artifactStorage()->persistArtifacts((int)$session->getId(), $storage['artifacts']);
+        $session->setScopeArray($storage['scope']);
         $this->touchUpdateTime($session);
         $session->save();
         return true;
@@ -161,7 +320,9 @@ class AiSiteAgentSessionService
             $td = \trim((string)$scope['target_domain']);
             $scope['target_domain'] = $td === '' ? '' : \strtolower($td);
         }
-        $session->setScopeArray($scope);
+        $storage = $this->artifactStorage()->prepareScopeForStorage((int)$session->getId(), $scope);
+        $this->artifactStorage()->persistArtifacts((int)$session->getId(), $storage['artifacts']);
+        $session->setScopeArray($storage['scope']);
         $this->touchUpdateTime($session);
         $session->save();
         return true;
@@ -178,7 +339,18 @@ class AiSiteAgentSessionService
             return false;
         }
 
-        $session->setScopeJsonRaw($scopeJson);
+        try {
+            $scope = \json_decode($scopeJson, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return false;
+        }
+        if (!\is_array($scope)) {
+            return false;
+        }
+
+        $storage = $this->artifactStorage()->prepareScopeForStorage((int)$session->getId(), $scope);
+        $this->artifactStorage()->persistArtifacts((int)$session->getId(), $storage['artifacts']);
+        $session->setScopeArray($storage['scope']);
         $this->touchUpdateTime($session);
         $session->save();
         return true;
@@ -301,6 +473,353 @@ class AiSiteAgentSessionService
         $this->touchUpdateTime($session);
         $session->save();
         return true;
+    }
+
+    private function artifactStorage(): AiSiteAgentSessionArtifactService
+    {
+        if ($this->artifactService instanceof AiSiteAgentSessionArtifactService) {
+            return $this->artifactService;
+        }
+
+        return ObjectManager::getInstance(AiSiteAgentSessionArtifactService::class);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $patch
+     * @return array<string, mixed>
+     */
+    private function mergeScopePatch(array $scope, array $patch): array
+    {
+        $merged = \array_replace($scope, $patch);
+        if (\is_array($scope['virtual_theme_plan'] ?? null) && \is_array($patch['virtual_theme_plan'] ?? null)) {
+            $merged['virtual_theme_plan'] = \array_replace($scope['virtual_theme_plan'], $patch['virtual_theme_plan']);
+        }
+
+        return $merged;
+    }
+
+    private function loadSessionMetadataFromPgsql(string|int $identity, int $forAdminUserId, bool $byPublicId): AiSiteAgentSession|false|null
+    {
+        $pdo = $this->getPgsqlPdo();
+        if ($pdo === null) {
+            return false;
+        }
+
+        $table = $this->sessionModel->getTable();
+        $identityField = $byPublicId ? AiSiteAgentSession::schema_fields_PUBLIC_ID : AiSiteAgentSession::schema_fields_ID;
+        $adminField = AiSiteAgentSession::schema_fields_ADMIN_USER_ID;
+        $fields = [
+            AiSiteAgentSession::schema_fields_ID,
+            AiSiteAgentSession::schema_fields_PUBLIC_ID,
+            AiSiteAgentSession::schema_fields_ADMIN_USER_ID,
+            AiSiteAgentSession::schema_fields_WEBSITE_ID,
+            AiSiteAgentSession::schema_fields_VIRTUAL_THEME_ID,
+            AiSiteAgentSession::schema_fields_STAGE,
+            AiSiteAgentSession::schema_fields_PUBLISH_STATUS,
+            AiSiteAgentSession::schema_fields_CREATE_TIME,
+            AiSiteAgentSession::schema_fields_UPDATE_TIME,
+        ];
+        $select = \implode(', ', \array_map(static fn(string $field): string => '"' . $field . '"', $fields));
+        $sql = <<<SQL
+SELECT {$select}
+FROM {$table}
+WHERE "{$identityField}" = :identity
+  AND "{$adminField}" = :admin_user_id
+LIMIT 1
+SQL;
+        $stmt = $pdo->prepare($sql);
+        if (!$stmt || !$stmt->execute([
+            'identity' => $identity,
+            'admin_user_id' => $forAdminUserId,
+        ])) {
+            return false;
+        }
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!\is_array($row)) {
+            return null;
+        }
+
+        $session = clone $this->sessionModel;
+        $session->clearData()->clearQuery();
+        foreach ($fields as $field) {
+            if (\array_key_exists($field, $row)) {
+                $session->setData($field, $row[$field]);
+            }
+        }
+
+        return $session->getId() > 0 ? $session : null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function loadScopeFragmentFromPgsql(AiSiteAgentSession $session, string $stageCode): ?array
+    {
+        $sessionId = (int)$session->getId();
+        $adminId = (int)$session->getAdminUserId();
+        if ($sessionId <= 0 || $adminId <= 0) {
+            return null;
+        }
+        $pdo = $this->getPgsqlPdo();
+        if ($pdo === null) {
+            return null;
+        }
+
+        $keys = $this->resolveStageScopeKeys($stageCode);
+        $jsonBuild = $this->buildStageScopeJsonbExpression($keys);
+        $table = $this->sessionModel->getTable();
+        $pk = AiSiteAgentSession::schema_fields_ID;
+        $adminField = AiSiteAgentSession::schema_fields_ADMIN_USER_ID;
+        $scopeField = AiSiteAgentSession::schema_fields_SCOPE_JSON;
+        $sql = <<<SQL
+SELECT ({$jsonBuild})::text AS scope_json
+FROM (
+    SELECT COALESCE(NULLIF("{$scopeField}", ''), '{}')::jsonb AS scope_doc
+    FROM {$table}
+    WHERE "{$pk}" = :session_id
+      AND "{$adminField}" = :admin_user_id
+    LIMIT 1
+) AS source
+SQL;
+        $stmt = $pdo->prepare($sql);
+        if (!$stmt || !$stmt->execute([
+            'session_id' => $sessionId,
+            'admin_user_id' => $adminId,
+        ])) {
+            return null;
+        }
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!\is_array($row)) {
+            return null;
+        }
+        $raw = \trim((string)($row['scope_json'] ?? ''));
+        if ($raw === '') {
+            return [];
+        }
+
+        try {
+            $decoded = \json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+
+        return \is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Legacy rows may still keep stage payloads inside scope_json. Migrate only
+     * the exact artifact paths needed by this stage, then future reads use the
+     * artifact table without transferring full scope_json to PHP.
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function hydrateLegacyArtifactsForStage(AiSiteAgentSession $session, array $scope, string $stageCode): array
+    {
+        $sessionId = (int)$session->getId();
+        if ($sessionId <= 0) {
+            return $scope;
+        }
+        $artifactService = $this->artifactStorage();
+        $refs = \is_array($scope['_artifact_refs'] ?? null) ? $scope['_artifact_refs'] : [];
+        $artifacts = [];
+        foreach ($artifactService->artifactKeysForStage($stageCode) as $artifactKey) {
+            $artifactStage = $artifactService->artifactStage($artifactKey);
+            if ($artifactStage === '' || \is_array($refs[$artifactStage][$artifactKey] ?? null)) {
+                continue;
+            }
+            $path = $artifactService->artifactPath($artifactKey);
+            if ($path === []) {
+                continue;
+            }
+            if ($artifactService->payloadHasContent($this->getNestedScopeValue($scope, $path))) {
+                continue;
+            }
+
+            $payload = $this->loadLegacyScopePathValueFromPgsql($session, $path);
+            if (!$artifactService->payloadHasContent($payload)) {
+                continue;
+            }
+
+            $scope = $this->setNestedScopeValue($scope, $path, $payload);
+            $documentJson = $this->encodeArtifactReferenceDocument($payload);
+            $refs[$artifactStage][$artifactKey] = [
+                'storage' => 'session_artifact_v1',
+                'stage_code' => $artifactStage,
+                'artifact_key' => $artifactKey,
+                'hash' => \sha1($documentJson),
+                'bytes' => \strlen($documentJson),
+                'updated_at' => \date('Y-m-d H:i:s'),
+                'legacy_migrated' => 1,
+            ];
+            $artifacts[] = [
+                'stage_code' => $artifactStage,
+                'artifact_key' => $artifactKey,
+                'payload' => $payload,
+            ];
+        }
+
+        if ($artifacts === []) {
+            return $scope;
+        }
+
+        $scope['_artifact_refs'] = $refs;
+        $artifactService->persistArtifacts($sessionId, $artifacts);
+        $storage = $artifactService->prepareScopeForStorage($sessionId, $scope);
+        $artifactService->persistArtifacts($sessionId, $storage['artifacts']);
+        $this->writeScopeArrayToExistingSession($session, $storage['scope']);
+
+        return $scope;
+    }
+
+    /**
+     * @param list<string> $path
+     */
+    private function loadLegacyScopePathValueFromPgsql(AiSiteAgentSession $session, array $path): mixed
+    {
+        $pdo = $this->getPgsqlPdo();
+        if ($pdo === null || $path === []) {
+            return null;
+        }
+        $pathSql = "'{" . \implode(',', \array_map(static fn(string $part): string => \str_replace(['\\', '"', ',', '{', '}'], '', $part), $path)) . "}'";
+        $table = $this->sessionModel->getTable();
+        $pk = AiSiteAgentSession::schema_fields_ID;
+        $adminField = AiSiteAgentSession::schema_fields_ADMIN_USER_ID;
+        $scopeField = AiSiteAgentSession::schema_fields_SCOPE_JSON;
+        $sql = <<<SQL
+SELECT (COALESCE(NULLIF("{$scopeField}", ''), '{}')::jsonb #> {$pathSql})::text AS payload_json
+FROM {$table}
+WHERE "{$pk}" = :session_id
+  AND "{$adminField}" = :admin_user_id
+LIMIT 1
+SQL;
+        $stmt = $pdo->prepare($sql);
+        if (!$stmt || !$stmt->execute([
+            'session_id' => (int)$session->getId(),
+            'admin_user_id' => (int)$session->getAdminUserId(),
+        ])) {
+            return null;
+        }
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        $raw = \trim((string)(\is_array($row) ? ($row['payload_json'] ?? '') : ''));
+        if ($raw === '' || $raw === 'null') {
+            return null;
+        }
+
+        try {
+            return \json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+    }
+
+    /**
+     * @param list<string> $path
+     */
+    private function getNestedScopeValue(array $scope, array $path): mixed
+    {
+        $cursor = $scope;
+        foreach ($path as $part) {
+            if (!\is_array($cursor) || !\array_key_exists($part, $cursor)) {
+                return null;
+            }
+            $cursor = $cursor[$part];
+        }
+
+        return $cursor;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param list<string> $path
+     * @return array<string, mixed>
+     */
+    private function setNestedScopeValue(array $scope, array $path, mixed $value): array
+    {
+        $cursor =& $scope;
+        foreach ($path as $index => $part) {
+            if ($index === \count($path) - 1) {
+                $cursor[$part] = $value;
+                break;
+            }
+            if (!\is_array($cursor[$part] ?? null)) {
+                $cursor[$part] = [];
+            }
+            $cursor =& $cursor[$part];
+        }
+        unset($cursor);
+
+        return $scope;
+    }
+
+    private function encodeArtifactReferenceDocument(mixed $payload): string
+    {
+        try {
+            return (string)\json_encode(
+                ['value' => $payload],
+                \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR
+            );
+        } catch (\JsonException) {
+            return '{"value":[]}';
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function writeScopeArrayToExistingSession(AiSiteAgentSession $session, array $scope): void
+    {
+        $session->setScopeArray($scope);
+        $this->touchUpdateTime($session);
+        $session->save();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveStageScopeKeys(string $stageCode): array
+    {
+        $keys = self::COMMON_STAGE_SCOPE_KEYS;
+        if ($stageCode === AiSiteAgentSession::STAGE_PLAN) {
+            $keys = \array_merge($keys, self::PLAN_STAGE_SCOPE_KEYS);
+        } elseif (\in_array($stageCode, [AiSiteAgentSession::STAGE_VISUAL_EDIT, AiSiteAgentSession::STAGE_PUBLISH, ''], true)) {
+            $keys = \array_merge($keys, self::PLAN_STAGE_SCOPE_KEYS, self::VISUAL_EDIT_STAGE_SCOPE_KEYS);
+        }
+
+        return \array_values(\array_unique($keys));
+    }
+
+    /**
+     * jsonb_build_object is limited to 100 arguments on PostgreSQL, so keep each
+     * chunk below 50 key/value pairs and merge the JSONB objects.
+     *
+     * @param list<string> $keys
+     */
+    private function buildStageScopeJsonbExpression(array $keys): string
+    {
+        $chunks = [];
+        foreach (\array_chunk($keys, 40) as $chunk) {
+            $jsonArgs = [];
+            foreach ($chunk as $key) {
+                if ($key === 'virtual_theme_plan') {
+                    $jsonArgs[] = "'virtual_theme_plan'";
+                    $jsonArgs[] = "COALESCE(scope_doc -> 'virtual_theme_plan', '{}'::jsonb) - 'draft' - 'draft_markdown' - 'confirmed' - 'confirmed_markdown'";
+                    continue;
+                }
+                $safeKey = \str_replace("'", "''", $key);
+                $jsonArgs[] = "'" . $safeKey . "'";
+                $jsonArgs[] = "scope_doc -> '" . $safeKey . "'";
+            }
+            if ($jsonArgs !== []) {
+                $chunks[] = 'jsonb_build_object(' . \implode(', ', $jsonArgs) . ')';
+            }
+        }
+        if ($chunks === []) {
+            return "'{}'::jsonb";
+        }
+
+        return 'jsonb_strip_nulls(' . \implode(' || ', $chunks) . ')';
     }
 
     /**
