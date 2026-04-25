@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Model;
 
+use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
@@ -67,6 +69,7 @@ class AiSiteAgentSession extends Model
     private ?string $scopeJsonDecodeCacheRaw = null;
     /** @var array<string, mixed> */
     private array $scopeJsonDecodeCacheData = [];
+    private bool $scopeLazyLoading = false;
 
     public const schema_table = 'guolairen_page_builder_ai_site_agent_session';
     public const schema_primary_key = 'ai_site_agent_session_id';
@@ -162,7 +165,10 @@ class AiSiteAgentSession extends Model
     {
         $raw = $this->getData(self::schema_fields_SCOPE_JSON);
         if ($raw === null || $raw === '') {
-            return [];
+            if ($this->scopeJsonDecodeCacheRaw === '__lazy_scope__') {
+                return $this->scopeJsonDecodeCacheData;
+            }
+            return $this->loadScopeArrayLazily();
         }
         if (!\is_string($raw)) {
             return [];
@@ -180,6 +186,35 @@ class AiSiteAgentSession extends Model
         $this->scopeJsonDecodeCacheData = $result;
 
         return $result;
+    }
+
+    /**
+     * Metadata-only session loads intentionally do not select scope_json. Preserve
+     * legacy callers by loading only the current stage fragment on demand.
+     *
+     * @return array<string, mixed>
+     */
+    private function loadScopeArrayLazily(): array
+    {
+        if ($this->scopeLazyLoading || $this->getId() <= 0 || $this->getAdminUserId() <= 0) {
+            return [];
+        }
+
+        $this->scopeLazyLoading = true;
+        try {
+            /** @var AiSiteAgentSessionService $sessionService */
+            $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
+            $scope = $sessionService->loadScopeForStage($this, $this->getStage());
+        } catch (\Throwable) {
+            $scope = [];
+        } finally {
+            $this->scopeLazyLoading = false;
+        }
+
+        $this->scopeJsonDecodeCacheRaw = '__lazy_scope__';
+        $this->scopeJsonDecodeCacheData = \is_array($scope) ? $scope : [];
+
+        return $this->scopeJsonDecodeCacheData;
     }
 
     /**
@@ -281,6 +316,7 @@ class AiSiteAgentSession extends Model
         $scope = $this->compactConfirmedStageOnePlanPayloadsForStorage($scope);
         $scope = $this->compactConfirmedBuildBlueprintTaskRuntimeForStorage($scope);
         $scope = $this->compactConfirmedBuildTaskStateForStorage($scope);
+        $scope = $this->compactDraftTaskPlanSnapshotsForStorage($scope);
         $scope = $this->compactConfirmedTaskPlanSnapshotsForStorage($scope);
 
         return $scope;
@@ -566,6 +602,48 @@ class AiSiteAgentSession extends Model
         }
 
         $scope['build_tasks'] = $buildTasks;
+
+        return $scope;
+    }
+
+    /**
+     * Stage-2 draft generation used to persist the same large task tree in both
+     * task_plan_structured and virtual_theme_plan.draft. Keep draft canonical
+     * and let readers reconstruct task_plan_structured from it when needed.
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function compactDraftTaskPlanSnapshotsForStorage(array $scope): array
+    {
+        if ((int)($scope['task_plan_confirmed'] ?? 0) === 1) {
+            return $scope;
+        }
+
+        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
+        $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
+        $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
+        if ($draft === [] && $taskPlanStructured === []) {
+            return $scope;
+        }
+
+        if ($draft !== []) {
+            $compactedDraft = $this->compactConfirmedTaskPlanSnapshotForStorage($draft);
+            if ($compactedDraft !== $draft) {
+                $virtualThemePlan['draft'] = $compactedDraft;
+                $scope['virtual_theme_plan'] = $virtualThemePlan;
+                $draft = $compactedDraft;
+            }
+        }
+
+        if ($taskPlanStructured !== []) {
+            $compactedStructured = $this->compactConfirmedTaskPlanSnapshotForStorage($taskPlanStructured);
+            if ($draft !== [] && $this->isEquivalentTaskPlanSnapshot($compactedStructured, $draft)) {
+                $scope['task_plan_structured'] = [];
+            } elseif ($compactedStructured !== $taskPlanStructured) {
+                $scope['task_plan_structured'] = $compactedStructured;
+            }
+        }
 
         return $scope;
     }
@@ -942,14 +1020,22 @@ class AiSiteAgentSession extends Model
      */
     private function isEquivalentConfirmedTaskPlanSnapshot(array $taskPlanStructured, array $confirmed): bool
     {
-        if ($taskPlanStructured == $confirmed) {
+        return $this->isEquivalentTaskPlanSnapshot($taskPlanStructured, $confirmed);
+    }
+
+    /**
+     * @param array<string, mixed> $left
+     * @param array<string, mixed> $right
+     */
+    private function isEquivalentTaskPlanSnapshot(array $left, array $right): bool
+    {
+        if ($left == $right) {
             return true;
         }
 
-        $confirmedWithoutSignature = $confirmed;
-        unset($confirmedWithoutSignature['signature']);
+        unset($left['signature'], $right['signature']);
 
-        return $taskPlanStructured == $confirmedWithoutSignature;
+        return $left == $right;
     }
 
     /**
