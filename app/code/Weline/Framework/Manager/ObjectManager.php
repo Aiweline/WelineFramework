@@ -91,6 +91,10 @@ class ObjectManager implements ManagerInterface
      */
     private static bool $compiledFactoriesLoaded = false;
 
+    private static ?array $generatedPluginRegistry = null;
+    private static ?int $generatedPluginRegistryMtime = null;
+    private static array $interceptorGenerationInProgress = [];
+
     private function __clone()
     {
     }
@@ -843,7 +847,9 @@ class ObjectManager implements ManagerInterface
             + \count(self::$interfaceCache)
             + \count(self::$parsedClasses)
             + \count(self::$initMethodCache)
-            + \count(self::$createMethodCache);
+            + \count(self::$createMethodCache)
+            + (self::$generatedPluginRegistry === null ? 0 : 1)
+            + \count(self::$interceptorGenerationInProgress);
 
         if ($metadataEntries > 0 || $aggressive) {
             self::$reflections = [];
@@ -855,6 +861,9 @@ class ObjectManager implements ManagerInterface
             self::$parsedClasses = [];
             self::$initMethodCache = [];
             self::$createMethodCache = [];
+            self::$generatedPluginRegistry = null;
+            self::$generatedPluginRegistryMtime = null;
+            self::$interceptorGenerationInProgress = [];
         }
 
         return [
@@ -951,6 +960,7 @@ class ObjectManager implements ManagerInterface
      */
     public static function parserClass(string $class): string
     {
+        self::loadGeneratedPluginRegistry();
         // PHP 8 性能优化：缓存解析结果，避免重复的 class_exists 调用
         if (isset(self::$parsedClasses[$class])) {
             return self::$parsedClasses[$class];
@@ -958,12 +968,89 @@ class ObjectManager implements ManagerInterface
         
         // 1. 拦截器处理（优先级最高）
         $interceptor = $class . '\\Interceptor';
-        if (self::cachedClassExists($interceptor)) {
+        if (self::ensureRegisteredInterceptorAvailable($class, $interceptor) || self::cachedClassExists($interceptor)) {
             return self::$parsedClasses[$class] = $interceptor;
         }
         
         // 2. 工厂类处理（工厂类不存在时还原类）
         return self::$parsedClasses[$class] = self::initFactoryClass($class);
+    }
+
+    private static function loadGeneratedPluginRegistry(): void
+    {
+        $file = BP . 'generated' . DIRECTORY_SEPARATOR . 'plugins.php';
+        $mtime = \is_file($file) ? (int)\filemtime($file) : 0;
+
+        if (self::$generatedPluginRegistryMtime === $mtime) {
+            return;
+        }
+
+        if (self::$generatedPluginRegistryMtime !== null) {
+            self::$parsedClasses = [];
+            self::$classExistsCache = [];
+        }
+
+        self::$generatedPluginRegistryMtime = $mtime;
+        self::$generatedPluginRegistry = null;
+
+        if ($mtime === 0) {
+            return;
+        }
+
+        $registry = @include $file;
+        if (\is_array($registry)) {
+            self::$generatedPluginRegistry = $registry;
+        }
+    }
+
+    private static function classHasRegisteredPlugins(string $class): bool
+    {
+        self::loadGeneratedPluginRegistry();
+
+        $classToPlugins = self::$generatedPluginRegistry['class_to_plugins'] ?? [];
+
+        return \is_array($classToPlugins) && !empty($classToPlugins[$class]);
+    }
+
+    private static function getGeneratedInterceptorPath(string $interceptor): string
+    {
+        return BP . 'generated' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR
+            . \str_replace('\\', DIRECTORY_SEPARATOR, $interceptor) . '.php';
+    }
+
+    private static function ensureRegisteredInterceptorAvailable(string $class, string $interceptor): bool
+    {
+        if (\class_exists($interceptor, false)) {
+            return true;
+        }
+
+        if (!self::classHasRegisteredPlugins($class)) {
+            return false;
+        }
+
+        $interceptorPath = self::getGeneratedInterceptorPath($interceptor);
+        if (\is_file($interceptorPath)) {
+            unset(self::$classExistsCache[$interceptor]);
+
+            return self::cachedClassExists($interceptor);
+        }
+
+        if (isset(self::$interceptorGenerationInProgress[$class])) {
+            return false;
+        }
+
+        self::$interceptorGenerationInProgress[$class] = true;
+
+        try {
+            \Weline\Framework\Plugin\Proxy\Generator::createInterceptor($class);
+        } catch (\Throwable) {
+            return false;
+        } finally {
+            unset(self::$interceptorGenerationInProgress[$class]);
+            unset(self::$classExistsCache[$interceptor]);
+        }
+
+        return \is_file($interceptorPath) && self::cachedClassExists($interceptor);
     }
 
     /**

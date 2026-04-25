@@ -9,7 +9,16 @@
 $phaseOneOk = !empty($pbAiPhaseOneConfirmedForTaskPlan);
 $phaseTwoTaskPlanPresent = !empty($pbAiPhaseTwoTaskPlanPresent);
 $phaseTwoQueueRunning = !empty($pbAiTaskPlanQueueRunning);
-$phaseTwoPanelOpen = $phaseTwoTaskPlanPresent || $phaseTwoQueueRunning;
+$phaseTwoTaskPlanConfirmed = (int)($state['task_plan_confirmed'] ?? 0) === 1;
+$phaseTwoActiveOperation = \is_array($activeOperation ?? null) ? $activeOperation : [];
+$phaseTwoActiveOperationName = \strtolower(\trim((string)($phaseTwoActiveOperation['operation'] ?? '')));
+$phaseTwoActiveOperationStatus = \strtolower(\trim((string)($phaseTwoActiveOperation['status'] ?? '')));
+$phaseTwoBuildPhaseActive = $phaseTwoTaskPlanConfirmed
+    || !empty($state['has_pending_build_tasks'])
+    || !empty($pbAiTaskPlanStageEntryDecision['build_queue_running'])
+    || ($phaseTwoActiveOperationName === 'build' && \in_array($phaseTwoActiveOperationStatus, ['queued', 'running'], true))
+    || ((int)(($buildTaskSummary['queued'] ?? 0) ?: 0) + (int)(($buildTaskSummary['running'] ?? 0) ?: 0) > 0);
+$phaseTwoPanelOpen = $phaseTwoQueueRunning || ($phaseTwoTaskPlanPresent && !$phaseTwoBuildPhaseActive);
 $phaseTwoTriggerLabel = $phaseTwoTaskPlanPresent
     ? (string)__('查看第二阶段任务方案')
     : (string)__('生成第二阶段任务方案');

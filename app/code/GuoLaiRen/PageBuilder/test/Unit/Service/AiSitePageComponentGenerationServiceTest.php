@@ -422,11 +422,15 @@ HTML,
         self::assertStringContainsString('content_locale/default_locale: zh_Hans_CN', $prompt);
         self::assertStringContainsString('plan_locale: en_US is only an internal planning language hint', $prompt);
         self::assertStringContainsString('Visitor-visible copy must use content_locale/default_locale', $prompt);
+        self::assertStringContainsString('Planned content is not exempt', $prompt);
+        self::assertStringContainsString('translate/rewrite them into content_locale/default_locale before rendering', $prompt);
         self::assertStringContainsString('Never render internal identifiers or paths as visible copy', $prompt);
         self::assertStringContainsString('plan_locale, page_type, section_code, task_key', $prompt);
         self::assertStringContainsString('Never render broken image placeholders', $prompt);
         self::assertStringContainsString('inline SVG or CSS shapes', $prompt);
         self::assertStringContainsString('Images: never output broken image placeholders', $prompt);
+        self::assertStringContainsString('stage2 language rule', $prompt);
+        self::assertStringContainsString('rewrite any planned text that is not in the website content language', $prompt);
     }
 
     public function testBuildSectionDefaultConfigUsesTaskPlanFieldSamples(): void
@@ -522,6 +526,41 @@ HTML,
             'Build a conversion-ready hero.',
             (string)($root['page_tasks']['home_page'][0]['task_script']['story_goal'] ?? '')
         );
+    }
+
+    public function testTaskPlanPromptUsesScopeLevelRuntimeContextWhenTaskSnapshotsAreCompacted(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+        $task = [
+            'task_key' => 'page:home_page:content/home-page-hero',
+            'plan_context' => [
+                'page_goal' => 'Explain the offer clearly.',
+                'block_goal' => 'Drive CTA clicks.',
+            ],
+            'task_script' => [
+                'story_goal' => 'Create a credible conversion hero.',
+            ],
+        ];
+        $scope = [
+            'stage2_context_snapshot' => [
+                'context_hash' => 'stage2-context-hash',
+                'theme_context_snapshot' => [
+                    'visual_tone' => 'Measured premium trust',
+                    'palette' => ['primary' => '#0f172a'],
+                ],
+                'shared_prompt_context' => [
+                    'navigation_tone' => 'Compact trust navigation',
+                ],
+            ],
+        ];
+
+        $prompt = (function (array $taskPlanTask, string $contextLabel, array $scope): string {
+            return $this->buildTaskPlanPromptAddon($taskPlanTask, $contextLabel, $scope);
+        })->call($service, $task, 'section', $scope);
+
+        self::assertStringContainsString('stage2-context-hash', $prompt);
+        self::assertStringContainsString('Measured premium trust', $prompt);
+        self::assertStringContainsString('Compact trust navigation', $prompt);
     }
 
     public function testSectionPromptIgnoresUnconfirmedTaskPlanDrafts(): void
@@ -810,5 +849,120 @@ HTML,
         (function (array $payload, string $region): array {
             return $this->ensureAiPayloadValid($payload, $region);
         })->call($service, $payload, 'content');
+    }
+
+    public function testHeaderDefaultConfigUsesConfirmedSharedPromptContextNavigationForEnglishLocale(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $config = (function (array $websiteProfile, array $scope, string $siteDisplayName): array {
+            return $this->buildHeaderDefaultConfig($websiteProfile, $scope, $siteDisplayName);
+        })->call(
+            $service,
+            ['site_title' => 'Arc Metrics'],
+            [
+                'default_locale' => 'en_US',
+                'page_types' => ['home_page', 'about_page', 'contact_page'],
+                'task_plan_confirmed' => 1,
+                'execution_blueprint' => [
+                    'shared_prompt_context' => [
+                        'header_items' => [
+                            ['label' => 'Home', 'href' => '/', 'type' => 'home_page'],
+                            ['label' => 'About', 'href' => '/about', 'type' => 'about_page'],
+                            ['label' => 'Contact', 'href' => '/contact', 'type' => 'contact_page'],
+                        ],
+                        'shared_cta_strategy' => [
+                            'primary_action' => 'Start Free',
+                        ],
+                    ],
+                ],
+            ],
+            'Arc Metrics'
+        );
+
+        self::assertSame('Start Free', (string)($config['cta.text'] ?? ''));
+        self::assertSame('Home', (string)($config['nav_items'][0]['text'] ?? ''));
+        self::assertSame('/about', (string)($config['nav_items'][1]['href'] ?? ''));
+        self::assertStringContainsString("Home=>/\nAbout=>/about", (string)($config['navigation.items'] ?? ''));
+    }
+
+    public function testSectionDefaultConfigPrefersEnglishTaskPlanSamplesOverChineseBlueprintCopy(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $config = (function (string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): array {
+            return $this->buildSectionDefaultConfig($pageType, $section, $blueprint, $websiteProfile, $scope);
+        })->call(
+            $service,
+            'home_page',
+            [
+                'code' => 'content/home-page-hero',
+                'key' => 'hero',
+                'name' => '首页主视觉',
+                'template' => 'hero',
+                'config' => [
+                    'section_title' => '首页主视觉',
+                    'section_intro' => '这是中文默认文案，不应进入英文站点 build。',
+                ],
+            ],
+            [
+                'page_title' => '首页',
+                'ai_description' => '中文页面描述',
+            ],
+            [
+                'site_title' => 'Arc Metrics',
+                'default_locale' => 'en_US',
+            ],
+            [
+                'default_locale' => 'en_US',
+                'task_plan_confirmed' => 1,
+                'virtual_theme_plan' => [
+                    'confirmed' => [
+                        'page_tasks' => [
+                            'home_page' => [
+                                [
+                                    'task_key' => 'page:home_page:content/home-page-hero',
+                                    'section_code' => 'content/home-page-hero',
+                                    'task_script' => [
+                                        'story_goal' => 'Open with a crisp analytics promise.',
+                                        'content_fill_rule' => 'Use one headline and one proof sentence.',
+                                        'field_content_requirements' => [
+                                            ['field' => 'title', 'sample' => 'See campaign clarity in one dashboard'],
+                                            ['field' => 'description', 'sample' => 'Turn scattered campaign signals into one clear growth view.'],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ]
+        );
+
+        self::assertSame('See campaign clarity in one dashboard', (string)($config['content.title'] ?? ''));
+        self::assertSame('Turn scattered campaign signals into one clear growth view.', (string)($config['content.description'] ?? ''));
+        self::assertStringNotContainsString('中文', (string)($config['content.description'] ?? ''));
+    }
+
+    public function testRenderedHtmlLanguageGuardRejectsMeaningfulChineseContentForEnglishLocale(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('website content locale');
+
+        (function (string $html, array $renderContext): void {
+            $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
+        })->call(
+            $service,
+            '<section><h2>立即开始体验</h2><p>这是中文段落，长度足够，英文站点不应通过。</p></section>',
+            ['_content_locale' => 'en_US']
+        );
     }
 }
