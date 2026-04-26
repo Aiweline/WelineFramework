@@ -123,7 +123,7 @@ foreach ($themes as $themeItem) {
                     $previewImageSrc = $previewImage ? '/' . ltrim($previewImage, '/') : '';
                     $hasPreview = $previewImageSrc !== '';
             ?>
-                <div class="col-xl-3 col-lg-4 col-md-6 mb-4">
+                <div class="theme-grid-item">
                     <div class="theme-card <?= $isActive ? 'active' : '' ?>"
                          data-theme-id="<?= $themeId ?>"
                          data-theme-name="<?= htmlspecialchars($themeName) ?>"
@@ -1344,15 +1344,38 @@ foreach ($themes as $themeItem) {
 <style>
 /* 主题管理：使用主题变量，避免硬编码颜色 */
 .weline-theme-manage {
-    background: var(--backend-color-bg-body, #f8f9fa);
+    background: var(--backend-color-bg-body, #f1f5f9);
     color: var(--backend-color-text-primary, #212529);
     border-radius: var(--backend-border-radius-lg, 12px);
-    padding: 0.25rem 0;
+    padding: 0.5rem 0.25rem;
 }
 
 .weline-theme-manage .tab-content,
 .weline-theme-manage .themes-grid {
     background: transparent;
+}
+
+.weline-theme-manage .themes-grid {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 14px;
+    margin-left: 0;
+    margin-right: 0;
+    padding: 0.25rem 0 0.5rem;
+}
+
+.weline-theme-manage .theme-grid-item {
+    display: flex;
+    flex: 1 1 clamp(250px, 24vw, 320px);
+    max-width: 340px;
+    padding: 0;
+    margin: 0;
+}
+
+.weline-theme-manage .theme-grid-item .theme-card {
+    width: 100%;
+    max-width: 100%;
 }
 
 .weline-theme-manage__tabbar {
@@ -1386,25 +1409,43 @@ foreach ($themes as $themeItem) {
     display: flex;
     flex-direction: column;
     height: 100%;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
     overflow: hidden;
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: 8px;
-    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #cfd8e3);
+    border-radius: 12px;
+    background: var(--backend-color-card-bg, #ffffff);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--backend-color-border-default, #cfd8e3) 55%, transparent),
+        0 6px 14px color-mix(in srgb, var(--backend-color-bg-body, #0f172a) 28%, transparent);
 }
 
 .weline-theme-manage .theme-card:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--backend-shadow-md, 0 8px 24px rgba(0,0,0,0.1));
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--backend-color-primary, #405189) 32%, var(--backend-color-border-default, #cfd8e3) 68%);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--backend-color-primary, #405189) 22%, transparent),
+        0 10px 22px color-mix(in srgb, var(--backend-color-bg-body, #0f172a) 42%, transparent);
+}
+
+.weline-theme-manage .theme-card.active {
+    border-color: color-mix(in srgb, var(--backend-color-primary, #405189) 55%, var(--backend-color-border-default, #cfd8e3) 45%);
+    box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--backend-color-primary, #405189) 25%, transparent),
+        0 12px 24px color-mix(in srgb, var(--backend-color-primary, #405189) 24%, transparent);
 }
 
 /* 预览区域 */
 .weline-theme-manage .theme-preview {
     position: relative;
     width: 100%;
-    height: 180px;
-    background: var(--backend-color-bg-tertiary, #e9ecef);
+    aspect-ratio: 16 / 9;
+    min-height: 160px;
+    max-height: 240px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(15, 23, 42, 0.03) 100%),
+        var(--backend-color-bg-tertiary, #e9ecef);
     overflow: hidden;
+    border-bottom: 1px solid var(--backend-color-border-default, #d6dee8);
 }
 
 .weline-theme-manage .theme-preview-image {
@@ -1509,13 +1550,16 @@ foreach ($themes as $themeItem) {
 /* 主题信息 */
 .weline-theme-manage .theme-info {
     flex: 1 1 auto;
-    padding: 15px;
+    padding: 14px 16px 12px;
+    background: color-mix(in srgb, var(--backend-color-card-bg, #ffffff) 94%, var(--backend-color-bg-secondary, #f8fbff) 6%);
+    border-bottom: 1px dashed var(--backend-color-border-light, #d9e1eb);
 }
 
 .weline-theme-manage .theme-name {
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 8px;
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 9px;
+    letter-spacing: 0.2px;
     color: var(--backend-color-text-primary, #212529);
     white-space: nowrap;
     overflow: hidden;
@@ -1525,7 +1569,7 @@ foreach ($themes as $themeItem) {
 .weline-theme-manage .theme-meta {
     font-size: 13px;
     color: var(--backend-color-text-secondary, #6c757d);
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     display: flex;
     align-items: center;
     gap: 5px;
@@ -1537,9 +1581,9 @@ foreach ($themes as $themeItem) {
 
 /* 操作按钮区域 */
 .weline-theme-manage .theme-actions {
-    padding: 12px 15px;
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
+    padding: 10px 12px 12px;
+    background: color-mix(in srgb, var(--backend-color-bg-secondary, #f8fbff) 82%, var(--backend-color-card-bg, #ffffff) 18%);
+    border-top: 1px solid var(--backend-color-border-default, #d6dee8);
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
@@ -1578,6 +1622,12 @@ foreach ($themes as $themeItem) {
     color: var(--backend-color-text-primary, #212529);
 }
 
+.modal-backdrop.show {
+    opacity: 0.36;
+    background: rgba(15, 23, 42, 0.52);
+    backdrop-filter: blur(1px);
+}
+
 #batchGenerateModal #batchStatus,
 #batchGenerateModal #batchCount,
 #singleGenerateModal #singleStatus {
@@ -1593,6 +1643,22 @@ foreach ($themes as $themeItem) {
     color: var(--backend-color-text-tertiary, #a0a7b5);
 }
 
+#singleGenerateModal .modal-body {
+    min-height: 168px;
+}
+
+#singleGenerateModal .modal-body .text-center.py-3 {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+#singleSpinner {
+    margin: 0 auto;
+}
+
 /* 响应式调整 */
 @media (max-width: 768px) {
     .weline-theme-manage__tabbar {
@@ -1604,8 +1670,17 @@ foreach ($themes as $themeItem) {
         width: 100%;
     }
 
+    .weline-theme-manage .themes-grid {
+        gap: 12px;
+    }
+
+    .weline-theme-manage .theme-grid-item {
+        flex-basis: 100%;
+        max-width: 100%;
+    }
+
     .weline-theme-manage .theme-preview {
-        height: 140px;
+        min-height: 140px;
     }
     .weline-theme-manage .theme-name {
         font-size: 16px;
