@@ -85,7 +85,7 @@ final class AiHtmlRenderService
             if (!\is_array($block)) {
                 continue;
             }
-            $parts[] = (string)($block['html'] ?? '');
+            $parts[] = $this->normalizeBlockHtmlForRender((string)($block['html'] ?? ''));
         }
 
         return \implode("\n", $parts);
@@ -118,11 +118,41 @@ final class AiHtmlRenderService
                 . ' data-block-type="' . \htmlspecialchars($blockType, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '">'
                 . '<div class="pb-ai-block-label">' . \htmlspecialchars($label, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</div>'
                 . $actions
-                . (string)($block['html'] ?? '')
+                . $this->normalizeBlockHtmlForRender((string)($block['html'] ?? ''))
                 . '</div>';
         }
 
         return \implode("\n", $parts);
+    }
+
+    private function normalizeBlockHtmlForRender(string $html): string
+    {
+        $trimmed = \ltrim($html);
+        if ($trimmed === '' || \str_starts_with($trimmed, '<')) {
+            return $html;
+        }
+
+        $firstTagPos = \strpos($trimmed, '<');
+        if ($firstTagPos === false) {
+            return $html;
+        }
+
+        $prefix = \trim(\substr($trimmed, 0, $firstTagPos));
+        if (!$this->looksLikeLegacyCssPreamble($prefix)) {
+            return $html;
+        }
+
+        $body = \substr($trimmed, $firstTagPos);
+        return '<style>' . $prefix . '</style>' . $body;
+    }
+
+    private function looksLikeLegacyCssPreamble(string $text): bool
+    {
+        if ($text === '' || \strpos($text, '{') === false || \strpos($text, '}') === false) {
+            return false;
+        }
+
+        return \preg_match('/(?:^|[\r\n])\s*(?:[#.][a-z0-9_-]+|[a-z][a-z0-9_-]*(?:[#.][a-z0-9_-]+)?|\[[^\]]+\]|:[a-z0-9_-]+)[^{]*\{/i', $text) === 1;
     }
 
     private function renderVisualAssets(Page $page): string
