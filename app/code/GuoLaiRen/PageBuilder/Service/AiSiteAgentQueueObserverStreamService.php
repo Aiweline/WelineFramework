@@ -54,10 +54,10 @@ class AiSiteAgentQueueObserverStreamService
         return $this->queueObserverHelperService;
     }
 
-    private function isQueueWaitingForSystemScheduler(string $queueStatus, int $queuePid): bool
+    private function isQueueWaitingForSystemScheduler(string $queueStatus, int $_queuePid): bool
     {
-        return \in_array($queueStatus, ['pending', 'queued'], true)
-            || ($queueStatus === 'running' && $queuePid <= 0);
+        // 仅待调度：pending/queued。running 表示 worker 已执行，不再用「等定时任务/约 1 分钟」类提示打扰用户。
+        return \in_array($queueStatus, ['pending', 'queued'], true);
     }
 
     private function buildSystemSchedulerWaitMessage(int $queueId = 0): string
