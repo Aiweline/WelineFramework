@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Ai\Test\Unit\Service;
 
 use Weline\Ai\Service\Provider\ModelSyncService;
+use Weline\Ai\Service\Provider\ProviderTimeoutPolicy;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\UnitTest\TestCore;
 
@@ -52,7 +53,7 @@ class ModelSyncServiceTest extends TestCore
             'temperature' => 0.7,
             'top_p' => 1.0,
             'stream' => true,
-            'timeout' => 180,
+            'timeout' => ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT,
             'max_retries' => 3,
             'capabilities' => ['chat', 'code'],
         ];
@@ -71,7 +72,7 @@ class ModelSyncServiceTest extends TestCore
         $providerConfigData = $config['config'] ?? [];
         $this->assertSame('https://api.openai.com/v1', $providerConfigData['base_url'] ?? '');
         $this->assertSame('gpt-4', $providerConfigData['model'] ?? '');
-        $this->assertSame(180, $providerConfigData['timeout'] ?? 0);
+        $this->assertSame(ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT, $providerConfigData['timeout'] ?? 0);
     }
 
     public function testBuildModelConfigNormalizesPerMillionPricing(): void
