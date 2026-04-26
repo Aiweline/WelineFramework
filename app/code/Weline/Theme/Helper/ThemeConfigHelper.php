@@ -67,9 +67,12 @@ class ThemeConfigHelper
         if ($area === null) {
             $area = ThemeData::getCurrentArea() ?? 'frontend';
         }
-        
-        // 构建模板路径：Weline_Theme::theme/{area}/{layout}/{configValue}.phtml
-        return "Weline_Theme::theme/{$area}/{$layout}/{$configValue}.phtml";
+
+        // 配置键使用点号命名（如 partials.header），模板路径需要目录分隔。
+        $layoutPath = trim(str_replace(['\\', '.'], '/', $layout), '/');
+
+        // 构建模板路径：Weline_Theme::theme/{area}/{layoutPath}/{configValue}.phtml
+        return "Weline_Theme::theme/{$area}/{$layoutPath}/{$configValue}.phtml";
     }
 }
 

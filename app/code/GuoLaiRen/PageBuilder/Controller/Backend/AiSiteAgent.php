@@ -1308,6 +1308,26 @@ SCRIPT;
         try {
             $websiteProfile = $this->profileGenerationService->generate($scope, false);
             $rawChunkInfoBuffer = '';
+            $emitPlanPipelineProgress = function (array $progressPayload) use ($sse): void {
+                $message = \trim((string)($progressPayload['message'] ?? ''));
+                if ($message === '') {
+                    return;
+                }
+
+                $payload = [
+                    'message' => $message,
+                    'operation' => 'plan',
+                    'progress_percent' => \max(0, \min(99, (int)($progressPayload['progress_percent'] ?? 0))),
+                    'progress_kind' => (string)($progressPayload['progress_kind'] ?? 'stage1_pipeline'),
+                ];
+                foreach (['stage1_step', 'stage1_phase', 'page_type', 'page_total'] as $key) {
+                    if (\array_key_exists($key, $progressPayload)) {
+                        $payload[$key] = $progressPayload[$key];
+                    }
+                }
+
+                $sse->sendEvent('progress', $payload);
+            };
             $emitAiChunkProgress = $this->createPlanSseAiChunkEmitter(
                 $sse,
                 $effectivePromptMode,
@@ -1317,12 +1337,12 @@ SCRIPT;
                 ? $this->executionBlueprintService->rebuildDraftPlan($scope, \is_array($websiteProfile) ? $websiteProfile : [], [
                     'instruction' => $instruction,
                     'round' => $round,
-                ], $emitAiChunkProgress)
+                ], $emitAiChunkProgress, $emitPlanPipelineProgress)
                 : $this->executionBlueprintService->refineDraftPlan($scope, \is_array($websiteProfile) ? $websiteProfile : [], [
                     'instruction' => $instruction,
                     'target_scope' => $targetScope,
                     'round' => $round,
-                ], $emitAiChunkProgress);
+                ], $emitAiChunkProgress, $emitPlanPipelineProgress);
             $this->flushPlanSseRawChunkBuffer($sse, $effectivePromptMode, $rawChunkInfoBuffer);
             if ((int)($scope['fake_mode'] ?? 0) !== 1 && (int)($artifacts['ai_generated'] ?? 0) !== 1) {
                 throw new \RuntimeException((string)__('阶段一方案必须由 AI 生成，本次未成功调用 AI，请检查模型配置后重试。'));
@@ -4464,6 +4484,26 @@ SCRIPT;
                 'emitted' => 0,
                 'markdown_string_closed' => false,
             ];
+            $onProgress = function (array $progressPayload) use ($sse): void {
+                $message = \trim((string)($progressPayload['message'] ?? ''));
+                if ($message === '') {
+                    return;
+                }
+
+                $payload = [
+                    'message' => $message,
+                    'operation' => 'plan',
+                    'progress_percent' => \max(0, \min(99, (int)($progressPayload['progress_percent'] ?? 0))),
+                    'progress_kind' => (string)($progressPayload['progress_kind'] ?? 'stage1_pipeline'),
+                ];
+                foreach (['stage1_step', 'stage1_phase', 'page_type', 'page_total'] as $key) {
+                    if (\array_key_exists($key, $progressPayload)) {
+                        $payload[$key] = $progressPayload[$key];
+                    }
+                }
+
+                $sse->sendEvent('progress', $payload);
+            };
             $onChunk = function (string $chunk) use ($sse, $fresh, $adminId, &$planAiStreamBuffer, &$planMarkdownStreamState): void {
                 if ($chunk === '') {
                     return;
@@ -4622,14 +4662,14 @@ SCRIPT;
                             'instruction' => $refineInstruction,
                             'target_scope' => $refineTargetScope,
                             'round' => $requestedRound,
-                        ], $onChunk);
+                        ], $onChunk, $onProgress);
                     } elseif ($planLocaleChanged && !$pageTypesChanged && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
                         $translateInstruction = (string)__('请保留当前方案结构与页面类型，仅将方案内容完整翻译为目标 plan_locale，不新增或删除页面。');
                         $artifacts = $this->executionBlueprintService->refineDraftPlan($scope, \is_array($websiteProfile) ? $websiteProfile : [], [
                             'instruction' => $translateInstruction,
                             'target_scope' => 'locale_translation',
                             'round' => 1,
-                        ], $onChunk);
+                        ], $onChunk, $onProgress);
                     } else {
                         if ((int)($scope['fake_mode'] ?? 0) === 1) {
                             $artifacts = $this->executionBlueprintService->buildPlanArtifacts($scope, \is_array($websiteProfile) ? $websiteProfile : []);
@@ -4640,7 +4680,13 @@ SCRIPT;
                             }
                             $buildPayload['round'] = $requestedRound;
                             $buildPayload['staged_generation'] = true;
-                            $artifacts = $this->executionBlueprintService->buildPlanArtifactsByAiStream($scope, \is_array($websiteProfile) ? $websiteProfile : [], $buildPayload, $onChunk);
+                            $artifacts = $this->executionBlueprintService->buildPlanArtifactsByAiStream(
+                                $scope,
+                                \is_array($websiteProfile) ? $websiteProfile : [],
+                                $buildPayload,
+                                $onChunk,
+                                $onProgress
+                            );
                         }
                     }
 
@@ -4872,7 +4918,9 @@ SCRIPT;
             $queueProcess = \trim((string)($queueRow['process'] ?? ''));
             $nextOperation['message'] = $queueProcess !== ''
                 ? $queueProcess
-                : 'Stage-1 plan queue is waiting for worker execution.';
+                : ($queueStatus === 'running'
+                    ? ''
+                    : (string)__('阶段一方案队列正在等待 worker 执行。'));
             $nextOperation['updated_at'] = \date('Y-m-d H:i:s');
         } elseif (\in_array($queueStatus, ['done', 'error', 'stop', 'cancelled'], true)) {
             $nextOperation = $this->reconcileActiveOperationWithQueueInfo(
@@ -5976,28 +6024,33 @@ SCRIPT;
                 ]);
             }
 
-            $sse->sendEvent('info', [
-                'message' => (string)__('操作已进入系统队列，正在等待系统定时任务调度；大部分情况约 1 分钟后开始执行。当前进度窗口可以关闭，可以继续操作其他内容。'),
-                'operation' => $operation,
-                'observer_mode' => true,
-                'background_mode' => true,
-                'queue_waiting_for_scheduler' => true,
-                'can_close_stream' => true,
-                'continue_other_operations' => true,
-                'queue_id' => (int)($queueRow['queue_id'] ?? 0),
-                'queue_status' => (string)($queueRow['status'] ?? ''),
-                'biz_key' => (string)($queueRow['biz_key'] ?? ''),
-            ]);
+            $queueStatusForObserver = \trim((string)($queueRow['status'] ?? ''));
+            $queueIsRunning = $queueStatusForObserver === 'running';
+            if (!$queueIsRunning) {
+                $schedulerHintMessage = (string)__('操作已进入系统队列，正在等待系统定时任务调度；大部分情况约 1 分钟后开始执行。当前进度窗口可以关闭，可以继续操作其他内容。');
+                $sse->sendEvent('info', [
+                    'message' => $schedulerHintMessage,
+                    'operation' => $operation,
+                    'observer_mode' => true,
+                    'background_mode' => true,
+                    'queue_waiting_for_scheduler' => true,
+                    'can_close_stream' => true,
+                    'continue_other_operations' => true,
+                    'queue_id' => (int)($queueRow['queue_id'] ?? 0),
+                    'queue_status' => (string)($queueRow['status'] ?? ''),
+                    'biz_key' => (string)($queueRow['biz_key'] ?? ''),
+                ]);
 
-            $sse->sendEvent('warning', [
-                'message' => (string)__('操作已进入系统队列，正在等待系统定时任务调度；大部分情况约 1 分钟后开始执行。当前进度窗口可以关闭，可以继续操作其他内容。'),
-                'operation' => $operation,
-                'observer_mode' => true,
-                'background_mode' => true,
-                'queue_id' => (int)($queueRow['queue_id'] ?? 0),
-                'queue_status' => (string)($queueRow['status'] ?? ''),
-                'biz_key' => (string)($queueRow['biz_key'] ?? ''),
-            ]);
+                $sse->sendEvent('warning', [
+                    'message' => $schedulerHintMessage,
+                    'operation' => $operation,
+                    'observer_mode' => true,
+                    'background_mode' => true,
+                    'queue_id' => (int)($queueRow['queue_id'] ?? 0),
+                    'queue_status' => (string)($queueRow['status'] ?? ''),
+                    'biz_key' => (string)($queueRow['biz_key'] ?? ''),
+                ]);
+            }
             $observed = $this->observeDuplicateOperationStream(
                 $sse,
                 $session,
@@ -8024,6 +8077,8 @@ SCRIPT;
 
         foreach ([
             'progress_kind',
+            'stage1_step',
+            'stage1_phase',
             'ai_generating',
             'active_operation_status',
             'queue_id',
@@ -8032,6 +8087,7 @@ SCRIPT;
             'task_progress',
             'task_summary',
             'build_task_summary',
+            'page_total',
         ] as $key) {
             if (\array_key_exists($key, $payload)) {
                 $result[$key] = $payload[$key];
@@ -10263,13 +10319,21 @@ SCRIPT;
             ? ($queueStatus === 'running' ? 'running' : 'queued')
             : (\trim((string)($activeOperation['status'] ?? '')) ?: 'queued');
 
+        $queueProcessLine = \is_array($queueRow) ? \trim((string)($queueRow['process'] ?? '')) : '';
+        $waitingForScheduler = $queueStatus === '' || \in_array($queueStatus, ['pending', 'queued'], true);
+        $checkpointMessage = $waitingForScheduler
+            ? (string)__('操作已进入系统队列，正在等待系统定时任务调度；大部分情况约 1 分钟后开始执行。当前进度窗口可以关闭，可以继续操作其他内容。')
+            : ($queueStatus === 'running'
+                ? $queueProcessLine
+                : (string)($activeOperation['message'] ?? ''));
+
         $activeOperation = \array_replace($activeOperation, [
             'operation' => $operation,
             'status' => $operationStatus,
             'queue_id' => \is_array($queueRow) ? (int)($queueRow['queue_id'] ?? 0) : (int)($activeOperation['queue_id'] ?? 0),
             'job_type' => $this->resolveAiSiteQueueJobType($operation),
-            'message' => (string)__('操作已进入系统队列，正在等待系统定时任务调度；大部分情况约 1 分钟后开始执行。当前进度窗口可以关闭，可以继续操作其他内容。'),
-            'queue_waiting_for_scheduler' => $queueStatus === '' || \in_array($queueStatus, ['pending', 'queued'], true),
+            'message' => $checkpointMessage,
+            'queue_waiting_for_scheduler' => $waitingForScheduler,
             'can_close_stream' => true,
             'continue_other_operations' => true,
         ]);
