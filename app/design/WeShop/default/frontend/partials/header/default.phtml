@@ -17,7 +17,7 @@
             
             <!-- Navigation Menu -->
             <div class="hidden lg:flex items-center gap-6">
-                <w:hook name="WeShop_Frontend::header::categories-menu"/>
+                <w:hook name="WeShop_Frontend::frontend::partials::header::categories-menu"/>
                 <a class="text-sm font-medium hover:text-primary dark:hover:text-primary" href="<?= $this->getUrl('catalog/category') ?>"><?= __('Shop by Category') ?></a>
                 <a class="text-sm font-medium hover:text-primary dark:hover:text-primary" href="<?= $this->getUrl('promotion/deals') ?>"><?= __("Today's Deals") ?></a>
                 <a class="text-sm font-medium hover:text-primary dark:hover:text-primary" href="<?= $this->getUrl('catalog/bestsellers') ?>"><?= __('Best Sellers') ?></a>
@@ -35,7 +35,7 @@
             >
                 <form action="<?= $this->getUrl('search') ?>" method="get" class="header-search-form relative flex flex-col w-full">
                     <div class="flex w-full flex-1 items-stretch rounded-lg h-11 border border-border-light dark:border-border-dark focus-within:ring-2 focus-within:ring-primary">
-                        <w:hook name="WeShop_Frontend::header::search-before"/>
+                        <w:hook name="WeShop_Frontend::frontend::partials::header::search-before"/>
                         <input 
                             type="text" 
                             name="q" 
@@ -46,19 +46,19 @@
                             aria-controls="header-search-suggestions"
                             aria-expanded="false"
                         />
-                        <w:hook name="WeShop_Frontend::header::search-after"/>
+                        <w:hook name="WeShop_Frontend::frontend::partials::header::search-after"/>
                         <button type="submit" class="flex items-center justify-center px-4 bg-primary text-white rounded-r-lg">
                             <span class="material-symbols-outlined text-xl">search</span>
                         </button>
                     </div>
 
                     <div id="header-search-suggestions" class="search-suggestions hidden absolute top-full z-40 mt-2 w-full overflow-hidden rounded-2xl border border-border-light bg-surface-light shadow-xl" aria-hidden="true">
-                        <w:hook name="WeShop_Frontend::header::search-suggestions-before"/>
+                        <w:hook name="WeShop_Frontend::frontend::partials::header::search-suggestions-before"/>
                         <div class="search-suggestions-header border-b border-border-light px-4 py-3 text-xs font-bold uppercase tracking-[0.16em] text-text-secondary-light">
                             <?= __('Search Suggestions') ?>
                         </div>
                         <ul class="search-suggestions-list max-h-80 overflow-y-auto px-2 py-2"></ul>
-                        <w:hook name="WeShop_Frontend::header::search-suggestions-after"/>
+                        <w:hook name="WeShop_Frontend::frontend::partials::header::search-suggestions-after"/>
                     </div>
                 </form>
             </div>
@@ -67,7 +67,7 @@
         <!-- User Actions -->
         <div class="flex items-center gap-3">
             <!-- Account -->
-            <w:hook name="WeShop_Frontend::header::account"/>
+            <w:hook name="WeShop_Frontend::frontend::partials::header::account"/>
             <a href="<?= $this->getUrl('weshop/customer/account/index') ?>" class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 gap-2 min-w-0 px-3 hover:bg-primary/10 transition-colors">
                 <span class="material-symbols-outlined text-2xl">person_outline</span>
                 <span class="hidden md:inline text-sm font-medium"><?= __('Account') ?></span>
@@ -96,7 +96,7 @@
                             </div>
                             
                             <!-- Cart Items -->
-                            <w:hook name="WeShop_Cart::header::mini_cart_items"/>
+                            <w:hook name="WeShop_Cart::frontend::partials::header::mini-cart-items"/>
                             
                             <!-- Cart Summary -->
                             <div class="p-5 bg-gray-50/50 dark:bg-white/5 border-t border-border-light dark:border-border-dark">
@@ -120,10 +120,10 @@
             </div>
             
             <!-- Language Switcher -->
-            <w:hook name="WeShop_Frontend::header::language_switcher"/>
+            <w:hook name="WeShop_Frontend::frontend::partials::header::language-switcher"/>
             
             <!-- Currency Switcher -->
-            <w:hook name="WeShop_Frontend::header::currency_switcher"/>
+            <w:hook name="WeShop_Frontend::frontend::partials::header::currency-switcher"/>
         </div>
     </div>
 </header>

@@ -48,6 +48,8 @@ class WlsRequest extends Request
     private array $parsedGetParams = [];
     /** 解析出的 POST 参数 */
     private array $parsedPostParams = [];
+    /** @var array{post: array, files: array} */
+    private array $parsedBodyPayload = ['post' => [], 'files' => []];
     /** 解析出的请求方法 */
     private string $parsedMethod = 'GET';
     /** 是否 HTTPS（不依赖 $_SERVER） */
@@ -138,11 +140,10 @@ class WlsRequest extends Request
         // 解析请求体（POST / PUT / PATCH / DELETE 均可携带 body）
         $contentType = $headers['Content-Type'] ?? '';
         $parsed = self::parseRequestBody($this->body, $contentType, $method);
+        $this->parsedBodyPayload = $parsed;
         $postParams = $parsed['post'] ?? [];
         $this->parsedPostParams = $postParams;
-        if (!empty($parsed['files'])) {
-            $_FILES = $parsed['files'];
-        }
+        $_FILES = $parsed['files'] ?? [];
         
         // 解析 Cookie。静态资源请求也必须保留原始 Cookie，避免同源资源请求覆盖已有 WELINE_SESSID。
         $cookies = [];
@@ -498,12 +499,9 @@ class WlsRequest extends Request
     public function getParameterBag(): \Weline\Framework\Http\Request\ParameterBag
     {
         if ($this->parameterBag === null) {
-            $contentType = $this->parsedHeaders['Content-Type'] ?? \w_env('server.content_type', '');
-            $parsed = self::parseRequestBody($this->body, $contentType, $this->parsedMethod);
+            $parsed = $this->parsedBodyPayload;
             $bodyData = $parsed['post'];
-            if (!empty($parsed['files'])) {
-                $_FILES = $parsed['files'];
-            }
+            $_FILES = $parsed['files'] ?? [];
             
             $this->parameterBag = new \Weline\Framework\Http\Request\ParameterBag(
                 $this->parsedGetParams ?: ($_GET ?? []),

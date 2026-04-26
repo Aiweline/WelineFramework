@@ -300,6 +300,7 @@
         state.layoutType = state.pageType || 'homepage';
         state.layoutOption = 'default';
         state.slots = {}; // 页面插槽信息
+        state.missingSlotWarnings = [];
 
         // 绑定事件
         bindEvents();
@@ -7554,7 +7555,7 @@
                 }
                 
                 // 构建预览 URL
-                showToast(`宸插垏鎹㈠埌 ${pageType} 甯冨眬`, 'info');
+                showToast(`已切换到 ${pageType} 布局`, 'info');
                 console.log('[ThemeEditor] Link intercepted:', href, '-> Editor page type:', pageType);
                 navigateEditorShell({
                     page_type: pageType,
@@ -7660,7 +7661,8 @@
 
             if (result.success && result.slots) {
                 state.slots = result.slots;
-                renderSlotsInfo(result.slots);
+                state.missingSlotWarnings = Array.isArray(result.missing_slot_warnings) ? result.missing_slot_warnings : [];
+                renderSlotsInfo(result.slots, state.missingSlotWarnings);
                 
                 // 显示插槽面板
                 if (elements.slotsInfoPanel) {
@@ -7675,10 +7677,10 @@
     /**
      * 渲染插槽信息列表
      */
-    function renderSlotsInfo(slots) {
+    function renderSlotsInfo(slots, missingSlotWarnings = []) {
         if (!elements.slotsInfoList) return;
 
-        let html = '';
+        let html = renderMissingSlotWarnings(missingSlotWarnings);
         for (const [slotId, slot] of Object.entries(slots)) {
             const rawAccept = slot.accept;
             const acceptArr = Array.isArray(rawAccept) ? rawAccept : (typeof rawAccept === 'string' ? rawAccept.split(',').map(s => s.trim()).filter(Boolean) : []);
@@ -7700,6 +7702,28 @@
     /**
      * 滚动到指定插槽（iframe 内）
      */
+    function renderMissingSlotWarnings(warnings) {
+        if (!Array.isArray(warnings) || warnings.length === 0) {
+            return '';
+        }
+
+        const items = warnings.slice(0, 8).map(warning => {
+            const key = warning.logical_key || warning.relative_path || 'unknown';
+            const slotIds = Array.isArray(warning.missing_slot_ids) ? warning.missing_slot_ids : [];
+            const slots = slotIds.map(slotId => `<code>${escapeHtml(String(slotId))}</code>`).join(', ');
+            return `<li><strong>${escapeHtml(String(key))}</strong>: ${slots}</li>`;
+        }).join('');
+        const remaining = warnings.length > 8 ? `<li>另有 ${warnings.length - 8} 个覆写文件存在相同问题。</li>` : '';
+
+        return `
+            <div class="slot-contract-warning">
+                <div class="slot-contract-warning-title">默认 slot 缺失</div>
+                <div class="slot-contract-warning-desc">当前主题覆写了 Weline_Theme 默认文件，但缺少默认 slot，相关插件可能找不到挂载点。</div>
+                <ul>${items}${remaining}</ul>
+            </div>
+        `;
+    }
+
     window.scrollToSlot = function(slotId) {
         if (!elements.previewFrame || !elements.previewFrame.contentWindow) return;
 

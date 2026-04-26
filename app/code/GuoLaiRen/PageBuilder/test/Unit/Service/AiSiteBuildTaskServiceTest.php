@@ -384,6 +384,35 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertTrue($service->hasPendingTasks($scope));
     }
 
+    public function testReconcileGeneratedArtifactsMarksPersistedPendingTasksDoneBeforeDispatch(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page'],
+        ], [
+            'site_title' => 'Example Site',
+            'brief_description' => 'Example site summary',
+        ], 'virtual_theme');
+
+        $pageTaskKey = 'page:home_page:content/home-page-hero';
+        $scope = $service->markTaskRunning($scope, 'shared:header');
+        $scope = $service->markTaskRunning($scope, $pageTaskKey);
+        $scope['shared_components']['header'] = ['region' => 'header', 'html' => '<header>Ready</header>'];
+        $scope['page_type_layouts']['home_page']['content'][] = [
+            'code' => 'content/home-page-hero',
+            'component' => 'content/home-page-hero',
+        ];
+
+        $scope = $service->reconcileGeneratedArtifactsWithTaskState($scope);
+        $pendingKeys = \array_column($service->listPendingTasks($scope), 'task_key');
+
+        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_DONE, $scope['build_tasks']['shared:header']['status'] ?? null);
+        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_DONE, $scope['build_tasks'][$pageTaskKey]['status'] ?? null);
+        $this->assertNotContains('shared:header', $pendingKeys);
+        $this->assertNotContains($pageTaskKey, $pendingKeys);
+    }
+
     public function testSummarizeTracksCancelledTasksWithoutPretendingTheyArePending(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
