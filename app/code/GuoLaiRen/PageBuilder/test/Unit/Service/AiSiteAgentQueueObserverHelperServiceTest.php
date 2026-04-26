@@ -290,4 +290,33 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
         self::assertCount(1, $filtered);
         self::assertSame(42, $filtered[0]['event_id']);
     }
+
+    public function testFilterOperationEventsSuppressesUncorrelatedProgressWhenStrictCorrelationEnabled(): void
+    {
+        $service = new AiSiteAgentQueueObserverHelperService();
+
+        $events = [
+            [
+                'event_id' => 51,
+                'event_type' => 'operation_progress',
+                'payload' => ['operation' => 'plan', 'message' => 'legacy event without queue linkage'],
+                'create_time' => '',
+            ],
+            [
+                'event_id' => 52,
+                'event_type' => 'operation_progress',
+                'payload' => ['operation' => 'plan', 'execution_token' => 'new-token', 'queue_id' => 20],
+                'create_time' => '',
+            ],
+        ];
+
+        $filtered = $service->filterOperationEvents($events, 'plan', '', 0, [
+            'execution_token' => 'new-token',
+            'queue_id' => 20,
+            'require_event_correlation' => true,
+        ]);
+
+        self::assertCount(1, $filtered);
+        self::assertSame(52, $filtered[0]['event_id']);
+    }
 }
