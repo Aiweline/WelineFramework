@@ -307,7 +307,7 @@ class ModelSyncService
         $modelName = (string)($modelMeta['name'] ?? $modelCode);
         $modelField = $providerConfig['model_field'] ?? 'model';
         $baseUrl = $providerConfig['base_url'] ?? '';
-        $timeout = (int)($defaults['timeout'] ?? 180);
+        $timeout = (int)($defaults['timeout'] ?? ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT);
         $priceUnit = (string)($providerConfig['price_unit'] ?? 'per_1k_tokens');
         $inputPrice = $this->normalizePricePerThousand((float)($modelMeta['input_price'] ?? 0), $priceUnit);
         $outputPrice = $this->normalizePricePerThousand((float)($modelMeta['output_price'] ?? 0), $priceUnit);

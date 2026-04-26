@@ -33,6 +33,8 @@
     var runningOperationKey = '';
     var runningOperationType = '';
     var runningStartAtByOperationKey = Object.create(null);
+    var phaseOneAutoRetryCountByKey = Object.create(null);
+    var PHASE_ONE_AUTO_RETRY_MAX = 3;
     var queueCompletionReloadTimer = null;
     var observerSyncStatusPulseTimer = null;
     var observerSyncDotPhase = 0;
@@ -202,6 +204,114 @@
     }
 
     relayoutExpertWorkspaceWithRightLog();
+
+    function getPhaseOneRetryKey(operation, payload) {
+        var op = String((operation || (payload && payload.operation) || '')).trim().toLowerCase();
+        if (op !== 'plan') {
+            return '';
+        }
+        var token = String(
+            (payload && payload.execution_token)
+            || (payload && payload.state && payload.state.active_operation && payload.state.active_operation.execution_token)
+            || ''
+        ).trim();
+        return publicId + ':plan:' + (token || 'no-token');
+    }
+
+    function collectQueueFailureDetailLines(payload, operation) {
+        var lines = [];
+        var state = payload && payload.state && typeof payload.state === 'object' ? payload.state : {};
+        var op = String((operation || (payload && payload.operation) || '')).trim().toLowerCase();
+        var queueInfo = null;
+        if (op === 'plan') {
+            queueInfo = state.plan_queue_info && typeof state.plan_queue_info === 'object' ? state.plan_queue_info : null;
+        } else if (op === 'task_plan') {
+            queueInfo = state.task_plan_queue_info && typeof state.task_plan_queue_info === 'object' ? state.task_plan_queue_info : null;
+        } else if (op === 'build') {
+            queueInfo = state.build_queue_info && typeof state.build_queue_info === 'object' ? state.build_queue_info : null;
+        }
+        var activeOperation = state.active_operation && typeof state.active_operation === 'object' ? state.active_operation : {};
+        var queueSnapshot = queueInfo && queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : {};
+        var queueId = parseInt(String((queueInfo && queueInfo.queue_id) || queueSnapshot.queue_id || activeOperation.queue_id || 0), 10) || 0;
+        if (queueId > 0) {
+            lines.push('队列ID：' + queueId);
+        }
+        var queueStatus = String(queueSnapshot.job_status || queueSnapshot.status || '').trim();
+        if (queueStatus) {
+            lines.push('队列状态：' + queueStatus);
+        }
+        var opMessage = String(activeOperation.message || payload.message || '').trim();
+        if (opMessage) {
+            lines.push('错误信息：' + opMessage);
+        }
+        var queueProcess = String((queueInfo && queueInfo.process) || '').trim();
+        if (queueProcess && queueProcess !== opMessage) {
+            lines.push('队列进程：' + queueProcess);
+        }
+        var resultLog = String((queueInfo && queueInfo.result_log) || '').trim();
+        if (resultLog) {
+            lines.push('队列日志：\n' + resultLog);
+        }
+        return lines;
+    }
+
+    function showOperationFailureDetailModal(operation, payload, autoRetryHint) {
+        var lines = collectQueueFailureDetailLines(payload, operation);
+        if (!lines.length) {
+            return;
+        }
+        var title = String(operation || '').toLowerCase() === 'plan'
+            ? <?= \json_encode((string)__('第一阶段方案生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+            : <?= \json_encode((string)__('操作执行失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+        var body = lines.join('\n\n');
+        if (autoRetryHint) {
+            body += '\n\n' + autoRetryHint;
+        }
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            window.BackendConfirm.show(body, {
+                title: title,
+                confirmText: <?= \json_encode((string)__('我知道了'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                cancelText: <?= \json_encode((string)__('关闭'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+            }).catch(function () {});
+            return;
+        }
+        toast('error', body);
+    }
+
+    function tryAutoRetryPhaseOnePlan(operation, payload) {
+        var op = String((operation || (payload && payload.operation) || '')).trim().toLowerCase();
+        if (op !== 'plan') {
+            return false;
+        }
+        var api = resolveWorkspaceApi();
+        if (typeof api.retryPhaseOnePlanGeneration !== 'function') {
+            return false;
+        }
+        var retryKey = getPhaseOneRetryKey(op, payload);
+        if (!retryKey) {
+            return false;
+        }
+        var current = parseInt(String(phaseOneAutoRetryCountByKey[retryKey] || 0), 10) || 0;
+        if (current >= PHASE_ONE_AUTO_RETRY_MAX) {
+            showOperationFailureDetailModal(
+                op,
+                payload,
+                <?= \json_encode((string)__('前端自动重试已达上限（3 次），请检查错误并手动重试或强制重建方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+            );
+            return false;
+        }
+        phaseOneAutoRetryCountByKey[retryKey] = current + 1;
+        var attempt = phaseOneAutoRetryCountByKey[retryKey];
+        showOperationFailureDetailModal(
+            op,
+            payload,
+            <?= \json_encode((string)__('前端将自动重试（第 %{1} / 3 次）。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>.replace('%{1}', String(attempt))
+        );
+        window.setTimeout(function () {
+            api.retryPhaseOnePlanGeneration({ forceRebuild: false });
+        }, 900);
+        return true;
+    }
 
     var toast = typeof previewBridge.toast === 'function'
         ? previewBridge.toast
@@ -2181,9 +2291,21 @@
             if (success && (normalizedDoneOperation === 'plan' || normalizedDoneOperation === 'task_plan')) {
                 finishOperation(normalizedDonePayload);
             }
+            if (success && normalizedDoneOperation === 'plan') {
+                var successRetryKey = getPhaseOneRetryKey(normalizedDoneOperation, normalizedDonePayload);
+                if (successRetryKey) {
+                    phaseOneAutoRetryCountByKey[successRetryKey] = 0;
+                }
+            }
             if (!success) {
+                var retried = tryAutoRetryPhaseOnePlan(normalizedDoneOperation, normalizedDonePayload);
                 logOperationToWorkspaceTerminal('done_error', payload, 'error', lastServerError || '工作区操作执行失败');
-                toast('error', (payload && payload.message) ? String(payload.message) : lastServerError || <?= \json_encode((string)__('操作执行失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                if (!retried) {
+                    showOperationFailureDetailModal(normalizedDoneOperation, normalizedDonePayload, '');
+                    toast('error', (payload && payload.message) ? String(payload.message) : lastServerError || <?= \json_encode((string)__('操作执行失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                } else {
+                    toast('warning', <?= \json_encode((string)__('第一阶段生成失败，正在自动重试...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                }
                 resetOperationUiOnFailure(operation);
                 // 操作失败，恢复导航按钮
                 if (typeof enableNavigationAfterOperation === 'function') {
