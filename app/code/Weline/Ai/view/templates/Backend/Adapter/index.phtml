@@ -90,9 +90,21 @@ foreach ($adapters as $a) {
 .weline-adapter-page .action-btn:hover {
     transform: scale(1.05);
 }
+.weline-adapter-page .adapter-search {
+    min-width: 280px;
+}
 .weline-adapter-page .checkbox-cell {
     width: 40px;
     text-align: center;
+}
+.weline-adapter-page .adapter-search-empty {
+    display: none;
+    padding: 32px 20px;
+    text-align: center;
+    color: var(--backend-color-text-muted);
+}
+.weline-adapter-page .adapter-search-empty.show {
+    display: block;
 }
 .weline-adapter-page .empty-state {
     padding: 60px 20px;
@@ -244,6 +256,15 @@ foreach ($adapters as $a) {
                         <lang>适配器列表</lang>
                     </h5>
                     <div class="d-flex gap-2">
+                        <div class="input-group input-group-sm adapter-search">
+                            <span class="input-group-text">
+                                <i class="mdi mdi-magnify"></i>
+                            </span>
+                            <input type="text"
+                                   class="form-control"
+                                   id="adapterSearchInput"
+                                   placeholder="Search code, name, description, default model">
+                        </div>
                         <button type="button" class="btn btn-outline-danger btn-sm" onclick="WelineAdapterManager.cleanup()">
                             <i class="mdi mdi-delete-sweep me-1"></i>
                             <lang>清理无效</lang>
@@ -389,7 +410,11 @@ foreach ($adapters as $a) {
                                 </tbody>
                             </table>
                         </div>
-                        
+                        <div class="adapter-search-empty" id="adapterSearchEmpty">
+                            <i class="mdi mdi-magnify-close fs-2 d-block mb-2"></i>
+                            <lang>娌℃湁鍖归厤鐨勯€傞厤鍣?/lang>
+                        </div>
+
                         <?php if (isset($pagination)): ?>
                             <div class="card-footer bg-transparent d-flex justify-content-center">
                                 <?= $pagination ?>
@@ -737,6 +762,37 @@ foreach ($adapters as $a) {
                 hideLoading();
                 BackendToast.error('<?= __('请求失败：') ?>' + (e.message || e));
             });
+        },
+
+        filterRows: function(keyword) {
+            var normalized = (keyword || '').trim().toLowerCase();
+            var rows = document.querySelectorAll('.adapter-table tbody tr');
+            var visibleCount = 0;
+
+            rows.forEach(function(row) {
+                var text = [
+                    row.children[1] ? row.children[1].innerText : '',
+                    row.children[2] ? row.children[2].innerText : '',
+                    row.children[4] ? row.children[4].innerText : '',
+                    row.children[5] ? row.children[5].innerText : '',
+                    row.children[6] ? row.children[6].innerText : ''
+                ].join(' ').toLowerCase();
+                var matched = normalized === '' || text.indexOf(normalized) !== -1;
+                row.style.display = matched ? '' : 'none';
+                if (!matched) {
+                    var checkbox = row.querySelector('.row-checkbox');
+                    if (checkbox) checkbox.checked = false;
+                } else {
+                    visibleCount++;
+                }
+            });
+
+            var emptyState = document.getElementById('adapterSearchEmpty');
+            if (emptyState) {
+                emptyState.classList.toggle('show', normalized !== '' && visibleCount === 0);
+            }
+
+            this.updateSelection();
         }
     };
 
@@ -749,6 +805,14 @@ foreach ($adapters as $a) {
                 WelineAdapterManager._doBatchSaveDefaultModel();
             });
         }
+    })();
+
+    (function bindAdapterSearch() {
+        var input = document.getElementById('adapterSearchInput');
+        if (!input) return;
+        input.addEventListener('input', function() {
+            WelineAdapterManager.filterRows(input.value);
+        });
     })();
 })();
 </script>

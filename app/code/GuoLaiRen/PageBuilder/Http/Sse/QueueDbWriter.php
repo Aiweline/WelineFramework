@@ -341,16 +341,17 @@ class QueueDbWriter extends SseWriter
             try {
                 /** @var AiSiteAgentSessionService $sessionService */
                 $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
+                $eventPayload = $this->enrichOperationCorrelationPayload([
+                    'operation' => $this->operation,
+                    'stage' => $this->stage,
+                    'token_usage' => $merged,
+                    'token_usage_delta' => $increment,
+                ]);
                 $sessionService->appendEvent(
                     $this->sessionId,
                     $this->adminId,
                     'token_usage',
-                    [
-                        'operation' => $this->operation,
-                        'stage' => $this->stage,
-                        'token_usage' => $merged,
-                        'token_usage_delta' => $increment,
-                    ],
+                    $eventPayload,
                     $this->stage,
                     'info'
                 );
@@ -370,6 +371,11 @@ class QueueDbWriter extends SseWriter
     private function flushAiRawStreamBuffer(bool $force): void
     {
         if ($this->queueId <= 0 || $this->suppressedAiStreamChunks <= 0) {
+            return;
+        }
+        if (!$this->shouldEmitSuppressedStreamTelemetry()) {
+            $this->lastAiStreamNoticeChunks = $this->suppressedAiStreamChunks;
+            $this->lastAiStreamNoticeBytes = $this->suppressedAiStreamBytes;
             return;
         }
         $chunkDelta = $this->suppressedAiStreamChunks - $this->lastAiStreamNoticeChunks;
@@ -401,19 +407,20 @@ class QueueDbWriter extends SseWriter
         try {
             /** @var AiSiteAgentSessionService $sessionService */
             $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
+            $eventPayload = $this->enrichOperationCorrelationPayload([
+                'message' => $message,
+                'operation' => $this->operation,
+                'stage' => $this->stage,
+                'stream_stage' => 'ai_stream_progress',
+                'suppressed_content' => true,
+                'ai_stream_chunks' => $this->suppressedAiStreamChunks,
+                'ai_stream_bytes' => $this->suppressedAiStreamBytes,
+            ]);
             $sessionService->appendEvent(
                 $this->sessionId,
                 $this->adminId,
                 'operation_progress',
-                [
-                    'message' => $message,
-                    'operation' => $this->operation,
-                    'stage' => $this->stage,
-                    'stream_stage' => 'ai_stream_progress',
-                    'suppressed_content' => true,
-                    'ai_stream_chunks' => $this->suppressedAiStreamChunks,
-                    'ai_stream_bytes' => $this->suppressedAiStreamBytes,
-                ],
+                $eventPayload,
                 $this->stage,
                 'info'
             );
@@ -423,6 +430,11 @@ class QueueDbWriter extends SseWriter
 
         $this->lastAiStreamNoticeChunks = $this->suppressedAiStreamChunks;
         $this->lastAiStreamNoticeBytes = $this->suppressedAiStreamBytes;
+    }
+
+    private function shouldEmitSuppressedStreamTelemetry(): bool
+    {
+        return \in_array($this->operation, ['plan', 'task_plan'], true);
     }
 
 

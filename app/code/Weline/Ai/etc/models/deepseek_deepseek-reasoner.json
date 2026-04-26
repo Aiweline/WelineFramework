@@ -20,7 +20,7 @@
         "temperature": 0.7,
         "top_p": 1,
         "stream": true,
-        "timeout": 180,
+        "timeout": 900,
         "max_retries": 3,
         "model": "deepseek-reasoner",
         "model_id": "deepseek-reasoner"
