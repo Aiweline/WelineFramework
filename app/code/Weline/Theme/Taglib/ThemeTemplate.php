@@ -97,12 +97,9 @@ class ThemeTemplate implements TaglibInterface
                     $filePath = $themeConfigHelper::getTemplatePath($layout);
                     
                     if ($filePath) {
-                        // 使用配置的模板路径
-                        // filePath 格式：Weline_Theme::theme/frontend/partials/header/minimal.phtml
-                        // 需要转换为 theme/frontend/partials/header/minimal.phtml
-                        if (strpos($filePath, 'Weline_Theme::') === 0) {
-                            $filePath = substr($filePath, strlen('Weline_Theme::'));
-                        }
+                        // fetchTagSource() 已支持 Module::path 语法；保留模块前缀，
+                        // 否则 dir_type_theme 会再次补 theme/ 前缀，导致 theme/theme/...。
+                        $filePath = self::parseMetaTags($filePath);
                         return file_get_contents($template->fetchTagSource(DataInterface::dir_type_THEME, $filePath));
                     }
                 } catch (\Exception $e) {

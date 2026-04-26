@@ -346,6 +346,19 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $template->setData('layoutTemplate', $resolvedLayoutPath);
                 $template->setData('fileName', $fileName);
 
+                try {
+                    $requestPathForDebug = strtolower(trim((string)($request?->getUrlPath() ?? '')));
+                    if ($requestPathForDebug === '/theme/frontend/theme-preview/content') {
+                        $response = $request?->getResponse();
+                        if ($response) {
+                            $response->setHeader('X-Weline-Debug-Preview-Before-LayoutType', (string)$layoutType);
+                            $response->setHeader('X-Weline-Debug-Preview-Before-LayoutOption', (string)$layoutOption);
+                            $response->setHeader('X-Weline-Debug-Preview-Before-LayoutTemplate', (string)$resolvedLayoutPath);
+                        }
+                    }
+                } catch (\Throwable) {
+                }
+
                 // 加载布局文件的参数配置（自动读取 @param 定义的参数）
                 // 构建 meta_identify：layouts.{layoutType} 或 layouts.{layoutType}.{layoutOption}
                 // 注意：meta_identify 格式应该是 theme.{area}.layouts.{layoutType} 或 theme.{area}.layouts.{layoutType}.{layoutOption}
