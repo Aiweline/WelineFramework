@@ -145,7 +145,12 @@ if (!$useCanonicalFilterContainer && !empty($filters)) {
         </aside>
 
         <!-- Product Grid -->
-        <div class="flex-1">
+        <div class="flex-1"
+             data-wslot="category-products"
+             data-wslot-name="Category Products"
+             data-wslot-accept="product-grid,product-list-view,category-children"
+             data-wslot-multiple="true"
+             data-wslot-position="content">
             <w:hook>WeShop_Catalog::listing::header_before</w:hook>
             <?php if (!($category['image'] ?? null)): ?>
                 <h1 class="font-heading text-2xl md:text-3xl font-bold text-text-primary-light dark:text-text-primary-dark uppercase tracking-tight mb-2">
