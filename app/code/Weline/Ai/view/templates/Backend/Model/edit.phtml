@@ -291,10 +291,10 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
                                    class="form-control" 
                                    id="timeout" 
                                    name="config[timeout]" 
-                                   value="<?= $config['timeout'] ?? '180' ?>"
+                                       value="<?= $config['timeout'] ?? (string)\Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT ?>"
                                    min="0"
-                                   placeholder="180">
-                            <small class="form-text text-muted"><?= __('API请求超时时间，0表示不限制，默认180秒') ?></small>
+                                       placeholder="<?= (string)\Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT ?>">
+                                <small class="form-text text-muted"><?= __('API请求超时时间，0表示不限制，默认900秒') ?></small>
                         </div>
                     </div>
                     
@@ -450,7 +450,7 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
   "frequency_penalty": 0.0,
   "presence_penalty": 0.0,
   "stream": true,
-  "timeout": 30,
+                                        "timeout": 900,
   "max_retries": 3
 }'
                                       style="font-family: 'Courier New', monospace;"><?php
@@ -719,7 +719,7 @@ if (!empty($displayConfig)) {
         setFieldValue('record_max_tokens', preset.max_tokens || config.max_tokens || 4096);
         setFieldValue('temperature', preset.temperature !== undefined ? preset.temperature : (config.temperature || 0.7));
         setFieldValue('top_p', preset.top_p !== undefined ? preset.top_p : (config.top_p || 1));
-        setFieldValue('timeout', preset.timeout || config.timeout || 180);
+                    setFieldValue('timeout', preset.timeout || config.timeout || <?= \Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT ?>);
         setCheckboxValue('stream', preset.stream !== false);
         setFieldValue('token_price_input', preset.token_price_input || 0);
         setFieldValue('token_price_output', preset.token_price_output || 0);

@@ -154,6 +154,7 @@
 - MUST 块任务 hover 操作提供：`微调任务`、`局部重建`、`删除任务`、`编辑字段内容`；页面底部允许 `新增块任务`。
 - MUST 第二阶段微调/删除/新增的结果同时更新：结构化块任务、页面装配结果、虚拟主题待生成树。
 - MUST 第二阶段预览同样支持块任务排序；排序变化必须同步影响任务方案 Markdown、`page_block_tasks[].sort_order`、虚拟主题待生成树顺序。
+- MUST 第二阶段任务微调/新增/删除/重建在复用队列时必须只处理 `task_keys[]` 指定任务，支持一键批量（多 task_key）并按提交顺序串行持久化；不得因复用队列而回退为整包任务重建。
 
 #### 第二阶段：提示词具体性契约（MUST，与实现对齐）
 
@@ -196,6 +197,7 @@
   - `stage=stage1|stage2|virtual_theme`
   - `page_key`
   - `block_key`
+- MUST 队列复用槽位执行块级动作时，队列 content 必须显式携带 `prompt_mode + mutation.action + mutation.targets[]`，并区分 `single_target` 与 `multi_target`；不得在复用队列时退化为“整页/全量方案”执行。
 - MUST `refine/rebuild` 默认只影响目标块；若需要联动共享块或关联页面，必须把影响范围写入返回值与进度事件。
 - MUST `create/delete/move` 完成后更新块树版本号与装配版本号，避免前端展示旧数据。
 

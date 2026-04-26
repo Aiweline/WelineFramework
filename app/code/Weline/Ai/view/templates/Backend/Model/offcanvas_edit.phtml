@@ -446,7 +446,7 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
   "frequency_penalty": 0.0,
   "presence_penalty": 0.0,
   "stream": true,
-  "timeout": 30,
+                                    "timeout": 900,
   "max_retries": 3
 }'><?php
 $displayConfig = $providerConfig;
@@ -609,7 +609,7 @@ if (!empty($displayConfig)) {
                                     <?= __('超时时间（秒）') ?>
                                 </label>
                                 <?php 
-                                    $timeout = $model && isset($model->getConfig()['timeout']) ? $model->getConfig()['timeout'] : '180';
+                                $timeout = $model && isset($model->getConfig()['timeout']) ? $model->getConfig()['timeout'] : (string)\Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT;
                                 ?>
                                 <input type="number" 
                                        class="form-control" 
@@ -617,9 +617,9 @@ if (!empty($displayConfig)) {
                                        name="config[timeout]" 
                                        value="<?= $timeout ?>" 
                                        min="0"
-                                       placeholder="180">
+                                   placeholder="<?= (string)\Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT ?>">
                                 <div class="form-text">
-                                    <?= __('API请求超时时间，0表示不限制，默认180秒') ?> 
+                                <?= __('API请求超时时间，0表示不限制，默认900秒') ?>
                                 </div>
                             </div>
                         </div>
@@ -821,7 +821,7 @@ if (!empty($displayConfig)) {
 
             this.setRangeValue('config_temperature', 'tempValue', preset.temperature !== undefined ? preset.temperature : 0.7);
             this.setRangeValue('config_top_p', 'topPValue', preset.top_p !== undefined ? preset.top_p : 1);
-            this.setFieldValue('config_timeout', preset.timeout || 180);
+                    this.setFieldValue('config_timeout', preset.timeout || <?= \Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT ?>);
 
             var streamInput = document.getElementById('config_stream');
             if (streamInput) {

@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace Weline\Ai\Model;
 use Weline\Ai\Service\Provider\VendorConfigManager;
+use Weline\Ai\Service\Provider\ProviderTimeoutPolicy;
 use Weline\Framework\App\Env;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
@@ -162,9 +163,9 @@ class AiModel extends Model
         ), 'DEBUG');
         if (is_string($config)) {
             $decoded = json_decode($config, true);
-            return is_array($decoded) ? $decoded : [];
+            return is_array($decoded) ? $this->normalizeLegacyPresetTimeout($decoded, $this->getProviderConfig()) : [];
         }
-        return is_array($config) ? $config : [];
+        return is_array($config) ? $this->normalizeLegacyPresetTimeout($config, $this->getProviderConfig()) : [];
     }
     public function getCapabilities(): array
     {
@@ -350,9 +351,9 @@ class AiModel extends Model
         $config = $this->getData(self::schema_fields_PROVIDER_CONFIG);
         if (is_string($config)) {
             $decoded = json_decode($config, true);
-            return is_array($decoded) ? $decoded : [];
+            return is_array($decoded) ? $this->normalizeLegacyPresetTimeout($decoded) : [];
         }
-        return is_array($config) ? $config : [];
+        return is_array($config) ? $this->normalizeLegacyPresetTimeout($config) : [];
     }
     public function setProviderConfig(array|string $config): self
     {
@@ -369,6 +370,27 @@ class AiModel extends Model
     public function getProxyInfo(): mixed
     {
         return $this->getData(self::schema_fields_PROXY_INFO) ?? '';
+    }
+
+    private function normalizeLegacyPresetTimeout(array $config, ?array $relatedConfig = null): array
+    {
+        if (!array_key_exists('timeout', $config)) {
+            return $config;
+        }
+
+        $timeout = (int)$config['timeout'];
+        if (!in_array($timeout, [30, 180], true)) {
+            return $config;
+        }
+
+        $isPreset = !empty($config['selected_model_preset'])
+            || !empty(($relatedConfig ?? [])['selected_model_preset']);
+        if (!$isPreset) {
+            return $config;
+        }
+
+        $config['timeout'] = ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT;
+        return $config;
     }
     public function getTokenPriceInput(): float
     {

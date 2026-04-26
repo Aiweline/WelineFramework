@@ -40,6 +40,12 @@ class AiSiteAgentQueueObserverHelperService
      */
     public function shouldSkipResultLine(string $operation, string $line): bool
     {
+        if (
+            \str_contains($line, '正文流不写入队列日志')
+            || \str_contains($line, '正文流已从队列 SSE 中省略')
+        ) {
+            return true;
+        }
         if (!\in_array($operation, ['plan', 'task_plan'], true)) {
             return false;
         }
@@ -263,6 +269,11 @@ class AiSiteAgentQueueObserverHelperService
 
         $hasEventCorrelation = $eventToken !== '' || $eventQueueId > 0 || $eventJobKey !== '' || $eventJobType !== '';
         $eventType = \trim((string)($event['event_type'] ?? ''));
+        if ((bool)($correlation['require_event_correlation'] ?? false)
+            && !$hasEventCorrelation
+            && \in_array($eventType, ['progress', 'chunk', 'operation_progress', 'ai_raw_chunk', 'plan_chunk', 'ai_chunk', 'operation_failed', 'error'], true)) {
+            return false;
+        }
         if ((bool)($correlation['require_error_correlation'] ?? false)
             && \in_array($eventType, ['error', 'operation_failed'], true)) {
             if ($expectedToken !== '' && $eventToken === '') {
