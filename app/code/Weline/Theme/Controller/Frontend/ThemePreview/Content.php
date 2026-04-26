@@ -12,8 +12,6 @@ use Weline\Theme\Service\ThemePreviewContentRenderer;
 
 class Content extends FrontendController
 {
-    protected ?string $layoutType = null;
-
     public function index(): string
     {
         /** @var PreviewContextService $previewContextService */

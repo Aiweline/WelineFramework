@@ -1323,6 +1323,88 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringNotContainsString('????????', $joinedPrompts);
     }
 
+    public function testBuildPlanArtifactsByAiStreamReportsDetailedStageOnePipelineProgress(): void
+    {
+        $progressEvents = [];
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::exactly(4))
+            ->method('generateStream')
+            ->willReturnCallback(function (string $prompt, callable $callback): void {
+                static $streamCall = 0;
+                $streamCall++;
+                $callback(match ($streamCall) {
+                    1 => $this->buildStageOneRequirementExpansionAiResponse(),
+                    3 => $this->buildStagedPageAiResponse(Page::TYPE_HOME),
+                    4 => $this->buildStagedPageAiResponse(Page::TYPE_ABOUT),
+                    default => $this->buildValidAiPlanResponse(),
+                });
+            });
+
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $aiService
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream(
+            [
+                'site_title' => 'Progress Pipeline Test',
+                'brief_description' => 'Need home and about pages with strong CTA.',
+                'page_types' => ['home_page', 'about_page'],
+                'workspace_track' => 'virtual_theme',
+                'plan_locale' => 'zh_Hans_CN',
+                'default_locale' => 'en_US',
+            ],
+            [
+                'site_title' => 'Progress Pipeline Test',
+                'brief_description' => 'Need home and about pages with strong CTA.',
+            ],
+            [],
+            null,
+            static function (array $progress) use (&$progressEvents): void {
+                $progressEvents[] = $progress;
+            }
+        );
+
+        self::assertNotEmpty($artifacts['plan_json']['pages'] ?? []);
+        self::assertNotEmpty($progressEvents);
+        $messages = \array_values(\array_map(static fn(array $row): string => (string)($row['message'] ?? ''), $progressEvents));
+        foreach ($messages as $message) {
+            self::assertNotSame('', \trim($message));
+        }
+
+        $stageMarkers = \array_values(\array_map(
+            static fn(array $row): string => (string)($row['stage1_step'] ?? '') . '|' . (string)($row['stage1_phase'] ?? ''),
+            $progressEvents
+        ));
+        $expectedMarkers = [
+            'requirement_expand|start',
+            'theme_design|start',
+            'header_footer|start',
+            'page_fanout|start',
+            'plan_assemble|start',
+            'plan_assemble|done',
+        ];
+        $positions = [];
+        foreach ($expectedMarkers as $expectedMarker) {
+            $position = \array_search($expectedMarker, $stageMarkers, true);
+            self::assertNotFalse($position, $expectedMarker);
+            $positions[] = (int)$position;
+        }
+        $sortedPositions = $positions;
+        \sort($sortedPositions);
+        self::assertSame($sortedPositions, $positions);
+
+        $pageMarkers = \array_values(\array_map(
+            static fn(array $row): string => (string)($row['page_type'] ?? '') . '|' . (string)($row['stage1_phase'] ?? ''),
+            \array_values(\array_filter($progressEvents, static fn(array $row): bool => (string)($row['stage1_step'] ?? '') === 'page_plan'))
+        ));
+        self::assertContains('home_page|start', $pageMarkers);
+        self::assertContains('about_page|start', $pageMarkers);
+        self::assertContains('home_page|done', $pageMarkers);
+        self::assertContains('about_page|done', $pageMarkers);
+        self::assertContains('stage1_pipeline', \array_map(static fn(array $row): string => (string)($row['progress_kind'] ?? ''), $progressEvents));
+    }
+
     public function testBuildPlanArtifactsByAiStreamCapsMaxTokensBelowProviderLimit(): void
     {
         $capturedCalls = [];
@@ -1745,7 +1827,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         );
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('AI plan generation failed: stage-one theme plan must be generated before page plans.');
+        $this->expectExceptionMessage('第一阶段方案生成失败：生成页面方案前必须先完成主题方案。');
 
         $service->buildPlanArtifactsByAiStream([
             'site_title' => 'Plan Service Test',
