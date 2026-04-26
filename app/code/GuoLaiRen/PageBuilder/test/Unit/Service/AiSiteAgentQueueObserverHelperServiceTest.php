@@ -96,6 +96,19 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
         self::assertSame($failureFallback, $service->resolveMessage(null, false));
     }
 
+    public function testResolveMessagePrefersResultTailForTerminalQueueStatuses(): void
+    {
+        $service = new AiSiteAgentQueueObserverHelperService();
+
+        $resolved = $service->resolveMessage([
+            'status' => 'error',
+            'process' => 'AI 正在生成内容，正文流不写入队列日志',
+            'result' => "[02:33:05] ERROR 阶段一方案生成失败\n第一阶段方案生成失败：AI流式生成完成但未返回任何内容",
+        ], false);
+
+        self::assertSame('第一阶段方案生成失败：AI流式生成完成但未返回任何内容', $resolved);
+    }
+
     public function testBuildPanelPayloadShapesQueueRowIntoPublicStructure(): void
     {
         $service = new AiSiteAgentQueueObserverHelperService();

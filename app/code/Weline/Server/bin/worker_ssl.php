@@ -38,6 +38,28 @@ if (!\function_exists('wlsNormalizeMemoryLimit')) {
         return $default;
     }
 }
+if (!\function_exists('wlsMemoryLimitToBytes')) {
+    function wlsMemoryLimitToBytes(mixed $value): int
+    {
+        $limit = \strtoupper(\trim((string) $value));
+        if ($limit === '' || $limit === '-1' || $limit === '0') {
+            return 0;
+        }
+
+        $unit = \substr($limit, -1);
+        $number = (float) $limit;
+        if ($number <= 0) {
+            return 0;
+        }
+
+        return match ($unit) {
+            'G' => (int) \round($number * 1024 * 1024 * 1024),
+            'M' => (int) \round($number * 1024 * 1024),
+            'K' => (int) \round($number * 1024),
+            default => (int) \round($number),
+        };
+    }
+}
 
 $wlsMemoryLimit = '256M';
 @\ini_set('memory_limit', $wlsMemoryLimit);
@@ -3971,7 +3993,8 @@ function sslFinalizeHttpResponseAfterHandle(
 
     WlsLogger::flush_(true);
 
-    $shouldClose = $isSseMode || !$keepAlive || $ipcDraining || $forceCloseAfterResponse;
+    $responseRequestsClose = \Weline\Server\Service\WorkerResponseMemoryGuard::responseRequestsConnectionClose($response);
+    $shouldClose = $isSseMode || !$keepAlive || $ipcDraining || $forceCloseAfterResponse || $responseRequestsClose;
     if ($shouldClose) {
         $hasBufferedData = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
 
