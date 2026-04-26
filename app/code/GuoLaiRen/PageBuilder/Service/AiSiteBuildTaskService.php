@@ -135,15 +135,6 @@ class AiSiteBuildTaskService
         foreach ($nextTasks as $taskKey => $defaultState) {
             $existing = \is_array($existingTasks[$taskKey] ?? null) ? $existingTasks[$taskKey] : [];
             $status = $this->normalizeTaskStatus((string)($existing['status'] ?? self::TASK_STATUS_PENDING));
-            $resultRef = \is_array($existing['result_ref'] ?? null) ? $existing['result_ref'] : [];
-            if ($status === self::TASK_STATUS_DONE && $resultRef !== []) {
-                $nextTasks[$taskKey] = \array_replace($defaultState, $existing, [
-                    'status' => self::TASK_STATUS_DONE,
-                    'result_ref' => $resultRef,
-                ]);
-                continue;
-            }
-
             if ($status === self::TASK_STATUS_CANCELLED) {
                 $nextTasks[$taskKey] = \array_replace($defaultState, $existing, [
                     'status' => self::TASK_STATUS_CANCELLED,
@@ -974,6 +965,35 @@ class AiSiteBuildTaskService
     }
 
     /**
+     * Reconcile mutable task state with generated artifacts already persisted by the builder.
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function reconcileGeneratedArtifactsWithTaskState(array $scope): array
+    {
+        $taskState = $this->extractTaskState($scope);
+        foreach ($this->extractBlueprintTasks($scope) as $task) {
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+            $status = $this->normalizeTaskStatus((string)($taskState[$taskKey]['status'] ?? self::TASK_STATUS_PENDING));
+            if (!\in_array($status, [self::TASK_STATUS_PENDING, self::TASK_STATUS_RUNNING], true)) {
+                continue;
+            }
+            if (!$this->isGeneratedArtifactAvailableForTask($scope, $task)) {
+                continue;
+            }
+
+            $scope = $this->markTaskDone($scope, $taskKey, $this->buildTaskResultRefFromDefinition($task));
+            $taskState = $this->extractTaskState($scope);
+        }
+
+        return $scope;
+    }
+
+    /**
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
@@ -1165,6 +1185,97 @@ class AiSiteBuildTaskService
         $scope['build_tasks'] = $tasks;
 
         return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $task
+     */
+    private function isGeneratedArtifactAvailableForTask(array $scope, array $task): bool
+    {
+        $taskType = \trim((string)($task['task_type'] ?? ''));
+        if ($taskType === 'shared_component') {
+            $region = \trim((string)($task['region'] ?? ''));
+            $sharedComponents = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
+            return $region !== '' && \is_array($sharedComponents[$region] ?? null) && $sharedComponents[$region] !== [];
+        }
+
+        if ($taskType !== 'page_section') {
+            return false;
+        }
+
+        $pageType = \trim((string)($task['page_type'] ?? ''));
+        $sectionCode = \trim((string)($task['section_code'] ?? ''));
+        if ($pageType === '' || $sectionCode === '') {
+            return false;
+        }
+
+        $layouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
+        $layout = \is_array($layouts[$pageType] ?? null) ? $layouts[$pageType] : [];
+        if ($this->layoutContainsSectionCode($layout, $sectionCode)) {
+            return true;
+        }
+
+        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
+        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
+        return $this->virtualPageContainsSectionCode($virtualPage, $sectionCode);
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @return array<string, mixed>
+     */
+    private function buildTaskResultRefFromDefinition(array $task): array
+    {
+        $taskType = \trim((string)($task['task_type'] ?? ''));
+        if ($taskType === 'shared_component') {
+            return ['region' => \trim((string)($task['region'] ?? ''))];
+        }
+
+        return [
+            'page_type' => \trim((string)($task['page_type'] ?? '')),
+            'section_code' => \trim((string)($task['section_code'] ?? '')),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     */
+    private function layoutContainsSectionCode(array $layout, string $sectionCode): bool
+    {
+        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+        foreach ($content as $section) {
+            if (!\is_array($section)) {
+                continue;
+            }
+            foreach (['code', 'component', 'section_code'] as $key) {
+                if (\trim((string)($section[$key] ?? '')) === $sectionCode) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $virtualPage
+     */
+    private function virtualPageContainsSectionCode(array $virtualPage, string $sectionCode): bool
+    {
+        $blocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+        foreach ($blocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            foreach (['section_code', 'code', 'block_code', 'component', 'component_code'] as $key) {
+                if (\trim((string)($block[$key] ?? '')) === $sectionCode) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private function normalizeTaskStatus(string $status): string

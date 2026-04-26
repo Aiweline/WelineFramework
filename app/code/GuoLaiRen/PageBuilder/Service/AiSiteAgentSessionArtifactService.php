@@ -129,6 +129,19 @@ class AiSiteAgentSessionArtifactService
                 $json = $this->encodeValueDocument($value);
                 $hash = \sha1($json);
                 $bytes = \strlen($json);
+                $previousHash = \trim((string)($existingRef['hash'] ?? ''));
+                if ($previousHash !== '' && \hash_equals($previousHash, $hash)) {
+                    $refs[$stageCode][$artifactKey] = \array_replace($existingRef, [
+                        'storage' => 'session_artifact_v1',
+                        'stage_code' => $stageCode,
+                        'artifact_key' => $artifactKey,
+                        'hash' => $hash,
+                        'bytes' => $bytes,
+                    ]);
+                    $scope = $this->setPathValue($scope, $definition['path'], $definition['empty']);
+                    unset($json, $value);
+                    continue;
+                }
                 $refs[$stageCode][$artifactKey] = [
                     'storage' => 'session_artifact_v1',
                     'stage_code' => $stageCode,
@@ -145,6 +158,7 @@ class AiSiteAgentSessionArtifactService
                     'bytes' => $bytes,
                 ];
                 $scope = $this->setPathValue($scope, $definition['path'], $definition['empty']);
+                unset($json, $value);
                 continue;
             }
 
@@ -290,6 +304,8 @@ class AiSiteAgentSessionArtifactService
             $artifact->setData(AiSiteAgentSessionArtifact::schema_fields_UPDATE_TIME, $now);
             $artifact->setPayloadValue($artifactData['payload'] ?? []);
             $artifact->save();
+            $artifact->clearData()->clearQuery();
+            unset($artifact);
         }
     }
 

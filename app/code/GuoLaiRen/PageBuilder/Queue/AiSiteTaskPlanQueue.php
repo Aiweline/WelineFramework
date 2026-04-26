@@ -349,12 +349,12 @@ class AiSiteTaskPlanQueue implements QueueInterface
             $this->queueTrace($sse, '草案校验失败：' . $hint);
         }
         $queueHint = ($sse instanceof QueueDbWriter && $sse->getQueueId() > 0)
-            ? 'queue:run --id=' . $sse->getQueueId() . ' -f'
-            : 'queue:run --id=<队列ID> -f';
+            ? '将队列 #' . $sse->getQueueId() . ' 重置为 pending/pid=0 后等待系统定时任务调度'
+            : '将对应 weline_queue 记录重置为 pending/pid=0 后等待系统定时任务调度';
         throw new \RuntimeException(
-            '任务方案草案校验失败，未检测到完整 draft 落库；请重试 '
+            '任务方案草案校验失败，未检测到完整 draft 落库；请'
             . $queueHint
-            . '，或检查 AiSiteAgent::runTaskPlanOperation 写入链路。（--id 为 weline_queue 主键，非 session_id）('
+            . '，或检查 AiSiteAgent::runTaskPlanOperation 写入链路。('
             . $hint
             . ')'
         );

@@ -391,4 +391,53 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
         self::assertSame('# Stage two draft', (string)($stored['task_plan_markdown'] ?? ''));
         self::assertSame('# Stage two draft', (string)($stored['virtual_theme_plan']['draft_markdown'] ?? ''));
     }
+
+    public function testArtifactBackedPayloadsAreNotStoredBackIntoScopeJson(): void
+    {
+        $session = new AiSiteAgentSession();
+
+        $session->setScopeArray([
+            '_artifact_refs' => [
+                AiSiteAgentSession::STAGE_PLAN => [
+                    'plan_json' => ['storage' => 'session_artifact_v1', 'hash' => 'plan-json-hash'],
+                    'plan_structured' => ['storage' => 'session_artifact_v1', 'hash' => 'plan-structured-hash'],
+                ],
+                AiSiteAgentSession::STAGE_VISUAL_EDIT => [
+                    'task_plan_structured' => ['storage' => 'session_artifact_v1', 'hash' => 'task-plan-hash'],
+                    'task_plan_markdown' => ['storage' => 'session_artifact_v1', 'hash' => 'task-plan-markdown-hash'],
+                    'task_plan_draft' => ['storage' => 'session_artifact_v1', 'hash' => 'draft-hash'],
+                    'task_plan_draft_markdown' => ['storage' => 'session_artifact_v1', 'hash' => 'draft-markdown-hash'],
+                    'task_plan_confirmed' => ['storage' => 'session_artifact_v1', 'hash' => 'confirmed-hash'],
+                    'task_plan_confirmed_markdown' => ['storage' => 'session_artifact_v1', 'hash' => 'confirmed-markdown-hash'],
+                    'build_blueprint' => ['storage' => 'session_artifact_v1', 'hash' => 'build-blueprint-hash'],
+                ],
+            ],
+            'plan_json' => ['pages' => ['home_page' => ['heavy' => \str_repeat('a', 1024)]]],
+            'plan_structured' => ['pages' => ['home_page' => ['heavy' => \str_repeat('b', 1024)]]],
+            'task_plan_structured' => ['page_tasks' => ['home_page' => [['heavy' => \str_repeat('c', 1024)]]]],
+            'task_plan_markdown' => \str_repeat('markdown', 128),
+            'virtual_theme_plan' => [
+                'draft' => ['page_tasks' => ['home_page' => [['heavy' => \str_repeat('d', 1024)]]]],
+                'draft_markdown' => \str_repeat('draft', 128),
+                'confirmed' => ['page_tasks' => ['home_page' => [['heavy' => \str_repeat('e', 1024)]]]],
+                'confirmed_markdown' => \str_repeat('confirmed', 128),
+                'plan_signature' => 'keep-signature',
+            ],
+            'build_blueprint' => ['tasks' => [['task_key' => 'page:home_page:hero', 'heavy' => \str_repeat('f', 1024)]]],
+        ]);
+
+        $stored = $session->getScopeArray();
+
+        self::assertSame([], $stored['plan_json'] ?? null);
+        self::assertSame([], $stored['plan_structured'] ?? null);
+        self::assertSame([], $stored['task_plan_structured'] ?? null);
+        self::assertSame('', $stored['task_plan_markdown'] ?? null);
+        self::assertSame([], $stored['virtual_theme_plan']['draft'] ?? null);
+        self::assertSame('', $stored['virtual_theme_plan']['draft_markdown'] ?? null);
+        self::assertSame([], $stored['virtual_theme_plan']['confirmed'] ?? null);
+        self::assertSame('', $stored['virtual_theme_plan']['confirmed_markdown'] ?? null);
+        self::assertSame('keep-signature', $stored['virtual_theme_plan']['plan_signature'] ?? null);
+        self::assertSame([], $stored['build_blueprint'] ?? null);
+        self::assertSame('draft-hash', $stored['_artifact_refs'][AiSiteAgentSession::STAGE_VISUAL_EDIT]['task_plan_draft']['hash'] ?? null);
+    }
 }

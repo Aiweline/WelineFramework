@@ -24,6 +24,10 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
             ->method('loadByPublicId')
             ->with('demo-public', 8)
             ->willReturn($session);
+        $sessionService->expects(self::once())
+            ->method('loadScopeForStage')
+            ->with($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            ->willReturn(['task_plan_confirmed' => 1]);
 
         $scopeCompatibility = $this->createMock(AiSiteScopeCompatibilityService::class);
         $scopeCompatibility->expects(self::once())

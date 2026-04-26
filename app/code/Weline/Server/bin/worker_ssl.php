@@ -4230,10 +4230,33 @@ function handleRequest(
                     if (!empty($cookie['sameSite'])) { $parts[] = 'SameSite=' . $cookie['sameSite']; }
                     $cookieHeaders .= 'Set-Cookie: ' . \implode('; ', $parts) . "\r\n";
                 }
-                $result = \substr($result, 0, $headerEnd) . "\r\n" . $cookieHeaders . \substr($result, $headerEnd);
+                $bodyPart = \substr($result, $headerEnd + 4);
+                $headerPart = \rtrim(\substr($result, 0, $headerEnd), "\r\n");
+                $cookieHeaders = \rtrim($cookieHeaders, "\r\n");
+                if ($cookieHeaders !== '') {
+                    $headerPart .= "\r\n" . $cookieHeaders;
+                }
+                $result = $headerPart . "\r\n\r\n" . $bodyPart;
             }
             $sni = \Weline\Server\Service\RouteHintService::extractSniFromRawRequest($rawRequest);
             $result = \Weline\Server\Service\RouteHintService::addHintToResponse($result, $sni);
+            $headerEnd = \strpos($result, "\r\n\r\n");
+            if ($headerEnd !== false) {
+                $headersPart = \substr($result, 0, $headerEnd);
+                $bodyPart = \substr($result, $headerEnd + 4);
+                if (\preg_match('/^Content-Length:\s*(\d+)/mi', $headersPart, $m)) {
+                    $contentLength = (int)($m[1] ?? 0);
+                    $bodyLen = \strlen($bodyPart);
+                    if ($bodyLen > $contentLength) {
+                        if (\str_starts_with($bodyPart, "\r\n") && ($bodyLen - 2) === $contentLength) {
+                            $bodyPart = \substr($bodyPart, 2);
+                        } elseif (\str_starts_with($bodyPart, "\n") && ($bodyLen - 1) === $contentLength) {
+                            $bodyPart = \substr($bodyPart, 1);
+                        }
+                        $result = $headersPart . "\r\n\r\n" . $bodyPart;
+                    }
+                }
+            }
             // HEAD 请求只返回头，不返回 body
             if (\strtoupper($method) === 'HEAD') {
                 $headerEnd = \strpos($result, "\r\n\r\n");

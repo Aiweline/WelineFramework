@@ -25,23 +25,60 @@ class AiSiteAgentMutateTaskPlanTaskOperationService
         string $instruction,
         int $round,
         string $targetScope,
-        AiSiteAgentMutateTaskPlanTaskOperationPorts $ports
+        AiSiteAgentMutateTaskPlanTaskOperationPorts $ports,
+        array $taskKeys = [],
+        array $taskConfigs = [],
+        array $targetScopes = []
     ): array {
         $normalizedBucket = \strtolower($bucket) === 'shared' ? 'shared' : 'page';
+        $taskKeys = \array_values(\array_unique(\array_filter(\array_map(static fn($value): string => \trim((string)$value), \array_merge(
+            $taskKey !== '' ? [$taskKey] : [],
+            $taskKeys
+        )), static fn(string $value): bool => \trim($value) !== '')));
+        if ($taskKey === '' && $taskKeys !== []) {
+            $taskKey = (string)$taskKeys[0];
+        }
         $resolvedTargetScope = \trim($targetScope);
         if ($resolvedTargetScope === '') {
-            $resolvedTargetScope = $taskKey !== ''
+            $resolvedTargetScope = \count($taskKeys) > 1
+                ? \implode(',', $taskKeys)
+                : ($taskKey !== ''
                 ? $taskKey
                 : ($normalizedBucket === 'shared'
                     ? 'shared_tasks'
-                    : ($pageType !== '' ? 'page_tasks.' . $pageType : 'task_plan'));
+                    : ($pageType !== '' ? 'page_tasks.' . $pageType : 'task_plan')));
         }
+        if ($targetScopes === [] && $taskKeys !== []) {
+            foreach ($taskKeys as $candidateTaskKey) {
+                $targetScopes[] = $normalizedBucket === 'shared'
+                    ? 'shared_tasks.' . $candidateTaskKey
+                    : 'page_tasks.' . $pageType . '.' . $candidateTaskKey;
+            }
+        }
+        if ($targetScopes === [] && $resolvedTargetScope !== '') {
+            $targetScopes = [$resolvedTargetScope];
+        }
+        $targets = \array_map(
+            static fn (string $candidateTaskKey): array => [
+                'bucket' => $normalizedBucket,
+                'page_type' => $pageType,
+                'task_key' => $candidateTaskKey,
+                'target_scope' => $normalizedBucket === 'shared'
+                    ? 'shared_tasks.' . $candidateTaskKey
+                    : 'page_tasks.' . $pageType . '.' . $candidateTaskKey,
+            ],
+            $taskKeys
+        );
         $mutation = [
             'action' => $action,
             'bucket' => $normalizedBucket,
             'page_type' => $pageType,
             'task_key' => $taskKey,
+            'task_keys' => $taskKeys,
             'task_config' => $taskConfig,
+            'task_configs' => $taskConfigs,
+            'target_scopes' => $targetScopes,
+            'targets' => $targets,
         ];
 
         $result = ($ports->startOperation)(
@@ -56,8 +93,16 @@ class AiSiteAgentMutateTaskPlanTaskOperationService
                     'prompt_mode' => 'mutate_task_plan_task',
                     'instruction' => $instruction,
                     'target_scope' => $resolvedTargetScope,
+                    'target_scopes' => $targetScopes,
                     'round' => $round,
                     'mutation' => $mutation,
+                    'mutations' => [$mutation],
+                    'task_key' => $taskKey,
+                    'task_keys' => $taskKeys,
+                    'task_config' => $taskConfig,
+                    'task_configs' => $taskConfigs,
+                    'selected_tasks' => $taskKeys,
+                    'targets' => $targets,
                 ],
             ],
             '',
@@ -69,11 +114,17 @@ class AiSiteAgentMutateTaskPlanTaskOperationService
                 'bucket' => $normalizedBucket,
                 'page_type' => $pageType,
                 'task_key' => $taskKey,
+                'task_keys' => $taskKeys,
                 'target_scope' => $resolvedTargetScope,
+                'target_scopes' => $targetScopes,
                 'instruction' => $instruction,
                 'round' => $round,
                 'mutation' => $mutation,
+                'mutations' => [$mutation],
                 'task_config' => $taskConfig,
+                'task_configs' => $taskConfigs,
+                'selected_tasks' => $taskKeys,
+                'targets' => $targets,
             ]
         );
 
@@ -83,6 +134,8 @@ class AiSiteAgentMutateTaskPlanTaskOperationService
                     'success' => true,
                     'message' => 'Detected an in-flight stage-2 task-plan operation and resumed its SSE progress.',
                     'operation' => 'task_plan',
+                    'execution_token' => (string)($result['execution_token'] ?? ''),
+                    'stream_url' => (string)($result['stream_url'] ?? ''),
                     'start_sse' => true,
                     'data' => ($ports->buildWorkspaceState)($session, $adminId, 80, true),
                 ];
@@ -109,9 +162,11 @@ class AiSiteAgentMutateTaskPlanTaskOperationService
             'success' => true,
             'message' => $queuedMessage,
             'operation' => (string)($result['operation'] ?? 'task_plan'),
+            'execution_token' => (string)($result['execution_token'] ?? ''),
+            'stream_url' => (string)($result['stream_url'] ?? ''),
             'start_sse' => true,
             'queue_id' => (int)($result['queue_id'] ?? 0),
-            'queue_dispatch' => \is_array($result['queue_dispatch'] ?? null) ? $result['queue_dispatch'] : null,
+            'queue_wait' => \is_array($result['queue_wait'] ?? null) ? $result['queue_wait'] : null,
             'data' => $responseState,
         ];
     }

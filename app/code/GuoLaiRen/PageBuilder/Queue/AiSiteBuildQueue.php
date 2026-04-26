@@ -175,8 +175,8 @@ class AiSiteBuildQueue implements QueueInterface
 
             // mergeScope 只更新库内 scope；内存中的 $session 可能仍带旧 build_tasks，会导致 ensureTaskScope 继续合并为 done 从而秒结束。
             $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-            $operationContext = $operation === 'block_regenerate'
-                ? $this->resolveQueuedOperationContext($content, $sessionService, $session, $scopeService)
+            $operationContexts = $operation === 'block_regenerate'
+                ? $this->resolveQueuedOperationContexts($content, $sessionService, $session, $scopeService)
                 : [];
 
             if ($allowStubAiInTest) {
@@ -184,13 +184,23 @@ class AiSiteBuildQueue implements QueueInterface
             }
             try {
                 if ($operation === 'block_regenerate') {
-                    $this->invokePrivate($controller, 'runRegenerateBlockOperation', [
+                    foreach ($operationContexts as $operationContext) {
+                        $this->invokePrivate($controller, 'runRegenerateBlockOperation', [
+                            $sse,
+                            $session,
+                            $adminId,
+                            (string)($operationContext['page_type'] ?? ''),
+                            (string)($operationContext['component_code'] ?? ''),
+                            (string)($operationContext['instruction'] ?? ''),
+                        ]);
+                        $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+                    }
+                } elseif ($operation === 'regenerate_page') {
+                    $this->invokePrivate($controller, 'runRegeneratePageOperation', [
                         $sse,
                         $session,
                         $adminId,
-                        (string)($operationContext['page_type'] ?? ''),
-                        (string)($operationContext['component_code'] ?? ''),
-                        (string)($operationContext['instruction'] ?? ''),
+                        $this->resolveQueuedPageType($content, $sessionService, $session, $scopeService),
                     ]);
                 } else {
                     $this->invokePrivate($controller, 'runBuildOperation', [$sse, $session, $adminId]);
@@ -240,7 +250,124 @@ class AiSiteBuildQueue implements QueueInterface
     {
         $operation = \trim($operation);
 
-        return \in_array($operation, ['build', 'block_regenerate'], true) ? $operation : 'build';
+        return \in_array($operation, ['build', 'block_regenerate', 'regenerate_page'], true) ? $operation : 'build';
+    }
+
+    private function resolveQueuedPageType(
+        array $content,
+        AiSiteAgentSessionService $sessionService,
+        AiSiteAgentSession $session,
+        AiSiteScopeCompatibilityService $scopeService
+    ): string {
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
+        $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
+        $activeDetails = \is_array($active['details'] ?? null) ? $active['details'] : [];
+        $pageType = $this->firstNonEmptyString([
+            $content['page_type'] ?? null,
+            $details['page_type'] ?? null,
+            $content['page_key'] ?? null,
+            $details['page_key'] ?? null,
+            $active['page_type'] ?? null,
+            $activeDetails['page_type'] ?? null,
+            $active['page_key'] ?? null,
+            $activeDetails['page_key'] ?? null,
+        ]);
+        if ($pageType === '') {
+            throw new \RuntimeException('Page regenerate queue context is missing page_type.');
+        }
+
+        return $pageType;
+    }
+
+    /**
+     * @return list<array{page_type: string, component_code: string, instruction: string}>
+     */
+    private function resolveQueuedOperationContexts(
+        array $content,
+        AiSiteAgentSessionService $sessionService,
+        AiSiteAgentSession $session,
+        AiSiteScopeCompatibilityService $scopeService
+    ): array {
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
+        $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
+        $activeDetails = \is_array($active['details'] ?? null) ? $active['details'] : [];
+
+        $pageType = $this->firstNonEmptyString([$content['page_type'] ?? null, $details['page_type'] ?? null, $active['page_type'] ?? null, $activeDetails['page_type'] ?? null]);
+        $pageTypes = $this->mergeStringLists([
+            $content['page_types'] ?? null,
+            $details['page_types'] ?? null,
+            $active['page_types'] ?? null,
+            $activeDetails['page_types'] ?? null,
+            $content['page_keys'] ?? null,
+            $details['page_keys'] ?? null,
+        ]);
+        if ($pageTypes === [] && $pageType !== '') {
+            $pageTypes = [$pageType];
+        }
+
+        $singleComponentCode = $this->firstNonEmptyString([
+            $content['component_code'] ?? null,
+            $details['component_code'] ?? null,
+            $active['component_code'] ?? null,
+            $activeDetails['component_code'] ?? null,
+            $content['block_key'] ?? null,
+            $details['block_key'] ?? null,
+            $active['block_key'] ?? null,
+            $activeDetails['block_key'] ?? null,
+            $content['section_code'] ?? null,
+            $details['section_code'] ?? null,
+            $active['section_code'] ?? null,
+            $activeDetails['section_code'] ?? null,
+            $content['task_key'] ?? null,
+            $details['task_key'] ?? null,
+            $active['task_key'] ?? null,
+            $activeDetails['task_key'] ?? null,
+        ]);
+        $componentCodes = $this->mergeStringLists([
+            $singleComponentCode,
+            $content['component_codes'] ?? null,
+            $details['component_codes'] ?? null,
+            $active['component_codes'] ?? null,
+            $activeDetails['component_codes'] ?? null,
+            $content['block_keys'] ?? null,
+            $details['block_keys'] ?? null,
+            $active['block_keys'] ?? null,
+            $activeDetails['block_keys'] ?? null,
+            $content['section_codes'] ?? null,
+            $details['section_codes'] ?? null,
+            $content['task_keys'] ?? null,
+            $details['task_keys'] ?? null,
+        ]);
+        $instruction = $this->firstNonEmptyString([$content['instruction'] ?? null, $details['instruction'] ?? null, $active['instruction'] ?? null, $activeDetails['instruction'] ?? null]);
+
+        if ($pageTypes === [] || $componentCodes === []) {
+            throw new \RuntimeException('Block queue context is missing page_type or component_code.');
+        }
+
+        $contexts = [];
+        foreach ($componentCodes as $index => $componentCode) {
+            $contextPageType = (string)($pageTypes[$index] ?? $pageTypes[0] ?? '');
+            if ($contextPageType === '' || $componentCode === '') {
+                continue;
+            }
+            $contexts[] = [
+                'page_type' => $contextPageType,
+                'component_code' => $componentCode,
+                'instruction' => $instruction,
+            ];
+        }
+
+        if ($contexts === []) {
+            throw new \RuntimeException('Block queue context is missing page_type or component_code.');
+        }
+
+        return $contexts;
     }
 
     /**
@@ -307,6 +434,43 @@ class AiSiteBuildQueue implements QueueInterface
         }
 
         return '';
+    }
+
+    /**
+     * @param list<mixed> $values
+     * @return list<string>
+     */
+    private function mergeStringLists(array $values): array
+    {
+        $merged = [];
+        foreach ($values as $value) {
+            foreach ($this->stringListFromMixed($value) as $item) {
+                if ($item !== '' && !\in_array($item, $merged, true)) {
+                    $merged[] = $item;
+                }
+            }
+        }
+
+        return $merged;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function stringListFromMixed(mixed $value): array
+    {
+        if (\is_array($value)) {
+            return \array_values(\array_filter(\array_map(
+                static fn($item): string => \is_scalar($item) ? \trim((string)$item) : '',
+                $value
+            ), static fn(string $item): bool => $item !== ''));
+        }
+        if (\is_scalar($value) || (\is_object($value) && \method_exists($value, '__toString'))) {
+            $item = \trim((string)$value);
+            return $item !== '' ? [$item] : [];
+        }
+
+        return [];
     }
 
     private function applyForceBuildQueuePreset(
