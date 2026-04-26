@@ -1386,6 +1386,106 @@ if ($dataLayout !== 'horizontal'):
             left: 190px !important;
             z-index: 10000 !important;
         }
+
+        /* ===== Theme Variable Compatibility Overrides ===== */
+        .sticky-menu-section {
+            background: var(--backend-color-card-bg, #ffffff) !important;
+            border: 1px solid var(--backend-color-border-default, #d8dee8) !important;
+            box-shadow: var(--backend-shadow-md, 0 8px 20px rgba(15, 23, 42, 0.1)) !important;
+        }
+
+        .menu-tabs-nav {
+            border-bottom: 1px solid var(--backend-color-border-light, #e7ecf3) !important;
+            background: color-mix(in srgb, var(--backend-color-card-bg, #ffffff) 92%, var(--backend-color-bg-secondary, #f4f7fb) 8%) !important;
+        }
+
+        .menu-tab-btn {
+            color: var(--backend-color-text-secondary, #6b7280) !important;
+            background: var(--backend-color-bg-secondary, #f4f7fb) !important;
+            border-color: var(--backend-color-border-default, #d8dee8) !important;
+        }
+
+        .menu-tab-btn:hover,
+        .menu-tab-btn.active {
+            color: var(--backend-color-primary, #0bb197) !important;
+            background: var(--backend-color-primary-bg-subtle, rgba(11, 177, 151, 0.12)) !important;
+            border-color: color-mix(in srgb, var(--backend-color-primary, #0bb197) 30%, var(--backend-color-border-default, #d8dee8) 70%) !important;
+        }
+
+        .search-tab-input-wrapper {
+            background: var(--backend-color-card-bg, #ffffff) !important;
+            border-color: var(--backend-color-input-border, #d8dee8) !important;
+        }
+
+        .search-tab-input,
+        .search-menu-input-wrapper .form-control {
+            color: var(--backend-color-text-primary, #111827) !important;
+        }
+
+        .search-results-container,
+        .search-results-header,
+        .search-result-item {
+            border-color: var(--backend-color-border-light, #e7ecf3) !important;
+        }
+
+        .search-results-header {
+            background: var(--backend-color-bg-secondary, #f4f7fb) !important;
+        }
+
+        .search-results-header h6,
+        .search-no-results {
+            color: var(--backend-color-text-secondary, #6b7280) !important;
+        }
+
+        .search-result-item a {
+            color: var(--backend-color-text-secondary, #6b7280) !important;
+        }
+
+        .search-result-item a:hover {
+            color: var(--backend-color-primary, #0bb197) !important;
+            background: var(--backend-color-sidebar-hover, #eef3fb) !important;
+        }
+
+        .frequent-menus-section,
+        .frequent-menu-group,
+        .frequent-menu-group-header {
+            border-color: var(--backend-color-border-light, #e7ecf3) !important;
+        }
+
+        .frequent-menu-group-header {
+            background: var(--backend-color-bg-secondary, #f4f7fb) !important;
+        }
+
+        .frequent-menu-group-header h6 {
+            color: var(--backend-color-text-tertiary, #94a3b8) !important;
+        }
+
+        .frequent-menu-item a {
+            color: var(--backend-color-sidebar-text, #64748b) !important;
+        }
+
+        .frequent-menu-item a:hover {
+            color: var(--backend-color-primary, #0bb197) !important;
+            background: var(--backend-color-sidebar-hover, #eef3fb) !important;
+            border-left-color: var(--backend-color-primary, #0bb197) !important;
+        }
+
+        .frequent-menu-item a i {
+            color: var(--backend-color-text-tertiary, #94a3b8) !important;
+        }
+
+        .frequent-menu-count {
+            color: var(--backend-color-text-secondary, #64748b) !important;
+            background: color-mix(in srgb, var(--backend-color-bg-secondary, #f4f7fb) 86%, var(--backend-color-border-default, #d8dee8) 14%) !important;
+        }
+
+        body.vertical-collpsed .menu-search-submenu,
+        body.vertical-collpsed .menu-frequent-submenu,
+        body.vertical-collpsed .menu-tabs-content.expanded-right {
+            background: var(--backend-color-card-bg, #ffffff) !important;
+            border: 1px solid var(--backend-color-border-default, #d8dee8) !important;
+            box-shadow: var(--backend-dropdown-shadow, 0 12px 24px rgba(15, 23, 42, 0.15)) !important;
+        }
     </style>
 
     <script>
