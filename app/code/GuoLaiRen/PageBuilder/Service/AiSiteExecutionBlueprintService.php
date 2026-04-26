@@ -166,7 +166,7 @@ final class AiSiteExecutionBlueprintService
             $pageTypes,
             $planLocale
         );
-        $pagePlans = $this->buildStageOnePagePlans($pages, $sharedPromptContext);
+        $pagePlans = [];
         $stageOneQueue = $this->buildStageOneHeaderFooterQueueEnvelope(
             $planningScope,
             $websiteProfile,
@@ -287,13 +287,19 @@ final class AiSiteExecutionBlueprintService
      *   ai_generated?:int
      * }
      */
-    public function buildPlanArtifactsByAiStream(array $scope, array $websiteProfile, array $payload = [], ?callable $onChunk = null): array
+    public function buildPlanArtifactsByAiStream(
+        array $scope,
+        array $websiteProfile,
+        array $payload = [],
+        ?callable $onChunk = null,
+        ?callable $onProgress = null
+    ): array
     {
         if ((int)($scope['fake_mode'] ?? 0) === 1) {
             throw new \RuntimeException((string)__('AI 建站阶段一不允许使用 deterministic/fake 回退方案'));
         }
 
-        return $this->buildPlanArtifactsByStagedAiStream($scope, $websiteProfile, $payload, $onChunk);
+        return $this->buildPlanArtifactsByStagedAiStream($scope, $websiteProfile, $payload, $onChunk, $onProgress);
     }
 
     /**
@@ -301,9 +307,16 @@ final class AiSiteExecutionBlueprintService
      * @param array<string, mixed> $websiteProfile
      * @param array<string, mixed> $payload
      * @param callable(string):void|null $onChunk
+     * @param callable(array<string, mixed>):void|null $onProgress
      * @return array<string, mixed>
      */
-    private function buildPlanArtifactsByStagedAiStream(array $scope, array $websiteProfile, array $payload = [], ?callable $onChunk = null): array
+    private function buildPlanArtifactsByStagedAiStream(
+        array $scope,
+        array $websiteProfile,
+        array $payload = [],
+        ?callable $onChunk = null,
+        ?callable $onProgress = null
+    ): array
     {
         $pageTypes = $this->expandPageTypes($scope);
         $instruction = \trim((string)($payload['instruction'] ?? ''));
@@ -323,6 +336,14 @@ final class AiSiteExecutionBlueprintService
         $planJson = [];
 
         try {
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                '正在扩展用户需求，生成阶段一总设计输入',
+                12,
+                'requirement_expand',
+                'start',
+                ['page_total' => \count($pageTypes)]
+            );
             $requirementDecoded = $this->generateStageOneJsonByAi(
                 $this->buildAiStageOneRequirementExpansionPrompt($scope, $websiteProfile, $pageTypes, $planLocale, $instruction, $siteDisplayName, $siteSummary),
                 'pagebuilder_plan_generation',
@@ -332,6 +353,14 @@ final class AiSiteExecutionBlueprintService
             );
             $planJson = $this->mergeStageOneRequirementExpansionAiPlanJson($planJson, $requirementDecoded, $oneLineRequirement, $pageTypes);
             $this->assertStageOneRequirementExpansionIsGenerated($planJson);
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                '需求扩写已完成，正在生成总主题设计',
+                28,
+                'theme_design',
+                'start',
+                ['page_total' => \count($pageTypes)]
+            );
 
             $themeDecoded = $this->generateStageOneJsonByAi(
                 $this->buildAiStageOneThemePrompt(
@@ -353,6 +382,22 @@ final class AiSiteExecutionBlueprintService
             $planJson = $this->mergeStageOneThemeAiPlanJson($planJson, $themeDecoded, $planLocale, $pageTypes, $scope);
             $planJson['content_locale'] = $contentLocale;
             $this->assertStageOneThemePlanIsGenerated($planJson);
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                '总主题设计已完成，正在整理共享 Header/Footer 规划',
+                44,
+                'header_footer',
+                'start',
+                ['page_total' => \count($pageTypes)]
+            );
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                '共享 Header/Footer 规划已就绪，正在并发生成各页面总设计',
+                60,
+                'page_fanout',
+                'start',
+                ['page_total' => \count($pageTypes)]
+            );
             $pagePlans = $this->generateStageOnePagePlansByAi(
                 $scope,
                 $websiteProfile,
@@ -362,15 +407,32 @@ final class AiSiteExecutionBlueprintService
                 $contentLocale,
                 $instruction,
                 $targetScope,
-                $onChunk
+                $onChunk,
+                $onProgress
             );
             if ($pagePlans !== []) {
                 $planJson['pages'] = \array_replace(\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [], $pagePlans);
             }
 
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                '各页面总设计已完成，正在装配阶段一总设计',
+                88,
+                'plan_assemble',
+                'start',
+                ['page_total' => \count($pageTypes)]
+            );
             $artifacts = $this->mapAiPlanToArtifacts($scope, $websiteProfile, ['plan_json' => $planJson], $pageTypes, $planLocale, $instruction, $targetScope);
             $artifacts['ai_generated'] = 1;
             $artifacts['generation_source'] = 'ai_staged';
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                '阶段一总设计装配完成，正在写入方案草案',
+                92,
+                'plan_assemble',
+                'done',
+                ['page_total' => \count($pageTypes)]
+            );
             return $artifacts;
         } catch (\Throwable $throwable) {
             throw new \RuntimeException(
@@ -379,6 +441,40 @@ final class AiSiteExecutionBlueprintService
                 $throwable
             );
         }
+    }
+
+    /**
+     * @param callable(array<string, mixed>):void|null $onProgress
+     * @param array<string, mixed> $context
+     */
+    private function emitStageOnePipelineProgress(
+        ?callable $onProgress,
+        string $message,
+        int $progressPercent,
+        string $step,
+        string $phase,
+        array $context = []
+    ): void {
+        if ($onProgress === null || $message === '') {
+            return;
+        }
+
+        $payload = \array_replace([
+            'message' => $message,
+            'progress_percent' => \max(0, \min(99, $progressPercent)),
+            'progress_kind' => 'stage1_pipeline',
+            'stage1_step' => $step,
+            'stage1_phase' => $phase,
+        ], $context);
+
+        $onProgress($payload);
+    }
+
+    private function buildStageOnePagePipelineMessage(bool $completed, int $current, int $totalPages, string $pageKey): string
+    {
+        $prefix = $completed ? '页面总设计已生成' : '正在生成页面总设计';
+
+        return $prefix . '（' . $current . '/' . $totalPages . '）：' . $pageKey;
     }
 
     /**
@@ -726,6 +822,7 @@ final class AiSiteExecutionBlueprintService
      * @param array<string, mixed> $planJson
      * @param list<string> $pageTypes
      * @param callable(string):void|null $onChunk
+     * @param callable(array<string, mixed>):void|null $onProgress
      * @return array<string, mixed>
      */
     private function generateStageOnePagePlansByAi(
@@ -737,17 +834,39 @@ final class AiSiteExecutionBlueprintService
         string $contentLocale,
         string $instruction,
         string $targetScope,
-        ?callable $onChunk = null
+        ?callable $onChunk = null,
+        ?callable $onProgress = null
     ): array {
         $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
         if (\count($pageTypes) <= 1 || !\class_exists(\Fiber::class)) {
-            return $this->generateStageOnePagePlansByAiSequential($scope, $websiteProfile, $planJson, $pageTypes, $planLocale, $contentLocale, $instruction, $targetScope, $onChunk);
+            return $this->generateStageOnePagePlansByAiSequential(
+                $scope,
+                $websiteProfile,
+                $planJson,
+                $pageTypes,
+                $planLocale,
+                $contentLocale,
+                $instruction,
+                $targetScope,
+                $onChunk,
+                $onProgress
+            );
         }
 
         /** @var array<string, \Fiber> $fibers */
         $fibers = [];
-        foreach ($pageTypes as $pageType) {
+        $totalPages = \count($pageTypes);
+        foreach ($pageTypes as $pageIndex => $pageType) {
             $pageKey = (string)$pageType;
+            $pageOrder = (int)$pageIndex + 1;
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                $this->buildStageOnePagePipelineMessage(false, $pageOrder, $totalPages, $pageKey),
+                60,
+                'page_plan',
+                'start',
+                ['page_type' => $pageKey]
+            );
             $fibers[$pageKey] = new \Fiber(function () use ($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope, $onChunk): array {
                 $decoded = $this->generateStageOneJsonByAi(
                     $this->buildAiStageOnePagePrompt($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope),
@@ -767,6 +886,7 @@ final class AiSiteExecutionBlueprintService
 
         $results = [];
         $errors = [];
+        $completedPages = 0;
         foreach ($fibers as $pageKey => $fiber) {
             try {
                 $fiber->start();
@@ -784,6 +904,16 @@ final class AiSiteExecutionBlueprintService
                 try {
                     if ($fiber->isTerminated()) {
                         $results[$pageKey] = $fiber->getReturn();
+                        $completedPages++;
+                        $pageProgress = 60 + (int)\floor(($completedPages / \max(1, $totalPages)) * 22);
+                        $this->emitStageOnePipelineProgress(
+                            $onProgress,
+                            $this->buildStageOnePagePipelineMessage(true, $completedPages, $totalPages, (string)$pageKey),
+                            $pageProgress,
+                            'page_plan',
+                            'done',
+                            ['page_type' => (string)$pageKey]
+                        );
                         $madeProgress = true;
                     } elseif ($fiber->isSuspended()) {
                         $fiber->resume();
@@ -822,6 +952,7 @@ final class AiSiteExecutionBlueprintService
     /**
      * @param list<string> $pageTypes
      * @param callable(string):void|null $onChunk
+     * @param callable(array<string, mixed>):void|null $onProgress
      * @return array<string, mixed>
      */
     private function generateStageOnePagePlansByAiSequential(
@@ -833,12 +964,24 @@ final class AiSiteExecutionBlueprintService
         string $contentLocale,
         string $instruction,
         string $targetScope,
-        ?callable $onChunk = null
+        ?callable $onChunk = null,
+        ?callable $onProgress = null
     ): array {
         $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
         $results = [];
-        foreach ($pageTypes as $pageType) {
+        $totalPages = \count($pageTypes);
+        $completedPages = 0;
+        foreach ($pageTypes as $pageIndex => $pageType) {
             $pageKey = (string)$pageType;
+            $pageOrder = (int)$pageIndex + 1;
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                $this->buildStageOnePagePipelineMessage(false, $pageOrder, $totalPages, $pageKey),
+                60,
+                'page_plan',
+                'start',
+                ['page_type' => $pageKey]
+            );
             $decoded = $this->generateStageOneJsonByAi(
                 $this->buildAiStageOnePagePrompt($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope),
                 'pagebuilder_plan_generation',
@@ -855,6 +998,16 @@ final class AiSiteExecutionBlueprintService
             if ($pagePlan !== []) {
                 $results[$pageKey] = $pagePlan;
             }
+            $completedPages++;
+            $pageProgress = 60 + (int)\floor(($completedPages / \max(1, $totalPages)) * 22);
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                $this->buildStageOnePagePipelineMessage(true, $completedPages, $totalPages, $pageKey),
+                $pageProgress,
+                'page_plan',
+                'done',
+                ['page_type' => $pageKey]
+            );
         }
 
         return $results;
@@ -1083,9 +1236,15 @@ final class AiSiteExecutionBlueprintService
      *   change_scope_report:array<string, mixed>
      * }
      */
-    public function refineDraftPlan(array $scope, array $websiteProfile, array $payload, ?callable $onChunk = null): array
+    public function refineDraftPlan(
+        array $scope,
+        array $websiteProfile,
+        array $payload,
+        ?callable $onChunk = null,
+        ?callable $onProgress = null
+    ): array
     {
-        $artifacts = $this->buildPlanArtifactsByAiStream($scope, $websiteProfile, $payload, $onChunk);
+        $artifacts = $this->buildPlanArtifactsByAiStream($scope, $websiteProfile, $payload, $onChunk, $onProgress);
         $instruction = \trim((string)($payload['instruction'] ?? ''));
         $targetScope = \trim((string)($payload['target_scope'] ?? ''));
         $round = \max(1, (int)($payload['round'] ?? 1));
@@ -1127,7 +1286,14 @@ final class AiSiteExecutionBlueprintService
      *   page_refine_summary:array<string, mixed>
      * }
      */
-    public function refineDraftPlanPage(array $scope, array $websiteProfile, string $pageType, array $payload, ?callable $onChunk = null): array
+    public function refineDraftPlanPage(
+        array $scope,
+        array $websiteProfile,
+        string $pageType,
+        array $payload,
+        ?callable $onChunk = null,
+        ?callable $onProgress = null
+    ): array
     {
         $pageType = \trim($pageType);
         if ($pageType === '') {
@@ -1161,7 +1327,7 @@ final class AiSiteExecutionBlueprintService
             'round' => $round,
         ]);
 
-        $candidateArtifacts = $this->buildPlanArtifactsByAiStream($scope, $websiteProfile, $aiPayload, $onChunk);
+        $candidateArtifacts = $this->buildPlanArtifactsByAiStream($scope, $websiteProfile, $aiPayload, $onChunk, $onProgress);
         $candidateStructured = \is_array($candidateArtifacts['structured'] ?? null) ? $candidateArtifacts['structured'] : [];
         $candidatePlanJson = \is_array($candidateArtifacts['plan_json'] ?? null) ? $candidateArtifacts['plan_json'] : [];
         $candidatePages = \is_array($candidateStructured['pages'] ?? null)
@@ -1776,9 +1942,15 @@ final class AiSiteExecutionBlueprintService
      *   rebuild_summary:array<string, mixed>
      * }
      */
-    public function rebuildDraftPlan(array $scope, array $websiteProfile, array $payload, ?callable $onChunk = null): array
+    public function rebuildDraftPlan(
+        array $scope,
+        array $websiteProfile,
+        array $payload,
+        ?callable $onChunk = null,
+        ?callable $onProgress = null
+    ): array
     {
-        $artifacts = $this->buildPlanArtifactsByAiStream($scope, $websiteProfile, $payload, $onChunk);
+        $artifacts = $this->buildPlanArtifactsByAiStream($scope, $websiteProfile, $payload, $onChunk, $onProgress);
         $instruction = \trim((string)($payload['instruction'] ?? ''));
         $round = \max(1, (int)($payload['round'] ?? 1));
         $summary = [
@@ -2278,6 +2450,8 @@ final class AiSiteExecutionBlueprintService
         $planJson['theme_design'] = $themeDesign;
         $planJson['requirement_expansion'] = $requirementExpansion;
         $planJson['shared_components'] = $sharedComponents;
+        $this->assertStageOneRequirementExpansionIsGenerated($planJson);
+        $this->assertStageOneThemePlanIsGenerated($planJson);
         $executionBlueprint['theme_context_snapshot'] = $themeContextSnapshot;
         $executionBlueprint['shared_prompt_context'] = $sharedPromptContext;
         $executionBlueprint['shared_components'] = $sharedComponents;
