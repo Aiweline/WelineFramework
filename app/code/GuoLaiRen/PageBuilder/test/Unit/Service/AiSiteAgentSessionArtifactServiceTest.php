@@ -84,6 +84,34 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
         self::assertSame([], $prepared['artifacts']);
     }
 
+    public function testUnchangedHydratedPayloadIsClearedWithoutRewritingArtifact(): void
+    {
+        $service = new AiSiteAgentSessionArtifactService(new AiSiteAgentSessionArtifact());
+        $payload = ['tasks' => [['task_key' => 'page:home_page:hero', 'heavy' => \str_repeat('x', 1024)]]];
+        $hash = \sha1(\json_encode(['value' => $payload], \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR));
+
+        $prepared = $service->prepareScopeForStorage(123, [
+            '_artifact_refs' => [
+                AiSiteAgentSession::STAGE_VISUAL_EDIT => [
+                    'build_blueprint' => [
+                        'storage' => 'session_artifact_v1',
+                        'stage_code' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                        'artifact_key' => 'build_blueprint',
+                        'hash' => $hash,
+                        'bytes' => 1234,
+                        'updated_at' => '2026-04-25 12:00:00',
+                    ],
+                ],
+            ],
+            'build_blueprint' => $payload,
+        ]);
+
+        self::assertSame([], $prepared['scope']['build_blueprint']);
+        self::assertSame([], $prepared['artifacts']);
+        self::assertSame($hash, $prepared['scope']['_artifact_refs'][AiSiteAgentSession::STAGE_VISUAL_EDIT]['build_blueprint']['hash'] ?? null);
+        self::assertSame('2026-04-25 12:00:00', $prepared['scope']['_artifact_refs'][AiSiteAgentSession::STAGE_VISUAL_EDIT]['build_blueprint']['updated_at'] ?? null);
+    }
+
     public function testTouchedEmptyPayloadRemovesStaleArtifactReference(): void
     {
         $service = new AiSiteAgentSessionArtifactService(new AiSiteAgentSessionArtifact());
