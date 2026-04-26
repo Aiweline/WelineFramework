@@ -1544,6 +1544,23 @@ SCRIPT;
         $requestedInstruction = \trim((string)$this->getRequestBodyValue('instruction', ''));
         $requestedTargetScope = \trim((string)$this->getRequestBodyValue('target_scope', ''));
         $requestedRound = \max(1, (int)$this->getRequestBodyValue('round', 1));
+        if ($this->shouldReusePersistedTaskPlanWithoutQueue($scope, $effectivePromptMode, $requestedInstruction, $requestedTargetScope)) {
+            $responseState = $this->buildWorkspaceOperationPayload(
+                $this->buildWorkspaceState($session, $adminId, 24, true),
+                'task_plan'
+            );
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => 'Stage-two task plan already exists; reused persisted content without starting a new queue.',
+                'operation' => 'task_plan',
+                'start_sse' => false,
+                'task_plan_action' => 'reuse',
+                'task_plan' => \is_array($responseState['task_plan'] ?? null) ? $responseState['task_plan'] : [],
+                'data' => $responseState,
+            ]);
+        }
+
         $regenerationResetPatch = $effectivePromptMode === 'rebuild_task_plan'
             ? $this->buildTaskPlanRegenerationResetScopePatch()
             : [];
@@ -1819,7 +1836,7 @@ SCRIPT;
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $this->sessionService->loadScopeForStage($fresh, $stageCode)
         );
         $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
         $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
@@ -2650,6 +2667,29 @@ SCRIPT;
     {
         return (int)($scope['task_plan_confirmed'] ?? 0) === 1
             || $this->buildTaskService->hasConfirmedTaskPlanForBuild($scope);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function shouldReusePersistedTaskPlanWithoutQueue(
+        array $scope,
+        string $promptMode,
+        string $instruction = '',
+        string $targetScope = ''
+    ): bool {
+        $promptMode = \trim($promptMode);
+        if ($promptMode === '') {
+            $promptMode = 'detect_bootstrap_task_plan';
+        }
+        if ($promptMode !== 'detect_bootstrap_task_plan') {
+            return false;
+        }
+        if (\trim($instruction) !== '' || \trim($targetScope) !== '') {
+            return false;
+        }
+
+        return $this->scopeHasPersistedStageTwoTaskPlan($scope);
     }
 
     /**
@@ -6025,8 +6065,8 @@ SCRIPT;
             }
 
             $queueStatusForObserver = \trim((string)($queueRow['status'] ?? ''));
-            $queueIsRunning = $queueStatusForObserver === 'running';
-            if (!$queueIsRunning) {
+            $queueWaitingForScheduler = \in_array($queueStatusForObserver, ['pending', 'queued'], true);
+            if ($queueWaitingForScheduler) {
                 $schedulerHintMessage = (string)__('操作已进入系统队列，正在等待系统定时任务调度；大部分情况约 1 分钟后开始执行。当前进度窗口可以关闭，可以继续操作其他内容。');
                 $sse->sendEvent('info', [
                     'message' => $schedulerHintMessage,
@@ -6501,6 +6541,7 @@ SCRIPT;
             $sse,
             $session,
             $adminId,
+            $stageCode,
             $operation,
             $executionToken,
             $queueId,
@@ -6611,6 +6652,7 @@ SCRIPT;
         SseWriter $sse,
         AiSiteAgentSession $session,
         int $adminId,
+        string $stageCode,
         string $operation,
         string $executionToken,
         int $queueId,
@@ -6640,7 +6682,7 @@ SCRIPT;
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $fresh;
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
+            $this->sessionService->loadScopeForStage($fresh, $stageCode)
         );
         $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
         $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, (int)($activeOperation['queue_id'] ?? $queueId));
@@ -6686,8 +6728,8 @@ SCRIPT;
     }
 
     /**
-     * 观察流终态判定：仅当队列状态为终态且已写入 finished/end_at 时，才视为真正完成。
-     * 避免 status=error 的瞬时中间态导致 SSE 过早 done。
+     * 观察流终态判定直接以队列真实状态为准。
+     * error/stop/cancelled 一旦落库，SSE 应立即收敛，不再继续心跳等待 finished/end_at。
      *
      * @param array<string, mixed>|null $queueRow
      */
@@ -6697,12 +6739,7 @@ SCRIPT;
             return false;
         }
         $status = \trim((string)($queueRow['status'] ?? ''));
-        if (!\in_array($status, ['done', 'error', 'stop', 'cancelled'], true)) {
-            return false;
-        }
-        $finished = (int)($queueRow['finished'] ?? 0);
-        $endAt = \trim((string)($queueRow['end_at'] ?? ''));
-        return $finished === 1 || $endAt !== '';
+        return \in_array($status, ['done', 'error', 'stop', 'cancelled'], true);
     }
 
     /**
@@ -6717,7 +6754,7 @@ SCRIPT;
             return false;
         }
         $status = \trim((string)($queueRow['status'] ?? ''));
-        return \in_array($status, ['pending', 'queued', 'running', 'error'], true);
+        return \in_array($status, ['pending', 'queued', 'running'], true);
     }
 
     /**
@@ -10626,8 +10663,11 @@ SCRIPT;
             \is_array($scope['website_profile']) ? $scope['website_profile'] : [],
             AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS
         );
-        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $queueForcedAiRebuild = (int)($scope['_queue_force_build']['active'] ?? 0) === 1;
+        if (!$queueForcedAiRebuild) {
+            $scope = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
+        }
+        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $pageTypeLabels = Page::getPageTypes();
         $dispatchWindow = 3;
         $initialPendingTasks = $this->buildTaskService->listPendingTasks($scope);
@@ -11726,9 +11766,12 @@ SCRIPT;
             \is_array($scope['website_profile']) ? $scope['website_profile'] : [],
             AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
         );
+        $queueForcedAiRebuild = (int)($scope['_queue_force_build']['active'] ?? 0) === 1;
+        if (!$queueForcedAiRebuild) {
+            $scope = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
+        }
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         // queue:run -f：_queue_force_build.active=1 时强制走 AI，并绕过共享 Header/Footer 的进程内静态缓存。
-        $queueForcedAiRebuild = (int)($scope['_queue_force_build']['active'] ?? 0) === 1;
         $pageTypeLabels = Page::getPageTypes();
         $dispatchWindow = 3;
         $initialPendingTasks = $this->buildTaskService->listPendingTasks($scope);
@@ -13245,7 +13288,7 @@ SCRIPT;
 
     private function shouldKeepQueuedObserverStreamOpen(string $operation): bool
     {
-        return \in_array($operation, ['plan', 'block_regenerate'], true);
+        return \in_array($operation, ['block_regenerate'], true);
     }
 
     /**

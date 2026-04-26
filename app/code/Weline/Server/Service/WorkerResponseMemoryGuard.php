@@ -59,6 +59,21 @@ final class WorkerResponseMemoryGuard
         return $headers . $body;
     }
 
+    public static function responseRequestsConnectionClose(string $httpResponse): bool
+    {
+        $headerEnd = \strpos($httpResponse, "\r\n\r\n");
+        if ($headerEnd === false) {
+            return false;
+        }
+
+        $headers = \substr($httpResponse, 0, $headerEnd);
+        if (\preg_match('/(?:^|\r\n)Connection:\s*close(?:\r\n|$)/i', $headers) === 1) {
+            return true;
+        }
+
+        return false;
+    }
+
     public static function shouldCompactAfterDrain(int $releasedBytes): bool
     {
         return $releasedBytes >= self::LARGE_RESPONSE_BYTES;

@@ -8,6 +8,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Service\PreviewRequestInspector;
@@ -16,6 +17,7 @@ use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\ThemeCacheGenerator;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemePageTypeResolver;
+use Weline\Theme\Service\ThemeSlotContractService;
 
 /**
  * 甯冨眬鎻掓Ы娓叉煋鍣?Observer
@@ -48,6 +50,7 @@ class LayoutSlotRenderer implements ObserverInterface
     private PreviewTokenService $previewTokenService;
     private PreviewRequestInspector $previewRequestInspector;
     private ThemePageTypeResolver $pageTypeResolver;
+    private ?ThemeSlotContractService $slotContractService = null;
     private bool $isEnabled = true;
 
     public function __construct(
@@ -123,11 +126,7 @@ class LayoutSlotRenderer implements ObserverInterface
         // 妫€鏌ユ槸鍚﹀寘鍚彃妲芥爣璁帮紙鏀寔鏂版棫涓ょ鏂瑰紡锛?
         // 娉ㄦ剰锛氫笉鍐嶅己鍒舵鏌?isLayoutTemplate锛屽洜涓?fetch_file_after 浜嬩欢
         // 鑾峰彇鐨勬槸瀹屾暣娓叉煋鍚庣殑 HTML锛屽寘鍚墍鏈夊瓙妯℃澘锛堝 partials锛夌殑鍐呭
-        if (strpos($html, 'data-wslot') === false && strpos($html, 'widget-slot-area') === false) {
-            // 娌℃湁鎻掓Ы鏍囪锛屼絾鍙兘宸茬粡娉ㄥ叆浜嗛瑙堥€€鍑烘寜閽紝鎵€浠ユ洿鏂颁簨浠舵暟鎹?
-            $event->setData('content', $html);
-            return;
-        }
+        $hasSlotMarkers = strpos($html, 'data-wslot') !== false || strpos($html, 'widget-slot-area') !== false;
 
         // Resolve preview/active theme through the shared theme context.
         $themeId = $this->resolveThemeId($area);
@@ -146,6 +145,22 @@ class LayoutSlotRenderer implements ObserverInterface
         
         // 鍒ゆ柇鏄惁涓虹紪杈?棰勮妯″紡锛堢敤浜庢樉绀鸿鍛婄瓑锛?
         $isEditorOrPreview = $this->isEditorOrPreviewMode();
+        $shouldReportSlotContractWarnings = $this->isLayoutTemplate($template) || stripos($html, '</body>') !== false;
+
+        $slotContractWarnings = $this->collectMissingSlotWarnings($area);
+        if (!empty($slotContractWarnings)) {
+            if ($isEditorOrPreview && $shouldReportSlotContractWarnings) {
+                $html = $this->getThemeSlotContractService()->injectMissingSlotWarningHtml($html, $slotContractWarnings);
+            }
+            if ($shouldReportSlotContractWarnings) {
+                $this->getThemeSlotContractService()->notifyMissingDefaultSlots($slotContractWarnings, $area);
+            }
+        }
+
+        if (!$hasSlotMarkers) {
+            $event->setData('content', $html);
+            return;
+        }
 
         // 鐢熶骇鐜妫€鏌ワ細濡傛灉鏈夌紦瀛樹笖涓嶆槸棰勮妯″紡锛屽彲浠ヨ烦杩囧疄鏃舵覆鏌?
         // 娉ㄦ剰锛氳繖閲屾垜浠粛鐒舵墽琛屽疄鏃舵覆鏌擄紝鍥犱负缂撳瓨妯℃澘搴旇鍦ㄦ洿楂樺眰绾у鐞?
@@ -178,7 +193,36 @@ class LayoutSlotRenderer implements ObserverInterface
         // 鏇存柊浜嬩欢鏁版嵁锛坒etch_file_after 浜嬩欢浣跨敤 content锛?
         $event->setData('content', $processedHtml);
     }
-    
+
+    private function collectMissingSlotWarnings(string $area): array
+    {
+        try {
+            $theme = $this->themeContext->resolveTheme($area, null, true);
+            if (!$theme || !$theme->getId()) {
+                return [];
+            }
+
+            return $this->getThemeSlotContractService()->collectMissingDefaultSlots($area, $theme);
+        } catch (\Throwable $e) {
+            if (defined('DEV') && DEV && function_exists('w_log_warning')) {
+                \w_log_warning('[Theme Slot Missing] scan failed: ' . $e->getMessage());
+            }
+            return [];
+        }
+    }
+
+    private function getThemeSlotContractService(): ThemeSlotContractService
+    {
+        if ($this->slotContractService instanceof ThemeSlotContractService) {
+            return $this->slotContractService;
+        }
+
+        /** @var ThemeSlotContractService $service */
+        $service = ObjectManager::getInstance(ThemeSlotContractService::class);
+        $this->slotContractService = $service;
+        return $service;
+    }
+
     /**
      * 鍦ㄩ瑙堟ā寮忎笅娉ㄥ叆瀛ゅ効閮ㄤ欢璀﹀憡
      * 

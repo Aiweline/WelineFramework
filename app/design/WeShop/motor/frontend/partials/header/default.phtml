@@ -4,7 +4,15 @@
  * 摩托车主题头部 - 深色工业风格头部，红色强调
  */
 ?>
-<header class="sticky top-0 z-50 w-full bg-motor-black shadow-lg font-heading">
+<header
+    class="sticky top-0 z-50 w-full bg-motor-black shadow-lg font-heading"
+    data-wslot="header"
+    data-wslot-name="Header"
+    data-wslot-accept="header-container"
+    data-wslot-exclusive="true"
+    data-wslot-multiple="false"
+    data-wslot-position="header"
+>
     <!-- Top bar -->
     <div class="bg-black/40 text-motor-steel text-xs py-1.5">
         <div class="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -12,8 +20,8 @@
                 <span class="uppercase tracking-widest"><?= __('Free Shipping on Orders Over $99') ?></span>
             </div>
             <div class="hidden md:flex items-center gap-4">
-                <w:hook>WeShop_Frontend::header::language_switcher</w:hook>
-                <w:hook>WeShop_Frontend::header::currency_switcher</w:hook>
+                <w:hook>WeShop_Frontend::frontend::partials::header::language-switcher</w:hook>
+                <w:hook>WeShop_Frontend::frontend::partials::header::currency-switcher</w:hook>
             </div>
         </div>
     </div>
@@ -22,7 +30,15 @@
     <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 py-3">
         <!-- Logo -->
         <div class="flex items-center gap-3">
-            <div class="flex items-center gap-2 text-white">
+            <div
+                class="flex items-center gap-2 text-white"
+                data-wslot="logo"
+                data-wslot-name="Header Logo"
+                data-wslot-accept="logo"
+                data-wslot-exclusive="true"
+                data-wslot-multiple="false"
+                data-wslot-position="header"
+            >
                 <span class="material-symbols-outlined text-primary text-3xl">two_wheeler</span>
                 <a href="<?= $this->getUrl('') ?>">
                     <h2 class="text-xl font-bold tracking-wider uppercase"><?= $this->getStoreName() ?></h2>
@@ -30,8 +46,16 @@
             </div>
 
             <!-- Navigation -->
-            <nav class="hidden lg:flex items-center gap-1 ml-6">
-                <w:hook>WeShop_Frontend::header::categories-menu</w:hook>
+            <nav
+                class="hidden lg:flex items-center gap-1 ml-6"
+                data-wslot="navigation"
+                data-wslot-name="Header Navigation"
+                data-wslot-accept="main-nav,category-menu"
+                data-wslot-exclusive="true"
+                data-wslot-multiple="false"
+                data-wslot-position="header"
+            >
+                <w:hook>WeShop_Frontend::frontend::partials::header::categories-menu</w:hook>
                 <a class="text-sm font-semibold text-gray-300 hover:text-primary uppercase tracking-wide px-3 py-2 transition-colors" href="<?= $this->getUrl('catalog/category') ?>"><?= __('Motorcycles') ?></a>
                 <a class="text-sm font-semibold text-gray-300 hover:text-primary uppercase tracking-wide px-3 py-2 transition-colors" href="<?= $this->getUrl('catalog/category/parts') ?>"><?= __('Parts') ?></a>
                 <a class="text-sm font-semibold text-gray-300 hover:text-primary uppercase tracking-wide px-3 py-2 transition-colors" href="<?= $this->getUrl('catalog/category/gear') ?>"><?= __('Gear & Apparel') ?></a>
@@ -42,10 +66,18 @@
 
         <!-- Search -->
         <div class="flex flex-1 items-center justify-center px-6">
-            <div class="w-full max-w-lg">
+            <div
+                class="w-full max-w-lg"
+                data-wslot="search"
+                data-wslot-name="Header Search"
+                data-wslot-accept="header-search"
+                data-wslot-exclusive="true"
+                data-wslot-multiple="false"
+                data-wslot-position="header"
+            >
                 <form action="<?= $this->getUrl('search') ?>" method="get" class="relative flex flex-col w-full">
                     <div class="flex w-full flex-1 items-stretch rounded h-10 border border-gray-600 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
-                        <w:hook>WeShop_Frontend::header::search-before</w:hook>
+                        <w:hook>WeShop_Frontend::frontend::partials::header::search-before</w:hook>
                         <input
                             type="text"
                             name="q"
@@ -53,7 +85,7 @@
                             placeholder="<?= __('Search motorcycles, parts, gear...') ?>"
                             value="<?= htmlspecialchars($this->request->getParam('q') ?? '') ?>"
                         />
-                        <w:hook>WeShop_Frontend::header::search-after</w:hook>
+                        <w:hook>WeShop_Frontend::frontend::partials::header::search-after</w:hook>
                         <button type="submit" class="flex items-center justify-center px-4 bg-primary hover:bg-primary-dark text-white rounded-r transition-colors">
                             <span class="material-symbols-outlined text-xl">search</span>
                         </button>
@@ -63,8 +95,16 @@
         </div>
 
         <!-- User Actions -->
-        <div class="flex items-center gap-2">
-            <w:hook>WeShop_Frontend::header::account</w:hook>
+        <div
+            class="flex items-center gap-2"
+            data-wslot="user-area"
+            data-wslot-name="Header User Area"
+            data-wslot-accept="account,mini-cart-icon,wishlist-icon,language-switcher,currency-switcher"
+            data-wslot-exclusive="false"
+            data-wslot-multiple="true"
+            data-wslot-position="header"
+        >
+            <w:hook>WeShop_Frontend::frontend::partials::header::account</w:hook>
             <a href="<?= $this->getUrl('customer/account') ?>" class="flex items-center justify-center rounded h-10 gap-2 px-3 text-gray-300 hover:text-primary hover:bg-white/5 transition-colors">
                 <span class="material-symbols-outlined text-2xl">person_outline</span>
                 <span class="hidden md:inline text-sm font-semibold uppercase tracking-wide"><?= __('Account') ?></span>
@@ -92,7 +132,7 @@
                                 <span class="text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark bg-primary/10 text-primary px-2 py-1 rounded"><?= $cartCount ?> <?= __('items') ?></span>
                             </div>
 
-                            <w:hook>WeShop_Cart::header::mini_cart_items</w:hook>
+                            <w:hook>WeShop_Cart::frontend::partials::header::mini-cart-items</w:hook>
 
                             <div class="p-5 bg-gray-50/50 dark:bg-white/5 border-t border-border-light dark:border-border-dark">
                                 <?php $cartTotal = $this->getData('cart_total') ?? 0; ?>

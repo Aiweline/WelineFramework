@@ -32,7 +32,9 @@ use Weline\Ai\Exception\ModelSelectionException;
 use Weline\Ai\Exception\StreamCancelledException;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\Env;
+use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * AI服务核心类
@@ -46,6 +48,41 @@ use Weline\Framework\Runtime\RequestContext;
  */
 class AiService
 {
+    /**
+     * Windows-1252 visible placeholders that often appear when UTF-8 bytes are decoded with the wrong code page.
+     *
+     * @var array<string, string>
+     */
+    private const MOJIBAKE_CP1252_BYTES = [
+        '€' => "\x80",
+        '‚' => "\x82",
+        'ƒ' => "\x83",
+        '„' => "\x84",
+        '…' => "\x85",
+        '†' => "\x86",
+        '‡' => "\x87",
+        'ˆ' => "\x88",
+        '‰' => "\x89",
+        'Š' => "\x8A",
+        '‹' => "\x8B",
+        'Œ' => "\x8C",
+        'Ž' => "\x8E",
+        '‘' => "\x91",
+        '’' => "\x92",
+        '“' => "\x93",
+        '”' => "\x94",
+        '•' => "\x95",
+        '–' => "\x96",
+        '—' => "\x97",
+        '˜' => "\x98",
+        '™' => "\x99",
+        'š' => "\x9A",
+        '›' => "\x9B",
+        'œ' => "\x9C",
+        'ž' => "\x9E",
+        'Ÿ' => "\x9F",
+    ];
+
     /**
      * 服务模式：API接口模式
      */
@@ -271,6 +308,86 @@ class AiService
             'chunk_size' => 1024,
             'flush_interval' => 100,
         ];
+    }
+
+    public function supportsCooperativeConcurrency(?int $concurrency = null): bool
+    {
+        $concurrency = $concurrency ?? 2;
+        return $concurrency > 1
+            && \class_exists(\Fiber::class)
+            && !SchedulerSystem::isSchedulerActive();
+    }
+
+    /**
+     * Run independent AI sub-tasks in child sessions when local cooperative scheduling is available.
+     *
+     * @param array<string|int, callable(array<string, mixed>, string|int): mixed> $tasks
+     * @param array{concurrency?:int,session_id?:string,params?:array<string,mixed>,disable_conversation_history?:bool,disable_conversation_persist?:bool} $options
+     * @return array<string|int, mixed>
+     */
+    public function runCooperativeSessionTasks(array $tasks, array $options = []): array
+    {
+        if ($tasks === []) {
+            return [];
+        }
+
+        $concurrency = \max(1, (int)($options['concurrency'] ?? \count($tasks)));
+        $baseSessionId = \trim((string)($options['session_id'] ?? ''));
+        $baseParams = \is_array($options['params'] ?? null) ? $options['params'] : [];
+        $runnerTasks = [];
+
+        foreach ($tasks as $taskKey => $task) {
+            if (!\is_callable($task)) {
+                throw new \InvalidArgumentException('Cooperative AI task must be callable.');
+            }
+            $sessionParams = $this->buildCooperativeChildSessionParams($baseParams, $baseSessionId, $taskKey, $options);
+            $runnerTasks[$taskKey] = static fn(string|int $key): mixed => $task($sessionParams, $key);
+        }
+
+        if (!$this->supportsCooperativeConcurrency($concurrency)) {
+            $results = [];
+            foreach ($runnerTasks as $taskKey => $task) {
+                $results[$taskKey] = $task($taskKey);
+            }
+            return $results;
+        }
+
+        return (new FiberTaskRunner(defaultConcurrency: $concurrency))->run($runnerTasks, $concurrency);
+    }
+
+    /**
+     * @param array<string, mixed> $baseParams
+     * @param array<string, mixed> $options
+     * @return array<string, mixed>
+     */
+    private function buildCooperativeChildSessionParams(array $baseParams, string $baseSessionId, string|int $taskKey, array $options): array
+    {
+        $params = $baseParams;
+        $taskKeyString = \trim((string)$taskKey);
+        if ($baseSessionId !== '') {
+            $params['session_id'] = $this->buildCooperativeChildSessionId($baseSessionId, $taskKeyString);
+            $params['cooperative_parent_session_id'] = $baseSessionId;
+        }
+        $params['cooperative_task_key'] = $taskKeyString;
+        if (\array_key_exists('disable_conversation_history', $options)) {
+            $params['disable_conversation_history'] = (bool)$options['disable_conversation_history'];
+        }
+        if (\array_key_exists('disable_conversation_persist', $options)) {
+            $params['disable_conversation_persist'] = (bool)$options['disable_conversation_persist'];
+        }
+
+        return $params;
+    }
+
+    private function buildCooperativeChildSessionId(string $baseSessionId, string $taskKey): string
+    {
+        $safeBase = \preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', \trim($baseSessionId)) ?? '';
+        $safeBase = \trim($safeBase, '._-');
+        if ($safeBase === '') {
+            $safeBase = 'ai';
+        }
+        $hash = \substr(\sha1($baseSessionId . '|' . $taskKey), 0, 16);
+        return $safeBase . '.task.' . $hash;
     }
 
     /**
@@ -1358,13 +1475,24 @@ class AiService
     }
 
     /**
-     * 缁熶竴 AI 娴佸紡閿欒鏂囨锛岄伩鍏嶅墠绔湅鍒扳€滈粦鐩掆€濇垨闅句互琛屽姩鐨勪俊鎭€?
+     * Normalize stream errors before surfacing them to PageBuilder and SSE logs.
      */
     private function normalizeStreamErrorMessage(string $message): string
     {
         $trimmed = trim($message);
         if ($trimmed === '') {
             return (string)__('AI 服务返回空错误，请检查供应商连接与账户状态。');
+        }
+
+        $canonicalMessage = $this->canonicalizeKnownStreamErrorMessage($trimmed);
+        if ($canonicalMessage !== null) {
+            return $canonicalMessage;
+        }
+
+        $trimmed = $this->repairLikelyUtf8AsGb18030Mojibake($trimmed);
+        $canonicalMessage = $this->canonicalizeKnownStreamErrorMessage($trimmed);
+        if ($canonicalMessage !== null) {
+            return $canonicalMessage;
         }
 
         $lower = strtolower($trimmed);
@@ -1379,6 +1507,145 @@ class AiService
         }
 
         return $trimmed;
+    }
+
+    private function repairLikelyUtf8AsGb18030Mojibake(string $message): string
+    {
+        if ($message === '' || !$this->containsLikelyMojibakeMarker($message)) {
+            return $message;
+        }
+
+        $candidate = $this->rebuildUtf8BytesFromGarbledMessage($message);
+        if ($candidate === '' || !mb_check_encoding($candidate, 'UTF-8')) {
+            return $message;
+        }
+
+        return $this->scoreReadableErrorMessage($candidate) >= ($this->scoreReadableErrorMessage($message) + 3)
+            ? $candidate
+            : $message;
+    }
+
+    private function rebuildUtf8BytesFromGarbledMessage(string $message): string
+    {
+        $chars = \preg_split('//u', $message, -1, \PREG_SPLIT_NO_EMPTY);
+        if (!\is_array($chars) || $chars === []) {
+            return '';
+        }
+
+        $rebuilt = '';
+        foreach ($chars as $char) {
+            if (\strlen($char) === 1 && \ord($char) < 0x80) {
+                $rebuilt .= $char;
+                continue;
+            }
+            if (isset(self::MOJIBAKE_CP1252_BYTES[$char])) {
+                $rebuilt .= self::MOJIBAKE_CP1252_BYTES[$char];
+                continue;
+            }
+
+            $encoded = @\mb_convert_encoding($char, 'GB18030', 'UTF-8');
+            if (!\is_string($encoded) || $encoded === '') {
+                return '';
+            }
+
+            $rebuilt .= $encoded;
+        }
+
+        return $rebuilt;
+    }
+
+    private function containsLikelyMojibakeMarker(string $message): bool
+    {
+        $matches = \preg_match_all('/锛|銆|鈥|€|�|娴|鏂|璇|闃|绗|鍒|浠|鍐|缁|鍚|鎴|妫|璁|瀹|璋|姝/u', $message);
+        return \is_int($matches) && $matches >= 2;
+    }
+
+    private function scoreReadableErrorMessage(string $message): int
+    {
+        $score = 0;
+        $punctuationMatches = \preg_match_all('/[，。！？：；（）《》“”]/u', $message);
+        if (\is_int($punctuationMatches) && $punctuationMatches > 0) {
+            $score += $punctuationMatches * 2;
+        }
+
+        foreach ([
+            '请检查',
+            '未返回',
+            '任何内容',
+            '模型配置',
+            '是否正确',
+            '网络连接',
+            '稍后重试',
+            '上游',
+            '流式',
+            '生成',
+            '完成',
+            '错误',
+            '失败',
+            '内容',
+            '返回',
+            '模型',
+            '配置',
+            '名称',
+            '请求',
+            '输出',
+            '服务',
+            '超时',
+            '网络',
+            '账户',
+        ] as $needle) {
+            $score += \substr_count($message, $needle) * (\mb_strlen($needle, 'UTF-8') >= 4 ? 4 : 2);
+        }
+
+        $markerMatches = \preg_match_all('/锛|銆|鈥|€|�|娴|鏂|璇|闃|绗|鍒|浠|鍐|缁|鍚|鎴|妫|璁|瀹|璋|姝/u', $message);
+        if (\is_int($markerMatches) && $markerMatches > 0) {
+            $score -= $markerMatches * 2;
+        }
+
+        return $score;
+    }
+
+    private function canonicalizeKnownStreamErrorMessage(string $message): ?string
+    {
+        $hasBaseUrlMarker = \str_contains($message, 'Base URL')
+            || \str_contains($message, '丅ase URL')
+            || \str_contains($message, 'ase URL');
+        if (!\str_contains($message, 'API Key') || !$hasBaseUrlMarker) {
+            return null;
+        }
+
+        $canonical = (string)__('AI 流式生成完成但未返回任何内容，请检查模型配置（API Key、Base URL、模型名称）是否正确');
+        if (\str_contains($message, $canonical)) {
+            return $canonical;
+        }
+
+        $garbledMarkerCount = 0;
+        foreach ([
+            '娴佸紡',
+            '鍐呭',
+            '鍨嬮厤缃',
+            '姝ｇ',
+        ] as $marker) {
+            if (\str_contains($message, $marker)) {
+                $garbledMarkerCount++;
+            }
+        }
+        if (\preg_match('/妫(?:€|\?|�)?鏌/u', $message) === 1) {
+            $garbledMarkerCount++;
+        }
+        if ($garbledMarkerCount >= 3) {
+            return $canonical;
+        }
+
+        if (
+            \str_contains($message, '流式生成完成')
+            && \str_contains($message, '未返回任何内容')
+            && \str_contains($message, '模型配置')
+        ) {
+            return $canonical;
+        }
+
+        return null;
     }
 
     private function isInsufficientBalanceError(\Throwable $throwable): bool

@@ -22,6 +22,7 @@ use Weline\Theme\Service\ThemeLayoutVersionService;
 use Weline\Theme\Service\ThemePageTypeResolver;
 use Weline\Theme\Service\ThemePlaceableRegistry;
 use Weline\Theme\Service\ThemePreviewContentRenderer;
+use Weline\Theme\Service\ThemeSlotContractService;
 use Weline\Theme\Service\WidgetPositionResolver;
 use Weline\Widget\Service\WidgetRegistry;
 use Weline\Theme\Helper\PreviewManager;
@@ -1442,12 +1443,17 @@ class ThemeEditor extends BackendController
             ]);
 
             $html = $this->fetchTagHtml($templatePath);
+            if ($editorArea === PreviewContextService::AREA_BACKEND) {
+                $html = $this->injectBackendStructuralSlots($html);
+            }
             $slots = $this->extractSlots($html);
+            $missingSlotWarnings = $this->collectMissingSlotWarningsForEditor($editorArea);
 
             return $this->fetchJson([
                 'success' => true,
                 'html' => $html,
                 'slots' => $slots,
+                'missing_slot_warnings' => $missingSlotWarnings,
                 'layout' => [
                     'type' => $layoutType,
                     'option' => $layoutOption,
@@ -2058,6 +2064,10 @@ class ThemeEditor extends BackendController
             return $this->renderLayoutNotFoundError($layoutType, $layoutOption);
         }
 
+        if ($editorArea === PreviewContextService::AREA_BACKEND) {
+            $html = $this->injectBackendStructuralSlots($html);
+        }
+
         return $this->injectEditorModeAssets($html);
     }
 
@@ -2205,6 +2215,78 @@ HTML;
         }
         
         return $html;
+    }
+
+    private function injectBackendStructuralSlots(string $html): string
+    {
+        if ($html === '' || (stripos($html, 'data-theme="backend"') === false && stripos($html, "data-theme='backend'") === false)) {
+            return $html;
+        }
+
+        $definitions = [
+            [
+                'pattern' => '/<header\b(?=[^>]*\bid=(["\'])page-topbar\1)(?![^>]*\bdata-wslot=)[^>]*>/i',
+                'attrs' => ['backend-topbar', 'Backend Topbar', 'header'],
+            ],
+            [
+                'pattern' => '/<div\b(?=[^>]*\bclass=(["\'])[^"\']*\btopnav\b[^"\']*\1)(?![^>]*\bdata-wslot=)[^>]*>/i',
+                'attrs' => ['backend-topnav', 'Backend Topnav', 'header'],
+            ],
+            [
+                'pattern' => '/<div\b(?=[^>]*\bclass=(["\'])[^"\']*\bvertical-menu\b[^"\']*\1)(?![^>]*\bdata-wslot=)[^>]*>/i',
+                'attrs' => ['backend-sidebar', 'Backend Sidebar', 'sidebar'],
+            ],
+            [
+                'pattern' => '/<main\b(?=[^>]*\bid=(["\'])main-content\1)(?![^>]*\bdata-wslot=)[^>]*>/i',
+                'attrs' => ['backend-content', 'Backend Content', 'content'],
+            ],
+            [
+                'pattern' => '/<footer\b(?=[^>]*\bclass=(["\'])[^"\']*\bfooter\b[^"\']*\1)(?![^>]*\bdata-wslot=)[^>]*>/i',
+                'attrs' => ['backend-footer', 'Backend Footer', 'footer'],
+            ],
+            [
+                'pattern' => '/<div\b(?=[^>]*\bclass=(["\'])[^"\']*\bright-bar\b[^"\']*\1)(?![^>]*\bdata-wslot=)[^>]*>/i',
+                'attrs' => ['backend-right-sidebar', 'Backend Right Sidebar', 'right-sidebar'],
+            ],
+        ];
+
+        foreach ($definitions as $definition) {
+            $html = $this->injectSlotAttributesIntoFirstTag(
+                $html,
+                $definition['pattern'],
+                $definition['attrs'][0],
+                $definition['attrs'][1],
+                $definition['attrs'][2]
+            );
+        }
+
+        return $html;
+    }
+
+    private function injectSlotAttributesIntoFirstTag(
+        string $html,
+        string $pattern,
+        string $slotId,
+        string $slotName,
+        string $position
+    ): string {
+        $attrs = sprintf(
+            ' data-wslot="%s" data-wslot-name="%s" data-wslot-accept="*" data-wslot-multiple="true" data-wslot-position="%s"',
+            htmlspecialchars($slotId, ENT_QUOTES, 'UTF-8'),
+            htmlspecialchars($slotName, ENT_QUOTES, 'UTF-8'),
+            htmlspecialchars($position, ENT_QUOTES, 'UTF-8')
+        );
+
+        $updated = preg_replace_callback(
+            $pattern,
+            static function (array $matches) use ($attrs): string {
+                return rtrim($matches[0], '>') . $attrs . '>';
+            },
+            $html,
+            1
+        );
+
+        return is_string($updated) ? $updated : $html;
     }
 
     /**
@@ -3357,6 +3439,27 @@ HTML;
         /** @var PreviewContextService $service */
         $service = ObjectManager::getInstance(PreviewContextService::class);
         return $service;
+    }
+
+    private function getThemeSlotContractService(): ThemeSlotContractService
+    {
+        /** @var ThemeSlotContractService $service */
+        $service = ObjectManager::getInstance(ThemeSlotContractService::class);
+        return $service;
+    }
+
+    private function collectMissingSlotWarningsForEditor(string $editorArea): array
+    {
+        try {
+            $warnings = $this->getThemeSlotContractService()->collectMissingDefaultSlots($editorArea, $this->welineTheme);
+            $this->getThemeSlotContractService()->notifyMissingDefaultSlots($warnings, $editorArea);
+            return $warnings;
+        } catch (\Throwable $e) {
+            if (defined('DEV') && DEV && function_exists('w_log_warning')) {
+                \w_log_warning('[Theme Slot Missing] editor scan failed: ' . $e->getMessage());
+            }
+            return [];
+        }
     }
 
     private function getThemeContextService(): ThemeContextService
