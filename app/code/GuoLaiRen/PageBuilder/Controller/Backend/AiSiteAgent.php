@@ -1036,7 +1036,7 @@ SCRIPT;
             );
             $planStartDecision = $this->resolvePlanStartDecision($currentScope);
         }
-        if ((string)($planStartDecision['action'] ?? '') === 'reuse' && $hasPlanDraft && $requestedPromptMode !== 'rebuild') {
+        if ((string)($planStartDecision['action'] ?? '') === 'reuse' && $hasPlanDraft && !\in_array($requestedPromptMode, ['rebuild', 'resume_plan'], true)) {
             return $this->fetchJson([
                 'success' => true,
                 'message' => (string)__('当前方案无需重建，已保留并回显已有方案内容。'),
@@ -1058,9 +1058,13 @@ SCRIPT;
             ]);
         }
         $stage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
-        $effectivePlanPromptMode = \in_array($requestedPromptMode, ['refine', 'rebuild'], true)
-            ? $requestedPromptMode
-            : (string)($planStartDecision['action'] ?? 'rebuild');
+        if (\in_array($requestedPromptMode, ['refine', 'rebuild', 'resume_plan'], true)) {
+            $effectivePlanPromptMode = $requestedPromptMode;
+        } elseif ((string)($planStartDecision['action'] ?? '') === 'reuse' && $this->scopeHasPersistedStageOnePlan($currentScope)) {
+            $effectivePlanPromptMode = 'resume_plan';
+        } else {
+            $effectivePlanPromptMode = (string)($planStartDecision['action'] ?? 'rebuild');
+        }
         $planRebuildResetPatch = $effectivePlanPromptMode === 'rebuild'
             ? $this->buildStageOnePlanRegenerationResetScopePatch()
             : [];
@@ -1216,7 +1220,7 @@ SCRIPT;
         $sse->start();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         $promptMode = \trim((string)$this->getRequestBodyValue('prompt_mode', ''));
-        if ($adminId <= 0 || $publicId === '' || !\in_array($promptMode, ['refine', 'rebuild'], true)) {
+        if ($adminId <= 0 || $publicId === '' || !\in_array($promptMode, ['refine', 'rebuild', 'resume_plan'], true)) {
             $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('阶段一方案流参数无效'), ['public_id', 'prompt_mode']);
             $sse->complete(['success' => false]);
             return;
@@ -1538,9 +1542,9 @@ SCRIPT;
         }
 
         $requestedPromptMode = \trim((string)$this->getRequestBodyValue('prompt_mode', ''));
-        $effectivePromptMode = \in_array($requestedPromptMode, ['detect_bootstrap_task_plan', 'refine_task_plan', 'rebuild_task_plan'], true)
+        $effectivePromptMode = \in_array($requestedPromptMode, ['detect_bootstrap_task_plan', 'resume_task_plan', 'refine_task_plan', 'rebuild_task_plan'], true)
             ? $requestedPromptMode
-            : 'detect_bootstrap_task_plan';
+            : 'resume_task_plan';
         $requestedInstruction = \trim((string)$this->getRequestBodyValue('instruction', ''));
         $requestedTargetScope = \trim((string)$this->getRequestBodyValue('target_scope', ''));
         $requestedRound = \max(1, (int)$this->getRequestBodyValue('round', 1));
@@ -1836,7 +1840,7 @@ SCRIPT;
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($fresh, $stageCode)
+            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
         );
         $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
         $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
@@ -2012,7 +2016,7 @@ SCRIPT;
         $sse->start();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         $promptMode = \trim((string)$this->getRequestBodyValue('prompt_mode', ''));
-        if ($adminId <= 0 || $publicId === '' || !\in_array($promptMode, ['refine_task_plan', 'rebuild_task_plan', 'detect_bootstrap_task_plan'], true)) {
+        if ($adminId <= 0 || $publicId === '' || !\in_array($promptMode, ['refine_task_plan', 'rebuild_task_plan', 'detect_bootstrap_task_plan', 'resume_task_plan'], true)) {
             $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('任务方案流参数无效'), ['public_id', 'prompt_mode']);
             $sse->complete(['success' => false]);
             return;
@@ -2068,7 +2072,7 @@ SCRIPT;
         ]);
         return;
 
-        if ($promptMode === 'detect_bootstrap_task_plan') {
+        if ($promptMode === 'detect_bootstrap_task_plan' || $promptMode === 'resume_task_plan') {
             $this->handleTaskPlanDetectBootstrapSse($sse, $session, $adminId, $scope, $buildBlueprint);
             return;
         }
@@ -3672,7 +3676,7 @@ SCRIPT;
             return $this->jsonError('INVALID_PARAMS', (string)__('所选页面类型不在当前工作区中'), self::PARAMS_UPDATE_BLOCK);
         }
 
-        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
+        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope, false);
         $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
         $blocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
         $updatedBlock = null;
@@ -4689,7 +4693,10 @@ SCRIPT;
                             $artifacts['mutation_summaries'] = $mutationSummaries;
                         }
                         $artifacts['ai_generated'] = 1;
-                    } elseif ($requestedPromptMode === 'refine' && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
+                    } elseif (($requestedPromptMode === 'refine' || $requestedPromptMode === 'resume_plan') && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
+                        $resumeInstruction = $requestedPromptMode === 'resume_plan'
+                            ? (string)__('请基于当前第一阶段草稿与已完成结构继续补齐中断内容，保留已完成部分，只修复缺失、未完成或异常中断的内容，并输出完整 markdown 与完整 plan_json。')
+                            : '';
                         $refineInstruction = $requestedInstruction;
                         $refineTargetScope = $requestedTargetScope;
                         if ($planLocaleChanged && !$pageTypesChanged) {
@@ -4698,10 +4705,17 @@ SCRIPT;
                                 ? ((string)__('请按目标 plan_locale 翻译当前方案，并保留原有结构与页面类型。') . ' ' . $refineInstruction)
                                 : (string)__('请按目标 plan_locale 翻译当前方案，并保留原有结构与页面类型。');
                         }
+                        if ($requestedPromptMode === 'resume_plan') {
+                            $refineInstruction = $refineInstruction !== ''
+                                ? ($resumeInstruction . ' ' . $refineInstruction)
+                                : $resumeInstruction;
+                            $refineTargetScope = $refineTargetScope !== '' ? $refineTargetScope : 'resume_generation';
+                        }
                         $artifacts = $this->executionBlueprintService->refineDraftPlan($scope, \is_array($websiteProfile) ? $websiteProfile : [], [
                             'instruction' => $refineInstruction,
                             'target_scope' => $refineTargetScope,
                             'round' => $requestedRound,
+                            'prompt_mode' => $requestedPromptMode,
                         ], $onChunk, $onProgress);
                     } elseif ($planLocaleChanged && !$pageTypesChanged && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
                         $translateInstruction = (string)__('请保留当前方案结构与页面类型，仅将方案内容完整翻译为目标 plan_locale，不新增或删除页面。');
@@ -4715,8 +4729,15 @@ SCRIPT;
                             $artifacts = $this->executionBlueprintService->buildPlanArtifacts($scope, \is_array($websiteProfile) ? $websiteProfile : []);
                         } else {
                             $buildPayload = [];
+                            if ($requestedPromptMode === 'resume_plan') {
+                                $buildPayload['instruction'] = (string)__('请基于当前阶段一上下文与已保存的工作台信息继续补齐中断内容，优先复用已完成部分，不要从零抛弃已有进度。');
+                                $buildPayload['target_scope'] = 'resume_generation';
+                                $buildPayload['prompt_mode'] = 'resume_plan';
+                            }
                             if ($requestedInstruction !== '') {
-                                $buildPayload['instruction'] = $requestedInstruction;
+                                $buildPayload['instruction'] = isset($buildPayload['instruction'])
+                                    ? ((string)$buildPayload['instruction'] . ' ' . $requestedInstruction)
+                                    : $requestedInstruction;
                             }
                             $buildPayload['round'] = $requestedRound;
                             $buildPayload['staged_generation'] = true;
@@ -5028,7 +5049,7 @@ SCRIPT;
         $targetScope = \trim((string)($sseReq['target_scope'] ?? ''));
         $round = \max(1, (int)($sseReq['round'] ?? 1));
 
-        if ($promptMode === '' || $promptMode === 'detect_bootstrap_task_plan') {
+        if ($promptMode === '' || $promptMode === 'detect_bootstrap_task_plan' || $promptMode === 'resume_task_plan') {
             $this->handleTaskPlanDetectBootstrapSse($sse, $fresh, $adminId, $scope, $buildBlueprint);
             return;
         }
@@ -9636,6 +9657,7 @@ SCRIPT;
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
         $forceTaskPlanRebuild = $this->isTaskPlanSchemeRebuildRequest($operation, $scopePatch, $operationDetails);
+        $preserveRunningQueueRow = false;
         if (
             \in_array($activeStatus, ['queued', 'running'], true)
             && $this->shouldReclaimStaleActiveOperation($activeOperation)
@@ -9663,6 +9685,7 @@ SCRIPT;
             $runningOperation = \trim((string)($activeOperation['operation'] ?? ''));
             $runningExecutionToken = \trim((string)($activeOperation['execution_token'] ?? ''));
             if ($forceTaskPlanRebuild && $runningOperation === 'task_plan') {
+                $preserveRunningQueueRow = true;
                 $scope = $this->markRunningTaskPlanAsDiscardedForRebuild($scope, $activeOperation);
                 $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
                 $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
@@ -9746,7 +9769,7 @@ SCRIPT;
         $freshForQueue = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         if ($this->shouldEnqueueOperation($operation)) {
             try {
-                $queueId = $this->enqueueOperationQueueTask($freshForQueue, $adminId, $operation, $executionToken, $scopePatch, $operationDetails);
+                $queueId = $this->enqueueOperationQueueTask($freshForQueue, $adminId, $operation, $executionToken, $scopePatch, $operationDetails, $preserveRunningQueueRow);
             } catch (\Throwable $throwable) {
                 $failedWorkspaceStatus = $operation === 'publish'
                     ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED
@@ -10215,12 +10238,14 @@ SCRIPT;
         string $operation,
         string $executionToken,
         array $scopePatch = [],
-        array $operationDetails = []
+        array $operationDetails = [],
+        bool $preserveRunningQueueRow = false
     ): int {
         $queueClass = $this->resolveAiSiteQueueClass($operation);
         if ($queueClass === '') {
             return 0;
         }
+        $typeId = $this->resolveAiSiteQueueTypeId($queueClass);
 
         $content = \array_replace($this->buildOperationQueueEnvelope($session, $operation, $executionToken, 'queued'), [
             'public_id' => $session->getPublicId(),
@@ -10242,6 +10267,24 @@ SCRIPT;
 
         $queueName = $this->buildAiSiteQueueName($operation, $executionToken);
         $bizKey = $this->buildAiSiteQueueBizKey((int)$session->getId(), $operation);
+        $reusableQueueRow = $this->findAiSiteOperationQueueRow($session, $operation);
+        $reuseFailureMessage = '';
+        if (\is_array($reusableQueueRow) && $reusableQueueRow !== [] && $this->shouldReuseAiSiteQueueRow($reusableQueueRow, $preserveRunningQueueRow)) {
+            $reusableQueueId = (int)($reusableQueueRow['queue_id'] ?? $reusableQueueRow['id'] ?? 0);
+            $updated = w_query('queue', 'update', [
+                'queue_id' => $reusableQueueId,
+                'patch' => $this->buildAiSiteQueueReusePatch($queueName, $content, $bizKey, $typeId),
+            ]);
+            if (\is_array($updated) && ($updated['success'] ?? false)) {
+                $queueId = (int)($updated['queue_id'] ?? 0);
+                if ($queueId > 0) {
+                    return $queueId;
+                }
+            }
+            $reuseFailureMessage = \is_array($updated)
+                ? \trim((string)($updated['message'] ?? ''))
+                : 'invalid queue update response';
+        }
         $created = w_query('queue', 'create', [
             'class' => $queueClass,
             'name' => $queueName,
@@ -10253,7 +10296,15 @@ SCRIPT;
         ]);
         $queueId = (int)(\is_array($created) ? ($created['queue_id'] ?? 0) : 0);
         if ($queueId <= 0 || !(\is_array($created) && ($created['success'] ?? false))) {
-            throw new \RuntimeException((string)__('创建队列任务失败。'));
+            $createFailureMessage = \is_array($created)
+                ? \trim((string)($created['message'] ?? ''))
+                : '';
+            $detail = $createFailureMessage !== '' ? $createFailureMessage : $reuseFailureMessage;
+            throw new \RuntimeException(
+                $detail !== ''
+                    ? (string)__('创建队列任务失败：%{1}', [$detail])
+                    : (string)__('创建队列任务失败。')
+            );
         }
 
         $queueCreatedHook = RequestContext::get(self::REQUEST_CTX_QUEUE_CREATED_HOOK);
@@ -10271,6 +10322,52 @@ SCRIPT;
 
         return $queueId;
     }
+
+    /**
+     * Scope already blocks the live same-operation queue before we enqueue.
+     * If a slot still looks running here, it is usually stale unless the caller
+     * explicitly preserves the currently running row.
+     *
+     * @param array<string, mixed> $queueRow
+     */
+    private function shouldReuseAiSiteQueueRow(array $queueRow, bool $preserveRunningQueueRow = false): bool
+    {
+        if ((int)($queueRow['queue_id'] ?? 0) <= 0) {
+            return false;
+        }
+
+        $status = \trim((string)($queueRow['status'] ?? ''));
+        if ($status === 'error') {
+            return false;
+        }
+        if ($preserveRunningQueueRow && $status === 'running') {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     * @return array<string, mixed>
+     */
+    private function buildAiSiteQueueReusePatch(string $queueName, array $content, string $bizKey, int $typeId): array
+    {
+        return [
+            'name' => $queueName,
+            'module' => 'GuoLaiRen_PageBuilder',
+            'type_id' => $typeId,
+            'content' => $content,
+            'status' => 'pending',
+            'auto' => true,
+            'biz_key' => $bizKey,
+            'result' => '',
+            'process' => '',
+            'pid' => 0,
+            'finished' => 0,
+        ];
+    }
+
     private function resolveAiSiteQueueClass(string $operation): string
     {
         return match ($operation) {
@@ -10597,7 +10694,7 @@ SCRIPT;
             $queue->clearData()
                 ->reset()
                 ->where(\Weline\Queue\Model\Queue::schema_fields_BIZ_KEY, $bizKey)
-                ->order(\Weline\Queue\Model\Queue::schema_fields_ID, 'ASC')
+                ->order(\Weline\Queue\Model\Queue::schema_fields_ID, 'DESC')
                 ->select()
                 ->fetch();
             $items = $queue->getItems();
@@ -10664,9 +10761,7 @@ SCRIPT;
             AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS
         );
         $queueForcedAiRebuild = (int)($scope['_queue_force_build']['active'] ?? 0) === 1;
-        if (!$queueForcedAiRebuild) {
-            $scope = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
-        }
+        $scope = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $pageTypeLabels = Page::getPageTypes();
         $dispatchWindow = 3;
@@ -10684,7 +10779,7 @@ SCRIPT;
 
         /** @var AiSitePageComponentGenerationService $pageComponentGenerationService */
         $pageComponentGenerationService = ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
-        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
+        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope, false);
         $sharedComponents = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
         $environmentReadyEmitted = false;
         $parallelPageModeLogged = false;
@@ -11767,9 +11862,7 @@ SCRIPT;
             AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
         );
         $queueForcedAiRebuild = (int)($scope['_queue_force_build']['active'] ?? 0) === 1;
-        if (!$queueForcedAiRebuild) {
-            $scope = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
-        }
+        $scope = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         // queue:run -f：_queue_force_build.active=1 时强制走 AI，并绕过共享 Header/Footer 的进程内静态缓存。
         $pageTypeLabels = Page::getPageTypes();
@@ -11793,7 +11886,7 @@ SCRIPT;
         $pageComponentGenerationService = ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
         $sharedComponents = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
         $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
-        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
+        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope, false);
         $environmentReadyEmitted = false;
         $parallelPageModeLogged = false;
 
