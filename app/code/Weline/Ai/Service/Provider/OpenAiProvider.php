@@ -2,12 +2,12 @@
 declare(strict_types=1);
 
 /*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 作者：Admin
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- * 日期：2025/10/09
+ * 鏈枃浠剁敱 绉嬫灚闆侀 缂栧啓锛屾墍鏈夎В閲婃潈褰扐iweline鎵€鏈夈€?
+ * 浣滆€咃細Admin
+ * 閭锛歛iweline@qq.com
+ * 缃戝潃锛歛iweline.com
+ * 璁哄潧锛歨ttps://bbs.aiweline.com
+ * 鏃ユ湡锛?025/10/09
  */
 
 namespace Weline\Ai\Service\Provider;
@@ -20,30 +20,30 @@ use Weline\Framework\Http\Sse\SseContext;
 use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
- * OpenAI API提供者
+ * OpenAI API鎻愪緵鑰?
  * 
- * 功能：
- * - 调用OpenAI API生成内容
- * - 支持流式响应
- * - 支持代理配置
- * - 错误处理和重试机制
- * - Token使用量统计
+ * 鍔熻兘锛?
+ * - 璋冪敤OpenAI API鐢熸垚鍐呭
+ * - 鏀寔娴佸紡鍝嶅簲
+ * - 鏀寔浠ｇ悊閰嶇疆
+ * - 閿欒澶勭悊鍜岄噸璇曟満鍒?
+ * - Token浣跨敤閲忕粺璁?
  */
 class OpenAiProvider implements ProviderInterface
 {
     /**
-     * 最大重试次数
+     * 鏈€澶ч噸璇曟鏁?
      */
     private const MAX_RETRIES = 3;
 
     /**
-     * 重试延迟（秒）
+     * 閲嶈瘯寤惰繜锛堢锛?
      */
     private const RETRY_DELAY = 1;
 
     /**
-     * curl 在 CURLOPT_WRITEFUNCTION 返回 -1 中止传输时的典型错误（如 SSE 对端断开、回调返回 false）。
-     * 不应按「上游 API 故障」向上抛致命异常，否则已断开的 SSE 链路仍会在服务端记一条误导性 exception。
+     * curl 鍦?CURLOPT_WRITEFUNCTION 杩斿洖 -1 涓浼犺緭鏃剁殑鍏稿瀷閿欒锛堝 SSE 瀵圭鏂紑銆佸洖璋冭繑鍥?false锛夈€?
+     * 涓嶅簲鎸夈€屼笂娓?API 鏁呴殰銆嶅悜涓婃姏鑷村懡寮傚父锛屽惁鍒欏凡鏂紑鐨?SSE 閾捐矾浠嶄細鍦ㄦ湇鍔＄璁颁竴鏉¤瀵兼€?exception銆?
      */
     private function isCurlStreamWriteAbortError(string $error): bool
     {
@@ -62,15 +62,15 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 构造函数
+     * 鏋勯€犲嚱鏁?
      */
     public function __construct()
     {
-        // 无参数构造函数，用于依赖注入兼容性
+        // 鏃犲弬鏁版瀯閫犲嚱鏁帮紝鐢ㄤ簬渚濊禆娉ㄥ叆鍏煎鎬?
     }
 
     /**
-     * 调用OpenAI API
+     * 璋冪敤OpenAI API
      * 
      * @param AiModel $model
      * @param string $prompt
@@ -82,13 +82,13 @@ class OpenAiProvider implements ProviderInterface
     {
         $config = $model->getConfig();
         
-        // 调试日志
+        // 璋冭瘯鏃ュ織
         Env::log('ai_provider_debug.log', sprintf(
             '[OpenAiProvider::generate] model->getConfig() api_key=%s',
             isset($config['api_key']) ? (empty($config['api_key']) ? '(empty)' : '...' . substr($config['api_key'], -4)) : '(not set)'
         ), 'DEBUG');
         
-        // 合并provider_config（优先）
+        // 鍚堝苟provider_config锛堜紭鍏堬級
         $providerConfig = $model->getData('provider_config');
         if (!empty($providerConfig)) {
             $providerData = is_string($providerConfig) ? json_decode($providerConfig, true) : $providerConfig;
@@ -117,16 +117,16 @@ class OpenAiProvider implements ProviderInterface
         }
 
         $messages = $this->buildMessages($prompt, $params);
-        // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
-        $timeout = (!empty($params['disable_ai_timeout']) || (PHP_SAPI === 'cli' && !empty($params['disable_cli_timeout'])))
-            ? 0
-            : (isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180));
+        $timeout = ProviderTimeoutPolicy::resolveRequestTimeout($params, $config);
+
+        // 璁剧疆鎵ц鏃堕棿闄愬埗锛圫SE 妯″紡涓嬭烦杩囷紝鐢?SseWriter 缁熶竴绠＄悊涓烘棤闄愬埗锛?
+
         
-        // 设置执行时间限制（SSE 模式下跳过，由 SseWriter 统一管理为无限制）
+        // 璁剧疆鎵ц鏃堕棿闄愬埗锛圫SE 妯″紡涓嬭烦杩囷紝鐢?SseWriter 缁熶竴绠＄悊涓烘棤闄愬埗锛?
         $shouldRestoreExecutionTimeLimit = !SseContext::isSseEnabled();
         if ($shouldRestoreExecutionTimeLimit) {
             if ($timeout > 0) {
-                $timeLimit = $timeout + 10;
+                $timeLimit = $timeout + ProviderTimeoutPolicy::EXECUTION_TIME_BUFFER;
                 @set_time_limit($timeLimit);
             } else {
                 @set_time_limit(0);
@@ -144,24 +144,24 @@ class OpenAiProvider implements ProviderInterface
             'stream' => false,
         ];
 
-        // 智能体模式：添加 tools（function calling）
+        // 鏅鸿兘浣撴ā寮忥細娣诲姞 tools锛坒unction calling锛?
         if (!empty($params['tools']) && is_array($params['tools'])) {
             $requestData['tools'] = $this->convertToolsToOpenAiFormat($params['tools']);
             $requestData['tool_choice'] = $params['tool_choice'] ?? 'auto';
         }
 
-        // JSON 模式（业界标准）：强制模型只输出合法 JSON，降低解析失败率
+        // JSON 妯″紡锛堜笟鐣屾爣鍑嗭級锛氬己鍒舵ā鍨嬪彧杈撳嚭鍚堟硶 JSON锛岄檷浣庤В鏋愬け璐ョ巼
         if (!empty($params['response_format']) && is_array($params['response_format'])) {
             $requestData['response_format'] = $params['response_format'];
         }
 
-        // 优先使用base_url，如果没有则使用api_url，最后使用默认值
+        // 浼樺厛浣跨敤base_url锛屽鏋滄病鏈夊垯浣跨敤api_url锛屾渶鍚庝娇鐢ㄩ粯璁ゅ€?
         $apiUrl = $config['base_url'] ?? $config['api_url'] ?? 'https://api.openai.com/v1';
         if (!str_ends_with($apiUrl, '/chat/completions')) {
             $apiUrl = rtrim($apiUrl, '/') . '/chat/completions';
         }
         
-        // 确保proxyInfo是数组（可能存储为 JSON 字符串）
+        // 纭繚proxyInfo鏄暟缁勶紙鍙兘瀛樺偍涓?JSON 瀛楃涓诧級
         $proxyInfo = $model->getProxyInfo();
         if (is_string($proxyInfo) && !empty($proxyInfo)) {
             $proxyInfo = json_decode($proxyInfo, true) ?: [];
@@ -178,7 +178,7 @@ class OpenAiProvider implements ProviderInterface
             $timeout
         );
 
-        // 提取 tool_calls（智能体模式）
+        // 鎻愬彇 tool_calls锛堟櫤鑳戒綋妯″紡锛?
         $toolCalls = $this->extractToolCalls($response);
         $finishReason = $response['choices'][0]['finish_reason'] ?? '';
 
@@ -194,15 +194,15 @@ class OpenAiProvider implements ProviderInterface
             'finish_reason' => $finishReason,
         ];
 
-            // 捕获推理/思考链内容（DeepSeek reasoning_content 等）
+            // 鎹曡幏鎺ㄧ悊/鎬濊€冮摼鍐呭锛圖eepSeek reasoning_content 绛夛級
             if (!empty($message['reasoning_content'])) {
                 $result['reasoning_content'] = $message['reasoning_content'];
             }
 
-            // 如果有 tool_calls，附加到结果中
+            // 濡傛灉鏈?tool_calls锛岄檮鍔犲埌缁撴灉涓?
             if (!empty($toolCalls)) {
                 $result['tool_calls'] = $toolCalls;
-                // 保留原始 message 用于构建后续消息（agent 需要完整的 assistant message）
+                // 淇濈暀鍘熷 message 鐢ㄤ簬鏋勫缓鍚庣画娑堟伅锛坅gent 闇€瑕佸畬鏁寸殑 assistant message锛?
                 $result['assistant_message'] = $message;
             }
 
@@ -215,34 +215,34 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 流式生成并返回完整结构化响应（含 tool_calls）
+     * 娴佸紡鐢熸垚骞惰繑鍥炲畬鏁寸粨鏋勫寲鍝嶅簲锛堝惈 tool_calls锛?
      * 
-     * 用于智能体模式：使用流式传输保持连接活跃，同时通过回调实时推送
-     * reasoning_content 和 content，最终返回与 generate() 相同格式的结果。
+     * 鐢ㄤ簬鏅鸿兘浣撴ā寮忥細浣跨敤娴佸紡浼犺緭淇濇寔杩炴帴娲昏穬锛屽悓鏃堕€氳繃鍥炶皟瀹炴椂鎺ㄩ€?
+     * reasoning_content 鍜?content锛屾渶缁堣繑鍥炰笌 generate() 鐩稿悓鏍煎紡鐨勭粨鏋溿€?
      * 
      * @param AiModel $model
      * @param string $prompt
-     * @param array $params 额外参数，支持：
-     *   - messages: 消息数组
-     *   - tools: 工具定义
-     *   - on_reasoning: callable(string $chunk) 推理内容回调
-     *   - on_content: callable(string $chunk) 正文内容回调
-     *   - on_heartbeat: callable() 心跳回调（每收到数据就触发）
-     * @return array 与 generate() 相同格式：content, reasoning_content, tool_calls, finish_reason, usage, assistant_message
+     * @param array $params 棰濆鍙傛暟锛屾敮鎸侊細
+     *   - messages: 娑堟伅鏁扮粍
+     *   - tools: 宸ュ叿瀹氫箟
+     *   - on_reasoning: callable(string $chunk) 鎺ㄧ悊鍐呭鍥炶皟
+     *   - on_content: callable(string $chunk) 姝ｆ枃鍐呭鍥炶皟
+     *   - on_heartbeat: callable() 蹇冭烦鍥炶皟锛堟瘡鏀跺埌鏁版嵁灏辫Е鍙戯級
+     * @return array 涓?generate() 鐩稿悓鏍煎紡锛歝ontent, reasoning_content, tool_calls, finish_reason, usage, assistant_message
      * @throws Exception
      */
     public function generateStreamFull(AiModel $model, string $prompt, array $params = []): array
     {
         $config = $model->getConfig();
 
-        // 调试日志
+        // 璋冭瘯鏃ュ織
         Env::log('ai_provider_debug.log', sprintf(
             '[OpenAiProvider::generateStreamFull] objId=%d, model->getConfig() api_key=%s',
             spl_object_id($model),
             isset($config['api_key']) ? (empty($config['api_key']) ? '(empty)' : '...' . substr($config['api_key'], -4)) : '(not set)'
         ), 'DEBUG');
 
-        // 合并 provider_config
+        // 鍚堝苟 provider_config
         $providerConfig = $model->getData('provider_config');
         if (!empty($providerConfig)) {
             $providerData = is_string($providerConfig) ? json_decode($providerConfig, true) : $providerConfig;
@@ -272,11 +272,11 @@ class OpenAiProvider implements ProviderInterface
         $messages = $this->buildMessages($prompt, $params);
         $timeout = $this->resolveStreamTimeout($params, $config);
 
-        // 非 SSE 的流式调用也要取消总执行时间限制，避免 generateStreamFull 在长推理时被 PHP 截断。
+        // 闈?SSE 鐨勬祦寮忚皟鐢ㄤ篃瑕佸彇娑堟€绘墽琛屾椂闂撮檺鍒讹紝閬垮厤 generateStreamFull 鍦ㄩ暱鎺ㄧ悊鏃惰 PHP 鎴柇銆?
         $shouldRestoreExecutionTimeLimit = !SseContext::isSseEnabled();
         if ($shouldRestoreExecutionTimeLimit) {
             if ($timeout > 0) {
-                @set_time_limit($timeout + 10);
+                @set_time_limit($timeout + ProviderTimeoutPolicy::EXECUTION_TIME_BUFFER);
             } else {
                 @set_time_limit(0);
             }
@@ -292,13 +292,13 @@ class OpenAiProvider implements ProviderInterface
             'stream' => true,
         ];
 
-        // 智能体模式：添加 tools
+        // 鏅鸿兘浣撴ā寮忥細娣诲姞 tools
         if (!empty($params['tools']) && is_array($params['tools'])) {
             $requestData['tools'] = $this->convertToolsToOpenAiFormat($params['tools']);
             $requestData['tool_choice'] = $params['tool_choice'] ?? 'auto';
         }
 
-        // JSON 模式（业界标准）：强制模型只输出合法 JSON
+        // JSON 妯″紡锛堜笟鐣屾爣鍑嗭級锛氬己鍒舵ā鍨嬪彧杈撳嚭鍚堟硶 JSON
         if (!empty($params['response_format']) && is_array($params['response_format'])) {
             $requestData['response_format'] = $params['response_format'];
         }
@@ -316,13 +316,13 @@ class OpenAiProvider implements ProviderInterface
             $proxyInfo = [];
         }
 
-        // 回调
+        // 鍥炶皟
         $onReasoning = $params['on_reasoning'] ?? null;
         $onContent = $params['on_content'] ?? null;
         $onHeartbeat = $params['on_heartbeat'] ?? null;
         $onWaiting = $params['on_waiting'] ?? null;
 
-        // 累积器
+        // 绱Н鍣?
         $fullContent = '';
         $fullReasoning = '';
         $toolCallsAccum = []; // index => ['id'=>..., 'name'=>..., 'arguments'=>'']
@@ -336,9 +336,9 @@ class OpenAiProvider implements ProviderInterface
         $streamLineBuffer = '';
         $startTime = microtime(true);
         $lastProgressNotify = $startTime;
-        $progressInterval = 5; // 每 5 秒发送一次等待状态
+        $progressInterval = 5; // 姣?5 绉掑彂閫佷竴娆＄瓑寰呯姸鎬?
 
-        // 进度回调：在 AI 未返回数据时周期性触发，保持 SSE 活跃并显示等待状态
+        // 杩涘害鍥炶皟锛氬湪 AI 鏈繑鍥炴暟鎹椂鍛ㄦ湡鎬цЕ鍙戯紝淇濇寔 SSE 娲昏穬骞舵樉绀虹瓑寰呯姸鎬?
         if ($onWaiting || $onHeartbeat) {
             curl_setopt($ch, CURLOPT_NOPROGRESS, false);
             curl_setopt($ch, CURLOPT_PROGRESSFUNCTION, function ($curl, $dlTotal, $dlNow, $ulTotal, $ulNow) use (
@@ -347,7 +347,7 @@ class OpenAiProvider implements ProviderInterface
                 $now = microtime(true);
                 $sinceLast = $now - $lastProgressNotify;
 
-                // AI 还没有返回有效数据时，每隔 $progressInterval 秒发送等待通知
+                // AI 杩樻病鏈夎繑鍥炴湁鏁堟暟鎹椂锛屾瘡闅?$progressInterval 绉掑彂閫佺瓑寰呴€氱煡
                 if (!$hasValidChunk && $sinceLast >= $progressInterval) {
                     $elapsed = (int)($now - $startTime);
                     if ($onWaiting) {
@@ -358,13 +358,13 @@ class OpenAiProvider implements ProviderInterface
                     }
                     $lastProgressNotify = $now;
                 }
-                // AI 已有数据流时，仍保持较高频保活，避免代理空闲超时误断（每 8 秒）
+                // AI 宸叉湁鏁版嵁娴佹椂锛屼粛淇濇寔杈冮珮棰戜繚娲伙紝閬垮厤浠ｇ悊绌洪棽瓒呮椂璇柇锛堟瘡 8 绉掞級
                 elseif ($hasValidChunk && $onHeartbeat && $sinceLast >= 8) {
                     $onHeartbeat();
                     $lastProgressNotify = $now;
                 }
 
-                return 0; // 返回 0 继续传输
+                return 0; // 杩斿洖 0 缁х画浼犺緭
             });
         }
 
@@ -377,7 +377,7 @@ class OpenAiProvider implements ProviderInterface
                 $rawResponseBuffer .= $data;
             }
 
-            // 心跳：收到任何数据都触发
+            // 蹇冭烦锛氭敹鍒颁换浣曟暟鎹兘瑙﹀彂
             if ($onHeartbeat) {
                 $onHeartbeat();
             }
@@ -410,7 +410,7 @@ class OpenAiProvider implements ProviderInterface
                     $modelName = $chunk['model'];
                 }
 
-                // 推理/思考内容
+                // 鎺ㄧ悊/鎬濊€冨唴瀹?
                 if (!empty($delta['reasoning_content'])) {
                     $fullReasoning .= $delta['reasoning_content'];
                     if ($onReasoning) {
@@ -418,7 +418,7 @@ class OpenAiProvider implements ProviderInterface
                     }
                 }
 
-                // 正文内容
+                // 姝ｆ枃鍐呭
                 if (isset($delta['content']) && $delta['content'] !== '') {
                     $fullContent .= $delta['content'];
                     if ($onContent) {
@@ -426,7 +426,7 @@ class OpenAiProvider implements ProviderInterface
                     }
                 }
 
-                // tool_calls 增量累积
+                // tool_calls 澧為噺绱Н
                 if (!empty($delta['tool_calls'])) {
                     foreach ($delta['tool_calls'] as $tc) {
                         $idx = $tc['index'] ?? 0;
@@ -465,7 +465,7 @@ class OpenAiProvider implements ProviderInterface
             if ($this->isCurlStreamWriteAbortError($error)) {
                 $streamWriteAborted = true;
             } else {
-                throw new Exception(__('流式API调用失败: %{error}', ['error' => $error]));
+                throw new Exception(__('娴佸紡API璋冪敤澶辫触: %{error}', ['error' => $error]));
             }
         }
         if (!$streamWriteAborted && $httpCode !== 200) {
@@ -475,7 +475,7 @@ class OpenAiProvider implements ProviderInterface
             throw new Exception($this->parseApiErrorResponse($rawResponseBuffer, $httpCode));
         }
 
-        // 构建 tool_calls（与 generate() 相同格式）
+        // 鏋勫缓 tool_calls锛堜笌 generate() 鐩稿悓鏍煎紡锛?
         $toolCalls = [];
         foreach ($toolCallsAccum as $tc) {
             $args = $tc['arguments'];
@@ -489,7 +489,7 @@ class OpenAiProvider implements ProviderInterface
             ];
         }
 
-        // 构建结果（与 generate() 返回格式一致）
+        // 鏋勫缓缁撴灉锛堜笌 generate() 杩斿洖鏍煎紡涓€鑷达級
         $result = [
             'content' => $fullContent,
             'usage' => [
@@ -508,7 +508,7 @@ class OpenAiProvider implements ProviderInterface
 
         if (!empty($toolCalls)) {
             $result['tool_calls'] = $toolCalls;
-            // 构建 assistant_message（用于后续消息历史）
+            // 鏋勫缓 assistant_message锛堢敤浜庡悗缁秷鎭巻鍙诧級
             $result['assistant_message'] = [
                 'role' => 'assistant',
                 'content' => $fullContent ?: null,
@@ -532,7 +532,7 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 流式生成
+     * 娴佸紡鐢熸垚
      * 
      * @param AiModel $model
      * @param string $prompt
@@ -545,7 +545,7 @@ class OpenAiProvider implements ProviderInterface
     {
         $config = $model->getConfig();
         
-        // 合并provider_config（优先）
+        // 鍚堝苟provider_config锛堜紭鍏堬級
         $providerConfig = $model->getData('provider_config');
         if (!empty($providerConfig)) {
             $providerData = is_string($providerConfig) ? json_decode($providerConfig, true) : $providerConfig;
@@ -567,11 +567,11 @@ class OpenAiProvider implements ProviderInterface
         $messages = $this->buildMessages($prompt, $params);
         $timeout = $this->resolveStreamTimeout($params, $config);
         
-        // 设置执行时间限制（SSE 模式下跳过，由 SseWriter 统一管理为无限制）
+        // 璁剧疆鎵ц鏃堕棿闄愬埗锛圫SE 妯″紡涓嬭烦杩囷紝鐢?SseWriter 缁熶竴绠＄悊涓烘棤闄愬埗锛?
         $shouldRestoreExecutionTimeLimit = !SseContext::isSseEnabled();
         if ($shouldRestoreExecutionTimeLimit) {
             if ($timeout > 0) {
-                $timeLimit = $timeout + 10;
+                $timeLimit = $timeout + ProviderTimeoutPolicy::EXECUTION_TIME_BUFFER;
                 @set_time_limit($timeLimit);
             } else {
                 @set_time_limit(0);
@@ -586,7 +586,7 @@ class OpenAiProvider implements ProviderInterface
             'stream' => true,
         ];
 
-        // 智能体模式：添加 tools（function calling）
+        // 鏅鸿兘浣撴ā寮忥細娣诲姞 tools锛坒unction calling锛?
         if (!empty($params['tools']) && is_array($params['tools'])) {
             $requestData['tools'] = $this->convertToolsToOpenAiFormat($params['tools']);
             $requestData['tool_choice'] = $params['tool_choice'] ?? 'auto';
@@ -604,13 +604,13 @@ class OpenAiProvider implements ProviderInterface
 
         $fullContent = '';
         
-        // 优先使用base_url，如果没有则使用api_url，最后使用默认值
+        // 浼樺厛浣跨敤base_url锛屽鏋滄病鏈夊垯浣跨敤api_url锛屾渶鍚庝娇鐢ㄩ粯璁ゅ€?
         $apiUrl = $config['base_url'] ?? $config['api_url'] ?? 'https://api.openai.com/v1';
         if (!str_ends_with($apiUrl, '/chat/completions')) {
             $apiUrl = rtrim($apiUrl, '/') . '/chat/completions';
         }
         
-        // 确保proxyInfo是数组（可能存储为 JSON 字符串）
+        // 纭繚proxyInfo鏄暟缁勶紙鍙兘瀛樺偍涓?JSON 瀛楃涓诧級
         $proxyInfo = $model->getProxyInfo();
         if (is_string($proxyInfo) && !empty($proxyInfo)) {
             $proxyInfo = json_decode($proxyInfo, true) ?: [];
@@ -619,7 +619,7 @@ class OpenAiProvider implements ProviderInterface
             $proxyInfo = [];
         }
         
-        // 推理/思考内容回调
+        // 鎺ㄧ悊/鎬濊€冨唴瀹瑰洖璋?
         $reasoningCallback = $params['reasoning_callback'] ?? null;
         $fullReasoning = '';
         $onHeartbeat = \is_callable($params['on_heartbeat'] ?? null) ? $params['on_heartbeat'] : null;
@@ -642,12 +642,12 @@ class OpenAiProvider implements ProviderInterface
             $onHeartbeat
         );
 
-        // 如果流式调用没有返回任何内容，抛出明确错误
+        // 濡傛灉娴佸紡璋冪敤娌℃湁杩斿洖浠讳綍鍐呭锛屾姏鍑烘槑纭敊璇?
         if (empty(trim($fullContent)) && empty(trim($fullReasoning))) {
-            throw new Exception(__('AI 流式生成完成但未返回任何内容，请检查模型配置（API Key、Base URL、模型名称）是否正确'));
+            throw new Exception(__('AI 娴佸紡鐢熸垚瀹屾垚浣嗘湭杩斿洖浠讳綍鍐呭锛岃妫€鏌ユā鍨嬮厤缃紙API Key銆丅ase URL銆佹ā鍨嬪悕绉帮級鏄惁姝ｇ‘'));
         }
 
-        // 估算token使用量
+        // 浼扮畻token浣跨敤閲?
         $totalTokens['completion_tokens'] = $this->estimateTokens($fullContent);
         $totalTokens['prompt_tokens'] = $this->estimateTokens($prompt);
         $totalTokens['total_tokens'] = $totalTokens['prompt_tokens'] + $totalTokens['completion_tokens'];
@@ -670,10 +670,10 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 解析 max_tokens：
-     * - 调用方显式传参时，以调用方为准（业务侧可按场景提升预算）
-     * - 未传参时，回落模型/配置默认值
-     * - 最终值不超过模型支持的 max_tokens 上限
+     * 瑙ｆ瀽 max_tokens锛?
+     * - 璋冪敤鏂规樉寮忎紶鍙傛椂锛屼互璋冪敤鏂逛负鍑嗭紙涓氬姟渚у彲鎸夊満鏅彁鍗囬绠楋級
+     * - 鏈紶鍙傛椂锛屽洖钀芥ā鍨?閰嶇疆榛樿鍊?
+     * - 鏈€缁堝€间笉瓒呰繃妯″瀷鏀寔鐨?max_tokens 涓婇檺
      */
     private function capMaxTokens(AiModel $model, array $config, array $params): int
     {
@@ -692,7 +692,7 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 构建消息数组
+     * 鏋勫缓娑堟伅鏁扮粍
      * 
      * @param string $prompt
      * @param array $params
@@ -700,14 +700,14 @@ class OpenAiProvider implements ProviderInterface
      */
     private function buildMessages(string $prompt, array $params): array
     {
-        // 智能体模式：直接使用完整消息历史
+        // 鏅鸿兘浣撴ā寮忥細鐩存帴浣跨敤瀹屾暣娑堟伅鍘嗗彶
         if (!empty($params['messages']) && is_array($params['messages'])) {
             return $this->ensureJsonResponseFormatMention($params['messages'], $params);
         }
 
         $messages = [];
 
-        // 系统消息
+        // 绯荤粺娑堟伅
         if (!empty($params['system_message'])) {
             $messages[] = [
                 'role' => 'system',
@@ -715,12 +715,12 @@ class OpenAiProvider implements ProviderInterface
             ];
         }
 
-        // 历史对话
+        // 鍘嗗彶瀵硅瘽
         if (!empty($params['history']) && is_array($params['history'])) {
             $messages = array_merge($messages, $params['history']);
         }
 
-        // 用户消息
+        // 鐢ㄦ埛娑堟伅
         if (!empty($prompt)) {
             $messages[] = [
                 'role' => 'user',
@@ -795,13 +795,13 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 将框架中间格式的 Tool 定义转换为 OpenAI function calling 格式
+     * 灏嗘鏋朵腑闂存牸寮忕殑 Tool 瀹氫箟杞崲涓?OpenAI function calling 鏍煎紡
      * 
-     * 框架格式：[['name' => '...', 'description' => '...', 'parameters' => [...]]]
-     * OpenAI 格式：[['type' => 'function', 'function' => ['name' => '...', 'description' => '...', 'parameters' => [...]]]]
+     * 妗嗘灦鏍煎紡锛歔['name' => '...', 'description' => '...', 'parameters' => [...]]]
+     * OpenAI 鏍煎紡锛歔['type' => 'function', 'function' => ['name' => '...', 'description' => '...', 'parameters' => [...]]]]
      * 
-     * @param array $tools 框架中间格式的 Tool 定义
-     * @return array OpenAI 格式
+     * @param array $tools 妗嗘灦涓棿鏍煎紡鐨?Tool 瀹氫箟
+     * @return array OpenAI 鏍煎紡
      */
     private function convertToolsToOpenAiFormat(array $tools): array
     {
@@ -820,10 +820,10 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 从 OpenAI 响应中提取 tool_calls
+     * 浠?OpenAI 鍝嶅簲涓彁鍙?tool_calls
      * 
-     * @param array $response OpenAI API 响应
-     * @return array 标准化的 tool_calls 数组
+     * @param array $response OpenAI API 鍝嶅簲
+     * @return array 鏍囧噯鍖栫殑 tool_calls 鏁扮粍
      */
     private function extractToolCalls(array $response): array
     {
@@ -848,7 +848,7 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 带重试的API调用
+     * 甯﹂噸璇曠殑API璋冪敤
      * 
      * @param string $url
      * @param string $apiKey
@@ -861,7 +861,7 @@ class OpenAiProvider implements ProviderInterface
      */
     private function callApiWithRetry(string $url, string $apiKey, array $data, array $proxyInfo, int $timeout, int $retryCount = 0): array
     {
-        // SSE 模式下不做 PHP 层面的超时检测
+        // SSE 妯″紡涓嬩笉鍋?PHP 灞傞潰鐨勮秴鏃舵娴?
         $isSseMode = SseContext::isSseEnabled();
         
         $startTime = microtime(true);
@@ -871,22 +871,22 @@ class OpenAiProvider implements ProviderInterface
         try {
             $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout);
             
-            // 在执行前检查剩余时间，如果时间不足，提前抛出错误
+            // 鍦ㄦ墽琛屽墠妫€鏌ュ墿浣欐椂闂达紝濡傛灉鏃堕棿涓嶈冻锛屾彁鍓嶆姏鍑洪敊璇?
             if ($timeLimit !== null && $timeLimit > 0) {
                 $elapsedBeforeRequest = microtime(true) - $startTime;
                 $remainingTime = $timeLimit - $elapsedBeforeRequest;
-                // 如果剩余时间少于5秒，提前抛出错误
+                // 濡傛灉鍓╀綑鏃堕棿灏戜簬5绉掞紝鎻愬墠鎶涘嚭閿欒
                 if ($remainingTime < 5) {
                     throw new Exception($this->getTimeoutErrorMessage($timeout));
                 }
             }
             
-            // 清除之前的错误
+            // 娓呴櫎涔嬪墠鐨勯敊璇?
             error_clear_last();
             
             $response = $this->executeCurl($ch);
             
-            // 检查 PHP 超时（SSE 模式下跳过）
+            // 妫€鏌?PHP 瓒呮椂锛圫SE 妯″紡涓嬭烦杩囷級
             if (!$isSseMode) {
                 $lastError = error_get_last();
                 if ($lastError && (
@@ -896,7 +896,7 @@ class OpenAiProvider implements ProviderInterface
                     throw new Exception($this->getTimeoutErrorMessage($timeout));
                 }
                 
-                // 检查执行时间是否接近限制
+                // 妫€鏌ユ墽琛屾椂闂存槸鍚︽帴杩戦檺鍒?
                 $elapsedTime = microtime(true) - $startTime;
                 if ($timeLimit !== null && $elapsedTime >= ($timeLimit - 2)) {
                     throw new Exception($this->getTimeoutErrorMessage($timeout));
@@ -907,39 +907,39 @@ class OpenAiProvider implements ProviderInterface
             $error = curl_error($ch);
 
             if ($response === false) {
-                // 检查是否是超时错误
+                // 妫€鏌ユ槸鍚︽槸瓒呮椂閿欒
                 if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
                     throw new Exception($this->getTimeoutErrorMessage($timeout));
                 }
-                throw new Exception(__('API请求失败: %{error}', ['error' => $error]));
+                throw new Exception(__('API璇锋眰澶辫触: %{error}', ['error' => $error]));
             }
 
             $result = json_decode($response, true);
             
             if ($httpCode >= 500 && $retryCount < self::MAX_RETRIES) {
-                // 服务器错误，重试
+                // 鏈嶅姟鍣ㄩ敊璇紝閲嶈瘯
                 SchedulerSystem::sleep(self::RETRY_DELAY * ($retryCount + 1));
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
 
             if ($httpCode !== 200) {
-                $errorMsg = $result['error']['message'] ?? __('HTTP错误: %{code}', ['code' => $httpCode]);
+                $errorMsg = $result['error']['message'] ?? __('HTTP閿欒: %{code}', ['code' => $httpCode]);
                 if ($this->isNonRetryableApiError($httpCode, (string)$errorMsg)) {
-                    throw new Exception(__('API返回错误（不可重试）: %{error}', ['error' => $errorMsg]));
+                    throw new Exception(__('API杩斿洖閿欒锛堜笉鍙噸璇曪級: %{error}', ['error' => $errorMsg]));
                 }
-                throw new Exception(__('API返回错误: %{error}', ['error' => $errorMsg]));
+                throw new Exception(__('API杩斿洖閿欒: %{error}', ['error' => $errorMsg]));
             }
 
             if (!isset($result['choices'][0]['message']['content'])) {
-                throw new Exception(__('API响应格式错误'));
+                throw new Exception(__('API鍝嶅簲鏍煎紡閿欒'));
             }
 
             return $result;
 
         } catch (\Exception $e) {
-            // 如果是超时错误，直接抛出，不重试
-            if (strpos($e->getMessage(), '请求超时') !== false || 
-                strpos($e->getMessage(), '执行时间') !== false) {
+            // 濡傛灉鏄秴鏃堕敊璇紝鐩存帴鎶涘嚭锛屼笉閲嶈瘯
+            if (strpos($e->getMessage(), '璇锋眰瓒呮椂') !== false || 
+                strpos($e->getMessage(), '鎵ц鏃堕棿') !== false) {
                 throw $e;
             }
             if ($this->isNonRetryableApiErrorMessage($e->getMessage())) {
@@ -950,7 +950,7 @@ class OpenAiProvider implements ProviderInterface
                 SchedulerSystem::sleep(self::RETRY_DELAY * ($retryCount + 1));
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
-            throw new Exception(__('API调用失败（已重试%{count}次）: %{msg}', [
+            throw new Exception(__('API璋冪敤澶辫触锛堝凡閲嶈瘯%{count}娆★級: %{msg}', [
                 'count' => $retryCount,
                 'msg' => $e->getMessage()
             ]));
@@ -989,7 +989,7 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 流式API调用
+     * 娴佸紡API璋冪敤
      * 
      * @param string $url
      * @param string $apiKey
@@ -1009,7 +1009,7 @@ class OpenAiProvider implements ProviderInterface
         ?callable $reasoningCallback = null,
         ?callable $onHeartbeat = null
     ): void {
-        // SSE 模式下不做 PHP 层面的超时检测，由 SseWriter 和 curl 自身控制
+        // SSE 妯″紡涓嬩笉鍋?PHP 灞傞潰鐨勮秴鏃舵娴嬶紝鐢?SseWriter 鍜?curl 鑷韩鎺у埗
         $isSseMode = SseContext::isSseEnabled();
         
         $startTime = microtime(true);
@@ -1018,26 +1018,26 @@ class OpenAiProvider implements ProviderInterface
         
         $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, true);
         
-        // 在执行前检查剩余时间，如果时间不足，提前抛出错误
+        // 鍦ㄦ墽琛屽墠妫€鏌ュ墿浣欐椂闂达紝濡傛灉鏃堕棿涓嶈冻锛屾彁鍓嶆姏鍑洪敊璇?
         if ($timeLimit !== null && $timeLimit > 0) {
             $elapsedBeforeRequest = microtime(true) - $startTime;
             $remainingTime = $timeLimit - $elapsedBeforeRequest;
-            // 如果剩余时间少于5秒，提前抛出错误
+            // 濡傛灉鍓╀綑鏃堕棿灏戜簬5绉掞紝鎻愬墠鎶涘嚭閿欒
             if ($remainingTime < 5) {
                 throw new Exception($this->getTimeoutErrorMessage($timeout));
             }
         }
         
-        // 清除之前的错误
+        // 娓呴櫎涔嬪墠鐨勯敊璇?
         error_clear_last();
         
-        // 用于捕获非 SSE 格式的响应（API 错误等）
+        // 鐢ㄤ簬鎹曡幏闈?SSE 鏍煎紡鐨勫搷搴旓紙API 閿欒绛夛級
         $rawResponseBuffer = '';
         $hasValidChunk = false;
         $streamLineBuffer = '';
         $streamTerminatedNormally = false;
-        // on_heartbeat：仅允许「轻量保活」（如 SseWriter::sendComment），禁止在进度回调里 sendEvent（会触发 checkHeartbeat/yield，与 curl 读并行时易异常）。
-        // 与 WRITEFUNCTION 共用节流：上游首包前可能长时间无 chunk，仅靠 PROGRESS 在部分环境不可靠，故在收到原始 TCP 片时也尝试保活。
+        // on_heartbeat锛氫粎鍏佽銆岃交閲忎繚娲汇€嶏紙濡?SseWriter::sendComment锛夛紝绂佹鍦ㄨ繘搴﹀洖璋冮噷 sendEvent锛堜細瑙﹀彂 checkHeartbeat/yield锛屼笌 curl 璇诲苟琛屾椂鏄撳紓甯革級銆?
+        // 涓?WRITEFUNCTION 鍏辩敤鑺傛祦锛氫笂娓搁鍖呭墠鍙兘闀挎椂闂存棤 chunk锛屼粎闈?PROGRESS 鍦ㄩ儴鍒嗙幆澧冧笉鍙潬锛屾晠鍦ㄦ敹鍒板師濮?TCP 鐗囨椂涔熷皾璇曚繚娲汇€?
         $streamKeepaliveIntervalSec = 5.0;
         $lastStreamKeepaliveAt = microtime(true);
         if ($onHeartbeat !== null) {
@@ -1068,13 +1068,13 @@ class OpenAiProvider implements ProviderInterface
             });
         }
         
-        // 设置流式处理回调
+        // 璁剧疆娴佸紡澶勭悊鍥炶皟
         curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback, $reasoningCallback, $startTime, $timeLimit, &$rawResponseBuffer, &$hasValidChunk, &$streamLineBuffer, &$streamTerminatedNormally, $onHeartbeat, &$lastStreamKeepaliveAt, $streamKeepaliveIntervalSec) {
-            // 检查是否超时
+            // 妫€鏌ユ槸鍚﹁秴鏃?
             if ($timeLimit !== null) {
                 $elapsedTime = microtime(true) - $startTime;
                 if ($elapsedTime >= ($timeLimit - 2)) {
-                    return -1; // 返回 -1 会中断 curl_exec
+                    return -1; // 杩斿洖 -1 浼氫腑鏂?curl_exec
                 }
             }
 
@@ -1089,7 +1089,7 @@ class OpenAiProvider implements ProviderInterface
                 }
             }
 
-            // 累积原始响应（限制大小，仅用于错误诊断）
+            // 绱Н鍘熷鍝嶅簲锛堥檺鍒跺ぇ灏忥紝浠呯敤浜庨敊璇瘖鏂級
             if (strlen($rawResponseBuffer) < 4096) {
                 $rawResponseBuffer .= $data;
             }
@@ -1115,7 +1115,7 @@ class OpenAiProvider implements ProviderInterface
                 $chunk = json_decode($jsonData, true);
                 $delta = $chunk['choices'][0]['delta'] ?? [];
 
-                // 处理推理/思考内容（DeepSeek reasoning_content）
+                // 澶勭悊鎺ㄧ悊/鎬濊€冨唴瀹癸紙DeepSeek reasoning_content锛?
                 if (!empty($delta['reasoning_content']) && $reasoningCallback) {
                     $hasValidChunk = true;
                     $result = $reasoningCallback($delta['reasoning_content']);
@@ -1125,7 +1125,7 @@ class OpenAiProvider implements ProviderInterface
                     }
                 }
 
-                // 处理正文内容
+                // 澶勭悊姝ｆ枃鍐呭
                 if (isset($delta['content'])) {
                     $hasValidChunk = true;
                     $result = $callback($delta['content']);
@@ -1145,7 +1145,7 @@ class OpenAiProvider implements ProviderInterface
 
         $this->executeCurl($ch);
 
-        // 兜底处理尾包：某些上游在结束时最后一行可能不带换行，若不补解析会丢失末尾 delta。
+        // 鍏滃簳澶勭悊灏惧寘锛氭煇浜涗笂娓稿湪缁撴潫鏃舵渶鍚庝竴琛屽彲鑳戒笉甯︽崲琛岋紝鑻ヤ笉琛ヨВ鏋愪細涓㈠け鏈熬 delta銆?
         $tailLine = trim($streamLineBuffer);
         if ($tailLine !== '' && str_starts_with($tailLine, 'data: ')) {
             $jsonData = substr($tailLine, 6);
@@ -1173,10 +1173,10 @@ class OpenAiProvider implements ProviderInterface
             }
         }
 
-        // 获取 HTTP 状态码
+        // 鑾峰彇 HTTP 鐘舵€佺爜
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
-        // 检查 PHP 超时（SSE 模式下跳过，因为已设 set_time_limit(0)）
+        // 妫€鏌?PHP 瓒呮椂锛圫SE 妯″紡涓嬭烦杩囷紝鍥犱负宸茶 set_time_limit(0)锛?
         if (!$isSseMode) {
             $lastError = error_get_last();
             if ($lastError && (
@@ -1193,24 +1193,24 @@ class OpenAiProvider implements ProviderInterface
 
         $streamWriteAborted = false;
         if ($error) {
-            // curl 超时错误始终需要检测（非 PHP 层面超时）
+            // curl 瓒呮椂閿欒濮嬬粓闇€瑕佹娴嬶紙闈?PHP 灞傞潰瓒呮椂锛?
             if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
                 throw new Exception($this->getTimeoutErrorMessage($timeout));
             }
             if ($this->isCurlStreamWriteAbortError($error)) {
                 $streamWriteAborted = true;
             } else {
-                throw new Exception(__('流式API调用失败: %{error}', ['error' => $error]));
+                throw new Exception(__('娴佸紡API璋冪敤澶辫触: %{error}', ['error' => $error]));
             }
         }
         
-        // 检查 HTTP 状态码
+        // 妫€鏌?HTTP 鐘舵€佺爜
         if (!$streamWriteAborted && $httpCode !== 200) {
             $errorMsg = $this->parseApiErrorResponse($rawResponseBuffer, $httpCode);
             throw new Exception($errorMsg);
         }
         
-        // 检查是否收到了有效内容
+        // 妫€鏌ユ槸鍚︽敹鍒颁簡鏈夋晥鍐呭
         if (!$streamWriteAborted && !$hasValidChunk && !empty($rawResponseBuffer)) {
             $errorMsg = $this->parseApiErrorResponse($rawResponseBuffer, $httpCode);
             throw new Exception($errorMsg);
@@ -1219,63 +1219,63 @@ class OpenAiProvider implements ProviderInterface
         if (!$streamWriteAborted && $hasValidChunk && !$streamTerminatedNormally) {
             $tailPreview = mb_substr(trim($streamLineBuffer), 0, 180);
             throw new Exception(
-                'AI 上游流式输出提前终止：未收到 [DONE] 结束标记。'
+                'AI upstream stream terminated before the [DONE] marker.'
                 . ($tailPreview !== '' ? " tail={$tailPreview}" : '')
             );
         }
     }
     
     /**
-     * 解析 API 错误响应，提取可读的错误信息
+     * 瑙ｆ瀽 API 閿欒鍝嶅簲锛屾彁鍙栧彲璇荤殑閿欒淇℃伅
      */
     private function parseApiErrorResponse(string $rawResponse, int $httpCode): string
     {
         $trimmed = trim($rawResponse);
         
-        // 尝试解析 JSON 错误响应
+        // 灏濊瘯瑙ｆ瀽 JSON 閿欒鍝嶅簲
         if (!empty($trimmed)) {
             $errorData = json_decode($trimmed, true);
             if (is_array($errorData)) {
-                // OpenAI 格式: {"error": {"message": "...", "type": "..."}}
+                // OpenAI 鏍煎紡: {"error": {"message": "...", "type": "..."}}
                 if (isset($errorData['error']['message'])) {
                     $errType = $errorData['error']['type'] ?? 'api_error';
-                    return "AI API 错误 (HTTP {$httpCode}, {$errType}): " . $errorData['error']['message'];
+                    return "AI API 閿欒 (HTTP {$httpCode}, {$errType}): " . $errorData['error']['message'];
                 }
-                // 其他格式: {"message": "..."} 或 {"detail": "..."}
+                // 鍏朵粬鏍煎紡: {"message": "..."} 鎴?{"detail": "..."}
                 if (isset($errorData['message'])) {
-                    return "AI API 错误 (HTTP {$httpCode}): " . $errorData['message'];
+                    return "AI API 閿欒 (HTTP {$httpCode}): " . $errorData['message'];
                 }
                 if (isset($errorData['detail'])) {
-                    return "AI API 错误 (HTTP {$httpCode}): " . $errorData['detail'];
+                    return "AI API 閿欒 (HTTP {$httpCode}): " . $errorData['detail'];
                 }
             }
         }
         
-        // HTTP 状态码友好提示
+        // HTTP 鐘舵€佺爜鍙嬪ソ鎻愮ず
         $statusMessages = [
-            401 => 'API 密钥无效或已过期，请检查 AI 模型配置中的 API Key',
-            403 => 'API 访问被拒绝，请检查账户权限',
-            404 => 'API 端点不存在，请检查 Base URL 配置',
-            429 => 'API 请求频率超限或额度不足，请稍后重试',
-            500 => 'AI 服务内部错误，请稍后重试',
-            502 => 'AI 服务网关错误，请稍后重试',
-            503 => 'AI 服务暂时不可用，请稍后重试',
+            401 => 'Invalid or expired API key. Check the AI model API Key configuration.',
+            403 => 'API access was denied. Check account permissions.',
+            404 => 'API endpoint was not found. Check the Base URL configuration.',
+            429 => 'API rate limit or quota was exceeded. Try again later.',
+            500 => 'AI service internal error. Try again later.',
+            502 => 'AI service gateway error. Try again later.',
+            503 => 'AI service is temporarily unavailable. Try again later.',
         ];
         
         if (isset($statusMessages[$httpCode])) {
-            return "AI API 错误 (HTTP {$httpCode}): " . $statusMessages[$httpCode];
+            return "AI API 閿欒 (HTTP {$httpCode}): " . $statusMessages[$httpCode];
         }
         
         if ($httpCode > 0) {
             $preview = mb_substr($trimmed, 0, 200);
-            return "AI API 返回异常 (HTTP {$httpCode})" . ($preview ? "，响应: {$preview}" : '');
+            return "AI API 杩斿洖寮傚父 (HTTP {$httpCode})" . ($preview ? "锛屽搷搴? {$preview}" : '');
         }
         
-        return "AI API 无响应，请检查网络连接和 API 地址配置";
+        return "AI API 鏃犲搷搴旓紝璇锋鏌ョ綉缁滆繛鎺ュ拰 API 鍦板潃閰嶇疆";
     }
 
     /**
-     * 初始化CURL
+     * 鍒濆鍖朇URL
      * 
      * @param string $url
      * @param string $apiKey
@@ -1305,20 +1305,20 @@ class OpenAiProvider implements ProviderInterface
             curl_setopt($ch, $option, $value);
         }
         
-        // SSL配置：在Windows本地开发环境中，可能需要跳过SSL验证
-        // 生产环境建议配置正确的CA证书包
+        // SSL閰嶇疆锛氬湪Windows鏈湴寮€鍙戠幆澧冧腑锛屽彲鑳介渶瑕佽烦杩嘢SL楠岃瘉
+        // 鐢熶骇鐜寤鸿閰嶇疆姝ｇ‘鐨凜A璇佷功鍖?
         $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
         if ($isWindows) {
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-            // Windows 双栈网络可能导致 IPv6 超时，强制使用 IPv4
+            // Windows 鍙屾爤缃戠粶鍙兘瀵艰嚧 IPv6 瓒呮椂锛屽己鍒朵娇鐢?IPv4
             curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
         } else {
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         }
 
-        // 代理配置
+        // 浠ｇ悊閰嶇疆
         if (!empty($proxyInfo['enabled'])) {
             $proxy = $proxyInfo['host'] . ':' . $proxyInfo['port'];
             curl_setopt($ch, CURLOPT_PROXY, $proxy);
@@ -1333,16 +1333,7 @@ class OpenAiProvider implements ProviderInterface
 
     private function resolveStreamTimeout(array $params, array $config): int
     {
-        if (!empty($params['disable_ai_timeout']) || (PHP_SAPI === 'cli' && !empty($params['disable_cli_timeout']))) {
-            return 0;
-        }
-        if (!empty($params['enforce_timeout_in_stream'])) {
-            return isset($params['timeout'])
-                ? (int)$params['timeout']
-                : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
-        }
-
-        return 0;
+        return ProviderTimeoutPolicy::resolveStreamTimeout($params, $config);
     }
 
     /**
@@ -1355,8 +1346,8 @@ class OpenAiProvider implements ProviderInterface
         if ($isStream) {
             return [
                 CURLOPT_TIMEOUT => 0,
-                CURLOPT_CONNECTTIMEOUT => 60,
-                // 流式长连接在推理阶段可能长时间不出 chunk，不能用低速保护把它误判成挂死。
+                CURLOPT_CONNECTTIMEOUT => ProviderTimeoutPolicy::DEFAULT_CONNECT_TIMEOUT,
+                // 娴佸紡闀胯繛鎺ュ湪鎺ㄧ悊闃舵鍙兘闀挎椂闂翠笉鍑?chunk锛屼笉鑳界敤浣庨€熶繚鎶ゆ妸瀹冭鍒ゆ垚鎸傛銆?
                 CURLOPT_LOW_SPEED_LIMIT => 0,
                 CURLOPT_LOW_SPEED_TIME => 0,
             ];
@@ -1367,15 +1358,24 @@ class OpenAiProvider implements ProviderInterface
         ];
 
         if ($timeout > 0) {
-            $options[CURLOPT_CONNECTTIMEOUT] = min($timeout, 60);
+            $options[CURLOPT_CONNECTTIMEOUT] = min($timeout, ProviderTimeoutPolicy::DEFAULT_CONNECT_TIMEOUT);
         } else {
-            $options[CURLOPT_CONNECTTIMEOUT] = 60;
+            $options[CURLOPT_CONNECTTIMEOUT] = ProviderTimeoutPolicy::DEFAULT_CONNECT_TIMEOUT;
             $options[CURLOPT_LOW_SPEED_LIMIT] = 1;
             $options[CURLOPT_LOW_SPEED_TIME] = 120;
         }
 
         return $options;
     }
+
+
+
+
+
+
+
+
+
 
     private function executeCurl(\CurlHandle $ch): string|bool
     {
@@ -1422,14 +1422,14 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 获取API密钥
+     * 鑾峰彇API瀵嗛挜
      * 
      * @param array $config
      * @return string
      */
     private function getApiKey(array $config): string
     {
-        // 优先使用环境变量
+        // 浼樺厛浣跨敤鐜鍙橀噺
         if (!empty($config['api_key_env'])) {
             $envKey = getenv($config['api_key_env']);
             if ($envKey) {
@@ -1437,7 +1437,7 @@ class OpenAiProvider implements ProviderInterface
             }
         }
 
-        // 使用配置中的密钥
+        // 浣跨敤閰嶇疆涓殑瀵嗛挜
         return $this->normalizeApiKey((string)($config['api_key'] ?? ''));
     }
 
@@ -1454,14 +1454,14 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 估算token数量
+     * 浼扮畻token鏁伴噺
      * 
      * @param string $text
      * @return int
      */
     private function estimateTokens(string $text): int
     {
-        // 简单估算：英文约4字符=1token，中文约1.5字符=1token
+        // 绠€鍗曚及绠楋細鑻辨枃绾?瀛楃=1token锛屼腑鏂囩害1.5瀛楃=1token
         $englishChars = preg_match_all('/[a-zA-Z0-9\s]/', $text);
         $otherChars = mb_strlen($text) - $englishChars;
         
@@ -1469,14 +1469,14 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 检查模型支持
+     * 妫€鏌ユā鍨嬫敮鎸?
      * 
      * @param string $modelCode
      * @return bool
      */
     public function supports(string $modelCode): bool
     {
-        // 支持OpenAI和兼容OpenAI API的模型（如DeepSeek等，但不包括Claude，Claude使用AnthropicProvider）
+        // 鏀寔OpenAI鍜屽吋瀹筄penAI API鐨勬ā鍨嬶紙濡侱eepSeek绛夛紝浣嗕笉鍖呮嫭Claude锛孋laude浣跨敤AnthropicProvider锛?
         return str_contains($modelCode, 'gpt') 
             || str_contains($modelCode, 'openai') 
             || str_contains($modelCode, 'deepseek')
@@ -1489,7 +1489,7 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 获取供应商代码
+     * 鑾峰彇渚涘簲鍟嗕唬鐮?
      * 
      * @return string
      */
@@ -1499,7 +1499,7 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 获取该供应商支持的模型列表
+     * 鑾峰彇璇ヤ緵搴斿晢鏀寔鐨勬ā鍨嬪垪琛?
      * 
      * @return array
      */
@@ -1509,32 +1509,32 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
-     * 获取超时错误消息
+     * 鑾峰彇瓒呮椂閿欒娑堟伅
      * 
-     * @param int $timeout 超时时间（秒）
-     * @return string 友好的错误消息（纯文本，不包含HTML标签）
+     * @param int $timeout 瓒呮椂鏃堕棿锛堢锛?
+     * @return string 鍙嬪ソ鐨勯敊璇秷鎭紙绾枃鏈紝涓嶅寘鍚獺TML鏍囩锛?
      */
     private function getTimeoutErrorMessage(int $timeout): string
     {
-        // 生成纯文本错误消息，去除所有HTML标签
-        $message = '';
+        $message = "";
         if ($timeout > 0) {
             $message = sprintf(
-                __('AI请求超时（已设置超时时间为 %d 秒）。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试增加超时时间设置；3) 简化请求内容；4) 稍后重试。'),
+                "AI request timed out after %d seconds. Check network connectivity, upstream AI response time, and request complexity.",
                 $timeout
             );
         } else {
-            $message = __('AI请求超时。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试设置合理的超时时间；3) 简化请求内容；4) 稍后重试。');
+            $message = "AI request timed out. Check network connectivity, upstream AI response time, and request complexity.";
         }
-        
-        // 去除所有HTML标签，只保留纯文本
+
         $message = strip_tags($message);
-        // 解码HTML实体
         $message = html_entity_decode($message, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        // 去除多余的空白字符
         $message = trim(preg_replace('/\s+/', ' ', $message));
-        
+
         return $message;
     }
+
+
+
+
 }
 
