@@ -54,4 +54,17 @@ final class AiSiteWorkbenchBlockSseChatIntegrationTest extends AbstractAiSiteWor
         self::assertStringContainsString("replaceCurrentBlockHtml(targetPageType, nextBlock);", $html);
         self::assertStringContainsString("toast('success', messages.blockSseApplied);", $html);
     }
+
+    public function testBlockQueueObserverKeepsStreamOpenUntilCompletion(): void
+    {
+        /** @var AiSiteAgent $controller */
+        $controller = ObjectManager::getInstance(AiSiteAgent::class);
+        $method = new \ReflectionMethod(AiSiteAgent::class, 'shouldKeepQueuedObserverStreamOpen');
+        $method->setAccessible(true);
+
+        self::assertTrue((bool)$method->invoke($controller, 'block_regenerate'));
+        self::assertFalse((bool)$method->invoke($controller, 'plan'));
+        self::assertFalse((bool)$method->invoke($controller, 'task_plan'));
+        self::assertFalse((bool)$method->invoke($controller, 'build'));
+    }
 }
