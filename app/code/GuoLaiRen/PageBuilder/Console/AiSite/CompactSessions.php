@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Console\AiSite;
 
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
+use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionArtifactService;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\ConnectionFactory;
@@ -47,6 +48,8 @@ final class CompactSessions implements CommandInterface
 
         /** @var AiSiteAgentSession $sessionModel */
         $sessionModel = ObjectManager::getInstance(AiSiteAgentSession::class);
+        /** @var AiSiteAgentSessionArtifactService $artifactService */
+        $artifactService = ObjectManager::getInstance(AiSiteAgentSessionArtifactService::class);
         /** @var ConnectionFactory $connectionFactory */
         $connectionFactory = ObjectManager::getInstance(ConnectionFactory::class);
         $connector = $connectionFactory->getConnector();
@@ -141,11 +144,13 @@ final class CompactSessions implements CommandInterface
 
                 if (!$includeRunning && $this->hasActiveOperation($decoded)) {
                     ++$summary['skipped_active'];
+                    unset($decoded, $rawScopeJson);
                     continue;
                 }
 
                 try {
-                    $compacted = $sessionModel->compactScopeForStorage($decoded);
+                    $prepared = $artifactService->prepareScopeForStorage($sessionRowId, $decoded);
+                    $compacted = $sessionModel->compactScopeForStorage($prepared['scope']);
                     $nextScopeJson = $compacted === []
                         ? '{}'
                         : (string)\json_encode(
@@ -154,12 +159,14 @@ final class CompactSessions implements CommandInterface
                         );
                 } catch (\Throwable) {
                     ++$summary['errors'];
+                    unset($decoded, $prepared, $compacted, $nextScopeJson, $rawScopeJson);
                     continue;
                 }
 
                 $nextBytes = \strlen($nextScopeJson);
                 if ($nextScopeJson === $rawScopeJson || $nextBytes >= $originalBytes) {
                     ++$summary['skipped_no_gain'];
+                    unset($decoded, $prepared, $compacted, $nextScopeJson, $rawScopeJson);
                     continue;
                 }
 
@@ -181,6 +188,7 @@ final class CompactSessions implements CommandInterface
                 ];
 
                 if ($apply) {
+                    $artifactService->persistArtifacts($sessionRowId, $prepared['artifacts']);
                     $updated = $this->updateScopeJson($pdo, $table, $pk, $scope, $sessionRowId, $rawScopeJson, $nextScopeJson);
                     if ($updated) {
                         ++$summary['applied'];
@@ -194,7 +202,7 @@ final class CompactSessions implements CommandInterface
                     $summary['samples'][] = $sample;
                 }
 
-                unset($decoded, $compacted, $nextScopeJson, $rawScopeJson);
+                unset($decoded, $prepared, $compacted, $nextScopeJson, $rawScopeJson);
             }
 
             if ($sessionId > 0 || \count($rows) < $batchSize) {

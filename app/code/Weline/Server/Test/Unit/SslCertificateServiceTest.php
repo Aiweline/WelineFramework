@@ -222,6 +222,38 @@ class SslCertificateServiceTest extends TestCase
         );
     }
 
+    public function testLocalCaCertificateReuseRequiresLoopbackIpSanForLocalDomain(): void
+    {
+        $fixture = $this->createLocalCaFixture('p11005ce4.weline.test');
+        $tempDir = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'p11005ce4.weline.test';
+        \mkdir($tempDir, 0700, true);
+        $certPath = $tempDir . DIRECTORY_SEPARATOR . 'fullchain.pem';
+        \file_put_contents($certPath, $fixture['fullchain']);
+        \file_put_contents($tempDir . DIRECTORY_SEPARATOR . 'chain.pem', $fixture['chain']);
+
+        $service = new SslCertificateService();
+        $covers = new ReflectionMethod($service, 'localCaCertificateCoversRequiredSan');
+        $covers->setAccessible(true);
+
+        $this->assertFalse($covers->invoke($service, 'p11005ce4.weline.test', $certPath));
+    }
+
+    public function testLocalCaCertificateReuseAcceptsLoopbackIpSanForLocalDomain(): void
+    {
+        $fixture = $this->createLocalCaFixture('p11005ce4.weline.test', ['127.0.0.1', '::1']);
+        $tempDir = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'p11005ce4.weline.test';
+        \mkdir($tempDir, 0700, true);
+        $certPath = $tempDir . DIRECTORY_SEPARATOR . 'fullchain.pem';
+        \file_put_contents($certPath, $fixture['fullchain']);
+        \file_put_contents($tempDir . DIRECTORY_SEPARATOR . 'chain.pem', $fixture['chain']);
+
+        $service = new SslCertificateService();
+        $covers = new ReflectionMethod($service, 'localCaCertificateCoversRequiredSan');
+        $covers->setAccessible(true);
+
+        $this->assertTrue($covers->invoke($service, 'p11005ce4.weline.test', $certPath));
+    }
+
     public function testHostMatchesCertificateNameSupportsManagedWildcardDomains(): void
     {
         $service = new SslCertificateService();
@@ -306,7 +338,7 @@ class SslCertificateServiceTest extends TestCase
     /**
      * @return array{ca:string, leaf:string, chain:string, fullchain:string}
      */
-    private function createLocalCaFixture(string $domain): array
+    private function createLocalCaFixture(string $domain, array $ipSans = []): array
     {
         $caOpenSslConfig = $this->getOpenSslConfigForFixture(
             'ca',
@@ -314,7 +346,7 @@ class SslCertificateServiceTest extends TestCase
         );
         $leafOpenSslConfig = $this->getOpenSslConfigForFixture(
             'leaf',
-            $this->buildFixtureServerLeafOpenSslConfig($domain)
+            $this->buildFixtureServerLeafOpenSslConfig($domain, $ipSans)
         );
         $caKey = \openssl_pkey_new([
             'private_key_type' => OPENSSL_KEYTYPE_RSA,
@@ -508,12 +540,12 @@ class SslCertificateServiceTest extends TestCase
         return (string) $method->invoke($service);
     }
 
-    private function buildFixtureServerLeafOpenSslConfig(string $domain): string
+    private function buildFixtureServerLeafOpenSslConfig(string $domain, array $ipSans = []): string
     {
         $service = new SslCertificateService();
         $method = new ReflectionMethod($service, 'buildServerLeafOpenSslConfig');
         $method->setAccessible(true);
 
-        return (string) $method->invoke($service, $domain, ['dns' => [$domain], 'ip' => []]);
+        return (string) $method->invoke($service, $domain, ['dns' => [$domain], 'ip' => $ipSans]);
     }
 }

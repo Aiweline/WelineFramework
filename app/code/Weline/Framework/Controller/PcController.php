@@ -499,6 +499,9 @@ class PcController extends Core
         $response = Response::json($data);
         $context = Context::getCurrent();
         if ($context !== null && $context->get('meta.type') === 'request') {
+            if (\ob_get_level() > 0 && \ob_get_length() > 0) {
+                \ob_clean();
+            }
             throw new \Weline\Framework\Http\ResponseTerminateException($response);
         }
 

@@ -22,6 +22,7 @@ Use this skill for WelineFramework queue inspection, repair, and operation. Pref
    - `app/code/GuoLaiRen/PageBuilder/Http/Sse/QueueDbWriter.php`
 3. Use `w_query('queue', ...)` for runtime queue reads and business-level writes. Direct DB reads can miss framework casting, EAV/model behavior, event dispatching, and current query-provider semantics.
 4. Preserve side-effect boundaries. `stats`, `get`, `getByBizKey`, `list`, `getTypeIdByClass`, and `queue:type:listing` are diagnostic. `create`, `update`, `delete`, `queue:collect`, and `queue:run` change state or execute work.
+5. PageBuilder queue execution is system-scheduler owned. Controllers, SSE endpoints, observers, recovery helpers, and browser-triggered flows must create or update queue rows only; they must not call `queue:run`, spawn PHP queue workers, call `Weline\Cron\Helper\Process::create`, or otherwise self-dispatch queues. Violating this can run long AI work inside the wrong worker/request lifecycle and cause OOM.
 
 ## Queue CLI
 
@@ -48,6 +49,8 @@ php bin/w queue:run --id=77 --force
 ```
 
 Run one queue item by `weline_queue.queue_id`. `--id` is the queue primary key, not a PageBuilder `session_id`.
+
+Do not use `queue:run` as the normal PageBuilder test path. PageBuilder plan/task/build queues are expected to be picked up by the system scheduler, usually within about one minute. In PageBuilder workflows, create or reset the queue to `pending` and observe it through `w_query`, SSE, or polling instead of starting it manually.
 
 Use `-f/--force` only when intentionally taking over or rebuilding the same queue item. Current behavior:
 
@@ -143,12 +146,21 @@ Registered PageBuilder queue implementations:
 
 PageBuilder queues write lifecycle/progress logs into `weline_queue.result` and sometimes `process` through `w_query('queue', 'update', ...)` and `QueueDbWriter`. When diagnosing SSE or background progress, inspect the queue row and the session scope together; SSE should display telemetry, not become a separate execution engine.
 
-For PageBuilder reruns, prefer:
+For PageBuilder reruns, prefer scheduler-safe recovery:
 
 1. Find the real `queue_id` with `w_query('queue','list', ...)` or `getByBizKey`.
 2. Inspect the queue row and logs.
-3. Run `php bin/w queue:run --id=<queue_id>` for normal execution.
-4. Run `php bin/w queue:run --id=<queue_id> -f` only when intentionally rebuilding and avoiding old `duplicate_stream` state.
+3. If the queue should retry, update or recreate the row as `pending`, `pid=0`, `finished=0`, with an operator-visible `process` such as `等待系统定时任务调度，通常约 1 分钟内开始执行。`.
+4. Wait at least one scheduler interval, usually about one minute, then re-read the queue row and session scope.
+5. Do not run `php bin/w queue:run --id=<queue_id>` or `-f` for PageBuilder normal flow validation unless the user explicitly asks for a manual scheduler bypass. If such a bypass is requested, call out that it is not the production path and can mask controller/SSE dispatch bugs.
+
+When fixing PageBuilder code, treat direct queue execution as a bug:
+
+- Start endpoints such as `post-start-plan`, `post-start-task-plan`, and `post-start-build` should create the queue row and return queue metadata only. They must not start, probe, heal, reset, or otherwise manage queue execution.
+- Block-level AI operations follow the same rule: refine, rebuild, create, delete, regenerate, or multi-block partial rebuild must enqueue work with explicit scope metadata such as `stage`, `page_key` / `page_type`, `block_key`, `task_key`, `bucket`, `target_scope`, and operation details. The queue may target a single block or a small set of blocks, but execution still belongs to the system scheduler.
+- SSE observers should wait, poll, and display `pending` / `running` / `done` / `error`; while `pending`, `queued`, or `running` with `pid<=0`, they should tell the user the system scheduler will usually dispatch within about one minute and that the current progress window can be closed while they continue other work.
+- Controller/SSE recovery paths must not self-heal queue execution. If an operator or backend recovery flow intentionally retries work, it should create or update the queue row/state and then wait for the system scheduler; it still must not launch a worker from the request lifecycle.
+- Queue classes may execute work only when invoked by the framework queue runner/system scheduler.
 
 ## Validation
 

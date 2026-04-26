@@ -514,6 +514,8 @@ final class AiSiteExecutionBlueprintService
                 $planJson['shared_components'] = $sharedComponents;
             }
         }
+        $planJson['shared_components'] = $this->ensureStageOneThemeSharedComponents($planJson, $scope, $planLocale);
+        $planJson['seo_strategy'] = $this->ensureStageOneThemeSeoStrategy($planJson, $scope, $pageTypes);
         $planJson['page_types'] = $pageTypes;
         $planJson['content_locale'] = $this->resolveStageOneContentLocale($scope, $planLocale);
         $planJson['i18n'] = $this->ensurePlanI18nSection(
@@ -536,6 +538,60 @@ final class AiSiteExecutionBlueprintService
         }
 
         return $planJson;
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @param array<string, mixed> $scope
+     * @return array<string, array<string, mixed>>
+     */
+    private function ensureStageOneThemeSharedComponents(array $planJson, array $scope, string $planLocale): array
+    {
+        $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
+        $siteDisplayName = \trim((string)($siteStrategy['site_display_name'] ?? $scope['site_title'] ?? $scope['website_profile']['site_title'] ?? ''));
+        $palette = \is_array($planJson['palette'] ?? null) ? $planJson['palette'] : [];
+        $themeStyle = \is_array($planJson['theme_style'] ?? null) ? $planJson['theme_style'] : [];
+        $seoStrategy = \is_array($planJson['seo_strategy'] ?? null) ? $planJson['seo_strategy'] : [];
+        $navigationPlan = \is_array($planJson['navigation_plan'] ?? null) ? $planJson['navigation_plan'] : [];
+        $footerPlan = \is_array($planJson['footer_plan'] ?? null) ? $planJson['footer_plan'] : [];
+        $contentLocale = $this->resolveStageOneContentLocale($scope, $planLocale);
+
+        $fallback = [
+            'header' => $this->buildSharedTask('header', $siteDisplayName, $navigationPlan, $palette, $themeStyle, $seoStrategy, $contentLocale),
+            'footer' => $this->buildSharedTask('footer', $siteDisplayName, $footerPlan, $palette, $themeStyle, $seoStrategy, $contentLocale),
+        ];
+
+        $sharedComponents = \is_array($planJson['shared_components'] ?? null)
+            ? $this->normalizeStageOneSharedComponents($planJson['shared_components'])
+            : [];
+
+        foreach ($fallback as $component => $defaultPlan) {
+            $sharedComponents[$component] = \array_replace(
+                $defaultPlan,
+                \is_array($sharedComponents[$component] ?? null) ? $sharedComponents[$component] : [],
+                ['component' => $component]
+            );
+        }
+
+        return $this->normalizeStageOneSharedComponents($sharedComponents);
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @param array<string, mixed> $scope
+     * @param list<string> $pageTypes
+     * @return array<string, mixed>
+     */
+    private function ensureStageOneThemeSeoStrategy(array $planJson, array $scope, array $pageTypes): array
+    {
+        $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
+        $siteDisplayName = \trim((string)($siteStrategy['site_display_name'] ?? $scope['site_title'] ?? $scope['website_profile']['site_title'] ?? ''));
+        $fallback = $this->buildSeoStrategy($siteDisplayName, $scope, $pageTypes);
+
+        return \array_replace(
+            $fallback,
+            \is_array($planJson['seo_strategy'] ?? null) ? $planJson['seo_strategy'] : []
+        );
     }
 
     /**
@@ -646,8 +702,20 @@ final class AiSiteExecutionBlueprintService
         $sharedComponents = \is_array($planJson['shared_components'] ?? null) ? $planJson['shared_components'] : [];
         foreach (['header', 'footer'] as $component) {
             $componentPlan = \is_array($sharedComponents[$component] ?? null) ? $sharedComponents[$component] : [];
-            if (\trim((string)($componentPlan['goal'] ?? '')) === '' || \trim((string)($componentPlan['implementation_detail'] ?? $componentPlan['implementation_note'] ?? '')) === '') {
-                throw new \RuntimeException('AI plan generation failed: stage-one theme/Header/Footer plan must be generated before page plans.');
+            $goal = \trim((string)($componentPlan['goal'] ?? ''));
+            $implementationDetail = \trim((string)($componentPlan['implementation_detail'] ?? $componentPlan['implementation_note'] ?? ''));
+            if ($goal === '' || $implementationDetail === '') {
+                $sharedKeys = \array_values(\array_filter(\array_map(
+                    static fn($key): string => \is_string($key) ? \trim($key) : '',
+                    \array_keys($sharedComponents)
+                ), static fn(string $key): bool => $key !== ''));
+                throw new \RuntimeException(
+                    'AI plan generation failed: stage-one theme/Header/Footer plan must be generated before page plans.'
+                    . ' component=' . $component
+                    . ' shared_keys=' . ($sharedKeys === [] ? '[none]' : \implode(',', $sharedKeys))
+                    . ' goal=' . ($goal === '' ? '0' : '1')
+                    . ' implementation=' . ($implementationDetail === '' ? '0' : '1')
+                );
             }
         }
     }
@@ -9336,6 +9404,11 @@ final class AiSiteExecutionBlueprintService
             $taskKey = 'shared:' . $component;
         }
         $goal = \trim((string)($componentPlan['goal'] ?? ''));
+        if ($goal === '') {
+            $goal = $component === 'header'
+                ? 'Build the shared site header with brand recognition, navigation, and a primary CTA.'
+                : 'Build the shared site footer with contact, policy, and support links.';
+        }
         $implementationDetail = \trim((string)($componentPlan['implementation_detail'] ?? $componentPlan['implementation_note'] ?? ''));
         if ($implementationDetail === '') {
             $implementationDetail = $goal !== '' ? $goal : 'Build the shared ' . $component . ' block with editable content and responsive behavior.';
