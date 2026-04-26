@@ -65,10 +65,12 @@
 #### 第一阶段的生成顺序与并发规则（MUST）
 
 - MUST 后台任务图固定为：`stage1.requirement_expand` -> `stage1.shared.theme_design` -> `stage1.shared.header_footer` -> `stage1.page_plan:*` -> `stage1.plan_assemble`。
+- MUST 顺序门禁固定且不可跳步：未完成 `stage1.requirement_expand` 不得启动 `stage1.shared.theme_design`；未完成 `stage1.shared.theme_design` 不得启动 `stage1.shared.header_footer` 与任何 `stage1.page_plan:*`；未完成 `stage1.shared.header_footer` 不得启动任何 `stage1.page_plan:*`。
 - MUST `stage1.shared.theme_design` 输出统一的 `theme_context_snapshot`，至少包含：站点定位、主题宗旨、具体色系、视觉系统、风格选择原因、共享导航策略、共享 CTA、共享内容语气、SEO 总策略、禁止写死字段。
 - MUST `stage1.shared.header_footer` 基于 `theme_context_snapshot` 生成共享块，并输出给页面任务复用的 `shared_prompt_context`。
 - MUST 页面类型任务在主题规划与 Header/Footer 共享规划完成后立即 Fiber/协程并发执行，默认一个页面一个队列任务；同一页面内块可顺序或小批并发生成，但页面级任务必须保留共享上下文哈希。
 - MUST `shared_prompt_context` 必须把主题规划转成页面提示词的硬性 system/context 条款；页面任务不得只收到“视觉方向”，必须收到具体色值/色系、主题宗旨、语气、禁用风格与选择理由摘要。
+- MUST 任一页面任务启动前必须通过顺序校验：`theme_context_snapshot` 与 `shared_prompt_context` 都存在且 `shared_context_hash` 匹配；否则任务直接拒收并返回 `STAGE1_THEME_REQUIRED_BEFORE_PAGE_PLAN`（错误消息：`stage-one theme plan must be generated before page plans.`）。
 - MUST 若共享规划被微调或重建，所有尚未完成的页面任务必须重新比对 `shared_context_hash`；不一致则标记 `stale` 并等待重建。
 - MUST 页面级任务完成后立即触发 `stage1.plan_assemble` 增量装配，把新页面并入总方案与页面 Tab。
 
@@ -245,7 +247,8 @@
 ### 4.1 阶段一：共享优先的块化方案生成
 
 - 输入：一句话需求、页面类型、语言/站点事实、用户补充说明。
-- 顺序：先扩展需求 -> 生成主题设计与共享块 -> 并发生成单页面块化方案 -> 增量装配总方案。
+- 顺序：先扩展需求 -> 生成主题设计（theme_design）-> 生成共享 Header/Footer（shared_plan）-> 并发生成单页面块化方案 -> 增量装配总方案。
+- 门禁：未生成 `theme_design` 与 `shared_plan` 时，页面方案任务必须拒绝启动并返回 `STAGE1_THEME_REQUIRED_BEFORE_PAGE_PLAN`。
 - 产出：
   - `theme_context_snapshot`
   - `shared_plan`
@@ -403,7 +406,7 @@
 
 - `post-start-stage1-plan`
   - 输入：`session_public_id`、一句话需求、`page_types[]`、`plan_locale`、`request_id`
-  - 行为：创建阶段一主任务与共享任务，不直接同步生成。
+  - 行为：创建阶段一主任务与共享任务，不直接同步生成；实际执行顺序固定为 `requirement_expand -> theme_design -> header_footer -> page_plan`。
   - 幂等：同一 `request_id` 重放只返回已存在任务图，不得重复入队。
 - `get-stage1-plan-status`
   - 输入：`session_public_id|website_public_id`
@@ -416,7 +419,7 @@
 - `post-stage1-block-delete`
 - `post-confirm-stage1-plan`
   - 成功输出：`confirmed_plan_signature`
-  - 失败错误码：`PLAN_NOT_READY`、`SIGNATURE_MISMATCH_STALE`、`SCHEMA_INVALID`
+  - 失败错误码：`PLAN_NOT_READY`、`SIGNATURE_MISMATCH_STALE`、`SCHEMA_INVALID`、`STAGE1_THEME_REQUIRED_BEFORE_PAGE_PLAN`
 
 ### 7.2 第二阶段接口
 
@@ -1782,6 +1785,7 @@ Atomic Task ID:
 ### 13.9 验收标准（覆盖本次重写要求）
 
 - 验收 A：第一阶段必须先生成主题设计与 Header/Footer，再生成页面类型方案；页面类型任务支持并发且共享同一主题上下文。
+- 验收 A1：顺序日志/状态流必须可验证为 `requirement_expand done -> theme_design done -> header_footer done -> page_plan queued|running`；任意页面任务若早于 `theme_design/header_footer done` 出现，判定为失败。
 - 验收 B：第一阶段方案本身是块树；每个块都能 hover 微调/删除，页面可新增块。
 - 验收 C：第一阶段不再依赖方案弹窗，方案直接以内联工作台展示在第一阶段下面。
 - 验收 D：第二阶段按块任务细化资料，所有并发块任务使用统一上下文快照，主题连续性不漂移。

@@ -30,13 +30,16 @@ For Weline Server / WLS work:
 
 - Start from runtime metadata, process lifecycle, IPC, ports, and logs.
 - Use exact WLS command output and stack traces as evidence.
-- `php bin/w s:start -r -f -frontend` is a recurring reproduction command when
-  the user asks to diagnose WLS start behavior.
+- `php bin/w s:start -r -f` is the default reproduction command when the user
+  asks to diagnose WLS start behavior.
+- Do not run `php bin/w s:start -r -f -frontend` unless the user explicitly
+  asks for it. In this workspace, `-frontend` can cause the process to hang.
 - Imperial cleanup commands are exclusive control-plane operations: let cleanup
   finish before layering other runtime actions.
 - Child/shared-service processes should self-stop if the master dies.
-- In `-frontend` mode, shared IPC services should be visible and helper-process
-  logs should be mirrored to the console.
+- If historical `-frontend` behavior is under discussion, shared IPC services
+  should be visible and helper-process logs should be mirrored to the console,
+  but do not use `-frontend` for routine reproduction.
 - If `curl -k` succeeds but browser/plain curl fails, separate app reachability
   from Windows Schannel/certificate trust.
 
@@ -72,4 +75,3 @@ For `app/code/GuoLaiRen/PageBuilder`:
   when the result should survive future sessions.
 - Keep reports out of the repository root unless the user explicitly asks for
   root-level artifacts.
-
