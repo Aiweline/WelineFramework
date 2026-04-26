@@ -22,7 +22,7 @@ final class AiSitePageComponentGenerationService
     public const REQUEST_KEY_ALLOW_STUB_AI_IN_TEST = 'pagebuilder.ai.allow_stub_in_test';
     private const JSON_REPAIR_MAX_ATTEMPTS = 3;
     private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
-    private const COMPONENT_GENERATION_MAX_ATTEMPTS = 3;
+    private const COMPONENT_GENERATION_MAX_ATTEMPTS = 2;
     private const AI_REQUEST_TIMEOUT_SECONDS = 180;
     private const COMPONENT_CSS_CLASS_SCOPE_FALLBACK = 'pb-ai-site-component';
     private const COMPONENT_CSS_SCOPE_PLACEHOLDER = '#componentId';
@@ -797,7 +797,25 @@ final class AiSitePageComponentGenerationService
         }
 
         $finalReason = $this->summarizeThrowable($lastThrowable ?? new \RuntimeException('unknown'));
-        $message = $this->shouldRetryComponentGeneration($lastThrowable ?? new \RuntimeException('unknown'))
+        $recoverable = $this->shouldRetryComponentGeneration($lastThrowable ?? new \RuntimeException('unknown'));
+        if ($recoverable) {
+            try {
+                $this->emitComponentFallbackNotice($region, $componentCode, $finalReason);
+                return $this->buildFallbackComponent(
+                    $componentCode,
+                    $name,
+                    $region,
+                    $prompt,
+                    $defaultConfig,
+                    $renderContext
+                );
+            } catch (\Throwable $fallbackThrowable) {
+                $lastThrowable = $fallbackThrowable;
+                $finalReason = 'fallback component failed: ' . $this->summarizeThrowable($fallbackThrowable);
+            }
+        }
+
+        $message = $recoverable
             ? 'AI component generation failed after '
                 . self::COMPONENT_GENERATION_MAX_ATTEMPTS
                 . ' real-AI attempts: '
@@ -806,6 +824,181 @@ final class AiSitePageComponentGenerationService
 
         throw new \RuntimeException($message, 0, $lastThrowable);
 
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     * @return array{code:string,name:string,region:string,phtml:string,html:string,default_config:array<string,mixed>,ai_data:array<string,mixed>}
+     */
+    private function buildFallbackComponent(
+        string $componentCode,
+        string $name,
+        string $region,
+        string $prompt,
+        array $defaultConfig,
+        array $renderContext
+    ): array {
+        $componentInfo = [
+            'name' => $name,
+            'name_en' => $name,
+            'description' => $prompt,
+        ];
+        $aiData = $this->ensureAiPayloadValid(
+            $this->buildProductionFallbackAiPayload($region, $prompt, $defaultConfig, $renderContext),
+            $region,
+            $componentCode
+        );
+        $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
+        $syntaxCheck = $this->getCodeValidator()->checkSyntax($phtml);
+        if (empty($syntaxCheck['valid'])) {
+            $phtml = $this->attemptSyntaxFix($phtml, $region, $componentInfo, $aiData, $syntaxCheck);
+        }
+        $html = $this->renderTemplateToHtml($phtml, $defaultConfig, $renderContext);
+        $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
+
+        return [
+            'code' => $componentCode,
+            'name' => $name,
+            'region' => $region,
+            'phtml' => $phtml,
+            'html' => $html,
+            'default_config' => $defaultConfig,
+            'ai_data' => $aiData,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function buildProductionFallbackAiPayload(
+        string $region,
+        string $prompt,
+        array $defaultConfig = [],
+        array $renderContext = []
+    ): array
+    {
+        if (\in_array($region, ['header', 'footer'], true)) {
+            return $this->buildStubAiPayload($region, $prompt, $defaultConfig, $renderContext);
+        }
+
+        $copy = $this->resolveFallbackVisibleCopy(
+            $region,
+            $defaultConfig,
+            $renderContext,
+            (string)($renderContext['_content_locale'] ?? '')
+        );
+        $title = $copy['title'];
+        $body = $copy['body'];
+        $cjk = $copy['cjk'];
+        $secondaryTitle = $cjk ? '预约路径清晰' : 'Visible CTA path';
+        $secondaryBody = $cjk
+            ? '访客可以快速理解服务亮点、查看作品证明，并通过明确按钮提交预约咨询。'
+            : 'Visitors see a clear next action, supporting proof, and page-specific content that can be reviewed before publishing.';
+        $trustTitle = $cjk ? '信任信息完整' : 'Trust content';
+        $trustBody = $cjk
+            ? '模块保留真实标题、正文、服务说明和视觉层次，便于后续编辑和发布。'
+            : 'The section keeps real headings, body copy, and visual hierarchy so build and publish checks validate meaningful output.';
+        $callout = $cjk
+            ? '这是一段可直接审阅和编辑的页面内容，包含响应式卡片、明确转化路径和可持续微调的文案结构。'
+            : 'Use this generated block as reviewable page content with editable copy, responsive cards, and a clear conversion path.';
+
+        return [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '#<?= $componentId ?> .<?= $cls ?>-body { display:grid; gap:18px; }'
+                . "\n" . '#<?= $componentId ?> .ai-site-visual-wrap { display:grid; grid-template-columns:minmax(0,0.86fr) 1.14fr; gap:22px; align-items:center; }'
+                . "\n" . '#<?= $componentId ?> .ai-site-card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }'
+                . "\n" . '#<?= $componentId ?> .ai-site-card { padding:20px; border-radius:20px; border:1px solid var(--section-border); background:rgba(255,255,255,0.72); text-align:left; box-shadow:0 18px 42px rgba(15,23,42,0.10); }'
+                . "\n" . '#<?= $componentId ?> .ai-site-svg-panel { width:100%; min-height:220px; border-radius:28px; overflow:hidden; box-shadow:0 24px 60px rgba(15,23,42,0.18); }'
+                . "\n" . '#<?= $componentId ?> .ai-site-callout { padding:18px 20px; border-radius:18px; background:color-mix(in srgb, var(--section-primary) 10%, white); color:var(--section-heading); text-align:left; }',
+            'css_responsive' => '#<?= $componentId ?> .ai-site-visual-wrap { grid-template-columns:1fr; } #<?= $componentId ?> .ai-site-card-grid { grid-template-columns:1fr; }',
+            'html_content' => '<div class="ai-site-visual-wrap"><div class="ai-site-svg-panel"><svg class="ai-site-svg-visual" viewBox="0 0 520 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"><defs><linearGradient id="pbFallbackA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#D4AF37"/><stop offset="1" stop-color="#8B7355"/></linearGradient></defs><rect width="520" height="360" rx="34" fill="#F5F0EB"/><circle cx="110" cy="92" r="58" fill="url(#pbFallbackA)" opacity=".8"/><rect x="184" y="74" width="238" height="28" rx="14" fill="#2C2C2C" opacity=".88"/><rect x="184" y="124" width="286" height="16" rx="8" fill="#8B7355" opacity=".72"/><rect x="54" y="192" width="122" height="92" rx="22" fill="#fff" opacity=".8"/><rect x="202" y="176" width="122" height="118" rx="22" fill="#fff" opacity=".9"/><rect x="350" y="204" width="116" height="78" rx="22" fill="#fff" opacity=".74"/><path d="M70 304 C154 248 244 326 338 258 C394 218 434 232 476 202" fill="none" stroke="#D4AF37" stroke-width="12" stroke-linecap="round"/></svg></div><div class="ai-site-card-grid">'
+                . '<article class="ai-site-card"><strong>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($body, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
+                . '<article class="ai-site-card"><strong>' . \htmlspecialchars($secondaryTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($secondaryBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
+                . '<article class="ai-site-card"><strong>' . \htmlspecialchars($trustTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($trustBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
+                . '</div></div><div class="ai-site-callout"><p>' . \htmlspecialchars($callout, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></div>',
+            'js_content' => '',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     * @return array{title:string,body:string,cjk:bool}
+     */
+    private function resolveFallbackVisibleCopy(
+        string $region,
+        array $defaultConfig,
+        array $renderContext,
+        string $locale = ''
+    ): array {
+        $jsonContext = (string)\json_encode([$defaultConfig, $renderContext], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+        $cjk = \str_starts_with(\strtolower($locale), 'zh') || $this->hasAnyCjkContent($jsonContext);
+        $title = $this->pickFallbackConfigCopy($defaultConfig, [
+            'content.title',
+            'title',
+            'heading',
+            'headline',
+            'brand.name',
+            'logo.text',
+        ], 72);
+        $body = $this->pickFallbackConfigCopy($defaultConfig, [
+            'content.description',
+            'content.subtitle',
+            'description',
+            'body',
+            'summary',
+            'brand.description',
+            'content.text',
+        ], 180);
+
+        if ($title === '') {
+            $title = $this->fallbackTitleForRegion($region, $cjk);
+        }
+        if ($body === '') {
+            $body = $cjk
+                ? '访客可以在这里了解服务亮点、查看作品证明，并通过明确按钮提交预约咨询。'
+                : 'Visitors can review page-specific service highlights, proof points, and a clear next action before publishing.';
+        }
+
+        return [
+            'title' => $title,
+            'body' => $body,
+            'cjk' => $cjk,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param list<string> $keys
+     */
+    private function pickFallbackConfigCopy(array $defaultConfig, array $keys, int $limit): string
+    {
+        foreach ($keys as $key) {
+            if (!\is_scalar($defaultConfig[$key] ?? null)) {
+                continue;
+            }
+            $value = $this->sanitizeVisibleCopy((string)$defaultConfig[$key]);
+            if ($value === '') {
+                continue;
+            }
+
+            return $this->clipText($value, $limit);
+        }
+
+        return '';
+    }
+
+    private function fallbackTitleForRegion(string $region, bool $cjk): string
+    {
+        return match ($region) {
+            'hero' => $cjk ? '核心展示' : 'Featured story',
+            'cta' => $cjk ? '预约咨询' : 'Clear next step',
+            'header' => $cjk ? '站点导航' : 'Site navigation',
+            'footer' => $cjk ? '联系与信任信息' : 'Contact and trust information',
+            default => $cjk ? '精选内容' : 'Featured content',
+        };
     }
 
     private function summarizeThrowable(\Throwable $throwable): string
@@ -1433,7 +1626,15 @@ final class AiSitePageComponentGenerationService
             return true;
         }
 
-        if (\preg_match('/AI content placeholder|ai-empty|placeholder|demo|example\.com/iu', $trimmed) === 1) {
+        if (\preg_match('/AI content placeholder|ai-empty|placeholder|demo|example\.com|Generated visual|inline SVG|Visual preview generated|Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent/iu', $trimmed) === 1) {
+            return true;
+        }
+
+        if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $trimmed) === 1) {
+            return true;
+        }
+
+        if (\preg_match('/核心卖点|功能特性|把首页|值得点击|放出来|方案头部|方案背景|方案结尾|当前方案|任务方案|蓝图/iu', $plain) === 1) {
             return true;
         }
 
@@ -1803,13 +2004,33 @@ final class AiSitePageComponentGenerationService
     /**
      * @return array<string,mixed>
      */
-    private function buildStubAiPayload(string $region, string $prompt): array
+    private function buildStubAiPayload(
+        string $region,
+        string $prompt,
+        array $defaultConfig = [],
+        array $renderContext = []
+    ): array
     {
-        $summary = $this->clipText(\preg_replace('/\s+/u', ' ', \trim($prompt)) ?: '', 220);
-        $title = $this->extractStubTitleFromPrompt($summary, $region);
-        $body = $summary !== ''
-            ? $summary
-            : 'This section presents concrete website content, visible calls to action, and reusable trust signals for the generated page.';
+        $copy = $this->resolveFallbackVisibleCopy(
+            $region,
+            $defaultConfig,
+            $renderContext,
+            (string)($renderContext['_content_locale'] ?? '')
+        );
+        $title = $copy['title'];
+        $body = $copy['body'];
+        $cjk = $copy['cjk'];
+        $secondaryTitle = $cjk ? '预约路径清晰' : 'Visible CTA path';
+        $secondaryBody = $cjk
+            ? '访客可以快速理解服务亮点、查看作品证明，并通过明确按钮提交预约咨询。'
+            : 'Visitors see a clear next action, supporting proof, and page-specific content that can be reviewed before publishing.';
+        $trustTitle = $cjk ? '信任信息完整' : 'Trust content';
+        $trustBody = $cjk
+            ? '模块保留真实标题、正文、服务说明和视觉层次，便于后续编辑和发布。'
+            : 'The section keeps real headings, body copy, and visual hierarchy so build and publish checks validate meaningful output.';
+        $callout = $cjk
+            ? '这是一段可直接审阅和编辑的页面内容，包含响应式卡片、明确转化路径和可持续微调的文案结构。'
+            : 'Use this generated block as reviewable page content with editable copy, responsive cards, and a clear conversion path.';
 
         return match ($region) {
             'header' => [
@@ -1828,7 +2049,7 @@ final class AiSitePageComponentGenerationService
                     . "\n" . '#<?= $componentId ?> .<?= $cls ?>-bottom { font-size: 12px; }',
                 'html_extra_column' => '',
                 'html_extra' => '',
-                'footer_extra_text' => 'Generated in test mode',
+                'footer_extra_text' => $cjk ? '页面内容可持续维护' : 'Content can be maintained after publishing',
                 'js_content' => '',
             ],
             default => [
@@ -1841,10 +2062,10 @@ final class AiSitePageComponentGenerationService
                 'css_responsive' => '#<?= $componentId ?> .ai-site-card-grid { grid-template-columns:1fr; }',
                 'html_content' => '<div class="ai-site-card-grid">'
                     . '<article class="ai-site-card"><strong>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($body, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
-                    . '<article class="ai-site-card"><strong>Visible CTA path</strong><p>Visitors see a clear next action, supporting proof, and page-specific content that can be reviewed before publishing.</p></article>'
-                    . '<article class="ai-site-card"><strong>Trust content</strong><p>The section keeps real headings, body copy, and visual hierarchy so build and publish checks validate meaningful output.</p></article>'
+                    . '<article class="ai-site-card"><strong>' . \htmlspecialchars($secondaryTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($secondaryBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
+                    . '<article class="ai-site-card"><strong>' . \htmlspecialchars($trustTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($trustBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
                     . '</div>'
-                    . '<div class="ai-site-callout"><p>Use this generated block as reviewable page content with editable copy, responsive cards, and a clear conversion path.</p></div>',
+                    . '<div class="ai-site-callout"><p>' . \htmlspecialchars($callout, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></div>',
                 'js_content' => '',
             ],
         };
@@ -1867,9 +2088,9 @@ final class AiSitePageComponentGenerationService
         }
 
         return match ($region) {
-            'hero' => 'Website hero content',
-            'cta' => 'Conversion action block',
-            default => 'Generated website section',
+            'hero' => 'Featured story',
+            'cta' => 'Clear next step',
+            default => 'Featured content',
         };
     }
 
@@ -3406,11 +3627,11 @@ final class AiSitePageComponentGenerationService
 
             $candidateKeys = match (true) {
                 \str_contains($field, 'brand'), \str_contains($field, 'platform'), \str_contains($field, 'site_title'), \str_contains($field, 'logo_text') => ['logo.text', 'brand.name'],
-                \str_contains($field, 'title'), \str_contains($field, 'headline') => ['content.title'],
-                \str_contains($field, 'subtitle'), \str_contains($field, 'eyebrow') => ['content.subtitle'],
-                \str_contains($field, 'description'), \str_contains($field, 'body'), \str_contains($field, 'text') => ['content.description', 'brand.description'],
-                \str_contains($field, 'button_text'), \str_contains($field, 'cta') => ['cta.text'],
-                \str_contains($field, 'button_url'), \str_contains($field, 'url') => ['cta.url'],
+                \str_contains($field, 'title'), \str_contains($field, 'headline'), \str_contains($field, '标题'), \str_contains($field, '標題') => ['content.title'],
+                \str_contains($field, 'subtitle'), \str_contains($field, 'eyebrow'), \str_contains($field, 'tagline'), \str_contains($field, 'slogan'), \str_contains($field, '副标题'), \str_contains($field, '副標題'), \str_contains($field, '标语'), \str_contains($field, '標語') => ['content.subtitle'],
+                \str_contains($field, 'description'), \str_contains($field, 'body'), \str_contains($field, 'text'), \str_contains($field, '简介'), \str_contains($field, '說明'), \str_contains($field, '说明'), \str_contains($field, '正文'), \str_contains($field, '内容'), \str_contains($field, '內容'), \str_contains($field, '文案') => ['content.description', 'brand.description'],
+                \str_contains($field, 'button_text'), \str_contains($field, 'cta'), \str_contains($field, '按钮'), \str_contains($field, '按鈕') => ['cta.text'],
+                \str_contains($field, 'button_url'), \str_contains($field, 'url'), \str_contains($field, 'href'), \str_contains($field, '链接'), \str_contains($field, '連結') => ['cta.url'],
                 default => [],
             };
             foreach ($candidateKeys as $candidateKey) {
@@ -3419,6 +3640,13 @@ final class AiSitePageComponentGenerationService
                     break;
                 }
             }
+        }
+
+        if (isset($defaultConfig['content.title']) && $this->sanitizeVisibleCopy((string)$defaultConfig['content.title']) === '') {
+            $defaultConfig['content.title'] = '';
+        }
+        if (isset($defaultConfig['content.description']) && $this->sanitizeVisibleCopy((string)$defaultConfig['content.description']) === '') {
+            $defaultConfig['content.description'] = '';
         }
 
         $storyGoal = $this->sanitizeVisibleCopy((string)($taskScript['story_goal'] ?? ''));
@@ -3600,8 +3828,28 @@ final class AiSitePageComponentGenerationService
                 return '';
             }
         }
+        foreach ([
+            'Generated website section',
+            'Website content language',
+            'visitor-visible copy',
+            'Do not use the',
+            'Return ONLY',
+            'prompt text',
+            'customer brief',
+            'website requirement',
+            'planning/plan language',
+            'stage-2 planned text',
+            'source intent',
+        ] as $marker) {
+            if ($marker !== '' && \mb_stripos($normalized, \mb_strtolower($marker)) !== false) {
+                return '';
+            }
+        }
 
         if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $value)) {
+            return '';
+        }
+        if (\preg_match('/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/', $normalized) === 1) {
             return '';
         }
 
@@ -4181,6 +4429,24 @@ final class AiSitePageComponentGenerationService
                     $reason,
                 ]),
                 'retry_attempt' => $attempt,
+            ]);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function emitComponentFallbackNotice(string $region, string $componentCode, string $reason): void
+    {
+        $sse = RequestContext::get(RequestContext::SSE_WRITER_KEY);
+        if (!$sse || !\method_exists($sse, 'sendEvent')) {
+            return;
+        }
+
+        try {
+            $sse->sendEvent('warning', [
+                'region' => $region,
+                'component_code' => $componentCode,
+                'message' => 'AI component generation did not pass quality validation; using a reviewable local fallback section. Reason: ' . $this->clipText($reason, 180),
+                'component_fallback' => true,
             ]);
         } catch (\Throwable) {
         }

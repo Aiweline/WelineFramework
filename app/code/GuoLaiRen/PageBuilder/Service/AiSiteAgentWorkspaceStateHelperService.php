@@ -317,7 +317,13 @@ class AiSiteAgentWorkspaceStateHelperService
         }
 
         if (\is_array($state['plan'] ?? null)) {
-            unset($state['plan']['execution_blueprint']);
+            $plan = $state['plan'];
+            $state['plan'] = [
+                'markdown' => (string)($plan['markdown'] ?? ''),
+                'json_available' => !empty($plan['json']),
+                'structured_available' => !empty($plan['structured']),
+                'execution_blueprint_available' => !empty($plan['execution_blueprint']),
+            ];
         }
         if (\is_array($state['task_plan'] ?? null)) {
             $taskPlanStructured = \is_array($state['task_plan']['structured'] ?? null)
@@ -331,6 +337,12 @@ class AiSiteAgentWorkspaceStateHelperService
                 'structured' => $taskPlanStructured,
                 'virtual_theme_plan' => $this->pruneTaskPlanVirtualThemePlanForView($taskPlanVirtualThemePlan),
             ];
+        }
+        if (\is_array($state['virtual_pages_by_type'] ?? null)) {
+            $state['virtual_pages_by_type'] = $this->pruneVirtualPagesByTypeForView($state['virtual_pages_by_type']);
+        }
+        if (\is_array($state['page_type_layouts'] ?? null)) {
+            $state['page_type_layouts'] = $this->prunePageTypeLayoutsForView($state['page_type_layouts']);
         }
 
         unset(
@@ -356,6 +368,102 @@ class AiSiteAgentWorkspaceStateHelperService
      * @param array<string, mixed> $virtualThemePlan
      * @return array<string, mixed>
      */
+    /**
+     * @param array<string, mixed> $virtualPagesByType
+     * @return array<string, mixed>
+     */
+    private function pruneVirtualPagesByTypeForView(array $virtualPagesByType): array
+    {
+        $result = [];
+        $scalarKeys = [
+            'title',
+            'handle',
+            'locale',
+            'page_type',
+            'meta_title',
+            'meta_keywords',
+            'ai_description',
+            'meta_description',
+            'preview_full_url',
+            'visual_edit_url',
+            'visual_preview_url',
+            'virtual_edit_url',
+            'virtual_preview_url',
+            'last_generated_at',
+        ];
+
+        foreach ($virtualPagesByType as $pageType => $pageData) {
+            if (!\is_array($pageData)) {
+                continue;
+            }
+            $summary = [];
+            foreach ($scalarKeys as $key) {
+                if (\array_key_exists($key, $pageData)) {
+                    $summary[$key] = (string)$pageData[$key];
+                }
+            }
+            $summary['materialized_page_id'] = (int)($pageData['materialized_page_id'] ?? 0);
+            $blocks = \is_array($pageData['blocks'] ?? null) ? $pageData['blocks'] : [];
+            $summary['block_count'] = \count($blocks);
+            $summary['blocks'] = $this->pruneVirtualPageBlocksForView($blocks);
+            $summary['blocks_slimmed'] = true;
+            $result[(string)$pageType] = $summary;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<int|string, mixed> $blocks
+     * @return list<array<string, mixed>>
+     */
+    private function pruneVirtualPageBlocksForView(array $blocks): array
+    {
+        $result = [];
+        foreach ($blocks as $index => $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $result[] = [
+                'index' => \is_int($index) ? $index : (string)$index,
+                'type' => (string)($block['type'] ?? ''),
+                'block_id' => (string)($block['block_id'] ?? ''),
+                'region' => (string)($block['_pb_server_region'] ?? $block['region'] ?? ''),
+                'component_code' => (string)($block['_pb_server_component_code'] ?? ''),
+                'html_available' => \trim((string)($block['html'] ?? '')) !== '',
+                'config_available' => \is_array($block['config'] ?? null) && $block['config'] !== [],
+                'field_schema_available' => \is_array($block['field_schema'] ?? null) && $block['field_schema'] !== [],
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $pageTypeLayouts
+     * @return array<string, mixed>
+     */
+    private function prunePageTypeLayoutsForView(array $pageTypeLayouts): array
+    {
+        $result = [];
+        foreach ($pageTypeLayouts as $pageType => $layout) {
+            if (!\is_array($layout)) {
+                continue;
+            }
+            $blocks = \is_array($layout['blocks'] ?? null) ? $layout['blocks'] : [];
+            $sections = \is_array($layout['sections'] ?? null) ? $layout['sections'] : [];
+            $result[(string)$pageType] = [
+                'page_type' => (string)($layout['page_type'] ?? $pageType),
+                'label' => (string)($layout['label'] ?? ''),
+                'block_count' => \count($blocks),
+                'section_count' => \count($sections),
+                'slimmed' => true,
+            ];
+        }
+
+        return $result;
+    }
+
     private function pruneTaskPlanVirtualThemePlanForView(array $virtualThemePlan): array
     {
         $result = [];
@@ -651,6 +759,7 @@ class AiSiteAgentWorkspaceStateHelperService
             'task_plan' => 'stage2.shared.tasks',
             'build' => 'virtual_theme.tree.build',
             'block_regenerate' => 'virtual_theme.block.regenerate',
+            'regenerate_page' => 'virtual_theme.page.regenerate',
             default => '',
         };
     }
