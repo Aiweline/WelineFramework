@@ -15,6 +15,15 @@ final class AiHtmlSanitizerServiceTest extends TestCase
         $out = $s->sanitizeBlockHtml('<p>Hi</p><script>alert(1)</script>');
         self::assertStringContainsString('<p>Hi</p>', $out);
         self::assertStringNotContainsString('script', \strtolower($out));
+        self::assertStringNotContainsString('alert(1)', $out);
+    }
+
+    public function testSanitizeBlockKeepsSafeStyleBlocks(): void
+    {
+        $s = new AiHtmlSanitizerService();
+        $out = $s->sanitizeBlockHtml('<style>.hero{color:#111}</style><section class="hero">Hi</section>');
+        self::assertStringContainsString('<style>.hero{color:#111}</style>', $out);
+        self::assertStringContainsString('<section class="hero">Hi</section>', $out);
     }
 
     public function testSanitizeAiLayoutNormalizesBlocks(): void

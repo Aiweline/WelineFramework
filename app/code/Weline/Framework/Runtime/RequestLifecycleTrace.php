@@ -27,6 +27,8 @@ class RequestLifecycleTrace
 
     private static bool $maxSpansLogged = false;
 
+    private static bool $recordingDisabledUntilReset = false;
+
     /** @var positive-int|null 缓存 getMaxSpansCap()，reset 时清空 */
     private static ?int $maxSpansCapCache = null;
 
@@ -60,6 +62,10 @@ class RequestLifecycleTrace
         }
 
         if (!$enabled) {
+            return false;
+        }
+
+        if (self::$recordingDisabledUntilReset) {
             return false;
         }
 
@@ -150,6 +156,10 @@ class RequestLifecycleTrace
                 self::$maxSpansLogged = true;
                 \error_log('[RequestLifecycleTrace] span 已达上限 ' . (string) $maxSpans . '，已停止记录直至 reset');
             }
+            self::$spans = [];
+            self::$startStack = [];
+            self::$currentParentStack = [];
+            self::$recordingDisabledUntilReset = true;
 
             return;
         }
@@ -396,6 +406,7 @@ class RequestLifecycleTrace
         self::$startStack = [];
         self::$currentParentStack = [];
         self::$maxSpansLogged = false;
+        self::$recordingDisabledUntilReset = false;
         self::$maxSpansCapCache = null;
         self::$metaStringMaxBytesCache = null;
     }
