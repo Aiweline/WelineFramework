@@ -3048,7 +3048,7 @@ SCRIPT;
                 $adminId,
                 'block_regenerate',
                 (string)($started['execution_token'] ?? ''),
-                true
+                !$this->shouldKeepQueuedObserverStreamOpen('block_regenerate')
             );
             $sse->complete([
                 'success' => (bool)($observed['success'] ?? true),
@@ -4543,6 +4543,8 @@ SCRIPT;
                         $mutationPageType = \trim((string)($mutation['page_type'] ?? ''));
                         $mutationBlockKey = \trim((string)($mutation['block_key'] ?? ''));
                         $mutationBlockConfig = \is_array($mutation['block_config'] ?? null) ? $mutation['block_config'] : [];
+                        $mutationBlockConfigs = \is_array($mutation['block_configs'] ?? null) ? $mutation['block_configs'] : [];
+                        $mutationBlockKeys = $this->resolvePlanMutationBlockKeys($mutation, $mutationBlockKey);
                         if ($mutationPageType === '' || !\in_array($mutationAction, ['create', 'delete', 'refine', 'rebuild'], true)) {
                             throw new \RuntimeException('Invalid stage-1 block mutation request.');
                         }
@@ -4569,13 +4571,43 @@ SCRIPT;
                             'event_id' => 0,
                             'created_at' => \date('Y-m-d H:i:s'),
                         ]);
-                        $artifacts = $this->executionBlueprintService->mutateDraftPlanBlock(
-                            $scope,
-                            $mutationPageType,
+                        $mutationTargets = $this->buildPlanMutationTargets(
                             $mutationAction,
+                            $mutationBlockKeys,
                             $mutationBlockKey,
-                            $mutationBlockConfig
+                            $mutationBlockConfig,
+                            $mutationBlockConfigs
                         );
+                        $workingScope = $scope;
+                        $mutationSummaries = [];
+                        $lastArtifacts = [];
+                        foreach ($mutationTargets as $mutationTarget) {
+                            $targetBlockKey = \trim((string)($mutationTarget['block_key'] ?? ''));
+                            $targetBlockConfig = \is_array($mutationTarget['block_config'] ?? null) ? $mutationTarget['block_config'] : [];
+                            $lastArtifacts = $this->executionBlueprintService->mutateDraftPlanBlock(
+                                $workingScope,
+                                $mutationPageType,
+                                $mutationAction,
+                                $targetBlockKey,
+                                $targetBlockConfig
+                            );
+                            $mutationSummary = \is_array($lastArtifacts['mutation_summary'] ?? null)
+                                ? $lastArtifacts['mutation_summary']
+                                : [];
+                            if ($mutationSummary !== []) {
+                                $mutationSummaries[] = $mutationSummary;
+                            }
+                            $workingScope = $this->buildScopeFromPlanArtifactsForMutation($workingScope, $lastArtifacts);
+                        }
+                        $artifacts = $lastArtifacts;
+                        if ($mutationSummaries !== []) {
+                            $artifacts['mutation_summary'] = $this->buildCombinedPlanMutationSummary(
+                                $mutationAction,
+                                $mutationPageType,
+                                $mutationSummaries
+                            );
+                            $artifacts['mutation_summaries'] = $mutationSummaries;
+                        }
                         $artifacts['ai_generated'] = 1;
                     } elseif ($requestedPromptMode === 'refine' && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
                         $refineInstruction = $requestedInstruction;
@@ -4948,6 +4980,8 @@ SCRIPT;
         $pageType = \trim((string)($mutation['page_type'] ?? ''));
         $taskKey = \trim((string)($mutation['task_key'] ?? ''));
         $taskConfig = \is_array($mutation['task_config'] ?? null) ? $mutation['task_config'] : [];
+        $taskConfigs = \is_array($mutation['task_configs'] ?? null) ? $mutation['task_configs'] : [];
+        $taskKeys = $this->resolveTaskPlanMutationTaskKeys($mutation, $taskKey);
         $instruction = \trim((string)($sseReq['instruction'] ?? ($mutation['instruction'] ?? '')));
         $targetScope = \trim((string)($sseReq['target_scope'] ?? ($taskKey !== '' ? $taskKey : ($bucket === 'shared' ? 'shared_tasks' : 'task_plan'))));
         $round = \max(1, (int)($sseReq['round'] ?? 1));
@@ -4976,6 +5010,7 @@ SCRIPT;
             'round' => $round,
             'target_scope' => $targetScope,
             'task_key' => $taskKey,
+            'task_keys' => $taskKeys,
             'page_type' => $pageType,
             'bucket' => $bucket,
         ]);
@@ -4987,15 +5022,43 @@ SCRIPT;
         ]);
 
         try {
-            $result = $this->virtualThemePlanService->mutateDraftTaskPlanTask(
-                $scope,
+            $mutationTargets = $this->buildTaskPlanMutationTargets(
                 $action,
-                $bucket,
-                $pageType,
+                $taskKeys,
                 $taskKey,
                 $taskConfig,
-                $instruction
+                $taskConfigs
             );
+            $workingScope = $scope;
+            $mutationSummaries = [];
+            $result = [];
+            foreach ($mutationTargets as $mutationTarget) {
+                $targetTaskKey = \trim((string)($mutationTarget['task_key'] ?? ''));
+                $targetTaskPatch = \is_array($mutationTarget['task_config'] ?? null) ? $mutationTarget['task_config'] : [];
+                $result = $this->virtualThemePlanService->mutateDraftTaskPlanTask(
+                    $workingScope,
+                    $action,
+                    $bucket,
+                    $pageType,
+                    $targetTaskKey,
+                    $targetTaskPatch,
+                    $instruction
+                );
+                $mutationSummary = \is_array($result['mutation_summary'] ?? null) ? $result['mutation_summary'] : [];
+                if ($mutationSummary !== []) {
+                    $mutationSummaries[] = $mutationSummary;
+                }
+                $workingScope = $this->buildScopeFromTaskPlanArtifactsForMutation($workingScope, $result);
+            }
+            if ($mutationSummaries !== []) {
+                $result['mutation_summary'] = $this->buildCombinedTaskPlanMutationSummary(
+                    $action,
+                    $bucket,
+                    $pageType,
+                    $mutationSummaries
+                );
+                $result['mutation_summaries'] = $mutationSummaries;
+            }
 
             $structured = \is_array($result['structured'] ?? null) ? $result['structured'] : [];
             $virtualThemePlan = \is_array($result['virtual_theme_plan'] ?? null) ? $result['virtual_theme_plan'] : [];
@@ -9702,6 +9765,277 @@ SCRIPT;
     }
 
     /**
+     * @param array<string, mixed> $mutation
+     * @return list<string>
+     */
+    private function resolvePlanMutationBlockKeys(array $mutation, string $primaryBlockKey): array
+    {
+        $blockKeys = $this->normalizeStringList($mutation['block_keys'] ?? []);
+        foreach (['component_codes', 'section_codes'] as $key) {
+            foreach ($this->normalizeStringList($mutation[$key] ?? []) as $candidate) {
+                if (!\in_array($candidate, $blockKeys, true)) {
+                    $blockKeys[] = $candidate;
+                }
+            }
+        }
+        $primaryBlockKey = \trim($primaryBlockKey);
+        if ($primaryBlockKey !== '' && !\in_array($primaryBlockKey, $blockKeys, true)) {
+            \array_unshift($blockKeys, $primaryBlockKey);
+        }
+
+        return \array_values($blockKeys);
+    }
+
+    /**
+     * @param list<string> $blockKeys
+     * @param array<string, mixed> $blockConfig
+     * @param array<string, mixed> $blockConfigs
+     * @return list<array{block_key:string, block_config:array<string,mixed>}>
+     */
+    private function buildPlanMutationTargets(
+        string $action,
+        array $blockKeys,
+        string $primaryBlockKey,
+        array $blockConfig,
+        array $blockConfigs
+    ): array {
+        $targets = [];
+        if ($action === 'create') {
+            if ($blockConfigs !== []) {
+                foreach ($blockConfigs as $configuredBlockKey => $configuredPatch) {
+                    $targets[] = [
+                        'block_key' => \trim((string)$configuredBlockKey),
+                        'block_config' => \is_array($configuredPatch) ? $configuredPatch : [],
+                    ];
+                }
+            } elseif ($blockKeys !== []) {
+                foreach ($blockKeys as $blockKey) {
+                    $targets[] = [
+                        'block_key' => $blockKey,
+                        'block_config' => $blockConfig,
+                    ];
+                }
+            } else {
+                $targets[] = [
+                    'block_key' => \trim($primaryBlockKey),
+                    'block_config' => $blockConfig,
+                ];
+            }
+        } else {
+            $resolvedBlockKeys = $blockKeys;
+            if ($resolvedBlockKeys === [] && \trim($primaryBlockKey) !== '') {
+                $resolvedBlockKeys = [\trim($primaryBlockKey)];
+            }
+            foreach ($resolvedBlockKeys as $blockKey) {
+                $configuredPatch = \is_array($blockConfigs[$blockKey] ?? null) ? $blockConfigs[$blockKey] : [];
+                $targets[] = [
+                    'block_key' => $blockKey,
+                    'block_config' => $configuredPatch !== [] ? $configuredPatch : $blockConfig,
+                ];
+            }
+        }
+
+        if ($targets === []) {
+            $targets[] = [
+                'block_key' => \trim($primaryBlockKey),
+                'block_config' => $blockConfig,
+            ];
+        }
+
+        return $targets;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $artifacts
+     * @return array<string, mixed>
+     */
+    private function buildScopeFromPlanArtifactsForMutation(array $scope, array $artifacts): array
+    {
+        $nextScope = $scope;
+        if (\is_array($artifacts['plan_structured'] ?? null)) {
+            $nextScope['plan_structured'] = $artifacts['plan_structured'];
+        } elseif (\is_array($artifacts['structured'] ?? null)) {
+            $nextScope['plan_structured'] = $artifacts['structured'];
+        }
+        if (\is_array($artifacts['execution_blueprint'] ?? null)) {
+            $nextScope['execution_blueprint_draft'] = $artifacts['execution_blueprint'];
+        }
+        if (\is_array($artifacts['plan_json'] ?? null)) {
+            $nextScope['plan_json'] = $artifacts['plan_json'];
+        }
+        if (\is_array($artifacts['plan_workbench'] ?? null)) {
+            $nextScope['plan_workbench'] = $artifacts['plan_workbench'];
+        }
+        if (\array_key_exists('markdown', $artifacts)) {
+            $nextScope['plan_markdown'] = (string)$artifacts['markdown'];
+        }
+
+        return $nextScope;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $mutationSummaries
+     * @return array<string, mixed>
+     */
+    private function buildCombinedPlanMutationSummary(string $action, string $pageType, array $mutationSummaries): array
+    {
+        $lastSummary = \is_array($mutationSummaries[\count($mutationSummaries) - 1] ?? null)
+            ? $mutationSummaries[\count($mutationSummaries) - 1]
+            : [];
+        $mutatedBlockKeys = [];
+        foreach ($mutationSummaries as $summary) {
+            $summaryBlockKey = \trim((string)($summary['block_key'] ?? ''));
+            if ($summaryBlockKey !== '' && !\in_array($summaryBlockKey, $mutatedBlockKeys, true)) {
+                $mutatedBlockKeys[] = $summaryBlockKey;
+            }
+        }
+
+        return \array_replace($lastSummary, [
+            'action' => $action,
+            'page_type' => $pageType,
+            'mutated_block_keys' => $mutatedBlockKeys,
+            'mutated_count' => \count($mutatedBlockKeys),
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $mutation
+     * @return list<string>
+     */
+    private function resolveTaskPlanMutationTaskKeys(array $mutation, string $primaryTaskKey): array
+    {
+        $taskKeys = $this->normalizeStringList($mutation['task_keys'] ?? []);
+        foreach (['selected_tasks', 'block_keys', 'section_codes', 'component_codes'] as $key) {
+            foreach ($this->normalizeStringList($mutation[$key] ?? []) as $candidate) {
+                if (!\in_array($candidate, $taskKeys, true)) {
+                    $taskKeys[] = $candidate;
+                }
+            }
+        }
+        $primaryTaskKey = \trim($primaryTaskKey);
+        if ($primaryTaskKey !== '' && !\in_array($primaryTaskKey, $taskKeys, true)) {
+            \array_unshift($taskKeys, $primaryTaskKey);
+        }
+
+        return \array_values($taskKeys);
+    }
+
+    /**
+     * @param list<string> $taskKeys
+     * @param array<string, mixed> $taskConfig
+     * @param array<string, mixed> $taskConfigs
+     * @return list<array{task_key:string, task_config:array<string,mixed>}>
+     */
+    private function buildTaskPlanMutationTargets(
+        string $action,
+        array $taskKeys,
+        string $primaryTaskKey,
+        array $taskConfig,
+        array $taskConfigs
+    ): array {
+        $targets = [];
+        if ($action === 'create') {
+            if ($taskConfigs !== []) {
+                foreach ($taskConfigs as $configuredTaskKey => $configuredPatch) {
+                    $targets[] = [
+                        'task_key' => \trim((string)$configuredTaskKey),
+                        'task_config' => \is_array($configuredPatch) ? $configuredPatch : [],
+                    ];
+                }
+            } elseif ($taskKeys !== []) {
+                foreach ($taskKeys as $taskKey) {
+                    $targets[] = [
+                        'task_key' => $taskKey,
+                        'task_config' => $taskConfig,
+                    ];
+                }
+            } else {
+                $targets[] = [
+                    'task_key' => \trim($primaryTaskKey),
+                    'task_config' => $taskConfig,
+                ];
+            }
+        } else {
+            $resolvedTaskKeys = $taskKeys;
+            if ($resolvedTaskKeys === [] && \trim($primaryTaskKey) !== '') {
+                $resolvedTaskKeys = [\trim($primaryTaskKey)];
+            }
+            foreach ($resolvedTaskKeys as $taskKey) {
+                $configuredPatch = \is_array($taskConfigs[$taskKey] ?? null) ? $taskConfigs[$taskKey] : [];
+                $targets[] = [
+                    'task_key' => $taskKey,
+                    'task_config' => $configuredPatch !== [] ? $configuredPatch : $taskConfig,
+                ];
+            }
+        }
+
+        if ($targets === []) {
+            $targets[] = [
+                'task_key' => \trim($primaryTaskKey),
+                'task_config' => $taskConfig,
+            ];
+        }
+
+        return $targets;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $result
+     * @return array<string, mixed>
+     */
+    private function buildScopeFromTaskPlanArtifactsForMutation(array $scope, array $result): array
+    {
+        $nextScope = $scope;
+        if (\is_array($result['structured'] ?? null)) {
+            $nextScope['task_plan_structured'] = $result['structured'];
+        }
+        if (\is_array($result['virtual_theme_plan'] ?? null)) {
+            $virtualThemePlan = $result['virtual_theme_plan'];
+            $nextScope['virtual_theme_plan'] = \array_replace(
+                \is_array($nextScope['virtual_theme_plan'] ?? null) ? $nextScope['virtual_theme_plan'] : [],
+                ['draft' => $virtualThemePlan]
+            );
+        }
+        if (\array_key_exists('markdown', $result)) {
+            $nextScope['task_plan_markdown'] = (string)$result['markdown'];
+        }
+
+        return $nextScope;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $mutationSummaries
+     * @return array<string, mixed>
+     */
+    private function buildCombinedTaskPlanMutationSummary(
+        string $action,
+        string $bucket,
+        string $pageType,
+        array $mutationSummaries
+    ): array {
+        $lastSummary = \is_array($mutationSummaries[\count($mutationSummaries) - 1] ?? null)
+            ? $mutationSummaries[\count($mutationSummaries) - 1]
+            : [];
+        $mutatedTaskKeys = [];
+        foreach ($mutationSummaries as $summary) {
+            $summaryTaskKey = \trim((string)($summary['task_key'] ?? ''));
+            if ($summaryTaskKey !== '' && !\in_array($summaryTaskKey, $mutatedTaskKeys, true)) {
+                $mutatedTaskKeys[] = $summaryTaskKey;
+            }
+        }
+
+        return \array_replace($lastSummary, [
+            'action' => $action,
+            'bucket' => $bucket,
+            'page_type' => $bucket === 'shared' ? '' : $pageType,
+            'mutated_task_keys' => $mutatedTaskKeys,
+            'mutated_count' => \count($mutatedTaskKeys),
+        ]);
+    }
+
+    /**
      * @param array<string, mixed> $scopePatch
      */
     private function enqueueOperationQueueTask(
@@ -12769,7 +13103,7 @@ SCRIPT;
 
     private function shouldKeepQueuedObserverStreamOpen(string $operation): bool
     {
-        return false;
+        return \in_array($operation, ['block_regenerate'], true);
     }
 
     /**
