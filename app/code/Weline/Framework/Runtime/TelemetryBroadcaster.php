@@ -26,9 +26,9 @@ class TelemetryBroadcaster
      * @param Request|null $request 可选 Request（传 null 时尝试从容器获取）
      * @return string 广播后（可能被观察者修改）的响应字符串
      */
-    public static function broadcast(string $result, ?Request $request = null): string
+    public static function broadcast(string $result, ?Request $request = null, bool $forceResultMutation = false): string
     {
-        $allowResultMutation = !(bool)\w_env('response.from_cache', false);
+        $allowResultMutation = $forceResultMutation || !(bool)\w_env('response.from_cache', false);
 
         // 遥测事件始终派发：即便未启用 RequestLifecycleTrace，监听者也可以拿到 request/runtime/result 等信息
         $spans = RequestLifecycleTrace::isEnabled()
