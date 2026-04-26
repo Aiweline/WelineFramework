@@ -19,7 +19,7 @@ use Weline\Framework\Runtime\SchedulerSystem;
 /**
  * Provider Account Service
  * 
- * 管理AI供应商账户的核心服务
+ * 绠＄悊AI渚涘簲鍟嗚处鎴风殑鏍稿績鏈嶅姟
  * 
  * @package Weline_Ai
  */
@@ -39,7 +39,7 @@ class AccountService
     }
 
     /**
-     * 获取支持的供应商列表
+     * 鑾峰彇鏀寔鐨勪緵搴斿晢鍒楄〃
      * 
      * @return array
      */
@@ -49,7 +49,7 @@ class AccountService
     }
 
     /**
-     * 根据模型代码获取供应商代码
+     * 鏍规嵁妯″瀷浠ｇ爜鑾峰彇渚涘簲鍟嗕唬鐮?
      * 
      * @param string $modelCode
      * @return string|null
@@ -72,8 +72,8 @@ class AccountService
     }
 
     /**
-     * 校验供应商是否支持指定模型代码
-     * 优先使用 vendor 配置中的 models 列表；若无配置则从账户缓存的 supported_models 判断。
+     * 鏍￠獙渚涘簲鍟嗘槸鍚︽敮鎸佹寚瀹氭ā鍨嬩唬鐮?
+     * 浼樺厛浣跨敤 vendor 閰嶇疆涓殑 models 鍒楄〃锛涜嫢鏃犻厤缃垯浠庤处鎴风紦瀛樼殑 supported_models 鍒ゆ柇銆?
      */
     public function supportsModel(string $providerCode, string $modelCode): bool
     {
@@ -111,8 +111,8 @@ class AccountService
     }
 
     /**
-     * OpenAI 兼容模式：从供应商账户直接拉取支持模型，并缓存到账户 config.supported_models
-     * 返回拉取到的模型 code 列表。
+     * OpenAI 鍏煎妯″紡锛氫粠渚涘簲鍟嗚处鎴风洿鎺ユ媺鍙栨敮鎸佹ā鍨嬶紝骞剁紦瀛樺埌璐︽埛 config.supported_models
+     * 杩斿洖鎷夊彇鍒扮殑妯″瀷 code 鍒楄〃銆?
      */
     public function refreshSupportedModels(Account $account): array
     {
@@ -213,7 +213,7 @@ class AccountService
     }
 
     /**
-     * 获取指定供应商的可用账户
+     * 鑾峰彇鎸囧畾渚涘簲鍟嗙殑鍙敤璐︽埛
      * 
      * @param string $providerCode
      * @return Account|null
@@ -223,7 +223,7 @@ class AccountService
         /** @var Account $accountModel */
         $accountModel = $this->objectManager->make(Account::class);
         
-        // 首先尝试获取默认账户
+        // 棣栧厛灏濊瘯鑾峰彇榛樿璐︽埛
         $defaultAccount = $accountModel->clear()
             ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
             ->where(Account::schema_fields_IS_DEFAULT, 1)
@@ -237,7 +237,7 @@ class AccountService
             return $defaultAccount;
         }
         
-        // 如果没有默认账户，获取任意可用账户
+        // 濡傛灉娌℃湁榛樿璐︽埛锛岃幏鍙栦换鎰忓彲鐢ㄨ处鎴?
         $availableAccount = $accountModel->clear()
             ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
             ->where(Account::schema_fields_IS_ACTIVE, 1)
@@ -251,7 +251,7 @@ class AccountService
     }
 
     /**
-     * 测试账户连通性
+     * 娴嬭瘯璐︽埛杩為€氭€?
      * 
      * @param Account $account
      * @return array ['success' => bool, 'message' => string, 'model_code' => string]
@@ -262,7 +262,7 @@ class AccountService
             $providerCode = $account->getData(Account::schema_fields_PROVIDER_CODE);
             $providerInfo = VendorConfigManager::getProviderConfig($providerCode);
             if (!$providerInfo) {
-                throw new Exception(__('不支持的供应商: %{provider}', ['provider' => $providerCode]));
+                throw new Exception(__('涓嶆敮鎸佺殑渚涘簲鍟? %{provider}', ['provider' => $providerCode]));
             }
             
             $testModelCode = $providerInfo['test_model'];
@@ -273,7 +273,7 @@ class AccountService
                 (string)$account->getId(), $providerCode, $testModelCode, $baseUrl, $apiKeyTail
             ));
             
-            // 创建临时模型用于测试
+            // 鍒涘缓涓存椂妯″瀷鐢ㄤ簬娴嬭瘯
             /** @var AiModel $testModel */
             $testModel = $this->objectManager->make(AiModel::class);
             $testModel->setData([
@@ -282,37 +282,37 @@ class AccountService
                 AiModel::schema_fields_CONFIG => json_encode([
                     'api_key' => $apiKeyPlain,
                     'base_url' => $baseUrl,
-                    'model' => $testModelCode  // 使用model字段而不是model_id
+                    'model' => $testModelCode  // 浣跨敤model瀛楁鑰屼笉鏄痬odel_id
                 ])
             ]);
             
-            // 设置代理配置
+            // 璁剧疆浠ｇ悊閰嶇疆
             $proxyConfig = $account->getProxyConfig();
             if (!empty($proxyConfig)) {
                 $testModel->setData(AiModel::schema_fields_PROXY_INFO, json_encode($proxyConfig));
             }
             
-            // 获取对应的Provider
+            // 鑾峰彇瀵瑰簲鐨凱rovider
             $provider = $this->getProviderInstance($account->getData(Account::schema_fields_PROVIDER_CODE));
             if (!$provider) {
-                throw new Exception(__('无法创建供应商实例'));
+                throw new Exception('Unable to create provider instance.');
             }
             
-            // 执行测试请求
-            $result = $provider->generate($testModel, '请回复"OK"表示连接成功', [
-                'max_tokens' => 10,
+            // 鎵ц娴嬭瘯璇锋眰
+            $result = $provider->generate($testModel, 'Please reply with "OK" to indicate the connection is working.', [
+                'max_tokens' => 64,
                 'temperature' => 0,
                 'test_mode' => true
             ]);
             
-            if (!empty($result['content'])) {
-                // 更新连接状态
+            if (!empty($result['content']) || !empty($result['reasoning_content'])) {
+                // 鏇存柊杩炴帴鐘舵€?
                 $account->setData(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS);
                 $account->setData(Account::schema_fields_CONNECTION_TEST_TIME, time());
-                $account->setData(Account::schema_fields_CONNECTION_TEST_MESSAGE, __('连接成功'));
+                $account->setData(Account::schema_fields_CONNECTION_TEST_MESSAGE, 'Connection successful');
                 $account->setData(Account::schema_fields_UPDATED_AT, time());
                 
-                // 保存并记录日志
+                // 淇濆瓨骞惰褰曟棩蹇?
                 $saveResult = $account->save();
                 Env::log('ai_provider_test.log', sprintf('[testConnection][success] account_id=%s provider=%s status=%s save_result=%s', 
                     (string)$account->getId(), 
@@ -321,7 +321,7 @@ class AccountService
                     $saveResult ? 'true' : 'false'
                 ));
                 
-                // 验证保存是否成功
+                // 楠岃瘉淇濆瓨鏄惁鎴愬姛
                 $account->reset()->load($account->getId());
                 $actualStatus = $account->getData(Account::schema_fields_CONNECTION_STATUS);
                 if ($actualStatus !== Account::STATUS_SUCCESS) {
@@ -334,7 +334,7 @@ class AccountService
                 
                 return [
                     'success' => true,
-                    'message' => __('连接测试成功'),
+                    'message' => 'Connection test successful',
                     'model_code' => $testModelCode,
                     'account_id' => $account->getId(),
                     'provider' => $providerCode,
@@ -342,17 +342,17 @@ class AccountService
                     'api_key_tail' => $apiKeyTail,
                     'connection_status' => Account::STATUS_SUCCESS,
                     'connection_test_time' => time(),
-                    'connection_test_message' => __('连接成功')
+                    'connection_test_message' => 'Connection successful'
                 ];
             } else {
-                throw new Exception(__('API响应为空'));
+                throw new Exception('API returned an empty response.');
             }
             
         } catch (\Exception $e) {
             Env::log('ai_provider_test.log', sprintf('[testConnection][error] account_id=%s provider=%s error=%s',
                 (string)$account->getId(), (string)$account->getData(Account::schema_fields_PROVIDER_CODE), $e->getMessage()
             ));
-            // 更新连接状态
+            // 鏇存柊杩炴帴鐘舵€?
             $account->setData(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_FAILED);
             $account->setData(Account::schema_fields_CONNECTION_TEST_TIME, time());
             $account->setData(Account::schema_fields_CONNECTION_TEST_MESSAGE, $e->getMessage());
@@ -360,7 +360,7 @@ class AccountService
             
             return [
                 'success' => false,
-                'message' => __('连接测试失败: %{msg}', ['msg' => $e->getMessage()]),
+                'message' => 'Connection test failed: ' . $e->getMessage(),
                 'model_code' => $testModelCode ?? 'unknown',
                 'account_id' => $account->getId(),
                 'provider' => $account->getData(Account::schema_fields_PROVIDER_CODE),
@@ -371,7 +371,7 @@ class AccountService
     }
 
     /**
-     * 记录使用情况
+     * 璁板綍浣跨敤鎯呭喌
      * 
      * @param Account $account
      * @param AiModel $model
@@ -384,7 +384,7 @@ class AccountService
         /** @var UsageRecord $record */
         $record = $this->objectManager->make(UsageRecord::class);
         
-        // 计算费用
+        // 璁＄畻璐圭敤
         $inputPrice = (float)$model->getData(AiModel::schema_fields_TOKEN_PRICE_INPUT);
         $outputPrice = (float)$model->getData(AiModel::schema_fields_TOKEN_PRICE_OUTPUT);
         
@@ -407,11 +407,11 @@ class AccountService
             UsageRecord::schema_fields_CREATED_AT => time()
         ]);
         
-        // 计算费用
+        // 璁＄畻璐圭敤
         $record->calculateCost($inputPrice, $outputPrice);
         $record->save();
         
-        // 更新账户余额
+        // 鏇存柊璐︽埛浣欓
         if ($record->getData(UsageRecord::schema_fields_STATUS) === 'success') {
             $account->updateBalance((float)$record->getData(UsageRecord::schema_fields_TOTAL_COST));
             $account->save();
@@ -421,7 +421,7 @@ class AccountService
     }
 
     /**
-     * 获取Provider实例
+     * 鑾峰彇Provider瀹炰緥
      * 
      * @param string $providerCode
      * @return ProviderInterface|null
@@ -429,16 +429,16 @@ class AccountService
     public function getProviderInstance(string $providerCode): ?ProviderInterface
     {
         try {
-            // 根据供应商代码返回对应的Provider实例
+            // 鏍规嵁渚涘簲鍟嗕唬鐮佽繑鍥炲搴旂殑Provider瀹炰緥
             $providerClass = match ($providerCode) {
                 'anthropic' => AnthropicProvider::class,
                 'openai', 'deepseek', 'google', 'kimi' => OpenAiProvider::class,
-                default => OpenAiProvider::class, // 默认使用OpenAI兼容的Provider
+                default => OpenAiProvider::class, // 榛樿浣跨敤OpenAI鍏煎鐨凱rovider
             };
             
             $provider = $this->objectManager->make($providerClass);
             if (!$provider instanceof ProviderInterface) {
-                Env::log('ai_provider_test.log', sprintf('[getProviderInstance][error] provider=%s error=返回的对象不是ProviderInterface实例', $providerCode));
+                Env::log('ai_provider_test.log', sprintf('[getProviderInstance][error] provider=%s error=杩斿洖鐨勫璞′笉鏄疨roviderInterface瀹炰緥', $providerCode));
                 return null;
             }
             return $provider;
@@ -460,7 +460,7 @@ class AccountService
     }
 
     /**
-     * 设置默认账户
+     * 璁剧疆榛樿璐︽埛
      * 
      * @param Account $account
      * @return void
@@ -469,7 +469,7 @@ class AccountService
     {
         $providerCode = $account->getData(Account::schema_fields_PROVIDER_CODE);
         
-        // 先取消该供应商的所有默认账户（使用批量更新避免迭代对象类型不一致）
+        // 鍏堝彇娑堣渚涘簲鍟嗙殑鎵€鏈夐粯璁よ处鎴凤紙浣跨敤鎵归噺鏇存柊閬垮厤杩唬瀵硅薄绫诲瀷涓嶄竴鑷达級
         /** @var Account $accountModel */
         $accountModel = $this->objectManager->make(Account::class);
         $accountModel->reset()
@@ -478,12 +478,12 @@ class AccountService
             ->update([Account::schema_fields_IS_DEFAULT => 0])
             ->fetch();
         
-        // 设置新的默认账户
+        // 璁剧疆鏂扮殑榛樿璐︽埛
         $account->setData(Account::schema_fields_IS_DEFAULT, 1)->save();
     }
 
     /**
-     * 获取供应商的所有账户
+     * 鑾峰彇渚涘簲鍟嗙殑鎵€鏈夎处鎴?
      * 
      * @param string $providerCode
      * @return array
@@ -502,7 +502,7 @@ class AccountService
     }
 
     /**
-     * 获取同步模型列表用的可用账户（仅要求激活）
+     * 鑾峰彇鍚屾妯″瀷鍒楄〃鐢ㄧ殑鍙敤璐︽埛锛堜粎瑕佹眰婵€娲伙級
      *
      * @param string $providerCode
      * @return Account|null
@@ -523,7 +523,7 @@ class AccountService
     }
 
     /**
-     * 获取指定供应商支持的模型列表
+     * 鑾峰彇鎸囧畾渚涘簲鍟嗘敮鎸佺殑妯″瀷鍒楄〃
      * 
      * @param string $providerCode
      * @return array
@@ -534,7 +534,7 @@ class AccountService
     }
 
     /**
-     * 获取所有供应商及其支持的模型列表
+     * 鑾峰彇鎵€鏈変緵搴斿晢鍙婂叾鏀寔鐨勬ā鍨嬪垪琛?
      * 
      * @return array
      */

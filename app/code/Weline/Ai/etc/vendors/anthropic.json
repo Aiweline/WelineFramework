@@ -41,7 +41,7 @@
         "temperature": 0.7,
         "top_p": 1.0,
         "stream": true,
-        "timeout": 180,
+        "timeout": 900,
         "max_retries": 3,
         "capabilities": ["chat", "vision", "code"]
     },

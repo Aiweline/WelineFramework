@@ -18,7 +18,7 @@
         "frequency_penalty": 0.0,
         "presence_penalty": 0.0,
         "stream": true,
-        "timeout": 180,
+        "timeout": 900,
         "max_retries": 3
     },
     "proxy_info": {

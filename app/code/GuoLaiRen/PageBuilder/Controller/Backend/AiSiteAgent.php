@@ -6024,17 +6024,47 @@ SCRIPT;
         }
 
         if ($this->isAiSiteQueueBackedOperation($operation)) {
+            $queueRow = $this->findAiSiteOperationQueueRow(
+                $session,
+                $operation,
+                (int)($activeOperation['queue_id'] ?? 0)
+            );
+            if (\is_array($queueRow) && $queueRow !== []) {
+                $sse->sendEvent('info', [
+                    'message' => (string)__('检测到已存在队列记录，已切换为观察模式并继续同步队列状态。'),
+                    'operation' => $operation,
+                    'observer_mode' => true,
+                    'queue_id' => (int)($queueRow['queue_id'] ?? 0),
+                    'queue_status' => (string)($queueRow['status'] ?? ''),
+                ]);
+                $observed = $this->observeDuplicateOperationStream($sse, $session, $adminId, $operation, $executionToken);
+                if (!(bool)($observed['success'] ?? true)) {
+                    $sse->sendError(
+                        (string)($observed['message'] ?? __('操作执行失败')),
+                        (int)($observed['http_code'] ?? 500)
+                    );
+                }
+                $sse->complete([
+                    'success' => (bool)($observed['success'] ?? true),
+                    'message' => (string)($observed['message'] ?? __('操作执行完成')),
+                    'operation' => $operation,
+                    'data' => \is_array($observed['data'] ?? null) ? $observed['data'] : [],
+                    'state' => \is_array($observed['state'] ?? null) ? $observed['state'] : [],
+                    'deferred_queue_progress' => (bool)($observed['deferred_queue_progress'] ?? false),
+                ]);
+                return;
+            }
             $this->sendSseContractError(
                 $sse,
                 'OPERATION_QUEUE_REQUIRED',
-                'Queue-backed AI operations are executed only by the system scheduler. Start the operation again so one queue row can be created.',
+                '队列型 AI 操作仅由系统调度器执行。请重新发起一次操作以创建队列记录。',
                 self::PARAMS_OPERATION_SSE,
                 409
             );
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
             $sse->complete([
                 'success' => false,
-                'message' => 'Queue-backed AI operations are executed only by the system scheduler.',
+                'message' => '队列型 AI 操作仅由系统调度器执行。',
                 'operation' => $operation,
                 'state' => $this->buildWorkspaceEventStatePayload(
                     $this->buildWorkspaceState($fresh, $adminId, 80, true)
@@ -6173,7 +6203,7 @@ SCRIPT;
         array $activeOperation
     ): array {
         if ($this->isAiSiteQueueBackedOperation($operation)) {
-            throw new \RuntimeException('Queue-backed AI operations are executed only by the system scheduler.');
+            throw new \RuntimeException('队列型 AI 操作仅由系统调度器执行。');
         }
 
         return match ($operation) {
@@ -6305,6 +6335,11 @@ SCRIPT;
             $lastTaskProgressSnapshotSignature
         );
 
+        if ($queueCheckpointOnly && $operation === 'plan') {
+            // 第一阶段必须保持观察流，不允许走 checkpoint-only 快速返回。
+            $queueCheckpointOnly = false;
+        }
+
         if ($queueCheckpointOnly) {
             $stateCheckpoint = $this->buildQueuedOperationCheckpointState(
                 $session,
@@ -6316,7 +6351,7 @@ SCRIPT;
 
             return [
                 'success' => true,
-                'message' => (string)__('队列任务已提交，进度将异步刷新，无需保持本连接。'),
+                'message' => (string)__('队列任务已提交，进度将持续同步到工作区。'),
                 'data' => $this->buildObservedOperationResultData($operation, $stateCheckpoint),
                 'state' => $stateCheckpoint,
                 'http_code' => 200,
@@ -6378,7 +6413,11 @@ SCRIPT;
                 $lastTaskProgressSnapshotSignature
             );
             if (!$this->isObservedOperationStillRunning($activeOperation, $operation, $executionToken, $queueRow)) {
-                break;
+                $loopQueueStatus = \trim((string)($queueRow['status'] ?? ''));
+                // 只要队列仍在 pending/queued/running，就继续保持观察连接，避免过早 done。
+                if (!\in_array($loopQueueStatus, ['pending', 'queued', 'running'], true)) {
+                    break;
+                }
             }
 
             if ($maxIdleLoops > 0 && $idleLoops >= $maxIdleLoops && $this->isActiveOperationStale($activeOperation)) {
@@ -6454,11 +6493,14 @@ SCRIPT;
         $status = \trim((string)($activeOperation['status'] ?? ''));
 
         $activeInProgress = \in_array($status, ['queued', 'running'], true);
-        $queueInProgress = \in_array($queueStatus, ['pending', 'queued', 'running'], true);
-        $success = !$timedOut && !\in_array($status, ['error', 'cancelled', 'queued', 'running'], true);
-        if ($queueStatus === 'done') {
+        $queueInProgress = $this->isObservedQueueInProgress($queueRow);
+        $queueTerminal = $this->isObservedQueueTerminal($queueRow);
+        $success = !$timedOut
+            && !\in_array($status, ['error', 'cancelled', 'queued', 'running'], true)
+            && !$queueInProgress;
+        if ($queueStatus === 'done' && $queueTerminal) {
             $success = true;
-        } elseif (\in_array($queueStatus, ['error', 'stop'], true)) {
+        } elseif (\in_array($queueStatus, ['error', 'stop'], true) && $queueTerminal) {
             $success = false;
         }
         $message = \trim((string)($activeOperation['message'] ?? ''));
@@ -6582,13 +6624,47 @@ SCRIPT;
         }
 
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
-        $queueStatus = \trim((string)($queueRow['status'] ?? ''));
-        if (\in_array($queueStatus, ['done', 'error', 'stop'], true)) {
+        if ($this->isObservedQueueTerminal($queueRow)) {
             return false;
         }
 
         return \in_array($activeStatus, ['queued', 'running'], true)
-            || \in_array($queueStatus, ['pending', 'running'], true);
+            || $this->isObservedQueueInProgress($queueRow);
+    }
+
+    /**
+     * 观察流终态判定：仅当队列状态为终态且已写入 finished/end_at 时，才视为真正完成。
+     * 避免 status=error 的瞬时中间态导致 SSE 过早 done。
+     *
+     * @param array<string, mixed>|null $queueRow
+     */
+    private function isObservedQueueTerminal(?array $queueRow): bool
+    {
+        if (!\is_array($queueRow) || $queueRow === []) {
+            return false;
+        }
+        $status = \trim((string)($queueRow['status'] ?? ''));
+        if (!\in_array($status, ['done', 'error', 'stop', 'cancelled'], true)) {
+            return false;
+        }
+        $finished = (int)($queueRow['finished'] ?? 0);
+        $endAt = \trim((string)($queueRow['end_at'] ?? ''));
+        return $finished === 1 || $endAt !== '';
+    }
+
+    /**
+     * @param array<string, mixed>|null $queueRow
+     */
+    private function isObservedQueueInProgress(?array $queueRow): bool
+    {
+        if (!\is_array($queueRow) || $queueRow === []) {
+            return false;
+        }
+        if ($this->isObservedQueueTerminal($queueRow)) {
+            return false;
+        }
+        $status = \trim((string)($queueRow['status'] ?? ''));
+        return \in_array($status, ['pending', 'queued', 'running', 'error'], true);
     }
 
     /**
@@ -13105,7 +13181,7 @@ SCRIPT;
 
     private function shouldKeepQueuedObserverStreamOpen(string $operation): bool
     {
-        return \in_array($operation, ['block_regenerate'], true);
+        return \in_array($operation, ['plan', 'block_regenerate'], true);
     }
 
     /**
