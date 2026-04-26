@@ -149,6 +149,26 @@ class Model extends BackendController
         return isset($providerConfig['account_id']) ? (int)$providerConfig['account_id'] : 0;
     }
 
+    private function getBoundProviderAccountUnavailableMessage(?Account $account, int $requestedAccountId): ?string
+    {
+        if ($requestedAccountId <= 0) {
+            return null;
+        }
+
+        if (!$account || !$account->getId()) {
+            return (string)__('模型绑定的供应商账户不存在（account_id: %{1}）', [$requestedAccountId]);
+        }
+
+        if ((int)$account->getData(Account::schema_fields_IS_ACTIVE) !== 1) {
+            return (string)__('模型绑定的供应商账户未启用（account_id: %{1}，account_name: %{2}）', [
+                $requestedAccountId,
+                (string)($account->getData(Account::schema_fields_ACCOUNT_NAME) ?: '-')
+            ]);
+        }
+
+        return null;
+    }
+
     private function normalizeBooleanValue(mixed $value): bool
     {
         if (is_bool($value)) {
@@ -281,6 +301,7 @@ class Model extends BackendController
     private function buildIncomingProviderConfigData(array $data, string $providerModelCode, array $config = []): array
     {
         $providerConfig = [];
+        $requestedAccountId = null;
 
         if (array_key_exists('provider_config_json', $data)) {
             $providerConfigJson = trim((string)$data['provider_config_json']);
@@ -290,10 +311,17 @@ class Model extends BackendController
         }
 
         if (isset($data['provider_config']) && is_array($data['provider_config'])) {
+            if (array_key_exists('account_id', $data['provider_config'])) {
+                $requestedAccountId = trim((string)$data['provider_config']['account_id']);
+            }
             $providerConfig = array_replace($providerConfig, $data['provider_config']);
         }
 
         $providerConfig = $this->filterConfigValues($providerConfig);
+
+        if ($requestedAccountId !== null && $requestedAccountId === '') {
+            unset($providerConfig['account_id']);
+        }
 
         if (!empty($config['api_key'])) {
             $providerConfig['api_key'] = $config['api_key'];
@@ -925,7 +953,16 @@ class Model extends BackendController
             $accountModel = ObjectManager::getInstance(Account::class);
             $requestedAccountId = $this->getRequestedProviderAccountId($testModel);
             if ($requestedAccountId > 0) {
-                $accounts = [['id' => $requestedAccountId]];
+                $requestedAccount = $accountModel->clear()->load($requestedAccountId);
+                $boundAccountUnavailableMessage = $this->getBoundProviderAccountUnavailableMessage($requestedAccount, $requestedAccountId);
+                if ($boundAccountUnavailableMessage !== null) {
+                    $accounts = [];
+                    $results['provider_account']['tested'] = false;
+                    $results['provider_account']['success'] = false;
+                    $results['provider_account']['message'] = $boundAccountUnavailableMessage;
+                } else {
+                    $accounts = [['id' => $requestedAccountId]];
+                }
             } else {
                 $accounts = $accountModel->clear()
                     ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
@@ -934,6 +971,14 @@ class Model extends BackendController
                     ->order(Account::schema_fields_BALANCE, 'DESC')
                     ->select()
                     ->fetchArray();
+                if (empty($accounts)) {
+                    $accounts = $accountModel->clear()
+                        ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
+                        ->order(Account::schema_fields_IS_DEFAULT, 'DESC')
+                        ->order(Account::schema_fields_BALANCE, 'DESC')
+                        ->select()
+                        ->fetchArray();
+                }
             }
             
             if (!empty($accounts) && is_array($accounts)) {
@@ -1257,7 +1302,7 @@ class Model extends BackendController
                     $temperature = $defaults['temperature'] ?? 0.7;
                     $topP = $defaults['top_p'] ?? 1.0;
                     $stream = $defaults['stream'] ?? true;
-                    $timeout = (int)($defaults['timeout'] ?? 180);
+                $timeout = (int)($defaults['timeout'] ?? \Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT);
                     $maxRetries = (int)($defaults['max_retries'] ?? 3);
 
                     $providerRuntimeConfig = [
@@ -1380,34 +1425,22 @@ class Model extends BackendController
         try {
             $model = $this->getAiModel()->reset();
             
-            $isNew = ($id === 0);
-            // 新建（id=0）：不加载，后续直接 setData + save
-            if (!$isNew) {
-                // 优先根据模型代码加载（以模型代码作为唯一标识）
-                if (!empty($modelCodeFromRequest)) {
-                    $loaded = $model->reset()
-                        ->where(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE, $modelCodeFromRequest)
-                        ->find()
-                        ->fetch();
-                    if ($loaded && $loaded->getId()) {
-                        $model = $loaded;
-                    } else {
-                        $model->load($id);
-                    }
-                } else {
-                    $model->load($id);
-                }
-                if (!$model->getId()) {
-                    if ($isAjax) {
-                        return $this->jsonResponse([
-                            'success' => false,
-                            'message' => __('模型不存在或模型代码无效')
-                        ]);
-                    }
-                    $this->getMessageManager()->addError(__('模型不存在或模型代码无效'));
-                    return $this->redirect('*/backend/model/index');
+            if (!empty($modelCodeFromRequest)) {
+                $loaded = $model->reset()
+                    ->where(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE, $modelCodeFromRequest)
+                    ->find()
+                    ->fetch();
+                if ($loaded && $loaded->getId()) {
+                    $model = $loaded;
+                    $id = (int)$model->getId();
                 }
             }
+
+            if (!$model->getId() && $id > 0) {
+                $model->load($id);
+            }
+
+            $isNew = !$model->getId();
             
             // 设置基本数据
             // 如果是编辑原始模型（非复制模型），基本信息不可修改
