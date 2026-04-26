@@ -77,6 +77,7 @@ class AiSitePublishService
             $pageTypeLayouts,
             $virtualPagesByType
         );
+        $this->applyPublishSnapshotsForMaterializedPages($materialized['pagebuilder_pages_by_type'] ?? []);
         $this->ensureWebsiteDomainBinding($websiteId, $websiteProfile);
 
         if ($virtualThemeId > 0) {

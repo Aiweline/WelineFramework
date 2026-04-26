@@ -96,15 +96,22 @@ QUEUETIP;
                 # 队列名
                 $queue_name = Process::initTaskName('queue-' . $queue->getName() . '-' . $queue->getId());
                 # 进程名
-                $process_name = PHP_BINARY . ' bin/w queue:run --id=' . $queue->getId() . ' --name \'' . $queue_name . '\'';
+                $process_name = $this->buildQueueRunProcessName((int)$queue->getId(), $queue_name);
                 # 优先使用队列记录 PID 精确判活（Windows 下按命令行匹配不稳定，容易误判）
                 $queuePid = (int)($queue->getPid() ?: 0);
-                $queuePidRunning = $queuePid > 0 && Processer::isRunningByPid($queuePid);
+                $queuePidRunning = $queuePid > 0
+                    && Processer::isManagedProcessRunning($queuePid, $queue_name, '', $process_name);
                 # 兼容旧逻辑：命令行名匹配作为回退
-                $pid = $queuePidRunning ? $queuePid : Process::getPidByName($process_name);
+                $managedPid = $queuePidRunning ? $queuePid : (int)(Processer::getData($process_name, 'pid') ?: 0);
+                $managedPidRunning = $managedPid > 0
+                    && Processer::isManagedProcessRunning($managedPid, $queue_name, '', $process_name);
+                if (!$managedPidRunning && $managedPid > 0) {
+                    Processer::removePidFile($process_name);
+                }
+                $pid = $queuePidRunning ? $queuePid : ($managedPidRunning ? $managedPid : 0);
                 $result = $queue->getResult();
                 if ($pid) {
-                    $output = Process::getProcessOutput($process_name);
+                    $output = $this->getManagedProcessOutput($process_name, $pid);
                     $queue->setResult($output . __('进程已存在，请检查进程状态！进程名：%{1}', $process_name) . $result)
                         ->setPid($pid)
                         ->setStatus($queue::status_running)
@@ -112,7 +119,7 @@ QUEUETIP;
                     continue;
                 } elseif ($queue->getPid()) {
                     # -----------没有查到该程序正在运行，数据库又存在PID，说明该任务运行结束-------------
-                    $output = Process::getProcessOutput($process_name);
+                    $output = $this->getManagedProcessOutput($process_name, $queuePid);
                     $queue->setEndAt(date('Y-m-d H:i:s'))
                         ->setPid(0);
                     if ($queue->isFinished()) {
@@ -125,13 +132,14 @@ QUEUETIP;
                             ->save();
                     }
                     # 卸载进程记录文件
-                    Process::unsetLogProcessFilePath($process_name);
+                    Processer::removePidFile($process_name);
                     continue;
                 }
                 # 创建进程
-                $pid = Process::create($process_name);
+                $pid = Processer::create($process_name, true, false, true);
                 if (!$pid) {
-                    $queue->setResult(__('进程创建失败！请检查进程状态！进程名：%{1}', [$process_name]))
+                    $output = $this->getManagedProcessOutput($process_name);
+                    $queue->setResult($output . __('进程创建失败！请检查进程状态！进程名：%{1}', [$process_name]))
                         ->setStartAt(date('Y-m-d H:i:s'))
                         ->setStatus($queue::status_error)
                         ->save();
@@ -145,6 +153,41 @@ QUEUETIP;
             }
         }
         return 'OK';
+    }
+
+    private function buildQueueRunProcessName(int $queueId, string $queueName): string
+    {
+        $bin = BP . 'bin' . DIRECTORY_SEPARATOR . 'w';
+
+        return escapeshellarg(PHP_BINARY)
+            . ' '
+            . escapeshellarg($bin)
+            . ' queue:run --id=' . $queueId
+            . ' --name=' . $queueName;
+    }
+
+    private function getManagedProcessOutput(string $processName, int $pid = 0): string
+    {
+        try {
+            if ($pid > 0) {
+                $output = Processer::outputByPid($pid);
+                if (is_string($output) && $output !== '') {
+                    return $output;
+                }
+            }
+
+            $path = Processer::getLogFile($processName);
+            if (is_file($path)) {
+                $output = file_get_contents($path);
+                if (is_string($output)) {
+                    return $output;
+                }
+            }
+        } catch (\Throwable) {
+            return '';
+        }
+
+        return '';
     }
 
     /**

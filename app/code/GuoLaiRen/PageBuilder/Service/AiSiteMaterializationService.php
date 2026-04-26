@@ -164,6 +164,9 @@ class AiSiteMaterializationService
             $pageLocales = $this->resolveMaterializedLocales($pageLocale, $websiteProfile);
             $pageHandle = \trim((string)($virtualPage['handle'] ?? $defaults['handle']));
             $blocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+            if ($blocks === []) {
+                $blocks = $this->resolveExistingAiHtmlBlocks($page);
+            }
             $aiLayout = ['blocks' => $blocks];
             $aiLayoutJson = \json_encode($aiLayout, \JSON_UNESCAPED_UNICODE);
 
@@ -369,11 +372,11 @@ class AiSiteMaterializationService
 
         $layoutJson = \json_encode($pageLayoutConfig, \JSON_UNESCAPED_UNICODE);
         $page->setData(Page::schema_fields_LAYOUT_CONFIG, $layoutJson);
-        $page->clearQuery()
-            ->where(Page::schema_fields_ID, (int)$page->getId())
-            ->update([
-                Page::schema_fields_LAYOUT_CONFIG => $layoutJson,
-            ]);
+        $page->clearQuery()->where(Page::schema_fields_ID, (int)$page->getId());
+        $page->update([
+            Page::schema_fields_LAYOUT_CONFIG => $layoutJson,
+        ]);
+        $page->fetch();
     }
 
     private function forceRenderModePersistence(Page $page, string $renderMode, ?string $aiLayoutJson): void
@@ -385,7 +388,27 @@ class AiSiteMaterializationService
 
         $page->setData(Page::schema_fields_RENDER_MODE, $renderMode)
             ->setData(Page::schema_fields_AI_LAYOUT, $aiLayoutJson);
-        $page->save(true);
+        $page->clearQuery()->where(Page::schema_fields_ID, $pageId);
+        $page->update([
+            Page::schema_fields_RENDER_MODE => $renderMode,
+            Page::schema_fields_AI_LAYOUT => $aiLayoutJson,
+        ]);
+        $page->fetch();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function resolveExistingAiHtmlBlocks(Page $page): array
+    {
+        if ((int)$page->getId() <= 0) {
+            return [];
+        }
+
+        $layout = $page->getAiLayoutArray();
+        $blocks = \is_array($layout['blocks'] ?? null) ? $layout['blocks'] : [];
+
+        return \array_values(\array_filter($blocks, static fn(mixed $block): bool => \is_array($block)));
     }
 
     /**

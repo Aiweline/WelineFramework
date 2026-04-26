@@ -54,6 +54,23 @@ class AiSiteAgentQueueObserverStreamService
         return $this->queueObserverHelperService;
     }
 
+    private function isQueueWaitingForSystemScheduler(string $queueStatus, int $queuePid): bool
+    {
+        return \in_array($queueStatus, ['pending', 'queued'], true)
+            || ($queueStatus === 'running' && $queuePid <= 0);
+    }
+
+    private function buildSystemSchedulerWaitMessage(int $queueId = 0): string
+    {
+        if ($queueId > 0) {
+            return (string)__('队列 #%{queue_id} 正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。', [
+                'queue_id' => (string)$queueId,
+            ]);
+        }
+
+        return (string)__('队列正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。');
+    }
+
     /**
      * 根据 queue_info 归一 activeOperation.status / message / updated_at。
      *
@@ -88,12 +105,18 @@ class AiSiteAgentQueueObserverStreamService
         if (\in_array($queueStatus, ['pending', 'queued', 'running'], true)) {
             $activeOperation['status'] = $queueStatus === 'running' ? 'running' : 'queued';
             $queueId = (int)($queueInfo['queue_id'] ?? $queueInfo['snapshot']['queue_id'] ?? 0);
+            $queuePid = (int)($queueInfo['pid'] ?? $queueInfo['snapshot']['pid'] ?? 0);
             if ($queueId > 0) {
                 $activeOperation['queue_id'] = $queueId;
             }
             $queueProcess = \trim((string)($queueInfo['process'] ?? ''));
             $currentMessage = \trim((string)($activeOperation['message'] ?? ''));
-            if ($queueProcess !== '') {
+            if ($this->isQueueWaitingForSystemScheduler($queueStatus, $queuePid)) {
+                $activeOperation['message'] = $this->buildSystemSchedulerWaitMessage($queueId);
+                $activeOperation['queue_waiting_for_scheduler'] = true;
+                $activeOperation['can_close_stream'] = true;
+                $activeOperation['continue_other_operations'] = true;
+            } elseif ($queueProcess !== '') {
                 $activeOperation['message'] = $queueProcess;
             } elseif ($activeStatus === 'error' || $currentMessage === '') {
                 $activeOperation['message'] = match ($operation) {
@@ -181,8 +204,16 @@ class AiSiteAgentQueueObserverStreamService
                 : (string)__('会话 public_id（脱敏）：%{h}', ['h' => (string)$snap['public_id_hint']]);
         }
 
+        $queueStatus = \trim((string)($snap['status'] ?? ''));
+        $queuePid = (int)($snap['pid'] ?? 0);
+        $waitingForScheduler = $this->isQueueWaitingForSystemScheduler($queueStatus, $queuePid);
+        $schedulerWaitMessage = $this->buildSystemSchedulerWaitMessage((int)($snap['queue_id'] ?? 0));
+        if ($waitingForScheduler) {
+            $lines[] = $schedulerWaitMessage;
+        }
+
         $sse->sendEvent('info', [
-            'message' => (string)($lines[0] ?? ''),
+            'message' => $waitingForScheduler ? $schedulerWaitMessage : (string)($lines[0] ?? ''),
             'detail_lines' => $lines,
             'queue_snapshot' => $snap,
             'queue_info' => $queueInfo,
@@ -192,6 +223,9 @@ class AiSiteAgentQueueObserverStreamService
             'token_usage' => $tokenUsage,
             'progress_kind' => 'queue_info',
             'observer_detail' => true,
+            'queue_waiting_for_scheduler' => $waitingForScheduler,
+            'can_close_stream' => $waitingForScheduler,
+            'continue_other_operations' => $waitingForScheduler,
         ]);
     }
 
@@ -253,6 +287,26 @@ class AiSiteAgentQueueObserverStreamService
                 'token_usage' => $tokenUsage,
                 'progress_kind' => 'queue_info',
                 'observer_detail' => true,
+            ]);
+        }
+
+        if (
+            $this->isQueueWaitingForSystemScheduler($queueStatus, $queuePid)
+            && ($lastQueueStatus === '' || $queueStatus !== $lastQueueStatus || $queuePid !== $lastQueuePid)
+        ) {
+            $sse->sendEvent('info', [
+                'message' => $this->buildSystemSchedulerWaitMessage($queueId),
+                'operation' => $operation,
+                'queue_id' => $queueId,
+                'queue_status' => $queueStatus,
+                'queue_snapshot' => $queueSnapshot,
+                'queue_info' => $queuePanelInfo,
+                'token_usage' => $tokenUsage,
+                'progress_kind' => 'queue_info',
+                'observer_detail' => true,
+                'queue_waiting_for_scheduler' => true,
+                'can_close_stream' => true,
+                'continue_other_operations' => true,
             ]);
         }
 

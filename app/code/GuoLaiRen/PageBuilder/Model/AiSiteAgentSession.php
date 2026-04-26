@@ -66,6 +66,23 @@ class AiSiteAgentSession extends Model
         'task_summary' => true,
         'build_summary' => true,
     ];
+    private const ARTIFACT_BACKED_SCOPE_PATHS = [
+        self::STAGE_PLAN => [
+            'plan_json' => [['plan_json'], []],
+            'plan_structured' => [['plan_structured'], []],
+        ],
+        self::STAGE_VISUAL_EDIT => [
+            'plan_json' => [['plan_json'], []],
+            'plan_structured' => [['plan_structured'], []],
+            'task_plan_structured' => [['task_plan_structured'], []],
+            'task_plan_markdown' => [['task_plan_markdown'], ''],
+            'task_plan_draft' => [['virtual_theme_plan', 'draft'], []],
+            'task_plan_draft_markdown' => [['virtual_theme_plan', 'draft_markdown'], ''],
+            'task_plan_confirmed' => [['virtual_theme_plan', 'confirmed'], []],
+            'task_plan_confirmed_markdown' => [['virtual_theme_plan', 'confirmed_markdown'], ''],
+            'build_blueprint' => [['build_blueprint'], []],
+        ],
+    ];
     private ?string $scopeJsonDecodeCacheRaw = null;
     /** @var array<string, mixed> */
     private array $scopeJsonDecodeCacheData = [];
@@ -263,6 +280,7 @@ class AiSiteAgentSession extends Model
             $scope[$field] = $this->compactScopeLogEntries($scope[$field] ?? []);
         }
 
+        $scope = $this->stripArtifactBackedPayloadsForStorage($scope);
         $scope = $this->compactBuildArtifactsBeforeStorage($scope);
 
         return $scope;
@@ -275,6 +293,64 @@ class AiSiteAgentSession extends Model
     private function compactScopeBeforeStorage(array $scope): array
     {
         return $this->compactScopeForStorage($scope);
+    }
+
+    /**
+     * Artifact references make the artifact table the canonical storage for
+     * these large payloads. Do not write hydrated copies back into scope_json.
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function stripArtifactBackedPayloadsForStorage(array $scope): array
+    {
+        $refs = \is_array($scope['_artifact_refs'] ?? null) ? $scope['_artifact_refs'] : [];
+        if ($refs === []) {
+            return $scope;
+        }
+
+        foreach (self::ARTIFACT_BACKED_SCOPE_PATHS as $stageCode => $artifactPaths) {
+            $stageRefs = \is_array($refs[$stageCode] ?? null) ? $refs[$stageCode] : [];
+            if ($stageRefs === []) {
+                continue;
+            }
+            foreach ($artifactPaths as $artifactKey => $pathConfig) {
+                if (!\is_array($stageRefs[$artifactKey] ?? null)) {
+                    continue;
+                }
+                [$path, $emptyValue] = $pathConfig;
+                $scope = $this->setScopePathForStorage($scope, $path, $emptyValue);
+            }
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param list<string> $path
+     * @return array<string, mixed>
+     */
+    private function setScopePathForStorage(array $scope, array $path, mixed $value): array
+    {
+        if ($path === []) {
+            return $scope;
+        }
+
+        $cursor =& $scope;
+        foreach ($path as $index => $part) {
+            if ($index === \count($path) - 1) {
+                $cursor[$part] = $value;
+                break;
+            }
+            if (!\is_array($cursor[$part] ?? null)) {
+                $cursor[$part] = [];
+            }
+            $cursor =& $cursor[$part];
+        }
+        unset($cursor);
+
+        return $scope;
     }
 
     /**

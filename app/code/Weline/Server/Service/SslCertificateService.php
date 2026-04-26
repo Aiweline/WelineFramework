@@ -465,8 +465,9 @@ class SslCertificateService
             return null;
         }
 
-        if ($this->shouldUseTrustedLocalCertificateAuthority($domain)
-            && $this->normalizeAcmeProvider((string) $wildcardCert->getProvider()) !== self::PROVIDER_LOCAL_CA) {
+        $isLocalCaWildcard = $this->shouldUseTrustedLocalCertificateAuthority($domain)
+            && $this->normalizeAcmeProvider((string) $wildcardCert->getProvider()) === self::PROVIDER_LOCAL_CA;
+        if ($this->shouldUseTrustedLocalCertificateAuthority($domain) && !$isLocalCaWildcard) {
             return null;
         }
 
@@ -481,6 +482,14 @@ class SslCertificateService
         if ($expiresAt !== '' && \strtotime($expiresAt) < \time()) {
             w_log_info(__('[SslCertificateService] 泛域名 *.%{1} 已过期，子域 %{2} 不使用泛域证书', [$rootDomain, $domain]));
             return null;
+        }
+
+        if ($isLocalCaWildcard) {
+            $this->restoreCertificateFilesFromData($wildcardCert->getData());
+            $wildcardCertPath = $this->getCertificateDir((string) $wildcardCert->getDomain()) . 'fullchain.pem';
+            if (!$this->localCaCertificateCoversRequiredSan($domain, $wildcardCertPath)) {
+                return null;
+            }
         }
 
         $subCert = ObjectManager::getInstance(SslCertificate::class, [], false);
@@ -1054,7 +1063,61 @@ CNF;
         $chainPath = \dirname($certPath) . DS . 'chain.pem';
         $chainPem = \is_file($chainPath) ? (string) @\file_get_contents($chainPath) : '';
 
-        return $this->extractLocalCaPemFromCertificateBundle($certPem, $chainPem) !== '';
+        if ($this->extractLocalCaPemFromCertificateBundle($certPem, $chainPem) === '') {
+            return false;
+        }
+
+        $domain = self::logicalDomainFromStorageSegment(\basename(\dirname($certPath)));
+
+        return $this->localCaCertificateCoversRequiredSan($domain, $certPath);
+    }
+
+    protected function localCaCertificateCoversRequiredSan(string $domain, string $certPath): bool
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '' || !\is_file($certPath)) {
+            return false;
+        }
+
+        $cert = $this->getParsedCertificateRaw($certPath);
+        if (!$cert) {
+            return false;
+        }
+
+        $requiredSan = $this->collectSanEntries($domain);
+        $actualSan = $this->extractCertificateSubjectAltNames((string) ($cert['extensions']['subjectAltName'] ?? ''));
+
+        foreach ($requiredSan['dns'] as $dnsName) {
+            if (!$this->certificateMatchesHost($certPath, $dnsName)) {
+                return false;
+            }
+        }
+
+        $actualIpSan = \array_map([$this, 'normalizeIpAddressForComparison'], $actualSan['ip']);
+        foreach ($requiredSan['ip'] as $ipAddr) {
+            if (!\in_array($this->normalizeIpAddressForComparison($ipAddr), $actualIpSan, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    protected function normalizeIpAddressForComparison(string $ip): string
+    {
+        $ip = \strtolower(\trim($ip));
+        if ($ip === '') {
+            return '';
+        }
+
+        $packed = @\inet_pton($ip);
+        if ($packed === false) {
+            return $ip;
+        }
+
+        $normalized = @\inet_ntop($packed);
+
+        return \is_string($normalized) && $normalized !== '' ? \strtolower($normalized) : $ip;
     }
 
     protected function ensureReusableLocalCaCertificate(string $domain, string $certPath, int $websiteId = 0): array

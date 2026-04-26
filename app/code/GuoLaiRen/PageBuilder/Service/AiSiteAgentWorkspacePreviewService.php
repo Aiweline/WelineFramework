@@ -16,6 +16,7 @@ final class AiSiteAgentWorkspacePreviewService
         private readonly AiSiteScopeCompatibilityService $scopeCompatibilityService,
         private readonly AiSiteVirtualLayoutService $virtualLayoutService,
         private readonly PageRenderService $pageRenderService,
+        private readonly ?AiSitePreviewLinkRewriteService $previewLinkRewriteService = null,
     ) {
     }
 
@@ -161,11 +162,16 @@ final class AiSiteAgentWorkspacePreviewService
             $context['virtual_theme_id'] > 0 ? $context['virtual_theme_id'] : null
         );
 
-        if (!$visualEditor) {
-            return $html;
+        if ($visualEditor) {
+            return $this->injectWorkspacePreviewNavLinks($html, $context['virtual_pages']);
         }
 
-        return $this->injectWorkspacePreviewNavLinks($html, $context['virtual_pages']);
+        return $this->getPreviewLinkRewriteService()->rewriteVirtualPreviewLinks(
+            $html,
+            (string)$context['page']->getData('virtual_public_id'),
+            $context['virtual_pages'],
+            $context['virtual_theme_id']
+        );
     }
 
     /**
@@ -233,5 +239,11 @@ SCRIPT;
         }
 
         return $html . $script;
+    }
+
+    private function getPreviewLinkRewriteService(): AiSitePreviewLinkRewriteService
+    {
+        return $this->previewLinkRewriteService
+            ?? ObjectManager::getInstance(AiSitePreviewLinkRewriteService::class);
     }
 }
