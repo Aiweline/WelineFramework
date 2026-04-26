@@ -19,6 +19,58 @@ final class AiHtmlRenderService
     }
 
     /**
+     * ai_html 轨 + 虚拟主题整页：仅产出中间主栏 HTML 与（visual 时）需写入整页 head 的片段，由 PageRenderService 拼头尾。
+     *
+     * @return array{content_html: string, head_inject: string}
+     */
+    public function buildFragmentForThemeShell(Page $page, string $visualMode, ?string $locale = null): array
+    {
+        $currentLocale = $locale ?: State::getLang();
+        $useDraft = ($visualMode !== PageRenderService::MODE_LIVE)
+            || ((int)$page->getData(Page::schema_fields_STATUS) !== Page::STATUS_PUBLISHED);
+
+        $layout = $page->resolveAiLayoutForFrontend($useDraft);
+        $blocks = $layout['blocks'] ?? [];
+        if (!\is_array($blocks)) {
+            $blocks = [];
+        }
+
+        $bodyHtml = $visualMode === PageRenderService::MODE_VISUAL
+            ? $this->renderVisualBlocks($blocks, $page)
+            : $this->renderPlainBlocks($blocks);
+
+        $previewComment = $visualMode !== PageRenderService::MODE_LIVE
+            ? "\n<!-- ai_html preview draft -->\n"
+            : '';
+
+        $headInject = $visualMode === PageRenderService::MODE_VISUAL
+            ? $this->renderVisualAssets($page)
+            : '';
+
+        $homeConfig = $page->getHomePageConfig();
+        $styleSettings = \is_array($homeConfig['style_setting'] ?? null) ? $homeConfig['style_setting'] : [];
+        $this->template->assign('page', $page);
+        $this->template->assign('style', $styleSettings);
+        $this->template->assign('style_settings', $styleSettings);
+        $this->template->assign('is_preview', $visualMode !== PageRenderService::MODE_LIVE);
+        $this->template->assign('current_locale', $currentLocale);
+
+        $tracking = '';
+        try {
+            $tracking = $this->template->fetch('GuoLaiRen_PageBuilder::templates/base/tracking.phtml', []);
+        } catch (\Throwable) {
+            $tracking = '';
+        }
+
+        $contentHtml = $previewComment . $bodyHtml . "\n" . $tracking;
+
+        return [
+            'content_html' => $contentHtml,
+            'head_inject' => $headInject,
+        ];
+    }
+
+    /**
      * @param 'visual'|'preview'|'live' $visualMode 与 PageRenderService 模式语义一致
      */
     public function render(Page $page, string $visualMode, ?string $locale = null): string
@@ -350,7 +402,7 @@ final class AiHtmlRenderService
             . ' data-region="' . \htmlspecialchars($region, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
             . ' data-index="' . (int)$index . '">'
             . '<button type="button" class="component-action-btn component-action-refine" data-pb-action="refine" title="AI 微调当前区块">AI 微调</button>'
-            . '<button type="button" class="component-action-btn component-action-editor" data-pb-action="open-editor" title="定位到当前页编辑器">编辑器</button>'
+            . '<button type="button" class="component-action-btn component-action-editor" data-pb-action="edit-block" title="编辑当前区块字段">编辑</button>'
             . '</div>';
     }
 }
