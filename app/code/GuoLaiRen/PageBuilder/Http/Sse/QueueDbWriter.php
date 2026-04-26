@@ -25,13 +25,32 @@ class QueueDbWriter extends SseWriter
 
     private int $lastAiStreamNoticeBytes = 0;
 
-    private const AI_STREAM_NOTICE_EVERY_CHUNKS = 64;
+    /**
+     * @var array<string, int>
+     */
+    private array $lastTelemetrySignatures = [];
+
+    /**
+     * Providers commonly report cumulative stream usage. Track the last value
+     * seen in this queue worker so repeated callbacks do not inflate totals.
+     *
+     * @var array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null}
+     */
+    private array $lastRecordedTokenUsage = [
+        'input_tokens' => null,
+        'output_tokens' => null,
+        'total_tokens' => null,
+    ];
+
+    private const AI_STREAM_NOTICE_EVERY_CHUNKS = 512;
 
     private const AI_STREAM_NOTICE_MIN_BYTES = 65536;
 
     private const QUEUE_RESULT_MAX_BYTES = 262144;
 
     private const QUEUE_RESULT_TRUNCATION_MARKER = '[... queue log truncated ...]';
+
+    private const TELEMETRY_DUPLICATE_SUPPRESSION_SECONDS = 5;
 
     public function __construct(
         private readonly int $sessionId,
@@ -91,11 +110,17 @@ class QueueDbWriter extends SseWriter
             if (!isset($payload['stage']) || !\is_string($payload['stage']) || \trim($payload['stage']) === '') {
                 $payload['stage'] = $this->stage;
             }
+            if ($this->isContentBearingStreamPayload($event, $payload)) {
+                $this->recordSuppressedStreamPayload($payload);
+                return $this;
+            }
             $payload = $this->enrichOperationCorrelationPayload($payload);
             $payload = $this->sanitizePayloadForQueueEvent($event, $payload);
 
             $message = \trim((string)($payload['message'] ?? ''));
-            $this->appendQueueLog($event, $payload, $message);
+            if (!$this->appendQueueLog($event, $payload, $message)) {
+                return $this;
+            }
             [$sessionEventType, $sessionEventPayload, $sessionEventLevel] = $this->resolveWorkspaceEventEnvelope($event, $payload);
             $sessionEventPayload = $this->sanitizePayloadForQueueEvent($sessionEventType, $sessionEventPayload);
 
@@ -114,6 +139,46 @@ class QueueDbWriter extends SseWriter
         }
 
         return $this;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function recordSuppressedStreamPayload(array $payload): void
+    {
+        if (!$this->alive || $this->queueId <= 0) {
+            return;
+        }
+
+        try {
+            $this->suppressedAiStreamChunks++;
+            $this->suppressedAiStreamBytes += $this->calculateContentPayloadBytes($payload);
+            $this->flushAiRawStreamBuffer(false);
+        } catch (\Throwable) {
+            // Content stream telemetry must never interrupt queue execution.
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function calculateContentPayloadBytes(array $payload): int
+    {
+        $bytes = 0;
+        foreach (['message', 'chunk', 'content', 'raw', 'delta', 'text'] as $field) {
+            if (isset($payload[$field]) && \is_string($payload[$field])) {
+                $bytes += \strlen($payload[$field]);
+            }
+        }
+        if (\is_array($payload['payload'] ?? null)) {
+            foreach (['message', 'chunk', 'content', 'raw', 'delta', 'text'] as $field) {
+                if (isset($payload['payload'][$field]) && \is_string($payload['payload'][$field])) {
+                    $bytes += \strlen($payload['payload'][$field]);
+                }
+            }
+        }
+
+        return \max(0, $bytes);
     }
 
     /**
@@ -239,8 +304,13 @@ class QueueDbWriter extends SseWriter
                 $content = [];
             }
 
+            $increment = $this->calculateTokenUsageIncrement($incoming);
+            if (!$this->hasPositiveTokenCount($increment)) {
+                return $this;
+            }
+
             $current = $this->normalizeTokenUsage($content);
-            $merged = $this->mergeTokenUsage($current, $incoming);
+            $merged = $this->mergeTokenUsage($current, $increment);
             $mergedMeta = $this->mergeTokenCostMeta(
                 \is_array($current['token_cost_meta'] ?? null) ? $current['token_cost_meta'] : [],
                 \is_array($incoming['token_cost_meta'] ?? null) ? $incoming['token_cost_meta'] : [],
@@ -257,7 +327,7 @@ class QueueDbWriter extends SseWriter
                 }
             }
 
-            $summary = $this->formatTokenUsageSummary($incoming, $merged);
+            $summary = $this->formatTokenUsageSummary($increment, $merged);
             $line = '[' . \date('H:i:s') . '] TOKEN_USAGE ' . $summary;
             $patch = $this->buildQueueResultPatch($line, $summary);
             $patch['content'] = \json_encode($content, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR);
@@ -279,7 +349,7 @@ class QueueDbWriter extends SseWriter
                         'operation' => $this->operation,
                         'stage' => $this->stage,
                         'token_usage' => $merged,
-                        'token_usage_delta' => $incoming,
+                        'token_usage_delta' => $increment,
                     ],
                     $this->stage,
                     'info'
@@ -424,6 +494,55 @@ class QueueDbWriter extends SseWriter
         return $usage['input_tokens'] !== null
             || $usage['output_tokens'] !== null
             || $usage['total_tokens'] !== null;
+    }
+
+    /**
+     * @param array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string, mixed>|null} $incoming
+     * @return array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string, mixed>|null}
+     */
+    private function calculateTokenUsageIncrement(array $incoming): array
+    {
+        $increment = [
+            'input_tokens' => null,
+            'output_tokens' => null,
+            'total_tokens' => null,
+            'token_cost_meta' => $incoming['token_cost_meta'],
+        ];
+        foreach (['input_tokens', 'output_tokens', 'total_tokens'] as $tokenKey) {
+            $count = $incoming[$tokenKey];
+            if ($count === null) {
+                continue;
+            }
+            $previous = $this->lastRecordedTokenUsage[$tokenKey] ?? null;
+            $increment[$tokenKey] = $previous === null || $count < $previous
+                ? $count
+                : $count - $previous;
+            $this->lastRecordedTokenUsage[$tokenKey] = $count;
+        }
+
+        if (
+            $increment['total_tokens'] === null
+            && $increment['input_tokens'] !== null
+            && $increment['output_tokens'] !== null
+        ) {
+            $increment['total_tokens'] = $increment['input_tokens'] + $increment['output_tokens'];
+        }
+
+        return $increment;
+    }
+
+    /**
+     * @param array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string, mixed>|null} $usage
+     */
+    private function hasPositiveTokenCount(array $usage): bool
+    {
+        foreach (['input_tokens', 'output_tokens', 'total_tokens'] as $tokenKey) {
+            if (($usage[$tokenKey] ?? null) !== null && (int)$usage[$tokenKey] > 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -665,17 +784,20 @@ class QueueDbWriter extends SseWriter
     /**
      * @param array<string, mixed> $payload
      */
-    private function appendQueueLog(string $event, array $payload, string $message): void
+    private function appendQueueLog(string $event, array $payload, string $message): bool
     {
         if ($this->queueId <= 0) {
-            return;
+            return true;
         }
 
         $summary = $this->resolveSummary($event, $payload, $message);
+        if ($this->shouldSuppressDuplicateTelemetry($event, $payload, $summary)) {
+            return false;
+        }
         $line = $this->formatLogLine($event, $summary);
         $patch = $this->buildQueueResultPatch($line, $summary);
         if ($patch === []) {
-            return;
+            return true;
         }
 
         w_query('queue', 'update', [
@@ -686,6 +808,40 @@ class QueueDbWriter extends SseWriter
         if ($line !== '') {
             $this->mirrorToCli($line);
         }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function shouldSuppressDuplicateTelemetry(string $event, array $payload, string $summary): bool
+    {
+        $summary = \trim($summary);
+        if ($summary === '') {
+            return false;
+        }
+
+        $eventType = \strtolower(\trim((string)($payload['event_type'] ?? $event)));
+        if (!\in_array($eventType, ['progress', 'operation_progress', 'ai_progress'], true)) {
+            return false;
+        }
+
+        $operation = \trim((string)($payload['operation'] ?? $this->operation));
+        $stage = \trim((string)($payload['stage'] ?? $this->stage));
+        $signature = \sha1($eventType . '|' . $operation . '|' . $stage . '|' . $summary);
+        $now = \time();
+        $lastSeenAt = (int)($this->lastTelemetrySignatures[$signature] ?? 0);
+        if ($lastSeenAt > 0 && ($now - $lastSeenAt) < self::TELEMETRY_DUPLICATE_SUPPRESSION_SECONDS) {
+            return true;
+        }
+
+        $this->lastTelemetrySignatures[$signature] = $now;
+        if (\count($this->lastTelemetrySignatures) > 512) {
+            $this->lastTelemetrySignatures = \array_slice($this->lastTelemetrySignatures, -256, null, true);
+        }
+
+        return false;
     }
 
     /**

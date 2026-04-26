@@ -323,10 +323,13 @@ class AiSiteAgentSessionService
         $scope = $this->loadScope($session, $hydrateKeys);
         $merged = $this->mergeScopePatch($scope, $patch);
         $storage = $this->artifactStorage()->prepareScopeForStorage((int)$session->getId(), $merged, $touchedArtifactKeys);
-        $this->artifactStorage()->persistArtifacts((int)$session->getId(), $storage['artifacts']);
-        $session->setScopeArray($storage['scope']);
-        $this->touchUpdateTime($session);
-        $session->save();
+        $scopeForStorage = $storage['scope'];
+        $artifacts = $storage['artifacts'];
+        unset($storage, $scope, $merged, $patch, $touchedArtifactKeys, $hydrateKeys);
+        $this->artifactStorage()->persistArtifacts((int)$session->getId(), $artifacts);
+        unset($artifacts);
+        $this->writeScopeArrayToExistingSession($session, $scopeForStorage);
+        unset($scopeForStorage);
         return true;
     }
 
@@ -346,10 +349,13 @@ class AiSiteAgentSessionService
             $scope['target_domain'] = $td === '' ? '' : \strtolower($td);
         }
         $storage = $this->artifactStorage()->prepareScopeForStorage((int)$session->getId(), $scope);
-        $this->artifactStorage()->persistArtifacts((int)$session->getId(), $storage['artifacts']);
-        $session->setScopeArray($storage['scope']);
-        $this->touchUpdateTime($session);
-        $session->save();
+        $scopeForStorage = $storage['scope'];
+        $artifacts = $storage['artifacts'];
+        unset($storage, $scope);
+        $this->artifactStorage()->persistArtifacts((int)$session->getId(), $artifacts);
+        unset($artifacts);
+        $this->writeScopeArrayToExistingSession($session, $scopeForStorage);
+        unset($scopeForStorage);
         return true;
     }
 
@@ -374,10 +380,13 @@ class AiSiteAgentSessionService
         }
 
         $storage = $this->artifactStorage()->prepareScopeForStorage((int)$session->getId(), $scope);
-        $this->artifactStorage()->persistArtifacts((int)$session->getId(), $storage['artifacts']);
-        $session->setScopeArray($storage['scope']);
-        $this->touchUpdateTime($session);
-        $session->save();
+        $scopeForStorage = $storage['scope'];
+        $artifacts = $storage['artifacts'];
+        unset($storage, $scope, $scopeJson);
+        $this->artifactStorage()->persistArtifacts((int)$session->getId(), $artifacts);
+        unset($artifacts);
+        $this->writeScopeArrayToExistingSession($session, $scopeForStorage);
+        unset($scopeForStorage);
         return true;
     }
 
@@ -648,7 +657,7 @@ SQL;
         }
         $artifactService = $this->artifactStorage();
         $refs = \is_array($scope['_artifact_refs'] ?? null) ? $scope['_artifact_refs'] : [];
-        $artifacts = [];
+        $migrated = false;
         foreach ($artifactService->artifactKeysForStage($stageCode) as $artifactKey) {
             $artifactStage = $artifactService->artifactStage($artifactKey);
             if ($artifactStage === '' || \is_array($refs[$artifactStage][$artifactKey] ?? null)) {
@@ -668,32 +677,22 @@ SQL;
             }
 
             $scope = $this->setNestedScopeValue($scope, $path, $payload);
-            $documentJson = $this->encodeArtifactReferenceDocument($payload);
-            $refs[$artifactStage][$artifactKey] = [
-                'storage' => 'session_artifact_v1',
-                'stage_code' => $artifactStage,
-                'artifact_key' => $artifactKey,
-                'hash' => \sha1($documentJson),
-                'bytes' => \strlen($documentJson),
-                'updated_at' => \date('Y-m-d H:i:s'),
-                'legacy_migrated' => 1,
-            ];
-            $artifacts[] = [
-                'stage_code' => $artifactStage,
-                'artifact_key' => $artifactKey,
-                'payload' => $payload,
-            ];
+            $migrated = true;
+            unset($payload);
         }
 
-        if ($artifacts === []) {
+        if (!$migrated) {
             return $scope;
         }
 
-        $scope['_artifact_refs'] = $refs;
-        $artifactService->persistArtifacts($sessionId, $artifacts);
         $storage = $artifactService->prepareScopeForStorage($sessionId, $scope);
-        $artifactService->persistArtifacts($sessionId, $storage['artifacts']);
-        $this->writeScopeArrayToExistingSession($session, $storage['scope']);
+        $scopeForStorage = $storage['scope'];
+        $artifacts = $storage['artifacts'];
+        unset($storage, $refs);
+        $artifactService->persistArtifacts($sessionId, $artifacts);
+        unset($artifacts);
+        $this->writeScopeArrayToExistingSession($session, $scopeForStorage);
+        unset($scopeForStorage);
 
         return $scope;
     }
@@ -776,18 +775,6 @@ SQL;
         unset($cursor);
 
         return $scope;
-    }
-
-    private function encodeArtifactReferenceDocument(mixed $payload): string
-    {
-        try {
-            return (string)\json_encode(
-                ['value' => $payload],
-                \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR
-            );
-        } catch (\JsonException) {
-            return '{"value":[]}';
-        }
     }
 
     /**
