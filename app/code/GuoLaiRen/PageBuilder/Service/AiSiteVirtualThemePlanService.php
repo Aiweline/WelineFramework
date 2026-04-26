@@ -13,6 +13,7 @@ final class AiSiteVirtualThemePlanService
     private const BLOCK_TASK_SCHEMA_VERSION = 'stage2-block-task-v1';
     private const STAGE_TWO_LOCAL_REGEN_MAX_ROUNDS = 3;
     private const STAGE_TWO_LOCAL_REGEN_BATCH_BLOCKS = 5;
+    private const STAGE_TWO_AI_FANOUT_CONCURRENCY = 4;
 
     private const STAGE2_BLOCK_TASK_FANOUT_GROUP = 'stage2.block_task_plan';
 
@@ -237,7 +238,9 @@ final class AiSiteVirtualThemePlanService
             $heartbeatCallback();
         }
 
-        if (\count($fanoutBatches) <= 1 || !\class_exists(\Fiber::class)) {
+        $ai = $this->getAiService();
+        $concurrency = \min(self::STAGE_TWO_AI_FANOUT_CONCURRENCY, \count($fanoutBatches));
+        if (\count($fanoutBatches) <= 1 || !($ai instanceof AiService) || !$ai->supportsCooperativeConcurrency($concurrency)) {
             $decodedByBatchId = [];
             foreach ($fanoutBatches as $fanoutBatch) {
                 $batch = \is_array($fanoutBatch['batch'] ?? null) ? $fanoutBatch['batch'] : [];
@@ -275,16 +278,12 @@ final class AiSiteVirtualThemePlanService
             return $decodedByBatchId;
         }
 
-        /** @var array<string, \Fiber> $fibers */
-        $fibers = [];
-        $batchById = [];
-        $batchIndexById = [];
+        /** @var array<string, callable(array<string, mixed>, string|int): array<string, mixed>> $tasks */
+        $tasks = [];
         foreach ($fanoutBatches as $fanoutBatch) {
             $batch = \is_array($fanoutBatch['batch'] ?? null) ? $fanoutBatch['batch'] : [];
             $batchIndex = (int)($fanoutBatch['batch_index'] ?? 0);
             $batchId = $this->buildTaskPlanBatchId($batch);
-            $batchById[$batchId] = $batch;
-            $batchIndexById[$batchId] = $batchIndex;
             $prompt = $this->buildTaskPlanGenerationBatchPrompt(
                 $scope,
                 $buildBlueprint,
@@ -296,90 +295,74 @@ final class AiSiteVirtualThemePlanService
                 $targetScope
             );
             $maxTokens = $this->resolveTaskPlanBatchMaxTokens($batch);
-            $fibers[$batchId] = new \Fiber(function () use ($scope, $prompt, $maxTokens, $chunkCallback, $heartbeatCallback): array {
-                return $this->requestTaskPlanJsonFromAi(
+            $tasks[$batchId] = function (array $sessionParams) use ($scope, $prompt, $maxTokens, $heartbeatCallback, $assembledStructured, $batch, $batchIndex, $progressCallback, $totalBatches, $completedBatches): array {
+                try {
+                    return $this->requestTaskPlanJsonFromAi(
+                        $scope,
+                        $prompt,
+                        $maxTokens,
+                        null,
+                        $heartbeatCallback,
+                        $sessionParams
+                    );
+                } catch (\Throwable $batchThrowable) {
+                    $this->emitTaskPlanBatchProgress($progressCallback, 'batch_done', $batch, $batchIndex, $totalBatches, $completedBatches, [
+                        'attempt_no' => 3,
+                        'recovered' => true,
+                        'warning_message' => $batchThrowable->getMessage(),
+                    ]);
+
+                    return $this->buildRecoverableTaskPlanBatchPayload(
+                        $assembledStructured,
+                        $batch,
+                        $batchThrowable->getMessage()
+                    );
+                }
+            };
+        }
+
+        $decodedByBatchId = $ai->runCooperativeSessionTasks($tasks, [
+            'concurrency' => $concurrency,
+            'session_id' => $this->resolveTaskPlanCooperativeSessionId($scope, 'batch_plan'),
+            'disable_conversation_history' => true,
+            'disable_conversation_persist' => true,
+        ]);
+
+        foreach ($fanoutBatches as $fanoutBatch) {
+            $batch = \is_array($fanoutBatch['batch'] ?? null) ? $fanoutBatch['batch'] : [];
+            $batchId = $this->buildTaskPlanBatchId($batch);
+            if (\array_key_exists($batchId, $decodedByBatchId)) {
+                continue;
+            }
+            $batchIndex = (int)($fanoutBatch['batch_index'] ?? 0);
+            try {
+                $decodedByBatchId[$batchId] = $this->requestTaskPlanJsonFromAi(
                     $scope,
-                    $prompt,
-                    $maxTokens,
+                    $this->buildTaskPlanGenerationBatchPrompt(
+                        $scope,
+                        $buildBlueprint,
+                        $assembledStructured,
+                        $assembledVirtualThemePlan,
+                        $batch,
+                        $mode,
+                        $instruction,
+                        $targetScope
+                    ),
+                    $this->resolveTaskPlanBatchMaxTokens($batch),
                     $chunkCallback,
                     $heartbeatCallback
                 );
-            });
-        }
-
-        $decodedByBatchId = [];
-        $errors = [];
-        foreach ($fibers as $batchId => $fiber) {
-            try {
-                $fiber->start();
-            } catch (\Throwable $throwable) {
+            } catch (\Throwable $batchThrowable) {
                 $decodedByBatchId[$batchId] = $this->buildRecoverableTaskPlanBatchPayload(
                     $assembledStructured,
-                    \is_array($batchById[$batchId] ?? null) ? $batchById[$batchId] : [],
-                    $throwable->getMessage()
+                    $batch,
+                    $batchThrowable->getMessage()
                 );
-                $this->emitTaskPlanBatchProgress(
-                    $progressCallback,
-                    'batch_done',
-                    \is_array($batchById[$batchId] ?? null) ? $batchById[$batchId] : [],
-                    (int)($batchIndexById[$batchId] ?? 0),
-                    $totalBatches,
-                    $completedBatches,
-                    [
-                        'attempt_no' => 3,
-                        'recovered' => true,
-                        'warning_message' => $throwable->getMessage(),
-                    ]
-                );
-            }
-        }
-
-        while (\count($decodedByBatchId) + \count($errors) < \count($fibers)) {
-            $madeProgress = false;
-            foreach ($fibers as $batchId => $fiber) {
-                if (isset($decodedByBatchId[$batchId]) || isset($errors[$batchId])) {
-                    continue;
-                }
-
-                try {
-                    if ($fiber->isTerminated()) {
-                        $decodedByBatchId[$batchId] = $fiber->getReturn();
-                        $madeProgress = true;
-                        continue;
-                    }
-                    if ($fiber->isSuspended()) {
-                        if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent()) {
-                            SchedulerSystem::yieldDelay(1);
-                        } else {
-                            $fiber->resume();
-                        }
-                        $madeProgress = true;
-                    }
-                } catch (\Throwable $throwable) {
-                    $decodedByBatchId[$batchId] = $this->buildRecoverableTaskPlanBatchPayload(
-                        $assembledStructured,
-                        \is_array($batchById[$batchId] ?? null) ? $batchById[$batchId] : [],
-                        $throwable->getMessage()
-                    );
-                    $this->emitTaskPlanBatchProgress(
-                        $progressCallback,
-                        'batch_done',
-                        \is_array($batchById[$batchId] ?? null) ? $batchById[$batchId] : [],
-                        (int)($batchIndexById[$batchId] ?? 0),
-                        $totalBatches,
-                        $completedBatches,
-                        [
-                            'attempt_no' => 3,
-                            'recovered' => true,
-                            'warning_message' => $throwable->getMessage(),
-                        ]
-                    );
-                    $madeProgress = true;
-                }
-            }
-
-            if (!$madeProgress && \count($decodedByBatchId) + \count($errors) < \count($fibers)) {
-                \usleep(1000);
+                $this->emitTaskPlanBatchProgress($progressCallback, 'batch_done', $batch, $batchIndex, $totalBatches, $completedBatches, [
+                    'attempt_no' => 3,
+                    'recovered' => true,
+                    'warning_message' => $batchThrowable->getMessage(),
+                ]);
             }
         }
 
@@ -430,9 +413,6 @@ final class AiSiteVirtualThemePlanService
     {
         $batches = [];
         $sharedTasks = \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [];
-        $sharedTaskKeys = [];
-        $sharedDependsOn = [];
-        $sharedSortOrder = null;
         foreach ($sharedTasks as $task) {
             if (!\is_array($task)) {
                 continue;
@@ -442,27 +422,16 @@ final class AiSiteVirtualThemePlanService
                 continue;
             }
 
-            $sharedTaskKeys[] = $taskKey;
-            $sharedSortOrder = $sharedSortOrder === null
-                ? (int)($task['sort_order'] ?? 0)
-                : \min($sharedSortOrder, (int)($task['sort_order'] ?? 0));
-            foreach (\is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [] as $dependency) {
-                $dependency = \trim((string)$dependency);
-                if ($dependency !== '') {
-                    $sharedDependsOn[] = $dependency;
-                }
-            }
-        }
-        if ($sharedTaskKeys !== []) {
+            $blockKey = $this->resolveTaskPlanBatchBlockKey($task, $taskKey);
             $batches[] = [
                 'type' => 'shared',
                 'key' => 'shared',
-                'block_key' => 'shared',
-                'task_keys' => \array_values(\array_unique($sharedTaskKeys)),
-                'sort_order' => $sharedSortOrder ?? 0,
-                'depends_on' => \array_values(\array_unique($sharedDependsOn)),
+                'block_key' => $blockKey,
+                'task_keys' => [$taskKey],
+                'sort_order' => (int)($task['sort_order'] ?? 0),
+                'depends_on' => $this->normalizeTaskPlanBatchDependencies($task),
                 'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
-                'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':shared',
+                'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':' . $this->normalizeTaskPlanBatchIdPart($blockKey),
             ];
         }
 
@@ -472,9 +441,6 @@ final class AiSiteVirtualThemePlanService
                 continue;
             }
             $pageType = (string)$pageType;
-            $pageTaskKeys = [];
-            $pageDependsOn = [];
-            $pageSortOrder = null;
             foreach ($tasks as $task) {
                 if (!\is_array($task)) {
                     continue;
@@ -484,32 +450,59 @@ final class AiSiteVirtualThemePlanService
                     continue;
                 }
 
-                $pageTaskKeys[] = $taskKey;
-                $pageSortOrder = $pageSortOrder === null
-                    ? (int)($task['sort_order'] ?? 0)
-                    : \min($pageSortOrder, (int)($task['sort_order'] ?? 0));
-                foreach (\is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [] as $dependency) {
-                    $dependency = \trim((string)$dependency);
-                    if ($dependency !== '') {
-                        $pageDependsOn[] = $dependency;
-                    }
-                }
-            }
-            if ($pageTaskKeys !== []) {
+                $blockKey = $this->resolveTaskPlanBatchBlockKey($task, $taskKey);
                 $batches[] = [
                     'type' => 'page',
                     'key' => $pageType,
-                    'block_key' => '',
-                    'task_keys' => \array_values(\array_unique($pageTaskKeys)),
-                    'sort_order' => $pageSortOrder ?? 0,
-                    'depends_on' => \array_values(\array_unique($pageDependsOn)),
+                    'block_key' => $blockKey,
+                    'task_keys' => [$taskKey],
+                    'sort_order' => (int)($task['sort_order'] ?? 0),
+                    'depends_on' => $this->normalizeTaskPlanBatchDependencies($task),
                     'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
-                    'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':' . $pageType,
+                    'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':' . $pageType . ':' . $this->normalizeTaskPlanBatchIdPart($blockKey),
                 ];
             }
         }
 
         return $batches;
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     */
+    private function resolveTaskPlanBatchBlockKey(array $task, string $fallbackTaskKey): string
+    {
+        foreach ([
+            $task['section_code'] ?? null,
+            $task['block_key'] ?? null,
+            $task['plan_context']['section_code'] ?? null,
+            $task['plan_context']['block_code'] ?? null,
+            $fallbackTaskKey,
+        ] as $candidate) {
+            $value = \trim((string)$candidate);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return 'block';
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @return list<string>
+     */
+    private function normalizeTaskPlanBatchDependencies(array $task): array
+    {
+        $dependencies = [];
+        foreach (\is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [] as $dependency) {
+            $dependency = \trim((string)$dependency);
+            if ($dependency !== '') {
+                $dependencies[] = $dependency;
+            }
+        }
+
+        return \array_values(\array_unique($dependencies));
     }
 
     /**
@@ -670,6 +663,9 @@ final class AiSiteVirtualThemePlanService
     {
         if (($batch['type'] ?? '') === 'shared') {
             $blockKey = \trim((string)($batch['block_key'] ?? $batch['key'] ?? ''));
+            if (\str_starts_with($blockKey, 'shared:')) {
+                return $blockKey;
+            }
             return 'shared:' . $this->normalizeTaskPlanBatchIdPart($blockKey !== '' ? $blockKey : 'block');
         }
 
@@ -1440,6 +1436,7 @@ final class AiSiteVirtualThemePlanService
     }
 
     /**
+     * @param array<string, mixed> $requestParamOverrides
      * @return array<string, mixed>
      */
     private function requestTaskPlanJsonFromAi(
@@ -1447,7 +1444,8 @@ final class AiSiteVirtualThemePlanService
         string $prompt,
         int $maxTokens,
         ?callable $chunkCallback = null,
-        ?callable $heartbeatCallback = null
+        ?callable $heartbeatCallback = null,
+        array $requestParamOverrides = []
     ): array {
         $ai = $this->getAiService();
         if ($ai === null) {
@@ -1455,7 +1453,7 @@ final class AiSiteVirtualThemePlanService
         }
 
         $publicId = \trim((string)($scope['public_id'] ?? ''));
-        $requestParams = [
+        $requestParams = \array_merge([
             'allow_zero_balance_provider' => true,
             'temperature' => 0.2,
             'max_tokens' => \min(8192, \max(512, $maxTokens)),
@@ -1465,7 +1463,7 @@ final class AiSiteVirtualThemePlanService
             'session_id' => $publicId,
             'disable_conversation_history' => true,
             'disable_conversation_persist' => true,
-        ];
+        ], $requestParamOverrides);
         $jsonRequestParams = \array_merge($requestParams, [
             'response_format' => ['type' => 'json_object'],
         ]);
@@ -1590,6 +1588,18 @@ final class AiSiteVirtualThemePlanService
         }
 
         return $decoded;
+    }
+
+    private function resolveTaskPlanCooperativeSessionId(array $scope, string $scopeKey): string
+    {
+        foreach ([$scope['public_id'] ?? null, $scope['session_public_id'] ?? null, $scope['session_id'] ?? null] as $candidate) {
+            $sessionId = \trim((string)$candidate);
+            if ($sessionId !== '') {
+                return $sessionId . ':stage2:' . $scopeKey;
+            }
+        }
+
+        return '';
     }
 
     private function decodeJsonObjectWithStringControlCharFix(string $raw): ?array

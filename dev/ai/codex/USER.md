@@ -24,6 +24,19 @@ This file captures durable user preferences for future Codex agents in
 - Treat newer logs or stack traces from the user as the current source of truth.
 - Preserve unrelated dirty worktree changes.
 
+## Local Development Environment
+
+- For local backend/admin verification in this workspace, the development
+  account is `admin/admin`.
+- When development requires backend interaction, you may use `admin/admin`
+  instead of blocking on credential requests.
+- In the development environment, database reads and writes are allowed when
+  they are needed for diagnosis, verification, or controlled setup changes.
+- Prefer framework ORM, model/service flows, and system update commands such as
+  `php bin/w setup:upgrade` over ad hoc direct SQL.
+- If direct SQL is truly necessary, keep it targeted and reversible, and report
+  the affected tables or rows in the final summary.
+
 ## WLS Preferences
 
 For Weline Server / WLS work:

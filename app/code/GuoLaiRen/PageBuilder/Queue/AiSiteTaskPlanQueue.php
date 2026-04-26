@@ -87,6 +87,24 @@ class AiSiteTaskPlanQueue implements QueueInterface
                 throw new \RuntimeException('会话不存在或无权访问。');
             }
             $this->appendQueueLifecycleLine($queue, '已加载会话 session_id=' . (int)$session->getId());
+            $hasQueuedTaskPlanMutation = $this->hasQueuedTaskPlanMutationRequest($content);
+            $guard = $this->guardTaskPlanQueueExecution(
+                $sessionService,
+                $scopeService,
+                $session,
+                $adminId,
+                $forceRebuild,
+                $hasQueuedTaskPlanMutation,
+                $effectiveExecutionToken
+            );
+            if (!($guard['ok'] ?? false)) {
+                $message = (string)($guard['message'] ?? 'Stage-two task-plan queue stopped.');
+                $this->appendQueueLifecycleLine($queue, $message);
+                $this->markQueueStopped($queue, $message);
+
+                return $message;
+            }
+
             if ($forceRebuild) {
                 $session = $this->applyForceTaskPlanRebuildPreset($sessionService, $scopeService, $session, $adminId);
                 $this->appendQueueLifecycleLine($queue, '检测到 _force_rebuild=1，已切换为 rebuild_task_plan 强制重建，execution_token=' . \substr($effectiveExecutionToken, 0, 20) . '…');
@@ -363,6 +381,35 @@ class AiSiteTaskPlanQueue implements QueueInterface
     /**
      * @param array<string, mixed> $content
      */
+    private function hasQueuedTaskPlanMutationRequest(array $content): bool
+    {
+        $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
+        $scopePatch = \is_array($content['scope_patch'] ?? null) ? $content['scope_patch'] : [];
+        $request = \array_replace(
+            \is_array($scopePatch['_task_plan_sse_request'] ?? null) ? $scopePatch['_task_plan_sse_request'] : [],
+            \is_array($content['_task_plan_sse_request'] ?? null) ? $content['_task_plan_sse_request'] : [],
+            \is_array($details['_task_plan_sse_request'] ?? null) ? $details['_task_plan_sse_request'] : []
+        );
+        $mutation = \is_array($request['mutation'] ?? null)
+            ? $request['mutation']
+            : (\is_array($content['mutation'] ?? null)
+                ? $content['mutation']
+                : (\is_array($details['mutation'] ?? null) ? $details['mutation'] : []));
+        $promptMode = $this->firstNonEmptyString([$content['prompt_mode'] ?? null, $details['prompt_mode'] ?? null, $request['prompt_mode'] ?? null]);
+        $action = $this->firstNonEmptyString([$content['action'] ?? null, $details['action'] ?? null, $mutation['action'] ?? null]);
+        $taskKey = $this->firstNonEmptyString([$content['task_key'] ?? null, $details['task_key'] ?? null, $mutation['task_key'] ?? null, $request['task_key'] ?? null]);
+        $targetScope = $this->firstNonEmptyString([$content['target_scope'] ?? null, $details['target_scope'] ?? null, $request['target_scope'] ?? null]);
+
+        return \in_array($promptMode, ['mutate_task_plan_task', 'refine_task_plan', 'rebuild_task_plan'], true)
+            || $action !== ''
+            || $taskKey !== ''
+            || $mutation !== []
+            || ($targetScope !== '' && $targetScope !== 'task_plan' && $targetScope !== 'full_task_plan');
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     */
     private function applyQueuedTaskPlanRequest(
         AiSiteAgentSessionService $sessionService,
         AiSiteScopeCompatibilityService $scopeService,
@@ -516,6 +563,114 @@ class AiSiteTaskPlanQueue implements QueueInterface
     }
 
     /**
+     * @return array{ok: bool, message?: string}
+     */
+    private function guardTaskPlanQueueExecution(
+        AiSiteAgentSessionService $sessionService,
+        AiSiteScopeCompatibilityService $scopeService,
+        AiSiteAgentSession $session,
+        int $adminId,
+        bool $forceRebuild,
+        bool $allowExistingTaskPlan,
+        string $executionToken
+    ): array {
+        $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
+
+        if (!$forceRebuild && !$allowExistingTaskPlan && $this->scopeHasPersistedStageTwoTaskPlan($scope)) {
+            $message = 'Stage-two task plan already exists; queue skipped duplicate generation. Use task/block refine or force rebuild to run again.';
+            $this->persistTaskPlanQueueStopState($sessionService, (int)$fresh->getId(), $adminId, $scope, $message, $executionToken);
+
+            return ['ok' => false, 'message' => $message];
+        }
+
+        return ['ok' => true];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function scopeHasPersistedStageTwoTaskPlan(array $scope): bool
+    {
+        if ((int)($scope['task_plan_confirmed'] ?? 0) === 1) {
+            return true;
+        }
+
+        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
+        $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
+        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
+        if ($draft !== [] || $confirmed !== []) {
+            return true;
+        }
+
+        foreach (['draft_markdown', 'confirmed_markdown', 'confirmed_at', 'confirmed_signature', 'plan_signature'] as $key) {
+            if (\trim((string)($virtualThemePlan[$key] ?? '')) !== '') {
+                return true;
+            }
+        }
+        if (\trim((string)($scope['task_plan_markdown'] ?? '')) !== '') {
+            return true;
+        }
+        if (\is_array($scope['task_plan_structured'] ?? null) && $scope['task_plan_structured'] !== []) {
+            return true;
+        }
+        if (\is_array($scope['task_plan_directory_tree'] ?? null) && $scope['task_plan_directory_tree'] !== []) {
+            return true;
+        }
+
+        $summary = \is_array($scope['task_plan_summary'] ?? null) ? $scope['task_plan_summary'] : [];
+
+        return ((int)($summary['page_task_count'] ?? 0)) > 0
+            || ((int)($summary['shared_task_count'] ?? 0)) > 0
+            || \trim((string)($summary['signature'] ?? '')) !== '';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function persistTaskPlanQueueStopState(
+        AiSiteAgentSessionService $sessionService,
+        int $sessionId,
+        int $adminId,
+        array $scope,
+        string $message,
+        string $executionToken
+    ): void {
+        $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        if ($active !== [] && (
+            (string)($active['operation'] ?? '') === 'task_plan'
+            || (string)($active['execution_token'] ?? '') === $executionToken
+        )) {
+            $active['status'] = 'stop';
+            $active['message'] = $message;
+            $active['updated_at'] = \date('Y-m-d H:i:s');
+            $scope['active_operation'] = $active;
+        }
+
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        $taskPlanOperation = \is_array($activeOperations['task_plan'] ?? null) ? $activeOperations['task_plan'] : [];
+        if ($taskPlanOperation !== [] && (
+            (string)($taskPlanOperation['execution_token'] ?? '') === $executionToken
+            || \in_array((string)($taskPlanOperation['status'] ?? ''), ['queued', 'running'], true)
+        )) {
+            $taskPlanOperation['status'] = 'stop';
+            $taskPlanOperation['message'] = $message;
+            $taskPlanOperation['updated_at'] = \date('Y-m-d H:i:s');
+            $activeOperations['task_plan'] = $taskPlanOperation;
+            $scope['active_operations'] = $activeOperations;
+        }
+
+        $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING;
+        $scope['task_plan_generation_last_error'] = [
+            'message' => $message,
+            'updated_at' => \date('Y-m-d H:i:s'),
+        ];
+        $sessionService->replaceScope($sessionId, $adminId, $scope);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function buildTaskPlanForceRebuildResetPatch(): array
@@ -628,6 +783,33 @@ class AiSiteTaskPlanQueue implements QueueInterface
             'level' => 'info',
         ]);
         $this->mirrorToCli('[' . \date('H:i:s') . '] LOG ' . $message);
+    }
+
+    private function markQueueStopped(Queue &$queue, string $message): void
+    {
+        $queueId = (int)$queue->getId();
+        if ($queueId <= 0) {
+            return;
+        }
+
+        $row = w_query('queue', 'get', ['queue_id' => $queueId]);
+        if (!\is_array($row) || $row === []) {
+            return;
+        }
+
+        $line = '[' . \date('H:i:s') . '] QUEUE_STOP ' . $message;
+        $existing = (string)($row['result'] ?? '');
+        w_query('queue', 'update', [
+            'queue_id' => $queueId,
+            'patch' => [
+                'status' => Queue::status_stop,
+                'pid' => 0,
+                'finished' => 1,
+                'process' => $message,
+                'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
+            ],
+        ]);
+        $this->mirrorToCli($line);
     }
 
     private function mirrorToCli(string $line): void

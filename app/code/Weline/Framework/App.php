@@ -64,7 +64,7 @@ class App
         return Response::normalize(
             $this->runPipeline(),
             ObjectManager::getInstance(Response::class)
-        );
+        )->markTelemetryPrepared();
     }
 
     public function runResponse(): Response

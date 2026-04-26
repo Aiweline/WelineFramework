@@ -11,15 +11,11 @@ $this->setLayout('base');
 <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
 <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
 
-<!-- Welcome 弹窗：页面加载后自动显示一次 -->
-<div id="motor-welcome-modal" class="motor-welcome-modal fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4" role="dialog" aria-labelledby="motor-welcome-title" aria-modal="true">
-    <div class="motor-welcome-modal__box max-w-md w-full rounded-xl bg-white dark:bg-surface-dark p-6 shadow-xl border border-border-light dark:border-border-dark">
-        <h2 id="motor-welcome-title" class="motor-welcome-modal__title text-xl font-heading font-bold text-primary dark:text-primary-light mb-4">Welcome to WeShop Motor Theme</h2>
-        <p class="motor-welcome-modal__desc text-text-secondary-light dark:text-text-secondary-dark mb-6"><?= $this->__('摩托车主题首页') ?></p>
-        <button type="button" class="motor-welcome-modal__close w-full rounded-lg bg-primary text-white font-display font-medium py-2.5 hover:bg-primary-dark dark:hover:bg-primary-light focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-background-dark" data-dismiss="motor-welcome-modal"><?= $this->__('知道了') ?></button>
-    </div>
-</div>
-
+<main data-wslot="content"
+      data-wslot-name="Content"
+      data-wslot-accept="content,banner,carousel,product,category,testimonial,faq"
+      data-wslot-multiple="true"
+      data-wslot-position="content">
 <w:hook>WeShop_Promotion::homepage::hero_banner</w:hook>
 <section class="relative w-full overflow-hidden" data-wslot="homepage-hero" data-wslot-name="Homepage Hero" data-wslot-accept="banner,carousel,content" data-wslot-multiple="false"></section>
 
@@ -34,27 +30,7 @@ $this->setLayout('base');
 <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12" data-wslot="homepage-brands" data-wslot-name="Homepage Brands" data-wslot-accept="content,category" data-wslot-multiple="true"></section>
 
 <section class="bg-gray-50 dark:bg-gray-900 py-12" data-wslot="homepage-benefits" data-wslot-name="Homepage Benefits" data-wslot-accept="content,testimonial,faq" data-wslot-multiple="true"></section>
+</main>
 
-<w:hook>WeShop_Frontend::homepage::content_after</w:hook>
+<w:hook>WeShop_Frontend::frontend::layouts::homepage::content-after</w:hook>
 <w:hook>Weline_Theme::frontend::layouts::default::content-after</w:hook>
-
-<script>
-(function() {
-    'use strict';
-    var modal = document.getElementById('motor-welcome-modal');
-    if (!modal) return;
-    var isPreviewIframe = (window.self !== window.top) || (typeof window.location !== 'undefined' && (window.location.search || '').indexOf('editor_mode') !== -1);
-    if (!isPreviewIframe) {
-        if (sessionStorage.getItem('motor_welcome_shown')) return;
-        sessionStorage.setItem('motor_welcome_shown', '1');
-    }
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-    modal.addEventListener('click', function(e) {
-        if (e.target === modal || (e.target.getAttribute && e.target.getAttribute('data-dismiss') === 'motor-welcome-modal')) {
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-        }
-    });
-})();
-</script>
