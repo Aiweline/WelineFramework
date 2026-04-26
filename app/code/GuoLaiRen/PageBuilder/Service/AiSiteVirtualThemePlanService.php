@@ -430,6 +430,9 @@ final class AiSiteVirtualThemePlanService
     {
         $batches = [];
         $sharedTasks = \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [];
+        $sharedTaskKeys = [];
+        $sharedDependsOn = [];
+        $sharedSortOrder = null;
         foreach ($sharedTasks as $task) {
             if (!\is_array($task)) {
                 continue;
@@ -438,21 +441,28 @@ final class AiSiteVirtualThemePlanService
             if ($taskKey === '') {
                 continue;
             }
-            $blockKey = $this->firstNonEmptyString([
-                $task['block_key'] ?? null,
-                $task['component'] ?? null,
-                \str_starts_with($taskKey, 'shared:') ? \substr($taskKey, 7) : null,
-                $taskKey,
-            ]);
+
+            $sharedTaskKeys[] = $taskKey;
+            $sharedSortOrder = $sharedSortOrder === null
+                ? (int)($task['sort_order'] ?? 0)
+                : \min($sharedSortOrder, (int)($task['sort_order'] ?? 0));
+            foreach (\is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [] as $dependency) {
+                $dependency = \trim((string)$dependency);
+                if ($dependency !== '') {
+                    $sharedDependsOn[] = $dependency;
+                }
+            }
+        }
+        if ($sharedTaskKeys !== []) {
             $batches[] = [
                 'type' => 'shared',
                 'key' => 'shared',
-                'block_key' => $blockKey !== '' ? $blockKey : $taskKey,
-                'task_keys' => [$taskKey],
-                'sort_order' => (int)($task['sort_order'] ?? 0),
-                'depends_on' => \array_values(\array_unique(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [])))),
+                'block_key' => 'shared',
+                'task_keys' => \array_values(\array_unique($sharedTaskKeys)),
+                'sort_order' => $sharedSortOrder ?? 0,
+                'depends_on' => \array_values(\array_unique($sharedDependsOn)),
                 'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
-                'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':shared:' . ($blockKey !== '' ? $blockKey : $taskKey),
+                'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':shared',
             ];
         }
 
@@ -462,6 +472,9 @@ final class AiSiteVirtualThemePlanService
                 continue;
             }
             $pageType = (string)$pageType;
+            $pageTaskKeys = [];
+            $pageDependsOn = [];
+            $pageSortOrder = null;
             foreach ($tasks as $task) {
                 if (!\is_array($task)) {
                     continue;
@@ -470,22 +483,28 @@ final class AiSiteVirtualThemePlanService
                 if ($taskKey === '') {
                     continue;
                 }
-                $blockKey = $this->firstNonEmptyString([
-                    $task['plan_context']['block_code'] ?? null,
-                    $task['section_code'] ?? null,
-                    $task['block_key'] ?? null,
-                    \str_contains($taskKey, ':') ? \substr($taskKey, \strrpos($taskKey, ':') + 1) : null,
-                    $taskKey,
-                ]);
+
+                $pageTaskKeys[] = $taskKey;
+                $pageSortOrder = $pageSortOrder === null
+                    ? (int)($task['sort_order'] ?? 0)
+                    : \min($pageSortOrder, (int)($task['sort_order'] ?? 0));
+                foreach (\is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [] as $dependency) {
+                    $dependency = \trim((string)$dependency);
+                    if ($dependency !== '') {
+                        $pageDependsOn[] = $dependency;
+                    }
+                }
+            }
+            if ($pageTaskKeys !== []) {
                 $batches[] = [
                     'type' => 'page',
                     'key' => $pageType,
-                    'block_key' => $blockKey !== '' ? $blockKey : $taskKey,
-                    'task_keys' => [$taskKey],
-                    'sort_order' => (int)($task['sort_order'] ?? 0),
-                    'depends_on' => \array_values(\array_unique(\array_filter(\array_map('strval', \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [])))),
+                    'block_key' => '',
+                    'task_keys' => \array_values(\array_unique($pageTaskKeys)),
+                    'sort_order' => $pageSortOrder ?? 0,
+                    'depends_on' => \array_values(\array_unique($pageDependsOn)),
                     'fanout_group' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP,
-                    'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':' . $pageType . ':' . ($blockKey !== '' ? $blockKey : $taskKey),
+                    'queue_job_key' => self::STAGE2_BLOCK_TASK_FANOUT_GROUP . ':' . $pageType,
                 ];
             }
         }

@@ -95,7 +95,9 @@ class AiSiteAgentSessionEvent extends Model
      */
     public function setPayloadArray(array $payload): static
     {
-        $json = $payload === [] ? '{}' : \json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR);
+        $json = $payload === []
+            ? '{}'
+            : \json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR);
         return $this->setData(self::schema_fields_PAYLOAD_JSON, $json);
     }
 }
