@@ -72,11 +72,22 @@ class AiSiteAgentQueueObserverHelperService
     public function resolveMessage(?array $queueRow, bool $success): string
     {
         if (\is_array($queueRow)) {
+            $status = \trim((string)($queueRow['status'] ?? ''));
             $process = \trim((string)($queueRow['process'] ?? ''));
+            $result = \trim($this->sanitizePlanningQueueResultLog($queueRow));
+            if ($result !== '') {
+                $lines = \preg_split("/\\r\\n|\\n|\\r/", $result) ?: [];
+                $lines = \array_values(\array_filter(\array_map('trim', $lines), static fn(string $line): bool => $line !== ''));
+                if ($lines !== []) {
+                    $resultTail = (string)\end($lines);
+                    if (\in_array($status, ['done', 'error', 'stop', 'cancelled'], true)) {
+                        return $resultTail;
+                    }
+                }
+            }
             if ($process !== '') {
                 return $process;
             }
-            $result = \trim($this->sanitizePlanningQueueResultLog($queueRow));
             if ($result !== '') {
                 $lines = \preg_split("/\\r\\n|\\n|\\r/", $result) ?: [];
                 $lines = \array_values(\array_filter(\array_map('trim', $lines), static fn(string $line): bool => $line !== ''));

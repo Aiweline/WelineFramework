@@ -81,6 +81,20 @@ final class WorkerResponseMemoryGuardTest extends TestCase
         self::assertStringContainsString("\r\nConnection: close\r\n\r\nOK", $rewritten);
     }
 
+    public function testDetectsExplicitConnectionCloseResponseHeader(): void
+    {
+        $response = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
+
+        self::assertTrue(WorkerResponseMemoryGuard::responseRequestsConnectionClose($response));
+    }
+
+    public function testIgnoresResponsesWithoutExplicitConnectionClose(): void
+    {
+        $response = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nOK";
+
+        self::assertFalse(WorkerResponseMemoryGuard::responseRequestsConnectionClose($response));
+    }
+
     public function testSseWriteBufferWouldExceedWhenOverLimit(): void
     {
         $max = WorkerResponseMemoryGuard::SSE_MAX_PENDING_WRITE_BYTES;

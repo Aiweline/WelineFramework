@@ -48,7 +48,6 @@ body.editor-mode [data-editor-interactive] label {
    插槽基础样式
    ======================================== */
 body.editor-mode [data-wslot] {
-    position: relative;
     outline: 2px dashed transparent;
     outline-offset: -2px;
     transition: outline 0.2s ease;

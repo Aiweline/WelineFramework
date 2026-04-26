@@ -46,19 +46,6 @@ class ControllerFetchFileAfter implements ObserverInterface
             return;
         }
 
-        try {
-            /** @var Request $request */
-            $request = ObjectManager::getInstance(Request::class);
-            $requestPathForDebug = strtolower(trim((string)$request->getUrlPath()));
-            if ($requestPathForDebug === '/theme/frontend/theme-preview/content') {
-                $response = $request->getResponse();
-                $response->setHeader('X-Weline-Debug-Preview-After-LayoutType', $layoutType);
-                $response->setHeader('X-Weline-Debug-Preview-After-LayoutTemplate', $layoutTemplate);
-                $response->setHeader('X-Weline-Debug-Preview-After-ContentTemplate', $contentTemplate);
-            }
-        } catch (\Throwable) {
-        }
-
         $template = $this->getTemplateInstance();
         $fallbackContent = (string)$eventData->getData('content');
 
@@ -71,35 +58,9 @@ class ControllerFetchFileAfter implements ObserverInterface
                 $contentHtml
             );
 
-            try {
-                /** @var Request $request */
-                $request = ObjectManager::getInstance(Request::class);
-                $requestPathForDebug = strtolower(trim((string)$request->getUrlPath()));
-                if ($requestPathForDebug === '/theme/frontend/theme-preview/content') {
-                    $response = $request->getResponse();
-                    $response->setHeader('X-Weline-Debug-Preview-After-FinalTemplate', $finalLayoutTemplate);
-                    $response->setHeader('X-Weline-Debug-Preview-After-RenderedHasHtml', str_contains($renderedHtml, '<html') ? '1' : '0');
-                    $response->setHeader('X-Weline-Debug-Preview-After-RenderedHasHeader', str_contains($renderedHtml, '<header') ? '1' : '0');
-                }
-            } catch (\Throwable) {
-            }
-
             $eventData->setData('content', $renderedHtml);
             $eventData->setData('fileName', $finalLayoutTemplate);
-        } catch (\Throwable $throwable) {
-            try {
-                /** @var Request $request */
-                $request = ObjectManager::getInstance(Request::class);
-                $requestPathForDebug = strtolower(trim((string)$request->getUrlPath()));
-                if ($requestPathForDebug === '/theme/frontend/theme-preview/content') {
-                    $request->getResponse()->setHeader('X-Weline-Debug-Preview-After-Exception', '1');
-                    $message = str_replace(["\r", "\n"], ' ', $throwable->getMessage());
-                    $message = substr($message, 0, 220);
-                    $request->getResponse()->setHeader('X-Weline-Debug-Preview-After-ExceptionClass', $throwable::class);
-                    $request->getResponse()->setHeader('X-Weline-Debug-Preview-After-ExceptionMsg', $message);
-                }
-            } catch (\Throwable) {
-            }
+        } catch (\Throwable) {
             // Keep original event content when wrapping fails.
         }
     }
