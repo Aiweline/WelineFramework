@@ -169,7 +169,11 @@ class FpmResponseEmitter implements ResponseEmitterInterface
     public function toHttpString(HeaderCollectorInterface $headerCollector, string $body): string
     {
         $result = $headerCollector->toHttpHeaderString();
-        $result .= "Content-Length: " . \strlen($body) . "\r\n";
+        $contentType = (string)($headerCollector->getHeader('Content-Type') ?? '');
+        if (!\str_contains(\strtolower($contentType), 'text/event-stream')
+            && !$headerCollector->hasHeader('Content-Length')) {
+            $result .= "Content-Length: " . \strlen($body) . "\r\n";
+        }
         $result .= "Connection: close\r\n";
         $result .= "\r\n";
         $result .= $body;

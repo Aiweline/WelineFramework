@@ -129,6 +129,26 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame(43, $errorPayload['last_event_id']);
     }
 
+    public function testObservedQueueErrorStatusWithoutFinishedStillTerminatesObserver(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $isTerminal = new ReflectionMethod(AiSiteAgent::class, 'isObservedQueueTerminal');
+        $isInProgress = new ReflectionMethod(AiSiteAgent::class, 'isObservedQueueInProgress');
+        $isTerminal->setAccessible(true);
+        $isInProgress->setAccessible(true);
+
+        $queueRow = [
+            'status' => 'error',
+            'pid' => 0,
+            'finished' => 0,
+            'end_at' => null,
+            'process' => 'AI 正在生成内容，正文流不写入队列日志',
+        ];
+
+        self::assertTrue((bool)$isTerminal->invoke($controller, $queueRow));
+        self::assertFalse((bool)$isInProgress->invoke($controller, $queueRow));
+    }
+
     public function testBlockConfigReplacementOnlyTouchesSelectedPageBlock(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
@@ -339,7 +359,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         );
     }
 
-    public function testOperationSseClaimedDispatcherIncludesPlanBranch(): void
+    public function testOperationSseClaimedDispatcherKeepsQueueBackedOperationsObserverOnly(): void
     {
         $controllerSource = \file_get_contents(
             \dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php'
@@ -347,11 +367,11 @@ final class AiSiteAgentSseMarkerTest extends TestCase
 
         self::assertIsString($controllerSource);
         self::assertStringContainsString(
-            '\'plan\' => $this->runPlanOperationSseBranch',
+            'if ($this->isAiSiteQueueBackedOperation($operation))',
             $controllerSource,
-            'operation-sse claimed-operation dispatcher must route operation=plan instead of falling through to unknown operation.'
+            'operation-sse claimed-operation dispatcher must not execute queue-backed AI operations directly.'
         );
-        self::assertStringContainsString('private function runPlanOperationSseBranch', $controllerSource);
+        self::assertStringContainsString('队列型 AI 操作仅由系统调度器执行。', $controllerSource);
     }
 
     public function testPhaseOneQueuePanelIsSubscribedToOperationSsePayloads(): void

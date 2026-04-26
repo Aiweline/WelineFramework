@@ -127,7 +127,9 @@ class StaticFileException extends ResponseTerminateException
         // 读取文件内容
         if (\is_file($this->filePath)) {
             $content = \file_get_contents($this->filePath);
-            $response .= "Content-Length: " . \strlen($content) . "\r\n";
+            if (!isset($this->headers['Content-Length'])) {
+                $response .= "Content-Length: " . \strlen($content) . "\r\n";
+            }
             $response .= "Connection: close\r\n";
             $response .= "\r\n";
             $response .= $content;

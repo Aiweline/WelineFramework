@@ -6,6 +6,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\TelemetryBroadcaster;
 use Weline\Framework\Runtime\System;
 
 /**
@@ -22,6 +23,8 @@ class Response implements ResponseInterface
     private ?HeaderCollectorInterface $headerCollector = null;
 
     private string $body = '';
+
+    private bool $telemetryPrepared = false;
 
     public function __construct(bool $detached = false)
     {
@@ -182,12 +185,12 @@ class Response implements ResponseInterface
         $contentType = (string)$this->getRequest()->getContentType();
         if (\is_int(\strpos($contentType, 'application/json'))) {
             $this->setHeader('Content-Type', 'application/json; charset=utf-8');
-            $this->body = $dataObject->toJson();
+            $this->setBody($dataObject->toJson());
         } elseif (\is_int(\strpos($contentType, 'text/xml'))) {
             $this->setHeader('Content-Type', 'text/xml');
-            $this->body = $dataObject->toXml();
+            $this->setBody($dataObject->toXml());
         } else {
-            $this->body = $dataObject->toString();
+            $this->setBody($dataObject->toString());
         }
 
         return $this;
@@ -274,11 +277,20 @@ class Response implements ResponseInterface
     public function setBody(string $body): static
     {
         $this->body = $body;
+        $this->telemetryPrepared = false;
+        return $this;
+    }
+
+    public function markTelemetryPrepared(bool $prepared = true): static
+    {
+        $this->telemetryPrepared = $prepared;
         return $this;
     }
 
     public function emit(bool $terminate = true): void
     {
+        $this->prepareForEmission();
+
         if (!\headers_sent()) {
             $contentType = (string)($this->getHeader('Content-Type') ?? '');
             if (!\str_contains(\strtolower($contentType), 'text/event-stream')
@@ -299,6 +311,8 @@ class Response implements ResponseInterface
 
     public function toHttpString(bool $keepAlive = true): string
     {
+        $this->prepareForEmission();
+
         $statusCode = $this->getStatusCode();
         $statusText = self::getStatusText($statusCode);
         $response = "HTTP/1.1 {$statusCode} {$statusText}\r\n";
@@ -318,7 +332,8 @@ class Response implements ResponseInterface
         }
 
         $contentType = (string)($this->getHeader('Content-Type') ?? '');
-        if (!\str_contains(\strtolower($contentType), 'text/event-stream')) {
+        if (!\str_contains(\strtolower($contentType), 'text/event-stream')
+            && $this->getHeader('Content-Length') === null) {
             $response .= 'Content-Length: ' . \strlen($this->body) . "\r\n";
         }
 
@@ -432,6 +447,75 @@ class Response implements ResponseInterface
         }
 
         return 'text/plain; charset=utf-8';
+    }
+
+    private function prepareForEmission(): void
+    {
+        if ($this->telemetryPrepared) {
+            return;
+        }
+
+        try {
+            if ($this->shouldBroadcastTelemetryBeforeEmission()) {
+                $preparedBody = TelemetryBroadcaster::broadcast(
+                    $this->body,
+                    $this->resolveRequestSafely(),
+                    true
+                );
+                if ($preparedBody !== $this->body) {
+                    $this->body = $preparedBody;
+                    $this->synchronizeContentLengthHeader();
+                }
+            }
+        } catch (\Throwable) {
+            // Response decoration must never block the actual response emission.
+        } finally {
+            $this->telemetryPrepared = true;
+        }
+    }
+
+    private function shouldBroadcastTelemetryBeforeEmission(): bool
+    {
+        if ($this->body === '') {
+            return false;
+        }
+
+        if ($this->getHeader('Content-Encoding') !== null) {
+            return false;
+        }
+
+        $contentType = \strtolower((string)($this->getHeader('Content-Type') ?? ''));
+        if (\str_contains($contentType, 'text/event-stream')) {
+            return false;
+        }
+
+        if ($contentType !== '') {
+            return \str_contains($contentType, 'text/html');
+        }
+
+        return \str_contains(\strtolower(self::detectContentType($this->body)), 'text/html');
+    }
+
+    private function synchronizeContentLengthHeader(): void
+    {
+        $contentType = \strtolower((string)($this->getHeader('Content-Type') ?? ''));
+        if (\str_contains($contentType, 'text/event-stream')) {
+            return;
+        }
+
+        if ($this->getHeader('Content-Length') !== null) {
+            $this->setHeader('Content-Length', (string)\strlen($this->body));
+        }
+    }
+
+    private function resolveRequestSafely(): ?Request
+    {
+        try {
+            $request = ObjectManager::getInstance(Request::class);
+            return $request instanceof Request ? $request : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function buildCookieString(array $cookie): string

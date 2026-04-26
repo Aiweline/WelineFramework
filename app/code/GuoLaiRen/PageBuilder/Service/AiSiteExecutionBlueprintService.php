@@ -14,6 +14,7 @@ final class AiSiteExecutionBlueprintService
     public const VERSION = 1;
     private const STAGE_ONE_LOCAL_REGEN_MAX_ROUNDS = 3;
     private const STAGE_ONE_LOCAL_REGEN_BATCH_BLOCKS = 5;
+    private const STAGE_ONE_AI_FANOUT_CONCURRENCY = 4;
     /** @var array<string, array<string, mixed>|null> */
     private array $appendInstructionDecisionCache = [];
 
@@ -479,10 +480,17 @@ final class AiSiteExecutionBlueprintService
 
     /**
      * @param callable(string):void|null $onChunk
+     * @param array<string, mixed> $requestParamOverrides
      * @return array<string, mixed>
      */
-    private function generateStageOneJsonByAi(string $prompt, string $scenarioCode, int $maxTokens, int $timeout, ?callable $onChunk = null): array
-    {
+    private function generateStageOneJsonByAi(
+        string $prompt,
+        string $scenarioCode,
+        int $maxTokens,
+        int $timeout,
+        ?callable $onChunk = null,
+        array $requestParamOverrides = []
+    ): array {
         $fullContent = '';
         $this->getAiService()->generateStream(
             $prompt,
@@ -496,7 +504,7 @@ final class AiSiteExecutionBlueprintService
             null,
             $scenarioCode,
             null,
-            [
+            \array_merge([
                 'allow_zero_balance_provider' => true,
                 'temperature' => 0.25,
                 'max_tokens' => $maxTokens,
@@ -505,7 +513,7 @@ final class AiSiteExecutionBlueprintService
                 'disable_cli_timeout' => true,
                 'enforce_timeout_in_stream' => false,
                 'response_format' => ['type' => 'json_object'],
-            ]
+            ], $requestParamOverrides)
         );
 
         $decoded = $this->getResponseJsonParser()->extractAndDecode($fullContent);
@@ -514,6 +522,18 @@ final class AiSiteExecutionBlueprintService
         }
 
         return $decoded;
+    }
+
+    private function resolveStageOneCooperativeSessionId(array $scope, string $scopeKey): string
+    {
+        foreach ([$scope['public_id'] ?? null, $scope['session_public_id'] ?? null, $scope['session_id'] ?? null] as $candidate) {
+            $sessionId = \trim((string)$candidate);
+            if ($sessionId !== '') {
+                return $sessionId . ':stage1:' . $scopeKey;
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -838,7 +858,9 @@ final class AiSiteExecutionBlueprintService
         ?callable $onProgress = null
     ): array {
         $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
-        if (\count($pageTypes) <= 1 || !\class_exists(\Fiber::class)) {
+        $concurrency = \min(self::STAGE_ONE_AI_FANOUT_CONCURRENCY, \count($pageTypes));
+        $ai = $this->getAiService();
+        if (\count($pageTypes) <= 1 || !$ai->supportsCooperativeConcurrency($concurrency)) {
             return $this->generateStageOnePagePlansByAiSequential(
                 $scope,
                 $websiteProfile,
@@ -853,9 +875,10 @@ final class AiSiteExecutionBlueprintService
             );
         }
 
-        /** @var array<string, \Fiber> $fibers */
-        $fibers = [];
+        /** @var array<string, callable(array<string, mixed>, string|int): array<string, mixed>> $tasks */
+        $tasks = [];
         $totalPages = \count($pageTypes);
+        $completedPages = 0;
         foreach ($pageTypes as $pageIndex => $pageType) {
             $pageKey = (string)$pageType;
             $pageOrder = (int)$pageIndex + 1;
@@ -867,73 +890,66 @@ final class AiSiteExecutionBlueprintService
                 'start',
                 ['page_type' => $pageKey]
             );
-            $fibers[$pageKey] = new \Fiber(function () use ($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope, $onChunk): array {
+            $tasks[$pageKey] = function (array $sessionParams) use ($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope, $onProgress, &$completedPages, $totalPages): array {
                 $decoded = $this->generateStageOneJsonByAi(
                     $this->buildAiStageOnePagePrompt($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope),
                     'pagebuilder_plan_generation',
                     4096,
                     150,
-                    $onChunk
+                    null,
+                    $sessionParams
                 );
 
-                return $this->normalizeStageOneAiPagePlanWithBaseline(
+                $pagePlan = $this->normalizeStageOneAiPagePlanWithBaseline(
                     $this->extractStageOneAiPagePlan($decoded, $pageKey),
                     \is_array($planJson['pages'][$pageKey] ?? null) ? $planJson['pages'][$pageKey] : [],
                     $pageKey
                 );
-            });
+                $completedPages++;
+                $pageProgress = 60 + (int)\floor(($completedPages / \max(1, $totalPages)) * 22);
+                $this->emitStageOnePipelineProgress(
+                    $onProgress,
+                    $this->buildStageOnePagePipelineMessage(true, $completedPages, $totalPages, $pageKey),
+                    $pageProgress,
+                    'page_plan',
+                    'done',
+                    ['page_type' => $pageKey]
+                );
+
+                return $pagePlan;
+            };
         }
 
-        $results = [];
-        $errors = [];
-        $completedPages = 0;
-        foreach ($fibers as $pageKey => $fiber) {
-            try {
-                $fiber->start();
-            } catch (\Throwable $throwable) {
-                $errors[$pageKey] = $throwable;
+        $results = $ai->runCooperativeSessionTasks($tasks, [
+            'concurrency' => $concurrency,
+            'session_id' => $this->resolveStageOneCooperativeSessionId($scope, 'page_plan'),
+            'disable_conversation_history' => true,
+            'disable_conversation_persist' => true,
+        ]);
+
+        $missingPageTypes = [];
+        foreach ($pageTypes as $pageType) {
+            $pageKey = (string)$pageType;
+            if (!\array_key_exists($pageKey, $results)) {
+                $missingPageTypes[] = $pageKey;
             }
         }
-
-        while (\count($results) + \count($errors) < \count($fibers)) {
-            $madeProgress = false;
-            foreach ($fibers as $pageKey => $fiber) {
-                if (isset($results[$pageKey]) || isset($errors[$pageKey])) {
-                    continue;
-                }
-                try {
-                    if ($fiber->isTerminated()) {
-                        $results[$pageKey] = $fiber->getReturn();
-                        $completedPages++;
-                        $pageProgress = 60 + (int)\floor(($completedPages / \max(1, $totalPages)) * 22);
-                        $this->emitStageOnePipelineProgress(
-                            $onProgress,
-                            $this->buildStageOnePagePipelineMessage(true, $completedPages, $totalPages, (string)$pageKey),
-                            $pageProgress,
-                            'page_plan',
-                            'done',
-                            ['page_type' => (string)$pageKey]
-                        );
-                        $madeProgress = true;
-                    } elseif ($fiber->isSuspended()) {
-                        $fiber->resume();
-                        $madeProgress = true;
-                    }
-                } catch (\Throwable $throwable) {
-                    $errors[$pageKey] = $throwable;
-                    $madeProgress = true;
-                }
-            }
-            if (!$madeProgress && \count($results) + \count($errors) < \count($fibers)) {
-                \usleep(1000);
-            }
-        }
-
-        if ($errors !== []) {
-            $firstError = \reset($errors);
-            if ($firstError instanceof \Throwable) {
-                throw $firstError;
-            }
+        if ($missingPageTypes !== []) {
+            $results = \array_replace(
+                $results,
+                $this->generateStageOnePagePlansByAiSequential(
+                    $scope,
+                    $websiteProfile,
+                    $planJson,
+                    $missingPageTypes,
+                    $planLocale,
+                    $contentLocale,
+                    $instruction,
+                    $targetScope,
+                    $onChunk,
+                    $onProgress
+                )
+            );
         }
 
         foreach ($pageTypes as $pageType) {

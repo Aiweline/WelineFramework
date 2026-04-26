@@ -98,6 +98,10 @@
     function addSelectButton(slot) {
         // 检查是否已有按钮
         if (slot.querySelector('.slot-toolbar')) return;
+
+        if (getComputedStyle(slot).position === 'static') {
+            slot.style.position = 'relative';
+        }
         
         // 按钮容器（选择 + 信息）
         const toolbar = document.createElement('div');
@@ -376,6 +380,35 @@
     /** 带嵌套可编辑插槽的容器部件 code，这些部件内的 [data-wslot] 需要初始化为可拖放目标 */
     var CONTAINER_WITH_NESTED_SLOTS = ['content-container', 'header-container', 'footer-container'];
 
+    /**
+     * Backend layout historically did not declare theme slots in its templates.
+     * In editor iframe mode, expose stable structural slots without changing normal backend pages.
+     */
+    function initBackendStructuralSlots() {
+        var isBackendLayout = document.documentElement.dataset.theme === 'backend'
+            || (!!document.getElementById('layout-wrapper') && !!document.getElementById('page-topbar'));
+
+        if (!isBackendLayout) return;
+
+        [
+            ['#page-topbar', 'backend-topbar', 'Backend Topbar', 'header'],
+            ['.topnav', 'backend-topnav', 'Backend Topnav', 'header'],
+            ['.vertical-menu', 'backend-sidebar', 'Backend Sidebar', 'sidebar'],
+            ['main.backend-main-content, #main-content.backend-main-content, main#main-content', 'backend-content', 'Backend Content', 'content'],
+            ['.footer', 'backend-footer', 'Backend Footer', 'footer'],
+            ['.right-bar', 'backend-right-sidebar', 'Backend Right Sidebar', 'right-sidebar']
+        ].forEach(function(definition) {
+            var slot = document.querySelector(definition[0]);
+            if (!slot || slot.hasAttribute('data-wslot')) return;
+
+            slot.setAttribute('data-wslot', definition[1]);
+            slot.setAttribute('data-wslot-name', definition[2]);
+            slot.setAttribute('data-wslot-accept', '*');
+            slot.setAttribute('data-wslot-multiple', 'true');
+            slot.setAttribute('data-wslot-position', definition[3]);
+        });
+    }
+
     function initSingleSlot(slot) {
         // 防止重复初始化
         if (slot._editorSlotInitialized) return;
@@ -544,6 +577,7 @@
      * 初始化所有插槽
      */
     function initSlots() {
+        initBackendStructuralSlots();
         document.querySelectorAll('[data-wslot]').forEach(initSingleSlot);
         
         // 初始化不在插槽内的独立占位符
