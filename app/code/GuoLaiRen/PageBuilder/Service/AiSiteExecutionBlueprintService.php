@@ -664,11 +664,11 @@ final class AiSiteExecutionBlueprintService
         $expansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
         foreach (['original_brief', 'expanded_brief', 'planning_summary', 'site_goal'] as $key) {
             if (\trim((string)($expansion[$key] ?? '')) === '') {
-                throw new \RuntimeException('AI plan generation failed: stage-one requirement expansion must be generated before theme planning.');
+                throw new \RuntimeException('第一阶段方案生成失败：生成主题规划前必须先完成需求扩展。');
             }
         }
         if (!\is_array($expansion['page_strategy'] ?? null) || $expansion['page_strategy'] === []) {
-            throw new \RuntimeException('AI plan generation failed: stage-one requirement expansion must be generated before theme planning.');
+            throw new \RuntimeException('第一阶段方案生成失败：生成主题规划前必须先完成需求扩展。');
         }
     }
 
@@ -692,12 +692,12 @@ final class AiSiteExecutionBlueprintService
 
         foreach ($requiredStrings as $value) {
             if (!\is_string($value) || \trim($value) === '') {
-                throw new \RuntimeException('AI plan generation failed: stage-one theme plan must be generated before page plans.');
+                throw new \RuntimeException('第一阶段方案生成失败：生成页面方案前必须先完成主题方案。');
             }
         }
 
         if (!\is_array($themeDesign['visual_keywords'] ?? null) || $themeDesign['visual_keywords'] === []) {
-            throw new \RuntimeException('AI plan generation failed: stage-one theme plan must be generated before page plans.');
+            throw new \RuntimeException('第一阶段方案生成失败：生成页面方案前必须先完成主题方案。');
         }
         $sharedComponents = \is_array($planJson['shared_components'] ?? null) ? $planJson['shared_components'] : [];
         foreach (['header', 'footer'] as $component) {
@@ -710,7 +710,7 @@ final class AiSiteExecutionBlueprintService
                     \array_keys($sharedComponents)
                 ), static fn(string $key): bool => $key !== ''));
                 throw new \RuntimeException(
-                    'AI plan generation failed: stage-one theme/Header/Footer plan must be generated before page plans.'
+                    '第一阶段方案生成失败：生成页面方案前必须先完成主题/Header/Footer 方案。'
                     . ' component=' . $component
                     . ' shared_keys=' . ($sharedKeys === [] ? '[none]' : \implode(',', $sharedKeys))
                     . ' goal=' . ($goal === '' ? '0' : '1')
@@ -2140,12 +2140,12 @@ final class AiSiteExecutionBlueprintService
     {
         $normalized = \trim($message);
         if ($normalized === '') {
-            $normalized = 'unknown error.';
+            $normalized = '未知错误。';
         }
 
-        $normalized = (string)(\preg_replace('/^(?:AI plan generation failed:\s*)+/i', '', $normalized) ?? $normalized);
+        $normalized = (string)(\preg_replace('/^(?:AI plan generation failed:|第一阶段方案生成失败：)\s*/iu', '', $normalized) ?? $normalized);
 
-        return 'AI plan generation failed: ' . $normalized;
+        return '第一阶段方案生成失败：' . $normalized;
     }
 
     private function mapAiPlanToArtifacts(

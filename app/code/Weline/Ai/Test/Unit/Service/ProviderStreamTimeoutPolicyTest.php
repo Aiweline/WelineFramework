@@ -7,6 +7,7 @@ namespace Weline\Ai\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use Weline\Ai\Service\Provider\AnthropicProvider;
 use Weline\Ai\Service\Provider\OpenAiProvider;
+use Weline\Ai\Service\Provider\ProviderTimeoutPolicy;
 
 class ProviderStreamTimeoutPolicyTest extends TestCase
 {
@@ -19,7 +20,7 @@ class ProviderStreamTimeoutPolicyTest extends TestCase
 
         $timeout = $this->invokePrivate($provider, 'resolveStreamTimeout', [
             [],
-            ['timeout' => 180],
+            ['timeout' => ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT],
         ]);
 
         $this->assertSame(0, $timeout);
@@ -34,7 +35,7 @@ class ProviderStreamTimeoutPolicyTest extends TestCase
 
         $explicitTimeout = $this->invokePrivate($provider, 'resolveStreamTimeout', [
             ['enforce_timeout_in_stream' => true, 'timeout' => 120],
-            ['timeout' => 180],
+            ['timeout' => ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT],
         ]);
         $configTimeout = $this->invokePrivate($provider, 'resolveStreamTimeout', [
             ['enforce_timeout_in_stream' => true],
@@ -54,7 +55,7 @@ class ProviderStreamTimeoutPolicyTest extends TestCase
 
         $timeout = $this->invokePrivate($provider, 'resolveStreamTimeout', [
             ['disable_ai_timeout' => true, 'enforce_timeout_in_stream' => true],
-            ['timeout' => 180],
+            ['timeout' => ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT],
         ]);
 
         $this->assertSame(0, $timeout);
@@ -73,7 +74,7 @@ class ProviderStreamTimeoutPolicyTest extends TestCase
 
         $this->assertSame(
             $expectedStreamOptions,
-            $this->invokePrivate($provider, 'buildCurlTimeoutOptions', [180, true])
+            $this->invokePrivate($provider, 'buildCurlTimeoutOptions', [ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT, true])
         );
         $this->assertSame(
             $expectedNonStreamZeroOptions,
@@ -131,6 +132,17 @@ class ProviderStreamTimeoutPolicyTest extends TestCase
                 ],
             ],
         ];
+    }
+
+    /**
+     * @dataProvider providerClasses
+     */
+    public function testRequestTimeoutFallsBackToUnifiedDefault(string $providerClass): void
+    {
+        $timeout = ProviderTimeoutPolicy::resolveRequestTimeout([], []);
+
+        $this->assertSame(ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT, $timeout);
+        $this->assertTrue(class_exists($providerClass));
     }
 
     private function invokePrivate(object $object, string $method, array $arguments)

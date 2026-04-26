@@ -573,7 +573,7 @@ API基础URL,"API Base URL"
 最大Token数,"Maximum Token Count"
 最大生成token数量,"Maximum token generation count"
 超时时间（秒）,超时时间（秒）
-API请求超时时间，0表示不限制，默认180秒,API请求超时时间，0表示不限制，默认180秒
+API请求超时时间，0表示不限制，默认900秒,API请求超时时间，0表示不限制，默认900秒
 核采样参数，0-1之间,"Nuclear sampling parameter, between 0 and 1"
 "频率惩罚 (Frequency Penalty)","频率惩罚 (Frequency Penalty)"
 降低重复词汇，-2到2之间,"Reduce repetitive vocabulary, between -2 and 2."

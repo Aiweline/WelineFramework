@@ -407,10 +407,15 @@
         return getTargetDomainTrimmed() !== '';
     }
 
+    function isPhaseOneQueueUnfinished() {
+        return isPlanGenerationRunningNow();
+    }
+
     function applyRunVirtualThemeButtonsDisabledState() {
         var domainLocked = !isTargetDomainRequiredForPlanActionSatisfied();
+        var queueLocked = isPhaseOneQueueUnfinished();
         getRunVirtualThemeButtons().forEach(function (b) {
-            b.disabled = planGenerationActionLockActive || globalRunVirtualThemeDisabled || domainLocked;
+            b.disabled = planGenerationActionLockActive || globalRunVirtualThemeDisabled || domainLocked || queueLocked;
             b.setAttribute('aria-disabled', b.disabled ? 'true' : 'false');
         });
         document.querySelectorAll('[data-pb-gate-phase-one="1"]').forEach(function (b) {
@@ -1023,7 +1028,7 @@
         if (!confirmBtn) {
             return;
         }
-        confirmBtn.disabled = planGenerationActionLockActive || planConfirmedState || !hasCurrentPhaseOnePlanDraft();
+        confirmBtn.disabled = planGenerationActionLockActive || planConfirmedState || !hasCurrentPhaseOnePlanDraft() || isPhaseOneQueueUnfinished();
     }
 
     function syncPlanRebuildButtonVisibility() {
@@ -1033,7 +1038,8 @@
         }
         var visible = hasCurrentPhaseOnePlanDraft();
         btn.classList.toggle('d-none', !visible);
-        btn.disabled = !visible || planGenerationActionLockActive || planStartRequestPending || planSseRunning;
+        // 强制重建是第一阶段队列未完成时唯一允许的操作入口。
+        btn.disabled = !visible || planStartRequestPending;
     }
     /**
      * 工作区流（非弹层 SSE）在 plan_generated 等节点回调：收敛按钮状态、写入方案 Markdown 并触发自动保存。
@@ -1253,7 +1259,7 @@
         blockSseRebuildStarted: <?= \json_encode((string)__('连接已建立，开始重建当前区块。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseRefineAwaitingConfirm: <?= \json_encode((string)__('区块微调等待确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseRebuildAwaitingConfirm: <?= \json_encode((string)__('区块重建等待确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        editUnavailable: <?= \json_encode((string)__('当前区块暂时无法打开可视化编辑弹窗。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        editUnavailable: <?= \json_encode((string)__('当前区块暂时无法打开字段编辑弹窗。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editSaved: <?= \json_encode((string)__('区块字段已更新，已刷新当前块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseDoneConfirm: <?= \json_encode((string)__('区块生成已完成，但未返回可立即刷新的区块结果。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseNoResult: <?= \json_encode((string)__('未找到当前区块的新结果，请稍后刷新预览重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1343,7 +1349,8 @@
         editAction: <?= \json_encode((string)__('编辑'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         aiRefineAction: <?= \json_encode((string)__('AI 微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         aiRebuildAction: <?= \json_encode((string)__('AI 重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        editBlockAction: <?= \json_encode((string)__('编辑块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        editBlockAction: <?= \json_encode((string)__('编辑当前区块字段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        editBlockHint: <?= \json_encode((string)__('按 PageBuilder 字段编辑逻辑直接编辑当前区块，可先用 AI 生成再保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineStage: <?= \json_encode((string)__('整体微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         rebuildStage: <?= \json_encode((string)__('完全重新生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         primaryKeywords: <?= \json_encode((string)__('主关键词'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -2415,6 +2422,49 @@
     var domainPurchaseSource = null;
     var domainPurchaseSourceStartTimer = null;
 
+    function getSiteTitleInputs() {
+        return Array.prototype.slice.call(document.querySelectorAll('#pb-ai-site-title'));
+    }
+
+    function getBriefDescriptionInputs() {
+        return Array.prototype.slice.call(document.querySelectorAll('#pb-ai-brief-description'));
+    }
+
+    function hasNonEmptyValue(inputs) {
+        return (Array.isArray(inputs) ? inputs : []).some(function (input) {
+            return !!(input && String(input.value || '').trim() !== '');
+        });
+    }
+
+    function setInputsInvalidState(inputs, invalid) {
+        (Array.isArray(inputs) ? inputs : []).forEach(function (input) {
+            if (!input || !input.classList) {
+                return;
+            }
+            input.classList.toggle('is-invalid', !!invalid);
+        });
+    }
+
+    function bindDomainRecommendRequiredFieldValidationReset() {
+        var bindReset = function (inputs) {
+            (Array.isArray(inputs) ? inputs : []).forEach(function (input) {
+                if (!input || input.dataset.pbDomainRecommendValidationBound === '1') {
+                    return;
+                }
+                input.dataset.pbDomainRecommendValidationBound = '1';
+                var clearInvalid = function () {
+                    if (String(input.value || '').trim() !== '') {
+                        input.classList.remove('is-invalid');
+                    }
+                };
+                input.addEventListener('input', clearInvalid);
+                input.addEventListener('change', clearInvalid);
+            });
+        };
+        bindReset(getSiteTitleInputs());
+        bindReset(getBriefDescriptionInputs());
+    }
+
     function getRegistrarSelection() {
         var hidden = document.getElementById('pb-ai-registrar-account_value');
         if (!hidden) {
@@ -2623,11 +2673,20 @@
 
     function recommendDomainsFromWorkbench() {
         var registrarSelection = getRegistrarSelection();
-        var description = (briefInputEl ? String(briefInputEl.value || '').trim() : '') || (titleInputEl ? String(titleInputEl.value || '').trim() : '');
-        if (!description) {
-            toast('warning', messages.domainNeedBrief);
+        var titleInputs = getSiteTitleInputs();
+        var briefInputs = getBriefDescriptionInputs();
+        var hasTitle = hasNonEmptyValue(titleInputs);
+        var hasBrief = hasNonEmptyValue(briefInputs);
+        setInputsInvalidState(titleInputs, !hasTitle);
+        setInputsInvalidState(briefInputs, !hasBrief);
+        if (!hasTitle || !hasBrief) {
+            bindDomainRecommendRequiredFieldValidationReset();
+            toast('warning', messages.domainNeedBrief || <?= \json_encode((string)__('请先填写网站标题和需求描述'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
             return;
         }
+        var description = hasBrief
+            ? String((briefInputEl && briefInputEl.value) || (briefInputs[0] && briefInputs[0].value) || '').trim()
+            : String((titleInputEl && titleInputEl.value) || (titleInputs[0] && titleInputs[0].value) || '').trim();
         var fakeSession = isGuidedFakeModeSession();
         if (!recommendDomainUrl) {
             toast('error', messages.networkError);
@@ -2791,18 +2850,16 @@
         });
     }
 
-    var recommendDomainBtn = document.getElementById('pb-ai-recommend-domain-btn');
-    if (recommendDomainBtn) {
+    document.querySelectorAll('#pb-ai-recommend-domain-btn').forEach(function (recommendDomainBtn) {
         recommendDomainBtn.addEventListener('click', function () {
             recommendDomainsFromWorkbench();
         });
-    }
-    var targetDomainAiRefreshBtn = document.getElementById('pb-ai-target-domain-ai-refresh');
-    if (targetDomainAiRefreshBtn) {
+    });
+    document.querySelectorAll('#pb-ai-target-domain-ai-refresh').forEach(function (targetDomainAiRefreshBtn) {
         targetDomainAiRefreshBtn.addEventListener('click', function () {
             recommendDomainsFromWorkbench();
         });
-    }
+    });
     var startDomainPurchaseBtn = document.getElementById('site-builder-start-domain-purchase');
     if (startDomainPurchaseBtn) {
         startDomainPurchaseBtn.addEventListener('click', function () {
@@ -3067,6 +3124,20 @@
     workspaceApi.selectedPageTypes = selectedPageTypes;
     workspaceApi.getTaskAlwaysVisiblePageTypeMap = function () {
         return TASK_ALWAYS_VISIBLE_PAGE_TYPE_MAP;
+    };
+    workspaceApi.retryPhaseOnePlanGeneration = function (options) {
+        var opts = options && typeof options === 'object' ? options : {};
+        if (planStartRequestPending || planSseRunning) {
+            return false;
+        }
+        var selectedTypes = Array.isArray(opts.selectedTypes) && opts.selectedTypes.length > 0
+            ? opts.selectedTypes.slice()
+            : selectedPageTypes();
+        selectedTypes = ensureRequiredPageTypeSelected(selectedTypes);
+        startPlanGenerationForSelection(currentPlanTriggerButton, selectedTypes, {
+            forceRebuild: opts.forceRebuild === true
+        });
+        return true;
     };
 
     function syncSameValuePageTypeChecks(pageType, isChecked) {
@@ -4580,7 +4651,7 @@
             refineBtn.setAttribute('title', previewLabels.aiRefineAction);
         }
 
-        var editBtn = actions.querySelector('[data-pb-action="open-editor"]');
+        var editBtn = actions.querySelector('[data-pb-action="edit-block"], [data-pb-action="open-editor"]');
         if (editBtn) {
             editBtn.textContent = previewLabels.editAction;
             editBtn.setAttribute('title', previewLabels.editBlockAction);
@@ -4819,7 +4890,7 @@
             throw new Error(messages.editUnavailable);
         }
 
-        toast('info', <?= \json_encode((string)__('加载配置...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+        toast('info', <?= \json_encode((string)__('加载区块字段...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
 
         var layoutUrlObj = new URL(visualComponentLayoutFieldsUrl, window.location.href);
         layoutUrlObj.searchParams.set('public_id', context.public_id);
@@ -4865,6 +4936,9 @@
         var pageTypeLabel = normalizePageTypeLabel(context.page_type);
         var pageAiDescription = getWorkspacePageAiDescription(context.page_type);
         var formHtml = '<div class="component-config-form" style="text-align:left; max-height:60vh; overflow-y:auto; padding:0 4px;">';
+        formHtml += '<div class="small text-muted" style="margin-bottom:12px; line-height:1.6;">'
+            + escapeHtml(String(messages.editBlockHint || ''))
+            + '</div>';
 
         if (hasTextFields && Object.keys(fields).length > 0) {
             var aiPromptValue = currentConfig._ai_prompt != null ? String(currentConfig._ai_prompt) : '';
@@ -4952,7 +5026,7 @@
         formHtml += '</div>';
 
         var result = await showComponentConfigModal({
-            title: <?= \json_encode((string)__('组件配置'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' - ' + String(metadata.name || context.component_code),
+            title: <?= \json_encode((string)__('编辑区块字段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' - ' + String(metadata.name || context.component_code),
             html: formHtml,
             confirmText: <?= \json_encode((string)__('保存'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
             cancelText: <?= \json_encode((string)__('取消'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -5625,7 +5699,8 @@
                         return;
                     }
 
-                    if (String(button.getAttribute('data-pb-action') || '') === 'open-editor') {
+                    var action = String(button.getAttribute('data-pb-action') || '');
+                    if (action === 'edit-block' || action === 'open-editor') {
                         openBlockEditorModal(payload);
                     }
                 }, true);
@@ -5675,7 +5750,7 @@
                     startBlockRegenerate(payload);
                     return;
                 }
-                if (String(payload.action || '') === 'open-editor') {
+                if (String(payload.action || '') === 'edit-block' || String(payload.action || '') === 'open-editor') {
                     openBlockEditorModal(payload);
                 }
                 return;
@@ -7856,6 +7931,34 @@
             return true;
         }
         return !!isOperationRunning;
+    }
+
+    var phaseOneObserverResumeToken = '';
+    function ensurePhaseOneQueueObserverRunning() {
+        var active = currentActiveOperationState && typeof currentActiveOperationState === 'object'
+            ? currentActiveOperationState
+            : {};
+        var activeOperation = String(active.operation || '').trim().toLowerCase();
+        var activeStatus = String(active.status || '').trim().toLowerCase();
+        var runningStatuses = ['queued', 'running', 'pending', 'processing'];
+        if (!isPhaseOneQueueUnfinished()) {
+            phaseOneObserverResumeToken = '';
+            return;
+        }
+        if (activeOperation !== 'plan' || runningStatuses.indexOf(activeStatus) === -1) {
+            return;
+        }
+        var token = String(active.execution_token || '').trim();
+        if (token === '' || token === phaseOneObserverResumeToken) {
+            return;
+        }
+        if (!(window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function')) {
+            return;
+        }
+        var resumePayload = Object.assign({ success: true, operation: 'plan', execution_token: token }, active);
+        if (window.PbAiOperationRunner.startFromResponse(resumePayload, 'plan')) {
+            phaseOneObserverResumeToken = token;
+        }
     }
 
     function getPlanStructuredPreviewEmptyText() {
@@ -11352,7 +11455,7 @@
     }
 
     function startWholeSchemePlanRebuildFromPanel(triggerBtn) {
-        if (planStartRequestPending || planSseRunning) {
+        if (planStartRequestPending) {
             return Promise.resolve(false);
         }
         if (!hasCurrentPhaseOnePlanDraft()) {
@@ -11751,10 +11854,12 @@
         }
         syncConfirmPlanButtonEnabled();
         syncPlanRebuildButtonVisibility();
+        ensurePhaseOneQueueObserverRunning();
 
         var rebuildPlanBtn = document.getElementById('pb-ai-plan-rebuild-full');
         if (rebuildPlanBtn && rebuildPlanBtn.dataset.pbBound !== '1') {
             rebuildPlanBtn.dataset.pbBound = '1';
+            rebuildPlanBtn.dataset.pbPlanGenerationLockBypass = '1';
             rebuildPlanBtn.addEventListener('click', function () {
                 startWholeSchemePlanRebuildFromPanel(this);
             });

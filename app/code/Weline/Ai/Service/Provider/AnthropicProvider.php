@@ -104,15 +104,11 @@ class AnthropicProvider implements ProviderInterface
 
         $messages = $this->buildMessages($prompt, $params);
         $systemMessage = $this->extractSystemMessage($params);
-        
-        // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
-        $timeout = (!empty($params['disable_ai_timeout']) || (PHP_SAPI === 'cli' && !empty($params['disable_cli_timeout'])))
-            ? 0
-            : (isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180));
+        $timeout = ProviderTimeoutPolicy::resolveRequestTimeout($params, $config);
         
         // 设置执行时间限制
         if ($timeout > 0) {
-            $timeLimit = $timeout + 10;
+            $timeLimit = $timeout + ProviderTimeoutPolicy::EXECUTION_TIME_BUFFER;
             @set_time_limit($timeLimit);
         } else {
             @set_time_limit(0);
@@ -229,19 +225,19 @@ class AnthropicProvider implements ProviderInterface
         $messages = $this->buildMessages($prompt, $params);
         $systemMessage = $this->extractSystemMessage($params);
         
-        // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
+        // 超时优先级：params.timeout > config.timeout > 默认超时；0 表示不限制
         $timeout = $this->resolveStreamTimeout($params, $config);
         
         // 设置执行时间限制
         $shouldRestoreExecutionTimeLimit = !SseContext::isSseEnabled();
         if ($shouldRestoreExecutionTimeLimit) {
             if ($timeout > 0) {
-                @set_time_limit($timeout + 10);
+                @set_time_limit($timeout + ProviderTimeoutPolicy::EXECUTION_TIME_BUFFER);
             } else {
                 @set_time_limit(0);
             }
         } else {
-            // SSE 模式下也需要移除执行时间限制，避免 PHP 默认 180 秒超时
+            // SSE 模式下也需要移除执行时间限制，避免 PHP 默认请求超时
             @set_time_limit(0);
         }
 
@@ -967,16 +963,7 @@ class AnthropicProvider implements ProviderInterface
 
     private function resolveStreamTimeout(array $params, array $config): int
     {
-        if (!empty($params['disable_ai_timeout']) || (PHP_SAPI === 'cli' && !empty($params['disable_cli_timeout']))) {
-            return 0;
-        }
-        if (!empty($params['enforce_timeout_in_stream'])) {
-            return isset($params['timeout'])
-                ? (int)$params['timeout']
-                : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
-        }
-
-        return 0;
+        return ProviderTimeoutPolicy::resolveStreamTimeout($params, $config);
     }
 
     /**
@@ -989,13 +976,13 @@ class AnthropicProvider implements ProviderInterface
         if ($isStream) {
             return [
                 CURLOPT_TIMEOUT => 0,
-                CURLOPT_CONNECTTIMEOUT => 60,
+                CURLOPT_CONNECTTIMEOUT => ProviderTimeoutPolicy::DEFAULT_CONNECT_TIMEOUT,
             ];
         }
 
         return [
             CURLOPT_TIMEOUT => $timeout,
-            CURLOPT_CONNECTTIMEOUT => $timeout > 0 ? min($timeout, 60) : 60,
+            CURLOPT_CONNECTTIMEOUT => $timeout > 0 ? min($timeout, ProviderTimeoutPolicy::DEFAULT_CONNECT_TIMEOUT) : ProviderTimeoutPolicy::DEFAULT_CONNECT_TIMEOUT,
         ];
     }
 
