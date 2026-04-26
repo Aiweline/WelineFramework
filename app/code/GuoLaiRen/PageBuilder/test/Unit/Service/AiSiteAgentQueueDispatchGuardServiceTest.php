@@ -40,6 +40,11 @@ final class SpySseWriterForQueueDispatchGuard extends SseWriter
 
 final class AiSiteAgentQueueDispatchGuardServiceTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        self::markTestSkipped('Direct queue dispatch guard has been removed; PageBuilder queues are system-scheduler owned.');
+    }
+
     private function service(): AiSiteAgentQueueDispatchGuardService
     {
         return new AiSiteAgentQueueDispatchGuardService();

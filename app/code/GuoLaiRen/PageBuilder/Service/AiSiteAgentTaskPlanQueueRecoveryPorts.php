@@ -39,16 +39,12 @@ final class AiSiteAgentTaskPlanQueueRecoveryPorts
         public readonly \Closure $mergeSessionScope,
         /** @var \Closure(int $sessionId, int $adminId): ?\GuoLaiRen\PageBuilder\Model\AiSiteAgentSession 根据 id 重载 session */
         public readonly \Closure $loadSession,
-        /** @var \Closure(\GuoLaiRen\PageBuilder\Model\AiSiteAgentSession $session, int $adminId, string $operation, int $queueId, string $executionToken, bool $force): array ensureAiSiteQueueWorkerDispatched 返回 `{started, attempted, pid, ...}` */
-        public readonly \Closure $ensureWorkerDispatched,
         /** @var \Closure(\GuoLaiRen\PageBuilder\Model\AiSiteAgentSession $session, array $activeOperation, string $operation): array 构建 stage queue info payload（含 snapshot） */
         public readonly \Closure $buildQueueInfoPayload,
         /** @var \Closure(string $event, array $data, string $level='info'): void 记录 operation SSE 日志 */
         public readonly \Closure $logSse,
         /** @var \Closure(string $operation): string operation→stage 映射 */
         public readonly \Closure $resolveQueueStage,
-        /** @var \Closure(int $queueId, array $patch): void 通过 w_query('queue','update',...) 打补丁 */
-        public readonly \Closure $updateQueueRow,
     ) {
     }
 }

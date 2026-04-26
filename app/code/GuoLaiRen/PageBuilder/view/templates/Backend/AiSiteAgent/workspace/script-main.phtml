@@ -197,6 +197,63 @@
             : {};
     }
 
+    function getLatestWorkspaceStateForQueuePrompt() {
+        if (window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object') {
+            return window.__pbWorkspaceState;
+        }
+        if (latestWorkspaceState && typeof latestWorkspaceState === 'object') {
+            return latestWorkspaceState;
+        }
+        if (window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object') {
+            return window.__pbLastWorkspaceState;
+        }
+        return initialWorkspaceState && typeof initialWorkspaceState === 'object' ? initialWorkspaceState : {};
+    }
+
+    function normalizeQueueStatusForPrompt(status) {
+        return String(status || '').trim().toLowerCase();
+    }
+
+    function isQueueStatusBlockingTaskPlanPrompt(status) {
+        return ['pending', 'queued', 'running', 'processing'].indexOf(normalizeQueueStatusForPrompt(status)) !== -1;
+    }
+
+    function readQueueStatusForPrompt(queueInfo) {
+        var info = queueInfo && typeof queueInfo === 'object' ? queueInfo : {};
+        var snapshot = info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
+        return normalizeQueueStatusForPrompt(
+            snapshot.job_status
+            || snapshot.status
+            || snapshot.queue_status
+            || info.job_status
+            || info.status
+            || info.queue_status
+            || ''
+        );
+    }
+
+    function hasBlockingQueueForTaskPlanGeneratePrompt() {
+        var state = getLatestWorkspaceStateForQueuePrompt();
+        var hasStateActiveOperation = Object.prototype.hasOwnProperty.call(state, 'active_operation');
+        var active = hasStateActiveOperation
+            ? (state.active_operation && typeof state.active_operation === 'object' ? state.active_operation : {})
+            : (currentActiveOperationState && typeof currentActiveOperationState === 'object' ? currentActiveOperationState : {});
+        var activeStatus = normalizeQueueStatusForPrompt(active.status);
+        if (isQueueStatusBlockingTaskPlanPrompt(activeStatus)) {
+            return true;
+        }
+        if (!!isOperationRunning && !hasStateActiveOperation && activeStatus === '') {
+            return true;
+        }
+        return [
+            state.plan_queue_info,
+            state.task_plan_queue_info,
+            state.build_queue_info
+        ].some(function (queueInfo) {
+            return isQueueStatusBlockingTaskPlanPrompt(readQueueStatusForPrompt(queueInfo));
+        });
+    }
+
     function hasServerPersistedPhaseTwoTaskPlan() {
         var decision = getTaskPlanStageEntryDecision();
         if (Object.prototype.hasOwnProperty.call(decision, 'has_phase_two_task_plan')) {
@@ -505,6 +562,9 @@
         setText('.pb-guided-domain-sidebar .fw-semibold.mt-2.small', <?= \json_encode((string)__('购买域名'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         setText('#pb-ai-recommend-domain-btn', <?= \json_encode((string)__('推荐域名'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         setText('#pb-ai-purchase-domain-btn', <?= \json_encode((string)__('购买域名'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        if (stageCards[2]) {
+            stageCards[2].textContent = <?= \json_encode((string)__('站点构建'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
+        }
         setText('label[for="pb-ai-target-domain"]', messages.targetDomainRequiredLabel);
         setPlaceholder('#pb-ai-target-domain', messages.targetDomainRequiredPlaceholder);
         var sessionBox = guidedRoot.querySelector('.pb-guided-sidebar .summary-grid');
@@ -893,7 +953,8 @@
     function shouldOpenTaskPlanGeneratePromptOnce() {
         return !taskPlanGeneratePromptInFlight
             && !taskPlanGeneratePromptHandled
-            && shouldPromptTaskPlanGenerateFromServer();
+            && shouldPromptTaskPlanGenerateFromServer()
+            && !hasBlockingQueueForTaskPlanGeneratePrompt();
     }
 
     function promptGenerateTaskPlanOnStageEnter() {
@@ -901,6 +962,9 @@
             return Promise.resolve(false);
         }
         if (!shouldOpenTaskPlanGeneratePromptOnce()) {
+            return Promise.resolve(false);
+        }
+        if (hasBlockingQueueForTaskPlanGeneratePrompt()) {
             return Promise.resolve(false);
         }
         taskPlanGeneratePromptInFlight = true;
@@ -1126,6 +1190,8 @@
         taskPlanConfirmStartBuildQuestion: <?= \json_encode((string)__('阶段二任务计划已保存，是否立即开始构建？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         continueGenerateNow: <?= \json_encode((string)__('继续生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         continueGenerateLater: <?= \json_encode((string)__('稍后继续'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        continueObserveNow: <?= \json_encode((string)__('继续观察'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        continueObserveLater: <?= \json_encode((string)__('关闭继续操作'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         immediateGenerate: <?= \json_encode((string)__('立即生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         laterGenerate: <?= \json_encode((string)__('稍后生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanDeferred: <?= \json_encode((string)__('已保留当前第二阶段草稿，稍后可以继续。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1154,7 +1220,7 @@
         taskPlanRunningMutationWarningTitle: <?= \json_encode((string)__('检测到任务正在运行'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanRunningMutationWarningMessage: <?= \json_encode((string)__('检测到仍有任务在运行，继续保存可能覆盖当前中间态，是否继续？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         resumePromptTitle: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        resumeRunningPrompt: <?= \json_encode((string)__('检测到有正在执行的工作区操作，是否继续观察执行流？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        resumeRunningPrompt: <?= \json_encode((string)__('检测到有正在执行的工作区队列，可继续观察执行流；队列由系统调度执行，也可以关闭窗口继续操作其他内容。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         resumePendingPrompt: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         resumeDeferred: <?= \json_encode((string)__('已保留当前任务，稍后可以继续。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         resumeStarted: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1189,9 +1255,9 @@
         blockSseRebuildAwaitingConfirm: <?= \json_encode((string)__('区块重建等待确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editUnavailable: <?= \json_encode((string)__('当前区块暂时无法打开可视化编辑弹窗。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editSaved: <?= \json_encode((string)__('区块字段已更新，已刷新当前块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        blockSseDoneConfirm: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        blockSseNoResult: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        blockSseApplied: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseDoneConfirm: <?= \json_encode((string)__('区块生成已完成，但未返回可立即刷新的区块结果。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseNoResult: <?= \json_encode((string)__('未找到当前区块的新结果，请稍后刷新预览重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseApplied: <?= \json_encode((string)__('当前区块已自动刷新。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         buildPreparing: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         buildReady: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         operationDuplicateStream: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1311,7 +1377,8 @@
         publishCheckItemOk: <?= \json_encode((string)__('已通过'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishCheckItemFail: <?= \json_encode((string)__('仍需修复'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishCheckConfirmStarting: <?= \json_encode((string)__('正在提交发布请求，请稍候...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        publishCheckConfirmPrompt: <?= \json_encode((string)__('确认将当前站点正式发布？发布后会覆盖原有线上站点内容。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+        publishCheckConfirmPrompt: <?= \json_encode((string)__('确认将当前站点正式发布？发布后会覆盖原有线上站点内容。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishCheckConfirmAction: <?= \json_encode((string)__('确认发布'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
     };
 
     var lastToastByKey = {};
@@ -4391,7 +4458,6 @@
         var titleEl = document.getElementById('pb-ai-block-sse-modal-title');
         var contextEl = document.getElementById('pb-ai-block-sse-context');
         var startBtn = document.getElementById('pb-ai-block-sse-confirm-start');
-        var applyBtn = document.getElementById('pb-ai-block-sse-apply');
         var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-block-sse-terminal'] : null;
         if (!modalEl || !terminal) {
             toast('error', messages.blockSseUnavailable);
@@ -4431,10 +4497,6 @@
             startBtn.classList.remove('d-none');
             startBtn.disabled = false;
         }
-        if (applyBtn) {
-            applyBtn.classList.add('d-none');
-            applyBtn.disabled = true;
-        }
         if (terminal.log) {
             terminal.log(options.pendingLogMessage || messages.blockSseStartPending, 'info');
         }
@@ -4457,10 +4519,6 @@
                 startBtn.disabled = true;
             }
             var applied = applyPendingBlockSseResult({ notify: true });
-            if (applyBtn) {
-                applyBtn.classList.toggle('d-none', applied);
-                applyBtn.disabled = applied;
-            }
             if (contextEl) {
                 contextEl.textContent = applied ? messages.blockSseApplied : messages.blockSseDoneConfirm;
             }
@@ -4585,25 +4643,11 @@
     (function initBlockSseModal() {
         var modalEl = document.getElementById('pb-ai-block-sse-modal');
         var startBtn = document.getElementById('pb-ai-block-sse-confirm-start');
-        var applyBtn = document.getElementById('pb-ai-block-sse-apply');
         if (!modalEl) {
             return;
         }
         if (startBtn) {
             startBtn.addEventListener('click', confirmPendingBlockSseStart);
-        }
-        if (applyBtn) {
-            applyBtn.addEventListener('click', function () {
-                if (!applyPendingBlockSseResult({ notify: true })) {
-                    return;
-                }
-                applyBtn.classList.add('d-none');
-                applyBtn.disabled = true;
-                var modalInstance = resolveBootstrapModalInstance(modalEl);
-                if (modalInstance && typeof modalInstance.hide === 'function') {
-                    modalInstance.hide();
-                }
-            });
         }
         modalEl.addEventListener('hidden.bs.modal', function () {
             var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-block-sse-terminal'] : null;
@@ -4615,10 +4659,6 @@
             if (startBtn) {
                 startBtn.classList.add('d-none');
                 startBtn.disabled = true;
-            }
-            if (applyBtn) {
-                applyBtn.classList.add('d-none');
-                applyBtn.disabled = true;
             }
             clearBlockStreamingState();
         });
@@ -11135,7 +11175,11 @@
                     setTaskPlanModeStatus(taskPlanConfirmedState ? messages.taskPlanConfirmSaved : messages.taskPlanGenerated);
                     return;
                 }
-                if (!needConfirm || !shouldOpenTaskPlanGeneratePromptOnce()) {
+                if (
+                    !needConfirm
+                    || !shouldOpenTaskPlanGeneratePromptOnce()
+                    || hasBlockingQueueForTaskPlanGeneratePrompt()
+                ) {
                     return;
                 }
                 taskPlanGeneratePromptInFlight = true;
@@ -11780,9 +11824,20 @@
     }
 
     function getTaskSummarySnapshotFromState(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : (
+                latestWorkspaceState && typeof latestWorkspaceState === 'object'
+                    ? latestWorkspaceState
+                    : (
+                        window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object'
+                            ? window.__pbLastWorkspaceState
+                            : (initialWorkspaceState && typeof initialWorkspaceState === 'object' ? initialWorkspaceState : {})
+                    )
+            );
         var summary = null;
-        if (workspaceState && typeof workspaceState === 'object' && workspaceState.build_task_summary && typeof workspaceState.build_task_summary === 'object') {
-            summary = workspaceState.build_task_summary;
+        if (state && typeof state === 'object' && state.build_task_summary && typeof state.build_task_summary === 'object') {
+            summary = state.build_task_summary;
         }
         if (!summary && window.__pbTaskSummary && typeof window.__pbTaskSummary === 'object') {
             summary = window.__pbTaskSummary;
@@ -11950,8 +12005,8 @@
             if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
                 window.BackendConfirm.show(confirmMessage, {
                     title: messages.resumePromptTitle,
-                    confirmText: messages.continueGenerateNow || messages.immediateGenerate,
-                    cancelText: messages.continueGenerateLater || messages.laterGenerate
+                    confirmText: messages.continueObserveNow || messages.continueGenerateNow || messages.immediateGenerate,
+                    cancelText: messages.continueObserveLater || messages.continueGenerateLater || messages.laterGenerate
                 }).then(function (confirmed) {
                     if (!confirmed) {
                         toast('info', messages.resumeDeferred);
@@ -12352,15 +12407,20 @@
                     }
                 }
                 if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-                    window.BackendConfirm.show({
-                        title: messages.publishCheckModalTitle || '',
-                        message: messages.publishCheckConfirmPrompt || '',
-                        confirmLabel: messages.publishCheckModalTitle || '',
-                        type: 'warning',
-                        onConfirm: proceed
-                    });
-                } else if (window.confirm(messages.publishCheckConfirmPrompt || '')) {
-                    proceed();
+                    var confirmTitle = String(messages.publishCheckModalTitle || '发布前预检清单');
+                    var confirmMessage = String(messages.publishCheckConfirmPrompt || '确认将当前站点正式发布？发布后会覆盖原有线上站点内容。');
+                    var confirmAction = String(messages.publishCheckConfirmAction || '确认发布');
+                    window.BackendConfirm.show(confirmMessage, {
+                        title: confirmTitle,
+                        confirmText: confirmAction,
+                        type: 'warning'
+                    }).then(function (confirmed) {
+                        if (confirmed) {
+                            proceed();
+                        }
+                    }).catch(function () {});
+                } else {
+                    toast('error', messages.publishStartUnavailable || messages.networkError);
                 }
             });
         }

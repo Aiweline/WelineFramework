@@ -8,6 +8,7 @@ use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
+use GuoLaiRen\PageBuilder\Service\AiSitePreviewLinkRewriteService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualLayoutService;
 use GuoLaiRen\PageBuilder\Service\LayoutAssembler;
 use GuoLaiRen\PageBuilder\Service\PageRenderService;
@@ -37,6 +38,7 @@ class Preview extends BackendController
     private Style $styleModel;
     private LayoutAssembler $layoutAssembler;
     private PageRenderService $pageRenderService;
+    private ?AiSitePreviewLinkRewriteService $previewLinkRewriteService = null;
 
     public function __construct(
         Page $pageModel,
@@ -389,6 +391,13 @@ class Preview extends BackendController
                 );
                 if ($isVisualEditor) {
                     $html = $this->injectVisualEditorNavLinks($html, $page);
+                } else {
+                    $html = $this->getPreviewLinkRewriteService()->rewriteVirtualPreviewLinks(
+                        $html,
+                        (string)($virtualContext['public_id'] ?? $previewPublicId),
+                        \is_array($page->getData('virtual_pages_by_type')) ? $page->getData('virtual_pages_by_type') : [],
+                        $resolvedThemeId
+                    );
                 }
 
                 $headers = [
@@ -435,6 +444,12 @@ class Preview extends BackendController
         );
         if ($isVisualEditor) {
             $html = $this->injectVisualEditorNavLinks($html, $page);
+        } else {
+            $html = $this->getPreviewLinkRewriteService()->rewriteMaterializedPreviewLinks(
+                $html,
+                $this->getNavPagesForVisualEditor($page),
+                $virtualThemeId
+            );
         }
         // 通过终止异常直接输出完整 HTML，避免被主题/布局包裹导致 header 等组件被塞进后台 layout 的 body
         $headers = [
@@ -679,6 +694,15 @@ SCRIPT;
         }
 
         return $result;
+    }
+
+    private function getPreviewLinkRewriteService(): AiSitePreviewLinkRewriteService
+    {
+        if ($this->previewLinkRewriteService === null) {
+            $this->previewLinkRewriteService = ObjectManager::getInstance(AiSitePreviewLinkRewriteService::class);
+        }
+
+        return $this->previewLinkRewriteService;
     }
 
     /**
