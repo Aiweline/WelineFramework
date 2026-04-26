@@ -3026,7 +3026,8 @@ function sendResponseAndCleanup(
 
     WlsLogger::flush_(true);
 
-    $shouldClose = $isSseMode || !$keepAlive || $ipcDraining || $forceCloseAfterResponse;
+    $responseRequestsClose = \Weline\Server\Service\WorkerResponseMemoryGuard::responseRequestsConnectionClose($response);
+    $shouldClose = $isSseMode || !$keepAlive || $ipcDraining || $forceCloseAfterResponse || $responseRequestsClose;
     if ($shouldClose) {
         $hasBufferedData = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
 
