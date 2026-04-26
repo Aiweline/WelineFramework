@@ -3028,7 +3028,7 @@ SCRIPT;
                 'component_code' => (string)($componentCodes[0] ?? ''),
                 'component_codes' => $componentCodes,
                 'queue_id' => (int)($started['queue_id'] ?? 0),
-                'message' => 'Block AI operation was queued and is waiting for the system scheduler.',
+                'message' => '区块 AI 操作已加入队列，正在等待系统调度执行。',
                 'queue_wait' => $queueWait,
             ]);
             if (\trim((string)($queueWait['message'] ?? '')) !== '') {
@@ -7732,6 +7732,8 @@ SCRIPT;
             'queue_id' => $queueId,
             'job_key' => $jobKey,
             'job_type' => $jobType,
+            'require_event_correlation' => $this->supportsBackgroundOperation($operation)
+                && ($operationToken !== '' || $queueId > 0 || $jobKey !== '' || $jobType !== ''),
             'require_error_correlation' => $this->supportsBackgroundOperation($operation)
                 && ($operationToken !== '' || $queueId > 0 || $jobKey !== '' || $jobType !== ''),
         ];
