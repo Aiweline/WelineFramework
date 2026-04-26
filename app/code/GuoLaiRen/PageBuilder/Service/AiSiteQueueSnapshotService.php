@@ -80,10 +80,7 @@ class AiSiteQueueSnapshotService
             }
         }
 
-        $effectiveJobStatus = $jobStatus !== '' ? $jobStatus : $status;
-        if (\in_array($status, ['error', 'done', 'stop', 'cancelled'], true)) {
-            $effectiveJobStatus = $status;
-        }
+        $effectiveJobStatus = $status !== '' ? $status : $jobStatus;
 
         return [
             'queue_id' => $queueId,

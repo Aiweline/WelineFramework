@@ -62,13 +62,41 @@ class RequestLifecycleTraceTest extends TestCase
         self::assertFalse(RequestLifecycleTrace::shouldSkipForCurrentRequest());
     }
 
+    public function testMaxSpanCapClearsBufferedSpansAndDisablesRecordingUntilReset(): void
+    {
+        Context::enter(new Context([
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+        $this->setStaticProperty('maxSpansCapCache', 1);
+        $this->setStaticProperty('maxSpansLogged', true);
+
+        RequestLifecycleTrace::recordSpan('first', 1.0);
+        self::assertCount(1, RequestLifecycleTrace::getSpans());
+
+        RequestLifecycleTrace::recordSpan('second', 1.0);
+        self::assertSame([], RequestLifecycleTrace::getSpans());
+
+        RequestLifecycleTrace::recordSpan('third', 1.0);
+        self::assertSame([], RequestLifecycleTrace::getSpans());
+
+        RequestLifecycleTrace::reset();
+        $this->setStaticProperty('maxSpansCapCache', 1);
+        RequestLifecycleTrace::recordSpan('after_reset', 1.0);
+        self::assertCount(1, RequestLifecycleTrace::getSpans());
+    }
+
     /**
      * @param array<int, array<string, mixed>> $spans
      */
     private function setSpans(array $spans): void
     {
-        $property = new \ReflectionProperty(RequestLifecycleTrace::class, 'spans');
+        $this->setStaticProperty('spans', $spans);
+    }
+
+    private function setStaticProperty(string $name, mixed $value): void
+    {
+        $property = new \ReflectionProperty(RequestLifecycleTrace::class, $name);
         $property->setAccessible(true);
-        $property->setValue(null, $spans);
+        $property->setValue(null, $value);
     }
 }

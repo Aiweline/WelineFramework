@@ -11,17 +11,20 @@ final class AiSiteQualityGateService
 {
     private readonly AiSiteBuildTaskService $buildTaskService;
     private readonly AiSiteScopeCompatibilityService $scopeCompatibilityService;
+    private readonly AiSiteVirtualLayoutService $virtualLayoutService;
     private readonly PageRenderService $pageRenderService;
     private readonly Page $pageModel;
 
     public function __construct(
         ?AiSiteBuildTaskService $buildTaskService = null,
         ?AiSiteScopeCompatibilityService $scopeCompatibilityService = null,
+        ?AiSiteVirtualLayoutService $virtualLayoutService = null,
         ?PageRenderService $pageRenderService = null,
         ?Page $pageModel = null
     ) {
         $this->buildTaskService = $buildTaskService ?? ObjectManager::getInstance(AiSiteBuildTaskService::class);
         $this->scopeCompatibilityService = $scopeCompatibilityService ?? ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
+        $this->virtualLayoutService = $virtualLayoutService ?? ObjectManager::getInstance(AiSiteVirtualLayoutService::class);
         $this->pageRenderService = $pageRenderService ?? ObjectManager::getInstance(PageRenderService::class);
         $this->pageModel = $pageModel ?? ObjectManager::getInstance(Page::class);
     }
@@ -36,6 +39,7 @@ final class AiSiteQualityGateService
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $pagesByType = $this->resolvePagesByType($scope);
         $renderVirtualThemeId = $this->resolveRenderVirtualThemeId($scope);
+        $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
         $pageReports = [];
 
         $allTasksDone = !$this->buildTaskService->hasPendingTasks($scope);
@@ -53,22 +57,43 @@ final class AiSiteQualityGateService
             $layout = [];
             $renderError = '';
 
+            if (
+                $html === ''
+                && $workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
+                && $renderVirtualThemeId > 0
+            ) {
+                try {
+                    $virtualRender = $this->renderVirtualThemePageForInspection($pageType, $scope, $renderVirtualThemeId);
+                    $html = $virtualRender['html'];
+                    $layout = $virtualRender['layout'];
+                } catch (\Throwable $throwable) {
+                    $renderError = $throwable->getMessage();
+                }
+            }
+
             if ($html === '' && $pageId > 0) {
                 try {
                     $page = clone $this->pageModel;
                     $page->clearData()->clearQuery()->load($pageId);
                     if ($page->getId() > 0) {
                         $layout = $page->getAiLayoutArray();
+                        // Pre-publish checks must inspect the current AI draft, not a stale live snapshot.
+                        $renderMode = $page->isAiHtmlRenderMode()
+                            ? PageRenderService::MODE_PREVIEW
+                            : PageRenderService::MODE_LIVE;
                         $html = $this->pageRenderService->render(
                             $page,
-                            PageRenderService::MODE_LIVE,
+                            $renderMode,
                             null,
                             null,
                             $renderVirtualThemeId > 0 ? $renderVirtualThemeId : null
                         );
+                        $renderError = '';
                     }
                 } catch (\Throwable $throwable) {
-                    $renderError = $throwable->getMessage();
+                    if ($renderError === '') {
+                        $renderError = $throwable->getMessage();
+                    }
                 }
             }
 
@@ -132,7 +157,7 @@ final class AiSiteQualityGateService
     ): array {
         $layoutJson = (string)\json_encode($layout, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
         $combined = $html . "\n" . $layoutJson;
-        $badMatches = $this->matchBadContent($html);
+        $badMatches = $this->matchBadContent($this->stripNonVisibleQualityGateHtml($html));
         $brokenImages = $this->matchBrokenImages($combined);
         $legacyBlocks = $this->matchLegacyDefaultBlocks($layout);
         $stageOneHits = $this->matchStageOneContent($pageType, $html, $scope);
@@ -167,6 +192,80 @@ final class AiSiteQualityGateService
 
     /**
      * @param array<string, mixed> $scope
+     * @return array{html:string,layout:array<string,mixed>}
+     */
+    private function renderVirtualThemePageForInspection(string $pageType, array $scope, int $virtualThemeId): array
+    {
+        $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
+        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
+        if (!\is_array($virtualPages[$pageType] ?? null)) {
+            $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
+        }
+        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
+        if ($virtualPage === []) {
+            throw new \RuntimeException('Virtual page is missing for publish quality inspection: ' . $pageType);
+        }
+
+        $layout = $this->virtualLayoutService->getResolvedLayout($virtualThemeId, $pageType);
+        if ($layout === [] && \is_array($scope['page_type_layouts'][$pageType] ?? null)) {
+            $layout = $this->scopeCompatibilityService->normalizeLayoutConfig(
+                $scope['page_type_layouts'][$pageType],
+                $pageType
+            );
+        }
+
+        $styleCode = \trim((string)($virtualPage['style_code'] ?? 'default'));
+        $styleCode = $styleCode !== '' ? $styleCode : 'default';
+        $locale = \trim((string)($virtualPage['locale'] ?? \Weline\Framework\App\State::getLang()));
+        $locale = $locale !== '' ? $locale : \Weline\Framework\App\State::getLang();
+        $virtualBlocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+        $renderMode = $virtualBlocks === [] ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;
+
+        $page = ObjectManager::make(Page::class);
+        $page->setData([
+            Page::schema_fields_ID => 0,
+            Page::schema_fields_WEBSITE_ID => (int)($scope['draft_website_id'] ?? ($scope['website_id'] ?? 0)),
+            Page::schema_fields_PARENT_ID => $pageType === Page::TYPE_HOME ? 0 : 1,
+            Page::schema_fields_LAYOUT_PAGE_ID => 0,
+            Page::schema_fields_STATUS => Page::STATUS_DRAFT,
+            Page::schema_fields_TITLE => (string)($virtualPage['title'] ?? ''),
+            Page::schema_fields_NAME => (string)($virtualPage['title'] ?? ''),
+            Page::schema_fields_HANDLE => (string)($virtualPage['handle'] ?? ''),
+            Page::schema_fields_STYLE => $styleCode,
+            Page::schema_fields_TYPE => $pageType,
+            Page::schema_fields_CONTENT => '',
+            Page::schema_fields_META_TITLE => (string)($virtualPage['meta_title'] ?? ''),
+            Page::schema_fields_META_DESCRIPTION => (string)($virtualPage['meta_description'] ?? ''),
+            Page::schema_fields_META_KEYWORDS => (string)($virtualPage['meta_keywords'] ?? ''),
+            Page::schema_fields_AI_DESCRIPTION => (string)($virtualPage['ai_description'] ?? ''),
+            Page::schema_fields_LOCALES => \json_encode([$locale], \JSON_UNESCAPED_UNICODE),
+            Page::schema_fields_DEFAULT_LOCALE => $locale,
+            Page::schema_fields_STYLE_SETTING => \json_encode([
+                $styleCode => \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [],
+            ], \JSON_UNESCAPED_UNICODE),
+            Page::schema_fields_LAYOUT_CONFIG => \json_encode($layout, \JSON_UNESCAPED_UNICODE),
+            Page::schema_fields_RENDER_MODE => $renderMode,
+            Page::schema_fields_AI_LAYOUT => \json_encode(['blocks' => $virtualBlocks], \JSON_UNESCAPED_UNICODE),
+        ]);
+        $page->setData('virtual_theme_id', $virtualThemeId);
+        $page->setData('virtual_page_type', $pageType);
+        $page->setData('virtual_layout_config', $layout);
+        $page->setData('virtual_pages_by_type', $virtualPages);
+
+        return [
+            'html' => $this->pageRenderService->render(
+                $page,
+                PageRenderService::MODE_PREVIEW,
+                $locale,
+                $styleCode,
+                $virtualThemeId
+            ),
+            'layout' => $layout,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
      * @return array<string, array<string, mixed>>
      */
     private function resolvePagesByType(array $scope): array
@@ -190,6 +289,15 @@ final class AiSiteQualityGateService
         return \max(0, (int)($scope['virtual_theme_id'] ?? 0));
     }
 
+    private function stripNonVisibleQualityGateHtml(string $html): string
+    {
+        $html = \preg_replace('/<!--.*?-->/s', '', $html) ?? $html;
+        $html = \preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html) ?? $html;
+        $html = \preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $html) ?? $html;
+
+        return $html;
+    }
+
     /**
      * @return list<string>
      */
@@ -202,6 +310,7 @@ final class AiSiteQualityGateService
             '/AI content placeholder|ai-empty|placeholder content|placeholder/iu',
             '/demo|example\.com|placeholder\.com|placehold\.co|via\.placeholder|dummyimage\.com|picsum\.photos/iu',
             '/Generated visual|inline SVG|Visual preview generated/iu',
+            '/Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent/iu',
         ];
         $matches = [];
         foreach ($patterns as $pattern) {
