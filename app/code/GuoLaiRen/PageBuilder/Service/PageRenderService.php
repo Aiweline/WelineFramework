@@ -58,7 +58,10 @@ class PageRenderService
 
     /** 当前 render() 调用内生效的 Weline 主题层 ID（用于 ThemeComponent 虚拟部件回退），0 表示关闭 */
     private int $renderWelineThemeId = 0;
-    
+
+    /** ai_html + virtual_theme_id 时 visual 模式注入到整页 head 的片段 */
+    private string $aiThemeShellHeadInject = '';
+
     public function __construct(
         LayoutAssembler $layoutAssembler,
         LayoutOwnerResolver $layoutOwnerResolver,
@@ -152,9 +155,11 @@ class PageRenderService
         // 重置模板变量
         $this->templateVars = [];
         try {
-        if ($page->isAiHtmlRenderMode()) {
+        $this->aiThemeShellHeadInject = '';
+        if ($page->isAiHtmlRenderMode() && $this->renderWelineThemeId <= 0) {
             return $this->aiHtmlRenderService->render($page, $mode, $locale);
         }
+        $aiWithVirtualThemeShell = $page->isAiHtmlRenderMode() && $this->renderWelineThemeId > 0;
 
         // 获取样式代码
         $styleCode = $tempStyleCode ?: ($page->getData('style') ?: 'default');
@@ -262,19 +267,46 @@ class PageRenderService
             !empty($layoutConfig['content']) || 
             !empty($layoutConfig['footer'])
         );
-        
+        if ($aiWithVirtualThemeShell && !$useComponentRendering && $pageType) {
+            $fallback = $this->getDefaultLayoutConfigForPageType($styleCode, (string)$pageType);
+            if (!empty($fallback['header']) || !empty($fallback['footer'])) {
+                if (empty($layoutConfig['header']) && !empty($fallback['header'])) {
+                    $layoutConfig['header'] = $fallback['header'];
+                }
+                if (empty($layoutConfig['footer']) && !empty($fallback['footer'])) {
+                    $layoutConfig['footer'] = $fallback['footer'];
+                }
+                $this->assign('layout_config', $layoutConfig);
+                $useComponentRendering = !empty($layoutConfig['header'])
+                    || !empty($layoutConfig['content'])
+                    || !empty($layoutConfig['footer']);
+            }
+        }
+
         // 调试信息
         $debugInfo = $this->buildDebugInfo($useComponentRendering, $layoutConfig);
         
         if ($useComponentRendering) {
             // 使用组件化渲染
             $headerHtml = $this->renderRegion('header', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode);
-            $contentHtml = $this->renderRegion('content', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode, $localizedContent);
+            if ($aiWithVirtualThemeShell) {
+                $frag = $this->aiHtmlRenderService->buildFragmentForThemeShell($page, $mode, $locale);
+                $contentHtml = $frag['content_html'];
+                $this->aiThemeShellHeadInject = $frag['head_inject'] ?? '';
+            } else {
+                $contentHtml = $this->renderRegion('content', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode, $localizedContent);
+            }
             $footerHtml = $this->renderRegion('footer', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode);
         } else {
             // 使用传统渲染方式
             $headerHtml = $this->fetch("{$stylePath}/header.phtml");
-            $contentHtml = $this->renderTraditionalContent($page, $stylePath, $localizedContent);
+            if ($aiWithVirtualThemeShell) {
+                $frag = $this->aiHtmlRenderService->buildFragmentForThemeShell($page, $mode, $locale);
+                $contentHtml = $frag['content_html'];
+                $this->aiThemeShellHeadInject = $frag['head_inject'] ?? '';
+            } else {
+                $contentHtml = $this->renderTraditionalContent($page, $stylePath, $localizedContent);
+            }
             $footerHtml = $this->fetch("{$stylePath}/footer.phtml");
         }
         
@@ -286,6 +318,7 @@ class PageRenderService
         return $this->finalizeOutput($headerHtml, $contentHtml, $footerHtml, $debugInfo, $page, $styleCode, $mode);
         } finally {
             $this->renderWelineThemeId = $savedWelineThemeId;
+            $this->aiThemeShellHeadInject = '';
         }
     }
 
@@ -1164,7 +1197,7 @@ class PageRenderService
 
         return '<div class="component-actions" data-page-type="' . $pageType . '" data-component="' . $escapedCode . '" data-region="' . $escapedRegion . '" data-index="' . $escapedIndex . '">'
             . '<button type="button" class="component-action-btn component-action-refine" data-pb-action="refine" title="AI 微调当前区块">AI 微调</button>'
-            . '<button type="button" class="component-action-btn component-action-editor" data-pb-action="open-editor" title="打开当前页真实编辑器">编辑器</button>'
+            . '<button type="button" class="component-action-btn component-action-editor" data-pb-action="edit-block" title="编辑当前区块字段">编辑</button>'
             . '</div>';
     }
     
@@ -1177,7 +1210,7 @@ class PageRenderService
 
         return '<div class="component-actions" data-page-type="' . $pageType . '" data-component="' . $escapedCode . '" data-region="' . $escapedRegion . '" data-index="' . $escapedIndex . '">'
             . '<button type="button" class="component-action-btn component-action-refine" data-pb-action="refine" title="AI 微调当前区块">AI 微调</button>'
-            . '<button type="button" class="component-action-btn component-action-editor" data-pb-action="open-editor" title="打开当前页真实编辑器">编辑器</button>'
+            . '<button type="button" class="component-action-btn component-action-editor" data-pb-action="edit-block" title="编辑当前区块字段">编辑</button>'
             . '</div>';
     }
 
@@ -1409,13 +1442,14 @@ class PageRenderService
             })();</script>';
         }
         
+        $extraHead = $this->aiThemeShellHeadInject;
         if ($mode === self::MODE_VISUAL) {
             // 可视化编辑器模式：添加插槽容器和拖拽支持
-            return $this->renderVisualMode($headerHtml, $contentHtml, $footerHtml, $debugInfo, $previewBoot, $page, $styleCode);
+            return $this->renderVisualMode($headerHtml, $contentHtml, $footerHtml, $debugInfo, $previewBoot, $page, $styleCode, $extraHead);
         }
         
         // preview 和 live 模式：输出完整 HTML 文档
-        return $this->renderLiveOrPreviewDocument($headerHtml, $contentHtml, $footerHtml, $previewBoot, $page, $styleCode);
+        return $this->renderLiveOrPreviewDocument($headerHtml, $contentHtml, $footerHtml, $previewBoot, $page, $styleCode, $extraHead);
     }
     
     /**
@@ -1431,7 +1465,8 @@ class PageRenderService
         string $debugInfo,
         string $previewBoot,
         Page $page,
-        string $styleCode
+        string $styleCode,
+        string $aiHtmlExtraHead = ''
     ): string {
         $dropZoneStyles = $this->getDropZoneStyles();
         
@@ -1464,6 +1499,7 @@ class PageRenderService
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>' . htmlspecialchars($pageTitle) . '</title>
+    ' . $aiHtmlExtraHead . '
     <link rel="stylesheet" href="' . htmlspecialchars($baseCssUrl, ENT_QUOTES, 'UTF-8') . '">
     ' . $dropZoneStyles . '
     <style>
@@ -1492,7 +1528,8 @@ class PageRenderService
         string $footerHtml,
         string $previewBoot,
         Page $page,
-        string $styleCode
+        string $styleCode,
+        string $aiHtmlExtraHead = ''
     ): string {
         $headerResult = $this->cleanHtmlDocumentTagsAndExtractStyles($headerHtml);
         $contentResult = $this->cleanHtmlDocumentTagsAndExtractStyles($contentHtml);
@@ -1522,6 +1559,7 @@ class PageRenderService
         $headContent = '    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>' . htmlspecialchars($pageTitle) . '</title>
+    ' . $aiHtmlExtraHead . '
     ' . $baseCssLink . '
     ' . $headStyles . '
     <style>
