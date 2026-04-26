@@ -72,6 +72,7 @@ class Connector extends BackendController
 
         $this->request->getResponse()->setHeader('Content-Type', $contentType);
         $this->request->getResponse()->setHeader('Content-Length', (string) \strlen($json));
+        $this->request->getResponse()->setHeader('Connection', 'close');
         return $json;
     }
 
@@ -144,6 +145,7 @@ class Connector extends BackendController
             'Content-Type' => $contentType,
             'Content-Length' => (string) $fileSize,
             'Content-Disposition' => 'inline',
+            'Connection' => 'close',
         ];
         if ($cacheControl) {
             $headers['Cache-Control'] = $cacheControl;

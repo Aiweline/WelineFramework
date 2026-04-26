@@ -118,7 +118,11 @@ class WlsResponseEmitter implements ResponseEmitterInterface
         }
         
         // Content-Length
-        $result .= "Content-Length: " . \strlen($body) . "\r\n";
+        $contentType = (string)($headerCollector->getHeader('Content-Type') ?? '');
+        if (!\str_contains(\strtolower($contentType), 'text/event-stream')
+            && !$headerCollector->hasHeader('Content-Length')) {
+            $result .= "Content-Length: " . \strlen($body) . "\r\n";
+        }
         // Keep-Alive 默认开启，避免在 HTTPS 下每个资源都重复握手。
         // 若业务已显式设置 Connection 头，则以业务头为准。
         $headers = $headerCollector->getHeaders();

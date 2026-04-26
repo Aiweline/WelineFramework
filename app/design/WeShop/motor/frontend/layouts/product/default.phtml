@@ -29,7 +29,12 @@ $reviewCount = $product['review_count'] ?? 0;
         </div>
         <w:hook>WeShop_Product::detail::breadcrumb_after</w:hook>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12"
+             data-wslot="product-main"
+             data-wslot-name="Product Main"
+             data-wslot-accept="product-gallery,product-info,product-options,add-to-cart"
+             data-wslot-multiple="true"
+             data-wslot-position="content">
             <div class="flex flex-col gap-4">
                 <w:hook>WeShop_Product::detail::gallery_before</w:hook>
                 <div class="relative w-full aspect-square bg-gray-100 dark:bg-gray-800 rounded overflow-hidden motor-product-gallery" id="main-product-image">
@@ -174,7 +179,12 @@ $reviewCount = $product['review_count'] ?? 0;
                data-wslot-accept="content,banner,product,review"
                data-wslot-multiple="true"></aside>
 
-        <div class="mt-12">
+        <div class="mt-12"
+             data-wslot="product-tabs"
+             data-wslot-name="Product Tabs"
+             data-wslot-accept="product-description,product-specs,product-reviews,product-qa"
+             data-wslot-multiple="true"
+             data-wslot-position="content">
             <w:hook>WeShop_Product::detail::tabs_before</w:hook>
             <div class="border-b-2 border-gray-200 dark:border-gray-800">
                 <nav class="-mb-px flex space-x-8 font-heading" role="tablist">
