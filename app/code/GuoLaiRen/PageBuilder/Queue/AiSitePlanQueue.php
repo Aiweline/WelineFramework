@@ -9,6 +9,7 @@ use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
+use Weline\Ai\Service\AiRuntimeContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Queue\Model\Queue;
@@ -75,6 +76,9 @@ class AiSitePlanQueue implements QueueInterface
         $previousSseContextExists = false;
         $previousSseContext = null;
         $sseContextRegistered = false;
+        $previousAiRuntimeParamsExists = false;
+        $previousAiRuntimeParams = [];
+        $aiRuntimeParamsRegistered = false;
         try {
             $this->appendQueueLifecycleLine($queue, '开始执行 queue_id=' . $queueId . ' public_id=' . $publicId . ' admin_id=' . $adminId);
 
@@ -135,6 +139,11 @@ class AiSitePlanQueue implements QueueInterface
             $previousSseContext = RequestContext::get(RequestContext::SSE_WRITER_KEY);
             RequestContext::set(RequestContext::SSE_WRITER_KEY, $sse);
             $sseContextRegistered = true;
+            $previousAiRuntimeParamsExists = AiRuntimeContext::hasDefaultParams();
+            $previousAiRuntimeParams = AiRuntimeContext::getDefaultParams();
+            AiRuntimeContext::setDefaultParams(AiRuntimeContext::thinkingModeParams());
+            $aiRuntimeParamsRegistered = true;
+            $this->queueTrace($sse, 'AI thinking mode enabled for queue execution; reasoning_content is kept separate from output content.');
             $this->queueTrace($sse, 'QueueDbWriter 已创建，阶段一进度将写入队列 result 与会话事件。');
 
             /** @var AiSiteAgent $controller */
@@ -167,6 +176,13 @@ class AiSitePlanQueue implements QueueInterface
             $this->updateSessionError($publicId, $adminId, $effectiveExecutionToken, $message);
             throw new \RuntimeException($message, 0, $throwable);
         } finally {
+            if ($aiRuntimeParamsRegistered) {
+                if ($previousAiRuntimeParamsExists) {
+                    AiRuntimeContext::setDefaultParams($previousAiRuntimeParams);
+                } else {
+                    AiRuntimeContext::removeDefaultParams();
+                }
+            }
             if ($sseContextRegistered) {
                 if ($previousSseContextExists) {
                     RequestContext::set(RequestContext::SSE_WRITER_KEY, $previousSseContext);

@@ -411,6 +411,51 @@
         return isPlanGenerationRunningNow();
     }
 
+    function getActiveOperationForPublishRepairState() {
+        var state = latestWorkspaceState && typeof latestWorkspaceState === 'object'
+            ? latestWorkspaceState
+            : ((window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object') ? window.__pbWorkspaceState : {});
+        if (state.active_operation && typeof state.active_operation === 'object') {
+            return state.active_operation;
+        }
+        return currentActiveOperationState && typeof currentActiveOperationState === 'object'
+            ? currentActiveOperationState
+            : {};
+    }
+
+    function isPublishRepairOperationLocked() {
+        var active = getActiveOperationForPublishRepairState();
+        var status = String(active.status || '').trim().toLowerCase();
+        if (status === '') {
+            return !!isOperationRunning;
+        }
+        return ['pending', 'queued', 'running', 'processing'].indexOf(status) !== -1;
+    }
+
+    function syncPublishRepairButtonDisabledState() {
+        var btn = document.getElementById('pb-ai-rebuild-publish-quality');
+        if (!btn) {
+            return;
+        }
+        btn.disabled = isPublishRepairOperationLocked();
+        btn.setAttribute('aria-disabled', btn.disabled ? 'true' : 'false');
+    }
+
+    function bindPublishRepairButton() {
+        var publishRepairBtn = document.getElementById('pb-ai-rebuild-publish-quality');
+        if (publishRepairBtn && publishRepairBtn.dataset.pbBound !== '1') {
+            publishRepairBtn.dataset.pbBound = '1';
+            publishRepairBtn.addEventListener('click', function () {
+                if (publishRepairBtn.disabled) {
+                    return;
+                }
+                closePublishChecklistModal();
+                startPublishStageQualityRepair(publishRepairBtn);
+            });
+        }
+        syncPublishRepairButtonDisabledState();
+    }
+
     function applyRunVirtualThemeButtonsDisabledState() {
         var domainLocked = !isTargetDomainRequiredForPlanActionSatisfied();
         var queueLocked = isPhaseOneQueueUnfinished();
@@ -435,6 +480,7 @@
         document.querySelectorAll('.pb-ai-phase-one-missing-hint').forEach(function (el) {
             el.classList.toggle('d-none', lastPhaseOnePlanPresent);
         });
+        syncPublishRepairButtonDisabledState();
     }
 
     function setRunVirtualThemeButtonsDisabled(disabled) {
@@ -1288,6 +1334,10 @@
         publishStageEntryBuildingBadge: <?= \json_encode((string)__('正在构建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryBuildingTitle: <?= \json_encode((string)__('虚拟主题构建进行中，完成后即可进入第三阶段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryBuildingHint: <?= \json_encode((string)__('后台仍在处理页面和区块，当前入口先锁定；构建结束后会自动变为可点击。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryFailedBadge: <?= \json_encode((string)__('最新 AI 生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryFailedTitle: <?= \json_encode((string)__('最新 AI 生成未成功，禁止进入发布以避免发布旧内容'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryFailedHint: <?= \json_encode((string)__('请先点击 AI 重新生成并修复，等待真实 AI 队列成功完成后再进入第三阶段。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishBlockedLatestBuildFailure: <?= \json_encode((string)__('最新 AI 生成失败或仍在运行，禁止发布旧站点；请先重新生成并等待成功完成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryReadyBadge: <?= \json_encode((string)__('可进入第三阶段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryReadyTitle: <?= \json_encode((string)__('虚拟主题已就绪，下一步进入确认发布'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryReadyHint: <?= \json_encode((string)__('进入第三阶段后可先运行发布前预检，再确认准备发布。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -3135,7 +3185,25 @@
             : selectedPageTypes();
         selectedTypes = ensureRequiredPageTypeSelected(selectedTypes);
         startPlanGenerationForSelection(currentPlanTriggerButton, selectedTypes, {
-            forceRebuild: opts.forceRebuild === true
+            forceRebuild: opts.forceRebuild === true,
+            promptMode: opts.forceRebuild === true ? 'rebuild' : PLAN_PROMPT_MODE_RESUME
+        });
+        return true;
+    };
+
+    workspaceApi.retryPhaseTwoTaskPlanGeneration = function (options) {
+        var opts = options && typeof options === 'object' ? options : {};
+        if (taskPlanStartRequestInFlight || taskPlanSseRunning) {
+            return false;
+        }
+        var selectedTypes = Array.isArray(opts.selectedTypes) && opts.selectedTypes.length > 0
+            ? opts.selectedTypes.slice()
+            : selectedPageTypes();
+        selectedTypes = ensureRequiredPageTypeSelected(selectedTypes);
+        startTaskPlanGenerationForBuild(currentPlanTriggerButton, selectedTypes, {
+            promptMode: TASK_PLAN_PROMPT_MODE_RESUME,
+            silentSuccessToast: !!opts.silentSuccessToast,
+            silentFailure: !!opts.silentFailure
         });
         return true;
     };
@@ -3446,8 +3514,70 @@
         });
     }
 
+    function markBuildOperationTerminalForUi(operation, status, message) {
+        var normalizedOperation = String(operation || '').trim().toLowerCase();
+        var previous = currentActiveOperationState && typeof currentActiveOperationState === 'object'
+            ? currentActiveOperationState
+            : {};
+        var previousOperation = String(previous.operation || '').trim().toLowerCase();
+        var isBuildTerminal = isPublishBlockingOperationName(normalizedOperation)
+            || previousOperation === 'build'
+            || isPublishBlockingOperationName(previousOperation);
+        if (!isBuildTerminal) {
+            return;
+        }
+        var normalizedStatus = String(status || 'error').trim().toLowerCase() || 'error';
+        var active = Object.assign({}, previous, {
+            operation: String(previous.operation || (normalizedOperation === 'visual_edit' ? 'build' : normalizedOperation || 'build')),
+            status: normalizedStatus
+        });
+        if (message) {
+            active.message = String(message);
+        }
+        currentActiveOperationState = active;
+        isOperationRunning = false;
+        if (!latestWorkspaceState || typeof latestWorkspaceState !== 'object') {
+            latestWorkspaceState = {};
+        }
+        latestWorkspaceState.active_operation = active;
+        var statePatch = { active_operation: active };
+        if (isPublishFailureStatus(normalizedStatus)) {
+            var failure = {
+                blocked: true,
+                operation: String(active.operation || normalizedOperation || 'build'),
+                status: normalizedStatus,
+                message: String(message || active.message || '')
+            };
+            latestWorkspaceState.latest_build_failed = true;
+            latestWorkspaceState.latest_build_failure = failure;
+            latestWorkspaceState.publish_blocked_by_latest_ai_failure = true;
+            latestWorkspaceState.publish_blocked_reason = failure.message;
+            latestWorkspaceState.can_publish = false;
+            latestWorkspaceState.workspace_status = 'failed';
+            statePatch.latest_build_failed = true;
+            statePatch.latest_build_failure = failure;
+            statePatch.publish_blocked_by_latest_ai_failure = true;
+            statePatch.publish_blocked_reason = failure.message;
+            statePatch.can_publish = false;
+            statePatch.workspace_status = 'failed';
+        }
+        try {
+            window.__pbWorkspaceState = window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object'
+                ? Object.assign({}, window.__pbWorkspaceState, statePatch)
+                : Object.assign({}, statePatch);
+            window.__pbLastWorkspaceState = window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object'
+                ? Object.assign({}, window.__pbLastWorkspaceState, statePatch)
+                : Object.assign({}, statePatch);
+        } catch (e) {
+            // UI state is already updated locally; cross-script mirrors are best-effort.
+        }
+        syncPublishRepairButtonDisabledState();
+        syncPublishStageEntryFromWorkspaceState(latestWorkspaceState);
+    }
+
     function resetBuildStartUi() {
         setRunVirtualThemeButtonsDisabled(false);
+        syncPublishRepairButtonDisabledState();
     }
 
     function debounce(fn, wait) {
@@ -4911,8 +5041,12 @@
             : {};
 
         var metadataUrlObj = new URL(visualComponentMetadataUrl, window.location.href);
+        metadataUrlObj.searchParams.set('public_id', context.public_id);
+        metadataUrlObj.searchParams.set('page_type', context.page_type);
         metadataUrlObj.searchParams.set('component_code', context.component_code);
         metadataUrlObj.searchParams.set('style_code', styleCode);
+        metadataUrlObj.searchParams.set('region', context.region);
+        metadataUrlObj.searchParams.set('index', String(context.index));
         var metadataResult = await getJson(metadataUrlObj.toString());
         var metadata = metadataResult && metadataResult.metadata ? metadataResult.metadata : null;
         if (!metadata || typeof metadata !== 'object' || metadataResult.success === false) {
@@ -5810,6 +5944,11 @@
         el.addEventListener('click', function () {
             var stage = el.getAttribute('data-goto-stage');
             if (!stage || !setStageUrl) { return; }
+            if (stage === 'publish' && !canEnterPublishStageFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {})) {
+                toast('warning', messages.publishBlockedLatestBuildFailure || messages.networkError);
+                syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
+                return;
+            }
             postForm(setStageUrl, { public_id: publicId, stage: stage }).then(function (data) {
                 if (data && data.success) {
                     window.location.href = guidedUrl || window.location.href;
@@ -5824,6 +5963,11 @@
         btn.addEventListener('click', function () {
             var stage = btn.getAttribute('data-stage') || '';
             if (!stage || !setStageUrl) { return; }
+            if (stage === 'publish' && !canEnterPublishStageFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {})) {
+                toast('warning', messages.publishBlockedLatestBuildFailure || messages.networkError);
+                syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
+                return;
+            }
             postForm(setStageUrl, { public_id: publicId, stage: stage }).then(function (data) {
                 if (data && data.success) {
                     window.location.reload();
@@ -6050,7 +6194,9 @@
     var taskPlanSseHandlersBound = false;
     var taskPlanSseRunning = false;
     var taskPlanStreamAccumMarkdown = '';
+    var PLAN_PROMPT_MODE_RESUME = 'resume_plan';
     var TASK_PLAN_PROMPT_MODE_DETECT_BOOTSTRAP = 'detect_bootstrap_task_plan';
+    var TASK_PLAN_PROMPT_MODE_RESUME = 'resume_task_plan';
     var taskPlanStartRequestInFlight = false;
     var pendingTaskPlanModeAfterBootstrap = '';
     var visualEditResumePrompted = false;
@@ -9854,6 +10000,100 @@
         return String(payload.markdown || payload.updated_markdown || '');
     }
 
+    function resolveQueueObserverStatusMessage(payload) {
+        var data = payload && typeof payload === 'object' ? payload : {};
+        var queueInfo = data.queue_info && typeof data.queue_info === 'object' ? data.queue_info : {};
+        var queueSnapshot = queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
+            ? queueInfo.snapshot
+            : ((data.queue_snapshot && typeof data.queue_snapshot === 'object') ? data.queue_snapshot : {});
+        var message = String(
+            data.message
+            || data.queue_process
+            || queueInfo.process
+            || data.phase
+            || ''
+        ).trim();
+        if (message !== '') {
+            return message;
+        }
+        var queueStatus = String(
+            data.queue_status
+            || queueSnapshot.job_status
+            || queueSnapshot.status
+            || queueSnapshot.queue_status
+            || ''
+        ).trim();
+        if (queueStatus === '') {
+            return '';
+        }
+        var queueId = String(data.queue_id || queueSnapshot.queue_id || queueInfo.queue_id || '').trim();
+        if (queueId !== '') {
+            return String(
+                <?= \json_encode((string)__('队列 #%{queue_id} 当前状态：%{status}', ['queue_id' => '%{queue_id}', 'status' => '%{status}']), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+            ).replace('%{queue_id}', queueId).replace('%{status}', queueStatus);
+        }
+        return String(
+            <?= \json_encode((string)__('队列当前状态：%{status}', ['status' => '%{status}']), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+        ).replace('%{status}', queueStatus);
+    }
+
+    function resolveQueueObserverProgressPercent(payload, fallbackPercent) {
+        var data = payload && typeof payload === 'object' ? payload : {};
+        var explicitPercent = parseInt(String(data.progress_percent || data.percent || 0), 10) || 0;
+        if (explicitPercent > 0) {
+            return Math.max(0, Math.min(100, explicitPercent));
+        }
+        var queueInfo = data.queue_info && typeof data.queue_info === 'object' ? data.queue_info : {};
+        var queueSnapshot = queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
+            ? queueInfo.snapshot
+            : ((data.queue_snapshot && typeof data.queue_snapshot === 'object') ? data.queue_snapshot : {});
+        var queueStatus = String(
+            data.queue_status
+            || queueSnapshot.job_status
+            || queueSnapshot.status
+            || queueSnapshot.queue_status
+            || ''
+        ).trim().toLowerCase();
+        if (queueStatus === 'done' || queueStatus === 'success' || queueStatus === 'error' || queueStatus === 'failed' || queueStatus === 'cancelled' || queueStatus === 'stop') {
+            return 100;
+        }
+        if (queueStatus === 'running' || queueStatus === 'processing') {
+            return 60;
+        }
+        if (queueStatus === 'pending' || queueStatus === 'queued') {
+            return 45;
+        }
+        var fallback = parseInt(String(fallbackPercent || 0), 10) || 0;
+        return Math.max(0, Math.min(100, fallback));
+    }
+
+    function logQueueObserverDetailLines(terminal, payload, primaryMessage, onBeforeLog) {
+        if (!terminal || typeof terminal.log !== 'function') {
+            return;
+        }
+        var data = payload && typeof payload === 'object' ? payload : {};
+        var lines = Array.isArray(data.detail_lines) ? data.detail_lines : [];
+        if (lines.length === 0) {
+            return;
+        }
+        var seen = {};
+        var normalizedPrimary = String(primaryMessage || '').trim();
+        if (normalizedPrimary !== '') {
+            seen[normalizedPrimary] = true;
+        }
+        lines.forEach(function (line) {
+            var text = String(line || '').trim();
+            if (text === '' || seen[text]) {
+                return;
+            }
+            seen[text] = true;
+            if (typeof onBeforeLog === 'function') {
+                onBeforeLog();
+            }
+            terminal.log(text, 'info', data);
+        });
+    }
+
     function bindPlanSseTerminalHandlers() {
         var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-plan-sse-terminal'] : null;
         if (!terminal) {
@@ -9890,6 +10130,20 @@
                     markPlanTerminalConnected();
                     terminal.log(progressMsg, 'progress', payload);
                 }
+            }
+        });
+        terminal.on('info', function (event) {
+            var payload = parsePlanTerminalPayload(event);
+            var infoMsg = resolveQueueObserverStatusMessage(payload);
+            if (infoMsg === '') {
+                return;
+            }
+            setPlanModeStatus(infoMsg);
+            setPlanModalProgress(infoMsg, resolveQueueObserverProgressPercent(payload, 45), false);
+            if (typeof terminal.log === 'function') {
+                markPlanTerminalConnected();
+                terminal.log(infoMsg, 'info', payload);
+                logQueueObserverDetailLines(terminal, payload, infoMsg, markPlanTerminalConnected);
             }
         });
         terminal.on('chunk', function (event) {
@@ -10182,8 +10436,103 @@
             || isThemeBuildGenerationRunning();
     }
 
+    function getWorkspaceStateForPublishGate(workspaceState) {
+        return workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : (
+                latestWorkspaceState && typeof latestWorkspaceState === 'object'
+                    ? latestWorkspaceState
+                    : (
+                        window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object'
+                            ? window.__pbWorkspaceState
+                            : (
+                                window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object'
+                                    ? window.__pbLastWorkspaceState
+                                    : (initialWorkspaceState && typeof initialWorkspaceState === 'object' ? initialWorkspaceState : {})
+                            )
+                    )
+            );
+    }
+
+    function isPublishBlockingOperationName(operation) {
+        return ['build', 'visual_edit', 'regenerate_page', 'block_regenerate'].indexOf(String(operation || '').trim().toLowerCase()) !== -1;
+    }
+
+    function isPublishFailureStatus(status) {
+        return ['error', 'failed', 'fail', 'stop', 'stopped', 'cancelled', 'canceled'].indexOf(String(status || '').trim().toLowerCase()) !== -1;
+    }
+
+    function isPublishRunningStatus(status) {
+        return ['queued', 'pending', 'running', 'processing'].indexOf(String(status || '').trim().toLowerCase()) !== -1;
+    }
+
+    function readPublishQueueStatus(queueInfo) {
+        var info = queueInfo && typeof queueInfo === 'object' ? queueInfo : {};
+        var snapshot = info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
+        return String(
+            snapshot.job_status
+            || snapshot.status
+            || snapshot.queue_status
+            || info.job_status
+            || info.status
+            || info.queue_status
+            || ''
+        ).trim().toLowerCase();
+    }
+
+    function collectPublishBlockingOperationCandidates(state) {
+        var candidates = [];
+        if (state && typeof state === 'object' && state.active_operation && typeof state.active_operation === 'object') {
+            candidates.push(state.active_operation);
+        }
+        if (state && typeof state === 'object' && state.active_operations && typeof state.active_operations === 'object') {
+            Object.keys(state.active_operations).forEach(function (key) {
+                var item = state.active_operations[key];
+                if (item && typeof item === 'object') {
+                    candidates.push(item);
+                }
+            });
+        }
+        if (state && typeof state === 'object' && state.build_queue_info && typeof state.build_queue_info === 'object') {
+            candidates.push({
+                operation: 'build',
+                status: readPublishQueueStatus(state.build_queue_info),
+                message: String(state.build_queue_info.message || state.build_queue_info.error || '')
+            });
+        }
+        return candidates;
+    }
+
+    function hasPublishBlockingLatestBuildFailureFromWorkspaceState(workspaceState) {
+        var state = getWorkspaceStateForPublishGate(workspaceState);
+        var existingFailure = state.latest_build_failure && typeof state.latest_build_failure === 'object'
+            ? state.latest_build_failure
+            : {};
+        if (jsonTruthyFlag(state.latest_build_failed)
+            || jsonTruthyFlag(state.publish_blocked_by_latest_ai_failure)
+            || jsonTruthyFlag(existingFailure.blocked)
+        ) {
+            return true;
+        }
+        return collectPublishBlockingOperationCandidates(state).some(function (candidate) {
+            return isPublishBlockingOperationName(candidate.operation) && isPublishFailureStatus(candidate.status);
+        });
+    }
+
+    function hasPublishBlockingAiOperationRunningFromWorkspaceState(workspaceState) {
+        var state = getWorkspaceStateForPublishGate(workspaceState);
+        return collectPublishBlockingOperationCandidates(state).some(function (candidate) {
+            return isPublishBlockingOperationName(candidate.operation) && isPublishRunningStatus(candidate.status);
+        });
+    }
+
     function canEnterPublishStageFromWorkspaceState(workspaceState) {
-        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var state = getWorkspaceStateForPublishGate(workspaceState);
+        if (hasPublishBlockingLatestBuildFailureFromWorkspaceState(state)
+            || hasPublishBlockingAiOperationRunningFromWorkspaceState(state)
+        ) {
+            return false;
+        }
         var workspaceStatus = String(state.workspace_status || '').toLowerCase();
         var publishStatus = String(state.publish_status || '').toLowerCase();
         return !!state.can_publish
@@ -10192,7 +10541,38 @@
             || publishStatus === 'published';
     }
 
+    function syncPublishStartButtonFromWorkspaceState(workspaceState) {
+        var state = getWorkspaceStateForPublishGate(workspaceState);
+        var publishBtn = document.getElementById('pb-ai-start-publish');
+        if (!publishBtn) {
+            return;
+        }
+        var blockedByFailure = hasPublishBlockingLatestBuildFailureFromWorkspaceState(state);
+        var blockedByRunning = hasPublishBlockingAiOperationRunningFromWorkspaceState(state);
+        var disabled = blockedByFailure || blockedByRunning || !canEnterPublishStageFromWorkspaceState(state);
+        publishBtn.disabled = disabled;
+        if (disabled) {
+            publishBtn.setAttribute('aria-disabled', 'true');
+            if (blockedByFailure || blockedByRunning) {
+                publishBtn.setAttribute('title', String(messages.publishBlockedLatestBuildFailure || ''));
+            }
+        } else {
+            publishBtn.removeAttribute('aria-disabled');
+            publishBtn.removeAttribute('title');
+        }
+        document.querySelectorAll('.pb-ai-set-stage[data-stage="publish"]').forEach(function (btn) {
+            btn.disabled = disabled;
+            if (disabled) {
+                btn.setAttribute('aria-disabled', 'true');
+            } else {
+                btn.removeAttribute('aria-disabled');
+            }
+        });
+    }
+
     function syncPublishStageEntryFromWorkspaceState(workspaceState) {
+        var state = getWorkspaceStateForPublishGate(workspaceState);
+        syncPublishStartButtonFromWorkspaceState(state);
         var card = document.getElementById('pb-ai-publish-stage-entry-card');
         var badgeEl = document.getElementById('pb-ai-publish-stage-entry-badge');
         var titleEl = document.getElementById('pb-ai-publish-stage-entry-title');
@@ -10201,9 +10581,6 @@
         if (!card || !badgeEl || !titleEl || !hintEl || !btn) {
             return;
         }
-        var state = workspaceState && typeof workspaceState === 'object'
-            ? workspaceState
-            : (latestWorkspaceState && typeof latestWorkspaceState === 'object' ? latestWorkspaceState : {});
         var workspaceStatus = String(state.workspace_status || '').toLowerCase();
         var publishStatus = String(state.publish_status || '').toLowerCase();
         var active = state.active_operation && typeof state.active_operation === 'object'
@@ -10211,16 +10588,23 @@
             : {};
         var activeOperation = String(active.operation || '').toLowerCase();
         var activeStatus = String(active.status || '').toLowerCase();
+        var blockedByFailure = hasPublishBlockingLatestBuildFailureFromWorkspaceState(state);
         var building = workspaceStatus === 'building'
-            || (activeOperation === 'build' && (activeStatus === 'queued' || activeStatus === 'running'));
+            || hasPublishBlockingAiOperationRunningFromWorkspaceState(state)
+            || (isPublishBlockingOperationName(activeOperation) && isPublishRunningStatus(activeStatus));
         var published = publishStatus === 'published' || workspaceStatus === 'published';
-        var ready = canEnterPublishStageFromWorkspaceState(state) && !building;
+        var ready = canEnterPublishStageFromWorkspaceState(state) && !building && !blockedByFailure;
         var badgeClass = 'badge bg-secondary';
         var badgeText = messages.publishStageEntryPendingBadge || '';
         var titleText = messages.publishStageEntryPendingTitle || '';
         var hintText = messages.publishStageEntryPendingHint || '';
 
-        if (published) {
+        if (blockedByFailure) {
+            badgeClass = 'badge bg-danger';
+            badgeText = messages.publishStageEntryFailedBadge || '';
+            titleText = messages.publishStageEntryFailedTitle || '';
+            hintText = messages.publishStageEntryFailedHint || '';
+        } else if (published) {
             badgeClass = 'badge bg-success';
             badgeText = messages.publishStageEntryPublishedBadge || '';
             titleText = messages.publishStageEntryPublishedTitle || '';
@@ -10245,8 +10629,14 @@
         btn.disabled = !ready;
         if (btn.disabled) {
             btn.setAttribute('aria-disabled', 'true');
+            if (blockedByFailure || building) {
+                btn.setAttribute('title', String(messages.publishBlockedLatestBuildFailure || ''));
+            } else {
+                btn.removeAttribute('title');
+            }
         } else {
             btn.removeAttribute('aria-disabled');
+            btn.removeAttribute('title');
         }
         card.dataset.publishReady = ready ? '1' : '0';
     }
@@ -10762,9 +11152,14 @@
         });
         terminal.on('info', function (event) {
             var payload = parseTaskPlanTerminalPayload(event);
-            var msg = String((payload && (payload.message || payload.phase)) || '');
+            var msg = resolveQueueObserverStatusMessage(payload);
+            if (msg !== '') {
+                setTaskPlanModeStatus(msg);
+                setTaskPlanModalProgress(msg, resolveQueueObserverProgressPercent(payload, 50), false);
+            }
             if (msg !== '' && typeof terminal.log === 'function') {
                 terminal.log(msg, 'info', payload);
+                logQueueObserverDetailLines(terminal, payload, msg);
             }
         });
         terminal.on('chunk', function (event) {
@@ -11349,8 +11744,8 @@
         var normalizedTypes = ensureRequiredPageTypeSelected(selectedTypes);
         var opts = options && typeof options === 'object' ? options : {};
         var requestedPromptMode = String(opts.promptMode || opts.prompt_mode || '').trim();
-        if (['detect_bootstrap_task_plan', 'refine_task_plan', 'rebuild_task_plan'].indexOf(requestedPromptMode) === -1) {
-            requestedPromptMode = TASK_PLAN_PROMPT_MODE_DETECT_BOOTSTRAP;
+        if (['detect_bootstrap_task_plan', 'resume_task_plan', 'refine_task_plan', 'rebuild_task_plan'].indexOf(requestedPromptMode) === -1) {
+            requestedPromptMode = TASK_PLAN_PROMPT_MODE_RESUME;
         }
         if (!startTaskPlanUrl) {
             toast('error', messages.taskPlanStartUnavailable);
@@ -11525,6 +11920,10 @@
         scrollIntoPlanInlinePanel();
 
         function resolveInitialPlanPromptMode() {
+            var explicitPromptMode = String(opts.promptMode || opts.prompt_mode || '').trim();
+            if (explicitPromptMode !== '') {
+                return explicitPromptMode;
+            }
             if (forceRebuild) {
                 return 'rebuild';
             }
@@ -11876,7 +12275,9 @@
                     ? currentPlanSelection.slice()
                     : selectedPageTypes();
                 selectedTypes = ensureRequiredPageTypeSelected(selectedTypes);
-                startPlanGenerationForSelection(currentPlanTriggerButton || this, selectedTypes);
+                startPlanGenerationForSelection(currentPlanTriggerButton || this, selectedTypes, {
+                    promptMode: PLAN_PROMPT_MODE_RESUME
+                });
             });
         }
         var savePlanBtn = document.getElementById('pb-ai-save-plan-draft');
@@ -11891,7 +12292,7 @@
         if (confirmTaskPlanBtn && confirmTaskPlanBtn.dataset.pbBound !== '1') {
             confirmTaskPlanBtn.dataset.pbBound = '1';
             confirmTaskPlanBtn.addEventListener('click', function () {
-                confirmCurrentTaskPlanAndMaybeBuild(currentPlanTriggerButton, currentPlanSelection);
+                ensureTaskPlanConfirmedBeforeBuild(currentPlanTriggerButton, currentPlanSelection, {});
             });
         }
         var saveTaskPlanBtn = document.getElementById('pb-ai-save-task-plan-draft');
@@ -11914,6 +12315,11 @@
                 if (publishStageBtn.disabled || !setStageUrl) {
                     return;
                 }
+                if (!canEnterPublishStageFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {})) {
+                    toast('warning', messages.publishBlockedLatestBuildFailure || messages.networkError);
+                    syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
+                    return;
+                }
                 postForm(setStageUrl, { public_id: publicId, stage: 'publish' }).then(function (data) {
                     if (data && data.success) {
                         window.location.reload();
@@ -11925,6 +12331,7 @@
                 });
             });
         }
+        bindPublishRepairButton();
         scheduleVisualEditResumePrompt();
     }
 
@@ -12081,6 +12488,31 @@
             toast('warning', messages.operationStreamMissing || messages.networkError);
         }).catch(function (error) {
             toast('error', (error && error.message) ? String(error.message) : messages.networkError);
+        });
+    }
+
+    function startPublishStageQualityRepair(triggerBtn) {
+        var state = latestWorkspaceState && typeof latestWorkspaceState === 'object'
+            ? latestWorkspaceState
+            : (
+                window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object'
+                    ? window.__pbWorkspaceState
+                    : (
+                        window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object'
+                            ? window.__pbLastWorkspaceState
+                            : (initialWorkspaceState && typeof initialWorkspaceState === 'object' ? initialWorkspaceState : {})
+                    )
+            );
+        var types = normalizePageTypeListForResumePrompt(state);
+        if (!types || types.length === 0) {
+            types = selectedPageTypes();
+        }
+        if (!types || types.length === 0) {
+            toast('warning', messages.noPageType);
+            return;
+        }
+        startConfirmedBuild(triggerBtn || document.getElementById('pb-ai-rebuild-publish-quality'), types, {
+            allowTaskPlanRetry: false
         });
     }
 
@@ -12245,6 +12677,16 @@
         setTargetDomainFieldInvalid: setTargetDomainFieldInvalid,
         bindTargetDomainInvalidClearOnce: bindTargetDomainInvalidClearOnce,
         resetBuildStartUi: resetBuildStartUi,
+        markBuildOperationTerminalForUi: markBuildOperationTerminalForUi,
+        hasPublishBlockingLatestBuildFailure: function (state) {
+            return hasPublishBlockingLatestBuildFailureFromWorkspaceState(state || latestWorkspaceState || initialWorkspaceState || {});
+        },
+        hasPublishBlockingAiOperationRunning: function (state) {
+            return hasPublishBlockingAiOperationRunningFromWorkspaceState(state || latestWorkspaceState || initialWorkspaceState || {});
+        },
+        syncPublishStartButtonFromWorkspaceState: function (state) {
+            syncPublishStartButtonFromWorkspaceState(state || latestWorkspaceState || initialWorkspaceState || {});
+        },
         compactPageDisplayLabel: compactPageDisplayLabel,
         getCurrentPreviewPageType: function () {
             return String(currentPreviewPageType || getActivePreviewPageType() || '');
@@ -12455,6 +12897,7 @@
     window.__pbClosePublishChecklistModal = closePublishChecklistModal;
 
     function bindPublishStageLogic() {
+        syncPublishStartButtonFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
         var openPublishPreviewBtn = document.getElementById('pb-ai-open-publish-preview');
         if (openPublishPreviewBtn && openPublishPreviewBtn.dataset.pbBound !== '1') {
             openPublishPreviewBtn.dataset.pbBound = '1';
@@ -12476,6 +12919,8 @@
                 runPublishChecklistFetchAndRender(true);
             });
         }
+
+        bindPublishRepairButton();
 
         var refreshBtn = document.getElementById('pb-ai-publish-checklist-refresh');
         if (refreshBtn && refreshBtn.dataset.pbBound !== '1') {
@@ -12639,6 +13084,7 @@
         hydrateInitialWorkspaceStateOnce();
         showWorkspaceEntryQueueNotice(initialWorkspaceState);
     }
+    bindPublishStageLogic();
 })();
 </script>
 

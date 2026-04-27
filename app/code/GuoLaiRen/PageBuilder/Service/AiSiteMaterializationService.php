@@ -39,10 +39,10 @@ class AiSiteMaterializationService
             throw new \InvalidArgumentException((string)__('PageBuilder materialization requires a real website_id'));
         }
 
-        $pageTypes = $this->scopeCompatibilityService->normalizePageTypes($pageTypes);
+        $pageTypes = $this->normalizeMaterializationPageTypes($pageTypes);
         $layouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($pageTypeLayouts, $pageTypes);
         $virtualPages = $this->scopeCompatibilityService->normalizeVirtualPagesByType($virtualPagesByType, $pageTypes);
-        $homePageId = 0;
+        $homePageId = $this->resolveExistingHomePageId($websiteId, $pageTypes);
         $pagesByType = [];
         $pageLogo = $this->normalizePageAssetPath((string)($websiteProfile['logo'] ?? ''));
         $pageIcon = $this->normalizePageAssetPath((string)($websiteProfile['icon'] ?? $websiteProfile['favicon'] ?? ''));
@@ -59,6 +59,9 @@ class AiSiteMaterializationService
             $layoutConfig = $layouts[$pageType] ?? $this->scopeCompatibilityService->normalizeLayoutConfig([]);
             $materializedLayoutConfig = $this->resolveMaterializedLayoutConfig($layoutConfig);
             $blocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+            if ($blocks === [] && !$this->layoutHasGeneratedContentComponents($materializedLayoutConfig)) {
+                throw new \RuntimeException((string)__('AI virtual theme page has no generated layout or blocks: %{1}', [$pageType]));
+            }
             $aiLayout = ['blocks' => $blocks];
             $renderMode = $blocks !== [] ? Page::RENDER_MODE_AI_HTML : Page::RENDER_MODE_THEME;
             $aiLayoutJson = $blocks !== [] ? \json_encode($aiLayout, \JSON_UNESCAPED_UNICODE) : null;
@@ -149,9 +152,9 @@ class AiSiteMaterializationService
             throw new \InvalidArgumentException((string)__('PageBuilder materialization requires a real website_id'));
         }
 
-        $pageTypes = $this->scopeCompatibilityService->normalizePageTypes($pageTypes);
+        $pageTypes = $this->normalizeMaterializationPageTypes($pageTypes);
         $virtualPages = $this->scopeCompatibilityService->normalizeVirtualPagesByType($virtualPagesByType, $pageTypes);
-        $homePageId = 0;
+        $homePageId = $this->resolveExistingHomePageId($websiteId, $pageTypes);
         $pagesByType = [];
         $pageLogo = $this->normalizePageAssetPath((string)($websiteProfile['logo'] ?? ''));
         $pageIcon = $this->normalizePageAssetPath((string)($websiteProfile['icon'] ?? $websiteProfile['favicon'] ?? ''));
@@ -267,6 +270,52 @@ class AiSiteMaterializationService
             ->fetch();
 
         return $page->getId() > 0 ? $page : null;
+    }
+
+    /**
+     * Materialization can run on a single changed page during resumable builds.
+     * Unlike workspace scope normalization, this must not inject home_page.
+     *
+     * @return list<string>
+     */
+    private function normalizeMaterializationPageTypes(mixed $raw): array
+    {
+        if (\is_array($raw)) {
+            $items = $raw;
+        } elseif (\is_string($raw) && \trim($raw) !== '') {
+            $decoded = \json_decode($raw, true);
+            $items = \is_array($decoded) ? $decoded : (\preg_split('/[\s,]+/', $raw, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+        } else {
+            $items = [];
+        }
+
+        $allowed = \array_keys(Page::getPageTypes());
+        $pageTypes = [];
+        foreach ($items as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $pageType = \trim((string)$item);
+            if ($pageType === '' || !\in_array($pageType, $allowed, true) || \in_array($pageType, $pageTypes, true)) {
+                continue;
+            }
+            $pageTypes[] = $pageType;
+        }
+
+        return $pageTypes !== [] ? \array_values($pageTypes) : $allowed;
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     */
+    private function resolveExistingHomePageId(int $websiteId, array $pageTypes): int
+    {
+        if (\in_array(Page::TYPE_HOME, $pageTypes, true)) {
+            return 0;
+        }
+
+        $homePage = $this->loadPageByType($websiteId, Page::TYPE_HOME);
+        return $homePage instanceof Page ? (int)$homePage->getId() : 0;
     }
 
     /**
@@ -444,7 +493,7 @@ class AiSiteMaterializationService
             . ' page_type=' . $pageType
             . ' page_style=' . (string)$page->getData(Page::schema_fields_STYLE)
             . ' component_codes=' . \implode(',', $componentCodes)
-            . ' fallback_to_style_defaults=' . ($this->layoutHasCustomComponents($materializedLayoutConfig) ? '0' : '1'),
+            . ' fallback_to_style_defaults=' . ($this->layoutHasGeneratedContentComponents($materializedLayoutConfig) ? '0' : '1'),
             [
                 'page_id' => (int)$page->getId(),
                 'website_id' => (int)$page->getData(Page::schema_fields_WEBSITE_ID),
@@ -531,9 +580,7 @@ class AiSiteMaterializationService
      */
     private function resolveMaterializedLayoutConfig(array $layoutConfig): array
     {
-        return $this->containsVirtualThemeComponentCodes($layoutConfig)
-            ? $this->scopeCompatibilityService->normalizeLayoutConfig([])
-            : $layoutConfig;
+        return $layoutConfig;
     }
 
     /**
@@ -553,9 +600,19 @@ class AiSiteMaterializationService
     /**
      * @param array<string, mixed> $layoutConfig
      */
-    private function layoutHasCustomComponents(array $layoutConfig): bool
+    private function layoutHasGeneratedContentComponents(array $layoutConfig): bool
     {
-        return $this->extractComponentCodes($layoutConfig) !== [];
+        foreach ($layoutConfig['content'] ?? [] as $component) {
+            if (!\is_array($component)) {
+                continue;
+            }
+            $code = \trim((string)($component['code'] ?? $component['component'] ?? ''));
+            if ($code !== '') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function resolveMaterializedText(mixed $preferred, string $fallback): string

@@ -42,16 +42,7 @@ class Router implements RouterInterface
             $websiteId = self::getCurrentWebsiteId();
             // 无站点时按请求 host 解析站点，便于直接用域名访问首页
             if ($websiteId <= 0) {
-                $host = \w_env('server.http_host', '');
-                if ($host !== '') {
-                    $websiteId = self::findWebsiteIdByHost($host) ?? 0;
-                    if ($websiteId > 0) {
-                        \w_env_set('website_id', (string)$websiteId);
-                        if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
-                            \Weline\Framework\Runtime\RequestContext::websiteId($websiteId);
-                        }
-                    }
-                }
+                $websiteId = self::resolveWebsiteIdByCurrentHost();
             }
             // 预览模式：优先用 query 的 handle + website_id 配合 URL 解码
             $isPreview = \w_env_get('preview') == '1';
@@ -109,6 +100,9 @@ class Router implements RouterInterface
         
         // 5. 检查当前站点下 handle 是否存在；同站可省略前缀，如 /about 匹配 handle about 或 home-about
         $websiteId = self::getCurrentWebsiteId();
+        if ($websiteId <= 0) {
+            $websiteId = self::resolveWebsiteIdByCurrentHost();
+        }
         $isPreview = \w_env_get('preview') == '1';
         if (!self::handleExists($handle, $websiteId, $isPreview)) {
             // 同站短路径：先试 path 作为 handle，再试「首页handle- path」
@@ -327,8 +321,30 @@ class Router implements RouterInterface
     }
 
     /**
-     * 获取当前站点ID
-     * 
+     * Resolve the current website from the request host when the framework
+     * website context has not been initialized yet.
+     */
+    private static function resolveWebsiteIdByCurrentHost(): int
+    {
+        $host = \w_env('server.http_host', '');
+        if ($host === '') {
+            return 0;
+        }
+
+        $websiteId = self::findWebsiteIdByHost((string)$host) ?? 0;
+        if ($websiteId <= 0) {
+            return 0;
+        }
+
+        \w_env_set('website_id', (string)$websiteId);
+        if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
+            \Weline\Framework\Runtime\RequestContext::websiteId($websiteId);
+        }
+
+        return $websiteId;
+    }
+
+    /**
      * @return int
      */
     private static function getCurrentWebsiteId(): int
@@ -424,4 +440,3 @@ class Router implements RouterInterface
         }
     }
 }
-
