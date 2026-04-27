@@ -24,6 +24,10 @@ final class AiSitePlanPreviewContractTest extends TestCase
         self::assertStringNotContainsString("+ (blockGoal ? '<div class=\"small text-muted mt-2\">' + blockGoal + '</div>' : '')", $script);
         self::assertStringNotContainsString("+ (goal ? '<div class=\"small mt-2\">' + goal + '</div>' : '')", $script);
         self::assertStringNotContainsString('renderKeywordBadges(keywords)', $this->extractFunctionBody($script, 'renderPlanPagePreviewCard'));
+
+        self::assertStringContainsString('function normalizeStageOneStructuredRootForPreview', $script);
+        self::assertStringContainsString('conf.plan_book.structured', $script);
+        self::assertStringContainsString('pages: pagePlans', $script);
     }
 
     private function extractFunctionBody(string $script, string $functionName): string
