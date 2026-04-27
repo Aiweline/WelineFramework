@@ -32,7 +32,7 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
         $service = new AiSiteAgentQueueObserverHelperService();
 
         self::assertTrue($service->shouldSuppressProcessMirror('plan'));
-        self::assertTrue($service->shouldSuppressProcessMirror('task_plan'));
+        self::assertFalse($service->shouldSuppressProcessMirror('task_plan'));
         self::assertFalse($service->shouldSuppressProcessMirror('build'));
         self::assertFalse($service->shouldSuppressProcessMirror(''));
         self::assertFalse($service->shouldSuppressProcessMirror('PLAN'), 'operation 比对是大小写敏感的，不能因为大写误命中');
@@ -49,8 +49,9 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
         // plan：带时间戳 + 预期事件类型前缀的回放日志需跳过。
         self::assertTrue($service->shouldSkipResultLine('plan', '[12:34:56] LOG hello'));
         self::assertTrue($service->shouldSkipResultLine('plan', '[00:00:01] PLAN_SAVED ok'));
-        self::assertTrue($service->shouldSkipResultLine('task_plan', '[23:59:59] TASK_PLAN_BUILT done'));
+        self::assertFalse($service->shouldSkipResultLine('task_plan', '[23:59:59] TASK_PLAN_BUILT done'));
         self::assertTrue($service->shouldSkipResultLine('plan', '[12:00:00] AI_STREAM chunk'));
+        self::assertFalse($service->shouldSkipResultLine('task_plan', 'free text no prefix'));
 
         // plan：旧版本可能把正文裸写成 markdown/json 行；规划类队列不再回放任何 result 正文。
         self::assertTrue($service->shouldSkipResultLine('plan', 'free text no prefix'));
@@ -107,6 +108,22 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
         ], false);
 
         self::assertSame('第一阶段方案生成失败：AI流式生成完成但未返回任何内容', $resolved);
+    }
+
+    public function testResolveMessagePrefersErrorLineOverTerminalAiProgressTail(): void
+    {
+        $service = new AiSiteAgentQueueObserverHelperService();
+
+        $resolved = $service->resolveMessage([
+            'status' => 'error',
+            'process' => 'AI 正在生成内容，正文流不写入队列日志',
+            'content' => \json_encode(['operation' => 'plan'], \JSON_THROW_ON_ERROR),
+            'result' => "[02:31:58] PROGRESS 需求扩写已完成，正在生成总主题设计\n"
+                . "[02:33:05] ERROR 第一阶段方案生成失败：AI流式生成失败: AI 流式生成完成但未返回任何内容\n"
+                . "[02:33:05] AI_PROGRESS AI 正在生成内容，正文流不写入队列日志（已接收 446 段 / 1965 B）。",
+        ], false);
+
+        self::assertSame('第一阶段方案生成失败：AI流式生成失败: AI 流式生成完成但未返回任何内容', $resolved);
     }
 
     public function testBuildPanelPayloadShapesQueueRowIntoPublicStructure(): void

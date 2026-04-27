@@ -130,14 +130,35 @@ class AiSiteAgentMutateTaskPlanTaskOperationService
 
         if (empty($result['success'])) {
             if ((string)($result['operation'] ?? '') === 'task_plan') {
+                $responseState = \is_array($result['data'] ?? null)
+                    ? $result['data']
+                    : ($ports->buildWorkspaceState)($session, $adminId, 80, true);
+                $executionToken = $this->resolveExecutionToken($result, $responseState, 'task_plan');
+                $streamUrl = $this->resolveStreamUrl($result, $responseState, 'task_plan');
+                $queueId = \max(
+                    (int)($result['queue_id'] ?? 0),
+                    $this->resolveQueueId($responseState, 'task_plan')
+                );
+                if (!$this->isOperationReadyForStream($executionToken, $streamUrl, $queueId)) {
+                    return [
+                        'success' => false,
+                        'message' => 'Task-plan operation did not provide a valid queue/SSE binding. Please retry.',
+                        'operation' => 'task_plan',
+                        'execution_token' => $executionToken,
+                        'stream_url' => $streamUrl,
+                        'queue_id' => $queueId,
+                        'data' => $responseState,
+                    ];
+                }
                 return [
                     'success' => true,
                     'message' => 'Detected an in-flight stage-2 task-plan operation and resumed its SSE progress.',
                     'operation' => 'task_plan',
-                    'execution_token' => (string)($result['execution_token'] ?? ''),
-                    'stream_url' => (string)($result['stream_url'] ?? ''),
+                    'execution_token' => $executionToken,
+                    'stream_url' => $streamUrl,
                     'start_sse' => true,
-                    'data' => ($ports->buildWorkspaceState)($session, $adminId, 80, true),
+                    'queue_id' => $queueId,
+                    'data' => $responseState,
                 ];
             }
 
@@ -157,17 +178,111 @@ class AiSiteAgentMutateTaskPlanTaskOperationService
         $responseState = \is_array($result['data'] ?? null)
             ? $result['data']
             : ($ports->buildWorkspaceState)($session, $adminId, 80, true);
+        $operation = (string)($result['operation'] ?? 'task_plan');
+        $executionToken = $this->resolveExecutionToken($result, $responseState, $operation);
+        $streamUrl = $this->resolveStreamUrl($result, $responseState, $operation);
+        $queueId = \max(
+            (int)($result['queue_id'] ?? 0),
+            $this->resolveQueueId($responseState, $operation)
+        );
+        if (!$this->isOperationReadyForStream($executionToken, $streamUrl, $queueId)) {
+            return [
+                'success' => false,
+                'message' => 'Task-plan operation creation failed: queue or SSE binding is missing.',
+                'operation' => $operation,
+                'execution_token' => $executionToken,
+                'stream_url' => $streamUrl,
+                'queue_id' => $queueId,
+                'queue_wait' => \is_array($result['queue_wait'] ?? null) ? $result['queue_wait'] : null,
+                'data' => $responseState,
+            ];
+        }
 
         return [
             'success' => true,
             'message' => $queuedMessage,
-            'operation' => (string)($result['operation'] ?? 'task_plan'),
-            'execution_token' => (string)($result['execution_token'] ?? ''),
-            'stream_url' => (string)($result['stream_url'] ?? ''),
+            'operation' => $operation,
+            'execution_token' => $executionToken,
+            'stream_url' => $streamUrl,
             'start_sse' => true,
-            'queue_id' => (int)($result['queue_id'] ?? 0),
+            'queue_id' => $queueId,
             'queue_wait' => \is_array($result['queue_wait'] ?? null) ? $result['queue_wait'] : null,
             'data' => $responseState,
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $result
+     * @param array<string,mixed> $responseState
+     */
+    private function resolveExecutionToken(array $result, array $responseState, string $operation): string
+    {
+        $token = \trim((string)($result['execution_token'] ?? ''));
+        if ($token !== '') {
+            return $token;
+        }
+        $active = $this->resolveOperationPayload($responseState, $operation);
+        return \trim((string)($active['execution_token'] ?? ''));
+    }
+
+    /**
+     * @param array<string,mixed> $result
+     * @param array<string,mixed> $responseState
+     */
+    private function resolveStreamUrl(array $result, array $responseState, string $operation): string
+    {
+        $streamUrl = \trim((string)($result['stream_url'] ?? ''));
+        if ($streamUrl !== '') {
+            return $streamUrl;
+        }
+        $active = $this->resolveOperationPayload($responseState, $operation);
+        return \trim((string)($active['stream_url'] ?? ''));
+    }
+
+    private function isOperationReadyForStream(string $executionToken, string $streamUrl, int $queueId): bool
+    {
+        return $executionToken !== '' && $streamUrl !== '' && $queueId > 0;
+    }
+
+    /**
+     * @param array<string,mixed> $responseState
+     */
+    private function resolveQueueId(array $responseState, string $operation): int
+    {
+        $active = $this->resolveOperationPayload($responseState, $operation);
+        $queueId = (int)($active['queue_id'] ?? 0);
+        if ($queueId > 0) {
+            return $queueId;
+        }
+        $queueInfoByOperation = [
+            'plan' => 'plan_queue_info',
+            'task_plan' => 'task_plan_queue_info',
+            'build' => 'build_queue_info',
+            'regenerate_page' => 'build_queue_info',
+        ];
+        $queueInfoKey = (string)($queueInfoByOperation[$operation] ?? '');
+        if ($queueInfoKey !== '' && \is_array($responseState[$queueInfoKey] ?? null)) {
+            $queueInfo = $responseState[$queueInfoKey];
+            return (int)($queueInfo['queue_id'] ?? $queueInfo['snapshot']['queue_id'] ?? 0);
+        }
+        return 0;
+    }
+
+    /**
+     * @param array<string,mixed> $responseState
+     * @return array<string,mixed>
+     */
+    private function resolveOperationPayload(array $responseState, string $operation): array
+    {
+        $active = \is_array($responseState['active_operation'] ?? null) ? $responseState['active_operation'] : [];
+        if ((string)($active['operation'] ?? '') === $operation) {
+            return $active;
+        }
+        $activeOperations = \is_array($responseState['active_operations'] ?? null) ? $responseState['active_operations'] : [];
+        $candidate = \is_array($activeOperations[$operation] ?? null) ? $activeOperations[$operation] : [];
+        if ($candidate !== []) {
+            return $candidate;
+        }
+        return $active;
     }
 }
