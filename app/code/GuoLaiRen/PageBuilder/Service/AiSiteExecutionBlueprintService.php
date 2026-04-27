@@ -334,55 +334,73 @@ final class AiSiteExecutionBlueprintService
             $siteDisplayName,
             $siteSummary
         );
-        $planJson = [];
+        $checkpointSignature = $this->buildStageOneCheckpointSignature($scope, $websiteProfile, $pageTypes, $planLocale, $contentLocale, $instruction, $targetScope, $oneLineRequirement);
+        $checkpoint = $this->resolveStageOneCheckpoint($payload, $scope, $checkpointSignature);
+        $onCheckpoint = \is_callable($payload['on_stage1_checkpoint'] ?? null) ? $payload['on_stage1_checkpoint'] : null;
+        $planJson = \is_array($checkpoint['plan_json'] ?? null) ? $checkpoint['plan_json'] : [];
 
         try {
+            if ($this->hasStageOneRequirementCheckpoint($planJson)) {
+                $this->emitStageOnePipelineProgress(
+                    $onProgress,
+                    '已复用已保存的需求扩写结果，继续生成阶段一方案',
+                    24,
+                    'requirement_expand',
+                    'checkpoint',
+                    ['page_total' => \count($pageTypes)]
+                );
+            } else {
+                $this->emitStageOnePipelineProgress(
+                    $onProgress,
+                    '正在扩展用户需求，生成阶段一总设计输入',
+                    12,
+                    'requirement_expand',
+                    'start',
+                    ['page_total' => \count($pageTypes)]
+                );
+                $requirementDecoded = $this->generateStageOneJsonByAi(
+                    $this->buildAiStageOneRequirementExpansionPrompt($scope, $websiteProfile, $pageTypes, $planLocale, $instruction, $siteDisplayName, $siteSummary),
+                    'pagebuilder_plan_generation',
+                    2048,
+                    150,
+                    $onChunk
+                );
+                $planJson = $this->mergeStageOneRequirementExpansionAiPlanJson($planJson, $requirementDecoded, $oneLineRequirement, $pageTypes);
+                $this->assertStageOneRequirementExpansionIsGenerated($planJson);
+                $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'requirement_expand', $pageTypes);
+            }
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '正在扩展用户需求，生成阶段一总设计输入',
-                12,
-                'requirement_expand',
-                'start',
-                ['page_total' => \count($pageTypes)]
-            );
-            $requirementDecoded = $this->generateStageOneJsonByAi(
-                $this->buildAiStageOneRequirementExpansionPrompt($scope, $websiteProfile, $pageTypes, $planLocale, $instruction, $siteDisplayName, $siteSummary),
-                'pagebuilder_plan_generation',
-                2048,
-                150,
-                $onChunk
-            );
-            $planJson = $this->mergeStageOneRequirementExpansionAiPlanJson($planJson, $requirementDecoded, $oneLineRequirement, $pageTypes);
-            $this->assertStageOneRequirementExpansionIsGenerated($planJson);
-            $this->emitStageOnePipelineProgress(
-                $onProgress,
-                '需求扩写已完成，正在生成总主题设计',
+                $this->hasStageOneThemeCheckpoint($planJson) ? '已复用已保存的总主题设计，继续生成页面总设计' : '需求扩写已完成，正在生成总主题设计',
                 28,
                 'theme_design',
-                'start',
+                $this->hasStageOneThemeCheckpoint($planJson) ? 'checkpoint' : 'start',
                 ['page_total' => \count($pageTypes)]
             );
 
-            $themeDecoded = $this->generateStageOneJsonByAi(
-                $this->buildAiStageOneThemePrompt(
-                    $scope,
-                    $websiteProfile,
-                    $pageTypes,
-                    $planLocale,
-                    $contentLocale,
-                    $instruction,
-                    $siteDisplayName,
-                    $siteSummary,
-                    \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : []
-                ),
-                'pagebuilder_plan_generation',
-                3072,
-                150,
-                $onChunk
-            );
-            $planJson = $this->mergeStageOneThemeAiPlanJson($planJson, $themeDecoded, $planLocale, $pageTypes, $scope);
-            $planJson['content_locale'] = $contentLocale;
-            $this->assertStageOneThemePlanIsGenerated($planJson);
+            if (!$this->hasStageOneThemeCheckpoint($planJson)) {
+                $themeDecoded = $this->generateStageOneJsonByAi(
+                    $this->buildAiStageOneThemePrompt(
+                        $scope,
+                        $websiteProfile,
+                        $pageTypes,
+                        $planLocale,
+                        $contentLocale,
+                        $instruction,
+                        $siteDisplayName,
+                        $siteSummary,
+                        \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : []
+                    ),
+                    'pagebuilder_plan_generation',
+                    3072,
+                    150,
+                    $onChunk
+                );
+                $planJson = $this->mergeStageOneThemeAiPlanJson($planJson, $themeDecoded, $planLocale, $pageTypes, $scope);
+                $planJson['content_locale'] = $contentLocale;
+                $this->assertStageOneThemePlanIsGenerated($planJson);
+                $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'theme_design', $pageTypes);
+            }
             $this->emitStageOnePipelineProgress(
                 $onProgress,
                 '总主题设计已完成，正在整理共享 Header/Footer 规划',
@@ -399,11 +417,26 @@ final class AiSiteExecutionBlueprintService
                 'start',
                 ['page_total' => \count($pageTypes)]
             );
-            $pagePlans = $this->generateStageOnePagePlansByAi(
+            $existingPagePlans = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+            $pendingPageTypes = \array_values(\array_filter(
+                $pageTypes,
+                static fn(string $pageType): bool => !\is_array($existingPagePlans[$pageType] ?? null) || $existingPagePlans[$pageType] === []
+            ));
+            if ($pendingPageTypes === []) {
+                $this->emitStageOnePipelineProgress(
+                    $onProgress,
+                    '已复用已保存的页面总设计，正在装配阶段一总设计',
+                    84,
+                    'page_fanout',
+                    'checkpoint',
+                    ['page_total' => \count($pageTypes)]
+                );
+            }
+            $pagePlans = $pendingPageTypes === [] ? [] : $this->generateStageOnePagePlansByAi(
                 $scope,
                 $websiteProfile,
                 $planJson,
-                $pageTypes,
+                $pendingPageTypes,
                 $planLocale,
                 $contentLocale,
                 $instruction,
@@ -413,6 +446,7 @@ final class AiSiteExecutionBlueprintService
             );
             if ($pagePlans !== []) {
                 $planJson['pages'] = \array_replace(\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [], $pagePlans);
+                $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'page_fanout', $pageTypes);
             }
 
             $this->emitStageOnePipelineProgress(
@@ -426,6 +460,7 @@ final class AiSiteExecutionBlueprintService
             $artifacts = $this->mapAiPlanToArtifacts($scope, $websiteProfile, ['plan_json' => $planJson], $pageTypes, $planLocale, $instruction, $targetScope);
             $artifacts['ai_generated'] = 1;
             $artifacts['generation_source'] = 'ai_staged';
+            $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'plan_assemble', $pageTypes);
             $this->emitStageOnePipelineProgress(
                 $onProgress,
                 '阶段一总设计装配完成，正在写入方案草案',
@@ -442,6 +477,84 @@ final class AiSiteExecutionBlueprintService
                 $throwable
             );
         }
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     */
+    private function buildStageOneCheckpointSignature(
+        array $scope,
+        array $websiteProfile,
+        array $pageTypes,
+        string $planLocale,
+        string $contentLocale,
+        string $instruction,
+        string $targetScope,
+        string $oneLineRequirement
+    ): string {
+        return \sha1((string)\json_encode([
+            'site_title' => \trim((string)($scope['site_title'] ?? $websiteProfile['site_title'] ?? '')),
+            'brief' => $oneLineRequirement,
+            'page_types' => \array_values($pageTypes),
+            'plan_locale' => $planLocale,
+            'content_locale' => $contentLocale,
+            'instruction' => $instruction,
+            'target_scope' => $targetScope,
+        ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolveStageOneCheckpoint(array $payload, array $scope, string $signature): array
+    {
+        $checkpoint = \is_array($payload['stage1_checkpoint'] ?? null)
+            ? $payload['stage1_checkpoint']
+            : (\is_array($scope['_plan_generation_checkpoint'] ?? null) ? $scope['_plan_generation_checkpoint'] : []);
+        if ((string)($checkpoint['signature'] ?? '') !== $signature) {
+            return [];
+        }
+
+        return $checkpoint;
+    }
+
+    private function hasStageOneRequirementCheckpoint(array $planJson): bool
+    {
+        try {
+            $this->assertStageOneRequirementExpansionIsGenerated($planJson);
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function hasStageOneThemeCheckpoint(array $planJson): bool
+    {
+        try {
+            $this->assertStageOneThemePlanIsGenerated($planJson);
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * @param callable(array<string, mixed>):void|null $onCheckpoint
+     * @param list<string> $pageTypes
+     */
+    private function persistStageOneCheckpoint(?callable $onCheckpoint, string $signature, array $planJson, string $step, array $pageTypes): void
+    {
+        if ($onCheckpoint === null || $signature === '' || $planJson === []) {
+            return;
+        }
+
+        $onCheckpoint([
+            'signature' => $signature,
+            'step' => $step,
+            'plan_json' => $planJson,
+            'page_types' => \array_values($pageTypes),
+            'updated_at' => \date('Y-m-d H:i:s'),
+        ]);
     }
 
     /**
