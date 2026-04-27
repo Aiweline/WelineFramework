@@ -35,16 +35,24 @@ class ThemeFileComponentSource implements ThemeComponentSourceInterface
             }
 
             $widgetMeta = $resource['widget_meta'] ?? [];
+            $isLegacyWidget = ($resource['type'] ?? '') === 'widgets';
             $category = (string)($resource['category'] ?? 'basic');
             $componentCode = (string)($resource['code'] ?? '');
             if ($componentCode === '') {
                 continue;
             }
 
+            $definitionType = $isLegacyWidget
+                ? (string)($widgetMeta['type'] ?? $category ?: 'content')
+                : 'theme_component';
+            $definitionCode = $isLegacyWidget
+                ? (string)($widgetMeta['code'] ?? $componentCode)
+                : "{$category}/{$componentCode}";
+
             $definitions[] = new ThemeComponentDefinition(
                 module: 'Weline_Theme',
-                type: 'theme_component',
-                code: "{$category}/{$componentCode}",
+                type: $definitionType,
+                code: $definitionCode,
                 name: (string)($widgetMeta['name'] ?? $resource['meta']['name'] ?? $componentCode),
                 description: (string)($widgetMeta['description'] ?? $resource['meta']['description'] ?? ''),
                 area: $area,
@@ -61,7 +69,7 @@ class ThemeFileComponentSource implements ThemeComponentSourceInterface
                     'widget_meta' => $widgetMeta,
                 ]),
                 params: $resource['params'] ?? [],
-                position: $this->normalizeArray($widgetMeta['position'] ?? ['content'], ['content']),
+                position: $this->normalizeArray($widgetMeta['position'] ?? [], $isLegacyWidget ? [] : ['content']),
                 pageLayouts: $this->normalizeArray($widgetMeta['page_layouts'] ?? ['*'], ['*']),
                 slots: $resource['slots'] ?? [],
                 slot: !empty($widgetMeta['slot']) ? (string)$widgetMeta['slot'] : null,
@@ -70,7 +78,7 @@ class ThemeFileComponentSource implements ThemeComponentSourceInterface
                 isContainer: (bool)($widgetMeta['is_container'] ?? false),
                 isAiGenerated: false,
                 icon: !empty($widgetMeta['icon']) ? (string)$widgetMeta['icon'] : ($resource['meta']['icon'] ?? null),
-                templatePath: $resource['file_path'] ?? null,
+                templatePath: $this->resolveTemplatePath($resource, $area, $isLegacyWidget),
                 themeId: (int)($resource['theme_id'] ?? 0),
                 themePath: $resource['theme_path'] ?? null,
                 logicalKey: $resource['logical_key'] ?? null,
@@ -145,5 +153,25 @@ class ThemeFileComponentSource implements ThemeComponentSourceInterface
         ), static fn(string $item): bool => $item !== ''));
 
         return $values ?: $fallback;
+    }
+
+    private function resolveTemplatePath(array $resource, string $area, bool $isLegacyWidget): ?string
+    {
+        $filePath = $resource['file_path'] ?? null;
+        if (!is_string($filePath) || $filePath === '') {
+            return null;
+        }
+
+        if (!$isLegacyWidget) {
+            return $filePath;
+        }
+
+        $relativePath = str_replace('\\', '/', (string)($resource['relative_path'] ?? ''));
+        $relativePath = trim($relativePath, '/');
+        if ($relativePath === '') {
+            return $filePath;
+        }
+
+        return sprintf('Weline_Theme::theme/%s/widgets/%s', $area, $relativePath);
     }
 }

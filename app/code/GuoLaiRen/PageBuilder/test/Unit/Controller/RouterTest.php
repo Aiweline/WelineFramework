@@ -59,4 +59,17 @@ class RouterTest extends TestCase
             $_GET = $savedGet;
         }
     }
+
+    public function testNonRootPathResolvesWebsiteFromHostBeforeGlobalHandleFallback(): void
+    {
+        $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Router.php');
+        self::assertIsString($source);
+
+        self::assertMatchesRegularExpression(
+            <<<'REGEX'
+/\$websiteId = self::getCurrentWebsiteId\(\);\s*if \(\$websiteId <= 0\) \{\s*\$websiteId = self::resolveWebsiteIdByCurrentHost\(\);\s*\}\s*\$isPreview = \\w_env_get\('preview'\) == '1';/s
+REGEX,
+            $source
+        );
+    }
 }

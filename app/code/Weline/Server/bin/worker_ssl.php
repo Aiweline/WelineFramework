@@ -1428,6 +1428,16 @@ $ackRetryCount = 0;
 $maxAckRetries = 0;
 $ackTimeout = 10.0;
 $orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
+$maxMemoryBytes = wlsMemoryLimitToBytes($wlsMemoryLimit);
+if ($maxMemoryBytes <= 0) {
+    $maxMemoryBytes = 256 * 1024 * 1024;
+}
+$memoryCheckInterval = 5;
+$lastMemoryCheck = \time();
+$memoryWarningThreshold = 0.80;
+$memoryDrainThreshold = 0.88;
+$maxRequestBodyBytes = 32 * 1024 * 1024;
+$maxBufferedRequestBytes = $maxRequestBodyBytes + 128 * 1024;
 
 // 如果启用了维护模式
 if ($isMaintenanceWorker) {
@@ -2128,6 +2138,41 @@ while (true) {
         }
     }
     
+    if ($now - $lastMemoryCheck >= $memoryCheckInterval) {
+        $lastMemoryCheck = $now;
+        $currentMemory = \memory_get_usage(true);
+        $memoryPercent = $maxMemoryBytes > 0 ? $currentMemory / $maxMemoryBytes : 0.0;
+
+        if ($memoryPercent >= $memoryDrainThreshold) {
+            $beforeMb = \round($currentMemory / 1024 / 1024, 1);
+            $compaction = \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
+            $currentMemory = \memory_get_usage(true);
+            $memoryPercent = $maxMemoryBytes > 0 ? $currentMemory / $maxMemoryBytes : 0.0;
+            $afterMb = \round($currentMemory / 1024 / 1024, 1);
+
+            if ($memoryPercent >= $memoryDrainThreshold) {
+                WlsLogger::warning_(
+                    "SSL Worker memory pressure {$afterMb}MB after compact (before={$beforeMb}MB), start drain to avoid OOM reset"
+                );
+                $shouldExit = true;
+                $ipcDraining = true;
+                $drainStartTime = \time();
+                $maxDrainTime = \min($maxDrainTime, 10);
+                if ($socket && \is_resource($socket)) {
+                    @\fclose($socket);
+                    $socket = null;
+                }
+            } elseif ($memoryPercent >= $memoryWarningThreshold) {
+                WlsLogger::warning_(
+                    "SSL Worker memory high {$afterMb}MB after compact (before={$beforeMb}MB, cycles="
+                    . (int)($compaction['cycles'] ?? 0) . ")"
+                );
+            }
+        } elseif ($memoryPercent >= $memoryWarningThreshold) {
+            WlsLogger::warning_("SSL Worker memory high: " . \round($currentMemory / 1024 / 1024, 1) . 'MB');
+        }
+    }
+
     $pendingPeekConns = [];
     foreach ($pendingPeek as $connId => $info) {
         if (\is_resource($info['conn']) && \get_resource_type($info['conn']) === 'stream') {
@@ -2525,6 +2570,32 @@ while (true) {
         $connectionLastActivity[$connId] = \time();
         
         $requestBuffers[$connId] = ($requestBuffers[$connId] ?? '') . $data;
+        $bufferLength = \strlen($requestBuffers[$connId]);
+        $tooLarge = $bufferLength > $maxBufferedRequestBytes;
+        if (!$tooLarge && \preg_match('/Content-Length:\s*(\d+)/i', $requestBuffers[$connId], $contentLengthMatch)) {
+            $tooLarge = (int) $contentLengthMatch[1] > $maxRequestBodyBytes;
+        }
+        if ($tooLarge) {
+            WlsLogger::warning_("SSL request body too large, reject connection (connId: {$connId}, buffered={$bufferLength})");
+            $errorBody = 'Request Entity Too Large';
+            $errorResponse = "HTTP/1.1 413 Request Entity Too Large\r\n";
+            $errorResponse .= "Content-Type: text/plain; charset=utf-8\r\n";
+            $errorResponse .= "Connection: close\r\n";
+            $errorResponse .= "Content-Length: " . \strlen($errorBody) . "\r\n\r\n" . $errorBody;
+            @\fwrite($conn, $errorResponse);
+            safeCloseStream($conn);
+            unset($connections[$connId]);
+            unset($requestBuffers[$connId]);
+            unset($connectionLastActivity[$connId]);
+            unset($requestLogged[$connId]);
+            unset($writeBuffers[$connId]);
+            unset($writableConnections[$connId]);
+            unset($pendingClose[$connId]);
+            if (isset($longLivedConnections[$connId])) {
+                unset($longLivedConnections[$connId]);
+            }
+            continue;
+        }
         
         // 开发模式：在接收到请求的第一行时立即输出路径日志（前台直接输出，后台通过 IPC 汇聚到 Master）
         if ($isDev && !isset($requestLogged[$connId])) {

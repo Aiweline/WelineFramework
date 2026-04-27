@@ -127,7 +127,8 @@ class AiSiteVirtualLayoutService
     ): array {
         $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType(
             $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []),
-            $scope
+            $scope,
+            false
         );
         $virtualPages[$pageType] = \array_replace(
             $virtualPages[$pageType] ?? [],

@@ -165,6 +165,134 @@ class AiSiteBuildTaskServiceTest extends TestCase
         );
     }
 
+    public function testFreshRepairResetsAttemptCountForQualityRetry(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+        $scope = [
+            'build_tasks' => [
+                'page:home_page:hero' => [
+                    'task_key' => 'page:home_page:hero',
+                    'status' => AiSiteBuildTaskService::TASK_STATUS_FAILED,
+                    'attempt_no' => 3,
+                    'message' => 'old failure',
+                    'result_ref' => ['page_type' => 'home_page'],
+                    'started_at' => '2026-01-01 00:00:00',
+                    'finished_at' => '2026-01-01 00:01:00',
+                ],
+            ],
+        ];
+
+        $scope = $service->markTaskPendingForFreshRepair($scope, 'page:home_page:hero', 'Quality gate retry');
+
+        self::assertSame(AiSiteBuildTaskService::TASK_STATUS_PENDING, $scope['build_tasks']['page:home_page:hero']['status']);
+        self::assertSame(0, $scope['build_tasks']['page:home_page:hero']['attempt_no']);
+        self::assertSame('Quality gate retry', $scope['build_tasks']['page:home_page:hero']['message']);
+        self::assertSame([], $scope['build_tasks']['page:home_page:hero']['result_ref']);
+        self::assertSame('', $scope['build_tasks']['page:home_page:hero']['started_at']);
+        self::assertSame('', $scope['build_tasks']['page:home_page:hero']['finished_at']);
+    }
+
+    public function testFreshRepairResetOnlyTouchesFailedBlueprintTasks(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+        $scope = [
+            'build_blueprint' => [
+                'tasks' => [
+                    ['task_key' => 'page:home_page:hero'],
+                    ['task_key' => 'page:about_page:story'],
+                    ['task_key' => 'page:contact_page:form'],
+                ],
+            ],
+            'build_tasks' => [
+                'page:home_page:hero' => [
+                    'task_key' => 'page:home_page:hero',
+                    'status' => AiSiteBuildTaskService::TASK_STATUS_FAILED,
+                    'attempt_no' => 3,
+                    'message' => 'old failure',
+                    'result_ref' => ['page_type' => 'home_page'],
+                    'started_at' => '2026-01-01 00:00:00',
+                    'finished_at' => '2026-01-01 00:01:00',
+                ],
+                'page:about_page:story' => [
+                    'task_key' => 'page:about_page:story',
+                    'status' => AiSiteBuildTaskService::TASK_STATUS_DONE,
+                    'attempt_no' => 1,
+                    'message' => '',
+                    'result_ref' => ['page_type' => 'about_page'],
+                ],
+                'orphan:failed' => [
+                    'task_key' => 'orphan:failed',
+                    'status' => AiSiteBuildTaskService::TASK_STATUS_FAILED,
+                    'attempt_no' => 3,
+                    'message' => 'stale orphan',
+                ],
+            ],
+        ];
+
+        $scope = $service->resetFailedTasksForFreshRepair($scope, 'Fresh build repair');
+
+        self::assertSame(AiSiteBuildTaskService::TASK_STATUS_PENDING, $scope['build_tasks']['page:home_page:hero']['status']);
+        self::assertSame(0, $scope['build_tasks']['page:home_page:hero']['attempt_no']);
+        self::assertSame([], $scope['build_tasks']['page:home_page:hero']['result_ref']);
+        self::assertSame(AiSiteBuildTaskService::TASK_STATUS_DONE, $scope['build_tasks']['page:about_page:story']['status']);
+        self::assertSame(AiSiteBuildTaskService::TASK_STATUS_FAILED, $scope['build_tasks']['orphan:failed']['status']);
+    }
+
+    public function testInterruptedBuildResetOnlyTouchesRunningBlueprintTasks(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+        $scope = [
+            'build_blueprint' => [
+                'tasks' => [
+                    ['task_key' => 'page:contact_page:faq'],
+                    ['task_key' => 'page:about_page:story'],
+                    ['task_key' => 'page:home_page:hero'],
+                ],
+            ],
+            'build_tasks' => [
+                'page:contact_page:faq' => [
+                    'task_key' => 'page:contact_page:faq',
+                    'status' => AiSiteBuildTaskService::TASK_STATUS_RUNNING,
+                    'attempt_no' => 2,
+                    'message' => 'generating',
+                    'result_ref' => ['page_type' => 'contact_page'],
+                    'started_at' => '2026-01-01 00:00:00',
+                    'finished_at' => '',
+                ],
+                'page:about_page:story' => [
+                    'task_key' => 'page:about_page:story',
+                    'status' => AiSiteBuildTaskService::TASK_STATUS_DONE,
+                    'attempt_no' => 1,
+                    'message' => '',
+                    'result_ref' => ['page_type' => 'about_page'],
+                ],
+                'page:home_page:hero' => [
+                    'task_key' => 'page:home_page:hero',
+                    'status' => AiSiteBuildTaskService::TASK_STATUS_FAILED,
+                    'attempt_no' => 3,
+                    'message' => 'quality failure',
+                ],
+                'orphan:running' => [
+                    'task_key' => 'orphan:running',
+                    'status' => AiSiteBuildTaskService::TASK_STATUS_RUNNING,
+                    'attempt_no' => 2,
+                ],
+            ],
+        ];
+
+        $scope = $service->resetRunningTasksForInterruptedBuild($scope, 'Provider interrupted build');
+
+        self::assertSame(AiSiteBuildTaskService::TASK_STATUS_PENDING, $scope['build_tasks']['page:contact_page:faq']['status']);
+        self::assertSame(0, $scope['build_tasks']['page:contact_page:faq']['attempt_no']);
+        self::assertSame('Provider interrupted build', $scope['build_tasks']['page:contact_page:faq']['message']);
+        self::assertSame([], $scope['build_tasks']['page:contact_page:faq']['result_ref']);
+        self::assertSame('', $scope['build_tasks']['page:contact_page:faq']['started_at']);
+        self::assertSame('', $scope['build_tasks']['page:contact_page:faq']['finished_at']);
+        self::assertSame(AiSiteBuildTaskService::TASK_STATUS_DONE, $scope['build_tasks']['page:about_page:story']['status']);
+        self::assertSame(AiSiteBuildTaskService::TASK_STATUS_FAILED, $scope['build_tasks']['page:home_page:hero']['status']);
+        self::assertSame(AiSiteBuildTaskService::TASK_STATUS_RUNNING, $scope['build_tasks']['orphan:running']['status']);
+    }
+
     public function testEnsureTaskScopeReusesExistingConfirmedBuildBlueprintWhenConfirmedPlanWasCompacted(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
@@ -411,6 +539,59 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_DONE, $scope['build_tasks'][$pageTaskKey]['status'] ?? null);
         $this->assertNotContains('shared:header', $pendingKeys);
         $this->assertNotContains($pageTaskKey, $pendingKeys);
+    }
+
+    public function testForceRebuildResetPreservesPersistedGeneratedArtifactsForResume(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page'],
+        ], [
+            'site_title' => 'Example Site',
+            'brief_description' => 'Example site summary',
+        ], 'virtual_theme');
+
+        $pageTaskKey = 'page:home_page:content/home-page-hero';
+        $scope['build_tasks']['shared:header']['status'] = AiSiteBuildTaskService::TASK_STATUS_PENDING;
+        $scope['build_tasks'][$pageTaskKey]['status'] = AiSiteBuildTaskService::TASK_STATUS_PENDING;
+        $scope['shared_components']['header'] = ['region' => 'header', 'html' => '<header>Ready</header>'];
+        $scope['page_type_layouts']['home_page']['content'][] = [
+            'code' => 'content/home-page-hero',
+            'component' => 'content/home-page-hero',
+        ];
+
+        $scope = $service->resetBuildTasksToPendingForRebuild($scope);
+        $pendingKeys = \array_column($service->listPendingTasks($scope), 'task_key');
+
+        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_DONE, $scope['build_tasks']['shared:header']['status'] ?? null);
+        $this->assertSame(['region' => 'header'], $scope['build_tasks']['shared:header']['result_ref'] ?? null);
+        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_DONE, $scope['build_tasks'][$pageTaskKey]['status'] ?? null);
+        $this->assertSame(
+            ['page_type' => 'home_page', 'section_code' => 'content/home-page-hero'],
+            $scope['build_tasks'][$pageTaskKey]['result_ref'] ?? null
+        );
+        $this->assertNotContains('shared:header', $pendingKeys);
+        $this->assertNotContains($pageTaskKey, $pendingKeys);
+    }
+
+    public function testForceRebuildResetRetriesDoneTaskWhenGeneratedArtifactIsMissing(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page'],
+        ], [
+            'site_title' => 'Example Site',
+            'brief_description' => 'Example site summary',
+        ], 'virtual_theme');
+
+        $scope = $service->markTaskDone($scope, 'shared:header', ['region' => 'header']);
+
+        $scope = $service->resetBuildTasksToPendingForRebuild($scope);
+
+        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_PENDING, $scope['build_tasks']['shared:header']['status'] ?? null);
+        $this->assertSame([], $scope['build_tasks']['shared:header']['result_ref'] ?? null);
     }
 
     public function testSummarizeTracksCancelledTasksWithoutPretendingTheyArePending(): void

@@ -77,7 +77,7 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
     public function testGenerateComponentThrowsAfterAiRetriesInsteadOfReturningStubFallback(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(3))
+        $aiService->expects(self::exactly(2))
             ->method('generateStream')
             ->willThrowException(new \RuntimeException('model unavailable'));
         $aiService->expects(self::never())
@@ -91,7 +91,7 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         );
 
         self::expectException(\RuntimeException::class);
-        self::expectExceptionMessage('AI');
+        self::expectExceptionMessage('AI component generation failed after');
 
         (function (): array {
             return $this->generateComponent(
@@ -105,10 +105,65 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         })->call($service);
     }
 
+    public function testProductionFallbackComponentGenerationIsForbidden(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            frameworkBuilder: new FrameworkBuilder(),
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+        );
+
+        self::expectException(\RuntimeException::class);
+        self::expectExceptionMessage('Local component fallback is forbidden');
+
+        (function (): array {
+            return $this->buildFallbackComponent(
+                'content/home-page-featured-plugins-grid',
+                'Featured plugin grid',
+                'content',
+                'Generate a featured plugin grid',
+                [
+                    'content.title' => 'AI Plugin Hub',
+                    'content.description' => 'Browse trusted AI tools with clear fit, proof points, and fast download paths.',
+                ],
+                ['_content_locale' => 'en_US']
+            );
+        })->call($service);
+    }
+
+    public function testRetryPromptPreservesVisualQualityFloor(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+
+        $prompt = (function (): string {
+            return $this->buildRetryGenerationPrompt(
+                'content',
+                'content/home-page-featured-plugins-grid',
+                'Base prompt',
+                'plain card grid failed quality check',
+                2
+            );
+        })->call($service);
+
+        self::assertStringContainsString('AI enhanced repair/rewrite mode', $prompt);
+        self::assertStringContainsString('full-quality AI design repair', $prompt);
+        self::assertStringContainsString('Preserve the original page/task intent', $prompt);
+        self::assertStringContainsString('Do not downgrade to a generic grid', $prompt);
+        self::assertStringContainsString('plain cards or a flat strip', $prompt);
+        self::assertStringContainsString('For link/contact/social blocks', $prompt);
+        self::assertStringContainsString('For blog/article/category blocks', $prompt);
+        self::assertStringContainsString('pb-content-home-page-featured-plugins-grid', $prompt);
+        self::assertStringNotContainsString('simplif', \strtolower($prompt));
+        self::assertStringNotContainsString('compact', \strtolower($prompt));
+        self::assertStringNotContainsString('reduced', \strtolower($prompt));
+        self::assertStringNotContainsString('Keep the structure compact', $prompt);
+        self::assertStringNotContainsString('Prefer one small section', $prompt);
+    }
+
     public function testGenerateComponentEventsConcurrentlyReportsFulfilledAndRejectedTasks(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::exactly(4))
+        $aiService->expects(self::exactly(3))
             ->method('generateStream')
             ->willReturnCallback(static function (string $prompt, callable $callback): void {
                 if (\str_contains($prompt, 'broken-batch-prompt')) {
@@ -150,6 +205,15 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         self::assertInstanceOf(\Throwable::class, $events['footer-task']['error'] ?? null);
     }
 
+    public function testFiberConcurrencyWrapsThrownComponentErrorsBeforeGetReturn(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/AiSitePageComponentGenerationService.php');
+
+        self::assertStringContainsString("'status' => 'rejected'", $source);
+        self::assertStringContainsString("'error' => \$throwable", $source);
+        self::assertStringContainsString("Component fiber failed without an exception payload.", $source);
+    }
+
     public function testGenerateComponentDoesNotRetryNonRetryableProviderErrors(): void
     {
         $aiService = $this->createMock(AiService::class);
@@ -169,6 +233,38 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         self::expectException(\RuntimeException::class);
         self::expectExceptionMessage('AI component generation failed');
         self::expectExceptionMessage('Insufficient Balance');
+
+        (function (): array {
+            return $this->generateComponent(
+                'header/ai-site-header',
+                'AI Site Header',
+                'header',
+                'Generate a simple header',
+                [],
+                []
+            );
+        })->call($service);
+    }
+
+    public function testGenerateComponentStillFailsForApiKeyConfigurationErrors(): void
+    {
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generateStream')
+            ->willThrowException(new \RuntimeException('AI API error (HTTP 401): missing api key'));
+        $aiService->expects(self::never())
+            ->method('generate');
+
+        $service = new AiSitePageComponentGenerationService(
+            frameworkBuilder: new FrameworkBuilder(),
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+            aiService: $aiService,
+        );
+
+        self::expectException(\RuntimeException::class);
+        self::expectExceptionMessage('AI component generation failed');
+        self::expectExceptionMessage('missing api key');
 
         (function (): array {
             return $this->generateComponent(
@@ -211,6 +307,29 @@ PHP,
 
         $validation = (new CodeValidator())->validateAiData($validatedPayload, 'header');
         self::assertTrue($validation['valid'], \implode('; ', $validation['errors'] ?? []));
+    }
+
+    public function testHeaderPayloadDoesNotRequireContentHtmlQualityBody(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+        );
+
+        $payload = [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '#componentId .pb-royal-header { display:flex; align-items:center; gap:18px; background:linear-gradient(135deg,var(--section-primary),var(--section-accent)); }',
+            'html_extra' => '',
+            'js_content' => '',
+        ];
+
+        $validatedPayload = (function (array $payload): array {
+            return $this->ensureAiPayloadValid($payload, 'header', 'header/ai-site-header');
+        })->call($service, $payload);
+
+        self::assertSame('', $validatedPayload['html_extra']);
+        self::assertStringContainsString('pb-royal-header', $validatedPayload['css_extra']);
     }
 
     public function testDecodeComponentPayloadWithRepairRetriesJsonRepairUpToThreeAttempts(): void
@@ -461,9 +580,18 @@ HTML,
         self::assertStringContainsString('translate/rewrite them into content_locale/default_locale before rendering', $prompt);
         self::assertStringContainsString('Never render internal identifiers or paths as visible copy', $prompt);
         self::assertStringContainsString('plan_locale, page_type, section_code, task_key', $prompt);
+        self::assertStringContainsString('Rewrite planning/observation sentences into direct marketing copy', $prompt);
+        self::assertStringContainsString('Visitors see', $prompt);
+        self::assertStringContainsString('访客看到', $prompt);
         self::assertStringContainsString('Never render broken image placeholders', $prompt);
         self::assertStringContainsString('inline SVG or CSS shapes', $prompt);
         self::assertStringContainsString('Images: never output broken image placeholders', $prompt);
+        self::assertStringContainsString('Visual excellence system prompt for section', $prompt);
+        self::assertStringContainsString('Section quality floor', $prompt);
+        self::assertStringContainsString('pale background + ordinary cards + small default buttons', $prompt);
+        self::assertStringContainsString('Customer-intent lock', $prompt);
+        self::assertStringContainsString('Interaction/effects requirement', $prompt);
+        self::assertStringContainsString('Do not leave css_extra empty', $prompt);
         self::assertStringContainsString('stage2 language rule', $prompt);
         self::assertStringContainsString('rewrite any planned text that is not in the website content language', $prompt);
     }
@@ -727,6 +855,14 @@ HTML,
                                         'visual_tone' => 'trustworthy gaming',
                                         'font_family' => 'Poppins, Inter, sans-serif',
                                     ],
+                                    'style_signature' => 'arcade trust dashboard with ember card accents',
+                                    'art_direction' => [
+                                        'layout_motif' => 'arcade cards and trust badges',
+                                        'background_system' => 'dark ember gradient with soft glow',
+                                        'surface_treatment' => 'glass cards with gold borders',
+                                        'visual_detail_rule' => 'use inline SVG game tokens',
+                                        'motion_rule' => 'restrained hover lift',
+                                    ],
                                     'palette' => [
                                         'primary' => '#111827',
                                         'accent' => '#f59e0b',
@@ -768,6 +904,12 @@ HTML,
         self::assertSame('/games', (string)($config['cta.url'] ?? ''));
         self::assertStringContainsString('Confirmed visual contract', $prompt);
         self::assertStringContainsString('#f59e0b', $prompt);
+        self::assertStringContainsString('style_signature', $prompt);
+        self::assertStringContainsString('arcade trust dashboard', $prompt);
+        self::assertStringContainsString('Visual excellence system prompt for header', $prompt);
+        self::assertStringContainsString('polished enough for a paying customer preview', $prompt);
+        self::assertStringContainsString('Header quality floor', $prompt);
+        self::assertStringContainsString('Do not leave css_extra empty', $prompt);
         self::assertStringContainsString('Do not invent unrelated accent colors', $prompt);
         self::assertStringContainsString('Weline/PageBuilder skill contract', $prompt);
         self::assertStringContainsString('pagebuilder-style-templates', $prompt);
@@ -798,6 +940,114 @@ HTML,
         self::assertSame('', $validated['css_extra']);
         self::assertSame('', $validated['html_extra']);
         self::assertSame('', $validated['js_content']);
+    }
+
+    public function testVirtualThemeComponentPolicyPreservesContentCssBudgetForVisualPolish(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+        );
+
+        $rules = [];
+        for ($index = 0; $index < 12; $index++) {
+            $rules[] = '#componentId .pb-rich-' . $index . ' { min-height:1px; background:linear-gradient(135deg,var(--section-primary),var(--section-accent)); border-radius:24px; box-shadow:0 18px 44px rgba(15,23,42,.14); }';
+        }
+        $css = \implode("\n", $rules) . "\n#componentId .pb-rich-sentinel { color:#123456; }";
+        self::assertGreaterThan(1800, \strlen($css));
+        self::assertLessThan(2800, \strlen($css));
+
+        $payload = [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => $css,
+            'html_content' => '<div class="pb-rich-0 pb-rich-sentinel"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8"/></svg><h2>AI Plugin Hub</h2><p>Browse trusted AI tools with clear fit, proof points, and fast download paths.</p></div>',
+            'js_content' => '',
+        ];
+
+        $validated = (function (array $payload, string $region, string $componentCode): array {
+            return $this->ensureAiPayloadValid($payload, $region, $componentCode);
+        })->call($service, $payload, 'content', 'content/home-page-featured-plugins-grid');
+
+        self::assertGreaterThan(1800, \strlen((string)($validated['css_extra'] ?? '')));
+        self::assertStringContainsString('pb-rich-sentinel', (string)($validated['css_extra'] ?? ''));
+    }
+
+    public function testVirtualThemeComponentPolicyAllowsVisitorFormPlaceholderAttributes(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+        );
+
+        $payload = [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '#componentId .pb-contact-panel { display:grid; grid-template-columns:1fr 1fr; gap:24px; padding:28px; border-radius:28px; background:linear-gradient(135deg,var(--section-primary),var(--section-accent)); } #componentId .pb-contact-form { display:grid; gap:14px; } #componentId .pb-contact-card { padding:18px; border-radius:18px; background:rgba(255,255,255,.86); }',
+            'css_responsive' => '#componentId .pb-contact-panel { grid-template-columns:1fr; }',
+            'html_content' => '<div class="pb-contact-panel"><div class="pb-contact-card"><h2>Message Teen Patti Royal</h2><p>Ask for APK download help, safety notes, and VIP table guidance before installing.</p></div><form class="pb-contact-form" aria-label="APK support form"><label>Name<input name="name" placeholder="Your name"></label><label>WhatsApp<input name="phone" placeholder="+91 phone number"></label><button type="button">Request APK link</button></form></div>',
+            'js_content' => '',
+        ];
+
+        $validated = (function (array $payload, string $region, string $componentCode): array {
+            return $this->ensureAiPayloadValid($payload, $region, $componentCode);
+        })->call($service, $payload, 'content', 'content/contact-page-contact-form-and-info');
+
+        self::assertStringContainsString('placeholder="Your name"', (string)($validated['html_content'] ?? ''));
+        self::assertStringContainsString('pb-contact-panel', (string)($validated['html_content'] ?? ''));
+    }
+
+    public function testVirtualThemeComponentPolicyAllowsVisitorSocialLinkCluster(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+        );
+
+        $payload = [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '#componentId .pb-social-links { display:flex; flex-wrap:wrap; gap:12px; padding:18px; border-radius:22px; background:linear-gradient(135deg,var(--section-primary),var(--section-accent)); } #componentId .pb-social-link { color:white; font-weight:700; text-decoration:none; }',
+            'css_responsive' => '#componentId .pb-social-links { display:grid; }',
+            'html_content' => '<nav class="pb-social-links" aria-label="Teen Patti social channels"><a class="pb-social-link" href="#whatsapp">WhatsApp</a><a class="pb-social-link" href="#telegram">Telegram</a><a class="pb-social-link" href="#instagram">Instagram</a></nav>',
+            'js_content' => '',
+        ];
+
+        $validated = (function (array $payload, string $region, string $componentCode): array {
+            return $this->ensureAiPayloadValid($payload, $region, $componentCode);
+        })->call($service, $payload, 'content', 'content/contact-page-social-media-links');
+
+        self::assertStringContainsString('WhatsApp', (string)($validated['html_content'] ?? ''));
+        self::assertStringContainsString('Telegram', (string)($validated['html_content'] ?? ''));
+        self::assertStringContainsString('Instagram', (string)($validated['html_content'] ?? ''));
+    }
+
+    public function testVirtualThemeComponentPolicyAllowsCompactVisitorArticleList(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+        );
+
+        $payload = [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '#componentId .pb-blog-list { display:flex; flex-direction:column; gap:12px; padding:18px; border-radius:18px; background:var(--section-bg); } #componentId .pb-blog-entry { display:flex; justify-content:space-between; gap:10px; }',
+            'css_responsive' => '#componentId .pb-blog-entry { flex-direction:column; }',
+            'html_content' => '<ul class="pb-blog-list"><li class="pb-blog-entry"><a href="#tips">Tips</a><time>Today</time></li><li class="pb-blog-entry"><a href="#news">News</a><span>3 min read</span></li></ul>',
+            'js_content' => '',
+        ];
+
+        $validated = (function (array $payload, string $region, string $componentCode): array {
+            return $this->ensureAiPayloadValid($payload, $region, $componentCode);
+        })->call($service, $payload, 'content', 'content/blog-category-article-list');
+
+        self::assertStringContainsString('Tips', (string)($validated['html_content'] ?? ''));
+        self::assertStringContainsString('News', (string)($validated['html_content'] ?? ''));
     }
 
     public function testVirtualThemeComponentPolicyDropsPageTypeEyebrowLabels(): void
@@ -1034,5 +1284,47 @@ HTML,
             '<section><h2>立即开始体验</h2><p>这是中文段落，长度足够，英文站点不应通过。</p></section>',
             ['_content_locale' => 'en_US']
         );
+    }
+
+    public function testSanitizeVisibleCopyDropsPlanningObservationCopy(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $sanitize = function (string $value): string {
+            return $this->sanitizeVisibleCopy($value);
+        };
+
+        self::assertSame('', $sanitize->call($service, 'Visitors see three cards before publishing.'));
+        self::assertSame('', $sanitize->call($service, 'Visitors can review clear steps and proof.'));
+        self::assertSame('', $sanitize->call($service, '访客看到三张精致卡片，从而产生下载兴趣。'));
+        self::assertSame('', $sanitize->call($service, '信任感增强，并知道如何立即下载 Teen Patti Royal APK。'));
+        self::assertSame('Trusted APK rewards', $sanitize->call($service, 'Trusted APK rewards'));
+    }
+
+    public function testVirtualThemeComponentPolicyRejectsPlanningObservationCopy(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+        );
+
+        $payload = [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '#componentId .pb-royal-panel { display:grid; gap:18px; padding:28px; border-radius:28px; background:linear-gradient(135deg,#1A1A1A,#E67E22); box-shadow:0 24px 60px rgba(0,0,0,.2); transition:transform .2s ease; }',
+            'css_responsive' => '#componentId .pb-royal-panel { grid-template-columns:1fr; }',
+            'html_content' => '<section class="pb-royal-panel"><svg viewBox="0 0 10 10"></svg><h2>访客看到三张精致卡片，从而产生下载兴趣。</h2><p>真实玩家对战，赢取真金奖励。</p></section>',
+            'js_content' => '',
+        ];
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('planning observation copy leaked');
+
+        (function (array $payload): array {
+            return $this->ensureAiPayloadValid($payload, 'content', 'content/home-page-game-features');
+        })->call($service, $payload);
     }
 }

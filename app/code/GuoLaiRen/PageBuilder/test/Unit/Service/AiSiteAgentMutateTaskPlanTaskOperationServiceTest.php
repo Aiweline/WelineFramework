@@ -175,7 +175,20 @@ final class AiSiteAgentMutateTaskPlanTaskOperationServiceTest extends TestCase
     {
         $state = [];
         $service = new AiSiteAgentMutateTaskPlanTaskOperationService();
-        $ports = $this->ports($state, ['success' => false, 'operation' => 'task_plan']);
+        $ports = $this->ports($state, [
+            'success' => false,
+            'operation' => 'task_plan',
+            'data' => [
+                'active_operations' => [
+                    'task_plan' => [
+                        'operation' => 'task_plan',
+                        'execution_token' => 'resume-token',
+                        'stream_url' => '/sse?execution_token=resume-token',
+                        'queue_id' => 21,
+                    ],
+                ],
+            ],
+        ]);
 
         $result = $service->run(
             $this->session(),
@@ -195,8 +208,20 @@ final class AiSiteAgentMutateTaskPlanTaskOperationServiceTest extends TestCase
         self::assertTrue($result['success']);
         self::assertSame('task_plan', $result['operation']);
         self::assertTrue($result['start_sse']);
-        self::assertSame(['state' => 'rebuilt'], $result['data']);
-        self::assertCount(1, $state['build_workspace_state_calls']);
+        self::assertSame('resume-token', $result['execution_token']);
+        self::assertSame('/sse?execution_token=resume-token', $result['stream_url']);
+        self::assertSame([
+            'active_operations' => [
+                'task_plan' => [
+                    'operation' => 'task_plan',
+                    'execution_token' => 'resume-token',
+                    'stream_url' => '/sse?execution_token=resume-token',
+                    'queue_id' => 21,
+                ],
+            ],
+        ], $result['data']);
+        self::assertSame(21, $result['queue_id']);
+        self::assertCount(0, $state['build_workspace_state_calls']);
     }
 
     public function testReturnsFailureWhenStartOperationFailsWithOtherOperation(): void
@@ -251,5 +276,86 @@ final class AiSiteAgentMutateTaskPlanTaskOperationServiceTest extends TestCase
         self::assertSame(['state' => 'rebuilt'], $result['data']);
         self::assertSame(9, $result['queue_id']);
         self::assertCount(1, $state['build_workspace_state_calls']);
+    }
+
+    public function testResolvesExecutionTokenAndStreamUrlFromOperationStateWhenMissingOnResult(): void
+    {
+        $state = [];
+        $service = new AiSiteAgentMutateTaskPlanTaskOperationService();
+        $ports = $this->ports($state, [
+            'success' => true,
+            'operation' => 'task_plan',
+            'queue_id' => 11,
+            'data' => [
+                'active_operations' => [
+                    'task_plan' => [
+                        'operation' => 'task_plan',
+                        'execution_token' => 'nested-token',
+                        'stream_url' => '/operation-sse?execution_token=nested-token',
+                        'queue_id' => 11,
+                    ],
+                ],
+            ],
+        ]);
+
+        $result = $service->run(
+            $this->session(),
+            8,
+            [],
+            'page',
+            'home',
+            'create',
+            '',
+            [],
+            '',
+            5,
+            '',
+            $ports
+        );
+
+        self::assertTrue($result['success']);
+        self::assertSame('nested-token', $result['execution_token']);
+        self::assertSame('/operation-sse?execution_token=nested-token', $result['stream_url']);
+        self::assertSame(11, $result['queue_id']);
+    }
+
+    public function testReturnsFailureWhenQueueOrSseBindingMissing(): void
+    {
+        $state = [];
+        $service = new AiSiteAgentMutateTaskPlanTaskOperationService();
+        $ports = $this->ports($state, [
+            'success' => true,
+            'operation' => 'task_plan',
+            'queue_id' => 0,
+            'data' => [
+                'active_operations' => [
+                    'task_plan' => [
+                        'operation' => 'task_plan',
+                        'execution_token' => '',
+                        'stream_url' => '',
+                        'queue_id' => 0,
+                    ],
+                ],
+            ],
+        ]);
+
+        $result = $service->run(
+            $this->session(),
+            8,
+            [],
+            'page',
+            'home',
+            'create',
+            '',
+            [],
+            '',
+            5,
+            '',
+            $ports
+        );
+
+        self::assertFalse($result['success']);
+        self::assertSame('task_plan', $result['operation']);
+        self::assertSame(0, $result['queue_id']);
     }
 }

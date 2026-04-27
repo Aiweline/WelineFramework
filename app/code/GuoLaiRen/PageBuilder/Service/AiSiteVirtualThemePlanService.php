@@ -263,16 +263,12 @@ final class AiSiteVirtualThemePlanService
                         $heartbeatCallback
                     );
                 } catch (\Throwable $batchThrowable) {
-                    $decodedByBatchId[$this->buildTaskPlanBatchId($batch)] = $this->buildRecoverableTaskPlanBatchPayload(
-                        $assembledStructured,
-                        $batch,
-                        $batchThrowable->getMessage()
-                    );
-                    $this->emitTaskPlanBatchProgress($progressCallback, 'batch_done', $batch, $batchIndex, $totalBatches, $completedBatches, [
+                    $this->emitTaskPlanBatchProgress($progressCallback, 'batch_failed', $batch, $batchIndex, $totalBatches, $completedBatches, [
                         'attempt_no' => 3,
-                        'recovered' => true,
-                        'warning_message' => $batchThrowable->getMessage(),
+                        'recovered' => false,
+                        'error_message' => $batchThrowable->getMessage(),
                     ]);
+                    $this->throwTaskPlanBatchAiFailure($batch, $batchThrowable->getMessage());
                 }
             }
             return $decodedByBatchId;
@@ -306,17 +302,12 @@ final class AiSiteVirtualThemePlanService
                         $sessionParams
                     );
                 } catch (\Throwable $batchThrowable) {
-                    $this->emitTaskPlanBatchProgress($progressCallback, 'batch_done', $batch, $batchIndex, $totalBatches, $completedBatches, [
+                    $this->emitTaskPlanBatchProgress($progressCallback, 'batch_failed', $batch, $batchIndex, $totalBatches, $completedBatches, [
                         'attempt_no' => 3,
-                        'recovered' => true,
-                        'warning_message' => $batchThrowable->getMessage(),
+                        'recovered' => false,
+                        'error_message' => $batchThrowable->getMessage(),
                     ]);
-
-                    return $this->buildRecoverableTaskPlanBatchPayload(
-                        $assembledStructured,
-                        $batch,
-                        $batchThrowable->getMessage()
-                    );
+                    $this->throwTaskPlanBatchAiFailure($batch, $batchThrowable->getMessage());
                 }
             };
         }
@@ -353,16 +344,12 @@ final class AiSiteVirtualThemePlanService
                     $heartbeatCallback
                 );
             } catch (\Throwable $batchThrowable) {
-                $decodedByBatchId[$batchId] = $this->buildRecoverableTaskPlanBatchPayload(
-                    $assembledStructured,
-                    $batch,
-                    $batchThrowable->getMessage()
-                );
-                $this->emitTaskPlanBatchProgress($progressCallback, 'batch_done', $batch, $batchIndex, $totalBatches, $completedBatches, [
+                $this->emitTaskPlanBatchProgress($progressCallback, 'batch_failed', $batch, $batchIndex, $totalBatches, $completedBatches, [
                     'attempt_no' => 3,
-                    'recovered' => true,
-                    'warning_message' => $batchThrowable->getMessage(),
+                    'recovered' => false,
+                    'error_message' => $batchThrowable->getMessage(),
                 ]);
+                $this->throwTaskPlanBatchAiFailure($batch, $batchThrowable->getMessage());
             }
         }
 
@@ -370,39 +357,20 @@ final class AiSiteVirtualThemePlanService
     }
 
     /**
-     * Keep stage-2 generation usable when a model returns truncated or malformed
-     * JSON for a single batch. The deterministic baseline still carries the
-     * confirmed stage-1 page/block tree and can be refined by the user later.
-     *
-     * @param array<string, mixed> $structured
      * @param array<string, mixed> $batch
-     * @return array<string, mixed>
      */
-    private function buildRecoverableTaskPlanBatchPayload(array $structured, array $batch, string $reason): array
+    private function throwTaskPlanBatchAiFailure(array $batch, string $reason): void
     {
-        $riskNotes = [
-            'AI batch output was not usable JSON; deterministic stage-2 task baseline was used for this batch. Reason: ' . $this->excerptText($reason, 360),
-        ];
+        $batchId = $this->buildTaskPlanBatchId($batch);
+        $batchType = \trim((string)($batch['type'] ?? ''));
+        $batchKey = \trim((string)($batch['key'] ?? ''));
+        $message = 'AI stage-two task batch failed and deterministic fallback is forbidden.'
+            . ' batch_id=' . $batchId
+            . ($batchType !== '' ? ' batch_type=' . $batchType : '')
+            . ($batchKey !== '' ? ' batch_key=' . $batchKey : '')
+            . ' reason=' . $this->excerptText($reason, 500);
 
-        if (($batch['type'] ?? '') === 'shared') {
-            return [
-                'shared_tasks' => $this->filterTaskPlanTaskListForBatch(
-                    \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [],
-                    $batch
-                ),
-                'risk_notes' => $riskNotes,
-            ];
-        }
-
-        $pageType = (string)($batch['key'] ?? '');
-        return [
-            'page_type' => $pageType,
-            'page_tasks' => $this->filterTaskPlanTaskListForBatch(
-                \is_array($structured['page_tasks'][$pageType] ?? null) ? $structured['page_tasks'][$pageType] : [],
-                $batch
-            ),
-            'risk_notes' => $riskNotes,
-        ];
+        throw new \RuntimeException($message);
     }
 
     /**
@@ -870,6 +838,8 @@ final class AiSiteVirtualThemePlanService
         $lines[] = '- block_task.style_plan must read like a UI/interaction designer handoff: include section surface treatment, foreground/background relationship, interaction states, motion restraint, and mobile rhythm for this page role.';
         $lines[] = '- Every planning_reason must be concrete and traceable to stage-1 reason/implementation_detail; generic wording such as "needed for the page" is invalid.';
         $lines[] = '- block_task.style_plan MUST include concrete color, font, spacing, and responsive keys. Each key must be directly usable by stage 3: color names palette/hex usage, font names family/weight/scale, spacing names section padding/gap/radius rhythm, responsive names desktop/mobile behavior.';
+        $lines[] = '- block_task.style_plan MUST also include visual_identity, composition, background_texture, surface_treatment, visual_motif, interaction_motion, and accessibility_contrast when relevant so stage 3 can create a polished block without guessing.';
+        $lines[] = '- If stage-1 theme_design contains style_signature or art_direction, quote or paraphrase those decisions inside style_plan and adapt them to this exact block; never ignore them.';
         $lines[] = '- Every returned task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, and completion_rule-compatible detail.';
         $lines[] = '- Keep task_key, group_key, page_type, and sort_order compatible with the provided skeleton.';
         $lines[] = '- Do not drop any task from this batch.';
@@ -1252,9 +1222,14 @@ final class AiSiteVirtualThemePlanService
             '- Source skill: ' . self::FRONTEND_DESIGN_SKILL_SOURCE,
             '- Scope for this batch: ' . $componentScope,
             '- Apply frontend-design skill before writing task_script/style_plan: pick a clear aesthetic direction that matches the site purpose, audience, page role, and block goal.',
+            '- Treat stage-1 theme_design.style_signature and art_direction as mandatory inputs when present; convert them into executable style_plan details instead of falling back to a generic template.',
             '- Avoid generic AI aesthetics: no default Inter/Roboto/Arial/system-font look, no timid purple-gradient-on-white templates, no cookie-cutter card grids, no interchangeable SaaS hero patterns unless stage-1 explicitly demands that visual language.',
+            '- Visual quality bar: the task must give stage 3 enough detail to build a polished customer-ready block, including composition motif, background/texture system, surface treatment, visual motif, CTA state, and mobile rhythm.',
+            '- Customer-fit rule: every style_plan must explain how the visual choices fit the user brief and the specific page/block role, not just the global palette.',
             '- Make each component memorable through a deliberate typography, color, spatial composition, motion, texture, and visual-detail decision that can be implemented by stage 3.',
             '- Match complexity to the chosen aesthetic: refined/minimal components need precise spacing, type scale, and restraint; expressive/maximal components need purposeful layering, motion, and atmosphere.',
+            '- Interaction/effects must be executable, not decorative prose: name the target element, default/hover/focus state, transition or transform, and reduced-motion behavior inside style_plan or task_script.',
+            '- Customer-intent lock: style_plan must show how the block satisfies the original customer request through UI affordances, CTA wording, motifs, and interaction behavior; do not merely restate the global theme.',
             '- Page-owned blocks must start from page_design_plan before component styling: use its color_layering, section_flow, and interaction_notes to make the page feel intentionally art-directed rather than theme-colored uniformly.',
             '- For each returned task, encode the skill outcome in block_task.style_plan and task_script.responsive_contract/accessibility_contract/asset_requirements; do not merely mention this skill in prose.',
             '- style_plan must include concrete typography, color/theme, motion, spatial composition, background/texture/detail, responsive behavior, and accessibility notes when relevant to the component.',
@@ -7194,6 +7169,8 @@ final class AiSiteVirtualThemePlanService
             '- Treat the style_plan as a UI/interaction designer handoff: section surface, visual hierarchy, foreground/background layering, hover/focus behavior, motion timing, and responsive rhythm must be concrete.',
             '- Every planning_reason field MUST be concrete and traceable to stage-1 reason/implementation_detail; generic wording such as "needed for the page" is invalid.',
             '- Every block_task.style_plan MUST include concrete color, font, spacing, and responsive keys. The color key names palette/hex usage; font names family/weight/scale; spacing names section padding, card gaps, and radius rhythm; responsive names desktop/mobile behavior from the confirmed stage-1 plan.',
+            '- Every block_task.style_plan MUST include visual_identity, composition, background_texture, surface_treatment, visual_motif, interaction_motion, and accessibility_contrast when relevant so final component generation can create a polished block without guessing.',
+            '- If stage-1 theme_design contains style_signature or art_direction, quote or paraphrase those decisions inside style_plan and adapt them to this exact block; never ignore them.',
             '- Every task must include plan_context, implementation_contract, task_script, field_content_requirements, result_ref, completion_rule.',
             '- The markdown must explain concrete execution steps by shared tasks, page tasks, and task tree order; every section MUST name real labels, routes, field keys, and example copy—never-only phrases like "完善导航" or "优化体验" without specifics.',
             '- The stage-2 document must include page coverage, task tree, execution order, and risk notes.',

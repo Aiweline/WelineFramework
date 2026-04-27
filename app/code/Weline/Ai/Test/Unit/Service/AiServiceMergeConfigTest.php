@@ -73,6 +73,27 @@ class AiServiceMergeConfigTest extends TestCase
         $this->assertFalse($method->invoke($this->service, new \Exception('Invalid prompt format')));
     }
 
+    public function testGenerateKeepsRuntimeParamsWhenCallingNonStreamProviderPath(): void
+    {
+        $source = (string)file_get_contents(\dirname(__DIR__, 3) . '/Service/AiService.php');
+
+        $this->assertStringContainsString("\$params['resolved_config'] = \$resolvedConfig;", $source);
+        $this->assertStringContainsString('$this->callModelApi($model, $adaptedPrompt, $params)', $source);
+        $this->assertStringNotContainsString('$this->callModelApi($model, $adaptedPrompt, $resolvedConfig, $params)', $source);
+    }
+
+    public function testAllowZeroBalanceProviderReachesConfigResolutionBeforeApiCall(): void
+    {
+        $aiServiceSource = (string)file_get_contents(\dirname(__DIR__, 3) . '/Service/AiService.php');
+        $configResolverSource = (string)file_get_contents(\dirname(__DIR__, 3) . '/Service/ConfigResolver.php');
+
+        $this->assertStringContainsString("\$userConfig['allow_zero_balance_provider'] = \$params['allow_zero_balance_provider'];", $aiServiceSource);
+        $this->assertStringContainsString("\$allowZeroBalanceProvider = (bool)(\$userConfig['allow_zero_balance_provider'] ?? false);", $configResolverSource);
+        $this->assertStringContainsString('unset($userConfig[\'allow_zero_balance_provider\']);', $configResolverSource);
+        $this->assertStringContainsString('getDefaultProviderAccount(string $providerCode, bool $allowZeroBalanceProvider = false)', $configResolverSource);
+        $this->assertStringContainsString('if (!$allowZeroBalanceProvider) {', $configResolverSource);
+    }
+
     public function testDetachedModelKeepsPerAttemptAccountConfigIsolated(): void
     {
         /** @var AiModel $baseModel */
