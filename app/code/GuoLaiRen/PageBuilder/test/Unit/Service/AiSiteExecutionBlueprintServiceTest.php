@@ -1633,6 +1633,60 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertContains('timeline reveal', $artifacts['structured']['page_plans'][Page::TYPE_ABOUT]['blocks'][0]['design_tags']['motion'] ?? []);
     }
 
+    public function testBuildPlanArtifactsByAiStreamReusesStageOneCheckpointWithoutRepeatingAiCalls(): void
+    {
+        $checkpoints = [];
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::exactly(4))
+            ->method('generateStream')
+            ->willReturnCallback(function (string $prompt, callable $callback): void {
+                static $streamCall = 0;
+                $streamCall++;
+                $callback(match ($streamCall) {
+                    1 => $this->buildStageOneRequirementExpansionAiResponse(),
+                    3 => $this->buildStagedPageAiResponse(Page::TYPE_HOME),
+                    4 => $this->buildStagedPageAiResponse(Page::TYPE_ABOUT),
+                    default => $this->buildValidAiPlanResponse(),
+                });
+            });
+
+        $scope = [
+            'site_title' => 'Checkpoint Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+            'default_locale' => 'en_US',
+        ];
+        $websiteProfile = [
+            'site_title' => 'Checkpoint Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ];
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService(), $aiService);
+        $firstArtifacts = $service->buildPlanArtifactsByAiStream($scope, $websiteProfile, [
+            'on_stage1_checkpoint' => static function (array $checkpoint) use (&$checkpoints): void {
+                $checkpoints[] = $checkpoint;
+            },
+        ]);
+
+        self::assertNotEmpty($firstArtifacts['plan_json']['pages'][Page::TYPE_HOME] ?? []);
+        self::assertGreaterThanOrEqual(3, \count($checkpoints));
+        self::assertSame('requirement_expand', (string)($checkpoints[0]['step'] ?? ''));
+        self::assertSame('theme_design', (string)($checkpoints[1]['step'] ?? ''));
+        self::assertSame('page_fanout', (string)($checkpoints[2]['step'] ?? ''));
+
+        $noRepeatAiService = $this->createMock(AiService::class);
+        $noRepeatAiService->expects(self::never())->method('generateStream');
+        $resumeService = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService(), $noRepeatAiService);
+        $resumedArtifacts = $resumeService->buildPlanArtifactsByAiStream($scope, $websiteProfile, [
+            'stage1_checkpoint' => \end($checkpoints),
+        ]);
+
+        self::assertSame($firstArtifacts['plan_json']['pages'][Page::TYPE_HOME]['blocks'] ?? [], $resumedArtifacts['plan_json']['pages'][Page::TYPE_HOME]['blocks'] ?? []);
+        self::assertSame($firstArtifacts['plan_json']['theme_design']['theme_purpose'] ?? '', $resumedArtifacts['plan_json']['theme_design']['theme_purpose'] ?? '');
+        self::assertSame('ai_staged', (string)($resumedArtifacts['generation_source'] ?? ''));
+    }
+
     public function testBuildPlanArtifactsByAiStreamUsesFallbackRequirementWhenBriefIsEmpty(): void
     {
         $calls = [];

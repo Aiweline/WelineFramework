@@ -40,7 +40,14 @@ final class AiSiteAgentMutateTaskPlanTaskOperationServiceTest extends TestCase
     {
         $state = [];
         $service = new AiSiteAgentMutateTaskPlanTaskOperationService();
-        $ports = $this->ports($state, ['success' => true, 'operation' => 'task_plan', 'data' => ['state' => 'direct']]);
+        $ports = $this->ports($state, [
+            'success' => true,
+            'operation' => 'task_plan',
+            'queue_id' => 1,
+            'execution_token' => 'token-1',
+            'stream_url' => '/operation-sse?execution_token=token-1',
+            'data' => ['state' => 'direct'],
+        ]);
 
         $result = $service->run(
             $this->session(),
@@ -74,7 +81,7 @@ final class AiSiteAgentMutateTaskPlanTaskOperationServiceTest extends TestCase
     {
         $state = [];
         $service = new AiSiteAgentMutateTaskPlanTaskOperationService();
-        $ports = $this->ports($state, ['success' => true, 'operation' => 'task_plan']);
+        $ports = $this->ports($state, ['success' => true, 'operation' => 'task_plan', 'queue_id' => 2, 'execution_token' => 'token-2', 'stream_url' => '/operation-sse?execution_token=token-2']);
 
         $service->run(
             $this->session(),
@@ -100,7 +107,7 @@ final class AiSiteAgentMutateTaskPlanTaskOperationServiceTest extends TestCase
     {
         $state = [];
         $service = new AiSiteAgentMutateTaskPlanTaskOperationService();
-        $ports = $this->ports($state, ['success' => true, 'operation' => 'task_plan']);
+        $ports = $this->ports($state, ['success' => true, 'operation' => 'task_plan', 'queue_id' => 3, 'execution_token' => 'token-3', 'stream_url' => '/operation-sse?execution_token=token-3']);
 
         $service->run(
             $this->session(),
@@ -125,7 +132,7 @@ final class AiSiteAgentMutateTaskPlanTaskOperationServiceTest extends TestCase
     {
         $state = [];
         $service = new AiSiteAgentMutateTaskPlanTaskOperationService();
-        $ports = $this->ports($state, ['success' => true, 'operation' => 'task_plan']);
+        $ports = $this->ports($state, ['success' => true, 'operation' => 'task_plan', 'queue_id' => 4, 'execution_token' => 'token-4', 'stream_url' => '/operation-sse?execution_token=token-4']);
 
         $service->run(
             $this->session(),
@@ -150,7 +157,7 @@ final class AiSiteAgentMutateTaskPlanTaskOperationServiceTest extends TestCase
     {
         $state = [];
         $service = new AiSiteAgentMutateTaskPlanTaskOperationService();
-        $ports = $this->ports($state, ['success' => true, 'operation' => 'task_plan']);
+        $ports = $this->ports($state, ['success' => true, 'operation' => 'task_plan', 'queue_id' => 5, 'execution_token' => 'token-5', 'stream_url' => '/operation-sse?execution_token=token-5']);
 
         $service->run(
             $this->session(),
@@ -255,7 +262,7 @@ final class AiSiteAgentMutateTaskPlanTaskOperationServiceTest extends TestCase
     {
         $state = [];
         $service = new AiSiteAgentMutateTaskPlanTaskOperationService();
-        $ports = $this->ports($state, ['success' => true, 'operation' => 'task_plan', 'queue_id' => 9]);
+        $ports = $this->ports($state, ['success' => true, 'operation' => 'task_plan', 'queue_id' => 9, 'execution_token' => 'token-9', 'stream_url' => '/operation-sse?execution_token=token-9']);
 
         $result = $service->run(
             $this->session(),

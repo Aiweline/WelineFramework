@@ -97,7 +97,11 @@ class AiSitePlanQueue implements QueueInterface
             if (!($guard['ok'] ?? false)) {
                 $message = (string)($guard['message'] ?? 'Stage-one plan queue stopped.');
                 $this->appendQueueLifecycleLine($queue, $message);
-                $this->markQueueStopped($queue, $message);
+                if ((string)($guard['terminal_status'] ?? '') === Queue::status_done) {
+                    $this->markQueueDone($queue, $message);
+                } else {
+                    $this->markQueueStopped($queue, $message);
+                }
                 return $message;
             }
 
@@ -477,7 +481,7 @@ class AiSitePlanQueue implements QueueInterface
     }
 
     /**
-     * @return array{ok: bool, message?: string}
+     * @return array{ok: bool, message?: string, terminal_status?: string}
      */
     private function guardPlanQueueExecution(
         AiSiteAgentSessionService $sessionService,
@@ -494,8 +498,8 @@ class AiSitePlanQueue implements QueueInterface
 
         if (!$forceRebuild && !$allowExistingPlan && $scopeService->hasPersistedStageOnePlan($scope)) {
             $message = (string)__('第一阶段方案已存在；队列已跳过重复生成。若需重新生成，请使用强制重建。');
-            $this->persistPlanQueueStopState($sessionService, (int)$fresh->getId(), $adminId, $scope, $message);
-            return ['ok' => false, 'message' => $message];
+            $this->persistPlanQueueStopState($sessionService, (int)$fresh->getId(), $adminId, $scope, $message, true);
+            return ['ok' => false, 'message' => $message, 'terminal_status' => Queue::status_done];
         }
 
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
@@ -517,22 +521,27 @@ class AiSitePlanQueue implements QueueInterface
         int $sessionId,
         int $adminId,
         array $scope,
-        string $message
+        string $message,
+        bool $skipAsDone = false
     ): void {
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         if ($active !== []) {
-            $active['status'] = 'stop';
+            $active['status'] = $skipAsDone ? 'done' : 'stop';
             $active['message'] = $message;
             $active['updated_at'] = \date('Y-m-d H:i:s');
             $scope['active_operation'] = $active;
         }
         $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING;
-        $scope['plan_generation_last_error'] = [
-            'message' => $message,
-            'attempt_no' => \max(0, (int)($active['attempt_no'] ?? 0)),
-            'max_attempts' => self::MAX_PLAN_QUEUE_ATTEMPTS,
-            'updated_at' => \date('Y-m-d H:i:s'),
-        ];
+        if ($skipAsDone) {
+            $scope['plan_generation_last_error'] = [];
+        } else {
+            $scope['plan_generation_last_error'] = [
+                'message' => $message,
+                'attempt_no' => \max(0, (int)($active['attempt_no'] ?? 0)),
+                'max_attempts' => self::MAX_PLAN_QUEUE_ATTEMPTS,
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ];
+        }
         $sessionService->replaceScope($sessionId, $adminId, $scope);
     }
 
