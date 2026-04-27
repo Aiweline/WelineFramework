@@ -50,7 +50,8 @@ final class AiSiteAgentWorkspacePreviewService
         $scope = $this->scopeCompatibilityService->normalizeScope($context['scope']);
         $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType(
             $this->scopeCompatibilityService->resolveScopedPageTypes($scope),
-            $scope
+            $scope,
+            false
         );
         $pageType = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, $requestedPageType);
         if ($pageType === '' || !\is_array($virtualPages[$pageType] ?? null)) {

@@ -43,6 +43,9 @@
         var val = (input.value || '').trim();
         var inner = q(preview, 'img');
         var placeholder = q(preview, '.w-param-image-placeholder');
+        var mediaWrap = preview.closest('.w-param-media-image');
+        var actions = q(preview, '.w-param-image-actions');
+        var clearBtn = actions ? q(actions, '.w-param-image-clear') : null;
         if (val) {
             if (!inner) {
                 inner = doc.createElement('img');
@@ -52,10 +55,22 @@
             inner.src = val;
             preview.classList.add('w-param-has-image');
             if (placeholder) placeholder.style.display = 'none';
+            if (actions && !clearBtn) {
+                clearBtn = doc.createElement('button');
+                clearBtn.type = 'button';
+                clearBtn.className = 'w-param-btn w-param-btn-sm w-param-btn-outline-danger w-param-image-clear';
+                clearBtn.setAttribute('data-target', input.id);
+                clearBtn.textContent = '×';
+                actions.appendChild(clearBtn);
+            }
         } else {
             preview.classList.remove('w-param-has-image');
             if (inner) inner.remove();
             if (placeholder) placeholder.style.display = '';
+            if (clearBtn) clearBtn.remove();
+        }
+        if (mediaWrap) {
+            initMediaImagePicker(mediaWrap);
         }
     }
 
@@ -240,7 +255,7 @@
                 if (idx === '__INDEX__') return null;
                 if (itemSchema && Object.keys(itemSchema).length > 0) {
                     var obj = {};
-                    qa(itemEl, '[data-field]').forEach(function (input) {
+                    qa(itemEl, 'input[data-field], select[data-field], textarea[data-field]').forEach(function (input) {
                         var field = input.getAttribute('data-field');
                         var v = input.value;
                         if (input.type === 'checkbox') v = input.checked;
@@ -258,7 +273,7 @@
                     Object.keys(itemSchema).forEach(function (fieldKey) {
                         var def = itemSchema[fieldKey];
                         var val = item && item[fieldKey] !== undefined ? item[fieldKey] : (def.default || '');
-                        var sel = '[data-field="' + fieldKey + '"]';
+                        var sel = 'input[data-field="' + fieldKey + '"], select[data-field="' + fieldKey + '"], textarea[data-field="' + fieldKey + '"]';
                         var el = doc.createElement('div');
                         el.innerHTML = html;
                         var fieldEl = el.querySelector(sel);
@@ -292,7 +307,10 @@
                 var removeBtn = q(div, '.w-param-array-remove');
                 if (removeBtn) removeBtn.addEventListener('click', function () { removeItem(div); });
                 itemsEl.appendChild(div);
-                initMediaImagePicker(wrapper);
+                qa(div, 'input[type="hidden"][data-preview]').forEach(function (input) {
+                    updateMediaImagePreview(input);
+                });
+                initMediaImagePicker(div);
                 var empty = q(wrapper, '.w-param-array-empty');
                 if (empty) empty.style.display = 'none';
             }
@@ -317,7 +335,10 @@
                 var removeBtn = q(div, '.w-param-array-remove');
                 if (removeBtn) removeBtn.addEventListener('click', function () { removeItem(div); });
                 itemsEl.appendChild(div);
-                initMediaImagePicker(wrapper);
+                qa(div, 'input[type="hidden"][data-preview]').forEach(function (input) {
+                    updateMediaImagePreview(input);
+                });
+                initMediaImagePicker(div);
                 var empty = q(wrapper, '.w-param-array-empty');
                 if (empty) empty.style.display = 'none';
                 hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -424,6 +445,9 @@
                     var item = btn.closest('.w-param-array-item');
                     if (item) removeItem(item);
                 });
+            });
+            qa(wrapper, 'input[type="hidden"][data-preview]').forEach(function (input) {
+                updateMediaImagePreview(input);
             });
             wrapper.addEventListener('change', syncFromDom);
             wrapper.addEventListener('input', syncFromDom);
