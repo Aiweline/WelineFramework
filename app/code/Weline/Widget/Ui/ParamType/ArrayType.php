@@ -23,10 +23,7 @@ class ArrayType extends AbstractParamType
         $sortable = $param['sortable'] ?? true;
         $addLabel = $param['add_label'] ?? __('添加项目');
         $emptyMessage = $param['empty_message'] ?? __('暂无项目，点击下方按钮添加');
-        $items = $value ?? $this->getDefaultValue($param) ?? [];
-        if (!is_array($items)) {
-            $items = [];
-        }
+        $items = $this->normalizeItems($value ?? $this->getDefaultValue($param) ?? []);
         $inputHtml = '<div class="w-param-array" data-field-id="' . htmlspecialchars($fieldId) . '" data-key="' . htmlspecialchars($key) . '" data-min-items="' . $minItems . '"' . ($maxItems !== null ? ' data-max-items="' . $maxItems . '"' : '') . '>';
         $inputHtml .= '<div class="w-param-array-items" id="' . htmlspecialchars($fieldId) . '_items">';
         if (empty($items)) {
@@ -52,6 +49,23 @@ class ArrayType extends AbstractParamType
         $inputHtml .= '<script type="application/json" id="' . htmlspecialchars($fieldId) . '_schema">' . json_encode($itemSchema, JSON_UNESCAPED_UNICODE) . '</script>';
         $inputHtml .= '</div>';
         return $this->wrapField($key, $param, $inputHtml, $layoutId);
+    }
+
+    private function normalizeItems(mixed $items): array
+    {
+        if (is_string($items)) {
+            $trimmed = trim($items);
+            if ($trimmed === '') {
+                return [];
+            }
+            $decoded = json_decode($trimmed, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return $decoded;
+            }
+            return [];
+        }
+
+        return is_array($items) ? $items : [];
     }
 
     /**

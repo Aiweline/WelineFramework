@@ -409,7 +409,7 @@ class Page extends Model
             $h = $handle === null || $handle === '' ? '' : (string)$handle;
             $type = $item->getData(self::schema_fields_TYPE);
             $result[] = [
-                'title' => $item->getData(self::schema_fields_TITLE) ?: $item->getData(self::schema_fields_NAME),
+                'title' => $item->resolveNavigationLabel(),
                 'handle' => $h,
                 'url' => $type === self::TYPE_HOME ? '/' : ($h === '' ? '/' : '/' . $h),
                 'type' => $type,
@@ -446,7 +446,7 @@ class Page extends Model
             $h = $handle === null || $handle === '' ? '' : (string)$handle;
             $type = $item->getData(self::schema_fields_TYPE);
             $result[] = [
-                'title' => $item->getData(self::schema_fields_TITLE) ?: $item->getData(self::schema_fields_NAME),
+                'title' => $item->resolveNavigationLabel(),
                 'handle' => $h,
                 'url' => $type === self::TYPE_HOME ? '/' : ($h === '' ? '/' : '/' . $h),
                 'type' => $type,
@@ -459,7 +459,7 @@ class Page extends Model
         $parent->clear()->load($parentId);
         if ($parent->getId() && $parent->getData(self::schema_fields_TYPE) === self::TYPE_HOME) {
             array_unshift($result, [
-                'title' => $parent->getData(self::schema_fields_TITLE) ?: $parent->getData(self::schema_fields_NAME),
+                'title' => $parent->resolveNavigationLabel(),
                 'handle' => $parent->getData(self::schema_fields_HANDLE) ?? '',
                 'url' => '/',
                 'type' => self::TYPE_HOME,
@@ -529,7 +529,7 @@ class Page extends Model
             $handle = $item->getData(self::schema_fields_HANDLE);
             $type = $item->getData(self::schema_fields_TYPE);
             $result[] = [
-                'title' => $item->getData(self::schema_fields_TITLE) ?: $item->getData(self::schema_fields_NAME),
+                'title' => $item->resolveNavigationLabel(),
                 'handle' => $handle,
                 'url' => $type === self::TYPE_HOME ? '/' : ('/' . ($handle ?? '')), // 首页直接用域名，不拼 handle
                 'type' => $type,
@@ -583,7 +583,7 @@ class Page extends Model
             $type = $item->getData(self::schema_fields_TYPE);
             $handle = $item->getData(self::schema_fields_HANDLE);
             $byType[$type] = [
-                'title' => $item->getData(self::schema_fields_TITLE) ?: $item->getData(self::schema_fields_NAME),
+                'title' => $item->resolveNavigationLabel(),
                 'handle' => $handle,
                 'url' => $type === self::TYPE_HOME ? '/' : ('/' . ($handle ?: '')),
                 'type' => $type,
@@ -607,6 +607,33 @@ class Page extends Model
      * @param string $orderBy 排序字段
      * @param string $orderDir 排序方向
      * @return array 博客文章列表
+     */
+
+    /**
+     * Resolve compact visitor-facing navigation label.
+     */
+    private function resolveNavigationLabel(): string
+    {
+        $type = (string)$this->getData(self::schema_fields_TYPE);
+        if ($type === self::TYPE_HOME) {
+            return (string)__('首页');
+        }
+
+        $name = \trim((string)$this->getData(self::schema_fields_NAME));
+        if ($name !== '') {
+            return $name;
+        }
+
+        $typeName = \trim($this->getTypeName());
+        if ($typeName !== '') {
+            return $typeName;
+        }
+
+        return \trim((string)$this->getData(self::schema_fields_TITLE));
+    }
+
+    /**
+     * Return blog posts for blog-style pages.
      */
     public function getBlogPosts(int $limit = 10, string $orderBy = 'published_at', string $orderDir = 'DESC'): array
     {

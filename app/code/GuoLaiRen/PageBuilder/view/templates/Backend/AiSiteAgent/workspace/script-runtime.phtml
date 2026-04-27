@@ -4,6 +4,56 @@
     var PB_SSE_CONNECT_DELAY_MS = 5000;
 
     var previewBridge = window.PbAiWorkspacePreview || {};
+    function resolveLivePreviewBridge() {
+        if (window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview === 'object') {
+            previewBridge = window.PbAiWorkspacePreview;
+        }
+        return previewBridge && typeof previewBridge === 'object' ? previewBridge : {};
+    }
+    function markBuildOperationTerminalForRuntimeUi(operation, status, message) {
+        var bridge = resolveLivePreviewBridge();
+        if (typeof bridge.markBuildOperationTerminalForUi === 'function') {
+            bridge.markBuildOperationTerminalForUi(operation, status, message);
+        }
+    }
+    function runtimeTruthyFlag(raw) {
+        return raw === true || raw === 1 || raw === '1'
+            || (typeof raw === 'string' && ['true', 'yes', 'on'].indexOf(raw.trim().toLowerCase()) >= 0);
+    }
+    function getRuntimeWorkspaceStateForPublishGate() {
+        if (window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object') {
+            return window.__pbWorkspaceState;
+        }
+        if (window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object') {
+            return window.__pbLastWorkspaceState;
+        }
+        return {};
+    }
+    function hasPublishBlockingAiStateForRuntime() {
+        var bridge = resolveLivePreviewBridge();
+        var state = getRuntimeWorkspaceStateForPublishGate();
+        if (typeof bridge.hasPublishBlockingLatestBuildFailure === 'function'
+            && bridge.hasPublishBlockingLatestBuildFailure(state)
+        ) {
+            return true;
+        }
+        if (typeof bridge.hasPublishBlockingAiOperationRunning === 'function'
+            && bridge.hasPublishBlockingAiOperationRunning(state)
+        ) {
+            return true;
+        }
+        return runtimeTruthyFlag(state.latest_build_failed)
+            || runtimeTruthyFlag(state.publish_blocked_by_latest_ai_failure);
+    }
+    function syncPublishStartButtonForRuntime() {
+        var bridge = resolveLivePreviewBridge();
+        if (typeof bridge.syncPublishStartButtonFromWorkspaceState === 'function') {
+            bridge.syncPublishStartButtonFromWorkspaceState(getRuntimeWorkspaceStateForPublishGate());
+        }
+    }
+    function isRuntimePublishBlockingAiOperation(operation) {
+        return ['build', 'visual_edit', 'regenerate_page', 'block_regenerate'].indexOf(String(operation || '').trim().toLowerCase()) !== -1;
+    }
     var compactPageDisplayLabel = typeof previewBridge.compactPageDisplayLabel === 'function'
         ? previewBridge.compactPageDisplayLabel
         : function (pageLabel, pageType) {
@@ -25,6 +75,7 @@
     var startPublishUrl = <?= \json_encode($startPublishUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var publishCheckUrl = <?= \json_encode($publishCheckUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var operationSseBaseUrl = <?= \json_encode($operationSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var workspaceSnapshotUrl = <?= \json_encode((string)($workspaceSnapshotUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var activeOperation = <?= \json_encode($activeOperation, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var pageTypeLabelMap = <?= \json_encode($pageTypeLabels, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var workspaceTerminal = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
@@ -34,10 +85,18 @@
     var runningOperationType = '';
     var runningStartAtByOperationKey = Object.create(null);
     var phaseOneAutoRetryCountByKey = Object.create(null);
+    var phaseOneRetryPromptPendingByKey = Object.create(null);
     var PHASE_ONE_AUTO_RETRY_MAX = 3;
+    var lastFailurePayloadByOperation = Object.create(null);
     var queueCompletionReloadTimer = null;
     var observerSyncStatusPulseTimer = null;
     var observerSyncDotPhase = 0;
+    var deferredQueueStatePollTimer = null;
+    var deferredQueueStatePollInFlight = false;
+    var deferredQueueStatePollDeadline = 0;
+    var deferredQueueStatePollOperation = '';
+    var DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS = 5000;
+    var DEFERRED_QUEUE_STATE_POLL_TTL_MS = 20 * 60 * 1000;
     var lastOperationTerminalFingerprint = '';
     var blockRefreshState = (window.__pbBlockRefreshState && typeof window.__pbBlockRefreshState === 'object')
         ? window.__pbBlockRefreshState
@@ -70,6 +129,16 @@
             window.clearInterval(observerSyncStatusPulseTimer);
             observerSyncStatusPulseTimer = null;
         }
+    }
+
+    function stopDeferredQueueStatePoll() {
+        if (deferredQueueStatePollTimer) {
+            window.clearInterval(deferredQueueStatePollTimer);
+            deferredQueueStatePollTimer = null;
+        }
+        deferredQueueStatePollInFlight = false;
+        deferredQueueStatePollDeadline = 0;
+        deferredQueueStatePollOperation = '';
     }
 
     /**
@@ -105,6 +174,143 @@
             return window.hydrateWorkspaceFromState(workspaceState);
         }
         return null;
+    }
+
+    function normalizeTerminalOperationStatus(status) {
+        var normalized = String(status || '').trim().toLowerCase();
+        if (['done', 'complete', 'completed'].indexOf(normalized) !== -1) {
+            return 'done';
+        }
+        if (['error', 'failed', 'fail'].indexOf(normalized) !== -1) {
+            return 'error';
+        }
+        if (['stop', 'stopped', 'cancelled', 'canceled'].indexOf(normalized) !== -1) {
+            return 'stop';
+        }
+        return '';
+    }
+
+    function readQueueStatusForDeferredState(workspaceState, operation) {
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return '';
+        }
+        var op = String(operation || '').trim().toLowerCase();
+        var key = op === 'task_plan'
+            ? 'task_plan_queue_info'
+            : (op === 'build' ? 'build_queue_info' : 'plan_queue_info');
+        var queueInfo = workspaceState[key] && typeof workspaceState[key] === 'object'
+            ? workspaceState[key]
+            : null;
+        var snapshot = queueInfo && queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
+            ? queueInfo.snapshot
+            : null;
+        return String(
+            (snapshot ? (snapshot.status || snapshot.job_status || snapshot.queue_status || '') : '')
+            || (queueInfo ? (queueInfo.queue_status || queueInfo.status || '') : '')
+            || ''
+        ).trim().toLowerCase();
+    }
+
+    function readQueueMessageForDeferredState(workspaceState, operation) {
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return '';
+        }
+        var op = String(operation || '').trim().toLowerCase();
+        var key = op === 'task_plan'
+            ? 'task_plan_queue_info'
+            : (op === 'build' ? 'build_queue_info' : 'plan_queue_info');
+        var queueInfo = workspaceState[key] && typeof workspaceState[key] === 'object'
+            ? workspaceState[key]
+            : null;
+        return readQueueResultTail(queueInfo) || String(
+            (queueInfo && (queueInfo.message || queueInfo.process))
+            || ''
+        ).trim();
+    }
+
+    function resolveDeferredQueueTerminalOperation(workspaceState, operation) {
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return null;
+        }
+        var op = String(operation || '').trim().toLowerCase();
+        var active = workspaceState.active_operation && typeof workspaceState.active_operation === 'object'
+            ? workspaceState.active_operation
+            : {};
+        var activeOperationName = String(active.operation || op || '').trim().toLowerCase();
+        var activeStatus = normalizeTerminalOperationStatus(active.status || '');
+        if (activeStatus && (activeOperationName === 'build' || activeOperationName === 'visual_edit' || activeOperationName === 'task_plan' || activeOperationName === 'plan')) {
+            return Object.assign({}, active, {
+                operation: activeOperationName,
+                status: activeStatus,
+                message: String(active.message || readQueueMessageForDeferredState(workspaceState, activeOperationName) || '')
+            });
+        }
+        var queueStatus = normalizeTerminalOperationStatus(readQueueStatusForDeferredState(workspaceState, op));
+        if (!queueStatus) {
+            return null;
+        }
+        return {
+            operation: op || 'build',
+            status: queueStatus,
+            message: readQueueMessageForDeferredState(workspaceState, op)
+        };
+    }
+
+    function applyDeferredQueueTerminalState(operation, workspaceState, terminalActive) {
+        var op = String((terminalActive && terminalActive.operation) || operation || '').trim().toLowerCase();
+        var status = normalizeTerminalOperationStatus(terminalActive && terminalActive.status);
+        var message = String((terminalActive && terminalActive.message) || '').trim();
+        if (!op || !status) {
+            return;
+        }
+        syncTerminalActiveOperationForRuntimeUi({
+            operation: op,
+            status: status,
+            message: message
+        });
+        logOperationToWorkspaceTerminal('deferred_queue_terminal', {
+            operation: op,
+            state: workspaceState,
+            active_operation: terminalActive,
+            message: message
+        }, status === 'error' ? 'error' : status, message || (status === 'done' ? '队列执行完成' : '队列执行已停止'));
+
+        if (status === 'error' || status === 'stop') {
+            rememberOperationFailurePayload(op, {
+                operation: op,
+                state: workspaceState,
+                active_operation: terminalActive,
+                message: message
+            }, message);
+            resetOperationUiOnFailure(op);
+            if (typeof enableNavigationAfterOperation === 'function') {
+                enableNavigationAfterOperation();
+            }
+            if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                previewBridge.resumeWorkspaceStream();
+            }
+            return;
+        }
+        if (op === 'build' || op === 'visual_edit') {
+            buildStartupPending = false;
+            if (typeof previewBridge.hideBuildGuard === 'function') {
+                previewBridge.hideBuildGuard();
+            }
+            if (typeof previewBridge.setBuildNavigationGuard === 'function') {
+                previewBridge.setBuildNavigationGuard(false);
+            }
+            clearBlockStreamingState();
+            if (typeof previewBridge.resetBuildStartUi === 'function') {
+                previewBridge.resetBuildStartUi();
+            }
+            if (typeof enableNavigationAfterOperation === 'function') {
+                enableNavigationAfterOperation();
+            }
+            if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                previewBridge.resumeWorkspaceStream();
+            }
+            refreshEmbeddedPreviewFrame(650);
+        }
     }
     function getWorkspaceFlagState(getterName, fallback) {
         var api = resolveWorkspaceApi();
@@ -207,7 +413,7 @@
 
     function getPhaseOneRetryKey(operation, payload) {
         var op = String((operation || (payload && payload.operation) || '')).trim().toLowerCase();
-        if (op !== 'plan') {
+        if (op !== 'plan' && op !== 'task_plan') {
             return '';
         }
         var token = String(
@@ -215,11 +421,25 @@
             || (payload && payload.state && payload.state.active_operation && payload.state.active_operation.execution_token)
             || ''
         ).trim();
-        return publicId + ':plan:' + (token || 'no-token');
+        return publicId + ':' + op + ':' + (token || 'no-token');
     }
 
-    function collectQueueFailureDetailLines(payload, operation) {
-        var lines = [];
+    function rememberOperationFailurePayload(operation, payload, fallbackMessage) {
+        var op = String((operation || (payload && payload.operation) || '')).trim().toLowerCase();
+        if (!op) {
+            return;
+        }
+        var nextPayload = payload && typeof payload === 'object'
+            ? Object.assign({}, payload)
+            : {};
+        nextPayload.operation = String(nextPayload.operation || op);
+        if (!nextPayload.message && fallbackMessage) {
+            nextPayload.message = String(fallbackMessage);
+        }
+        lastFailurePayloadByOperation[op] = nextPayload;
+    }
+
+    function resolveQueueInfoForOperation(payload, operation) {
         var state = payload && payload.state && typeof payload.state === 'object' ? payload.state : {};
         var op = String((operation || (payload && payload.operation) || '')).trim().toLowerCase();
         var queueInfo = null;
@@ -230,6 +450,46 @@
         } else if (op === 'build') {
             queueInfo = state.build_queue_info && typeof state.build_queue_info === 'object' ? state.build_queue_info : null;
         }
+        if (!queueInfo && payload && payload.queue_info && typeof payload.queue_info === 'object') {
+            queueInfo = payload.queue_info;
+        }
+        return queueInfo;
+    }
+
+    function readQueueResultTail(queueInfo) {
+        var resultLog = String((queueInfo && queueInfo.result_log) || '').trim();
+        if (!resultLog) {
+            return '';
+        }
+        var lines = resultLog.split(/\r\n|\n|\r/).map(function (line) {
+            return String(line || '').trim();
+        }).filter(function (line) {
+            return line !== '';
+        });
+        return lines.length ? lines[lines.length - 1] : '';
+    }
+
+    function resolveQueueFailureMessage(payload, operation) {
+        var state = payload && payload.state && typeof payload.state === 'object' ? payload.state : {};
+        var queueInfo = resolveQueueInfoForOperation(payload, operation);
+        var activeOperation = state.active_operation && typeof state.active_operation === 'object'
+            ? state.active_operation
+            : (payload && payload.active_operation && typeof payload.active_operation === 'object' ? payload.active_operation : {});
+        var activeMessage = String(activeOperation.message || '').trim();
+        var payloadMessage = String((payload && payload.message) || '').trim();
+        var queueProcess = String((queueInfo && queueInfo.process) || '').trim();
+        var resultTail = readQueueResultTail(queueInfo);
+        var primaryMessage = activeMessage || payloadMessage;
+        if (resultTail && (!primaryMessage || primaryMessage === queueProcess || primaryMessage.length <= 48)) {
+            return resultTail;
+        }
+        return primaryMessage || resultTail || queueProcess || '';
+    }
+
+    function collectQueueFailureDetailLines(payload, operation) {
+        var lines = [];
+        var state = payload && payload.state && typeof payload.state === 'object' ? payload.state : {};
+        var queueInfo = resolveQueueInfoForOperation(payload, operation);
         var activeOperation = state.active_operation && typeof state.active_operation === 'object' ? state.active_operation : {};
         var queueSnapshot = queueInfo && queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : {};
         var queueId = parseInt(String((queueInfo && queueInfo.queue_id) || queueSnapshot.queue_id || activeOperation.queue_id || 0), 10) || 0;
@@ -240,7 +500,7 @@
         if (queueStatus) {
             lines.push('队列状态：' + queueStatus);
         }
-        var opMessage = String(activeOperation.message || payload.message || '').trim();
+        var opMessage = resolveQueueFailureMessage(payload, operation) || String(activeOperation.message || payload.message || '').trim();
         if (opMessage) {
             lines.push('错误信息：' + opMessage);
         }
@@ -255,62 +515,149 @@
         return lines;
     }
 
-    function showOperationFailureDetailModal(operation, payload, autoRetryHint) {
+    function showOperationFailureDetailModal(operation, payload, options) {
+        var opts = options && typeof options === 'object' ? options : {};
         var lines = collectQueueFailureDetailLines(payload, operation);
         if (!lines.length) {
-            return;
+            return Promise.resolve(false);
         }
         var title = String(operation || '').toLowerCase() === 'plan'
             ? <?= \json_encode((string)__('第一阶段方案生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
             : <?= \json_encode((string)__('操作执行失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
         var body = lines.join('\n\n');
-        if (autoRetryHint) {
-            body += '\n\n' + autoRetryHint;
+        if (opts.extraMessage) {
+            body += '\n\n' + String(opts.extraMessage);
         }
         if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-            window.BackendConfirm.show(body, {
+            return window.BackendConfirm.show(body, {
                 title: title,
-                confirmText: <?= \json_encode((string)__('我知道了'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                cancelText: <?= \json_encode((string)__('关闭'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-            }).catch(function () {});
-            return;
+                confirmText: opts.confirmText || <?= \json_encode((string)__('我知道了'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                cancelText: opts.cancelText || <?= \json_encode((string)__('关闭'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+            }).then(function (confirmed) {
+                return !!confirmed;
+            }).catch(function () {
+                return false;
+            });
         }
         toast('error', body);
+        return Promise.resolve(false);
     }
 
-    function tryAutoRetryPhaseOnePlan(operation, payload) {
+    function offerRetryForFailedOperation(operation, payload) {
         var op = String((operation || (payload && payload.operation) || '')).trim().toLowerCase();
-        if (op !== 'plan') {
-            return false;
+        if (op !== 'plan' && op !== 'task_plan') {
+            return showOperationFailureDetailModal(op, payload, {});
+        }
+        if (op === 'task_plan') {
+            var taskPlanApi = resolveWorkspaceApi();
+            var taskPlanRetryKey = getPhaseOneRetryKey(op, payload);
+            if (!taskPlanRetryKey || typeof taskPlanApi.retryPhaseTwoTaskPlanGeneration !== 'function') {
+                return showOperationFailureDetailModal(op, payload, {});
+            }
+            if (phaseOneRetryPromptPendingByKey[taskPlanRetryKey]) {
+                return Promise.resolve(false);
+            }
+            var taskPlanCurrent = parseInt(String(phaseOneAutoRetryCountByKey[taskPlanRetryKey] || 0), 10) || 0;
+            if (taskPlanCurrent >= PHASE_ONE_AUTO_RETRY_MAX) {
+                return showOperationFailureDetailModal(
+                    op,
+                    payload,
+                    {
+                        extraMessage: <?= \json_encode((string)__('前端重试已达上限，请检查错误后再手动重试或明确重建任务方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    }
+                ).then(function () {
+                    return false;
+                });
+            }
+            phaseOneRetryPromptPendingByKey[taskPlanRetryKey] = true;
+            var taskPlanNextAttempt = taskPlanCurrent + 1;
+            return showOperationFailureDetailModal(
+                op,
+                payload,
+                {
+                    extraMessage: <?= \json_encode((string)__('是否立即重试第二阶段任务方案生成？本次将进行第 %{1} / 3 次前端重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>.replace('%{1}', String(taskPlanNextAttempt)),
+                    confirmText: <?= \json_encode((string)__('立即重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    cancelText: <?= \json_encode((string)__('暂不重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                }
+            ).then(function (confirmed) {
+                delete phaseOneRetryPromptPendingByKey[taskPlanRetryKey];
+                if (!confirmed) {
+                    return false;
+                }
+                phaseOneAutoRetryCountByKey[taskPlanRetryKey] = taskPlanNextAttempt;
+                toast('warning', <?= \json_encode((string)__('第二阶段任务方案生成失败，正在准备断点续跑重试...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                window.setTimeout(function () {
+                    var started = taskPlanApi.retryPhaseTwoTaskPlanGeneration({ forceRebuild: false });
+                    if (!started) {
+                        toast('warning', <?= \json_encode((string)__('当前仍有进行中的第二阶段任务方案任务，请稍后再试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                    }
+                }, 120);
+                return true;
+            }).catch(function () {
+                delete phaseOneRetryPromptPendingByKey[taskPlanRetryKey];
+                return false;
+            });
         }
         var api = resolveWorkspaceApi();
-        if (typeof api.retryPhaseOnePlanGeneration !== 'function') {
-            return false;
-        }
         var retryKey = getPhaseOneRetryKey(op, payload);
-        if (!retryKey) {
-            return false;
+        var retryFn = op === 'task_plan'
+            ? api.retryPhaseTwoTaskPlanGeneration
+            : api.retryPhaseOnePlanGeneration;
+        if (!retryKey || typeof retryFn !== 'function') {
+            return showOperationFailureDetailModal(op, payload, {});
+        }
+        if (phaseOneRetryPromptPendingByKey[retryKey]) {
+            return Promise.resolve(false);
         }
         var current = parseInt(String(phaseOneAutoRetryCountByKey[retryKey] || 0), 10) || 0;
         if (current >= PHASE_ONE_AUTO_RETRY_MAX) {
-            showOperationFailureDetailModal(
+            return showOperationFailureDetailModal(
                 op,
                 payload,
-                <?= \json_encode((string)__('前端自动重试已达上限（3 次），请检查错误并手动重试或强制重建方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-            );
-            return false;
+                {
+                    extraMessage: <?= \json_encode((string)__('前端重试已达上限（3 次），请检查错误后再手动重试或强制重建方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                }
+            ).then(function () {
+                return false;
+            });
         }
-        phaseOneAutoRetryCountByKey[retryKey] = current + 1;
-        var attempt = phaseOneAutoRetryCountByKey[retryKey];
-        showOperationFailureDetailModal(
+        phaseOneRetryPromptPendingByKey[retryKey] = true;
+        var nextAttempt = current + 1;
+        var retryPromptMessage = op === 'task_plan'
+            ? <?= \json_encode((string)__('是否立即重试第二阶段任务方案生成？本次将进行第 %{1} / 3 次前端重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+            : <?= \json_encode((string)__('是否立即重试第一阶段方案生成？本次将进行第 %{1} / 3 次前端重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+        var retryPreparingMessage = op === 'task_plan'
+            ? <?= \json_encode((string)__('第二阶段任务方案生成失败，正在准备重试...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+            : <?= \json_encode((string)__('第一阶段生成失败，正在准备重试...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+        var retryBlockedMessage = op === 'task_plan'
+            ? <?= \json_encode((string)__('当前仍有进行中的第二阶段任务方案任务，请稍后再试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+            : <?= \json_encode((string)__('当前仍有进行中的第一阶段任务，请稍后再试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+        return showOperationFailureDetailModal(
             op,
             payload,
-            <?= \json_encode((string)__('前端将自动重试（第 %{1} / 3 次）。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>.replace('%{1}', String(attempt))
-        );
-        window.setTimeout(function () {
-            api.retryPhaseOnePlanGeneration({ forceRebuild: false });
-        }, 900);
-        return true;
+            {
+                extraMessage: <?= \json_encode((string)__('是否立即重试第一阶段方案生成？本次将进行第 %{1} / 3 次前端重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>.replace('%{1}', String(nextAttempt)),
+                confirmText: <?= \json_encode((string)__('立即重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                cancelText: <?= \json_encode((string)__('暂不重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+            }
+        ).then(function (confirmed) {
+            delete phaseOneRetryPromptPendingByKey[retryKey];
+            if (!confirmed) {
+                return false;
+            }
+            phaseOneAutoRetryCountByKey[retryKey] = nextAttempt;
+            toast('warning', <?= \json_encode((string)__('第一阶段生成失败，正在准备重试...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            window.setTimeout(function () {
+                var started = api.retryPhaseOnePlanGeneration({ forceRebuild: false });
+                if (!started) {
+                    toast('warning', <?= \json_encode((string)__('当前仍有进行中的第一阶段任务，请稍后再试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                }
+            }, 120);
+            return true;
+        }).catch(function () {
+            delete phaseOneRetryPromptPendingByKey[retryKey];
+            return false;
+        });
     }
 
     var toast = typeof previewBridge.toast === 'function'
@@ -371,6 +718,71 @@
         return poster(url, fields);
     }
 
+    function extractWorkspaceSnapshotState(data) {
+        if (!data || typeof data !== 'object') {
+            return null;
+        }
+        if (data.data && typeof data.data === 'object') {
+            return data.data;
+        }
+        if (data.state && typeof data.state === 'object') {
+            return data.state;
+        }
+        return data;
+    }
+
+    function syncDeferredQueueWorkspaceState(operation, workspaceState) {
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return false;
+        }
+        hydrateWorkspaceFromState(workspaceState);
+        updateTaskSummaryFromState(workspaceState);
+        updateStageStatusSummary(workspaceState);
+
+        var terminalActive = resolveDeferredQueueTerminalOperation(workspaceState, operation);
+        if (!terminalActive) {
+            return false;
+        }
+        stopDeferredQueueStatePoll();
+        applyDeferredQueueTerminalState(operation, workspaceState, terminalActive);
+        return true;
+    }
+
+    function startDeferredQueueStatePoll(operation) {
+        var normalizedOperation = String(operation || '').trim().toLowerCase() || 'build';
+        if (!workspaceSnapshotUrl || !publicId) {
+            return false;
+        }
+        stopDeferredQueueStatePoll();
+        deferredQueueStatePollOperation = normalizedOperation;
+        deferredQueueStatePollDeadline = Date.now() + DEFERRED_QUEUE_STATE_POLL_TTL_MS;
+
+        function pollOnce() {
+            if (!deferredQueueStatePollOperation || deferredQueueStatePollInFlight) {
+                return;
+            }
+            if (deferredQueueStatePollDeadline > 0 && Date.now() > deferredQueueStatePollDeadline) {
+                stopDeferredQueueStatePoll();
+                return;
+            }
+            deferredQueueStatePollInFlight = true;
+            submitWorkspaceForm(workspaceSnapshotUrl, { public_id: publicId }).then(function (data) {
+                deferredQueueStatePollInFlight = false;
+                if (deferredQueueStatePollOperation !== normalizedOperation) {
+                    return;
+                }
+                var workspaceState = extractWorkspaceSnapshotState(data);
+                syncDeferredQueueWorkspaceState(normalizedOperation, workspaceState);
+            }).catch(function () {
+                deferredQueueStatePollInFlight = false;
+            });
+        }
+
+        deferredQueueStatePollTimer = window.setInterval(pollOnce, DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS);
+        pollOnce();
+        return true;
+    }
+
     function getCurrentPreviewPageType() {
         if (typeof previewBridge.getCurrentPreviewPageType === 'function') {
             return String(previewBridge.getCurrentPreviewPageType() || '');
@@ -392,6 +804,21 @@
         }
     }
 
+    function syncTerminalActiveOperationForRuntimeUi(active) {
+        if (!active || typeof active !== 'object') {
+            return;
+        }
+        var operation = String(active.operation || '').trim().toLowerCase();
+        var status = normalizeTerminalOperationStatus(active.status || '');
+        if (!status) {
+            return;
+        }
+        if (operation !== 'build' && operation !== 'visual_edit') {
+            return;
+        }
+        markBuildOperationTerminalForRuntimeUi(operation, status, String(active.message || ''));
+    }
+
     // 已禁用页面加载阶段的自动续跑/自动接管提示逻辑，仅允许用户显式触发。
 
     if (workspaceTerminal && typeof workspaceTerminal.on === 'function') {
@@ -402,12 +829,17 @@
             }
             if (data.active_operation && typeof data.active_operation === 'object') {
                 activeOperation = data.active_operation;
+                syncTerminalActiveOperationForRuntimeUi(data.active_operation);
             }
         });
         workspaceTerminal.on('log', function (event) {
             var data = parsePayload(event);
             if (!data || typeof data !== 'object') {
                 return;
+            }
+            if (data.active_operation && typeof data.active_operation === 'object') {
+                activeOperation = data.active_operation;
+                syncTerminalActiveOperationForRuntimeUi(data.active_operation);
             }
             mirrorWorkspaceLogToQueuedStageUi(data);
         });
@@ -885,21 +1317,62 @@
         }
     }
 
+    function resolveNestedOperationPayload(container, operation) {
+        if (!container || typeof container !== 'object') {
+            return null;
+        }
+        var normalizedOperation = String(operation || '').trim();
+        var activeOperation = container.active_operation && typeof container.active_operation === 'object'
+            ? container.active_operation
+            : null;
+        if (activeOperation && String(activeOperation.execution_token || '').trim()) {
+            return activeOperation;
+        }
+        var activeOperations = container.active_operations && typeof container.active_operations === 'object'
+            ? container.active_operations
+            : null;
+        if (!activeOperations) {
+            return activeOperation;
+        }
+        if (normalizedOperation && activeOperations[normalizedOperation] && typeof activeOperations[normalizedOperation] === 'object') {
+            return activeOperations[normalizedOperation];
+        }
+        var operationKeys = ['task_plan', 'plan', 'build', 'publish'];
+        for (var i = 0; i < operationKeys.length; i++) {
+            var key = operationKeys[i];
+            if (activeOperations[key] && typeof activeOperations[key] === 'object') {
+                var candidateToken = String(activeOperations[key].execution_token || '').trim();
+                if (candidateToken) {
+                    return activeOperations[key];
+                }
+            }
+        }
+        return activeOperation;
+    }
+
     function normalizeOperationStreamStartPayload(payload, fallbackOperation) {
         var operation = String((payload && payload.operation) || fallbackOperation || '');
         var executionToken = String((payload && payload.execution_token) || '');
         var streamUrl = String((payload && payload.stream_url) || '');
         var level1 = payload && payload.data && typeof payload.data === 'object' ? payload.data : null;
+        var level2 = level1 && level1.data && typeof level1.data === 'object' ? level1.data : null;
         var activeOperationPayload = payload && payload.active_operation && typeof payload.active_operation === 'object'
             ? payload.active_operation
             : (level1 && level1.active_operation && typeof level1.active_operation === 'object' ? level1.active_operation : null);
+        var nestedOperationPayload = resolveNestedOperationPayload(level1, operation)
+            || resolveNestedOperationPayload(level2, operation)
+            || null;
 
         if (!operation && activeOperationPayload) {
             operation = String(activeOperationPayload.operation || fallbackOperation || '');
         }
+        if (!operation && nestedOperationPayload) {
+            operation = String(nestedOperationPayload.operation || fallbackOperation || '');
+        }
         if (!executionToken) {
             executionToken = String(
                 (activeOperationPayload && activeOperationPayload.execution_token)
+                || (nestedOperationPayload && nestedOperationPayload.execution_token)
                 || (level1 && level1.execution_token)
                 || ''
             );
@@ -907,6 +1380,7 @@
         if (!streamUrl) {
             streamUrl = String(
                 (activeOperationPayload && activeOperationPayload.stream_url)
+                || (nestedOperationPayload && nestedOperationPayload.stream_url)
                 || (level1 && level1.stream_url)
                 || ''
             );
@@ -948,6 +1422,9 @@
 
     function closeOperationSource(source) {
         stopObserverSyncTerminalPulse();
+        if (!source || source === runningSource) {
+            stopDeferredQueueStatePoll();
+        }
 
         if (runningSourceStartTimer) {
             window.clearTimeout(runningSourceStartTimer);
@@ -1011,6 +1488,20 @@
             }
             return;
         }
+        if (operation === 'publish') {
+            var publishState = null;
+            if (payload && payload.state && typeof payload.state === 'object') {
+                publishState = payload.state;
+            } else if (payload && payload.data && payload.data.state && typeof payload.data.state === 'object') {
+                publishState = payload.data.state;
+            }
+            if (publishState) {
+                hydrateWorkspaceFromState(publishState);
+                updateTaskSummaryFromState(publishState);
+                updateStageStatusSummary(publishState);
+            }
+            return;
+        }
         var redirectUrl = '';
         if (payload && payload.data && payload.data.redirect_url) {
             redirectUrl = String(payload.data.redirect_url);
@@ -1025,7 +1516,7 @@
     }
 
     function resetOperationUiOnFailure(operation) {
-        if (String(operation || '') === 'build') {
+        if (isRuntimePublishBlockingAiOperation(operation)) {
             buildStartupPending = false;
             if (typeof previewBridge.hideBuildGuard === 'function') {
                 previewBridge.hideBuildGuard();
@@ -1036,12 +1527,14 @@
             if (typeof previewBridge.resetBuildStartUi === 'function') {
                 previewBridge.resetBuildStartUi();
             }
+            syncPublishStartButtonForRuntime();
         }
         if (String(operation || '') === 'publish') {
             var publishBtn = document.getElementById('pb-ai-start-publish');
             if (publishBtn) {
-                publishBtn.disabled = false;
+                publishBtn.disabled = hasPublishBlockingAiStateForRuntime();
             }
+            syncPublishStartButtonForRuntime();
         }
         clearBlockStreamingState();
     }
@@ -1681,6 +2174,13 @@
             return String(queueInfo && typeof queueInfo === 'object' ? (queueInfo.process || queueInfo.message || '') : '').trim();
         }
 
+        function readStageQueueFailureMessage(queueInfo) {
+            var resultTail = readQueueResultTail(queueInfo);
+            var message = String(queueInfo && typeof queueInfo === 'object' ? (queueInfo.message || '') : '').trim();
+            var process = String(queueInfo && typeof queueInfo === 'object' ? (queueInfo.process || '') : '').trim();
+            return resultTail || message || process || '';
+        }
+
         function isStageQueueInProgress(queueStatus) {
             return ['pending', 'queued', 'running'].indexOf(String(queueStatus || '').toLowerCase()) !== -1;
         }
@@ -1689,8 +2189,15 @@
             return ['done', 'complete', 'completed'].indexOf(String(queueStatus || '').toLowerCase()) !== -1;
         }
 
+        function isStageQueueFailed(queueStatus) {
+            return ['error', 'failed', 'fail', 'stop', 'stopped', 'cancelled', 'canceled'].indexOf(String(queueStatus || '').toLowerCase()) !== -1;
+        }
+
         if (kind === 'plan') {
             var planQueueStatus = readStageQueueStatus(state.plan_queue_info);
+            if (isStageQueueFailed(planQueueStatus)) {
+                return make('失败', 'text-bg-danger', readStageQueueFailureMessage(state.plan_queue_info) || activeMessage || '第一阶段方案生成失败，请重试。');
+            }
             if (isStageQueueInProgress(planQueueStatus)) {
                 return make(
                     planQueueStatus === 'running' ? '生成中' : '排队中',
@@ -1723,6 +2230,9 @@
 
         if (kind === 'task_plan') {
             var taskPlanQueueStatus = readStageQueueStatus(state.task_plan_queue_info);
+            if (isStageQueueFailed(taskPlanQueueStatus)) {
+                return make('失败', 'text-bg-danger', readStageQueueFailureMessage(state.task_plan_queue_info) || activeMessage || '第二阶段任务方案生成失败，请重试。');
+            }
             if (planConfirmed && isStageQueueInProgress(taskPlanQueueStatus)) {
                 return make(
                     taskPlanQueueStatus === 'running' ? '生成中' : '排队中',
@@ -1761,6 +2271,9 @@
             return make('未解锁', 'text-bg-secondary', '请先确认第二阶段任务方案。');
         }
         var buildQueueStatus = readStageQueueStatus(state.build_queue_info);
+        if (isStageQueueFailed(buildQueueStatus)) {
+            return make('失败', 'text-bg-danger', readStageQueueFailureMessage(state.build_queue_info) || activeMessage || '站点构建失败，请重试。');
+        }
         if (isStageQueueInProgress(buildQueueStatus)) {
             return make(
                 buildQueueStatus === 'running' ? '构建中' : '排队中',
@@ -1914,6 +2427,7 @@
         if (!streamUrl) {
             return false;
         }
+        delete lastFailurePayloadByOperation[String(operation || '').trim().toLowerCase()];
 
         var operationKey = String(operation || '') + ':' + String(executionToken || '');
         var now = Date.now();
@@ -2005,6 +2519,22 @@
                     parsedMessage = String(event.data).trim();
                 }
                 lastServerError = normalizeToastMessage(parsedMessage || <?= \json_encode((string)__('操作执行失败（服务端返回错误事件）'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                var failureMessage = resolveQueueFailureMessage(payload, operation) || lastServerError;
+                lastServerError = normalizeToastMessage(failureMessage);
+                if (payload && typeof payload === 'object') {
+                    payload.message = lastServerError;
+                    if (payload.state && typeof payload.state === 'object') {
+                        if (!payload.state.active_operation || typeof payload.state.active_operation !== 'object') {
+                            payload.state.active_operation = {};
+                        }
+                        payload.state.active_operation.operation = String(payload.state.active_operation.operation || payload.operation || operation || '');
+                        payload.state.active_operation.status = 'error';
+                        payload.state.active_operation.message = lastServerError;
+                        hydrateWorkspaceFromState(payload.state);
+                        updateTaskSummaryFromState(payload.state);
+                        updateStageStatusSummary(payload.state);
+                    }
+                }
                 if (payload && Array.isArray(payload.required_params) && payload.required_params.length > 0) {
                     lastServerError += ' [' + payload.required_params.join(', ') + ']';
                 }
@@ -2020,11 +2550,11 @@
                     }
                     return;
                 }
+                rememberOperationFailurePayload(operation, payload, lastServerError);
                 logOperationToWorkspaceTerminal('error', payload, 'error', lastServerError);
                 if (settled) {
                     return;
                 }
-                toast('error', lastServerError);
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
                 }
@@ -2295,17 +2825,35 @@
                 var successRetryKey = getPhaseOneRetryKey(normalizedDoneOperation, normalizedDonePayload);
                 if (successRetryKey) {
                     phaseOneAutoRetryCountByKey[successRetryKey] = 0;
+                    delete phaseOneRetryPromptPendingByKey[successRetryKey];
                 }
             }
             if (!success) {
-                var retried = tryAutoRetryPhaseOnePlan(normalizedDoneOperation, normalizedDonePayload);
-                logOperationToWorkspaceTerminal('done_error', payload, 'error', lastServerError || '工作区操作执行失败');
-                if (!retried) {
-                    showOperationFailureDetailModal(normalizedDoneOperation, normalizedDonePayload, '');
-                    toast('error', (payload && payload.message) ? String(payload.message) : lastServerError || <?= \json_encode((string)__('操作执行失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
-                } else {
-                    toast('warning', <?= \json_encode((string)__('第一阶段生成失败，正在自动重试...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                var failureMessage = resolveQueueFailureMessage(normalizedDonePayload, normalizedDoneOperation) || lastServerError || <?= \json_encode((string)__('工作区操作执行失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+                lastServerError = normalizeToastMessage(failureMessage);
+                if (normalizedDonePayload && typeof normalizedDonePayload === 'object') {
+                    normalizedDonePayload.message = lastServerError;
+                    if (normalizedDonePayload.state && typeof normalizedDonePayload.state === 'object') {
+                        if (!normalizedDonePayload.state.active_operation || typeof normalizedDonePayload.state.active_operation !== 'object') {
+                            normalizedDonePayload.state.active_operation = {};
+                        }
+                        normalizedDonePayload.state.active_operation.operation = String(normalizedDonePayload.state.active_operation.operation || normalizedDoneOperation || operation || '');
+                        normalizedDonePayload.state.active_operation.status = 'error';
+                        normalizedDonePayload.state.active_operation.message = lastServerError;
+                        hydrateWorkspaceFromState(normalizedDonePayload.state);
+                        updateTaskSummaryFromState(normalizedDonePayload.state);
+                        updateStageStatusSummary(normalizedDonePayload.state);
+                    }
                 }
+                if (payload && typeof payload === 'object') {
+                    payload.message = lastServerError;
+                    if (!payload.state && normalizedDonePayload && normalizedDonePayload.state) {
+                        payload.state = normalizedDonePayload.state;
+                    }
+                }
+                rememberOperationFailurePayload(normalizedDoneOperation, normalizedDonePayload, lastServerError);
+                markBuildOperationTerminalForRuntimeUi(normalizedDoneOperation, 'error', lastServerError);
+                logOperationToWorkspaceTerminal('done_error', payload, 'error', lastServerError || '工作区操作执行失败');
                 resetOperationUiOnFailure(operation);
                 // 操作失败，恢复导航按钮
                 if (typeof enableNavigationAfterOperation === 'function') {
@@ -2314,6 +2862,7 @@
                 if (typeof previewBridge.resumeWorkspaceStream === 'function') {
                     previewBridge.resumeWorkspaceStream();
                 }
+                offerRetryForFailedOperation(normalizedDoneOperation, normalizedDonePayload);
                 return;
             }
 
@@ -2364,6 +2913,7 @@
                 if (deferredTerminal) {
                     startObserverSyncTerminalPulse(deferredTerminal);
                 }
+                startDeferredQueueStatePoll(operation);
 
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
@@ -2453,8 +3003,19 @@
                 return;
             }
             if (lastServerError) {
-                toast('error', lastServerError);
                 settled = true;
+                var failurePayload = lastFailurePayloadByOperation[String(operation || '').trim().toLowerCase()];
+                if (!failurePayload || typeof failurePayload !== 'object') {
+                    failurePayload = {
+                        operation: operation,
+                        message: lastServerError
+                    };
+                } else if (!failurePayload.message) {
+                    failurePayload = Object.assign({}, failurePayload, {
+                        message: lastServerError
+                    });
+                }
+                markBuildOperationTerminalForRuntimeUi(operation, 'error', lastServerError);
                 resetOperationUiOnFailure(operation);
                 // 操作错误，恢复导航按钮
                 if (typeof enableNavigationAfterOperation === 'function') {
@@ -2463,6 +3024,7 @@
                 if (typeof previewBridge.resumeWorkspaceStream === 'function') {
                     previewBridge.resumeWorkspaceStream();
                 }
+                offerRetryForFailedOperation(operation, failurePayload);
             }
         };
 
@@ -2478,13 +3040,22 @@
         }
         var level1 = (data.data && typeof data.data === 'object') ? data.data : null;
         var level2 = (level1 && level1.data && typeof level1.data === 'object') ? level1.data : null;
-        if (data.execution_token || data.stream_url || data.operation) {
+        if (data.execution_token || data.stream_url) {
             return data;
         }
-        if (level1 && (level1.execution_token || level1.stream_url || level1.operation)) {
+        if (level1 && (level1.execution_token || level1.stream_url)) {
             return level1;
         }
-        if (level2 && (level2.execution_token || level2.stream_url || level2.operation)) {
+        if (level2 && (level2.execution_token || level2.stream_url)) {
+            return level2;
+        }
+        if (data.operation) {
+            return data;
+        }
+        if (level1 && level1.operation) {
+            return level1;
+        }
+        if (level2 && level2.operation) {
             return level2;
         }
         return data;
@@ -2542,6 +3113,11 @@
 
     function startPublishFlow(triggerButton, options) {
         var opts = options && typeof options === 'object' ? options : {};
+        if (hasPublishBlockingAiStateForRuntime()) {
+            syncPublishStartButtonForRuntime();
+            toast('warning', messages.publishBlockedLatestBuildFailure || messages.publishRunning || '');
+            return;
+        }
         if (!startPublishUrl) {
             toast('error', messages.publishStartUnavailable);
             if (triggerButton) {
@@ -2579,6 +3155,11 @@
     }
 
     function checkBeforePublishAndStart(triggerButton) {
+        if (hasPublishBlockingAiStateForRuntime()) {
+            syncPublishStartButtonForRuntime();
+            toast('warning', messages.publishBlockedLatestBuildFailure || messages.publishRunning || '');
+            return;
+        }
         if (triggerButton && triggerButton.disabled) {
             toast('warning', messages.publishRunning);
             return;
