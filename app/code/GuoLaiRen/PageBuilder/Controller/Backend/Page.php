@@ -5059,7 +5059,8 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
         $scope = $scopeService->normalizeScope($context['scope']);
         $virtualPages = $scopeService->buildVirtualPagesByType(
             $scopeService->normalizePageTypes($scope['page_types'] ?? []),
-            $scope
+            $scope,
+            false
         );
         $pageType = $scopeService->resolvePreviewPageType($virtualPages, $requestedPageType);
         if ($pageType === '' || !isset($virtualPages[$pageType])) {

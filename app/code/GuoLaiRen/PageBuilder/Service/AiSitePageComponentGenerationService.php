@@ -460,14 +460,24 @@ final class AiSitePageComponentGenerationService
         $fibers = [];
         foreach ($components as $region => $spec) {
             $fibers[$region] = new \Fiber(function () use ($spec): array {
-                return $this->generateComponent(
-                    $spec['componentCode'],
-                    $spec['name'],
-                    $spec['region'],
-                    $spec['prompt'],
-                    $spec['defaultConfig'],
-                    $spec['renderContext']
-                );
+                try {
+                    return [
+                        'status' => 'fulfilled',
+                        'result' => $this->generateComponent(
+                            $spec['componentCode'],
+                            $spec['name'],
+                            $spec['region'],
+                            $spec['prompt'],
+                            $spec['defaultConfig'],
+                            $spec['renderContext']
+                        ),
+                    ];
+                } catch (\Throwable $throwable) {
+                    return [
+                        'status' => 'rejected',
+                        'error' => $throwable,
+                    ];
+                }
             });
         }
 
@@ -486,7 +496,14 @@ final class AiSitePageComponentGenerationService
                 }
                 if ($fiber->isTerminated()) {
                     try {
-                        $results[$region] = $fiber->getReturn();
+                        $outcome = $fiber->getReturn();
+                        if (($outcome['status'] ?? '') === 'fulfilled') {
+                            $results[$region] = \is_array($outcome['result'] ?? null) ? $outcome['result'] : [];
+                        } else {
+                            $errors[$region] = ($outcome['error'] ?? null) instanceof \Throwable
+                                ? $outcome['error']
+                                : new \RuntimeException('Component fiber failed without an exception payload.');
+                        }
                     } catch (\Throwable $e) {
                         $errors[$region] = $e;
                     }
@@ -561,14 +578,24 @@ final class AiSitePageComponentGenerationService
         $fibers = [];
         foreach ($components as $componentKey => $spec) {
             $fibers[$componentKey] = new \Fiber(function () use ($spec): array {
-                return $this->generateComponent(
-                    $spec['componentCode'],
-                    $spec['name'],
-                    $spec['region'],
-                    $spec['prompt'],
-                    $spec['defaultConfig'],
-                    $spec['renderContext']
-                );
+                try {
+                    return [
+                        'status' => 'fulfilled',
+                        'result' => $this->generateComponent(
+                            $spec['componentCode'],
+                            $spec['name'],
+                            $spec['region'],
+                            $spec['prompt'],
+                            $spec['defaultConfig'],
+                            $spec['renderContext']
+                        ),
+                    ];
+                } catch (\Throwable $throwable) {
+                    return [
+                        'status' => 'rejected',
+                        'error' => $throwable,
+                    ];
+                }
             });
         }
 
@@ -588,10 +615,18 @@ final class AiSitePageComponentGenerationService
                     if ($fiber->isTerminated()) {
                         $settled[$componentKey] = true;
                         $madeProgress = true;
-                        yield $componentKey => [
-                            'status' => 'fulfilled',
-                            'result' => $fiber->getReturn(),
-                        ];
+                        $outcome = $fiber->getReturn();
+                        yield $componentKey => ($outcome['status'] ?? '') === 'fulfilled'
+                            ? [
+                                'status' => 'fulfilled',
+                                'result' => \is_array($outcome['result'] ?? null) ? $outcome['result'] : [],
+                            ]
+                            : [
+                                'status' => 'rejected',
+                                'error' => ($outcome['error'] ?? null) instanceof \Throwable
+                                    ? $outcome['error']
+                                    : new \RuntimeException('Component fiber failed without an exception payload.'),
+                            ];
                         continue;
                     }
 
@@ -601,10 +636,18 @@ final class AiSitePageComponentGenerationService
 
                         if ($fiber->isTerminated()) {
                             $settled[$componentKey] = true;
-                            yield $componentKey => [
-                                'status' => 'fulfilled',
-                                'result' => $fiber->getReturn(),
-                            ];
+                            $outcome = $fiber->getReturn();
+                            yield $componentKey => ($outcome['status'] ?? '') === 'fulfilled'
+                                ? [
+                                    'status' => 'fulfilled',
+                                    'result' => \is_array($outcome['result'] ?? null) ? $outcome['result'] : [],
+                                ]
+                                : [
+                                    'status' => 'rejected',
+                                    'error' => ($outcome['error'] ?? null) instanceof \Throwable
+                                        ? $outcome['error']
+                                        : new \RuntimeException('Component fiber failed without an exception payload.'),
+                                ];
                         }
                     }
                 } catch (\Throwable $throwable) {
@@ -798,22 +841,6 @@ final class AiSitePageComponentGenerationService
 
         $finalReason = $this->summarizeThrowable($lastThrowable ?? new \RuntimeException('unknown'));
         $recoverable = $this->shouldRetryComponentGeneration($lastThrowable ?? new \RuntimeException('unknown'));
-        if ($recoverable) {
-            try {
-                $this->emitComponentFallbackNotice($region, $componentCode, $finalReason);
-                return $this->buildFallbackComponent(
-                    $componentCode,
-                    $name,
-                    $region,
-                    $prompt,
-                    $defaultConfig,
-                    $renderContext
-                );
-            } catch (\Throwable $fallbackThrowable) {
-                $lastThrowable = $fallbackThrowable;
-                $finalReason = 'fallback component failed: ' . $this->summarizeThrowable($fallbackThrowable);
-            }
-        }
 
         $message = $recoverable
             ? 'AI component generation failed after '
@@ -839,6 +866,8 @@ final class AiSitePageComponentGenerationService
         array $defaultConfig,
         array $renderContext
     ): array {
+        throw new \RuntimeException('Local component fallback is forbidden for real AI site generation.');
+
         $componentInfo = [
             'name' => $name,
             'name_en' => $name,
@@ -878,6 +907,8 @@ final class AiSitePageComponentGenerationService
         array $renderContext = []
     ): array
     {
+        throw new \RuntimeException('Deterministic component fallback is forbidden for real AI site generation.');
+
         if (\in_array($region, ['header', 'footer'], true)) {
             return $this->buildStubAiPayload($region, $prompt, $defaultConfig, $renderContext);
         }
@@ -893,31 +924,31 @@ final class AiSitePageComponentGenerationService
         $cjk = $copy['cjk'];
         $secondaryTitle = $cjk ? '预约路径清晰' : 'Visible CTA path';
         $secondaryBody = $cjk
-            ? '访客可以快速理解服务亮点、查看作品证明，并通过明确按钮提交预约咨询。'
-            : 'Visitors see a clear next action, supporting proof, and page-specific content that can be reviewed before publishing.';
+            ? '服务亮点、作品证明与预约入口以清晰层级呈现，帮助客户快速完成咨询决策。'
+            : 'Key benefits, proof points, and the next action are presented with a clear visual hierarchy.';
         $trustTitle = $cjk ? '信任信息完整' : 'Trust content';
         $trustBody = $cjk
             ? '模块保留真实标题、正文、服务说明和视觉层次，便于后续编辑和发布。'
-            : 'The section keeps real headings, body copy, and visual hierarchy so build and publish checks validate meaningful output.';
+            : 'Headings, body copy, and visual hierarchy stay clear across mobile and desktop.';
         $callout = $cjk
-            ? '这是一段可直接审阅和编辑的页面内容，包含响应式卡片、明确转化路径和可持续微调的文案结构。'
-            : 'Use this generated block as reviewable page content with editable copy, responsive cards, and a clear conversion path.';
+            ? '这段内容具备发布级文案质感，包含响应式卡片、明确转化路径和可持续微调的内容结构。'
+            : 'Responsive cards, clear actions, and layered visuals help users move to the next step faster.';
 
         return [
             'extra_fields' => '',
             'php_variables' => '',
-            'css_extra' => '#<?= $componentId ?> .<?= $cls ?>-body { display:grid; gap:18px; }'
-                . "\n" . '#<?= $componentId ?> .ai-site-visual-wrap { display:grid; grid-template-columns:minmax(0,0.86fr) 1.14fr; gap:22px; align-items:center; }'
-                . "\n" . '#<?= $componentId ?> .ai-site-card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }'
-                . "\n" . '#<?= $componentId ?> .ai-site-card { padding:20px; border-radius:20px; border:1px solid var(--section-border); background:rgba(255,255,255,0.72); text-align:left; box-shadow:0 18px 42px rgba(15,23,42,0.10); }'
-                . "\n" . '#<?= $componentId ?> .ai-site-svg-panel { width:100%; min-height:220px; border-radius:28px; overflow:hidden; box-shadow:0 24px 60px rgba(15,23,42,0.18); }'
-                . "\n" . '#<?= $componentId ?> .ai-site-callout { padding:18px 20px; border-radius:18px; background:color-mix(in srgb, var(--section-primary) 10%, white); color:var(--section-heading); text-align:left; }',
-            'css_responsive' => '#<?= $componentId ?> .ai-site-visual-wrap { grid-template-columns:1fr; } #<?= $componentId ?> .ai-site-card-grid { grid-template-columns:1fr; }',
-            'html_content' => '<div class="ai-site-visual-wrap"><div class="ai-site-svg-panel"><svg class="ai-site-svg-visual" viewBox="0 0 520 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"><defs><linearGradient id="pbFallbackA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#D4AF37"/><stop offset="1" stop-color="#8B7355"/></linearGradient></defs><rect width="520" height="360" rx="34" fill="#F5F0EB"/><circle cx="110" cy="92" r="58" fill="url(#pbFallbackA)" opacity=".8"/><rect x="184" y="74" width="238" height="28" rx="14" fill="#2C2C2C" opacity=".88"/><rect x="184" y="124" width="286" height="16" rx="8" fill="#8B7355" opacity=".72"/><rect x="54" y="192" width="122" height="92" rx="22" fill="#fff" opacity=".8"/><rect x="202" y="176" width="122" height="118" rx="22" fill="#fff" opacity=".9"/><rect x="350" y="204" width="116" height="78" rx="22" fill="#fff" opacity=".74"/><path d="M70 304 C154 248 244 326 338 258 C394 218 434 232 476 202" fill="none" stroke="#D4AF37" stroke-width="12" stroke-linecap="round"/></svg></div><div class="ai-site-card-grid">'
-                . '<article class="ai-site-card"><strong>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($body, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
-                . '<article class="ai-site-card"><strong>' . \htmlspecialchars($secondaryTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($secondaryBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
-                . '<article class="ai-site-card"><strong>' . \htmlspecialchars($trustTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($trustBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
-                . '</div></div><div class="ai-site-callout"><p>' . \htmlspecialchars($callout, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></div>',
+            'css_extra' => '#componentId { --ai-site-fallback-gap:22px; }'
+                . "\n" . '#componentId .ai-site-fallback-stage { position:relative; overflow:hidden; display:grid; grid-template-columns:minmax(0,1.04fr) minmax(280px,.96fr); gap:30px; align-items:center; padding:34px; border-radius:32px; border:1px solid color-mix(in srgb,var(--section-primary,#2563eb) 22%,transparent); background:radial-gradient(circle at 12% 8%,color-mix(in srgb,var(--section-accent,#f59e0b) 26%,transparent),transparent 32%),linear-gradient(135deg,color-mix(in srgb,var(--section-primary,#2563eb) 12%,white),color-mix(in srgb,var(--section-secondary,#06b6d4) 10%,white)); box-shadow:0 28px 80px rgba(15,23,42,.14); }'
+                . "\n" . '#componentId .ai-site-fallback-stage:before { content:""; position:absolute; inset:auto -12% -38% 22%; height:56%; background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--section-primary,#2563eb) 16%,transparent) 0 2px,transparent 2px 12px); opacity:.36; transform:rotate(-4deg); }'
+                . "\n" . '#componentId .ai-site-fallback-copy, #componentId .ai-site-fallback-art { position:relative; z-index:1; }'
+                . "\n" . '#componentId .ai-site-fallback-copy strong { display:block; max-width:10ch; font-size:clamp(28px,4.5vw,58px); line-height:.95; letter-spacing:-.06em; color:var(--section-heading,#0f172a); }'
+                . "\n" . '#componentId .ai-site-fallback-copy p { margin:16px 0 0; max-width:58ch; color:var(--section-text,#334155); font-size:clamp(15px,1.3vw,18px); }'
+                . "\n" . '#componentId .ai-site-fallback-kicker { display:inline-flex; margin-bottom:16px; padding:7px 12px; border-radius:999px; background:color-mix(in srgb,var(--section-primary,#2563eb) 12%,white); color:var(--section-primary,#2563eb); font-weight:700; font-size:12px; letter-spacing:.12em; text-transform:uppercase; }'
+                . "\n" . '#componentId .ai-site-fallback-proof { display:flex; flex-wrap:wrap; gap:10px; margin-top:22px; } #componentId .ai-site-fallback-proof span { padding:10px 12px; border-radius:14px; background:rgba(255,255,255,.74); border:1px solid rgba(255,255,255,.72); box-shadow:0 12px 30px rgba(15,23,42,.09); color:var(--section-heading,#0f172a); font-weight:700; }'
+                . "\n" . '#componentId .ai-site-fallback-art { min-height:260px; border-radius:28px; overflow:hidden; box-shadow:0 24px 70px rgba(15,23,42,.20); background:linear-gradient(145deg,var(--section-primary,#2563eb),var(--section-secondary,#06b6d4)); } #componentId .ai-site-fallback-art svg { width:100%; height:100%; display:block; }'
+                . "\n" . '#componentId .ai-site-fallback-callout { position:relative; padding:18px 20px; border-radius:20px; background:var(--section-heading,#0f172a); color:var(--section-bg,#fff); box-shadow:0 20px 48px rgba(15,23,42,.18); }',
+            'css_responsive' => '#componentId .ai-site-fallback-stage { grid-template-columns:1fr; padding:24px; } #componentId .ai-site-fallback-copy strong { max-width:12ch; }',
+            'html_content' => '<div class="ai-site-fallback-stage"><div class="ai-site-fallback-copy"><span class="ai-site-fallback-kicker">Curated preview</span><strong>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($body, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p><div class="ai-site-fallback-proof"><span>' . \htmlspecialchars($secondaryTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span><span>' . \htmlspecialchars($trustTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</span></div></div><div class="ai-site-fallback-art"><svg viewBox="0 0 520 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"><rect width="520" height="360" rx="34" fill="#0f172a"/><circle cx="96" cy="92" r="72" fill="#38bdf8" opacity=".38"/><circle cx="426" cy="264" r="104" fill="#f59e0b" opacity=".34"/><path d="M68 248 C144 160 228 294 310 202 C372 134 430 150 474 104" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".86"/><rect x="68" y="68" width="162" height="74" rx="24" fill="#fff" opacity=".88"/><rect x="258" y="82" width="188" height="24" rx="12" fill="#fff" opacity=".78"/><rect x="258" y="128" width="132" height="18" rx="9" fill="#fff" opacity=".46"/><rect x="72" y="224" width="112" height="72" rx="22" fill="#fff" opacity=".20"/><rect x="214" y="204" width="112" height="92" rx="22" fill="#fff" opacity=".26"/><rect x="356" y="224" width="92" height="72" rx="22" fill="#fff" opacity=".20"/></svg></div></div><div class="ai-site-fallback-callout"><p>' . \htmlspecialchars($callout, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p><p>' . \htmlspecialchars($secondaryBody . ' ' . $trustBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></div>',
             'js_content' => '',
         ];
     }
@@ -959,7 +990,7 @@ final class AiSitePageComponentGenerationService
         if ($body === '') {
             $body = $cjk
                 ? '访客可以在这里了解服务亮点、查看作品证明，并通过明确按钮提交预约咨询。'
-                : 'Visitors can review page-specific service highlights, proof points, and a clear next action before publishing.';
+                : 'Core benefits, trust proof, and a clear action come together so users can understand the value quickly.';
         }
 
         return [
@@ -1045,6 +1076,51 @@ final class AiSitePageComponentGenerationService
         }
 
         return true;
+    }
+
+    private function shouldFallbackComponentGeneration(\Throwable $throwable): bool
+    {
+        return false;
+
+        $message = \strtolower($this->collectThrowableMessages($throwable));
+        if (\trim($message) === '') {
+            return true;
+        }
+
+        foreach ([
+            'http 402',
+            'insufficient balance',
+            'quota',
+            '浣欓',
+            '余额',
+            '额度',
+        ] as $marker) {
+            if (\str_contains($message, $marker)) {
+                return true;
+            }
+        }
+
+        foreach ([
+            'http 401',
+            'http 403',
+            'api key',
+            'missing api key',
+            'model selection',
+            'no available',
+            'provider account',
+            'provider configuration',
+            '瀵嗛挜',
+            '鏈厤缃?',
+            '閰嶇疆',
+            '璐︽埛',
+            'account',
+        ] as $marker) {
+            if (\str_contains($message, $marker)) {
+                return false;
+            }
+        }
+
+        return $this->shouldRetryComponentGeneration($throwable);
     }
 
     private function attemptSyntaxFix(string $phtml, string $region, array $componentInfo, array $aiData, array $initialCheck): string
@@ -1147,7 +1223,10 @@ final class AiSitePageComponentGenerationService
                 continue;
             }
             $this->assertNoBrokenGeneratedImageReferences($css);
-            $aiData[$cssKey] = $this->normalizeVirtualThemeCssForValidation($css, 1800);
+            $aiData[$cssKey] = $this->normalizeVirtualThemeCssForValidation(
+                $css,
+                $this->resolveVirtualThemeCssValidationLimit($region, $cssKey)
+            );
         }
 
         if (\in_array($region, ['header', 'footer'], true)) {
@@ -1164,11 +1243,23 @@ final class AiSitePageComponentGenerationService
             $aiData['html_content'] = $this->cleanAiHtmlFragment((string)$aiData['html_content']);
         }
 
-        if ($this->isLowQualityGeneratedSectionHtml((string)($aiData['html_content'] ?? ''))) {
-            throw new \RuntimeException((string)__('AI 组件内容质量不足：缺少真实文案、视觉层次或有效内容。请重新生成。'));
+        if ($region === 'content') {
+            $lowQualityReason = $this->detectLowQualityGeneratedSectionHtmlReason((string)($aiData['html_content'] ?? ''));
+            if ($lowQualityReason !== null) {
+                throw new \RuntimeException((string)__('AI 组件内容质量不足：%{1}。请重新生成。', [$lowQualityReason]));
+            }
         }
 
         return $aiData;
+    }
+
+    private function resolveVirtualThemeCssValidationLimit(string $region, string $cssKey): int
+    {
+        if ($cssKey === 'css_responsive') {
+            return 1200;
+        }
+
+        return $region === 'content' ? 2800 : 2000;
     }
 
     private function normalizeVirtualThemeCssForValidation(string $css, int $limit): string
@@ -1616,36 +1707,92 @@ final class AiSitePageComponentGenerationService
 
     private function isLowQualityGeneratedSectionHtml(string $html): bool
     {
+        return $this->detectLowQualityGeneratedSectionHtmlReason($html) !== null;
+    }
+
+    private function detectLowQualityGeneratedSectionHtmlReason(string $html): ?string
+    {
         $trimmed = \trim($html);
         if ($trimmed === '') {
-            return true;
+            return 'empty html';
         }
 
         $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($trimmed)));
         if ($plain === '' || \mb_strlen($plain) < 18) {
-            return true;
+            return 'insufficient visitor-facing text';
         }
 
-        if (\preg_match('/AI content placeholder|ai-empty|placeholder|demo|example\.com|Generated visual|inline SVG|Visual preview generated|Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent/iu', $trimmed) === 1) {
-            return true;
+        if (\preg_match('/AI content placeholder|ai-empty|placeholder\s+(?:content|copy|section|text|block|image|visual)|demo|example\.com|Generated visual|inline SVG|Visual preview generated|Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent/iu', $trimmed) === 1) {
+            return 'prompt or placeholder text leaked';
         }
 
         if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $trimmed) === 1) {
-            return true;
+            return 'internal task identifiers leaked';
         }
 
         if (\preg_match('/核心卖点|功能特性|把首页|值得点击|放出来|方案头部|方案背景|方案结尾|当前方案|任务方案|蓝图/iu', $plain) === 1) {
-            return true;
+            return 'planning copy leaked into visitor content';
+        }
+
+        if ($this->containsPlanningObservationCopy($plain)) {
+            return 'planning observation copy leaked into visitor content';
         }
 
         if (\preg_match('/<(h[1-6]|p|a)\b[^>]*>\s*<\/\1>/iu', $trimmed) === 1) {
-            return true;
+            return 'empty visitor element';
         }
 
         $hasVisual = \preg_match('/<svg\b|data:image\/svg\+xml|class=["\'][^"\']*(?:card|visual|panel|media|grid|badge)[^"\']*/iu', $trimmed) === 1;
         $hasRealCopy = \mb_strlen($plain) >= 32;
+        $hasVisitorLinkCluster = $this->hasVisitorLinkCluster($trimmed);
+        $hasVisitorArticleList = $this->hasVisitorArticleListStructure($trimmed);
 
-        return !$hasVisual && !$hasRealCopy;
+        if (!$hasVisual && !$hasRealCopy && !$hasVisitorLinkCluster && !$hasVisitorArticleList) {
+            return 'missing real copy, visual hierarchy, or visitor content structure';
+        }
+
+        return null;
+    }
+
+    private function hasVisitorLinkCluster(string $html): bool
+    {
+        if (\preg_match_all('/<a\b[^>]*>(.*?)<\/a>/isu', $html, $matches) < 3) {
+            return false;
+        }
+
+        $labels = [];
+        foreach ($matches[1] as $rawLabel) {
+            $label = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags((string)$rawLabel)));
+            if ($label !== '' && \mb_strlen($label) >= 2) {
+                $labels[] = \mb_strtolower($label);
+            }
+        }
+
+        return \count(\array_unique($labels)) >= 3;
+    }
+
+    private function hasVisitorArticleListStructure(string $html): bool
+    {
+        if (\preg_match_all('/<(article|li)\b[^>]*>.*?<\/\1>/isu', $html, $items) < 2) {
+            return false;
+        }
+        if (\preg_match_all('/<a\b[^>]*>(.*?)<\/a>/isu', $html, $links) < 2) {
+            return false;
+        }
+
+        $labels = [];
+        foreach ($links[1] as $rawLabel) {
+            $label = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags((string)$rawLabel)));
+            if ($label !== '' && \mb_strlen($label) >= 4) {
+                $labels[] = \mb_strtolower($label);
+            }
+        }
+        if (\count(\array_unique($labels)) < 2) {
+            return false;
+        }
+
+        $plain = \mb_strtolower(\trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($html))));
+        return \preg_match('/<time\b|date|read|guide|review|tips|news|update|strategy|apk|teen patti|rummy|category|article/iu', $html . ' ' . $plain) === 1;
     }
 
     private function assertNoBrokenGeneratedImageReferences(string $html): void
@@ -2022,31 +2169,32 @@ final class AiSitePageComponentGenerationService
         $cjk = $copy['cjk'];
         $secondaryTitle = $cjk ? '预约路径清晰' : 'Visible CTA path';
         $secondaryBody = $cjk
-            ? '访客可以快速理解服务亮点、查看作品证明，并通过明确按钮提交预约咨询。'
-            : 'Visitors see a clear next action, supporting proof, and page-specific content that can be reviewed before publishing.';
+            ? '服务亮点、作品证明与预约入口以清晰层级呈现，帮助客户快速完成咨询决策。'
+            : 'Clear proof points, page-specific content, and the primary next action are presented with a polished launch-ready hierarchy.';
         $trustTitle = $cjk ? '信任信息完整' : 'Trust content';
         $trustBody = $cjk
             ? '模块保留真实标题、正文、服务说明和视觉层次，便于后续编辑和发布。'
             : 'The section keeps real headings, body copy, and visual hierarchy so build and publish checks validate meaningful output.';
         $callout = $cjk
-            ? '这是一段可直接审阅和编辑的页面内容，包含响应式卡片、明确转化路径和可持续微调的文案结构。'
-            : 'Use this generated block as reviewable page content with editable copy, responsive cards, and a clear conversion path.';
+            ? '这段内容具备发布级文案质感，包含响应式卡片、明确转化路径和可持续微调的内容结构。'
+            : 'Use this generated block as launch-ready content with editorial polish, responsive cards, and a clear conversion path.';
 
         return match ($region) {
             'header' => [
                 'extra_fields' => '',
                 'php_variables' => '',
-                'css_extra' => '#<?= $componentId ?> { border-bottom: 1px solid rgba(15, 23, 42, 0.08); }'
-                    . "\n" . '#<?= $componentId ?> .<?= $cls ?>-logo { letter-spacing: -0.02em; }'
-                    . "\n" . '#<?= $componentId ?> .<?= $cls ?>-cta { box-shadow: 0 10px 24px rgba(37,99,235,0.22); }',
+                'css_extra' => '#componentId { position:sticky; top:0; z-index:20; border-bottom:1px solid color-mix(in srgb,var(--section-primary,#2563eb) 20%,transparent); background:linear-gradient(135deg,rgba(255,255,255,.94),color-mix(in srgb,var(--section-primary,#2563eb) 8%,white)); backdrop-filter:blur(18px); box-shadow:0 18px 44px rgba(15,23,42,.10); }'
+                    . "\n" . '#componentId:after { content:""; position:absolute; left:8%; right:8%; bottom:-1px; height:2px; border-radius:99px; background:linear-gradient(90deg,transparent,var(--section-accent,#f59e0b),transparent); }'
+                    . "\n" . '#componentId a { transition:color .18s ease, transform .18s ease; } #componentId a:hover, #componentId a:focus-visible { color:var(--section-accent,#f59e0b); transform:translateY(-1px); }',
                 'html_extra' => '',
                 'js_content' => '',
             ],
             'footer' => [
                 'extra_fields' => '',
                 'php_variables' => '',
-                'css_extra' => '#<?= $componentId ?> { border-top: 1px solid rgba(148,163,184,0.18); }'
-                    . "\n" . '#<?= $componentId ?> .<?= $cls ?>-bottom { font-size: 12px; }',
+                'css_extra' => '#componentId { position:relative; overflow:hidden; border-top:1px solid color-mix(in srgb,var(--section-accent,#f59e0b) 28%,transparent); background:radial-gradient(circle at 86% 10%,color-mix(in srgb,var(--section-accent,#f59e0b) 20%,transparent),transparent 30%),linear-gradient(135deg,var(--section-heading,#0f172a),color-mix(in srgb,var(--section-primary,#2563eb) 42%,#0f172a)); color:var(--section-bg,#fff); box-shadow:0 -24px 70px rgba(15,23,42,.18); }'
+                    . "\n" . '#componentId:before { content:""; position:absolute; inset:0; background:repeating-linear-gradient(135deg,rgba(255,255,255,.10) 0 1px,transparent 1px 12px); opacity:.32; pointer-events:none; }'
+                    . "\n" . '#componentId a { color:inherit; text-decoration-color:rgba(255,255,255,.38); text-underline-offset:4px; } #componentId a:hover, #componentId a:focus-visible { color:var(--section-accent,#f59e0b); }',
                 'html_extra_column' => '',
                 'html_extra' => '',
                 'footer_extra_text' => $cjk ? '页面内容可持续维护' : 'Content can be maintained after publishing',
@@ -2055,11 +2203,10 @@ final class AiSitePageComponentGenerationService
             default => [
                 'extra_fields' => '',
                 'php_variables' => '',
-                'css_extra' => '#<?= $componentId ?> .<?= $cls ?>-body { display:grid; gap:18px; }'
-                    . "\n" . '#<?= $componentId ?> .ai-site-card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }'
-                    . "\n" . '#<?= $componentId ?> .ai-site-card { padding:20px; border-radius:20px; border:1px solid var(--section-border); background:rgba(255,255,255,0.72); text-align:left; }'
-                    . "\n" . '#<?= $componentId ?> .ai-site-callout { padding:18px 20px; border-radius:18px; background:color-mix(in srgb, var(--section-primary) 10%, white); color:var(--section-heading); text-align:left; }',
-                'css_responsive' => '#<?= $componentId ?> .ai-site-card-grid { grid-template-columns:1fr; }',
+                'css_extra' => '#componentId .ai-site-card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }'
+                    . "\n" . '#componentId .ai-site-card { padding:20px; border-radius:20px; border:1px solid var(--section-border); background:rgba(255,255,255,0.72); text-align:left; box-shadow:0 16px 42px rgba(15,23,42,.10); }'
+                    . "\n" . '#componentId .ai-site-callout { padding:18px 20px; border-radius:18px; background:color-mix(in srgb,var(--section-primary) 10%,white); color:var(--section-heading); text-align:left; }',
+                'css_responsive' => '#componentId .ai-site-card-grid { grid-template-columns:1fr; }',
                 'html_content' => '<div class="ai-site-card-grid">'
                     . '<article class="ai-site-card"><strong>' . \htmlspecialchars($title, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($body, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
                     . '<article class="ai-site-card"><strong>' . \htmlspecialchars($secondaryTitle, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</strong><p>' . \htmlspecialchars($secondaryBody, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</p></article>'
@@ -2648,6 +2795,7 @@ final class AiSitePageComponentGenerationService
             $scope
         );
         $themeContract = $this->buildThemeContractPromptAddon($scope);
+        $visualExcellence = $this->buildVisualExcellencePromptAddon('header');
         $skillContract = $this->buildWelineSkillContractPromptAddon();
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
 
@@ -2659,6 +2807,7 @@ final class AiSitePageComponentGenerationService
             . $visibleCopyRule
             . $skillContract
             . $themeContract
+            . $visualExcellence
             . "Selected pages: " . \implode(', ', $pageList) . "\n"
             . "Current navigation data: " . \json_encode($headerConfig['nav_items'] ?? [], \JSON_UNESCAPED_UNICODE) . "\n"
             . $taskPlanPromptAddon
@@ -2671,7 +2820,7 @@ final class AiSitePageComponentGenerationService
             . "5. Keep the structure practical: logo area, navigation, optional CTA, mobile-friendly behavior.\n"
             . "6. Style should be inspired by the reference theme, but do not mention the theme name in visible copy.\n"
             . "7. The framework already provides fields/config/nav/CTA. Set extra_fields, php_variables, html_extra, and js_content to empty strings unless explicitly required.\n"
-            . "8. Return compact JSON only. No markdown. No explanation. Keep css_extra under 1200 chars.\n"
+            . "8. Return valid JSON only. No markdown. No explanation. Keep css_extra under 1800 chars.\n"
             . "JSON fields: extra_fields, php_variables, css_extra, html_extra, js_content.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
@@ -2689,6 +2838,7 @@ final class AiSitePageComponentGenerationService
             $scope
         );
         $themeContract = $this->buildThemeContractPromptAddon($scope);
+        $visualExcellence = $this->buildVisualExcellencePromptAddon('footer');
         $skillContract = $this->buildWelineSkillContractPromptAddon();
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
 
@@ -2700,6 +2850,7 @@ final class AiSitePageComponentGenerationService
             . $visibleCopyRule
             . $skillContract
             . $themeContract
+            . $visualExcellence
             . $taskPlanPromptAddon
             . ($sharedRefinement !== '' ? "Latest user refinement for this footer: {$sharedRefinement}\n" : '')
             . "Footer link data: " . \json_encode([
@@ -2715,7 +2866,7 @@ final class AiSitePageComponentGenerationService
             . "5. Footer links should be compatible with real page nav logic and the provided link groups.\n"
             . "6. Style should follow the reference theme direction without naming the theme in visible text.\n"
             . "7. The framework already provides brand/link/social/copyright fields. Set extra_fields, php_variables, html_extra_column, html_extra, and js_content to empty strings unless explicitly required.\n"
-            . "8. Return compact JSON only. No markdown. No explanation. Keep footer_extra_text as one short visitor-facing sentence.\n"
+            . "8. Return valid JSON only. No markdown. No explanation. Keep css_extra under 1800 chars and footer_extra_text as one short visitor-facing sentence.\n"
             . "JSON fields: extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
@@ -2749,6 +2900,7 @@ final class AiSitePageComponentGenerationService
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
         $taskPlanPromptAddon = $this->buildTaskPlanPromptAddon($taskPlanTask, 'section', $scope);
         $themeContract = $this->buildThemeContractPromptAddon($scope);
+        $visualExcellence = $this->buildVisualExcellencePromptAddon('section');
         $skillContract = $this->buildWelineSkillContractPromptAddon();
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
         $pageLabel = $this->normalizePromptVisibleLabel(
@@ -2770,6 +2922,7 @@ final class AiSitePageComponentGenerationService
             . $visibleCopyRule
             . $skillContract
             . $themeContract
+            . $visualExcellence
             . $taskPlanPromptAddon
             . ($refinement !== '' ? "Latest refine instruction for this section: {$refinement}\n" : '')
             . ($blogPrompt !== '' ? $blogPrompt . "\n" : '')
@@ -2783,7 +2936,7 @@ final class AiSitePageComponentGenerationService
             . "7. Preserve page-level color layering: this block must have its own surface/contrast role and must not make the whole page feel like one solid theme color.\n"
             . "8. Implement like a UI/interaction designer handoff: section-specific visual hierarchy, spatial rhythm, motion restraint, hover/focus states, and mobile stacking must be visible in html_content/css_extra.\n"
             . "9. Set extra_fields, php_variables, and js_content to empty strings. Put final visible section body only in html_content.\n"
-            . "10. Return compact JSON only. No markdown. No explanation. Keep html_content under 1800 chars and css_extra under 1200 chars.\n"
+            . "10. Return valid JSON only. No markdown. No explanation. Keep html_content under 2400 chars and css_extra under 2600 chars.\n"
             . "11. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
             . "12. If real blog data variables are provided, prefer them over invented articles or categories.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
@@ -2801,7 +2954,7 @@ final class AiSitePageComponentGenerationService
             . "- Do not redeclare or break framework-provided variables (\$page, \$getConfig, \$componentId, \$cls, \$parseLinks, \$navItems, etc.) unless you know exactly how; prefer using them read-only.\n"
             . "- extra_fields and js_content: MUST be empty strings unless the task explicitly requires them.\n"
             . "- html_extra, html_extra_column, html_content: static HTML fragments only. No PHP tags, no <style>, no <script>, no @component_start/@fields_start metadata.\n"
-            . "- css_extra, css_responsive: CSS only. No <? ... ?> and no PHP. Prefer empty CSS because theme tokens are already applied through default_config. If CSS is used, every rule and @media block must have balanced { } braces and be short enough to fit completely.\n"
+            . "- css_extra, css_responsive: CSS only. No <? ... ?> and no PHP. Use scoped CSS when needed for visual polish: layered backgrounds, textures, shape motifs, hover/focus states, responsive rhythm, and type scale. Every rule and @media block must have balanced { } braces and be short enough to fit completely.\n"
             . "- CSS class names: never use generic selectors like .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active. Use component-specific classes shaped like pb-{component-code}-{element}, scope selectors with #componentId, and keep CSS selectors and HTML class attributes in sync.\n"
             . "- Images: never output broken image placeholders. If no verified asset URL is provided, create the visual directly with inline SVG or CSS shapes inside html_content; do not use empty src, example.com, placeholder services, or unverified .jpg/.png/.webp URLs.\n"
             . "- js_content: MUST be an empty string for this virtual-theme build.\n";
@@ -2855,6 +3008,7 @@ final class AiSitePageComponentGenerationService
             . "- plan_locale: " . ($planLocale !== '' ? $planLocale : 'not provided') . " is only an internal planning language hint, never a visitor-facing language source.\n"
             . "- Visitor-visible copy must use content_locale/default_locale. Do not use plan_locale unless it is the same locale.\n"
             . "- Planned content is not exempt: if task_script, block_task.content_plan, field samples, nav labels, CTA labels, SEO snippets, or stage-1 plan text use another language, translate/rewrite them into content_locale/default_locale before rendering html_content/footer/header text.\n"
+            . "- Rewrite planning/observation sentences into direct marketing copy before rendering. Do not visibly output phrases like \"Visitors see...\", \"Visitors can review...\", \"访客看到...\", \"用户看到...\", \"信任感增强\", or \"从而产生...\".\n"
             . "- Never render internal identifiers or paths as visible copy: plan_locale, page_type, section_code, task_key, block_key, runtime_context, app/code paths, var/ paths, content/... component paths, shared:* keys, or page:* keys.\n"
             . "- Never render broken image placeholders. If a verified uploaded asset URL is absent, create the visual with inline SVG or CSS shapes.\n";
     }
@@ -2875,9 +3029,33 @@ final class AiSitePageComponentGenerationService
             . "- theme_name: " . (string)($contract['name'] ?? '') . "\n"
             . "- visual_tone: " . (string)($contract['visual_tone'] ?? '') . "\n"
             . "- font_family: " . (string)($contract['font_family'] ?? '') . "\n"
+            . "- style_signature: " . (string)($contract['style_signature'] ?? '') . "\n"
+            . "- art_direction: " . $this->jsonEncodeForPrompt(\is_array($contract['art_direction'] ?? null) ? $contract['art_direction'] : [], 2000) . "\n"
             . "- palette: " . \json_encode($palette, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- full_theme_context: " . $this->jsonEncodeForPrompt($themeContext, 9000) . "\n"
             . "- Use these exact palette tokens for generated CSS and extra fields. Do not invent unrelated accent colors.\n";
+    }
+
+    private function buildVisualExcellencePromptAddon(string $componentScope): string
+    {
+        $scopeRule = match ($componentScope) {
+            'header' => '- Header quality floor: css_extra must visibly restyle the shell/nav/CTA with depth, contrast, active/hover states, and a brand-specific motif; a plain border-only header is invalid.' . "\n",
+            'footer' => '- Footer quality floor: css_extra must create a distinct closing surface with grouped information rhythm, trust/support emphasis, texture or shape detail, and mobile spacing; a flat link list is invalid.' . "\n",
+            default => '- Section quality floor: html_content must include a component-specific wrapper plus at least two visible design devices such as an inline SVG motif, media frame, trust/metric strip, timeline/process rail, comparison band, badge cluster, or editorial callout; css_extra must style those devices.' . "\n",
+        };
+
+        return "Visual excellence system prompt for {$componentScope}:\n"
+            . "- The generated component must look polished enough for a paying customer preview, not like a default template or placeholder block.\n"
+            . "- Design from the customer brief plus theme style_signature/art_direction when present; the style reference is scaffolding, not permission to reuse a fixed look.\n"
+            . "- Avoid one-size-fits-all layouts: no plain centered hero plus three generic cards, no flat one-color strip, no default Inter/Roboto/Arial/system-font look, no purple-on-white AI template unless explicitly requested.\n"
+            . "- Spend CSS budget on visible quality: scoped CSS variables, clamp typography, layered gradients, texture/noise via CSS, asymmetric composition, decorative borders, inline SVG/CSS motifs, tactile CTA hover/focus states, and mobile-specific rhythm.\n"
+            . "- Customer-intent lock: the final HTML/CSS must visibly match the user's actual business/game/service scenario through motifs, labels, CTA affordances, proof details, and interaction behavior; do not generate a category-neutral section.\n"
+            . "- Interaction/effects requirement: implement at least one friendly visible hover/focus/reveal/ambient effect with CSS transition/transform/animation plus a reduced-motion-safe fallback when motion is used; do not describe effects without CSS.\n"
+            . "- Do not leave css_extra empty when visual polish depends on it; the page preview should show the styling without a designer adding anything later.\n"
+            . $scopeRule
+            . "- Before returning, silently self-audit: if the preview would still read as pale background + ordinary cards + small default buttons, rewrite the composition and CSS.\n"
+            . "- If no real asset is available, create the visual language with inline SVG or CSS shapes that match the brief; never leave a blank media slot.\n"
+            . "- Keep the result maintainable: component-scoped class names only, accessible contrast/focus, and reduced-motion-friendly transitions.\n";
     }
 
     /**
@@ -3025,11 +3203,14 @@ final class AiSitePageComponentGenerationService
 
         $visualDirection = \is_array($themeContext['visual_direction'] ?? null) ? $themeContext['visual_direction'] : [];
         $typography = \is_array($themeContext['typography_spacing_radius'] ?? null) ? $themeContext['typography_spacing_radius'] : [];
+        $artDirection = \is_array($themeContext['art_direction'] ?? null) ? $themeContext['art_direction'] : [];
 
         return [
             'name' => (string)($themeContext['name'] ?? $visualDirection['name'] ?? $palette['name'] ?? ''),
             'visual_tone' => (string)($themeContext['visual_tone'] ?? $themeContext['content_tone'] ?? ''),
             'font_family' => (string)($themeContext['font_family'] ?? $visualDirection['font_family'] ?? $typography['font_family'] ?? ''),
+            'style_signature' => (string)($themeContext['style_signature'] ?? $themeContext['visual_identity'] ?? $visualDirection['style_signature'] ?? ''),
+            'art_direction' => $artDirection,
             'palette' => $palette,
             'raw_context' => $themeContext,
         ];
@@ -3590,6 +3771,7 @@ final class AiSitePageComponentGenerationService
             . "- block_task.planning_reason: " . (string)($blockTask['planning_reason'] ?? '') . "\n"
             . "- design execution rule: apply page_design_plan.color_layering and section_flow before local block styling; this block must contrast with adjacent blocks through surfaces/cards/gradients/dividers/illustration while staying inside the confirmed palette.\n"
             . "- stage2 language rule: treat stage-2 planned text as source intent, not copy authority; rewrite any planned text that is not in the website content language before placing it in visible component output.\n"
+            . "- anti-copy rule: never paste stage-2 observation/planning sentences directly into html_content. Rewrite phrases like \"访客看到...\", \"用户看到...\", \"从而产生...\", \"信任感增强\", \"知道如何...\", \"Visitors see...\", or \"Visitors can review...\" into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n"
             . "- theme_context: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
             . "- acceptance: " . \json_encode($acceptance, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- runtime_context: " . \json_encode($runtimeContext, \JSON_UNESCAPED_UNICODE) . "\n";
@@ -3828,6 +4010,11 @@ final class AiSitePageComponentGenerationService
                 return '';
             }
         }
+        foreach (['访客看到', '用户看到', '让访客看到', '从而产生', '产生下载兴趣', '信任感增强', '知道如何'] as $marker) {
+            if ($marker !== '' && \mb_stripos($normalized, \mb_strtolower($marker)) !== false) {
+                return '';
+            }
+        }
         foreach ([
             'Generated website section',
             'Website content language',
@@ -3840,6 +4027,12 @@ final class AiSitePageComponentGenerationService
             'planning/plan language',
             'stage-2 planned text',
             'source intent',
+            'Visitors see',
+            'Visitor sees',
+            'Visitors can review',
+            'Visitors can verify',
+            'before publishing',
+            'reviewable page content',
         ] as $marker) {
             if ($marker !== '' && \mb_stripos($normalized, \mb_strtolower($marker)) !== false) {
                 return '';
@@ -3853,7 +4046,45 @@ final class AiSitePageComponentGenerationService
             return '';
         }
 
+        if ($this->containsPlanningObservationCopy($value)) {
+            return '';
+        }
+
         return $this->clipText($value, 220);
+    }
+
+    private function containsPlanningObservationCopy(string $value): bool
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return false;
+        }
+
+        $normalized = \mb_strtolower($value);
+        foreach ([
+            '访客看到',
+            '用户看到',
+            '让访客看到',
+            '从而产生',
+            '产生下载兴趣',
+            '信任感增强',
+            '知道如何',
+            'Visitors see',
+            'Visitor sees',
+            'Visitors can review',
+            'Visitors can verify',
+            'Visitors understand',
+            'Visitors are guided',
+            'before publishing',
+            'reviewable page content',
+        ] as $marker) {
+            $marker = \mb_strtolower($marker);
+            if ($marker !== '' && \mb_stripos($normalized, $marker) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -4156,6 +4387,9 @@ final class AiSitePageComponentGenerationService
         if ($locale !== '' && $this->isNonCjkLocale($locale) && $this->hasMeaningfulCjkContent($value)) {
             return '';
         }
+        if ($this->containsPlanningObservationCopy($value)) {
+            return '';
+        }
 
         return $value;
     }
@@ -4424,7 +4658,7 @@ final class AiSitePageComponentGenerationService
             $sse->sendEvent('warning', [
                 'region' => $region,
                 'component_code' => $componentCode,
-                'message' => (string)__('AI 组件生成未通过校验，正在使用 AI 简化方案重试（第 %{1} 轮）：%{2}', [
+                'message' => (string)__('AI 组件生成未通过校验，正在使用 AI 增强修复方案重写（第 %{1} 轮）：%{2}', [
                     $attempt,
                     $reason,
                 ]),
@@ -4445,8 +4679,8 @@ final class AiSitePageComponentGenerationService
             $sse->sendEvent('warning', [
                 'region' => $region,
                 'component_code' => $componentCode,
-                'message' => 'AI component generation did not pass quality validation; using a reviewable local fallback section. Reason: ' . $this->clipText($reason, 180),
-                'component_fallback' => true,
+                'message' => 'AI component generation did not pass quality validation; deterministic local fallback is forbidden. Reason: ' . $this->clipText($reason, 180),
+                'component_fallback_forbidden' => true,
             ]);
         } catch (\Throwable) {
         }
@@ -4462,15 +4696,20 @@ final class AiSitePageComponentGenerationService
         $cssPrefix = $this->normalizeComponentCssPrefix($componentCode);
 
         return $basePrompt
-            . "\n\nRetry mode (attempt {$attempt}/" . self::COMPONENT_GENERATION_MAX_ATTEMPTS . "):"
+            . "\n\nAI enhanced repair/rewrite mode (attempt {$attempt}/" . self::COMPONENT_GENERATION_MAX_ATTEMPTS . "):"
             . "\n- The previous AI output failed validation because: {$reason}"
-            . "\n- Regenerate the SAME component with a safer implementation that is still production-quality and visually layered."
-            . "\n- Keep the structure compact, but include real visitor-facing copy, panel/card depth, button states, and an inline SVG or CSS visual if no real asset URL is provided."
+            . "\n- Regenerate the SAME component as a full-quality AI design repair, not a stub; keep the complete planned component scope."
+            . "\n- Preserve the original page/task intent and customer brief; strengthen visitor-facing copy, hierarchy, surface depth, CTA states, and theme-specific visual devices."
+            . "\n- Do not paste planning/observation copy into visible text. Rewrite \"访客看到\", \"用户看到\", \"从而产生\", \"信任感增强\", \"知道如何\", \"Visitors see\", and \"Visitors can review\" sentences into direct marketing, legal, support, or editorial copy."
+            . "\n- Do not downgrade to a generic grid: preserve a distinctive composition, theme-matched surface treatment, and at least two visible design devices."
+            . "\n- If the failed output looked like plain cards or a flat strip, rewrite the composition with richer layout, stronger art direction, and complete scoped CSS instead of reducing detail."
+            . "\n- For link/contact/social blocks, include real visitor-facing labels, short supporting copy where useful, clear interaction states, and visible grouping or motif treatment."
+            . "\n- For blog/article/category blocks, render editorial-quality visitor content: category headline, article teasers, meta chips, related links, reading CTA, and theme-specific layout treatment; use internal anchors or provided URLs, never example.com."
             . "\n- Keep `extra_fields`, `php_variables`, and `js_content` empty unless absolutely necessary."
             . "\n- Do not use generic CSS classes such as .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active; use `{$cssPrefix}-...` classes in both CSS and HTML, and scope CSS selectors with #componentId."
-            . "\n- Keep CSS short and syntactically complete: every selector and @media block must close its braces before the JSON field ends."
-            . "\n- Prefer one small section/root wrapper, practical cards/proof points, one short paragraph, and one optional CTA."
-            . "\n- Avoid loops, complex PHP, embedded arrays, dynamic calculations, markdown fences, and long CSS."
+            . "\n- Keep CSS within the requested budget but visually complete: every selector and @media block must close its braces before the JSON field ends."
+            . "\n- Keep the component complete for its planned purpose, with a component-specific wrapper and enough real content to stand alone in the final preview."
+            . "\n- Avoid loops, complex PHP, embedded arrays, dynamic calculations, markdown fences, placeholder copy, and unverified external assets."
             . "\n- Return pure JSON only for component `{$componentCode}`.";
     }
 

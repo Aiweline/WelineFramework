@@ -1854,17 +1854,7 @@
             form.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 const layoutId = this.dataset.layoutId;
-                const formData = new FormData(this);
-                const configData = {};
-                
-                formData.forEach((value, key) => {
-                    configData[key] = value;
-                });
-                
-                // 处理复选框
-                this.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-                    configData[checkbox.name] = checkbox.checked;
-                });
+                const configData = collectWidgetConfigData(this);
                 
                 try {
                     const response = await fetch(config.apiUpdateConfig, {
@@ -2950,16 +2940,7 @@
             return;
         }
 
-        const configData = {};
-        const formData = new FormData(form);
-        for (const [key, value] of formData.entries()) {
-            configData[key] = value;
-        }
-
-        // 处理复选框
-        form.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-            configData[cb.name] = cb.checked;
-        });
+        const configData = collectWidgetConfigData(form);
 
         try {
             const response = await fetch(config.apiUpdateConfig, {
@@ -6302,6 +6283,49 @@
     }
     
     /**
+     * 收集表单配置，保留数组字段与多选字段的结构。
+     */
+    function collectWidgetConfigData(form) {
+        const formData = new FormData(form);
+        const configData = {};
+
+        formData.forEach((value, rawKey) => {
+            let key = rawKey;
+            if (key.endsWith('[]')) {
+                key = key.slice(0, -2);
+            }
+            if (Object.prototype.hasOwnProperty.call(configData, key)) {
+                if (!Array.isArray(configData[key])) {
+                    configData[key] = [configData[key]];
+                }
+                configData[key].push(value);
+            } else {
+                configData[key] = value;
+            }
+        });
+
+        form.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            if (!checkbox.name) {
+                return;
+            }
+            let key = checkbox.name;
+            if (key.endsWith('[]')) {
+                key = key.slice(0, -2);
+            }
+            if (!key || checkbox.closest('.w-param-array-item')) {
+                return;
+            }
+            if (!formData.has(checkbox.name)) {
+                configData[key] = false;
+            } else if (!Array.isArray(configData[key])) {
+                configData[key] = true;
+            }
+        });
+
+        return configData;
+    }
+
+    /**
      * 从模态框保存部件配置
      * @param {HTMLFormElement} form
      * @param {HTMLElement|null} widgetElement
@@ -6312,21 +6336,7 @@
         const layoutId = form.dataset.layoutId;
         if (!layoutId) return;
 
-        const formData = new FormData(form);
-        const configData = {};
-
-        formData.forEach((value, key) => {
-            configData[key] = value;
-        });
-
-        // 处理复选框（未选中时不会在 FormData 中）
-        form.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-            if (!formData.has(checkbox.name)) {
-                configData[checkbox.name] = false;
-            } else {
-                configData[checkbox.name] = true;
-            }
-        });
+        const configData = collectWidgetConfigData(form);
 
         try {
             const response = await fetch(config.apiUpdateConfig, {
@@ -6345,8 +6355,9 @@
             if (result.success) {
                 if (!autoSave) showToast('配置已保存', 'success');
                 // 更新部件的 data-config
+                const normalizedConfig = (result && result.config && typeof result.config === 'object') ? result.config : configData;
                 if (widgetElement) {
-                    widgetElement.dataset.config = JSON.stringify(configData);
+                    widgetElement.dataset.config = JSON.stringify(normalizedConfig);
                 }
                 if (!autoSave) {
                     const modal = bootstrap.Modal.getInstance(document.getElementById('widgetConfigModal'));
@@ -6373,21 +6384,7 @@
         const layoutId = form.dataset.layoutId;
         if (!layoutId) return;
 
-        const formData = new FormData(form);
-        const configData = {};
-
-        formData.forEach((value, key) => {
-            configData[key] = value;
-        });
-
-        // 处理复选框（未选中时不会在 FormData 中）
-        form.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-            if (!formData.has(checkbox.name)) {
-                configData[checkbox.name] = false;
-            } else {
-                configData[checkbox.name] = true;
-            }
-        });
+        const configData = collectWidgetConfigData(form);
 
         try {
             const response = await fetch(config.apiUpdateConfig, {
@@ -6405,8 +6402,9 @@
 
             if (result.success) {
                 if (!silent) showToast('配置已保存', 'success');
+                const normalizedConfig = (result && result.config && typeof result.config === 'object') ? result.config : configData;
                 if (state.selectedWidget) {
-                    state.selectedWidget.dataset.config = JSON.stringify(configData);
+                    state.selectedWidget.dataset.config = JSON.stringify(normalizedConfig);
                 }
                 if (result.preview_html) {
                     updateWidgetPreviewInIframe(layoutId, result.preview_html);

@@ -73,9 +73,13 @@ test.describe('Theme editor iframe preview integration', () => {
       timeout: 60000,
     });
 
+    await expect(frame.locator('[data-wslot="header"]')).toHaveCount(1);
+    await expect(frame.locator('[data-wslot="footer"]')).toHaveCount(1);
     await expect(frame.locator('[data-wslot="homepage-hero"]')).toHaveCount(1);
     await expect(frame.locator('#motor-welcome-modal')).toHaveCount(1);
     await expect(frame.locator('#orphan-widgets-warning')).toHaveCount(0);
+    await expect(frame.locator('link[href*="editor-mode.css"]')).toHaveCount(1);
+    await expect(frame.locator('script[src*="editor-mode.js"]')).toHaveCount(1);
 
     const themeAssets = await frame.locator('link[href], script[src]').evaluateAll((nodes) => nodes
       .map((node) => node.getAttribute('href') || node.getAttribute('src') || '')
