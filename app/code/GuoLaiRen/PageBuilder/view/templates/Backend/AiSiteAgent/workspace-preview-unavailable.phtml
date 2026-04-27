@@ -6,14 +6,18 @@
  */
 $sessionOk = (bool)($this->getData('pb_preview_unavailable_session_ok') ?? false);
 $taskPlanConfirmed = (bool)($this->getData('pb_preview_unavailable_task_plan_confirmed') ?? false);
+$buildQueueRunning = (bool)($this->getData('pb_preview_unavailable_build_queue_running') ?? false);
 $pageTypeRaw = \trim((string)($this->getData('pb_preview_unavailable_page_type') ?? ''));
 $pageTypeJson = \json_encode($pageTypeRaw, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR);
 $taskPlanConfirmedJson = $taskPlanConfirmed ? 'true' : 'false';
+$buildQueueRunningJson = $buildQueueRunning ? 'true' : 'false';
 $titleGeneric = (string)__('预览页面不存在或无访问权限');
 $titleNotGenerated = (string)__('预览页面尚未生成');
 $hintReady = (string)__('当前预览页面尚未生成。完善并确认「生成细节任务规划方案」后，点击下方按钮即可由 AI 生成该页面。');
 $btnTitleLocked = (string)__('请先完善并确认细节任务规划方案，再进行 AI 生成。');
+$btnTitleBuilding = (string)__('虚拟主题构建中，请等待当前构建完成。');
 $btnLabel = (string)__('AI生成');
+$btnLabelBuilding = (string)__('构建中');
 ?>
 <!DOCTYPE html>
 <html lang="<?= htmlspecialchars(\strtolower(\str_replace('_', '-', (string)\Weline\Framework\App\State::getLang())), ENT_QUOTES, 'UTF-8') ?>">
@@ -41,13 +45,13 @@ $btnLabel = (string)__('AI生成');
             <h1><?= htmlspecialchars($titleNotGenerated, ENT_QUOTES, 'UTF-8') ?></h1>
             <p><?= htmlspecialchars($hintReady, ENT_QUOTES, 'UTF-8') ?></p>
             <div class="actions">
-                <button type="button" id="pb-ai-preview-generate"<?= $taskPlanConfirmed ? '' : ' disabled aria-disabled="true"' ?>
-                    <?= $taskPlanConfirmed ? '' : (' title="' . htmlspecialchars($btnTitleLocked, ENT_QUOTES, 'UTF-8') . '"') ?>>
-                    <?= htmlspecialchars($btnLabel, ENT_QUOTES, 'UTF-8') ?>
+                <button type="button" id="pb-ai-preview-generate"<?= ($taskPlanConfirmed && !$buildQueueRunning) ? '' : ' disabled aria-disabled="true"' ?>
+                    <?= !$taskPlanConfirmed ? (' title="' . htmlspecialchars($btnTitleLocked, ENT_QUOTES, 'UTF-8') . '"') : ($buildQueueRunning ? (' title="' . htmlspecialchars($btnTitleBuilding, ENT_QUOTES, 'UTF-8') . '"') : '') ?>>
+                    <?= htmlspecialchars($buildQueueRunning ? $btnLabelBuilding : $btnLabel, ENT_QUOTES, 'UTF-8') ?>
                 </button>
             </div>
-            <?php if (!$taskPlanConfirmed): ?>
-                <p class="muted" style="margin-top:14px;margin-bottom:0;"><?= htmlspecialchars($btnTitleLocked, ENT_QUOTES, 'UTF-8') ?></p>
+            <?php if (!$taskPlanConfirmed || $buildQueueRunning): ?>
+                <p class="muted" style="margin-top:14px;margin-bottom:0;"><?= htmlspecialchars(!$taskPlanConfirmed ? $btnTitleLocked : $btnTitleBuilding, ENT_QUOTES, 'UTF-8') ?></p>
             <?php endif; ?>
         </div>
     <?php else: ?>
@@ -57,9 +61,10 @@ $btnLabel = (string)__('AI生成');
 <script>
 (function () {
     var taskOk = <?= $taskPlanConfirmedJson ?>;
+    var buildRunning = <?= $buildQueueRunningJson ?>;
     var pageType = <?= $pageTypeJson ?>;
     var btn = document.getElementById('pb-ai-preview-generate');
-    if (!btn || !taskOk) {
+    if (!btn || !taskOk || buildRunning) {
         return;
     }
     btn.addEventListener('click', function () {

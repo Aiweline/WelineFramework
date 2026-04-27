@@ -888,7 +888,7 @@
             case 'task_plan_generated':
             case 'task_plan_refined':
             case 'task_plan_rebuilt':
-                mirroredKind = 'info';
+                mirroredKind = 'done';
                 break;
             case 'total':
             case 'operation_total':
@@ -922,6 +922,9 @@
             updateTaskSummaryFromState(normalized.payload.state);
         }
         updateTaskSummaryFromState(normalized.payload);
+        if (normalized.kind === 'done') {
+            scheduleReloadAfterQueueCompleted(normalized.operation, normalized.payload, normalized.kind);
+        }
         syncQueuedStageUi(normalized.operation, normalized.kind, normalized.payload, {
             level: normalized.kind === 'error'
                 ? 'error'
@@ -1185,17 +1188,10 @@
         ).trim().toLowerCase();
     }
 
-    function scheduleReloadAfterQueueCompleted(operation, payload) {
+    function scheduleReloadAfterQueueCompleted(operation, payload, eventKind) {
         var normalizedOperation = String(operation || '').toLowerCase();
         var status = readQueueStatusFromPayload(operation, payload);
         var completed = ['done', 'complete', 'completed'].indexOf(status) !== -1;
-        if (
-            !completed
-            && normalizedOperation === 'task_plan'
-            && (!payload || payload.success !== false)
-        ) {
-            completed = true;
-        }
         if (!completed || queueCompletionReloadTimer) {
             return;
         }
@@ -2508,7 +2504,6 @@
                 }
                 updateTaskSummaryFromState(payload);
                 logOperationToWorkspaceTerminal('info', payload, 'info', String(payload.message || ''));
-                scheduleReloadAfterQueueCompleted(operation, payload);
             });
 
             source.addEventListener('error', function (event) {
@@ -2595,7 +2590,6 @@
                     logOperationToWorkspaceTerminal('total', payload, 'total', totalMessage);
                     toast('info', totalMessage);
                 }
-                scheduleReloadAfterQueueCompleted(operation, payload);
             });
 
             source.addEventListener('environment_ready', function (event) {
@@ -2627,7 +2621,6 @@
                 updateTaskSummaryFromState(payload.state);
             }
             updateTaskSummaryFromState(payload);
-            scheduleReloadAfterQueueCompleted(operation, payload);
             var progressMessage = String(payload.message || '');
             if (progressMessage) {
                 logOperationToWorkspaceTerminal('progress', payload, 'progress', progressMessage);
@@ -2811,7 +2804,38 @@
             settled = true;
             var payload = parsePayload(event);
             closeOperationSource(source);
-            scheduleReloadAfterQueueCompleted(operation, payload);
+            scheduleReloadAfterQueueCompleted(operation, payload, 'done');
+            var queueStatusOnDone = readQueueStatusFromPayload(operation, payload);
+            var queueCompletedOnDone = ['done', 'complete', 'completed'].indexOf(String(queueStatusOnDone || '').toLowerCase()) !== -1;
+            if (!queueCompletedOnDone && (!payload || payload.success !== false)) {
+                if (payload && payload.state && typeof payload.state === 'object') {
+                    hydrateWorkspaceFromState(payload.state);
+                    updateTaskSummaryFromState(payload.state);
+                }
+                updateTaskSummaryFromState(payload);
+                var continueMessage = (payload && payload.message)
+                    ? String(payload.message)
+                    : <?= \json_encode((string)__('队列尚未完成，继续同步后台执行进度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+                logOperationToWorkspaceTerminal('done', payload, 'info', continueMessage);
+                var continueTerminal = null;
+                var continueBind = resolveQueuedStageUiBinding(operation);
+                if (continueBind && continueBind.terminal) {
+                    continueTerminal = continueBind.terminal;
+                } else if (workspaceTerminal && typeof workspaceTerminal.setStatus === 'function') {
+                    continueTerminal = workspaceTerminal;
+                }
+                if (continueTerminal) {
+                    startObserverSyncTerminalPulse(continueTerminal);
+                }
+                startDeferredQueueStatePoll(operation);
+                if (typeof enableNavigationAfterOperation === 'function') {
+                    enableNavigationAfterOperation();
+                }
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                }
+                return;
+            }
 
             var success = !payload || payload.success !== false;
             var normalizedDonePayload = Object.assign({}, payload || {}, {
@@ -3100,13 +3124,18 @@
         if (!operation || (status !== 'queued' && status !== 'running')) {
             return;
         }
-        if (operation !== 'plan' && operation !== 'task_plan') {
+        if (operation !== 'plan' && operation !== 'task_plan' && operation !== 'build') {
             return;
         }
-        if (!String(active.execution_token || '').trim()) {
+        var hasExecutionToken = !!String(active.execution_token || '').trim();
+        if (!hasExecutionToken) {
+            startDeferredQueueStatePoll(operation);
             return;
         }
-        startFromResponse(Object.assign({ success: true }, active), operation);
+        var started = startFromResponse(Object.assign({ success: true }, active), operation);
+        if (!started) {
+            startDeferredQueueStatePoll(operation);
+        }
     }
 
     window.setTimeout(observeExistingDraftOperationOnLoad, 180);

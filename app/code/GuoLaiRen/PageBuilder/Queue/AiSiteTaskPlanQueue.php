@@ -104,7 +104,11 @@ class AiSiteTaskPlanQueue implements QueueInterface
             if (!($guard['ok'] ?? false)) {
                 $message = (string)($guard['message'] ?? 'Stage-two task-plan queue stopped.');
                 $this->appendQueueLifecycleLine($queue, $message);
-                $this->markQueueStopped($queue, $message);
+                if ((string)($guard['terminal_status'] ?? '') === Queue::status_done) {
+                    $this->markQueueDone($queue, $message);
+                } else {
+                    $this->markQueueStopped($queue, $message);
+                }
 
                 return $message;
             }
@@ -579,7 +583,7 @@ class AiSiteTaskPlanQueue implements QueueInterface
     }
 
     /**
-     * @return array{ok: bool, message?: string}
+     * @return array{ok: bool, message?: string, terminal_status?: string}
      */
     private function guardTaskPlanQueueExecution(
         AiSiteAgentSessionService $sessionService,
@@ -597,9 +601,9 @@ class AiSiteTaskPlanQueue implements QueueInterface
 
         if (!$forceRebuild && !$allowExistingTaskPlan && $this->scopeHasPersistedStageTwoTaskPlan($scope)) {
             $message = 'Stage-two task plan already exists; queue skipped duplicate generation. Use task/block refine or force rebuild to run again.';
-            $this->persistTaskPlanQueueStopState($sessionService, (int)$fresh->getId(), $adminId, $scope, $message, $executionToken);
+            $this->persistTaskPlanQueueStopState($sessionService, (int)$fresh->getId(), $adminId, $scope, $message, $executionToken, true);
 
-            return ['ok' => false, 'message' => $message];
+            return ['ok' => false, 'message' => $message, 'terminal_status' => Queue::status_done];
         }
 
         return ['ok' => true];
@@ -652,14 +656,15 @@ class AiSiteTaskPlanQueue implements QueueInterface
         int $adminId,
         array $scope,
         string $message,
-        string $executionToken
+        string $executionToken,
+        bool $skipAsDone = false
     ): void {
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         if ($active !== [] && (
             (string)($active['operation'] ?? '') === 'task_plan'
             || (string)($active['execution_token'] ?? '') === $executionToken
         )) {
-            $active['status'] = 'stop';
+            $active['status'] = $skipAsDone ? 'done' : 'stop';
             $active['message'] = $message;
             $active['updated_at'] = \date('Y-m-d H:i:s');
             $scope['active_operation'] = $active;
@@ -671,7 +676,7 @@ class AiSiteTaskPlanQueue implements QueueInterface
             (string)($taskPlanOperation['execution_token'] ?? '') === $executionToken
             || \in_array((string)($taskPlanOperation['status'] ?? ''), ['queued', 'running'], true)
         )) {
-            $taskPlanOperation['status'] = 'stop';
+            $taskPlanOperation['status'] = $skipAsDone ? 'done' : 'stop';
             $taskPlanOperation['message'] = $message;
             $taskPlanOperation['updated_at'] = \date('Y-m-d H:i:s');
             $activeOperations['task_plan'] = $taskPlanOperation;
@@ -679,10 +684,14 @@ class AiSiteTaskPlanQueue implements QueueInterface
         }
 
         $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING;
-        $scope['task_plan_generation_last_error'] = [
-            'message' => $message,
-            'updated_at' => \date('Y-m-d H:i:s'),
-        ];
+        if ($skipAsDone) {
+            $scope['task_plan_generation_last_error'] = [];
+        } else {
+            $scope['task_plan_generation_last_error'] = [
+                'message' => $message,
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ];
+        }
         $sessionService->replaceScope($sessionId, $adminId, $scope);
     }
 
