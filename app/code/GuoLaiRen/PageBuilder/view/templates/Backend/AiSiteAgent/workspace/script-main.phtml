@@ -155,6 +155,26 @@
         return Array.isArray(value) ? value.length > 0 : Object.keys(value).length > 0;
     }
 
+    function hasTaskPlanSummaryEvidence(summary) {
+        if (!summary || typeof summary !== 'object') {
+            return false;
+        }
+        var signature = String(summary.signature || '').trim();
+        var sharedCount = Number(summary.shared_task_count || 0);
+        var pageCount = Number(summary.page_task_count || 0);
+        return signature !== '' || sharedCount > 0 || pageCount > 0;
+    }
+
+    function hasVirtualThemePlanEvidence(vtPlan) {
+        if (!vtPlan || typeof vtPlan !== 'object') {
+            return false;
+        }
+        if (hasNonEmptyPlanArtifact(vtPlan.draft) || hasNonEmptyPlanArtifact(vtPlan.confirmed)) {
+            return true;
+        }
+        return String(vtPlan.draft_markdown || vtPlan.confirmed_markdown || vtPlan.confirmed_signature || vtPlan.plan_signature || '').trim() !== '';
+    }
+
     /**
      * 根据工作区状态判断是否已有可用的第一阶段方案（已确认、Markdown、JSON/结构化草稿等）。
      */
@@ -177,6 +197,26 @@
     function phaseTwoTaskPlanPresentFromWorkspaceState(workspaceState) {
         if (!workspaceState || typeof workspaceState !== 'object') {
             return false;
+        }
+        if (Object.prototype.hasOwnProperty.call(workspaceState, 'task_plan_summary')
+            && hasTaskPlanSummaryEvidence(workspaceState.task_plan_summary)
+        ) {
+            return true;
+        }
+        if (Object.prototype.hasOwnProperty.call(workspaceState, 'task_plan_markdown')
+            && String(workspaceState.task_plan_markdown || '').trim() !== ''
+        ) {
+            return true;
+        }
+        if (Object.prototype.hasOwnProperty.call(workspaceState, 'task_plan_structured')
+            && hasNonEmptyPlanArtifact(workspaceState.task_plan_structured)
+        ) {
+            return true;
+        }
+        if (Object.prototype.hasOwnProperty.call(workspaceState, 'virtual_theme_plan')
+            && hasVirtualThemePlanEvidence(workspaceState.virtual_theme_plan)
+        ) {
+            return true;
         }
         if (Object.prototype.hasOwnProperty.call(workspaceState, 'has_virtual_theme_plan')) {
             return !!workspaceState.has_virtual_theme_plan || !!workspaceState.task_plan_confirmed;
@@ -215,6 +255,10 @@
     }
 
     function isQueueStatusBlockingTaskPlanPrompt(status) {
+        return ['pending', 'queued', 'running', 'processing'].indexOf(normalizeQueueStatusForPrompt(status)) !== -1;
+    }
+
+    function isQueueStatusRunningForUi(status) {
         return ['pending', 'queued', 'running', 'processing'].indexOf(normalizeQueueStatusForPrompt(status)) !== -1;
     }
 
@@ -408,7 +452,32 @@
     }
 
     function isPhaseOneQueueUnfinished() {
-        return isPlanGenerationRunningNow();
+        return hasAnyRunningQueueForUi();
+    }
+
+    function hasAnyRunningQueueForUi() {
+        var state = getLatestWorkspaceStateForQueuePrompt();
+        var hasStateActiveOperation = Object.prototype.hasOwnProperty.call(state, 'active_operation');
+        var active = hasStateActiveOperation
+            ? (state.active_operation && typeof state.active_operation === 'object' ? state.active_operation : {})
+            : (currentActiveOperationState && typeof currentActiveOperationState === 'object' ? currentActiveOperationState : {});
+        if (isQueueStatusRunningForUi(active.status)) {
+            return true;
+        }
+        if (!!isOperationRunning && !hasStateActiveOperation && !String(active.status || '').trim()) {
+            return true;
+        }
+        var queueInfoBuckets = [
+            state.plan_queue_info,
+            state.task_plan_queue_info,
+            state.build_queue_info
+        ];
+        for (var i = 0; i < queueInfoBuckets.length; i += 1) {
+            if (isQueueStatusRunningForUi(readQueueStatusForPrompt(queueInfoBuckets[i]))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     function getActiveOperationForPublishRepairState() {
@@ -740,12 +809,32 @@
             window.__pbWorkspacePagesByType = workspaceState.pagebuilder_pages_by_type;
         }
         var scope = workspaceState.scope && typeof workspaceState.scope === 'object' ? workspaceState.scope : {};
+        var workspacePlan = workspaceState.plan && typeof workspaceState.plan === 'object' ? workspaceState.plan : {};
+        var scopeWorkbench = scope.plan_workbench && typeof scope.plan_workbench === 'object' ? scope.plan_workbench : {};
+        var scopeConfirmed = scopeWorkbench.confirmed && typeof scopeWorkbench.confirmed === 'object' ? scopeWorkbench.confirmed : {};
+        var planBookStructured = scopeConfirmed.plan_book && scopeConfirmed.plan_book.structured && typeof scopeConfirmed.plan_book.structured === 'object'
+            ? scopeConfirmed.plan_book.structured
+            : null;
+        var structuredFromApi = (workspaceState.plan_structured && typeof workspaceState.plan_structured === 'object')
+            ? workspaceState.plan_structured
+            : ((workspacePlan.structured && typeof workspacePlan.structured === 'object')
+                ? workspacePlan.structured
+                : ((scope.plan_structured && typeof scope.plan_structured === 'object') ? scope.plan_structured : {}));
+        var resolvedStageOneStructured = (planBookStructured && Object.keys(planBookStructured).length > 0)
+            ? planBookStructured
+            : structuredFromApi;
         window.__pbWorkspaceConfirmedPlan = {
-            markdown: String(workspaceState.confirmed_plan_markdown || scope.plan_markdown || ''),
-            plan_json: (scope.plan_json && typeof scope.plan_json === 'object') ? scope.plan_json : {},
-            structured: (workspaceState.plan_structured && typeof workspaceState.plan_structured === 'object')
-                ? workspaceState.plan_structured
-                : ((scope.plan_structured && typeof scope.plan_structured === 'object') ? scope.plan_structured : {}),
+            markdown: String(
+                workspaceState.confirmed_plan_markdown
+                || workspacePlan.markdown
+                || scope.plan_markdown
+                || scopeConfirmed.plan_book_markdown
+                || ''
+            ),
+            plan_json: (workspacePlan.json && typeof workspacePlan.json === 'object')
+                ? workspacePlan.json
+                : ((scope.plan_json && typeof scope.plan_json === 'object') ? scope.plan_json : {}),
+            structured: resolvedStageOneStructured,
             confirmed_at: String(workspaceState.plan_confirmed_at || scope.plan_confirmed_at || ''),
             signature: String(workspaceState.confirmed_plan_signature || scope.execution_blueprint_confirmed_signature || ''),
             plan_locale: String((scope.plan_locale || (scope.website_profile && scope.website_profile.plan_locale) || '')),
@@ -761,16 +850,20 @@
             : ((scope.task_plan_structured && typeof scope.task_plan_structured === 'object')
                 ? scope.task_plan_structured
                 : {});
+        persistedTaskPlanStructured = normalizeTaskPlanStructuredCandidate(persistedTaskPlanStructured);
         var taskPlanDraftMarkdown = String(workspaceTaskPlan.markdown || workspaceState.task_plan_markdown || vtPlan.draft_markdown || '').trim();
         var taskPlanConfirmedMarkdown = String(vtPlan.confirmed_markdown || '').trim();
-        var taskPlanDraftStructured = isNonEmptyObject(persistedTaskPlanStructured)
+        var taskPlanDraftStructured = hasNonEmptyPlanArtifact(persistedTaskPlanStructured)
             ? persistedTaskPlanStructured
             : ((workspaceTaskPlan.structured && typeof workspaceTaskPlan.structured === 'object')
-                ? workspaceTaskPlan.structured
-                : (vtPlan.draft && typeof vtPlan.draft === 'object' ? vtPlan.draft : {}));
-        var taskPlanConfirmedStructured = vtPlan.confirmed && typeof vtPlan.confirmed === 'object' ? vtPlan.confirmed : {};
+                ? normalizeTaskPlanStructuredCandidate(workspaceTaskPlan.structured)
+                : normalizeTaskPlanStructuredCandidate(vtPlan.draft && typeof vtPlan.draft === 'object' ? vtPlan.draft : {}));
+        var taskPlanConfirmedStructured = normalizeTaskPlanStructuredCandidate(vtPlan.confirmed && typeof vtPlan.confirmed === 'object' ? vtPlan.confirmed : {});
+        var taskPlanSummary = workspaceState.task_plan_summary && typeof workspaceState.task_plan_summary === 'object'
+            ? workspaceState.task_plan_summary
+            : (scope.task_plan_summary && typeof scope.task_plan_summary === 'object' ? scope.task_plan_summary : {});
         var taskPlanPreferredMarkdown = taskPlanDraftMarkdown !== '' ? taskPlanDraftMarkdown : taskPlanConfirmedMarkdown;
-        var taskPlanPreferredStructured = isNonEmptyObject(taskPlanDraftStructured)
+        var taskPlanPreferredStructured = hasNonEmptyPlanArtifact(taskPlanDraftStructured)
             ? taskPlanDraftStructured
             : taskPlanConfirmedStructured;
         window.__pbWorkspaceConfirmedTaskPlan = {
@@ -784,20 +877,24 @@
             structured: taskPlanPreferredStructured,
             draft_structured: taskPlanDraftStructured,
             confirmed_structured: taskPlanConfirmedStructured,
+            task_plan_summary: taskPlanSummary,
         };
         var hasConfirmedTaskPlanEntity = String(window.__pbWorkspaceConfirmedTaskPlan.confirmed_at || window.__pbWorkspaceConfirmedTaskPlan.signature || '').trim() !== ''
             || String(window.__pbWorkspaceConfirmedTaskPlan.markdown || window.__pbWorkspaceConfirmedTaskPlan.confirmed_markdown || '').trim() !== ''
-            || isNonEmptyObject(window.__pbWorkspaceConfirmedTaskPlan.structured);
+            || hasNonEmptyPlanArtifact(window.__pbWorkspaceConfirmedTaskPlan.structured)
+            || hasTaskPlanSummaryEvidence(taskPlanSummary);
         if (
             taskPlanDraftMarkdown !== ''
             || taskPlanConfirmedMarkdown !== ''
-            || isNonEmptyObject(taskPlanDraftStructured)
-            || isNonEmptyObject(taskPlanConfirmedStructured)
+            || hasNonEmptyPlanArtifact(taskPlanDraftStructured)
+            || hasNonEmptyPlanArtifact(taskPlanConfirmedStructured)
+            || hasTaskPlanSummaryEvidence(taskPlanSummary)
         ) {
             currentTaskPlanPayload = Object.assign({}, currentTaskPlanPayload || {}, {
                 markdown: taskPlanDraftMarkdown !== '' ? taskPlanDraftMarkdown : taskPlanConfirmedMarkdown,
-                structured: isNonEmptyObject(taskPlanDraftStructured) ? taskPlanDraftStructured : taskPlanConfirmedStructured,
-                virtual_theme_plan: Object.assign({}, vtPlan)
+                structured: hasNonEmptyPlanArtifact(taskPlanDraftStructured) ? taskPlanDraftStructured : taskPlanConfirmedStructured,
+                virtual_theme_plan: Object.assign({}, vtPlan),
+                task_plan_summary: taskPlanSummary,
             });
             if (typeof updateTaskPlanModalContent === 'function') {
                 updateTaskPlanModalContent(String((currentTaskPlanPayload && currentTaskPlanPayload.markdown) || ''));
@@ -805,9 +902,16 @@
         }
         syncGuidedProfileDefaultsFromWorkspaceState(workspaceState);
         if (workspaceState.plan && typeof workspaceState.plan === 'object') {
-            currentPlanPayload = workspaceState.plan;
+            var nextPlanPayload = Object.assign({}, workspaceState.plan);
+            if (scopeWorkbench && typeof scopeWorkbench === 'object' && Object.keys(scopeWorkbench).length > 0) {
+                nextPlanPayload.plan_workbench = scopeWorkbench;
+            }
+            if (!isNonEmptyObject(nextPlanPayload.structured) && isNonEmptyObject(resolvedStageOneStructured)) {
+                nextPlanPayload.structured = resolvedStageOneStructured;
+            }
+            currentPlanPayload = nextPlanPayload;
             if (typeof updatePlanModalContent === 'function') {
-                var planMarkdown = String((workspaceState.plan.markdown || '')).trim();
+                var planMarkdown = String((nextPlanPayload.markdown || '')).trim();
                 if (!planMarkdown) {
                     planMarkdown = String((scope.plan_markdown || '')).trim();
                 }
@@ -823,7 +927,10 @@
                 currentPlanPayload = Object.assign({}, currentPlanPayload || {}, {
                     markdown: fallbackPlanMarkdown,
                     json: fallbackPlanJson,
-                    structured: fallbackStructured
+                    structured: normalizeStageOneStructuredRootForPreview(
+                        isNonEmptyObject(resolvedStageOneStructured) ? resolvedStageOneStructured : fallbackStructured
+                    ),
+                    plan_workbench: scopeWorkbench && typeof scopeWorkbench === 'object' ? scopeWorkbench : {}
                 });
                 if (typeof updatePlanModalContent === 'function') {
                     updatePlanModalContent(fallbackPlanMarkdown);
@@ -853,6 +960,7 @@
         } else if (hasConfirmedTaskPlanEntity) {
             taskPlanConfirmedState = true;
         }
+        syncTaskPlanBuildButtonState();
         if (Object.prototype.hasOwnProperty.call(workspaceState, 'has_execution_blueprint')) {
             hasExecutionBlueprintState = !!workspaceState.has_execution_blueprint;
         }
@@ -2944,7 +3052,7 @@
             signature = planData.signature || planData.execution_blueprint_signature || '';
             locale = planData.plan_locale || '';
         } else if (planType === 'stage2') {
-            typeLabel = <?= \json_encode((string)__('阶段一方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            typeLabel = <?= \json_encode((string)__('第二阶段任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
             planData = window.__pbWorkspaceConfirmedTaskPlan || {};
             markdown = planData.markdown || planData.confirmed_markdown || '';
             confirmedAt = planData.confirmed_at || planData.task_plan_confirmed_at || '';
@@ -6243,28 +6351,116 @@
         return !!(value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length > 0);
     }
 
+    function normalizeTaskPlanStructuredCandidate(value) {
+        if (!value || typeof value !== 'object') {
+            return {};
+        }
+        if (!Array.isArray(value)) {
+            return value;
+        }
+        if (value.length === 0) {
+            return {};
+        }
+        var firstNonEmptyObject = null;
+        for (var i = 0; i < value.length; i++) {
+            var item = value[i];
+            if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).length === 0) {
+                continue;
+            }
+            if (isTaskPlanStructuredRoot(item)) {
+                return item;
+            }
+            if (!firstNonEmptyObject) {
+                firstNonEmptyObject = item;
+            }
+        }
+        var sharedTasks = [];
+        var pageTasks = {};
+        value.forEach(function (item) {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) {
+                return;
+            }
+            var pageType = String(item.page_type || item.pageType || '').trim();
+            var bucket = String(item.bucket || item.task_type || '').trim().toLowerCase();
+            if (!pageType || ['shared', 'theme', 'global', 'shared_theme'].indexOf(pageType.toLowerCase()) !== -1 || bucket === 'shared' || bucket === 'shared_component') {
+                sharedTasks.push(item);
+                return;
+            }
+            pageTasks[pageType] = Array.isArray(pageTasks[pageType]) ? pageTasks[pageType] : [];
+            pageTasks[pageType].push(item);
+        });
+        if (sharedTasks.length > 0 || Object.keys(pageTasks).length > 0) {
+            return {
+                shared_tasks: sharedTasks,
+                page_tasks: pageTasks,
+            };
+        }
+        return firstNonEmptyObject || {};
+    }
+
     function pickStructuredPlanRoot(payload) {
         if (!payload || typeof payload !== 'object') {
             return null;
         }
-        if (isNonEmptyObject(payload.structured)) {
-            return payload.structured;
+        // v2 工作台：confirmed.plan_book.structured 已展开为 pages/shared_blocks，优先用于阶段一预览。
+        if (payload.plan_workbench && typeof payload.plan_workbench === 'object') {
+            var wb = payload.plan_workbench;
+            var conf = wb.confirmed && typeof wb.confirmed === 'object' ? wb.confirmed : null;
+            if (conf && conf.plan_book && typeof conf.plan_book === 'object' && isNonEmptyObject(conf.plan_book.structured)) {
+                return conf.plan_book.structured;
+            }
+            if (wb.stage1 && typeof wb.stage1 === 'object' && (
+                isNonEmptyObject(wb.stage1.page_plans)
+                || isNonEmptyObject(wb.stage1.pages)
+            )) {
+                return wb.stage1;
+            }
         }
-        if (isNonEmptyObject(payload.json)) {
-            return payload.json;
+        if (hasNonEmptyPlanArtifact(payload.structured)) {
+            return normalizeTaskPlanStructuredCandidate(payload.structured);
         }
-        if (isNonEmptyObject(payload.plan_json)) {
-            return payload.plan_json;
+        if (hasNonEmptyPlanArtifact(payload.json)) {
+            return normalizeTaskPlanStructuredCandidate(payload.json);
+        }
+        if (hasNonEmptyPlanArtifact(payload.plan_json)) {
+            return normalizeTaskPlanStructuredCandidate(payload.plan_json);
         }
         if (payload.virtual_theme_plan && typeof payload.virtual_theme_plan === 'object') {
-            if (isNonEmptyObject(payload.virtual_theme_plan.draft)) {
-                return payload.virtual_theme_plan.draft;
+            if (hasNonEmptyPlanArtifact(payload.virtual_theme_plan.draft)) {
+                return normalizeTaskPlanStructuredCandidate(payload.virtual_theme_plan.draft);
             }
-            if (isNonEmptyObject(payload.virtual_theme_plan.confirmed)) {
-                return payload.virtual_theme_plan.confirmed;
+            if (hasNonEmptyPlanArtifact(payload.virtual_theme_plan.confirmed)) {
+                return normalizeTaskPlanStructuredCandidate(payload.virtual_theme_plan.confirmed);
             }
         }
         return null;
+    }
+
+    /**
+     * 阶段一结构化数据 v2：API/会话里常见 page_plans（页面映射）而非 pages；
+     * 少数载荷会把 plan_book 包在根上。此处统一成预览渲染器可消费的「根对象」。
+     */
+    function normalizeStageOneStructuredRootForPreview(root) {
+        if (!root || typeof root !== 'object') {
+            return root;
+        }
+        var base = root;
+        if (root.plan_book && typeof root.plan_book === 'object' && isNonEmptyObject(root.plan_book.structured)) {
+            base = root.plan_book.structured;
+        }
+        if (isNonEmptyObject(base.pages)) {
+            return base;
+        }
+        var pagePlans = null;
+        if (isNonEmptyObject(base.page_plans)) {
+            pagePlans = base.page_plans;
+        } else if (base.stage1 && typeof base.stage1 === 'object' && isNonEmptyObject(base.stage1.page_plans)) {
+            pagePlans = base.stage1.page_plans;
+        }
+        if (!pagePlans) {
+            return base;
+        }
+        return Object.assign({}, base, { pages: pagePlans });
     }
 
     function coerceStructuredPlanRootFromParsedJson(parsed) {
@@ -6273,6 +6469,9 @@
         }
         if (isNonEmptyObject(parsed.pages)) {
             return parsed;
+        }
+        if (isNonEmptyObject(parsed.page_plans) && !isNonEmptyObject(parsed.pages)) {
+            return Object.assign({}, parsed, { pages: parsed.page_plans });
         }
         if (isNonEmptyObject(parsed.plan_json)) {
             return parsed.plan_json;
@@ -7453,6 +7652,9 @@
         if (isNonEmptyObject(planRoot.page_tasks)) {
             return true;
         }
+        if (Array.isArray(planRoot.page_tasks) && planRoot.page_tasks.length > 0) {
+            return true;
+        }
         if (isNonEmptyObject(planRoot.task_script_brief)) {
             return true;
         }
@@ -8259,6 +8461,9 @@
         var structuredRoot = pickStructuredPlanRoot(payload);
         if (!structuredRoot && parsedFromMd && typeof parsedFromMd === 'object') {
             structuredRoot = coerceStructuredPlanRootFromParsedJson(parsedFromMd);
+        }
+        if (structuredRoot && typeof structuredRoot === 'object') {
+            structuredRoot = normalizeStageOneStructuredRootForPreview(structuredRoot);
         }
 
         // 有结构化根数据时优先渲染结构化预览；当 Markdown 与结构化数据都为空时显示状态文案，避免空白区域。
@@ -10480,6 +10685,63 @@
         ).trim().toLowerCase();
     }
 
+    function getPublishBlockingOperationLabel(operation) {
+        var op = String(operation || '').trim().toLowerCase();
+        if (op === 'build' || op === 'visual_edit') {
+            return <?= \json_encode((string)__('站点构建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        }
+        if (op === 'regenerate_page') {
+            return <?= \json_encode((string)__('页面重生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        }
+        if (op === 'block_regenerate') {
+            return <?= \json_encode((string)__('区块重生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        }
+        return <?= \json_encode((string)__('构建任务'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    }
+
+    function getPublishBlockingOperationTarget(candidate) {
+        var item = candidate && typeof candidate === 'object' ? candidate : {};
+        var details = item.details && typeof item.details === 'object' ? item.details : {};
+        var pageType = String(details.page_type || item.page_type || '').trim();
+        var componentCode = String(details.component_code || item.component_code || '').trim();
+        var taskKey = String(details.task_key || item.task_key || '').trim();
+        if (componentCode !== '') {
+            return <?= \json_encode((string)__('区块：'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + componentCode;
+        }
+        if (pageType !== '') {
+            return <?= \json_encode((string)__('页面：'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + normalizePageTypeLabel(pageType);
+        }
+        if (taskKey !== '') {
+            return <?= \json_encode((string)__('任务：'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + taskKey;
+        }
+        return '';
+    }
+
+    function resolvePublishBuildingRuntimeDetail(state) {
+        var candidates = collectPublishBlockingOperationCandidates(state);
+        for (var i = 0; i < candidates.length; i++) {
+            var candidate = candidates[i] && typeof candidates[i] === 'object' ? candidates[i] : {};
+            var status = String(candidate.status || '').toLowerCase();
+            var operation = String(candidate.operation || '').toLowerCase();
+            if (!isPublishBlockingOperationName(operation) || !isPublishRunningStatus(status)) {
+                continue;
+            }
+            var operationLabel = getPublishBlockingOperationLabel(operation);
+            var targetLabel = getPublishBlockingOperationTarget(candidate);
+            var suffix = targetLabel !== '' ? (operationLabel + ' / ' + targetLabel) : operationLabel;
+            return {
+                badgeSuffix: suffix,
+                titleSuffix: suffix,
+                hint: (<?= \json_encode((string)__('当前进度：'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + suffix)
+            };
+        }
+        return {
+            badgeSuffix: '',
+            titleSuffix: '',
+            hint: ''
+        };
+    }
+
     function collectPublishBlockingOperationCandidates(state) {
         var candidates = [];
         if (state && typeof state === 'object' && state.active_operation && typeof state.active_operation === 'object') {
@@ -10619,6 +10881,16 @@
             badgeText = messages.publishStageEntryBuildingBadge || '';
             titleText = messages.publishStageEntryBuildingTitle || '';
             hintText = messages.publishStageEntryBuildingHint || '';
+            var runtimeDetail = resolvePublishBuildingRuntimeDetail(state);
+            if (runtimeDetail.badgeSuffix) {
+                badgeText = String(badgeText || '') + ' · ' + String(runtimeDetail.badgeSuffix || '');
+            }
+            if (runtimeDetail.titleSuffix) {
+                titleText = String(titleText || '') + '（' + String(runtimeDetail.titleSuffix || '') + '）';
+            }
+            if (runtimeDetail.hint) {
+                hintText = String(runtimeDetail.hint || '');
+            }
         }
 
         badgeEl.className = badgeClass;
@@ -10696,7 +10968,7 @@
     }
 
     function applyTaskPlanEditingLockFromActiveOperation() {
-        var locked = isThemeBuildGenerationRunning();
+        var locked = isThemeBuildGenerationRunning() || hasAnyRunningQueueForUi();
         [
             'pb-ai-task-plan-mode-refine',
             'pb-ai-task-plan-mode-rebuild',
@@ -10704,7 +10976,8 @@
             'pb-ai-task-plan-regenerate',
             'pb-ai-task-plan-mode-prompt',
             'pb-ai-save-task-plan-draft',
-            'pb-ai-confirm-task-plan'
+            'pb-ai-confirm-task-plan',
+            'pb-ai-start-build-site'
         ].forEach(function (id) {
             setElementLockedForThemeBuild(document.getElementById(id), locked);
         });
@@ -10751,7 +11024,16 @@
         if (!!String((currentTaskPlanPayload && currentTaskPlanPayload.markdown) || '').trim()) {
             return true;
         }
-        return isNonEmptyObject(pickStructuredPlanRoot(currentTaskPlanPayload || {}));
+        if (hasNonEmptyPlanArtifact(currentTaskPlanPayload && currentTaskPlanPayload.structured)) {
+            return true;
+        }
+        if (hasTaskPlanSummaryEvidence(currentTaskPlanPayload && currentTaskPlanPayload.task_plan_summary)) {
+            return true;
+        }
+        if (hasVirtualThemePlanEvidence(currentTaskPlanPayload && currentTaskPlanPayload.virtual_theme_plan)) {
+            return true;
+        }
+        return hasNonEmptyPlanArtifact(pickStructuredPlanRoot(currentTaskPlanPayload || {}));
     }
 
     function hasCachedTaskPlanForAccordion() {
@@ -10770,7 +11052,7 @@
         if (String(cp.markdown || cp.confirmed_markdown || '').trim() !== '') {
             return true;
         }
-        if (isNonEmptyObject(cp.structured)) {
+        if (hasNonEmptyPlanArtifact(cp.structured)) {
             return true;
         }
         return false;
@@ -10816,9 +11098,9 @@
         }
         if (
             (!currentTaskPlanPayload.structured || typeof currentTaskPlanPayload.structured !== 'object' || Object.keys(currentTaskPlanPayload.structured).length === 0)
-            && isNonEmptyObject(cp.structured)
+            && hasNonEmptyPlanArtifact(cp.structured)
         ) {
-            currentTaskPlanPayload.structured = cp.structured;
+            currentTaskPlanPayload.structured = normalizeTaskPlanStructuredCandidate(cp.structured);
         }
         updateTaskPlanModalContent(String((currentTaskPlanPayload && currentTaskPlanPayload.markdown) || ''));
         setTaskPlanModalProgress(messages.taskPlanGenerated, 100, true);
@@ -11564,6 +11846,7 @@
         var statusEl = document.getElementById('pb-ai-task-plan-status');
         var progressBar = document.getElementById('pb-ai-task-plan-progress-bar');
         var confirmBtn = document.getElementById('pb-ai-confirm-task-plan');
+        var buildBtn = document.getElementById('pb-ai-start-build-site');
         if (statusEl) {
             statusEl.textContent = String(message || '');
             applyStatusTone(statusEl, message, level);
@@ -11572,10 +11855,21 @@
             progressBar.style.width = String(Math.max(0, Math.min(100, percent || 0))) + '%';
         }
         if (confirmBtn) {
-            confirmBtn.disabled = isThemeBuildGenerationRunning() || !enableConfirm;
+            confirmBtn.disabled = isThemeBuildGenerationRunning() || hasAnyRunningQueueForUi() || !enableConfirm;
+        }
+        if (buildBtn) {
+            buildBtn.disabled = isThemeBuildGenerationRunning() || hasAnyRunningQueueForUi() || !taskPlanConfirmedState;
         }
         syncTaskPlanRegenerateButtonVisibility();
         applyTaskPlanEditingLockFromActiveOperation();
+    }
+
+    function syncTaskPlanBuildButtonState() {
+        var buildBtn = document.getElementById('pb-ai-start-build-site');
+        if (!buildBtn) {
+            return;
+        }
+        buildBtn.disabled = isThemeBuildGenerationRunning() || hasAnyRunningQueueForUi() || !taskPlanConfirmedState;
     }
 
     function hideTaskPlanGenerationModal() {
@@ -12114,11 +12408,13 @@
         pbAiConfirmGenerateThemeContinue(triggerBtn || currentPlanTriggerButton, normalizedTypes, opts);
     }
 
-    function confirmCurrentTaskPlanAndMaybeBuild(triggerBtn, selectedTypes) {
+    function confirmCurrentTaskPlanAndMaybeBuild(triggerBtn, selectedTypes, options) {
         if (!confirmTaskPlanUrl) {
             toast('error', messages.taskPlanStartUnavailable);
             return Promise.resolve(false);
         }
+        var opts = options && typeof options === 'object' ? options : {};
+        var shouldStartBuild = opts.startBuild !== false;
         var confirmBtn = document.getElementById('pb-ai-confirm-task-plan');
         return confirmTaskPlanMutationRiskIfNeeded().then(function (mutationConfirmed) {
             if (!mutationConfirmed) {
@@ -12143,8 +12439,11 @@
                 }
                 taskPlanConfirmedState = true;
                 hideTaskPlanGenerationModal();
+                syncTaskPlanBuildButtonState();
                 toast('success', messages.taskPlanConfirmSaved);
-                startConfirmedBuild(triggerBtn || currentPlanTriggerButton, selectedTypes || currentPlanSelection, { allowTaskPlanRetry: false });
+                if (shouldStartBuild) {
+                    startConfirmedBuild(triggerBtn || currentPlanTriggerButton, selectedTypes || currentPlanSelection, { allowTaskPlanRetry: false });
+                }
                 return true;
             }).catch(function (error) {
                 if (confirmBtn) {
@@ -12170,6 +12469,16 @@
         }
         if (taskPlanConfirmedState) {
             startConfirmedBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes, opts);
+            return;
+        }
+        // 真实数据链路：第二阶段常先落 draft（task_plan_markdown/task_plan_structured），
+        // 此时应直接确认并构建，而不是再次触发生成队列。
+        if (hasTaskPlanDraft()) {
+            confirmCurrentTaskPlanAndMaybeBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes);
+            return;
+        }
+        if (hasPersistedPhaseTwoTaskPlan()) {
+            confirmCurrentTaskPlanAndMaybeBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes);
             return;
         }
         startTaskPlanGenerationForBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes, {
@@ -12292,9 +12601,19 @@
         if (confirmTaskPlanBtn && confirmTaskPlanBtn.dataset.pbBound !== '1') {
             confirmTaskPlanBtn.dataset.pbBound = '1';
             confirmTaskPlanBtn.addEventListener('click', function () {
+                confirmCurrentTaskPlanAndMaybeBuild(currentPlanTriggerButton, currentPlanSelection, {
+                    startBuild: false
+                });
+            });
+        }
+        var startBuildSiteBtn = document.getElementById('pb-ai-start-build-site');
+        if (startBuildSiteBtn && startBuildSiteBtn.dataset.pbBound !== '1') {
+            startBuildSiteBtn.dataset.pbBound = '1';
+            startBuildSiteBtn.addEventListener('click', function () {
                 ensureTaskPlanConfirmedBeforeBuild(currentPlanTriggerButton, currentPlanSelection, {});
             });
         }
+        syncTaskPlanBuildButtonState();
         var saveTaskPlanBtn = document.getElementById('pb-ai-save-task-plan-draft');
         if (saveTaskPlanBtn && saveTaskPlanBtn.dataset.pbBound !== '1') {
             saveTaskPlanBtn.dataset.pbBound = '1';
@@ -12427,6 +12746,32 @@
         });
     }
 
+    function isQueueStatusErrorForResumePrompt(status) {
+        var normalized = String(status || '').trim().toLowerCase();
+        return normalized === 'error' || normalized === 'failed' || normalized === 'fail';
+    }
+
+    function hasBuildQueueErrorForResumePrompt(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var active = state.active_operation && typeof state.active_operation === 'object' ? state.active_operation : {};
+        var activeOp = String(active.operation || '').trim().toLowerCase();
+        var activeStatus = String(active.status || '').trim().toLowerCase();
+        if ((activeOp === 'build' || activeOp === 'visual_edit') && isQueueStatusErrorForResumePrompt(activeStatus)) {
+            return true;
+        }
+        var queueInfo = state.build_queue_info && typeof state.build_queue_info === 'object' ? state.build_queue_info : {};
+        var snapshot = queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : {};
+        return isQueueStatusErrorForResumePrompt(
+            snapshot.job_status
+            || snapshot.status
+            || snapshot.queue_status
+            || queueInfo.job_status
+            || queueInfo.status
+            || queueInfo.queue_status
+            || ''
+        );
+    }
+
     function isTerminalActiveOperationStatus(status) {
         return ['done', 'complete', 'completed', 'error', 'cancelled', 'canceled', 'stop', 'stopped'].indexOf(String(status || '').toLowerCase()) !== -1;
     }
@@ -12525,6 +12870,13 @@
             if (!taskPlanConfirmedState) {
                 return;
             }
+            var stateForPrompt = latestWorkspaceState && typeof latestWorkspaceState === 'object'
+                ? latestWorkspaceState
+                : (initialWorkspaceState && typeof initialWorkspaceState === 'object' ? initialWorkspaceState : {});
+            // 仅在构建队列异常时提示“继续观察/继续操作”，正常运行中不打断用户。
+            if (!hasBuildQueueErrorForResumePrompt(stateForPrompt)) {
+                return;
+            }
             var summary = getTaskSummarySnapshotFromState(null);
             var runningOperation = !!isOperationRunning || summary.running > 0;
             var activeStatus = String(currentActiveOperationState && currentActiveOperationState.status || '').toLowerCase();
@@ -12604,10 +12956,6 @@
                             confirmBtn.disabled = false;
                         }
                         toast('info', (data && data.message) ? String(data.message) : messages.taskPlanRequiredByBuild);
-                        startTaskPlanGenerationForBuild(confirmBtn || currentPlanTriggerButton, selectedTypes, {
-                            silentSuccessToast: true,
-                            silentFailure: false
-                        });
                         return;
                     }
                     var canResumeRunning = !!(

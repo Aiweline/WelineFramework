@@ -532,6 +532,7 @@ class AiSiteAgent extends BaseController
     {
         $sessionAccessible = false;
         $taskPlanConfirmed = false;
+        $buildQueueRunning = false;
         if ($adminId > 0 && $publicId !== '' && $requestedPageType !== '') {
             $session = $this->sessionService->loadByPublicId($publicId, $adminId);
             if ($session !== null) {
@@ -540,12 +541,21 @@ class AiSiteAgent extends BaseController
                     $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
                 );
                 $taskPlanConfirmed = (int)($scope['task_plan_confirmed'] ?? 0) === 1;
+                $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+                $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+                $activeBuild = \is_array($activeOperations['build'] ?? null) ? $activeOperations['build'] : [];
+                $activeOpName = \strtolower(\trim((string)($activeOperation['operation'] ?? '')));
+                $activeOpStatus = \strtolower(\trim((string)($activeOperation['status'] ?? '')));
+                $buildStatus = \strtolower(\trim((string)($activeBuild['status'] ?? '')));
+                $buildQueueRunning = ($activeOpName === 'build' && \in_array($activeOpStatus, ['pending', 'queued', 'running', 'processing'], true))
+                    || \in_array($buildStatus, ['pending', 'queued', 'running', 'processing'], true);
             }
         }
         // 必须用 template() 直出 HTML：fetch() 会走 fetch_file_after，Theme 会把内容包进后台整页布局，iframe 内会出现后台顶栏/主题壳。
         return $this->template('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace-preview-unavailable.phtml', [
             'pb_preview_unavailable_session_ok' => $sessionAccessible,
             'pb_preview_unavailable_task_plan_confirmed' => $taskPlanConfirmed,
+            'pb_preview_unavailable_build_queue_running' => $buildQueueRunning,
             'pb_preview_unavailable_page_type' => $requestedPageType,
         ]);
     }
@@ -1101,33 +1111,62 @@ SCRIPT;
         ]));
         if (empty($result['success'])) {
             if ((string)($result['operation'] ?? '') === 'plan') {
+                $resumeExecutionToken = \trim((string)($result['execution_token'] ?? ''));
+                $resumeStreamUrl = \trim((string)($result['stream_url'] ?? ''));
+                if ($resumeExecutionToken !== '' && $resumeStreamUrl !== '') {
+                    return $this->fetchJson([
+                        'success' => true,
+                        'message' => (string)__('检测到阶段一方案任务已在执行中，已继续复用当前任务进度。'),
+                        'operation' => 'plan',
+                        'execution_token' => $resumeExecutionToken,
+                        'stream_url' => $resumeStreamUrl,
+                        'start_sse' => true,
+                        'requires_confirmation' => false,
+                        'plan_is_empty' => $planIsEmpty,
+                        'allow_generate_when_plan_empty' => true,
+                        'plan_action' => (string)($planStartDecision['action'] ?? 'reuse'),
+                        'plan_rebuild_required' => !empty($planStartDecision['rebuild_required']),
+                        'plan_translation_required' => !empty($planStartDecision['translation_required']),
+                        'plan_locale_changed' => !empty($planStartDecision['plan_locale_changed']),
+                        'plan_page_types_changed' => !empty($planStartDecision['page_types_changed']),
+                        'plan_source_changed' => !empty($planStartDecision['source_signature_changed']),
+                        'data' => $this->buildWorkspaceOperationPayload(
+                            $this->buildWorkspaceState($session, $adminId, 24, true),
+                            'plan'
+                        ),
+                    ]);
+                }
+                // 后端识别到 plan 已"占位"，但缺少有效 execution_token/stream_url，无法 SSE 复用：
+                // 主动取消旧 active_operation 并重新发起一次启动，避免前端陷入"缺少 SSE 参数"。
+                $this->cancelActivePlanOperationForScopeChange($session, $adminId);
+                $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+                $stage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
+                $result = $this->startOperation($session, $adminId, 'plan', $stage, \array_replace($planRebuildResetPatch, [
+                    'plan_locale' => (string)$scope['plan_locale'],
+                    'plan_confirmed' => 0,
+                    '_plan_sse_request' => [
+                        'prompt_mode' => $effectivePlanPromptMode,
+                        'instruction' => $requestedInstruction,
+                        'target_scope' => $requestedTargetScope,
+                        'round' => $requestedRound,
+                        'plan_locale' => (string)$scope['plan_locale'],
+                    ],
+                ]));
+                if (empty($result['success'])) {
+                    return $this->fetchJson([
+                        'success' => false,
+                        'message' => (string)($result['message'] ?? __('阶段一方案启动失败：检测到无效的历史任务记录，已自动清理，请稍后重试')),
+                        'operation' => (string)($result['operation'] ?? 'plan'),
+                    ]);
+                }
+                // 走到此处说明清理后重试启动成功，继续走下方正常成功响应路径。
+            } else {
                 return $this->fetchJson([
-                    'success' => true,
-                    'message' => (string)__('检测到阶段一方案任务已在执行中，已继续复用当前任务进度。'),
-                    'operation' => 'plan',
-                    'execution_token' => (string)($result['execution_token'] ?? ''),
-                    'stream_url' => (string)($result['stream_url'] ?? ''),
-                    'start_sse' => true,
-                    'requires_confirmation' => false,
-                    'plan_is_empty' => $planIsEmpty,
-                    'allow_generate_when_plan_empty' => true,
-                    'plan_action' => (string)($planStartDecision['action'] ?? 'reuse'),
-                    'plan_rebuild_required' => !empty($planStartDecision['rebuild_required']),
-                    'plan_translation_required' => !empty($planStartDecision['translation_required']),
-                    'plan_locale_changed' => !empty($planStartDecision['plan_locale_changed']),
-                    'plan_page_types_changed' => !empty($planStartDecision['page_types_changed']),
-                    'plan_source_changed' => !empty($planStartDecision['source_signature_changed']),
-                    'data' => $this->buildWorkspaceOperationPayload(
-                        $this->buildWorkspaceState($session, $adminId, 24, true),
-                        'plan'
-                    ),
+                    'success' => false,
+                    'message' => (string)($result['message'] ?? __('当前无法启动阶段一方案生成')),
+                    'operation' => (string)($result['operation'] ?? ''),
                 ]);
             }
-            return $this->fetchJson([
-                'success' => false,
-                'message' => (string)($result['message'] ?? __('当前无法启动阶段一方案生成')),
-                'operation' => (string)($result['operation'] ?? ''),
-            ]);
         }
 
         $responseState = \is_array($result['data'] ?? null)
@@ -2666,6 +2705,16 @@ SCRIPT;
         $mergedScope = $this->scopeCompatibilityService->normalizeScope(\array_replace($currentScope, $scopePatch));
         $mergedScope = $this->buildTaskService->restoreBuildPlanContract($mergedScope, $currentScope);
         $mergedScope = $this->normalizeTaskPlanConfirmationForBuild($mergedScope);
+        if ((int)($mergedScope['task_plan_confirmed'] ?? 0) !== 1 && $this->scopeHasPersistedStageTwoTaskPlan($mergedScope)) {
+            $confirmedAt = \trim((string)($mergedScope['task_plan_confirmed_at'] ?? ''));
+            if ($confirmedAt === '') {
+                $confirmedAt = \date('Y-m-d H:i:s');
+            }
+            $mergedScope['task_plan_confirmed'] = 1;
+            $mergedScope['task_plan_confirmed_at'] = $confirmedAt;
+            $scopePatch['task_plan_confirmed'] = 1;
+            $scopePatch['task_plan_confirmed_at'] = $confirmedAt;
+        }
         if (!$this->isTaskPlanConfirmedForBuild($mergedScope)) {
             return $this->jsonError(
                 'TASK_PLAN_REQUIRED_BEFORE_BUILD',
@@ -2717,6 +2766,7 @@ SCRIPT;
     private function isTaskPlanConfirmedForBuild(array $scope): bool
     {
         return (int)($scope['task_plan_confirmed'] ?? 0) === 1
+            || $this->scopeHasPersistedStageTwoTaskPlan($scope)
             || $this->buildTaskService->hasConfirmedTaskPlanForBuild($scope);
     }
 
@@ -4813,6 +4863,21 @@ SCRIPT;
                             }
                             $buildPayload['round'] = $requestedRound;
                             $buildPayload['staged_generation'] = true;
+                            $buildPayload['stage1_checkpoint'] = \is_array($scope['_plan_generation_checkpoint'] ?? null) ? $scope['_plan_generation_checkpoint'] : [];
+                            $buildPayload['on_stage1_checkpoint'] = function (array $checkpoint) use ($fresh, $adminId, &$scope): void {
+                                if ($checkpoint === [] || !\is_array($checkpoint['plan_json'] ?? null)) {
+                                    return;
+                                }
+                                $scope['_plan_generation_checkpoint'] = $checkpoint;
+                                $this->sessionService->mergeScope($fresh->getId(), $adminId, [
+                                    '_plan_generation_checkpoint' => $checkpoint,
+                                    'plan_generation_progress' => [
+                                        'step' => (string)($checkpoint['step'] ?? ''),
+                                        'page_types' => \is_array($checkpoint['page_types'] ?? null) ? $checkpoint['page_types'] : [],
+                                        'updated_at' => (string)($checkpoint['updated_at'] ?? \date('Y-m-d H:i:s')),
+                                    ],
+                                ]);
+                            };
                             $artifacts = $this->executionBlueprintService->buildPlanArtifactsByAiStream(
                                 $scope,
                                 \is_array($websiteProfile) ? $websiteProfile : [],
@@ -4859,6 +4924,8 @@ SCRIPT;
                 'plan_generated_page_types' => \array_values(\array_map('strval', $currentPageTypes)),
                 'plan_generated_source_signature' => $this->buildPlanSourceSignature(\array_replace($scope, ['page_types' => $currentPageTypes])),
                 'plan_confirmed' => 0,
+                '_plan_generation_checkpoint' => [],
+                'plan_generation_progress' => [],
             ]);
             $this->sessionService->mergeScope($fresh->getId(), $adminId, $scopePatchPersist);
             $freshSaved = $this->sessionService->loadById($fresh->getId(), $adminId) ?? $fresh;
@@ -8517,6 +8584,8 @@ SCRIPT;
             $this->sessionService->loadScopeForStage($session, $this->scopeCompatibilityService->normalizeStage($session->getStage()))
         );
         $normalized = $this->scopeCompatibilityService->normalizeConfirmedPlanFlag($normalized);
+        $normalized = $this->hydrateStageOnePlanPayloadFromPlanStageScope($session, $adminId, $normalized);
+        $normalized = $this->hydrateStageOnePlanPayloadFromWorkbench($normalized);
         // 读取工作区状态时避免触发外部 AI 生成，防止首开/轮询被远程调用阻塞。
         $profileStartedAt = \microtime(true);
         $normalized['website_profile'] = $this->profileGenerationService->generate($normalized, false);
@@ -8777,6 +8846,30 @@ SCRIPT;
         $taskPlanDraftMarkdown = (string)($normalized['task_plan_markdown'] ?? ($virtualThemePlan['draft_markdown'] ?? ''));
         $taskPlanConfirmedMarkdown = (string)($virtualThemePlan['confirmed_markdown'] ?? '');
 
+        // Stage-two task plan fallback：方案确认后真实数据全部沉到 execution_blueprint 中，
+        // task_plan_structured/draft/confirmed/markdown 都会被清空。这里在内存中把蓝图反推成
+        // 前端期望的 {shared_tasks, page_tasks} 形态以及一份概览 markdown，使预览始终能渲染。
+        if (
+            $taskPlanStructured === []
+            && $taskPlanDraftStructured === []
+            && $taskPlanConfirmedStructured === []
+            && \trim($taskPlanDraftMarkdown) === ''
+            && \trim($taskPlanConfirmedMarkdown) === ''
+        ) {
+            $blueprintForDerive = \is_array($normalized['execution_blueprint'] ?? null) && $normalized['execution_blueprint'] !== []
+                ? $normalized['execution_blueprint']
+                : (\is_array($normalized['execution_blueprint_draft'] ?? null) ? $normalized['execution_blueprint_draft'] : []);
+            if (\is_array($blueprintForDerive['tasks'] ?? null) && $blueprintForDerive['tasks'] !== []) {
+                $derivedTaskPlan = $this->deriveTaskPlanArtifactsFromExecutionBlueprint($blueprintForDerive);
+                if (\is_array($derivedTaskPlan['structured'] ?? null) && $derivedTaskPlan['structured'] !== []) {
+                    $taskPlanStructured = $derivedTaskPlan['structured'];
+                }
+                if (\trim((string)($derivedTaskPlan['markdown'] ?? '')) !== '') {
+                    $taskPlanDraftMarkdown = (string)$derivedTaskPlan['markdown'];
+                }
+            }
+        }
+
         $eventsStartedAt = \microtime(true);
         $events = $this->sessionService->listRecentEvents($session->getId(), $adminId, $eventLimit);
         $this->logHotPathStage('build_workspace_state.events', $eventsStartedAt, [
@@ -8908,6 +9001,95 @@ SCRIPT;
         ]);
 
         return $this->decorateWorkspaceStateWithPollingPayload($result);
+    }
+
+    /**
+     * 某些历史会话会把阶段一方案主数据压缩在 plan_workbench.confirmed，
+     * 但 plan_markdown/plan_json/plan_structured 为空。此处在组装工作区状态时做只读回填，
+     * 避免前端出现“方案已存在但预览空白”。
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function hydrateStageOnePlanPayloadFromWorkbench(array $scope): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+        $planMarkdown = \trim((string)($scope['plan_markdown'] ?? ''));
+        if ($planJson !== [] || $planStructured !== [] || $planMarkdown !== '') {
+            return $scope;
+        }
+
+        $workbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
+        $confirmed = \is_array($workbench['confirmed'] ?? null) ? $workbench['confirmed'] : [];
+        if ($confirmed === []) {
+            return $scope;
+        }
+
+        $confirmedPlanJson = \is_array($confirmed['plan_json'] ?? null) ? $confirmed['plan_json'] : [];
+        $confirmedStructured = \is_array($confirmed['structured_plan'] ?? null) ? $confirmed['structured_plan'] : [];
+        $confirmedMarkdown = \trim((string)($confirmed['plan_book_markdown'] ?? ''));
+
+        if ($confirmedPlanJson !== []) {
+            $scope['plan_json'] = $confirmedPlanJson;
+        }
+        if ($confirmedStructured !== []) {
+            $scope['plan_structured'] = $confirmedStructured;
+        }
+        if ($confirmedMarkdown !== '') {
+            $scope['plan_markdown'] = $confirmedMarkdown;
+        }
+
+        return $scope;
+    }
+
+    /**
+     * 当前工作区若在 visual_edit/publish 阶段，阶段一方案可能仅保存在 plan 作用域。
+     * 这里做一次跨阶段只读兜底，避免“方案已存在但当前页无法渲染”。
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function hydrateStageOnePlanPayloadFromPlanStageScope(
+        AiSiteAgentSession $session,
+        int $adminId,
+        array $scope
+    ): array {
+        $hasStageOnePayload = (\is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== [])
+            || (\is_array($scope['plan_structured'] ?? null) && $scope['plan_structured'] !== [])
+            || \trim((string)($scope['plan_markdown'] ?? '')) !== '';
+        if ($hasStageOnePayload) {
+            return $scope;
+        }
+
+        $planStageScope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
+        );
+        if ($planStageScope === [] || $planStageScope === $scope) {
+            return $scope;
+        }
+
+        foreach ([
+            'plan_json',
+            'plan_structured',
+            'plan_markdown',
+            'plan_workbench',
+            'execution_blueprint_draft',
+            'execution_blueprint',
+            'plan_generated_at',
+            'plan_confirmed',
+            'plan_confirmed_at',
+            'execution_blueprint_confirmed_signature',
+            'execution_blueprint_confirmed_at',
+        ] as $key) {
+            if (!\array_key_exists($key, $scope) || $scope[$key] === [] || $scope[$key] === '' || $scope[$key] === 0 || $scope[$key] === null) {
+                if (\array_key_exists($key, $planStageScope)) {
+                    $scope[$key] = $planStageScope[$key];
+                }
+            }
+        }
+
+        return $scope;
     }
 
     /**
@@ -9130,6 +9312,27 @@ SCRIPT;
         ], $this->buildWorkspaceStatusEnvelope($state, 'queue'));
 
         if ($workspaceStream) {
+            $plan = \is_array($state['plan'] ?? null) ? $state['plan'] : [];
+            $planMarkdown = \trim((string)($plan['markdown'] ?? $state['plan_markdown'] ?? ''));
+            $planJson = \is_array($plan['json'] ?? null)
+                ? $plan['json']
+                : (\is_array($state['plan_json'] ?? null) ? $state['plan_json'] : []);
+            $planStructured = \is_array($plan['structured'] ?? null)
+                ? $plan['structured']
+                : (\is_array($state['plan_structured'] ?? null) ? $state['plan_structured'] : $planJson);
+            if ($planMarkdown !== '' || $planJson !== [] || $planStructured !== []) {
+                $payload['plan'] = [
+                    'json' => $planJson,
+                    'markdown' => $planMarkdown,
+                    'structured' => $planStructured,
+                    'execution_blueprint' => \is_array($plan['execution_blueprint'] ?? null) ? $plan['execution_blueprint'] : [],
+                ];
+                $payload['plan_markdown'] = $planMarkdown;
+                $payload['plan_json'] = $planJson;
+                $payload['plan_structured'] = $planStructured;
+                $payload['confirmed_plan_markdown'] = $planMarkdown;
+                $payload['confirmed_plan_signature'] = (string)($state['confirmed_plan_signature'] ?? '');
+            }
             $payload['auto_start_build_after_stream'] = !empty($state['auto_start_build_after_stream']);
             $payload['last_event_id'] = $this->resolveWorkspaceLastEventId(\is_array($state['events'] ?? null) ? $state['events'] : []);
             $payload['events'] = $this->pruneWorkspaceEventsForSse(\is_array($state['events'] ?? null) ? $state['events'] : [], 6);
@@ -9964,7 +10167,6 @@ SCRIPT;
         );
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
-        $forceTaskPlanRebuild = $this->isTaskPlanSchemeRebuildRequest($operation, $scopePatch, $operationDetails);
         $preserveRunningQueueRow = false;
         if (
             \in_array($activeStatus, ['queued', 'running'], true)
@@ -10012,15 +10214,39 @@ SCRIPT;
                 $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
             }
         }
+        // 残留无效状态：active_operation 处于 queued/running 但 execution_token 缺失
+        // （可能因前次任务异常中断/部分写入未清理）。这种状态下既无法复用 SSE，也无法继续推进，
+        // 必须主动回收，否则会导致前端拿到空的 execution_token/stream_url 而陷入"操作已创建但缺少 SSE 参数"循环。
+        if (
+            \in_array($activeStatus, ['queued', 'running'], true)
+            && \trim((string)($activeOperation['execution_token'] ?? '')) === ''
+        ) {
+            $scope['active_operation'] = \array_replace($activeOperation, [
+                'status' => 'cancelled',
+                'message' => (string)__('检测到无效的历史操作记录（缺少执行令牌），已自动回收并允许重新开始'),
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ]);
+            $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+            $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+            $this->appendWorkspaceEvent(
+                $session->getId(),
+                $adminId,
+                $this->scopeCompatibilityService->normalizeStage($session->getStage()),
+                'operation_cancelled',
+                'Active operation missing execution token; auto-recovered to allow restart.',
+                [
+                    'operation' => (string)($activeOperation['operation'] ?? ''),
+                    'details' => ['reason' => 'missing_execution_token'],
+                ],
+                AiSiteAgentSessionEvent::LEVEL_WARNING
+            );
+            $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+            $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+        }
         if (\in_array($activeStatus, ['queued', 'running'], true)) {
             $runningOperation = \trim((string)($activeOperation['operation'] ?? ''));
             $runningExecutionToken = \trim((string)($activeOperation['execution_token'] ?? ''));
-            if ($forceTaskPlanRebuild && $runningOperation === 'task_plan') {
-                $preserveRunningQueueRow = true;
-                $scope = $this->markRunningTaskPlanAsDiscardedForRebuild($scope, $activeOperation);
-                $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
-                $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
-            } elseif ($this->shouldReuseRunningQueuedOperation($operation, $runningOperation)) {
+            if ($this->shouldReuseRunningQueuedOperation($operation, $runningOperation)) {
                 $reusedOperation = $runningOperation !== '' ? $runningOperation : $operation;
                 return [
                     'success' => false,
@@ -10209,8 +10435,10 @@ SCRIPT;
                 'session_id' => 'pagebuilder_ai_provider_preflight',
             ]
         );
+        // 预检探针偶发返回空串（例如模型/网关短暂抖动），
+        // 这里不应阻断真实业务请求入队；由实际队列任务继续执行并在运行态给出真实错误。
         if (\trim((string)$response) === '') {
-            throw new \RuntimeException('AI provider readiness check returned an empty response.');
+            return;
         }
     }
 
@@ -14173,7 +14401,9 @@ SCRIPT;
 
     private function shouldKeepQueuedObserverStreamOpen(string $operation): bool
     {
-        return \in_array($operation, ['block_regenerate'], true);
+        // 队列型核心操作在前端已改为“持续观察直到队列终态”，
+        // 因此这里必须保持 SSE 连接，不再走 checkpoint-only 快速 done。
+        return \in_array($operation, ['plan', 'task_plan', 'build', 'block_regenerate', 'regenerate_page'], true);
     }
 
     /**

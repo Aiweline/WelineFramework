@@ -2788,6 +2788,7 @@ final class AiSitePageComponentGenerationService
         $styleCode = $this->resolvePromptStyleCode($scope, Page::TYPE_HOME);
         $styleDirection = $this->describeStyleDirection($styleCode);
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
+        $stage3LocaleContract = $this->buildStage3LocaleExecutionPromptAddon($websiteProfile, $scope);
         $sharedRefinement = $this->resolveSharedComponentRefinement($scope, 'header');
         $taskPlanPromptAddon = $this->buildTaskPlanPromptAddon(
             $this->resolveSharedTaskPlanTask($scope, 'header'),
@@ -2800,6 +2801,7 @@ final class AiSitePageComponentGenerationService
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
 
         return $langRule
+            . $stage3LocaleContract
             . "You are generating a PageBuilder website header component.\n"
             . "Site name: {$siteDisplayName}\n"
             . "Visitor-facing brand summary: {$siteSummary}\n"
@@ -2831,6 +2833,7 @@ final class AiSitePageComponentGenerationService
         $styleCode = $this->resolvePromptStyleCode($scope, Page::TYPE_HOME);
         $styleDirection = $this->describeStyleDirection($styleCode);
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
+        $stage3LocaleContract = $this->buildStage3LocaleExecutionPromptAddon($websiteProfile, $scope);
         $sharedRefinement = $this->resolveSharedComponentRefinement($scope, 'footer');
         $taskPlanPromptAddon = $this->buildTaskPlanPromptAddon(
             $this->resolveSharedTaskPlanTask($scope, 'footer'),
@@ -2843,6 +2846,7 @@ final class AiSitePageComponentGenerationService
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
 
         return $langRule
+            . $stage3LocaleContract
             . "You are generating a PageBuilder website footer component.\n"
             . "Site name: {$siteDisplayName}\n"
             . "Visitor-facing brand summary: {$siteSummary}\n"
@@ -2898,6 +2902,7 @@ final class AiSitePageComponentGenerationService
         $styleCode = $this->resolvePromptStyleCode($scope, $pageType);
         $styleDirection = $this->describeStyleDirection($styleCode);
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
+        $stage3LocaleContract = $this->buildStage3LocaleExecutionPromptAddon($websiteProfile, $scope);
         $taskPlanPromptAddon = $this->buildTaskPlanPromptAddon($taskPlanTask, 'section', $scope);
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $visualExcellence = $this->buildVisualExcellencePromptAddon('section');
@@ -2910,6 +2915,7 @@ final class AiSitePageComponentGenerationService
         );
 
         return $langRule
+            . $stage3LocaleContract
             . "You are generating a PageBuilder content component.\n"
             . "Page type: " . $pageLabel . " ({$pageType})\n"
             . "Section name: {$sectionName}\n"
@@ -3011,6 +3017,30 @@ final class AiSitePageComponentGenerationService
             . "- Rewrite planning/observation sentences into direct marketing copy before rendering. Do not visibly output phrases like \"Visitors see...\", \"Visitors can review...\", \"访客看到...\", \"用户看到...\", \"信任感增强\", or \"从而产生...\".\n"
             . "- Never render internal identifiers or paths as visible copy: plan_locale, page_type, section_code, task_key, block_key, runtime_context, app/code paths, var/ paths, content/... component paths, shared:* keys, or page:* keys.\n"
             . "- Never render broken image placeholders. If a verified uploaded asset URL is absent, create the visual with inline SVG or CSS shapes.\n";
+    }
+
+    /**
+     * @param array<string,mixed> $websiteProfile
+     * @param array<string,mixed> $scope
+     */
+    private function buildStage3LocaleExecutionPromptAddon(array $websiteProfile, array $scope): string
+    {
+        $contentLocale = $this->resolvePrimaryLocale($websiteProfile, $scope);
+        if ($contentLocale === '') {
+            return '';
+        }
+
+        $localeHint = $this->describeLocaleForAiPrompt($contentLocale);
+        $scriptGuard = $this->isNonCjkLocale($contentLocale)
+            ? "- Script guard for final visible copy: do not output Chinese/Japanese/Korean sentences in headings, body, nav labels, buttons, footer text, alt text, badges, or trust points. If any planned sample contains CJK text, rewrite it into {$contentLocale} before rendering.\n"
+            : "- Script guard for final visible copy: keep all visitor-visible text in {$contentLocale}; if planned samples use another language, rewrite them to match the content locale before rendering.\n";
+
+        return "Stage-3 language execution contract (hard requirement):\n"
+            . "- source_of_truth_locale: {$contentLocale} ({$localeHint})\n"
+            . "- Internal planning language is not output language. stage-1/stage-2/story/task samples are intent only.\n"
+            . "- Before composing html_content/html_extra/footer text/nav labels, normalize every candidate sentence to source_of_truth_locale.\n"
+            . $scriptGuard
+            . "- Final self-check before returning JSON: if any visitor-visible sentence is not in source_of_truth_locale, rewrite it now and then return.\n";
     }
 
     /**
@@ -3747,6 +3777,11 @@ final class AiSitePageComponentGenerationService
         $pageDesignPlan = \is_array($planContext['page_design_plan'] ?? null)
             ? $planContext['page_design_plan']
             : (\is_array($stylePlan['page_design_plan'] ?? null) ? $stylePlan['page_design_plan'] : []);
+        $contentLocale = \trim((string)($runtimeContext['content_locale'] ?? $scope['default_locale'] ?? ''));
+        $localeHint = $contentLocale !== '' ? $this->describeLocaleForAiPrompt($contentLocale) : '';
+        $stage3LocaleRule = $contentLocale !== ''
+            ? "- stage3 locale gate: source_of_truth_locale={$contentLocale} ({$localeHint}). stage-2 text is intent only; rewrite any non-{$contentLocale} planned sentence before it becomes visible copy.\n"
+            : '';
 
         return "Stage-2 task context for this {$contextLabel}:\n"
             . "- task_key: " . (string)($taskPlanTask['task_key'] ?? '') . "\n"
@@ -3772,6 +3807,7 @@ final class AiSitePageComponentGenerationService
             . "- design execution rule: apply page_design_plan.color_layering and section_flow before local block styling; this block must contrast with adjacent blocks through surfaces/cards/gradients/dividers/illustration while staying inside the confirmed palette.\n"
             . "- stage2 language rule: treat stage-2 planned text as source intent, not copy authority; rewrite any planned text that is not in the website content language before placing it in visible component output.\n"
             . "- anti-copy rule: never paste stage-2 observation/planning sentences directly into html_content. Rewrite phrases like \"访客看到...\", \"用户看到...\", \"从而产生...\", \"信任感增强\", \"知道如何...\", \"Visitors see...\", or \"Visitors can review...\" into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n"
+            . $stage3LocaleRule
             . "- theme_context: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
             . "- acceptance: " . \json_encode($acceptance, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- runtime_context: " . \json_encode($runtimeContext, \JSON_UNESCAPED_UNICODE) . "\n";
