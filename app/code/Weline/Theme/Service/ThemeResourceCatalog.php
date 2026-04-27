@@ -363,18 +363,22 @@ class ThemeResourceCatalog
             }
         }
 
-        if (preg_match('/@widget\.exclusive\s+(true|false|1|0)/i', $content, $matches)) {
+        if (preg_match('/@widget\.exclusive\s+\{?(true|false|1|0)\}?/i', $content, $matches)) {
             $data['exclusive'] = $this->toBool((string)$matches[1]);
         }
-        if (preg_match('/@widget\.compatible\s+(true|false|1|0)/i', $content, $matches)) {
+        if (preg_match('/@widget\.compatible\s+\{?(true|false|1|0)\}?/i', $content, $matches)) {
             $data['compatible'] = $this->toBool((string)$matches[1]);
         }
-        if (preg_match('/@widget\.is_container\s+(true|false|1|0)/i', $content, $matches)) {
+        if (preg_match('/@widget\.is_container\s+\{?(true|false|1|0)\}?/i', $content, $matches)) {
             $data['is_container'] = $this->toBool((string)$matches[1]);
         }
 
-        $data['position'] = $this->splitCsv($data['position']);
-        $data['page_layouts'] = $this->splitCsv($data['page_layouts']) ?: ['*'];
+        foreach (['code', 'name', 'description', 'type', 'area', 'slot', 'icon'] as $key) {
+            $data[$key] = $this->unwrapWidgetScalar((string)$data[$key]);
+        }
+
+        $data['position'] = $this->parseWidgetListValue($data['position']);
+        $data['page_layouts'] = $this->parseWidgetListValue($data['page_layouts']) ?: ['*'];
 
         return $data;
     }
@@ -497,6 +501,39 @@ class ThemeResourceCatalog
             static fn(string $item): string => trim($item),
             explode(',', $value)
         ), static fn(string $item): bool => $item !== ''));
+    }
+
+    private function unwrapWidgetScalar(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        if (str_starts_with($value, '{') && str_ends_with($value, '}')) {
+            $value = trim(substr($value, 1, -1));
+        }
+
+        return trim($value, " \t\n\r\0\x0B\"'");
+    }
+
+    private function parseWidgetListValue(string|array $value): array
+    {
+        if (is_array($value)) {
+            return $this->splitCsv($value);
+        }
+
+        $value = $this->unwrapWidgetScalar($value);
+        if ($value === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+        if (is_array($decoded)) {
+            return $this->splitCsv($decoded);
+        }
+
+        return $this->splitCsv($value);
     }
 
     private function toBool(string $value, bool $default = false): bool

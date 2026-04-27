@@ -65,6 +65,12 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('Service/AI/prompt_guides/frontend-design/SKILL.md', $prompt);
         self::assertStringContainsString('https://github.com/anthropics/claude-code/blob/main/plugins/frontend-design/skills/frontend-design/SKILL.md', $prompt);
         self::assertStringContainsString('Avoid generic AI aesthetics', $prompt);
+        self::assertStringContainsString('theme_design.style_signature', $prompt);
+        self::assertStringContainsString('Visual quality bar', $prompt);
+        self::assertStringContainsString('Customer-fit rule', $prompt);
+        self::assertStringContainsString('Interaction/effects must be executable', $prompt);
+        self::assertStringContainsString('Customer-intent lock', $prompt);
+        self::assertStringContainsString('visual_identity, composition, background_texture', $prompt);
         self::assertStringContainsString('block_task.style_plan', $prompt);
         self::assertStringContainsString('page_design_plan', $prompt);
         self::assertStringContainsString('color_layering', $prompt);
@@ -102,6 +108,8 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('Planned-content language lock', $prompt);
         self::assertStringContainsString('markdown task-plan descriptions, task_script.story_goal, task_script.content_fill_rule', $prompt);
         self::assertStringContainsString('translate/adapt it before writing the task plan', $prompt);
+        self::assertStringContainsString('visual_identity, composition, background_texture', $prompt);
+        self::assertStringContainsString('style_signature or art_direction', $prompt);
     }
 
     public function testBuildTaskPlanArtifactsProducesStructuredPlan(): void
@@ -1998,6 +2006,16 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 ],
             ],
         ];
+    }
+
+    public function testStageTwoBatchFailuresAreFatalInsteadOfDeterministicFallback(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/AiSiteVirtualThemePlanService.php');
+
+        self::assertStringNotContainsString('buildRecoverableTaskPlanBatchPayload', $source);
+        self::assertStringNotContainsString('AI batch output was not usable JSON; deterministic stage-2 task baseline was used', $source);
+        self::assertStringContainsString("'batch_failed'", $source);
+        self::assertStringContainsString('deterministic fallback is forbidden', $source);
     }
 
     /**

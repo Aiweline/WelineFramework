@@ -11,6 +11,7 @@ use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
+use Weline\Ai\Service\AiRuntimeContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Queue\Model\Queue;
@@ -77,6 +78,9 @@ class AiSiteBuildQueue implements QueueInterface
         $previousSseContextExists = false;
         $previousSseContext = null;
         $sseContextRegistered = false;
+        $previousAiRuntimeParamsExists = false;
+        $previousAiRuntimeParams = [];
+        $aiRuntimeParamsRegistered = false;
         try {
             $this->appendQueueLifecycleLine($queue, '开始执行 queue_id=' . $queueId . ' public_id=' . $publicId . ' admin_id=' . $adminId);
 
@@ -92,6 +96,32 @@ class AiSiteBuildQueue implements QueueInterface
                 throw new \RuntimeException('会话不存在或无权访问。');
             }
             $this->appendQueueLifecycleLine($queue, '已加载会话 session_id=' . (int)$session->getId());
+            $supersedingQueueRow = $this->findSupersedingQueueRow(
+                $queueId,
+                $queue->getBizKey(),
+                $operation,
+                $effectiveExecutionToken
+            );
+            if ($supersedingQueueRow !== []) {
+                $newerQueueId = (int)($supersedingQueueRow['queue_id'] ?? 0);
+                $message = 'Superseded by newer PageBuilder queue #' . $newerQueueId . '; skipped duplicate AI execution.';
+                $this->appendQueueLifecycleLine($queue, $message);
+
+                return $message;
+            }
+            $activeQueueId = $this->resolveActiveQueueIdForQueuedOperation(
+                $sessionService,
+                $scopeService,
+                $session,
+                $operation,
+                $effectiveExecutionToken
+            );
+            if ($activeQueueId > 0 && $activeQueueId !== $queueId && $activeQueueId > $queueId) {
+                $message = 'Active operation is already owned by newer queue #' . $activeQueueId . '; skipped duplicate AI execution.';
+                $this->appendQueueLifecycleLine($queue, $message);
+
+                return $message;
+            }
             if ($forceRebuild) {
                 $session = $this->applyForceBuildQueuePreset($sessionService, $scopeService, $session, $adminId);
                 $this->appendQueueLifecycleLine(
@@ -157,6 +187,11 @@ class AiSiteBuildQueue implements QueueInterface
             $previousSseContext = RequestContext::get(RequestContext::SSE_WRITER_KEY);
             RequestContext::set(RequestContext::SSE_WRITER_KEY, $sse);
             $sseContextRegistered = true;
+            $previousAiRuntimeParamsExists = AiRuntimeContext::hasDefaultParams();
+            $previousAiRuntimeParams = AiRuntimeContext::getDefaultParams();
+            AiRuntimeContext::setDefaultParams(AiRuntimeContext::thinkingModeParams());
+            $aiRuntimeParamsRegistered = true;
+            $this->queueTrace($sse, 'AI thinking mode enabled for queue execution; reasoning_content is kept separate from output content.');
             $this->queueTrace($sse, 'QueueDbWriter 已创建，构建进度将写入队列 result');
 
             /** @var AiSiteAgent $controller */
@@ -230,6 +265,13 @@ class AiSiteBuildQueue implements QueueInterface
             $this->updateSessionError($publicId, $adminId, $effectiveExecutionToken, $throwable->getMessage());
             throw new \RuntimeException('构建失败：' . $throwable->getMessage(), 0, $throwable);
         } finally {
+            if ($aiRuntimeParamsRegistered) {
+                if ($previousAiRuntimeParamsExists) {
+                    AiRuntimeContext::setDefaultParams($previousAiRuntimeParams);
+                } else {
+                    AiRuntimeContext::removeDefaultParams();
+                }
+            }
             if ($sseContextRegistered) {
                 if ($previousSseContextExists) {
                     RequestContext::set(RequestContext::SSE_WRITER_KEY, $previousSseContext);
@@ -524,6 +566,8 @@ class AiSiteBuildQueue implements QueueInterface
             $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
             /** @var AiSiteScopeCompatibilityService $scopeService */
             $scopeService = ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
+            /** @var AiSiteBuildTaskService $buildTaskService */
+            $buildTaskService = ObjectManager::getInstance(AiSiteBuildTaskService::class);
 
             $session = $sessionService->loadByPublicId($publicId, $adminId);
             if (!$session instanceof AiSiteAgentSession) {
@@ -541,11 +585,73 @@ class AiSiteBuildQueue implements QueueInterface
             $active['status'] = 'error';
             $active['message'] = $message;
             $active['updated_at'] = \date('Y-m-d H:i:s');
+            $active['queue_waiting_for_scheduler'] = false;
+            $active['can_close_stream'] = false;
+            $active['continue_other_operations'] = false;
             $scope['active_operation'] = $active;
-            $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+            $operation = \trim((string)($active['operation'] ?? ''));
+            $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+            if ($operation !== '' && \is_array($activeOperations[$operation] ?? null)) {
+                $operationState = $activeOperations[$operation];
+                if ((string)($operationState['execution_token'] ?? '') === $executionToken) {
+                    $operationState['status'] = 'error';
+                    $operationState['message'] = $message;
+                    $operationState['updated_at'] = $active['updated_at'];
+                    $operationState['queue_waiting_for_scheduler'] = false;
+                    $operationState['can_close_stream'] = false;
+                    $operationState['continue_other_operations'] = false;
+                    $activeOperations[$operation] = $operationState;
+                    $scope['active_operations'] = $activeOperations;
+                }
+            }
+            $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
+            if (\in_array($operation, ['build', 'block_regenerate', 'regenerate_page'], true)) {
+                $failurePayload = $this->buildPublishBlockingAiFailurePayload($operation, $message);
+                $scope['latest_build_failed'] = 1;
+                $scope['latest_build_failure'] = $failurePayload;
+                $scope['publish_blocked_by_latest_ai_failure'] = 1;
+                $scope['publish_blocked_reason'] = $this->formatPublishBlockedByAiFailureMessage($failurePayload);
+            }
+            if ($operation === 'build') {
+                $scope = $buildTaskService->resetRunningTasksForInterruptedBuild(
+                    $scope,
+                    'Build interrupted before task completion: ' . $message
+                );
+            }
             $sessionService->replaceScope((int)$session->getId(), $adminId, $scope);
         } catch (\Throwable) {
         }
+    }
+
+    /**
+     * @return array{blocked:bool,operation:string,status:string,message:string}
+     */
+    private function buildPublishBlockingAiFailurePayload(string $operation, string $message): array
+    {
+        $message = \trim($message);
+        if ($message === '') {
+            $message = 'Latest AI site build failed; publish is blocked until a successful AI rebuild completes.';
+        }
+
+        return [
+            'blocked' => true,
+            'operation' => $operation !== '' ? $operation : 'build',
+            'status' => 'error',
+            'message' => $message,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $failure
+     */
+    private function formatPublishBlockedByAiFailureMessage(array $failure): string
+    {
+        $message = \trim((string)($failure['message'] ?? ''));
+        if ($message === '') {
+            return 'Latest AI site build failed; publish is blocked until a successful AI rebuild completes.';
+        }
+
+        return 'Latest AI site build failed; publish is blocked until a successful AI rebuild completes. Error: ' . $message;
     }
 
     private function ensureQueuedActiveOperation(
@@ -564,6 +670,16 @@ class AiSiteBuildQueue implements QueueInterface
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeStatus = \trim((string)($active['status'] ?? ''));
         $activeQueueId = (int)($active['queue_id'] ?? 0);
+        if (
+            (string)($active['operation'] ?? '') === $operation
+            && $this->executionTokenMatches((string)($active['execution_token'] ?? ''), $executionToken)
+            && \in_array($activeStatus, ['queued', 'running'], true)
+            && $activeQueueId > 0
+            && $activeQueueId !== $queueId
+            && $activeQueueId > $queueId
+        ) {
+            throw new \RuntimeException('Duplicate build queue is superseded by active queue #' . $activeQueueId . '.');
+        }
         if (
             (string)($active['operation'] ?? '') === $operation
             && (string)($active['execution_token'] ?? '') === $executionToken
@@ -588,6 +704,111 @@ class AiSiteBuildQueue implements QueueInterface
         $sessionService->replaceScope((int)$fresh->getId(), $adminId, $scope);
 
         return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function findSupersedingQueueRow(int $queueId, string $bizKey, string $operation, string $executionToken): array
+    {
+        $bizKey = \trim($bizKey);
+        if ($queueId <= 0 || $bizKey === '') {
+            return [];
+        }
+
+        try {
+            $result = w_query('queue', 'list', [
+                'biz_key' => $bizKey,
+                'page_size' => 20,
+            ]);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        foreach (\is_array($result['items'] ?? null) ? $result['items'] : [] as $item) {
+            $row = \is_object($item) && \method_exists($item, 'getData') ? $item->getData() : $item;
+            if (!\is_array($row)) {
+                continue;
+            }
+            $candidateQueueId = (int)($row['queue_id'] ?? 0);
+            if ($candidateQueueId <= $queueId) {
+                continue;
+            }
+            $status = \trim((string)($row['status'] ?? ''));
+            if (!\in_array($status, ['pending', 'running', 'done'], true)) {
+                continue;
+            }
+            if ($this->queueRowMatchesOperationToken($row, $operation, $executionToken)) {
+                return $row;
+            }
+        }
+
+        return [];
+    }
+
+    private function resolveActiveQueueIdForQueuedOperation(
+        AiSiteAgentSessionService $sessionService,
+        AiSiteScopeCompatibilityService $scopeService,
+        AiSiteAgentSession $session,
+        string $operation,
+        string $executionToken
+    ): int {
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
+        $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        if (
+            \trim((string)($active['operation'] ?? '')) === $operation
+            && $this->executionTokenMatches((string)($active['execution_token'] ?? ''), $executionToken)
+        ) {
+            return (int)($active['queue_id'] ?? 0);
+        }
+
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        $operationState = \is_array($activeOperations[$operation] ?? null) ? $activeOperations[$operation] : [];
+        if ($this->executionTokenMatches((string)($operationState['execution_token'] ?? ''), $executionToken)) {
+            return (int)($operationState['queue_id'] ?? 0);
+        }
+
+        return 0;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function queueRowMatchesOperationToken(array $row, string $operation, string $executionToken): bool
+    {
+        $content = $row['content'] ?? null;
+        if (\is_string($content)) {
+            $decoded = \json_decode($content, true);
+            $content = \is_array($decoded) ? $decoded : [];
+        }
+        if (!\is_array($content)) {
+            return false;
+        }
+
+        $rowOperation = \trim((string)($content['operation'] ?? ''));
+        $rowToken = \trim((string)($content['execution_token'] ?? $content['token'] ?? ''));
+
+        return $rowOperation === $operation
+            && $this->executionTokenMatches($rowToken, $executionToken);
+    }
+
+    private function executionTokenMatches(string $actualToken, string $requestedToken): bool
+    {
+        $actualToken = \trim($actualToken);
+        $requestedToken = \trim($requestedToken);
+        if ($actualToken === '' || $requestedToken === '') {
+            return false;
+        }
+        if ($actualToken === $requestedToken) {
+            return true;
+        }
+
+        $actualBase = \explode('-force-', $actualToken, 2)[0] ?? $actualToken;
+        $requestedBase = \explode('-force-', $requestedToken, 2)[0] ?? $requestedToken;
+
+        return $actualBase !== '' && $actualBase === $requestedBase;
     }
 
     private function invokePrivate(object $object, string $method, array $arguments = []): mixed
