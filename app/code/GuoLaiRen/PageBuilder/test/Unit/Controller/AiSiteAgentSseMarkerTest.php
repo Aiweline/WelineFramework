@@ -149,6 +149,21 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertFalse((bool)$isInProgress->invoke($controller, $queueRow));
     }
 
+    public function testRuntimeUsesQueueFailureDetailForFailedSseDonePayload(): void
+    {
+        $source = \file_get_contents(
+            \dirname(__DIR__, 3) . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml'
+        );
+
+        self::assertIsString($source);
+        self::assertStringContainsString('function resolveQueueFailureMessage(payload, operation)', $source);
+        self::assertStringContainsString('function readStageQueueFailureMessage(queueInfo)', $source);
+        self::assertStringContainsString('isStageQueueFailed(planQueueStatus)', $source);
+        self::assertStringContainsString('resolveQueueFailureMessage(normalizedDonePayload, normalizedDoneOperation)', $source);
+        self::assertStringContainsString('hydrateWorkspaceFromState(normalizedDonePayload.state)', $source);
+        self::assertStringContainsString('updateStageStatusSummary(normalizedDonePayload.state)', $source);
+    }
+
     public function testBlockConfigReplacementOnlyTouchesSelectedPageBlock(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();

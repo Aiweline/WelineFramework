@@ -30,7 +30,7 @@ class AiSiteAgentQueueObserverHelperService
      */
     public function shouldSuppressProcessMirror(string $operation): bool
     {
-        return \in_array($operation, ['plan', 'task_plan'], true);
+        return $operation === 'plan';
     }
 
     /**
@@ -40,6 +40,9 @@ class AiSiteAgentQueueObserverHelperService
      */
     public function shouldSkipResultLine(string $operation, string $line): bool
     {
+        if ($operation === 'task_plan') {
+            return false;
+        }
         if (
             \str_contains($line, '正文流不写入队列日志')
             || \str_contains($line, '正文流已从队列 SSE 中省略')
@@ -81,6 +84,14 @@ class AiSiteAgentQueueObserverHelperService
                 if ($lines !== []) {
                     $resultTail = (string)\end($lines);
                     if (\in_array($status, ['done', 'error', 'stop', 'cancelled'], true)) {
+                        if ($status === 'error') {
+                            for ($i = \count($lines) - 1; $i >= 0; $i--) {
+                                $line = (string)$lines[$i];
+                                if ($this->isTerminalErrorMessageLine($line)) {
+                                    return $this->normalizeTerminalErrorMessageLine($line);
+                                }
+                            }
+                        }
                         return $resultTail;
                     }
                 }
@@ -403,6 +414,22 @@ class AiSiteAgentQueueObserverHelperService
 
         return \str_contains($line, '正文流不写入队列日志')
             || \str_contains($line, '正文流已从队列 SSE 中省略');
+    }
+
+    private function isTerminalErrorMessageLine(string $line): bool
+    {
+        return (bool)\preg_match('/^\[\d{2}:\d{2}:\d{2}\]\s+(?:ERROR|WARNING)\b/u', $line)
+            || \str_contains($line, '失败')
+            || \str_contains($line, '异常')
+            || \stripos($line, 'error') !== false
+            || \stripos($line, 'failed') !== false
+            || \stripos($line, 'exception') !== false;
+    }
+
+    private function normalizeTerminalErrorMessageLine(string $line): string
+    {
+        $normalized = \preg_replace('/^\[\d{2}:\d{2}:\d{2}\]\s+(?:ERROR|WARNING)\s+/u', '', $line);
+        return \trim(\is_string($normalized) ? $normalized : $line);
     }
 
     /**

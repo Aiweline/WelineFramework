@@ -130,8 +130,19 @@ class AiSiteBuildTaskService
         if ($tasks === []) {
             return $scope;
         }
+        $definitionsByTaskKey = [];
+        foreach ($tasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey !== '') {
+                $definitionsByTaskKey[$taskKey] = $task;
+            }
+        }
         $existingTasks = $this->extractTaskState($scope);
         $nextTasks = $this->buildDefaultTaskState($blueprint);
+        $now = \date('Y-m-d H:i:s');
         foreach ($nextTasks as $taskKey => $defaultState) {
             $existing = \is_array($existingTasks[$taskKey] ?? null) ? $existingTasks[$taskKey] : [];
             $status = $this->normalizeTaskStatus((string)($existing['status'] ?? self::TASK_STATUS_PENDING));
@@ -142,12 +153,31 @@ class AiSiteBuildTaskService
                 continue;
             }
 
+            $definition = \is_array($definitionsByTaskKey[$taskKey] ?? null) ? $definitionsByTaskKey[$taskKey] : [];
+            if ($definition !== [] && $this->isGeneratedArtifactAvailableForTask($scope, $definition)) {
+                $resultRef = \is_array($existing['result_ref'] ?? null) && $existing['result_ref'] !== []
+                    ? $existing['result_ref']
+                    : $this->buildTaskResultRefFromDefinition($definition);
+                $nextTasks[$taskKey] = \array_replace($defaultState, $existing, [
+                    'status' => self::TASK_STATUS_DONE,
+                    'message' => '',
+                    'result_ref' => $resultRef,
+                    'updated_at' => \trim((string)($existing['updated_at'] ?? '')) !== ''
+                        ? (string)$existing['updated_at']
+                        : $now,
+                    'finished_at' => \trim((string)($existing['finished_at'] ?? '')) !== ''
+                        ? (string)$existing['finished_at']
+                        : $now,
+                ]);
+                continue;
+            }
+
             $nextTasks[$taskKey] = \array_replace($defaultState, [
                 'status' => self::TASK_STATUS_PENDING,
                 'attempt_no' => 0,
                 'message' => '',
                 'result_ref' => [],
-                'updated_at' => \date('Y-m-d H:i:s'),
+                'updated_at' => $now,
                 'started_at' => '',
                 'finished_at' => '',
             ]);
@@ -876,6 +906,69 @@ class AiSiteBuildTaskService
             'finished_at' => '',
             'updated_at' => \date('Y-m-d H:i:s'),
         ], false);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function markTaskPendingForFreshRepair(array $scope, string $taskKey, string $message): array
+    {
+        return $this->setTaskState($scope, $taskKey, [
+            'status' => self::TASK_STATUS_PENDING,
+            'attempt_no' => 0,
+            'message' => \trim($message),
+            'result_ref' => [],
+            'started_at' => '',
+            'finished_at' => '',
+            'updated_at' => \date('Y-m-d H:i:s'),
+        ], false);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function resetFailedTasksForFreshRepair(array $scope, string $message): array
+    {
+        $taskState = $this->extractTaskState($scope);
+        foreach ($this->extractBlueprintTasks($scope) as $task) {
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+            $state = \is_array($taskState[$taskKey] ?? null) ? $taskState[$taskKey] : [];
+            if ($this->normalizeTaskStatus((string)($state['status'] ?? self::TASK_STATUS_PENDING)) !== self::TASK_STATUS_FAILED) {
+                continue;
+            }
+            $scope = $this->markTaskPendingForFreshRepair($scope, $taskKey, $message);
+            $taskState = $this->extractTaskState($scope);
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function resetRunningTasksForInterruptedBuild(array $scope, string $message): array
+    {
+        $taskState = $this->extractTaskState($scope);
+        foreach ($this->extractBlueprintTasks($scope) as $task) {
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+            $state = \is_array($taskState[$taskKey] ?? null) ? $taskState[$taskKey] : [];
+            if ($this->normalizeTaskStatus((string)($state['status'] ?? self::TASK_STATUS_PENDING)) !== self::TASK_STATUS_RUNNING) {
+                continue;
+            }
+            $scope = $this->markTaskPendingForFreshRepair($scope, $taskKey, $message);
+            $taskState = $this->extractTaskState($scope);
+        }
+
+        return $scope;
     }
 
     /**

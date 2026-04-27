@@ -411,6 +411,8 @@ class AiService
         ?int $userId = null,
         bool $isBackend = false
     ): string {
+        $params = AiRuntimeContext::mergeDefaultParams($params);
+
         // 1. 模型选择
         $model = $this->selectModel($modelCode, $scenarioCode);
         if (!$model) {
@@ -421,6 +423,9 @@ class AiService
         // 2. 配置解析
         $configResolver = ObjectManager::getInstance(ConfigResolver::class);
         $userConfig = $params['user_config'] ?? [];
+        if (\array_key_exists('allow_zero_balance_provider', $params)) {
+            $userConfig['allow_zero_balance_provider'] = $params['allow_zero_balance_provider'];
+        }
         // 解析测试模式（多来源并规范化）：
         // - 顶层 params['test_mode']
         // - user_config['test_mode']
@@ -467,7 +472,8 @@ class AiService
         }
 
         // 6. 调用AI模型API
-        $response = $this->callModelApi($model, $adaptedPrompt, $resolvedConfig, $params);
+        $params['resolved_config'] = $resolvedConfig;
+        $response = $this->callModelApi($model, $adaptedPrompt, $params);
 
         // 7. 场景适配器后处理
         $processedResponse = $this->processScenarioResponse($response, $scenarioCode, $params);
@@ -504,6 +510,8 @@ class AiService
         ?string $scenarioCode = null,
         array $params = []
     ): array {
+        $params = AiRuntimeContext::mergeDefaultParams($params);
+
         $model = $this->selectModel($modelCode, $scenarioCode);
         if (!$model) {
             $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
@@ -536,6 +544,8 @@ class AiService
         ?string $locale = null,
         array $params = []
     ): void {
+        $params = AiRuntimeContext::mergeDefaultParams($params);
+
         $model = $this->selectModel($modelCode, $scenarioCode);
         if (!$model) {
             $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
@@ -544,6 +554,9 @@ class AiService
 
         $configResolver = ObjectManager::getInstance(ConfigResolver::class);
         $userConfig = \is_array($params['user_config'] ?? null) ? $params['user_config'] : [];
+        if (\array_key_exists('allow_zero_balance_provider', $params)) {
+            $userConfig['allow_zero_balance_provider'] = $params['allow_zero_balance_provider'];
+        }
         $userId = isset($params['user_id']) ? (int)$params['user_id'] : null;
         $isBackend = (bool)($params['is_backend'] ?? false);
         $isTestMode = false;
@@ -603,6 +616,8 @@ class AiService
         ?string $locale = null,
         array $params = []
     ): array {
+        $params = AiRuntimeContext::mergeDefaultParams($params);
+
         $model = $this->selectModel($modelCode, $scenarioCode);
         if (!$model) {
             $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
@@ -1067,7 +1082,6 @@ class AiService
 
                 // 注入账户配置并尝试请求
                 $this->injectAccountConfig($model, $accModel);
-                $this->injectAccountConfig($model, $accModel);
                 $provider = $this->providerFactory->getProvider($model);
 
                 try {
@@ -1172,14 +1186,15 @@ class AiService
             }
 
             $isTestMode = (bool)($params['test_mode'] ?? false);
-            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) use ($isTestMode) {
+            $allowZeroBalanceProvider = (bool)($params['allow_zero_balance_provider'] ?? false);
+            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) use ($isTestMode, $allowZeroBalanceProvider) {
                 if ((int)($acc['is_active'] ?? 0) !== 1) {
                     return false;
                 }
                 if ($isTestMode) {
                     return true;
                 }
-                return (($acc['connection_status'] ?? '') === 'success') && (float)($acc['balance'] ?? 0) > 0;
+                return (($acc['connection_status'] ?? '') === 'success') && ($allowZeroBalanceProvider || (float)($acc['balance'] ?? 0) > 0);
             }));
             if (empty($candidateAccounts)) {
                 $message = $isTestMode
@@ -2022,6 +2037,8 @@ class AiService
         array $params = [],
         ?callable $streamCallback = null
     ): AgentResult {
+        $params = AiRuntimeContext::mergeDefaultParams($params);
+
         // 1. 获取智能体
         $agent = $this->agentScanner->getAgent($agentCode);
         if (!$agent) {

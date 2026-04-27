@@ -199,7 +199,7 @@ final class AiSiteQualityGateService
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
         if (!\is_array($virtualPages[$pageType] ?? null)) {
-            $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
+            $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope, false);
         }
         $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
         if ($virtualPage === []) {
@@ -295,7 +295,41 @@ final class AiSiteQualityGateService
         $html = \preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html) ?? $html;
         $html = \preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $html) ?? $html;
 
-        return $html;
+        $visibleAttributeValues = [];
+        if (
+            \preg_match_all(
+                '/\s(?:href|src|alt|title|aria-label|placeholder|value)\s*=\s*(["\'])(.*?)\1/isu',
+                $html,
+                $quotedAttributes
+            ) > 0
+        ) {
+            foreach ($quotedAttributes[2] ?? [] as $value) {
+                $value = \trim((string)$value);
+                if ($value !== '') {
+                    $visibleAttributeValues[] = $value;
+                }
+            }
+        }
+        if (
+            \preg_match_all(
+                '/\s(?:href|src|alt|title|aria-label|placeholder|value)\s*=\s*([^\s>]+)/isu',
+                $html,
+                $unquotedAttributes
+            ) > 0
+        ) {
+            foreach ($unquotedAttributes[1] ?? [] as $value) {
+                $value = \trim((string)$value, " \t\n\r\0\x0B\"'");
+                if ($value !== '') {
+                    $visibleAttributeValues[] = $value;
+                }
+            }
+        }
+
+        $visibleText = \preg_replace('/<[^>]+>/u', ' ', $html) ?? $html;
+        $combined = \trim($visibleText . ' ' . \implode(' ', $visibleAttributeValues));
+        $combined = \html_entity_decode($combined, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+
+        return \preg_replace('/\s+/u', ' ', $combined) ?? $combined;
     }
 
     /**
@@ -311,6 +345,8 @@ final class AiSiteQualityGateService
             '/demo|example\.com|placeholder\.com|placehold\.co|via\.placeholder|dummyimage\.com|picsum\.photos/iu',
             '/Generated visual|inline SVG|Visual preview generated/iu',
             '/Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent/iu',
+            '/欢迎访问|默认页面模板|Default Page Template|This is the default page/iu',
+            '/访客看到|用户看到|让访客看到|从而产生|信任感增强|知道如何|Visitors?\s+(?:see|can review|can verify|understand how|ready to)|before publishing|reviewable page content/iu',
         ];
         $matches = [];
         foreach ($patterns as $pattern) {

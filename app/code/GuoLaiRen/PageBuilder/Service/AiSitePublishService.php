@@ -16,6 +16,7 @@ class AiSitePublishService
     private readonly Page $pageModel;
     private readonly WebsiteDomain $websiteDomainModel;
     private readonly DomainPool $domainPoolModel;
+    private readonly AiSitePublishVerificationService $publishVerificationService;
 
     public function __construct(
         private readonly AiSiteMaterializationService $materializationService,
@@ -25,11 +26,13 @@ class AiSitePublishService
         ?Page $pageModel = null,
         ?WebsiteDomain $websiteDomainModel = null,
         ?DomainPool $domainPoolModel = null,
+        ?AiSitePublishVerificationService $publishVerificationService = null,
     ) {
         $this->htmlSanitizer = $htmlSanitizer ?? ObjectManager::getInstance(AiHtmlSanitizerService::class);
         $this->pageModel = $pageModel ?? ObjectManager::getInstance(Page::class);
         $this->websiteDomainModel = $websiteDomainModel ?? ObjectManager::getInstance(WebsiteDomain::class);
         $this->domainPoolModel = $domainPoolModel ?? ObjectManager::getInstance(DomainPool::class);
+        $this->publishVerificationService = $publishVerificationService ?? ObjectManager::getInstance(AiSitePublishVerificationService::class);
     }
 
     /**
@@ -56,6 +59,12 @@ class AiSitePublishService
                 $virtualPagesByType
             );
             $this->applyPublishSnapshotsForMaterializedPages($materialized['pagebuilder_pages_by_type'] ?? []);
+            $verification = $this->publishVerificationService->assertPublishedPagesRenderable(
+                $materialized['pagebuilder_pages_by_type'] ?? [],
+                0,
+                $workspaceTrack,
+                $websiteProfile
+            );
             $this->ensureWebsiteDomainBinding($websiteId, $websiteProfile);
 
             $previewPageId = (int)($materialized['preview_page_id'] ?? 0);
@@ -64,6 +73,7 @@ class AiSitePublishService
                 $materialized,
                 [
                     'materialized_pages_by_type' => $materialized['pagebuilder_pages_by_type'] ?? [],
+                    'publish_verification' => $verification,
                     'published_at' => \date('Y-m-d H:i:s'),
                 ],
                 $this->visualUrlService->resolveUrls($previewPageId, 0)
@@ -100,6 +110,12 @@ class AiSitePublishService
                     ->save(true);
             }
         }
+        $verification = $this->publishVerificationService->assertPublishedPagesRenderable(
+            $materialized['pagebuilder_pages_by_type'] ?? [],
+            $virtualThemeId,
+            $workspaceTrack,
+            $websiteProfile
+        );
 
         $previewPageId = (int)($materialized['preview_page_id'] ?? 0);
 
@@ -107,6 +123,7 @@ class AiSitePublishService
             $materialized,
             [
                 'materialized_pages_by_type' => $materialized['pagebuilder_pages_by_type'] ?? [],
+                'publish_verification' => $verification,
                 'published_at' => \date('Y-m-d H:i:s'),
                 'published_virtual_theme_id' => $virtualThemeId,
             ],
