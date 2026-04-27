@@ -133,16 +133,7 @@ class OpenAiProvider implements ProviderInterface
             }
         }
         try {
-            $requestData = [
-            'model' => $config['model'] ?? $model->getModelCode(),
-            'messages' => $messages,
-            'temperature' => (float)($params['temperature'] ?? $config['temperature'] ?? 0.7),
-            'max_tokens' => $this->capMaxTokens($model, $config, $params),
-            'top_p' => (float)($params['top_p'] ?? $config['top_p'] ?? 1.0),
-            'frequency_penalty' => (float)($params['frequency_penalty'] ?? $config['frequency_penalty'] ?? 0.0),
-            'presence_penalty' => (float)($params['presence_penalty'] ?? $config['presence_penalty'] ?? 0.0),
-            'stream' => false,
-        ];
+            $requestData = $this->buildChatCompletionRequestData($model, $config, $messages, $params, false);
 
         // 鏅鸿兘浣撴ā寮忥細娣诲姞 tools锛坒unction calling锛?
         if (!empty($params['tools']) && is_array($params['tools'])) {
@@ -284,13 +275,7 @@ class OpenAiProvider implements ProviderInterface
 
         $streamWriteAborted = false;
         try {
-            $requestData = [
-            'model' => $config['model'] ?? $model->getModelCode(),
-            'messages' => $messages,
-            'temperature' => (float)($params['temperature'] ?? $config['temperature'] ?? 0.7),
-            'max_tokens' => $this->capMaxTokens($model, $config, $params),
-            'stream' => true,
-        ];
+            $requestData = $this->buildChatCompletionRequestData($model, $config, $messages, $params, true);
 
         // 鏅鸿兘浣撴ā寮忥細娣诲姞 tools
         if (!empty($params['tools']) && is_array($params['tools'])) {
@@ -578,13 +563,7 @@ class OpenAiProvider implements ProviderInterface
             }
         }
         try {
-            $requestData = [
-            'model' => $config['model'] ?? $model->getModelCode(),
-            'messages' => $messages,
-            'temperature' => (float)($params['temperature'] ?? $config['temperature'] ?? 0.7),
-            'max_tokens' => $this->capMaxTokens($model, $config, $params),
-            'stream' => true,
-        ];
+            $requestData = $this->buildChatCompletionRequestData($model, $config, $messages, $params, true);
 
         // 鏅鸿兘浣撴ā寮忥細娣诲姞 tools锛坒unction calling锛?
         if (!empty($params['tools']) && is_array($params['tools'])) {
@@ -635,15 +614,22 @@ class OpenAiProvider implements ProviderInterface
             },
             $proxyInfo,
             $timeout,
-            $reasoningCallback ? function($chunk) use ($reasoningCallback, &$fullReasoning) {
+            function($chunk) use ($reasoningCallback, &$fullReasoning) {
                 $fullReasoning .= $chunk;
-                return $reasoningCallback($chunk);
-            } : null,
+                if (\is_callable($reasoningCallback)) {
+                    return $reasoningCallback($chunk);
+                }
+
+                return true;
+            },
             $onHeartbeat
         );
 
         // 濡傛灉娴佸紡璋冪敤娌℃湁杩斿洖浠讳綍鍐呭锛屾姏鍑烘槑纭敊璇?
-        if (empty(trim($fullContent)) && empty(trim($fullReasoning))) {
+        if (empty(trim($fullContent))) {
+            if (!empty(trim($fullReasoning))) {
+                throw new Exception('AI stream returned reasoning_content only without final content. For DeepSeek V4 structured JSON tasks, disable thinking or increase max_tokens.');
+            }
             throw new Exception(__('AI 娴佸紡鐢熸垚瀹屾垚浣嗘湭杩斿洖浠讳綍鍐呭锛岃妫€鏌ユā鍨嬮厤缃紙API Key銆丅ase URL銆佹ā鍨嬪悕绉帮級鏄惁姝ｇ‘'));
         }
 
@@ -689,6 +675,219 @@ class OpenAiProvider implements ProviderInterface
 
         $fallback = (int)($modelMaxTokens ?: ($config['max_tokens'] ?? 2000));
         return \max(1, $fallback);
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @param array<int, array<string, mixed>> $messages
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function buildChatCompletionRequestData(
+        AiModel $model,
+        array $config,
+        array $messages,
+        array $params,
+        bool $stream
+    ): array {
+        $requestData = [
+            'model' => $config['model'] ?? $model->getModelCode(),
+            'messages' => $messages,
+            'temperature' => (float)($params['temperature'] ?? $config['temperature'] ?? 0.7),
+            'max_tokens' => $this->capMaxTokens($model, $config, $params),
+            'stream' => $stream,
+        ];
+
+        if (!$stream) {
+            $requestData['top_p'] = (float)($params['top_p'] ?? $config['top_p'] ?? 1.0);
+            $requestData['frequency_penalty'] = (float)($params['frequency_penalty'] ?? $config['frequency_penalty'] ?? 0.0);
+            $requestData['presence_penalty'] = (float)($params['presence_penalty'] ?? $config['presence_penalty'] ?? 0.0);
+        }
+
+        if (!empty($params['tools']) && is_array($params['tools'])) {
+            $requestData['tools'] = $this->convertToolsToOpenAiFormat($params['tools']);
+            $requestData['tool_choice'] = $params['tool_choice'] ?? 'auto';
+        }
+
+        if (!empty($params['response_format']) && is_array($params['response_format'])) {
+            $requestData['response_format'] = $params['response_format'];
+        }
+
+        $this->applyThinkingControls($model, $requestData, \array_replace(
+            $this->extractThinkingConfig($config),
+            $params
+        ));
+
+        return $requestData;
+    }
+
+    /**
+     * @param array<string, mixed> $requestData
+     * @param array<string, mixed> $params
+     */
+    private function applyThinkingControls(AiModel $model, array &$requestData, array $params): void
+    {
+        $thinking = $this->resolveThinkingPayload($params);
+        if ($thinking !== null && $this->isDeepSeekV4Model($model, $requestData)) {
+            $requestData['thinking'] = $thinking;
+        } elseif ($thinking === null && $this->shouldDisableThinkingByDefault($params) && $this->isDeepSeekV4Model($model, $requestData)) {
+            $requestData['thinking'] = ['type' => 'disabled'];
+        }
+
+        $reasoningEffort = \trim((string)($params['reasoning_effort'] ?? ''));
+        if ($reasoningEffort !== '' && $this->supportsReasoningEffort($model, $requestData)) {
+            $requestData['reasoning_effort'] = $reasoningEffort;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function extractThinkingConfig(array $config): array
+    {
+        $keys = [
+            'thinking',
+            'thinking_mode',
+            'enable_thinking',
+            'enable_reasoning',
+            'reasoning_effort',
+            'thinking_budget',
+            'thinking_budget_tokens',
+        ];
+        $result = [];
+        foreach ($keys as $key) {
+            if (\array_key_exists($key, $config)) {
+                $result[$key] = $config[$key];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>|null
+     */
+    private function resolveThinkingPayload(array $params): ?array
+    {
+        $thinking = $params['thinking'] ?? null;
+        if (\is_array($thinking) && \trim((string)($thinking['type'] ?? '')) !== '') {
+            return $thinking;
+        }
+
+        foreach (['thinking_mode', 'enable_thinking', 'enable_reasoning'] as $key) {
+            if (!\array_key_exists($key, $params)) {
+                continue;
+            }
+
+            return $this->normalizeThinkingModePayload($params[$key], $params);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>|null
+     */
+    private function normalizeThinkingModePayload(mixed $mode, array $params): ?array
+    {
+        if (\is_array($mode)) {
+            $type = \trim((string)($mode['type'] ?? ''));
+            return $type !== '' ? $mode : null;
+        }
+
+        $type = $this->normalizeThinkingModeType($mode);
+        if ($type === '') {
+            return null;
+        }
+
+        $payload = ['type' => $type];
+        $budgetTokens = (int)($params['thinking_budget_tokens'] ?? $params['thinking_budget'] ?? 0);
+        if ($type === 'enabled' && $budgetTokens > 0) {
+            $payload['budget_tokens'] = $budgetTokens;
+        }
+
+        return $payload;
+    }
+
+    private function normalizeThinkingModeType(mixed $mode): string
+    {
+        if (\is_bool($mode)) {
+            return $mode ? 'enabled' : 'disabled';
+        }
+
+        $normalized = \strtolower(\trim((string)$mode));
+        if (\in_array($normalized, ['1', 'true', 'yes', 'on', 'enable', 'enabled', 'auto'], true)) {
+            return 'enabled';
+        }
+        if (\in_array($normalized, ['0', 'false', 'no', 'off', 'disable', 'disabled', 'none'], true)) {
+            return 'disabled';
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $requestData
+     */
+    private function isDeepSeekV4Model(AiModel $model, array $requestData): bool
+    {
+        if (\strtolower($model->getSupplier()) !== 'deepseek') {
+            return false;
+        }
+
+        $modelCode = \strtolower((string)($requestData['model'] ?? $model->getModelCode()));
+        return \str_starts_with($modelCode, 'deepseek-v4-');
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function shouldDisableThinkingByDefault(array $params): bool
+    {
+        if (
+            \array_key_exists('thinking', $params)
+            || \array_key_exists('thinking_mode', $params)
+            || \array_key_exists('enable_thinking', $params)
+            || \array_key_exists('enable_reasoning', $params)
+            || \array_key_exists('reasoning_effort', $params)
+        ) {
+            return false;
+        }
+
+        $responseFormat = $params['response_format'] ?? null;
+        return \is_array($responseFormat)
+            && \strtolower(\trim((string)($responseFormat['type'] ?? ''))) === 'json_object';
+    }
+
+    /**
+     * @param array<string, mixed> $requestData
+     */
+    private function supportsReasoningEffort(AiModel $model, array $requestData): bool
+    {
+        if ($this->isDeepSeekV4Model($model, $requestData)) {
+            return true;
+        }
+
+        return $this->isOpenAiReasoningModel($model, $requestData);
+    }
+
+    /**
+     * @param array<string, mixed> $requestData
+     */
+    private function isOpenAiReasoningModel(AiModel $model, array $requestData): bool
+    {
+        $supplier = \strtolower((string)$model->getSupplier());
+        $modelCode = \strtolower((string)($requestData['model'] ?? $model->getModelCode()));
+        if (!\in_array($supplier, ['openai', ''], true) && !\str_contains($modelCode, 'openai')) {
+            return false;
+        }
+
+        return \str_starts_with($modelCode, 'o1-')
+            || \str_starts_with($modelCode, 'o3-')
+            || \str_starts_with($modelCode, 'o4-');
     }
 
     /**
@@ -959,7 +1158,7 @@ class OpenAiProvider implements ProviderInterface
 
     private function isNonRetryableApiError(int $httpCode, string $errorMessage): bool
     {
-        if (\in_array($httpCode, [400, 401, 403], true)) {
+        if (\in_array($httpCode, [400, 401, 402, 403], true)) {
             return true;
         }
         return $this->isNonRetryableApiErrorMessage($errorMessage);
@@ -976,6 +1175,9 @@ class OpenAiProvider implements ProviderInterface
             'invalid api key',
             'unauthorized',
             'permission denied',
+            'insufficient balance',
+            'balance not enough',
+            '余额不足',
             'insufficient_quota',
             'quota exceeded',
             'invalid_request_error',

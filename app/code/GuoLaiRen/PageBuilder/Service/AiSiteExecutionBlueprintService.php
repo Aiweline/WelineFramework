@@ -630,10 +630,12 @@ final class AiSiteExecutionBlueprintService
                 $planJson['shared_components'] = $sharedComponents;
             }
         }
+        $contentLocale = $this->resolveStageOneContentLocale($scope, $planLocale);
+        $planJson = $this->ensureStageOneNavigationAndFooterPlans($planJson, $pageTypes, $contentLocale);
         $planJson['shared_components'] = $this->ensureStageOneThemeSharedComponents($planJson, $scope, $planLocale);
         $planJson['seo_strategy'] = $this->ensureStageOneThemeSeoStrategy($planJson, $scope, $pageTypes);
         $planJson['page_types'] = $pageTypes;
-        $planJson['content_locale'] = $this->resolveStageOneContentLocale($scope, $planLocale);
+        $planJson['content_locale'] = $contentLocale;
         $planJson['i18n'] = $this->ensurePlanI18nSection(
             \is_array($planJson['i18n'] ?? null) ? $planJson['i18n'] : [],
             $planLocale,
@@ -651,6 +653,33 @@ final class AiSiteExecutionBlueprintService
                 \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $scope['website_profile']['brief_description'] ?? '')),
                 $planLocale
             );
+        }
+
+        return $planJson;
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     * @return array<string, mixed>
+     */
+    private function ensureStageOneNavigationAndFooterPlans(array $planJson, array $pageTypes, string $contentLocale): array
+    {
+        if (
+            !\is_array($planJson['navigation_plan'] ?? null)
+            || !\is_array($planJson['navigation_plan']['header_items'] ?? null)
+            || $planJson['navigation_plan']['header_items'] === []
+        ) {
+            $planJson['navigation_plan'] = $this->buildNavigationPlan($pageTypes, $contentLocale);
+        }
+
+        if (
+            !\is_array($planJson['footer_plan'] ?? null)
+            || !\is_array($planJson['footer_plan']['featured'] ?? null)
+            || $planJson['footer_plan']['featured'] === []
+            || !\is_array($planJson['footer_plan']['policies'] ?? null)
+            || $planJson['footer_plan']['policies'] === []
+        ) {
+            $planJson['footer_plan'] = $this->buildFooterPlan($pageTypes, $contentLocale);
         }
 
         return $planJson;
@@ -1144,9 +1173,15 @@ final class AiSiteExecutionBlueprintService
             'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
             'Selected page types: ' . \implode(', ', $pageTypes),
             'Schema:',
-            '{"i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},"site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},"theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"string"},"palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"string"},"theme_design":{"theme_purpose":"string","color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"must copy at least one exact noun/action phrase from Brief or Instruction and explain why the shared theme fits it"},"page_type_overviews":{"home_page":{"page_role":"string","content_focus":"string","theme_color_application":"string","section_layering_hint":"string","interaction_intent":"string","differentiation_note":"string"}},"navigation_plan":{"header_items":[{"label":"string","href":"string"}]},"footer_plan":{"featured":[{"label":"string","href":"string"}],"policies":[{"label":"string","href":"string"}]},"shared_components":{"header":{"component":"header","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"},"footer":{"component":"footer","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"}},"seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"}}',
+            '{"i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},"site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},"theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"string"},"palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"string"},"theme_design":{"theme_purpose":"string","style_signature":"brief-derived visual identity, not a generic theme name","art_direction":{"layout_motif":"string","background_system":"string","surface_treatment":"string","visual_detail_rule":"string","motion_rule":"string"},"color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"must copy at least one exact noun/action phrase from Brief or Instruction and explain why the shared theme fits it"},"page_type_overviews":{"home_page":{"page_role":"string","content_focus":"string","theme_color_application":"string","section_layering_hint":"string","interaction_intent":"string","differentiation_note":"string"}},"navigation_plan":{"header_items":[{"label":"string","href":"string"}]},"footer_plan":{"featured":[{"label":"string","href":"string"}],"policies":[{"label":"string","href":"string"}]},"shared_components":{"header":{"component":"header","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"},"footer":{"component":"footer","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"}},"seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"}}',
             'Hard rules: theme_design and shared_components.header/footer must be concrete implementation decisions derived from the expanded requirement; page_type_overviews must cover every selected page type with page role, content focus, theme color application, section layering hint, interaction intent, and differentiation note; these overviews are conceptual page planning only, not block lists; theme_design.selection_reason must copy at least one exact noun/action phrase from Brief or Instruction and explain why the theme fits that one-line requirement; keep output compact.',
+            'Visual quality bar: theme_design.style_signature and art_direction are mandatory. They must describe a polished, customer-fit visual identity that a frontend generator can execute, including composition motif, background/texture system, surface treatment, detail language, and motion restraint.',
+            'Customer-fit rule: do not default to a blue SaaS gradient, plain white cards, generic Inter/Roboto/system-font hierarchy, or centered hero plus three-card grid unless the user brief specifically asks for that look.',
+            'Beauty rule: make the final website feel designed for a paying client. Select deliberate typography, layered backgrounds, tactile CTA states, inline SVG/CSS visual motifs, spacing/radius rhythm, and mobile composition that match the brief.',
             'Anti-monotony rule: page_type_overviews.theme_color_application and section_layering_hint must prevent an entire page from becoming one flat color; describe alternating surfaces/cards/gradients/contrast zones using the approved palette.',
+            'Customer-anchor rule: style_signature must include at least two concrete nouns/actions from Brief or Instruction and turn them into visible design language; never choose a style that could fit any unrelated website.',
+            'Interaction/effects rule: art_direction.motion_rule must name exact hover, focus, reveal, or ambient effects that are reduced-motion-safe and suitable for the customer scenario; do not write vague "smooth animation".',
+            'Style-diversity rule: forbidden_styles must include the generic look most likely to be overused for this site category, and page_type_overviews must explain how each page avoids repeating the same hero/card composition.',
         ]);
     }
 
@@ -1186,10 +1221,14 @@ final class AiSiteExecutionBlueprintService
             'Baseline page shape to improve, keep compatible keys: ' . $baselinePage,
             'Page design planning rules:',
             '- First create page_design_plan, then derive blocks from it. Blocks must not be chosen directly from theme_design alone.',
+            '- page_design_plan must translate theme_design.style_signature and art_direction into this page: composition motif, background system, surface treatment, detail language, and motion restraint.',
             '- page_design_plan.color_layering must name which theme colors are used for page background, alternating section surfaces, cards/panels, text, and CTA/accent states.',
             '- Prevent monotone pages: never make the entire page one flat background color unless the page_design_plan explicitly adds layered surfaces, cards, dividers, gradients, illustrations, or contrast bands.',
             '- page_design_plan.section_flow must describe the visual rhythm across 2-3 blocks: opening impact, middle information/proof layer, and closing action or reassurance layer.',
             '- page_design_plan.interaction_notes must describe hover/focus/mobile behavior that matches the page role, not just generic CTA hover.',
+            '- Visual polish is mandatory: every page must include at least one specific motif/detail (inline SVG idea, CSS texture, framed media treatment, asymmetric composition, editorial type contrast, or tactile button state) that fits the brief.',
+            '- Customer-intent lock: page_design_plan and every block must preserve the user brief as an experience, not just as copy. If the user asks for gaming, APK, booking, consulting, education, or local service, the layout, affordances, effects, and CTAs must visibly fit that scenario.',
+            '- Interaction/effects plan: every page_design_plan.polish_details item must say where the effect appears, which CSS/SVG technique implements it, and how mobile/reduced-motion behavior stays friendly.',
             'Critical page differentiation rules:',
             '- Design this page from its page_type intent, not by copying the home page and changing nouns.',
             '- home_page and about_page MUST have clearly different block_key sets, block order, content purpose, and design_tags.',
@@ -1202,7 +1241,7 @@ final class AiSiteExecutionBlueprintService
             '- design_tags examples: visual=["premium","card shadow","rounded image","large banner"], motion=["5s fade in/out","subtle parallax","hover lift"], interaction=["primary CTA hover","tabs","accordion"], texture=["soft gradient","glass surface","Indian pattern accent"], responsive=["mobile stacked cards","desktop two-column"].',
             '- These design_tags are source-of-truth for stage-2 and stage-3; make them specific enough to recreate effects, spacing, shadows, radius, image treatment, and interaction behavior.',
             'Schema:',
-            '{"page":{"page_goal":"string","theme_alignment_summary":"string","page_design_plan":{"page_role":"string","content_narrative":"string","visual_hierarchy":"string","color_layering":"string","section_flow":["string"],"interaction_notes":["string"],"anti_monotony_rule":"string"},"primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","page_flow_role":"opening|proof|details|cta|support","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"color_layering":"string","implementation_note":"string"},"field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}}',
+            '{"page":{"page_goal":"string","theme_alignment_summary":"string","page_design_plan":{"page_role":"string","content_narrative":"string","visual_hierarchy":"string","visual_signature_application":"string","composition_motif":"string","color_layering":"string","section_flow":["string"],"interaction_notes":["string"],"polish_details":["string"],"anti_monotony_rule":"string"},"primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","page_flow_role":"opening|proof|details|cta|support","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"color_layering":"string","implementation_note":"string"},"field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}}',
             'Hard rules: output 2-3 blocks only; each block exactly 3 field_plan rows; execution_script.feature_points max 3 and must be concrete customer-visible deliverables for this block, not writing/layout instructions like "section title"; content and core_copy must be final customer-visible implementation content in Website content locale, compact and not instruction-like; every block must have complete design_tags; every block must state how it follows page_design_plan.color_layering and page_design_plan.section_flow.',
         ]);
     }
@@ -2046,6 +2085,9 @@ final class AiSiteExecutionBlueprintService
             '- theme_design.color_scheme must provide ready-to-apply hex colors for primary/secondary/accent/background/body/button; values must be concrete implementation decisions, not labels like "modern palette".',
             '- theme_design.typography_spacing_radius must give usable font family, heading/body scale, spacing scale, and radius scale decisions that can be implemented without another interpretation step.',
             '- theme_design.visual_keywords, tone_of_voice, cta_tone, and forbidden_styles must be specific reusable constraints for page prompts, not vague words like "premium", "clean", or "professional" alone.',
+            '- theme_design.style_signature is required: a brief-derived visual identity that makes this site feel intentionally designed, not a reusable default template.',
+            '- theme_design.art_direction is required: layout_motif, background_system, surface_treatment, visual_detail_rule, and motion_rule must be concrete enough for frontend component generation.',
+            '- Avoid default AI website aesthetics unless explicitly requested: no generic blue SaaS gradient, no purple-on-white default, no plain centered hero plus three cards, no default Inter/Roboto/Arial/system-font look as the main design.',
             '- Header/Footer planning must reuse this theme_design directly so shared_prompt_context can carry concrete colors, voice, CTA tone, and forbidden styles to every page.',
             '',
             'STAGE-1 PAGE THEME ALIGNMENT CONTRACT (pages must satisfy ALL):',
@@ -2074,7 +2116,7 @@ final class AiSiteExecutionBlueprintService
             '    "site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},',
             '    "theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"why this font family and voice/tone fit the user requirement"},',
             '    "palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"why this color system fits the user requirement"},',
-            '    "theme_design":{"theme_purpose":"string","color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"why this shared theme fits the user one-line requirement; must copy at least one exact noun/action phrase from the requirement"},',
+            '    "theme_design":{"theme_purpose":"string","style_signature":"brief-derived visual identity, not a generic theme name","art_direction":{"layout_motif":"string","background_system":"string","surface_treatment":"string","visual_detail_rule":"string","motion_rule":"string"},"color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"why this shared theme fits the user one-line requirement; must copy at least one exact noun/action phrase from the requirement"},',
             '    "navigation_plan":{"header_items":[{"label":"string","href":"string"}]},',
             '    "footer_plan":{"featured":[],"policies":[]},',
             '    "seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"},',
@@ -3052,6 +3094,7 @@ final class AiSiteExecutionBlueprintService
         string $briefDescription
     ): array {
         $normalized = $planJson;
+        $normalized = $this->ensureStageOneNavigationAndFooterPlans($normalized, $pageTypes, $planLocale);
         if (!\is_array($normalized['pages'] ?? null)) {
             $normalized['pages'] = [];
         }
@@ -4369,6 +4412,54 @@ final class AiSiteExecutionBlueprintService
             ];
         }
 
+        if ($this->containsAny($brief . ' ' . $instructionLower, ['ai', 'plugin', 'plugins', 'extension', 'download', 'automation', 'developer tool', '插件', '下载', '工具'])) {
+            return [
+                'name' => 'Electric Circuit',
+                'primary' => '#07111f',
+                'accent' => '#38bdf8',
+                'secondary' => '#a3e635',
+                'surface' => '#ecfeff',
+                'text' => '#0f172a',
+                'reason' => 'AI/product-download briefs need a sharper utility-tech palette with luminous accents, dark depth, and clear action contrast.',
+            ];
+        }
+
+        if ($this->containsAny($brief . ' ' . $instructionLower, ['ceramic', 'pottery', 'handmade', 'craft', 'aroma', 'candle', 'home fragrance', '陶瓷', '手作', '香薰', '礼物'])) {
+            return [
+                'name' => 'Warm Atelier',
+                'primary' => '#5f2d1f',
+                'accent' => '#d97706',
+                'secondary' => '#0f766e',
+                'surface' => '#fff7ed',
+                'text' => '#3f1f16',
+                'reason' => 'Craft and gift-oriented briefs benefit from warm tactile color, natural surfaces, and editorial contrast.',
+            ];
+        }
+
+        if ($this->containsAny($brief . ' ' . $instructionLower, ['restaurant', 'coffee', 'bakery', 'food', 'tea', '餐厅', '咖啡', '烘焙', '茶'])) {
+            return [
+                'name' => 'Culinary Ink',
+                'primary' => '#1f1308',
+                'accent' => '#c2410c',
+                'secondary' => '#facc15',
+                'surface' => '#fffbeb',
+                'text' => '#241509',
+                'reason' => 'Food and hospitality briefs need appetite-driven warmth, high-contrast menu hierarchy, and tactile editorial surfaces.',
+            ];
+        }
+
+        if ($this->containsAny($brief . ' ' . $instructionLower, ['fashion', 'beauty', 'luxury', 'jewelry', 'skincare', '美妆', '服装', '珠宝', '护肤', '奢侈'])) {
+            return [
+                'name' => 'Editorial Rose',
+                'primary' => '#3b0a2a',
+                'accent' => '#f472b6',
+                'secondary' => '#f59e0b',
+                'surface' => '#fff1f2',
+                'text' => '#3b0a2a',
+                'reason' => 'Fashion and beauty briefs need a more editorial palette with premium contrast, soft surfaces, and expressive accents.',
+            ];
+        }
+
         return [
             'name' => 'Ocean Slate',
             'primary' => '#0f172a',
@@ -4450,36 +4541,85 @@ final class AiSiteExecutionBlueprintService
     private function buildThemeStyle(array $scope, array $websiteProfile, array $palette, string $instruction = ''): array
     {
         $brief = \trim((string)($websiteProfile['brief_description'] ?? $scope['brief_description'] ?? $scope['user_description'] ?? ''));
-        $reason = '该风格优先保证信息结构可读、内容可落地，再通过关键区块强化转化动作。';
+        $paletteName = (string)($palette['name'] ?? 'Ocean Slate');
+        $preset = match (\strtolower($paletteName)) {
+            'electric circuit' => [
+                'name' => 'Neon Utility Lab',
+                'visual_tone' => 'sharp, luminous, product-led, download-focused',
+                'font_family' => 'Sora, Manrope, Avenir Next, sans-serif',
+                'style_signature' => 'dark utility dashboard with luminous circuit accents',
+                'layout_direction' => 'high-contrast hero, floating plugin cards, proof band, and direct download CTA path',
+                'component_density' => 'medium-high density with compact product facts, badges, and action states',
+                'layout_motif' => 'circuit-grid overlays and modular plugin panels',
+                'background_system' => 'deep ink gradients with cyan/lime glows and pale utility surfaces',
+                'surface_treatment' => 'glass panels, bordered cards, and terminal-like detail strips',
+                'visual_detail_rule' => 'use inline SVG plugin nodes, circuit traces, and status chips instead of generic illustrations',
+                'motion_rule' => 'short reveal transitions, restrained hover lift, and clear focus states',
+                'reason' => 'The AI/plugin/download requirement needs stronger utility-tech styling, visible product action, and a memorable non-generic visual system.',
+            ],
+            'warm atelier' => [
+                'name' => 'Warm Atelier Editorial',
+                'visual_tone' => 'warm, tactile, natural, gift-ready',
+                'font_family' => 'Fraunces, Cormorant Garamond, Georgia, serif',
+                'style_signature' => 'handmade atelier warmth with tactile editorial framing',
+                'layout_direction' => 'large editorial product moments, warm paper surfaces, story panels, and soft CTA flow',
+                'component_density' => 'airy density with larger imagery slots and slower reading rhythm',
+                'layout_motif' => 'handmade labels, asymmetric still-life panels, and craft note cards',
+                'background_system' => 'cream paper base, terracotta accents, subtle grain, and natural shadow bands',
+                'surface_treatment' => 'soft cards, rounded clay-like corners, and framed image wells',
+                'visual_detail_rule' => 'use line-drawn vessels, scent notes, stamps, and textured borders',
+                'motion_rule' => 'gentle fade/slide motion only; avoid techy animations',
+                'reason' => 'Craft and gift briefs need warmth, material texture, and a quieter premium rhythm.',
+            ],
+            'culinary ink' => [
+                'name' => 'Culinary Ink House',
+                'visual_tone' => 'warm, appetite-led, editorial, lively',
+                'font_family' => 'Recoleta, Fraunces, Georgia, serif',
+                'style_signature' => 'menu-editorial warmth with bold appetite accents',
+                'layout_direction' => 'hero dish/story impact, menu cards, reservation/contact path, and local trust details',
+                'component_density' => 'medium density with readable menus and strong CTA contrast',
+                'layout_motif' => 'menu boards, ingredient chips, and framed tasting notes',
+                'background_system' => 'warm parchment surfaces, toasted accents, and dark ink contrast sections',
+                'surface_treatment' => 'paper cards, stamped labels, and tactile dividers',
+                'visual_detail_rule' => 'use ingredient icons, menu rules, and CSS texture instead of stock food placeholders',
+                'motion_rule' => 'small hover warmth and reservation CTA emphasis',
+                'reason' => 'Food and hospitality sites need appetite, clarity, and tactile local atmosphere.',
+            ],
+            'editorial rose' => [
+                'name' => 'Editorial Rose Studio',
+                'visual_tone' => 'premium, expressive, editorial, polished',
+                'font_family' => 'Canela, Playfair Display, Georgia, serif',
+                'style_signature' => 'luxury editorial composition with rose-glow accents',
+                'layout_direction' => 'bold editorial hero, curated collection cards, trust/service blocks, and elegant CTA moments',
+                'component_density' => 'selective density with strong white space and premium detail',
+                'layout_motif' => 'magazine crops, soft frames, badges, and asymmetric content rhythm',
+                'background_system' => 'rose-tinted surfaces, deep plum contrast, and glossy accent strips',
+                'surface_treatment' => 'elevated cards, fine borders, soft glows, and image-frame treatment',
+                'visual_detail_rule' => 'use editorial labels, product swatches, and refined inline SVG details',
+                'motion_rule' => 'subtle reveal, no busy effects; preserve premium restraint',
+                'reason' => 'Fashion/beauty/luxury briefs need editorial polish and expressive but controlled visual hierarchy.',
+            ],
+            default => [
+                'name' => 'Plan-Driven Hybrid',
+                'visual_tone' => $brief !== '' ? 'credible, clear, conversion-ready, polished' : 'professional, stable, executable, polished',
+                'font_family' => 'Sora, Manrope, Avenir Next, sans-serif',
+                'style_signature' => 'brief-led polished editorial-product hybrid',
+                'layout_direction' => 'first-screen value, proof points, and primary CTA form a clear top-to-bottom conversion path',
+                'component_density' => 'medium density with enough visual detail to avoid a template feel',
+                'layout_motif' => 'layered panels, clear proof cards, and action-focused content bands',
+                'background_system' => 'alternating surfaces, subtle gradients, and contrast bands inside the approved palette',
+                'surface_treatment' => 'scoped cards, soft depth, visible hover/focus states, and consistent radius rhythm',
+                'visual_detail_rule' => 'use CSS shapes or inline SVG motifs tied to the brief; never rely on blank stock placeholders',
+                'motion_rule' => 'restrained reveal and hover motion with accessible focus states',
+                'reason' => 'This style keeps the plan readable while adding enough art direction for a polished generated website.',
+            ],
+        };
         if ($instruction !== '') {
-            $reason = '本轮按用户补充说明调整视觉策略：' . $this->clipText($instruction, 80);
+            $preset['reason'] = 'This round adapts the visual strategy to the user instruction: ' . $this->clipText($instruction, 120);
         }
+        $preset['palette_name'] = $paletteName;
 
-        return [
-            'name' => 'Plan-Driven Hybrid',
-            'visual_tone' => $brief !== '' ? '可信、清晰、可转化' : '专业、稳定、可执行',
-            'font_family' => 'Poppins, Inter, sans-serif',
-            'layout_direction' => '以首屏价值、信任点和单一主 CTA 形成自上而下的转化路径。',
-            'component_density' => '中等密度，优先保证首屏理解和后续区块浏览效率。',
-            'reason' => $reason,
-            'palette_name' => (string)($palette['name'] ?? 'Ocean Slate'),
-        ];
-
-        $brief = \trim((string)($websiteProfile['brief_description'] ?? $scope['brief_description'] ?? $scope['user_description'] ?? ''));
-        $reason = '该风格优先保证信息结构可读、内容可落地，再通过关键区块强化转化动作。';
-        if ($instruction !== '') {
-            $reason = '本轮按用户补充说明调整视觉策略：' . $this->clipText($instruction, 80);
-        }
-
-        return [
-            'name' => 'Plan-Driven Hybrid',
-            'visual_tone' => $brief !== '' ? '可信、清晰、可转化' : '专业、稳定、可执行',
-            'font_family' => 'Poppins, Inter, sans-serif',
-            'layout_direction' => '以首屏价值、信任点和单一主 CTA 形成自上而下的转化路径。',
-            'component_density' => '中等密度，优先保证首屏理解和后续区块浏览效率。',
-            'reason' => $reason,
-            'palette_name' => (string)($palette['name'] ?? 'Ocean Slate'),
-        ];
+        return $preset;
     }
 
     private function buildNavigationPlan(array $pageTypes, string $contentLocale = ''): array
@@ -5909,6 +6049,14 @@ final class AiSiteExecutionBlueprintService
 
         return [
             'theme_purpose' => $themePurpose,
+            'style_signature' => (string)($themeStyle['style_signature'] ?? (($themeStyle['name'] ?? 'Theme') . ' visual identity')),
+            'art_direction' => [
+                'layout_motif' => (string)($themeStyle['layout_motif'] ?? 'layered content panels and action-focused visual rhythm'),
+                'background_system' => (string)($themeStyle['background_system'] ?? 'alternating surfaces, subtle gradients, and contrast bands inside the approved palette'),
+                'surface_treatment' => (string)($themeStyle['surface_treatment'] ?? 'cards, panels, soft depth, and consistent radius rhythm'),
+                'visual_detail_rule' => (string)($themeStyle['visual_detail_rule'] ?? 'use inline SVG/CSS motifs tied to the customer brief, not generic stock placeholders'),
+                'motion_rule' => (string)($themeStyle['motion_rule'] ?? 'restrained reveal, hover, and focus states with accessible motion'),
+            ],
             'color_scheme' => [
                 'name' => (string)($palette['name'] ?? 'Ocean Slate'),
                 'primary' => (string)($palette['primary'] ?? '#0f172a'),
@@ -5982,9 +6130,22 @@ final class AiSiteExecutionBlueprintService
         $typography = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
         $visualKeywords = \is_array($themeDesign['visual_keywords'] ?? null) ? $themeDesign['visual_keywords'] : [];
         $forbiddenStyles = \is_array($themeDesign['forbidden_styles'] ?? null) ? $themeDesign['forbidden_styles'] : [];
+        $styleSignature = \trim((string)($themeDesign['style_signature'] ?? $themeDesign['visual_identity'] ?? $themeDesign['design_signature'] ?? ''));
+        if ($styleSignature === '') {
+            $styleSignature = \trim((string)($themeDesign['theme_purpose'] ?? $themeDesign['site_positioning'] ?? 'brief-led polished visual identity'));
+        }
+        $artDirection = \array_replace([
+            'layout_motif' => 'brief-led composition motif',
+            'background_system' => 'layered backgrounds and contrast surfaces inside the approved palette',
+            'surface_treatment' => 'polished cards, panels, depth, and radius rhythm',
+            'visual_detail_rule' => 'inline SVG/CSS motifs tied to the brief, never generic placeholders',
+            'motion_rule' => 'restrained reveal, hover, and focus states',
+        ], \is_array($themeDesign['art_direction'] ?? null) ? $themeDesign['art_direction'] : []);
 
         return [
             'theme_purpose' => (string)($themeDesign['theme_purpose'] ?? $themeDesign['site_positioning'] ?? ''),
+            'style_signature' => $styleSignature,
+            'art_direction' => $artDirection,
             'color_scheme' => $colorScheme,
             'typography_spacing_radius' => $typography,
             'visual_keywords' => \array_values($visualKeywords),
