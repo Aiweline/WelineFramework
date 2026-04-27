@@ -1120,9 +1120,12 @@ class PageRenderService
                 }
             }
             
-            $virtualThemeHtml = null;
-            if (!$componentFile && !$componentPath) {
-                $virtualThemeHtml = $this->renderVirtualThemeComponentHtml($code, $config, $page, $styleSettings, $mode);
+            $virtualThemeHtml = $this->renderVirtualThemeComponentHtml($code, $config, $page, $styleSettings, $mode);
+            if ($virtualThemeHtml !== null) {
+                $componentFile = null;
+                $componentPath = null;
+                $html .= "<!-- Component {$code} resolved via Weline_Theme virtual theme (theme_id={$this->renderWelineThemeId}) -->\n";
+            } elseif (!$componentFile && !$componentPath) {
                 if ($virtualThemeHtml === null) {
                     $this->logMissingComponentResolution(
                         $page,
@@ -1137,7 +1140,6 @@ class PageRenderService
                     $componentIndex++;
                     continue;
                 }
-                $html .= "<!-- Component {$code} resolved via Weline_Theme virtual theme (theme_id={$this->renderWelineThemeId}) -->\n";
             }
             
             // 构建组件模板路径（如果未通过 Component 模型解析且非虚拟主题）

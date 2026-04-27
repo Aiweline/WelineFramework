@@ -41,6 +41,7 @@ use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSiteTaskPlanSseService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemePlanService;
 use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
+use Weline\Ai\Service\AiService;
 use Weline\Framework\App\State;
 use Weline\Admin\Controller\BaseController;
 use Weline\Framework\Acl\Acl;
@@ -464,7 +465,8 @@ class AiSiteAgent extends BaseController
         $scope = $this->scopeCompatibilityService->normalizeScope($context['scope']);
         $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType(
             $this->scopeCompatibilityService->resolveScopedPageTypes($scope),
-            $scope
+            $scope,
+            false
         );
         $pageType = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, $requestedPageType);
         if ($pageType === '' || !\is_array($virtualPages[$pageType] ?? null)) {
@@ -674,6 +676,24 @@ SCRIPT;
         $allowed = \array_column($this->getStageOptions(), 'value');
         if (!\in_array($stage, $allowed, true)) {
             return $this->fetchJson(['success' => false, 'message' => __('无效的阶段')]);
+        }
+
+        if ($stage === AiSiteAgentSession::STAGE_PUBLISH) {
+            $state = $this->buildWorkspaceState($session, $adminId, 24, true);
+            $publishBlock = $this->resolvePublishBlockingAiFailureFromWorkspaceState($state);
+            if (!empty($publishBlock['blocked'])) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => $this->formatPublishBlockedByAiFailureMessage($publishBlock),
+                    'data' => [
+                        'publish_blocked_by_latest_ai_failure' => true,
+                        'latest_build_failure' => $publishBlock,
+                    ],
+                ]);
+            }
+            if (empty($state['can_publish']) && $session->getPublishStatus() !== AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED) {
+                return $this->fetchJson(['success' => false, 'message' => __('Current workspace is not ready to publish. Finish AI page generation first.')]);
+            }
         }
 
         $this->sessionService->setStage($session->getId(), $adminId, $stage);
@@ -1732,11 +1752,34 @@ SCRIPT;
         $taskPlanForConfirm = $this->resolveStageTwoTaskPlanForConfirmation($scope);
         $draftTaskPlan = \is_array($taskPlanForConfirm['structured'] ?? null) ? $taskPlanForConfirm['structured'] : [];
         $draftMarkdown = (string)($taskPlanForConfirm['markdown'] ?? '');
-        if ($draftTaskPlan === []) {
-            return $this->jsonError('TASK_PLAN_NOT_READY', (string)__('尚未生成第二阶段任务方案，请先生成后再确认'), ['public_id']);
-        }
         if (!$this->isPlanConfirmedForTaskPlan($scope)) {
             return $this->jsonError('PLAN_REQUIRED_BEFORE_TASK_PLAN_CONFIRM', (string)__('请先确认阶段一方案，再确认第二阶段任务方案'), ['public_id', 'plan_confirmed']);
+        }
+        if ($draftTaskPlan === []) {
+            if ($this->buildTaskService->hasConfirmedTaskPlanForBuild($scope)) {
+                $scopePatch = [
+                    'task_plan_confirmed' => 1,
+                    'task_plan_confirmed_at' => (string)($scope['task_plan_confirmed_at'] ?? \date('Y-m-d H:i:s')),
+                ];
+                try {
+                    $saved = $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
+                    if (!$saved) {
+                        throw new \RuntimeException('Second-stage task plan idempotent confirm persist failed: mergeScope returned false.');
+                    }
+                } catch (\Throwable $throwable) {
+                    return $this->jsonError('TASK_PLAN_CONFIRM_PERSIST_FAILED', $throwable->getMessage(), ['public_id']);
+                }
+                $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+                return $this->fetchJson([
+                    'success' => true,
+                    'message' => (string)__('第二阶段任务方案已确认'),
+                    'data' => $this->buildWorkspaceConfirmPayload(
+                        $this->buildWorkspaceState($fresh, $adminId, 80, true),
+                        'task_plan'
+                    ),
+                ]);
+            }
+            return $this->jsonError('TASK_PLAN_NOT_READY', (string)__('尚未生成第二阶段任务方案，请先生成后再确认'), ['public_id']);
         }
 
         $signature = (string)($taskPlanForConfirm['signature'] ?? '');
@@ -2645,6 +2688,9 @@ SCRIPT;
             }
         }
         $startStage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
+        if ($startStage === AiSiteAgentSession::STAGE_PUBLISH) {
+            $startStage = AiSiteAgentSession::STAGE_VISUAL_EDIT;
+        }
         if ($startStage !== AiSiteAgentSession::STAGE_VISUAL_EDIT) {
             $startStage = AiSiteAgentSession::STAGE_PLAN;
         }
@@ -2656,7 +2702,8 @@ SCRIPT;
             $startStage,
             $scopePatch,
             '',
-            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING
+            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING,
+            $isResume ? [] : ['fresh_repair_failed_tasks' => 1]
         );
         if (!empty($startResult['success'])) {
             $startResult['start_sse'] = true;
@@ -3600,6 +3647,17 @@ SCRIPT;
             return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
         $state = $this->buildWorkspaceState($session, $adminId, 40, true);
+        $publishBlock = $this->resolvePublishBlockingAiFailureFromWorkspaceState($state);
+        if (!empty($publishBlock['blocked'])) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $this->formatPublishBlockedByAiFailureMessage($publishBlock),
+                'data' => [
+                    'publish_blocked_by_latest_ai_failure' => true,
+                    'latest_build_failure' => $publishBlock,
+                ],
+            ]);
+        }
         if (empty($state['can_publish'])) {
             if ((int)($state['site_ready'] ?? 1) !== 1) {
                 return $this->fetchJson(['success' => false, 'message' => __('域名尚未就绪，请先完成域名流程后再发布。')]);
@@ -4009,6 +4067,17 @@ SCRIPT;
 
         $state = $this->buildWorkspaceState($session, $adminId, 40, true);
         $scope = $state['scope'];
+        $publishBlock = $this->resolvePublishBlockingAiFailureFromWorkspaceState($state);
+        $publishBlockedItem = null;
+        if (!empty($publishBlock['blocked'])) {
+            $publishBlockedItem = [
+                'key' => 'latest_ai_build',
+                'label' => 'Latest AI build completed successfully',
+                'ok' => false,
+                'value' => (string)($publishBlock['status'] ?? 'failed'),
+                'detail' => $this->formatPublishBlockedByAiFailureMessage($publishBlock),
+            ];
+        }
         if ((int)($state['plan_confirmed'] ?? 0) !== 1) {
             return $this->fetchJson(['success' => false, 'message' => __('请先确认阶段一方案，再检查发布条件。')]);
         }
@@ -4055,6 +4124,9 @@ SCRIPT;
                 'value' => ['visual_preview_url' => $state['visual_preview_url'], 'visual_edit_url' => $state['visual_edit_url']],
             ],
         ];
+        if ($publishBlockedItem !== null) {
+            \array_unshift($checkItems, $publishBlockedItem);
+        }
         $qualityGate = ObjectManager::getInstance(AiSiteQualityGateService::class);
         $qualityReport = $qualityGate->inspectScope($scope);
         foreach (\is_array($qualityReport['items'] ?? null) ? $qualityReport['items'] : [] as $qualityItem) {
@@ -5787,6 +5859,12 @@ SCRIPT;
             if ($status === 'running') {
                 $claimedBy = \trim((string)($active['claimed_by'] ?? ''));
                 if (
+                    $claimSource === 'queue'
+                    && $claimedBy === ''
+                ) {
+                    // Queue observers may mirror the row to running before the scheduler worker claims it.
+                    $allowUnclaimedPlanQueueRun = true;
+                } elseif (
                     $operation === 'plan'
                     && $claimSource === 'queue'
                     && $claimedBy === ''
@@ -6760,7 +6838,7 @@ SCRIPT;
             return false;
         }
         $status = \trim((string)($queueRow['status'] ?? ''));
-        return \in_array($status, ['done', 'error', 'stop', 'cancelled'], true);
+        return \in_array($status, ['done', 'error', 'stop', 'cancelled', 'canceled'], true);
     }
 
     /**
@@ -6873,6 +6951,10 @@ SCRIPT;
         ?array $queueInfo,
         string $operation
     ): array {
+        if (!empty($activeOperation['preflight_failed']) && \strtolower(\trim((string)($activeOperation['status'] ?? ''))) === 'error') {
+            return $activeOperation;
+        }
+
         return $this->queueObserverStreamService()->reconcileActiveOperationWithQueueInfo(
             $activeOperation,
             $queueInfo,
@@ -8303,7 +8385,8 @@ SCRIPT;
                 'page_types' => \array_values(\array_map('strval', \array_keys(\is_array($state['pagebuilder_pages_by_type'] ?? null) ? $state['pagebuilder_pages_by_type'] : []))),
             ],
             'publish' => [
-                'redirect_url' => $this->url->getBackendUrl('pagebuilder/backend/page/index'),
+                'publish_status' => (string)($state['publish_status'] ?? ''),
+                'publish_verification' => \is_array($state['publish_verification'] ?? null) ? $state['publish_verification'] : [],
             ],
             default => [],
         };
@@ -8663,7 +8746,24 @@ SCRIPT;
             $activeOperation['status'] = 'done';
             $normalized['active_operation'] = $activeOperation;
         }
+        $activeOperationStatus = \trim((string)($activeOperation['status'] ?? ''));
+        $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
+        $publishBlockingBuildFailure = $this->resolveLatestPublishBlockingAiBuildFailure($normalized, $activeOperation, $buildQueueInfo);
+        $publishBlockingAiRunning = $this->isPublishBlockingAiBuildOperation($activeOperationName)
+            && $this->isPublishBlockingAiRunningStatus($activeOperationStatus);
+        if (!empty($publishBlockingBuildFailure['blocked']) || $publishBlockingAiRunning) {
+            $canPublish = false;
+        }
+        $normalized['latest_build_failed'] = !empty($publishBlockingBuildFailure['blocked']) ? 1 : 0;
+        $normalized['latest_build_failure'] = !empty($publishBlockingBuildFailure['blocked']) ? $publishBlockingBuildFailure : [];
+        $normalized['publish_blocked_by_latest_ai_failure'] = !empty($publishBlockingBuildFailure['blocked']) ? 1 : 0;
+        $normalized['publish_blocked_reason'] = !empty($publishBlockingBuildFailure['blocked'])
+            ? $this->formatPublishBlockedByAiFailureMessage($publishBlockingBuildFailure)
+            : '';
         $workspaceStatus = $this->resolveWorkspaceStatus($session, $normalized, $canPublish, $pendingGenerationPageTypes);
+        if (!empty($publishBlockingBuildFailure['blocked'])) {
+            $workspaceStatus = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
+        }
         $normalized['workspace_status'] = $workspaceStatus;
         $normalized['can_publish'] = $canPublish ? 1 : 0;
         $normalized['build_summary'] = $this->buildSummary($virtualPagesByType, $activeOperation, $canPublish, $pendingGenerationPageTypes, $taskSummary);
@@ -8724,6 +8824,10 @@ SCRIPT;
             'workspace_status' => $workspaceStatus,
             'publish_status' => $session->getPublishStatus(),
             'can_publish' => $canPublish,
+            'latest_build_failed' => !empty($normalized['latest_build_failed']),
+            'latest_build_failure' => \is_array($normalized['latest_build_failure'] ?? null) ? $normalized['latest_build_failure'] : [],
+            'publish_blocked_by_latest_ai_failure' => !empty($normalized['publish_blocked_by_latest_ai_failure']),
+            'publish_blocked_reason' => (string)($normalized['publish_blocked_reason'] ?? ''),
             'workspace_track' => $workspaceTrack,
             'site_ready' => (int)($normalized['site_ready'] ?? 1),
             'website_id' => $draftWebsiteId,
@@ -8838,6 +8942,10 @@ SCRIPT;
             'workspace_status' => (string)($state['workspace_status'] ?? ''),
             'publish_status' => (string)($state['publish_status'] ?? ''),
             'can_publish' => !empty($state['can_publish']),
+            'latest_build_failed' => !empty($state['latest_build_failed']),
+            'latest_build_failure' => \is_array($state['latest_build_failure'] ?? null) ? $state['latest_build_failure'] : [],
+            'publish_blocked_by_latest_ai_failure' => !empty($state['publish_blocked_by_latest_ai_failure']),
+            'publish_blocked_reason' => (string)($state['publish_blocked_reason'] ?? ''),
             'workspace_track' => (string)($state['workspace_track'] ?? ''),
             'site_ready' => (int)($state['site_ready'] ?? 1),
             'website_id' => (int)($state['website_id'] ?? 0),
@@ -8904,6 +9012,10 @@ SCRIPT;
             'workspace_status' => (string)($state['workspace_status'] ?? ''),
             'publish_status' => (string)($state['publish_status'] ?? ''),
             'can_publish' => !empty($state['can_publish']),
+            'latest_build_failed' => !empty($state['latest_build_failed']),
+            'latest_build_failure' => \is_array($state['latest_build_failure'] ?? null) ? $state['latest_build_failure'] : [],
+            'publish_blocked_by_latest_ai_failure' => !empty($state['publish_blocked_by_latest_ai_failure']),
+            'publish_blocked_reason' => (string)($state['publish_blocked_reason'] ?? ''),
             'workspace_track' => (string)($state['workspace_track'] ?? ''),
             'site_ready' => (int)($state['site_ready'] ?? 1),
             'website_id' => (int)($state['website_id'] ?? 0),
@@ -8981,6 +9093,10 @@ SCRIPT;
             'workspace_status' => (string)($state['workspace_status'] ?? ''),
             'publish_status' => (string)($state['publish_status'] ?? ''),
             'can_publish' => !empty($state['can_publish']),
+            'latest_build_failed' => !empty($state['latest_build_failed']),
+            'latest_build_failure' => \is_array($state['latest_build_failure'] ?? null) ? $state['latest_build_failure'] : [],
+            'publish_blocked_by_latest_ai_failure' => !empty($state['publish_blocked_by_latest_ai_failure']),
+            'publish_blocked_reason' => (string)($state['publish_blocked_reason'] ?? ''),
             'workspace_track' => (string)($state['workspace_track'] ?? ''),
             'site_ready' => (int)($state['site_ready'] ?? 1),
             'website_id' => (int)($state['website_id'] ?? 0),
@@ -9064,6 +9180,200 @@ SCRIPT;
     private function normalizeWorkspaceEnvelopeStatus(string $status): string
     {
         return $this->workspaceStateHelperService()->normalizeEnvelopeStatus($status);
+    }
+
+    private function isPublishBlockingAiBuildOperation(string $operation): bool
+    {
+        return \in_array(\strtolower(\trim($operation)), ['build', 'visual_edit', 'regenerate_page', 'block_regenerate'], true);
+    }
+
+    private function isPublishBlockingAiFailureStatus(string $status): bool
+    {
+        return \in_array(\strtolower(\trim($status)), ['error', 'failed', 'fail', 'stop', 'stopped', 'cancelled', 'canceled'], true);
+    }
+
+    private function isPublishBlockingAiRunningStatus(string $status): bool
+    {
+        return \in_array(\strtolower(\trim($status)), ['queued', 'pending', 'running', 'processing'], true);
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array{blocked:bool,operation:string,status:string,message:string}
+     */
+    private function resolvePublishBlockingAiFailureFromWorkspaceState(array $state): array
+    {
+        $existing = \is_array($state['latest_build_failure'] ?? null) ? $state['latest_build_failure'] : [];
+        if (!empty($state['latest_build_failed']) && !empty($existing['blocked'])) {
+            return $this->buildPublishBlockingAiFailurePayload(
+                (string)($existing['operation'] ?? 'build'),
+                (string)($existing['status'] ?? 'error'),
+                (string)($existing['message'] ?? '')
+            );
+        }
+        if (!empty($state['publish_blocked_by_latest_ai_failure'])) {
+            return $this->buildPublishBlockingAiFailurePayload(
+                (string)($existing['operation'] ?? 'build'),
+                (string)($existing['status'] ?? 'error'),
+                (string)($existing['message'] ?? ($state['publish_blocked_reason'] ?? ''))
+            );
+        }
+
+        $scope = \is_array($state['scope'] ?? null) ? $state['scope'] : $state;
+        $activeOperation = \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [];
+        $buildQueueInfo = \is_array($state['build_queue_info'] ?? null) ? $state['build_queue_info'] : null;
+
+        return $this->resolveLatestPublishBlockingAiBuildFailure($scope, $activeOperation, $buildQueueInfo);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $activeOperation
+     * @param array<string, mixed>|null $buildQueueInfo
+     * @return array{blocked:bool,operation:string,status:string,message:string}
+     */
+    private function resolveLatestPublishBlockingAiBuildFailure(array $scope, array $activeOperation = [], ?array $buildQueueInfo = null): array
+    {
+        $existing = \is_array($scope['latest_build_failure'] ?? null) ? $scope['latest_build_failure'] : [];
+        if (!empty($scope['latest_build_failed']) && !empty($existing['blocked'])) {
+            return $this->buildPublishBlockingAiFailurePayload(
+                (string)($existing['operation'] ?? 'build'),
+                (string)($existing['status'] ?? 'error'),
+                (string)($existing['message'] ?? '')
+            );
+        }
+        if (!empty($scope['publish_blocked_by_latest_ai_failure'])) {
+            return $this->buildPublishBlockingAiFailurePayload(
+                (string)($existing['operation'] ?? 'build'),
+                (string)($existing['status'] ?? 'error'),
+                (string)($existing['message'] ?? ($scope['publish_blocked_reason'] ?? ''))
+            );
+        }
+
+        $candidates = [];
+        $appendCandidate = static function (array $operationState, string $fallbackOperation = '') use (&$candidates): void {
+            if ($operationState === []) {
+                return;
+            }
+            if (\trim((string)($operationState['operation'] ?? '')) === '' && $fallbackOperation !== '') {
+                $operationState['operation'] = $fallbackOperation;
+            }
+            $candidates[] = $operationState;
+        };
+
+        $appendCandidate($activeOperation);
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        foreach (['build', 'visual_edit', 'regenerate_page', 'block_regenerate'] as $operationKey) {
+            if (\is_array($activeOperations[$operationKey] ?? null)) {
+                $appendCandidate($activeOperations[$operationKey], $operationKey);
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            $operation = \trim((string)($candidate['operation'] ?? ''));
+            if (!$this->isPublishBlockingAiBuildOperation($operation)) {
+                continue;
+            }
+            $status = \strtolower(\trim((string)($candidate['status'] ?? '')));
+            if ($this->isPublishBlockingAiFailureStatus($status)) {
+                return $this->buildPublishBlockingAiFailurePayload(
+                    $operation,
+                    $status,
+                    $this->readAiFailureMessage($candidate)
+                );
+            }
+        }
+
+        if (\is_array($buildQueueInfo)) {
+            $queueStatus = $this->readAiQueueInfoStatus($buildQueueInfo);
+            if ($this->isPublishBlockingAiFailureStatus($queueStatus)) {
+                return $this->buildPublishBlockingAiFailurePayload('build', $queueStatus, $this->readAiQueueInfoMessage($buildQueueInfo));
+            }
+        }
+
+        return ['blocked' => false, 'operation' => '', 'status' => '', 'message' => ''];
+    }
+
+    /**
+     * @param array<string, mixed> $operationState
+     */
+    private function readAiFailureMessage(array $operationState): string
+    {
+        return \trim((string)(
+            $operationState['message']
+            ?? $operationState['error']
+            ?? $operationState['process']
+            ?? ''
+        ));
+    }
+
+    /**
+     * @param array<string, mixed> $queueInfo
+     */
+    private function readAiQueueInfoStatus(array $queueInfo): string
+    {
+        $snapshot = \is_array($queueInfo['snapshot'] ?? null) ? $queueInfo['snapshot'] : [];
+        return \strtolower(\trim((string)(
+            $snapshot['job_status']
+            ?? $snapshot['status']
+            ?? $snapshot['queue_status']
+            ?? $queueInfo['queue_status']
+            ?? $queueInfo['status']
+            ?? ''
+        )));
+    }
+
+    /**
+     * @param array<string, mixed> $queueInfo
+     */
+    private function readAiQueueInfoMessage(array $queueInfo): string
+    {
+        $snapshot = \is_array($queueInfo['snapshot'] ?? null) ? $queueInfo['snapshot'] : [];
+        foreach ([
+            $queueInfo['result_tail'] ?? null,
+            $queueInfo['message'] ?? null,
+            $queueInfo['process'] ?? null,
+            $snapshot['message'] ?? null,
+            $snapshot['process'] ?? null,
+        ] as $candidate) {
+            $message = \trim((string)$candidate);
+            if ($message !== '') {
+                return $message;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @return array{blocked:bool,operation:string,status:string,message:string}
+     */
+    private function buildPublishBlockingAiFailurePayload(string $operation, string $status, string $message): array
+    {
+        $message = \trim($message);
+        if ($message === '') {
+            $message = 'Latest AI site build failed; publish is blocked until a successful AI rebuild completes.';
+        }
+
+        return [
+            'blocked' => true,
+            'operation' => $operation !== '' ? $operation : 'build',
+            'status' => $status !== '' ? $status : 'error',
+            'message' => $message,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $failure
+     */
+    private function formatPublishBlockedByAiFailureMessage(array $failure): string
+    {
+        $message = \trim((string)($failure['message'] ?? ''));
+        if ($message === '') {
+            return 'Latest AI site build failed; publish is blocked until a successful AI rebuild completes.';
+        }
+
+        return 'Latest AI site build failed; publish is blocked until a successful AI rebuild completes. Error: ' . $message;
     }
 
     /**
@@ -9448,7 +9758,7 @@ SCRIPT;
         if ($activeStatus === 'error' || $workspaceStatus === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED) {
             return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
         }
-        if (\in_array($activeStatus, ['queued', 'running'], true) && \in_array($operation, ['build', 'regenerate_page'], true)) {
+        if (\in_array($activeStatus, ['queued', 'running'], true) && $this->isPublishBlockingAiBuildOperation($operation)) {
             return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING;
         }
         if ($canPublish) {
@@ -9560,8 +9870,6 @@ SCRIPT;
                 'preview_page_type' => '',
             ];
         }
-
-        $pageTypes = $this->scopeCompatibilityService->normalizePageTypes($pageTypes);
 
         if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
             return $this->materializationService->materializeHtml(
@@ -9682,6 +9990,29 @@ SCRIPT;
             $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
         }
         if (\in_array($activeStatus, ['queued', 'running'], true)) {
+            $linkedQueueIssue = $this->resolveActiveOperationLinkedQueueIssue($activeOperation);
+            if ($linkedQueueIssue !== []) {
+                $scope = $this->markActiveOperationLinkedQueueStaleForRetry($scope, $activeOperation, $linkedQueueIssue);
+                $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING;
+                $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+                $this->appendWorkspaceEvent(
+                    $session->getId(),
+                    $adminId,
+                    $this->scopeCompatibilityService->normalizeStage($session->getStage()),
+                    'operation_cancelled',
+                    'Linked queue is no longer active; allowing a fresh AI operation retry.',
+                    [
+                        'operation' => (string)($activeOperation['operation'] ?? ''),
+                        'queue_id' => (int)($linkedQueueIssue['queue_id'] ?? 0),
+                        'details' => $linkedQueueIssue,
+                    ],
+                    AiSiteAgentSessionEvent::LEVEL_WARNING
+                );
+                $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+                $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+            }
+        }
+        if (\in_array($activeStatus, ['queued', 'running'], true)) {
             $runningOperation = \trim((string)($activeOperation['operation'] ?? ''));
             $runningExecutionToken = \trim((string)($activeOperation['execution_token'] ?? ''));
             if ($forceTaskPlanRebuild && $runningOperation === 'task_plan') {
@@ -9690,10 +10021,11 @@ SCRIPT;
                 $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
                 $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
             } elseif ($this->shouldReuseRunningQueuedOperation($operation, $runningOperation)) {
+                $reusedOperation = $runningOperation !== '' ? $runningOperation : $operation;
                 return [
                     'success' => false,
-                    'message' => $this->buildRunningOperationReuseMessage('task_plan'),
-                    'operation' => 'task_plan',
+                    'message' => $this->buildRunningOperationReuseMessage($reusedOperation),
+                    'operation' => $reusedOperation,
                     'execution_token' => $runningExecutionToken,
                     'stream_url' => $runningExecutionToken !== ''
                         ? $this->buildOperationStreamUrl($session->getPublicId(), $runningExecutionToken)
@@ -9722,9 +10054,39 @@ SCRIPT;
         if ($operation === 'build') {
             $scope = $this->buildTaskService->restoreBuildPlanContract($scope, $baseScope);
             $scope = $this->normalizeTaskPlanConfirmationForBuild($scope);
+            if ((int)($operationDetails['fresh_repair_failed_tasks'] ?? 0) === 1) {
+                $scope = $this->buildTaskService->resetFailedTasksForFreshRepair(
+                    $scope,
+                    'Fresh build repair after previous task failure'
+                );
+                $scope = $this->buildTaskService->resetRunningTasksForInterruptedBuild(
+                    $scope,
+                    'Fresh build repair after interrupted task execution'
+                );
+            }
+        }
+        if ($this->isPublishBlockingAiBuildOperation($operation)) {
+            $scope['latest_build_failed'] = 0;
+            $scope['publish_blocked_by_latest_ai_failure'] = 0;
+            unset($scope['latest_build_failure'], $scope['publish_blocked_reason']);
         }
         if ($pageType !== '' && !\in_array($pageType, $scope['page_types'], true)) {
             return ['success' => false, 'message' => __('所选页面类型不在当前工作区中')];
+        }
+
+        if ($this->requiresFrontendAiProviderReadinessCheck($operation)) {
+            try {
+                $this->assertFrontendAiProviderReadyBeforeQueue($operation);
+            } catch (\Throwable $throwable) {
+                return $this->buildFrontendAiProviderReadinessFailureResult(
+                    $session,
+                    $adminId,
+                    $operation,
+                    $stage,
+                    $scope,
+                    $throwable
+                );
+            }
         }
 
         $executionToken = \bin2hex(\random_bytes(16));
@@ -9745,6 +10107,10 @@ SCRIPT;
             'page_type' => $pageType,
             'started_at' => \date('Y-m-d H:i:s'),
             'updated_at' => \date('Y-m-d H:i:s'),
+            'claimed_by' => '',
+            'claimed_at' => '',
+            'retry_allowed' => 0,
+            'queue_terminal_recovered' => 0,
             'message' => (string)__('等待开始'),
         ], $operationEnvelope);
         if ($operationDetails !== []) {
@@ -9821,6 +10187,124 @@ SCRIPT;
         ];
     }
 
+    private function requiresFrontendAiProviderReadinessCheck(string $operation): bool
+    {
+        return $this->shouldEnqueueOperation($operation);
+    }
+
+    private function assertFrontendAiProviderReadyBeforeQueue(string $operation): void
+    {
+        $response = AiService::generateText(
+            'PageBuilder AI readiness check. Reply with OK only.',
+            null,
+            $this->resolveFrontendAiProviderReadinessScenario($operation),
+            null,
+            [
+                'allow_zero_balance_provider' => true,
+                'temperature' => 0.0,
+                'max_tokens' => 8,
+                'timeout' => 45,
+                'disable_conversation_history' => true,
+                'disable_conversation_persist' => true,
+                'session_id' => 'pagebuilder_ai_provider_preflight',
+            ]
+        );
+        if (\trim((string)$response) === '') {
+            throw new \RuntimeException('AI provider readiness check returned an empty response.');
+        }
+    }
+
+    private function resolveFrontendAiProviderReadinessScenario(string $operation): string
+    {
+        $operation = \strtolower(\trim($operation));
+        if ($operation === 'plan') {
+            return 'pagebuilder_plan_generation';
+        }
+        if ($operation === 'task_plan') {
+            return 'pagebuilder_task_plan_generation';
+        }
+
+        return 'pagebuilder_component_generation';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildFrontendAiProviderReadinessFailureResult(
+        AiSiteAgentSession $session,
+        int $adminId,
+        string $operation,
+        string $stage,
+        array $scope,
+        \Throwable $throwable
+    ): array {
+        $message = $this->formatFrontendAiProviderReadinessFailureMessage($throwable);
+        $now = \date('Y-m-d H:i:s');
+        $activeOperation = [
+            'operation' => $operation,
+            'execution_token' => '',
+            'status' => 'error',
+            'page_type' => '',
+            'queue_id' => 0,
+            'started_at' => $now,
+            'updated_at' => $now,
+            'message' => $message,
+            'preflight_failed' => 1,
+        ];
+        $scope['active_operation'] = $activeOperation;
+        $scope = $this->writeActiveOperationStateToScope($scope, $activeOperation);
+        $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
+        $failure = ['blocked' => false, 'operation' => $operation, 'status' => 'error', 'message' => $message];
+        if ($this->isPublishBlockingAiBuildOperation($operation)) {
+            $failure = $this->buildPublishBlockingAiFailurePayload($operation, 'error', $message);
+            $scope['latest_build_failed'] = 1;
+            $scope['latest_build_failure'] = $failure;
+            $scope['publish_blocked_by_latest_ai_failure'] = 1;
+            $scope['publish_blocked_reason'] = $this->formatPublishBlockedByAiFailureMessage($failure);
+        }
+
+        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+        $this->sessionService->setStage($session->getId(), $adminId, $stage);
+        $this->appendWorkspaceEvent(
+            $session->getId(),
+            $adminId,
+            $stage,
+            'ai_provider_preflight_failed',
+            $message,
+            ['operation' => $operation, 'queue_id' => 0],
+            AiSiteAgentSessionEvent::LEVEL_ERROR
+        );
+
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $state = $this->buildWorkspaceState($fresh, $adminId, 24, true);
+
+        return [
+            'success' => false,
+            'code' => 'AI_PROVIDER_NOT_READY',
+            'message' => $message,
+            'operation' => $operation,
+            'queue_id' => 0,
+            'start_sse' => false,
+            'latest_build_failure' => $failure,
+            'publish_blocked_by_latest_ai_failure' => !empty($failure['blocked']),
+            'data' => $this->buildWorkspaceOperationPayload($state, $operation),
+        ];
+    }
+
+    private function formatFrontendAiProviderReadinessFailureMessage(\Throwable $throwable): string
+    {
+        $raw = \trim((string)$throwable->getMessage());
+        if ($raw === '') {
+            $raw = 'Unknown AI provider error.';
+        }
+        if (\strlen($raw) > 2000) {
+            $raw = \substr($raw, 0, 2000) . '...';
+        }
+
+        return 'AI provider readiness check failed before queue creation. Real AI generation cannot start. Error: ' . $raw;
+    }
+
     private function shouldEnqueueOperation(string $operation): bool
     {
         return \in_array($operation, ['plan', 'task_plan', 'build', 'block_regenerate', 'regenerate_page'], true);
@@ -9832,6 +10316,12 @@ SCRIPT;
         if ($operation === 'task_plan') {
             return 'Current stage-two task-plan generation is still running; reusing the current queue progress.';
         }
+        if ($operation === 'build') {
+            return 'Current site build is still running; reusing the current queue progress.';
+        }
+        if (\in_array($operation, ['block_regenerate', 'regenerate_page'], true)) {
+            return 'Current page or block AI operation is still running; reusing the current queue progress.';
+        }
         if ($operation === 'plan') {
             return 'Current stage-one plan generation is still running; wait for it to finish.';
         }
@@ -9841,8 +10331,116 @@ SCRIPT;
 
     private function shouldReuseRunningQueuedOperation(string $requestedOperation, string $runningOperation): bool
     {
-        return \trim($requestedOperation) === 'task_plan'
-            && \trim($runningOperation) === 'task_plan';
+        $requestedOperation = \trim($requestedOperation);
+        $runningOperation = \trim($runningOperation);
+        if ($requestedOperation === '' || $runningOperation === '') {
+            return false;
+        }
+        if ($requestedOperation === 'plan' || $runningOperation === 'plan') {
+            return false;
+        }
+
+        return $this->isAiSiteQueueBackedOperation($requestedOperation)
+            && $this->isAiSiteQueueBackedOperation($runningOperation);
+    }
+
+    /**
+     * @param array<string, mixed> $activeOperation
+     * @return array<string, mixed>
+     */
+    private function resolveActiveOperationLinkedQueueIssue(array $activeOperation): array
+    {
+        $operation = \trim((string)($activeOperation['operation'] ?? ''));
+        if (!$this->isAiSiteQueueBackedOperation($operation)) {
+            return [];
+        }
+
+        $queueId = (int)($activeOperation['queue_id'] ?? 0);
+        if ($queueId <= 0) {
+            return [];
+        }
+
+        try {
+            $queueRow = w_query('queue', 'get', ['queue_id' => $queueId]);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (!\is_array($queueRow) || $queueRow === []) {
+            return [
+                'reason' => 'linked_queue_missing',
+                'queue_id' => $queueId,
+                'queue_status' => '',
+                'message' => 'Linked queue #' . $queueId . ' no longer exists; starting a fresh AI operation is allowed.',
+            ];
+        }
+
+        if ($this->isObservedQueueInProgress($queueRow)) {
+            return [];
+        }
+
+        $queueStatus = \strtolower(\trim((string)($queueRow['status'] ?? '')));
+        if ($this->isObservedQueueTerminal($queueRow) || $queueStatus !== '') {
+            $duplicateSkip = $this->isAiSiteQueueDuplicateSkipResult($queueRow);
+            return [
+                'reason' => $duplicateSkip ? 'linked_queue_duplicate_skip' : 'linked_queue_terminal',
+                'queue_id' => $queueId,
+                'queue_status' => $queueStatus,
+                'message' => $duplicateSkip
+                    ? 'Linked queue #' . $queueId . ' only skipped a duplicate stream; starting a fresh AI operation is allowed.'
+                    : 'Linked queue #' . $queueId . ' is ' . ($queueStatus !== '' ? $queueStatus : 'not active') . '; starting a fresh AI operation is allowed.',
+            ];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $activeOperation
+     * @param array<string, mixed> $queueIssue
+     * @return array<string, mixed>
+     */
+    private function markActiveOperationLinkedQueueStaleForRetry(array $scope, array $activeOperation, array $queueIssue): array
+    {
+        $details = \is_array($activeOperation['details'] ?? null) ? $activeOperation['details'] : [];
+        $details = \array_replace($details, [
+            'reason' => (string)($queueIssue['reason'] ?? 'linked_queue_terminal'),
+            'queue_id' => (int)($queueIssue['queue_id'] ?? 0),
+            'queue_status' => (string)($queueIssue['queue_status'] ?? ''),
+        ]);
+        $operationState = \array_replace($activeOperation, [
+            'status' => 'cancelled',
+            'message' => (string)($queueIssue['message'] ?? 'Linked queue is no longer active; retry is allowed.'),
+            'retry_allowed' => 1,
+            'queue_terminal_recovered' => 1,
+            'updated_at' => \date('Y-m-d H:i:s'),
+            'details' => $details,
+        ]);
+
+        return $this->writeActiveOperationStateToScope($scope, $operationState);
+    }
+
+    /**
+     * @param array<string, mixed> $queueRow
+     */
+    private function isAiSiteQueueDuplicateSkipResult(array $queueRow): bool
+    {
+        foreach (['process', 'result'] as $field) {
+            $text = \strtolower((string)($queueRow[$field] ?? ''));
+            if ($text === '') {
+                continue;
+            }
+            if (
+                \str_contains($text, 'duplicate_stream')
+                || \str_contains($text, 'skipped duplicate')
+                || \str_contains($text, 'duplicate ai execution')
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -10278,6 +10876,7 @@ SCRIPT;
             if (\is_array($updated) && ($updated['success'] ?? false)) {
                 $queueId = (int)($updated['queue_id'] ?? 0);
                 if ($queueId > 0) {
+                    $this->stopSupersededPendingAiSiteQueueRows($bizKey, $queueId, $operation);
                     return $queueId;
                 }
             }
@@ -10306,6 +10905,7 @@ SCRIPT;
                     : (string)__('创建队列任务失败。')
             );
         }
+        $this->stopSupersededPendingAiSiteQueueRows($bizKey, $queueId, $operation);
 
         $queueCreatedHook = RequestContext::get(self::REQUEST_CTX_QUEUE_CREATED_HOOK);
         if (\is_callable($queueCreatedHook)) {
@@ -10366,6 +10966,53 @@ SCRIPT;
             'pid' => 0,
             'finished' => 0,
         ];
+    }
+
+    private function stopSupersededPendingAiSiteQueueRows(string $bizKey, int $activeQueueId, string $operation): void
+    {
+        $bizKey = \trim($bizKey);
+        if ($bizKey === '' || $activeQueueId <= 0 || !$this->isAiSiteQueueBackedOperation($operation)) {
+            return;
+        }
+
+        try {
+            $result = w_query('queue', 'list', [
+                'biz_key' => $bizKey,
+                'page_size' => 20,
+            ]);
+        } catch (\Throwable) {
+            return;
+        }
+
+        foreach (\is_array($result['items'] ?? null) ? $result['items'] : [] as $item) {
+            $row = \is_object($item) && \method_exists($item, 'getData') ? $item->getData() : $item;
+            if (!\is_array($row)) {
+                continue;
+            }
+            $queueId = (int)($row['queue_id'] ?? 0);
+            if ($queueId <= 0 || $queueId >= $activeQueueId) {
+                continue;
+            }
+            $status = \strtolower(\trim((string)($row['status'] ?? '')));
+            if (!\in_array($status, ['pending', 'queued'], true)) {
+                continue;
+            }
+            if (!$this->isAiSiteQueueRowForOperation($row, $operation)) {
+                continue;
+            }
+            try {
+                w_query('queue', 'update', [
+                    'queue_id' => $queueId,
+                    'patch' => [
+                        'status' => 'stop',
+                        'pid' => 0,
+                        'process' => 'Superseded by newer PageBuilder queue #' . $activeQueueId . '.',
+                    ],
+                ]);
+            } catch (\Throwable) {
+                continue;
+            }
+        }
     }
 
     private function resolveAiSiteQueueClass(string $operation): string
@@ -10927,7 +11574,9 @@ SCRIPT;
                 );
                 $scope = \is_array($failure['scope'] ?? null) ? $failure['scope'] : $scope;
                 if (!empty($failure['fatal'])) {
-                    $fatalBatchThrowable = $failure['throwable'] instanceof \Throwable ? $failure['throwable'] : new \RuntimeException('Build task spec error');
+                    if (!$fatalBatchThrowable instanceof \Throwable) {
+                        $fatalBatchThrowable = $failure['throwable'] instanceof \Throwable ? $failure['throwable'] : new \RuntimeException('Build task spec error');
+                    }
                     $failedTaskKeys[] = $taskKey;
                     continue;
                 }
@@ -10998,7 +11647,9 @@ SCRIPT;
                     );
                     $scope = \is_array($failure['scope'] ?? null) ? $failure['scope'] : $scope;
                     if (!empty($failure['fatal'])) {
-                        $fatalBatchThrowable = $failure['throwable'] instanceof \Throwable ? $failure['throwable'] : $throwable;
+                        if (!$fatalBatchThrowable instanceof \Throwable) {
+                            $fatalBatchThrowable = $failure['throwable'] instanceof \Throwable ? $failure['throwable'] : $throwable;
+                        }
                         $failedTaskKeys[] = (string)$taskKey;
                         continue;
                     }
@@ -11597,9 +12248,6 @@ SCRIPT;
                 }
             }
             if (!\is_array($sectionSpec)) {
-                $sectionSpec = $this->buildFallbackPageTaskSectionSpec($task, $pageType, $sectionCode, $taskKey);
-            }
-            if (!\is_array($sectionSpec)) {
                 $errors[$taskKey] = [
                     'task_key' => $taskKey,
                     'page_type' => $pageType,
@@ -11634,63 +12282,6 @@ SCRIPT;
             'components' => $components,
             'meta' => $meta,
             'errors' => $errors,
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $task
-     * @return array<string, mixed>
-     */
-    private function buildFallbackPageTaskSectionSpec(array $task, string $pageType, string $sectionCode, string $taskKey): array
-    {
-        $sectionCode = \trim($sectionCode);
-        if ($sectionCode === '' || \in_array(\strtolower($sectionCode), ['section', 'content', 'block'], true)) {
-            $taskTail = \trim((string)\preg_replace('/^page:[^:]+:/', '', $taskKey));
-            $seed = $taskTail !== '' ? $pageType . '-' . $taskTail : $taskKey;
-            $slug = \strtolower(\trim((string)\preg_replace('/[^a-z0-9]+/i', '-', \str_replace('_', '-', $seed)), '-'));
-            $sectionCode = $slug !== '' ? 'content/' . $slug : '';
-        }
-        if ($sectionCode === '') {
-            return [];
-        }
-
-        $label = \trim((string)($task['label'] ?? ''));
-        if ($label === '') {
-            $label = \trim((string)\preg_replace('/[^a-z0-9]+/i', ' ', \str_replace(['content/', '_', '-'], ' ', $sectionCode)));
-            $label = $label !== '' ? \ucwords($label) : $sectionCode;
-        }
-
-        $promptParts = [
-            'Generate this confirmed stage-two page section as one production PageBuilder component.',
-            'Task key: ' . $taskKey,
-            'Page type: ' . $pageType,
-            'Section code: ' . $sectionCode,
-            'Label: ' . $label,
-        ];
-        foreach (['task_script', 'plan_context', 'block_task', 'implementation_contract', 'runtime_context'] as $key) {
-            $value = \is_array($task[$key] ?? null) ? $task[$key] : [];
-            if ($value === []) {
-                continue;
-            }
-            $encoded = $this->encodeCompactJson($value);
-            if ($encoded === '') {
-                continue;
-            }
-            $promptParts[] = $key . ': ' . \substr($encoded, 0, 3000);
-        }
-
-        return [
-            'code' => $sectionCode,
-            'key' => \trim((string)($task['block_key'] ?? '')),
-            'name' => $label,
-            'region' => 'content',
-            'prompt' => \implode("\n", $promptParts),
-            'default_config' => [],
-            'render_context' => [
-                'page_type' => $pageType,
-                'section_code' => $sectionCode,
-                'task_key' => $taskKey,
-            ],
         ];
     }
 
@@ -11803,6 +12394,29 @@ SCRIPT;
     }
 
     /**
+     * @param array<string, mixed> $sectionComponent
+     * @param array<string, mixed> $sectionBlock
+     */
+    private function isGeneratedSectionBlockUsable(array $sectionComponent, array $sectionBlock): bool
+    {
+        $componentCode = \trim((string)($sectionComponent['code'] ?? $sectionBlock['_pb_component_code'] ?? ''));
+        if ($componentCode === '') {
+            return false;
+        }
+
+        $html = \trim((string)($sectionBlock['html'] ?? $sectionComponent['html'] ?? ''));
+        if ($html === '') {
+            return false;
+        }
+
+        if (\strip_tags($html) === '' && !\str_contains($html, '<svg') && !\str_contains($html, '<img')) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * @param list<array<string, mixed>> $tasks
      * @return list<string>
      */
@@ -11848,6 +12462,98 @@ SCRIPT;
         }
         return $this->runVirtualThemeBuildOperationV3($sse, $session, $adminId, $scope);
     }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array{scope:array<string,mixed>,page_types:list<string>,bad_matches:array<string,list<string>>}
+     */
+    private function invalidateQualityFailedVirtualThemeBuildTasks(array $scope): array
+    {
+        $badMatchesByPage = [];
+        $invalidatedPageTypes = [];
+        try {
+            /** @var AiSiteQualityGateService $qualityGate */
+            $qualityGate = ObjectManager::getInstance(AiSiteQualityGateService::class);
+            $qualityReport = $qualityGate->inspectScope($scope);
+        } catch (\Throwable) {
+            return [
+                'scope' => $scope,
+                'page_types' => [],
+                'bad_matches' => [],
+            ];
+        }
+
+        $pageReports = \is_array($qualityReport['page_reports'] ?? null) ? $qualityReport['page_reports'] : [];
+        foreach ($pageReports as $pageType => $pageReport) {
+            $pageType = \trim((string)$pageType);
+            if ($pageType === '' || !\is_array($pageReport)) {
+                continue;
+            }
+            $badMatches = \array_values(\array_unique(\array_filter(
+                \array_map('strval', \is_array($pageReport['bad_matches'] ?? null) ? $pageReport['bad_matches'] : []),
+                static fn(string $match): bool => \trim($match) !== ''
+            )));
+            if ($badMatches === []) {
+                continue;
+            }
+            $taskKeys = $this->buildTaskService->listTaskKeysByPageType($scope, $pageType);
+            if ($taskKeys === []) {
+                continue;
+            }
+            $badMatchesByPage[$pageType] = $badMatches;
+            $invalidatedPageTypes[] = $pageType;
+            $message = 'Quality gate retry: ' . \implode(', ', $badMatches);
+            $scope = $this->clearQualityFailedVirtualThemePageArtifacts($scope, $pageType);
+            foreach ($taskKeys as $taskKey) {
+                $scope = $this->buildTaskService->markTaskPendingForFreshRepair($scope, $taskKey, $message);
+            }
+        }
+
+        return [
+            'scope' => $scope,
+            'page_types' => \array_values(\array_unique($invalidatedPageTypes)),
+            'bad_matches' => $badMatchesByPage,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function clearQualityFailedVirtualThemePageArtifacts(array $scope, string $pageType): array
+    {
+        $pageType = \trim($pageType);
+        if ($pageType === '') {
+            return $scope;
+        }
+
+        $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
+        if ($pageTypes === []) {
+            $pageTypes = [$pageType];
+        }
+        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
+        $layout = $this->scopeCompatibilityService->normalizeLayoutConfig($pageTypeLayouts[$pageType] ?? [], $pageType);
+        $layout['content'] = [];
+        $pageTypeLayouts[$pageType] = $layout;
+        $scope['page_type_layouts'] = $pageTypeLayouts;
+
+        if (\is_array($scope['virtual_pages_by_type'][$pageType] ?? null)) {
+            $scope['virtual_pages_by_type'][$pageType]['blocks'] = [];
+            $scope['virtual_pages_by_type'][$pageType]['last_generated_at'] = '';
+        }
+
+        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
+        if ($virtualThemeId > 0) {
+            try {
+                $this->virtualThemeService->saveGeneratedPageLayout($virtualThemeId, $pageType, $layout);
+            } catch (\Throwable) {
+                // Scope cleanup is authoritative for the repair queue; persistence will be retried during generation.
+            }
+        }
+
+        return $scope;
+    }
+
     private function runVirtualThemeBuildOperationV3(
         SseWriter $sse,
         AiSiteAgentSession $session,
@@ -11863,6 +12569,20 @@ SCRIPT;
         );
         $queueForcedAiRebuild = (int)($scope['_queue_force_build']['active'] ?? 0) === 1;
         $scope = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
+        $qualityInvalidation = $this->invalidateQualityFailedVirtualThemeBuildTasks($scope);
+        $scope = \is_array($qualityInvalidation['scope'] ?? null) ? $qualityInvalidation['scope'] : $scope;
+        $qualityInvalidatedPageTypes = \is_array($qualityInvalidation['page_types'] ?? null) ? $qualityInvalidation['page_types'] : [];
+        if ($qualityInvalidatedPageTypes !== []) {
+            $this->emitBuildInfoEvent(
+                $sse,
+                (string)__('Quality gate invalidated generated pages; rebuilding affected tasks.'),
+                [
+                    'event_type' => 'build_quality_retry',
+                    'page_types' => $qualityInvalidatedPageTypes,
+                    'bad_matches' => \is_array($qualityInvalidation['bad_matches'] ?? null) ? $qualityInvalidation['bad_matches'] : [],
+                ]
+            );
+        }
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         // queue:run -f：_queue_force_build.active=1 时强制走 AI，并绕过共享 Header/Footer 的进程内静态缓存。
         $pageTypeLabels = Page::getPageTypes();
@@ -12038,7 +12758,9 @@ SCRIPT;
                 );
                 $scope = \is_array($failure['scope'] ?? null) ? $failure['scope'] : $scope;
                 if (!empty($failure['fatal'])) {
-                    $fatalBatchThrowable = $failure['throwable'] instanceof \Throwable ? $failure['throwable'] : new \RuntimeException('Build task spec error');
+                    if (!$fatalBatchThrowable instanceof \Throwable) {
+                        $fatalBatchThrowable = $failure['throwable'] instanceof \Throwable ? $failure['throwable'] : new \RuntimeException('Build task spec error');
+                    }
                     $failedTaskKeys[] = $taskKey;
                     continue;
                 }
@@ -12109,7 +12831,9 @@ SCRIPT;
                     );
                     $scope = \is_array($failure['scope'] ?? null) ? $failure['scope'] : $scope;
                     if (!empty($failure['fatal'])) {
-                        $fatalBatchThrowable = $failure['throwable'] instanceof \Throwable ? $failure['throwable'] : $throwable;
+                        if (!$fatalBatchThrowable instanceof \Throwable) {
+                            $fatalBatchThrowable = $failure['throwable'] instanceof \Throwable ? $failure['throwable'] : $throwable;
+                        }
                         $failedTaskKeys[] = (string)$taskKey;
                         continue;
                     }
@@ -12132,6 +12856,35 @@ SCRIPT;
 
                 $blueprint = \is_array($meta['blueprint'] ?? null) ? $meta['blueprint'] : [];
                 $sectionComponent = \is_array($event['result'] ?? null) ? $event['result'] : [];
+                $sectionBlock = $this->htmlBlocksBuildService->buildGeneratedSectionBlock($sectionComponent);
+                if (!$this->isGeneratedSectionBlockUsable($sectionComponent, $sectionBlock)) {
+                    $failure = $this->handleBuildTaskGenerationFailure(
+                        $sse,
+                        $session,
+                        $adminId,
+                        $scope,
+                        (string)$taskKey,
+                        'page_section',
+                        AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+                        new \RuntimeException('AI generated empty or unusable section block: ' . (string)$taskKey),
+                        [
+                            'page_type' => $pageType,
+                            'task_keys' => $runningTaskKeys,
+                            'completed_task_keys' => $completedTaskKeys,
+                            'progress_percent' => $progressPercent,
+                        ]
+                    );
+                    $scope = \is_array($failure['scope'] ?? null) ? $failure['scope'] : $scope;
+                    if (!empty($failure['fatal'])) {
+                        if (!$fatalBatchThrowable instanceof \Throwable) {
+                            $fatalBatchThrowable = $failure['throwable'] instanceof \Throwable ? $failure['throwable'] : new \RuntimeException('AI generated empty section block.');
+                        }
+                        $failedTaskKeys[] = (string)$taskKey;
+                        continue;
+                    }
+                    $retryTaskKeys[] = (string)$taskKey;
+                    continue;
+                }
                 $this->virtualThemeService->saveGeneratedContentComponent((int)$scope['virtual_theme_id'], $pageType, $sectionComponent);
 
                 $layout = $this->scopeCompatibilityService->normalizeLayoutConfig($pageTypeLayouts[$pageType] ?? [], $pageType);
@@ -12167,7 +12920,7 @@ SCRIPT;
                         $pageType,
                         \is_array($virtualPages[$pageType]['blocks'] ?? null) ? $virtualPages[$pageType]['blocks'] : [],
                         $sharedComponents,
-                        $this->htmlBlocksBuildService->buildGeneratedSectionBlock($sectionComponent),
+                        $sectionBlock,
                         $scope['website_profile'],
                         $scope
                     );
@@ -12177,16 +12930,44 @@ SCRIPT;
                 $scope['page_type_layouts'] = $pageTypeLayouts;
                 $scope['virtual_pages_by_type'] = $virtualPages;
                 $scope['preview_page_type'] = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, (string)($scope['preview_page_type'] ?? $pageType));
+                try {
+                    $materialized = $this->materializeGeneratedPages(
+                        AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+                        (int)$draftWebsite['website_id'],
+                        $scope['website_profile'],
+                        [$pageType],
+                        [$pageType => $layout],
+                        [$pageType => $virtualPages[$pageType]]
+                    );
+                } catch (\Throwable $materializeThrowable) {
+                    $failure = $this->handleBuildTaskGenerationFailure(
+                        $sse,
+                        $session,
+                        $adminId,
+                        $scope,
+                        (string)$taskKey,
+                        'page_section',
+                        AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+                        $materializeThrowable,
+                        [
+                            'page_type' => $pageType,
+                            'task_keys' => $runningTaskKeys,
+                            'completed_task_keys' => $completedTaskKeys,
+                            'progress_percent' => $progressPercent,
+                        ]
+                    );
+                    $scope = \is_array($failure['scope'] ?? null) ? $failure['scope'] : $scope;
+                    if (!empty($failure['fatal'])) {
+                        if (!$fatalBatchThrowable instanceof \Throwable) {
+                            $fatalBatchThrowable = $failure['throwable'] instanceof \Throwable ? $failure['throwable'] : $materializeThrowable;
+                        }
+                        $failedTaskKeys[] = (string)$taskKey;
+                        continue;
+                    }
+                    $retryTaskKeys[] = (string)$taskKey;
+                    continue;
+                }
                 $scope = $this->buildTaskService->markTaskDone($scope, (string)$taskKey, ['page_type' => $pageType, 'section_code' => $sectionCode]);
-
-                $materialized = $this->materializeGeneratedPages(
-                    AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
-                    (int)$draftWebsite['website_id'],
-                    $scope['website_profile'],
-                    [$pageType],
-                    [$pageType => $layout],
-                    [$pageType => $virtualPages[$pageType]]
-                );
                 $scope = $this->mergeMaterializedPagesIntoScope($scope, $materialized);
                 $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
 
@@ -12365,6 +13146,14 @@ SCRIPT;
         $scope = $this->scopeCompatibilityService->normalizeScope(
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PUBLISH)
         );
+        $publishBlock = $this->resolveLatestPublishBlockingAiBuildFailure(
+            $scope,
+            \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
+            null
+        );
+        if (!empty($publishBlock['blocked'])) {
+            throw new \RuntimeException($this->formatPublishBlockedByAiFailureMessage($publishBlock));
+        }
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
         $websiteProfile = $this->profileGenerationService->generate($scope);
@@ -12407,6 +13196,9 @@ SCRIPT;
 
         $scope['pagebuilder_pages_by_type'] = $published['pagebuilder_pages_by_type'] ?? [];
         $scope['materialized_pages_by_type'] = $published['materialized_pages_by_type'] ?? [];
+        $scope['publish_verification'] = \is_array($published['publish_verification'] ?? null)
+            ? $published['publish_verification']
+            : [];
         $scope['preview_page_id'] = (int)($published['preview_page_id'] ?? 0);
         $scope['preview_page_type'] = (string)($published['preview_page_type'] ?? ($scope['preview_page_type'] ?? ''));
         $scope['build_summary'] = \array_replace(
@@ -12421,7 +13213,7 @@ SCRIPT;
         $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_PUBLISH);
 
         $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', __('正式页面已创建并上线'), 100);
-        return ['message' => (string)__('发布完成'), 'redirect_url' => $this->url->getBackendUrl('pagebuilder/backend/page/index'), 'published' => $published];
+        return ['message' => (string)__('发布完成'), 'published' => $published];
     }
 
     private function sendOperationProgress(

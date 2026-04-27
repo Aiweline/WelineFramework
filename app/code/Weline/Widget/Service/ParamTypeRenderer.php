@@ -87,6 +87,7 @@ class ParamTypeRenderer
     {
         $type = $this->normalizeType($param['type'] ?? 'string');
         $param = array_merge($param, ['type' => $type]);
+        $value = $this->normalizeValueForRender($param, $value);
         return $this->getRenderer($type)->getHtml($key, $param, $value, $layoutId, $attrs);
     }
 
@@ -191,5 +192,51 @@ class ParamTypeRenderer
     public function getRegisteredTypes(): array
     {
         return array_keys(self::DEFAULT_TYPE_CLASSES);
+    }
+
+    private function normalizeValueForRender(array $param, mixed $value): mixed
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $type = $param['type'] ?? 'string';
+
+        if ($type === 'array' || $type === 'list') {
+            if (is_string($value)) {
+                $trimmed = trim($value);
+                if ($trimmed === '') {
+                    return [];
+                }
+                $decoded = json_decode($trimmed, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    return $decoded;
+                }
+            }
+            return $value;
+        }
+
+        if ($type === 'select' && ($param['multiple'] ?? false)) {
+            if (is_array($value)) {
+                return $value;
+            }
+            if (is_string($value)) {
+                $trimmed = trim($value);
+                if ($trimmed === '') {
+                    return [];
+                }
+                $decoded = json_decode($trimmed, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    return $decoded;
+                }
+                if (str_contains($trimmed, ',')) {
+                    return array_values(array_filter(array_map('trim', explode(',', $trimmed)), static fn($item) => $item !== ''));
+                }
+                return [$trimmed];
+            }
+            return [$value];
+        }
+
+        return $value;
     }
 }

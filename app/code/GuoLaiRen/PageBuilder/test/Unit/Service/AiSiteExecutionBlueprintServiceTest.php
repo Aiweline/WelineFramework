@@ -205,6 +205,68 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         );
     }
 
+    public function testStageOneThemePromptRequiresPolishedCustomerFitVisualIdentity(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $method = new \ReflectionMethod($service, 'buildAiStageOneThemePrompt');
+        $method->setAccessible(true);
+
+        $prompt = $method->invokeArgs($service, [
+            [
+                'site_title' => 'AI Plugin Lab',
+                'brief_description' => 'Build an AI plugin download website for developers.',
+                'page_types' => ['home_page', 'about_page'],
+            ],
+            [
+                'site_title' => 'AI Plugin Lab',
+                'brief_description' => 'Build an AI plugin download website for developers.',
+            ],
+            ['home_page', 'about_page'],
+            'en_US',
+            'en_US',
+            '',
+            'AI Plugin Lab',
+            'A focused AI plugin download website.',
+            [
+                'expanded_brief' => 'Developers need a memorable AI plugin download site with trust and direct CTA.',
+            ],
+        ]);
+
+        self::assertIsString($prompt);
+        self::assertStringContainsString('theme_design.style_signature', $prompt);
+        self::assertStringContainsString('art_direction', $prompt);
+        self::assertStringContainsString('Visual quality bar', $prompt);
+        self::assertStringContainsString('Customer-fit rule', $prompt);
+        self::assertStringContainsString('Beauty rule', $prompt);
+        self::assertStringContainsString('Customer-anchor rule', $prompt);
+        self::assertStringContainsString('Interaction/effects rule', $prompt);
+        self::assertStringContainsString('Style-diversity rule', $prompt);
+        self::assertStringContainsString('generic Inter/Roboto/system-font hierarchy', $prompt);
+    }
+
+    public function testAiPluginDownloadBriefUsesDistinctiveFallbackVisualSystem(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+
+        $artifacts = $service->buildPlanArtifacts([
+            'site_title' => 'AI Plugin Lab',
+            'brief_description' => 'Build an AI plugin download website for developers.',
+            'page_types' => ['home_page'],
+            'workspace_track' => 'virtual_theme',
+        ], [
+            'site_title' => 'AI Plugin Lab',
+            'brief_description' => 'Build an AI plugin download website for developers.',
+        ]);
+
+        self::assertSame('Electric Circuit', (string)($artifacts['plan_json']['palette']['name'] ?? ''));
+        self::assertSame('Neon Utility Lab', (string)($artifacts['plan_json']['theme_style']['name'] ?? ''));
+        self::assertStringContainsString(
+            'luminous circuit accents',
+            (string)($artifacts['plan_json']['theme_design']['style_signature'] ?? '')
+        );
+        self::assertIsArray($artifacts['plan_json']['theme_design']['art_direction'] ?? null);
+    }
+
     public function testBuildPlanArtifactsUsesDefaultLocaleForWebsiteContentWhenPlanLocaleDiffers(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
@@ -1323,6 +1385,33 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringNotContainsString('????????', $joinedPrompts);
     }
 
+    public function testBuildPlanArtifactsByAiStreamBackfillsMissingStageOneNavigationPlan(): void
+    {
+        $response = \json_decode($this->buildValidAiPlanResponse(), true);
+        unset($response['plan_json']['navigation_plan']);
+
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub(\json_encode($response, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}')
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'zh_Hans_CN',
+            'default_locale' => 'en_US',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+
+        self::assertNotEmpty($artifacts['plan_json']['navigation_plan']['header_items'] ?? []);
+        self::assertNotEmpty($artifacts['structured']['navigation_plan']['header_items'] ?? []);
+        self::assertSame('/', (string)($artifacts['plan_json']['navigation_plan']['header_items'][0]['href'] ?? ''));
+    }
+
     public function testBuildPlanArtifactsByAiStreamReportsDetailedStageOnePipelineProgress(): void
     {
         $progressEvents = [];
@@ -1968,6 +2057,8 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertIsArray($themeDesign);
         foreach ([
             'theme_purpose',
+            'style_signature',
+            'art_direction',
             'color_scheme',
             'typography_spacing_radius',
             'visual_keywords',
@@ -1978,8 +2069,13 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         ] as $field) {
             self::assertArrayHasKey($field, $themeDesign);
         }
-        foreach (['theme_purpose', 'tone_of_voice', 'cta_tone', 'selection_reason'] as $field) {
+        foreach (['theme_purpose', 'style_signature', 'tone_of_voice', 'cta_tone', 'selection_reason'] as $field) {
             self::assertNotSame('', \trim((string)$themeDesign[$field]), 'theme_design.' . $field . ' must not be empty.');
+        }
+        self::assertIsArray($themeDesign['art_direction']);
+        foreach (['layout_motif', 'background_system', 'surface_treatment', 'visual_detail_rule', 'motion_rule'] as $field) {
+            self::assertArrayHasKey($field, $themeDesign['art_direction']);
+            self::assertNotSame('', \trim((string)$themeDesign['art_direction'][$field]), 'theme_design.art_direction.' . $field . ' must not be empty.');
         }
 
         self::assertIsArray($themeDesign['color_scheme']);
@@ -2026,6 +2122,8 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
 
         return [
             'theme_purpose' => $themeDesign['theme_purpose'],
+            'style_signature' => $themeDesign['style_signature'],
+            'art_direction' => $themeDesign['art_direction'],
             'color_scheme' => [
                 'name' => $themeDesign['color_scheme']['name'],
                 'primary' => $themeDesign['color_scheme']['primary'],

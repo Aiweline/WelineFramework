@@ -27,6 +27,7 @@ use GuoLaiRen\PageBuilder\Service\Component\ComponentRenderer;
 use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\PageLayout;
+use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
 
 class Component extends BackendController
 {
@@ -1517,11 +1518,29 @@ class Component extends BackendController
         try {
             $componentCode = $this->request->getParam('component_code', '');
             $styleCode = trim((string)$this->request->getParam('style_code', ''));
+            $virtualParams = [
+                'public_id' => (string)$this->request->getParam('public_id', ''),
+                'page_type' => (string)$this->request->getParam('page_type', ''),
+                'component_code' => (string)$componentCode,
+                'style_code' => $styleCode,
+                'region' => (string)$this->request->getParam('region', ''),
+                'index' => (string)$this->request->getParam('index', ''),
+            ];
             
             if ($componentCode === '' || $componentCode === null) {
                 throw new \Exception('缺少组件代码');
             }
             
+            if ($this->isVirtualRequest($virtualParams)) {
+                $virtualMetadata = $this->buildVirtualComponentMetadata($virtualParams);
+                if ($virtualMetadata !== null) {
+                    return $this->fetchJson([
+                        'success' => true,
+                        'metadata' => $virtualMetadata,
+                    ]);
+                }
+            }
+
             $metadata = null;
             if ($styleCode !== '') {
                 $metadata = $this->layoutAssembler->getComponentMetadata($styleCode, $componentCode);
@@ -1686,7 +1705,8 @@ class Component extends BackendController
         $scope = $scopeService->normalizeScope($context['scope']);
         $virtualPages = $scopeService->buildVirtualPagesByType(
             $scopeService->normalizePageTypes($scope['page_types'] ?? []),
-            $scope
+            $scope,
+            false
         );
         $pageType = $scopeService->resolvePreviewPageType($virtualPages, $requestedPageType);
         if ($pageType === '' || !isset($virtualPages[$pageType])) {
@@ -2208,6 +2228,194 @@ class Component extends BackendController
         }
 
         return null;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>|null
+     */
+    private function buildVirtualComponentMetadata(array $params): ?array
+    {
+        $context = $this->resolveVirtualContext($params);
+        if ($context === null) {
+            return null;
+        }
+
+        $componentCode = \trim((string)($params['component_code'] ?? ''));
+        if ($componentCode === '') {
+            return null;
+        }
+
+        $component = $this->loadVirtualThemeComponent((int)$context['virtual_theme_id'], $componentCode);
+        if (!$component) {
+            return null;
+        }
+
+        $region = \trim((string)($params['region'] ?? ''));
+        $layoutEntry = $this->findVirtualLayoutComponentEntry(
+            $context['layout'],
+            $componentCode,
+            $region,
+            (int)($params['index'] ?? -1)
+        );
+        $defaultConfig = $component->getDefaultConfig();
+        $currentConfig = \is_array($layoutEntry['config'] ?? null) ? $layoutEntry['config'] : [];
+        $fieldConfig = \array_replace($defaultConfig, $currentConfig);
+        $meta = $component->getMeta();
+        $category = $component->getCategory();
+
+        return [
+            'code' => $componentCode,
+            'actual_code' => $component->getComponentCode(),
+            'style_code' => (string)$context['style_code'],
+            'virtual_theme_id' => (int)$context['virtual_theme_id'],
+            'name' => $component->getName() !== '' ? $component->getName() : $componentCode,
+            'description' => \is_string($meta['description'] ?? null) ? (string)$meta['description'] : '',
+            'region' => $region !== '' ? $region : $category,
+            'category' => $category,
+            'type' => 'section',
+            'thumbnail' => '',
+            'config_groups' => [],
+            'fields' => $this->buildVirtualComponentFields($fieldConfig),
+        ];
+    }
+
+    private function loadVirtualThemeComponent(int $virtualThemeId, string $componentCode): ?VirtualThemeComponent
+    {
+        if ($virtualThemeId <= 0 || $componentCode === '') {
+            return null;
+        }
+
+        /** @var VirtualThemeComponent $component */
+        $component = clone ObjectManager::getInstance(VirtualThemeComponent::class);
+        $component->clear()
+            ->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $virtualThemeId)
+            ->where(VirtualThemeComponent::schema_fields_COMPONENT_CODE, $componentCode)
+            ->where(VirtualThemeComponent::schema_fields_AREA, VirtualThemeComponent::AREA_FRONTEND)
+            ->where(VirtualThemeComponent::schema_fields_IS_ACTIVE, 1)
+            ->order(VirtualThemeComponent::schema_fields_ID, 'DESC')
+            ->find()
+            ->fetch();
+
+        if (!$component->getId()) {
+            $component = clone ObjectManager::getInstance(VirtualThemeComponent::class);
+            $component->clear()
+                ->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $virtualThemeId)
+                ->where(VirtualThemeComponent::schema_fields_COMPONENT_CODE, $componentCode)
+                ->where(VirtualThemeComponent::schema_fields_IS_ACTIVE, 1)
+                ->order(VirtualThemeComponent::schema_fields_ID, 'DESC')
+                ->find()
+                ->fetch();
+        }
+
+        return $component->getId() ? $component : null;
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     * @return array<string, mixed>
+     */
+    private function findVirtualLayoutComponentEntry(array $layout, string $componentCode, string $region, int $index): array
+    {
+        if (($region === 'header' || $region === 'footer') && \is_array($layout[$region] ?? null)) {
+            $entry = $layout[$region];
+            $entryCode = (string)($entry['component'] ?? $entry['code'] ?? '');
+            return $entryCode === $componentCode ? $entry : [];
+        }
+
+        $contentComponents = \array_values(\is_array($layout['content'] ?? null) ? $layout['content'] : []);
+        if ($region === 'content' && isset($contentComponents[$index]) && \is_array($contentComponents[$index])) {
+            $entry = $contentComponents[$index];
+            $entryCode = (string)($entry['code'] ?? $entry['component'] ?? '');
+            if ($entryCode === $componentCode) {
+                return $entry;
+            }
+        }
+
+        foreach ($contentComponents as $entry) {
+            if (!\is_array($entry)) {
+                continue;
+            }
+            $entryCode = (string)($entry['code'] ?? $entry['component'] ?? '');
+            if ($entryCode === $componentCode) {
+                return $entry;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildVirtualComponentFields(array $config): array
+    {
+        $groups = [];
+        foreach ($config as $key => $value) {
+            $fieldKey = \trim((string)$key);
+            if ($fieldKey === '' || \str_starts_with($fieldKey, '_')) {
+                continue;
+            }
+
+            $parts = \explode('.', $fieldKey, 2);
+            $groupKey = $parts[0] !== '' ? $parts[0] : 'config';
+            $shortKey = $parts[1] ?? $fieldKey;
+            if (!isset($groups[$groupKey])) {
+                $groups[$groupKey] = [
+                    'label' => $this->humanizeVirtualFieldLabel($groupKey),
+                    'fields' => [],
+                ];
+            }
+
+            $groups[$groupKey]['fields'][$shortKey] = [
+                'label' => $this->humanizeVirtualFieldLabel($shortKey),
+                'type' => $this->inferVirtualFieldType($fieldKey, $value),
+                'default' => $value,
+            ];
+
+            $lowerValue = \is_scalar($value) || $value === null ? \strtolower((string)$value) : '';
+            if (\in_array($lowerValue, ['yes', 'no'], true)) {
+                $groups[$groupKey]['fields'][$shortKey]['type'] = 'select';
+                $groups[$groupKey]['fields'][$shortKey]['options'] = ['yes', 'no'];
+            }
+        }
+
+        return $groups;
+    }
+
+    private function inferVirtualFieldType(string $key, mixed $value): string
+    {
+        $key = \strtolower($key);
+        $fieldName = $key;
+        if (\str_contains($fieldName, '.')) {
+            $fieldName = (string)\substr($fieldName, (int)\strrpos($fieldName, '.') + 1);
+        }
+        $stringValue = \is_scalar($value) || $value === null ? (string)$value : \json_encode($value, \JSON_UNESCAPED_UNICODE);
+        $stringValue = \is_string($stringValue) ? $stringValue : '';
+        if (\preg_match('/(^|\.|_)(color|colour)$/', $key) === 1 && \preg_match('/^#[0-9a-f]{6}$/i', $stringValue) === 1) {
+            return 'color';
+        }
+        if (\str_contains($key, 'image') || \str_contains($key, 'logo') || \str_contains($key, 'icon') || \str_contains($key, 'media')) {
+            return 'image';
+        }
+        if (
+            \strlen($stringValue) > 96
+            || \str_contains($fieldName, 'description')
+            || \str_contains($fieldName, 'subtitle')
+            || $fieldName === 'content'
+            || \str_ends_with($fieldName, '_content')
+        ) {
+            return 'textarea';
+        }
+
+        return 'text';
+    }
+
+    private function humanizeVirtualFieldLabel(string $key): string
+    {
+        $label = \trim(\preg_replace('/[_-]+/', ' ', $key) ?: $key);
+        return $label !== '' ? \ucfirst($label) : $key;
     }
 
     private function resolveRequestVirtualThemeId(): int
