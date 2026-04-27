@@ -6,6 +6,7 @@ namespace Weline\Theme\Controller\Frontend\ThemePreview;
 
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Service\EditorModeAssetInjector;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\ThemePageTypeResolver;
 use Weline\Theme\Service\ThemePreviewContentRenderer;
@@ -78,6 +79,14 @@ class Content extends FrontendController
             'showPartners' => true,
         ], $previewPayload['meta']));
 
-        return (string)$this->fetch('Weline_Theme::templates/frontend/theme-preview/content.phtml');
+        $html = (string)$this->fetch('Weline_Theme::templates/frontend/theme-preview/content.phtml');
+        $editorMode = (string)$this->request->getParam('editor_mode', '');
+        if ($html !== '' && ($editorMode === '1' || $editorMode === 'true')) {
+            /** @var EditorModeAssetInjector $injector */
+            $injector = ObjectManager::getInstance(EditorModeAssetInjector::class);
+            $html = $injector->inject($html);
+        }
+
+        return $html;
     }
 }

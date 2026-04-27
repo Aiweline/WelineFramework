@@ -12,6 +12,32 @@ use Weline\Widget\Service\WidgetRegistry;
 
 class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
 {
+    private const SLOT_TO_POSITION_MAP = [
+        'logo' => 'header',
+        'search' => 'header',
+        'header-search' => 'header',
+        'navigation' => 'header',
+        'user-area' => 'header',
+        'account' => 'header',
+        'cart' => 'header',
+        'cart-icon' => 'header',
+        'mini-cart-icon' => 'header',
+        'language' => 'header',
+        'language-switcher' => 'header',
+        'currency' => 'header',
+        'currency-switcher' => 'header',
+        'footer-links' => 'footer',
+        'links' => 'footer',
+        'footer-newsletter' => 'footer',
+        'newsletter' => 'footer',
+        'footer-social' => 'footer',
+        'social' => 'footer',
+        'footer-payment' => 'footer',
+        'payment' => 'footer',
+        'footer-copyright' => 'footer',
+        'copyright' => 'footer',
+    ];
+
     public function __construct(
         private readonly WidgetRegistry $widgetRegistry,
     ) {
@@ -70,7 +96,7 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
                         'template' => $widget['template'] ?? null,
                     ]),
                     params: is_array($widget['params'] ?? null) ? $widget['params'] : [],
-                    position: $this->normalizeArray($widget['position'] ?? ['content'], ['content']),
+                    position: $this->resolvePositions($widget, $widgetType, $code),
                     pageLayouts: $this->normalizeArray($widget['page_layouts'] ?? ['*'], ['*']),
                     slots: is_array($widget['slots'] ?? null) ? $widget['slots'] : [],
                     slot: !empty($widget['slot']) ? (string)$widget['slot'] : null,
@@ -133,5 +159,42 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
         ), static fn(string $item): bool => $item !== ''));
 
         return $items ?: $fallback;
+    }
+
+    private function resolvePositions(array $widget, string $widgetType, string $code): array
+    {
+        $explicit = $this->normalizeArray($widget['position'] ?? [], []);
+        if ($explicit) {
+            return $explicit;
+        }
+
+        $slot = (string)($widget['slot'] ?? '');
+        if ($slot !== '' && isset(self::SLOT_TO_POSITION_MAP[$slot])) {
+            return [self::SLOT_TO_POSITION_MAP[$slot]];
+        }
+
+        if ($widgetType === 'container') {
+            $codeLower = strtolower($code);
+            if (str_contains($codeLower, 'header')) {
+                return ['header'];
+            }
+            if (str_contains($codeLower, 'footer')) {
+                return ['footer'];
+            }
+            if (str_contains($codeLower, 'sidebar')) {
+                return ['sidebar'];
+            }
+            if (str_contains($codeLower, 'banner')) {
+                return ['banner'];
+            }
+            return ['content'];
+        }
+
+        return match ($widgetType) {
+            'header', 'navigation', 'search' => ['header'],
+            'footer', 'newsletter', 'social' => ['footer'],
+            'sidebar' => ['sidebar'],
+            default => ['content'],
+        };
     }
 }

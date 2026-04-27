@@ -585,12 +585,27 @@ class ThemeEditor extends BackendController
             ]);
         }
 
+        if (!is_array($config)) {
+            $config = is_string($config) ? (json_decode($config, true) ?: []) : [];
+        }
+
+        $this->themeLayout->reset()->load($layoutId);
+        if (!$this->themeLayout->getLayoutId()) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('部件不存在'),
+            ]);
+        }
+
+        $config = $this->normalizeWidgetConfigForLayout($this->themeLayout, $config);
+
         try {
             $result = $this->layoutService->updateWidgetConfig($layoutId, $config);
 
             $response = [
                 'success' => $result,
                 'message' => $result ? __('配置已保存') : __('保存失败'),
+                'config' => $config,
             ];
 
             // T009: 配置保存成功后返回 preview_html
@@ -1352,6 +1367,7 @@ class ThemeEditor extends BackendController
                 $paramDefs = [];
             }
 
+            $configData = $this->normalizeWidgetConfigValues($configData, $paramDefs);
             $identify = $this->resolveThemeConfigIdentify($widgetModule, $widgetType, $widgetCode, $area);
 
             // 分离路径 key（如 slides.0.title）与普通 key，同时写入翻译存储
@@ -1815,6 +1831,74 @@ class ThemeEditor extends BackendController
         }
 
         return null;
+    }
+
+    private function getWidgetParamDefinitions(string $widgetModule, string $widgetCode, string $area): array
+    {
+        $eventData = [
+            'data' => [
+                'operation' => 'getParamDefinitions',
+                'params' => [
+                    'widget_module' => $widgetModule,
+                    'widget_code' => $widgetCode,
+                    'area' => $area,
+                ],
+            ],
+        ];
+        $this->getEventManager()->dispatch('Weline_Widget::query', $eventData);
+        $paramDefs = $eventData['data']['result'] ?? [];
+        return is_array($paramDefs) ? $paramDefs : [];
+    }
+
+    private function normalizeWidgetConfigValues(array $configData, array $paramDefs): array
+    {
+        if (empty($configData) || empty($paramDefs)) {
+            return $configData;
+        }
+
+        $pathConfig = [];
+        $normalConfig = [];
+        foreach ($configData as $key => $value) {
+            if (is_string($key) && str_contains($key, '.')) {
+                $pathConfig[$key] = $value;
+            } else {
+                $normalConfig[$key] = $value;
+            }
+        }
+
+        if (empty($normalConfig)) {
+            return $configData;
+        }
+
+        $eventData = [
+            'data' => [
+                'operation' => 'processConfig',
+                'params' => [
+                    'params' => $paramDefs,
+                    'values' => $normalConfig,
+                ],
+            ],
+        ];
+        $this->getEventManager()->dispatch('Weline_Widget::query', $eventData);
+        $processed = $eventData['data']['result'] ?? null;
+        if (!is_array($processed)) {
+            return $configData;
+        }
+
+        return array_merge($processed, $pathConfig);
+    }
+
+    private function normalizeWidgetConfigForLayout(ThemeLayout $widgetLayout, array $configData): array
+    {
+        $widgetModule = (string)$widgetLayout->getData('widget_module');
+        $widgetCode = (string)$widgetLayout->getData('widget_code');
+        $area = (string)($widgetLayout->getData('area') ?: 'frontend');
+        if ($widgetModule === '' || $widgetCode === '') {
+            return $configData;
+        }
+
+        $paramDefs = $this->getWidgetParamDefinitions($widgetModule, $widgetCode, $area);
+        return $this->normalizeWidgetConfigValues($configData, $paramDefs);
     }
 
     private function resolveThemeConfigIdentify(string $widgetModule, string $widgetType, string $widgetCode, string $area): string

@@ -58,7 +58,13 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
     {
         $service = $this->service();
 
-        $active = ['operation' => 'plan', 'status' => 'running'];
+        $active = [
+            'operation' => 'plan',
+            'status' => 'running',
+            'queue_waiting_for_scheduler' => true,
+            'can_close_stream' => true,
+            'continue_other_operations' => true,
+        ];
 
         self::assertSame(
             $active,
@@ -102,7 +108,24 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         );
         self::assertSame('error', $withProcess['status']);
         self::assertSame('AI 拒绝请求：超过配额', $withProcess['message'], 'process 非空时优先');
+        self::assertFalse((bool)$withProcess['queue_waiting_for_scheduler']);
+        self::assertFalse((bool)$withProcess['can_close_stream']);
+        self::assertFalse((bool)$withProcess['continue_other_operations']);
         self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', (string)$withProcess['updated_at']);
+
+        $withResultTail = $service->reconcileActiveOperationWithQueueInfo(
+            $active,
+            [
+                'queue_id' => 553,
+                'snapshot' => ['queue_id' => 553, 'status' => 'error'],
+                'process' => 'AI body stream is intentionally omitted from queue logs',
+                'result_log' => "line one\nstage-one terminal failure detail",
+            ],
+            'plan'
+        );
+        self::assertSame('error', $withResultTail['status']);
+        self::assertSame(553, $withResultTail['queue_id']);
+        self::assertSame('stage-one terminal failure detail', $withResultTail['message']);
 
         $withOnlyResult = $service->reconcileActiveOperationWithQueueInfo(
             $active,
@@ -130,13 +153,24 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         $service = $this->service();
 
         $running = $service->reconcileActiveOperationWithQueueInfo(
-            ['operation' => 'plan', 'status' => 'error', 'message' => 'stale frontend failure', 'queue_id' => 12],
-            ['queue_id' => 344, 'snapshot' => ['status' => 'running', 'queue_id' => 344], 'process' => 'AI body is still streaming'],
+            [
+                'operation' => 'plan',
+                'status' => 'error',
+                'message' => 'stale frontend failure',
+                'queue_id' => 12,
+                'queue_waiting_for_scheduler' => true,
+                'can_close_stream' => true,
+                'continue_other_operations' => true,
+            ],
+            ['queue_id' => 344, 'pid' => 987, 'snapshot' => ['status' => 'running', 'queue_id' => 344, 'pid' => 987], 'process' => 'AI body is still streaming'],
             'plan'
         );
         self::assertSame('running', $running['status']);
         self::assertSame(344, $running['queue_id']);
         self::assertSame('AI body is still streaming', $running['message']);
+        self::assertFalse((bool)$running['queue_waiting_for_scheduler']);
+        self::assertFalse((bool)$running['can_close_stream']);
+        self::assertFalse((bool)$running['continue_other_operations']);
 
         $queued = $service->reconcileActiveOperationWithQueueInfo(
             ['operation' => 'task_plan', 'status' => 'error', 'message' => 'stale frontend failure'],
@@ -144,7 +178,10 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
             'task_plan'
         );
         self::assertSame('queued', $queued['status']);
-        self::assertSame('Stage-2 task-plan queue is running.', $queued['message']);
+        self::assertNotSame('', (string)$queued['message']);
+        self::assertTrue((bool)$queued['queue_waiting_for_scheduler']);
+        self::assertTrue((bool)$queued['can_close_stream']);
+        self::assertTrue((bool)$queued['continue_other_operations']);
     }
 
     public function testReconcileMapsDoneFamilyStatusesToDoneWithOperationSpecificFallback(): void
@@ -153,21 +190,37 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
 
         foreach (['done', 'stop', 'cancelled'] as $queueStatus) {
             $result = $service->reconcileActiveOperationWithQueueInfo(
-                ['operation' => 'task_plan', 'status' => 'running', 'message' => ''],
+                [
+                    'operation' => 'task_plan',
+                    'status' => 'running',
+                    'message' => '',
+                    'queue_waiting_for_scheduler' => true,
+                    'can_close_stream' => true,
+                    'continue_other_operations' => true,
+                ],
                 ['snapshot' => ['status' => $queueStatus]],
                 'task_plan'
             );
             self::assertSame('done', $result['status'], "queue={$queueStatus} 应映射为 done");
             self::assertNotSame('', (string)$result['message'], 'task_plan 兜底 message 非空');
+            self::assertFalse((bool)$result['queue_waiting_for_scheduler']);
+            self::assertFalse((bool)$result['can_close_stream']);
+            self::assertFalse((bool)$result['continue_other_operations']);
         }
 
         $buildResult = $service->reconcileActiveOperationWithQueueInfo(
-            ['operation' => 'build', 'status' => 'queued', 'message' => ''],
+            [
+                'operation' => 'build',
+                'status' => 'queued',
+                'message' => '',
+                'queue_waiting_for_scheduler' => true,
+            ],
             ['snapshot' => ['status' => 'done']],
             'build'
         );
         self::assertSame('done', $buildResult['status']);
         self::assertNotSame('', (string)$buildResult['message']);
+        self::assertFalse((bool)$buildResult['queue_waiting_for_scheduler']);
 
         $recovered = $service->reconcileActiveOperationWithQueueInfo(
             ['operation' => 'plan', 'status' => 'error', 'message' => 'stale frontend failure'],
@@ -320,6 +373,39 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
 
         // lastProcess 应被更新
         self::assertSame('AI 生成进度 45%', $result[0]);
+    }
+
+    public function testForwardObservedQueueSignalsKeepsTaskPlanQueueProcessAndResultVisible(): void
+    {
+        $sse = new SpySseWriterForQueueObserverStream(true);
+
+        $queueRow = [
+            'queue_id' => 18,
+            'status' => 'running',
+            'pid' => 2468,
+            'process' => '第二阶段任务方案：正在汇总页面任务',
+            'result' => "[12:00:00] INFO 第二阶段任务方案进入批量整理\n[12:00:02] TASK_PLAN_REFINED 第二阶段任务方案已刷新\n",
+        ];
+
+        $result = $this->service()->forwardObservedQueueSignals(
+            $sse,
+            $queueRow,
+            'task_plan',
+            '',
+            0,
+            'running',
+            2468
+        );
+
+        self::assertCount(3, $sse->calls);
+        self::assertSame('progress', $sse->calls[0]['event']);
+        self::assertSame('第二阶段任务方案：正在汇总页面任务', $sse->calls[0]['data']['message']);
+        self::assertSame('chunk', $sse->calls[1]['event']);
+        self::assertSame('[12:00:00] INFO 第二阶段任务方案进入批量整理', $sse->calls[1]['data']['message']);
+        self::assertSame('chunk', $sse->calls[2]['event']);
+        self::assertSame('[12:00:02] TASK_PLAN_REFINED 第二阶段任务方案已刷新', $sse->calls[2]['data']['message']);
+        self::assertSame('第二阶段任务方案：正在汇总页面任务', $result[0]);
+        self::assertSame(\strlen($queueRow['result']), $result[1]);
     }
 
     public function testForwardObservedQueueSignalsEmitsSuppressedPanelUpdateWhenOperationSuppressed(): void
