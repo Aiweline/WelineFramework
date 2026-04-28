@@ -12,10 +12,11 @@ use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
 use GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\SchedulerSystem;
 
-final class AiSitePageComponentGenerationService
+class AiSitePageComponentGenerationService
 {
     private const REQUEST_CTX_AI_CHUNK_FORWARDER = 'pagebuilder.ai.chunk.forwarder';
     public const REQUEST_KEY_FORCE_REAL_AI_IN_TEST = 'pagebuilder.ai.force_real_in_test';
@@ -449,7 +450,6 @@ final class AiSitePageComponentGenerationService
             return;
         }
 
-        // Fiber 不可用或测试环境 → 串行回退
         if ($this->isTestEnvironment() || !\class_exists(\Fiber::class)) {
             foreach ($components as $region => $spec) {
                 yield $region => $this->generateComponent(
@@ -464,70 +464,33 @@ final class AiSitePageComponentGenerationService
             return;
         }
 
-        /** @var array<string, \Fiber> $fibers */
-        $fibers = [];
+        $tasks = [];
         foreach ($components as $region => $spec) {
-            $fibers[$region] = new \Fiber(function () use ($spec): array {
-                try {
-                    return [
-                        'status' => 'fulfilled',
-                        'result' => $this->generateComponent(
-                            $spec['componentCode'],
-                            $spec['name'],
-                            $spec['region'],
-                            $spec['prompt'],
-                            $spec['defaultConfig'],
-                            $spec['renderContext']
-                        ),
-                    ];
-                } catch (\Throwable $throwable) {
-                    return [
-                        'status' => 'rejected',
-                        'error' => $throwable,
-                    ];
-                }
-            });
+            $tasks[$region] = function () use ($spec): array {
+                return $this->generateComponent(
+                    $spec['componentCode'],
+                    $spec['name'],
+                    $spec['region'],
+                    $spec['prompt'],
+                    $spec['defaultConfig'],
+                    $spec['renderContext']
+                );
+            };
         }
 
-        // 启动所有 Fiber
-        foreach ($fibers as $fiber) {
-            $fiber->start();
-        }
-
-        // 轮询直到全部完成
         $results = [];
         $errors = [];
-        while (\count($results) + \count($errors) < \count($fibers)) {
-            foreach ($fibers as $region => $fiber) {
-                if (isset($results[$region]) || isset($errors[$region])) {
-                    continue;
-                }
-                if ($fiber->isTerminated()) {
-                    try {
-                        $outcome = $fiber->getReturn();
-                        if (($outcome['status'] ?? '') === 'fulfilled') {
-                            $results[$region] = \is_array($outcome['result'] ?? null) ? $outcome['result'] : [];
-                        } else {
-                            $errors[$region] = ($outcome['error'] ?? null) instanceof \Throwable
-                                ? $outcome['error']
-                                : new \RuntimeException('Component fiber failed without an exception payload.');
-                        }
-                    } catch (\Throwable $e) {
-                        $errors[$region] = $e;
-                    }
-                } elseif ($fiber->isSuspended()) {
-                    try {
-                        $fiber->resume();
-                    } catch (\Throwable $e) {
-                        $errors[$region] = $e;
-                    }
-                }
+        $runner = new FiberTaskRunner(defaultConcurrency: $this->resolveConcurrency(\count($tasks)));
+        foreach ($runner->runEvents($tasks) as $region => $event) {
+            if (($event['status'] ?? '') === 'fulfilled') {
+                $results[$region] = \is_array($event['result'] ?? null) ? $event['result'] : [];
+                continue;
             }
-            // 避免 CPU 空转，并让出当前调度片
-            SchedulerSystem::yieldDelay(5);
+            $errors[$region] = ($event['error'] ?? null) instanceof \Throwable
+                ? $event['error']
+                : new \RuntimeException('Component fiber failed without an exception payload.');
         }
 
-        // 按原始顺序 yield 结果
         foreach ($components as $region => $_) {
             if (isset($results[$region])) {
                 yield $region => $results[$region];
@@ -582,96 +545,45 @@ final class AiSitePageComponentGenerationService
             return;
         }
 
-        /** @var array<string, \Fiber> $fibers */
-        $fibers = [];
+        $tasks = [];
         foreach ($components as $componentKey => $spec) {
-            $fibers[$componentKey] = new \Fiber(function () use ($spec): array {
-                try {
-                    return [
-                        'status' => 'fulfilled',
-                        'result' => $this->generateComponent(
-                            $spec['componentCode'],
-                            $spec['name'],
-                            $spec['region'],
-                            $spec['prompt'],
-                            $spec['defaultConfig'],
-                            $spec['renderContext']
-                        ),
-                    ];
-                } catch (\Throwable $throwable) {
-                    return [
-                        'status' => 'rejected',
-                        'error' => $throwable,
-                    ];
-                }
-            });
+            $tasks[$componentKey] = function () use ($spec): array {
+                return $this->generateComponent(
+                    $spec['componentCode'],
+                    $spec['name'],
+                    $spec['region'],
+                    $spec['prompt'],
+                    $spec['defaultConfig'],
+                    $spec['renderContext']
+                );
+            };
         }
 
-        foreach ($fibers as $fiber) {
-            $fiber->start();
-        }
-
-        $settled = [];
-        while (\count($settled) < \count($fibers)) {
-            $madeProgress = false;
-            foreach ($fibers as $componentKey => $fiber) {
-                if (isset($settled[$componentKey])) {
-                    continue;
-                }
-
-                try {
-                    if ($fiber->isTerminated()) {
-                        $settled[$componentKey] = true;
-                        $madeProgress = true;
-                        $outcome = $fiber->getReturn();
-                        yield $componentKey => ($outcome['status'] ?? '') === 'fulfilled'
-                            ? [
-                                'status' => 'fulfilled',
-                                'result' => \is_array($outcome['result'] ?? null) ? $outcome['result'] : [],
-                            ]
-                            : [
-                                'status' => 'rejected',
-                                'error' => ($outcome['error'] ?? null) instanceof \Throwable
-                                    ? $outcome['error']
-                                    : new \RuntimeException('Component fiber failed without an exception payload.'),
-                            ];
-                        continue;
-                    }
-
-                    if ($fiber->isSuspended()) {
-                        $fiber->resume();
-                        $madeProgress = true;
-
-                        if ($fiber->isTerminated()) {
-                            $settled[$componentKey] = true;
-                            $outcome = $fiber->getReturn();
-                            yield $componentKey => ($outcome['status'] ?? '') === 'fulfilled'
-                                ? [
-                                    'status' => 'fulfilled',
-                                    'result' => \is_array($outcome['result'] ?? null) ? $outcome['result'] : [],
-                                ]
-                                : [
-                                    'status' => 'rejected',
-                                    'error' => ($outcome['error'] ?? null) instanceof \Throwable
-                                        ? $outcome['error']
-                                        : new \RuntimeException('Component fiber failed without an exception payload.'),
-                                ];
-                        }
-                    }
-                } catch (\Throwable $throwable) {
-                    $settled[$componentKey] = true;
-                    $madeProgress = true;
-                    yield $componentKey => [
-                        'status' => 'rejected',
-                        'error' => $throwable,
-                    ];
-                }
+        $runner = new FiberTaskRunner(defaultConcurrency: $this->resolveConcurrency(\count($tasks)));
+        foreach ($runner->runEvents($tasks) as $componentKey => $event) {
+            if (($event['status'] ?? '') === 'fulfilled') {
+                yield $componentKey => [
+                    'status' => 'fulfilled',
+                    'result' => \is_array($event['result'] ?? null) ? $event['result'] : [],
+                ];
+                continue;
             }
 
-            if (\count($settled) < \count($fibers)) {
-                SchedulerSystem::yieldDelay($madeProgress ? 1 : 5);
-            }
+            yield $componentKey => [
+                'status' => 'rejected',
+                'error' => ($event['error'] ?? null) instanceof \Throwable
+                    ? $event['error']
+                    : new \RuntimeException('Component fiber failed without an exception payload.'),
+            ];
         }
+    }
+
+    /**
+     * 并发上限：默认与任务数对齐，但封顶 8，防止 cURL multi/上游 API 配额突发。
+     */
+    private function resolveConcurrency(int $taskCount): int
+    {
+        return \max(1, \min(8, $taskCount));
     }
 
     /**
@@ -811,7 +723,7 @@ final class AiSitePageComponentGenerationService
      *   ai_data:array<string,mixed>
      * }
      */
-    private function generateComponent(
+    protected function generateComponent(
         string $componentCode,
         string $name,
         string $region,
@@ -4548,7 +4460,7 @@ final class AiSitePageComponentGenerationService
         return \rtrim(\substr($value, 0, \max(1, $limit - 3))) . '...';
     }
 
-    private function isTestEnvironment(): bool
+    protected function isTestEnvironment(): bool
     {
         return (\defined('ENV_TEST') && ENV_TEST === true)
             || \defined('PHPUNIT_COMPOSER_INSTALL')

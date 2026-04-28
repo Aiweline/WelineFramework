@@ -17,6 +17,9 @@ use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Http\Sse\SseContext;
+use Weline\Ai\Service\Provider\Stream\OpenAiStreamParser;
+use Weline\Framework\Php\CurlStreamPump;
+use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
@@ -1419,222 +1422,262 @@ class OpenAiProvider implements ProviderInterface
         int $timeout,
         ?callable $reasoningCallback = null,
         ?callable $onHeartbeat = null
-    ): void {
-        // SSE 妯″紡涓嬩笉鍋?PHP 灞傞潰鐨勮秴鏃舵娴嬶紝鐢?SseWriter 鍜?curl 鑷韩鎺у埗
-        $isSseMode = SseContext::isSseEnabled();
-        
-        $startTime = microtime(true);
-        $maxExecutionTime = $isSseMode ? 0 : (int)ini_get('max_execution_time');
-        $timeLimit = $maxExecutionTime > 0 ? $maxExecutionTime : null;
-        
-        $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, true);
-        
-        // 鍦ㄦ墽琛屽墠妫€鏌ュ墿浣欐椂闂达紝濡傛灉鏃堕棿涓嶈冻锛屾彁鍓嶆姏鍑洪敊璇?
-        if ($timeLimit !== null && $timeLimit > 0) {
-            $elapsedBeforeRequest = microtime(true) - $startTime;
-            $remainingTime = $timeLimit - $elapsedBeforeRequest;
-            // 濡傛灉鍓╀綑鏃堕棿灏戜簬5绉掞紝鎻愬墠鎶涘嚭閿欒
-            if ($remainingTime < 5) {
-                throw new Exception($this->getTimeoutErrorMessage($timeout));
-            }
-        }
-        
-        // 娓呴櫎涔嬪墠鐨勯敊璇?
-        error_clear_last();
-        
-        // 鐢ㄤ簬鎹曡幏闈?SSE 鏍煎紡鐨勫搷搴旓紙API 閿欒绛夛級
-        $rawResponseBuffer = '';
-        $hasValidChunk = false;
-        $streamLineBuffer = '';
-        $streamTerminatedNormally = false;
-        // on_heartbeat锛氫粎鍏佽銆岃交閲忎繚娲汇€嶏紙濡?SseWriter::sendComment锛夛紝绂佹鍦ㄨ繘搴﹀洖璋冮噷 sendEvent锛堜細瑙﹀彂 checkHeartbeat/yield锛屼笌 curl 璇诲苟琛屾椂鏄撳紓甯革級銆?
-        // 涓?WRITEFUNCTION 鍏辩敤鑺傛祦锛氫笂娓搁鍖呭墠鍙兘闀挎椂闂存棤 chunk锛屼粎闈?PROGRESS 鍦ㄩ儴鍒嗙幆澧冧笉鍙潬锛屾晠鍦ㄦ敹鍒板師濮?TCP 鐗囨椂涔熷皾璇曚繚娲汇€?
-        $streamKeepaliveIntervalSec = 5.0;
-        $lastStreamKeepaliveAt = microtime(true);
-        if ($onHeartbeat !== null) {
-            try {
-                $onHeartbeat();
-                $lastStreamKeepaliveAt = microtime(true);
-            } catch (\Throwable) {
-            }
-            curl_setopt($ch, CURLOPT_NOPROGRESS, false);
-            curl_setopt($ch, CURLOPT_PROGRESSFUNCTION, function (
-                $curl,
-                $dlTotal,
-                $dlNow,
-                $ulTotal,
-                $ulNow
-            ) use ($onHeartbeat, &$lastStreamKeepaliveAt, $streamKeepaliveIntervalSec) {
-                $now = microtime(true);
-                if (($now - $lastStreamKeepaliveAt) < $streamKeepaliveIntervalSec) {
-                    return 0;
-                }
-                $lastStreamKeepaliveAt = $now;
-                try {
-                    $onHeartbeat();
-                } catch (\Throwable) {
-                }
-
-                return 0;
-            });
-        }
-        
-        // 璁剧疆娴佸紡澶勭悊鍥炶皟
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback, $reasoningCallback, $startTime, $timeLimit, &$rawResponseBuffer, &$hasValidChunk, &$streamLineBuffer, &$streamTerminatedNormally, $onHeartbeat, &$lastStreamKeepaliveAt, $streamKeepaliveIntervalSec) {
-            // 妫€鏌ユ槸鍚﹁秴鏃?
-            if ($timeLimit !== null) {
-                $elapsedTime = microtime(true) - $startTime;
-                if ($elapsedTime >= ($timeLimit - 2)) {
-                    return -1; // 杩斿洖 -1 浼氫腑鏂?curl_exec
-                }
-            }
-
-            if ($onHeartbeat !== null) {
-                $nowHb = microtime(true);
-                if (($nowHb - $lastStreamKeepaliveAt) >= $streamKeepaliveIntervalSec) {
-                    $lastStreamKeepaliveAt = $nowHb;
-                    try {
-                        $onHeartbeat();
-                    } catch (\Throwable) {
-                    }
-                }
-            }
-
-            // 绱Н鍘熷鍝嶅簲锛堥檺鍒跺ぇ灏忥紝浠呯敤浜庨敊璇瘖鏂級
-            if (strlen($rawResponseBuffer) < 4096) {
-                $rawResponseBuffer .= $data;
-            }
-
-            $streamLineBuffer .= $data;
-            $lines = explode("\n", $streamLineBuffer);
-            $streamLineBuffer = array_pop($lines) ?? '';
-
-            foreach ($lines as $line) {
-                $line = trim($line);
-
-                if (empty($line) || !str_starts_with($line, 'data: ')) {
-                    continue;
-                }
-
-                $jsonData = substr($line, 6);
-
-                if ($jsonData === '[DONE]') {
-                    $streamTerminatedNormally = true;
-                    continue;
-                }
-
-                $chunk = json_decode($jsonData, true);
-                $delta = $chunk['choices'][0]['delta'] ?? [];
-
-                // 澶勭悊鎺ㄧ悊/鎬濊€冨唴瀹癸紙DeepSeek reasoning_content锛?
-                if (!empty($delta['reasoning_content']) && $reasoningCallback) {
-                    $hasValidChunk = true;
-                    $result = $reasoningCallback($delta['reasoning_content']);
-                    // CRITICAL-FIX-2026-04-02: Abort curl on SSE disconnect (return -1 stops CURLOPT_WRITEFUNCTION)
-                    if ($result === false) {
-                        return -1;
-                    }
-                }
-
-                // 澶勭悊姝ｆ枃鍐呭
-                if (isset($delta['content'])) {
-                    $hasValidChunk = true;
-                    $result = $callback($delta['content']);
-                    // CRITICAL-FIX-2026-04-02: Abort curl on SSE disconnect (return -1 stops CURLOPT_WRITEFUNCTION)
-                    if ($result === false) {
-                        return -1;
-                    }
-                }
-            }
-
-            if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent()) {
-                SchedulerSystem::yieldDelay(1);
-            }
-
-            return strlen($data);
-        });
-
-        $this->executeCurl($ch);
-
-        // 鍏滃簳澶勭悊灏惧寘锛氭煇浜涗笂娓稿湪缁撴潫鏃舵渶鍚庝竴琛屽彲鑳戒笉甯︽崲琛岋紝鑻ヤ笉琛ヨВ鏋愪細涓㈠け鏈熬 delta銆?
-        $tailLine = trim($streamLineBuffer);
-        if ($tailLine !== '' && str_starts_with($tailLine, 'data: ')) {
-            $jsonData = substr($tailLine, 6);
-            if ($jsonData === '[DONE]') {
-                $streamTerminatedNormally = true;
-            } else {
-                $chunk = json_decode($jsonData, true);
-                $delta = $chunk['choices'][0]['delta'] ?? [];
-
-                if (!empty($delta['reasoning_content']) && $reasoningCallback) {
-                    $hasValidChunk = true;
-                    $result = $reasoningCallback($delta['reasoning_content']);
-                    if ($result === false) {
-                        throw new Exception(__('SSE stream aborted by reasoning callback'));
-                    }
-                }
-
-                if (isset($delta['content'])) {
-                    $hasValidChunk = true;
-                    $result = $callback($delta['content']);
-                    if ($result === false) {
-                        throw new Exception(__('SSE stream aborted by content callback'));
-                    }
-                }
-            }
-        }
-
-        // 鑾峰彇 HTTP 鐘舵€佺爜
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        
-        // 妫€鏌?PHP 瓒呮椂锛圫SE 妯″紡涓嬭烦杩囷紝鍥犱负宸茶 set_time_limit(0)锛?
-        if (!$isSseMode) {
-            $lastError = error_get_last();
-            if ($lastError && (
-                strpos($lastError['message'], 'Maximum execution time') !== false ||
-                strpos($lastError['message'], 'exceeded') !== false
-            )) {
-                curl_close($ch);
-                throw new Exception($this->getTimeoutErrorMessage($timeout));
-            }
-        }
-        
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        $streamWriteAborted = false;
-        if ($error) {
-            // curl 瓒呮椂閿欒濮嬬粓闇€瑕佹娴嬶紙闈?PHP 灞傞潰瓒呮椂锛?
-            if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
-                throw new Exception($this->getTimeoutErrorMessage($timeout));
-            }
-            if ($this->isCurlStreamWriteAbortError($error)) {
-                $streamWriteAborted = true;
-            } else {
-                throw new Exception(__('Stream API request failed: %{error}', ['error' => $error]));
-            }
-        }
-        
-        // 妫€鏌?HTTP 鐘舵€佺爜
-        if (!$streamWriteAborted && $httpCode !== 200) {
-            $errorMsg = $this->parseApiErrorResponse($rawResponseBuffer, $httpCode);
-            throw new Exception($errorMsg);
-        }
-        
-        // 妫€鏌ユ槸鍚︽敹鍒颁簡鏈夋晥鍐呭
-        if (!$streamWriteAborted && !$hasValidChunk && !empty($rawResponseBuffer)) {
-            $errorMsg = $this->parseApiErrorResponse($rawResponseBuffer, $httpCode);
-            throw new Exception($errorMsg);
-        }
-
-        if (!$streamWriteAborted && $hasValidChunk && !$streamTerminatedNormally) {
-            $tailPreview = mb_substr(trim($streamLineBuffer), 0, 180);
-            throw new Exception(
-                'AI upstream stream terminated before the [DONE] marker.'
-                . ($tailPreview !== '' ? " tail={$tailPreview}" : '')
-            );
-        }
-    }
+    ): void {
+        // CLI / queue 内并发场景：FiberTaskRunner 已激活 cURL multi pump，走真并发流式分支。
+        $pump = FiberTaskRunner::currentPump();
+        if ($pump instanceof CurlStreamPump
+            && \class_exists(\Fiber::class)
+            && \Fiber::getCurrent() !== null
+            && SchedulerSystem::isSchedulerActive()
+        ) {
+            $this->callStreamApiViaPump(
+                $pump,
+                $url,
+                $apiKey,
+                $data,
+                $callback,
+                $proxyInfo,
+                $timeout,
+                $reasoningCallback,
+                $onHeartbeat
+            );
+            return;
+        }
+
+        // SSE 模式下不做 PHP 层面超时检测，由 SseWriter 与 curl 自身控制。
+        $isSseMode = SseContext::isSseEnabled();
+
+        $startTime = microtime(true);
+        $maxExecutionTime = $isSseMode ? 0 : (int)ini_get('max_execution_time');
+        $timeLimit = $maxExecutionTime > 0 ? $maxExecutionTime : null;
+
+        $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, true);
+
+        if ($timeLimit !== null && $timeLimit > 0) {
+            $elapsedBeforeRequest = microtime(true) - $startTime;
+            $remainingTime = $timeLimit - $elapsedBeforeRequest;
+            if ($remainingTime < 5) {
+                throw new Exception($this->getTimeoutErrorMessage($timeout));
+            }
+        }
+
+        error_clear_last();
+
+        $parser = new OpenAiStreamParser();
+        // on_heartbeat 仅允许「轻量保活」（如 SseWriter::sendComment），禁止在进度回调里 sendEvent。
+        $streamKeepaliveIntervalSec = 5.0;
+        $lastStreamKeepaliveAt = microtime(true);
+        if ($onHeartbeat !== null) {
+            try {
+                $onHeartbeat();
+                $lastStreamKeepaliveAt = microtime(true);
+            } catch (\Throwable) {
+            }
+            curl_setopt($ch, CURLOPT_NOPROGRESS, false);
+            curl_setopt($ch, CURLOPT_PROGRESSFUNCTION, function (
+                $curl,
+                $dlTotal,
+                $dlNow,
+                $ulTotal,
+                $ulNow
+            ) use ($onHeartbeat, &$lastStreamKeepaliveAt, $streamKeepaliveIntervalSec) {
+                $now = microtime(true);
+                if (($now - $lastStreamKeepaliveAt) < $streamKeepaliveIntervalSec) {
+                    return 0;
+                }
+                $lastStreamKeepaliveAt = $now;
+                try {
+                    $onHeartbeat();
+                } catch (\Throwable) {
+                }
+
+                return 0;
+            });
+        }
+
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, $data) use (
+            $callback,
+            $reasoningCallback,
+            $startTime,
+            $timeLimit,
+            $parser,
+            $onHeartbeat,
+            &$lastStreamKeepaliveAt,
+            $streamKeepaliveIntervalSec
+        ) {
+            if ($timeLimit !== null) {
+                $elapsedTime = microtime(true) - $startTime;
+                if ($elapsedTime >= ($timeLimit - 2)) {
+                    return -1;
+                }
+            }
+
+            if ($onHeartbeat !== null) {
+                $nowHb = microtime(true);
+                if (($nowHb - $lastStreamKeepaliveAt) >= $streamKeepaliveIntervalSec) {
+                    $lastStreamKeepaliveAt = $nowHb;
+                    try {
+                        $onHeartbeat();
+                    } catch (\Throwable) {
+                    }
+                }
+            }
+
+            if (!$parser->ingest($data, $callback, $reasoningCallback)) {
+                // CRITICAL-FIX-2026-04-02: Abort curl on SSE disconnect (return -1 stops CURLOPT_WRITEFUNCTION).
+                return -1;
+            }
+
+            if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent()) {
+                SchedulerSystem::yieldDelay(1);
+            }
+
+            return strlen($data);
+        });
+
+        $this->executeCurl($ch);
+
+        if (!$parser->flushTail($callback, $reasoningCallback)) {
+            curl_close($ch);
+            throw new Exception(__('SSE stream aborted by callback'));
+        }
+
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+        if (!$isSseMode) {
+            $lastError = error_get_last();
+            if ($lastError && (
+                strpos($lastError['message'], 'Maximum execution time') !== false ||
+                strpos($lastError['message'], 'exceeded') !== false
+            )) {
+                curl_close($ch);
+                throw new Exception($this->getTimeoutErrorMessage($timeout));
+            }
+        }
+
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        $this->validateStreamOutcome($parser, (int)$httpCode, (string)$error, $timeout);
+    }
+
+    /**
+     * 在 FiberTaskRunner 的 cURL multi pump 上执行流式调用：N 路并行不会互相阻塞。
+     * 仅用于 CLI / 系统调用触发（queue:run 等）的并发批；浏览器在线 SSE 仍走 curl_exec 路径。
+     */
+    private function callStreamApiViaPump(
+        CurlStreamPump $pump,
+        string $url,
+        string $apiKey,
+        array $data,
+        callable $callback,
+        array $proxyInfo,
+        int $timeout,
+        ?callable $reasoningCallback = null,
+        ?callable $onHeartbeat = null
+    ): void {
+        $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, true);
+        $parser = new OpenAiStreamParser();
+        $hid = $pump->register($ch);
+
+        $aborted = false;
+        $heartbeatIntervalSec = 5.0;
+        $lastHeartbeatAt = microtime(true);
+        if ($onHeartbeat !== null) {
+            try {
+                $onHeartbeat();
+                $lastHeartbeatAt = microtime(true);
+            } catch (\Throwable) {
+            }
+        }
+
+        try {
+            while (($chunk = $pump->awaitChunk($hid)) !== null) {
+                if ($onHeartbeat !== null) {
+                    $now = microtime(true);
+                    if (($now - $lastHeartbeatAt) >= $heartbeatIntervalSec) {
+                        $lastHeartbeatAt = $now;
+                        try {
+                            $onHeartbeat();
+                        } catch (\Throwable) {
+                        }
+                    }
+                }
+
+                if (!$parser->ingest($chunk, $callback, $reasoningCallback)) {
+                    $pump->abort($hid);
+                    $aborted = true;
+                    break;
+                }
+            }
+
+            if (!$aborted && !$parser->flushTail($callback, $reasoningCallback)) {
+                $pump->abort($hid);
+                $aborted = true;
+            }
+
+            $info = $pump->finalize($hid);
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($aborted) {
+                return;
+            }
+
+            $error = $info['ok'] ? '' : (string)$info['error'];
+            $this->validateStreamOutcome($parser, $httpCode, $error, $timeout);
+        } catch (\Throwable $throwable) {
+            try {
+                $pump->abort($hid);
+            } catch (\Throwable) {
+            }
+            if ($ch instanceof \CurlHandle) {
+                @curl_close($ch);
+            }
+            throw $throwable;
+        }
+    }
+
+    /**
+     * 流式调用结束后的统一校验：HTTP / curl 错误 → 抛；解析器内部状态 → 抛或忽略。
+     * 抽离自原 callStreamApi 的尾段，使新旧两条路径共享一致的失败语义。
+     */
+    private function validateStreamOutcome(
+        OpenAiStreamParser $parser,
+        int $httpCode,
+        string $error,
+        int $timeout
+    ): void {
+        $streamWriteAborted = false;
+        if ($error !== '') {
+            if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
+                throw new Exception($this->getTimeoutErrorMessage($timeout));
+            }
+            if ($this->isCurlStreamWriteAbortError($error)) {
+                $streamWriteAborted = true;
+            } else {
+                throw new Exception(__('Stream API request failed: %{error}', ['error' => $error]));
+            }
+        }
+
+        $rawResponse = $parser->rawResponseSnapshot();
+
+        if (!$streamWriteAborted && $httpCode !== 200 && $httpCode !== 0) {
+            throw new Exception($this->parseApiErrorResponse($rawResponse, $httpCode));
+        }
+
+        if (!$streamWriteAborted && !$parser->hasValidChunk() && $rawResponse !== '') {
+            throw new Exception($this->parseApiErrorResponse($rawResponse, $httpCode));
+        }
+
+        if (!$streamWriteAborted && $parser->hasValidChunk() && !$parser->streamTerminatedNormally()) {
+            $tailPreview = mb_substr(trim($parser->tailLineBuffer()), 0, 180);
+            throw new Exception(
+                'AI upstream stream terminated before the [DONE] marker.'
+                . ($tailPreview !== '' ? " tail={$tailPreview}" : '')
+            );
+        }
+    }
     
     /**
      * 瑙ｆ瀽 API 閿欒鍝嶅簲锛屾彁鍙栧彲璇荤殑閿欒淇℃伅
