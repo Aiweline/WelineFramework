@@ -15,7 +15,6 @@ final class AiSiteExecutionBlueprintService
     public const VERSION = 1;
     private const STAGE_ONE_LOCAL_REGEN_MAX_ROUNDS = 3;
     private const STAGE_ONE_LOCAL_REGEN_BATCH_BLOCKS = 5;
-    private const STAGE_ONE_AI_FANOUT_CONCURRENCY = 4;
     /** @var array<string, array<string, mixed>|null> */
     private array $appendInstructionDecisionCache = [];
 
@@ -439,6 +438,7 @@ final class AiSiteExecutionBlueprintService
                     ['page_total' => \count($pageTypes)]
                 );
             }
+            $pageFanoutFailures = [];
             $pagePlans = $pendingPageTypes === [] ? [] : $this->generateStageOnePagePlansByAi(
                 $scope,
                 $websiteProfile,
@@ -449,12 +449,13 @@ final class AiSiteExecutionBlueprintService
                 $instruction,
                 $targetScope,
                 $onChunk,
-                $onProgress
+                $onProgress,
+                $pageFanoutFailures
             );
             if ($pagePlans !== []) {
                 $planJson['pages'] = \array_replace(\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [], $pagePlans);
-                $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'page_fanout', $pageTypes);
             }
+            $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'page_fanout', $pageTypes, $pageFanoutFailures);
 
             $this->emitStageOnePipelineProgress(
                 $onProgress,
@@ -464,10 +465,28 @@ final class AiSiteExecutionBlueprintService
                 'start',
                 ['page_total' => \count($pageTypes)]
             );
-            $artifacts = $this->mapAiPlanToArtifacts($scope, $websiteProfile, ['plan_json' => $planJson], $pageTypes, $planLocale, $instruction, $targetScope);
+            $validationPageTypes = $pageFanoutFailures === []
+                ? $pageTypes
+                : \array_values(\array_filter(
+                    $pageTypes,
+                    static fn(string $pageType): bool => \is_array($planJson['pages'][$pageType] ?? null) && $planJson['pages'][$pageType] !== []
+                ));
+            $artifacts = $this->mapAiPlanToArtifacts(
+                $scope,
+                $websiteProfile,
+                ['plan_json' => $planJson],
+                $pageTypes,
+                $planLocale,
+                $instruction,
+                $targetScope,
+                $validationPageTypes,
+                $pageFanoutFailures !== []
+            );
             $artifacts['ai_generated'] = 1;
             $artifacts['generation_source'] = 'ai_staged';
-            $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'plan_assemble', $pageTypes);
+            $artifacts['retryable_ai_failures'] = \array_values($pageFanoutFailures);
+            $artifacts['partial_retry_required'] = $pageFanoutFailures !== [] ? 1 : 0;
+            $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'plan_assemble', $pageTypes, $pageFanoutFailures);
             $this->emitStageOnePipelineProgress(
                 $onProgress,
                 '阶段一总设计装配完成，正在写入方案草案',
@@ -549,7 +568,14 @@ final class AiSiteExecutionBlueprintService
      * @param callable(array<string, mixed>):void|null $onCheckpoint
      * @param list<string> $pageTypes
      */
-    private function persistStageOneCheckpoint(?callable $onCheckpoint, string $signature, array $planJson, string $step, array $pageTypes): void
+    private function persistStageOneCheckpoint(
+        ?callable $onCheckpoint,
+        string $signature,
+        array $planJson,
+        string $step,
+        array $pageTypes,
+        array $retryableFailures = []
+    ): void
     {
         if ($onCheckpoint === null || $signature === '' || $planJson === []) {
             return;
@@ -560,6 +586,7 @@ final class AiSiteExecutionBlueprintService
             'step' => $step,
             'plan_json' => $planJson,
             'page_types' => \array_values($pageTypes),
+            'retryable_ai_failures' => \array_values($retryableFailures),
             'updated_at' => \date('Y-m-d H:i:s'),
         ]);
     }
@@ -1158,25 +1185,15 @@ final class AiSiteExecutionBlueprintService
         string $instruction,
         string $targetScope,
         ?callable $onChunk = null,
-        ?callable $onProgress = null
+        ?callable $onProgress = null,
+        ?array &$retryableFailures = null
     ): array {
-        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
-        $concurrency = \min(self::STAGE_ONE_AI_FANOUT_CONCURRENCY, \count($pageTypes));
-        $ai = $this->getAiService();
-        if (\count($pageTypes) <= 1 || !$ai->supportsCooperativeConcurrency($concurrency)) {
-            return $this->generateStageOnePagePlansByAiSequential(
-                $scope,
-                $websiteProfile,
-                $planJson,
-                $pageTypes,
-                $planLocale,
-                $contentLocale,
-                $instruction,
-                $targetScope,
-                $onChunk,
-                $onProgress
-            );
+        if ($retryableFailures === null) {
+            $retryableFailures = [];
         }
+
+        $concurrency = \max(1, \count($pageTypes));
+        $ai = $this->getAiService();
 
         /** @var array<string, callable(array<string, mixed>, string|int): array<string, mixed>> $tasks */
         $tasks = [];
@@ -1223,49 +1240,54 @@ final class AiSiteExecutionBlueprintService
             };
         }
 
-        $results = $ai->runCooperativeSessionTasks($tasks, [
+        $settled = $ai->runCooperativeSessionTasksSettled($tasks, [
             'concurrency' => $concurrency,
             'session_id' => $this->resolveStageOneCooperativeSessionId($scope, 'page_plan'),
             'disable_conversation_history' => true,
             'disable_conversation_persist' => true,
         ]);
 
-        $missingPageTypes = [];
+        $results = [];
         foreach ($pageTypes as $pageType) {
             $pageKey = (string)$pageType;
-            if (!\array_key_exists($pageKey, $results)) {
-                $missingPageTypes[] = $pageKey;
+            $entry = \is_array($settled[$pageKey] ?? null) ? $settled[$pageKey] : [];
+            if (($entry['status'] ?? '') === 'fulfilled' && \is_array($entry['result'] ?? null) && $entry['result'] !== []) {
+                $results[$pageKey] = $entry['result'];
+                continue;
             }
-        }
-        if ($missingPageTypes !== []) {
-            $results = \array_replace(
-                $results,
-                $this->generateStageOnePagePlansByAiSequential(
-                    $scope,
-                    $websiteProfile,
-                    $planJson,
-                    $missingPageTypes,
-                    $planLocale,
-                    $contentLocale,
-                    $instruction,
-                    $targetScope,
-                    $onChunk,
-                    $onProgress
-                )
+
+            $throwable = ($entry['error'] ?? null) instanceof \Throwable
+                ? $entry['error']
+                : new \RuntimeException('Stage-one page fanout task did not return a usable page plan.');
+            $message = \trim($throwable->getMessage());
+            $retryableFailures[$pageKey] = $this->buildStageOneRetryablePageFailure($pageKey, $message !== '' ? $message : $throwable::class);
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                'Page plan generation failed and is waiting for retry: ' . $pageKey,
+                82,
+                'page_plan',
+                'failed',
+                ['page_type' => $pageKey, 'error_message' => $retryableFailures[$pageKey]['message']]
             );
         }
 
-        foreach ($pageTypes as $pageType) {
-            $pageKey = (string)$pageType;
-            if (!\is_array($results[$pageKey] ?? null) || $results[$pageKey] === []) {
-                $results[$pageKey] = \is_array($pages[$pageKey] ?? null) ? $pages[$pageKey] : [];
-            }
-            if ($results[$pageKey] === []) {
-                unset($results[$pageKey]);
-            }
-        }
-
         return $results;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildStageOneRetryablePageFailure(string $pageType, string $message): array
+    {
+        return [
+            'operation' => 'plan',
+            'item_key' => $pageType,
+            'item_type' => 'page_fanout',
+            'retry_scope' => 'stage1_page',
+            'page_type' => $pageType,
+            'message' => $this->clipText($message, 800),
+            'failed_at' => \date('Y-m-d H:i:s'),
+        ];
     }
 
     /**
@@ -2671,7 +2693,9 @@ final class AiSiteExecutionBlueprintService
         array $pageTypes,
         string $planLocale,
         string $instruction,
-        string $targetScope
+        string $targetScope,
+        ?array $validationPageTypes = null,
+        bool $skipLocalRepair = false
     ): array {
         $decoded = $this->normalizeAiPlanResponseShape($decoded);
         $baseline = $this->buildPlanArtifacts($scope, $websiteProfile, [
@@ -2686,26 +2710,32 @@ final class AiSiteExecutionBlueprintService
         }
 
         $planJson['page_types'] = $pageTypes;
+        $validationPageTypes = \array_values(\array_filter(
+            $validationPageTypes ?? $pageTypes,
+            static fn($pageType): bool => \is_string($pageType) && $pageType !== ''
+        ));
         $planJson['i18n'] = $this->ensurePlanI18nSection(
             \is_array($planJson['i18n'] ?? null) ? $planJson['i18n'] : [],
             $planLocale,
             $this->isEnglishLocale($planLocale)
         );
         $briefDescription = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? ''));
-        $planJson = $this->repairAiStageOnePlanJsonBeforeValidation($planJson, $pageTypes, $planLocale, $briefDescription);
+        $planJson = $this->repairAiStageOnePlanJsonBeforeValidation($planJson, $validationPageTypes, $planLocale, $briefDescription);
         $contentLocale = $this->resolveStageOneContentLocale($scope, $planLocale);
         $localRegenReport = [];
-        [$planJson, $localRegenReport] = $this->repairAiStageOneProblemBlocksByAi(
-            $scope,
-            $websiteProfile,
-            $planJson,
-            $pageTypes,
-            $planLocale,
-            $contentLocale,
-            $instruction,
-            $targetScope,
-            $briefDescription
-        );
+        if (!$skipLocalRepair) {
+            [$planJson, $localRegenReport] = $this->repairAiStageOneProblemBlocksByAi(
+                $scope,
+                $websiteProfile,
+                $planJson,
+                $validationPageTypes,
+                $planLocale,
+                $contentLocale,
+                $instruction,
+                $targetScope,
+                $briefDescription
+            );
+        }
         if ($localRegenReport !== []) {
             $planJson['_stage1_local_regen_report'] = $localRegenReport;
         }
@@ -2716,7 +2746,7 @@ final class AiSiteExecutionBlueprintService
         }
         $planJson['plan_blocks'] = $planBlocks;
 
-        $this->assertAiStageOnePlanJsonIsStrict($planJson, $pageTypes, $briefDescription, $planLocale);
+        $this->assertAiStageOnePlanJsonIsStrict($planJson, $validationPageTypes, $briefDescription, $planLocale);
 
         $executionBlueprint = \is_array($baseline['execution_blueprint'] ?? null) ? $baseline['execution_blueprint'] : [];
         $requirementExpansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
