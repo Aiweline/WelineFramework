@@ -160,6 +160,17 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         self::assertStringNotContainsString('Prefer one small section', $prompt);
     }
 
+    public function testResolveConcurrencyUsesTaskCountWithoutApplicationCap(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+        $method = new \ReflectionMethod($service, 'resolveConcurrency');
+        $method->setAccessible(true);
+
+        self::assertSame(1, $method->invoke($service, 0));
+        self::assertSame(1, $method->invoke($service, 1));
+        self::assertSame(8, $method->invoke($service, 8));
+    }
+
     public function testGenerateComponentEventsConcurrentlyReportsFulfilledAndRejectedTasks(): void
     {
         $aiService = $this->createMock(AiService::class);
