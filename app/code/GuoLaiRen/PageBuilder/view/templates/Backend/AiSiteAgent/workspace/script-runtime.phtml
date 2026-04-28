@@ -2609,69 +2609,79 @@
             toast('success', (payload && payload.message) ? String(payload.message) : (messages.buildReady || '编辑环境已就绪'));
         });
 
-            source.addEventListener('progress', function (event) {
-            var payload = parsePayload(event);
-            if (!payload || typeof payload !== 'object') {
-                return;
-            }
-            stopObserverSyncTerminalPulse();
-            // SSE is alive and delivering events — stop the polling timer immediately
-            if (payload.state && typeof payload.state === 'object') {
-                hydrateWorkspaceFromState(payload.state);
-                updateTaskSummaryFromState(payload.state);
-            }
-            updateTaskSummaryFromState(payload);
-            var progressMessage = String(payload.message || '');
-            if (progressMessage) {
-                logOperationToWorkspaceTerminal('progress', payload, 'progress', progressMessage);
-            }
-
-            // 更新 build guard 进度条（如果正在显示）
-            if (buildStartupPending && typeof previewBridge.updateBuildGuardProgress === 'function') {
-                var pageType = String(payload.page_type || '');
-                var pageLabel = String(payload.page_label || pageTypeLabelMap[pageType] || pageType || '').trim();
-                var detailText = pageLabel ? (pageLabel + ' · ' + progressMessage) : progressMessage;
-                previewBridge.updateBuildGuardProgress(
-                    (<?= \json_encode((string)__('生成中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ' ' + (parseInt(payload.progress_percent || 0, 10) || 0) + '%'),
-                    payload.progress_percent || 0,
-                    detailText
-                );
-            }
-
-            // 第一个 progress 事件到来时，隐藏 build guard 并滚动到 SSE 终端
-            if (buildStartupPending && typeof previewBridge.hideBuildGuard === 'function') {
-                buildStartupPending = false;
-                previewBridge.hideBuildGuard();
-                previewBridge.setBuildNavigationGuard(false);
-                // 滚动到 SSE 终端
-                var panels = Array.from(document.querySelectorAll('.pb-ai-workspace-log-panel'));
-                if (panels.length > 0 && typeof panels[0].scrollIntoView === 'function') {
-                    panels[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+            function handleOperationProgressPayload(payload, logEventType) {
+                if (!payload || typeof payload !== 'object') {
+                    return;
                 }
-            }
-
-            if (window.PbAiWorkspacePreview && payload.page_type) {
-                var progressPercent = parseInt(payload.progress_percent || 0, 10) || 0;
-                var messageText = progressPercent > 0
-                    ? (<?= \json_encode((string)__('生成中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ' ' + progressPercent + '%')
-                    : progressMessage;
-                window.PbAiWorkspacePreview.markPageGenerationStatus(String(payload.page_type), 'running', messageText);
-                if (blockRefreshState.active && String(payload.page_type || '') === String(blockRefreshState.pageType || '')) {
-                    renderBlockStreamingState(messageText);
+                stopObserverSyncTerminalPulse();
+                if (payload.state && typeof payload.state === 'object') {
+                    hydrateWorkspaceFromState(payload.state);
+                    updateTaskSummaryFromState(payload.state);
                 }
-            }
+                updateTaskSummaryFromState(payload);
+                var progressMessage = String(payload.message || '');
+                if (progressMessage) {
+                    logOperationToWorkspaceTerminal(logEventType || 'progress', payload, 'progress', progressMessage);
+                }
 
-            // 实时更新预览 iframe（如果存在）
-            var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
-            if (previewFrame && payload.page_type && payload.progress_percent >= 100 && !blockRefreshState.active && (buildStartupPending || String(payload.page_type || '') === getCurrentPreviewPageType())) {
-                // 页面生成完成，刷新预览
-                window.setTimeout(function() {
-                    if (previewFrame.src) {
-                        previewFrame.src = previewFrame.src;
+                if (buildStartupPending && typeof previewBridge.updateBuildGuardProgress === 'function') {
+                    var pageType = String(payload.page_type || '');
+                    var pageLabel = String(payload.page_label || pageTypeLabelMap[pageType] || pageType || '').trim();
+                    var detailText = pageLabel ? (pageLabel + ' · ' + progressMessage) : progressMessage;
+                    previewBridge.updateBuildGuardProgress(
+                        (<?= \json_encode((string)__('生成中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ' ' + (parseInt(payload.progress_percent || 0, 10) || 0) + '%'),
+                        payload.progress_percent || 0,
+                        detailText
+                    );
+                }
+
+                if (buildStartupPending && typeof previewBridge.hideBuildGuard === 'function') {
+                    buildStartupPending = false;
+                    previewBridge.hideBuildGuard();
+                    previewBridge.setBuildNavigationGuard(false);
+                    var panels = Array.from(document.querySelectorAll('.pb-ai-workspace-log-panel'));
+                    if (panels.length > 0 && typeof panels[0].scrollIntoView === 'function') {
+                        panels[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }
-                }, 500);
+                }
+
+                if (window.PbAiWorkspacePreview && payload.page_type) {
+                    var progressPercent = parseInt(payload.progress_percent || 0, 10) || 0;
+                    var messageText = progressPercent > 0
+                        ? (<?= \json_encode((string)__('生成中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ' ' + progressPercent + '%')
+                        : progressMessage;
+                    window.PbAiWorkspacePreview.markPageGenerationStatus(String(payload.page_type), 'running', messageText);
+                    if (blockRefreshState.active && String(payload.page_type || '') === String(blockRefreshState.pageType || '')) {
+                        renderBlockStreamingState(messageText);
+                    }
+                }
+
+                var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
+                if (previewFrame && payload.page_type && payload.progress_percent >= 100 && !blockRefreshState.active && (buildStartupPending || String(payload.page_type || '') === getCurrentPreviewPageType())) {
+                    window.setTimeout(function() {
+                        if (previewFrame.src) {
+                            previewFrame.src = previewFrame.src;
+                        }
+                    }, 500);
+                }
             }
-        });
+
+            source.addEventListener('progress', function (event) {
+                var payload = parsePayload(event);
+                if (!payload || typeof payload !== 'object') {
+                    return;
+                }
+                // 任务进度改由 task_progress 专门事件处理，避免 progress/task_progress 双事件重复渲染。
+                if (String(payload.progress_kind || '') === 'task_progress') {
+                    return;
+                }
+                handleOperationProgressPayload(payload, 'progress');
+            });
+
+            source.addEventListener('task_progress', function (event) {
+                var payload = parsePayload(event);
+                handleOperationProgressPayload(payload, 'task_progress');
+            });
 
         source.addEventListener('chunk', function (event) {
             stopObserverSyncTerminalPulse();
@@ -2792,6 +2802,7 @@
             }
             if (payload.state) {
                 hydrateWorkspaceFromState(payload.state);
+                updateTaskSummaryFromState(payload.state);
             }
             var taskMessage = String(payload.message || <?= \json_encode((string)__('任务已完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
             logOperationToWorkspaceTerminal('task_completed', payload, 'done', taskMessage);
