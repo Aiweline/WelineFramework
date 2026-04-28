@@ -2820,20 +2820,11 @@ SCRIPT;
         $currentScope = $this->scopeCompatibilityService->normalizeScope(
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
         );
+        $currentScope = $this->normalizeTaskPlanConfirmationForBuild($currentScope);
         $scopePatch = $this->buildTaskService->stripBuildPlanMutationScopePatch($scopePatch, $currentScope);
         $mergedScope = $this->scopeCompatibilityService->normalizeScope(\array_replace($currentScope, $scopePatch));
         $mergedScope = $this->buildTaskService->restoreBuildPlanContract($mergedScope, $currentScope);
         $mergedScope = $this->normalizeTaskPlanConfirmationForBuild($mergedScope);
-        if ((int)($mergedScope['task_plan_confirmed'] ?? 0) !== 1 && $this->scopeHasPersistedStageTwoTaskPlan($mergedScope)) {
-            $confirmedAt = \trim((string)($mergedScope['task_plan_confirmed_at'] ?? ''));
-            if ($confirmedAt === '') {
-                $confirmedAt = \date('Y-m-d H:i:s');
-            }
-            $mergedScope['task_plan_confirmed'] = 1;
-            $mergedScope['task_plan_confirmed_at'] = $confirmedAt;
-            $scopePatch['task_plan_confirmed'] = 1;
-            $scopePatch['task_plan_confirmed_at'] = $confirmedAt;
-        }
         if ($this->isTaskPlanConfirmedForBuild($mergedScope)) {
             $mergedScope = $this->buildTaskService->ensureTaskScope(
                 $mergedScope,
@@ -2915,7 +2906,6 @@ SCRIPT;
     private function isTaskPlanConfirmedForBuild(array $scope): bool
     {
         return (int)($scope['task_plan_confirmed'] ?? 0) === 1
-            || $this->scopeHasPersistedStageTwoTaskPlan($scope)
             || $this->buildTaskService->hasConfirmedTaskPlanForBuild($scope);
     }
 
@@ -7692,42 +7682,8 @@ SCRIPT;
             return true;
         }
 
-        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        $draft = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
-        $draftMarkdown = \trim((string)($virtualThemePlan['draft_markdown'] ?? ''));
-        $taskPlanMarkdown = \trim((string)($scope['task_plan_markdown'] ?? ''));
-        $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
-        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
-        $confirmedMarkdown = \trim((string)($virtualThemePlan['confirmed_markdown'] ?? ''));
-        $confirmedAt = \trim((string)($virtualThemePlan['confirmed_at'] ?? ''));
-        $confirmedSignature = \trim((string)($virtualThemePlan['confirmed_signature'] ?? ''));
-
-        $hasDraftArtifact = $draft !== []
-            || $taskPlanStructured !== []
-            || $draftMarkdown !== ''
-            || $taskPlanMarkdown !== '';
-        $hasConfirmedArtifact = $confirmed !== []
-            || $confirmedMarkdown !== ''
-            || $confirmedAt !== ''
-            || $confirmedSignature !== '';
-        if ($hasDraftArtifact || $hasConfirmedArtifact) {
-            return true;
-        }
-
-        if ($this->virtualThemePlanRootHasTaskPayload($virtualThemePlan)) {
-            return true;
-        }
-
-        $summary = \is_array($scope['task_plan_summary'] ?? null) ? $scope['task_plan_summary'] : [];
-        if (((int)($summary['page_task_count'] ?? 0)) > 0 || ((int)($summary['shared_task_count'] ?? 0)) > 0) {
-            return true;
-        }
-        if (\trim((string)($summary['signature'] ?? '')) !== '') {
-            return true;
-        }
-
-        $directoryTree = \is_array($scope['task_plan_directory_tree'] ?? null) ? $scope['task_plan_directory_tree'] : [];
-        if ($directoryTree !== []) {
+        $taskPlanForConfirm = $this->resolveStageTwoTaskPlanForConfirmation($scope);
+        if (\is_array($taskPlanForConfirm['structured'] ?? null) && $taskPlanForConfirm['structured'] !== []) {
             return true;
         }
 
@@ -8072,31 +8028,44 @@ SCRIPT;
     {
         $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
         $candidates = [
-            \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [],
-            \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [],
-            \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [],
+            [
+                'structured' => \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [],
+                'markdown' => (string)($virtualThemePlan['draft_markdown'] ?? ''),
+                'generated_at' => (string)($virtualThemePlan['draft_generated_at'] ?? ''),
+            ],
+            [
+                'structured' => \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [],
+                'markdown' => (string)($scope['task_plan_markdown'] ?? ''),
+                'generated_at' => (string)($scope['task_plan_generated_at'] ?? ''),
+            ],
+            [
+                'structured' => \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [],
+                'markdown' => (string)($virtualThemePlan['confirmed_markdown'] ?? ''),
+                'generated_at' => (string)($virtualThemePlan['confirmed_at'] ?? ''),
+            ],
         ];
         if ($this->virtualThemePlanRootHasTaskPayload($virtualThemePlan)) {
-            $candidates[] = $virtualThemePlan;
+            $candidates[] = [
+                'structured' => $virtualThemePlan,
+                'markdown' => (string)($scope['task_plan_markdown'] ?? $virtualThemePlan['draft_markdown'] ?? ''),
+                'generated_at' => (string)($scope['task_plan_generated_at'] ?? $virtualThemePlan['draft_generated_at'] ?? ''),
+            ];
         }
 
-        $structured = [];
-        foreach ($candidates as $candidate) {
-            if ($this->stageTwoTaskPlanPayloadHasTasks($candidate)) {
-                $structured = $candidate;
-                break;
-            }
-        }
+        $selectedCandidate = $this->selectRichestStageTwoTaskPlanCandidate($candidates);
+        $structured = \is_array($selectedCandidate['structured'] ?? null) ? $selectedCandidate['structured'] : [];
 
-        $markdown = '';
-        foreach ([
-            $virtualThemePlan['draft_markdown'] ?? '',
-            $scope['task_plan_markdown'] ?? '',
-            $virtualThemePlan['confirmed_markdown'] ?? '',
-        ] as $markdownCandidate) {
-            $markdown = \trim((string)$markdownCandidate);
-            if ($markdown !== '') {
-                break;
+        $markdown = \trim((string)($selectedCandidate['markdown'] ?? ''));
+        if ($markdown === '') {
+            foreach ([
+                $virtualThemePlan['draft_markdown'] ?? '',
+                $scope['task_plan_markdown'] ?? '',
+                $virtualThemePlan['confirmed_markdown'] ?? '',
+            ] as $markdownCandidate) {
+                $markdown = \trim((string)$markdownCandidate);
+                if ($markdown !== '') {
+                    break;
+                }
             }
         }
         if ($markdown === '' && $structured !== []) {
@@ -8121,15 +8090,17 @@ SCRIPT;
             $signature = \sha1((string)\json_encode($structured, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
         }
 
-        $generatedAt = '';
-        foreach ([
-            $virtualThemePlan['draft_generated_at'] ?? '',
-            $scope['task_plan_generated_at'] ?? '',
-            $virtualThemePlan['confirmed_at'] ?? '',
-        ] as $generatedAtCandidate) {
-            $generatedAt = \trim((string)$generatedAtCandidate);
-            if ($generatedAt !== '') {
-                break;
+        $generatedAt = \trim((string)($selectedCandidate['generated_at'] ?? ''));
+        if ($generatedAt === '') {
+            foreach ([
+                $virtualThemePlan['draft_generated_at'] ?? '',
+                $scope['task_plan_generated_at'] ?? '',
+                $virtualThemePlan['confirmed_at'] ?? '',
+            ] as $generatedAtCandidate) {
+                $generatedAt = \trim((string)$generatedAtCandidate);
+                if ($generatedAt !== '') {
+                    break;
+                }
             }
         }
         if ($generatedAt === '') {
@@ -8151,38 +8122,77 @@ SCRIPT;
     }
 
     /**
-     * @param array<string, mixed> $taskPlan
+     * @param list<array<string, mixed>> $candidates
+     * @return array<string, mixed>
      */
-    private function stageTwoTaskPlanPayloadHasTasks(array $taskPlan): bool
+    private function selectRichestStageTwoTaskPlanCandidate(array $candidates): array
     {
-        $sharedTasks = \is_array($taskPlan['shared_tasks'] ?? null) ? $taskPlan['shared_tasks'] : [];
-        foreach ($sharedTasks as $task) {
-            if (\is_array($task) && $task !== []) {
-                return true;
-            }
-        }
-
-        $pageTasks = \is_array($taskPlan['page_tasks'] ?? null) ? $taskPlan['page_tasks'] : [];
-        foreach ($pageTasks as $tasks) {
-            if (!\is_array($tasks)) {
+        $selected = [];
+        $selectedScore = 0;
+        foreach ($candidates as $candidate) {
+            $structured = \is_array($candidate['structured'] ?? null) ? $candidate['structured'] : [];
+            $score = $this->countStageTwoTaskPlanPayloadItems($structured);
+            if ($score <= 0 || $score <= $selectedScore) {
                 continue;
             }
-            foreach ($tasks as $task) {
-                if (\is_array($task) && $task !== []) {
-                    return true;
-                }
-            }
+            $selected = $candidate;
+            $selectedScore = $score;
         }
 
+        return $selected;
+    }
+
+    /**
+     * @param array<string, mixed> $taskPlan
+     */
+    private function countStageTwoTaskPlanPayloadItems(array $taskPlan): int
+    {
+        $seen = [];
+        $count = 0;
+
+        $this->countStageTwoTaskPlanTaskList(
+            \is_array($taskPlan['shared_tasks'] ?? null) ? $taskPlan['shared_tasks'] : [],
+            'shared',
+            $seen,
+            $count
+        );
+        $pageTasks = \is_array($taskPlan['page_tasks'] ?? null) ? $taskPlan['page_tasks'] : [];
+        foreach ($pageTasks as $pageType => $tasks) {
+            if (\is_array($tasks)) {
+                $this->countStageTwoTaskPlanTaskList($tasks, 'page:' . (string)$pageType, $seen, $count);
+            }
+        }
         $executionBlueprint = \is_array($taskPlan['execution_blueprint'] ?? null) ? $taskPlan['execution_blueprint'] : [];
-        $executionTasks = \is_array($executionBlueprint['tasks'] ?? null) ? $executionBlueprint['tasks'] : [];
-        foreach ($executionTasks as $task) {
-            if (\is_array($task) && $task !== []) {
-                return true;
-            }
-        }
+        $this->countStageTwoTaskPlanTaskList(
+            \is_array($executionBlueprint['tasks'] ?? null) ? $executionBlueprint['tasks'] : [],
+            'execution',
+            $seen,
+            $count
+        );
 
-        return false;
+        return $count;
+    }
+
+    /**
+     * @param array<int, mixed> $tasks
+     * @param array<string, true> $seen
+     */
+    private function countStageTwoTaskPlanTaskList(array $tasks, string $prefix, array &$seen, int &$count): void
+    {
+        foreach ($tasks as $index => $task) {
+            if (!\is_array($task) || $task === []) {
+                continue;
+            }
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                $taskKey = $prefix . ':' . $index . ':' . \sha1((string)\json_encode($task, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+            }
+            if (isset($seen[$taskKey])) {
+                continue;
+            }
+            $seen[$taskKey] = true;
+            ++$count;
+        }
     }
 
     /**
@@ -10924,6 +10934,8 @@ SCRIPT;
 
         $baseScope = $scope;
         if ($operation === 'build') {
+            $baseScope = $this->normalizeTaskPlanConfirmationForBuild($baseScope);
+            $scope = $baseScope;
             $scopePatch = $this->buildTaskService->stripBuildPlanMutationScopePatch($scopePatch, $baseScope);
         }
         $scope = \array_replace($scope, $scopePatch);
