@@ -780,6 +780,7 @@ class ServiceOrchestratorStartupTest extends TestCase
     {
         $orchestrator = new class extends ServiceOrchestrator {
             public int $inspectCalls = 0;
+            public array $capturedCommands = [];
 
             protected function inspectSharedSidecarForAdoption(string $role, int $port, string $expectedTokenFileName): array
             {
@@ -799,6 +800,8 @@ class ServiceOrchestratorStartupTest extends TestCase
 
             protected function batchCreateProcesses(array $commands): array
             {
+                $this->capturedCommands = $commands;
+
                 return [
                     ControlMessage::ROLE_SESSION_SERVER . '#1' => 43210,
                 ];
@@ -854,6 +857,68 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame('providers_batch_create', $instance->getMeta('spawn_strategy'));
         self::assertSame(43210, $instance->getRootPid());
         self::assertSame(43210, $instance->getLauncherPid());
+        self::assertTrue($orchestrator->capturedCommands[ControlMessage::ROLE_SESSION_SERVER . '#1']['enableLog'] ?? false);
+    }
+
+    public function testResolveChildProcessLogFlagForcesCriticalBackgroundLogs(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $context = $this->createWorkerInfraContext();
+
+        self::assertTrue($this->invokePrivateWithArgs(
+            $orchestrator,
+            'resolveChildProcessLogFlag',
+            [new SessionServerProvider(), $context]
+        ));
+        self::assertTrue($this->invokePrivateWithArgs(
+            $orchestrator,
+            'resolveChildProcessLogFlag',
+            [new MemoryServerProvider(), $context]
+        ));
+        self::assertTrue($this->invokePrivateWithArgs(
+            $orchestrator,
+            'resolveChildProcessLogFlag',
+            [new DispatcherProvider(), $context]
+        ));
+        self::assertNull($this->invokePrivateWithArgs(
+            $orchestrator,
+            'resolveChildProcessLogFlag',
+            [new WorkerProvider(), $context]
+        ));
+    }
+
+    public function testStartProvidersBatchRunsPortPreflightForPhaseOneDispatcher(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            public array $prepareCalls = [];
+            public array $capturedCommands = [];
+            public int $batchCreateCalls = 0;
+
+            protected function prepareLocalPortForStart(string $role, int $port): bool
+            {
+                $this->prepareCalls[] = [$role, $port];
+
+                return false;
+            }
+
+            protected function batchCreateProcesses(array $commands): array
+            {
+                $this->batchCreateCalls++;
+                $this->capturedCommands = $commands;
+
+                return [];
+            }
+        };
+
+        $result = $this->invokePrivateWithArgs($orchestrator, 'startProvidersBatch', [
+            [new DispatcherProvider()],
+            $this->createWorkerInfraContext(),
+        ]);
+
+        self::assertSame([[ControlMessage::ROLE_DISPATCHER, 8080]], $orchestrator->prepareCalls);
+        self::assertSame([], $orchestrator->capturedCommands);
+        self::assertSame([], $result);
+        self::assertSame(1, $orchestrator->batchCreateCalls);
     }
 
     public function testMarkSpawnedInstancePreservesLowLevelSpawnTransportAndKeepsForegroundPidAsLauncherOnly(): void
@@ -3118,6 +3183,61 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertFalse($workerForeground);
     }
 
+    public function testShouldLaunchForegroundKeepsUnixFrontendBootstrapChildrenDetached(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            protected function isWindowsRuntime(): bool
+            {
+                return false;
+            }
+        };
+        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
+
+        $context = $this->createFrontendContext([
+            'frontend_non_worker_unix' => true,
+        ]);
+
+        self::assertFalse($this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldLaunchForeground',
+            [ControlMessage::ROLE_SESSION_SERVER, $context]
+        ));
+        self::assertFalse($this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldLaunchForeground',
+            [ControlMessage::ROLE_MEMORY_SERVER, $context]
+        ));
+        self::assertFalse($this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldLaunchForeground',
+            [ControlMessage::ROLE_DISPATCHER, $context]
+        ));
+    }
+
+    public function testShouldLaunchForegroundRequiresUnixNonWorkerOptInAfterBootstrap(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            protected function isWindowsRuntime(): bool
+            {
+                return false;
+            }
+        };
+        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', false);
+
+        self::assertFalse($this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldLaunchForeground',
+            [ControlMessage::ROLE_DISPATCHER, $this->createFrontendContext()]
+        ));
+        self::assertTrue($this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldLaunchForeground',
+            [ControlMessage::ROLE_DISPATCHER, $this->createFrontendContext([
+                'frontend_non_worker_unix' => true,
+            ])]
+        ));
+    }
+
     public function testBuildWindowsDetachedPhpArgvForBackgroundCommandIncludesEpochLaunchIdAndName(): void
     {
         $orchestrator = new ServiceOrchestrator();
@@ -3968,6 +4088,34 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertTrue($second['eligible']);
         self::assertFalse($second['recovery_dispatched']);
         self::assertSame('dispatcher_alert_cooldown', $second['reason']);
+    }
+
+    private function createFrontendContext(array $orchestratorConfig = []): ServiceContext
+    {
+        return new ServiceContext(
+            instanceName: 'frontend-unix',
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: 8080,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: true,
+            envConfig: [
+                'wls' => [
+                    'orchestrator' => $orchestratorConfig,
+                ],
+            ],
+            dispatcherEnabled: true,
+            workerCount: 2,
+            workerBasePort: 18080,
+            workerPort: 18080,
+        );
     }
 
     private function createWorkerInfraContext(): ServiceContext
