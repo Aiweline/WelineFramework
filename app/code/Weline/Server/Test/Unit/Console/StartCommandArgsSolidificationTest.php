@@ -119,6 +119,8 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertSame('127.0.0.1', $start->resolveListenHost('p11005ce4.weline.test'));
         self::assertSame('127.0.0.1', $start->resolveListenHost('demo.weline.localhost'));
         self::assertSame('0.0.0.0', $start->resolveListenHost('0.0.0.0'));
+        self::assertSame('0.0.0.0', $start->resolveListenHost('www.example.com'));
+        self::assertSame('192.168.1.10', $start->resolveListenHost('192.168.1.10'));
     }
 
     public function testEnvCustomHostOverridesSavedLegacyHost(): void

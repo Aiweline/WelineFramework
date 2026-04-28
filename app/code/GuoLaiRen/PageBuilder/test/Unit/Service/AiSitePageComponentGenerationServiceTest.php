@@ -252,6 +252,53 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         self::assertStringContainsString('HTML fragments must be balanced', $prompt);
     }
 
+    public function testClaudeDesignPolishPassIncludesDefaultSkillGuide(): void
+    {
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generate')
+            ->with(
+                self::callback(static function (string $prompt): bool {
+                    return \str_contains($prompt, 'AI BUILDER SKILL CAPABILITY (mandatory, default-loaded):')
+                        && \str_contains($prompt, 'code=claude-design')
+                        && \str_contains($prompt, 'CLAUDE-DESIGN HARD RULES')
+                        && \str_contains($prompt, 'Original generation prompt context');
+                }),
+                'claude-3-5-sonnet-20241022',
+                'pagebuilder_component_generation',
+                null,
+                self::callback(static function (array $params): bool {
+                    return ($params['response_format']['type'] ?? null) === 'json_object'
+                        && ($params['allow_zero_balance_provider'] ?? null) === true;
+                }),
+                null,
+                false
+            )
+            ->willReturn('{"extra_fields":"","php_variables":"","css_extra":"","html_extra":"<div class=\"header-polish\">Navigation</div>","js_content":""}');
+
+        $service = new AiSitePageComponentGenerationService(
+            aiService: $aiService,
+        );
+
+        $result = (function (array $payload): array {
+            return $this->applyClaudeDesignPolishPass(
+                'header',
+                'header/ai-site-header',
+                'Original header prompt',
+                $payload
+            );
+        })->call($service, [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '',
+            'html_extra' => '<div>Initial</div>',
+            'js_content' => '',
+        ]);
+
+        self::assertIsArray($result);
+        self::assertArrayHasKey('html_extra', $result);
+    }
+
     public function testResolveConcurrencyUsesTaskCountWithoutApplicationCap(): void
     {
         $service = new AiSitePageComponentGenerationService();
@@ -676,6 +723,9 @@ HTML,
         self::assertStringContainsString('Weline/PageBuilder skill contract / frontend skill contract', $prompt);
         self::assertStringContainsString('page-design-plan', $prompt);
         self::assertStringContainsString('frontend-components', $prompt);
+        self::assertStringContainsString('AI BUILDER SKILL CAPABILITY (mandatory, default-loaded):', $prompt);
+        self::assertStringContainsString('code=claude-design', $prompt);
+        self::assertStringContainsString('CLAUDE-DESIGN HARD RULES', $prompt);
         self::assertStringContainsString('content_locale/default_locale: zh_Hans_CN', $prompt);
         self::assertStringContainsString('plan_locale: en_US is only an internal planning language hint', $prompt);
         self::assertStringContainsString('Visitor-visible copy must use content_locale/default_locale', $prompt);
@@ -1017,7 +1067,49 @@ HTML,
         self::assertStringContainsString('Weline/PageBuilder skill contract', $prompt);
         self::assertStringContainsString('pagebuilder-style-templates', $prompt);
         self::assertStringContainsString('theme-development', $prompt);
+        self::assertStringContainsString('AI BUILDER SKILL CAPABILITY (mandatory, default-loaded):', $prompt);
+        self::assertStringContainsString('code=claude-design', $prompt);
+        self::assertStringContainsString('CLAUDE-DESIGN HARD RULES', $prompt);
         self::assertStringContainsString('primary_cta_label', $prompt);
+    }
+
+    public function testBuildFooterGenerationPromptIncludesDefaultClaudeDesignSkill(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $prompt = (function (array $websiteProfile, array $scope, string $siteDisplayName, array $footerConfig): string {
+            return $this->buildFooterGenerationPrompt($websiteProfile, $scope, $siteDisplayName, $footerConfig);
+        })->call(
+            $service,
+            ['site_title' => 'Royal Indian Games', 'brief_description' => 'Indian card and board games'],
+            [
+                'content_locale' => 'en_US',
+                'default_locale' => 'en_US',
+                'theme_design' => [
+                    'style_signature' => 'arcade trust footer',
+                    'color_scheme' => [
+                        'primary' => '#111827',
+                        'surface' => '#1f2937',
+                        'text' => '#f9fafb',
+                        'accent' => '#f59e0b',
+                    ],
+                ],
+            ],
+            'Royal Indian Games',
+            [
+                'links.column1_items' => "Games=>/games\nRewards=>/rewards",
+                'links.column2_items' => "Privacy=>/privacy\nTerms=>/terms",
+                'links.column3_items' => "Support=>/contact\nFAQ=>/faq",
+            ]
+        );
+
+        self::assertStringContainsString('AI BUILDER SKILL CAPABILITY (mandatory, default-loaded):', $prompt);
+        self::assertStringContainsString('code=claude-design', $prompt);
+        self::assertStringContainsString('CLAUDE-DESIGN HARD RULES', $prompt);
+        self::assertStringContainsString('Footer quality floor', $prompt);
+        self::assertStringContainsString('Footer link data', $prompt);
     }
 
     public function testVirtualThemeComponentPolicyRemovesFrameworkReinventionFromAiPayload(): void
