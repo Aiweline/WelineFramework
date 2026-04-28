@@ -1644,6 +1644,31 @@
         return parseInt(String(source[key] || 0), 10) || 0;
     }
 
+    function readTaskProgressSummaryTotal(summary) {
+        return readTaskProgressCount(summary, 'total');
+    }
+
+    function readBuildTaskSummaryCandidate(source) {
+        if (!source || typeof source !== 'object') {
+            return null;
+        }
+        if (source.build_task_summary && typeof source.build_task_summary === 'object') {
+            return source.build_task_summary;
+        }
+        if (
+            source.build_summary
+            && typeof source.build_summary === 'object'
+            && source.build_summary.task_summary
+            && typeof source.build_summary.task_summary === 'object'
+        ) {
+            return source.build_summary.task_summary;
+        }
+        if (source.state && typeof source.state === 'object') {
+            return readBuildTaskSummaryCandidate(source.state);
+        }
+        return null;
+    }
+
     function normalizeTaskProgressSummary(rawSummary) {
         if (!rawSummary || typeof rawSummary !== 'object') {
             return null;
@@ -1731,14 +1756,17 @@
         if (!source || typeof source !== 'object') {
             return null;
         }
-        if (source.build_task_summary && typeof source.build_task_summary === 'object') {
-            return source.build_task_summary;
+        if (!shouldConsumeBuildTaskProgressSummary(source)) {
+            return null;
+        }
+        if (source.task_progress && typeof source.task_progress === 'object') {
+            return source.task_progress;
         }
         if (source.task_summary && typeof source.task_summary === 'object') {
             return source.task_summary;
         }
-        if (source.task_progress && typeof source.task_progress === 'object') {
-            return source.task_progress;
+        if (source.build_task_summary && typeof source.build_task_summary === 'object') {
+            return source.build_task_summary;
         }
         if (source.state && typeof source.state === 'object') {
             return extractTaskProgressSummary(source.state);
@@ -1748,6 +1776,24 @@
 
     function isBuildTaskProgressOperation(operation) {
         return ['build', 'regenerate_page', 'block_regenerate'].indexOf(String(operation || '').trim()) !== -1;
+    }
+
+    function shouldConsumeBuildTaskProgressSummary(source) {
+        if (!source || typeof source !== 'object') {
+            return false;
+        }
+        var operation = readTaskProgressOperation(source);
+        if (isBuildTaskProgressOperation(operation)) {
+            return true;
+        }
+        if (source.state && typeof source.state === 'object' && shouldConsumeBuildTaskProgressSummary(source.state)) {
+            return true;
+        }
+        var buildSummary = readBuildTaskSummaryCandidate(source);
+        if (readTaskProgressSummaryTotal(buildSummary) > 0 && (source.task_plan_confirmed || source.has_pending_build_tasks)) {
+            return true;
+        }
+        return false;
     }
 
     function readTaskProgressOperation(source) {
@@ -1802,12 +1848,11 @@
         if (!source || typeof source !== 'object') {
             return false;
         }
+        if (!shouldConsumeBuildTaskProgressSummary(source)) {
+            return false;
+        }
         if (source.ai_generating || source.queue_generating) {
             return true;
-        }
-        var operation = readTaskProgressOperation(source);
-        if (!isBuildTaskProgressOperation(operation) && !(source.build_task_summary || source.task_summary || source.task_progress)) {
-            return false;
         }
         var status = readTaskProgressStatusSignal(source);
         return ['pending', 'queued', 'running', 'processing', 'in_progress'].indexOf(status) !== -1;
@@ -1815,11 +1860,9 @@
 
     function updateTaskProgressGeneratingState(source) {
         var previous = (taskProgressGeneratingState.active ? '1' : '0') + ':' + String(taskProgressGeneratingState.status || '');
-        var operation = readTaskProgressOperation(source);
         var status = readTaskProgressStatusSignal(source);
         var active = isQueueTaskProgressGenerating(source);
-        var isBuildSignal = isBuildTaskProgressOperation(operation)
-            || (source && typeof source === 'object' && (source.build_task_summary || source.task_progress || String(source.progress_kind || '') === 'task_progress'));
+        var isBuildSignal = shouldConsumeBuildTaskProgressSummary(source);
         if (isBuildSignal) {
             taskProgressGeneratingState.active = active;
             taskProgressGeneratingState.status = status;
@@ -1867,13 +1910,33 @@
 
     function shouldShowBuildTaskProgressPanel(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
-        if (state.task_plan_confirmed || state.has_virtual_theme_plan || state.has_pending_build_tasks) {
+        var activeOperation = state.active_operation && typeof state.active_operation === 'object'
+            ? state.active_operation
+            : {};
+        var activeOp = String(activeOperation.operation || '').trim().toLowerCase();
+        var activeStatus = String(activeOperation.status || '').trim().toLowerCase();
+        if (
+            (activeOp === 'plan' || activeOp === 'task_plan')
+            && ['queued', 'running', 'pending', 'processing', 'in_progress'].indexOf(activeStatus) !== -1
+        ) {
+            // Plan and task-plan generation have their own queue progress channel.
+            return false;
+        }
+        if (isBuildTaskProgressOperation(activeOp)) {
+            return true;
+        }
+        if (state.has_pending_build_tasks) {
+            return true;
+        }
+        if (state.task_plan_confirmed && readTaskProgressSummaryTotal(readBuildTaskSummaryCandidate(state)) > 0) {
             return true;
         }
         var api = resolveWorkspaceApi();
+        if (typeof api.getHasPendingBuildTasksState === 'function' && !!api.getHasPendingBuildTasksState()) {
+            return true;
+        }
         return getWorkspaceFlagState('getTaskPlanConfirmedState', false)
-            || getWorkspaceFlagState('getHasVirtualThemePlanState', false)
-            || (typeof api.getHasPendingBuildTasksState === 'function' && !!api.getHasPendingBuildTasksState());
+            && readTaskProgressSummaryTotal(window.__pbTaskSummary) > 0;
     }
 
     function syncBuildTaskProgressPanelVisibility(workspaceState) {
@@ -1887,12 +1950,25 @@
     function updateTaskSummaryFromState(workspaceState) {
         syncBuildTaskProgressPanelVisibility(workspaceState);
         var generatingChanged = updateTaskProgressGeneratingState(workspaceState);
+        var shouldConsumeBuildSummary = shouldConsumeBuildTaskProgressSummary(workspaceState);
         var summary = extractTaskProgressSummary(workspaceState);
-        if (!summary && workspaceState && typeof workspaceState === 'object' && String(workspaceState.progress_kind || '') === 'task_progress') {
+        if (!summary && shouldConsumeBuildSummary && workspaceState && typeof workspaceState === 'object' && String(workspaceState.progress_kind || '') === 'task_progress') {
             summary = mergeSingleTaskProgressPayload(cloneTaskProgressSummary(window.__pbTaskSummary), workspaceState);
         }
         summary = normalizeTaskProgressSummary(summary);
         if (!summary) {
+            var operation = readTaskProgressOperation(workspaceState);
+            var status = readTaskProgressStatusSignal(workspaceState);
+            var isPlanQueueSignal = ['plan', 'task_plan'].indexOf(String(operation || '').trim().toLowerCase()) !== -1
+                && ['pending', 'queued', 'running', 'processing', 'in_progress'].indexOf(status) !== -1;
+            if (!shouldConsumeBuildSummary && !isPlanQueueSignal && !shouldShowBuildTaskProgressPanel(workspaceState)) {
+                var cleared = normalizeTaskProgressSummary({});
+                if (cleared) {
+                    cleared.ai_generating = false;
+                    cleared.ai_status = '';
+                    window.__pbTaskSummary = cleared;
+                }
+            }
             if (generatingChanged && window.__pbTaskSummary && typeof window.applyTaskSummarySelectionFilter === 'function') {
                 window.applyTaskSummarySelectionFilter();
             }

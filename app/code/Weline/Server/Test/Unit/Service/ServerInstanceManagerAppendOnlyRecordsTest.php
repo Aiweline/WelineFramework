@@ -85,6 +85,69 @@ final class ServerInstanceManagerAppendOnlyRecordsTest extends TestCase
         self::assertSame(19002, $info->getWorkers()[0]->port);
     }
 
+    public function testUpdateServicesCurrentSnapshotIgnoresHistoricalExtraSlots(): void
+    {
+        $this->writeInstanceFile([
+            'name' => $this->instanceName,
+            'master_pid' => 1001,
+            'control_port' => 19000,
+            'host' => '127.0.0.1',
+            'port' => 9443,
+            'count' => 1,
+            'services' => [
+                'session_server' => [
+                    'display_name' => 'Session Server',
+                    'instances' => [
+                        [
+                            'role' => 'session_server',
+                            'display_name' => 'Session Server',
+                            'instance_id' => 1,
+                            'pid' => 2001,
+                            'port' => 19970,
+                            'state' => ServiceInstance::STATE_READY,
+                            'launch_id' => 'old-session-1',
+                        ],
+                        [
+                            'role' => 'session_server',
+                            'display_name' => 'Session Server',
+                            'instance_id' => 2,
+                            'pid' => 0,
+                            'port' => 19970,
+                            'state' => ServiceInstance::STATE_STARTING,
+                            'launch_id' => 'stale-session-2',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->manager->updateServices($this->instanceName, [
+            new ServiceInfo(
+                role: 'session_server',
+                displayName: 'Session Server',
+                instanceId: 1,
+                pid: 2002,
+                port: 19970,
+                state: ServiceInstance::STATE_READY,
+                priority: 10,
+                launchId: 'new-session-1',
+            ),
+        ]);
+
+        $data = $this->readInstanceFile();
+        self::assertCount(3, $data['services']['session_server']['instances'] ?? []);
+
+        $snapshotInstances = $data['current_snapshot']['services']['session_server']['instances'] ?? [];
+        self::assertCount(1, $snapshotInstances);
+        self::assertSame(1, $snapshotInstances[0]['instance_id'] ?? null);
+        self::assertSame('new-session-1', $snapshotInstances[0]['launch_id'] ?? null);
+
+        $info = $this->manager->getInstanceInfo($this->instanceName, false);
+        self::assertNotNull($info);
+        self::assertCount(1, $info->getServicesByRole('session_server'));
+        self::assertSame('new-session-1', $info->getSessionServer()?->launchId);
+    }
+
     public function testSaveInstancePreservesServiceTableAndAppendsRuntimeRecord(): void
     {
         $this->writeInstanceFile([

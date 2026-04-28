@@ -209,16 +209,13 @@ class AiSiteBuildTaskService
             return $this->isReusableConfirmedBuildBlueprint($buildBlueprint);
         }
 
-        $executionBlueprint = \is_array($confirmedPlan['execution_blueprint'] ?? null)
-            ? $confirmedPlan['execution_blueprint']
-            : [];
-        $executionTasks = \is_array($executionBlueprint['tasks'] ?? null) ? $executionBlueprint['tasks'] : [];
-        if ($executionTasks === []) {
-            $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-            return $this->isReusableConfirmedBuildBlueprint($buildBlueprint);
+        if ($this->resolveExecutionTaskRowsForStageTwoBuild($confirmedPlan, $scope) !== []) {
+            return true;
         }
 
-        return true;
+        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
+
+        return $this->isReusableConfirmedBuildBlueprint($buildBlueprint);
     }
 
     /**
@@ -384,8 +381,9 @@ class AiSiteBuildTaskService
     }
 
     /**
-     * 第二阶段确认后，后续构建必须严格吃 confirmed task plan 拆好的 execution_blueprint.tasks，
-     * 不再回退到按页面 section 重新推导任务。
+     * Build definitions come from the confirmed plan contract. When compacted
+     * snapshots or older queues disagree, prefer the richest confirmed task list
+     * instead of falling back to skeleton-derived tasks.
      *
      * @param array<string, mixed> $scope
      * @param list<string> $fallbackPageTypes
@@ -399,8 +397,7 @@ class AiSiteBuildTaskService
 
         $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
         $confirmedPlan = $this->extractConfirmedTaskPlan($scope);
-        $executionBlueprint = \is_array($confirmedPlan['execution_blueprint'] ?? null) ? $confirmedPlan['execution_blueprint'] : [];
-        $executionTasks = \is_array($executionBlueprint['tasks'] ?? null) ? $executionBlueprint['tasks'] : [];
+        $executionTasks = $this->resolveExecutionTaskRowsForStageTwoBuild($confirmedPlan, $scope);
         if ($executionTasks === []) {
             return [];
         }
@@ -726,6 +723,90 @@ class AiSiteBuildTaskService
         $value = \preg_replace('/[^a-z0-9]+/i', '-', $value) ?? $value;
         $value = \trim($value, '-');
         return $value !== '' ? $value : 'section';
+    }
+
+    /**
+     * 合并阶段一锁定蓝图任务、第二阶段结构化任务卡片与 confirmed 内嵌 EB.tasks，避免「预览 38 个 / 构建只有 5 个」的割裂。
+     *
+     * @param array<string, mixed> $confirmedPlan virtual_theme_plan.confirmed
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    private function resolveExecutionTaskRowsForStageTwoBuild(array $confirmedPlan, array $scope): array
+    {
+        $scopeEb = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        $scopeTasks = \is_array($scopeEb['tasks'] ?? null) ? $scopeEb['tasks'] : [];
+
+        $confirmedEb = \is_array($confirmedPlan['execution_blueprint'] ?? null) ? $confirmedPlan['execution_blueprint'] : [];
+        $confirmedTasks = \is_array($confirmedEb['tasks'] ?? null) ? $confirmedEb['tasks'] : [];
+
+        $synthesized = $this->synthesizeExecutionTasksFromStageTwoStructuredLists($confirmedPlan);
+
+        $scopeCount = \count($scopeTasks);
+        $confirmedCount = \count($confirmedTasks);
+        $synthesizedCount = \count($synthesized);
+
+        if ($synthesizedCount > $scopeCount && $synthesizedCount > $confirmedCount) {
+            return $synthesized;
+        }
+        if ($scopeCount > 0 && $scopeCount >= $confirmedCount) {
+            return $scopeTasks;
+        }
+        if ($confirmedCount > 0) {
+            return $confirmedTasks;
+        }
+        if ($synthesizedCount > 0) {
+            return $synthesized;
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $confirmedPlan
+     * @return list<array<string, mixed>>
+     */
+    private function synthesizeExecutionTasksFromStageTwoStructuredLists(array $confirmedPlan): array
+    {
+        $rows = [];
+        $seen = [];
+
+        foreach (\is_array($confirmedPlan['shared_tasks'] ?? null) ? $confirmedPlan['shared_tasks'] : [] as $task) {
+            if (!\is_array($task) || $task === []) {
+                continue;
+            }
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '' || isset($seen[$taskKey])) {
+                continue;
+            }
+            $seen[$taskKey] = true;
+            $rows[] = $task;
+        }
+
+        foreach (\is_array($confirmedPlan['page_tasks'] ?? null) ? $confirmedPlan['page_tasks'] : [] as $pageType => $tasks) {
+            if (!\is_array($tasks)) {
+                continue;
+            }
+            $pageTypeTrim = \trim((string)$pageType);
+            foreach ($tasks as $task) {
+                if (!\is_array($task) || $task === []) {
+                    continue;
+                }
+                $taskKey = \trim((string)($task['task_key'] ?? ''));
+                if ($taskKey === '' || isset($seen[$taskKey])) {
+                    continue;
+                }
+                $seen[$taskKey] = true;
+                if ($pageTypeTrim !== '' && \trim((string)($task['page_type'] ?? '')) === '') {
+                    $task['page_type'] = $pageTypeTrim;
+                }
+                $rows[] = $task;
+            }
+        }
+
+        \usort($rows, static fn(array $left, array $right): int => ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0)));
+
+        return $rows;
     }
 
     /**

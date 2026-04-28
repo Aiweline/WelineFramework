@@ -659,9 +659,12 @@ final class AiSiteExecutionBlueprintService
             } catch (\Throwable $throwable) {
                 $lastThrowable = $throwable;
                 $message = \strtolower($throwable->getMessage());
+                $reasoningOnlyError = \str_contains($message, 'reasoning_content only')
+                    || \str_contains($message, 'without final content');
+                $retryableStreamError = $this->isRetryableStageOneStreamError($message);
                 if (
                     $attemptIndex >= 1
-                    && (\str_contains($message, 'reasoning_content only') || \str_contains($message, 'without final content'))
+                    && ($reasoningOnlyError || $retryableStreamError)
                 ) {
                     return $this->generateStageOneJsonWithoutStream(
                         $attemptPrompt,
@@ -674,7 +677,8 @@ final class AiSiteExecutionBlueprintService
                 if (
                     $attemptIndex >= 1
                     || (
-                        !\str_contains($message, 'reasoning_content only')
+                        !$reasoningOnlyError
+                        && !$retryableStreamError
                         && !\str_contains($message, 'invalid ai json')
                         && !\str_contains($message, 'valid component json')
                     )
@@ -751,16 +755,11 @@ final class AiSiteExecutionBlueprintService
      */
     private function sanitizeStageOneJsonRequestParams(array $params): array
     {
-        $thinking = $params['thinking'] ?? null;
-        $thinkingType = \is_array($thinking) ? \strtolower(\trim((string)($thinking['type'] ?? ''))) : '';
-        $thinkingDisabled = $thinkingType === 'disabled'
-            || (isset($params['enable_thinking']) && $params['enable_thinking'] === false)
-            || (isset($params['enable_reasoning']) && $params['enable_reasoning'] === false)
-            || (\is_string($params['thinking_mode'] ?? null) && \strtolower(\trim((string)$params['thinking_mode'])) === 'disabled');
-
-        if (!$thinkingDisabled) {
-            return $params;
-        }
+        // 阶段一结构化 JSON 任务：强制禁用 thinking，避免只返回 reasoning_content。
+        $params['thinking'] = ['type' => 'disabled'];
+        $params['thinking_mode'] = 'disabled';
+        $params['enable_thinking'] = false;
+        $params['enable_reasoning'] = false;
 
         unset(
             $params['reasoning_effort'],
@@ -769,6 +768,25 @@ final class AiSiteExecutionBlueprintService
         );
 
         return $params;
+    }
+
+    private function isRetryableStageOneStreamError(string $message): bool
+    {
+        foreach ([
+            'stream api request failed',
+            'unexpected eof while reading',
+            'ssl_read',
+            'stream terminated before the [done] marker',
+            'no response from ai api',
+            'timed out',
+            'timeout',
+        ] as $needle) {
+            if (\str_contains($message, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function resolveStageOneCooperativeSessionId(array $scope, string $scopeKey): string
@@ -862,6 +880,15 @@ final class AiSiteExecutionBlueprintService
         foreach (['i18n', 'site_strategy', 'theme_style', 'palette', 'theme_design', 'page_type_overviews', 'navigation_plan', 'footer_plan', 'shared_components', 'seo_strategy'] as $key) {
             if (\is_array($source[$key] ?? null)) {
                 $planJson[$key] = $source[$key];
+            }
+        }
+        if (!\is_array($planJson['theme_design'] ?? null)) {
+            $sharedPlan = \is_array($source['shared_plan'] ?? null) ? $source['shared_plan'] : [];
+            $themeDesignFallback = \is_array($sharedPlan['theme_design'] ?? null)
+                ? $sharedPlan['theme_design']
+                : (\is_array($sharedPlan['theme_context_snapshot'] ?? null) ? $sharedPlan['theme_context_snapshot'] : []);
+            if ($themeDesignFallback !== []) {
+                $planJson['theme_design'] = $themeDesignFallback;
             }
         }
         if (!\is_array($planJson['shared_components'] ?? null)) {
