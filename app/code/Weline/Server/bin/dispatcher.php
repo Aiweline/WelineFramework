@@ -100,6 +100,74 @@ if (!\defined('DS')) {
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 
 // ========== 主端口尽早 listen（先于 resolveControlPort / WlsRuntime）==========
+if (!\function_exists('wlsDispatcherIsIpBindAddress')) {
+    function wlsDispatcherIsIpBindAddress(string $host): bool
+    {
+        $host = \trim($host);
+        if ($host === '' || $host === '0.0.0.0' || $host === '::' || $host === '*') {
+            return true;
+        }
+
+        return \filter_var($host, FILTER_VALIDATE_IP) !== false;
+    }
+}
+
+if (!\function_exists('wlsDispatcherBindListenSocket')) {
+    /**
+     * @param \Socket|resource $socket
+     * @return array{success:bool,host:string,error_code:int,error_msg:string,fallback_used:bool}
+     */
+    function wlsDispatcherBindListenSocket($socket, string $host, int $port): array
+    {
+        $host = \trim($host);
+        if ($host === '' || $host === '*') {
+            $host = '0.0.0.0';
+        }
+
+        if (@\socket_bind($socket, $host, $port)) {
+            return [
+                'success' => true,
+                'host' => $host,
+                'error_code' => 0,
+                'error_msg' => '',
+                'fallback_used' => false,
+            ];
+        }
+
+        $errorCode = \socket_last_error($socket);
+        $errorMsg = \socket_strerror($errorCode);
+        if (wlsDispatcherIsIpBindAddress($host)) {
+            return [
+                'success' => false,
+                'host' => $host,
+                'error_code' => $errorCode,
+                'error_msg' => $errorMsg,
+                'fallback_used' => false,
+            ];
+        }
+
+        $fallbackHost = '127.0.0.1';
+        if (@\socket_bind($socket, $fallbackHost, $port)) {
+            return [
+                'success' => true,
+                'host' => $fallbackHost,
+                'error_code' => $errorCode,
+                'error_msg' => $errorMsg,
+                'fallback_used' => true,
+            ];
+        }
+
+        $fallbackErrorCode = \socket_last_error($socket);
+        return [
+            'success' => false,
+            'host' => $host,
+            'error_code' => $fallbackErrorCode,
+            'error_msg' => $errorMsg . '; fallback 127.0.0.1 failed: (' . $fallbackErrorCode . ') ' . \socket_strerror($fallbackErrorCode),
+            'fallback_used' => false,
+        ];
+    }
+}
+
 $socket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
 if ($socket === false) {
     $errorCode = \socket_last_error();
@@ -113,12 +181,18 @@ if (!$reuseResult['success']) {
     \socket_close($socket);
     exit(1);
 }
-if (!@\socket_bind($socket, $host, $port)) {
-    $errorCode = \socket_last_error($socket);
-    $errorMsg = \socket_strerror($errorCode);
+$bindResult = wlsDispatcherBindListenSocket($socket, (string)$host, $port);
+if (!$bindResult['success']) {
+    $errorCode = (int)$bindResult['error_code'];
+    $errorMsg = (string)$bindResult['error_msg'];
     \fwrite(STDERR, "[Dispatcher] socket_bind failed on {$host}:{$port}: ({$errorCode}) {$errorMsg}\n");
     \socket_close($socket);
     exit(1);
+}
+$requestedHost = (string)$host;
+$host = (string)$bindResult['host'];
+if ($bindResult['fallback_used']) {
+    \fwrite(STDERR, "[Dispatcher] socket_bind fallback: {$requestedHost}:{$port} failed, listening on {$host}:{$port}\n");
 }
 if (@\socket_listen($socket, 1024) === false) {
     $errorCode = \socket_last_error($socket);
