@@ -244,6 +244,8 @@ unset($_dispatcherDevMode);
 WlsLogger::info_("Dispatcher 启动，监听 tcp://{$host}:{$port}，预计 Worker 数: {$workerCount}（实际端口由 Master 动态通知）");
 
 // 连接 IPC 控制通道
+$dispatcher->setLifecycleTokens($orchestratorEpoch, $orchestratorLaunchId);
+
 if ($controlPort > 0 || $supervisorEnabled) {
     $dispatcher->connectIpc($controlPort);
 }
@@ -252,6 +254,5 @@ if ($controlPort > 0 || $supervisorEnabled) {
 if ($masterPid > 0) {
     $dispatcher->setMasterPid($masterPid);
 }
-$dispatcher->setLifecycleTokens($orchestratorEpoch, $orchestratorLaunchId);
 
 $dispatcher->run();
