@@ -6722,6 +6722,20 @@ class ServiceOrchestrator
                     $result = $provider->healthCheck($instance);
                     $instance->lastHealthCheck = $now;
                     if (!$result->isHealthy()) {
+                        if ($this->shouldAttemptWorkerAccessRecovery($instance)) {
+                            if ($this->attemptWorkerAccessRecovery($instance, $result->message)) {
+                                $this->registry->updateInstance($instance);
+                                continue;
+                            }
+                            WlsLogger::warning_(
+                                "[Orchestrator] Worker 访问恢复失败，准备重启: {$instance->role}#{$instance->instanceId} - {$result->message}"
+                            );
+                            $this->healthCheckRestartOrEscalate(
+                                $instance,
+                                "worker_unhealthy_access_failed:{$instance->role}#{$instance->instanceId}"
+                            );
+                            continue;
+                        }
                         WlsLogger::warning_(
                             "[Master自检] 子进程健康检查异常: {$instance->role}#{$instance->instanceId} — {$result->message}"
                         );
@@ -6769,12 +6783,90 @@ class ServiceOrchestrator
         }
     }
 
+    private function shouldAttemptWorkerAccessRecovery(ServiceInstance $instance): bool
+    {
+        if (!$this->startupAcceptanceComplete) {
+            return false;
+        }
+
+        if ($instance->role !== ControlMessage::ROLE_WORKER) {
+            return false;
+        }
+
+        if ($instance->state !== ServiceInstance::STATE_READY) {
+            return false;
+        }
+
+        return (int) ($instance->port ?? 0) > 0;
+    }
+
+    private function attemptWorkerAccessRecovery(ServiceInstance $instance, string $reason): bool
+    {
+        $port = (int) ($instance->port ?? 0);
+        if ($port <= 0) {
+            return false;
+        }
+
+        $attempts = 2;
+        for ($i = 1; $i <= $attempts; $i++) {
+            if ($this->probeWorkerHealthEndpoint($port) || $this->canConnectLocalPort($port)) {
+                $instance->setMeta('worker_access_recovery_at', \microtime(true));
+                $instance->setMeta('worker_access_recovery_reason', $reason);
+                WlsLogger::info_(
+                    "[Orchestrator] Worker 异常后访问恢复成功: worker#{$instance->instanceId}, port={$port}, attempt={$i}"
+                );
+
+                return true;
+            }
+
+            if ($i < $attempts) {
+                $this->sleepInterruptiblyForPeriodicWork(80000);
+            }
+        }
+
+        return false;
+    }
+
+    private function probeWorkerHealthEndpoint(int $port): bool
+    {
+        if ($port <= 0) {
+            return false;
+        }
+
+        $errno = 0;
+        $errstr = '';
+        $socket = @\fsockopen('127.0.0.1', $port, $errno, $errstr, 0.3);
+        if (!\is_resource($socket)) {
+            return false;
+        }
+
+        @\stream_set_timeout($socket, 0, 300000);
+        @\fwrite(
+            $socket,
+            "GET /_wls/health HTTP/1.1\r\n"
+            . "Host: 127.0.0.1\r\n"
+            . "Connection: close\r\n"
+            . "\r\n"
+        );
+        $line = @\fgets($socket, 512);
+        @\fclose($socket);
+        if (!\is_string($line) || $line === '') {
+            return false;
+        }
+
+        return \str_starts_with($line, 'HTTP/1.1')
+            || \str_starts_with($line, 'HTTP/1.0');
+    }
+
     /**
      * 健康检查触发的重启：凡可复活的子进程均单槽拉起；仅无复活优先级或单槽重启耗尽时整组重启。
      */
     private function healthCheckRestartOrEscalate(ServiceInstance $instance, string $reason): void
     {
         if ($this->isRecoverySuspended()) {
+            return;
+        }
+        if ($this->shouldThrottleHealthRestart($instance, $reason)) {
             return;
         }
         WlsLogger::warning_(
@@ -6825,6 +6917,33 @@ class ServiceOrchestrator
             }
         }
         $this->scheduleResurrection($instance);
+    }
+
+    private function shouldThrottleHealthRestart(ServiceInstance $instance, string $reason): bool
+    {
+        if ($this->context === null) {
+            return false;
+        }
+        $cooldown = (float) ($this->context->getConfig('wls.orchestrator.health_restart_cooldown_sec', 6.0) ?? 6.0);
+        if ($cooldown <= 0.0) {
+            return false;
+        }
+
+        $now = \microtime(true);
+        $lastAt = (float) ($instance->getMeta('health_restart_last_at', 0.0) ?? 0.0);
+        if ($lastAt > 0.0 && ($now - $lastAt) < $cooldown) {
+            WlsLogger::info_(
+                "[Orchestrator] 健康重启宽限中，跳过重复重启: {$instance->role}#{$instance->instanceId} "
+                . "(reason={$reason}, cooldown={$cooldown}s)"
+            );
+            return true;
+        }
+
+        $instance->setMeta('health_restart_last_at', $now);
+        $instance->setMeta('health_restart_last_reason', $reason);
+        $this->registry->updateInstance($instance);
+
+        return false;
     }
 
     private function canUseLocalSlotResurrection(

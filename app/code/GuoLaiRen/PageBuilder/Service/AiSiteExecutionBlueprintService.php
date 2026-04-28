@@ -6,6 +6,7 @@ namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser;
+use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -22,12 +23,18 @@ final class AiSiteExecutionBlueprintService
         private readonly AiSitePageBlueprintService $pageBlueprintService,
         private readonly ?AiService $aiService = null,
         private readonly ?AiResponseJsonParser $responseJsonParser = null,
+        private readonly ?AiSiteSkillRegistry $skillRegistry = null,
     ) {
     }
 
     private function getResponseJsonParser(): AiResponseJsonParser
     {
         return $this->responseJsonParser ?? ObjectManager::getInstance(AiResponseJsonParser::class);
+    }
+
+    private function getSkillRegistry(): AiSiteSkillRegistry
+    {
+        return $this->skillRegistry ?? ObjectManager::getInstance(AiSiteSkillRegistry::class);
     }
 
     /**
@@ -576,9 +583,14 @@ final class AiSiteExecutionBlueprintService
         $payload = \array_replace([
             'message' => $message,
             'progress_percent' => \max(0, \min(99, $progressPercent)),
-            'progress_kind' => 'stage1_pipeline',
+            'progress_kind' => 'queue_info',
             'stage1_step' => $step,
             'stage1_phase' => $phase,
+            'token_usage' => [
+                'input_tokens' => null,
+                'output_tokens' => null,
+                'total_tokens' => null,
+            ],
         ], $context);
 
         $onProgress($payload);
@@ -604,37 +616,159 @@ final class AiSiteExecutionBlueprintService
         ?callable $onChunk = null,
         array $requestParamOverrides = []
     ): array {
-        $fullContent = '';
-        $this->getAiService()->generateStream(
-            $prompt,
-            static function (string $chunk) use (&$fullContent, $onChunk): bool {
-                $fullContent .= $chunk;
-                if (\is_callable($onChunk) && $chunk !== '') {
-                    $onChunk($chunk);
-                }
-                return true;
-            },
-            null,
-            $scenarioCode,
-            null,
-            \array_merge([
+        $lastThrowable = null;
+        $attemptPrompts = [
+            $this->prependStageOneJsonOnlyGuard($prompt, false),
+            $this->prependStageOneJsonOnlyGuard($prompt, true),
+        ];
+        foreach ($attemptPrompts as $attemptIndex => $attemptPrompt) {
+            $fullContent = '';
+            $requestParams = \array_merge([
                 'allow_zero_balance_provider' => true,
-                'temperature' => 0.25,
+                'temperature' => $attemptIndex === 0 ? 0.15 : 0.05,
                 'max_tokens' => $maxTokens,
                 'timeout' => 0,
                 'disable_ai_timeout' => true,
                 'disable_cli_timeout' => true,
                 'enforce_timeout_in_stream' => false,
                 'response_format' => ['type' => 'json_object'],
-            ], $requestParamOverrides)
-        );
+            ], $requestParamOverrides);
+            $requestParams = $this->sanitizeStageOneJsonRequestParams($requestParams);
+            try {
+                $this->getAiService()->generateStream(
+                    $attemptPrompt,
+                    static function (string $chunk) use (&$fullContent, $onChunk, $attemptIndex): bool {
+                        $fullContent .= $chunk;
+                        if ($attemptIndex === 0 && \is_callable($onChunk) && $chunk !== '') {
+                            $onChunk($chunk);
+                        }
+                        return true;
+                    },
+                    null,
+                    $scenarioCode,
+                    null,
+                    $requestParams
+                );
 
-        $decoded = $this->getResponseJsonParser()->extractAndDecode($fullContent);
-        if (!\is_array($decoded)) {
-            throw new \RuntimeException('invalid ai json: ' . \substr(\preg_replace('/\s+/', ' ', $fullContent), 0, 200));
+                $decoded = $this->getResponseJsonParser()->extractAndDecode($fullContent);
+                if (\is_array($decoded)) {
+                    return $decoded;
+                }
+
+                $lastThrowable = new \RuntimeException('invalid ai json: ' . \substr(\preg_replace('/\s+/', ' ', $fullContent), 0, 200));
+            } catch (\Throwable $throwable) {
+                $lastThrowable = $throwable;
+                $message = \strtolower($throwable->getMessage());
+                if (
+                    $attemptIndex >= 1
+                    && (\str_contains($message, 'reasoning_content only') || \str_contains($message, 'without final content'))
+                ) {
+                    return $this->generateStageOneJsonWithoutStream(
+                        $attemptPrompt,
+                        $scenarioCode,
+                        $maxTokens,
+                        $timeout,
+                        $requestParams
+                    );
+                }
+                if (
+                    $attemptIndex >= 1
+                    || (
+                        !\str_contains($message, 'reasoning_content only')
+                        && !\str_contains($message, 'invalid ai json')
+                        && !\str_contains($message, 'valid component json')
+                    )
+                ) {
+                    throw $throwable;
+                }
+            }
         }
 
-        return $decoded;
+        throw $lastThrowable ?? new \RuntimeException('invalid ai json: empty response');
+    }
+
+    private function prependStageOneJsonOnlyGuard(string $prompt, bool $retry): string
+    {
+        $guard = [
+            'CRITICAL OUTPUT CONTRACT FOR STRUCTURED JSON:',
+            '- You may think internally, but final output must contain only one JSON object and nothing else.',
+            '- Do not output reasoning_content, analysis, comments, markdown, code fences, or prose outside the final JSON object.',
+            '- The first character of the final answer MUST be `{` and the last character MUST be `}`.',
+            '- Return exactly one valid JSON object matching the requested schema. No trailing text.',
+            '- Prefer compact strings and short arrays. Do not produce huge narrative paragraphs inside JSON values.',
+            '- Escape all quotes inside string values; never use unescaped newlines in JSON strings.',
+        ];
+        if ($retry) {
+            $guard[] = 'RETRY MODE: your previous answer was not usable JSON or contained only reasoning. Return the JSON object immediately, starting with `{`.';
+        }
+
+        return \implode("\n", $guard) . "\n\n" . $prompt;
+    }
+
+    /**
+     * @param array<string, mixed> $requestParams
+     * @return array<string, mixed>
+     */
+    private function generateStageOneJsonWithoutStream(
+        string $prompt,
+        string $scenarioCode,
+        int $maxTokens,
+        int $timeout,
+        array $requestParams = []
+    ): array {
+        $requestParams = \array_merge([
+            'allow_zero_balance_provider' => true,
+            'temperature' => 0.0,
+            'max_tokens' => $maxTokens,
+            'timeout' => $timeout > 0 ? $timeout : 120,
+            'response_format' => ['type' => 'json_object'],
+        ], $requestParams);
+        unset(
+            $requestParams['disable_ai_timeout'],
+            $requestParams['disable_cli_timeout'],
+            $requestParams['enforce_timeout_in_stream']
+        );
+        $requestParams = $this->sanitizeStageOneJsonRequestParams($requestParams);
+
+        $raw = (string)$this->getAiService()->generate(
+            $prompt,
+            null,
+            $scenarioCode,
+            null,
+            $requestParams
+        );
+        $decoded = $this->getResponseJsonParser()->extractAndDecode($raw);
+        if (\is_array($decoded)) {
+            return $decoded;
+        }
+
+        throw new \RuntimeException('invalid ai json: non-stream recovery failed');
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function sanitizeStageOneJsonRequestParams(array $params): array
+    {
+        $thinking = $params['thinking'] ?? null;
+        $thinkingType = \is_array($thinking) ? \strtolower(\trim((string)($thinking['type'] ?? ''))) : '';
+        $thinkingDisabled = $thinkingType === 'disabled'
+            || (isset($params['enable_thinking']) && $params['enable_thinking'] === false)
+            || (isset($params['enable_reasoning']) && $params['enable_reasoning'] === false)
+            || (\is_string($params['thinking_mode'] ?? null) && \strtolower(\trim((string)$params['thinking_mode'])) === 'disabled');
+
+        if (!$thinkingDisabled) {
+            return $params;
+        }
+
+        unset(
+            $params['reasoning_effort'],
+            $params['thinking_budget'],
+            $params['thinking_budget_tokens']
+        );
+
+        return $params;
     }
 
     private function resolveStageOneCooperativeSessionId(array $scope, string $scopeKey): string
@@ -1242,7 +1376,10 @@ final class AiSiteExecutionBlueprintService
         return \implode("\n", [
             'You are PageBuilder Stage-1 REQUIREMENT EXPANSION planner.',
             'Step 1 only: expand the user one-line requirement into a concrete website planning brief. Do not generate theme, Header/Footer, or page blocks.',
-            'Return STRICT JSON only.',
+            'Decision order: first rewrite the one-line requirement into concrete business intent, then map intent to page-by-page roles, then derive technical direction.',
+            'Return STRICT JSON only. Start with `{` and end with `}`. No markdown, no explanation, no reasoning text.',
+            'JSON size rule: keep arrays short and values concise; use 1-2 sentence strings, not long essays.',
+            'Output budget: target 5-8 target_users entries max 4 words each; page_strategy one row per selected page type; technical_direction 3-6 actionable bullets.',
             'Locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
             'Site: ' . ($siteDisplayName !== '' ? $siteDisplayName : '-'),
             'User one-line requirement: ' . ($brief !== '' ? $brief : '-'),
@@ -1252,6 +1389,7 @@ final class AiSiteExecutionBlueprintService
             'Schema:',
             '{"requirement_expansion":{"original_brief":"string","expanded_brief":"string","planning_summary":"string","site_goal":"string","target_users":["string"],"business_context":"string","content_direction":"string","conversion_strategy":"string","page_strategy":[{"page_type":"string","intent":"string","content_focus":"string","conversion_role":"string"}],"technical_direction":["string"]}}',
             'Hard rules: expanded_brief must be a larger concrete version of the user requirement; page_strategy must cover every selected page type; all values must be customer-visible planning content, not prompt instructions.',
+            'Self-check before return: remove any sentence that still reads like "围绕/突出/说明/优化"; replace with named offers, nouns, and visible outcomes.',
         ]);
     }
 
@@ -1275,7 +1413,10 @@ final class AiSiteExecutionBlueprintService
         return \implode("\n", [
             'You are PageBuilder Stage-1 THEME planner.',
             'Step 2 only: use the confirmed requirement expansion to generate the shared theme, Header, Footer, and compact page-type design overviews. Do not include page-specific block plans.',
-            'Return STRICT JSON only.',
+            'Decision order: lock theme_design first, then shared Header/Footer content structure, then page_type_overviews. Do not reverse this order.',
+            'Return STRICT JSON only. Start with `{` and end with `}`. No markdown, no explanation, no reasoning text.',
+            'JSON size rule: compact object only; keep arrays short and avoid long narrative paragraphs.',
+            'Output budget: visual_keywords 4-8 items, forbidden_styles 3-6 items, each page_type_overviews entry 4-6 compact lines of concrete implementation direction.',
             'Confirmed requirement expansion from step 1: ' . $requirementExpansionJson,
             'Goal: confirm the shared theme/global plan, shared Header/Footer, and each page type visual role before page-specific plans are generated in separate fanout calls.',
             'Plan locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
@@ -1295,6 +1436,7 @@ final class AiSiteExecutionBlueprintService
             'Customer-anchor rule: style_signature must include at least two concrete nouns/actions from Brief or Instruction and turn them into visible design language; never choose a style that could fit any unrelated website.',
             'Interaction/effects rule: art_direction.motion_rule must name exact hover, focus, reveal, or ambient effects that are reduced-motion-safe and suitable for the customer scenario; do not write vague "smooth animation".',
             'Style-diversity rule: forbidden_styles must include the generic look most likely to be overused for this site category, and page_type_overviews must explain how each page avoids repeating the same hero/card composition.',
+            'Self-check before return: if header/footer labels, CTA labels, or links are still abstract placeholders, rewrite to concrete visitor-facing wording in Website content locale.',
         ]);
     }
 
@@ -1318,7 +1460,10 @@ final class AiSiteExecutionBlueprintService
         return \implode("\n", [
             'You are PageBuilder Stage-1 PAGE planner.',
             'Step 3 only: generate exactly this page type by carrying the confirmed requirement expansion, theme, Header, and Footer. Other page types are generated in parallel calls.',
-            'Return STRICT JSON only for exactly one page. Do not return other pages.',
+            'Decision order: first page_design_plan, then blocks, then field_plan + execution_script; never draft block copy before page_design_plan is complete.',
+            'Return STRICT JSON only for exactly one page. Start with `{` and end with `}`. Do not return other pages, markdown, explanation, or reasoning text.',
+            'JSON size rule: produce 2-4 blocks only unless the page type requires legal/support details; keep each field concise.',
+            'Output budget: each block should contain 2-4 concrete sentences of visible content; avoid oversized paragraphs that stage-2 must split again.',
             'Plan locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
             'Website content locale: ' . ($contentLocale !== '' ? $contentLocale : ($planLocale !== '' ? $planLocale : 'zh_Hans_CN')),
             'Language rule: blocks[].content, field_plan[].sample, CTA labels, link labels, alt text, and media descriptions are customer-visible website content and MUST use Website content locale. Do not use Plan locale for website copy unless it is identical to Website content locale.',
@@ -1356,6 +1501,7 @@ final class AiSiteExecutionBlueprintService
             'Schema:',
             '{"page":{"page_goal":"string","theme_alignment_summary":"string","page_design_plan":{"page_role":"string","content_narrative":"string","visual_hierarchy":"string","visual_signature_application":"string","composition_motif":"string","color_layering":"string","section_flow":["string"],"interaction_notes":["string"],"polish_details":["string"],"anti_monotony_rule":"string"},"primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","page_flow_role":"opening|proof|details|cta|support","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"color_layering":"string","implementation_note":"string"},"field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}}',
             'Hard rules: output 2-3 blocks only; each block exactly 3 field_plan rows; execution_script.feature_points max 3 and must be concrete customer-visible deliverables for this block, not writing/layout instructions like "section title"; content and core_copy must be final customer-visible implementation content in Website content locale, compact and not instruction-like; every block must have complete design_tags; every block must state how it follows page_design_plan.color_layering and page_design_plan.section_flow.',
+            'Self-check before return: verify every block has explicit page_flow_role rhythm (opening/proof/details/cta/support) and does not duplicate another page type block purpose.',
         ]);
     }
 
@@ -2191,7 +2337,7 @@ final class AiSiteExecutionBlueprintService
             '3) Use proper nouns / numbers / offers / brand voice; avoid generic "突出价值/说明亮点/完善导航" sentences.',
             '4) When facts are uncertain, use prefix "[假设]" and STILL output a concrete sample value (not a placeholder).',
             '5) navigation_plan.header_items, footer_plan.featured, footer_plan.policies must be non-empty arrays of {label, href} with real labels and routes.',
-            '',
+            ...$this->getSkillRegistry()->buildPromptGuideLines('stage1'),
             'STAGE-1 SHARED THEME PLAN CONTRACT (theme_design must satisfy ALL):',
             '- theme_design is the concrete shared plan for Header/Footer and later page prompts; never output it as abstract direction, brand adjectives, or design-method notes.',
             '- theme_design.theme_purpose must name the site mission, target visitor, first-screen emotion, and conversion promise derived from the user one-line requirement.',

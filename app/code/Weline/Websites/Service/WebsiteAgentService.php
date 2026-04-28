@@ -31,6 +31,8 @@ class WebsiteAgentService
         private readonly DomainResolveService $resolveService,
         private readonly FrameworkQueryService $queryService,
         private readonly ?LocalWelineWildcardCertificateService $localWelineWildcardCertificateService = null,
+        private readonly ?DomainPool $domainPoolModel = null,
+        private readonly ?LocalWelineHostsSyncService $localWelineHostsSyncService = null,
     ) {
     }
 
@@ -100,8 +102,8 @@ class WebsiteAgentService
         $emit('progress', ['message' => __('域名 %{1} 可用', [$domain]), 'progress' => 10]);
 
         if ($isLocalDomain) {
-            $wildcardResult = $this->getLocalWelineWildcardCertificateService()
-                ->ensureWildcardCertificateForDomain($domain, 0);
+            $localRecovery = $this->rememberManagedLocalDomain($domain, 0, 'build_from_description');
+            $wildcardResult = \is_array($localRecovery['certificate'] ?? null) ? $localRecovery['certificate'] : [];
             $httpsOk = (bool)($wildcardResult['success'] ?? false);
             $wildcardDomain = (string)($wildcardResult['wildcard_domain'] ?? LocalDomainPolicy::currentWildcardDomain());
             $emit('progress', [
@@ -228,6 +230,7 @@ class WebsiteAgentService
     {
         if ($deferAvailabilityCheck && $accountId > 0 && $this->isLocalTestRegistrarAccount($accountId)) {
             $fakeDomain = $this->buildLocalFlowDomainSuggestion($description, $preferredDomain);
+            $this->rememberManagedLocalDomain($fakeDomain, 0, 'recommend_defer_local_account');
             return [
                 'success' => true,
                 'message' => (string)__('本地测试账号：已生成流程联调域名 %{domain}', ['domain' => $fakeDomain]),
@@ -273,6 +276,7 @@ class WebsiteAgentService
 
         if ($this->isLocalTestRegistrarAccount($accountId)) {
             $fakeDomain = $this->buildLocalFlowDomainSuggestion($description, $preferredDomain);
+            $this->rememberManagedLocalDomain($fakeDomain, 0, 'recommend_local_account');
             return [
                 'success' => true,
                 'message' => (string)__('本地测试账号：已生成流程联调域名 %{domain}', ['domain' => $fakeDomain]),
@@ -823,6 +827,154 @@ class WebsiteAgentService
         return $base . '-' . $suffix . '.' . LocalDomainPolicy::currentRootDomain();
     }
 
+    /**
+     * 将本地托管域名写入域名池，并尽量恢复 hosts 与通配证书。
+     *
+     * @return array{
+     *   success:bool,
+     *   domain:string,
+     *   pool_id:int,
+     *   hosts?:array<string,mixed>,
+     *   certificate?:array<string,mixed>
+     * }
+     */
+    private function rememberManagedLocalDomain(string $domain, int $websiteId = 0, string $scene = ''): array
+    {
+        $domain = \strtolower(\trim($domain));
+        if (!$this->isLocalDevelopmentDomain($domain)) {
+            return [
+                'success' => false,
+                'domain' => $domain,
+                'pool_id' => 0,
+            ];
+        }
+
+        $result = [
+            'success' => true,
+            'domain' => $domain,
+            'pool_id' => 0,
+        ];
+
+        try {
+            $pool = $this->persistManagedLocalDomainIntoPool($domain);
+            if ($pool instanceof DomainPool) {
+                $result['pool_id'] = $pool->getPoolId();
+            }
+        } catch (\Throwable $throwable) {
+            \w_log_warning(
+                '[Websites\\WebsiteAgentService] persist local domain to pool failed: '
+                . $domain . ' scene=' . $scene . ' err=' . $throwable->getMessage()
+            );
+        }
+
+        try {
+            $hostsService = $this->getLocalWelineHostsSyncService();
+            if ($hostsService instanceof LocalWelineHostsSyncService) {
+                $result['hosts'] = $hostsService->ensureHostsInjected($domain);
+            }
+        } catch (\Throwable $throwable) {
+            \w_log_warning(
+                '[Websites\\WebsiteAgentService] local hosts recovery failed: '
+                . $domain . ' scene=' . $scene . ' err=' . $throwable->getMessage()
+            );
+        }
+
+        try {
+            $certificateResult = $this->getLocalWelineWildcardCertificateService()
+                ->ensureWildcardCertificateForDomain($domain, \max(0, $websiteId));
+            if (\is_array($certificateResult)) {
+                $result['certificate'] = $certificateResult;
+                $this->syncManagedLocalDomainCertificateStatus($domain, $certificateResult);
+            }
+        } catch (\Throwable $throwable) {
+            \w_log_warning(
+                '[Websites\\WebsiteAgentService] local wildcard certificate ensure failed: '
+                . $domain . ' scene=' . $scene . ' err=' . $throwable->getMessage()
+            );
+        }
+
+        return $result;
+    }
+
+    private function persistManagedLocalDomainIntoPool(string $domain): ?DomainPool
+    {
+        $poolModel = $this->getDomainPoolModel();
+        if (!$poolModel instanceof DomainPool) {
+            return null;
+        }
+
+        $pool = clone $poolModel;
+        $pool->loadByDomain($domain);
+        if ($pool->getPoolId() <= 0) {
+            $pool->clearData()->clearQuery();
+            $pool->setDomain($domain);
+            $pool->setDescription((string)__('AI 本地推荐域名自动入池：%{domain}', ['domain' => $domain]));
+        }
+
+        $pool->setStatus(DomainPool::STATUS_ACTIVE);
+        $pool->setResolveStatus(DomainPool::RESOLVE_STATUS_RESOLVED);
+        $pool->setDnsStatus(DomainPool::INFRA_STATUS_READY);
+        $pool->setCdnStatus(DomainPool::INFRA_STATUS_READY);
+        $pool->setIsLocalServer(true);
+        $pool->setResolveCheckedAt(\date('Y-m-d H:i:s'));
+        $pool->setResolveError('');
+
+        $httpsStatus = (string)$pool->getHttpsStatus();
+        if ($httpsStatus === DomainPool::HTTPS_STATUS_VALID) {
+            $pool->setPoolLifecycleStage(DomainPool::LIFECYCLE_CERT_VALID);
+            $pool->calculateSiteReady();
+        } else {
+            $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING);
+            $pool->setPoolLifecycleStage(DomainPool::LIFECYCLE_CERT_PENDING);
+            $pool->setSiteReady(false);
+        }
+
+        $pool->save();
+        return $pool;
+    }
+
+    /**
+     * @param array<string, mixed> $certificateResult
+     */
+    private function syncManagedLocalDomainCertificateStatus(string $domain, array $certificateResult): void
+    {
+        $poolModel = $this->getDomainPoolModel();
+        if (!$poolModel instanceof DomainPool) {
+            return;
+        }
+
+        $pool = clone $poolModel;
+        $pool->loadByDomain($domain);
+        if ($pool->getPoolId() <= 0) {
+            return;
+        }
+
+        $ok = !empty($certificateResult['success']);
+        $message = \trim((string)($certificateResult['message'] ?? ''));
+
+        $pool->setStatus(DomainPool::STATUS_ACTIVE);
+        $pool->setResolveStatus(DomainPool::RESOLVE_STATUS_RESOLVED);
+        $pool->setDnsStatus(DomainPool::INFRA_STATUS_READY);
+        $pool->setCdnStatus(DomainPool::INFRA_STATUS_READY);
+        $pool->setIsLocalServer(true);
+        $pool->setResolveCheckedAt(\date('Y-m-d H:i:s'));
+        $pool->setResolveError('');
+
+        if ($ok) {
+            $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
+            $pool->setHttpsError('');
+            $pool->setPoolLifecycleStage(DomainPool::LIFECYCLE_CERT_VALID);
+            $pool->calculateSiteReady();
+        } else {
+            $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING);
+            $pool->setHttpsError($message);
+            $pool->setPoolLifecycleStage(DomainPool::LIFECYCLE_CERT_PENDING);
+            $pool->setSiteReady(false);
+        }
+
+        $pool->save();
+    }
+
     private function isDevSimulationDomain(string $domain): bool
     {
         return (\defined('DEV') && DEV)
@@ -842,6 +994,32 @@ class WebsiteAgentService
     {
         return $this->localWelineWildcardCertificateService
             ?? ObjectManager::getInstance(LocalWelineWildcardCertificateService::class);
+    }
+
+    private function getDomainPoolModel(): ?DomainPool
+    {
+        if ($this->domainPoolModel instanceof DomainPool) {
+            return $this->domainPoolModel;
+        }
+
+        try {
+            return ObjectManager::getInstance(DomainPool::class);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function getLocalWelineHostsSyncService(): ?LocalWelineHostsSyncService
+    {
+        if ($this->localWelineHostsSyncService instanceof LocalWelineHostsSyncService) {
+            return $this->localWelineHostsSyncService;
+        }
+
+        try {
+            return ObjectManager::getInstance(LocalWelineHostsSyncService::class);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
