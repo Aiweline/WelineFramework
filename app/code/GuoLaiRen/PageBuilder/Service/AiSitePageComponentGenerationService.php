@@ -671,7 +671,7 @@ class AiSitePageComponentGenerationService
                     'max_tokens' => 4096,
                     'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
                     'response_format' => ['type' => 'json_object'],
-                ]),
+                ], true),
             ];
         }
 
@@ -2112,7 +2112,7 @@ class AiSitePageComponentGenerationService
                     'max_tokens' => 4096,
                     'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
                     'response_format' => ['type' => 'json_object'],
-                ]),
+                ], true),
             ]);
         } catch (\Throwable $streamThrowable) {
             $flushChunkBuffer(true);
@@ -2726,14 +2726,16 @@ class AiSitePageComponentGenerationService
      * @param array<string,mixed> $params
      * @return array<string,mixed>
      */
-    private function buildAiRuntimeParams(array $params): array
+    private function buildAiRuntimeParams(array $params, bool $isStream = false): array
     {
-        if (\PHP_SAPI !== 'cli') {
+        if (\PHP_SAPI !== 'cli' || !$isStream) {
             return $params;
         }
 
         $params['timeout'] = 0;
+        $params['disable_ai_timeout'] = true;
         $params['disable_cli_timeout'] = true;
+        $params['enforce_timeout_in_stream'] = false;
 
         return $params;
     }

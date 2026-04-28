@@ -946,6 +946,45 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(43210, $instance->getMeta('tracking_pid'));
     }
 
+    public function testMarkSpawnedInstanceDoesNotDemoteAlreadyReadyIpcInstance(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $instance = new ServiceInstance(
+            role: ControlMessage::ROLE_SESSION_SERVER,
+            instanceId: 1,
+            epoch: 9,
+            launchId: 'session-fast-ready',
+            pid: 962834,
+            port: 24302,
+            state: ServiceInstance::STATE_READY,
+            startedAt: 1234.0,
+            ipcClientId: 469,
+        );
+        $instance->setMeta('spawn_transport', 'processer_create');
+        $instance->setMeta('ready_received_at', 1234.5);
+        $orchestrator->getRegistry()->addInstance($instance);
+
+        $this->invokePrivateWithArgs($orchestrator, 'markSpawnedInstance', [
+            $instance,
+            10.0,
+            12.0,
+            962833,
+            'providers_batch_create',
+            3,
+        ]);
+
+        self::assertSame(ServiceInstance::STATE_READY, $instance->state);
+        self::assertSame(469, $instance->ipcClientId);
+        self::assertSame(962834, $instance->pid);
+        self::assertSame(962833, $instance->getRootPid());
+        self::assertSame(962833, $instance->getLauncherPid());
+        self::assertSame(962834, $instance->getMeta('service_pid'));
+        self::assertSame(962833, $instance->getMeta('root_pid'));
+        self::assertSame(962833, $instance->getMeta('tracking_pid'));
+        self::assertSame(962833, $instance->getMeta('spawn_pid_returned'));
+        self::assertSame(1234.0, $instance->startedAt);
+    }
+
     public function testRegisterInstanceIpcSwitchesForegroundTrackingPidToRuntimeServicePid(): void
     {
         $orchestrator = new ServiceOrchestrator();
@@ -1068,6 +1107,8 @@ class ServiceOrchestratorStartupTest extends TestCase
 
                 $this->batchRegistrySnapshot = [
                     'command_keys' => \array_keys($commands),
+                    'dispatcher_command' => (string)($commands[ControlMessage::ROLE_DISPATCHER . '#1']['command'] ?? ''),
+                    'redirect_command' => (string)($commands[ControlMessage::ROLE_REDIRECT . '#1']['command'] ?? ''),
                     'dispatcher_state' => $dispatcher?->state,
                     'dispatcher_pid' => $dispatcher?->pid,
                     'dispatcher_launch_id' => $dispatcher?->launchId,
@@ -1117,9 +1158,17 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(ServiceInstance::STATE_STARTING, $orchestrator->batchRegistrySnapshot['dispatcher_state'] ?? null);
         self::assertSame(0, $orchestrator->batchRegistrySnapshot['dispatcher_pid'] ?? null);
         self::assertNotEmpty($orchestrator->batchRegistrySnapshot['dispatcher_launch_id'] ?? null);
+        self::assertStringContainsString('--slot-id=', $orchestrator->batchRegistrySnapshot['dispatcher_command'] ?? '');
+        self::assertStringContainsString('dispatcher#1', $orchestrator->batchRegistrySnapshot['dispatcher_command'] ?? '');
+        self::assertStringContainsString('--lease-id=', $orchestrator->batchRegistrySnapshot['dispatcher_command'] ?? '');
+        self::assertStringContainsString('--slot-generation=', $orchestrator->batchRegistrySnapshot['dispatcher_command'] ?? '');
         self::assertSame(ServiceInstance::STATE_STARTING, $orchestrator->batchRegistrySnapshot['redirect_state'] ?? null);
         self::assertSame(0, $orchestrator->batchRegistrySnapshot['redirect_pid'] ?? null);
         self::assertNotEmpty($orchestrator->batchRegistrySnapshot['redirect_launch_id'] ?? null);
+        self::assertStringContainsString('--slot-id=', $orchestrator->batchRegistrySnapshot['redirect_command'] ?? '');
+        self::assertStringContainsString('redirect#1', $orchestrator->batchRegistrySnapshot['redirect_command'] ?? '');
+        self::assertStringContainsString('--lease-id=', $orchestrator->batchRegistrySnapshot['redirect_command'] ?? '');
+        self::assertStringContainsString('--slot-generation=', $orchestrator->batchRegistrySnapshot['redirect_command'] ?? '');
 
         $dispatcher = $orchestrator->getRegistry()->getInstance(ControlMessage::ROLE_DISPATCHER, 1);
         $redirect = $orchestrator->getRegistry()->getInstance(ControlMessage::ROLE_REDIRECT, 1);
