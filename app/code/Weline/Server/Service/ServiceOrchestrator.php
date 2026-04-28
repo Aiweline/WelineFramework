@@ -2386,6 +2386,7 @@ class ServiceOrchestrator
                 if ($configuredPort !== null && (int)$configuredPort !== (int)$port) {
                     $this->markEmergencyDynamicPort($instance, (int)$configuredPort, (int)$port, 'providers_batch_start');
                 }
+                $this->assignSlotLeaseMetadata($instance);
 
                 $commandPrepareStartedAt = \microtime(true);
                 $command = $provider->buildCommand($i, $context);
@@ -2402,12 +2403,7 @@ class ServiceOrchestrator
                 $instance->setMeta('launch_id', $launchId);
 
                 $cmd = $command->build();
-                if ($instance->epoch > 0) {
-                    $cmd .= ' --epoch=' . \escapeshellarg((string)$instance->epoch);
-                }
-                if ($instance->launchId !== '') {
-                    $cmd .= ' --launch-id=' . \escapeshellarg($instance->launchId);
-                }
+                $cmd = $this->appendInstanceIdentityArgs($cmd, $instance);
                 if ($processName !== null) {
                     $cmd .= ' --name=' . \escapeshellarg($processName);
                 }
@@ -7182,15 +7178,49 @@ class ServiceOrchestrator
             $instance->setMeta('spawn_batch_size', $batchSize);
         }
 
+        $alreadyAcceptedByIpc = $instance->ipcClientId !== null
+            || \in_array($instance->state, [ServiceInstance::STATE_REGISTERED, ServiceInstance::STATE_READY], true)
+            || $instance->getMeta('register_received_at') !== null
+            || $instance->getMeta('ready_received_at') !== null;
+
         $instance->setMeta('spawn_pid_returned', $pid > 0 ? $pid : 0);
-        $this->applySpawnedProcessTree($instance, $pid);
-        $instance->state = ServiceInstance::STATE_STARTING;
-        $instance->startedAt = $spawnFinishedAt;
+        if ($alreadyAcceptedByIpc) {
+            $this->mergeSpawnedProcessTreeForAcceptedInstance($instance, $pid);
+            if ($instance->startedAt <= 0) {
+                $instance->startedAt = $spawnFinishedAt;
+            }
+        } else {
+            $this->applySpawnedProcessTree($instance, $pid);
+            $instance->state = ServiceInstance::STATE_STARTING;
+            $instance->startedAt = $spawnFinishedAt;
+        }
 
         $this->logStartupTiming($instance, 'spawn_return', [
             'pid_returned' => $pid > 0 ? $pid : 0,
             'batch_size' => $batchSize,
         ]);
+    }
+
+    private function mergeSpawnedProcessTreeForAcceptedInstance(ServiceInstance $instance, int $pid): void
+    {
+        $spawnPid = $pid > 0 ? $pid : 0;
+        $servicePid = (int)$instance->pid;
+        if ($spawnPid <= 0) {
+            $this->syncInstanceProcessTreeMeta($instance);
+            return;
+        }
+
+        if ($servicePid > 0 && $servicePid !== $spawnPid) {
+            if ((string)($instance->getMeta('spawn_transport') ?? '') === 'processer_create_foreground') {
+                $instance->setProcessTreePids($servicePid, $servicePid, $spawnPid);
+            } else {
+                $instance->setProcessTreePids($servicePid, $spawnPid, $spawnPid);
+            }
+            $this->syncInstanceProcessTreeMeta($instance);
+            return;
+        }
+
+        $this->applySpawnedProcessTree($instance, $spawnPid);
     }
 
     private function applySpawnedProcessTree(ServiceInstance $instance, int $pid): void

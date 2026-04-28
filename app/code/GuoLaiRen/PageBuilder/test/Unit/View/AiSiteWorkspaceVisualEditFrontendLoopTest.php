@@ -68,6 +68,19 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('page_type: wrapper.dataset.pageType || document.body.getAttribute("data-page-type") || ""', $source);
     }
 
+    public function testVisualPreviewFrameUsesFixedDeviceViewportHeightInsteadOfDocumentScrollHeight(): void
+    {
+        $script = $this->workspaceScript();
+        $syncBody = $this->extractFunctionBody($script, 'syncVisualPreviewFrameHeight');
+
+        self::assertStringNotContainsString('function measureVisualPreviewDocumentHeight', $script);
+        self::assertStringContainsString('var fixedHeight = getPreviewDeviceMinHeight();', $syncBody);
+        self::assertStringContainsString("frame.style.minHeight = fixedHeight + 'px';", $syncBody);
+        self::assertStringContainsString("frame.style.height = fixedHeight + 'px';", $syncBody);
+        self::assertStringNotContainsString('scrollHeight', $syncBody);
+        self::assertStringNotContainsString('clientHeight', $syncBody);
+    }
+
     public function testPublishedVirtualThemeComponentsOverrideDefaultComponentRegistry(): void
     {
         $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/PageRenderService.php');
