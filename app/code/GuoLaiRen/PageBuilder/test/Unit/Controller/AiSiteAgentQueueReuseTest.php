@@ -133,10 +133,38 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertIsInt($busyPos);
         self::assertIsInt($baseScopePos);
         self::assertLessThan($baseScopePos, $busyPos);
+        self::assertStringContainsString('resolveRunningQueuedOperationState($scope, $operation)', $methodSource);
         self::assertStringContainsString('buildRunningOperationBusyMessage($operation, $runningOperation)', $methodSource);
         self::assertStringContainsString("'operation' => \$operation", $methodSource);
         self::assertStringContainsString("'running_operation' => \$runningOperation", $methodSource);
         self::assertStringContainsString("'stream_url' => ''", $methodSource);
+    }
+
+    public function testQueuedOperationConflictReadsRunningOperationSlotsBeyondActiveOperation(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(AiSiteAgent::class, 'resolveRunningQueuedOperationState');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, [
+            'active_operation' => [
+                'operation' => 'block_regenerate',
+                'status' => 'done',
+                'execution_token' => 'old-block',
+            ],
+            'active_operations' => [
+                'build' => [
+                    'operation' => 'build',
+                    'status' => 'running',
+                    'execution_token' => 'build-token',
+                    'queue_id' => 0,
+                ],
+            ],
+        ], 'block_regenerate');
+
+        self::assertSame('build', $result['operation'] ?? null);
+        self::assertSame('running', $result['status'] ?? null);
+        self::assertSame('build-token', $result['execution_token'] ?? null);
     }
 
     public function testQueuedOperationStartChecksLinkedQueueBeforeReusingActiveOperation(): void
