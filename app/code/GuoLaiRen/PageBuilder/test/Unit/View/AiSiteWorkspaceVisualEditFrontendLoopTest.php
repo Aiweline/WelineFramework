@@ -81,6 +81,31 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringNotContainsString('clientHeight', $syncBody);
     }
 
+    public function testWorkspaceStateReconcilesGeneratedArtifactsBeforeTaskSummary(): void
+    {
+        $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php');
+        self::assertIsString($source);
+        $body = $this->extractFunctionBody($source, 'buildWorkspaceState');
+
+        $virtualPagesAssigned = \strpos($body, '$normalized[\'virtual_pages_by_type\'] = $virtualPagesByType;');
+        $reconcile = \strpos($body, '$normalized = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($normalized);');
+        $summary = \strpos($body, '$taskSummary = $this->buildTaskService->summarize($normalized);');
+
+        self::assertIsInt($virtualPagesAssigned);
+        self::assertIsInt($reconcile);
+        self::assertIsInt($summary);
+        self::assertGreaterThan(
+            $virtualPagesAssigned,
+            $reconcile,
+            'Generated page and shared-component artifacts must be visible before task-state reconciliation.'
+        );
+        self::assertLessThan(
+            $summary,
+            $reconcile,
+            'Workspace task progress must summarize the reconciled build_tasks state.'
+        );
+    }
+
     public function testPublishedVirtualThemeComponentsOverrideDefaultComponentRegistry(): void
     {
         $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/PageRenderService.php');
