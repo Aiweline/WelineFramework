@@ -7,7 +7,7 @@
     "models_prefix": ["gpt-", "o1-", "o3-", "o4-"],
     "allow_custom_models": true,
     "quick_create": true,
-    "test_model": "gpt-5.4-mini",
+    "test_model": "gpt-5.5",
     "api_key_field": "api_key",
     "base_url_field": "base_url",
     "model_field": "model",
@@ -45,6 +45,36 @@
         "capabilities": ["chat", "vision", "code", "function_calling", "structured_outputs"]
     },
     "models": [
+        {
+            "code": "gpt-5.5",
+            "name": "GPT-5.5",
+            "description": "OpenAI 最新一代旗舰推理模型，统一驱动 ChatGPT 与 Codex，擅长复杂编码、研究与专业工作。",
+            "max_tokens": 128000,
+            "context_window": 1050000,
+            "input_price": 5.00,
+            "output_price": 30.00,
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "structured_outputs", "codex"]
+        },
+        {
+            "code": "gpt-5.5-pro",
+            "name": "GPT-5.5 Pro",
+            "description": "GPT-5.5 高强度推理版本，面向最复杂的研究、编码与多步专业任务。",
+            "max_tokens": 128000,
+            "context_window": 1050000,
+            "input_price": 30.00,
+            "output_price": 180.00,
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "structured_outputs", "codex"]
+        },
+        {
+            "code": "gpt-5.3-codex",
+            "name": "GPT-5.3 Codex",
+            "description": "OpenAI 面向 Codex 编码场景优化的模型，长任务稳定，性价比更高。",
+            "max_tokens": 128000,
+            "context_window": 400000,
+            "input_price": 1.75,
+            "output_price": 14.00,
+            "capabilities": ["chat", "code", "reasoning", "function_calling", "structured_outputs", "codex"]
+        },
         {
             "code": "gpt-5.4",
             "name": "GPT-5.4",
@@ -126,6 +156,6 @@
             "capabilities": ["chat", "vision", "code", "function_calling", "structured_outputs"]
         }
     ],
-    "models_updated_at": "2026-04-24",
-    "models_source": "https://platform.openai.com/docs/models"
+    "models_updated_at": "2026-04-27",
+    "models_source": "https://developers.openai.com/api/docs/models/gpt-5.5"
 }

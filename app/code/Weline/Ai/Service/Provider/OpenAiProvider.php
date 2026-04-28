@@ -31,6 +31,11 @@ use Weline\Framework\Runtime\SchedulerSystem;
  */
 class OpenAiProvider implements ProviderInterface
 {
+    private const THINKING_PROTOCOL_PAYLOAD = 'thinking_payload';
+    private const THINKING_PROTOCOL_BOOLEAN = 'boolean_toggle';
+    private const THINKING_PROTOCOL_REASONING_EFFORT = 'reasoning_effort_only';
+    private const THINKING_PROTOCOL_NONE = 'none';
+
     /**
      * 鏈€澶ч噸璇曟鏁?
      */
@@ -450,7 +455,7 @@ class OpenAiProvider implements ProviderInterface
             if ($this->isCurlStreamWriteAbortError($error)) {
                 $streamWriteAborted = true;
             } else {
-                throw new Exception(__('娴佸紡API璋冪敤澶辫触: %{error}', ['error' => $error]));
+                throw new Exception(__('Stream API request failed: %{error}', ['error' => $error]));
             }
         }
         if (!$streamWriteAborted && $httpCode !== 200) {
@@ -625,12 +630,28 @@ class OpenAiProvider implements ProviderInterface
             $onHeartbeat
         );
 
+        if (empty(trim($fullContent))) {
+            $fallbackContent = $this->resolveReasoningOnlyFallbackContent($fullReasoning, $params);
+            if ($fallbackContent !== null) {
+                $fullContent = $fallbackContent;
+            }
+        }
+
         // 濡傛灉娴佸紡璋冪敤娌℃湁杩斿洖浠讳綍鍐呭锛屾姏鍑烘槑纭敊璇?
         if (empty(trim($fullContent))) {
             if (!empty(trim($fullReasoning))) {
-                throw new Exception('AI stream returned reasoning_content only without final content. For DeepSeek V4 structured JSON tasks, disable thinking or increase max_tokens.');
+                $supplier = \strtolower((string)$model->getSupplier());
+                $modelCode = (string)($requestData['model'] ?? $model->getModelCode());
+                $protocol = $this->resolveThinkingControlProtocol($model, $requestData);
+                throw new Exception(
+                    'AI stream returned reasoning_content only without final content.'
+                    . ' model=' . $modelCode
+                    . ' supplier=' . $supplier
+                    . ' thinking_protocol=' . $protocol
+                    . ' For structured JSON tasks, disable thinking or increase max_tokens.'
+                );
             }
-            throw new Exception(__('AI 娴佸紡鐢熸垚瀹屾垚浣嗘湭杩斿洖浠讳綍鍐呭锛岃妫€鏌ユā鍨嬮厤缃紙API Key銆丅ase URL銆佹ā鍨嬪悕绉帮級鏄惁姝ｇ‘'));
+            throw new Exception(__('AI stream completed but returned no content. Please check model configuration (API Key, Base URL, model name).'));
         }
 
         // 浼扮畻token浣跨敤閲?
@@ -728,16 +749,121 @@ class OpenAiProvider implements ProviderInterface
     private function applyThinkingControls(AiModel $model, array &$requestData, array $params): void
     {
         $thinking = $this->resolveThinkingPayload($params);
-        if ($thinking !== null && $this->isDeepSeekV4Model($model, $requestData)) {
-            $requestData['thinking'] = $thinking;
-        } elseif ($thinking === null && $this->shouldDisableThinkingByDefault($params) && $this->isDeepSeekV4Model($model, $requestData)) {
-            $requestData['thinking'] = ['type' => 'disabled'];
+        $disableByDefault = $thinking === null && $this->shouldDisableThinkingByDefault($params);
+        $effectiveThinking = $thinking ?? ($disableByDefault ? ['type' => 'disabled'] : null);
+        $protocol = $this->resolveThinkingControlProtocol($model, $requestData);
+
+        if ($effectiveThinking !== null) {
+            if ($protocol === self::THINKING_PROTOCOL_PAYLOAD) {
+                $requestData['thinking'] = $effectiveThinking;
+            } elseif ($protocol === self::THINKING_PROTOCOL_BOOLEAN) {
+                $requestData['enable_thinking'] = $this->thinkingPayloadToEnabledToggle($effectiveThinking);
+            }
         }
 
         $reasoningEffort = \trim((string)($params['reasoning_effort'] ?? ''));
-        if ($reasoningEffort !== '' && $this->supportsReasoningEffort($model, $requestData)) {
-            $requestData['reasoning_effort'] = $reasoningEffort;
+        if (
+            $reasoningEffort === ''
+            && $protocol === self::THINKING_PROTOCOL_REASONING_EFFORT
+            && $this->isThinkingPayloadDisabled($effectiveThinking)
+        ) {
+            $reasoningEffort = 'minimal';
         }
+        if (
+            $reasoningEffort !== ''
+            && !$this->isThinkingDisabledByRequestParams($params, $requestData)
+            && $this->supportsReasoningEffort($model, $requestData)
+        ) {
+            $requestData['reasoning_effort'] = $reasoningEffort;
+        } else {
+            unset($requestData['reasoning_effort']);
+        }
+    }
+
+    /**
+     * @param array<string, mixed>|null $thinking
+     */
+    private function isThinkingPayloadDisabled(?array $thinking): bool
+    {
+        if ($thinking === null) {
+            return false;
+        }
+
+        return \strtolower(\trim((string)($thinking['type'] ?? ''))) === 'disabled';
+    }
+
+    /**
+     * @param array<string, mixed> $thinking
+     */
+    private function thinkingPayloadToEnabledToggle(array $thinking): bool
+    {
+        return !$this->isThinkingPayloadDisabled($thinking);
+    }
+
+    /**
+     * @param array<string, mixed> $requestData
+     */
+    private function resolveThinkingControlProtocol(AiModel $model, array $requestData): string
+    {
+        $supplier = \strtolower((string)$model->getSupplier());
+        $modelCode = \strtolower((string)($requestData['model'] ?? $model->getModelCode()));
+
+        if ($supplier === 'deepseek' || \str_starts_with($modelCode, 'deepseek-')) {
+            return self::THINKING_PROTOCOL_PAYLOAD;
+        }
+        if (
+            \in_array($supplier, ['qwen', 'tongyi', 'aliyun'], true)
+            || \str_starts_with($modelCode, 'qwen3')
+            || \str_starts_with($modelCode, 'qwen-')
+        ) {
+            return self::THINKING_PROTOCOL_BOOLEAN;
+        }
+        if (
+            \in_array($supplier, ['glm', 'zhipu'], true)
+            || \str_contains($modelCode, 'glm-z1')
+        ) {
+            return self::THINKING_PROTOCOL_PAYLOAD;
+        }
+        if (
+            $supplier === 'anthropic'
+            || \str_starts_with($modelCode, 'claude-')
+        ) {
+            return self::THINKING_PROTOCOL_PAYLOAD;
+        }
+        if ($this->isOpenAiReasoningModel($model, $requestData)) {
+            return self::THINKING_PROTOCOL_REASONING_EFFORT;
+        }
+
+        return self::THINKING_PROTOCOL_NONE;
+    }
+
+    /**
+     * DeepSeek V4 在 thinking=disabled 时不允许 reasoning_effort。
+     *
+     * @param array<string, mixed> $params
+     * @param array<string, mixed> $requestData
+     */
+    private function isThinkingDisabledByRequestParams(array $params, array $requestData): bool
+    {
+        $thinking = $requestData['thinking'] ?? ($params['thinking'] ?? null);
+        if (\is_array($thinking)) {
+            $type = \strtolower(\trim((string)($thinking['type'] ?? '')));
+            if ($type === 'disabled') {
+                return true;
+            }
+        }
+
+        if (isset($params['enable_thinking']) && $params['enable_thinking'] === false) {
+            return true;
+        }
+        if (isset($params['enable_reasoning']) && $params['enable_reasoning'] === false) {
+            return true;
+        }
+        if (\is_string($params['thinking_mode'] ?? null) && \strtolower(\trim((string)$params['thinking_mode'])) === 'disabled') {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -839,7 +965,70 @@ class OpenAiProvider implements ProviderInterface
         }
 
         $modelCode = \strtolower((string)($requestData['model'] ?? $model->getModelCode()));
-        return \str_starts_with($modelCode, 'deepseek-v4-');
+        return \str_starts_with($modelCode, 'deepseek-v4-')
+            || \str_starts_with($modelCode, 'deepseek-chat')
+            || \str_starts_with($modelCode, 'deepseek-reasoner');
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function resolveReasoningOnlyFallbackContent(string $reasoningContent, array $params): ?string
+    {
+        if (\trim($reasoningContent) === '') {
+            return null;
+        }
+
+        $responseFormat = $params['response_format'] ?? null;
+        if (
+            !\is_array($responseFormat)
+            || \strtolower(\trim((string)($responseFormat['type'] ?? ''))) !== 'json_object'
+        ) {
+            return null;
+        }
+
+        return $this->extractJsonObjectFromReasoningContent($reasoningContent);
+    }
+
+    private function extractJsonObjectFromReasoningContent(string $reasoningContent): ?string
+    {
+        $direct = $this->normalizeJsonObjectCandidate($reasoningContent);
+        if ($direct !== null) {
+            return $direct;
+        }
+
+        if (\preg_match_all('/```(?:json)?\s*([\s\S]*?)\s*```/i', $reasoningContent, $matches)) {
+            foreach ($matches[1] as $candidate) {
+                $normalized = $this->normalizeJsonObjectCandidate((string)$candidate);
+                if ($normalized !== null) {
+                    return $normalized;
+                }
+            }
+        }
+
+        $start = \strpos($reasoningContent, '{');
+        $end = \strrpos($reasoningContent, '}');
+        if ($start === false || $end === false || $end <= $start) {
+            return null;
+        }
+
+        $candidate = \substr($reasoningContent, $start, $end - $start + 1);
+        return $this->normalizeJsonObjectCandidate($candidate === false ? '' : $candidate);
+    }
+
+    private function normalizeJsonObjectCandidate(string $candidate): ?string
+    {
+        $trimmed = \trim($candidate);
+        if ($trimmed === '' || !\str_starts_with($trimmed, '{')) {
+            return null;
+        }
+
+        $decoded = \json_decode($trimmed, true);
+        if (!\is_array($decoded) || \json_last_error() !== \JSON_ERROR_NONE || \array_is_list($decoded)) {
+            return null;
+        }
+
+        return $trimmed;
     }
 
     /**
@@ -885,9 +1074,26 @@ class OpenAiProvider implements ProviderInterface
             return false;
         }
 
-        return \str_starts_with($modelCode, 'o1-')
+        // o-series 推理模型
+        if (
+            \str_starts_with($modelCode, 'o1-')
             || \str_starts_with($modelCode, 'o3-')
-            || \str_starts_with($modelCode, 'o4-');
+            || \str_starts_with($modelCode, 'o4-')
+        ) {
+            return true;
+        }
+
+        // GPT-5 / GPT-5.x 推理模型族（含 GPT-5.5、GPT-5.5 Pro、GPT-5.3-Codex 等）
+        if ($modelCode === 'gpt-5' || \str_starts_with($modelCode, 'gpt-5-') || \str_starts_with($modelCode, 'gpt-5.')) {
+            return true;
+        }
+
+        // Codex 系列编码模型显式纳入
+        if (\str_contains($modelCode, 'codex')) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -1110,7 +1316,7 @@ class OpenAiProvider implements ProviderInterface
                 if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
                     throw new Exception($this->getTimeoutErrorMessage($timeout));
                 }
-                throw new Exception(__('API璇锋眰澶辫触: %{error}', ['error' => $error]));
+                throw new Exception(__('API request failed: %{error}', ['error' => $error]));
             }
 
             $result = json_decode($response, true);
@@ -1122,23 +1328,23 @@ class OpenAiProvider implements ProviderInterface
             }
 
             if ($httpCode !== 200) {
-                $errorMsg = $result['error']['message'] ?? __('HTTP閿欒: %{code}', ['code' => $httpCode]);
+                $errorMsg = $result['error']['message'] ?? __('HTTP error: %{code}', ['code' => $httpCode]);
                 if ($this->isNonRetryableApiError($httpCode, (string)$errorMsg)) {
-                    throw new Exception(__('API杩斿洖閿欒锛堜笉鍙噸璇曪級: %{error}', ['error' => $errorMsg]));
+                    throw new Exception(__('API returned a non-retryable error: %{error}', ['error' => $errorMsg]));
                 }
-                throw new Exception(__('API杩斿洖閿欒: %{error}', ['error' => $errorMsg]));
+                throw new Exception(__('API returned an error: %{error}', ['error' => $errorMsg]));
             }
 
             if (!isset($result['choices'][0]['message']['content'])) {
-                throw new Exception(__('API鍝嶅簲鏍煎紡閿欒'));
+                throw new Exception(__('Invalid API response format.'));
             }
 
             return $result;
 
         } catch (\Exception $e) {
             // 濡傛灉鏄秴鏃堕敊璇紝鐩存帴鎶涘嚭锛屼笉閲嶈瘯
-            if (strpos($e->getMessage(), '璇锋眰瓒呮椂') !== false || 
-                strpos($e->getMessage(), '鎵ц鏃堕棿') !== false) {
+            if (strpos($e->getMessage(), 'timed out') !== false ||
+                strpos($e->getMessage(), 'execution time') !== false) {
                 throw $e;
             }
             if ($this->isNonRetryableApiErrorMessage($e->getMessage())) {
@@ -1149,7 +1355,7 @@ class OpenAiProvider implements ProviderInterface
                 SchedulerSystem::sleep(self::RETRY_DELAY * ($retryCount + 1));
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
-            throw new Exception(__('API璋冪敤澶辫触锛堝凡閲嶈瘯%{count}娆★級: %{msg}', [
+            throw new Exception(__('API request failed after %{count} retries: %{msg}', [
                 'count' => $retryCount,
                 'msg' => $e->getMessage()
             ]));
@@ -1180,6 +1386,9 @@ class OpenAiProvider implements ProviderInterface
             '余额不足',
             'insufficient_quota',
             'quota exceeded',
+            'exceeded your current quota',
+            'current quota',
+            'insufficient quota',
             'invalid_request_error',
             'model not found',
         ] as $keyword) {
@@ -1402,7 +1611,7 @@ class OpenAiProvider implements ProviderInterface
             if ($this->isCurlStreamWriteAbortError($error)) {
                 $streamWriteAborted = true;
             } else {
-                throw new Exception(__('娴佸紡API璋冪敤澶辫触: %{error}', ['error' => $error]));
+                throw new Exception(__('Stream API request failed: %{error}', ['error' => $error]));
             }
         }
         
@@ -1441,14 +1650,14 @@ class OpenAiProvider implements ProviderInterface
                 // OpenAI 鏍煎紡: {"error": {"message": "...", "type": "..."}}
                 if (isset($errorData['error']['message'])) {
                     $errType = $errorData['error']['type'] ?? 'api_error';
-                    return "AI API 閿欒 (HTTP {$httpCode}, {$errType}): " . $errorData['error']['message'];
+                    return "AI API error (HTTP {$httpCode}, {$errType}): " . $errorData['error']['message'];
                 }
                 // 鍏朵粬鏍煎紡: {"message": "..."} 鎴?{"detail": "..."}
                 if (isset($errorData['message'])) {
-                    return "AI API 閿欒 (HTTP {$httpCode}): " . $errorData['message'];
+                    return "AI API error (HTTP {$httpCode}): " . $errorData['message'];
                 }
                 if (isset($errorData['detail'])) {
-                    return "AI API 閿欒 (HTTP {$httpCode}): " . $errorData['detail'];
+                    return "AI API error (HTTP {$httpCode}): " . $errorData['detail'];
                 }
             }
         }
@@ -1465,15 +1674,15 @@ class OpenAiProvider implements ProviderInterface
         ];
         
         if (isset($statusMessages[$httpCode])) {
-            return "AI API 閿欒 (HTTP {$httpCode}): " . $statusMessages[$httpCode];
+            return "AI API error (HTTP {$httpCode}): " . $statusMessages[$httpCode];
         }
         
         if ($httpCode > 0) {
             $preview = mb_substr($trimmed, 0, 200);
-            return "AI API 杩斿洖寮傚父 (HTTP {$httpCode})" . ($preview ? "锛屽搷搴? {$preview}" : '');
+            return "AI API returned an unexpected response (HTTP {$httpCode})" . ($preview ? ", response: {$preview}" : '');
         }
         
-        return "AI API 鏃犲搷搴旓紝璇锋鏌ョ綉缁滆繛鎺ュ拰 API 鍦板潃閰嶇疆";
+        return "No response from AI API. Check network connectivity and Base URL configuration.";
     }
 
     /**

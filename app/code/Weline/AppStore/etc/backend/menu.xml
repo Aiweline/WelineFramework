@@ -14,7 +14,7 @@
     <menu source="Weline_AppStore::appstore"
           name="appstore"
           title="应用商城"
-          icon="bi-bag"
+          icon="mdi mdi-shopping"
           order="60">
 
         <!-- 商城首页 -->
@@ -22,7 +22,7 @@
               name="index"
               title="商城首页"
               action="*/backend/index"
-              icon="bi-house"
+              icon="mdi mdi-home"
               order="0"/>
 
         <!-- 我的模块 -->
@@ -30,7 +30,7 @@
               name="installed"
               title="我的模块"
               action="*/backend/installed"
-              icon="bi-puzzle"
+              icon="mdi mdi-puzzle"
               order="1"/>
 
         <!-- 账户绑定 -->
@@ -38,7 +38,7 @@
               name="account"
               title="账户绑定"
               action="*/backend/account"
-              icon="bi-link-45deg"
+              icon="mdi mdi-link-variant"
               order="2"/>
 
         <!-- 许可证管理 -->
@@ -46,7 +46,7 @@
               name="license"
               title="许可证管理"
               action="*/backend/license"
-              icon="bi-key"
+              icon="mdi mdi-key-variant"
               order="3"/>
 
         <!-- 下载历史 -->
@@ -54,7 +54,7 @@
               name="download_history"
               title="下载历史"
               action="*/backend/download-history"
-              icon="bi-clock-history"
+              icon="mdi mdi-history"
               order="4"/>
     </menu>
 </menus>

@@ -14,7 +14,7 @@
     <menu source="Weline_PlatformAppStore::platform"
           name="platform_appstore"
           title="平台应用商店"
-          icon="bi-shop"
+          icon="mdi mdi-storefront"
           order="50">
 
         <!-- 模块管理 -->
@@ -22,7 +22,7 @@
               name="module"
               title="模块管理"
               action="*/backend/module"
-              icon="bi-puzzle"
+              icon="mdi mdi-puzzle"
               order="0"/>
 
         <!-- 模块分类 -->
@@ -30,7 +30,7 @@
               name="category"
               title="模块分类"
               action="*/backend/category"
-              icon="bi-folder"
+              icon="mdi mdi-folder-multiple"
               order="1"/>
 
         <!-- 订单管理 -->
@@ -38,7 +38,7 @@
               name="order"
               title="订单管理"
               action="*/backend/order"
-              icon="bi-receipt"
+              icon="mdi mdi-receipt"
               order="2"/>
 
         <!-- 许可证管理 -->
@@ -46,7 +46,7 @@
               name="license"
               title="许可证管理"
               action="*/backend/license"
-              icon="bi-key"
+              icon="mdi mdi-key-variant"
               order="3"/>
 
         <!-- 开发者中心 -->
@@ -54,7 +54,7 @@
               name="developer"
               title="开发者中心"
               action="*/backend/developer"
-              icon="bi-person-code"
+              icon="mdi mdi-account-cog"
               order="4"/>
 
         <!-- 收益管理 -->
@@ -62,7 +62,7 @@
               name="earnings"
               title="收益管理"
               action="*/backend/earnings"
-              icon="bi-cash-stack"
+              icon="mdi mdi-cash-multiple"
               order="5"/>
 
         <!-- API配置 -->
@@ -70,7 +70,7 @@
               name="api_config"
               title="API配置"
               action="*/backend/api-config"
-              icon="bi-gear"
+              icon="mdi mdi-cog"
               order="6"/>
     </menu>
 </menus>

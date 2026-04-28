@@ -2207,4 +2207,46 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             ],
         ];
     }
+
+    public function testSanitizeStageTwoJsonRequestParamsDisablesThinkingForJsonContract(): void
+    {
+        $service = new AiSiteVirtualThemePlanService();
+        $method = new \ReflectionMethod($service, 'sanitizeStageTwoJsonRequestParams');
+        $method->setAccessible(true);
+
+        $sanitized = $method->invoke($service, [
+            'response_format' => ['type' => 'json_object'],
+            'thinking_mode' => true,
+            'enable_thinking' => true,
+            'enable_reasoning' => true,
+            'thinking_budget_tokens' => 2048,
+            'reasoning_effort' => 'high',
+        ]);
+
+        self::assertIsArray($sanitized);
+        self::assertSame(['type' => 'disabled'], $sanitized['thinking'] ?? null);
+        self::assertSame('disabled', (string)($sanitized['thinking_mode'] ?? ''));
+        self::assertFalse((bool)($sanitized['enable_thinking'] ?? true));
+        self::assertFalse((bool)($sanitized['enable_reasoning'] ?? true));
+        self::assertArrayNotHasKey('thinking_budget_tokens', $sanitized);
+        self::assertArrayNotHasKey('thinking_budget', $sanitized);
+        self::assertArrayNotHasKey('reasoning_effort', $sanitized);
+    }
+
+    public function testResolveTaskPlanBatchMaxTokensKeepsSingleTaskBatchAboveLegacyFloor(): void
+    {
+        $service = new AiSiteVirtualThemePlanService();
+        $method = new \ReflectionMethod($service, 'resolveTaskPlanBatchMaxTokens');
+        $method->setAccessible(true);
+
+        $singleTaskMax = (int)$method->invoke($service, [
+            'task_keys' => ['page:blog_list:featured_post_hero'],
+        ]);
+        $multiTaskMax = (int)$method->invoke($service, [
+            'task_keys' => ['page:home_page:hero', 'page:home_page:proof'],
+        ]);
+
+        self::assertSame(6200, $singleTaskMax);
+        self::assertSame(8192, $multiTaskMax);
+    }
 }
