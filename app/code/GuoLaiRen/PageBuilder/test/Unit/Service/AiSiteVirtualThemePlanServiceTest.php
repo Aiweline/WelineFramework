@@ -694,7 +694,7 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertNotEmpty($pageTask['implementation_contract']['acceptance'] ?? []);
     }
 
-    public function testBuildTaskPlanArtifactsRejectsChineseVisibleContentForEnglishLocale(): void
+    public function testBuildTaskPlanArtifactsAllowsChineseVisibleContentWithEnglishContentLocale(): void
     {
         $decoded = \json_decode($this->buildTaskPlanResponse(), true);
         $task =& $decoded['virtual_theme_plan']['page_tasks']['home_page'][0];
@@ -711,10 +711,10 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         $scope = $this->buildPromptScope();
         $scope['content_locale'] = 'en_US';
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('content_locale');
+        $artifacts = $service->buildTaskPlanArtifacts($scope, $this->buildPromptBlueprint());
 
-        $service->buildTaskPlanArtifacts($scope, $this->buildPromptBlueprint());
+        self::assertIsArray($artifacts);
+        self::assertArrayHasKey('virtual_theme_plan', $artifacts);
     }
 
     public function testBuildTaskPlanArtifactsPassesStageOneTaskCuesIntoAiPrompt(): void

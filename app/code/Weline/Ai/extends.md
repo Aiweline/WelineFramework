@@ -4,6 +4,14 @@
 
 Weline_Ai 模块提供了多个扩展点，允许其他模块扩展 AI 功能。本文档详细说明如何使用这些扩展点。
 
+## 本模块对外的 Query 能力（Weline_Framework Query）
+
+本模块在 **`extends/module/Weline_Framework/Query/AiQueryProvider.php`** 中实现 `Weline\Framework\Service\Query\Provider\QueryProviderInterface`，向全框架注册 **`provider = ai`**。其他模块通过 **`w_query('ai', $operation, $params)`** 调用大模型同步/流式/结构化/智能体等能力，内部统一委托 `AiService`。
+
+- 与 `ai_knowledge`（`w_query('ai_knowledge', 'search', …)`）并列，由 `QueryProviderRegistry` 自动扫描注册。
+- 流式操作需在 `params` 中传入 **`stream_callback`（callable）**；**仅同一次 PHP 请求/进程内有效**，不可序列化、不可入队、不可落盘后再执行。
+- 参数与 operation 说明见 **`doc/API/API.md`** 中「跨模块调用（w_query）」章节。
+
 ## 快速开始
 
 ### 创建场景适配器
