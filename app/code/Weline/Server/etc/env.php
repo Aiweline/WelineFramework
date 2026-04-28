@@ -7,8 +7,8 @@ return [
     'wls' => [
         'orchestrator' => [
             // 后台启动时等待“所有服务就绪”的常规时长（秒）。
-            // 推荐默认值：12（可显著减少 4 秒误报，同时保持启动反馈及时）。
-            'background_ready_wait_sec' => 12,
+            // 推荐默认值：15（进一步减少慢机/冷启动时的误报）。
+            'background_ready_wait_sec' => 15,
             // 后台启动等待上限（秒），超过仍未就绪会返回警告并提示后续排查。
             // 推荐默认值：60（避免异常时无限等待）。
             'background_ready_max_wait_sec' => 60,

@@ -1476,18 +1476,8 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             return (int) \round(\max(5.0, \min(180.0, $timeoutSec)) * 1000);
         }
 
-        // Background start should hand control back quickly once the Master is alive.
-        // Long "wait until every child is ready" behavior is opt-in through the env
-        // settings above; otherwise a broken/duplicating service table can make
-        // server:start appear hung for 90s+.
-        $timeoutSec = 1.5
-            + \max(0, $workerCount - 1) * 0.25
-            + ($dispatcherEnabled ? 0.5 : 0.0)
-            + ($sslEnabled ? 0.5 : 0.0)
-            + $sharedServiceCount * 0.25;
-        $timeoutSec = \max(1.5, \min(6.0, $timeoutSec));
-
-        return (int) \round($timeoutSec * 1000);
+        // 默认兜底改为 15 秒，减少 Linux 冷启动/慢机场景下的误报。
+        return 15000;
     }
 
     protected function resolveBackgroundStartupReadyHardWaitMs(array $instanceData = []): int
