@@ -1,32 +1,26 @@
 [
     {
         "route": "ai\/backend\/manager\/index",
-        "description": "AI管理",
+        "description": "AI Management",
         "status": "UNKNOWN",
-        "message": "未知响应"
+        "message": "Unknown response"
     },
     {
         "route": "ai\/backend\/model\/index",
-        "description": "AI模型管理",
+        "description": "AI Models",
         "status": "UNKNOWN",
-        "message": "未知响应"
+        "message": "Unknown response"
     },
     {
         "route": "ai\/backend\/adapter\/index",
-        "description": "场景适配器",
+        "description": "Scenario Adapters",
         "status": "UNKNOWN",
-        "message": "未知响应"
+        "message": "Unknown response"
     },
     {
         "route": "ai\/backend\/provider\/index",
-        "description": "供应商账户",
+        "description": "Provider Accounts",
         "status": "UNKNOWN",
-        "message": "未知响应"
-    },
-    {
-        "route": "ai\/backend\/defaultmodel\/index",
-        "description": "默认模型管理",
-        "status": "UNKNOWN",
-        "message": "未知响应"
+        "message": "Unknown response"
     }
 ]

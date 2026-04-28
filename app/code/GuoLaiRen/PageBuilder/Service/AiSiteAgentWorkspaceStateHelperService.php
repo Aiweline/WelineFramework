@@ -318,8 +318,15 @@ class AiSiteAgentWorkspaceStateHelperService
 
         if (\is_array($state['plan'] ?? null)) {
             $plan = $state['plan'];
+            // 阶段一方案预览必须 hydrate 结构化数据：保留 markdown / json / structured /
+            // execution_blueprint 原始字段，同时保留兼容用 *_available 标志位。
+            // 之前为了减小 HTML 体积把 structured / json 全部裁剪掉，会导致重新进入工作区
+            // 时 buildPlanPreviewHtml 始终走 empty state 分支，方案预览只显示「方案等待确认」。
             $state['plan'] = [
                 'markdown' => (string)($plan['markdown'] ?? ''),
+                'json' => \is_array($plan['json'] ?? null) ? $plan['json'] : [],
+                'structured' => \is_array($plan['structured'] ?? null) ? $plan['structured'] : [],
+                'execution_blueprint' => \is_array($plan['execution_blueprint'] ?? null) ? $plan['execution_blueprint'] : [],
                 'json_available' => !empty($plan['json']),
                 'structured_available' => !empty($plan['structured']),
                 'execution_blueprint_available' => !empty($plan['execution_blueprint']),
@@ -345,10 +352,11 @@ class AiSiteAgentWorkspaceStateHelperService
             $state['page_type_layouts'] = $this->prunePageTypeLayoutsForView($state['page_type_layouts']);
         }
 
+        // 注意：保留顶层 plan_json / plan_structured 作为前端 hydrate 的结构化方案 fallback；
+        // execution_blueprint 大块数据已通过 state['plan']['execution_blueprint'] 保留，
+        // 顶层 execution_blueprint / execution_blueprint_draft 删除，避免重复下发。
         unset(
             $state['events'],
-            $state['plan_json'],
-            $state['plan_structured'],
             $state['confirmed_stage1_plan_book'],
             $state['task_plan_structured'],
             $state['task_plan_directory_tree'],
@@ -492,6 +500,8 @@ class AiSiteAgentWorkspaceStateHelperService
      */
     public function pruneScopeForView(array $scope): array
     {
+        // 注意：保留 scope.plan_json / scope.plan_structured 作为前端 hydrate 兜底，
+        // 防止 state.plan / state.plan_structured 在某些异常路径缺失时阶段一预览仍能复用 scope 数据。
         unset(
             $scope['pagebuilder_pages_by_type'],
             $scope['virtual_pages_by_type'],
@@ -503,8 +513,6 @@ class AiSiteAgentWorkspaceStateHelperService
             $scope['build_summary'],
             $scope['active_operation'],
             $scope['pre_publish_visual_urls'],
-            $scope['plan_json'],
-            $scope['plan_structured'],
             $scope['confirmed_stage1_plan_book'],
             $scope['execution_blueprint'],
             $scope['execution_blueprint_draft'],
