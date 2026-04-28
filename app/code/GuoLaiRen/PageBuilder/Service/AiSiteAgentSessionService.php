@@ -823,7 +823,10 @@ SQL;
             foreach ($chunk as $key) {
                 if ($key === 'virtual_theme_plan') {
                     $jsonArgs[] = "'virtual_theme_plan'";
-                    $jsonArgs[] = "COALESCE(scope_doc -> 'virtual_theme_plan', '{}'::jsonb) - 'draft' - 'draft_markdown' - 'confirmed' - 'confirmed_markdown'";
+                    // Keep full task-plan snapshots for stage reads.
+                    // Trimming confirmed/draft here can make build fallback to
+                    // stale/minimal blueprints (e.g. 28 tasks collapsing to 5).
+                    $jsonArgs[] = "scope_doc -> 'virtual_theme_plan'";
                     continue;
                 }
                 $safeKey = \str_replace("'", "''", $key);

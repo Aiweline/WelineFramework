@@ -9222,13 +9222,22 @@ SCRIPT;
 
         // Stage-two task plan derive：阶段二预览始终从草稿读取，确认态不直接展示。
         // - 任务方案确认后，virtual_theme_plan.draft / task_plan_structured / task_plan_markdown 会被清空。
-        // - 此时不读 confirmed_markdown / confirmed structured 作为预览源（避免“确认态泄漏到前端”），
-        //   而是从 execution_blueprint 反推一份等价于“最新草稿”的结构化 + 概览 markdown，
+        // - 此时不读 confirmed_markdown / confirmed structured 作为预览源（避免"确认态泄漏到前端"），
+        //   而是从 execution_blueprint 反推一份等价于"最新草稿"的结构化 + 概览 markdown，
         //   让 buildPlanPreviewHtml 始终能走结构化预览，不再退化成 markdown 列表。
+        // 守门：仅允许在阶段二任务方案"已确认"且 execution_blueprint 来源为阶段二
+        // (build_blueprint.source = stage2_confirmed_task_plan) 时反推。否则
+        // 阶段一刚确认（execution_blueprint 已存在但仍属阶段一蓝图）时会被误识别成
+        // "阶段二已经生成方案"，前端就会出现"未生成阶段二却出现方案"的现象。
+        $taskPlanConfirmedFlag = (int)($normalized['task_plan_confirmed'] ?? 0) === 1;
+        $buildBlueprintForDerive = \is_array($normalized['build_blueprint'] ?? null) ? $normalized['build_blueprint'] : [];
+        $buildBlueprintIsStageTwo = (string)($buildBlueprintForDerive['source'] ?? '') === 'stage2_confirmed_task_plan';
         if (
             $taskPlanStructured === []
             && $taskPlanDraftStructured === []
             && \trim($taskPlanDraftMarkdown) === ''
+            && $taskPlanConfirmedFlag
+            && $buildBlueprintIsStageTwo
         ) {
             $blueprintForDerive = \is_array($normalized['execution_blueprint'] ?? null) && $normalized['execution_blueprint'] !== []
                 ? $normalized['execution_blueprint']
