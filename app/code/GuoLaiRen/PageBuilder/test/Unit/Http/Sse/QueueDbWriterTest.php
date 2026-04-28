@@ -109,6 +109,27 @@ final class QueueDbWriterTest extends TestCase
         self::assertGreaterThan(0, (int)($result['suppressed_content_bytes'] ?? 0));
     }
 
+    public function testIsContentBearingStreamPayloadTreatsThinkingAsSuppressedStream(): void
+    {
+        $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_PLAN, 'plan');
+        $method = new ReflectionMethod(QueueDbWriter::class, 'isContentBearingStreamPayload');
+        $method->setAccessible(true);
+
+        self::assertTrue((bool)$method->invoke($writer, 'thinking', [
+            'content' => 'reasoning content chunk',
+            'event_type' => 'thinking',
+        ]));
+        self::assertTrue((bool)$method->invoke($writer, 'log', [
+            'stream_stage' => 'reasoning_chunk',
+            'message' => 'intermediate reasoning stream',
+        ]));
+        self::assertTrue((bool)$method->invoke($writer, 'log', [
+            'payload' => [
+                'format' => 'reasoning_stream',
+            ],
+        ]));
+    }
+
     public function testAppendLineToQueueResultCacheKeepsRecentTailWithinLimit(): void
     {
         $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'task_plan');

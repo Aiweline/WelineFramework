@@ -15,6 +15,7 @@ namespace Weline\Queue\Cron;
 
 use Weline\Cron\Helper\CronStatus;
 use Weline\Cron\Helper\Process;
+use Weline\Framework\App\Env;
 use Weline\Framework\System\Process\Processer;
 use Weline\Framework\Output\Cli\Printing;
 
@@ -73,86 +74,115 @@ QUEUETIP;
      */
     public function execute(): string
     {
-        $pageSize = 2;
-        $this->queue->reset()->where($this->queue::schema_fields_finished, 0)
+        $maxConcurrent = $this->resolveMaxConcurrent();
+        $this->reconcileRunningQueues();
+        $runningCount = $this->countRunningAutoQueues();
+        $slots = max(0, $maxConcurrent - $runningCount);
+        if ($slots <= 0) {
+            return 'OK';
+        }
+
+        $pendingQueues = $this->queue->reset()
+            ->where($this->queue::schema_fields_finished, 0)
             ->where($this->queue::schema_fields_auto, 1)
-            ->where($this->queue::schema_fields_status, $this->queue::status_done, '!=')
-            ->where($this->queue::schema_fields_status, $this->queue::status_stop, '!=')
-            ->where($this->queue::schema_fields_status, $this->queue::status_error, '!=')
-            ->pagination();
-        $pages = $this->queue->pagination['lastPage'];
-        foreach (range(1, $pages) as $page) {
-            $queues = $this->queue->reset()->where($this->queue::schema_fields_finished, 0)
-                ->where($this->queue::schema_fields_status, $this->queue::status_done, '!=')
-                ->where($this->queue::schema_fields_status, $this->queue::status_stop, '!=')
-                ->where($this->queue::schema_fields_status, $this->queue::status_error, '!=')
-                ->where($this->queue::schema_fields_auto, 1)
-                ->pagination($page, $pageSize)
-                ->select()
-                ->fetch()
-                ->getItems();
-            /**@var \Weline\Queue\Model\Queue $queue */
-            foreach ($queues as $key => $queue) {
-                # 队列名
-                $queue_name = Process::initTaskName('queue-' . $queue->getName() . '-' . $queue->getId());
-                # 进程名
-                $process_name = $this->buildQueueRunProcessName((int)$queue->getId(), $queue_name);
-                # 优先使用队列记录 PID 精确判活（Windows 下按命令行匹配不稳定，容易误判）
-                $queuePid = (int)($queue->getPid() ?: 0);
-                $queuePidRunning = $queuePid > 0
-                    && Processer::isManagedProcessRunning($queuePid, $queue_name, '', $process_name);
-                # 兼容旧逻辑：命令行名匹配作为回退
-                $managedPid = $queuePidRunning ? $queuePid : (int)(Processer::getData($process_name, 'pid') ?: 0);
-                $managedPidRunning = $managedPid > 0
-                    && Processer::isManagedProcessRunning($managedPid, $queue_name, '', $process_name);
-                if (!$managedPidRunning && $managedPid > 0) {
-                    Processer::removePidFile($process_name);
-                }
-                $pid = $queuePidRunning ? $queuePid : ($managedPidRunning ? $managedPid : 0);
-                $result = $queue->getResult();
-                if ($pid) {
-                    $output = $this->getManagedProcessOutput($process_name, $pid);
-                    $queue->setResult($output . __('进程已存在，请检查进程状态！进程名：%{1}', $process_name) . $result)
-                        ->setPid($pid)
-                        ->setStatus($queue::status_running)
-                        ->save();
-                    continue;
-                } elseif ($queue->getPid()) {
-                    # -----------没有查到该程序正在运行，数据库又存在PID，说明该任务运行结束-------------
-                    $output = $this->getManagedProcessOutput($process_name, $queuePid);
-                    $queue->setEndAt(date('Y-m-d H:i:s'))
-                        ->setPid(0);
-                    if ($queue->isFinished()) {
-                        $queue->setResult(PHP_EOL . $output . __('队列结束...') . $result)
-                            ->setStatus($queue::status_done)
-                            ->save();
-                    } else {
-                        $queue->setStatus($queue::status_error)
-                            ->setResult(PHP_EOL . $output . __('队列进程异常结束...') . $result)
-                            ->save();
-                    }
-                    # 卸载进程记录文件
-                    Processer::removePidFile($process_name);
-                    continue;
-                }
-                # 创建进程
-                $pid = Processer::create($process_name, true, false, true);
-                if (!$pid) {
-                    $output = $this->getManagedProcessOutput($process_name);
-                    $queue->setResult($output . __('进程创建失败！请检查进程状态！进程名：%{1}', [$process_name]))
-                        ->setStartAt(date('Y-m-d H:i:s'))
-                        ->setStatus($queue::status_error)
-                        ->save();
-                } else {
-                    # 记录PID
-                    $queue->setStatus($queue::status_running)
-                        ->setPid($pid)
-                        ->setStartAt(date('Y-m-d H:i:s'))
-                        ->save();
-                }
-            }
+            ->where($this->queue::schema_fields_status, $this->queue::status_pending)
+            ->pagination(1, $slots)
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        /** @var \Weline\Queue\Model\Queue $queue */
+        foreach ($pendingQueues as $queue) {
+            $this->startQueueProcess($queue);
         }
         return 'OK';
+    }
+
+    private function startQueueProcess(\Weline\Queue\Model\Queue $queue): void
+    {
+        $queueName = Process::initTaskName('queue-' . $queue->getName() . '-' . $queue->getId());
+        $processName = $this->buildQueueRunProcessName((int)$queue->getId(), $queueName);
+        $pid = Processer::create($processName, true, false, true);
+        if (!$pid) {
+            $output = $this->getManagedProcessOutput($processName);
+            $queue->setResult($output . __('进程创建失败！请检查进程状态！进程名：%{1}', [$processName]))
+                ->setStartAt(date('Y-m-d H:i:s'))
+                ->setStatus($queue::status_error)
+                ->save();
+            return;
+        }
+
+        $queue->setStatus($queue::status_running)
+            ->setPid($pid)
+            ->setStartAt(date('Y-m-d H:i:s'))
+            ->save();
+    }
+
+    private function reconcileRunningQueues(): void
+    {
+        $runningQueues = $this->queue->reset()
+            ->where($this->queue::schema_fields_finished, 0)
+            ->where($this->queue::schema_fields_auto, 1)
+            ->where($this->queue::schema_fields_status, $this->queue::status_running)
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        /** @var \Weline\Queue\Model\Queue $queue */
+        foreach ($runningQueues as $queue) {
+            $queueName = Process::initTaskName('queue-' . $queue->getName() . '-' . $queue->getId());
+            $processName = $this->buildQueueRunProcessName((int)$queue->getId(), $queueName);
+            $queuePid = (int)($queue->getPid() ?: 0);
+            $running = $queuePid > 0 && Processer::isManagedProcessRunning($queuePid, $queueName, '', $processName);
+            if ($running) {
+                continue;
+            }
+
+            if ($queuePid > 0) {
+                Processer::removePidFile($processName);
+                $output = $this->getManagedProcessOutput($processName, $queuePid);
+                $queue->setEndAt(date('Y-m-d H:i:s'))
+                    ->setPid(0);
+                if ($queue->isFinished()) {
+                    $queue->setResult(PHP_EOL . $output . __('队列结束...') . $queue->getResult())
+                        ->setStatus($queue::status_done)
+                        ->save();
+                    continue;
+                }
+                $queue->setStatus($queue::status_error)
+                    ->setResult(PHP_EOL . $output . __('队列进程异常结束...') . $queue->getResult())
+                    ->save();
+                continue;
+            }
+
+            // running 但 pid=0 说明是脏状态，回收后重新进入待调度。
+            $queue->setStatus($queue::status_pending)
+                ->setResult(\trim((string)$queue->getResult() . PHP_EOL . __('检测到无 PID 的运行中状态，已回收为 pending，等待重新调度。')))
+                ->save();
+        }
+    }
+
+    private function countRunningAutoQueues(): int
+    {
+        $items = $this->queue->reset()
+            ->where($this->queue::schema_fields_finished, 0)
+            ->where($this->queue::schema_fields_auto, 1)
+            ->where($this->queue::schema_fields_status, $this->queue::status_running)
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        return \count($items);
+    }
+
+    private function resolveMaxConcurrent(): int
+    {
+        $maxConcurrent = (int)(Env::get('queue.cron.max_concurrent', 4) ?: 4);
+        if ($maxConcurrent < 1) {
+            $maxConcurrent = 1;
+        }
+
+        return $maxConcurrent;
     }
 
     private function buildQueueRunProcessName(int $queueId, string $queueName): string
