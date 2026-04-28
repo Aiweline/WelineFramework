@@ -627,7 +627,7 @@ class AiSiteAgentWorkspaceStateHelperService
         $key = match (\trim($operation)) {
             'plan' => 'plan_queue_info',
             'task_plan' => 'task_plan_queue_info',
-            'build', 'regenerate_page' => 'build_queue_info',
+            'build', 'regenerate_page', 'block_regenerate' => 'build_queue_info',
             default => '',
         };
         if ($key !== '' && \is_array($state[$key] ?? null)) {
@@ -713,8 +713,8 @@ class AiSiteAgentWorkspaceStateHelperService
     }
 
     /**
-     * 进度种类：task_plan 已确认且不是 plan 操作 → `task_progress`（按任务进度渲染），
-     * 其他 → `queue_info`（按队列百分比渲染）。
+     * Only build execution operations render task-level progress. Stage-one plan
+     * generation and stage-two task-plan generation stay on queue percentage.
      *
      * @param array<string, mixed> $state
      * @param array<string, mixed> $activeOperation
@@ -722,7 +722,10 @@ class AiSiteAgentWorkspaceStateHelperService
     public function resolveProgressKind(array $state, array $activeOperation): string
     {
         $operation = \trim((string)($activeOperation['operation'] ?? ''));
-        if ((int)($state['task_plan_confirmed'] ?? 0) === 1 && $operation !== 'plan') {
+        if (
+            (int)($state['task_plan_confirmed'] ?? 0) === 1
+            && \in_array($operation, ['build', 'regenerate_page', 'block_regenerate'], true)
+        ) {
             return 'task_progress';
         }
 

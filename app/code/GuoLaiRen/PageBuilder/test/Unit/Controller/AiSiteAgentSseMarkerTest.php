@@ -547,7 +547,9 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString("url.searchParams.set('_pb_build_done'", $runtimeScript);
         self::assertStringContainsString('window.PbAiWorkspacePreview.syncPreviewMetaFromState(payload.state)', $runtimeScript);
         self::assertStringContainsString('function renderTaskProgressGroupSummary(group)', $runtimeScript);
-        self::assertStringContainsString("String(workspaceState.progress_kind || '') === 'task_progress'", $runtimeScript);
+        self::assertStringContainsString('function shouldConsumeBuildTaskProgressSummary(source)', $runtimeScript);
+        self::assertStringContainsString("['build', 'regenerate_page', 'block_regenerate']", $runtimeScript);
+        self::assertStringContainsString("activeOp === 'task_plan'", $runtimeScript);
         self::assertStringContainsString('updateTaskSummaryFromState(payload)', $runtimeScript);
         self::assertStringContainsString('renderTaskStatusCountBadges(group)', $runtimeScript);
         self::assertStringContainsString('renderTaskProgressGroupSummary(group)', $runtimeScript);
