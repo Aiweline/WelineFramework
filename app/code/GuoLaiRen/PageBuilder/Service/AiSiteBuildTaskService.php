@@ -8,6 +8,13 @@ use GuoLaiRen\PageBuilder\Model\Page;
 
 class AiSiteBuildTaskService
 {
+    /**
+     * 页级 rollup / checkpoint：按 page_type 统计块级任务完成情况；可与 skip_remaining_blocks 联动跳过后续 section。
+     *
+     * @see self::rollupBuildPageProgressForPageType()
+     */
+    public const BUILD_PAGE_PROGRESS_SCOPE_KEY = '_build_page_progress';
+
     public const BLUEPRINT_VERSION = 1;
     public const TASK_STATUS_PENDING = 'pending';
     public const TASK_STATUS_RUNNING = 'running';
@@ -858,12 +865,136 @@ class AiSiteBuildTaskService
      */
     public function markTaskDone(array $scope, string $taskKey, array $resultRef = []): array
     {
-        return $this->setTaskState($scope, $taskKey, [
+        $scope = $this->setTaskState($scope, $taskKey, [
             'status' => self::TASK_STATUS_DONE,
             'updated_at' => \date('Y-m-d H:i:s'),
             'finished_at' => \date('Y-m-d H:i:s'),
             'result_ref' => $resultRef,
         ], false);
+
+        return $this->rollupBuildPageProgressForCompletedTaskIfNeeded($scope, $taskKey);
+    }
+
+    /**
+     * 若 scope 中存在 `_build_page_progress[<page_type>][skip_remaining_blocks]=true`，将仍处 pending/running 的页内 section 批量标为 done（保留检查点语义，避免卡住总进度）。
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function applyPagesMarkedSkipRemaining(array $scope): array
+    {
+        $progress = \is_array($scope[self::BUILD_PAGE_PROGRESS_SCOPE_KEY] ?? null)
+            ? $scope[self::BUILD_PAGE_PROGRESS_SCOPE_KEY]
+            : [];
+        if ($progress === []) {
+            return $scope;
+        }
+
+        foreach ($progress as $pageTypeKey => $row) {
+            if (!\is_array($row) || !((bool)($row['skip_remaining_blocks'] ?? false))) {
+                continue;
+            }
+            $pageType = \trim((string)$pageTypeKey);
+            if ($pageType === '') {
+                continue;
+            }
+
+            foreach ($this->extractBlueprintTasks($scope) as $task) {
+                if ((string)($task['task_type'] ?? '') !== 'page_section') {
+                    continue;
+                }
+                if (\trim((string)($task['page_type'] ?? '')) !== $pageType) {
+                    continue;
+                }
+                $taskKey = \trim((string)($task['task_key'] ?? ''));
+                if ($taskKey === '') {
+                    continue;
+                }
+                $taskState = $this->extractTaskState($scope);
+                $status = $this->normalizeTaskStatus((string)($taskState[$taskKey]['status'] ?? self::TASK_STATUS_PENDING));
+                if (!\in_array($status, [self::TASK_STATUS_PENDING, self::TASK_STATUS_RUNNING], true)) {
+                    continue;
+                }
+                $scope = $this->markTaskDone($scope, $taskKey, \array_merge(
+                    $this->buildTaskResultRefFromDefinition($task),
+                    ['skipped_remaining_blocks' => true]
+                ));
+            }
+
+            $progressReload = \is_array($scope[self::BUILD_PAGE_PROGRESS_SCOPE_KEY] ?? null)
+                ? $scope[self::BUILD_PAGE_PROGRESS_SCOPE_KEY]
+                : [];
+            $slot = \is_array($progressReload[$pageType] ?? null) ? $progressReload[$pageType] : [];
+            $progressReload[$pageType] = \array_replace($slot, [
+                'skip_remaining_blocks' => false,
+                'skipped_at' => \date('Y-m-d H:i:s'),
+            ]);
+            $scope[self::BUILD_PAGE_PROGRESS_SCOPE_KEY] = $progressReload;
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function rollupBuildPageProgressForCompletedTaskIfNeeded(array $scope, string $completedTaskKey): array
+    {
+        $definition = $this->getTaskDefinition($scope, $completedTaskKey);
+        if ($definition === null || (string)($definition['task_type'] ?? '') !== 'page_section') {
+            return $scope;
+        }
+        $pageType = \trim((string)($definition['page_type'] ?? ''));
+        if ($pageType === '') {
+            return $scope;
+        }
+
+        return $this->rollupBuildPageProgressForPageType($scope, $pageType);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function rollupBuildPageProgressForPageType(array $scope, string $pageType): array
+    {
+        $pageType = \trim($pageType);
+        if ($pageType === '') {
+            return $scope;
+        }
+        $expected = 0;
+        $done = 0;
+        $taskState = $this->extractTaskState($scope);
+        foreach ($this->extractBlueprintTasks($scope) as $task) {
+            if ((string)($task['task_type'] ?? '') !== 'page_section') {
+                continue;
+            }
+            if (\trim((string)($task['page_type'] ?? '')) !== $pageType) {
+                continue;
+            }
+            $expected++;
+            $tk = \trim((string)($task['task_key'] ?? ''));
+            if ($tk === '') {
+                continue;
+            }
+            $st = $this->normalizeTaskStatus((string)($taskState[$tk]['status'] ?? self::TASK_STATUS_PENDING));
+            if ($st === self::TASK_STATUS_DONE) {
+                $done++;
+            }
+        }
+
+        $progress = \is_array($scope[self::BUILD_PAGE_PROGRESS_SCOPE_KEY] ?? null)
+            ? $scope[self::BUILD_PAGE_PROGRESS_SCOPE_KEY]
+            : [];
+        $prior = \is_array($progress[$pageType] ?? null) ? $progress[$pageType] : [];
+        $progress[$pageType] = \array_replace($prior, [
+            'sections_expected' => $expected,
+            'sections_done' => $done,
+            'page_rollup_complete' => $expected > 0 && $done >= $expected,
+            'rollup_updated_at' => \date('Y-m-d H:i:s'),
+        ]);
+        $scope[self::BUILD_PAGE_PROGRESS_SCOPE_KEY] = $progress;
+
+        return $scope;
     }
 
     /**
