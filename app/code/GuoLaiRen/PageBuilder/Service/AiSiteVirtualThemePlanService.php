@@ -15,6 +15,12 @@ final class AiSiteVirtualThemePlanService
     private const STAGE_TWO_LOCAL_REGEN_MAX_ROUNDS = 3;
     private const STAGE_TWO_LOCAL_REGEN_BATCH_BLOCKS = 5;
     private const STAGE_TWO_AI_FANOUT_CONCURRENCY = 4;
+    /**
+     * 阶段二 batch 级断点续生成 checkpoint 落 scope 的字段名。
+     * 与 PlanQueue 的 `_plan_generation_checkpoint` 形态对齐：
+     * `['signature' => sha1, 'batches' => [batchId => decoded], 'updated_at' => iso8601]`。
+     */
+    public const TASK_PLAN_CHECKPOINT_SCOPE_KEY = '_task_plan_generation_checkpoint';
 
     private const STAGE2_BLOCK_TASK_FANOUT_GROUP = 'stage2.block_task_plan';
 
@@ -54,7 +60,8 @@ final class AiSiteVirtualThemePlanService
         string $instruction = '',
         string $targetScope = '',
         ?array $selectedBatchIds = null,
-        ?callable $progressCallback = null
+        ?callable $progressCallback = null,
+        ?callable $onCheckpoint = null
     ): array {
         $pageTypes = \array_values(\array_filter(\array_map('strval', \array_keys(\is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : []))));
         $assembledStructured = $structured;
@@ -71,6 +78,8 @@ final class AiSiteVirtualThemePlanService
         }
         $totalBatches = \count($effectiveBatches);
         $completedBatches = 0;
+        /** @var list<string> $checkpointCompletedBatchIds */
+        $checkpointCompletedBatchIds = [];
         $fanoutBatches = [];
 
         foreach ($effectiveBatches as $batchIndex => $batch) {
@@ -111,6 +120,19 @@ final class AiSiteVirtualThemePlanService
                     $heartbeatCallback();
                 }
                 $completedBatches++;
+                $checkpointCompletedBatchIds[] = $batchId;
+                if ($onCheckpoint !== null) {
+                    try {
+                        $onCheckpoint([
+                            'updated_at' => \date('Y-m-d H:i:s'),
+                            'plan_signature' => (string)($assembledStructured['plan_signature'] ?? ''),
+                            'completed_batch_ids' => $checkpointCompletedBatchIds,
+                            'task_plan_structured' => $assembledStructured,
+                            'virtual_theme_plan' => $assembledVirtualThemePlan,
+                        ]);
+                    } catch (\Throwable) {
+                    }
+                }
                 $this->emitTaskPlanBatchProgress($progressCallback, 'batch_done', $batch, $batchIndex, $totalBatches, $completedBatches, [
                     'structured' => $assembledStructured,
                     'virtual_theme_plan' => $assembledVirtualThemePlan,
@@ -2456,9 +2478,9 @@ final class AiSiteVirtualThemePlanService
      *   generation_source:string
      * }
      */
-    public function buildTaskPlanArtifacts(array $scope, array $buildBlueprint): array
+    public function buildTaskPlanArtifacts(array $scope, array $buildBlueprint, ?callable $onCheckpoint = null): array
     {
-        return $this->buildTaskPlanArtifactsInternal($scope, $buildBlueprint, null);
+        return $this->buildTaskPlanArtifactsInternal($scope, $buildBlueprint, null, null, null, $onCheckpoint);
     }
 
     /**
@@ -2468,6 +2490,10 @@ final class AiSiteVirtualThemePlanService
      * @param array<string, mixed> $buildBlueprint
      * @param callable|null $chunkCallback function(string $chunk): void
      * @param callable|null $heartbeatCallback function(): void
+     * @param callable|null $progressCallback function(array $payload): void
+     * @param callable|null $onCheckpoint function(array $checkpoint): void —— 每个 batch 完成后回调，
+     *     回调内应负责把 `$checkpoint` 持久化到 session scope（key={@see self::TASK_PLAN_CHECKPOINT_SCOPE_KEY}），
+     *     以支持进程硬崩 / 重启后只补未完成 batch。当为 null 时本次执行不持久化进度。
      * @return array{markdown:string,structured:array<string, mixed>,virtual_theme_plan:array<string, mixed>,generation_source:string}
      */
     public function buildTaskPlanArtifactsStream(
@@ -2475,10 +2501,11 @@ final class AiSiteVirtualThemePlanService
         array $buildBlueprint,
         ?callable $chunkCallback = null,
         ?callable $heartbeatCallback = null,
-        ?callable $progressCallback = null
+        ?callable $progressCallback = null,
+        ?callable $onCheckpoint = null
     ): array
     {
-        return $this->buildTaskPlanArtifactsInternal($scope, $buildBlueprint, $chunkCallback, $heartbeatCallback, $progressCallback);
+        return $this->buildTaskPlanArtifactsInternal($scope, $buildBlueprint, $chunkCallback, $heartbeatCallback, $progressCallback, $onCheckpoint);
     }
 
     /**
@@ -2493,7 +2520,8 @@ final class AiSiteVirtualThemePlanService
         array $buildBlueprint,
         ?callable $chunkCallback,
         ?callable $heartbeatCallback = null,
-        ?callable $progressCallback = null
+        ?callable $progressCallback = null,
+        ?callable $onCheckpoint = null
     ): array
     {
         $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
@@ -3000,7 +3028,8 @@ final class AiSiteVirtualThemePlanService
             $chunkCallback,
             $heartbeatCallback,
             $progressCallback,
-            $resumeCompletedBatchIds !== [] ? $resumePendingBatchIds : null
+            $resumeCompletedBatchIds !== [] ? $resumePendingBatchIds : null,
+            $onCheckpoint
         );
         $markdown = \trim((string)($aiTaskPlan['markdown'] ?? ''));
         $aiVirtualThemePlan = \is_array($aiTaskPlan['virtual_theme_plan'] ?? null) ? $aiTaskPlan['virtual_theme_plan'] : [];
@@ -6886,7 +6915,8 @@ final class AiSiteVirtualThemePlanService
         ?callable $chunkCallback = null,
         ?callable $heartbeatCallback = null,
         ?callable $progressCallback = null,
-        ?array $selectedBatchIds = null
+        ?array $selectedBatchIds = null,
+        ?callable $onCheckpoint = null
     ): array {
         return $this->buildTaskPlanArtifactsByAiInBatches(
             $scope,
@@ -6899,7 +6929,8 @@ final class AiSiteVirtualThemePlanService
             '',
             '',
             $selectedBatchIds,
-            $progressCallback
+            $progressCallback,
+            $onCheckpoint
         );
 
         $ai = $this->getAiService();
