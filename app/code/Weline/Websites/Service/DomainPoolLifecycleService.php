@@ -132,8 +132,7 @@ final class DomainPoolLifecycleService
         do {
             $rows = $pool->clearQuery()
                 ->order(DomainPool::schema_fields_ID, 'ASC')
-                ->limit($batchSize)
-                ->offset($offset)
+                ->limit($batchSize, $offset)
                 ->select()
                 ->fetchArray();
             if ($rows === []) {
