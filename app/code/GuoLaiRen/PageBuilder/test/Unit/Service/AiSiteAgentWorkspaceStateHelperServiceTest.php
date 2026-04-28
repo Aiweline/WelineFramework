@@ -630,10 +630,22 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
             'task_progress',
             $service->resolveProgressKind(['task_plan_confirmed' => 1], ['operation' => 'build'])
         );
-        // plan operation should stay on queue_info even when task_plan is confirmed
+        self::assertSame(
+            'task_progress',
+            $service->resolveProgressKind(['task_plan_confirmed' => 1], ['operation' => 'regenerate_page'])
+        );
+        self::assertSame(
+            'task_progress',
+            $service->resolveProgressKind(['task_plan_confirmed' => 1], ['operation' => 'block_regenerate'])
+        );
+        // Plan and task-plan generation stay on queue_info even when the task plan is confirmed.
         self::assertSame(
             'queue_info',
             $service->resolveProgressKind(['task_plan_confirmed' => 1], ['operation' => 'plan'])
+        );
+        self::assertSame(
+            'queue_info',
+            $service->resolveProgressKind(['task_plan_confirmed' => 1], ['operation' => 'task_plan'])
         );
     }
 
