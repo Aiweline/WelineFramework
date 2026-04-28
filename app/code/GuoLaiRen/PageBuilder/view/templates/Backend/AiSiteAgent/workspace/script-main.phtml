@@ -4993,6 +4993,23 @@
             if (payload && payload.state && payload.state.virtual_pages_by_type) {
                 mergeVirtualPagesByTypeState(payload.state.virtual_pages_by_type);
             }
+            if (payload && payload.success === false) {
+                var failureMessage = String(payload.message || messages.networkError || '');
+                pendingBlockSseResult = null;
+                pendingBlockSseStart = null;
+                clearBlockStreamingState();
+                if (contextEl) {
+                    contextEl.textContent = failureMessage;
+                }
+                if (terminal.setStatus) {
+                    terminal.setStatus('error', failureMessage);
+                }
+                if (terminal.log && failureMessage) {
+                    terminal.log(failureMessage, 'error', payload);
+                }
+                toast('error', failureMessage);
+                return;
+            }
             pendingBlockSseResult = payload && typeof payload === 'object' ? payload : null;
             pendingBlockSseStart = null;
             if (startBtn) {
