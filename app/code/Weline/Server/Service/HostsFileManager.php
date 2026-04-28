@@ -145,7 +145,7 @@ class HostsFileManager
     private static function tryAddDomainWithElevation(string $hostsFile, string $newContent, string $domain, string $ip): ?array
     {
         if (PHP_OS_FAMILY !== 'Windows') {
-            return null;
+            return self::tryAddDomainWithSudo($hostsFile, $newContent, $domain, $ip);
         }
 
         $payloadPath = tempnam(sys_get_temp_dir(), 'wls-hosts-');
@@ -202,6 +202,88 @@ PS1;
         ];
     }
 
+    private static function tryAddDomainWithSudo(string $hostsFile, string $newContent, string $domain, string $ip): ?array
+    {
+        if (!\function_exists('exec')) {
+            return null;
+        }
+
+        $sudoPath = self::findUnixCommand('sudo');
+        if ($sudoPath === '') {
+            return null;
+        }
+
+        $payloadPath = \tempnam(\sys_get_temp_dir(), 'wls-hosts-');
+        if ($payloadPath === false) {
+            return null;
+        }
+
+        if (\file_put_contents($payloadPath, $newContent) === false) {
+            @\unlink($payloadPath);
+            return null;
+        }
+        @\chmod($payloadPath, 0600);
+
+        $script = 'cat ' . \escapeshellarg($payloadPath) . ' > ' . \escapeshellarg($hostsFile);
+        $sudoArgs = self::canUseInteractiveSudo()
+            ? ' -p ' . \escapeshellarg('[WLS] sudo password for hosts: ')
+            : ' -n';
+        $command = \escapeshellcmd($sudoPath) . $sudoArgs . ' /bin/sh -c ' . \escapeshellarg($script) . ' 2>&1';
+        $exitCode = 1;
+        if (self::canUseInteractiveSudo() && \function_exists('passthru')) {
+            @\passthru($command, $exitCode);
+        } else {
+            $output = [];
+            @\exec($command, $output, $exitCode);
+        }
+        @\unlink($payloadPath);
+
+        if ($exitCode === 0) {
+            $content = \file_get_contents($hostsFile);
+            if ($content !== false && self::domainExists($content, $domain)) {
+                return [
+                    'success' => true,
+                    'message' => "Added {$domain} to hosts file",
+                    'needs_admin' => false,
+                    'elevated' => true,
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    private static function canUseInteractiveSudo(): bool
+    {
+        if (PHP_SAPI !== 'cli' || !\defined('STDIN')) {
+            return false;
+        }
+        if (\function_exists('posix_isatty')) {
+            return (bool) @\posix_isatty(STDIN);
+        }
+        if (\function_exists('stream_isatty')) {
+            return (bool) @\stream_isatty(STDIN);
+        }
+
+        return true;
+    }
+
+    private static function findUnixCommand(string $command): string
+    {
+        if (!\function_exists('exec')) {
+            return '';
+        }
+
+        $output = [];
+        $exitCode = 1;
+        @\exec('command -v ' . \escapeshellarg($command) . ' 2>/dev/null', $output, $exitCode);
+        if ($exitCode !== 0 || empty($output[0])) {
+            return '';
+        }
+
+        return \trim((string)$output[0]);
+    }
+
     private static function domainExists(string $content, string $domain): bool
     {
         foreach (explode("\n", $content) as $line) {
@@ -241,11 +323,24 @@ PS1;
 
     private static function getAdminCommand(string $domain, string $ip): string
     {
+        return self::getAdminCommandForOs($domain, $ip, PHP_OS_FAMILY);
+    }
+
+    private static function getAdminCommandForOs(string $domain, string $ip, string $osFamily): string
+    {
         $hostsFile = self::getHostsFilePath();
-        if (PHP_OS_FAMILY === 'Windows') {
+        if ($osFamily === 'Windows') {
             return "Add-Content -Path '{$hostsFile}' -Value '{$ip} {$domain}'";
         }
 
-        return "echo '{$ip} {$domain}' | sudo tee -a {$hostsFile}";
+        $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
+        if (\defined('BP') && \is_file(BP . 'bin' . DIRECTORY_SEPARATOR . 'w')) {
+            return 'sudo ' . \escapeshellarg($phpBinary) . ' ' . \escapeshellarg(BP . 'bin' . DIRECTORY_SEPARATOR . 'w')
+                . ' server:hosts:add ' . \escapeshellarg($domain) . ' --ip=' . \escapeshellarg($ip);
+        }
+
+        return 'sudo /bin/sh -c ' . \escapeshellarg(
+            'printf ' . \escapeshellarg("\n{$ip} {$domain}\n") . ' >> ' . \escapeshellarg($hostsFile)
+        );
     }
 }
