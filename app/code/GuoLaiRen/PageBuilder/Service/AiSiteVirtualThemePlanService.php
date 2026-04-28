@@ -14,7 +14,6 @@ final class AiSiteVirtualThemePlanService
     private const BLOCK_TASK_SCHEMA_VERSION = 'stage2-block-task-v1';
     private const STAGE_TWO_LOCAL_REGEN_MAX_ROUNDS = 3;
     private const STAGE_TWO_LOCAL_REGEN_BATCH_BLOCKS = 5;
-    private const STAGE_TWO_AI_FANOUT_CONCURRENCY = 4;
     /**
      * 阶段二 batch 级断点续生成 checkpoint 落 scope 的字段名。
      * 与 PlanQueue 的 `_plan_generation_checkpoint` 形态对齐：
@@ -80,6 +79,8 @@ final class AiSiteVirtualThemePlanService
         $completedBatches = 0;
         /** @var list<string> $checkpointCompletedBatchIds */
         $checkpointCompletedBatchIds = [];
+        /** @var array<string, array<string, mixed>> $retryableBatchFailures */
+        $retryableBatchFailures = [];
         $fanoutBatches = [];
 
         foreach ($effectiveBatches as $batchIndex => $batch) {
@@ -100,7 +101,8 @@ final class AiSiteVirtualThemePlanService
                 $heartbeatCallback,
                 $progressCallback,
                 $totalBatches,
-                $completedBatches
+                $completedBatches,
+                $retryableBatchFailures
             );
 
             foreach ($fanoutBatches as $fanoutBatch) {
@@ -108,6 +110,9 @@ final class AiSiteVirtualThemePlanService
                 $batchIndex = (int)($fanoutBatch['batch_index'] ?? 0);
                 $batchId = $this->buildTaskPlanBatchId($batch);
                 $decoded = \is_array($decodedByBatchId[$batchId] ?? null) ? $decodedByBatchId[$batchId] : [];
+                if ($decoded === [] && isset($retryableBatchFailures[$batchId])) {
+                    continue;
+                }
                 ['structured' => $assembledStructured, 'virtual_theme_plan' => $assembledVirtualThemePlan, 'risk_notes' => $riskNotes] =
                     $this->mergeTaskPlanGenerationBatch(
                         $assembledStructured,
@@ -127,6 +132,8 @@ final class AiSiteVirtualThemePlanService
                             'updated_at' => \date('Y-m-d H:i:s'),
                             'plan_signature' => (string)($assembledStructured['plan_signature'] ?? ''),
                             'completed_batch_ids' => $checkpointCompletedBatchIds,
+                            'failed_batch_ids' => \array_values(\array_keys($retryableBatchFailures)),
+                            'retryable_ai_failures' => \array_values($retryableBatchFailures),
                             'task_plan_structured' => $assembledStructured,
                             'virtual_theme_plan' => $assembledVirtualThemePlan,
                         ]);
@@ -151,24 +158,37 @@ final class AiSiteVirtualThemePlanService
         $assembledStructured = $this->syncStageTwoRuntimeContexts($assembledStructured);
         $assembledStructured = $this->syncStageTwoTaskSortArtifacts($assembledStructured, $pageTypes);
         $localRegenReport = [];
-        [
-            'structured' => $assembledStructured,
-            'virtual_theme_plan' => $assembledVirtualThemePlan,
-            'risk_notes' => $riskNotes,
-            'report' => $localRegenReport,
-        ] = $this->repairStageTwoProblemBatchesByAi(
-            $scope,
-            $buildBlueprint,
-            $assembledStructured,
-            $assembledVirtualThemePlan,
-            $riskNotes,
-            $mode,
-            $instruction,
-            $targetScope,
-            $chunkCallback,
-            $heartbeatCallback,
-            $progressCallback
-        );
+        if ($retryableBatchFailures === []) {
+            [
+                'structured' => $assembledStructured,
+                'virtual_theme_plan' => $assembledVirtualThemePlan,
+                'risk_notes' => $riskNotes,
+                'report' => $localRegenReport,
+            ] = $this->repairStageTwoProblemBatchesByAi(
+                $scope,
+                $buildBlueprint,
+                $assembledStructured,
+                $assembledVirtualThemePlan,
+                $riskNotes,
+                $mode,
+                $instruction,
+                $targetScope,
+                $chunkCallback,
+                $heartbeatCallback,
+                $progressCallback
+            );
+            if (\is_array($localRegenReport['_retryable_ai_failures'] ?? null)) {
+                foreach ($localRegenReport['_retryable_ai_failures'] as $failure) {
+                    if (!\is_array($failure)) {
+                        continue;
+                    }
+                    $failureKey = \trim((string)($failure['item_key'] ?? ''));
+                    if ($failureKey !== '') {
+                        $retryableBatchFailures[$failureKey] = $failure;
+                    }
+                }
+            }
+        }
         $assembledStructured = $this->syncStageTwoTaskSortArtifacts($assembledStructured, $pageTypes);
         $assembledVirtualThemePlan = \array_replace_recursive($assembledVirtualThemePlan, [
             'block_task_schema' => $assembledStructured['block_task_schema'] ?? [],
@@ -186,7 +206,9 @@ final class AiSiteVirtualThemePlanService
             $assembledStructured['_stage2_local_regen_report'] = $localRegenReport;
             $assembledVirtualThemePlan['_stage2_local_regen_report'] = $localRegenReport;
         }
-        $this->assertAiTaskPlanIsContentful($assembledStructured);
+        if ($retryableBatchFailures === []) {
+            $this->assertAiTaskPlanIsContentful($assembledStructured);
+        }
         $assembledVirtualThemePlan['signature'] = $this->buildSignature($assembledStructured);
 
         return [
@@ -198,6 +220,8 @@ final class AiSiteVirtualThemePlanService
             ),
             'structured' => $assembledStructured,
             'virtual_theme_plan' => $assembledVirtualThemePlan,
+            'retryable_ai_failures' => \array_values($retryableBatchFailures),
+            'partial_retry_required' => $retryableBatchFailures !== [] ? 1 : 0,
         ];
     }
 
@@ -252,8 +276,12 @@ final class AiSiteVirtualThemePlanService
         ?callable $heartbeatCallback,
         ?callable $progressCallback,
         int $totalBatches,
-        int $completedBatches
+        int $completedBatches,
+        ?array &$retryableFailures = null
     ): array {
+        if ($retryableFailures === null) {
+            $retryableFailures = [];
+        }
         foreach ($fanoutBatches as $fanoutBatch) {
             $batch = \is_array($fanoutBatch['batch'] ?? null) ? $fanoutBatch['batch'] : [];
             $batchIndex = (int)($fanoutBatch['batch_index'] ?? 0);
@@ -264,14 +292,15 @@ final class AiSiteVirtualThemePlanService
         }
 
         $ai = $this->getAiService();
-        $concurrency = \min(self::STAGE_TWO_AI_FANOUT_CONCURRENCY, \count($fanoutBatches));
+        $concurrency = \max(1, \count($fanoutBatches));
         if (\count($fanoutBatches) <= 1 || !($ai instanceof AiService) || !$ai->supportsCooperativeConcurrency($concurrency)) {
             $decodedByBatchId = [];
             foreach ($fanoutBatches as $fanoutBatch) {
                 $batch = \is_array($fanoutBatch['batch'] ?? null) ? $fanoutBatch['batch'] : [];
                 $batchIndex = (int)($fanoutBatch['batch_index'] ?? 0);
+                $batchId = $this->buildTaskPlanBatchId($batch);
                 try {
-                    $decodedByBatchId[$this->buildTaskPlanBatchId($batch)] = $this->requestTaskPlanJsonFromAi(
+                    $decoded = $this->requestTaskPlanJsonFromAi(
                         $scope,
                         $this->buildTaskPlanGenerationBatchPrompt(
                             $scope,
@@ -287,13 +316,17 @@ final class AiSiteVirtualThemePlanService
                         $chunkCallback,
                         $heartbeatCallback
                     );
+                    if ($decoded === []) {
+                        throw new \RuntimeException('Stage-two batch task returned an empty response.');
+                    }
+                    $decodedByBatchId[$batchId] = $decoded;
                 } catch (\Throwable $batchThrowable) {
                     $this->emitTaskPlanBatchProgress($progressCallback, 'batch_failed', $batch, $batchIndex, $totalBatches, $completedBatches, [
                         'attempt_no' => 3,
                         'recovered' => false,
                         'error_message' => $batchThrowable->getMessage(),
                     ]);
-                    $this->throwTaskPlanBatchAiFailure($batch, $batchThrowable->getMessage());
+                    $retryableFailures[$batchId] = $this->buildTaskPlanRetryableBatchFailure($batch, $batchThrowable->getMessage());
                 }
             }
             return $decodedByBatchId;
@@ -317,69 +350,75 @@ final class AiSiteVirtualThemePlanService
             );
             $maxTokens = $this->resolveTaskPlanBatchMaxTokens($batch);
             $tasks[$batchId] = function (array $sessionParams) use ($scope, $prompt, $maxTokens, $heartbeatCallback, $assembledStructured, $batch, $batchIndex, $progressCallback, $totalBatches, $completedBatches): array {
-                try {
-                    return $this->requestTaskPlanJsonFromAi(
-                        $scope,
-                        $prompt,
-                        $maxTokens,
-                        null,
-                        $heartbeatCallback,
-                        $sessionParams
-                    );
-                } catch (\Throwable $batchThrowable) {
-                    $this->emitTaskPlanBatchProgress($progressCallback, 'batch_failed', $batch, $batchIndex, $totalBatches, $completedBatches, [
-                        'attempt_no' => 3,
-                        'recovered' => false,
-                        'error_message' => $batchThrowable->getMessage(),
-                    ]);
-                    $this->throwTaskPlanBatchAiFailure($batch, $batchThrowable->getMessage());
-                    return [];
+                $decoded = $this->requestTaskPlanJsonFromAi(
+                    $scope,
+                    $prompt,
+                    $maxTokens,
+                    null,
+                    $heartbeatCallback,
+                    $sessionParams
+                );
+                if ($decoded === []) {
+                    throw new \RuntimeException('Stage-two batch task returned an empty response.');
                 }
+                return $decoded;
             };
         }
 
-        $decodedByBatchId = $ai->runCooperativeSessionTasks($tasks, [
+        $settledByBatchId = $ai->runCooperativeSessionTasksSettled($tasks, [
             'concurrency' => $concurrency,
             'session_id' => $this->resolveTaskPlanCooperativeSessionId($scope, 'batch_plan'),
             'disable_conversation_history' => true,
             'disable_conversation_persist' => true,
         ]);
 
+        $decodedByBatchId = [];
         foreach ($fanoutBatches as $fanoutBatch) {
             $batch = \is_array($fanoutBatch['batch'] ?? null) ? $fanoutBatch['batch'] : [];
             $batchId = $this->buildTaskPlanBatchId($batch);
-            if (\array_key_exists($batchId, $decodedByBatchId)) {
+            $batchIndex = (int)($fanoutBatch['batch_index'] ?? 0);
+            $entry = \is_array($settledByBatchId[$batchId] ?? null) ? $settledByBatchId[$batchId] : [];
+            if (($entry['status'] ?? '') === 'fulfilled' && \is_array($entry['result'] ?? null) && $entry['result'] !== []) {
+                $decodedByBatchId[$batchId] = $entry['result'];
                 continue;
             }
-            $batchIndex = (int)($fanoutBatch['batch_index'] ?? 0);
-            try {
-                $decodedByBatchId[$batchId] = $this->requestTaskPlanJsonFromAi(
-                    $scope,
-                    $this->buildTaskPlanGenerationBatchPrompt(
-                        $scope,
-                        $buildBlueprint,
-                        $assembledStructured,
-                        $assembledVirtualThemePlan,
-                        $batch,
-                        $mode,
-                        $instruction,
-                        $targetScope
-                    ),
-                    $this->resolveTaskPlanBatchMaxTokens($batch),
-                    $chunkCallback,
-                    $heartbeatCallback
-                );
-            } catch (\Throwable $batchThrowable) {
-                $this->emitTaskPlanBatchProgress($progressCallback, 'batch_failed', $batch, $batchIndex, $totalBatches, $completedBatches, [
-                    'attempt_no' => 3,
-                    'recovered' => false,
-                    'error_message' => $batchThrowable->getMessage(),
-                ]);
-                $this->throwTaskPlanBatchAiFailure($batch, $batchThrowable->getMessage());
-            }
+
+            $batchThrowable = ($entry['error'] ?? null) instanceof \Throwable
+                ? $entry['error']
+                : new \RuntimeException('Stage-two batch task did not return a usable task plan.');
+            $retryableFailures[$batchId] = $this->buildTaskPlanRetryableBatchFailure($batch, $batchThrowable->getMessage());
+            $this->emitTaskPlanBatchProgress($progressCallback, 'batch_failed', $batch, $batchIndex, $totalBatches, $completedBatches, [
+                'attempt_no' => 3,
+                'recovered' => false,
+                'error_message' => $batchThrowable->getMessage(),
+            ]);
         }
 
         return $decodedByBatchId;
+    }
+
+    /**
+     * @param array<string, mixed> $batch
+     * @return array<string, mixed>
+     */
+    private function buildTaskPlanRetryableBatchFailure(array $batch, string $reason): array
+    {
+        $batchId = $this->buildTaskPlanBatchId($batch);
+        $taskKeys = \array_values(\array_filter(\array_map('strval', \is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : [])));
+
+        return [
+            'operation' => 'task_plan',
+            'item_key' => $batchId,
+            'item_type' => 'stage2_batch',
+            'retry_scope' => 'stage2_batch',
+            'batch_id' => $batchId,
+            'batch_type' => (string)($batch['type'] ?? ''),
+            'batch_key' => (string)($batch['key'] ?? ''),
+            'block_key' => (string)($batch['block_key'] ?? ''),
+            'task_keys' => $taskKeys,
+            'message' => $this->excerptText($reason, 800),
+            'failed_at' => \date('Y-m-d H:i:s'),
+        ];
     }
 
     /**
@@ -3031,6 +3070,9 @@ final class AiSiteVirtualThemePlanService
             $resumeCompletedBatchIds !== [] ? $resumePendingBatchIds : null,
             $onCheckpoint
         );
+        $retryableAiFailures = \is_array($aiTaskPlan['retryable_ai_failures'] ?? null)
+            ? \array_values(\array_filter($aiTaskPlan['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
+            : [];
         $markdown = \trim((string)($aiTaskPlan['markdown'] ?? ''));
         $aiVirtualThemePlan = \is_array($aiTaskPlan['virtual_theme_plan'] ?? null) ? $aiTaskPlan['virtual_theme_plan'] : [];
         if ($markdown === '' || $aiVirtualThemePlan === []) {
@@ -3043,7 +3085,9 @@ final class AiSiteVirtualThemePlanService
         }
         $mergedStructured = $this->sanitizePromptLikeTaskPlanStructured($mergedStructured);
         $mergedStructured = $this->applyBlockTaskSchemaToStructured($mergedStructured);
-        $this->assertAiTaskPlanIsContentful($mergedStructured);
+        if ($retryableAiFailures === []) {
+            $this->assertAiTaskPlanIsContentful($mergedStructured);
+        }
         $mergedStructured = $this->ensureTaskDirectoryHierarchy($mergedStructured);
         $mergedStructured = $this->syncStageTwoRuntimeContexts($mergedStructured);
         $mergedVirtualThemePlan = \array_replace_recursive($mergedVirtualThemePlan, [
@@ -3060,6 +3104,8 @@ final class AiSiteVirtualThemePlanService
             'structured' => $mergedStructured,
             'virtual_theme_plan' => $mergedVirtualThemePlan,
             'generation_source' => 'ai',
+            'retryable_ai_failures' => $retryableAiFailures,
+            'partial_retry_required' => $retryableAiFailures !== [] ? 1 : 0,
         ];
     }
 
@@ -3129,6 +3175,8 @@ final class AiSiteVirtualThemePlanService
             'virtual_theme_plan' => $virtualThemePlan,
             'change_scope_report' => $report,
             'generation_source' => (string)($artifacts['generation_source'] ?? 'ai'),
+            'retryable_ai_failures' => \is_array($artifacts['retryable_ai_failures'] ?? null) ? $artifacts['retryable_ai_failures'] : [],
+            'partial_retry_required' => !empty($artifacts['partial_retry_required']) ? 1 : 0,
         ];
     }
 
@@ -3201,6 +3249,8 @@ final class AiSiteVirtualThemePlanService
             'virtual_theme_plan' => $virtualThemePlan,
             'rebuild_summary' => $summary,
             'generation_source' => (string)($artifacts['generation_source'] ?? 'ai'),
+            'retryable_ai_failures' => \is_array($artifacts['retryable_ai_failures'] ?? null) ? $artifacts['retryable_ai_failures'] : [],
+            'partial_retry_required' => !empty($artifacts['partial_retry_required']) ? 1 : 0,
         ];
     }
 
@@ -7446,6 +7496,7 @@ final class AiSiteVirtualThemePlanService
                 . 'Keep task_key/sort_order/dependencies unchanged. '
                 . 'Issue list: ' . \implode('; ', $issueSummary));
 
+            $repairRetryableFailures = [];
             $decodedByBatchId = $this->requestTaskPlanFanoutBatchesConcurrently(
                 $scope,
                 $buildBlueprint,
@@ -7459,13 +7510,17 @@ final class AiSiteVirtualThemePlanService
                 $heartbeatCallback,
                 $progressCallback,
                 \count($fanoutBatches),
-                0
+                0,
+                $repairRetryableFailures
             );
 
             foreach ($fanoutBatches as $fanoutBatch) {
                 $batch = \is_array($fanoutBatch['batch'] ?? null) ? $fanoutBatch['batch'] : [];
                 $batchId = $this->buildTaskPlanBatchId($batch);
                 $decoded = \is_array($decodedByBatchId[$batchId] ?? null) ? $decodedByBatchId[$batchId] : [];
+                if ($decoded === [] && isset($repairRetryableFailures[$batchId])) {
+                    continue;
+                }
                 ['structured' => $structured, 'virtual_theme_plan' => $virtualThemePlan, 'risk_notes' => $riskNotes] = $this->mergeTaskPlanGenerationBatch(
                     $structured,
                     $virtualThemePlan,
@@ -7485,7 +7540,12 @@ final class AiSiteVirtualThemePlanService
                 'round' => $round,
                 'batch_ids' => $targetBatchIds,
                 'issue_count_before' => \count($issues),
+                'retryable_ai_failures' => \array_values($repairRetryableFailures),
             ];
+            if ($repairRetryableFailures !== []) {
+                $report['_retryable_ai_failures'] = \array_values($repairRetryableFailures);
+                break;
+            }
         }
 
         $finalIssues = $this->collectStageTwoTaskPlanIssues($structured);

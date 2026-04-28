@@ -1217,6 +1217,16 @@ SCRIPT;
             return $this->jsonError('PLAN_NOT_READY', (string)__('尚未生成方案，请先完成方案生成'), ['public_id']);
         }
 
+        if ($this->buildTaskService->hasRetryableAiFailures($scope, 'plan')) {
+            $summary = $this->buildTaskService->summarizeRetryableAiFailures($scope, 'plan');
+            return $this->jsonError(
+                'RETRYABLE_AI_FAILURES_PENDING',
+                (string)__('阶段一仍有 AI 生成失败项，请先点击重试失败项。'),
+                ['public_id'],
+                ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
+            );
+        }
+
         $scopePatch = [
             'execution_blueprint' => $executionBlueprintDraft,
             'execution_blueprint_confirmed_at' => \date('Y-m-d H:i:s'),
@@ -1484,7 +1494,6 @@ SCRIPT;
                     ],
                 ]
             );
-
             $sse->sendEvent('progress', [
                 'message' => (string)__('正在输出更新后的阶段一方案'),
                 'prompt_mode' => $effectivePromptMode,
@@ -1599,6 +1608,15 @@ SCRIPT;
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
         );
         $scope = $this->normalizePlanConfirmationForTaskPlan($session, $adminId, $scope);
+        if ($this->buildTaskService->hasRetryableAiFailures($scope, 'plan')) {
+            $summary = $this->buildTaskService->summarizeRetryableAiFailures($scope, 'plan');
+            return $this->jsonError(
+                'RETRYABLE_AI_FAILURES_PENDING',
+                (string)__('阶段一仍有 AI 生成失败项，请先点击重试失败项。'),
+                ['public_id'],
+                ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
+            );
+        }
         if (!$this->isPlanConfirmedForTaskPlan($scope)) {
             return $this->jsonError('PLAN_REQUIRED_BEFORE_TASK_PLAN', (string)__('请先确认第一阶段方案，再生成第二阶段任务方案'), ['public_id', 'plan_confirmed']);
         }
@@ -1800,6 +1818,15 @@ SCRIPT;
         $draftMarkdown = (string)($taskPlanForConfirm['markdown'] ?? '');
         if (!$this->isPlanConfirmedForTaskPlan($scope)) {
             return $this->jsonError('PLAN_REQUIRED_BEFORE_TASK_PLAN_CONFIRM', (string)__('请先确认阶段一方案，再确认第二阶段任务方案'), ['public_id', 'plan_confirmed']);
+        }
+        if ($this->buildTaskService->hasRetryableAiFailures($scope, 'task_plan')) {
+            $summary = $this->buildTaskService->summarizeRetryableAiFailures($scope, 'task_plan');
+            return $this->jsonError(
+                'RETRYABLE_AI_FAILURES_PENDING',
+                (string)__('第二阶段仍有 AI 生成失败项，请先点击重试失败项。'),
+                ['public_id'],
+                ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
+            );
         }
         if ($draftTaskPlan === []) {
             if ($this->buildTaskService->hasConfirmedTaskPlanForBuild($scope)) {
@@ -2298,6 +2325,9 @@ SCRIPT;
             $structured = \is_array($result['structured'] ?? null) ? $result['structured'] : [];
             $virtualThemePlan = \is_array($result['virtual_theme_plan'] ?? null) ? $result['virtual_theme_plan'] : [];
             $taskPlanGenerationSource = (string)($result['generation_source'] ?? '');
+            $retryableTaskPlanFailures = \is_array($result['retryable_ai_failures'] ?? null)
+                ? \array_values(\array_filter($result['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
+                : [];
             if ($this->shouldRejectTaskPlanGenerationSource($scope, $taskPlanGenerationSource)) {
                 throw new \RuntimeException((string)__('第二阶段任务方案生成失败：当前结果不是 AI 生成，请检查 AI 服务后重试'));
             }
@@ -2333,6 +2363,14 @@ SCRIPT;
                 $scopePatch['task_plan_change_scope_report'] = \is_array($result['change_scope_report'] ?? null) ? $result['change_scope_report'] : [];
             }
             $scopePatch['_task_plan_sse_request'] = [];
+            $scopeWithTaskPlanFailures = $this->buildTaskService->replaceRetryableAiFailures(
+                \array_replace($scope, $scopePatch),
+                'task_plan',
+                $retryableTaskPlanFailures
+            );
+            $scopePatch['retryable_ai_failures'] = \is_array($scopeWithTaskPlanFailures['retryable_ai_failures'] ?? null) ? $scopeWithTaskPlanFailures['retryable_ai_failures'] : [];
+            $scopePatch['retryable_ai_failure_count'] = (int)($scopeWithTaskPlanFailures['retryable_ai_failure_count'] ?? 0);
+            $scopePatch['next_stage_blocked_by_ai_failures'] = (int)($scopeWithTaskPlanFailures['next_stage_blocked_by_ai_failures'] ?? 0);
             $sse->sendEvent('progress', [
                 'message' => (string)__('正在持久化任务方案草案'),
                 'prompt_mode' => $promptMode,
@@ -2362,6 +2400,22 @@ SCRIPT;
                     ],
                 ]
             );
+            if ($retryableTaskPlanFailures !== []) {
+                $this->updateActiveOperation(
+                    $fresh,
+                    $adminId,
+                    [
+                        'operation' => 'task_plan',
+                        'status' => 'error',
+                        'message' => (string)__('第二阶段部分任务方案生成失败，请重试失败项。'),
+                        'retry_allowed' => 1,
+                        'failure_mode' => 'partial_retry_required',
+                        'retryable_ai_failure_count' => \count($retryableTaskPlanFailures),
+                    ],
+                    AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
+                );
+                $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $fresh;
+            }
 
             $sse->sendEvent('progress', [
                 'message' => (string)__('第二阶段任务方案已生成，正在输出完成标记'),
@@ -2376,6 +2430,8 @@ SCRIPT;
                     ? (string)__('第二阶段任务方案重建完成')
                     : (string)__('第二阶段任务方案微调完成'),
                 'prompt_mode' => $promptMode,
+                'partial_retry_required' => $retryableTaskPlanFailures !== [] ? 1 : 0,
+                'retryable_ai_failure_count' => \count($retryableTaskPlanFailures),
                 'task_plan' => [
                     'markdown' => $markdown,
                     'structured' => $structured,
@@ -2493,16 +2549,25 @@ SCRIPT;
                     ]);
                 }
             };
-            $onTaskPlanCheckpoint = function (array $checkpoint) use ($session, $adminId): void {
+            $onTaskPlanCheckpoint = function (array $checkpoint) use ($session, $adminId, &$scope): void {
                 if ($checkpoint === [] || !\is_array($checkpoint['task_plan_structured'] ?? null)) {
                     return;
                 }
+                $retryableFailures = \is_array($checkpoint['retryable_ai_failures'] ?? null)
+                    ? \array_values(\array_filter($checkpoint['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
+                    : [];
+                $scope = $this->buildTaskService->replaceRetryableAiFailures($scope, 'task_plan', $retryableFailures);
                 $this->sessionService->mergeScope((int)$session->getId(), $adminId, [
                     AiSiteVirtualThemePlanService::TASK_PLAN_CHECKPOINT_SCOPE_KEY => [
                         'updated_at' => (string)($checkpoint['updated_at'] ?? ''),
                         'plan_signature' => (string)($checkpoint['plan_signature'] ?? ''),
                         'completed_batch_ids' => \is_array($checkpoint['completed_batch_ids'] ?? null) ? $checkpoint['completed_batch_ids'] : [],
+                        'failed_batch_ids' => \is_array($checkpoint['failed_batch_ids'] ?? null) ? $checkpoint['failed_batch_ids'] : [],
+                        'retryable_ai_failures' => $retryableFailures,
                     ],
+                    'retryable_ai_failures' => \is_array($scope['retryable_ai_failures'] ?? null) ? $scope['retryable_ai_failures'] : [],
+                    'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
+                    'next_stage_blocked_by_ai_failures' => (int)($scope['next_stage_blocked_by_ai_failures'] ?? 0),
                     'task_plan_structured' => $checkpoint['task_plan_structured'],
                     'virtual_theme_plan' => [
                         'draft' => \is_array($checkpoint['virtual_theme_plan'] ?? null)
@@ -2539,6 +2604,9 @@ SCRIPT;
             $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
             $markdown = (string)($artifacts['markdown'] ?? '');
             $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
+            $retryableTaskPlanFailures = \is_array($artifacts['retryable_ai_failures'] ?? null)
+                ? \array_values(\array_filter($artifacts['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
+                : [];
 
             if ($sse->isAlive()) {
                 $sse->sendEvent('progress', [
@@ -2598,6 +2666,14 @@ SCRIPT;
                 'task_plan_confirmed' => 0,
                 '_task_plan_rebuild_in_progress' => 0,
             ];
+            $scopeWithTaskPlanFailures = $this->buildTaskService->replaceRetryableAiFailures(
+                \array_replace($scope, $scopePatch),
+                'task_plan',
+                $retryableTaskPlanFailures
+            );
+            $scopePatch['retryable_ai_failures'] = \is_array($scopeWithTaskPlanFailures['retryable_ai_failures'] ?? null) ? $scopeWithTaskPlanFailures['retryable_ai_failures'] : [];
+            $scopePatch['retryable_ai_failure_count'] = (int)($scopeWithTaskPlanFailures['retryable_ai_failure_count'] ?? 0);
+            $scopePatch['next_stage_blocked_by_ai_failures'] = (int)($scopeWithTaskPlanFailures['next_stage_blocked_by_ai_failures'] ?? 0);
             $sse->sendEvent('progress', [
                 'message' => (string)__('正在持久化任务方案草案'),
                 'prompt_mode' => $promptMode,
@@ -2630,6 +2706,21 @@ SCRIPT;
                 ['operation' => 'task_plan', 'status' => 'done', 'message' => (string)__('第二阶段任务方案已生成')],
                 AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
             );
+            if ($retryableTaskPlanFailures !== []) {
+                $this->updateActiveOperation(
+                    $fresh,
+                    $adminId,
+                    [
+                        'operation' => 'task_plan',
+                        'status' => 'error',
+                        'message' => (string)__('第二阶段部分任务方案生成失败，请重试失败项。'),
+                        'retry_allowed' => 1,
+                        'failure_mode' => 'partial_retry_required',
+                        'retryable_ai_failure_count' => \count($retryableTaskPlanFailures),
+                    ],
+                    AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
+                );
+            }
 
             $sse->sendEvent('progress', [
                 'message' => (string)__('第二阶段任务方案已生成，正在输出完成标记'),
@@ -2644,6 +2735,8 @@ SCRIPT;
                 'message' => (string)__('第二阶段任务方案已生成，请确认后再进入构建'),
                 'prompt_mode' => $promptMode,
                 'phase' => 'virtual_theme_plan_generated',
+                'partial_retry_required' => $retryableTaskPlanFailures !== [] ? 1 : 0,
+                'retryable_ai_failure_count' => \count($retryableTaskPlanFailures),
                 'task_plan' => [
                     'markdown' => $markdown,
                     'structured' => $structured,
@@ -2759,6 +2852,17 @@ SCRIPT;
             $scopePatch['build_summary'] = \array_replace($buildSummary, [
                 'task_summary' => $this->buildTaskService->summarize($mergedScope),
             ]);
+        }
+        if ($this->buildTaskService->hasRetryableAiFailures($mergedScope, 'plan')
+            || $this->buildTaskService->hasRetryableAiFailures($mergedScope, 'task_plan')
+        ) {
+            $summary = $this->buildTaskService->summarizeRetryableAiFailures($mergedScope);
+            return $this->jsonError(
+                'RETRYABLE_AI_FAILURES_PENDING',
+                (string)__('仍有 AI 生成失败项，请先点击重试失败项。'),
+                ['public_id'],
+                ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
+            );
         }
         if (!$this->isTaskPlanConfirmedForBuild($mergedScope)) {
             return $this->jsonError(
@@ -4921,11 +5025,19 @@ SCRIPT;
                                     return;
                                 }
                                 $scope['_plan_generation_checkpoint'] = $checkpoint;
+                                $retryableFailures = \is_array($checkpoint['retryable_ai_failures'] ?? null)
+                                    ? \array_values(\array_filter($checkpoint['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
+                                    : [];
+                                $scope = $this->buildTaskService->replaceRetryableAiFailures($scope, 'plan', $retryableFailures);
                                 $this->sessionService->mergeScope($fresh->getId(), $adminId, [
                                     '_plan_generation_checkpoint' => $checkpoint,
+                                    'retryable_ai_failures' => \is_array($scope['retryable_ai_failures'] ?? null) ? $scope['retryable_ai_failures'] : [],
+                                    'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
+                                    'next_stage_blocked_by_ai_failures' => (int)($scope['next_stage_blocked_by_ai_failures'] ?? 0),
                                     'plan_generation_progress' => [
                                         'step' => (string)($checkpoint['step'] ?? ''),
                                         'page_types' => \is_array($checkpoint['page_types'] ?? null) ? $checkpoint['page_types'] : [],
+                                        'failed_count' => \count($retryableFailures),
                                         'updated_at' => (string)($checkpoint['updated_at'] ?? \date('Y-m-d H:i:s')),
                                     ],
                                 ]);
@@ -4962,6 +5074,10 @@ SCRIPT;
             $derivedPatch = \is_array($artifacts['derived_scope_patch'] ?? null) ? $artifacts['derived_scope_patch'] : [];
             $executionBlueprint = \is_array($artifacts['execution_blueprint'] ?? null) ? $artifacts['execution_blueprint'] : [];
             $planJson = \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [];
+            $retryablePlanFailures = \is_array($artifacts['retryable_ai_failures'] ?? null)
+                ? \array_values(\array_filter($artifacts['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
+                : [];
+            $checkpointForRetry = \is_array($scope['_plan_generation_checkpoint'] ?? null) ? $scope['_plan_generation_checkpoint'] : [];
             $scopePatchPersist = \array_replace($derivedPatch, [
                 'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
                 'execution_blueprint_draft' => $executionBlueprint,
@@ -4976,9 +5092,17 @@ SCRIPT;
                 'plan_generated_page_types' => \array_values(\array_map('strval', $currentPageTypes)),
                 'plan_generated_source_signature' => $this->buildPlanSourceSignature(\array_replace($scope, ['page_types' => $currentPageTypes])),
                 'plan_confirmed' => 0,
-                '_plan_generation_checkpoint' => [],
+                '_plan_generation_checkpoint' => $retryablePlanFailures === [] ? [] : $checkpointForRetry,
                 'plan_generation_progress' => [],
             ]);
+            $scopeWithFailures = $this->buildTaskService->replaceRetryableAiFailures(
+                \array_replace($scope, $scopePatchPersist),
+                'plan',
+                $retryablePlanFailures
+            );
+            $scopePatchPersist['retryable_ai_failures'] = \is_array($scopeWithFailures['retryable_ai_failures'] ?? null) ? $scopeWithFailures['retryable_ai_failures'] : [];
+            $scopePatchPersist['retryable_ai_failure_count'] = (int)($scopeWithFailures['retryable_ai_failure_count'] ?? 0);
+            $scopePatchPersist['next_stage_blocked_by_ai_failures'] = (int)($scopeWithFailures['next_stage_blocked_by_ai_failures'] ?? 0);
             $this->sessionService->mergeScope($fresh->getId(), $adminId, $scopePatchPersist);
             $freshSaved = $this->sessionService->loadById($fresh->getId(), $adminId) ?? $fresh;
             $this->appendWorkspaceEvent(
@@ -5016,6 +5140,20 @@ SCRIPT;
                 ['status' => 'done', 'message' => (string)__('阶段一方案生成完成')],
                 AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
             );
+            if ($retryablePlanFailures !== []) {
+                $this->updateActiveOperation(
+                    $fresh,
+                    $adminId,
+                    [
+                        'status' => 'error',
+                        'message' => (string)__('部分页面方案生成失败，请重试失败项。'),
+                        'retry_allowed' => 1,
+                        'failure_mode' => 'partial_retry_required',
+                        'retryable_ai_failure_count' => \count($retryablePlanFailures),
+                    ],
+                    AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
+                );
+            }
             $this->appendWorkspaceEvent(
                 $fresh->getId(),
                 $adminId,
@@ -9161,6 +9299,10 @@ SCRIPT;
         ]);
         $siteReady = (int)($normalized['site_ready'] ?? 1) === 1;
         $titleOk = \trim((string)($normalized['website_profile']['site_title'] ?? '')) !== '';
+        $normalized = $this->buildTaskService->syncBuildTaskFailuresToRetryableLedger($normalized);
+        $taskSummary = $this->buildTaskService->summarize($normalized);
+        $retryableAiFailureSummary = $this->buildTaskService->summarizeRetryableAiFailures($normalized);
+        $hasRetryableAiFailures = (int)($retryableAiFailureSummary['count'] ?? 0) > 0;
         $taskReady = $this->taskSummaryIndicatesCompleted($taskSummary);
         if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
             $htmlTrackReady = $this->scopeCompatibilityService->htmlTrackHasCompleteBlocks($virtualPagesByType, $normalized['page_types'])
@@ -9174,6 +9316,9 @@ SCRIPT;
                 && ($pendingGenerationPageTypes === [] || $taskReady)
                 && $titleOk
                 && $siteReady;
+        }
+        if ($hasRetryableAiFailures) {
+            $canPublish = false;
         }
         $activeOperationStatus = \trim((string)($activeOperation['status'] ?? ''));
         $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
@@ -9319,6 +9464,10 @@ SCRIPT;
             'workspace_status' => $workspaceStatus,
             'publish_status' => $session->getPublishStatus(),
             'can_publish' => $canPublish,
+            'retryable_ai_failures' => \is_array($normalized['retryable_ai_failures'] ?? null) ? $normalized['retryable_ai_failures'] : [],
+            'retryable_ai_failure_count' => (int)($normalized['retryable_ai_failure_count'] ?? ($retryableAiFailureSummary['count'] ?? 0)),
+            'next_stage_blocked_by_ai_failures' => (int)($normalized['next_stage_blocked_by_ai_failures'] ?? ($hasRetryableAiFailures ? 1 : 0)),
+            'retryable_ai_failure_summary' => $retryableAiFailureSummary,
             'latest_build_failed' => !empty($normalized['latest_build_failed']),
             'latest_build_failure' => \is_array($normalized['latest_build_failure'] ?? null) ? $normalized['latest_build_failure'] : [],
             'publish_blocked_by_latest_ai_failure' => !empty($normalized['publish_blocked_by_latest_ai_failure']),
@@ -10720,9 +10869,10 @@ SCRIPT;
             $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
             $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
         }
-        if (\in_array($activeStatus, ['queued', 'running'], true)) {
-            $runningOperation = \trim((string)($activeOperation['operation'] ?? ''));
-            $runningExecutionToken = \trim((string)($activeOperation['execution_token'] ?? ''));
+        $runningOperationState = $this->resolveRunningQueuedOperationState($scope, $operation);
+        if ($runningOperationState !== []) {
+            $runningOperation = \trim((string)($runningOperationState['operation'] ?? ''));
+            $runningExecutionToken = \trim((string)($runningOperationState['execution_token'] ?? ''));
             if ($this->shouldReuseRunningQueuedOperation($operation, $runningOperation)) {
                 $reusedOperation = $runningOperation !== '' ? $runningOperation : $operation;
                 return [
@@ -10738,6 +10888,8 @@ SCRIPT;
             if ($operation === 'plan' || $runningOperation === 'plan') {
                 return [
                     'success' => false,
+                    'http_status' => 409,
+                    'status_code' => 409,
                     'message' => __('当前已有正在执行的第一阶段主题规划，请先等待完成'),
                     'operation' => $runningOperation,
                     'execution_token' => $runningExecutionToken,
@@ -10753,6 +10905,8 @@ SCRIPT;
 
                 return [
                     'success' => false,
+                    'http_status' => 409,
+                    'status_code' => 409,
                     'code' => 'AI_SITE_OPERATION_BUSY',
                     'message' => $this->buildRunningOperationBusyMessage($operation, $runningOperation),
                     'operation' => $operation,
@@ -11093,6 +11247,105 @@ SCRIPT;
         }
 
         return (string)__('当前已有 AI 队列操作运行中，请等待完成后再试。');
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function resolveRunningQueuedOperationState(array $scope, string $requestedOperation): array
+    {
+        $candidates = [];
+        $seen = [];
+        $appendCandidate = static function (array $operationState, string $fallbackOperation = '') use (&$candidates, &$seen): void {
+            $operation = \trim((string)($operationState['operation'] ?? $fallbackOperation));
+            if ($operation === '') {
+                return;
+            }
+            $queueId = (int)($operationState['queue_id'] ?? 0);
+            $token = \trim((string)($operationState['execution_token'] ?? $operationState['token'] ?? ''));
+            $key = $operation . ':' . $queueId . ':' . $token;
+            if (isset($seen[$key])) {
+                return;
+            }
+            $seen[$key] = true;
+            if (\trim((string)($operationState['operation'] ?? '')) === '') {
+                $operationState['operation'] = $operation;
+            }
+            $candidates[] = $operationState;
+        };
+
+        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        if ($activeOperation !== []) {
+            $appendCandidate($activeOperation);
+        }
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        if (\is_array($activeOperations[$requestedOperation] ?? null)) {
+            $appendCandidate($activeOperations[$requestedOperation], $requestedOperation);
+        }
+        foreach ($activeOperations as $operation => $operationState) {
+            if (!\is_array($operationState)) {
+                continue;
+            }
+            $appendCandidate($operationState, \is_string($operation) ? $operation : '');
+        }
+
+        foreach ($candidates as $candidate) {
+            $running = $this->normalizeRunningQueuedOperationCandidate($candidate);
+            if ($running !== []) {
+                return $running;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $operationState
+     * @return array<string, mixed>
+     */
+    private function normalizeRunningQueuedOperationCandidate(array $operationState): array
+    {
+        $operation = \trim((string)($operationState['operation'] ?? ''));
+        if (!$this->isAiSiteQueueBackedOperation($operation)) {
+            return [];
+        }
+        $status = \trim((string)($operationState['status'] ?? ''));
+        if (!\in_array($status, ['pending', 'queued', 'running'], true)) {
+            return [];
+        }
+        if ($status === 'pending') {
+            $status = 'queued';
+        }
+
+        $queueId = (int)($operationState['queue_id'] ?? 0);
+        if ($queueId > 0) {
+            try {
+                $queueRow = w_query('queue', 'get', ['queue_id' => $queueId]);
+            } catch (\Throwable) {
+                $queueRow = null;
+            }
+            if (\is_object($queueRow) && \method_exists($queueRow, 'getData')) {
+                $queueRow = $queueRow->getData();
+            }
+            if (!\is_array($queueRow) || $queueRow === []) {
+                return [];
+            }
+            if (!$this->isObservedQueueInProgress($queueRow)) {
+                return [];
+            }
+            $queueStatus = \trim((string)($queueRow['status'] ?? ''));
+            $status = $queueStatus === 'pending' ? 'queued' : $queueStatus;
+            $operationState['queue_status'] = $queueStatus;
+        }
+
+        $operationState['operation'] = $operation;
+        $operationState['status'] = $status;
+        if (\trim((string)($operationState['execution_token'] ?? '')) === '' && \trim((string)($operationState['token'] ?? '')) !== '') {
+            $operationState['execution_token'] = \trim((string)$operationState['token']);
+        }
+
+        return $operationState;
     }
 
     private function shouldReuseRunningQueuedOperation(string $requestedOperation, string $runningOperation): bool
@@ -12187,7 +12440,7 @@ SCRIPT;
         $scope = $this->buildTaskService->applyPagesMarkedSkipRemaining($scope);
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $pageTypeLabels = Page::getPageTypes();
-        $dispatchWindow = 3;
+        $dispatchWindow = PHP_INT_MAX;
         $initialPendingTasks = $this->buildTaskService->listPendingTasks($scope);
         $totalSteps = \max(1, \count($initialPendingTasks) + 1);
         $currentStep = 0;
@@ -12226,82 +12479,62 @@ SCRIPT;
                 }
             }
 
-            foreach ($sharedTasks as $task) {
-                $this->assertActiveStreamLeaseAlive($session, $adminId);
-                $taskKey = (string)($task['task_key'] ?? '');
-                if ($taskKey === '') {
-                    continue;
-                }
-
-                $currentStep++;
-                $progressPercent = (int)(($currentStep / $totalSteps) * 100);
-                $scope = $this->buildTaskService->markTaskRunning($scope, $taskKey);
-                $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
-
-                $region = (string)($task['region'] ?? '');
-                $this->sendOperationProgress(
-                    $sse,
-                    $session,
-                    $adminId,
-                    AiSiteAgentSession::STAGE_VISUAL_EDIT,
-                    'build',
-                    $region === 'header' ? __('Generating shared header') : __('Generating shared footer'),
-                    $progressPercent
-                );
-                try {
-                    $component = $pageComponentGenerationService->generateSharedComponent(
-                        $region,
-                        $scope['website_profile'],
-                        $scope,
-                        '',
-                        $queueForcedAiRebuild
-                    );
-                } catch (\Throwable $throwable) {
-                    $failure = $this->handleBuildTaskGenerationFailure(
-                        $sse,
-                        $session,
-                        $adminId,
-                        $scope,
-                        $taskKey,
-                        'shared_component',
-                        AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS,
-                        $throwable,
-                        [
-                            'region' => $region,
-                            'progress_percent' => $progressPercent,
-                        ]
-                    );
-                    $scope = \is_array($failure['scope'] ?? null) ? $failure['scope'] : $scope;
-                    if (!empty($failure['fatal'])) {
-                        throw $failure['throwable'] instanceof \Throwable ? $failure['throwable'] : $throwable;
+            if ($sharedTasks !== []) {
+                $sharedTaskByRegion = [];
+                foreach ($sharedTasks as $task) {
+                    $this->assertActiveStreamLeaseAlive($session, $adminId);
+                    $taskKey = (string)($task['task_key'] ?? '');
+                    $region = (string)($task['region'] ?? '');
+                    if ($taskKey === '' || $region === '') {
+                        continue;
                     }
-                    continue;
+                    $currentStep++;
+                    $sharedTaskByRegion[$region] = ['task' => $task, 'task_key' => $taskKey, 'progress_percent' => (int)(($currentStep / $totalSteps) * 100)];
+                    $scope = $this->buildTaskService->markTaskRunning($scope, $taskKey);
                 }
-                $sharedComponents[$region] = $component;
-                $scope['shared_components'] = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
-                $scope['shared_components'][$region] = $component;
-                $scope = $this->buildTaskService->markTaskDone($scope, $taskKey, ['region' => $region]);
-                $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+                if ($sharedTaskByRegion !== []) {
+                    $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+                    $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('Generating shared header/footer'), (int)(($currentStep / $totalSteps) * 100));
+                    foreach ($pageComponentGenerationService->generateSharedComponentEventsConcurrently($scope['website_profile'], $scope, \array_keys($sharedTaskByRegion)) as $region => $event) {
+                        $taskMeta = \is_array($sharedTaskByRegion[(string)$region] ?? null) ? $sharedTaskByRegion[(string)$region] : [];
+                        $taskKey = (string)($taskMeta['task_key'] ?? '');
+                        $progressPercent = (int)($taskMeta['progress_percent'] ?? 0);
+                        if ($taskKey === '') {
+                            continue;
+                        }
+                        if (($event['status'] ?? '') !== 'fulfilled' || !\is_array($event['result'] ?? null) || $event['result'] === []) {
+                            $throwable = ($event['error'] ?? null) instanceof \Throwable
+                                ? $event['error']
+                                : new \RuntimeException('Shared component generation returned an empty result.');
+                            $failure = $this->handleBuildTaskGenerationFailure($sse, $session, $adminId, $scope, $taskKey, 'shared_component', AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS, $throwable, [
+                                'region' => (string)$region,
+                                'progress_percent' => $progressPercent,
+                            ]);
+                            $scope = \is_array($failure['scope'] ?? null) ? $failure['scope'] : $scope;
+                            if (!empty($failure['fatal'])) {
+                                throw $failure['throwable'] instanceof \Throwable ? $failure['throwable'] : $throwable;
+                            }
+                            continue;
+                        }
+                        $component = $event['result'];
+                        $sharedComponents[(string)$region] = $component;
+                        $scope['shared_components'] = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
+                        $scope['shared_components'][(string)$region] = $component;
+                        $scope = $this->buildTaskService->markTaskDone($scope, $taskKey, ['region' => (string)$region]);
+                        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
 
-                $message = $region === 'header' ? 'Shared header generated' : 'Shared footer generated';
-                $this->appendWorkspaceEvent(
-                    $session->getId(),
-                    $adminId,
-                    AiSiteAgentSession::STAGE_VISUAL_EDIT,
-                    'shared_component_generated',
-                    $message,
-                    ['operation' => 'build', 'details' => ['region' => $region]]
-                );
-                $freshShared = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-                $sharedState = $this->buildWorkspaceEventStatePayload(
-                    $this->buildWorkspaceState($freshShared, $adminId, 80, true)
-                );
-                $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
-                    'task_key' => $taskKey,
-                    'task_type' => 'shared_component',
-                    'message' => $message,
-                    'state' => $sharedState,
-                ]));
+                        $message = (string)$region === 'header' ? 'Shared header generated' : 'Shared footer generated';
+                        $this->appendWorkspaceEvent($session->getId(), $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'shared_component_generated', $message, ['operation' => 'build', 'details' => ['region' => (string)$region]]);
+                        $freshShared = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+                        $sharedState = $this->buildWorkspaceEventStatePayload($this->buildWorkspaceState($freshShared, $adminId, 80, true));
+                        $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
+                            'task_key' => $taskKey,
+                            'task_type' => 'shared_component',
+                            'message' => $message,
+                            'state' => $sharedState,
+                        ]));
+                    }
+                }
             }
 
             if ($pageTasks === []) {
@@ -12356,7 +12589,7 @@ SCRIPT;
                     $failedTaskKeys[] = $taskKey;
                     continue;
                 }
-                $retryTaskKeys[] = $taskKey;
+                $failedTaskKeys[] = $taskKey;
             }
             if ($componentSpecs === []) {
                 if ($fatalBatchThrowable instanceof \Throwable) {
@@ -12429,7 +12662,7 @@ SCRIPT;
                         $failedTaskKeys[] = (string)$taskKey;
                         continue;
                     }
-                    $retryTaskKeys[] = (string)$taskKey;
+                    $failedTaskKeys[] = (string)$taskKey;
                     continue;
                 }
 
@@ -12566,6 +12799,7 @@ SCRIPT;
                     'task_keys' => $runningTaskKeys,
                     'completed_task_keys' => $completedTaskKeys,
                     'retry_task_keys' => $retryTaskKeys,
+                    'failed_task_keys' => $failedTaskKeys,
                 ]
             );
         }
@@ -12573,21 +12807,35 @@ SCRIPT;
         $now = \date('Y-m-d H:i:s');
         $htmlTrackReady = $this->scopeCompatibilityService->htmlTrackHasCompleteBlocks($virtualPages, $pageTypes)
             || $this->htmlTrackHasMaterializedAiBlocks($scope, $virtualPages, $pageTypes);
-        if (!$htmlTrackReady) {
+        $scope = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
+        $scope = $this->buildTaskService->syncBuildTaskFailuresToRetryableLedger($scope);
+        $taskSummary = $this->buildTaskService->summarize($scope);
+        $hasBuildFailures = (int)($taskSummary['failed'] ?? 0) > 0 || $this->buildTaskService->hasRetryableAiFailures($scope, 'build');
+        if (!$htmlTrackReady && !$hasBuildFailures) {
             throw new \RuntimeException((string)__('HTML 区块构建未完整产出，请重新调度构建队列'));
         }
-        $scope = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
+        $canPublishBuild = !$this->buildTaskService->hasPendingTasks($scope) && $htmlTrackReady && !$hasBuildFailures;
         $scope['build_summary'] = [
             'page_count' => \count($virtualPages),
             'last_generated_at' => $now,
             'active_operation' => 'build',
-            'can_publish' => !$this->buildTaskService->hasPendingTasks($scope) && $htmlTrackReady,
-            'task_summary' => $this->buildTaskService->summarize($scope),
+            'can_publish' => $canPublishBuild,
+            'task_summary' => $taskSummary,
         ];
-        $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+        $scope['workspace_status'] = $hasBuildFailures
+            ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED
+            : AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
         $scope['active_operation'] = \array_replace(
             \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
-            [
+            $hasBuildFailures ? [
+                'status' => 'error',
+                'updated_at' => $now,
+                'message' => (string)__('HTML blocks partially generated; retry failed items before publishing.'),
+                'retry_allowed' => 1,
+                'failure_mode' => 'partial_retry_required',
+                'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
+                'queue_waiting_for_scheduler' => false,
+            ] : [
                 'status' => 'done',
                 'updated_at' => $now,
                 'message' => (string)__('HTML blocks generated'),
@@ -12599,10 +12847,20 @@ SCRIPT;
         $this->sessionService->bindVirtualTheme($session->getId(), $adminId, 0);
         $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT);
         $this->sessionService->setPublishStatus($session->getId(), $adminId, AiSiteAgentSession::PUBLISH_STATUS_DRAFT);
-        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('HTML blocks ready for preview or publish'), 100);
+        $this->sendOperationProgress(
+            $sse,
+            $session,
+            $adminId,
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'build',
+            $hasBuildFailures ? __('HTML blocks partially generated; retry failed items before publishing.') : __('HTML blocks ready for preview or publish'),
+            100
+        );
 
         return [
-            'message' => (string)__('HTML block build complete'),
+            'message' => $hasBuildFailures
+                ? (string)__('HTML block build partially complete; retry failed items before publishing.')
+                : (string)__('HTML block build complete'),
             'draft_website_id' => (int)$draftWebsite['website_id'],
             'virtual_theme_id' => 0,
             'page_types' => $pageTypes,
@@ -13102,47 +13360,12 @@ SCRIPT;
             'error_message' => $message,
         ]);
 
-        if ($attemptNo < self::BUILD_TASK_MAX_GENERATION_ATTEMPTS) {
-            $scope = $this->buildTaskService->markTaskPendingForRetry($scope, $taskKey, $message);
-            $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
-            $this->emitBuildInfoEvent(
-                $sse,
-                (string)__('Build task failed on attempt %{attempt}/%{max}; queued retry: %{task}', [
-                    'attempt' => (string)$attemptNo,
-                    'max' => (string)self::BUILD_TASK_MAX_GENERATION_ATTEMPTS,
-                    'task' => $taskKey,
-                ]),
-                \array_replace($basePayload, [
-                    'event_type' => 'build_task_retry',
-                    'batch_state' => 'retrying',
-                    'next_attempt_no' => $attemptNo + 1,
-                ])
-            );
-            $this->emitBuildTaskProgressSnapshotFromScope(
-                $sse,
-                $scope,
-                'build',
-                (string)__('Build task queued for retry: %{task}', ['task' => $taskKey]),
-                $progressPercent,
-                'queued'
-            );
-            $sse->sendEvent('task_retry', $this->enrichTaskEventPayload($scope, \array_replace($basePayload, [
-                'message' => 'Build task queued for retry: ' . $taskKey,
-            ])));
-
-            return [
-                'scope' => $scope,
-                'fatal' => false,
-                'throwable' => $throwable,
-            ];
-        }
-
         $scope = $this->buildTaskService->markTaskFailed($scope, $taskKey, $message);
+        $scope = $this->buildTaskService->syncBuildTaskFailuresToRetryableLedger($scope);
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $this->emitBuildInfoEvent(
             $sse,
-            (string)__('Build task failed after %{max} attempts: %{task}', [
-                'max' => (string)self::BUILD_TASK_MAX_GENERATION_ATTEMPTS,
+            (string)__('Build task failed and is waiting for retry: %{task}', [
                 'task' => $taskKey,
             ]),
             \array_replace($basePayload, [
@@ -13164,7 +13387,7 @@ SCRIPT;
 
         return [
             'scope' => $scope,
-            'fatal' => true,
+            'fatal' => false,
             'throwable' => $throwable,
         ];
     }
@@ -13362,7 +13585,7 @@ SCRIPT;
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         // queue:run -f：_queue_force_build.active=1 时强制走 AI，并绕过共享 Header/Footer 的进程内静态缓存。
         $pageTypeLabels = Page::getPageTypes();
-        $dispatchWindow = 3;
+        $dispatchWindow = PHP_INT_MAX;
         $initialPendingTasks = $this->buildTaskService->listPendingTasks($scope);
         $totalSteps = \max(1, \count($initialPendingTasks) + 1);
         $currentStep = 0;
@@ -13405,87 +13628,67 @@ SCRIPT;
                 }
             }
 
-            foreach ($sharedTasks as $task) {
-                $this->assertActiveStreamLeaseAlive($session, $adminId);
-                $taskKey = (string)($task['task_key'] ?? '');
-                if ($taskKey === '') {
-                    continue;
-                }
-
-                $currentStep++;
-                $progressPercent = (int)(($currentStep / $totalSteps) * 100);
-                $scope = $this->buildTaskService->markTaskRunning($scope, $taskKey);
-                $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
-
-                $region = (string)($task['region'] ?? '');
-                $this->sendOperationProgress(
-                    $sse,
-                    $session,
-                    $adminId,
-                    AiSiteAgentSession::STAGE_VISUAL_EDIT,
-                    'build',
-                    $region === 'header' ? __('Generating shared header') : __('Generating shared footer'),
-                    $progressPercent
-                );
-                try {
-                    $component = $pageComponentGenerationService->generateSharedComponent(
-                        $region,
-                        $scope['website_profile'],
-                        $scope,
-                        '',
-                        $queueForcedAiRebuild
-                    );
-                } catch (\Throwable $throwable) {
-                    $failure = $this->handleBuildTaskGenerationFailure(
-                        $sse,
-                        $session,
-                        $adminId,
-                        $scope,
-                        $taskKey,
-                        'shared_component',
-                        AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
-                        $throwable,
-                        [
-                            'region' => $region,
-                            'progress_percent' => $progressPercent,
-                        ]
-                    );
-                    $scope = \is_array($failure['scope'] ?? null) ? $failure['scope'] : $scope;
-                    if (!empty($failure['fatal'])) {
-                        throw $failure['throwable'] instanceof \Throwable ? $failure['throwable'] : $throwable;
+            if ($sharedTasks !== []) {
+                $sharedTaskByRegion = [];
+                foreach ($sharedTasks as $task) {
+                    $this->assertActiveStreamLeaseAlive($session, $adminId);
+                    $taskKey = (string)($task['task_key'] ?? '');
+                    $region = (string)($task['region'] ?? '');
+                    if ($taskKey === '' || $region === '') {
+                        continue;
                     }
-                    continue;
+                    $currentStep++;
+                    $sharedTaskByRegion[$region] = ['task' => $task, 'task_key' => $taskKey, 'progress_percent' => (int)(($currentStep / $totalSteps) * 100)];
+                    $scope = $this->buildTaskService->markTaskRunning($scope, $taskKey);
                 }
-                $sharedComponents[$region] = $component;
-                $scope['shared_components'] = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
-                $scope['shared_components'][$region] = $component;
-                $scope = $this->buildTaskService->markTaskDone($scope, $taskKey, ['region' => $region]);
-                $virtualThemeId = (int)$scope['virtual_theme_id'];
-                $this->virtualThemeService->saveGeneratedSharedComponent($virtualThemeId, $component);
-                $pageTypeLayouts = $this->applySharedComponentToPageLayouts($pageTypes, $pageTypeLayouts, $component);
-                $this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypes, $pageTypeLayouts);
-                $scope['page_type_layouts'] = $pageTypeLayouts;
-                $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+                if ($sharedTaskByRegion !== []) {
+                    $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+                    $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('Generating shared header/footer'), (int)(($currentStep / $totalSteps) * 100));
+                    foreach ($pageComponentGenerationService->generateSharedComponentEventsConcurrently($scope['website_profile'], $scope, \array_keys($sharedTaskByRegion)) as $region => $event) {
+                        $taskMeta = \is_array($sharedTaskByRegion[(string)$region] ?? null) ? $sharedTaskByRegion[(string)$region] : [];
+                        $taskKey = (string)($taskMeta['task_key'] ?? '');
+                        $progressPercent = (int)($taskMeta['progress_percent'] ?? 0);
+                        if ($taskKey === '') {
+                            continue;
+                        }
+                        if (($event['status'] ?? '') !== 'fulfilled' || !\is_array($event['result'] ?? null) || $event['result'] === []) {
+                            $throwable = ($event['error'] ?? null) instanceof \Throwable
+                                ? $event['error']
+                                : new \RuntimeException('Shared component generation returned an empty result.');
+                            $failure = $this->handleBuildTaskGenerationFailure($sse, $session, $adminId, $scope, $taskKey, 'shared_component', AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME, $throwable, [
+                                'region' => (string)$region,
+                                'progress_percent' => $progressPercent,
+                            ]);
+                            $scope = \is_array($failure['scope'] ?? null) ? $failure['scope'] : $scope;
+                            if (!empty($failure['fatal'])) {
+                                throw $failure['throwable'] instanceof \Throwable ? $failure['throwable'] : $throwable;
+                            }
+                            continue;
+                        }
+                        $component = $event['result'];
+                        $sharedComponents[(string)$region] = $component;
+                        $scope['shared_components'] = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
+                        $scope['shared_components'][(string)$region] = $component;
+                        $scope = $this->buildTaskService->markTaskDone($scope, $taskKey, ['region' => (string)$region]);
+                        $virtualThemeId = (int)$scope['virtual_theme_id'];
+                        $this->virtualThemeService->saveGeneratedSharedComponent($virtualThemeId, $component);
+                        $pageTypeLayouts = $this->applySharedComponentToPageLayouts($pageTypes, $pageTypeLayouts, $component);
+                        $this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypes, $pageTypeLayouts);
+                        $scope['page_type_layouts'] = $pageTypeLayouts;
+                        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
 
-                $message = $region === 'header' ? 'Shared header generated' : 'Shared footer generated';
-                $this->appendWorkspaceEvent(
-                    $session->getId(),
-                    $adminId,
-                    AiSiteAgentSession::STAGE_VISUAL_EDIT,
-                    'shared_component_generated',
-                    $message,
-                    ['operation' => 'build', 'details' => ['region' => $region]]
-                );
-                $freshShared = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-                $sharedState = $this->buildWorkspaceEventStatePayload(
-                    $this->buildWorkspaceState($freshShared, $adminId, 80, true)
-                );
-                $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
-                    'task_key' => $taskKey,
-                    'task_type' => 'shared_component',
-                    'message' => $message,
-                    'state' => $sharedState,
-                ]));
+                        $message = (string)$region === 'header' ? 'Shared header generated' : 'Shared footer generated';
+                        $this->appendWorkspaceEvent($session->getId(), $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'shared_component_generated', $message, ['operation' => 'build', 'details' => ['region' => (string)$region]]);
+                        $freshShared = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+                        $sharedState = $this->buildWorkspaceEventStatePayload($this->buildWorkspaceState($freshShared, $adminId, 80, true));
+                        $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
+                            'task_key' => $taskKey,
+                            'task_type' => 'shared_component',
+                            'message' => $message,
+                            'state' => $sharedState,
+                        ]));
+                    }
+                }
             }
 
             if ($pageTasks === []) {
@@ -13540,7 +13743,7 @@ SCRIPT;
                     $failedTaskKeys[] = $taskKey;
                     continue;
                 }
-                $retryTaskKeys[] = $taskKey;
+                $failedTaskKeys[] = $taskKey;
             }
             if ($componentSpecs === []) {
                 if ($fatalBatchThrowable instanceof \Throwable) {
@@ -13613,7 +13816,7 @@ SCRIPT;
                         $failedTaskKeys[] = (string)$taskKey;
                         continue;
                     }
-                    $retryTaskKeys[] = (string)$taskKey;
+                    $failedTaskKeys[] = (string)$taskKey;
                     continue;
                 }
 
@@ -13658,7 +13861,7 @@ SCRIPT;
                         $failedTaskKeys[] = (string)$taskKey;
                         continue;
                     }
-                    $retryTaskKeys[] = (string)$taskKey;
+                    $failedTaskKeys[] = (string)$taskKey;
                     continue;
                 }
                 $this->virtualThemeService->saveGeneratedContentComponent((int)$scope['virtual_theme_id'], $pageType, $sectionComponent);
@@ -13740,7 +13943,7 @@ SCRIPT;
                         $failedTaskKeys[] = (string)$taskKey;
                         continue;
                     }
-                    $retryTaskKeys[] = (string)$taskKey;
+                    $failedTaskKeys[] = (string)$taskKey;
                     continue;
                 }
                 $scope = $this->buildTaskService->markTaskDone($scope, (string)$taskKey, ['page_type' => $pageType, 'section_code' => $sectionCode]);
@@ -13833,24 +14036,39 @@ SCRIPT;
                     'task_keys' => $runningTaskKeys,
                     'completed_task_keys' => $completedTaskKeys,
                     'retry_task_keys' => $retryTaskKeys,
+                    'failed_task_keys' => $failedTaskKeys,
                 ]
             );
         }
 
         $scope = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
+        $scope = $this->buildTaskService->syncBuildTaskFailuresToRetryableLedger($scope);
 
         $now = \date('Y-m-d H:i:s');
+        $taskSummary = $this->buildTaskService->summarize($scope);
+        $hasBuildFailures = (int)($taskSummary['failed'] ?? 0) > 0 || $this->buildTaskService->hasRetryableAiFailures($scope, 'build');
+        $canPublishBuild = !$this->buildTaskService->hasPendingTasks($scope) && !$hasBuildFailures;
         $scope['build_summary'] = [
             'page_count' => \count($virtualPages),
             'last_generated_at' => $now,
             'active_operation' => 'build',
-            'can_publish' => !$this->buildTaskService->hasPendingTasks($scope),
-            'task_summary' => $this->buildTaskService->summarize($scope),
+            'can_publish' => $canPublishBuild,
+            'task_summary' => $taskSummary,
         ];
-        $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+        $scope['workspace_status'] = $hasBuildFailures
+            ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED
+            : AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
         $scope['active_operation'] = \array_replace(
             \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
-            [
+            $hasBuildFailures ? [
+                'status' => 'error',
+                'updated_at' => $now,
+                'message' => (string)__('Virtual theme partially generated; retry failed items before publishing.'),
+                'retry_allowed' => 1,
+                'failure_mode' => 'partial_retry_required',
+                'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
+                'queue_waiting_for_scheduler' => false,
+            ] : [
                 'status' => 'done',
                 'updated_at' => $now,
                 'message' => (string)__('Virtual theme generated'),
@@ -13864,9 +14082,19 @@ SCRIPT;
         $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT);
         $this->sessionService->setPublishStatus($session->getId(), $adminId, AiSiteAgentSession::PUBLISH_STATUS_DRAFT);
 
-        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('Virtual theme ready for editing'), 100);
+        $this->sendOperationProgress(
+            $sse,
+            $session,
+            $adminId,
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'build',
+            $hasBuildFailures ? __('Virtual theme partially generated; retry failed items before publishing.') : __('Virtual theme ready for editing'),
+            100
+        );
         return [
-            'message' => (string)__('Virtual theme build complete'),
+            'message' => $hasBuildFailures
+                ? (string)__('Virtual theme build partially complete; retry failed items before publishing.')
+                : (string)__('Virtual theme build complete'),
             'draft_website_id' => (int)$draftWebsite['website_id'],
             'virtual_theme_id' => (int)($scope['virtual_theme_id'] ?? 0),
             'page_types' => $pageTypes,
@@ -14978,6 +15206,25 @@ SCRIPT;
         return 0;
     }
 
+
+    protected function fetchJson(array $data): string
+    {
+        $statusCode = (int)($data['http_status'] ?? 0);
+        if ($statusCode <= 0 || $statusCode === 200) {
+            return parent::fetchJson($data);
+        }
+
+        $response = \Weline\Framework\Http\Response::json($data, $statusCode);
+        $context = \Weline\Framework\Context::getCurrent();
+        if ($context !== null && $context->get('meta.type') === 'request') {
+            if (\ob_get_level() > 0 && \ob_get_length() > 0) {
+                \ob_clean();
+            }
+            throw new ResponseTerminateException($response);
+        }
+
+        return $response->getBody();
+    }
 
     /**
      * @param list<string> $requiredParams
