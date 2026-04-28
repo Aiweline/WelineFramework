@@ -179,12 +179,77 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         self::assertStringContainsString('plain cards or a flat strip', $prompt);
         self::assertStringContainsString('For link/contact/social blocks', $prompt);
         self::assertStringContainsString('For blog/article/category blocks', $prompt);
+        self::assertStringContainsString('Fix contrast explicitly', $prompt);
+        self::assertStringContainsString('Fix page hierarchy explicitly', $prompt);
+        self::assertStringContainsString('Fix HTML structure explicitly', $prompt);
         self::assertStringContainsString('pb-content-home-page-featured-plugins-grid', $prompt);
         self::assertStringNotContainsString('simplif', \strtolower($prompt));
         self::assertStringNotContainsString('compact', \strtolower($prompt));
         self::assertStringNotContainsString('reduced', \strtolower($prompt));
         self::assertStringNotContainsString('Keep the structure compact', $prompt);
         self::assertStringNotContainsString('Prefer one small section', $prompt);
+    }
+
+    public function testThemeStyleDefaultsCorrectUnreadableDarkPaletteText(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+        $method = new \ReflectionMethod($service, 'resolveThemeStyleDefaults');
+        $method->setAccessible(true);
+
+        $scope = [
+            'theme_design' => [
+                'color_scheme' => [
+                    'primary' => '#0f172a',
+                    'background' => '#0f172a',
+                    'surface' => '#111827',
+                    'text' => '#111111',
+                    'accent' => '#f59e0b',
+                ],
+            ],
+        ];
+
+        $header = $method->invoke($service, $scope, 'header');
+        $footer = $method->invoke($service, $scope, 'footer');
+        $content = $method->invoke($service, $scope, 'content');
+
+        self::assertSame('#111827', $header['style.bg_color'] ?? null);
+        self::assertSame('#f8fafc', $header['style.text_color'] ?? null);
+        self::assertSame('#f8fafc', $header['style.link_color'] ?? null);
+        self::assertSame('#f8fafc', $footer['style.text_color'] ?? null);
+        self::assertSame('#f8fafc', $content['style.title_color'] ?? null);
+    }
+
+    public function testPromptAddonsRequireContrastLayeringAndBalancedHtml(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+        $themeContract = new \ReflectionMethod($service, 'buildThemeContractPromptAddon');
+        $themeContract->setAccessible(true);
+        $visualExcellence = new \ReflectionMethod($service, 'buildVisualExcellencePromptAddon');
+        $visualExcellence->setAccessible(true);
+        $safetyRules = new \ReflectionMethod($service, 'buildComponentJsonPhpSafetyRulesEn');
+        $safetyRules->setAccessible(true);
+
+        $scope = [
+            'theme_design' => [
+                'style_signature' => 'dark editorial casino trust',
+                'color_scheme' => [
+                    'primary' => '#0f172a',
+                    'background' => '#0f172a',
+                    'surface' => '#111827',
+                    'text' => '#e2e8f0',
+                    'accent' => '#f59e0b',
+                ],
+            ],
+        ];
+
+        $prompt = $themeContract->invoke($service, $scope)
+            . $visualExcellence->invoke($service, 'section')
+            . $safetyRules->invoke($service);
+
+        self::assertStringContainsString('Contrast is non-negotiable', $prompt);
+        self::assertStringContainsString('Theme color is not a paint bucket', $prompt);
+        self::assertStringContainsString('Color quality requirement', $prompt);
+        self::assertStringContainsString('HTML fragments must be balanced', $prompt);
     }
 
     public function testResolveConcurrencyUsesTaskCountWithoutApplicationCap(): void
@@ -1339,6 +1404,25 @@ HTML,
         self::assertSame('', $sanitize->call($service, '访客看到三张精致卡片，从而产生下载兴趣。'));
         self::assertSame('', $sanitize->call($service, '信任感增强，并知道如何立即下载 Teen Patti Royal APK。'));
         self::assertSame('Trusted APK rewards', $sanitize->call($service, 'Trusted APK rewards'));
+    }
+
+    public function testCleanAiHtmlFragmentRepairsUnclosedHtmlTags(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $cleaned = (function (string $html): string {
+            return $this->cleanAiHtmlFragment($html);
+        })->call(
+            $service,
+            '<section class="stage"><div class="copy"><h2>Title</h2><p>Readable body</section></span>'
+        );
+
+        self::assertSame(
+            '<section class="stage"><div class="copy"><h2>Title</h2><p>Readable body</p></div></section>',
+            $cleaned
+        );
     }
 
     public function testVirtualThemeComponentPolicyRejectsPlanningObservationCopy(): void
