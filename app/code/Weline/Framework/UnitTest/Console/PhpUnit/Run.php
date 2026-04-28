@@ -424,6 +424,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
         
         # 检查文件名参数（只从用户明确指定的参数中获取）
         $fileName = $args['--name'] ?? $args['name'] ?? null;
+        $fileList = $this->extractFilesListFromArgs($args);
         
         # 调试信息
         if (isset($args['debug']) || isset($data['debug'])) {
@@ -443,6 +444,8 @@ class Run implements \Weline\Framework\Console\CommandInterface
         # 显示运行模式
         if ($moduleName) {
             $this->printing->note(__('运行模式: 指定模块 - %{1}', $moduleName));
+        } elseif ($fileList !== []) {
+            $this->printing->note(__('运行模式: 指定文件列表 - %{1}', [implode(', ', $fileList)]));
         } elseif ($fileName) {
             $this->printing->note(__('运行模式: 指定文件 - %{1}', $fileName));
         } else {
@@ -463,7 +466,15 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $totalTestCount = 0;
         
         # 根据运行模式生成不同的配置
-        if ($fileName) {
+        if ($fileList !== []) {
+            # 指定文件列表：按路径直接执行
+            $this->printing->note(__('运行模式: 指定文件列表'));
+            $php_unit_xml = $this->generateSuiteConfig($php_unit_report_path);
+            $totalTestCount = 0;
+            foreach ($fileList as $oneFile) {
+                $totalTestCount += $this->countTestMethodsInFile($oneFile);
+            }
+        } elseif ($fileName) {
             # 优先处理文件名参数
             if ($moduleName) {
                 # 指定模块 + 文件名：在指定模块中查找文件
@@ -516,7 +527,19 @@ class Run implements \Weline\Framework\Console\CommandInterface
         }
         $phpunitCommand = $this->appendCoverageArguments($phpunitCommand, $args, $data, $php_unit_path);
         
-        if ($fileName) {
+        if ($fileList !== []) {
+            $resolvedFiles = [];
+            foreach ($fileList as $oneFile) {
+                $resolved = $this->resolveTestFilePathFromInput($oneFile);
+                if ($resolved === null) {
+                    $this->printing->error(__('未找到测试文件: %{1}', [$oneFile]));
+                    return;
+                }
+                $resolvedFiles[] = escapeshellarg($resolved);
+            }
+            $this->printing->note(__('正在运行文件列表测试: %{1}', [implode(', ', $fileList)]));
+            $command = $this->system->exec($phpunitCommand . ' ' . implode(' ', $resolvedFiles), true);
+        } elseif ($fileName) {
             # 文件模式：运行指定文件的测试
             if ($moduleName) {
                 # 在指定模块中查找文件
@@ -736,7 +759,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
         }
         
         # 判断是否为文件或方法测试模式（快速测试）
-        $isQuickTest = !empty($fileName);
+        $isQuickTest = !empty($fileName) || !empty($fileList);
         
         # 文件或方法测试时，如果指定了前台运行，直接输出结果后返回
         if ($isQuickTest && !$isBackground) {
@@ -761,7 +784,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
         # 检查是否启用监听模式
         $watchMode = isset($args['watch']) || isset($args['w']);
         
-        # 启动报告服务器
+        # 启动报告服务器（仅 --web）
         if ($isBackground) {
             if (!$this->isInteractiveConsole()) {
                 $this->printing->warning(__('检测到非交互环境，已跳过启动 Web 报告服务器（避免后台进程堆积）'));
@@ -792,9 +815,72 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->separator('═', 0, 'SUCCESS');
             # 确保立即返回
             return;
-        } else {
-            $this->system->exec('php -S localhost:' . $port . ' -t ' . escapeshellarg($php_unit_path));
         }
+        
+        $this->printing->note(__('测试运行完成；如需 Web 报告请添加 --web 参数。'));
+    }
+
+    /**
+     * @param array<int|string, mixed> $args
+     * @return array<int, string>
+     */
+    private function extractFilesListFromArgs(array $args): array
+    {
+        $rawValues = [];
+        foreach (['--files', 'files'] as $key) {
+            if (isset($args[$key]) && !is_bool($args[$key])) {
+                $rawValues[] = (string)$args[$key];
+            }
+        }
+
+        foreach ($args as $argKey => $argValue) {
+            if (!is_int($argKey) || !is_string($argValue)) {
+                continue;
+            }
+            $trimmed = trim($argValue);
+            if (str_starts_with($trimmed, '--files=')) {
+                $rawValues[] = substr($trimmed, strlen('--files='));
+                continue;
+            }
+            if (str_starts_with($trimmed, '--files,')) {
+                $rawValues[] = substr($trimmed, strlen('--files,'));
+                continue;
+            }
+        }
+
+        $files = [];
+        foreach ($rawValues as $raw) {
+            $parts = preg_split('/[,\r\n]+/', (string)$raw) ?: [];
+            foreach ($parts as $part) {
+                $file = trim((string)$part, " \t\n\r\0\x0B\"'");
+                if ($file === '') {
+                    continue;
+                }
+                $files[] = $file;
+            }
+        }
+
+        return array_values(array_unique($files));
+    }
+
+    private function resolveTestFilePathFromInput(string $filePath): ?string
+    {
+        $trimmed = trim($filePath);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        if (is_file($trimmed)) {
+            return $trimmed;
+        }
+
+        $normalized = str_replace(['/', '\\'], DS, $trimmed);
+        $relativeFromRoot = BP . ltrim($normalized, DS);
+        if (is_file($relativeFromRoot)) {
+            return $relativeFromRoot;
+        }
+
+        return $this->findTestFile($trimmed, false);
     }
 
     /**
