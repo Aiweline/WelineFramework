@@ -79,4 +79,40 @@ final class AiServiceCooperativeSessionTasksTest extends TestCase
 
         self::assertTrue($this->service->supportsCooperativeConcurrency(2));
     }
+
+    public function testRunCooperativeSessionTasksSettledKeepsFailuresIsolated(): void
+    {
+        $events = [];
+
+        $results = $this->service->runCooperativeSessionTasksSettled([
+            'ok_a' => static function (array $params) use (&$events): array {
+                $events[] = 'ok_a';
+
+                return $params;
+            },
+            'bad' => static function (): never {
+                throw new \RuntimeException('bad task failed');
+            },
+            'ok_b' => static function (array $params) use (&$events): array {
+                $events[] = 'ok_b';
+
+                return $params;
+            },
+        ], [
+            'concurrency' => 3,
+            'session_id' => 'pagebuilder-settled',
+            'params' => ['source' => 'pagebuilder'],
+        ]);
+
+        self::assertSame(['ok_a', 'ok_b'], $events);
+        self::assertSame('fulfilled', $results['ok_a']['status'] ?? null);
+        self::assertSame('rejected', $results['bad']['status'] ?? null);
+        self::assertSame('fulfilled', $results['ok_b']['status'] ?? null);
+        self::assertInstanceOf(\RuntimeException::class, $results['bad']['error'] ?? null);
+        self::assertSame('bad task failed', ($results['bad']['error'] ?? null)?->getMessage());
+        self::assertSame('ok_a', $results['ok_a']['result']['cooperative_task_key'] ?? null);
+        self::assertSame('ok_b', $results['ok_b']['result']['cooperative_task_key'] ?? null);
+        self::assertStringStartsWith('pagebuilder-settled.task.', (string)($results['ok_a']['result']['session_id'] ?? ''));
+        self::assertStringStartsWith('pagebuilder-settled.task.', (string)($results['ok_b']['result']['session_id'] ?? ''));
+    }
 }
