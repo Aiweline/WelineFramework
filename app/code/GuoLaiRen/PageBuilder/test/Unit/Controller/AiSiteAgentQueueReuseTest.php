@@ -103,7 +103,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertTrue($method->invoke($controller, ['plan_markdown' => '阶段一方案']));
     }
 
-    public function testQueuedOperationStartReusesExistingNonPlanQueueOperation(): void
+    public function testQueuedOperationStartOnlyReusesSameNonPlanQueueOperation(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
         $method = new ReflectionMethod(AiSiteAgent::class, 'shouldReuseRunningQueuedOperation');
@@ -111,11 +111,32 @@ final class AiSiteAgentQueueReuseTest extends TestCase
 
         self::assertTrue($method->invoke($controller, 'task_plan', 'task_plan'));
         self::assertTrue($method->invoke($controller, 'build', 'build'));
-        self::assertTrue($method->invoke($controller, 'build', 'task_plan'));
-        self::assertTrue($method->invoke($controller, 'block_regenerate', 'build'));
+        self::assertTrue($method->invoke($controller, 'block_regenerate', 'block_regenerate'));
+        self::assertTrue($method->invoke($controller, 'regenerate_page', 'regenerate_page'));
+        self::assertFalse($method->invoke($controller, 'build', 'task_plan'));
+        self::assertFalse($method->invoke($controller, 'block_regenerate', 'build'));
+        self::assertFalse($method->invoke($controller, 'task_plan', 'build'));
+        self::assertFalse($method->invoke($controller, 'regenerate_page', 'block_regenerate'));
         self::assertFalse($method->invoke($controller, 'task_plan', 'plan'));
         self::assertFalse($method->invoke($controller, 'plan', 'build'));
         self::assertFalse($method->invoke($controller, 'build', ''));
+    }
+
+    public function testQueuedOperationStartBlocksDifferentRunningQueueOperationWithoutReusingStream(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $methodSource = $this->extractControllerMethodSource($source, 'startOperation');
+
+        $busyPos = \strpos($methodSource, "'code' => 'AI_SITE_OPERATION_BUSY'");
+        $baseScopePos = \strpos($methodSource, '$baseScope = $scope;');
+
+        self::assertIsInt($busyPos);
+        self::assertIsInt($baseScopePos);
+        self::assertLessThan($baseScopePos, $busyPos);
+        self::assertStringContainsString('buildRunningOperationBusyMessage($operation, $runningOperation)', $methodSource);
+        self::assertStringContainsString("'operation' => \$operation", $methodSource);
+        self::assertStringContainsString("'running_operation' => \$runningOperation", $methodSource);
+        self::assertStringContainsString("'stream_url' => ''", $methodSource);
     }
 
     public function testQueuedOperationStartChecksLinkedQueueBeforeReusingActiveOperation(): void
