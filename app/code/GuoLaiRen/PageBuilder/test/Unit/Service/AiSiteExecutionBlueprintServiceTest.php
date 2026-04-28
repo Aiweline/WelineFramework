@@ -583,7 +583,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
 
     public function testBuildPlanArtifactsByAiStreamRejectsFakeMode(): void
     {
-        $aiService = $this->createMock(AiService::class);
+        $aiService = $this->createAiServiceStreamMock();
         $aiService->expects(self::never())->method('generateStream');
 
         $service = new AiSiteExecutionBlueprintService(
@@ -1318,7 +1318,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
     public function testBuildAiPlanPromptsContainStageOneThemeFirstConstraints(): void
     {
         $capturedPrompts = [];
-        $aiService = $this->createMock(AiService::class);
+        $aiService = $this->createAiServiceStreamMock();
         $aiService->expects(self::exactly(4))
             ->method('generateStream')
             ->willReturnCallback(function (string $prompt, callable $callback) use (&$capturedPrompts): void {
@@ -1415,7 +1415,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
     public function testBuildPlanArtifactsByAiStreamReportsDetailedStageOnePipelineProgress(): void
     {
         $progressEvents = [];
-        $aiService = $this->createMock(AiService::class);
+        $aiService = $this->createAiServiceStreamMock();
         $aiService->expects(self::exactly(4))
             ->method('generateStream')
             ->willReturnCallback(function (string $prompt, callable $callback): void {
@@ -1497,7 +1497,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
     public function testBuildPlanArtifactsByAiStreamCapsMaxTokensBelowProviderLimit(): void
     {
         $capturedCalls = [];
-        $aiService = $this->createMock(AiService::class);
+        $aiService = $this->createAiServiceStreamMock();
         $aiService->expects(self::exactly(4))
             ->method('generateStream')
             ->willReturnCallback(function (
@@ -1555,7 +1555,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
     public function testBuildPlanArtifactsByAiStreamSupportsStagedThemeAndPageGeneration(): void
     {
         $calls = [];
-        $aiService = $this->createMock(AiService::class);
+        $aiService = $this->createAiServiceStreamMock();
         $aiService->expects(self::exactly(4))
             ->method('generateStream')
             ->willReturnCallback(function (
@@ -1636,7 +1636,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
     public function testBuildPlanArtifactsByAiStreamReusesStageOneCheckpointWithoutRepeatingAiCalls(): void
     {
         $checkpoints = [];
-        $aiService = $this->createMock(AiService::class);
+        $aiService = $this->createAiServiceStreamMock();
         $aiService->expects(self::exactly(4))
             ->method('generateStream')
             ->willReturnCallback(function (string $prompt, callable $callback): void {
@@ -1675,7 +1675,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertSame('theme_design', (string)($checkpoints[1]['step'] ?? ''));
         self::assertSame('page_fanout', (string)($checkpoints[2]['step'] ?? ''));
 
-        $noRepeatAiService = $this->createMock(AiService::class);
+        $noRepeatAiService = $this->createAiServiceStreamMock();
         $noRepeatAiService->expects(self::never())->method('generateStream');
         $resumeService = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService(), $noRepeatAiService);
         $resumedArtifacts = $resumeService->buildPlanArtifactsByAiStream($scope, $websiteProfile, [
@@ -1690,7 +1690,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
     public function testBuildPlanArtifactsByAiStreamUsesFallbackRequirementWhenBriefIsEmpty(): void
     {
         $calls = [];
-        $aiService = $this->createMock(AiService::class);
+        $aiService = $this->createAiServiceStreamMock();
         $aiService->expects(self::exactly(3))
             ->method('generateStream')
             ->willReturnCallback(function (
@@ -2229,7 +2229,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
 
     private function createStreamingAiServiceStub(string $response): AiService
     {
-        $aiService = $this->createMock(AiService::class);
+        $aiService = $this->createAiServiceStreamMock();
         $aiService->method('generateStream')
             ->willReturnCallback(function (string $prompt, callable $callback) use ($response): void {
                 if (\str_contains($prompt, 'Stage-1 REQUIREMENT EXPANSION planner')) {
@@ -2240,6 +2240,14 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             });
 
         return $aiService;
+    }
+
+    private function createAiServiceStreamMock(): AiService
+    {
+        return $this->getMockBuilder(AiService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['generateStream'])
+            ->getMock();
     }
 
     /**
