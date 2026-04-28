@@ -125,28 +125,23 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringNotContainsString('confirmCurrentTaskPlanAndMaybeBuild(currentPlanTriggerButton, currentPlanSelection);', $bindBody);
     }
 
-    public function testPublishStageCanTriggerAiQualityRepairBuild(): void
+    public function testPublishStageStillKeepsPublishControlsAfterRemovingAiQualityRepairEntry(): void
     {
         $layout = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
         self::assertIsString($layout);
-        self::assertStringContainsString('id="pb-ai-rebuild-publish-quality"', $layout);
-        self::assertStringContainsString('data-pb-plan-generation-lock-bypass="1"', $layout);
-        self::assertStringContainsString('AI 重新生成并修复', $layout);
+        self::assertStringNotContainsString('id="pb-ai-rebuild-publish-quality"', $layout);
 
         $visualEditCard = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/stages/sections/visual-edit-card.phtml');
         self::assertIsString($visualEditCard);
-        self::assertStringContainsString('id="pb-ai-rebuild-publish-quality"', $visualEditCard);
-        self::assertStringContainsString('data-pb-plan-generation-lock-bypass="1"', $visualEditCard);
+        self::assertStringNotContainsString('id="pb-ai-rebuild-publish-quality"', $visualEditCard);
 
         $publishCard = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/stages/sections/publish-card.phtml');
         self::assertIsString($publishCard);
-        self::assertStringContainsString('id="pb-ai-rebuild-publish-quality"', $publishCard);
-        self::assertStringContainsString('data-pb-plan-generation-lock-bypass="1"', $publishCard);
+        self::assertStringNotContainsString('id="pb-ai-rebuild-publish-quality"', $publishCard);
         self::assertStringContainsString('$pbAiLatestBuildFailed', $publishCard);
         self::assertStringContainsString('$pbAiPublishDisabled', $publishCard);
 
         $script = $this->workspaceScript();
-        $repairBody = $this->extractFunctionBody($script, 'startPublishStageQualityRepair');
         $bindBody = $this->extractFunctionBody($script, 'bindPublishStageLogic');
         $visualEditBindBody = $this->extractFunctionBody($script, 'bindVisualEditStageLogic');
         $syncBody = $this->extractFunctionBody($script, 'syncPublishRepairButtonDisabledState');
@@ -154,9 +149,6 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $terminalBody = $this->extractFunctionBody($script, 'markBuildOperationTerminalForUi');
         $resetBody = $this->extractFunctionBody($script, 'resetBuildStartUi');
 
-        self::assertStringContainsString('normalizePageTypeListForResumePrompt(state)', $repairBody);
-        self::assertStringContainsString('startConfirmedBuild(triggerBtn || document.getElementById(\'pb-ai-rebuild-publish-quality\'), types, {', $repairBody);
-        self::assertStringContainsString('allowTaskPlanRetry: false', $repairBody);
         self::assertStringContainsString('bindPublishRepairButton();', $bindBody);
         self::assertStringContainsString('bindPublishRepairButton();', $visualEditBindBody);
         $publishRepairBindBody = $this->extractFunctionBody($script, 'bindPublishRepairButton');

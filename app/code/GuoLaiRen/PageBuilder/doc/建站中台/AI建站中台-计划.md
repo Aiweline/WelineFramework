@@ -1081,6 +1081,13 @@ Atomic Task ID:
 - [ ] T36 博客运行时数据契约接入（status=todo, progress=0%, owner=backend+frontend, note=虚拟主题博客页消费 `current_post/blog_posts/current_category/blog_categories/recent_posts/related_posts/pagination/all_tags`，不写死文章数据）
 - [ ] T37 博客预览、链接重写与发布探活（status=todo, progress=0%, owner=qa+backend, note=覆盖列表页、分类页、详情页 slug/category/page 参数与正式 URL 探活）
 
+#### G. AI 建站工作台技能加载能力（Skill Loading Capability）
+
+- [x] T38 AI 建站工作台技能注册表落地（status=done, progress=100%, owner=backend, note=新增 `AiSiteSkillRegistry`，扫描 `app/code/GuoLaiRen/PageBuilder/skills/<code>/SKILL.md`，对接 stage1/stage2 提示词；默认加载 `claude-design`）
+- [x] T39 第一阶段提示词加载技能（status=done, progress=100%, owner=prompt-engineering, note=`buildAiPlanPrompt` 注入 AI BUILDER SKILL CAPABILITY + CLAUDE-DESIGN HARD RULES，与 §14.7 对齐）
+- [x] T40 第二阶段提示词加载技能（status=done, progress=100%, owner=prompt-engineering, note=`buildFrontendDesignSkillPromptGuide` 改走 `AiSiteSkillRegistry::buildStageTwoComponentSkillGuide`，合并 claude-design 与 frontend-design 指引）
+- [x] T41 技能注册表单测（status=done, progress=100%, owner=qa, note=`AiSiteSkillRegistryTest` 5 tests / 24 assertions 通过；覆盖 frontmatter、默认加载列表、stage1/stage2 注入行与未知 code 回退）
+
 ### 12.1A 智能体原子任务队列（按细节执行，新增）
 
 > 本节把 T01~T34 拆成更细的执行任务。智能体执行时优先使用本节任务，不允许只凭 T01/T14 这类大任务直接开工。
@@ -1147,11 +1154,11 @@ Atomic Task ID:
 
 #### F. 通用队列、token、SSE/polling 与测试
 
-- [ ] A46 AI 队列记录 input/output/total tokens（status=todo, owner=backend-queue, covers=§5.4/§13.5, output=token_usage）
+- [x] A46 AI 队列记录 input/output/total tokens（status=done, owner=worker-1, source=code-discovered, evidence=`Http/Sse/QueueDbWriter::recordTokenUsage` + `Service/AiSiteQueueSnapshotService` + `AiSiteAgentSseMarkerTest`，covers=§5.4/§13.5, output=队列 content + token_usage 快照统一沉淀 `input_tokens/output_tokens/total_tokens/token_cost_meta`）
 - [x] A47 队列信息列表展示 token 用量（status=done, owner=worker-2, covers=§5.4, output=token columns, evidence=AiSiteAgentSseMarkerTest queue info token columns）
-- [ ] A48 SSE payload 增加 `token_usage` 与 `progress_kind`（status=todo, owner=sse-runtime, covers=§13.5.2, output=统一事件体）
-- [ ] A49 polling payload 与 SSE payload 对齐（status=todo, owner=backend-api, covers=§13.5, output=同一状态真相源）
-- [ ] A50 `done/error/cancelled` 后关闭 SSE 流（status=todo, owner=sse-runtime, covers=§7.4, output=无连接泄漏）
+- [x] A48 SSE payload 增加 `token_usage` 与 `progress_kind`（status=done, owner=worker-1, evidence=`AiSiteExecutionBlueprintService::emitStageOnePipelineProgress` + `Controller/Backend/AiSiteAgent` plan-progress emitter，`progress_kind` 统一默认 `queue_info`，并携带 `token_usage` 字段；`AiSiteExecutionBlueprintServiceTest` 与 `AiSiteAgentSseMarkerTest` 通过，covers=§13.5.2, output=统一事件体）
+- [x] A49 polling payload 与 SSE payload 对齐（status=done, owner=worker-1, evidence=`AiSiteAgent::decorateWorkspaceStateWithPollingPayload` + `buildWorkspaceSseStatePayload` 共同复用 `buildWorkspaceStatusEnvelope`; `AiSiteAgentSseMarkerTest::testWorkspaceStatusEnvelopeMatchesBetweenPollingAndSsePayload` 对 `job_key/job_type/status/event_id/seq_no/cursor/progress_percent/session_public_id/context_hash/state_fingerprint/token_usage/progress_kind/updated_at` 做同值断言通过，covers=§13.5, output=同一状态真相源）
+- [x] A50 `done/error/cancelled` 后关闭 SSE 流（status=done, owner=worker-1, evidence=`AiSiteAgent::isWorkspaceStreamOperationTerminal` + `handleStreamSse` 终态 `complete()` 收口；新增 `AiSiteAgentSseMarkerTest::testWorkspaceAndOperationSseTerminalPathsCloseStreamContract` 锁定 `done/error/cancelled` 终态识别与 complete 收尾（SseWriter::complete -> close），covers=§7.4, output=终态流收口契约固化）
 - [ ] A51 第一阶段单测：主题规划字段完整（status=todo, owner=qa, covers=A01-A05, output=单测）
 - [ ] A52 第一阶段单测：Header/Footer 后 fanout 页面任务（status=todo, owner=qa, covers=A12-A13, output=队列/服务测试）
 - [ ] A53 第一阶段单测：Markdown 由块排序组合（status=todo, owner=qa, covers=A20-A23, output=装配测试）
@@ -1249,6 +1256,15 @@ Atomic Task ID:
 - [ ] A110 博客模板解析与回退（status=todo, owner=backend+pagebuilder, source=code-discovered, evidence=`view/templates/style/*/layouts/default/blog_*.json` + `components/content/blog-*.phtml`, covers=§1A.0A/§13.4.4, output=当前 style 博客模板缺失时回退 default 或阻断发布并记录缺失清单）
 - [ ] A111 博客运行时数据绑定（status=todo, owner=backend+frontend, source=code-discovered, evidence=`Controller/Frontend/Page::loadBlogData`, covers=§1A.0A/§13.7.4, output=博客模板读取 `blog_posts/current_post/current_category/blog_categories/recent_posts/related_posts/pagination/all_tags`，正式页不落静态样例）
 - [ ] A112 博客链接重写与探活测试（status=todo, owner=qa, source=code-discovered, evidence=`blog_list/blog_category/blog_post preview URL`, covers=§13.7.4/§14.5, output=列表分页、分类 category、详情 slug 在预览与发布 URL 中保留）
+
+#### Q. AI 建站工作台技能加载能力（Skill Loading Capability）
+
+- [x] A113 新增 `AiSiteSkillRegistry`（status=done, owner=worker-1, source=code-discovered, evidence=`app/code/GuoLaiRen/PageBuilder/Service/AI/AiSiteSkillRegistry.php`, covers=T38/§14.6, output=扫描 `skills/<code>/SKILL.md` frontmatter，输出 stage1/stage2 注入行与默认加载列表）
+- [x] A114 默认加载 `claude-design`（status=done, owner=worker-1, source=code-discovered, evidence=`AiSiteSkillRegistry::DEFAULT_SKILL_CODES`, covers=T38/T39/§14.6, output=stage1/stage2 提示词中包含 AI BUILDER SKILL CAPABILITY + CLAUDE-DESIGN HARD RULES）
+- [x] A115 第一阶段 `buildAiPlanPrompt` 注入技能段（status=done, owner=worker-1, source=code-discovered, evidence=`AiSiteExecutionBlueprintService::buildAiPlanPrompt`, covers=T39/§14.6, output=`getSkillRegistry()->buildPromptGuideLines('stage1')`）
+- [x] A116 第二阶段组件任务注入合并指引（status=done, owner=worker-1, source=code-discovered, evidence=`AiSiteVirtualThemePlanService::buildFrontendDesignSkillPromptGuide`, covers=T40/§14.6, output=委托 `AiSiteSkillRegistry::buildStageTwoComponentSkillGuide` 合并 claude-design + frontend-design）
+- [x] A117 技能索引文件就位（status=done, owner=worker-1, source=code-discovered, evidence=`app/code/GuoLaiRen/PageBuilder/skills/_index.md`, covers=T38/§14.6, output=人类可读的技能清单与新增技能流程）
+- [x] A118 技能注册表单测（status=done, owner=worker-1, source=code-discovered, evidence=`app/code/GuoLaiRen/PageBuilder/test/Unit/Service/AI/AiSiteSkillRegistryTest.php`, covers=T41/§14.6, output=5 tests / 24 assertions：覆盖 frontmatter 解析、默认加载列表、stage1 / stage2 注入行内容、未知 code 回退；`vendor/bin/phpunit ...AiSiteSkillRegistryTest.php` 全部通过）
 
 ### 12.1C 任务-细节对齐规则（新增）
 
@@ -1929,12 +1945,47 @@ Atomic Task ID:
 - 每个用例必须产出可定位证据：case id、运行时间、失败截图/日志或关键断言。
 - E2E-13 全链路收官不得替代 E2E-14～E2E-21；它只作为最终组合冒烟。
 
-### 14.6 发布前最终硬门禁（MUST）
+### 14.6 AI 建站工作台技能加载能力（MUST，2026-04-27 新增）
+
+> 目的：把"技能加载能力"从一句口头要求落到提示词与代码层。AI 在第一阶段方案与第二阶段任务方案生成时，必须把 `app/code/GuoLaiRen/PageBuilder/skills/` 下的指定技能视为已装载，并执行其硬约束。默认加载 `claude-design`。
+
+#### 14.6.1 技能注册表（MUST）
+
+- 实现位置：`app/code/GuoLaiRen/PageBuilder/Service/AI/AiSiteSkillRegistry.php`。
+- 技能目录约定：`app/code/GuoLaiRen/PageBuilder/skills/<skill_code>/SKILL.md`，顶部 YAML frontmatter 必须含 `name`、`description`。
+- 默认加载列表写在 `AiSiteSkillRegistry::DEFAULT_SKILL_CODES`，当前固定为 `['claude-design']`；新增默认技能必须同步更新本节与 `skills/_index.md`。
+- 注册表本身只输出"提示词注入行"，不直接调用 AI。
+
+#### 14.6.2 注入点（MUST）
+
+- 第一阶段：`AiSiteExecutionBlueprintService::buildAiPlanPrompt` 在 `CONCRETENESS CONTRACT` 之后、`STAGE-1 SHARED THEME PLAN CONTRACT` 之前调用 `AiSiteSkillRegistry::buildPromptGuideLines('stage1')`。
+- 第二阶段：`AiSiteVirtualThemePlanService::buildFrontendDesignSkillPromptGuide` 委托 `AiSiteSkillRegistry::buildStageTwoComponentSkillGuide($batch)`，把默认加载技能段与既有 `frontend-design` 兼容指引合并输出。
+- 注入内容必须满足：
+  - `AI BUILDER SKILL CAPABILITY` 段说明本平台具备技能加载能力，并列出当前默认加载的技能（含本地路径与压缩描述）；
+  - `CLAUDE-DESIGN HARD RULES` 段输出反 AI-slop / craft / 内容真实性 / 视觉系统硬约束（与 `claude-design/SKILL.md` 与 `references/design-principles.md` 对齐）；
+  - 第二阶段额外保留旧的 `Frontend design skill reference` 段，兼容历史 `style_plan/responsive_contract/accessibility_contract` 行为。
+
+#### 14.6.3 不变式（MUST）
+
+- AI 输出绝不允许在已声明加载 `claude-design` 的前提下出现 `claude-design` 明令禁止的 anti-slop 模式（gradient orb、SVG 假产品图、三栏特性网格作为默认结构、Inter/Roboto 默认字体等）。
+- 新增技能必须遵循 `skills/_index.md` 流程：写好 frontmatter -> 决定是否进入默认加载 -> 更新本节 -> 跑 `php -l` 与 `AiSiteSkillRegistry` 单测。
+- `AiSiteSkillRegistry` 只读 frontmatter 与精炼硬约束；禁止把整份 SKILL.md 注入提示词，避免上下文膨胀。
+- 技能加载能力是工作台层契约，不影响 stage3 模板兼容层；stage3 仍由 PageBuilder 模板/blog 模板兼容机制承担。
+
+#### 14.6.4 验收（MUST）
+
+- `AiSiteSkillRegistry::listAvailableSkills()` 必须能在 `app/code/GuoLaiRen/PageBuilder/skills/claude-design` 存在时返回该 code，且 `name`、`description` 非空。
+- `AiSiteSkillRegistry::buildPromptGuideLines('stage1')` 输出文本必须同时出现 `AI BUILDER SKILL CAPABILITY` 与 `CLAUDE-DESIGN HARD RULES` 两段标识，且包含 `claude-design` code 与本地路径。
+- `buildAiPlanPrompt` 输出（log/单测断言）必须包含上述两个标识；`buildFrontendDesignSkillPromptGuide` 输出必须同时包含 claude-design 段与 `Frontend design skill reference` 段。
+- 默认加载列表变更需同步：本节、`skills/_index.md`、`AiSiteSkillRegistry::DEFAULT_SKILL_CODES`；任一处缺失视为不达标。
+
+### 14.7 发布前最终硬门禁（MUST，原 14.6）
 
 发布或标记本计划完成前必须同时满足：
 
 - §1A 所有 MUST 无回归；
 - §14.1 技能命中清单中的相关技能均已在实现/测试/文档中有落点；
+- §14.6 技能加载能力落地：默认加载技能与提示词注入段在 stage1/stage2 全链路可见，`AiSiteSkillRegistry` 单测通过；
 - 所有 `Txx` 任务状态为 `done` 或明确 `cancelled`，不得停留在无解释的 `todo/in_progress/failed/stale`；
 - 所有 `done` 任务都有 `smoke/e2e evidence`；
 - `stage1/stage2/virtual_theme` 三段队列均支持断点恢复；
