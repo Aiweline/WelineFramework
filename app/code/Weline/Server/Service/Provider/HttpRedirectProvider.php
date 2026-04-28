@@ -7,6 +7,7 @@ use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
+use Weline\Server\Service\LocalDomainPolicy;
 
 /**
  * HTTP 重定向服务提供者
@@ -77,7 +78,7 @@ class HttpRedirectProvider extends AbstractServiceProvider
         $httpsPort = $context->mainPort;
 
         $arguments = [
-            ($context->envConfig['wls'] ?? [])['host'] ?? '127.0.0.1',
+            $this->resolveBindHost($context),
             (string) $httpPort,
             (string) $httpsPort,
             $context->instanceName,
@@ -118,5 +119,32 @@ class HttpRedirectProvider extends AbstractServiceProvider
         }
 
         return $context->mainPort === 443 ? 80 : 0;
+    }
+
+    private function resolveBindHost(ServiceContext $context): string
+    {
+        $wlsConfig = \is_array($context->envConfig['wls'] ?? null) ? $context->envConfig['wls'] : [];
+        $redirectConfig = \is_array($wlsConfig['redirect'] ?? null) ? $wlsConfig['redirect'] : [];
+
+        foreach ([
+            $redirectConfig['bind_host'] ?? null,
+            $wlsConfig['bind_host'] ?? null,
+        ] as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        $host = \trim((string)$context->host);
+        if ($host === '' || $host === 'localhost' || LocalDomainPolicy::isManagedLocalDomain($host)) {
+            return '127.0.0.1';
+        }
+
+        if (\filter_var($host, FILTER_VALIDATE_IP) !== false) {
+            return $host;
+        }
+
+        return '0.0.0.0';
     }
 }
