@@ -119,17 +119,80 @@ $context = \stream_context_create([
     ]),
 ]);
 
-$socket = @\stream_socket_server(
-    "tcp://{$host}:{$httpPort}",
-    $errno,
-    $errstr,
-    STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
-    $context
-);
+if (!\function_exists('wlsRedirectIsIpBindAddress')) {
+    function wlsRedirectIsIpBindAddress(string $host): bool
+    {
+        $host = \trim($host);
+        if ($host === '' || $host === '0.0.0.0' || $host === '::' || $host === '*') {
+            return true;
+        }
+
+        return \filter_var($host, FILTER_VALIDATE_IP) !== false;
+    }
+}
+
+if (!\function_exists('wlsRedirectBindListenSocket')) {
+    /**
+     * @return array{socket:resource|false,host:string,errno:int,errstr:string,fallback_used:bool}
+     */
+    function wlsRedirectBindListenSocket(string $host, int $port, $context): array
+    {
+        $host = \trim($host);
+        if ($host === '' || $host === '*') {
+            $host = '127.0.0.1';
+        }
+
+        $errno = 0;
+        $errstr = '';
+        $socket = @\stream_socket_server(
+            "tcp://{$host}:{$port}",
+            $errno,
+            $errstr,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+            $context
+        );
+        if ($socket || wlsRedirectIsIpBindAddress($host)) {
+            return [
+                'socket' => $socket,
+                'host' => $host,
+                'errno' => (int)$errno,
+                'errstr' => (string)$errstr,
+                'fallback_used' => false,
+            ];
+        }
+
+        $fallbackHost = '127.0.0.1';
+        $fallbackErrno = 0;
+        $fallbackErrstr = '';
+        $fallbackSocket = @\stream_socket_server(
+            "tcp://{$fallbackHost}:{$port}",
+            $fallbackErrno,
+            $fallbackErrstr,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+            $context
+        );
+
+        return [
+            'socket' => $fallbackSocket,
+            'host' => $fallbackSocket ? $fallbackHost : $host,
+            'errno' => $fallbackSocket ? (int)$errno : (int)$fallbackErrno,
+            'errstr' => $fallbackSocket ? (string)$errstr : ((string)$errstr . '; fallback 127.0.0.1 failed: ' . (string)$fallbackErrstr),
+            'fallback_used' => (bool)$fallbackSocket,
+        ];
+    }
+}
+
+$bindResult = wlsRedirectBindListenSocket((string)$host, $httpPort, $context);
+$socket = $bindResult['socket'];
 
 if (!$socket) {
-    WlsLogger::error_("Failed to bind {$host}:{$httpPort}: {$errstr}");
+    WlsLogger::error_("Failed to bind {$host}:{$httpPort}: {$bindResult['errstr']}");
     exit(1);
+}
+$requestedHost = (string)$host;
+$host = (string)$bindResult['host'];
+if ($bindResult['fallback_used']) {
+    WlsLogger::warning_("Bind fallback: {$requestedHost}:{$httpPort} failed, listening on {$host}:{$httpPort}");
 }
 
 \stream_set_blocking($socket, false);

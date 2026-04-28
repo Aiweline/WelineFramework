@@ -112,6 +112,15 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertSame('custom.example.test', (string)($config['host'] ?? ''));
     }
 
+    public function testManagedLocalHostListenAddressUsesLoopback(): void
+    {
+        $start = $this->createProbe();
+
+        self::assertSame('127.0.0.1', $start->resolveListenHost('p11005ce4.weline.test'));
+        self::assertSame('127.0.0.1', $start->resolveListenHost('demo.weline.localhost'));
+        self::assertSame('0.0.0.0', $start->resolveListenHost('0.0.0.0'));
+    }
+
     public function testEnvCustomHostOverridesSavedLegacyHost(): void
     {
         $start = $this->createProbe(
@@ -143,10 +152,23 @@ final class StartCommandArgsSolidificationTest extends TestCase
         $info = $manager->savedInstances[0]['info'];
         self::assertSame('unit-solidify', $info['name'] ?? null);
         self::assertSame('127.0.0.1', $info['host'] ?? null);
+        self::assertSame('127.0.0.1', $info['public_host'] ?? null);
         self::assertSame(9443, $info['port'] ?? null);
         self::assertSame(2, $info['count'] ?? null);
         self::assertSame(19443, $info['worker_port'] ?? null);
         self::assertSame(80, $info['http_redirect_port'] ?? null);
+    }
+
+    public function testSaveInstanceInfoKeepsPublicHostSeparateFromListenHost(): void
+    {
+        $manager = new StartInstanceManagerProbe();
+        $start = new StartInstanceInfoProbe($manager);
+
+        $start->persistInstanceInfoWithPublicHost('unit-public-host');
+
+        $info = $manager->savedInstances[0]['info'];
+        self::assertSame('127.0.0.1', $info['host'] ?? null);
+        self::assertSame('p11005ce4.weline.test', $info['public_host'] ?? null);
     }
 
     public function testBaseStartExposesInstanceManagerForRuntimePersistence(): void
@@ -176,6 +198,11 @@ final class StartConfigProbe extends Start
     public function resolveConfig(string $instanceName, array $args): array
     {
         return $this->getServerConfig($instanceName, $args);
+    }
+
+    public function resolveListenHost(string $host): string
+    {
+        return $this->resolveServerListenHost($host);
     }
 
     protected function getDefaultHost(): string
@@ -304,6 +331,33 @@ final class StartInstanceInfoProbe extends Start
             [],
             ['frontend_process_mode' => true],
             '512M'
+        );
+    }
+
+    public function persistInstanceInfoWithPublicHost(string $instanceName): void
+    {
+        $this->saveInstanceInfo(
+            $instanceName,
+            '127.0.0.1',
+            9443,
+            2,
+            true,
+            true,
+            '/tmp/cert.pem',
+            '/tmp/key.pem',
+            [],
+            true,
+            19443,
+            80,
+            false,
+            false,
+            false,
+            19443,
+            [],
+            [],
+            '512M',
+            '',
+            'p11005ce4.weline.test'
         );
     }
 

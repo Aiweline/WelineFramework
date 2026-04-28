@@ -53,6 +53,9 @@ final class AiSiteSkillRegistryTest extends TestCase
         );
         self::assertStringContainsString('Skill loading protocol', $payload);
         self::assertStringContainsString('aggressive multi-hue gradient backgrounds', $payload);
+        self::assertStringContainsString('Palette role discipline', $payload);
+        self::assertStringContainsString('Contrast gate', $payload);
+        self::assertStringContainsString('Code craft gate', $payload);
     }
 
     public function testStageTwoComponentSkillGuideMergesClaudeDesignAndFrontendDesign(): void
@@ -69,6 +72,8 @@ final class AiSiteSkillRegistryTest extends TestCase
             $sharedPayload
         );
         self::assertStringContainsString('shared theme component such as header/footer', $sharedPayload);
+        self::assertStringContainsString('exact contrast pairings', $sharedPayload);
+        self::assertStringContainsString('neighboring-section contrast strategy', $sharedPayload);
 
         $pageLines = $registry->buildStageTwoComponentSkillGuide(['type' => 'page']);
         $pagePayload = \implode("\n", $pageLines);
