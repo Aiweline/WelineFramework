@@ -508,8 +508,32 @@ SQL);
 CREATE INDEX IF NOT EXISTS idx_pb_ai_site_artifact_session_stage
 ON {$table} ("{$sessionId}", "{$stageCode}")
 SQL);
+        $this->syncArtifactPrimaryKeySequence($pdo, $table, $id);
 
         $this->artifactTableEnsured = true;
+    }
+
+    private function syncArtifactPrimaryKeySequence(\PDO $pdo, string $table, string $idField): void
+    {
+        try {
+            $sequenceNameStmt = $pdo->query(
+                "SELECT pg_get_serial_sequence('{$table}', '{$idField}') AS seq_name"
+            );
+            if (!$sequenceNameStmt instanceof \PDOStatement) {
+                return;
+            }
+            $sequenceName = (string)$sequenceNameStmt->fetchColumn();
+            if (\trim($sequenceName) === '') {
+                return;
+            }
+
+            // Keep sequence in sync with existing rows to avoid duplicate PK on insert.
+            $pdo->exec(
+                "SELECT setval('{$sequenceName}', COALESCE((SELECT MAX(\"{$idField}\") FROM {$table}), 0), true)"
+            );
+        } catch (\Throwable) {
+            // Ignore sequence sync failures and keep runtime path non-fatal.
+        }
     }
 
     private function getPgsqlPdo(): ?\PDO
