@@ -611,6 +611,196 @@
         return false;
     }
 
+    function countRetryableAiFailureBucket(bucket) {
+        if (!bucket) {
+            return 0;
+        }
+        if (Array.isArray(bucket)) {
+            return bucket.length;
+        }
+        if (typeof bucket !== 'object') {
+            return 0;
+        }
+        if (Object.prototype.hasOwnProperty.call(bucket, 'count')) {
+            return parseInt(String(bucket.count || 0), 10) || 0;
+        }
+        if (bucket.items) {
+            if (Array.isArray(bucket.items)) {
+                return bucket.items.length;
+            }
+            if (typeof bucket.items === 'object') {
+                return Object.keys(bucket.items).length;
+            }
+        }
+        var total = 0;
+        Object.keys(bucket).forEach(function (key) {
+            if (key === 'updated_at') {
+                return;
+            }
+            total += countRetryableAiFailureBucket(bucket[key]);
+        });
+        return total;
+    }
+
+    function getRetryableAiFailureCount(workspaceState, operation) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        var summary = state.retryable_ai_failure_summary && typeof state.retryable_ai_failure_summary === 'object'
+            ? state.retryable_ai_failure_summary
+            : {};
+        var normalizedOperation = String(operation || '').trim();
+        var candidates = [];
+        if (normalizedOperation !== '') {
+            var summaryOps = summary.operations && typeof summary.operations === 'object' ? summary.operations : {};
+            candidates.push(parseInt(String(summaryOps[normalizedOperation] || 0), 10) || 0);
+            var active = state.active_operation && typeof state.active_operation === 'object' ? state.active_operation : {};
+            if (String(active.operation || '').trim() === normalizedOperation) {
+                candidates.push(parseInt(String(state.retryable_ai_failure_count || 0), 10) || 0);
+            }
+            [state.retryable_ai_failures, scope.retryable_ai_failures].forEach(function (ledger) {
+                if (!ledger || typeof ledger !== 'object') {
+                    return;
+                }
+                if (Array.isArray(ledger)) {
+                    var matched = ledger.filter(function (item) {
+                        return item && typeof item === 'object' && String(item.operation || '').trim() === normalizedOperation;
+                    }).length;
+                    candidates.push(matched > 0 ? matched : ledger.length);
+                    return;
+                }
+                if (ledger.operation === normalizedOperation) {
+                    candidates.push(countRetryableAiFailureBucket(ledger));
+                }
+                if (ledger[normalizedOperation]) {
+                    candidates.push(countRetryableAiFailureBucket(ledger[normalizedOperation]));
+                }
+            });
+        } else {
+            candidates.push(parseInt(String(state.retryable_ai_failure_count || 0), 10) || 0);
+            candidates.push(parseInt(String(scope.retryable_ai_failure_count || 0), 10) || 0);
+            candidates.push(parseInt(String(summary.count || 0), 10) || 0);
+            candidates.push(countRetryableAiFailureBucket(state.retryable_ai_failures));
+            candidates.push(countRetryableAiFailureBucket(scope.retryable_ai_failures));
+        }
+        return Math.max.apply(Math, candidates.concat([0]));
+    }
+
+    function hasRetryableAiFailures(workspaceState, operation) {
+        return getRetryableAiFailureCount(workspaceState, operation) > 0;
+    }
+
+    function getRetryableAiFailureMessage(workspaceState, operation) {
+        if (hasAnyRunningQueueForUi()) {
+            return (typeof messages === 'object' && messages.retryableAiQueueRunning)
+                ? String(messages.retryableAiQueueRunning || '')
+                : '当前队列仍在运行，等待完成后再重试';
+        }
+        var count = getRetryableAiFailureCount(workspaceState, operation);
+        if (count > 0) {
+            return (typeof messages === 'object' && messages.retryableAiFailuresPendingWithCount)
+                ? String(messages.retryableAiFailuresPendingWithCount || '').replace('%{count}', String(count))
+                : ('当前仍有 ' + count + ' 个 AI 生成失败项，请先点击“重试失败项”。');
+        }
+        return (typeof messages === 'object' && messages.retryableAiFailuresPending)
+            ? String(messages.retryableAiFailuresPending || '')
+            : '当前仍有 AI 生成失败项，请先点击“重试失败项”。';
+    }
+
+    function guardRetryableAiFailuresBeforeProgress(operation) {
+        var state = getLatestWorkspaceStateForQueuePrompt();
+        if (!hasRetryableAiFailures(state, operation)) {
+            return true;
+        }
+        toast('warning', getRetryableAiFailureMessage(state, operation));
+        syncRetryableAiFailureActionGuards(state);
+        return false;
+    }
+
+    function setRetryableGuardedControlState(el, disabled, message) {
+        if (!el) {
+            return;
+        }
+        if (disabled) {
+            if (!el.dataset.pbRetryableAiGuarded) {
+                el.dataset.pbRetryableAiPrevDisabled = el.disabled ? '1' : '0';
+                el.dataset.pbRetryableAiPrevAriaDisabled = el.hasAttribute('aria-disabled')
+                    ? String(el.getAttribute('aria-disabled') || '')
+                    : '__none__';
+                el.dataset.pbRetryableAiPrevTitle = el.hasAttribute('title')
+                    ? String(el.getAttribute('title') || '')
+                    : '__none__';
+            }
+            el.dataset.pbRetryableAiGuarded = '1';
+            el.disabled = true;
+            el.setAttribute('aria-disabled', 'true');
+            el.setAttribute('title', message);
+            return;
+        }
+        if (el.dataset.pbRetryableAiGuarded === '1') {
+            el.disabled = el.dataset.pbRetryableAiPrevDisabled === '1';
+            if (el.dataset.pbRetryableAiPrevAriaDisabled === '__none__') {
+                el.removeAttribute('aria-disabled');
+            } else {
+                el.setAttribute('aria-disabled', el.dataset.pbRetryableAiPrevAriaDisabled || 'false');
+            }
+            if (el.dataset.pbRetryableAiPrevTitle === '__none__') {
+                el.removeAttribute('title');
+            } else {
+                el.setAttribute('title', el.dataset.pbRetryableAiPrevTitle || '');
+            }
+            delete el.dataset.pbRetryableAiGuarded;
+            delete el.dataset.pbRetryableAiPrevDisabled;
+            delete el.dataset.pbRetryableAiPrevAriaDisabled;
+            delete el.dataset.pbRetryableAiPrevTitle;
+        }
+    }
+
+    function syncRetryableAiFailureActionGuards(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var planBlocked = hasRetryableAiFailures(state, 'plan');
+        var taskPlanBlocked = hasRetryableAiFailures(state, 'task_plan');
+        var buildBlocked = hasRetryableAiFailures(state, 'build') || hasRetryableAiFailures(state, null);
+        setRetryableGuardedControlState(
+            document.getElementById('pb-ai-confirm-plan'),
+            planBlocked,
+            getRetryableAiFailureMessage(state, 'plan')
+        );
+        setRetryableGuardedControlState(
+            document.getElementById('pb-ai-confirm-task-plan'),
+            taskPlanBlocked,
+            getRetryableAiFailureMessage(state, 'task_plan')
+        );
+        setRetryableGuardedControlState(
+            document.getElementById('pb-ai-start-build-site'),
+            planBlocked || taskPlanBlocked,
+            getRetryableAiFailureMessage(state, null)
+        );
+        setRetryableGuardedControlState(
+            document.getElementById('pb-ai-start-publish'),
+            buildBlocked,
+            getRetryableAiFailureMessage(state, 'build')
+        );
+        setRetryableGuardedControlState(
+            document.getElementById('pb-ai-go-publish-stage'),
+            buildBlocked,
+            getRetryableAiFailureMessage(state, 'build')
+        );
+        setRetryableGuardedControlState(
+            document.getElementById('pb-ai-run-publish-check'),
+            buildBlocked,
+            getRetryableAiFailureMessage(state, 'build')
+        );
+        setRetryableGuardedControlState(
+            document.getElementById('pb-ai-publish-checklist-confirm'),
+            buildBlocked,
+            getRetryableAiFailureMessage(state, 'build')
+        );
+    }
+
     function hasBuildQueueRunningForUi(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object'
             ? workspaceState
@@ -676,9 +866,17 @@
     function applyRunVirtualThemeButtonsDisabledState() {
         var domainLocked = !isTargetDomainRequiredForPlanActionSatisfied();
         var queueLocked = isPhaseOneQueueUnfinished();
+        var retryableLocked = hasRetryableAiFailures(null, 'plan') || hasRetryableAiFailures(null, 'task_plan');
         getRunVirtualThemeButtons().forEach(function (b) {
-            b.disabled = planGenerationActionLockActive || globalRunVirtualThemeDisabled || domainLocked || queueLocked;
+            b.disabled = planGenerationActionLockActive || globalRunVirtualThemeDisabled || domainLocked || queueLocked || retryableLocked;
             b.setAttribute('aria-disabled', b.disabled ? 'true' : 'false');
+            if (retryableLocked) {
+                b.setAttribute('title', getRetryableAiFailureMessage(null, null));
+                b.dataset.pbRetryableAiRunTitle = '1';
+            } else if (b.dataset.pbRetryableAiRunTitle === '1') {
+                b.removeAttribute('title');
+                delete b.dataset.pbRetryableAiRunTitle;
+            }
         });
         document.querySelectorAll('[data-pb-gate-phase-one="1"]').forEach(function (b) {
             var locked = planGenerationActionLockActive || globalRunVirtualThemeDisabled || !lastPhaseOnePlanPresent;
@@ -950,6 +1148,7 @@
             // 忽略：仅用于队列面板复用最近工作区状态。
         }
         // 用后端/持久化返回的状态填充工作区：页面、方案、任务计划、SSE 地址与按钮状态等。
+        syncRetryableAiFailureActionGuards(workspaceState);
         if (workspaceState.task_plan_stage_entry && typeof workspaceState.task_plan_stage_entry === 'object') {
             taskPlanStageEntryDecision = workspaceState.task_plan_stage_entry;
         }
@@ -1335,7 +1534,10 @@
         if (!confirmBtn) {
             return;
         }
-        confirmBtn.disabled = planGenerationActionLockActive || !hasCurrentPhaseOnePlanDraft() || isPhaseOneQueueUnfinished();
+        confirmBtn.disabled = planGenerationActionLockActive
+            || !hasCurrentPhaseOnePlanDraft()
+            || isPhaseOneQueueUnfinished()
+            || hasRetryableAiFailures(getLatestWorkspaceStateForQueuePrompt(), 'plan');
     }
 
     function syncPlanRebuildButtonVisibility() {
@@ -1569,6 +1771,9 @@
         blockSseRefineAwaitingConfirm: <?= \json_encode((string)__('区块微调等待确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseRebuildAwaitingConfirm: <?= \json_encode((string)__('区块重建等待确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         buildQueueBusyActionBlocked: <?= \json_encode((string)__('构建队列正在执行，请等待完成或失败后再操作。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiQueueRunning: <?= \json_encode((string)__('当前队列仍在运行，等待完成后再重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiFailuresPending: <?= \json_encode((string)__('当前仍有 AI 生成失败项，请先点击“重试失败项”。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiFailuresPendingWithCount: <?= \json_encode((string)__('当前仍有 %{count} 个 AI 生成失败项，请先点击“重试失败项”。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editUnavailable: <?= \json_encode((string)__('当前区块暂时无法打开字段编辑弹窗。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editSaved: <?= \json_encode((string)__('区块字段已更新，已刷新当前块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseDoneConfirm: <?= \json_encode((string)__('区块生成已完成，但未返回可立即刷新的区块结果。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -3455,7 +3660,8 @@
     };
     workspaceApi.retryPhaseOnePlanGeneration = function (options) {
         var opts = options && typeof options === 'object' ? options : {};
-        if (planStartRequestPending || planSseRunning) {
+        if (planStartRequestPending || planSseRunning || hasAnyRunningQueueForUi()) {
+            toast('warning', getRetryableAiFailureMessage(null, 'plan'));
             return false;
         }
         var selectedTypes = Array.isArray(opts.selectedTypes) && opts.selectedTypes.length > 0
@@ -3471,7 +3677,8 @@
 
     workspaceApi.retryPhaseTwoTaskPlanGeneration = function (options) {
         var opts = options && typeof options === 'object' ? options : {};
-        if (taskPlanStartRequestInFlight || taskPlanSseRunning) {
+        if (taskPlanStartRequestInFlight || taskPlanSseRunning || hasAnyRunningQueueForUi()) {
+            toast('warning', getRetryableAiFailureMessage(null, 'task_plan'));
             return false;
         }
         var selectedTypes = Array.isArray(opts.selectedTypes) && opts.selectedTypes.length > 0
@@ -10610,7 +10817,7 @@
         }
         var shouldShow = !!visible;
         retryBtn.classList.toggle('d-none', !shouldShow);
-        retryBtn.disabled = planGenerationActionLockActive || !shouldShow || planStartRequestPending || planSseRunning;
+        retryBtn.disabled = planGenerationActionLockActive || !shouldShow || planStartRequestPending || planSseRunning || hasAnyRunningQueueForUi();
     }
 
     function hidePlanGenerationModal(options) {
@@ -11388,6 +11595,7 @@
         if (jsonTruthyFlag(state.latest_build_failed)
             || jsonTruthyFlag(state.publish_blocked_by_latest_ai_failure)
             || jsonTruthyFlag(existingFailure.blocked)
+            || hasRetryableAiFailures(state, 'build')
         ) {
             return true;
         }
@@ -11407,6 +11615,7 @@
         var state = getWorkspaceStateForPublishGate(workspaceState);
         if (hasPublishBlockingLatestBuildFailureFromWorkspaceState(state)
             || hasPublishBlockingAiOperationRunningFromWorkspaceState(state)
+            || hasRetryableAiFailures(state, null)
         ) {
             return false;
         }
@@ -11426,11 +11635,14 @@
         }
         var blockedByFailure = hasPublishBlockingLatestBuildFailureFromWorkspaceState(state);
         var blockedByRunning = hasPublishBlockingAiOperationRunningFromWorkspaceState(state);
-        var disabled = blockedByFailure || blockedByRunning || !canEnterPublishStageFromWorkspaceState(state);
+        var blockedByRetryable = hasRetryableAiFailures(state, null);
+        var disabled = blockedByFailure || blockedByRunning || blockedByRetryable || !canEnterPublishStageFromWorkspaceState(state);
         publishBtn.disabled = disabled;
         if (disabled) {
             publishBtn.setAttribute('aria-disabled', 'true');
-            if (blockedByFailure || blockedByRunning) {
+            if (blockedByRetryable) {
+                publishBtn.setAttribute('title', getRetryableAiFailureMessage(state, 'build'));
+            } else if (blockedByFailure || blockedByRunning) {
                 publishBtn.setAttribute('title', String(messages.publishBlockedLatestBuildFailure || ''));
             }
         } else {
@@ -11466,21 +11678,22 @@
         var activeOperation = String(active.operation || '').toLowerCase();
         var activeStatus = String(active.status || '').toLowerCase();
         var blockedByFailure = hasPublishBlockingLatestBuildFailureFromWorkspaceState(state);
+        var blockedByRetryable = hasRetryableAiFailures(state, null);
         var building = workspaceStatus === 'building'
             || hasPublishBlockingAiOperationRunningFromWorkspaceState(state)
             || (isPublishBlockingOperationName(activeOperation) && isPublishRunningStatus(activeStatus));
         var published = publishStatus === 'published' || workspaceStatus === 'published';
-        var ready = canEnterPublishStageFromWorkspaceState(state) && !building && !blockedByFailure;
+        var ready = canEnterPublishStageFromWorkspaceState(state) && !building && !blockedByFailure && !blockedByRetryable;
         var badgeClass = 'badge bg-secondary';
         var badgeText = messages.publishStageEntryPendingBadge || '';
         var titleText = messages.publishStageEntryPendingTitle || '';
         var hintText = messages.publishStageEntryPendingHint || '';
 
-        if (blockedByFailure) {
+        if (blockedByFailure || blockedByRetryable) {
             badgeClass = 'badge bg-danger';
             badgeText = messages.publishStageEntryFailedBadge || '';
             titleText = messages.publishStageEntryFailedTitle || '';
-            hintText = messages.publishStageEntryFailedHint || '';
+            hintText = blockedByRetryable ? getRetryableAiFailureMessage(state, 'build') : (messages.publishStageEntryFailedHint || '');
         } else if (published) {
             badgeClass = 'badge bg-success';
             badgeText = messages.publishStageEntryPublishedBadge || '';
@@ -11516,7 +11729,9 @@
         btn.disabled = !ready;
         if (btn.disabled) {
             btn.setAttribute('aria-disabled', 'true');
-            if (blockedByFailure || building) {
+            if (blockedByRetryable) {
+                btn.setAttribute('title', getRetryableAiFailureMessage(state, 'build'));
+            } else if (blockedByFailure || building) {
                 btn.setAttribute('title', String(messages.publishBlockedLatestBuildFailure || ''));
             } else {
                 btn.removeAttribute('title');
@@ -12480,10 +12695,16 @@
             progressBar.style.width = String(Math.max(0, Math.min(100, percent || 0))) + '%';
         }
         if (confirmBtn) {
-            confirmBtn.disabled = isThemeBuildGenerationRunning() || hasAnyRunningQueueForUi() || !enableConfirm;
+            confirmBtn.disabled = isThemeBuildGenerationRunning()
+                || hasAnyRunningQueueForUi()
+                || hasRetryableAiFailures(null, 'task_plan')
+                || !enableConfirm;
         }
         if (buildBtn) {
-            buildBtn.disabled = isBuildActionLocked() || !taskPlanConfirmedState;
+            buildBtn.disabled = isBuildActionLocked()
+                || hasRetryableAiFailures(null, 'plan')
+                || hasRetryableAiFailures(null, 'task_plan')
+                || !taskPlanConfirmedState;
         }
         syncTaskPlanRegenerateButtonVisibility();
         applyTaskPlanEditingLockFromActiveOperation();
@@ -12494,7 +12715,10 @@
         if (!buildBtn) {
             return;
         }
-        buildBtn.disabled = isBuildActionLocked() || !taskPlanConfirmedState;
+        buildBtn.disabled = isBuildActionLocked()
+            || hasRetryableAiFailures(null, 'plan')
+            || hasRetryableAiFailures(null, 'task_plan')
+            || !taskPlanConfirmedState;
     }
 
     function hideTaskPlanGenerationModal() {
@@ -13046,6 +13270,9 @@
         var opts = options && typeof options === 'object' ? options : {};
         var shouldStartBuild = opts.startBuild !== false;
         var confirmBtn = document.getElementById('pb-ai-confirm-task-plan');
+        if (!guardRetryableAiFailuresBeforeProgress('task_plan')) {
+            return Promise.resolve(false);
+        }
         return confirmTaskPlanMutationRiskIfNeeded().then(function (mutationConfirmed) {
             if (!mutationConfirmed) {
                 toast('info', messages.resumeDeferred);
@@ -13089,6 +13316,10 @@
         var opts = options && typeof options === 'object' ? options : {};
         var normalizedTypes = ensureRequiredPageTypeSelected(selectedTypes);
         var canUseTaskPlanFlow = !!(startTaskPlanUrl && confirmTaskPlanUrl);
+        if (hasRetryableAiFailures(null, 'plan') || hasRetryableAiFailures(null, 'task_plan')) {
+            guardRetryableAiFailuresBeforeProgress(null);
+            return;
+        }
         if (!canUseTaskPlanFlow) {
             startConfirmedBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes, opts);
             return;
@@ -13138,6 +13369,9 @@
     function confirmCurrentPlanAndMaybeBuild() {
         if (!confirmPlanUrl) {
             toast('error', messages.planStartUnavailable);
+            return;
+        }
+        if (!guardRetryableAiFailuresBeforeProgress('plan')) {
             return;
         }
         persistStageOneInlineEdits(true).then(function (patched) {
@@ -13215,7 +13449,8 @@
         if (retryPlanBtn && retryPlanBtn.dataset.pbBound !== '1') {
             retryPlanBtn.dataset.pbBound = '1';
             retryPlanBtn.addEventListener('click', function () {
-                if (planStartRequestPending || planSseRunning) {
+                if (planStartRequestPending || planSseRunning || hasAnyRunningQueueForUi()) {
+                    toast('warning', getRetryableAiFailureMessage(null, 'plan'));
                     return;
                 }
                 var selectedTypes = Array.isArray(currentPlanSelection) && currentPlanSelection.length > 0
@@ -13248,6 +13483,10 @@
         if (startBuildSiteBtn && startBuildSiteBtn.dataset.pbBound !== '1') {
             startBuildSiteBtn.dataset.pbBound = '1';
             startBuildSiteBtn.addEventListener('click', function () {
+                if (!guardRetryableAiFailuresBeforeProgress(null)) {
+                    syncTaskPlanBuildButtonState();
+                    return;
+                }
                 if (isBuildActionLocked(latestWorkspaceState || initialWorkspaceState || {})) {
                     toast('warning', messages.buildQueueBusyActionBlocked || messages.networkError);
                     syncTaskPlanBuildButtonState();
@@ -13274,6 +13513,10 @@
         if (publishStageBtn && publishStageBtn.dataset.pbBound !== '1') {
             publishStageBtn.dataset.pbBound = '1';
             publishStageBtn.addEventListener('click', function () {
+                if (!guardRetryableAiFailuresBeforeProgress(null)) {
+                    syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
+                    return;
+                }
                 if (isBuildActionLocked(latestWorkspaceState || initialWorkspaceState || {})) {
                     toast('warning', messages.buildQueueBusyActionBlocked || messages.networkError);
                     syncTaskPlanBuildButtonState();
@@ -13863,6 +14106,9 @@
             toast('error', messages.networkError);
             return Promise.resolve(false);
         }
+        if (!guardRetryableAiFailuresBeforeProgress(null)) {
+            return Promise.resolve(false);
+        }
         var modalOpened = false;
         if (forceOpen) {
             openPublishChecklistModalLoading();
@@ -13916,6 +14162,7 @@
             publishBtn.dataset.pbBound = '1';
             publishBtn.addEventListener('click', function () {
                 if (!publishCheckUrl) { return; }
+                if (!guardRetryableAiFailuresBeforeProgress(null)) { return; }
                 runPublishChecklistFetchAndRender(true);
             });
         }
@@ -13946,6 +14193,7 @@
             confirmBtn.dataset.pbBound = '1';
             confirmBtn.addEventListener('click', function () {
                 if (confirmBtn.disabled) { return; }
+                if (!guardRetryableAiFailuresBeforeProgress(null)) { return; }
                 function proceed() {
                     toast('info', messages.publishCheckConfirmStarting || '');
                     closePublishChecklistModal();
