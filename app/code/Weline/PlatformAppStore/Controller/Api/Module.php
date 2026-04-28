@@ -60,8 +60,7 @@ class Module extends FrontendRestController
             }
 
             // 分页
-            $moduleModel->limit($pageSize);
-            $moduleModel->offset(($page - 1) * $pageSize);
+            $moduleModel->limit($pageSize, \max(0, ($page - 1) * $pageSize));
 
             $modules = $moduleModel->reset('fields')
                 ->fields([

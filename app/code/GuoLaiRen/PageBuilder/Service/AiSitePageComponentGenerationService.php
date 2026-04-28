@@ -6,6 +6,7 @@ namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser;
+use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
 use GuoLaiRen\PageBuilder\Service\AI\CodeFixer;
 use GuoLaiRen\PageBuilder\Service\AI\CodeValidator;
 use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
@@ -52,6 +53,7 @@ class AiSitePageComponentGenerationService
         private readonly ?AiSitePageBlueprintService $pageBlueprintService = null,
         private readonly ?Page $pageModel = null,
         private readonly ?AiSiteScopeCompatibilityService $scopeCompatibilityService = null,
+        private readonly ?AiSiteSkillRegistry $skillRegistry = null,
     ) {
     }
 
@@ -2330,6 +2332,7 @@ class AiSitePageComponentGenerationService
             'footer' => 'extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content',
             default => 'extra_fields, php_variables, css_extra, css_responsive, html_content, js_content',
         };
+        $claudeDesignSkillGuide = $this->buildClaudeDesignSkillPromptAddon('stage3');
         $polishPrompt = "You are a senior frontend design finisher for a PageBuilder component.\n"
             . "Task: improve visual quality while keeping business meaning and JSON schema stable.\n"
             . "Component code: {$componentCode}\n"
@@ -2342,6 +2345,7 @@ class AiSitePageComponentGenerationService
             . "Footer-specific floor: visible grouped links + support/contact path + policy/compliance labels; never hide footer.\n"
             . "If any sentence reads like planning instruction (Use/Populate/Must/Ensure/请/必须/补充), rewrite it to visitor-facing copy.\n"
             . "Return JSON object only with fields: {$expectedFields}\n"
+            . $claudeDesignSkillGuide
             . "Original generation prompt context:\n"
             . $this->clipText($originalPrompt, 2000) . "\n"
             . "Current component JSON:\n"
@@ -3213,6 +3217,7 @@ class AiSitePageComponentGenerationService
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $visualExcellence = $this->buildVisualExcellencePromptAddon('header');
         $skillContract = $this->buildWelineSkillContractPromptAddon();
+        $claudeDesignSkill = $this->buildClaudeDesignSkillPromptAddon('stage3');
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
 
         return $langRule
@@ -3223,6 +3228,7 @@ class AiSitePageComponentGenerationService
             . "Style reference: {$styleCode} ({$styleDirection})\n"
             . $visibleCopyRule
             . $skillContract
+            . $claudeDesignSkill
             . $themeContract
             . $visualExcellence
             . "Selected pages: " . \implode(', ', $pageList) . "\n"
@@ -3258,6 +3264,7 @@ class AiSitePageComponentGenerationService
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $visualExcellence = $this->buildVisualExcellencePromptAddon('footer');
         $skillContract = $this->buildWelineSkillContractPromptAddon();
+        $claudeDesignSkill = $this->buildClaudeDesignSkillPromptAddon('stage3');
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
 
         return $langRule
@@ -3268,6 +3275,7 @@ class AiSitePageComponentGenerationService
             . "Style reference: {$styleCode} ({$styleDirection})\n"
             . $visibleCopyRule
             . $skillContract
+            . $claudeDesignSkill
             . $themeContract
             . $visualExcellence
             . $taskPlanPromptAddon
@@ -3324,6 +3332,7 @@ class AiSitePageComponentGenerationService
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $visualExcellence = $this->buildVisualExcellencePromptAddon('section');
         $skillContract = $this->buildWelineSkillContractPromptAddon();
+        $claudeDesignSkill = $this->buildClaudeDesignSkillPromptAddon('stage3');
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
         $pageLabel = $this->normalizePromptVisibleLabel(
             (string)($blueprint['page_label'] ?? ''),
@@ -3344,6 +3353,7 @@ class AiSitePageComponentGenerationService
             . "Style reference: {$styleCode} ({$styleDirection})\n"
             . $visibleCopyRule
             . $skillContract
+            . $claudeDesignSkill
             . $themeContract
             . $visualExcellence
             . $taskPlanPromptAddon
@@ -3419,6 +3429,11 @@ class AiSitePageComponentGenerationService
             . "- asset-rule: when a visual/image is needed but no verified uploaded asset URL exists, create a theme-colored inline SVG or CSS visual directly. Never render a broken <img>.\n"
             . "- ai-module-development: this is an audited AI scenario result; include only content that follows the provided stage-1 theme context and current stage-2 task contract.\n"
             . "- queue-usage/sse-streaming: long generation is already queued; return the final component JSON only, not progress narration or markdown.\n";
+    }
+
+    private function buildClaudeDesignSkillPromptAddon(string $stage): string
+    {
+        return \implode("\n", $this->getSkillRegistry()->buildPromptGuideLines($stage)) . "\n";
     }
 
     /**
@@ -4895,6 +4910,11 @@ class AiSitePageComponentGenerationService
     private function getCodeValidator(): CodeValidator
     {
         return $this->codeValidator ?? ObjectManager::getInstance(CodeValidator::class);
+    }
+
+    private function getSkillRegistry(): AiSiteSkillRegistry
+    {
+        return $this->skillRegistry ?? ObjectManager::getInstance(AiSiteSkillRegistry::class);
     }
 
     /**
