@@ -3381,6 +3381,111 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame([], $argv);
     }
 
+    public function testDispatcherProviderDoesNotBindToConfiguredAccessHostByDefault(): void
+    {
+        $provider = new DispatcherProvider();
+        $context = new ServiceContext(
+            instanceName: 'dispatcher-bind-host',
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: 'p11005ce4.weline.test',
+            mainPort: 9981,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: false,
+            envConfig: [
+                'wls' => [
+                    'host' => 'p11005ce4.weline.test',
+                ],
+            ],
+            dispatcherEnabled: true,
+            workerCount: 4,
+            workerBasePort: 24313,
+            workerPort: 24313,
+        );
+
+        $command = $provider->buildCommand(1, $context);
+
+        self::assertSame('127.0.0.1', $command->arguments[0] ?? null);
+        self::assertNotContains('p11005ce4.weline.test', $command->arguments);
+    }
+
+    public function testDispatcherProviderHonorsExplicitDispatcherBindHost(): void
+    {
+        $provider = new DispatcherProvider();
+        $context = new ServiceContext(
+            instanceName: 'dispatcher-bind-host',
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: 'p11005ce4.weline.test',
+            mainPort: 9981,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: false,
+            envConfig: [
+                'wls' => [
+                    'host' => 'p11005ce4.weline.test',
+                    'dispatcher' => [
+                        'bind_host' => '127.0.0.1',
+                    ],
+                ],
+            ],
+            dispatcherEnabled: true,
+            workerCount: 4,
+            workerBasePort: 24313,
+            workerPort: 24313,
+        );
+
+        $command = $provider->buildCommand(1, $context);
+
+        self::assertSame('127.0.0.1', $command->arguments[0] ?? null);
+    }
+
+    public function testHttpRedirectProviderDoesNotBindToConfiguredAccessHostByDefault(): void
+    {
+        $provider = new HttpRedirectProvider();
+        $context = new ServiceContext(
+            instanceName: 'redirect-bind-host',
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: 'p11005ce4.weline.test',
+            mainPort: 443,
+            sslEnabled: true,
+            sslCert: '/tmp/cert.pem',
+            sslKey: '/tmp/key.pem',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: false,
+            envConfig: [
+                'wls' => [
+                    'host' => 'p11005ce4.weline.test',
+                ],
+            ],
+            httpRedirectPort: 80,
+            dispatcherEnabled: true,
+            workerCount: 4,
+            workerBasePort: 24313,
+            workerPort: 24313,
+        );
+
+        $command = $provider->buildCommand(1, $context);
+
+        self::assertSame('127.0.0.1', $command->arguments[0] ?? null);
+        self::assertNotContains('p11005ce4.weline.test', $command->arguments);
+    }
+
     public function testBuildWindowsDetachedPhpArgvForPostBootstrapWorkerYieldsToFrontendWindowFlags(): void
     {
         $orchestrator = new ServiceOrchestrator();

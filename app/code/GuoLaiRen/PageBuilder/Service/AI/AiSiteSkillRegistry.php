@@ -147,6 +147,9 @@ final class AiSiteSkillRegistry
         $lines[] = 'CLAUDE-DESIGN HARD RULES (always-on craft + anti-slop discipline):';
         $lines[] = '- Commit to a system before placing pixels: declare type scale, 1-2 background colors, layout rhythm, section-header pattern, and stick to them across the whole plan.';
         $lines[] = '- Ground hi-fi in real context: reuse the resolved theme_design palette/typography/spacing/radius and the user one-line requirement; do not invent a per-page palette or voice.';
+        $lines[] = '- Palette role discipline: assign palette colors to roles (page base, elevated surface, text, muted text, CTA, accent, divider) instead of flooding every block with the same theme color.';
+        $lines[] = '- Contrast gate: dark backgrounds require light readable text and light backgrounds require dark readable text; never emit dark-on-dark or light-on-light text, links, chips, or buttons.';
+        $lines[] = '- Layering gate: adjacent sections must alternate surface weight, depth, divider, illustration, or spacing rhythm so the page has hierarchy instead of one flat color slab.';
         $lines[] = '- Variations should mix conservative + novel; do not converge on a single safe template across pages or blocks.';
         $lines[] = '- Anti-slop (forbidden by default unless the brief explicitly demands them):';
         $lines[] = '  * aggressive multi-hue gradient backgrounds (purple-to-blue, sunset, conic rainbows) used as decoration;';
@@ -162,6 +165,7 @@ final class AiSiteSkillRegistry
         $lines[] = '- No filler content: every section must earn its place. Do not pad with dummy "Why choose us / Our values / Team" sections, fake testimonials, decorative stats, or feature grids invented to fill space.';
         $lines[] = '- Use the user voice: reuse the exact nouns, offers, numbers, and proof points from the user one-line requirement; do not replace them with abstract marketing-speak.';
         $lines[] = '- Visual rhythm: alternate heavy and light sections, give full-bleed imagery breathing room, use 1-2 background colors with intent across a page system.';
+        $lines[] = '- Code craft gate: generated HTML fragments must be structurally balanced, component-scoped, and safe to embed; close every non-void tag before returning JSON.';
         $lines[] = '- Final gut check (silently before output): would this look like it came from a specific designer for this exact brief, or like generic AI? If generic, rebalance toward specificity (bolder color, heavier type weight, bigger hero, fewer decorative sections).';
         $lines[] = '';
 
@@ -196,6 +200,7 @@ final class AiSiteSkillRegistry
         $lines[] = '- Interaction/effects must be executable, not decorative prose: name the target element, default/hover/focus state, transition or transform, and reduced-motion behavior inside style_plan or task_script.';
         $lines[] = '- Customer-intent lock: style_plan must show how the block satisfies the original customer request through UI affordances, CTA wording, motifs, and interaction behavior; do not merely restate the global theme.';
         $lines[] = '- Page-owned blocks must start from page_design_plan before component styling: use its color_layering, section_flow, and interaction_notes to make the page feel intentionally art-directed rather than theme-colored uniformly.';
+        $lines[] = '- Each style_plan must name exact contrast pairings for background/surface/text/CTA states and a neighboring-section contrast strategy; missing contrast pairings are invalid.';
         $lines[] = '- For each returned task, encode the skill outcome in block_task.style_plan and task_script.responsive_contract/accessibility_contract/asset_requirements; do not merely mention this skill in prose.';
         $lines[] = '- style_plan must include concrete typography, color/theme, motion, spatial composition, background/texture/detail, responsive behavior, and accessibility notes when relevant to the component.';
         $lines[] = '- Shared components must keep the same aesthetic system while adapting interaction density: header navigation clarity, footer trust/compliance structure, and mobile ergonomics are mandatory.';
