@@ -31,7 +31,7 @@
 - 系统交付文档
 
 ### 🔌 API参考
-- [API文档](./API/API文档.md) - API接口完整说明
+- [HTTP/API 说明](./API/API.md) - 含认证、Chat/Model 等及 **跨模块 `w_query('ai', ...)`** 说明
 
 ## 🎯 模块简介
 
