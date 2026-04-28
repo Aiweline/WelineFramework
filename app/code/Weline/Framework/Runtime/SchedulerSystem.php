@@ -20,6 +20,44 @@ class SchedulerSystem
     private static $waitDispatcher = null;
 
     /**
+     * WLS 全局调度已激活时，暂停其全局标记与 waitDispatcher，便于
+     * {@see \Weline\Framework\Php\FiberTaskRunner} / {@see \Weline\Ai\Service\AiService::runCooperativeSessionTasks()}
+     * 安装本地 Fiber 等待环与并发池。返回的闭包必须在 finally 中调用以恢复。
+     */
+    public static function suppressGlobalSchedulerMomentarily(): \Closure
+    {
+        if (!self::$schedulerActive) {
+            return static function (): void {};
+        }
+
+        /** @var null|callable(string,array):void $savedDispatcher */
+        $savedDispatcher = self::$waitDispatcher;
+        self::$schedulerActive = false;
+        self::$waitDispatcher = null;
+
+        return static function () use ($savedDispatcher): void {
+            self::$schedulerActive = true;
+            self::$waitDispatcher = $savedDispatcher;
+        };
+    }
+
+    /**
+     * @template T
+     * @param callable():T $callback
+     * @return T
+     */
+    public static function runWithoutGlobalScheduler(callable $callback): mixed
+    {
+        $restore = self::suppressGlobalSchedulerMomentarily();
+
+        try {
+            return $callback();
+        } finally {
+            $restore();
+        }
+    }
+
+    /**
      * 标记调度器已激活（由 WLS Server 模块在 Worker 启动时调用）
      */
     public static function enableScheduler(): void

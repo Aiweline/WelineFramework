@@ -313,9 +313,8 @@ class AiService
     public function supportsCooperativeConcurrency(?int $concurrency = null): bool
     {
         $concurrency = $concurrency ?? 2;
-        return $concurrency > 1
-            && \class_exists(\Fiber::class)
-            && !SchedulerSystem::isSchedulerActive();
+        // WLS 开启全局调度时仍允许并发：FiberTaskRunner 会临时 suppress 外层 Scheduler 再装本地 Fiber 等待环。
+        return $concurrency > 1 && \class_exists(\Fiber::class);
     }
 
     /**
