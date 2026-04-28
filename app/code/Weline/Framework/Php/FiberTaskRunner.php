@@ -19,16 +19,34 @@ final class FiberTaskRunner
     private const DEFAULT_CONCURRENCY = 4;
     private const IDLE_SLEEP_US = 1_000;
     private const MAX_SLEEP_US = 10_000;
+    private const PUMP_BLOCKING_TICK_SECONDS = 0.05;
 
     /** @var array<int, array{fiber: \Fiber, deadline: float}> */
     private array $waits = [];
 
     private bool $ownsScheduler = false;
 
+    private ?CurlStreamPump $pump = null;
+
+    /**
+     * 当前正在 run() 中的 runner 持有的 pump；嵌套 run 时按栈顺序保存/恢复。
+     */
+    private static ?CurlStreamPump $activePump = null;
+
     public function __construct(
         private readonly int $defaultConcurrency = self::DEFAULT_CONCURRENCY,
         private readonly bool $preserveContext = true
     ) {
+    }
+
+    /**
+     * 当前 Fiber 上下文里可用的多路 cURL 调度器。
+     * 仅在 {@see self::run()} 的并发分支期间非空；外部（控制器、Provider 老路径）
+     * 应据此判断走串行还是并行分支。
+     */
+    public static function currentPump(): ?CurlStreamPump
+    {
+        return self::$activePump;
     }
 
     /**
@@ -48,10 +66,15 @@ final class FiberTaskRunner
 
         $contextSnapshot = $this->captureContextSnapshot();
         $this->startLocalScheduler();
+        $previousPump = self::$activePump;
+        $this->pump = new CurlStreamPump();
+        self::$activePump = $this->pump;
 
         try {
             return $this->runWithFibers($tasks, $concurrency, $contextSnapshot);
         } finally {
+            self::$activePump = $previousPump;
+            $this->pump = null;
             $this->stopLocalScheduler();
             $this->waits = [];
         }
@@ -64,6 +87,194 @@ final class FiberTaskRunner
         }
 
         return \Fiber::suspend($value);
+    }
+
+    /**
+     * 并发版本的 Promise.allSettled：边完成边产出，永不抛出。
+     *
+     * 与 {@see self::run()} 不同，runEvents 把每个任务的成功/失败都包装成
+     * `['status' => 'fulfilled', 'result' => mixed]` 或
+     * `['status' => 'rejected', 'error' => Throwable]`，且按完成顺序流式 yield。
+     *
+     * 串行回退（concurrency<=1 / 无 Fiber / 已有外层 scheduler）走与并发分支相同的
+     * 协议，方便上层只写一份消费代码。
+     *
+     * @param array<string|int, callable(string|int): mixed> $tasks
+     * @return \Generator<string|int, array{status:string, result?:mixed, error?:\Throwable}>
+     */
+    public function runEvents(array $tasks, ?int $concurrency = null): \Generator
+    {
+        if ($tasks === []) {
+            return;
+        }
+
+        $concurrency = $this->normalizeConcurrency($concurrency);
+        if ($concurrency <= 1 || !\class_exists(\Fiber::class) || SchedulerSystem::isSchedulerActive()) {
+            foreach ($tasks as $key => $task) {
+                if (!\is_callable($task)) {
+                    yield $key => [
+                        'status' => 'rejected',
+                        'error' => new \InvalidArgumentException('Fiber task must be callable.'),
+                    ];
+                    continue;
+                }
+
+                try {
+                    yield $key => [
+                        'status' => 'fulfilled',
+                        'result' => $task($key),
+                    ];
+                } catch (\Throwable $throwable) {
+                    yield $key => [
+                        'status' => 'rejected',
+                        'error' => $throwable,
+                    ];
+                }
+            }
+
+            return;
+        }
+
+        $contextSnapshot = $this->captureContextSnapshot();
+        $this->startLocalScheduler();
+        $previousPump = self::$activePump;
+        $this->pump = new CurlStreamPump();
+        self::$activePump = $this->pump;
+
+        try {
+            yield from $this->runEventsWithFibers($tasks, $concurrency, $contextSnapshot);
+        } finally {
+            self::$activePump = $previousPump;
+            $this->pump = null;
+            $this->stopLocalScheduler();
+            $this->waits = [];
+        }
+    }
+
+    /**
+     * @param array<string|int, callable(string|int): mixed> $tasks
+     * @param array<string, mixed>|null $contextSnapshot
+     * @return \Generator<string|int, array{status:string, result?:mixed, error?:\Throwable}>
+     */
+    private function runEventsWithFibers(array $tasks, int $concurrency, ?array $contextSnapshot): \Generator
+    {
+        $taskKeys = \array_keys($tasks);
+        $pendingIndex = 0;
+        $totalTasks = \count($taskKeys);
+        /** @var array<string|int, \Fiber> $running */
+        $running = [];
+        /** @var array<string|int, array{status:string, result?:mixed, error?:\Throwable}> $pendingEvents */
+        $pendingEvents = [];
+
+        $spawn = function (string|int $taskKey) use ($tasks, $contextSnapshot, &$running, &$pendingEvents): void {
+            $task = $tasks[$taskKey];
+            if (!\is_callable($task)) {
+                $pendingEvents[$taskKey] = [
+                    'status' => 'rejected',
+                    'error' => new \InvalidArgumentException('Fiber task must be callable.'),
+                ];
+                return;
+            }
+
+            $fiber = new \Fiber(fn(): mixed => $this->runTaskWithContext($task, $taskKey, $contextSnapshot));
+            $running[$taskKey] = $fiber;
+
+            try {
+                $fiber->start();
+            } catch (\Throwable $throwable) {
+                unset($running[$taskKey], $this->waits[\spl_object_id($fiber)]);
+                $pendingEvents[$taskKey] = [
+                    'status' => 'rejected',
+                    'error' => $throwable,
+                ];
+                return;
+            }
+
+            $this->collectTerminatedEvent($taskKey, $fiber, $running, $pendingEvents);
+        };
+
+        while ($pendingIndex < $totalTasks || $running !== [] || $pendingEvents !== []) {
+            while ($pendingIndex < $totalTasks && \count($running) < $concurrency) {
+                $spawn($taskKeys[$pendingIndex++]);
+            }
+
+            $madeProgress = false;
+            foreach ($running as $taskKey => $fiber) {
+                $this->collectTerminatedEvent($taskKey, $fiber, $running, $pendingEvents);
+                if (!isset($running[$taskKey])) {
+                    $madeProgress = true;
+                    continue;
+                }
+
+                if (!$fiber->isSuspended() || !$this->fiberReadyToResume($fiber)) {
+                    continue;
+                }
+
+                try {
+                    $fiber->resume();
+                    $madeProgress = true;
+                } catch (\Throwable $throwable) {
+                    unset($running[$taskKey], $this->waits[\spl_object_id($fiber)]);
+                    $pendingEvents[$taskKey] = [
+                        'status' => 'rejected',
+                        'error' => $throwable,
+                    ];
+                    continue;
+                }
+
+                $this->collectTerminatedEvent($taskKey, $fiber, $running, $pendingEvents);
+            }
+
+            // 优先把已完成事件 flush 给消费者，触发后续 spawn。
+            if ($pendingEvents !== []) {
+                foreach ($pendingEvents as $key => $event) {
+                    yield $key => $event;
+                }
+                $pendingEvents = [];
+                $madeProgress = true;
+            }
+
+            if ($this->pump?->hasActiveHandles() && $this->pump->tick(0.0)) {
+                $madeProgress = true;
+            }
+
+            if (!$madeProgress && $running !== []) {
+                if ($this->pump?->hasActiveHandles()) {
+                    $this->pump->tick(self::PUMP_BLOCKING_TICK_SECONDS);
+                } else {
+                    \usleep($this->idleSleepMicroseconds());
+                }
+            }
+        }
+    }
+
+    /**
+     * @param array<string|int, \Fiber> $running
+     * @param array<string|int, array{status:string, result?:mixed, error?:\Throwable}> $pendingEvents
+     */
+    private function collectTerminatedEvent(
+        string|int $taskKey,
+        \Fiber $fiber,
+        array &$running,
+        array &$pendingEvents
+    ): void {
+        if (!$fiber->isTerminated()) {
+            return;
+        }
+
+        unset($running[$taskKey], $this->waits[\spl_object_id($fiber)]);
+
+        try {
+            $pendingEvents[$taskKey] = [
+                'status' => 'fulfilled',
+                'result' => $fiber->getReturn(),
+            ];
+        } catch (\Throwable $throwable) {
+            $pendingEvents[$taskKey] = [
+                'status' => 'rejected',
+                'error' => $throwable,
+            ];
+        }
     }
 
     private function normalizeConcurrency(?int $concurrency): int
@@ -150,8 +361,18 @@ final class FiberTaskRunner
                 break;
             }
 
+            // 推进 cURL multi（非阻塞），让流式 Fiber 拿到新 chunk。
+            if ($this->pump?->hasActiveHandles() && $this->pump->tick(0.0)) {
+                $madeProgress = true;
+            }
+
             if (!$madeProgress && $running !== []) {
-                \usleep($this->idleSleepMicroseconds());
+                if ($this->pump?->hasActiveHandles()) {
+                    // 既无可推进 Fiber 也无新 chunk：阻塞等 I/O，避免空跑 CPU。
+                    $this->pump->tick(self::PUMP_BLOCKING_TICK_SECONDS);
+                } else {
+                    \usleep($this->idleSleepMicroseconds());
+                }
             }
         }
 

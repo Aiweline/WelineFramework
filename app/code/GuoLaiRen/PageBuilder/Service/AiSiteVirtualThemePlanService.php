@@ -7481,8 +7481,6 @@ final class AiSiteVirtualThemePlanService
     private function collectStageTwoTaskPlanIssues(array $structured): array
     {
         $issues = [];
-        $contentLocale = $this->resolveStageTwoStructuredContentLocale($structured);
-        $requiresEnglishContent = $this->isStageTwoEnglishLocale($contentLocale);
         $pageTasks = \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [];
         foreach ($pageTasks as $pageType => $tasks) {
             if (!\is_array($tasks)) {
@@ -7563,17 +7561,6 @@ final class AiSiteVirtualThemePlanService
                             'snippet' => $this->clipText($sample, 120),
                         ];
                     }
-                }
-                if ($requiresEnglishContent && $this->stageTwoTaskHasCjkVisibleContent($taskScript, $blockTask)) {
-                    $issues[] = [
-                        'stage' => 'stage2',
-                        'page_type' => (string)$pageType,
-                        'block_key' => $blockKey,
-                        'task_key' => $taskKey,
-                        'field_path' => 'visible_content',
-                        'reason_code' => 'locale_mismatch',
-                        'snippet' => '',
-                    ];
                 }
             }
         }
@@ -7670,8 +7657,6 @@ final class AiSiteVirtualThemePlanService
                         }
                     }
                     $pageTasks[$pageType][$taskIndex]['block_task']['style_plan'] = $stylePlan;
-                } elseif ($fieldPath === 'visible_content') {
-                    $pageTasks[$pageType][$taskIndex]['task_script']['story_goal'] = 'Visitors can see clear and actionable on-page content.';
                 }
                 break;
             }
@@ -7751,8 +7736,6 @@ final class AiSiteVirtualThemePlanService
      */
     private function assertAiTaskPlanIsContentful(array $structured): void
     {
-        $contentLocale = $this->resolveStageTwoStructuredContentLocale($structured);
-        $requiresEnglishContent = $this->isStageTwoEnglishLocale($contentLocale);
         $pageTasks = \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [];
         if ($pageTasks === []) {
             throw new \RuntimeException('AI task plan generation failed: empty page_tasks.');
@@ -7830,9 +7813,6 @@ final class AiSiteVirtualThemePlanService
                 if (!$hasSample) {
                     throw new \RuntimeException('AI task plan generation failed: field samples are missing.');
                 }
-                if ($requiresEnglishContent && $this->stageTwoTaskHasCjkVisibleContent($taskScript, $blockTask)) {
-                    throw new \RuntimeException('AI task plan generation failed: task visible content language does not match content_locale.');
-                }
                 if ($this->isStageTwoMetaInstructionLike($storyGoal)) {
                     throw new \RuntimeException('AI task plan generation failed: story_goal still contains blueprint guidance.');
                 }
@@ -7900,41 +7880,6 @@ final class AiSiteVirtualThemePlanService
     {
         $locale = \strtolower(\trim($locale));
         return $locale === 'en' || \str_starts_with($locale, 'en_') || \str_starts_with($locale, 'en-');
-    }
-
-    private function stageTwoTaskHasCjkVisibleContent(array $taskScript, array $blockTask): bool
-    {
-        $contentPlan = \is_array($blockTask['content_plan'] ?? null) ? $blockTask['content_plan'] : [];
-        foreach ([
-            $taskScript['field_content_requirements'] ?? [],
-            $blockTask['meta_fields'] ?? [],
-            $contentPlan['field_content_requirements'] ?? [],
-            $contentPlan['content_copy'] ?? [],
-            $contentPlan['cta_plan'] ?? [],
-            $contentPlan['asset_plan'] ?? [],
-        ] as $rows) {
-            if (!\is_array($rows)) {
-                continue;
-            }
-            foreach ($rows as $row) {
-                if (!\is_array($row)) {
-                    continue;
-                }
-                foreach (['sample', 'default', 'copy', 'label', 'description', 'alt_text'] as $key) {
-                    $value = \trim((string)($row[$key] ?? ''));
-                    if ($value !== '' && $this->containsStageTwoCjkText($value)) {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        return false;
-    }
-
-    private function containsStageTwoCjkText(string $text): bool
-    {
-        return \preg_match('/\p{Han}/u', $text) === 1;
     }
 
     private function clipText(string $text, int $maxLength = 120): string

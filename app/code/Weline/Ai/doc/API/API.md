@@ -1,7 +1,7 @@
 # Weline AI 模块 API 文档
 
 **版本**: 1.0.0  
-**更新日期**: 2025-10-10
+**更新日期**: 2026-04-28
 
 ---
 
@@ -14,6 +14,7 @@
 5. [错误处理](#错误处理)
 6. [速率限制](#速率限制)
 7. [最佳实践](#最佳实践)
+8. [跨模块调用（w_query）](#跨模块调用w_query)
 
 ---
 
@@ -480,6 +481,56 @@ async function getCachedResponse(prompt, modelCode) {
 
 ---
 
+## 跨模块调用（w_query）
+
+其他 **PHP 模块**（非 HTTP 客户端）需要调用本模块的大模型能力时，推荐通过框架统一查询入口 **`w_query('ai', $operation, $params)`**，由 `AiQueryProvider`（`provider = ai`）委托 `AiService`，与 `w_query('ai_knowledge', 'search', …)` 同属 `QueryProviderInterface` 体系。
+
+### 说明
+
+- **适用场景**：同一次 PHP 请求内的业务代码（Controller、Service、队列消费者进程内等）。
+- **同步**：`operation` 为 `generate`、`generate_structured` 等，返回字符串或数组。
+- **流式**：`generate_stream`、`generate_stream_result` 必须在 `$params` 中传入 **`stream_callback`**（`callable`）。该回调**仅在同进程内有效**，不可序列化、不可写入队列 payload、不可持久化到日志后再还原。
+- **参数约定**：顶层扁平字段与 `AiService` 对齐，包括 `prompt`（必填）、`model_code`、`scenario_code`、`locale`、`user_id`、`is_backend`；`execute_agent` 另需 `agent_code`。其余如 `session_id`、`user_config` 等作为额外上下文下沉至服务层（详见实现类 `AiQueryProvider`）。
+
+### operation 一览
+
+| operation | 说明 |
+|-----------|------|
+| `generate` | 同步文本生成，返回 `string` |
+| `generate_stream` | 流式文本；**必填** `stream_callback`；返回 `['success' => true, 'mode' => 'stream']` |
+| `generate_structured` | 结构化输出（保留 tool_calls 等），返回 `array` |
+| `generate_stream_result` | 流式 + 最终结构化结果；**必填** `stream_callback` |
+| `execute_agent` | 智能体执行；`stream_callback` 可选；返回 `AgentResult` |
+
+### 示例
+
+```php
+// 同步
+$text = w_query('ai', 'generate', [
+    'prompt'     => '用一句话介绍 WelineFramework',
+    'model_code' => 'gpt-4o-mini',
+    'session_id' => 'task-123',
+    'user_id'    => 1,
+    'is_backend' => true,
+]);
+
+// 流式（同请求内）
+w_query('ai', 'generate_stream', [
+    'prompt'          => '续写下文：',
+    'stream_callback' => function ($chunk) {
+        echo $chunk;
+        return true;
+    },
+    'session_id'      => 'task-123',
+]);
+```
+
+### 发现与自检
+
+可用 `w_query('framework', 'introspect', ['what' => 'operations', 'provider' => 'ai'])` 查看本 provider 声明的 operations 与参数说明（由 `getDescriptor()` 提供）。
+
+---
+
 ## 支持与反馈
 
 - **文档**: [https://docs.weline.com/ai](https://docs.weline.com/ai)
@@ -489,5 +540,6 @@ async function getCachedResponse(prompt, modelCode) {
 ---
 
 **更新历史**:
+- 2026-04-28: 增加「跨模块调用（w_query）」章节（`provider = ai`）
 - 2025-10-10: 初始版本发布
 
