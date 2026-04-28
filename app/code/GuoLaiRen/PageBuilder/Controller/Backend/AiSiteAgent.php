@@ -10746,6 +10746,26 @@ SCRIPT;
                         : '',
                 ];
             }
+            if ($this->isAiSiteQueueBackedOperation($operation) && $this->isAiSiteQueueBackedOperation($runningOperation)) {
+                $activeStreamUrl = ($runningOperation !== '' && $runningExecutionToken !== '')
+                    ? $this->buildOperationStreamUrl($session->getPublicId(), $runningExecutionToken)
+                    : '';
+
+                return [
+                    'success' => false,
+                    'code' => 'AI_SITE_OPERATION_BUSY',
+                    'message' => $this->buildRunningOperationBusyMessage($operation, $runningOperation),
+                    'operation' => $operation,
+                    'running_operation' => $runningOperation,
+                    'execution_token' => '',
+                    'stream_url' => '',
+                    'active_operation' => [
+                        'operation' => $runningOperation,
+                        'execution_token' => $runningExecutionToken,
+                        'stream_url' => $activeStreamUrl,
+                    ],
+                ];
+            }
         }
 
         $baseScope = $scope;
@@ -11049,6 +11069,32 @@ SCRIPT;
         return 'Current workspace operation is still running; wait for it to finish.';
     }
 
+    private function buildRunningOperationBusyMessage(string $requestedOperation, string $runningOperation): string
+    {
+        $requestedOperation = \trim($requestedOperation);
+        $runningOperation = \trim($runningOperation);
+        if ($runningOperation === 'build' && $requestedOperation === 'block_regenerate') {
+            return (string)__('当前站点构建仍在运行，暂不能发起区块微调或重建；请等待构建完成后再试。');
+        }
+        if ($runningOperation === 'build' && $requestedOperation === 'regenerate_page') {
+            return (string)__('当前站点构建仍在运行，暂不能重新生成页面；请等待构建完成后再试。');
+        }
+        if ($requestedOperation === 'build' && \in_array($runningOperation, ['block_regenerate', 'regenerate_page'], true)) {
+            return (string)__('当前页面或区块 AI 操作仍在运行，暂不能启动整站构建；请等待完成后再试。');
+        }
+        if ($runningOperation === 'task_plan') {
+            return (string)__('第二阶段任务方案仍在生成，暂不能发起新的 AI 队列操作；请等待完成后再试。');
+        }
+        if ($runningOperation === 'build') {
+            return (string)__('当前站点构建仍在运行，暂不能发起新的 AI 队列操作；请等待完成后再试。');
+        }
+        if (\in_array($runningOperation, ['block_regenerate', 'regenerate_page'], true)) {
+            return (string)__('当前页面或区块 AI 操作仍在运行，请等待完成后再试。');
+        }
+
+        return (string)__('当前已有 AI 队列操作运行中，请等待完成后再试。');
+    }
+
     private function shouldReuseRunningQueuedOperation(string $requestedOperation, string $runningOperation): bool
     {
         $requestedOperation = \trim($requestedOperation);
@@ -11060,7 +11106,8 @@ SCRIPT;
             return false;
         }
 
-        return $this->isAiSiteQueueBackedOperation($requestedOperation)
+        return $requestedOperation === $runningOperation
+            && $this->isAiSiteQueueBackedOperation($requestedOperation)
             && $this->isAiSiteQueueBackedOperation($runningOperation);
     }
 
