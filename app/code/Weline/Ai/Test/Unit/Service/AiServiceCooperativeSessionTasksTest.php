@@ -71,12 +71,12 @@ final class AiServiceCooperativeSessionTasksTest extends TestCase
         self::assertFalse(SchedulerSystem::isSchedulerActive());
     }
 
-    public function testSupportsCooperativeConcurrencyRejectsExistingScheduler(): void
+    public function testSupportsCooperativeConcurrencyAllowsConcurrencyWhenOuterSchedulerFlagIsOn(): void
     {
         self::assertTrue($this->service->supportsCooperativeConcurrency(2));
 
         SchedulerSystem::enableScheduler();
 
-        self::assertFalse($this->service->supportsCooperativeConcurrency(2));
+        self::assertTrue($this->service->supportsCooperativeConcurrency(2));
     }
 }
