@@ -2283,33 +2283,13 @@
         visualPreviewHeightResizeObserver = null;
     }
 
-    function measureVisualPreviewDocumentHeight(frame, minHeight) {
-        var doc = getPreviewFrameDocument(frame);
-        if (!doc) {
-            return minHeight;
-        }
-        var body = doc.body;
-        var root = doc.documentElement;
-        var candidates = [minHeight];
-        if (body) {
-            candidates.push(body.scrollHeight || 0, body.offsetHeight || 0, body.clientHeight || 0);
-        }
-        if (root) {
-            candidates.push(root.scrollHeight || 0, root.offsetHeight || 0, root.clientHeight || 0);
-        }
-        return Math.max.apply(Math, candidates.map(function (height) {
-            return Math.ceil(Number(height) || 0);
-        }));
-    }
-
     function syncVisualPreviewFrameHeight(frame) {
         if (!isAdaptiveVisualPreviewFrame(frame)) {
             return;
         }
-        var minHeight = getPreviewDeviceMinHeight();
-        var nextHeight = measureVisualPreviewDocumentHeight(frame, minHeight);
-        frame.style.minHeight = minHeight + 'px';
-        frame.style.height = nextHeight + 'px';
+        var fixedHeight = getPreviewDeviceMinHeight();
+        frame.style.minHeight = fixedHeight + 'px';
+        frame.style.height = fixedHeight + 'px';
         frame.style.maxHeight = 'none';
     }
 
