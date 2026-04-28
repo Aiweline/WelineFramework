@@ -9,6 +9,7 @@ use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
+use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Server\Service\ServiceOrchestrator;
 
 /**
@@ -75,7 +76,7 @@ class DispatcherProvider extends AbstractServiceProvider
         $workerBasePort = $context->getWorkerBasePort();
 
         $arguments = [
-            ($context->envConfig['wls'] ?? [])['host'] ?? '127.0.0.1',
+            $this->resolveBindHost($context),
             (string) $port,
             (string) $workerBasePort,
             (string) $workerCount,
@@ -99,6 +100,33 @@ class DispatcherProvider extends AbstractServiceProvider
     public function getPort(int $instanceId, ServiceContext $context): ?int
     {
         return $context->mainPort;
+    }
+
+    private function resolveBindHost(ServiceContext $context): string
+    {
+        $wlsConfig = \is_array($context->envConfig['wls'] ?? null) ? $context->envConfig['wls'] : [];
+        $dispatcherConfig = \is_array($wlsConfig['dispatcher'] ?? null) ? $wlsConfig['dispatcher'] : [];
+
+        foreach ([
+            $dispatcherConfig['bind_host'] ?? null,
+            $wlsConfig['bind_host'] ?? null,
+        ] as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        $host = \trim((string)$context->host);
+        if ($host === '' || $host === 'localhost' || LocalDomainPolicy::isManagedLocalDomain($host)) {
+            return '127.0.0.1';
+        }
+
+        if (\filter_var($host, FILTER_VALIDATE_IP) !== false) {
+            return $host;
+        }
+
+        return '0.0.0.0';
     }
 
     public function handleMessage(array $message, ServiceInstance $instance, ServiceOrchestrator $orchestrator): bool

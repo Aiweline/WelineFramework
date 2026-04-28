@@ -903,7 +903,7 @@ CNF;
 
     protected function shouldPreferTrustedLocalSelfSignedCertificate(string $domain): bool
     {
-        return \PHP_OS_FAMILY === 'Windows'
+        return \in_array($this->getOsFamily(), ['Windows', 'Darwin', 'Linux'], true)
             && $this->shouldUseTrustedLocalCertificateAuthority($domain);
     }
 
@@ -1232,6 +1232,83 @@ CNF;
         return \strtoupper((string) \preg_replace('/[^A-F0-9]/i', '', $value));
     }
 
+    protected function getOsFamily(): string
+    {
+        return \PHP_OS_FAMILY;
+    }
+
+    protected function isRootUser(): bool
+    {
+        return \function_exists('posix_geteuid') && (int) @\posix_geteuid() === 0;
+    }
+
+    protected function runTrustCommand(string $command, ?int &$exitCode = null): string
+    {
+        $exitCode = 1;
+        if (!\function_exists('exec')) {
+            return '';
+        }
+
+        $output = [];
+        @\exec($command, $output, $exitCode);
+
+        return \implode("\n", $output);
+    }
+
+    protected function runInteractiveTrustCommand(string $command, ?int &$exitCode = null): string
+    {
+        $exitCode = 1;
+        if ($this->canUseInteractivePrivilegePrompt() && \function_exists('passthru')) {
+            @\passthru($command, $exitCode);
+            return '';
+        }
+
+        return $this->runTrustCommand($command, $exitCode);
+    }
+
+    protected function canUseInteractivePrivilegePrompt(): bool
+    {
+        if (PHP_SAPI !== 'cli' || !\defined('STDIN')) {
+            return false;
+        }
+        if (\function_exists('posix_isatty')) {
+            return (bool) @\posix_isatty(STDIN);
+        }
+        if (\function_exists('stream_isatty')) {
+            return (bool) @\stream_isatty(STDIN);
+        }
+
+        return true;
+    }
+
+    protected function buildSudoCommand(string $script, string $prompt): string
+    {
+        $sudoArgs = $this->canUseInteractivePrivilegePrompt()
+            ? ' -p ' . \escapeshellarg($prompt)
+            : ' -n';
+
+        return 'sudo' . $sudoArgs . ' /bin/sh -c ' . \escapeshellarg($script) . ' 2>&1';
+    }
+
+    protected function commandExists(string $command): bool
+    {
+        $command = \trim($command);
+        if ($command === '') {
+            return false;
+        }
+
+        if ($command === 'security' && \is_file('/usr/bin/security')) {
+            return true;
+        }
+
+        $exitCode = 1;
+        $probe = $this->getOsFamily() === 'Windows'
+            ? 'where ' . \escapeshellarg($command) . ' 2>NUL'
+            : 'command -v ' . \escapeshellarg($command) . ' 2>/dev/null';
+
+        return \trim($this->runTrustCommand($probe, $exitCode)) !== '' && $exitCode === 0;
+    }
+
     protected function isLocalCertificateAuthorityTrustedOnWindows(string $caCertPath): bool
     {
         if (!\is_file($caCertPath) || !\function_exists('openssl_x509_fingerprint')) {
@@ -1255,7 +1332,7 @@ CNF;
             return false;
         }
 
-        $storeOutput = (string) @\shell_exec(
+        $storeOutput = $this->runTrustCommand(
             'certutil -user -store Root ' . \escapeshellarg($thumb) . ' 2>&1'
         );
         if ($storeOutput === '') {
@@ -1270,19 +1347,237 @@ CNF;
             || \str_contains($storeOutput, 'Certificate:');
     }
 
+    protected function isLocalCertificateAuthorityTrustedOnMacos(string $caCertPath): bool
+    {
+        if (!\is_file($caCertPath) || !$this->commandExists('security')) {
+            return false;
+        }
+
+        $exitCode = 1;
+        $output = $this->runTrustCommand(
+            '/usr/bin/security verify-cert -c ' . \escapeshellarg($caCertPath) . ' -p ssl 2>&1',
+            $exitCode
+        );
+        if ($exitCode === 0 && !\preg_match('/CSSMERR_|failed|error/i', $output)) {
+            return true;
+        }
+
+        $thumb = $this->getCertificateSha1Fingerprint($caCertPath);
+        if ($thumb === '') {
+            return false;
+        }
+
+        $findExit = 1;
+        $findOutput = $this->runTrustCommand(
+            '/usr/bin/security find-certificate -a -Z -c ' . \escapeshellarg(self::ISSUER_LOCAL_CA) . ' 2>&1',
+            $findExit
+        );
+
+        return $findExit === 0 && \str_contains($this->normalizeCertificateFingerprint($findOutput), $thumb);
+    }
+
+    protected function isLocalCertificateAuthorityTrustedOnLinux(string $caCertPath): bool
+    {
+        if (!\is_file($caCertPath) || !$this->commandExists('openssl')) {
+            return false;
+        }
+
+        $verifyCommands = [];
+        if (\is_dir('/etc/ssl/certs')) {
+            $verifyCommands[] = 'openssl verify -CApath /etc/ssl/certs ' . \escapeshellarg($caCertPath) . ' 2>&1';
+        }
+        foreach ([
+            '/etc/ssl/certs/ca-certificates.crt',
+            '/etc/pki/tls/certs/ca-bundle.crt',
+            '/etc/ssl/cert.pem',
+        ] as $bundlePath) {
+            if (\is_file($bundlePath)) {
+                $verifyCommands[] = 'openssl verify -CAfile ' . \escapeshellarg($bundlePath) . ' ' . \escapeshellarg($caCertPath) . ' 2>&1';
+            }
+        }
+
+        foreach (\array_unique($verifyCommands) as $command) {
+            $exitCode = 1;
+            $output = $this->runTrustCommand($command, $exitCode);
+            if ($exitCode === 0 && \str_contains($output, ': OK')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function getCertificateSha1Fingerprint(string $certPath): string
+    {
+        if (!\is_file($certPath) || !\function_exists('openssl_x509_fingerprint')) {
+            return '';
+        }
+
+        $certPem = (string) @\file_get_contents($certPath);
+        if ($certPem === '') {
+            return '';
+        }
+
+        $fingerprint = \openssl_x509_fingerprint($certPem, 'sha1');
+
+        return \is_string($fingerprint) ? $this->normalizeCertificateFingerprint($fingerprint) : '';
+    }
+
+    /**
+     * @return array{dest:string,refresh:string,manual:string}|null
+     */
+    protected function resolveLinuxLocalCaInstallPlan(string $caCertPath): ?array
+    {
+        if ($this->commandExists('update-ca-certificates') && \is_dir('/usr/local/share/ca-certificates')) {
+            $dest = '/usr/local/share/ca-certificates/weline-local-development-ca.crt';
+            $script = 'install -m 0644 ' . \escapeshellarg($caCertPath) . ' ' . \escapeshellarg($dest)
+                . ' && update-ca-certificates';
+
+            return [
+                'dest' => $dest,
+                'refresh' => 'update-ca-certificates',
+                'manual' => 'sudo /bin/sh -c ' . \escapeshellarg($script),
+            ];
+        }
+
+        if ($this->commandExists('update-ca-trust') && \is_dir('/etc/pki/ca-trust/source/anchors')) {
+            $dest = '/etc/pki/ca-trust/source/anchors/weline-local-development-ca.crt';
+            $script = 'install -m 0644 ' . \escapeshellarg($caCertPath) . ' ' . \escapeshellarg($dest)
+                . ' && update-ca-trust extract';
+
+            return [
+                'dest' => $dest,
+                'refresh' => 'update-ca-trust extract',
+                'manual' => 'sudo /bin/sh -c ' . \escapeshellarg($script),
+            ];
+        }
+
+        return null;
+    }
+
+    protected function trustLocalCertificateAuthorityOnLinux(string $caCertPath): array
+    {
+        if ($this->isLocalCertificateAuthorityTrustedOnLinux($caCertPath)) {
+            return ['success' => true, 'trusted' => true, 'message' => __('Local CA is already trusted by the Linux system store')];
+        }
+
+        $plan = $this->resolveLinuxLocalCaInstallPlan($caCertPath);
+        if ($plan === null) {
+            return [
+                'success' => false,
+                'trusted' => false,
+                'message' => __('Local CA was generated, but no supported Linux trust tool was found. Import %{1} into the system trust store manually', [$caCertPath]),
+            ];
+        }
+
+        $script = 'install -m 0644 ' . \escapeshellarg($caCertPath) . ' ' . \escapeshellarg($plan['dest'])
+            . ' && ' . $plan['refresh'];
+        if ($this->isRootUser()) {
+            $command = '/bin/sh -c ' . \escapeshellarg($script) . ' 2>&1';
+        } elseif ($this->commandExists('sudo')) {
+            $command = $this->buildSudoCommand($script, '[WLS] sudo password for CA trust: ');
+        } else {
+            return [
+                'success' => false,
+                'trusted' => false,
+                'message' => __('Local CA was generated. Run manually: %{1}', [$plan['manual']]),
+            ];
+        }
+
+        $exitCode = 1;
+        $output = $this->runInteractiveTrustCommand($command, $exitCode);
+        if ($exitCode === 0) {
+            $trusted = $this->isLocalCertificateAuthorityTrustedOnLinux($caCertPath) || \is_file($plan['dest']);
+
+            return [
+                'success' => true,
+                'trusted' => $trusted,
+                'message' => $trusted
+                    ? __('Local CA imported into Linux system trust store')
+                    : __('Local CA install command completed, but trust verification did not confirm it yet'),
+            ];
+        }
+
+        return [
+            'success' => false,
+            'trusted' => false,
+            'message' => __('Local CA was generated, but automatic Linux trust import failed. Run manually: %{1}. Output: %{2}', [$plan['manual'], \trim($output)]),
+        ];
+    }
+
+    protected function resolveMacosLoginKeychain(): string
+    {
+        $home = (string) \getenv('HOME');
+        foreach ([
+            $home !== '' ? $home . '/Library/Keychains/login.keychain-db' : '',
+            $home !== '' ? $home . '/Library/Keychains/login.keychain' : '',
+        ] as $candidate) {
+            if ($candidate !== '' && \is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return 'login.keychain-db';
+    }
+
+    protected function trustLocalCertificateAuthorityOnMacos(string $caCertPath): array
+    {
+        if (!$this->commandExists('security')) {
+            return [
+                'success' => false,
+                'trusted' => false,
+                'message' => __('Local CA was generated, but macOS security tool was not found. Import %{1} into Keychain Access manually', [$caCertPath]),
+            ];
+        }
+
+        if ($this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
+            return ['success' => true, 'trusted' => true, 'message' => __('Local CA is already trusted by macOS Keychain')];
+        }
+
+        $loginKeychain = $this->resolveMacosLoginKeychain();
+        $loginCommand = '/usr/bin/security add-trusted-cert -r trustRoot -p ssl -p basic -k '
+            . \escapeshellarg($loginKeychain) . ' ' . \escapeshellarg($caCertPath) . ' 2>&1';
+        $exitCode = 1;
+        $output = $this->runInteractiveTrustCommand($loginCommand, $exitCode);
+        if ($exitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
+            return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS login Keychain')];
+        }
+
+        $manual = 'sudo /usr/bin/security add-trusted-cert -d -r trustRoot -p ssl -p basic -k /Library/Keychains/System.keychain '
+            . \escapeshellarg($caCertPath);
+        if ($this->commandExists('sudo')) {
+            $sudoArgs = $this->canUseInteractivePrivilegePrompt()
+                ? ' -p ' . \escapeshellarg('[WLS] sudo password for macOS CA trust: ')
+                : ' -n';
+            $systemCommand = 'sudo' . $sudoArgs . ' /usr/bin/security add-trusted-cert -d -r trustRoot -p ssl -p basic -k /Library/Keychains/System.keychain '
+                . \escapeshellarg($caCertPath) . ' 2>&1';
+            $systemExitCode = 1;
+            $systemOutput = $this->runInteractiveTrustCommand($systemCommand, $systemExitCode);
+            if ($systemExitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
+                return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS System Keychain')];
+            }
+            $output = \trim($output . "\n" . $systemOutput);
+        }
+
+        return [
+            'success' => false,
+            'trusted' => false,
+            'message' => __('Local CA was generated, but automatic macOS trust import failed. Run manually: %{1}. Output: %{2}', [$manual, \trim($output)]),
+        ];
+    }
+
     protected function trustLocalCertificateAuthority(string $caCertPath): array
     {
         if (!\is_file($caCertPath)) {
             return ['success' => false, 'trusted' => false, 'message' => __('Local CA certificate file is missing: %{1}', [$caCertPath])];
         }
 
-        if (\PHP_OS_FAMILY === 'Windows') {
+        if ($this->getOsFamily() === 'Windows') {
             if ($this->isLocalCertificateAuthorityTrustedOnWindows($caCertPath)) {
                 return ['success' => true, 'trusted' => true, 'message' => __('Local CA is already trusted by the current Windows user')];
             }
 
-            $whereOutput = (string) @\shell_exec('where certutil.exe 2>NUL');
-            if (\trim($whereOutput) === '') {
+            if (!$this->commandExists('certutil.exe')) {
                 return [
                     'success' => false,
                     'trusted' => false,
@@ -1290,7 +1585,7 @@ CNF;
                 ];
             }
 
-            @\shell_exec('certutil -user -addstore Root ' . \escapeshellarg($caCertPath) . ' 2>&1');
+            $this->runTrustCommand('certutil -user -addstore Root ' . \escapeshellarg($caCertPath) . ' 2>&1');
             if ($this->isLocalCertificateAuthorityTrustedOnWindows($caCertPath)) {
                 return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into Current User Root store')];
             }
@@ -1300,6 +1595,14 @@ CNF;
                 'trusted' => false,
                 'message' => __('Local CA was generated, but automatic trust import failed. Import %{1} into Current User > Trusted Root Certification Authorities manually', [$caCertPath]),
             ];
+        }
+
+        if ($this->getOsFamily() === 'Darwin') {
+            return $this->trustLocalCertificateAuthorityOnMacos($caCertPath);
+        }
+
+        if ($this->getOsFamily() === 'Linux') {
+            return $this->trustLocalCertificateAuthorityOnLinux($caCertPath);
         }
 
         return [

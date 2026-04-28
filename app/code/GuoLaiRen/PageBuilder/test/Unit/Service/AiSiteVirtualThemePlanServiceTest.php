@@ -81,6 +81,9 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('Planned-content language lock', $prompt);
         self::assertStringContainsString('task_script.story_goal, task_script.content_fill_rule', $prompt);
         self::assertStringContainsString('translate/adapt it instead of copying it', $prompt);
+        self::assertStringContainsString('explicit readable contrast pairs', $prompt);
+        self::assertStringContainsString('theme palette as role tokens', $prompt);
+        self::assertStringContainsString('Dark surfaces require light foregrounds', $prompt);
     }
 
     public function testStageTwoFullTaskPlanPromptLocksPlannedContentToWebsiteLanguage(): void
