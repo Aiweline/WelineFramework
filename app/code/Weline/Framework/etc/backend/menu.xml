@@ -16,6 +16,6 @@
           title="环境管理" 
           action="weline_framework/backend/env-manager"
           parent="Weline_Backend::system_service_group" 
-          icon="bi-cpu" 
+          icon="mdi mdi-chip" 
           order="90"/>
 </menus>

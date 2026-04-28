@@ -126,6 +126,99 @@ class OpenAiProviderJsonResponseFormatTest extends TestCase
         $this->assertArrayNotHasKey('reasoning_effort', $requestData);
     }
 
+    public function testBuildChatCompletionRequestDataSendsReasoningEffortForGpt55(): void
+    {
+        $provider = new OpenAiProvider();
+        $model = $this->createModel('openai', 'gpt-5.5');
+
+        $requestData = $this->invokeBuildChatCompletionRequestData($provider, $model, [], [
+            ['role' => 'user', 'content' => 'Solve this complex coding problem.'],
+        ], [
+            'reasoning_effort' => 'high',
+            'max_tokens' => 1024,
+        ], true);
+
+        $this->assertSame('high', $requestData['reasoning_effort'] ?? null);
+        $this->assertArrayNotHasKey('thinking', $requestData);
+    }
+
+    public function testBuildChatCompletionRequestDataDefaultsReasoningEffortToMinimalForJsonReasoningModel(): void
+    {
+        $provider = new OpenAiProvider();
+        $model = $this->createModel('openai', 'gpt-5.5');
+
+        $requestData = $this->invokeBuildChatCompletionRequestData($provider, $model, [], [
+            ['role' => 'user', 'content' => 'Return JSON only.'],
+        ], [
+            'response_format' => ['type' => 'json_object'],
+            'max_tokens' => 512,
+        ], true);
+
+        $this->assertSame('minimal', $requestData['reasoning_effort'] ?? null);
+    }
+
+    public function testBuildChatCompletionRequestDataMapsQwenThinkingControlsToBooleanToggle(): void
+    {
+        $provider = new OpenAiProvider();
+        $model = $this->createModel('qwen', 'qwen3-32b');
+
+        $requestData = $this->invokeBuildChatCompletionRequestData($provider, $model, [], [
+            ['role' => 'user', 'content' => 'Return JSON only.'],
+        ], [
+            'response_format' => ['type' => 'json_object'],
+            'max_tokens' => 512,
+        ], true);
+
+        $this->assertSame(false, $requestData['enable_thinking'] ?? null);
+        $this->assertArrayNotHasKey('thinking', $requestData);
+    }
+
+    public function testResolveReasoningOnlyFallbackContentExtractsJsonFromReasoningFence(): void
+    {
+        $provider = new OpenAiProvider();
+        $method = new \ReflectionMethod($provider, 'resolveReasoningOnlyFallbackContent');
+        $method->setAccessible(true);
+
+        $result = $method->invoke(
+            $provider,
+            "analysis...\n```json\n{\"ok\":true,\"items\":[1,2]}\n```\nmore notes",
+            ['response_format' => ['type' => 'json_object']]
+        );
+
+        $this->assertSame('{"ok":true,"items":[1,2]}', $result);
+    }
+
+    public function testResolveReasoningOnlyFallbackContentReturnsNullForNonJsonResponseFormat(): void
+    {
+        $provider = new OpenAiProvider();
+        $method = new \ReflectionMethod($provider, 'resolveReasoningOnlyFallbackContent');
+        $method->setAccessible(true);
+
+        $result = $method->invoke(
+            $provider,
+            "{\"ok\":true}",
+            ['response_format' => ['type' => 'text']]
+        );
+
+        $this->assertNull($result);
+    }
+
+    public function testBuildChatCompletionRequestDataSendsReasoningEffortForCodexModel(): void
+    {
+        $provider = new OpenAiProvider();
+        $model = $this->createModel('openai', 'gpt-5.3-codex');
+
+        $requestData = $this->invokeBuildChatCompletionRequestData($provider, $model, [], [
+            ['role' => 'user', 'content' => 'Refactor this function.'],
+        ], [
+            'reasoning_effort' => 'medium',
+            'max_tokens' => 1024,
+        ], true);
+
+        $this->assertSame('medium', $requestData['reasoning_effort'] ?? null);
+        $this->assertArrayNotHasKey('thinking', $requestData);
+    }
+
     public function testBillingAndAuthErrorsAreNotRetried(): void
     {
         $provider = new OpenAiProvider();
@@ -137,6 +230,7 @@ class OpenAiProviderJsonResponseFormatTest extends TestCase
 
         $this->assertTrue($httpMethod->invoke($provider, 402, 'Insufficient Balance'));
         $this->assertTrue($messageMethod->invoke($provider, 'Insufficient Balance'));
+        $this->assertTrue($messageMethod->invoke($provider, 'You exceeded your current quota, please check your plan and billing details.'));
         $this->assertFalse($messageMethod->invoke($provider, 'temporary upstream timeout'));
     }
 

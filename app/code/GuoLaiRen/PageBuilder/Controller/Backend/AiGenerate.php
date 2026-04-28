@@ -703,13 +703,14 @@ class AiGenerate extends BackendController
                 ]);
             }
 
-            // 获取 LayoutAssembler 服务
-            $layoutAssembler = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\LayoutAssembler::class);
-            
-            // 获取组件元数据（包含配置字段）
-            $metadata = $layoutAssembler->getComponentMetadata($styleCode, $componentCode);
-            
-            if (!$metadata) {
+            $metadata = $this->resolveComponentMetadataForGeneration(
+                $context,
+                $styleCode,
+                $componentCode,
+                $region,
+                $index
+            );
+            if ($metadata === null) {
                 $this->request->getResponse()->setHeader('Content-Type', 'application/json');
                 return json_encode([
                     'success' => false,
@@ -853,9 +854,14 @@ class AiGenerate extends BackendController
                 return;
             }
 
-            $layoutAssembler = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\LayoutAssembler::class);
-            $metadata = $layoutAssembler->getComponentMetadata($styleCode, $componentCode);
-            if (!$metadata) {
+            $metadata = $this->resolveComponentMetadataForGeneration(
+                $context,
+                $styleCode,
+                $componentCode,
+                $region,
+                $index
+            );
+            if ($metadata === null) {
                 $sse->sendEvent('error', ['message' => __('组件不存在')]);
                 $sse->close();
                 return;
@@ -1725,6 +1731,162 @@ class AiGenerate extends BackendController
             'style_code' => $resolvedStyleCode,
             'is_virtual' => true,
         ];
+    }
+
+    /**
+     * @param array{
+     *   page:PageModel,
+     *   layout_config:array<string,mixed>,
+     *   style_code:string,
+     *   is_virtual:bool
+     * } $context
+     * @return array<string,mixed>|null
+     */
+    private function resolveComponentMetadataForGeneration(
+        array $context,
+        string $styleCode,
+        string $componentCode,
+        string $region,
+        int $index
+    ): ?array {
+        $layoutAssembler = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\LayoutAssembler::class);
+        try {
+            $metadata = $layoutAssembler->getComponentMetadata($styleCode, $componentCode);
+            if (\is_array($metadata) && $metadata !== []) {
+                return $metadata;
+            }
+        } catch (\Throwable $throwable) {
+            if (empty($context['is_virtual'])) {
+                throw $throwable;
+            }
+        }
+
+        if (empty($context['is_virtual'])) {
+            return null;
+        }
+
+        $layoutConfig = \is_array($context['layout_config'] ?? null) ? $context['layout_config'] : [];
+        $layoutEntry = $this->resolveLayoutComponentEntryForGeneration($layoutConfig, $componentCode, $region, $index);
+        $fieldConfig = \is_array($layoutEntry['config'] ?? null) ? $layoutEntry['config'] : [];
+        if ($fieldConfig === []) {
+            return null;
+        }
+
+        return [
+            'code' => $componentCode,
+            'name' => $componentCode,
+            'description' => 'Virtual theme component metadata fallback',
+            'region' => $region !== '' ? $region : 'content',
+            'category' => $region !== '' ? $region : 'content',
+            'type' => 'section',
+            'fields' => $this->buildVirtualFallbackFields($fieldConfig),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $layoutConfig
+     * @return array<string,mixed>
+     */
+    private function resolveLayoutComponentEntryForGeneration(
+        array $layoutConfig,
+        string $componentCode,
+        string $region,
+        int $index
+    ): array {
+        $regionItems = \is_array($layoutConfig[$region] ?? null) ? $layoutConfig[$region] : [];
+        if (($region === 'header' || $region === 'footer') && $regionItems !== []) {
+            // 虚拟主题与 toExportLayout：header/footer 为单块 { component|code, config }，不是区块列表
+            $singletonCode = \trim((string)($regionItems['code'] ?? $regionItems['component'] ?? ''));
+            if ($singletonCode !== '' && $singletonCode === \trim($componentCode)) {
+                return $regionItems;
+            }
+            foreach ($regionItems as $entry) {
+                if (!\is_array($entry)) {
+                    continue;
+                }
+                $entryCode = (string)($entry['code'] ?? $entry['component'] ?? '');
+                if ($entryCode === $componentCode) {
+                    return $entry;
+                }
+            }
+            return \is_array($regionItems[0] ?? null) ? $regionItems[0] : [];
+        }
+
+        if ($regionItems !== [] && isset($regionItems[$index]) && \is_array($regionItems[$index])) {
+            $entry = $regionItems[$index];
+            $entryCode = (string)($entry['code'] ?? $entry['component'] ?? '');
+            if ($entryCode === $componentCode) {
+                return $entry;
+            }
+        }
+        foreach ($regionItems as $entry) {
+            if (!\is_array($entry)) {
+                continue;
+            }
+            $entryCode = (string)($entry['code'] ?? $entry['component'] ?? '');
+            if ($entryCode === $componentCode) {
+                return $entry;
+            }
+        }
+
+        $contentItems = \array_values(\is_array($layoutConfig['content'] ?? null) ? $layoutConfig['content'] : []);
+        foreach ($contentItems as $entry) {
+            if (!\is_array($entry)) {
+                continue;
+            }
+            $entryCode = (string)($entry['code'] ?? $entry['component'] ?? '');
+            if ($entryCode === $componentCode) {
+                return $entry;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $fieldConfig
+     * @return array<string,array<string,mixed>>
+     */
+    private function buildVirtualFallbackFields(array $fieldConfig): array
+    {
+        $groups = [];
+        foreach ($fieldConfig as $fieldKey => $value) {
+            $fullKey = \trim((string)$fieldKey);
+            if ($fullKey === '' || \str_starts_with($fullKey, '_')) {
+                continue;
+            }
+            $parts = \explode('.', $fullKey, 2);
+            $groupKey = $parts[0] !== '' ? $parts[0] : 'config';
+            $shortKey = $parts[1] ?? $fullKey;
+            if (!isset($groups[$groupKey])) {
+                $groups[$groupKey] = [
+                    'label' => $groupKey,
+                    'fields' => [],
+                ];
+            }
+            $groups[$groupKey]['fields'][$shortKey] = [
+                'label' => $shortKey,
+                'type' => $this->inferVirtualFallbackFieldType($fullKey, $value),
+                'default' => $value,
+            ];
+        }
+        return $groups;
+    }
+
+    private function inferVirtualFallbackFieldType(string $fieldKey, mixed $value): string
+    {
+        $field = \strtolower($fieldKey);
+        $raw = \is_scalar($value) || $value === null ? (string)$value : '';
+        if (\preg_match('/(^|\.|_)(color|colour)$/', $field) === 1 && \preg_match('/^#[0-9a-f]{6}$/i', $raw) === 1) {
+            return 'color';
+        }
+        if (\str_contains($field, 'image') || \str_contains($field, 'logo') || \str_contains($field, 'icon')) {
+            return 'image';
+        }
+        if (\strlen($raw) > 96 || \str_contains($field, 'description') || \str_contains($field, 'subtitle') || \str_ends_with($field, 'content')) {
+            return 'textarea';
+        }
+        return 'text';
     }
 
     private function shouldFlushSseChunkBuffer(string $buffer): bool

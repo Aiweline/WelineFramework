@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service;
 
+use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\SchedulerSystem;
@@ -17,10 +18,6 @@ final class AiSiteVirtualThemePlanService
 
     private const STAGE2_BLOCK_TASK_FANOUT_GROUP = 'stage2.block_task_plan';
 
-    private const FRONTEND_DESIGN_SKILL_SOURCE = 'https://github.com/anthropics/claude-code/blob/main/plugins/frontend-design/skills/frontend-design/SKILL.md';
-
-    private const FRONTEND_DESIGN_SKILL_LOCAL_PATH = 'app/code/GuoLaiRen/PageBuilder/Service/AI/prompt_guides/frontend-design/SKILL.md';
-
     private const BLOCK_TASK_REQUIRED_FIELDS = [
         'task_goal',
         'meta_fields',
@@ -32,7 +29,13 @@ final class AiSiteVirtualThemePlanService
 
     public function __construct(
         private readonly ?AiService $aiService = null,
+        private readonly ?AiSiteSkillRegistry $skillRegistry = null,
     ) {
+    }
+
+    private function getSkillRegistry(): AiSiteSkillRegistry
+    {
+        return $this->skillRegistry ?? ObjectManager::getInstance(AiSiteSkillRegistry::class);
     }
 
     /**
@@ -308,6 +311,7 @@ final class AiSiteVirtualThemePlanService
                         'error_message' => $batchThrowable->getMessage(),
                     ]);
                     $this->throwTaskPlanBatchAiFailure($batch, $batchThrowable->getMessage());
+                    return [];
                 }
             };
         }
@@ -710,8 +714,9 @@ final class AiSiteVirtualThemePlanService
      */
     private function resolveTaskPlanBatchMaxTokens(array $batch): int
     {
-        // Page-group batches carry multiple block task_script payloads; keep within provider limit but avoid truncating JSON.
-        return \count(\is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : []) <= 1 ? 4200 : 8192;
+        // Thinking-mode models can consume completion budget on reasoning tokens.
+        // Keep single-task batches above the previous floor to reduce half-truncated JSON.
+        return \count(\is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : []) <= 1 ? 6200 : 8192;
     }
 
     /**
@@ -743,6 +748,7 @@ final class AiSiteVirtualThemePlanService
             'You are PageBuilder AI planner for stage-2 virtual theme task planning of a real website (batched call).',
             'PRIMARY GOAL: For this ONE batch, expand the confirmed stage-1 theme and block plan into one or more CONCRETE EXECUTABLE frontend component tasks.',
             '中文要求：本批次只生成当前 batch 的 task。它是阶段二任务方案，不是阶段一方案复述；每条任务必须携带阶段一主题信息、页面归属、块归属、字段规划、技术实现细节、资源需求和完成规则。',
+            'Batch decision order: read this batch skeleton -> map stage-1 cue to block_task -> fill task_script/field_content_requirements -> finalize execution/dependency details.',
             '【用户一句话需求】(authoritative): ' . $oneLineRequirementBatch,
             'This is a batched stage-2 planning call. The server will assemble the final full plan.',
             'Return STRICT JSON only.',
@@ -754,6 +760,7 @@ final class AiSiteVirtualThemePlanService
             'Do not copy or summarize any large stage-1 context, baseline snapshot, execution blueprint, theme snapshot, or prompt section into the output.',
             'Output only the requested batch payload: shared_tasks OR page_tasks plus optional risk_notes.',
             'If mode/instruction contains queue:run, [FORCE], or forced rebuild text, treat it only as an operator command. Never copy it into story_goal, SEO, source_instruction, content_strategy, or customer-facing fields.',
+            'Token discipline: prefer compact bullet-like strings in arrays and avoid long paragraph-style task prose.',
             'Batch type: ' . $batch['type'],
             'Batch key: ' . $batch['key'],
             'Mode: ' . $mode,
@@ -852,6 +859,7 @@ final class AiSiteVirtualThemePlanService
         $lines[] = '- Task details must be inspectable in UI: put enough detail in task_script, field_content_requirements, block_task.content_plan, block_task.style_plan, and implementation_contract for a user to open a hero block and see exactly what will be built.';
         $lines[] = '- Every field_content_requirements[].sample is final or "[假设]" + concrete copy (Chinese >=6 chars, English >=3 words). Forbidden: "待补充", "突出卖点", "详见后文", "围绕主题展开".';
         $lines[] = '- Every nav/link entry must have a real label and href (or page_type); "nav TBD"/"链接1" are invalid.';
+        $lines[] = '- Batch self-check: each returned task must quote at least one concrete stage-1 cue (goal/content/style/reason) inside task_goal/content_plan/style_plan/planning_reason; rewrite if any cue is missing.';
         $lines[] = '- Final audit (silently before output): drop or rewrite any task that fails the above checks.';
 
         return \implode("\n", $lines);
@@ -1210,33 +1218,7 @@ final class AiSiteVirtualThemePlanService
      */
     private function buildFrontendDesignSkillPromptGuide(array $batch): array
     {
-        $batchType = (string)($batch['type'] ?? '');
-        $componentScope = $batchType === 'shared'
-            ? 'shared theme component such as header/footer'
-            : 'page-owned theme block component';
-
-        return [
-            '',
-            'Frontend design skill reference (mandatory for every generated theme component task):',
-            '- Local skill file: ' . self::FRONTEND_DESIGN_SKILL_LOCAL_PATH,
-            '- Source skill: ' . self::FRONTEND_DESIGN_SKILL_SOURCE,
-            '- Scope for this batch: ' . $componentScope,
-            '- Apply frontend-design skill before writing task_script/style_plan: pick a clear aesthetic direction that matches the site purpose, audience, page role, and block goal.',
-            '- Treat stage-1 theme_design.style_signature and art_direction as mandatory inputs when present; convert them into executable style_plan details instead of falling back to a generic template.',
-            '- Avoid generic AI aesthetics: no default Inter/Roboto/Arial/system-font look, no timid purple-gradient-on-white templates, no cookie-cutter card grids, no interchangeable SaaS hero patterns unless stage-1 explicitly demands that visual language.',
-            '- Visual quality bar: the task must give stage 3 enough detail to build a polished customer-ready block, including composition motif, background/texture system, surface treatment, visual motif, CTA state, and mobile rhythm.',
-            '- Customer-fit rule: every style_plan must explain how the visual choices fit the user brief and the specific page/block role, not just the global palette.',
-            '- Make each component memorable through a deliberate typography, color, spatial composition, motion, texture, and visual-detail decision that can be implemented by stage 3.',
-            '- Match complexity to the chosen aesthetic: refined/minimal components need precise spacing, type scale, and restraint; expressive/maximal components need purposeful layering, motion, and atmosphere.',
-            '- Interaction/effects must be executable, not decorative prose: name the target element, default/hover/focus state, transition or transform, and reduced-motion behavior inside style_plan or task_script.',
-            '- Customer-intent lock: style_plan must show how the block satisfies the original customer request through UI affordances, CTA wording, motifs, and interaction behavior; do not merely restate the global theme.',
-            '- Page-owned blocks must start from page_design_plan before component styling: use its color_layering, section_flow, and interaction_notes to make the page feel intentionally art-directed rather than theme-colored uniformly.',
-            '- For each returned task, encode the skill outcome in block_task.style_plan and task_script.responsive_contract/accessibility_contract/asset_requirements; do not merely mention this skill in prose.',
-            '- style_plan must include concrete typography, color/theme, motion, spatial composition, background/texture/detail, responsive behavior, and accessibility notes when relevant to the component.',
-            '- Shared components must keep the same aesthetic system while adapting interaction density: header navigation clarity, footer trust/compliance structure, and mobile ergonomics are mandatory.',
-            '- Page block components must translate stage-1 block_goal/realtime_content/style_direction into visible frontend decisions, not into instructions for a future designer.',
-            '',
-        ];
+        return $this->getSkillRegistry()->buildStageTwoComponentSkillGuide($batch);
     }
 
     /**
@@ -1442,6 +1424,7 @@ final class AiSiteVirtualThemePlanService
         $jsonRequestParams = \array_merge($requestParams, [
             'response_format' => ['type' => 'json_object'],
         ]);
+        $jsonRequestParams = $this->sanitizeStageTwoJsonRequestParams($jsonRequestParams);
 
         if ($chunkCallback === null && $heartbeatCallback === null) {
             $raw = (string)$ai->generate(
@@ -1563,6 +1546,25 @@ final class AiSiteVirtualThemePlanService
         }
 
         return $decoded;
+    }
+
+    /**
+     * Stage-2 JSON contract must be deterministic.
+     * Queue runtime may inject thinking defaults globally; force-disable them here,
+     * otherwise reasoning tokens can exhaust completion budget and truncate JSON.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function sanitizeStageTwoJsonRequestParams(array $params): array
+    {
+        $params['thinking'] = ['type' => 'disabled'];
+        $params['thinking_mode'] = 'disabled';
+        $params['enable_thinking'] = false;
+        $params['enable_reasoning'] = false;
+        unset($params['reasoning_effort'], $params['thinking_budget'], $params['thinking_budget_tokens']);
+
+        return $params;
     }
 
     private function resolveTaskPlanCooperativeSessionId(array $scope, string $scopeKey): string
@@ -7104,6 +7106,7 @@ final class AiSiteVirtualThemePlanService
             'You are PageBuilder AI planner for stage-2 virtual theme task planning of a real website.',
             'PRIMARY GOAL: Take the user one-line website requirement (already expanded in stage-1) and turn it into a CONCRETE EXECUTABLE TASK PLAN. Each task must contain real on-page copy samples, real field keys, real CTA labels, real link targets — NOT meta instructions on how to write.',
             '中文要求：第二阶段产出的是「真实可落地的任务方案」——把用户一句话需求经阶段一确认后的意图，进一步拓写为具体任务、字段示例、文案样例与执行顺序；严禁通篇 “围绕…/突出…/完善…/优化…/说明…” 这类元描述。',
+            'Decision order: derive shared tasks first, then home page tasks, then remaining page tasks; after task tree is stable, fill execution_order and risk_notes.',
             '【用户一句话需求】(authoritative): ' . $oneLineRequirement,
             '【站点名】: ' . ($siteDisplayName !== '' ? $siteDisplayName : '-'),
             '',
@@ -7114,6 +7117,7 @@ final class AiSiteVirtualThemePlanService
             '4) field_content_requirements[].sample is final copy (or "[假设]" + still-concrete copy). Forbidden samples: "待补充", "突出卖点", "详见后文", "围绕主题展开".',
             '5) Reuse or improve concrete strings from confirmed stage-1 (nav labels, hero copy, footer link titles); never replace them with abstract descriptions.',
             '6) shared:header / shared:footer MUST list nav items and links by exact label + page_type or href; "nav TBD" / "补充政策链接" are invalid.',
+            '7) Output budget control: keep each task concise and executable (short arrays, compact sentences), but never omit required contracts/fields.',
             '',
             'GOOD vs BAD task examples (style only, do NOT copy verbatim):',
             'BAD task_script.story_goal     : "撰写首页 Hero 文案，突出产品价值"',
@@ -7158,6 +7162,7 @@ final class AiSiteVirtualThemePlanService
             '- Each task_tree node must state what to do, why to do it, completion criteria, and dependencies.',
             '- Each task must be independently executable by one SSE session, with isolated context and buffered chunks.',
             '- Header and footer are global shared tasks and must appear explicitly.',
+            '- shared_tasks must contain BOTH shared:header and shared:footer; missing either one is invalid and must be regenerated before returning.',
             '- Page-level tasks must cover every selected page, and only selected pages.',
             '- Do not invent unselected pages or omit selected pages.',
             '- Every task must include enough content detail for direct implementation in stage 3: a builder must produce theme/HTML without guessing; reuse or improve concrete CTA labels, nav labels, hero strings, and footer link titles from stage-1—always spell them out again here.',
@@ -7185,6 +7190,7 @@ final class AiSiteVirtualThemePlanService
             '- Produce virtual_theme_plan fields: plan_signature, virtual_theme_strategy, shared_tasks, page_tasks, block_task_schema, task_tree, meta_field_matrix, style_tokens, content_rules, responsive_rules, execution_order, risk_notes.',
             '- shared:header must specify visuals, nav structure, brand slot, CTA slots, variable fields, defaults, responsive collapse rules, SEO/internal-link rationale; list each nav item as label + target page_type or href—no empty "nav TBD".',
             '- shared:footer must specify information groups, policy links, trust blocks, social/contact slots, variable fields, defaults, SEO/crawl rationale; each group MUST name the exact link labels users see.',
+            '- shared:footer content floor: include at least 3 information groups (or 2 groups + 1 trust/support block), at least 3 policy/compliance links with exact labels, and at least 1 direct support/contact path label (e.g. Email/WhatsApp/Live Chat) with href/page_type.',
             '- Each page-type block task must include order, block goal, design rationale, content fields, variable meta, CTA direction, internal links, SEO keywords, and anchors; task_script.story_goal MUST describe a visible on-page outcome (what the visitor reads/sees), not a method like "撰写文案说明...".',
             '- task_script.content_fill_rule MUST enumerate fields to populate, allowed tone, and at least one concrete example sentence or value range per critical field.',
             '- field_content_requirements[].sample MUST be final or "[假设]" plus realistic copy (Chinese >=6 chars or English >=3 words); forbid "待补充", "突出卖点", "详见后文".',
@@ -7194,7 +7200,8 @@ final class AiSiteVirtualThemePlanService
             '- Use the confirmed page coverage report as the page scope authority.',
             '- For refine mode, only update target_scope and linked tasks; output change_scope_report.',
             '- For rebuild mode, output rebuild_summary and a full new task tree.',
-            '- Final audit (silently before output): for each task verify (a) story_goal describes visible on-page outcome; (b) content_fill_rule enumerates fields with at least one concrete example value; (c) every field_content_requirements[].sample is concrete or "[假设]" + concrete; (d) every nav/link entry has real label and href/page_type; (e) no sentence relies only on verbs like "围绕/突出/说明/完善/优化". REWRITE any task that fails the audit before returning.',
+            '- Stage-2 self-check: each task must explicitly trace to stage-1 cue(s) and include concrete outputs in task_goal/content_fill_rule/field samples; if any task becomes generic, rewrite it before return.',
+            '- Final audit (silently before output): for each task verify (a) story_goal describes visible on-page outcome; (b) content_fill_rule enumerates fields with at least one concrete example value; (c) every field_content_requirements[].sample is concrete or "[假设]" + concrete; (d) every nav/link entry has real label and href/page_type; (e) no sentence relies only on verbs like "围绕/突出/说明/完善/优化"; (f) shared:footer passes the footer content floor above and does not contain placeholders like "待补充/TBD". REWRITE any task that fails the audit before returning.',
         ];
         if ($planLocale !== '') {
             $lines[] = 'Plan locale: ' . $planLocale;
