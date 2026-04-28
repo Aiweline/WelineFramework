@@ -2388,7 +2388,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         $defaults = [
             'host' => $this->getDefaultHost(),  // 使用项目唯一域名，避免多项目 SSL 证书冲突
             'port' => self::DEFAULT_PORT,
-            'worker_count' => 'auto',
+            'worker_count' => 4,
             'mode' => 'io',
             'daemon' => true,
             'hot_reload' => false,  // 默认关闭，可通过 wls.hot_reload=true 或 --hot-reload 启用
@@ -2975,9 +2975,9 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         // 智能模式：根据环境、CPU 核心数和工作模式计算
         $deployMode = Env::system('deploy') ?? 'dev';
         
-        // 开发环境：固定 2 个 Worker，便于调试且节省资源
+        // 开发环境：固定 4 个 Worker，兼顾并发与调试体验
         if ($deployMode === 'dev') {
-            return 2;
+            return 4;
         }
         
         // 生产环境：根据 CPU 核心数和工作模式计算
@@ -5999,7 +5999,7 @@ PHP;
                 __('配置优先级') => __('命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值'),
                 __('多实例支持') => __('可同时运行多个命名实例，每个实例使用不同端口。首次指定 -p 后配置会自动记住，下次直接用实例名启动'),
                 __('配置记忆') => __('首次 server:start api -p 8443 会保存配置，之后 server:start api 自动使用端口 8443'),
-                __('智能模式') => __('worker_count 设为 "auto" 时：开发环境固定 2 个 Worker，生产环境根据 CPU 核心数自动计算'),
+                __('智能模式') => __('worker_count 设为 "auto" 时：开发环境固定 4 个 Worker，生产环境根据 CPU 核心数自动计算'),
                 __('事件循环') => __('自动选择最优：Event 扩展 > stream_select'),
                 __('多进程') => __('优先级：proc_open > pcntl_fork > exec'),
                 __('HTTPS 支持') => __('自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key'),
