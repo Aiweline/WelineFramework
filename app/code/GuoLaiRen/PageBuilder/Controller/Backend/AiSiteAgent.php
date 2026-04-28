@@ -2493,12 +2493,31 @@ SCRIPT;
                     ]);
                 }
             };
+            $onTaskPlanCheckpoint = function (array $checkpoint) use ($session, $adminId): void {
+                if ($checkpoint === [] || !\is_array($checkpoint['task_plan_structured'] ?? null)) {
+                    return;
+                }
+                $this->sessionService->mergeScope((int)$session->getId(), $adminId, [
+                    AiSiteVirtualThemePlanService::TASK_PLAN_CHECKPOINT_SCOPE_KEY => [
+                        'updated_at' => (string)($checkpoint['updated_at'] ?? ''),
+                        'plan_signature' => (string)($checkpoint['plan_signature'] ?? ''),
+                        'completed_batch_ids' => \is_array($checkpoint['completed_batch_ids'] ?? null) ? $checkpoint['completed_batch_ids'] : [],
+                    ],
+                    'task_plan_structured' => $checkpoint['task_plan_structured'],
+                    'virtual_theme_plan' => [
+                        'draft' => \is_array($checkpoint['virtual_theme_plan'] ?? null)
+                            ? $checkpoint['virtual_theme_plan']
+                            : $checkpoint['task_plan_structured'],
+                    ],
+                ]);
+            };
             $artifacts = $this->virtualThemePlanService->buildTaskPlanArtifactsStream(
                 $scope,
                 $buildBlueprint,
                 $chunkCallback,
                 $taskPlanStreamHeartbeat,
-                $this->buildTaskPlanGenerationProgressCallback($sse, $session, $adminId, $promptMode)
+                $this->buildTaskPlanGenerationProgressCallback($sse, $session, $adminId, $promptMode),
+                $onTaskPlanCheckpoint
             );
             if ($rawChunkInfoBuffer !== '' && !($sse instanceof QueueDbWriter) && $sse->isAlive()) {
                 $sse->sendEvent('info', [
@@ -8242,7 +8261,7 @@ SCRIPT;
             $queueRow,
             $activeStatus
         );
-        $sse->sendEvent('progress', $payload);
+        $this->emitTaskProgressSnapshotEvent($sse, $payload);
     }
 
     /**
@@ -8281,6 +8300,22 @@ SCRIPT;
     }
 
     /**
+     * 统一发任务进度事件：
+     * - task_progress: 任务面板专用实时事件（前端按 task summary 直接刷新）
+     * - progress: 兼容旧订阅方，避免一次改动影响其它流转逻辑
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function emitTaskProgressSnapshotEvent(SseWriter $sse, array $payload): void
+    {
+        if (!$sse->isAlive()) {
+            return;
+        }
+        $sse->sendEvent('task_progress', $payload);
+        $sse->sendEvent('progress', $payload);
+    }
+
+    /**
      * @param array<string, mixed> $scope
      */
     private function emitBuildTaskProgressSnapshotFromScope(
@@ -8300,7 +8335,7 @@ SCRIPT;
             return;
         }
 
-        $sse->sendEvent('progress', $this->buildTaskProgressSnapshotPayload(
+        $this->emitTaskProgressSnapshotEvent($sse, $this->buildTaskProgressSnapshotPayload(
             $summary,
             $operation,
             $message,
@@ -12051,6 +12086,15 @@ SCRIPT;
         );
         $queueForcedAiRebuild = (int)($scope['_queue_force_build']['active'] ?? 0) === 1;
         $scope = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
+        // 续生成入口防御：把上次硬崩（OOM/kill -9/Worker 进程死亡，未走 PHP catch）残留的
+        // status=running 任务清回 pending+attempt_no=0，避免反复重启把 attempt_no 累计到
+        // BUILD_TASK_MAX_GENERATION_ATTEMPTS 后被永久标 failed。已 reconcile 过的产物已 done，
+        // 不会被这里二次扰动。
+        $scope = $this->buildTaskService->resetRunningTasksForInterruptedBuild(
+            $scope,
+            'Build entry: clearing stale running tasks before scheduling.'
+        );
+        $scope = $this->buildTaskService->applyPagesMarkedSkipRemaining($scope);
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $pageTypeLabels = Page::getPageTypes();
         $dispatchWindow = 3;
@@ -13929,7 +13973,13 @@ SCRIPT;
                 );
             }
         }
-        $sse->sendEvent('progress', $payload);
+        if (\in_array($operation, ['build', 'regenerate_page', 'block_regenerate'], true)
+            && (string)($payload['progress_kind'] ?? '') === 'task_progress'
+        ) {
+            $this->emitTaskProgressSnapshotEvent($sse, $payload);
+        } else {
+            $sse->sendEvent('progress', $payload);
+        }
         $this->updateActiveOperation(
             $session,
             $adminId,
