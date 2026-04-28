@@ -96,10 +96,7 @@ class Pixel extends Model
         // 添加限制，避免查询过大导致性能问题
         if ($limit !== null) {
             $limit = min($limit, 10000); // 最大限制10000条
-            $model->limit($limit);
-            if ($offset !== null) {
-                $model->offset($offset);
-            }
+            $model->limit($limit, $offset !== null ? \max(0, $offset) : 0);
         } else {
             // 如果没有指定限制，默认限制10000条
             $model->limit(10000);
