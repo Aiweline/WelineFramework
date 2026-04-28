@@ -374,6 +374,23 @@ class Start extends CommandAbstract
             $this->printer->note('');
             return;
         }
+
+        // 跨项目作用域占用：另一项目（不同 BP 目录哈希派生的 pXXXXXXXX）的 WLS 占了该端口。
+        // 这里要立刻友好报错，禁止冒充自家 default 实例进入 -r -f 空转的清理流程。
+        $foreignScope = $mainStop->findForeignWelineServerScopeByPort($port);
+        if ($foreignScope !== null && $foreignScope !== '' && $foreignScope !== MasterProcess::getProjectScopeToken()) {
+            $this->printer->error(__('端口 %{1} 已被其他项目的 Weline Server 占用（项目作用域：%{2}）', [$port, $foreignScope]));
+            $this->printer->note('');
+            $this->printer->setup(__('解决方案：'));
+            $this->printer->note('  ' . __('1. 该端口属于不同 BP 目录下的项目实例，与本项目相互隔离，请直接换一个端口启动：'));
+            $this->printer->note('     php bin/w server:start ' . $instanceName . ' -p ' . ($port + 1000));
+            $this->printer->note('  ' . __('2. 查看占用进程：'));
+            $this->printer->note('     netstat -anp 2>/dev/null | grep ' . $port);
+            $this->printer->note('  ' . __('3. 或前往实际项目目录处理：'));
+            $this->printer->note('     php bin/w server:status --all');
+            $this->printer->note('');
+            return;
+        }
         // CLI 服务器占用该端口 → 先停
         if ($occupantCli) {
             $this->printer->note(__('端口 %{1} 已被 PHP 内置服务器占用，正在停止...', [$port]));
@@ -3611,19 +3628,27 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         
         // ========== 方案2：端口检测（服务是否可用） ==========
         // 与 server:status 使用相同的 Processer::isPortInUse 逻辑
-        
+        // 严格按项目作用域：外项目作用域占用不算自家在跑，避免跨项目误识
+        $ownScope = $this->getCurrentProjectScopeToken();
+
         // 检查主端口（Dispatcher 或直连）
-        $mainPortInspect = Processer::inspectPortOccupantWithHistory($port);
+        $mainPortInspect = $this->inspectPortOccupantWithHistory($port);
         if (($mainPortInspect['pid_running'] ?? false) && ($mainPortInspect['is_weline'] ?? false)) {
-            return true;
+            $mainScope = (string) ($mainPortInspect['scope'] ?? '');
+            if ($mainScope === '' || $mainScope === $ownScope) {
+                return true;
+            }
         }
-        
+
         // 检查 Worker 端口
         for ($i = 0; $i < $count; $i++) {
             $workerPort = $workerPortBase + $i;
-            $workerPortInspect = Processer::inspectPortOccupantWithHistory($workerPort);
+            $workerPortInspect = $this->inspectPortOccupantWithHistory($workerPort);
             if (($workerPortInspect['pid_running'] ?? false) && ($workerPortInspect['is_weline'] ?? false)) {
-                return true;
+                $workerScope = (string) ($workerPortInspect['scope'] ?? '');
+                if ($workerScope === '' || $workerScope === $ownScope) {
+                    return true;
+                }
             }
         }
         
@@ -3644,7 +3669,12 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
     }
 
     /**
-     * 端口是否被 Weline 管理进程占用
+     * 端口是否被本项目作用域的 Weline 管理进程占用。
+     *
+     * 严格按项目作用域 token（{@see MasterProcess::getProjectScopeToken()}）判定：
+     * - 本项目自己的 WLS 进程（scope 与自家一致）→ true
+     * - 旧版本无作用域段的 weline 进程（scope='') → true（按"自家可疑残留"兼容处理）
+     * - 其它项目作用域的 WLS 进程 → false（不视为自家占用，避免误触发 -r -f 空转）
      */
     protected function isPortOccupiedByWelineProcess(int $port): bool
     {
@@ -3652,14 +3682,39 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             return false;
         }
 
-        $inspect = Processer::inspectPortOccupantWithHistory($port);
+        $inspect = $this->inspectPortOccupantWithHistory($port);
         if (($inspect['pid_running'] ?? false) && ($inspect['is_weline'] ?? false)) {
-            return true;
+            $scope = (string) ($inspect['scope'] ?? '');
+            $own = $this->getCurrentProjectScopeToken();
+            if ($scope === '' || $scope === $own) {
+                return true;
+            }
+            return false;
         }
 
         /** @var MainStop $mainStop */
         $mainStop = ObjectManager::getInstance(MainStop::class);
         return $mainStop->findWelineServerInstanceNameByPort($port) !== null;
+    }
+
+    /**
+     * 包装 {@see Processer::inspectPortOccupantWithHistory()}，便于子类（含测试桩）覆盖。
+     *
+     * @return array{in_use?:bool,pid?:int,pid_running?:bool,is_weline?:bool,state?:string,pname?:string,scope?:string}
+     */
+    protected function inspectPortOccupantWithHistory(int $port): array
+    {
+        return Processer::inspectPortOccupantWithHistory($port);
+    }
+
+    /**
+     * 当前项目的作用域 token（用于跨项目隔离判定）。
+     *
+     * 抽离为方法以便测试覆盖，正常运行时与 {@see MasterProcess::getProjectScopeToken()} 一致。
+     */
+    protected function getCurrentProjectScopeToken(): string
+    {
+        return MasterProcess::getProjectScopeToken();
     }
 
     /**
@@ -3794,9 +3849,18 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             $ports[] = $workerBase + $i;
         }
 
+        $ownScope = $this->getCurrentProjectScopeToken();
         foreach (\array_values(\array_unique(\array_filter($ports, static fn (int $port): bool => $port > 0))) as $port) {
-            $inspect = Processer::inspectPortOccupantWithHistory($port);
-            if (($inspect['in_use'] ?? false) && ($inspect['is_weline'] ?? false)) {
+            $inspect = $this->inspectPortOccupantWithHistory($port);
+            if (!($inspect['in_use'] ?? false) || !($inspect['is_weline'] ?? false)) {
+                continue;
+            }
+
+            // 严格按项目作用域识别"自家残留"：
+            // - 自家 scope 或老版本无 scope 段（兼容向后） → 视为残留
+            // - 其它项目作用域占用 → 不是自家残留，跳过
+            $scope = (string) ($inspect['scope'] ?? '');
+            if ($scope === '' || $scope === $ownScope) {
                 return true;
             }
         }

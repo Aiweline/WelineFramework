@@ -226,6 +226,21 @@ AI监控告警,"AI Monitoring Alerts"
 在AI模型监控触发告警时触发，允许其他模块监听并处理告警通知。事件数据包含告警信息、监控数据、模型代码、租户ID等。,"Triggered when an AI model monitoring alert is activated, allowing other modules to listen for and process alarm notifications. The event data includes alert information, monitoring data, model code, tenant ID, etc."
 AI翻译调用,AI翻译调用
 其他模块可以通过触发此事件调用AI进行翻译。支持批量翻译和增量翻译。事件数据包含待翻译词列表、目标语言、源语言等。,其他模块可以通过触发此事件调用AI进行翻译。支持批量翻译和增量翻译。事件数据包含待翻译词列表、目标语言、源语言等。
+"Ai 查询器不支持的操作：%{1}","Ai 查询器不支持的操作：%{1}"
+"generateStreamBatch task[%{1}] 必须是数组","generateStreamBatch task[%{1}] 必须是数组"
+"AI 模型查询","AI 模型查询"
+"对外暴露 AiService 的同步/流式/结构化/批量并发流式 调用入口","对外暴露 AiService 的同步/流式/结构化/批量并发流式 调用入口"
+同步生成文本，返回字符串,同步生成文本，返回字符串
+"temperature/max_tokens/response_format 等","temperature/max_tokens/response_format 等"
+仅本进程内有效；不可入队/序列化,仅本进程内有效；不可入队/序列化
+"单路流式生成并返回最终结构化结果（含 success/mode 等）","单路流式生成并返回最终结构化结果（含 success/mode 等）"
+"返回 provider 原始结构化响应（含 tool_calls 等）","返回 provider 原始结构化响应（含 tool_calls 等）"
+"N 路流式真并发：FiberTaskRunner + CurlStreamPump 驱动；按 settled 协议返回每个 task 的 status/error。","N 路流式真并发：FiberTaskRunner + CurlStreamPump 驱动；按 settled 协议返回每个 task 的 status/error。"
+"每个 task: {prompt, on_chunk, model_code?, scenario_code?, locale?, params?}","每个 task: {prompt, on_chunk, model_code?, scenario_code?, locale?, params?}"
+"每个 task 完成时触发 (key, settledEvent)","每个 task 完成时触发 (key, settledEvent)"
+"参数 %{1} 缺失","参数 %{1} 缺失"
+"参数 %{1} 必须为非空字符串","参数 %{1} 必须为非空字符串"
+"参数 %{1} 必须是 callable","参数 %{1} 必须是 callable"
 点击前往配置供应商账户,"Click to configure provider account"
 点击前往配置API密钥,"Click to configure API key"
 点击前往配置模型,"Click to configure model"
