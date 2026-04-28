@@ -2140,6 +2140,9 @@ class ServiceOrchestrator
         foreach ($startupAcceptance as $role => $rule) {
             $readyCount = $this->countRoleReadyInstances((string)$role);
             if ($readyCount < $rule['minReady']) {
+                foreach ($this->buildStartupAcceptanceTimeoutDiagnostics((string)$role) as $detail) {
+                    WlsLogger::error_('[Orchestrator] startup pending diagnostic: ' . $detail);
+                }
                 WlsLogger::error_(
                     "[Orchestrator] 启动异常明细: {$rule['displayName']}({$role}) READY {$readyCount}/{$rule['minReady']} (expected={$rule['expected']}, timeout={$timeout}s)"
                 );
@@ -2150,6 +2153,104 @@ class ServiceOrchestrator
         }
 
         $this->forceTerminateMasterAndChildren('startup_ready_timeout:' . $pendingLabel);
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function buildStartupAcceptanceTimeoutDiagnostics(string $role): array
+    {
+        $details = [];
+        foreach ($this->registry->getInstancesByRole($role) as $instance) {
+            $details[] = $this->formatStartupPendingInstanceDiagnostic($instance);
+        }
+
+        if ($details === []) {
+            $details[] = "role={$role} no registered instances";
+        }
+
+        return $details;
+    }
+
+    private function formatStartupPendingInstanceDiagnostic(ServiceInstance $instance): string
+    {
+        $trackingPid = $instance->getTrackingPid();
+        $parts = [
+            "role={$instance->role}#{$instance->instanceId}",
+            "state={$instance->state}",
+            "pid={$instance->pid}",
+            'root_pid=' . $instance->getRootPid(),
+            'launcher_pid=' . $instance->getLauncherPid(),
+            "tracking_pid={$trackingPid}",
+            'tracking_running=' . ($trackingPid > 0 && Processer::isRunningByPid($trackingPid) ? 'yes' : 'no'),
+        ];
+
+        if ($instance->port !== null) {
+            $port = (int)$instance->port;
+            $parts[] = "port={$port}";
+            $portDiagnostic = $this->formatStartupPendingPortDiagnostic($port);
+            if ($portDiagnostic !== '') {
+                $parts[] = $portDiagnostic;
+            }
+        }
+
+        $processName = \trim((string)$instance->getMeta('process_name', ''));
+        if ($processName !== '') {
+            $parts[] = 'process_name=' . $processName;
+            try {
+                $parts[] = 'log_file=' . Processer::getLogFile('--name=' . $processName);
+            } catch (\Throwable $exception) {
+                $parts[] = 'log_file_error=' . $this->compactDiagnosticValue($exception->getMessage());
+            }
+        }
+
+        if ($instance->launchId !== '') {
+            $parts[] = 'launch_id=' . $instance->launchId;
+        }
+
+        return \implode(' ', $parts);
+    }
+
+    private function formatStartupPendingPortDiagnostic(int $port): string
+    {
+        if ($port <= 0) {
+            return '';
+        }
+
+        try {
+            $occupant = Processer::inspectPortOccupantWithHistory($port);
+        } catch (\Throwable $exception) {
+            return 'port_probe_error=' . $this->compactDiagnosticValue($exception->getMessage());
+        }
+
+        $parts = [
+            'port_in_use=' . (!empty($occupant['in_use']) ? 'yes' : 'no'),
+        ];
+        foreach (['pid', 'pid_running', 'is_weline', 'state', 'pname'] as $key) {
+            if (\array_key_exists($key, $occupant)) {
+                $value = $occupant[$key];
+                if (\is_bool($value)) {
+                    $value = $value ? 'yes' : 'no';
+                }
+                $parts[] = 'port_' . $key . '=' . $this->compactDiagnosticValue((string)$value);
+            }
+        }
+
+        return \implode(' ', $parts);
+    }
+
+    private function compactDiagnosticValue(string $value): string
+    {
+        $value = \trim(\preg_replace('/\s+/', '_', $value) ?? $value);
+        if ($value === '') {
+            return '-';
+        }
+
+        if (\strlen($value) > 180) {
+            return \substr($value, 0, 177) . '...';
+        }
+
+        return $value;
     }
 
     private function countRoleReadyInstances(string $role): int
@@ -2260,7 +2361,16 @@ class ServiceOrchestrator
                     continue;
                 }
 
-                $port = $provider->getPort($i, $context);
+                $configuredPort = $provider->getPort($i, $context);
+                $port = $configuredPort;
+                if ($configuredPort !== null) {
+                    $resolvedPort = $this->resolveLaunchPortForStart($role, $i, (int)$configuredPort, $context);
+                    if ($resolvedPort === null) {
+                        WlsLogger::warning_("[Orchestrator] {$role}#{$i} port {$configuredPort} is still occupied; skip startup in this batch");
+                        continue;
+                    }
+                    $port = $resolvedPort;
+                }
                 $launchId = $this->generateLaunchId($role, $i);
                 $instance = new ServiceInstance(
                     role: $role,
@@ -2273,9 +2383,15 @@ class ServiceOrchestrator
                     processKind: $provider->getProcessKind(),
                     moduleCode: $provider->getModuleCode(),
                 );
+                if ($configuredPort !== null && (int)$configuredPort !== (int)$port) {
+                    $this->markEmergencyDynamicPort($instance, (int)$configuredPort, (int)$port, 'providers_batch_start');
+                }
 
                 $commandPrepareStartedAt = \microtime(true);
                 $command = $provider->buildCommand($i, $context);
+                if ($configuredPort !== null && (int)$configuredPort !== (int)$port) {
+                    $command = $this->withServiceCommandPort($command, (int)$port);
+                }
                 $commandPrepareElapsedMs = \max(0, (int) \round((\microtime(true) - $commandPrepareStartedAt) * 1000));
                 $processName = $command->getProcessName();
                 if ($processName !== null) {
@@ -2304,6 +2420,7 @@ class ServiceOrchestrator
                     'command' => $cmd,
                     'block' => false,
                     'foreground' => $foreground,
+                    'enableLog' => $this->resolveChildProcessLogFlag($provider, $context),
                 ];
                 $prepared[$key] = [
                     'instance' => $instance,
@@ -2382,6 +2499,10 @@ class ServiceOrchestrator
             );
             $this->registry->updateInstance($instance);
             $provider->onStarted($instance);
+            $configuredPort = (int)($instance->getMeta('configured_port') ?? 0);
+            if ($configuredPort > 0 && $configuredPort !== (int)($instance->port ?? 0)) {
+                $this->scheduleEmergencyPortCleanup($role, $instanceId, $configuredPort, 'providers_batch_start');
+            }
             WlsLogger::info_("[Orchestrator] 已启动 {$role}#{$instanceId} (pid={$pid}" . ($instance->port !== null ? ", port={$instance->port}" : '') . ')');
             $result[$role][] = $instance;
         }
@@ -3074,6 +3195,7 @@ class ServiceOrchestrator
                 'command' => $cmd,
                 'block' => false,
                 'foreground' => $foreground,
+                'enableLog' => $this->resolveChildProcessLogFlag($provider, $context),
             ];
             WlsLogger::info_(
                 '[Orchestrator][StartupTiming] role=' . $role
@@ -3726,13 +3848,22 @@ class ServiceOrchestrator
         return $argv;
     }
 
+    private function resolveChildProcessLogFlag(ServiceProviderInterface $provider, ServiceContext $context): ?bool
+    {
+        if ($context->frontend || $provider->requiresStartupReadyBarrier() || $provider->isCriticalRole()) {
+            return true;
+        }
+
+        return null;
+    }
+
     private function shouldLaunchForeground(string $role, ?ServiceContext $context): bool
     {
         if ($context === null || !$context->frontend) {
             return false;
         }
 
-        if (\defined('IS_WIN') && IS_WIN) {
+        if ($this->isWindowsRuntime()) {
             // Windows 下前台子进程拉起成本较高，默认强制走后台 detached。
             // server:start --frontend 会通过 buildOrchestratorRuntimeOptions 写入 allow_windows_frontend_child_process
             // 与 frontend_worker_windows；批量脚本已不等待 PID/重定向输出，因此启动批次也可以显示子窗口。
@@ -3751,11 +3882,22 @@ class ServiceOrchestrator
             return (bool) ($context->getConfig('wls.orchestrator.frontend_non_worker_windows', false) ?? false);
         }
 
+        if ($this->childServicesBootstrapInProgress) {
+            return false;
+        }
+
         if (\in_array($role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
             return false;
         }
 
-        return true;
+        return (bool) ($context->getConfig('wls.orchestrator.frontend_non_worker_unix', false) ?? false);
+    }
+
+    protected function isWindowsRuntime(): bool
+    {
+        return \defined('IS_WIN')
+            ? (bool) IS_WIN
+            : (\DIRECTORY_SEPARATOR === '\\' || \strncasecmp(\PHP_OS, 'WIN', 3) === 0);
     }
 
     /**

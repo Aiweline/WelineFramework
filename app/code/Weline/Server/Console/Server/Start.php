@@ -244,26 +244,7 @@ class Start extends CommandAbstract
         // --frontend / -frontend / --foreground / -foreground：前台运行（不后台）
         // 兼容：部分参数解析器可能不会把 -frontend 解析为 args['frontend']，
         // 因此额外从原始 argv 兜底识别，避免误走后台路径。
-        $frontend = isset($args['frontend']) || isset($args['foreground']);
-        if (!$frontend) {
-            foreach ($args as $key => $val) {
-                if (\is_int($key) && \in_array($val, ['--frontend', '-frontend', '--foreground', '-foreground'], true)) {
-                    $frontend = true;
-                    break;
-                }
-            }
-        }
-        if (!$frontend) {
-            $rawArgv = $_SERVER['argv'] ?? [];
-            if (\is_array($rawArgv)) {
-                foreach ($rawArgv as $raw) {
-                    if (\in_array($raw, ['--frontend', '-frontend', '--foreground', '-foreground'], true)) {
-                        $frontend = true;
-                        break;
-                    }
-                }
-            }
-        }
+        $frontend = $this->resolveFrontendFlag($args);
         
         // -log / --log：启用进程管理日志（system.processer.log）+ 运行时 verbose（开发态 Master/子进程控制台等）
         // --frontend：前台启动时同步视为全量日志开关，并写入实例 enable_log 供 Worker 等子进程读取
@@ -1517,6 +1498,59 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
      *
      * @param array<string, mixed> $config
      */
+    protected function resolveFrontendFlag(array $args): bool
+    {
+        foreach (['frontend', 'foreground'] as $name) {
+            if (\array_key_exists($name, $args) && $this->isTruthyCliFlagValue($args[$name])) {
+                return true;
+            }
+        }
+
+        foreach ($args as $key => $value) {
+            if (\is_int($key) && \is_string($value) && $this->isFrontendFlagToken($value)) {
+                return true;
+            }
+        }
+
+        $rawArgv = $_SERVER['argv'] ?? [];
+        if (\is_array($rawArgv)) {
+            foreach ($rawArgv as $raw) {
+                if (\is_string($raw) && $this->isFrontendFlagToken($raw)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function isTruthyCliFlagValue(mixed $value): bool
+    {
+        if ($value === false || $value === null) {
+            return false;
+        }
+
+        if (\is_string($value)) {
+            $normalized = \strtolower(\trim($value));
+            if ($normalized === '' || \in_array($normalized, ['0', 'false', 'off', 'no'], true)) {
+                return false;
+            }
+
+            return true;
+        }
+
+        if (\is_int($value) || \is_float($value)) {
+            return $value != 0;
+        }
+
+        return (bool)$value;
+    }
+
+    private function isFrontendFlagToken(string $value): bool
+    {
+        return \in_array($value, ['--frontend', '-frontend', '--foreground', '-foreground'], true);
+    }
+
     protected function resolveDaemonMode(array $config, bool $frontend): bool
     {
         if ($frontend) {
@@ -6301,17 +6335,7 @@ PHP;
     {
         // 构建 ServerConfig
         $instanceName = $args['instance'] ?? $args['name'] ?? 'default';
-        $frontend = !empty($args['frontend']) || !empty($args['foreground'])
-            || \in_array('--frontend', $args, true) || \in_array('-frontend', $args, true)
-            || \in_array('--foreground', $args, true) || \in_array('-foreground', $args, true);
-        if (!$frontend) {
-            foreach ($args as $key => $val) {
-                if (\is_int($key) && \in_array($val, ['--frontend', '-frontend', '--foreground', '-foreground'], true)) {
-                    $frontend = true;
-                    break;
-                }
-            }
-        }
+        $frontend = $this->resolveFrontendFlag($args);
         $enableLog = isset($args['log']);
         if (!$enableLog) {
             foreach ($args as $key => $val) {

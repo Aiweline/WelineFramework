@@ -28,6 +28,56 @@ final class StartCommandDaemonModeTest extends TestCase
         self::assertTrue($start->daemonMode(['daemon' => true], false));
     }
 
+    public function testFrontendFlagRequiresExplicitTruthyValue(): void
+    {
+        $start = new class extends Start {
+            public function frontendFlag(array $args): bool
+            {
+                return $this->resolveFrontendFlag($args);
+            }
+        };
+        $start->__init();
+
+        $originalArgv = $_SERVER['argv'] ?? null;
+        $_SERVER['argv'] = ['bin/w', 'server:start'];
+        try {
+            self::assertFalse($start->frontendFlag(['frontend' => false]));
+            self::assertFalse($start->frontendFlag(['foreground' => 'false']));
+            self::assertFalse($start->frontendFlag(['frontend' => '0']));
+            self::assertTrue($start->frontendFlag(['frontend' => true]));
+            self::assertTrue($start->frontendFlag([0 => '--frontend']));
+        } finally {
+            if ($originalArgv === null) {
+                unset($_SERVER['argv']);
+            } else {
+                $_SERVER['argv'] = $originalArgv;
+            }
+        }
+    }
+
+    public function testFrontendFlagFallsBackToRawArgv(): void
+    {
+        $start = new class extends Start {
+            public function frontendFlag(array $args): bool
+            {
+                return $this->resolveFrontendFlag($args);
+            }
+        };
+        $start->__init();
+
+        $originalArgv = $_SERVER['argv'] ?? null;
+        $_SERVER['argv'] = ['bin/w', 'server:start', '--foreground'];
+        try {
+            self::assertTrue($start->frontendFlag([]));
+        } finally {
+            if ($originalArgv === null) {
+                unset($_SERVER['argv']);
+            } else {
+                $_SERVER['argv'] = $originalArgv;
+            }
+        }
+    }
+
     public function testFrontendMasterBackgroundLaunchCarriesFrontendIdentity(): void
     {
         $start = new class extends Start {

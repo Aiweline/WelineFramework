@@ -203,7 +203,7 @@ final class SessionServer
 
         $this->publishAuthTokenFile();
         if ($this->authToken === null) {
-            $this->lastBindError = 'auth token initialization failed';
+            $this->lastBindError ??= 'auth token initialization failed';
             @\fclose($this->serverSocket);
             $this->serverSocket = null;
             return false;
@@ -1207,11 +1207,31 @@ final class SessionServer
             return;
         }
 
+        $dir = \dirname($this->tokenFilePath);
+        if (!\is_dir($dir) && !@\mkdir($dir, 0755, true) && !\is_dir($dir)) {
+            $this->lastBindError = "auth token directory create failed: {$dir}";
+            $this->log($this->lastBindError);
+            $this->authToken = null;
+            $this->tokenFilePath = '';
+            return;
+        }
+        if (!\is_writable($dir)) {
+            $this->lastBindError = "auth token directory not writable: {$dir}";
+            $this->log($this->lastBindError);
+            $this->authToken = null;
+            $this->tokenFilePath = '';
+            return;
+        }
+
         // Token 文件格式：token:version（用冒号分隔）
         $content = $this->authToken . ':' . $this->authTokenVersion;
         $written = @\file_put_contents($this->tokenFilePath, $content, \LOCK_EX);
         if ($written === false) {
-            $this->log("Auth token file write failed: {$this->tokenFilePath}, fallback to auth disabled");
+            $error = \error_get_last();
+            $detail = \is_array($error) ? (string)($error['message'] ?? '') : '';
+            $this->lastBindError = 'auth token file write failed: ' . $this->tokenFilePath
+                . ($detail !== '' ? " ({$detail})" : '');
+            $this->log($this->lastBindError);
             $this->authToken = null;
             $this->tokenFilePath = '';
             return;
