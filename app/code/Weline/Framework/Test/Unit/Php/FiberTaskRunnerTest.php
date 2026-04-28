@@ -100,4 +100,33 @@ final class FiberTaskRunnerTest extends TestCase
             },
         ]);
     }
+
+    public function testSchedulerActiveDoesNotForceSequentialFiberPool(): void
+    {
+        SchedulerSystem::enableScheduler();
+        $events = [];
+        $runner = new FiberTaskRunner(defaultConcurrency: 2);
+
+        $results = $runner->run([
+            'slow' => static function () use (&$events): string {
+                $events[] = 'slow:start';
+                SchedulerSystem::yieldDelay(12);
+                $events[] = 'slow:end';
+
+                return 'slow-result';
+            },
+            'fast' => static function () use (&$events): string {
+                $events[] = 'fast';
+
+                return 'fast-result';
+            },
+        ]);
+
+        self::assertSame(['slow:start', 'fast', 'slow:end'], $events);
+        self::assertSame([
+            'slow' => 'slow-result',
+            'fast' => 'fast-result',
+        ], $results);
+        self::assertTrue(SchedulerSystem::isSchedulerActive());
+    }
 }
