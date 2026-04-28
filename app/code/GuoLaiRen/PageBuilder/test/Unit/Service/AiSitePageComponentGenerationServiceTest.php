@@ -74,6 +74,33 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         self::assertSame('<div>Recovered header</div>', $payload['html_extra'] ?? null);
     }
 
+    public function testCliStreamUsesUnlimitedTransportButNonStreamFallbackKeepsFiniteTimeout(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+
+        $reflector = new \ReflectionMethod($service, 'buildAiRuntimeParams');
+        $reflector->setAccessible(true);
+
+        $streamParams = $reflector->invoke($service, [
+            'timeout' => 180,
+            'response_format' => ['type' => 'json_object'],
+        ], true);
+        $fallbackParams = $reflector->invoke($service, [
+            'timeout' => 180,
+            'response_format' => ['type' => 'json_object'],
+        ], false);
+
+        self::assertSame(0, $streamParams['timeout'] ?? null);
+        self::assertTrue((bool)($streamParams['disable_ai_timeout'] ?? false));
+        self::assertTrue((bool)($streamParams['disable_cli_timeout'] ?? false));
+        self::assertFalse((bool)($streamParams['enforce_timeout_in_stream'] ?? true));
+
+        self::assertSame(180, $fallbackParams['timeout'] ?? null);
+        self::assertArrayNotHasKey('disable_ai_timeout', $fallbackParams);
+        self::assertArrayNotHasKey('disable_cli_timeout', $fallbackParams);
+        self::assertArrayNotHasKey('enforce_timeout_in_stream', $fallbackParams);
+    }
+
     public function testGenerateComponentThrowsAfterAiRetriesInsteadOfReturningStubFallback(): void
     {
         $aiService = $this->createMock(AiService::class);

@@ -29,6 +29,22 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertNotEmpty($scope['build_blueprint']['tasks']);
     }
 
+    public function testBuildScopePatchCannotMutatePlanContractBeforeBuild(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $patch = $service->stripBuildPlanMutationScopePatch([
+            'site_title' => 'Keep editable profile field',
+            'task_plan_confirmed' => 1,
+            'task_plan_structured' => ['shared_tasks' => [['task_key' => 'shared:header']]],
+            'virtual_theme_plan' => ['confirmed' => ['shared_tasks' => [['task_key' => 'shared:header']]]],
+            'build_blueprint' => ['tasks' => [['task_key' => 'shared:header']]],
+            'build_tasks' => ['shared:header' => ['status' => AiSiteBuildTaskService::TASK_STATUS_PENDING]],
+        ], []);
+
+        $this->assertSame(['site_title' => 'Keep editable profile field'], $patch);
+    }
+
     public function testEnsureTaskScopeUsesConfirmedStageTwoExecutionBlueprintWhenAvailable(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
@@ -126,7 +142,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
         );
     }
 
-    public function testEnsureTaskScopePrefersStageOneExecutionBlueprintTasksWhenPresent(): void
+    public function testEnsureTaskScopeIgnoresTopLevelStageOneExecutionBlueprintForStageTwoBuild(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
@@ -160,9 +176,11 @@ class AiSiteBuildTaskServiceTest extends TestCase
         ], 'virtual_theme');
 
         $this->assertSame(
-            ['shared:header', 'shared:footer', 'page:home_page:a', 'page:home_page:b'],
+            ['shared:header', 'shared:footer'],
             \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
         );
+        $this->assertArrayNotHasKey('page:home_page:a', $scope['build_tasks']);
+        $this->assertArrayNotHasKey('page:home_page:b', $scope['build_tasks']);
     }
 
     public function testEnsureTaskScopeUsesStructuredTaskListsWhenRicherThanConfirmedEmbeddedTasks(): void
@@ -245,6 +263,74 @@ class AiSiteBuildTaskServiceTest extends TestCase
             \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
         );
         $this->assertArrayHasKey('page:home_page:t3', $scope['build_tasks']);
+    }
+
+    public function testEnsureTaskScopeUsesFullStructuredPlanWhenConfirmedSnapshotIsCurrentPageOnly(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page'],
+            'task_plan_confirmed' => 1,
+            'task_plan_structured' => [
+                'signature' => 'full-plan',
+                'shared_tasks' => [
+                    ['task_key' => 'shared:header', 'sort_order' => 10],
+                    ['task_key' => 'shared:footer', 'sort_order' => 20],
+                ],
+                'page_tasks' => [
+                    'home_page' => [
+                        ['task_key' => 'page:home_page:hero', 'sort_order' => 30],
+                        ['task_key' => 'page:home_page:trust', 'sort_order' => 40],
+                        ['task_key' => 'page:home_page:cta', 'sort_order' => 50],
+                    ],
+                    'about_page' => [
+                        ['task_key' => 'page:about_page:story', 'sort_order' => 60],
+                        ['task_key' => 'page:about_page:team', 'sort_order' => 70],
+                    ],
+                    'contact_page' => [
+                        ['task_key' => 'page:contact_page:form', 'sort_order' => 80],
+                        ['task_key' => 'page:contact_page:faq', 'sort_order' => 90],
+                    ],
+                ],
+            ],
+            'virtual_theme_plan' => [
+                'confirmed' => [
+                    'signature' => 'partial-current-page',
+                    'shared_tasks' => [
+                        ['task_key' => 'shared:header', 'sort_order' => 10],
+                        ['task_key' => 'shared:footer', 'sort_order' => 20],
+                    ],
+                    'page_tasks' => [
+                        'home_page' => [
+                            ['task_key' => 'page:home_page:hero', 'sort_order' => 30],
+                            ['task_key' => 'page:home_page:trust', 'sort_order' => 40],
+                            ['task_key' => 'page:home_page:cta', 'sort_order' => 50],
+                        ],
+                    ],
+                ],
+            ],
+        ], [
+            'site_title' => 'Example Site',
+            'brief_description' => 'Example site summary',
+        ], 'virtual_theme');
+
+        $this->assertSame(
+            [
+                'shared:header',
+                'shared:footer',
+                'page:home_page:hero',
+                'page:home_page:trust',
+                'page:home_page:cta',
+                'page:about_page:story',
+                'page:about_page:team',
+                'page:contact_page:form',
+                'page:contact_page:faq',
+            ],
+            \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
+        );
+        $this->assertSame(['home_page', 'about_page', 'contact_page'], $scope['build_blueprint']['page_types'] ?? []);
+        $this->assertCount(9, $scope['build_tasks']);
     }
 
     public function testEnsureTaskScopeRepairsStaleConfirmedFlagWhenConfirmedExecutionBlueprintExists(): void
