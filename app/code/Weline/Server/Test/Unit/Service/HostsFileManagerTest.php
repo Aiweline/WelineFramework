@@ -40,4 +40,36 @@ HOSTS;
         self::assertStringContainsString('127.0.0.1 shop-b.weline.test', $result);
         self::assertSame(1, substr_count($result, '# Weline WLS Auto-Config Start'));
     }
+
+    public function testUnixAdminCommandUsesHostsCommandEntryPoint(): void
+    {
+        if (!\defined('BP')) {
+            \define('BP', \getcwd() . DIRECTORY_SEPARATOR);
+        }
+
+        $method = new ReflectionMethod(HostsFileManager::class, 'getAdminCommandForOs');
+        $method->setAccessible(true);
+
+        $command = $method->invoke(null, 'shop-a.weline.test', '127.0.0.1', 'Linux');
+
+        self::assertStringContainsString('sudo', $command);
+        self::assertStringContainsString('server:hosts:add', $command);
+        self::assertStringContainsString('shop-a.weline.test', $command);
+        self::assertStringContainsString('127.0.0.1', $command);
+    }
+
+    public function testMacAdminCommandUsesSameHostsCommandEntryPoint(): void
+    {
+        if (!\defined('BP')) {
+            \define('BP', \getcwd() . DIRECTORY_SEPARATOR);
+        }
+
+        $method = new ReflectionMethod(HostsFileManager::class, 'getAdminCommandForOs');
+        $method->setAccessible(true);
+
+        $command = $method->invoke(null, 'shop-a.weline.test', '127.0.0.1', 'Darwin');
+
+        self::assertStringContainsString('sudo', $command);
+        self::assertStringContainsString('server:hosts:add', $command);
+    }
 }
