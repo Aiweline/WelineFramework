@@ -224,7 +224,11 @@ class Stop extends CommandAbstract
     }
 
     /**
-     * 按端口查找占用该端口的 Weline Server 实例名
+     * 按端口查找占用该端口的本项目作用域 Weline Server 实例名。
+     *
+     * 若端口实际由其它项目作用域（不同 BP 哈希派生的 pXXXXXXXX）的 WLS 占用，
+     * 一律返回 null —— 不冒充自家实例名，避免上层 -r -f 流程误停外项目。
+     * 调用方需要识别外项目占用时，请改用 {@see self::findForeignWelineServerScopeByPort()}。
      */
     public function findWelineServerInstanceNameByPort(int $port): ?string
     {
@@ -235,6 +239,11 @@ class Stop extends CommandAbstract
             return null;
         }
         if ($this->isSharedStateIndexedPort($port)) {
+            return null;
+        }
+
+        $scope = (string) ($portInspect['scope'] ?? '');
+        if ($scope !== '' && $scope !== MasterProcess::getProjectScopeToken()) {
             return null;
         }
 
@@ -249,6 +258,33 @@ class Stop extends CommandAbstract
         }
 
         return $this->findConfiguredRunningInstanceNameByPort($port);
+    }
+
+    /**
+     * 若端口被其它项目作用域的 WLS 占用，则返回该外项目的作用域 token（如 pAAAAAAAA）。
+     *
+     * 命中条件：
+     * - 端口正在被运行中的 weline 进程占用
+     * - 进程名带有合规的项目作用域段（{@see Processer::extractProjectScopeFromProcessName()}）
+     * - 该作用域与当前进程的 {@see MasterProcess::getProjectScopeToken()} 不一致
+     *
+     * 其它情况（端口空闲、自家占用、无作用域段的老版本进程）返回 null。
+     */
+    public function findForeignWelineServerScopeByPort(int $port): ?string
+    {
+        $portInspect = $this->inspectPortOccupantWithHistory($port);
+        $runningWelineOnPort = (bool) ($portInspect['pid_running'] ?? false)
+            && (bool) ($portInspect['is_weline'] ?? false);
+        if (!$runningWelineOnPort) {
+            return null;
+        }
+
+        $scope = (string) ($portInspect['scope'] ?? '');
+        if ($scope === '' || $scope === MasterProcess::getProjectScopeToken()) {
+            return null;
+        }
+
+        return $scope;
     }
 
     /**

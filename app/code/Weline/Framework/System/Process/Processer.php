@@ -136,6 +136,50 @@ class Processer
         return $name ?: 'process';
     }
 
+    /**
+     * 从进程名 / cmdline 中抽取 WLS 项目作用域 token。
+     *
+     * 进程名格式由 {@see \Weline\Server\Service\MasterProcess::buildScopedProcessName()} 生成：
+     *   weline-{role}-{instance}-p{8 位小写十六进制}[-{slot}]
+     * 例如：
+     *   - weline-wls-dispatcher-default-p16330cac
+     *   - weline-wls-worker-default-p16330cac-3
+     *   - --name=weline-wls-dispatcher-default-p16330cac
+     *   - php /srv/site/bin/dispatcher.php --name=weline-wls-... --port=9981
+     *
+     * 仅当严格匹配 `-p[0-9a-f]{8}` 段时返回作用域，否则返回空字符串。
+     * 老版本（无作用域段）的进程名会返回空字符串，调用方应将其按
+     * "兼容性疑似自家进程" 处理。
+     *
+     * 该方法是纯字符串操作，跨平台、无副作用，可被启停判定路径直接使用。
+     */
+    public static function extractProjectScopeFromProcessName(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        $candidate = \trim($value);
+        if ($candidate === '') {
+            return '';
+        }
+
+        if (\preg_match('/--name(?:=|\s+)(?:"([^"]+)"|\'([^\']+)\'|([^\s]+))/', $candidate, $matches) === 1) {
+            foreach ([1, 2, 3] as $idx) {
+                if (!empty($matches[$idx])) {
+                    $candidate = (string) $matches[$idx];
+                    break;
+                }
+            }
+        }
+
+        if (\preg_match('/-(p[0-9a-f]{8})(?:-\d+)?(?:\s|$)/', $candidate, $scopeMatches) === 1) {
+            return (string) $scopeMatches[1];
+        }
+
+        return '';
+    }
+
     private static function doesRecordedProcessNameMatchPort(string $value, int $port): bool
     {
         if ($port <= 0 || $value === '') {
@@ -154,6 +198,19 @@ class Processer
 
         if (\array_key_exists($port, self::$orphanWelinePortHintCache)) {
             return self::$orphanWelinePortHintCache[$port];
+        }
+
+        return self::resolveWelinePnameByPortHint($port) !== '';
+    }
+
+    /**
+     * 在 pid_index 中查找与该端口可能关联的 weline 进程名（用于 history 推断）。
+     * 命中返回原始 pname（含 --name= 前缀时保留），否则返回空串。
+     */
+    private static function resolveWelinePnameByPortHint(int $port): string
+    {
+        if ($port <= 0) {
+            return '';
         }
 
         $pidIndex = self::readPidIndex();
@@ -179,11 +236,11 @@ class Processer
             }
 
             self::$orphanWelinePortHintCache[$port] = true;
-            return true;
+            return $pname;
         }
 
         self::$orphanWelinePortHintCache[$port] = false;
-        return false;
+        return '';
     }
 
     public static function inspectPortOccupantWithHistory(int $port): array
@@ -205,12 +262,19 @@ class Processer
             return $inspect;
         }
 
-        if (!self::nameIndexSuggestsWelinePort($port)) {
+        $hintedPname = self::resolveWelinePnameByPortHint($port);
+        if ($hintedPname === '') {
             return $inspect;
         }
 
         $inspect['is_weline'] = true;
         $inspect['state'] = 'weline';
+        if (!isset($inspect['pname']) || $inspect['pname'] === '') {
+            $inspect['pname'] = $hintedPname;
+        }
+        if (!isset($inspect['scope']) || $inspect['scope'] === '') {
+            $inspect['scope'] = self::extractProjectScopeFromProcessName($hintedPname);
+        }
 
         return $inspect;
     }
@@ -5618,12 +5682,19 @@ POWERSHELL;
      * - foreign: 明确为非框架进程占用
      * - orphan:  端口被占用但 PID 不可用/失效
      *
+     * 返回字段：
+     * - in_use / pid / pid_running / is_weline / state（既有契约，向后兼容）
+     * - pname  从 port_index / cmdline / pid_index 还原出的最完整进程标识，便于上层识别归属
+     * - scope  WLS 进程的项目作用域 token（如 p16330cac），命中 weline 时尽量填；非 weline 或无法识别时为空字符串
+     *
      * @return array{
      *   in_use:bool,
      *   pid:int,
      *   pid_running:bool,
      *   is_weline:bool,
-     *   state:string
+     *   state:string,
+     *   pname:string,
+     *   scope:string
      * }
      */
     public static function inspectPortOccupant(int $port): array
@@ -5635,16 +5706,19 @@ POWERSHELL;
                 'pid_running' => false,
                 'is_weline' => false,
                 'state' => 'free',
+                'pname' => '',
+                'scope' => '',
             ];
         }
 
         $portIndexSuggestsWeline = false;
+        $portIndexPname = '';
         $portKey = (string) $port;
         $portIndex = self::readPortIndex();
         if (isset($portIndex[$portKey])) {
-            $pname = (string) $portIndex[$portKey];
-            $portIndexSuggestsWeline = (\strpos($pname, self::WELINE_PROCESS_PREFIX) !== false)
-                || (\strpos($pname, '--name=' . self::WELINE_PROCESS_PREFIX) !== false);
+            $portIndexPname = (string) $portIndex[$portKey];
+            $portIndexSuggestsWeline = (\strpos($portIndexPname, self::WELINE_PROCESS_PREFIX) !== false)
+                || (\strpos($portIndexPname, '--name=' . self::WELINE_PROCESS_PREFIX) !== false);
         }
 
         $pid = self::getProcessIdByPort($port);
@@ -5655,6 +5729,8 @@ POWERSHELL;
                 'pid_running' => false,
                 'is_weline' => false,
                 'state' => 'orphan',
+                'pname' => $portIndexPname,
+                'scope' => self::extractProjectScopeFromProcessName($portIndexPname),
             ];
         }
 
@@ -5666,16 +5742,35 @@ POWERSHELL;
                 'pid_running' => false,
                 'is_weline' => false,
                 'state' => 'orphan',
+                'pname' => $portIndexPname,
+                'scope' => self::extractProjectScopeFromProcessName($portIndexPname),
             ];
         }
 
         $isWeline = $portIndexSuggestsWeline || self::isWelineServerProcess($pid);
+
+        // 命中 weline 时尽量补齐 pname，便于上层按项目作用域辨别归属。
+        $pname = $portIndexPname;
+        if ($pname === '' && $isWeline) {
+            $cmdLine = self::getProcessCommandLine($pid);
+            if ($cmdLine !== '') {
+                $pname = $cmdLine;
+            } else {
+                $indexed = self::getNameByPid($pid);
+                if ($indexed !== 'unknown' && $indexed !== '') {
+                    $pname = $indexed;
+                }
+            }
+        }
+
         return [
             'in_use' => true,
             'pid' => $pid,
             'pid_running' => true,
             'is_weline' => $isWeline,
             'state' => $isWeline ? 'weline' : 'foreign',
+            'pname' => $pname,
+            'scope' => self::extractProjectScopeFromProcessName($pname),
         ];
     }
     
