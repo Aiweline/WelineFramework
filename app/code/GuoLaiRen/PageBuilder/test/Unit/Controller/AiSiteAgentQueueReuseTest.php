@@ -407,7 +407,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertSame([], $patch['build_tasks']);
     }
 
-    public function testDefaultTaskPlanStartReusesPersistedDraftWithoutQueue(): void
+    public function testDefaultTaskPlanStartReusesOnlyStructuredPersistedDraftWithoutQueue(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
         $buildTaskService = $this->createMock(AiSiteBuildTaskService::class);
@@ -419,7 +419,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         $method = new ReflectionMethod(AiSiteAgent::class, 'shouldReusePersistedTaskPlanWithoutQueue');
         $method->setAccessible(true);
 
-        self::assertTrue($method->invoke($controller, ['task_plan_markdown' => 'draft'], 'detect_bootstrap_task_plan', '', ''));
+        self::assertFalse($method->invoke($controller, ['task_plan_markdown' => 'draft'], 'detect_bootstrap_task_plan', '', ''));
         self::assertTrue($method->invoke($controller, ['task_plan_structured' => ['shared_tasks' => [['task_key' => 'shared:header']]]], '', '', ''));
         self::assertFalse($method->invoke($controller, ['task_plan_markdown' => 'draft'], 'refine_task_plan', '', ''));
         self::assertFalse($method->invoke($controller, ['task_plan_markdown' => 'draft'], 'resume_task_plan', '', ''));
