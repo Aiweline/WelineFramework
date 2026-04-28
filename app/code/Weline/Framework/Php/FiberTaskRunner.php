@@ -60,24 +60,30 @@ final class FiberTaskRunner
         }
 
         $concurrency = $this->normalizeConcurrency($concurrency);
-        if ($concurrency <= 1 || !\class_exists(\Fiber::class) || SchedulerSystem::isSchedulerActive()) {
+        if ($concurrency <= 1 || !\class_exists(\Fiber::class)) {
             return $this->runSequentially($tasks);
         }
 
-        $contextSnapshot = $this->captureContextSnapshot();
-        $this->startLocalScheduler();
-        $previousPump = self::$activePump;
-        $this->pump = new CurlStreamPump();
-        self::$activePump = $this->pump;
+        $runPool = function () use ($tasks, $concurrency): array {
+            $contextSnapshot = $this->captureContextSnapshot();
+            $this->startLocalScheduler();
+            $previousPump = self::$activePump;
+            $this->pump = new CurlStreamPump();
+            self::$activePump = $this->pump;
 
-        try {
-            return $this->runWithFibers($tasks, $concurrency, $contextSnapshot);
-        } finally {
-            self::$activePump = $previousPump;
-            $this->pump = null;
-            $this->stopLocalScheduler();
-            $this->waits = [];
-        }
+            try {
+                return $this->runWithFibers($tasks, $concurrency, $contextSnapshot);
+            } finally {
+                self::$activePump = $previousPump;
+                $this->pump = null;
+                $this->stopLocalScheduler();
+                $this->waits = [];
+            }
+        };
+
+        return SchedulerSystem::isSchedulerActive()
+            ? SchedulerSystem::runWithoutGlobalScheduler($runPool)
+            : $runPool();
     }
 
     public static function yield(mixed $value = null): mixed
@@ -96,8 +102,8 @@ final class FiberTaskRunner
      * `['status' => 'fulfilled', 'result' => mixed]` 或
      * `['status' => 'rejected', 'error' => Throwable]`，且按完成顺序流式 yield。
      *
-     * 串行回退（concurrency<=1 / 无 Fiber / 已有外层 scheduler）走与并发分支相同的
-     * 协议，方便上层只写一份消费代码。
+     * 串行回退（concurrency<=1 / 无 Fiber）走与并发分支相同的协议；WLS 全局调度开启时
+     * 将临时抑制外层标记以便走 Fiber 池（见 {@see SchedulerSystem::suppressGlobalSchedulerMomentarily()}）。
      *
      * @param array<string|int, callable(string|int): mixed> $tasks
      * @return \Generator<string|int, array{status:string, result?:mixed, error?:\Throwable}>
@@ -109,7 +115,7 @@ final class FiberTaskRunner
         }
 
         $concurrency = $this->normalizeConcurrency($concurrency);
-        if ($concurrency <= 1 || !\class_exists(\Fiber::class) || SchedulerSystem::isSchedulerActive()) {
+        if ($concurrency <= 1 || !\class_exists(\Fiber::class)) {
             foreach ($tasks as $key => $task) {
                 if (!\is_callable($task)) {
                     yield $key => [
@@ -135,19 +141,25 @@ final class FiberTaskRunner
             return;
         }
 
-        $contextSnapshot = $this->captureContextSnapshot();
-        $this->startLocalScheduler();
-        $previousPump = self::$activePump;
-        $this->pump = new CurlStreamPump();
-        self::$activePump = $this->pump;
+        $restoreOuterScheduler = SchedulerSystem::suppressGlobalSchedulerMomentarily();
 
         try {
-            yield from $this->runEventsWithFibers($tasks, $concurrency, $contextSnapshot);
+            $contextSnapshot = $this->captureContextSnapshot();
+            $this->startLocalScheduler();
+            $previousPump = self::$activePump;
+            $this->pump = new CurlStreamPump();
+            self::$activePump = $this->pump;
+
+            try {
+                yield from $this->runEventsWithFibers($tasks, $concurrency, $contextSnapshot);
+            } finally {
+                self::$activePump = $previousPump;
+                $this->pump = null;
+                $this->stopLocalScheduler();
+                $this->waits = [];
+            }
         } finally {
-            self::$activePump = $previousPump;
-            $this->pump = null;
-            $this->stopLocalScheduler();
-            $this->waits = [];
+            $restoreOuterScheduler();
         }
     }
 

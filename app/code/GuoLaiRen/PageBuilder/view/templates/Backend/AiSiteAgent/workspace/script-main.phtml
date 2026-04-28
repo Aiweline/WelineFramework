@@ -374,6 +374,61 @@
         });
     }
 
+    function isTaskPlanQueueRunningForPrompt() {
+        var state = getLatestWorkspaceStateForQueuePrompt();
+        var hasStateActiveOperation = Object.prototype.hasOwnProperty.call(state, 'active_operation');
+        var active = hasStateActiveOperation
+            ? (state.active_operation && typeof state.active_operation === 'object' ? state.active_operation : {})
+            : (currentActiveOperationState && typeof currentActiveOperationState === 'object' ? currentActiveOperationState : {});
+        var activeOperation = String(active.operation || '').trim().toLowerCase();
+        var activeStatus = normalizeQueueStatusForPrompt(active.status);
+        var terminalStatuses = ['done', 'success', 'error', 'failed', 'cancelled', 'stop'];
+        if (activeOperation === 'task_plan' && isQueueStatusBlockingTaskPlanPrompt(activeStatus)) {
+            return true;
+        }
+        if (activeOperation === 'task_plan' && activeStatus !== '' && terminalStatuses.indexOf(activeStatus) === -1) {
+            return true;
+        }
+        if (activeOperation === 'task_plan' && !!isOperationRunning && !hasStateActiveOperation && activeStatus === '') {
+            return true;
+        }
+        if (activeOperation === 'task_plan' && Number(active.queue_id || 0) > 0 && activeStatus !== '' && terminalStatuses.indexOf(activeStatus) === -1) {
+            return true;
+        }
+        if (activeOperation === 'task_plan' && !!active.queue_waiting_for_scheduler) {
+            return true;
+        }
+
+        var queueInfo = state.task_plan_queue_info && typeof state.task_plan_queue_info === 'object'
+            ? state.task_plan_queue_info
+            : {};
+        var taskPlanQueueStatus = readQueueStatusForPrompt(state.task_plan_queue_info);
+        if (isQueueStatusBlockingTaskPlanPrompt(taskPlanQueueStatus)) {
+            return true;
+        }
+        if (taskPlanQueueStatus !== '' && terminalStatuses.indexOf(taskPlanQueueStatus) === -1) {
+            return true;
+        }
+        if (!!queueInfo.queue_waiting_for_scheduler || !!queueInfo.can_close_stream) {
+            return true;
+        }
+        var queueSnapshot = queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
+            ? queueInfo.snapshot
+            : {};
+        if (
+            Number(queueInfo.queue_id || queueSnapshot.queue_id || 0) > 0
+            && Number(queueSnapshot.finished || 0) === 0
+        ) {
+            return true;
+        }
+
+        var decision = getTaskPlanStageEntryDecision();
+        if (!!decision.task_plan_queue_running || !!decision.operation_running) {
+            return true;
+        }
+        return !!isOperationRunning && hasAnyRunningQueueForUi();
+    }
+
     function hasServerPersistedPhaseTwoTaskPlan() {
         var decision = getTaskPlanStageEntryDecision();
         if (Object.prototype.hasOwnProperty.call(decision, 'has_phase_two_task_plan')) {
@@ -1212,6 +1267,11 @@
     function promptGenerateTaskPlanOnStageEnter() {
         if (!isTaskPlanWorkspaceStage(currentWorkspaceStage) || hasServerPersistedPhaseTwoTaskPlan()) {
             return Promise.resolve(false);
+        }
+        if (isTaskPlanQueueRunningForPrompt()) {
+            taskPlanGeneratePromptHandled = true;
+            showTaskPlanPanel();
+            return Promise.resolve(!!startTaskPlanDetectBootstrapSse({ suppressStartFallback: true }));
         }
         if (!shouldOpenTaskPlanGeneratePromptOnce()) {
             return Promise.resolve(false);
@@ -12513,6 +12573,11 @@
                 var needConfirm = !serverHasTaskPlan;
                 if (serverHasTaskPlan && applyCachedTaskPlanToPanel()) {
                     setTaskPlanModeStatus(taskPlanConfirmedState ? messages.taskPlanConfirmSaved : messages.taskPlanGenerated);
+                    return;
+                }
+                if (needConfirm && isTaskPlanQueueRunningForPrompt()) {
+                    taskPlanGeneratePromptHandled = true;
+                    startTaskPlanDetectBootstrapSse({ suppressStartFallback: true });
                     return;
                 }
                 if (
