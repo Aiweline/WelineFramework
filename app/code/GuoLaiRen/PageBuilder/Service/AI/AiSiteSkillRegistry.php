@@ -115,7 +115,7 @@ final class AiSiteSkillRegistry
     /**
      * 输出注入到 Stage1 / Stage2 提示词的“技能加载能力”段。
      *
-     * @param string $stage 'stage1' | 'stage2' | 'stage2_shared' | 'stage2_page'
+     * @param string $stage 'stage1' | 'stage2' | 'stage2_shared' | 'stage2_page' | 'stage3'
      * @param list<string> $extraCodes 额外要求加载的技能 code（与默认列表合并、去重）
      * @return list<string>
      */
