@@ -280,7 +280,16 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
             '_ai_generated_shared_components' => [1],
         ];
         $pruned = $service->pruneScopeForView($scope);
-        self::assertSame(['public_id' => 'pub_keep', 'plan_confirmed' => 1], $pruned);
+        // 阶段一方案预览所需字段（plan_json / plan_structured）必须保留，作为前端 hydrate 兜底。
+        self::assertSame(
+            [
+                'public_id' => 'pub_keep',
+                'plan_confirmed' => 1,
+                'plan_json' => ['raw' => 1],
+                'plan_structured' => [1],
+            ],
+            $pruned
+        );
     }
 
     public function testPruneStateForViewCollapsesTaskPlanAndUsesPrunedScope(): void
@@ -321,8 +330,23 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
             'execution_blueprint_draft' => [1],
         ];
         $pruned = $service->pruneStateForView($state);
-        self::assertSame(['public_id' => 'pub_2', 'plan_confirmed' => 1], $pruned['scope']);
-        self::assertArrayNotHasKey('execution_blueprint', $pruned['plan']);
+        // scope 中保留 plan_json / plan_structured 作为 hydrate fallback。
+        self::assertSame(
+            [
+                'public_id' => 'pub_2',
+                'plan_confirmed' => 1,
+            ],
+            $pruned['scope']
+        );
+        // state['plan'] 必须保留 markdown / json / structured / execution_blueprint 完整字段，
+        // 同时附带 *_available 兼容标志位，供前端 hydrate 直接渲染结构化预览。
+        self::assertSame('plan-md', $pruned['plan']['markdown']);
+        self::assertSame([], $pruned['plan']['json']);
+        self::assertSame([], $pruned['plan']['structured']);
+        self::assertSame(['heavy' => 1], $pruned['plan']['execution_blueprint']);
+        self::assertFalse($pruned['plan']['json_available']);
+        self::assertFalse($pruned['plan']['structured_available']);
+        self::assertTrue($pruned['plan']['execution_blueprint_available']);
         self::assertSame(
             [
                 'markdown' => 'tp-md',
@@ -334,8 +358,12 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
             ],
             $pruned['task_plan']
         );
+        // 顶层 plan_json / plan_structured 必须保留作为前端 hydrate 兜底；
+        // execution_blueprint / events 等仍裁剪。
+        self::assertSame([1], $pruned['plan_json']);
+        self::assertSame([1], $pruned['plan_structured']);
         foreach ([
-            'events', 'plan_json', 'plan_structured', 'task_plan_structured',
+            'events', 'task_plan_structured',
             'task_plan_directory_tree', 'task_plan_markdown', 'virtual_theme_plan',
             'execution_blueprint', 'execution_blueprint_draft',
         ] as $dropped) {

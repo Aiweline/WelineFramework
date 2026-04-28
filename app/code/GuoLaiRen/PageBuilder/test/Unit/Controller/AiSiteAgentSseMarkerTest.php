@@ -797,6 +797,36 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertFalse($ssePayload['has_virtual_theme_plan']);
     }
 
+    public function testWorkspaceAndOperationSseTerminalPathsCloseStreamContract(): void
+    {
+        $moduleRoot = \defined('BP')
+            ? BP . '/app/code/GuoLaiRen/PageBuilder'
+            : \dirname(__DIR__, 4);
+        $controllerSource = \file_get_contents($moduleRoot . '/Controller/Backend/AiSiteAgent.php');
+        self::assertIsString($controllerSource);
+
+        // Workspace stream terminal recognition must include done/error/cancelled.
+        self::assertStringContainsString(
+            "return \\in_array(\$status, ['done', 'error', 'cancelled'], true);",
+            $controllerSource
+        );
+        // Workspace stream loop exits on terminal and sends complete payload (complete() implies close()).
+        self::assertStringContainsString(
+            '$sse->complete($terminalCompletePayload);',
+            $controllerSource
+        );
+        self::assertStringContainsString(
+            "\$sse->complete(['success' => true, 'last_event_id' => \$lastEventId]);",
+            $controllerSource
+        );
+
+        // Operation SSE error branches still end with complete/close.
+        self::assertStringContainsString(
+            "\$sse->complete(['success' => false, 'message' => \$throwable->getMessage(), 'operation' => \$operation]);",
+            $controllerSource
+        );
+    }
+
     public function testTaskPlanRecoveryNoticeOverridesSettledDoneQueue(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
