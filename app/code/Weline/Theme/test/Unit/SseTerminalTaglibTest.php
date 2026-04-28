@@ -35,6 +35,8 @@ class SseTerminalTaglibTest extends TestCore
             "if (eventName === 'error' && (typeof e.data !== 'string' || e.data === ''))",
             $html
         );
+        $this->assertStringContainsString("if (e && typeof e.data === 'string' && e.data !== '')", $html);
+        $this->assertStringContainsString("setStatus('error', String(msg ||", $html);
         $this->assertStringContainsString('if (terminalCompleted)', $html);
     }
 

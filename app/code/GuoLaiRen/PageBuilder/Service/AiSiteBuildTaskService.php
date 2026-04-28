@@ -21,6 +21,7 @@ class AiSiteBuildTaskService
     public const TASK_STATUS_DONE = 'done';
     public const TASK_STATUS_FAILED = 'failed';
     public const TASK_STATUS_CANCELLED = 'cancelled';
+    public const RETRYABLE_AI_FAILURES_SCOPE_KEY = 'retryable_ai_failures';
     private const BUILD_LOCKED_PLAN_SCOPE_KEYS = [
         'page_types',
         'page_types_user_customized',
@@ -837,7 +838,7 @@ class AiSiteBuildTaskService
             }
             $state = \is_array($taskState[$taskKey] ?? null) ? $taskState[$taskKey] : [];
             $status = $this->normalizeTaskStatus((string)($state['status'] ?? self::TASK_STATUS_PENDING));
-            if (\in_array($status, [self::TASK_STATUS_DONE, self::TASK_STATUS_CANCELLED], true)) {
+            if ($status !== self::TASK_STATUS_PENDING) {
                 continue;
             }
             $pending[] = \array_replace($task, $state);
@@ -855,10 +856,17 @@ class AiSiteBuildTaskService
      * @param array<string, mixed> $scope
      * @return list<array<string, mixed>>
      */
-    public function pickConcurrentTasks(array $scope, int $maxConcurrent = 3): array
+    public function pickConcurrentTasks(array $scope, int $maxConcurrent = PHP_INT_MAX): array
     {
         $maxConcurrent = \max(1, $maxConcurrent);
         $pending = $this->listPendingTasks($scope);
+        if ($pending === []) {
+            return [];
+        }
+        $pending = \array_values(\array_filter(
+            $pending,
+            fn(array $task): bool => $this->areTaskDependenciesSatisfied($scope, $task)
+        ));
         if ($pending === []) {
             return [];
         }
@@ -1157,7 +1165,7 @@ class AiSiteBuildTaskService
             $taskState = $this->extractTaskState($scope);
         }
 
-        return $scope;
+        return $this->clearRetryableAiFailures($scope, 'build');
     }
 
     /**
@@ -1363,11 +1371,162 @@ class AiSiteBuildTaskService
 
     /**
      * @param array<string, mixed> $scope
+     * @return array<string, array{items:array<string,array<string,mixed>>,updated_at:string}>
+     */
+    public function getRetryableAiFailures(array $scope, ?string $operation = null): array
+    {
+        $ledger = $this->normalizeRetryableAiFailureLedger(
+            \is_array($scope[self::RETRYABLE_AI_FAILURES_SCOPE_KEY] ?? null)
+                ? $scope[self::RETRYABLE_AI_FAILURES_SCOPE_KEY]
+                : []
+        );
+        if ($operation === null || \trim($operation) === '') {
+            return $ledger;
+        }
+
+        $operation = \trim($operation);
+        return isset($ledger[$operation]) ? [$operation => $ledger[$operation]] : [];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param list<array<string, mixed>>|array<string, array<string, mixed>> $failures
+     * @return array<string, mixed>
+     */
+    public function replaceRetryableAiFailures(array $scope, string $operation, array $failures): array
+    {
+        $operation = \trim($operation);
+        if ($operation === '') {
+            return $scope;
+        }
+
+        $ledger = $this->normalizeRetryableAiFailureLedger(
+            \is_array($scope[self::RETRYABLE_AI_FAILURES_SCOPE_KEY] ?? null)
+                ? $scope[self::RETRYABLE_AI_FAILURES_SCOPE_KEY]
+                : []
+        );
+        $items = $this->normalizeRetryableAiFailureItems($operation, $failures);
+        if ($items === []) {
+            unset($ledger[$operation]);
+        } else {
+            $ledger[$operation] = [
+                'items' => $items,
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ];
+        }
+
+        $scope[self::RETRYABLE_AI_FAILURES_SCOPE_KEY] = $ledger;
+        $scope['retryable_ai_failure_count'] = $this->countRetryableAiFailuresFromLedger($ledger);
+        $scope['next_stage_blocked_by_ai_failures'] = $scope['retryable_ai_failure_count'] > 0 ? 1 : 0;
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function clearRetryableAiFailures(array $scope, string $operation): array
+    {
+        return $this->replaceRetryableAiFailures($scope, $operation, []);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    public function hasRetryableAiFailures(array $scope, ?string $operation = null): bool
+    {
+        $summary = $this->summarizeRetryableAiFailures($scope, $operation);
+        return (int)($summary['count'] ?? 0) > 0;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array{count:int,operations:array<string,int>,items:list<array<string,mixed>>}
+     */
+    public function summarizeRetryableAiFailures(array $scope, ?string $operation = null): array
+    {
+        $ledger = $this->getRetryableAiFailures($scope, $operation);
+        $items = [];
+        $operations = [];
+        foreach ($ledger as $operationKey => $bucket) {
+            $bucketItems = \is_array($bucket['items'] ?? null) ? $bucket['items'] : [];
+            $operations[$operationKey] = \count($bucketItems);
+            foreach ($bucketItems as $failure) {
+                if (\is_array($failure)) {
+                    $items[] = $failure;
+                }
+            }
+        }
+
+        return [
+            'count' => \count($items),
+            'operations' => $operations,
+            'items' => $items,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function syncBuildTaskFailuresToRetryableLedger(array $scope): array
+    {
+        $taskState = $this->extractTaskState($scope);
+        $failures = [];
+        foreach ($this->extractBlueprintTasks($scope) as $task) {
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+            $state = \is_array($taskState[$taskKey] ?? null) ? $taskState[$taskKey] : [];
+            $status = $this->normalizeTaskStatus((string)($state['status'] ?? self::TASK_STATUS_PENDING));
+            if ($status !== self::TASK_STATUS_FAILED) {
+                continue;
+            }
+            $message = \trim((string)($state['message'] ?? ''));
+            $failures[$taskKey] = [
+                'operation' => 'build',
+                'item_key' => $taskKey,
+                'item_type' => (string)($task['task_type'] ?? 'build_task'),
+                'retry_scope' => 'build_task',
+                'page_type' => (string)($task['page_type'] ?? ''),
+                'section_code' => (string)($task['section_code'] ?? ''),
+                'message' => $message !== '' ? $message : 'Build task failed.',
+                'failed_at' => (string)($state['finished_at'] ?? $state['updated_at'] ?? \date('Y-m-d H:i:s')),
+            ];
+        }
+
+        return $this->replaceRetryableAiFailures($scope, 'build', $failures);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
      * @return bool
      */
     public function hasPendingTasks(array $scope): bool
     {
         return $this->listPendingTasks($scope) !== [];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $task
+     */
+    private function areTaskDependenciesSatisfied(array $scope, array $task): bool
+    {
+        $dependencies = \is_array($task['dependencies'] ?? null) ? $task['dependencies'] : [];
+        foreach ($dependencies as $dependency) {
+            $dependencyKey = \trim((string)$dependency);
+            if ($dependencyKey === '') {
+                continue;
+            }
+            if (!$this->isTaskDispatchSatisfied($scope, $dependencyKey)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -1400,6 +1559,79 @@ class AiSiteBuildTaskService
         $tasks = \is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [];
 
         return \array_values(\array_filter($tasks, static fn($task): bool => \is_array($task)));
+    }
+
+    /**
+     * @param array<string, mixed> $ledger
+     * @return array<string, array{items:array<string,array<string,mixed>>,updated_at:string}>
+     */
+    private function normalizeRetryableAiFailureLedger(array $ledger): array
+    {
+        $normalized = [];
+        foreach ($ledger as $operation => $bucket) {
+            $operation = \trim((string)$operation);
+            if ($operation === '' || !\is_array($bucket)) {
+                continue;
+            }
+            $items = $this->normalizeRetryableAiFailureItems(
+                $operation,
+                \is_array($bucket['items'] ?? null) ? $bucket['items'] : []
+            );
+            if ($items === []) {
+                continue;
+            }
+            $normalized[$operation] = [
+                'items' => $items,
+                'updated_at' => (string)($bucket['updated_at'] ?? \date('Y-m-d H:i:s')),
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param list<array<string, mixed>>|array<string, array<string, mixed>> $failures
+     * @return array<string, array<string, mixed>>
+     */
+    private function normalizeRetryableAiFailureItems(string $operation, array $failures): array
+    {
+        $items = [];
+        foreach ($failures as $key => $failure) {
+            if (!\is_array($failure)) {
+                continue;
+            }
+            $itemKey = \trim((string)($failure['item_key'] ?? $failure['key'] ?? (\is_string($key) ? $key : '')));
+            if ($itemKey === '') {
+                continue;
+            }
+            $message = \trim((string)($failure['message'] ?? $failure['error'] ?? ''));
+            $items[$itemKey] = \array_replace([
+                'operation' => $operation,
+                'item_key' => $itemKey,
+                'item_type' => (string)($failure['item_type'] ?? 'ai_item'),
+                'retry_scope' => (string)($failure['retry_scope'] ?? $operation),
+                'message' => $message !== '' ? $message : 'AI generation failed.',
+                'failed_at' => (string)($failure['failed_at'] ?? \date('Y-m-d H:i:s')),
+            ], $failure, [
+                'operation' => \trim((string)($failure['operation'] ?? $operation)),
+                'item_key' => $itemKey,
+            ]);
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param array<string, array{items:array<string,array<string,mixed>>,updated_at:string}> $ledger
+     */
+    private function countRetryableAiFailuresFromLedger(array $ledger): int
+    {
+        $count = 0;
+        foreach ($ledger as $bucket) {
+            $count += \count(\is_array($bucket['items'] ?? null) ? $bucket['items'] : []);
+        }
+
+        return $count;
     }
 
     /**
