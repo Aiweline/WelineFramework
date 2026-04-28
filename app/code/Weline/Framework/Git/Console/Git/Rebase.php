@@ -74,7 +74,7 @@ class Rebase extends CommandAbstract
             [
                 '-h, --help'      => __('显示帮助信息'),
                 '--cwd=<path>'    => __('Git 仓库工作目录，默认为项目根目录 BP'),
-                '--all'           => __('log 子命令：在所有 ref 上扫描（git log --all）'),
+                '--all'           => __('log 子命令：在所有 ref 上扫描（git log --all）；remove 子命令：在所有 ref 上定位路径并做全仓库历史重写（不加 --refs 局部优化，适合 Gitee 等大文件在侧分支历史中的情况）'),
                 '--since=<date>'  => __('log 子命令：限定时间范围，例如 --since=1.week 或 --since=2026-01-01'),
                 '--limit=<n>'     => __('log 子命令：限制最多输出多少条记录'),
                 '--force'         => __('remove / cleanup 子命令：真正执行操作（默认仅 dry-run）'),
@@ -95,6 +95,7 @@ class Rebase extends CommandAbstract
                 __('从历史移除（真正执行 + 自动 cleanup）') => 'php bin/w git:rebase remove app/etc/env.php --force',
                 __('从历史移除但不自动 cleanup') => 'php bin/w git:rebase remove app/etc/env.php --force --no-cleanup',
                 __('强制全量重写历史')         => 'php bin/w git:rebase remove app/etc/env.php --all-history --force',
+                __('Gitee 大文件在侧分支历史（推荐整目录）') => 'php bin/w git:rebase remove tests/e2e/pw-json-out/ --all --force',
                 __('单独清理（dry-run）')      => 'php bin/w git:rebase cleanup',
                 __('单独清理（真正执行）')      => 'php bin/w git:rebase cleanup --force',
                 __('透传 rebase（交互式）')    => 'php bin/w git:rebase -i HEAD~3',
@@ -221,35 +222,38 @@ class Rebase extends CommandAbstract
         }
 
         $forceAll = isset($args['all-history']);
-        $scope = $this->resolveRewriteScope($paths, $cwd, $forceAll);
-        $this->printScopeReport($scope, $paths, $cwd);
+        $scanAllRefs = isset($args['all']);
+        $scope = $this->resolveRewriteScope($paths, $cwd, $forceAll, $scanAllRefs);
+        $this->printScopeReport($scope, $paths, $cwd, $scanAllRefs);
 
         if ($scope['touched'] === 0) {
             return;
         }
 
-        $check = $this->runProc(['git', 'filter-repo', '--version'], $cwd);
-        if ($check['exit'] !== 0) {
-            $this->printer->error(__('未检测到 git-filter-repo，无法继续真正改写历史。'));
-            $this->printer->note(__('安装方法（任选其一）：'));
-            $this->printer->note('  pip install git-filter-repo');
-            $this->printer->note('  brew install git-filter-repo');
-            $this->printer->note(__('详情见 https://github.com/newren/git-filter-repo'));
-            return;
+        $useFilterRepo = $this->runProc(['git', 'filter-repo', '--version'], $cwd)['exit'] === 0;
+        $cmd = [];
+        if ($useFilterRepo) {
+            $cmd = ['git', 'filter-repo', '--invert-paths'];
+            foreach ($paths as $p) {
+                $cmd[] = '--path';
+                $cmd[] = $p;
+            }
+            if ($scope['range'] !== null) {
+                // --refs <range> 限定改写范围，filter-repo 会自动 implies --partial。
+                $cmd[] = '--refs';
+                $cmd[] = $scope['range'];
+            }
+            // 已自行做 dry-run 与统计提示，跳过 filter-repo 的 fresh-clone 等保护。
+            $cmd[] = '--force';
+        } else {
+            $this->printer->warning(__('未检测到 git-filter-repo，将自动降级到 Git 内置 filter-branch（较慢，但无需额外依赖）。'));
+            $cmd = ['git', 'filter-branch', '--force', '--index-filter', $this->buildFilterBranchIndexFilter($paths), '--prune-empty', '--tag-name-filter', 'cat', '--'];
+            if ($scope['range'] !== null) {
+                $cmd[] = $scope['range'];
+            } else {
+                $cmd[] = '--all';
+            }
         }
-
-        $cmd = ['git', 'filter-repo', '--invert-paths'];
-        foreach ($paths as $p) {
-            $cmd[] = '--path';
-            $cmd[] = $p;
-        }
-        if ($scope['range'] !== null) {
-            // --refs <range> 限定改写范围，filter-repo 会自动 implies --partial。
-            $cmd[] = '--refs';
-            $cmd[] = $scope['range'];
-        }
-        // 已自行做 dry-run 与统计提示，跳过 filter-repo 的 fresh-clone 等保护。
-        $cmd[] = '--force';
 
         $this->printer->note(__('待执行：%{1}', [$this->formatCmd($cmd)]));
         $this->printer->warning(__('破坏性操作：将重写仓库历史。如已推送到远程，需要协调 force-push 与团队成员。'));
@@ -260,7 +264,7 @@ class Rebase extends CommandAbstract
             return;
         }
 
-        $this->printer->note(__('开始执行 git filter-repo ...'));
+        $this->printer->note($useFilterRepo ? __('开始执行 git filter-repo ...') : __('开始执行 git filter-branch ...'));
         $result = $this->runProc($cmd, $cwd);
         if ($result['stdout'] !== '') {
             $this->printer->printing($result['stdout']);
@@ -269,7 +273,7 @@ class Rebase extends CommandAbstract
             $this->printer->printing($result['stderr']);
         }
         if ($result['exit'] !== 0) {
-            $this->printer->error(__('git filter-repo 退出码：%{1}', [$result['exit']]));
+            $this->printer->error(__('%{1} 退出码：%{2}', [$useFilterRepo ? 'git filter-repo' : 'git filter-branch', $result['exit']]));
             return;
         }
         $this->printer->success(__('历史已重写。请检查后再 push（通常需要 git push --force）。'));
@@ -285,20 +289,37 @@ class Rebase extends CommandAbstract
     }
 
     /**
+     * 构建 filter-branch 的 index-filter 命令。
+     *
+     * 使用 Git 自带 `git rm --cached --ignore-unmatch` 从每个提交索引中剔除目标路径。
+     * 这里必须拼成单字符串，因为 filter-branch 会在 shell 中执行该参数。
+     *
+     * @param array<int, string> $paths
+     */
+    private function buildFilterBranchIndexFilter(array $paths): string
+    {
+        $quoted = array_map(static fn(string $p): string => escapeshellarg($p), $paths);
+        return 'git rm -r --cached --ignore-unmatch -- ' . implode(' ', $quoted);
+    }
+
+    /**
      * 计算改写范围：
-     *  - 用 `git rev-list --reverse HEAD -- <paths>` 找出最早涉及任一路径的 commit；
-     *  - 它的父 commit 即为 rewrite base，filter-repo 只重写 <base>..HEAD；
-     *  - 若该 commit 是 root（无父）或 --all-history 强制全量，退化为整段历史。
+     *  - 默认：`git rev-list --reverse HEAD -- <paths>` + 局部 `--refs <base>..HEAD`；
+     *  - `--all`：`git rev-list --reverse --all -- <paths>` 定位，且 **不做** `--refs` 局部优化（全 ref 重写），
+     *    因侧分支上的最早提交往往不是当前 HEAD 的祖先，`base..HEAD` 会漏删；
+     *  - `--all-history`：强制整仓库全历史（与是否局部无关，等价于不加 --refs）；
+     *  - 若最早提交是 root（无父），退化为不加 --refs。
      *
      * @param array<int, string> $paths
      * @return array{range: ?string, total: int, touched: int, earliest: ?string, base: ?string, mode: string}
      */
-    private function resolveRewriteScope(array $paths, string $cwd, bool $forceAll): array
+    private function resolveRewriteScope(array $paths, string $cwd, bool $forceAll, bool $scanAllRefs): array
     {
-        $totalRes = $this->runProc(['git', 'rev-list', '--count', 'HEAD'], $cwd);
+        $revListHead = $scanAllRefs ? '--all' : 'HEAD';
+        $totalRes = $this->runProc(['git', 'rev-list', '--count', $revListHead], $cwd);
         $total = $totalRes['exit'] === 0 ? (int)trim($totalRes['stdout']) : 0;
 
-        $cmd = ['git', 'rev-list', '--reverse', 'HEAD', '--'];
+        $cmd = ['git', 'rev-list', '--reverse', $revListHead, '--'];
         foreach ($paths as $p) {
             $cmd[] = $p;
         }
@@ -317,14 +338,14 @@ class Rebase extends CommandAbstract
         $touched = count($lines);
         $earliest = $lines[0] ?? null;
 
-        if ($forceAll) {
+        if ($forceAll || $scanAllRefs) {
             return [
                 'range'    => null,
                 'total'    => $total,
                 'touched'  => $touched,
                 'earliest' => $earliest,
                 'base'     => null,
-                'mode'     => 'forced-full',
+                'mode'     => $scanAllRefs ? 'all-refs-full' : 'forced-full',
             ];
         }
 
@@ -355,12 +376,20 @@ class Rebase extends CommandAbstract
      * @param array{range: ?string, total: int, touched: int, earliest: ?string, base: ?string, mode: string} $scope
      * @param array<int, string> $paths
      */
-    private function printScopeReport(array $scope, array $paths, string $cwd): void
+    private function printScopeReport(array $scope, array $paths, string $cwd, bool $scanAllRefs = false): void
     {
         $this->printer->note(__('待移除路径：%{1}', [implode(', ', $paths)]));
         if ($scope['touched'] === 0) {
-            $this->printer->warning(__('未在 HEAD 历史中找到任何涉及该路径的提交，可能路径错误或仅在其它 ref 上。'));
-            $this->printer->note(__('总提交数：%{1}', [$scope['total']]));
+            $this->printer->warning(__('未找到任何涉及该路径的提交（当前扫描范围：%{1}）。', [
+                $scanAllRefs ? 'git rev-list --all' : 'git rev-list HEAD',
+            ]));
+            if (!$scanAllRefs) {
+                $this->printer->note(__('若大文件只在其它分支或未合并提交里，请改用：php bin/w git:rebase remove <路径> --all'));
+            }
+            $this->printer->note(__('总提交数（%{1}）：%{2}', [
+                $scanAllRefs ? '--all' : 'HEAD',
+                $scope['total'],
+            ]));
             return;
         }
 
@@ -384,6 +413,9 @@ class Rebase extends CommandAbstract
                 break;
             case 'forced-full':
                 $this->printer->warning(__('已通过 --all-history 强制对全部历史进行重写。'));
+                break;
+            case 'all-refs-full':
+                $this->printer->warning(__('已启用 --all：将在所有分支/ref 上重写历史（不使用 --refs 局部范围），确保侧分支上的大文件一并清除。'));
                 break;
         }
     }
