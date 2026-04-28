@@ -1877,13 +1877,12 @@ class AiSitePageComponentGenerationService
 
         $guardedPrompt = $this->prependComponentJsonOnlyGuard($prompt, false);
         try {
-            $this->getAiService()->generateStream(
-                $guardedPrompt,
-                static function (string $chunk) use (&$fullContent, &$chunkBuffer, $flushChunkBuffer, $sse, $region): bool {
+            $this->callAiOperation('generateStream', [
+                'prompt' => $guardedPrompt,
+                'on_chunk' => static function (string $chunk) use (&$fullContent, &$chunkBuffer, $flushChunkBuffer, $sse, $region): bool {
                     $fullContent .= $chunk;
                     $chunkBuffer .= $chunk;
                     $flushChunkBuffer(false);
-                    // 实时转发 AI chunks 到 SSE 客户端，不等待完整响应
                     if ($sse !== null && \is_object($sse) && \method_exists($sse, 'sendEvent')) {
                         $sse->sendEvent('ai_chunk', [
                             'region' => $region,
@@ -1892,17 +1891,15 @@ class AiSitePageComponentGenerationService
                     }
                     return true;
                 },
-                null,
-                'pagebuilder_component_generation',
-                null,
-                $this->buildAiRuntimeParams([
+                'scenario_code' => 'pagebuilder_component_generation',
+                'params' => $this->buildAiRuntimeParams([
                     'allow_zero_balance_provider' => true,
                     'temperature' => 0.35,
                     'max_tokens' => 4096,
                     'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
                     'response_format' => ['type' => 'json_object'],
-                ])
-            );
+                ]),
+            ]);
         } catch (\Throwable $streamThrowable) {
             $flushChunkBuffer(true);
             return $this->recoverAiGenerationAfterStreamFailure($region, $prompt, $fullContent, $streamThrowable);
@@ -1979,19 +1976,17 @@ class AiSitePageComponentGenerationService
     private function runAiGenerationWithoutStream(string $region, string $prompt): array
     {
         $guardedPrompt = $this->prependComponentJsonOnlyGuard($prompt, true);
-        $response = $this->getAiService()->generate(
-            $guardedPrompt,
-            null,
-            'pagebuilder_component_generation',
-            null,
-            $this->buildAiRuntimeParams([
+        $response = $this->callAiOperation('generate', [
+            'prompt' => $guardedPrompt,
+            'scenario_code' => 'pagebuilder_component_generation',
+            'params' => $this->buildAiRuntimeParams([
                 'allow_zero_balance_provider' => true,
                 'temperature' => 0.35,
                 'max_tokens' => 4096,
                 'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
                 'response_format' => ['type' => 'json_object'],
-            ])
-        );
+            ]),
+        ]);
 
         return $this->decodeAndNormalizeComponentContent(
             \is_string($response) ? $response : '',
@@ -2044,19 +2039,18 @@ class AiSitePageComponentGenerationService
 
         foreach (self::CLAUDE_DESIGN_PASS_MODEL_CODES as $modelCode) {
             try {
-                $response = $this->getAiService()->generate(
-                    $polishPrompt,
-                    $modelCode,
-                    'pagebuilder_component_generation',
-                    null,
-                    $this->buildAiRuntimeParams([
+                $response = $this->callAiOperation('generate', [
+                    'prompt' => $polishPrompt,
+                    'model_code' => $modelCode,
+                    'scenario_code' => 'pagebuilder_component_generation',
+                    'params' => $this->buildAiRuntimeParams([
                         'allow_zero_balance_provider' => true,
                         'temperature' => 0.25,
                         'max_tokens' => 4096,
                         'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
                         'response_format' => ['type' => 'json_object'],
-                    ])
-                );
+                    ]),
+                ]);
                 if (!\is_string($response) || \trim($response) === '') {
                     continue;
                 }
@@ -2499,19 +2493,17 @@ class AiSitePageComponentGenerationService
             . $safety
             . "Previous invalid output:\n{$previousSnippet}";
 
-        $response = $this->getAiService()->generate(
-            $prompt,
-            null,
-            'pagebuilder_component_generation',
-            null,
-            $this->buildAiRuntimeParams([
+        $response = $this->callAiOperation('generate', [
+            'prompt' => $prompt,
+            'scenario_code' => 'pagebuilder_component_generation',
+            'params' => $this->buildAiRuntimeParams([
                 'temperature' => 0.2,
                 'max_tokens' => 8192,
                 'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
                 'response_format' => ['type' => 'json_object'],
                 'allow_zero_balance_provider' => true,
-            ])
-        );
+            ]),
+        ]);
 
         return \is_string($response) ? $response : null;
     }
@@ -4487,9 +4479,75 @@ class AiSitePageComponentGenerationService
         return $this->codeValidator ?? ObjectManager::getInstance(CodeValidator::class);
     }
 
+    /**
+     * @deprecated 仅用于既有依赖检查；新代码必须走 {@see self::callAiOperation()}，
+     *             以遵守 unified-query-provider 规范（模块间通过 w_query('ai', ...) 触达 AI）。
+     */
     private function getAiService(): AiService
     {
         return $this->aiService ?? ObjectManager::getInstance(AiService::class);
+    }
+
+    /**
+     * 统一的跨模块 AI 调用入口：
+     *  - 构造注入了 {@see AiService} 时直接复用，兼容既有 mock 测试；
+     *  - 否则走 `w_query('ai', $operation, $params)`，由 {@see \Weline\Ai\Extends\Module\Weline_Framework\Query\AiQueryProvider} 接管。
+     *
+     * 支持的 operation：
+     *  - generate(prompt, model_code?, scenario_code?, locale?, params?, user_id?, is_backend?) -> string
+     *  - generateStream(prompt, on_chunk, model_code?, scenario_code?, locale?, params?) -> ['status'=>'fulfilled']
+     *
+     * @param array<string, mixed> $params
+     */
+    private function callAiOperation(string $operation, array $params): mixed
+    {
+        if ($this->aiService !== null) {
+            return $this->dispatchAiOperationViaInjectedService($this->aiService, $operation, $params);
+        }
+
+        return w_query('ai', $operation, $params);
+    }
+
+    private function dispatchAiOperationViaInjectedService(AiService $aiService, string $operation, array $params): mixed
+    {
+        return match ($operation) {
+            'generate' => $aiService->generate(
+                (string)($params['prompt'] ?? ''),
+                $params['model_code'] ?? null,
+                $params['scenario_code'] ?? null,
+                $params['locale'] ?? null,
+                \is_array($params['params'] ?? null) ? $params['params'] : [],
+                isset($params['user_id']) ? (int)$params['user_id'] : null,
+                (bool)($params['is_backend'] ?? false),
+            ),
+            'generateStream' => $this->dispatchInjectedGenerateStream($aiService, $params),
+            default => throw new \InvalidArgumentException(
+                'Unsupported AI operation in PageBuilder helper: ' . $operation
+            ),
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array{status:string}
+     */
+    private function dispatchInjectedGenerateStream(AiService $aiService, array $params): array
+    {
+        $callback = $params['on_chunk'] ?? null;
+        if (!\is_callable($callback)) {
+            throw new \InvalidArgumentException('on_chunk callable is required for generateStream');
+        }
+
+        $aiService->generateStream(
+            (string)($params['prompt'] ?? ''),
+            $callback,
+            $params['model_code'] ?? null,
+            $params['scenario_code'] ?? null,
+            $params['locale'] ?? null,
+            \is_array($params['params'] ?? null) ? $params['params'] : [],
+        );
+
+        return ['status' => 'fulfilled'];
     }
 
     private function getPageBlueprintService(): AiSitePageBlueprintService
