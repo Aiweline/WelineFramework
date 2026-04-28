@@ -525,6 +525,28 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertContains('page:about_page:content/about-page-hero', $pageTaskKeys);
     }
 
+    public function testPickConcurrentTasksDefaultsToAllCurrentlySchedulableTasks(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page', 'about_page'],
+        ], [
+            'site_title' => 'Example Site',
+            'brief_description' => 'Example site summary',
+        ], 'virtual_theme');
+
+        $scope = $service->markTaskDone($scope, 'shared:header', ['region' => 'header']);
+        $scope = $service->markTaskDone($scope, 'shared:footer', ['region' => 'footer']);
+
+        $picked = $service->pickConcurrentTasks($scope);
+        $pickedKeys = \array_column($picked, 'task_key');
+
+        $this->assertContains('page:home_page:content/home-page-hero', $pickedKeys);
+        $this->assertContains('page:about_page:content/about-page-hero', $pickedKeys);
+        $this->assertGreaterThan(2, \count($pickedKeys));
+    }
+
     public function testPickConcurrentTasksHonorsNonParallelTasks(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
@@ -612,7 +634,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertSame(['page:home_page:content/home-page-hero'], \array_column($picked, 'task_key'));
     }
 
-    public function testListPendingTasksSkipsCancelledAndRunningTasksRemainVisibleForResumeSummary(): void
+    public function testListPendingTasksSkipsCancelledAndRunningTasks(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
@@ -628,7 +650,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
 
         $pendingKeys = \array_column($service->listPendingTasks($scope), 'task_key');
 
-        $this->assertContains('shared:header', $pendingKeys);
+        $this->assertNotContains('shared:header', $pendingKeys);
         $this->assertNotContains('shared:footer', $pendingKeys);
         $this->assertTrue($service->hasPendingTasks($scope));
     }
