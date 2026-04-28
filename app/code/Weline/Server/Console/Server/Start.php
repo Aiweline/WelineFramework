@@ -804,7 +804,8 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             // 保存实例信息（Master 将从这里读取配置并启动所有进程）
             $workerScript = $this->ensureWorkerScript($workerSslEnabled);
             $orchestratorRuntimeOptions = $this->buildOrchestratorRuntimeOptions($frontend);
-            $this->saveInstanceInfo($instanceName, $host, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime, $orchestratorRuntimeOptions, (string) ($config['worker_memory_limit'] ?? '256M'), (string) ($config['dispatcher_memory_limit'] ?? ''));
+            $listenHost = $this->resolveServerListenHost((string)$host);
+            $this->saveInstanceInfo($instanceName, $listenHost, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime, $orchestratorRuntimeOptions, (string) ($config['worker_memory_limit'] ?? '256M'), (string) ($config['dispatcher_memory_limit'] ?? ''), (string)$host);
         } finally {
             if ($workerPortAllocationLocked) {
                 $this->releaseWorkerPortAllocationLock();
@@ -848,10 +849,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
 
         // 将 .local 域名转换为 127.0.0.1 用于实际监听
         // 域名仅用于 SSL 证书，实际监听使用 IP 避免 PHP DNS 解析问题
-        $listenHost = $host;
-        if ($host === 'localhost' || LocalDomainPolicy::isManagedLocalDomain($host)) {
-            $listenHost = '127.0.0.1';
-        }
+        $listenHost = $this->resolveServerListenHost((string)$host);
 
         if ($daemon) {
             $this->wlsChildProcessesMayExist = true;
@@ -1062,6 +1060,16 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             || (bool)\preg_match('/^127\.\d+\.\d+\.\d+$/', $host);
     }
 
+    protected function resolveServerListenHost(string $host): string
+    {
+        $host = \trim($host);
+        if ($host === '' || $host === 'localhost' || LocalDomainPolicy::isManagedLocalDomain($host)) {
+            return '127.0.0.1';
+        }
+
+        return $host;
+    }
+
     /**
      * 仅运行 Master 进程（由 startMasterInBackground 通过子进程调用，从实例文件恢复状态）
      * 非 Windows 下调用 posix_setsid() 脱离控制终端，避免 SSH 断开或父进程退出时收到 SIGHUP 导致 Master 退出。
@@ -1121,6 +1129,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             : [];
         $config = [
             'host' => (string)($data['host'] ?? '127.0.0.1'),
+            'public_host' => (string)($data['public_host'] ?? ($data['host'] ?? '127.0.0.1')),
             'port' => $port,
             'worker_count' => $workerCount,
             'dispatcher_enabled' => $dispatcherEnabled,
@@ -4693,11 +4702,12 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
     /**
      * 保存实例信息
      */
-    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000, array $sharedStateRuntime = [], array $orchestratorRuntimeOptions = [], string $workerMemoryLimit = '256M', string $dispatcherMemoryLimit = ''): void
+    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000, array $sharedStateRuntime = [], array $orchestratorRuntimeOptions = [], string $workerMemoryLimit = '256M', string $dispatcherMemoryLimit = '', string $publicHost = ''): void
     {
         $instanceData = [
             'name' => $instanceName,
             'host' => $host,
+            'public_host' => $publicHost !== '' ? $publicHost : $host,
             'port' => $port,
             'count' => $count,
             'daemon' => $daemon,
