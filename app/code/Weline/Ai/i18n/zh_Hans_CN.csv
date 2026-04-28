@@ -343,7 +343,7 @@ API响应格式错误,API响应格式错误
 "API returned an error: %{error}","API returned an error: %{error}"
 "Invalid API response format.","Invalid API response format."
 "API request failed after %{count} retries: %{msg}","API request failed after %{count} retries: %{msg}"
-"SSE stream aborted by reasoning callback","SSE 流被推理回调终止"
+"SSE stream aborted by callback","SSE stream aborted by callback"
 未配置翻译默认模型,未配置翻译默认模型
 id属性不能为空,id属性不能为空
 使用默认模型,使用默认模型
