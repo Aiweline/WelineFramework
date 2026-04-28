@@ -29,6 +29,7 @@ class ServerInstanceManager
 
     private const INSTANCE_RECORDS_KEY = 'instance_records';
     private const CURRENT_SNAPSHOT_KEY = 'current_snapshot';
+    private const CURRENT_SERVICES_INPUT_KEY = '__current_services_input';
 
     /** 服务角色显示名称映射 */
     private const ROLE_DISPLAY_NAMES = [
@@ -337,9 +338,12 @@ class ServerInstanceManager
         }
 
         // 构建 services 数组（按角色分组）
+        $currentServicesData = ['services' => []];
         foreach ($services as $service) {
             $this->mergeServiceRecord($data, $service);
+            $this->mergeServiceRecord($currentServicesData, $service);
         }
+        $data[self::CURRENT_SERVICES_INPUT_KEY] = $currentServicesData['services'];
         $data['services_updated_at'] = \date('Y-m-d H:i:s');
 
         // 同时更新便于直接访问的旧字段（向后兼容）
@@ -352,6 +356,11 @@ class ServerInstanceManager
     {
         $services = \is_array($existing['services'] ?? null) ? $existing['services'] : [];
         $dataServices = \is_array($data['services'] ?? null) ? $data['services'] : [];
+        $hasCurrentServicesInput = \array_key_exists(self::CURRENT_SERVICES_INPUT_KEY, $data);
+        $currentServices = $hasCurrentServicesInput && \is_array($data[self::CURRENT_SERVICES_INPUT_KEY])
+            ? $data[self::CURRENT_SERVICES_INPUT_KEY]
+            : $dataServices;
+        unset($data[self::CURRENT_SERVICES_INPUT_KEY]);
         $records = \is_array($existing[self::INSTANCE_RECORDS_KEY] ?? null)
             ? $existing[self::INSTANCE_RECORDS_KEY]
             : [];
@@ -369,7 +378,15 @@ class ServerInstanceManager
         );
         $merged['lifecycle_state'] = (string)($data['startup_phase'] ?? 'starting');
         $merged[self::INSTANCE_RECORDS_KEY] = $this->appendInstanceRuntimeRecord($records, $data);
-        $merged[self::CURRENT_SNAPSHOT_KEY] = $this->buildCurrentSnapshot($merged);
+
+        $snapshotData = $merged;
+        if ($hasCurrentServicesInput) {
+            // updateServices() receives the orchestrator's live registry view.
+            // Keep the append-only service history, but do not let old slots
+            // inflate the startup-ready barrier or current status snapshot.
+            $snapshotData['services'] = $currentServices;
+        }
+        $merged[self::CURRENT_SNAPSHOT_KEY] = $this->buildCurrentSnapshot($snapshotData);
 
         return $merged;
     }
