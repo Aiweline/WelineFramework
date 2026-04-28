@@ -74,11 +74,12 @@ class Rebase extends CommandAbstract
             [
                 '-h, --help'      => __('显示帮助信息'),
                 '--cwd=<path>'    => __('Git 仓库工作目录，默认为项目根目录 BP'),
-                '--all'           => __('log 子命令：在所有 ref 上扫描（git log --all）；remove 子命令：在所有 ref 上定位路径并做全仓库历史重写（不加 --refs 局部优化，适合 Gitee 等大文件在侧分支历史中的情况）'),
+                '--ref=<name>'    => __('remove 子命令：指定要重写的分支/标签/ref（可多次传入），例如 --ref=master --ref=refs/remotes/origin/dev'),
                 '--since=<date>'  => __('log 子命令：限定时间范围，例如 --since=1.week 或 --since=2026-01-01'),
                 '--limit=<n>'     => __('log 子命令：限制最多输出多少条记录'),
                 '--force'         => __('remove / cleanup 子命令：真正执行操作（默认仅 dry-run）'),
-                '--all-history'   => __('remove 子命令：强制重写全部历史（关闭「按文件起点局部重写」优化）'),
+                '--all-history'   => __('remove 子命令：强制重写全部历史（关闭局部重写优化）'),
+                '--all-hard'      => __('remove 子命令：同 --all-history，强制全仓库全 refs 重写（最慢，谨慎使用）'),
                 '--no-cleanup'    => __('remove 子命令：成功后不自动跑 cleanup（默认会自动收尾）'),
             ],
             [
@@ -89,20 +90,20 @@ class Rebase extends CommandAbstract
             ],
             [
                 __('查看路径相关提交')        => 'php bin/w git:rebase log app/etc/env.php',
-                __('所有分支 + 时间范围')      => 'php bin/w git:rebase log app/etc/env.php --all --since=1.week',
                 __('指定别的仓库目录')        => 'php bin/w git:rebase log app/etc/env.php --cwd=/path/to/repo',
                 __('从历史移除（dry-run 局部）') => 'php bin/w git:rebase remove app/etc/env.php',
                 __('从历史移除（真正执行 + 自动 cleanup）') => 'php bin/w git:rebase remove app/etc/env.php --force',
                 __('从历史移除但不自动 cleanup') => 'php bin/w git:rebase remove app/etc/env.php --force --no-cleanup',
+                __('指定分支重写（可多次 --ref）') => 'php bin/w git:rebase remove tests/e2e/pw-json-out/ --ref=master --force',
                 __('强制全量重写历史')         => 'php bin/w git:rebase remove app/etc/env.php --all-history --force',
-                __('Gitee 大文件在侧分支历史（推荐整目录）') => 'php bin/w git:rebase remove tests/e2e/pw-json-out/ --all --force',
+                __('强制全库重写（最慢）')       => 'php bin/w git:rebase remove tests/e2e/pw-json-out/ --all-hard --force',
                 __('单独清理（dry-run）')      => 'php bin/w git:rebase cleanup',
                 __('单独清理（真正执行）')      => 'php bin/w git:rebase cleanup --force',
                 __('透传 rebase（交互式）')    => 'php bin/w git:rebase -i HEAD~3',
                 __('透传 rebase（指定上游）')  => 'php bin/w git:rebase main',
                 __('短别名')                 => 'php bin/w git:rb log app/etc/env.php',
             ],
-            'php bin/w git:rebase [log|remove|cleanup <path...>] [--cwd=<path>] [--all] [--since=<date>] [--limit=<n>] [--all-history] [--no-cleanup] [--force]'
+            'php bin/w git:rebase [log|remove|cleanup <path...>] [--cwd=<path>] [--ref=<name>] [--since=<date>] [--limit=<n>] [--all-history] [--no-cleanup] [--force]'
         );
     }
 
@@ -181,9 +182,6 @@ class Rebase extends CommandAbstract
         }
 
         $cmd = ['git', 'log', '--oneline'];
-        if (isset($args['all'])) {
-            $cmd[] = '--all';
-        }
         if (isset($args['since']) && is_string($args['since']) && $args['since'] !== '') {
             $cmd[] = '--since=' . $args['since'];
         }
@@ -221,12 +219,17 @@ class Rebase extends CommandAbstract
             return;
         }
 
-        $forceAll = isset($args['all-history']);
-        $scanAllRefs = isset($args['all']);
-        $scope = $this->resolveRewriteScope($paths, $cwd, $forceAll, $scanAllRefs);
-        $this->printScopeReport($scope, $paths, $cwd, $scanAllRefs);
+        $forceAll = isset($args['all-history']) || isset($args['all-hard']);
+        $manualRefs = $this->collectManualRefsFromArgs($args);
+        $scope = $this->resolveRewriteScope($paths, $cwd, $forceAll, $manualRefs);
+        $this->printScopeReport($scope, $paths, $cwd);
 
         if ($scope['touched'] === 0) {
+            return;
+        }
+        if ($manualRefs !== [] && $scope['mode'] === 'manual-refs-none') {
+            $this->printer->error(__('指定 --ref 未命中目标路径提交，已终止（未执行任何重写）。'));
+            $this->printer->note(__('请检查分支名是否正确，或改用当前分支默认模式。'));
             return;
         }
 
@@ -242,6 +245,12 @@ class Rebase extends CommandAbstract
                 // --refs <range> 限定改写范围，filter-repo 会自动 implies --partial。
                 $cmd[] = '--refs';
                 $cmd[] = $scope['range'];
+            } elseif ($scope['refs'] !== []) {
+                // 使用受影响 refs 做增量重写，避免全量扫描。
+                $cmd[] = '--refs';
+                foreach ($scope['refs'] as $ref) {
+                    $cmd[] = $ref;
+                }
             }
             // 已自行做 dry-run 与统计提示，跳过 filter-repo 的 fresh-clone 等保护。
             $cmd[] = '--force';
@@ -250,6 +259,10 @@ class Rebase extends CommandAbstract
             $cmd = ['git', 'filter-branch', '--force', '--index-filter', $this->buildFilterBranchIndexFilter($paths), '--prune-empty', '--tag-name-filter', 'cat', '--'];
             if ($scope['range'] !== null) {
                 $cmd[] = $scope['range'];
+            } elseif ($scope['refs'] !== []) {
+                foreach ($scope['refs'] as $ref) {
+                    $cmd[] = $ref;
+                }
             } else {
                 $cmd[] = '--all';
             }
@@ -305,21 +318,24 @@ class Rebase extends CommandAbstract
     /**
      * 计算改写范围：
      *  - 默认：`git rev-list --reverse HEAD -- <paths>` + 局部 `--refs <base>..HEAD`；
-     *  - `--all`：`git rev-list --reverse --all -- <paths>` 定位，且 **不做** `--refs` 局部优化（全 ref 重写），
-     *    因侧分支上的最早提交往往不是当前 HEAD 的祖先，`base..HEAD` 会漏删；
+     *  - `--ref`：在指定 refs 上定位并仅重写命中路径的 refs；
      *  - `--all-history`：强制整仓库全历史（与是否局部无关，等价于不加 --refs）；
      *  - 若最早提交是 root（无父），退化为不加 --refs。
      *
      * @param array<int, string> $paths
-     * @return array{range: ?string, total: int, touched: int, earliest: ?string, base: ?string, mode: string}
+     * @return array{range: ?string, refs: array<int, string>, total: int, touched: int, earliest: ?string, base: ?string, mode: string, scope: string}
      */
-    private function resolveRewriteScope(array $paths, string $cwd, bool $forceAll, bool $scanAllRefs): array
+    private function resolveRewriteScope(array $paths, string $cwd, bool $forceAll, array $manualRefs = []): array
     {
-        $revListHead = $scanAllRefs ? '--all' : 'HEAD';
-        $totalRes = $this->runProc(['git', 'rev-list', '--count', $revListHead], $cwd);
+        $revTargets = $manualRefs !== [] ? $manualRefs : ['HEAD'];
+        $scopeLabel = $manualRefs !== [] ? implode(', ', $manualRefs) : 'HEAD';
+
+        $totalCmd = array_merge(['git', 'rev-list', '--count'], $revTargets);
+        $totalRes = $this->runProc($totalCmd, $cwd);
         $total = $totalRes['exit'] === 0 ? (int)trim($totalRes['stdout']) : 0;
 
-        $cmd = ['git', 'rev-list', '--reverse', $revListHead, '--'];
+        $cmd = array_merge(['git', 'rev-list', '--reverse'], $revTargets);
+        $cmd[] = '--';
         foreach ($paths as $p) {
             $cmd[] = $p;
         }
@@ -327,25 +343,32 @@ class Rebase extends CommandAbstract
         if ($touchedRes['exit'] !== 0 || trim($touchedRes['stdout']) === '') {
             return [
                 'range'    => null,
+                'refs'     => [],
                 'total'    => $total,
                 'touched'  => 0,
                 'earliest' => null,
                 'base'     => null,
-                'mode'     => 'none',
+                'mode'     => $manualRefs !== [] ? 'manual-refs-none' : 'none',
+                'scope'    => $scopeLabel,
             ];
         }
         $lines = preg_split('/\r?\n/', trim($touchedRes['stdout'])) ?: [];
         $touched = count($lines);
         $earliest = $lines[0] ?? null;
 
-        if ($forceAll || $scanAllRefs) {
+        if ($forceAll || $manualRefs !== []) {
+            $affectedRefs = $manualRefs !== [] ? $this->filterAffectedManualRefs($manualRefs, $paths, $cwd) : [];
             return [
                 'range'    => null,
+                'refs'     => $forceAll ? [] : $affectedRefs,
                 'total'    => $total,
                 'touched'  => $touched,
                 'earliest' => $earliest,
                 'base'     => null,
-                'mode'     => $scanAllRefs ? 'all-refs-full' : 'forced-full',
+                'mode'     => $forceAll
+                    ? 'forced-full'
+                    : ($affectedRefs === [] ? 'manual-refs-none' : 'manual-refs-affected'),
+                'scope'    => $scopeLabel,
             ];
         }
 
@@ -353,41 +376,40 @@ class Rebase extends CommandAbstract
         if ($parentRes['exit'] !== 0 || trim($parentRes['stdout']) === '') {
             return [
                 'range'    => null,
+                'refs'     => [],
                 'total'    => $total,
                 'touched'  => $touched,
                 'earliest' => $earliest,
                 'base'     => null,
                 'mode'     => 'root-fallback',
+                'scope'    => $scopeLabel,
             ];
         }
         $base = trim($parentRes['stdout']);
 
         return [
             'range'    => $base . '..HEAD',
+            'refs'     => [],
             'total'    => $total,
             'touched'  => $touched,
             'earliest' => $earliest,
             'base'     => $base,
             'mode'     => 'partial',
+            'scope'    => $scopeLabel,
         ];
     }
 
     /**
-     * @param array{range: ?string, total: int, touched: int, earliest: ?string, base: ?string, mode: string} $scope
+     * @param array{range: ?string, refs: array<int, string>, total: int, touched: int, earliest: ?string, base: ?string, mode: string, scope: string} $scope
      * @param array<int, string> $paths
      */
-    private function printScopeReport(array $scope, array $paths, string $cwd, bool $scanAllRefs = false): void
+    private function printScopeReport(array $scope, array $paths, string $cwd): void
     {
         $this->printer->note(__('待移除路径：%{1}', [implode(', ', $paths)]));
         if ($scope['touched'] === 0) {
-            $this->printer->warning(__('未找到任何涉及该路径的提交（当前扫描范围：%{1}）。', [
-                $scanAllRefs ? 'git rev-list --all' : 'git rev-list HEAD',
-            ]));
-            if (!$scanAllRefs) {
-                $this->printer->note(__('若大文件只在其它分支或未合并提交里，请改用：php bin/w git:rebase remove <路径> --all'));
-            }
+            $this->printer->warning(__('未找到任何涉及该路径的提交（当前扫描范围：%{1}）。', [$scope['scope']]));
             $this->printer->note(__('总提交数（%{1}）：%{2}', [
-                $scanAllRefs ? '--all' : 'HEAD',
+                $scope['scope'],
                 $scope['total'],
             ]));
             return;
@@ -414,11 +436,94 @@ class Rebase extends CommandAbstract
             case 'forced-full':
                 $this->printer->warning(__('已通过 --all-history 强制对全部历史进行重写。'));
                 break;
-            case 'all-refs-full':
-                $this->printer->warning(__('已启用 --all：将在所有分支/ref 上重写历史（不使用 --refs 局部范围），确保侧分支上的大文件一并清除。'));
+            case 'manual-refs-affected':
+                $this->printer->success(__('已指定 refs：仅重写受影响 refs（共 %{1} 个）。', [
+                    count($scope['refs']),
+                ]));
+                foreach ($scope['refs'] as $ref) {
+                    $this->printer->note('  - ' . $ref);
+                }
+                break;
+            case 'manual-refs-none':
+                $this->printer->warning(__('已指定 --ref，但这些 refs 下未发现目标路径提交。为避免误操作，本次不会执行改写。'));
                 break;
         }
     }
+
+    /**
+     * 解析命令参数中的 --ref（支持 --ref=xxx 与 --ref xxx，允许多次）。
+     *
+     * @param array<mixed> $args
+     * @return array<int, string>
+     */
+    private function collectManualRefsFromArgs(array $args): array
+    {
+        $refs = [];
+        // 1) 解析具名参数（框架会把 --ref=xxx 合并为 key=>value）
+        if (isset($args['ref'])) {
+            $raw = $args['ref'];
+            if (is_string($raw) && $raw !== '') {
+                $refs[] = $raw;
+            } elseif (is_array($raw)) {
+                foreach ($raw as $item) {
+                    if (is_string($item) && $item !== '') {
+                        $refs[] = $item;
+                    }
+                }
+            }
+        }
+        // 2) 兜底解析位置参数里的 --ref/--ref=
+        for ($i = 1; isset($args[$i]); $i++) {
+            $val = $args[$i];
+            if (!is_string($val) || $val === '') {
+                continue;
+            }
+            if (str_starts_with($val, '--ref=')) {
+                $v = trim(substr($val, 6));
+                if ($v !== '') {
+                    $refs[] = $v;
+                }
+                continue;
+            }
+            if ($val === '--ref' && isset($args[$i + 1]) && is_string($args[$i + 1]) && $args[$i + 1] !== '') {
+                $refs[] = trim((string)$args[$i + 1]);
+            }
+        }
+        $refs = array_values(array_unique(array_filter($refs, static fn(string $r): bool => $r !== '')));
+        return $refs;
+    }
+
+    /**
+     * 从用户指定 refs 中，仅保留“确实触达目标路径”的 refs。
+     *
+     * @param array<int, string> $manualRefs
+     * @param array<int, string> $paths
+     * @return array<int, string>
+     */
+    private function filterAffectedManualRefs(array $manualRefs, array $paths, string $cwd): array
+    {
+        $affected = [];
+        foreach ($manualRefs as $ref) {
+            $verify = $this->runProc(['git', 'rev-parse', '--verify', $ref], $cwd);
+            if ($verify['exit'] !== 0) {
+                $this->printer->warning(__('指定 ref 不存在，已忽略：%{1}', [$ref]));
+                continue;
+            }
+            $cmd = ['git', 'rev-list', '--count', $ref, '--'];
+            foreach ($paths as $path) {
+                $cmd[] = $path;
+            }
+            $res = $this->runProc($cmd, $cwd);
+            if ($res['exit'] !== 0) {
+                continue;
+            }
+            if ((int)trim($res['stdout']) > 0) {
+                $affected[] = $ref;
+            }
+        }
+        return array_values(array_unique($affected));
+    }
+
 
     /**
      * 计算 base..HEAD 之间的提交数（仅用于展示「重写多少 / 跳过多少」）。
