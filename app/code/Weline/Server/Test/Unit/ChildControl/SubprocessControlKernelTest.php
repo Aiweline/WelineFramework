@@ -439,6 +439,22 @@ PHP);
         }
     }
 
+    public function testDispatcherEntrypointSetsLifecycleTokensBeforeConnectingIpc(): void
+    {
+        $path = BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Weline'
+            . DIRECTORY_SEPARATOR . 'Server' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'dispatcher.php';
+        $source = \file_get_contents($path);
+
+        self::assertNotFalse($source, 'failed to read dispatcher.php');
+
+        $tokensPos = \strpos($source, '$dispatcher->setLifecycleTokens($orchestratorEpoch, $orchestratorLaunchId);');
+        $connectPos = \strpos($source, '$dispatcher->connectIpc($controlPort);');
+
+        self::assertNotFalse($tokensPos, 'dispatcher.php should set lifecycle tokens');
+        self::assertNotFalse($connectPos, 'dispatcher.php should connect IPC');
+        self::assertLessThan($connectPos, $tokensPos, 'dispatcher.php should set lifecycle tokens before IPC register/ready can be sent');
+    }
+
     public function testSessionAndRedirectEntrypointsAllowSupervisorModeWithoutLegacyControlPort(): void
     {
         foreach (['session_server.php', 'http_redirect_worker.php'] as $script) {

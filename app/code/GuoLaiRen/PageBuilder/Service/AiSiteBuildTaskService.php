@@ -210,7 +210,7 @@ class AiSiteBuildTaskService
             return $this->isReusableConfirmedBuildBlueprint($buildBlueprint);
         }
 
-        if ($this->resolveExecutionTaskRowsForStageTwoBuild($confirmedPlan, $scope) !== []) {
+        if ($this->resolveExecutionTaskRowsForStageTwoBuild($confirmedPlan) !== []) {
             return true;
         }
 
@@ -253,8 +253,8 @@ class AiSiteBuildTaskService
     }
 
     /**
-     * Build consumes the confirmed stage plan. Request or queue scope_patch must
-     * not rewrite plans after confirmation.
+     * Build consumes the confirmed stage-two contract. Request or queue
+     * scope_patch must never confirm or rewrite plan/build definitions.
      *
      * @param array<string, mixed> $scopePatch
      * @param array<string, mixed> $currentScope
@@ -262,10 +262,6 @@ class AiSiteBuildTaskService
      */
     public function stripBuildPlanMutationScopePatch(array $scopePatch, array $currentScope): array
     {
-        if (!$this->shouldLockBuildPlanContract($currentScope)) {
-            return $scopePatch;
-        }
-
         foreach (self::BUILD_LOCKED_PLAN_SCOPE_KEYS as $key) {
             unset($scopePatch[$key]);
         }
@@ -398,7 +394,7 @@ class AiSiteBuildTaskService
 
         $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
         $confirmedPlan = $this->extractConfirmedTaskPlan($scope);
-        $executionTasks = $this->resolveExecutionTaskRowsForStageTwoBuild($confirmedPlan, $scope);
+        $executionTasks = $this->resolveExecutionTaskRowsForStageTwoBuild($confirmedPlan);
         if ($executionTasks === []) {
             return [];
         }
@@ -730,28 +726,20 @@ class AiSiteBuildTaskService
      * 合并阶段一锁定蓝图任务、第二阶段结构化任务卡片与 confirmed 内嵌 EB.tasks，避免「预览 38 个 / 构建只有 5 个」的割裂。
      *
      * @param array<string, mixed> $confirmedPlan virtual_theme_plan.confirmed
-     * @param array<string, mixed> $scope
      * @return list<array<string, mixed>>
      */
-    private function resolveExecutionTaskRowsForStageTwoBuild(array $confirmedPlan, array $scope): array
+    private function resolveExecutionTaskRowsForStageTwoBuild(array $confirmedPlan): array
     {
-        $scopeEb = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        $scopeTasks = \is_array($scopeEb['tasks'] ?? null) ? $scopeEb['tasks'] : [];
-
         $confirmedEb = \is_array($confirmedPlan['execution_blueprint'] ?? null) ? $confirmedPlan['execution_blueprint'] : [];
         $confirmedTasks = \is_array($confirmedEb['tasks'] ?? null) ? $confirmedEb['tasks'] : [];
 
         $synthesized = $this->synthesizeExecutionTasksFromStageTwoStructuredLists($confirmedPlan);
 
-        $scopeCount = \count($scopeTasks);
         $confirmedCount = \count($confirmedTasks);
         $synthesizedCount = \count($synthesized);
 
-        if ($synthesizedCount > $scopeCount && $synthesizedCount > $confirmedCount) {
+        if ($synthesizedCount > $confirmedCount) {
             return $synthesized;
-        }
-        if ($scopeCount > 0 && $scopeCount >= $confirmedCount) {
-            return $scopeTasks;
         }
         if ($confirmedCount > 0) {
             return $confirmedTasks;
@@ -817,9 +805,89 @@ class AiSiteBuildTaskService
     private function extractConfirmedTaskPlan(array $scope): array
     {
         $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
-        $confirmedPlan = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
+        $candidates = [
+            \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [],
+        ];
+        if ((int)($scope['task_plan_confirmed'] ?? 0) === 1) {
+            $candidates[] = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
+            $candidates[] = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
+            if ($this->stageTwoTaskPlanRootHasStructuredTasks($virtualThemePlan)) {
+                $candidates[] = $virtualThemePlan;
+            }
+        }
 
-        return $confirmedPlan;
+        return $this->selectRichestStageTwoTaskPlanPayload($candidates);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $candidates
+     * @return array<string, mixed>
+     */
+    private function selectRichestStageTwoTaskPlanPayload(array $candidates): array
+    {
+        $selected = [];
+        $selectedScore = 0;
+        foreach ($candidates as $candidate) {
+            if ($candidate === []) {
+                continue;
+            }
+            $score = $this->countStageTwoTaskPlanRows($candidate);
+            if ($score <= 0) {
+                continue;
+            }
+            if ($score > $selectedScore) {
+                $selected = $candidate;
+                $selectedScore = $score;
+            }
+        }
+
+        return $selected;
+    }
+
+    /**
+     * @param array<string, mixed> $taskPlan
+     */
+    private function countStageTwoTaskPlanRows(array $taskPlan): int
+    {
+        $seen = [];
+        foreach ($this->synthesizeExecutionTasksFromStageTwoStructuredLists($taskPlan) as $task) {
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey !== '') {
+                $seen[$taskKey] = true;
+            }
+        }
+        $executionBlueprint = \is_array($taskPlan['execution_blueprint'] ?? null) ? $taskPlan['execution_blueprint'] : [];
+        foreach (\is_array($executionBlueprint['tasks'] ?? null) ? $executionBlueprint['tasks'] : [] as $index => $task) {
+            if (!\is_array($task) || $task === []) {
+                continue;
+            }
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                $taskKey = 'execution:' . $index . ':' . \sha1((string)\json_encode($task, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+            }
+            $seen[$taskKey] = true;
+        }
+
+        return \count($seen);
+    }
+
+    /**
+     * @param array<string, mixed> $virtualThemePlan
+     */
+    private function stageTwoTaskPlanRootHasStructuredTasks(array $virtualThemePlan): bool
+    {
+        foreach (\is_array($virtualThemePlan['shared_tasks'] ?? null) ? $virtualThemePlan['shared_tasks'] : [] as $task) {
+            if (\is_array($task) && $task !== []) {
+                return true;
+            }
+        }
+        foreach (\is_array($virtualThemePlan['page_tasks'] ?? null) ? $virtualThemePlan['page_tasks'] : [] as $tasks) {
+            if (\is_array($tasks) && $tasks !== []) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
