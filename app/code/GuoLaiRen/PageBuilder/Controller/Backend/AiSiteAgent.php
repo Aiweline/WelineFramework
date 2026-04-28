@@ -9192,6 +9192,7 @@ SCRIPT;
             'page_type_count' => \count($normalized['page_types']),
         ]);
         $normalized['virtual_pages_by_type'] = $virtualPagesByType;
+        $normalized = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($normalized);
         $taskSummaryStartedAt = \microtime(true);
         $taskSummary = $this->buildTaskService->summarize($normalized);
         $this->logHotPathStage('build_workspace_state.task_summary', $taskSummaryStartedAt, [
