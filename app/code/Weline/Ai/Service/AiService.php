@@ -355,6 +355,72 @@ class AiService
     }
 
     /**
+     * Run independent AI sub-tasks and return every child outcome.
+     *
+     * @param array<string|int, callable(array<string, mixed>, string|int): mixed> $tasks
+     * @param array{concurrency?:int,session_id?:string,params?:array<string,mixed>,disable_conversation_history?:bool,disable_conversation_persist?:bool} $options
+     * @return array<string|int, array{status:string,result?:mixed,error?:\Throwable}>
+     */
+    public function runCooperativeSessionTasksSettled(array $tasks, array $options = []): array
+    {
+        if ($tasks === []) {
+            return [];
+        }
+
+        $concurrency = \max(1, (int)($options['concurrency'] ?? \count($tasks)));
+        $baseSessionId = \trim((string)($options['session_id'] ?? ''));
+        $baseParams = \is_array($options['params'] ?? null) ? $options['params'] : [];
+        $runnerTasks = [];
+
+        foreach ($tasks as $taskKey => $task) {
+            if (!\is_callable($task)) {
+                throw new \InvalidArgumentException('Cooperative AI task must be callable.');
+            }
+            $sessionParams = $this->buildCooperativeChildSessionParams($baseParams, $baseSessionId, $taskKey, $options);
+            $runnerTasks[$taskKey] = static fn(string|int $key): mixed => $task($sessionParams, $key);
+        }
+
+        if (!$this->supportsCooperativeConcurrency($concurrency)) {
+            $settled = [];
+            foreach ($runnerTasks as $taskKey => $task) {
+                try {
+                    $settled[$taskKey] = [
+                        'status' => 'fulfilled',
+                        'result' => $task($taskKey),
+                    ];
+                } catch (\Throwable $throwable) {
+                    $settled[$taskKey] = [
+                        'status' => 'rejected',
+                        'error' => $throwable,
+                    ];
+                }
+            }
+
+            return $settled;
+        }
+
+        $settled = [];
+        foreach ((new FiberTaskRunner(defaultConcurrency: $concurrency))->runEvents($runnerTasks, $concurrency) as $taskKey => $event) {
+            if (($event['status'] ?? '') === 'fulfilled') {
+                $settled[$taskKey] = [
+                    'status' => 'fulfilled',
+                    'result' => $event['result'] ?? null,
+                ];
+                continue;
+            }
+
+            $settled[$taskKey] = [
+                'status' => 'rejected',
+                'error' => ($event['error'] ?? null) instanceof \Throwable
+                    ? $event['error']
+                    : new \RuntimeException('Cooperative AI task failed without an exception payload.'),
+            ];
+        }
+
+        return $settled;
+    }
+
+    /**
      * @param array<string, mixed> $baseParams
      * @param array<string, mixed> $options
      * @return array<string, mixed>

@@ -373,6 +373,9 @@ function dispatchSseEvent(eventName, data, rawEvent) {
         if (!msg) msg = (Object.keys(data).length > 0 ? JSON.stringify(data) : eventName);
         var type = (eventName === 'failed' || eventName === 'error') ? 'error' : eventName;
         var hasCallback = !!eventCallbacks[eventName];
+        if (eventName === 'error') {
+            setStatus('error', String(msg || '$t_error'));
+        }
         if (hasCallback) {
             eventCallbacks[eventName](callbackEvent);
         } else {
@@ -482,6 +485,10 @@ function start(url, options) {
         }
         if (terminalCompleted) {
             stop({ keepStatus: true, internal: true });
+            return;
+        }
+        if (e && typeof e.data === 'string' && e.data !== '') {
+            // SSE business error events carry data and are handled by the registered error listener below.
             return;
         }
         var isBenignTransition = false;

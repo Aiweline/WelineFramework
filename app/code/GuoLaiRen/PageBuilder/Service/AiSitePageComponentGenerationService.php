@@ -83,6 +83,20 @@ class AiSitePageComponentGenerationService
     }
 
     /**
+     * @param list<string> $regions
+     * @return \Generator<string, array{status:string, result?:array<string,mixed>, error?:\Throwable}>
+     */
+    public function generateSharedComponentEventsConcurrently(array $websiteProfile, array $scope, array $regions = []): \Generator
+    {
+        $components = $this->buildSharedComponentGenerationSpecs($websiteProfile, $scope, $regions);
+        if ($components === []) {
+            return;
+        }
+
+        yield from $this->generateComponentEventsConcurrently($components);
+    }
+
+    /**
      * @return array{
      *   code:string,
      *   name:string,
@@ -730,11 +744,11 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * 并发上限：默认与任务数对齐，但封顶 8，防止 cURL multi/上游 API 配额突发。
+     * No application-level cap: the caller decides the task set size.
      */
     private function resolveConcurrency(int $taskCount): int
     {
-        return \max(1, \min(8, $taskCount));
+        return \max(1, $taskCount);
     }
 
     /**
@@ -745,27 +759,8 @@ class AiSitePageComponentGenerationService
     public function generateSharedComponentsConcurrently(array $websiteProfile, array $scope): array
     {
         $siteDisplayName = $this->getPageBlueprintService()->resolveSiteDisplayName($websiteProfile, $scope);
-        $headerConfig = $this->buildHeaderDefaultConfig($websiteProfile, $scope, $siteDisplayName);
         $footerConfig = $this->buildFooterDefaultConfig($websiteProfile, $scope, $siteDisplayName);
-
-        $components = [
-            'header' => [
-                'componentCode' => 'header/ai-site-header',
-                'name' => 'AI Site Header',
-                'region' => 'header',
-                'prompt' => $this->buildHeaderGenerationPrompt($websiteProfile, $scope, $siteDisplayName, $headerConfig),
-                'defaultConfig' => $headerConfig,
-                'renderContext' => $this->buildRenderContext(Page::TYPE_HOME, $websiteProfile, $scope, $headerConfig),
-            ],
-            'footer' => [
-                'componentCode' => 'footer/ai-site-footer',
-                'name' => 'AI Site Footer',
-                'region' => 'footer',
-                'prompt' => $this->buildFooterGenerationPrompt($websiteProfile, $scope, $siteDisplayName, $footerConfig),
-                'defaultConfig' => $footerConfig,
-                'renderContext' => $this->buildRenderContext(Page::TYPE_HOME, $websiteProfile, $scope, $footerConfig),
-            ],
-        ];
+        $components = $this->buildSharedComponentGenerationSpecs($websiteProfile, $scope);
 
         $result = ['header' => null, 'footer' => null];
         $errors = [];
@@ -801,6 +796,38 @@ class AiSitePageComponentGenerationService
         }
 
         return $result;
+    }
+
+    /**
+     * @param list<string> $regions
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildSharedComponentGenerationSpecs(array $websiteProfile, array $scope, array $regions = []): array
+    {
+        $regionMap = $regions === [] ? ['header' => true, 'footer' => true] : \array_fill_keys(\array_values(\array_filter(\array_map('strval', $regions))), true);
+        $siteDisplayName = $this->getPageBlueprintService()->resolveSiteDisplayName($websiteProfile, $scope);
+        $headerConfig = $this->buildHeaderDefaultConfig($websiteProfile, $scope, $siteDisplayName);
+        $footerConfig = $this->buildFooterDefaultConfig($websiteProfile, $scope, $siteDisplayName);
+        $components = [
+            'header' => [
+                'componentCode' => 'header/ai-site-header',
+                'name' => 'AI Site Header',
+                'region' => 'header',
+                'prompt' => $this->buildHeaderGenerationPrompt($websiteProfile, $scope, $siteDisplayName, $headerConfig),
+                'defaultConfig' => $headerConfig,
+                'renderContext' => $this->buildRenderContext(Page::TYPE_HOME, $websiteProfile, $scope, $headerConfig),
+            ],
+            'footer' => [
+                'componentCode' => 'footer/ai-site-footer',
+                'name' => 'AI Site Footer',
+                'region' => 'footer',
+                'prompt' => $this->buildFooterGenerationPrompt($websiteProfile, $scope, $siteDisplayName, $footerConfig),
+                'defaultConfig' => $footerConfig,
+                'renderContext' => $this->buildRenderContext(Page::TYPE_HOME, $websiteProfile, $scope, $footerConfig),
+            ],
+        ];
+
+        return \array_intersect_key($components, $regionMap);
     }
 
     /**
