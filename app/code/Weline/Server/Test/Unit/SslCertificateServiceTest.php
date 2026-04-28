@@ -12,6 +12,13 @@ use Weline\Server\Service\SslCertificateService;
 
 class SslCertificateServiceTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        if (!\defined('IS_WIN')) {
+            \define('IS_WIN', \PHP_OS_FAMILY === 'Windows');
+        }
+    }
+
     public function testNormalizeProviderAliases(): void
     {
         $service = new SslCertificateService();
@@ -424,8 +431,211 @@ class SslCertificateServiceTest extends TestCase
         $method = new ReflectionMethod($service, 'shouldPreferTrustedLocalSelfSignedCertificate');
         $method->setAccessible(true);
 
-        $this->assertSame(\PHP_OS_FAMILY === 'Windows', $method->invoke($service, 'demo.weline.test'));
+        $this->assertSame(
+            \in_array(\PHP_OS_FAMILY, ['Windows', 'Darwin', 'Linux'], true),
+            $method->invoke($service, 'demo.weline.test')
+        );
         $this->assertFalse($method->invoke($service, 'example.com'));
+    }
+
+    public function testTrustLocalCertificateAuthorityOnLinuxUsesSystemTrustToolWithNonInteractiveSudo(): void
+    {
+        $caPath = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'rootCA.pem';
+        \file_put_contents($caPath, 'ca');
+
+        $service = new class extends SslCertificateService {
+            /** @var list<string> */
+            public array $commands = [];
+            public bool $installed = false;
+
+            protected function getOsFamily(): string
+            {
+                return 'Linux';
+            }
+
+            protected function commandExists(string $command): bool
+            {
+                return \in_array($command, ['sudo', 'openssl', 'update-ca-certificates'], true);
+            }
+
+            protected function isRootUser(): bool
+            {
+                return false;
+            }
+
+            protected function canUseInteractivePrivilegePrompt(): bool
+            {
+                return true;
+            }
+
+            protected function isLocalCertificateAuthorityTrustedOnLinux(string $caCertPath): bool
+            {
+                unset($caCertPath);
+
+                return $this->installed;
+            }
+
+            protected function resolveLinuxLocalCaInstallPlan(string $caCertPath): ?array
+            {
+                return [
+                    'dest' => '/usr/local/share/ca-certificates/weline-local-development-ca.crt',
+                    'refresh' => 'update-ca-certificates',
+                    'manual' => 'sudo /bin/sh -c install',
+                ];
+            }
+
+            protected function runTrustCommand(string $command, ?int &$exitCode = null): string
+            {
+                $this->commands[] = $command;
+                $this->installed = \str_contains($command, 'update-ca-certificates');
+                $exitCode = 0;
+
+                return '';
+            }
+
+            protected function runInteractiveTrustCommand(string $command, ?int &$exitCode = null): string
+            {
+                return $this->runTrustCommand($command, $exitCode);
+            }
+
+            public function trust(string $caCertPath): array
+            {
+                return $this->trustLocalCertificateAuthority($caCertPath);
+            }
+        };
+
+        $result = $service->trust($caPath);
+
+        $this->assertTrue((bool)($result['trusted'] ?? false));
+        $this->assertNotEmpty($service->commands);
+        $this->assertStringContainsString('sudo -p', $service->commands[0]);
+        $this->assertStringContainsString('[WLS] sudo password for CA trust: ', $service->commands[0]);
+        $this->assertStringContainsString('/bin/sh -c', $service->commands[0]);
+        $this->assertStringContainsString('update-ca-certificates', $service->commands[0]);
+        $this->assertStringContainsString('weline-local-development-ca.crt', $service->commands[0]);
+    }
+
+    public function testTrustLocalCertificateAuthorityOnLinuxUsesNonInteractiveSudoWithoutTty(): void
+    {
+        $caPath = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'rootCA.pem';
+        \file_put_contents($caPath, 'ca');
+
+        $service = new class extends SslCertificateService {
+            /** @var list<string> */
+            public array $commands = [];
+            public bool $installed = false;
+
+            protected function getOsFamily(): string
+            {
+                return 'Linux';
+            }
+
+            protected function commandExists(string $command): bool
+            {
+                return \in_array($command, ['sudo', 'openssl', 'update-ca-certificates'], true);
+            }
+
+            protected function isRootUser(): bool
+            {
+                return false;
+            }
+
+            protected function canUseInteractivePrivilegePrompt(): bool
+            {
+                return false;
+            }
+
+            protected function isLocalCertificateAuthorityTrustedOnLinux(string $caCertPath): bool
+            {
+                unset($caCertPath);
+
+                return $this->installed;
+            }
+
+            protected function resolveLinuxLocalCaInstallPlan(string $caCertPath): ?array
+            {
+                return [
+                    'dest' => '/usr/local/share/ca-certificates/weline-local-development-ca.crt',
+                    'refresh' => 'update-ca-certificates',
+                    'manual' => 'sudo /bin/sh -c install',
+                ];
+            }
+
+            protected function runTrustCommand(string $command, ?int &$exitCode = null): string
+            {
+                $this->commands[] = $command;
+                $this->installed = \str_contains($command, 'update-ca-certificates');
+                $exitCode = 0;
+
+                return '';
+            }
+
+            public function trust(string $caCertPath): array
+            {
+                return $this->trustLocalCertificateAuthority($caCertPath);
+            }
+        };
+
+        $result = $service->trust($caPath);
+
+        $this->assertTrue((bool)($result['trusted'] ?? false));
+        $this->assertNotEmpty($service->commands);
+        $this->assertStringContainsString('sudo -n /bin/sh -c', $service->commands[0]);
+    }
+
+    public function testTrustLocalCertificateAuthorityOnMacosUsesLoginKeychain(): void
+    {
+        $caPath = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'rootCA.pem';
+        \file_put_contents($caPath, 'ca');
+
+        $service = new class extends SslCertificateService {
+            /** @var list<string> */
+            public array $commands = [];
+            public bool $installed = false;
+
+            protected function getOsFamily(): string
+            {
+                return 'Darwin';
+            }
+
+            protected function commandExists(string $command): bool
+            {
+                return $command === 'security';
+            }
+
+            protected function isLocalCertificateAuthorityTrustedOnMacos(string $caCertPath): bool
+            {
+                unset($caCertPath);
+
+                return $this->installed;
+            }
+
+            protected function resolveMacosLoginKeychain(): string
+            {
+                return '/Users/unit/Library/Keychains/login.keychain-db';
+            }
+
+            protected function runTrustCommand(string $command, ?int &$exitCode = null): string
+            {
+                $this->commands[] = $command;
+                $this->installed = \str_contains($command, 'add-trusted-cert');
+                $exitCode = 0;
+
+                return '';
+            }
+
+            public function trust(string $caCertPath): array
+            {
+                return $this->trustLocalCertificateAuthority($caCertPath);
+            }
+        };
+
+        $result = $service->trust($caPath);
+
+        $this->assertTrue((bool)($result['trusted'] ?? false));
+        $this->assertNotEmpty($service->commands);
+        $this->assertStringContainsString('/usr/bin/security add-trusted-cert', $service->commands[0]);
+        $this->assertStringContainsString('/Users/unit/Library/Keychains/login.keychain-db', $service->commands[0]);
     }
 
     public function testIsCertificateSelfSignedDistinguishesLocalCaRootAndLeaf(): void

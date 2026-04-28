@@ -24,7 +24,7 @@ class AiSitePageComponentGenerationService
     private const JSON_REPAIR_MAX_ATTEMPTS = 3;
     private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
     private const COMPONENT_GENERATION_MAX_ATTEMPTS = 2;
-    // 临时旁路：先跳过组件质量门禁（语言一致性/低质量文案）以解除卡在反复校验重试的问题。
+    // 临时旁路：先跳过主观低质量文案门禁以解除卡在反复校验重试的问题；硬性语言/泄漏守卫仍执行。
     private const SKIP_COMPONENT_QUALITY_VALIDATION = true;
     private const ENABLE_CLAUDE_DESIGN_POLISH_PASS = true;
     private const CLAUDE_DESIGN_PASS_MODEL_CODES = [
@@ -1406,6 +1406,13 @@ class AiSitePageComponentGenerationService
             $aiData['html_content'] = $this->cleanAiHtmlFragment((string)$aiData['html_content']);
         }
 
+        if ($region === 'content') {
+            $hardPolicyReason = $this->detectHardGeneratedSectionHtmlPolicyViolation((string)($aiData['html_content'] ?? ''));
+            if ($hardPolicyReason !== null) {
+                throw new \RuntimeException('AI component content hard policy failed: ' . $hardPolicyReason);
+            }
+        }
+
         if (!self::SKIP_COMPONENT_QUALITY_VALIDATION && $region === 'content') {
             $lowQualityReason = $this->detectLowQualityGeneratedSectionHtmlReason((string)($aiData['html_content'] ?? ''));
             if ($lowQualityReason !== null) {
@@ -1849,11 +1856,77 @@ class AiSitePageComponentGenerationService
         $html = \preg_replace('/<div([^>]*class="[^"]*(?:eyebrow|subtitle|kicker|badge)[^"]*"[^>]*)>\s*(首页|主页|关于我们|关于|Home|About|About Us)\s*<\/div>/iu', '', $html) ?? $html;
         $html = \preg_replace('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', '', $html) ?? $html;
         $html = \preg_replace('/(?:核心卖点|功能特性|把首页[^。！？.!?]{0,80}放出来|值得点击|页面类型|内容块)/u', '', $html) ?? $html;
+        $html = $this->repairHtmlFragmentTagBalance($html);
         $this->assertNoBrokenGeneratedImageReferences($html);
         $html = \preg_replace('/\s{2,}/u', ' ', $html) ?? $html;
         $html = \trim($html);
 
         return $this->clipText($html, 5000);
+    }
+
+    private function repairHtmlFragmentTagBalance(string $html): string
+    {
+        if (\trim($html) === '') {
+            return '';
+        }
+
+        $voidTags = \array_fill_keys([
+            'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+            'link', 'meta', 'param', 'source', 'track', 'wbr',
+        ], true);
+        $matchCount = \preg_match_all('/<\s*\/?\s*([a-z][a-z0-9:-]*)\b[^>]*>/i', $html, $matches, \PREG_OFFSET_CAPTURE);
+        if ($matchCount === false || $matchCount === 0) {
+            return $html;
+        }
+
+        $result = '';
+        $offset = 0;
+        $stack = [];
+        foreach ($matches[0] as $index => $match) {
+            $tagText = (string)$match[0];
+            $tagOffset = (int)$match[1];
+            $result .= \substr($html, $offset, \max(0, $tagOffset - $offset));
+            $offset = $tagOffset + \strlen($tagText);
+            $tagName = \strtolower((string)($matches[1][$index][0] ?? ''));
+            if ($tagName === '') {
+                $result .= $tagText;
+                continue;
+            }
+
+            if (\preg_match('/^<\s*\/\s*/', $tagText) === 1) {
+                $matchedIndex = -1;
+                for ($stackIndex = \count($stack) - 1; $stackIndex >= 0; $stackIndex--) {
+                    if ($stack[$stackIndex] === $tagName) {
+                        $matchedIndex = $stackIndex;
+                        break;
+                    }
+                }
+                if ($matchedIndex < 0) {
+                    continue;
+                }
+                for ($stackIndex = \count($stack) - 1; $stackIndex > $matchedIndex; $stackIndex--) {
+                    $result .= '</' . $stack[$stackIndex] . '>';
+                    \array_pop($stack);
+                }
+                \array_pop($stack);
+                $result .= '</' . $tagName . '>';
+                continue;
+            }
+
+            $result .= $tagText;
+            if (isset($voidTags[$tagName]) || \preg_match('/\/\s*>$/', $tagText) === 1) {
+                continue;
+            }
+
+            $stack[] = $tagName;
+        }
+
+        $result .= \substr($html, $offset);
+        for ($stackIndex = \count($stack) - 1; $stackIndex >= 0; $stackIndex--) {
+            $result .= '</' . $stack[$stackIndex] . '>';
+        }
+
+        return $result;
     }
 
     private function stripPhpFragmentsFromHtml(string $html): string
@@ -1874,6 +1947,27 @@ class AiSitePageComponentGenerationService
     private function isLowQualityGeneratedSectionHtml(string $html): bool
     {
         return $this->detectLowQualityGeneratedSectionHtmlReason($html) !== null;
+    }
+
+    private function detectHardGeneratedSectionHtmlPolicyViolation(string $html): ?string
+    {
+        $trimmed = \trim($html);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($trimmed)));
+        if (\preg_match('/AI content placeholder|placeholder\s+(?:content|copy|section|text|block|image|visual)|example\.com|Generated visual|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent/iu', $trimmed) === 1) {
+            return 'prompt or placeholder text leaked';
+        }
+        if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $trimmed) === 1) {
+            return 'internal task identifiers leaked';
+        }
+        if ($this->containsPlanningObservationCopy($plain)) {
+            return 'planning observation copy leaked into visitor content';
+        }
+
+        return null;
     }
 
     private function detectLowQualityGeneratedSectionHtmlReason(string $html): ?string
@@ -2242,6 +2336,9 @@ class AiSitePageComponentGenerationService
             . "Region: {$region}\n"
             . "Allowed edits: html/css text polish, hierarchy, spacing, contrast, hover/focus, responsive rhythm, trust details.\n"
             . "Forbidden: prompt/instruction leakage in visible copy, changing JSON field names, adding PHP/script/style tags in html fields.\n"
+            . "Contrast fix requirement: correct any dark-on-dark or light-on-light text/link/button combinations; use readable foreground colors from the palette roles.\n"
+            . "Layering fix requirement: if the block looks like one flat theme-color slab, add surface depth, dividers, texture, or composition contrast without inventing unrelated colors.\n"
+            . "HTML structure requirement: every html_content/html_extra/html_extra_column fragment must be balanced and embeddable; close all non-void tags.\n"
             . "Footer-specific floor: visible grouped links + support/contact path + policy/compliance labels; never hide footer.\n"
             . "If any sentence reads like planning instruction (Use/Populate/Must/Ensure/请/必须/补充), rewrite it to visitor-facing copy.\n"
             . "Return JSON object only with fields: {$expectedFields}\n"
@@ -3261,10 +3358,12 @@ class AiSitePageComponentGenerationService
             . "6. Do not repeat the framework title/description in the body as empty h1/h2/p tags. The body must add useful content such as cards, trust points, game tiles, proof points, or CTA support.\n"
             . "7. Preserve page-level color layering: this block must have its own surface/contrast role and must not make the whole page feel like one solid theme color.\n"
             . "8. Implement like a UI/interaction designer handoff: section-specific visual hierarchy, spatial rhythm, motion restraint, hover/focus states, and mobile stacking must be visible in html_content/css_extra.\n"
-            . "9. Set extra_fields, php_variables, and js_content to empty strings. Put final visible section body only in html_content.\n"
-            . "10. Return valid JSON only. No markdown. No explanation. Keep html_content under 2400 chars and css_extra under 2600 chars.\n"
-            . "11. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
-            . "12. If real blog data variables are provided, prefer them over invented articles or categories.\n"
+            . "9. Accessibility contrast gate: before returning, inspect every visible text/link/button/chip against its immediate background; rewrite CSS if any foreground/background pair is low-contrast.\n"
+            . "10. HTML closure gate: html_content must be a balanced fragment with all non-void tags closed; invalid nesting or stray closing tags are build-breaking failures.\n"
+            . "11. Set extra_fields, php_variables, and js_content to empty strings. Put final visible section body only in html_content.\n"
+            . "12. Return valid JSON only. No markdown. No explanation. Keep html_content under 2400 chars and css_extra under 2600 chars.\n"
+            . "13. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
+            . "14. If real blog data variables are provided, prefer them over invented articles or categories.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
 
@@ -3280,7 +3379,10 @@ class AiSitePageComponentGenerationService
             . "- Do not redeclare or break framework-provided variables (\$page, \$getConfig, \$componentId, \$cls, \$parseLinks, \$navItems, etc.) unless you know exactly how; prefer using them read-only.\n"
             . "- extra_fields and js_content: MUST be empty strings unless the task explicitly requires them.\n"
             . "- html_extra, html_extra_column, html_content: static HTML fragments only. No PHP tags, no <style>, no <script>, no @component_start/@fields_start metadata.\n"
+            . "- HTML fragments must be balanced and embeddable: close every non-void tag, do not output full <html>/<head>/<body> documents, and do not leave stray closing tags.\n"
             . "- css_extra, css_responsive: CSS only. No <? ... ?> and no PHP. Use scoped CSS when needed for visual polish: layered backgrounds, textures, shape motifs, hover/focus states, responsive rhythm, and type scale. Every rule and @media block must have balanced { } braces and be short enough to fit completely.\n"
+            . "- Color contrast: never pair dark foreground text with dark backgrounds or light foreground text with light backgrounds; define readable text/link/button/focus states in CSS before returning.\n"
+            . "- Page hierarchy: do not make the section one flat theme-color slab. Use palette roles, surface elevation, dividers, texture, cards, or spacing to distinguish this block from adjacent blocks.\n"
             . "- CSS class names: never use generic selectors like .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active. Use component-specific classes shaped like pb-{component-code}-{element}, scope selectors with #componentId, and keep CSS selectors and HTML class attributes in sync.\n"
             . "- Images: never output broken image placeholders. If no verified asset URL is provided, create the visual directly with inline SVG or CSS shapes inside html_content; do not use empty src, example.com, placeholder services, or unverified .jpg/.png/.webp URLs.\n"
             . "- js_content: MUST be an empty string for this virtual-theme build.\n";
@@ -3383,7 +3485,10 @@ class AiSitePageComponentGenerationService
             . "- art_direction: " . $this->jsonEncodeForPrompt(\is_array($contract['art_direction'] ?? null) ? $contract['art_direction'] : [], 2000) . "\n"
             . "- palette: " . \json_encode($palette, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- full_theme_context: " . $this->jsonEncodeForPrompt($themeContext, 9000) . "\n"
-            . "- Use these exact palette tokens for generated CSS and extra fields. Do not invent unrelated accent colors.\n";
+            . "- Use these exact palette tokens for generated CSS and extra fields. Do not invent unrelated accent colors.\n"
+            . "- Palette usage is role-based: map tokens to page base, elevated surface, text, muted text, CTA, accent, divider, and focus state before writing CSS.\n"
+            . "- Contrast is non-negotiable: if a background/surface token is dark, choose light text/link/chip colors; if it is light, choose dark text. Never place dark text on a dark background or light text on a light background.\n"
+            . "- Theme color is not a paint bucket: do not make every block the same full-bleed primary/accent color. Use surfaces, cards, dividers, textures, and spacing to create adjacent-section hierarchy inside the confirmed palette.\n";
     }
 
     private function buildVisualExcellencePromptAddon(string $componentScope): string
@@ -3401,6 +3506,7 @@ class AiSitePageComponentGenerationService
             . "- Spend CSS budget on visible quality: scoped CSS variables, clamp typography, layered gradients, texture/noise via CSS, asymmetric composition, decorative borders, inline SVG/CSS motifs, tactile CTA hover/focus states, and mobile-specific rhythm.\n"
             . "- Customer-intent lock: the final HTML/CSS must visibly match the user's actual business/game/service scenario through motifs, labels, CTA affordances, proof details, and interaction behavior; do not generate a category-neutral section.\n"
             . "- Interaction/effects requirement: implement at least one friendly visible hover/focus/reveal/ambient effect with CSS transition/transform/animation plus a reduced-motion-safe fallback when motion is used; do not describe effects without CSS.\n"
+            . "- Color quality requirement: define explicit readable background/text/CTA/focus pairings; dark surfaces require light foregrounds, and neighboring blocks must differ by surface depth, divider, texture, or layout rhythm.\n"
             . "- Do not leave css_extra empty when visual polish depends on it; the page preview should show the styling without a designer adding anything later.\n"
             . $scopeRule
             . "- Before returning, silently self-audit: if the preview would still read as pale background + ordinary cards + small default buttons, rewrite the composition and CSS.\n"
@@ -3428,30 +3534,39 @@ class AiSitePageComponentGenerationService
         $background = $this->pickPaletteColor($palette, ['background', 'surface']);
 
         if ($region === 'header') {
+            $headerBg = $surface !== '' ? $surface : $primary;
+            $headerText = $this->resolveReadableTextColor($headerBg, $text);
+
             return \array_filter([
-                'style.bg_color' => $surface !== '' ? $surface : $primary,
-                'style.text_color' => $text,
-                'style.link_color' => $text,
+                'style.bg_color' => $headerBg,
+                'style.text_color' => $headerText,
+                'style.link_color' => $headerText,
                 'style.link_hover_color' => $accent,
                 'style.accent_color' => $accent,
             ], static fn(string $value): bool => $value !== '');
         }
 
         if ($region === 'footer') {
+            $footerBg = $surface !== '' ? $surface : $primary;
+            $footerText = $this->resolveReadableTextColor($footerBg, $text);
+
             return \array_filter([
-                'style.bg_color' => $surface !== '' ? $surface : $primary,
-                'style.text_color' => $text,
-                'style.title_color' => $text,
-                'style.link_color' => $text,
+                'style.bg_color' => $footerBg,
+                'style.text_color' => $footerText,
+                'style.title_color' => $footerText,
+                'style.link_color' => $footerText,
                 'style.link_hover_color' => $accent !== '' ? $accent : $secondary,
                 'style.accent_color' => $accent !== '' ? $accent : $secondary,
             ], static fn(string $value): bool => $value !== '');
         }
 
+        $contentBg = $background !== '' ? $background : '#ffffff';
+        $contentText = $this->resolveReadableTextColor($contentBg, $text);
+
         return \array_filter([
-            'style.bg_color' => $background !== '' ? $background : '#ffffff',
-            'style.text_color' => $text,
-            'style.title_color' => $text,
+            'style.bg_color' => $contentBg,
+            'style.text_color' => $contentText,
+            'style.title_color' => $contentText,
             'style.accent_color' => $accent !== '' ? $accent : $primary,
             'style.bg_gradient' => ($primary !== '' && $accent !== '')
                 ? 'linear-gradient(135deg, ' . $primary . ' 0%, ' . $accent . ' 100%)'
@@ -3580,6 +3695,91 @@ class AiSitePageComponentGenerationService
         }
 
         return '';
+    }
+
+    private function resolveReadableTextColor(string $backgroundColor, string $preferredTextColor = ''): string
+    {
+        $backgroundRgb = $this->parseCssColorToRgb($backgroundColor);
+        $preferredTextColor = \trim($preferredTextColor);
+        if ($backgroundRgb === null) {
+            return $preferredTextColor;
+        }
+
+        $preferredRgb = $preferredTextColor !== '' ? $this->parseCssColorToRgb($preferredTextColor) : null;
+        if ($preferredRgb !== null && $this->contrastRatio($backgroundRgb, $preferredRgb) >= 4.5) {
+            return $preferredTextColor;
+        }
+
+        $light = '#f8fafc';
+        $dark = '#0f172a';
+        $lightRatio = $this->contrastRatio($backgroundRgb, $this->parseCssColorToRgb($light) ?? [248, 250, 252]);
+        $darkRatio = $this->contrastRatio($backgroundRgb, $this->parseCssColorToRgb($dark) ?? [15, 23, 42]);
+
+        return $lightRatio >= $darkRatio ? $light : $dark;
+    }
+
+    /**
+     * @return array{0:int,1:int,2:int}|null
+     */
+    private function parseCssColorToRgb(string $color): ?array
+    {
+        $color = \trim($color);
+        if ($color === '') {
+            return null;
+        }
+
+        if (\preg_match('/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i', $color, $matches) === 1) {
+            $hex = $matches[1];
+            if (\strlen($hex) === 3) {
+                $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+            }
+
+            return [
+                \hexdec(\substr($hex, 0, 2)),
+                \hexdec(\substr($hex, 2, 2)),
+                \hexdec(\substr($hex, 4, 2)),
+            ];
+        }
+
+        if (\preg_match('/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/i', $color, $matches) === 1) {
+            return [
+                \max(0, \min(255, (int)$matches[1])),
+                \max(0, \min(255, (int)$matches[2])),
+                \max(0, \min(255, (int)$matches[3])),
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{0:int,1:int,2:int} $a
+     * @param array{0:int,1:int,2:int} $b
+     */
+    private function contrastRatio(array $a, array $b): float
+    {
+        $aLum = $this->relativeLuminance($a);
+        $bLum = $this->relativeLuminance($b);
+        $lighter = \max($aLum, $bLum);
+        $darker = \min($aLum, $bLum);
+
+        return ($lighter + 0.05) / ($darker + 0.05);
+    }
+
+    /**
+     * @param array{0:int,1:int,2:int} $rgb
+     */
+    private function relativeLuminance(array $rgb): float
+    {
+        $channels = \array_map(static function (int $value): float {
+            $channel = $value / 255;
+
+            return $channel <= 0.03928
+                ? $channel / 12.92
+                : (($channel + 0.055) / 1.055) ** 2.4;
+        }, $rgb);
+
+        return (0.2126 * $channels[0]) + (0.7152 * $channels[1]) + (0.0722 * $channels[2]);
     }
 
     private function buildHeaderPrompt(array $websiteProfile, array $scope, string $siteDisplayName, array $headerConfig): string
@@ -4125,6 +4325,8 @@ class AiSitePageComponentGenerationService
             . "- block_task.style_plan: " . \json_encode($stylePlan, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- block_task.planning_reason: " . (string)($blockTask['planning_reason'] ?? '') . "\n"
             . "- design execution rule: apply page_design_plan.color_layering and section_flow before local block styling; this block must contrast with adjacent blocks through surfaces/cards/gradients/dividers/illustration while staying inside the confirmed palette.\n"
+            . "- contrast execution rule: convert palette tokens into readable role pairs; dark surfaces must use light foregrounds, light surfaces must use dark foregrounds, and CTA/focus states must remain legible.\n"
+            . "- hierarchy execution rule: do not reuse the same full-bleed primary/accent background for every block; vary surface elevation, background texture, dividers, spacing rhythm, or visual motif per block.\n"
             . "- stage2 language rule: treat stage-2 planned text as source intent, not copy authority; rewrite any planned text that is not in the website content language before placing it in visible component output.\n"
             . "- anti-copy rule: never paste stage-2 observation/planning sentences directly into html_content. Rewrite phrases like \"访客看到...\", \"用户看到...\", \"从而产生...\", \"信任感增强\", \"知道如何...\", \"Visitors see...\", or \"Visitors can review...\" into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n"
             . $stage3LocaleRule
@@ -5077,9 +5279,6 @@ class AiSitePageComponentGenerationService
      */
     private function assertRenderedHtmlMatchesLocale(string $html, array $renderContext): void
     {
-        if (self::SKIP_COMPONENT_QUALITY_VALIDATION) {
-            return;
-        }
         $locale = \trim((string)($renderContext['_content_locale'] ?? ''));
         if ($locale === '' || !$this->isNonCjkLocale($locale)) {
             return;
@@ -5181,6 +5380,9 @@ class AiSitePageComponentGenerationService
             . "\n- For blog/article/category blocks, render editorial-quality visitor content: category headline, article teasers, meta chips, related links, reading CTA, and theme-specific layout treatment; use internal anchors or provided URLs, never example.com."
             . "\n- Keep `extra_fields`, `php_variables`, and `js_content` empty unless absolutely necessary."
             . "\n- Do not use generic CSS classes such as .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active; use `{$cssPrefix}-...` classes in both CSS and HTML, and scope CSS selectors with #componentId."
+            . "\n- Fix contrast explicitly: no dark text on dark surfaces, no pale text on pale surfaces, and every CTA/link/focus state must be readable against its immediate background."
+            . "\n- Fix page hierarchy explicitly: do not repaint the block as one uniform theme color; use role-based palette surfaces, elevation, dividers, texture, or composition contrast."
+            . "\n- Fix HTML structure explicitly: every html_* fragment must be balanced, no stray closing tags, no unclosed non-void tags, and no full HTML document wrapper."
             . "\n- Keep CSS within the requested budget but visually complete: every selector and @media block must close its braces before the JSON field ends."
             . "\n- Keep the component complete for its planned purpose, with a component-specific wrapper and enough real content to stand alone in the final preview."
             . "\n- Avoid loops, complex PHP, embedded arrays, dynamic calculations, markdown fences, placeholder copy, and unverified external assets."
