@@ -204,12 +204,11 @@ class SseWriter
         $id = $id ?? ++$this->eventId;
         $dataStr = $this->encodeJsonForSseData($data);
 
-        $message = "id: {$id}\n";
-        $message .= "event: {$event}\n";
-        $message .= "data: {$dataStr}\n\n";
-
-        // 使用带重试的写入方法，避免缓冲区满时阻塞
-        $this->writeWithRetry($message);
+        // 分段写入避免构建大字符串造成瞬时内存峰值
+        $this->writeWithRetry("id: {$id}\n");
+        $this->writeWithRetry("event: {$event}\n");
+        $this->writeDataLines($dataStr);
+        $this->writeWithRetry("\n");
 
         // 发送后自动让出控制权，让 Worker 处理其他请求
         $this->yieldAfterSend();
@@ -238,16 +237,9 @@ class SseWriter
 
         $dataStr = $this->encodeJsonForSseData($data);
 
-        // SSE 数据格式：多行数据需要每行都加 "data: " 前缀
-        $lines = \explode("\n", $dataStr);
-        $message = '';
-        foreach ($lines as $line) {
-            $message .= "data: {$line}\n";
-        }
-        $message .= "\n";
-
-        // 使用带重试的写入方法，避免缓冲区满时阻塞
-        $this->writeWithRetry($message);
+        // 分段写入避免构建大字符串造成瞬时内存峰值
+        $this->writeDataLines($dataStr);
+        $this->writeWithRetry("\n");
 
         // 发送后自动让出控制权，让 Worker 处理其他请求
         $this->yieldAfterSend();
@@ -332,6 +324,19 @@ class SseWriter
         // #endregion
 
         return false;  // 重试次数用尽
+    }
+
+    /**
+     * SSE 数据行写入（每行前缀 data: ）
+     *
+     * 避免将多行 payload 先拼成大字符串再输出，降低内存峰值。
+     */
+    private function writeDataLines(string $data): void
+    {
+        $lines = \explode("\n", $data);
+        foreach ($lines as $line) {
+            $this->writeWithRetry("data: {$line}\n");
+        }
     }
     
     /**
