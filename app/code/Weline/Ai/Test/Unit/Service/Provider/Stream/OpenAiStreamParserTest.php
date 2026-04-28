@@ -94,6 +94,34 @@ final class OpenAiStreamParserTest extends TestCase
         self::assertTrue($parser->hasValidChunk());
     }
 
+    public function testThinkTagContentIsSeparatedFromFormalContent(): void
+    {
+        $parser = new OpenAiStreamParser();
+        $contents = [];
+        $reasonings = [];
+
+        $parser->ingest(
+            $this->buildSseFrame([
+                'choices' => [[
+                    'delta' => [
+                        'content' => '<think>step-1</think>{"ok":true}',
+                    ],
+                ]],
+            ]),
+            static function (string $chunk) use (&$contents): bool {
+                $contents[] = $chunk;
+                return true;
+            },
+            static function (string $reason) use (&$reasonings): bool {
+                $reasonings[] = $reason;
+                return true;
+            }
+        );
+
+        self::assertSame(['step-1'], $reasonings);
+        self::assertSame(['{"ok":true}'], $contents);
+    }
+
     public function testAbortSignalFromContentCallbackStopsIngestion(): void
     {
         $parser = new OpenAiStreamParser();
