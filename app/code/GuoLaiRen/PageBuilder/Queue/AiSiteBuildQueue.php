@@ -210,6 +210,28 @@ class AiSiteBuildQueue implements QueueInterface
 
             // mergeScope 只更新库内 scope；内存中的 $session 可能仍带旧 build_tasks，会导致 ensureTaskScope 继续合并为 done 从而秒结束。
             $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+
+            // 断点续生成入口防御：build operation 进入控制器之前，先把上次硬崩（OOM/kill -9/Worker 死亡，
+            // 没走 catch 分支）残留的 status=running 任务清回 pending+attempt_no=0。这样下次
+            // pickConcurrentTasks 能拾取干净的 task，避免 markTaskRunning 的 bumpAttempt 把
+            // attempt_no 累计到 BUILD_TASK_MAX_GENERATION_ATTEMPTS=3 之后被永久 failed，
+            // 让单页/单 section 的续生成可在不依赖 -f 的前提下成立。
+            // controller 入口 runHtmlBlocksBuildOperationV3 也有兜底 reset，这里属于双层防御。
+            if ($operation === 'build') {
+                $resumeScope = $scopeService->normalizeScope(
+                    $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                );
+                $resetScope = $buildTaskService->resetRunningTasksForInterruptedBuild(
+                    $resumeScope,
+                    'Queue restart: clearing stale running tasks for resume.'
+                );
+                if ($resetScope !== $resumeScope) {
+                    $sessionService->replaceScope((int)$session->getId(), $adminId, $resetScope);
+                    $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+                    $this->queueTrace($sse, '入口已清理脏 running 状态，断点续生成就绪');
+                }
+            }
+
             $operationContexts = $operation === 'block_regenerate'
                 ? $this->resolveQueuedOperationContexts($content, $sessionService, $session, $scopeService)
                 : [];

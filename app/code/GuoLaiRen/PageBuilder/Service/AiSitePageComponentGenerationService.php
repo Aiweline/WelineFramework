@@ -545,6 +545,19 @@ class AiSitePageComponentGenerationService
             return;
         }
 
+        if (\function_exists('w_query')) {
+            try {
+                yield from $this->generateComponentEventsConcurrentlyViaAiQueryBatch($components);
+
+                return;
+            } catch (\InvalidArgumentException $wQueryUnavailable) {
+                // 单元测试 / 裁剪环境未加载 Weline_Ai 的 AiQueryProvider 时 w_query('ai') 不可用，回退到 Fiber。
+                if (!\str_contains((string)$wQueryUnavailable->getMessage(), '查询器')) {
+                    throw $wQueryUnavailable;
+                }
+            }
+        }
+
         $tasks = [];
         foreach ($components as $componentKey => $spec) {
             $tasks[$componentKey] = function () use ($spec): array {
@@ -575,6 +588,144 @@ class AiSitePageComponentGenerationService
                     ? $event['error']
                     : new \RuntimeException('Component fiber failed without an exception payload.'),
             ];
+        }
+    }
+
+    /**
+     * N 路流式走统一 {@see w_query()}（AiQueryProvider::generateStreamBatch），与站内其它模块 AI 接入一致；
+     * 失败或解析异常时对该 key 回退到单路 {@see generateComponent()}。
+     *
+     * @param array<string, array{
+     *   componentCode:string,
+     *   name:string,
+     *   region:string,
+     *   prompt:string,
+     *   defaultConfig:array<string,mixed>,
+     *   renderContext:array<string,mixed>
+     * }> $components
+     * @return \Generator<string|int, array{status:string, result?:array<string,mixed>, error?:\Throwable}>
+     */
+    private function generateComponentEventsConcurrentlyViaAiQueryBatch(array $components): \Generator
+    {
+        $fullByKey = [];
+        /** @var array<string|int, array<string,mixed>> $batchSpecs */
+        $batchSpecs = [];
+        $sse = RequestContext::get(RequestContext::SSE_WRITER_KEY);
+        $chunkForwarder = RequestContext::get(self::REQUEST_CTX_AI_CHUNK_FORWARDER);
+
+        foreach ($components as $componentKey => $spec) {
+            $region = (string)($spec['region'] ?? 'content');
+            $componentCode = (string)($spec['componentCode'] ?? '');
+            $attemptPrompt = $this->appendComponentCssScopeInstruction((string)($spec['prompt'] ?? ''), $componentCode);
+            $guardedPrompt = $this->prependComponentJsonOnlyGuard($attemptPrompt, false);
+            $fullByKey[$componentKey] = '';
+            $batchSpecs[$componentKey] = [
+                'prompt' => $guardedPrompt,
+                'on_chunk' => function (string $chunk) use (
+                    &$fullByKey,
+                    $componentKey,
+                    $sse,
+                    $chunkForwarder,
+                    $region
+                ): bool {
+                    if ($chunk === '') {
+                        return true;
+                    }
+                    $fullByKey[$componentKey] .= $chunk;
+                    if (\is_callable($chunkForwarder)) {
+                        try {
+                            ($chunkForwarder)([
+                                'region' => $region,
+                                'chunk' => $chunk,
+                            ]);
+                        } catch (\Throwable) {
+                        }
+                    }
+                    if ($sse !== null && \is_object($sse) && \method_exists($sse, 'sendEvent')) {
+                        $sse->sendEvent('ai_chunk', [
+                            'region' => $region,
+                            'chunk' => $chunk,
+                        ]);
+                    }
+
+                    return true;
+                },
+                'scenario_code' => 'pagebuilder_component_generation',
+                'params' => $this->buildAiRuntimeParams([
+                    'allow_zero_balance_provider' => true,
+                    'temperature' => 0.35,
+                    'max_tokens' => 4096,
+                    'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
+                    'response_format' => ['type' => 'json_object'],
+                ]),
+            ];
+        }
+
+        /** @var array<string|int, array{status:string, error?:\Throwable}> $settled */
+        $settled = \w_query('ai', 'generateStreamBatch', [
+            'tasks' => $batchSpecs,
+            'concurrency' => $this->resolveConcurrency(\count($batchSpecs)),
+        ]);
+        if (!\is_array($settled)) {
+            $settled = [];
+        }
+
+        foreach ($components as $componentKey => $spec) {
+            $entry = \is_array($settled[$componentKey] ?? null) ? $settled[$componentKey] : [];
+            if (($entry['status'] ?? '') !== 'fulfilled') {
+                $err = $entry['error'] ?? null;
+                yield $componentKey => [
+                    'status' => 'rejected',
+                    'error' => $err instanceof \Throwable
+                        ? $err
+                        : new \RuntimeException('AI generateStreamBatch task failed for component key: ' . (string)$componentKey),
+                ];
+
+                continue;
+            }
+
+            $region = (string)($spec['region'] ?? 'content');
+            $raw = (string)($fullByKey[$componentKey] ?? '');
+            try {
+                $aiData = $this->decodeAndNormalizeComponentContent(
+                    $raw,
+                    $region,
+                    'AI did not return a valid component JSON payload'
+                );
+                $artifact = $this->buildComponentArtifactFromAiData(
+                    (string)($spec['componentCode'] ?? ''),
+                    (string)($spec['name'] ?? ''),
+                    $region,
+                    (string)($spec['prompt'] ?? ''),
+                    $this->appendComponentCssScopeInstruction((string)($spec['prompt'] ?? ''), (string)($spec['componentCode'] ?? '')),
+                    \is_array($spec['defaultConfig'] ?? null) ? $spec['defaultConfig'] : [],
+                    \is_array($spec['renderContext'] ?? null) ? $spec['renderContext'] : [],
+                    $aiData
+                );
+                yield $componentKey => [
+                    'status' => 'fulfilled',
+                    'result' => $artifact,
+                ];
+            } catch (\Throwable $primary) {
+                try {
+                    yield $componentKey => [
+                        'status' => 'fulfilled',
+                        'result' => $this->generateComponent(
+                            (string)($spec['componentCode'] ?? ''),
+                            (string)($spec['name'] ?? ''),
+                            $region,
+                            (string)($spec['prompt'] ?? ''),
+                            \is_array($spec['defaultConfig'] ?? null) ? $spec['defaultConfig'] : [],
+                            \is_array($spec['renderContext'] ?? null) ? $spec['renderContext'] : [],
+                        ),
+                    ];
+                } catch (\Throwable $fallback) {
+                    yield $componentKey => [
+                        'status' => 'rejected',
+                        'error' => $fallback instanceof \Throwable ? $fallback : $primary,
+                    ];
+                }
+            }
         }
     }
 
@@ -713,6 +864,58 @@ class AiSitePageComponentGenerationService
     /**
      * @param array<string,mixed> $defaultConfig
      * @param array<string,mixed> $renderContext
+     * @param array<string,mixed> $aiData
+     * @return array{
+     *   code:string,
+     *   name:string,
+     *   region:string,
+     *   phtml:string,
+     *   html:string,
+     *   default_config:array<string,mixed>,
+     *   ai_data:array<string,mixed>
+     * }
+     */
+    private function buildComponentArtifactFromAiData(
+        string $componentCode,
+        string $name,
+        string $region,
+        string $originalPromptForDescription,
+        string $attemptPromptForPolish,
+        array $defaultConfig,
+        array $renderContext,
+        array $aiData
+    ): array {
+        $componentInfo = [
+            'name' => $name,
+            'name_en' => $name,
+            'description' => $originalPromptForDescription,
+        ];
+        $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode);
+        $aiData = $this->applyClaudeDesignPolishPass($region, $componentCode, $attemptPromptForPolish, $aiData);
+
+        $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
+
+        $syntaxCheck = $this->getCodeValidator()->checkSyntax($phtml);
+        if (empty($syntaxCheck['valid'])) {
+            $phtml = $this->attemptSyntaxFix($phtml, $region, $componentInfo, $aiData, $syntaxCheck);
+        }
+
+        $html = $this->renderTemplateToHtml($phtml, $defaultConfig, $renderContext);
+        $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
+
+        return [
+            'code' => $componentCode,
+            'name' => $name,
+            'region' => $region,
+            'phtml' => $phtml,
+            'html' => $html,
+            'default_config' => $defaultConfig,
+            'ai_data' => $aiData,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
      * @return array{
      *   code:string,
      *   name:string,
@@ -731,11 +934,6 @@ class AiSitePageComponentGenerationService
         array $defaultConfig,
         array $renderContext
     ): array {
-        $componentInfo = [
-            'name' => $name,
-            'name_en' => $name,
-            'description' => $prompt,
-        ];
         $attemptPrompt = $this->appendComponentCssScopeInstruction($prompt, $componentCode);
         $lastThrowable = null;
 
@@ -743,28 +941,17 @@ class AiSitePageComponentGenerationService
             $aiData = [];
             try {
                 $aiData = $this->runAiGeneration($region, $attemptPrompt);
-                $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode);
-                $aiData = $this->applyClaudeDesignPolishPass($region, $componentCode, $attemptPrompt, $aiData);
 
-                $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
-
-                $syntaxCheck = $this->getCodeValidator()->checkSyntax($phtml);
-                if (empty($syntaxCheck['valid'])) {
-                    $phtml = $this->attemptSyntaxFix($phtml, $region, $componentInfo, $aiData, $syntaxCheck);
-                }
-
-                $html = $this->renderTemplateToHtml($phtml, $defaultConfig, $renderContext);
-                $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
-
-                return [
-                    'code' => $componentCode,
-                    'name' => $name,
-                    'region' => $region,
-                    'phtml' => $phtml,
-                    'html' => $html,
-                    'default_config' => $defaultConfig,
-                    'ai_data' => $aiData,
-                ];
+                return $this->buildComponentArtifactFromAiData(
+                    $componentCode,
+                    $name,
+                    $region,
+                    $prompt,
+                    $attemptPrompt,
+                    $defaultConfig,
+                    $renderContext,
+                    $aiData
+                );
             } catch (\Throwable $throwable) {
                 $lastThrowable = $throwable;
                 if (!$this->shouldRetryComponentGeneration($throwable)) {
