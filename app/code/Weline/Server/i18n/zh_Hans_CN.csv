@@ -760,7 +760,7 @@ env.wls,env.wls
 "可同时运行多个命名实例，每个实例使用不同端口。首次指定 -p 后配置会自动记住，下次直接用实例名启动","可同时运行多个命名实例，每个实例使用不同端口。首次指定 -p 后配置会自动记住，下次直接用实例名启动"
 配置记忆,配置记忆
 "首次 server:start api -p 8443 会保存配置，之后 server:start api 自动使用端口 8443","首次 server:start api -p 8443 会保存配置，之后 server:start api 自动使用端口 8443"
-"worker_count 设为 ""auto"" 时：开发环境固定 2 个 Worker，生产环境根据 CPU 核心数自动计算","worker_count 设为 ""auto"" 时：开发环境固定 2 个 Worker，生产环境根据 CPU 核心数自动计算"
+"worker_count 设为 ""auto"" 时：开发环境固定 4 个 Worker，生产环境根据 CPU 核心数自动计算","worker_count 设为 ""auto"" 时：开发环境固定 4 个 Worker，生产环境根据 CPU 核心数自动计算"
 事件循环,事件循环
 "自动选择最优：Event 扩展 > stream_select","自动选择最优：Event 扩展 > stream_select"
 多进程,多进程
@@ -1473,6 +1473,17 @@ DDoS攻击,DDoS攻击
 "Failed to export local CA private key","Failed to export local CA private key"
 "Failed to persist local CA certificate","Failed to persist local CA certificate"
 "Failed to persist local CA private key","Failed to persist local CA private key"
+"Local CA is already trusted by the Linux system store","Local CA is already trusted by the Linux system store"
+"Local CA was generated, but no supported Linux trust tool was found. Import %{1} into the system trust store manually","Local CA was generated, but no supported Linux trust tool was found. Import %{1} into the system trust store manually"
+"Local CA was generated. Run manually: %{1}","Local CA was generated. Run manually: %{1}"
+"Local CA imported into Linux system trust store","Local CA imported into Linux system trust store"
+"Local CA install command completed, but trust verification did not confirm it yet","Local CA install command completed, but trust verification did not confirm it yet"
+"Local CA was generated, but automatic Linux trust import failed. Run manually: %{1}. Output: %{2}","Local CA was generated, but automatic Linux trust import failed. Run manually: %{1}. Output: %{2}"
+"Local CA was generated, but macOS security tool was not found. Import %{1} into Keychain Access manually","Local CA was generated, but macOS security tool was not found. Import %{1} into Keychain Access manually"
+"Local CA is already trusted by macOS Keychain","Local CA is already trusted by macOS Keychain"
+"Local CA imported into macOS login Keychain","Local CA imported into macOS login Keychain"
+"Local CA imported into macOS System Keychain","Local CA imported into macOS System Keychain"
+"Local CA was generated, but automatic macOS trust import failed. Run manually: %{1}. Output: %{2}","Local CA was generated, but automatic macOS trust import failed. Run manually: %{1}. Output: %{2}"
 "Local CA certificate file is missing: %{1}","Local CA certificate file is missing: %{1}"
 "Local CA is already trusted by the current Windows user","Local CA is already trusted by the current Windows user"
 "Failed to find certutil.exe; import %{1} into Current User > Trusted Root Certification Authorities manually","Failed to find certutil.exe; import %{1} into Current User > Trusted Root Certification Authorities manually"

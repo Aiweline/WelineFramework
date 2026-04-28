@@ -1067,7 +1067,11 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             return '127.0.0.1';
         }
 
-        return $host;
+        if (\filter_var($host, FILTER_VALIDATE_IP) !== false) {
+            return $host;
+        }
+
+        return '0.0.0.0';
     }
 
     /**
