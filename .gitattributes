@@ -1,6 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
-
 # Shell scripts must use LF (CRLF breaks bash on Linux)
 bin/install.sh text eol=lf
 bin/install.bash text eol=lf
