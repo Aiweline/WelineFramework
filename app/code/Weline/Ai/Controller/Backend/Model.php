@@ -1012,6 +1012,7 @@ class Model extends BackendController
                             $results['provider_account']['account_name'] = $testAccount->getData('account_name');
                             $results['provider_account']['account_id'] = $testAccount->getId();
                             $results['provider_account']['connection_status'] = $testAccount->getData(Account::schema_fields_CONNECTION_STATUS);
+                            $results['provider_account']['trace'] = $testResult['trace'] ?? [];
                             
                             // 保存供应商测试成功状态
                             if (!$testOnly) {
@@ -1039,6 +1040,9 @@ class Model extends BackendController
                 if (!$testSuccess) {
                     $results['provider_account']['success'] = false;
                     $results['provider_account']['message'] = __('所有供应商账户测试均失败');
+                    if (!isset($results['provider_account']['trace'])) {
+                        $results['provider_account']['trace'] = [];
+                    }
                     
                     // 保存供应商测试失败状态
                     if (!$testOnly) {
