@@ -126,6 +126,127 @@ class AiSiteBuildTaskServiceTest extends TestCase
         );
     }
 
+    public function testEnsureTaskScopePrefersStageOneExecutionBlueprintTasksWhenPresent(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $stageOneTasks = [
+            ['task_key' => 'shared:header', 'sort_order' => 10],
+            ['task_key' => 'shared:footer', 'sort_order' => 20],
+            ['task_key' => 'page:home_page:a', 'page_type' => 'home_page', 'sort_order' => 30],
+            ['task_key' => 'page:home_page:b', 'page_type' => 'home_page', 'sort_order' => 40],
+        ];
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page'],
+            'task_plan_confirmed' => 1,
+            'execution_blueprint' => [
+                'tasks' => $stageOneTasks,
+            ],
+            'virtual_theme_plan' => [
+                'confirmed' => [
+                    'signature' => 'sig',
+                    'execution_blueprint' => [
+                        'tasks' => [
+                            ['task_key' => 'shared:header', 'sort_order' => 10],
+                            ['task_key' => 'shared:footer', 'sort_order' => 20],
+                        ],
+                    ],
+                ],
+            ],
+        ], [
+            'site_title' => 'Example Site',
+            'brief_description' => 'Example site summary',
+        ], 'virtual_theme');
+
+        $this->assertSame(
+            ['shared:header', 'shared:footer', 'page:home_page:a', 'page:home_page:b'],
+            \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
+        );
+    }
+
+    public function testEnsureTaskScopeUsesStructuredTaskListsWhenRicherThanConfirmedEmbeddedTasks(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page'],
+            'task_plan_confirmed' => 1,
+            'virtual_theme_plan' => [
+                'confirmed' => [
+                    'signature' => 'sig',
+                    'shared_tasks' => [
+                        ['task_key' => 'shared:header', 'sort_order' => 10],
+                        ['task_key' => 'shared:footer', 'sort_order' => 20],
+                    ],
+                    'page_tasks' => [
+                        'home_page' => [
+                            ['task_key' => 'page:home_page:t1', 'sort_order' => 30],
+                            ['task_key' => 'page:home_page:t2', 'sort_order' => 40],
+                            ['task_key' => 'page:home_page:t3', 'sort_order' => 50],
+                        ],
+                    ],
+                    'execution_blueprint' => [
+                        'tasks' => [
+                            ['task_key' => 'shared:header', 'sort_order' => 10],
+                            ['task_key' => 'shared:footer', 'sort_order' => 20],
+                            ['task_key' => 'page:home_page:t1', 'page_type' => 'home_page', 'sort_order' => 30],
+                        ],
+                    ],
+                ],
+            ],
+        ], [
+            'site_title' => 'Example Site',
+            'brief_description' => 'Example site summary',
+        ], 'virtual_theme');
+
+        $this->assertSame(
+            ['shared:header', 'shared:footer', 'page:home_page:t1', 'page:home_page:t2', 'page:home_page:t3'],
+            \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
+        );
+    }
+
+    public function testEnsureTaskScopeUsesStructuredTaskListsWhenRicherThanTopLevelBlueprint(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page'],
+            'task_plan_confirmed' => 1,
+            'execution_blueprint' => [
+                'tasks' => [
+                    ['task_key' => 'shared:header', 'sort_order' => 10],
+                    ['task_key' => 'page:home_page:t1', 'page_type' => 'home_page', 'sort_order' => 30],
+                ],
+            ],
+            'virtual_theme_plan' => [
+                'confirmed' => [
+                    'signature' => 'sig',
+                    'shared_tasks' => [
+                        ['task_key' => 'shared:header', 'sort_order' => 10],
+                        ['task_key' => 'shared:footer', 'sort_order' => 20],
+                    ],
+                    'page_tasks' => [
+                        'home_page' => [
+                            ['task_key' => 'page:home_page:t1', 'sort_order' => 30],
+                            ['task_key' => 'page:home_page:t2', 'sort_order' => 40],
+                            ['task_key' => 'page:home_page:t3', 'sort_order' => 50],
+                        ],
+                    ],
+                ],
+            ],
+        ], [
+            'site_title' => 'Example Site',
+            'brief_description' => 'Example site summary',
+        ], 'virtual_theme');
+
+        $this->assertSame(
+            ['shared:header', 'shared:footer', 'page:home_page:t1', 'page:home_page:t2', 'page:home_page:t3'],
+            \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
+        );
+        $this->assertArrayHasKey('page:home_page:t3', $scope['build_tasks']);
+    }
+
     public function testEnsureTaskScopeRepairsStaleConfirmedFlagWhenConfirmedExecutionBlueprintExists(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
