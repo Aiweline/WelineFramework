@@ -772,17 +772,33 @@ class QueueDbWriter extends SseWriter
     private function isContentBearingStreamPayload(string $event, array $payload): bool
     {
         $eventType = \strtolower(\trim((string)($payload['event_type'] ?? $event)));
-        if (\in_array($eventType, ['chunk', 'ai_raw_chunk', 'ai_chunk', 'plan_chunk'], true)) {
+        if (\in_array($eventType, [
+            'chunk',
+            'ai_raw_chunk',
+            'ai_chunk',
+            'plan_chunk',
+            'thinking',
+            'reasoning',
+            'reasoning_chunk',
+        ], true)) {
             return true;
         }
 
         $streamStage = \strtolower(\trim((string)($payload['stream_stage'] ?? '')));
-        if (\in_array($streamStage, ['ai_raw_chunk', 'ai_chunk', 'plan_chunk', 'markdown_stream'], true)) {
+        if (\in_array($streamStage, [
+            'ai_raw_chunk',
+            'ai_chunk',
+            'plan_chunk',
+            'markdown_stream',
+            'reasoning',
+            'reasoning_chunk',
+            'thinking',
+        ], true)) {
             return true;
         }
 
         $format = \strtolower(\trim((string)($payload['format'] ?? '')));
-        if ($format === 'markdown_stream') {
+        if ($format === 'markdown_stream' || $format === 'reasoning_stream') {
             return true;
         }
 
@@ -790,7 +806,16 @@ class QueueDbWriter extends SseWriter
         $nestedFormat = \strtolower(\trim((string)($nestedPayload['format'] ?? '')));
         $nestedStreamStage = \strtolower(\trim((string)($nestedPayload['stream_stage'] ?? '')));
         return $nestedFormat === 'markdown_stream'
-            || \in_array($nestedStreamStage, ['ai_raw_chunk', 'ai_chunk', 'plan_chunk', 'markdown_stream'], true);
+            || $nestedFormat === 'reasoning_stream'
+            || \in_array($nestedStreamStage, [
+                'ai_raw_chunk',
+                'ai_chunk',
+                'plan_chunk',
+                'markdown_stream',
+                'reasoning',
+                'reasoning_chunk',
+                'thinking',
+            ], true);
     }
 
     /**

@@ -15,7 +15,7 @@
           name="server" 
           title="服务器管理" 
           parent="Weline_Backend::system_service_group" 
-          icon="bi-hdd-rack" 
+          icon="mdi mdi-server-network" 
           order="10">
         
         <!-- 服务器监控 -->
@@ -23,7 +23,7 @@
               name="server_monitor" 
               title="服务器监控" 
               action="*/backend/server-monitor"
-              icon="bi-speedometer2" 
+              icon="mdi mdi-speedometer" 
               order="0"/>
         
         <!-- 服务器实例 -->
@@ -31,21 +31,21 @@
               name="server_manager" 
               title="服务器实例" 
               action="*/backend/server-manager"
-              icon="bi-server" 
+              icon="mdi mdi-server" 
               order="1"/>
         
         <menu source="Weline_Server::session_manager"
               name="session_manager"
               title="Session 管理"
               action="*/backend/server-manager/session"
-              icon="bi-person-check"
+              icon="mdi mdi-account-key"
               order="2"/>
         
         <menu source="Weline_Server::memory_cache_manager"
               name="memory_cache_manager"
               title="内存缓存管理"
               action="*/backend/server-manager/memory"
-              icon="bi-memory"
+              icon="mdi mdi-memory"
               order="3"/>
         
         <!-- 攻击日志 -->
@@ -53,7 +53,7 @@
               name="attack_log" 
               title="攻击日志" 
               action="*/backend/server-monitor/attack-log"
-              icon="bi-shield-exclamation" 
+              icon="mdi mdi-shield-alert" 
               order="4"/>
         
         <!-- 安全规则 -->
@@ -61,7 +61,7 @@
               name="security_rules" 
               title="安全规则" 
               action="*/backend/server-monitor/security-rules"
-              icon="bi-shield-check" 
+              icon="mdi mdi-shield-check" 
               order="5"/>
         
         <!-- SSL证书管理 -->
@@ -69,7 +69,7 @@
               name="ssl"
               title="SSL证书管理"
               action="*/backend/ssl-certificate"
-              icon="bi-shield-lock"
+              icon="mdi mdi-shield-lock"
               order="6"/>
 
         <!-- 反向代理配置 -->
@@ -77,7 +77,7 @@
               name="reverse_proxy"
               title="反向代理配置"
               action="*/backend/reverse-proxy"
-              icon="bi-arrow-left-right"
+              icon="mdi mdi-arrow-left-right"
               order="6.5"/>
 
         <!-- 性能优化指南 -->
@@ -85,7 +85,7 @@
               name="optimization"
               title="性能优化指南"
               action="*/backend/optimization-guide"
-              icon="bi-lightning-charge"
+              icon="mdi mdi-lightning-bolt"
               order="7"/>
         
         <!-- API文档 -->
@@ -93,7 +93,7 @@
               name="api_doc" 
               title="API文档" 
               action="*/backend/server-monitor/api-doc"
-              icon="bi-book" 
+              icon="mdi mdi-book-open-page-variant" 
               order="8"/>
     </menu>
 </menus>
