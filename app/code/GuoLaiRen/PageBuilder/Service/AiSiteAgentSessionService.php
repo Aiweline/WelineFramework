@@ -97,6 +97,7 @@ class AiSiteAgentSessionService
     /** @var list<string> */
     private const VISUAL_EDIT_STAGE_SCOPE_KEYS = [
         'build_blueprint',
+        '_build_page_progress',
         'build_task_summary',
         'build_tasks',
         'component_refinements',
