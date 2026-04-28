@@ -820,6 +820,39 @@ ACL分发,ACL分发
 "✓ 扩展注册表已重建完成。","✓ 扩展注册表已重建完成。"
 位置：generated/extends.php,位置：generated/extends.php
 "✖ 写入扩展注册表失败。","✖ 写入扩展注册表失败。"
+"Git 工具：按路径定位提交、从历史移除路径，或透传 git rebase。","Git 工具：按路径定位提交、从历史移除路径，或透传 git rebase。"
+"Git 仓库工作目录，默认为项目根目录 BP","Git 仓库工作目录，默认为项目根目录 BP"
+"log 子命令：在所有 ref 上扫描（git log --all）","log 子命令：在所有 ref 上扫描（git log --all）"
+"log 子命令：限定时间范围，例如 --since=1.week 或 --since=2026-01-01","log 子命令：限定时间范围，例如 --since=1.week 或 --since=2026-01-01"
+"log 子命令：限制最多输出多少条记录","log 子命令：限制最多输出多少条记录"
+"remove 子命令：真正执行 git filter-repo（默认仅 dry-run）","remove 子命令：真正执行 git filter-repo（默认仅 dry-run）"
+"列出涉及指定路径的提交（git log --oneline -- <path>）","列出涉及指定路径的提交（git log --oneline -- <path>）"
+"使用 git filter-repo --invert-paths 从全部历史中删除路径，默认 dry-run","使用 git filter-repo --invert-paths 从全部历史中删除路径，默认 dry-run"
+其余参数,其余参数
+"未命中子命令时，所有参数透传给 git rebase（保留原顺序与引号）","未命中子命令时，所有参数透传给 git rebase（保留原顺序与引号）"
+查看路径相关提交,查看路径相关提交
+"所有分支 + 时间范围","所有分支 + 时间范围"
+指定别的仓库目录,指定别的仓库目录
+从历史移除（先预演）,从历史移除（先预演）
+从历史移除（真正执行）,从历史移除（真正执行）
+"透传 rebase（交互式）","透传 rebase（交互式）"
+"透传 rebase（指定上游）","透传 rebase（指定上游）"
+短别名,短别名
+工作目录不存在：%{1},工作目录不存在：%{1}
+"目录 %{1} 下未发现 .git，请确认是否为 Git 仓库根。","目录 %{1} 下未发现 .git，请确认是否为 Git 仓库根。"
+执行：%{1},执行：%{1}
+未找到与指定路径相关的提交。,未找到与指定路径相关的提交。
+"git log 退出码：%{1}","git log 退出码：%{1}"
+"未检测到 git-filter-repo，无法继续。","未检测到 git-filter-repo，无法继续。"
+安装方法（任选其一）：,安装方法（任选其一）：
+"详情见 https://github.com/newren/git-filter-repo","详情见 https://github.com/newren/git-filter-repo"
+待执行：%{1},待执行：%{1}
+"破坏性操作：将重写仓库历史。如已推送到远程，需要协调 force-push 与团队成员。","破坏性操作：将重写仓库历史。如已推送到远程，需要协调 force-push 与团队成员。"
+"当前为 dry-run，未执行。加 --force 才会真正改写历史。","当前为 dry-run，未执行。加 --force 才会真正改写历史。"
+"开始执行 git filter-repo ...","开始执行 git filter-repo ..."
+"git filter-repo 退出码：%{1}","git filter-repo 退出码：%{1}"
+"历史已重写。请检查后再 push（通常需要 git push --force）。","历史已重写。请检查后再 push（通常需要 git push --force）。"
+"git rebase 退出码：%{1}","git rebase 退出码：%{1}"
 "Hook 未定义或未注册：%{1}。请在 Weline\Framework\Hook\HookInterface 中定义此 hook 常量，并在模块的 hook.php 文件中定义规约。","Hook 未定义或未注册：%{1}。请在 Weline\Framework\Hook\HookInterface 中定义此 hook 常量，并在模块的 hook.php 文件中定义规约。"
 请指定请求路径！,请指定请求路径！
 正确用法示例:,正确用法示例:
