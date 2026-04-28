@@ -625,6 +625,8 @@ Cookie政策,Cookie政策
 效果,效果
 SEO设置,SEO设置
 统计代码,统计代码
+第一阶段方案已存在；队列已跳过重复生成。若需重新生成，请使用强制重建。,第一阶段方案已存在；队列已跳过重复生成。若需重新生成，请使用强制重建。
+"第一阶段方案生成已失败 %{1} 次，队列不再自动重试；如需继续，请手动强制重建。","第一阶段方案生成已失败 %{1} 次，队列不再自动重试；如需继续，请手动强制重建。"
 Component,Component
 "Component code generated, but preview failed to render","Component code generated, but preview failed to render"
 "You can continue to refine or save the component directly","You can continue to refine or save the component directly"
@@ -635,11 +637,11 @@ Component,Component
 页面不存在：%{1},页面不存在：%{1}
 组件不存在：%{1},组件不存在：%{1}
 "PHP 变量未声明：%{1}","PHP 变量未声明：%{1}"
-检测到队列上次异常结束，正在尝试自动恢复执行。,检测到队列上次异常结束，正在尝试自动恢复执行。
 操作执行完成,操作执行完成
 "…（以下仅显示末尾约 %{n} 字符）","…（以下仅显示末尾约 %{n} 字符）"
 "已省略 %{n} 行 AI 正文输出。","已省略 %{n} 行 AI 正文输出。"
-队列执行失败，请查看队列日志并重试。,队列执行失败，请查看队列日志并重试。
+"队列 #%{queue_id} 正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。","队列 #%{queue_id} 正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。"
+"队列正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。","队列正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。"
 队列执行失败，请重试。,队列执行失败，请重试。
 第二阶段任务方案队列已完成。,第二阶段任务方案队列已完成。
 生成主题队列已完成。,生成主题队列已完成。
@@ -662,8 +664,6 @@ Component,Component
 页面重建完成,页面重建完成
 页面已重建：%{page},页面已重建：%{page}
 页面重建完成，可继续调整组件,页面重建完成，可继续调整组件
-检测到第二阶段方案为空，已初始化队列并开始执行。,检测到第二阶段方案为空，已初始化队列并开始执行。
-检测到第二阶段方案为空，已重跑原队列。,检测到第二阶段方案为空，已重跑原队列。
 未命名账号,未命名账号
 "本地供应商 - 本地默认账号","本地供应商 - 本地默认账号"
 本地供应商,本地供应商
@@ -691,27 +691,31 @@ Component,Component
 "%{operation} 队列 #%{queue_id} 当前状态：%{status}。","%{operation} 队列 #%{queue_id} 当前状态：%{status}。"
 已读取队列状态,已读取队列状态
 "Failed to create PageBuilder draft website","Failed to create PageBuilder draft website"
-"AI 建站阶段一不允许使用 deterministic/fake 回退方案","AI 建站阶段一不允许使用 deterministic/fake 回退方案"
 "AI 未生成任何可用页面区块：%{1}","AI 未生成任何可用页面区块：%{1}"
 "PageBuilder materialization requires a real website_id","PageBuilder materialization requires a real website_id"
+"AI virtual theme page has no generated layout or blocks: %{1}","AI virtual theme page has no generated layout or blocks: %{1}"
 "Failed to materialize PageBuilder page: %{1}","Failed to materialize PageBuilder page: %{1}"
 "Unsupported shared component region: %{1}","Unsupported shared component region: %{1}"
 "Unknown page section: %{section}","Unknown page section: %{section}"
 "AI 生成的组件未通过 PHP 语法校验（已尝试 %{n} 轮自动修复）：%{message}","AI 生成的组件未通过 PHP 语法校验（已尝试 %{n} 轮自动修复）：%{message}"
 "AI 组件 JSON 校验失败：%{message}","AI 组件 JSON 校验失败：%{message}"
-"AI 组件内容质量不足：缺少真实文案、视觉层次或有效内容。请重新生成。","AI 组件内容质量不足：缺少真实文案、视觉层次或有效内容。请重新生成。"
+"AI 组件内容质量不足：%{1}。请重新生成。","AI 组件内容质量不足：%{1}。请重新生成。"
 "AI 组件包含无效图片资源：%{1}","AI 组件包含无效图片资源：%{1}"
 "AI 组件预览渲染失败：%{message}","AI 组件预览渲染失败：%{message}"
-"AI 未返回有效的组件 JSON 结果","AI 未返回有效的组件 JSON 结果"
 "正在对组件 JSON 进行本地解析与修复（提取 JSON、控制字符、尾逗号、截断补全等）…","Running local JSON parse/repair (extract JSON, escape control characters, trailing commas, truncation recovery)…"
 "本地解析与修复成功，已得到有效组件 JSON。","Local parse/repair succeeded; component JSON is valid."
 "本地解析与修复仍未得到有效 JSON，将按轮次调用 AI 进行结构修复（共 %{1} 轮）","Local repair did not yield valid JSON; will request AI structural repair for up to %{1} round(s)."
 "第 %{1}/%{2} 轮：正在请求 AI 修复 JSON 结构…","Round %{1}/%{2}: requesting AI JSON repair…"
+"AI 未返回有效的组件 JSON 结果","AI 未返回有效的组件 JSON 结果"
 "第 %{1}/%{2} 轮：AI 未返回可用内容，将尝试下一轮（若仍有）。","Round %{1}/%{2}: AI returned no usable content; will try the next round if available."
 "第 %{1}/%{2} 轮：AI 已返回，正在解析校验…","Round %{1}/%{2}: AI response received; validating parse…"
 "第 %{1}/%{2} 轮：AI 修复后解析成功。","Round %{1}/%{2}: AI repair produced valid JSON."
 "第 %{1}/%{2} 轮：解析仍失败，将继续下一轮（若仍有）。","Round %{1}/%{2}: parse still failing; continuing to the next round if any."
-"AI 组件生成未通过校验，正在使用 AI 简化方案重试（第 %{1} 轮）：%{2}","AI component generation failed validation; retrying with a simplified AI fallback (attempt %{1}): %{2}"
+"AI 组件生成未通过校验，正在使用 AI 增强修复方案重写（第 %{1} 轮）：%{2}","AI 组件生成未通过校验，正在使用 AI 增强修复方案重写（第 %{1} 轮）：%{2}"
+"AI publish verification failed: no materialized pages were produced.","AI publish verification failed: no materialized pages were produced."
+"AI publish verification failed: page %{1} has no materialized page_id.","AI publish verification failed: page %{1} has no materialized page_id."
+"AI publish verification failed: materialized page %{1} does not exist.","AI publish verification failed: materialized page %{1} does not exist."
+"AI publish verification failed for %{1}: %{2}","AI publish verification failed for %{1}: %{2}"
 "Invalid generated content component payload","Invalid generated content component payload"
 "Invalid generated page layout payload","Invalid generated page layout payload"
 "Home | Pages | Contact","Home | Pages | Contact"
@@ -818,6 +822,7 @@ Terms,Terms
 渚嬪：时尚精品店,渚嬪：时尚精品店
 请填写要绑定的目标域名,请填写要绑定的目标域名
 "描述网站的主题、风格和主要功能，越详细 AI 生成效果越好","描述网站的主题、风格和主要功能，越详细 AI 生成效果越好"
+工作区日志,工作区日志
 "AI 快速建站","AI 快速建站"
 返回,返回
 切换到“%{step}”,切换到“%{step}”
@@ -835,8 +840,15 @@ Terms,Terms
 一句话描述你的网站,一句话描述你的网站
 需要的页面,需要的页面
 取消选择,取消选择
+表单会自动保存。第一阶段生成在后台队列中执行，这里会持续显示状态与草稿更新。,表单会自动保存。第一阶段生成在后台队列中执行，这里会持续显示状态与草稿更新。
+确认&更新方案,"Confirm & update plan"
 返回第一阶段生成建站方案再试,"Back to phase one to generate the site plan"
-鐪嬭捣鏉ヤ笉閿欙紒,鐪嬭捣鏉ヤ笉閿欙紒
+看起来不错！,看起来不错！
+站点已经生成，可以先预览并运行发布前检查，确认无误后再发布。,站点已经生成，可以先预览并运行发布前检查，确认无误后再发布。
+预览站点,预览站点
+发布前建议先检查首页、关于页和联系页。,发布前建议先检查首页、关于页和联系页。
+当前可访问地址,当前可访问地址
+运行发布检查,运行发布检查
 立即发布,立即发布
 任务进度,"Task progress"
 "AI 生成中","AI 生成中"
@@ -859,11 +871,9 @@ cancelled,cancelled
 当前进程状态,当前进程状态
 队列日志（result，末尾截断）,队列日志（result，末尾截断）
 生成主题队列,生成主题队列
-表单会自动保存。第一阶段生成在后台队列中执行，这里会持续显示状态与草稿更新。,表单会自动保存。第一阶段生成在后台队列中执行，这里会持续显示状态与草稿更新。
-确认&更新方案,"Confirm & update plan"
 第一阶段队列,"Phase 1 queue"
 当前执行中的队列会自动展开，并实时同步执行状态与日志。,当前执行中的队列会自动展开，并实时同步执行状态与日志。
-铏氭嫙涓婚鏋勫缓,铏氭嫙涓婚鏋勫缓
+站点构建,站点构建
 域名与注册商,"Domain & registrar"
 "AI 推荐: {label}","AI 推荐: {label}"
 Pending,Pending
@@ -882,6 +892,7 @@ Pending,Pending
 鑽夌站点,鑽夌站点
 铏氭嫙涓婚,铏氭嫙涓婚
 当前阶段,Stage
+"用于观察队列调度、SSE 事件和阶段状态。","用于观察队列调度、SSE 事件和阶段状态。"
 "寮€发：直接编辑 Scope JSON","寮€发：直接编辑 Scope JSON"
 "瀹屾暣 Scope","瀹屾暣 Scope"
 "Patch JSON","Patch JSON"
@@ -972,6 +983,19 @@ Token,Token
 完成时间,完成时间
 进行中...,"In progress..."
 "AI 排队中","AI 排队中"
+第一阶段方案生成失败,第一阶段方案生成失败
+我知道了,我知道了
+前端重试已达上限，请检查错误后再手动重试或明确重建任务方案。,前端重试已达上限，请检查错误后再手动重试或明确重建任务方案。
+"是否立即重试第二阶段任务方案生成？本次将进行第 %{1} / 3 次前端重试。","是否立即重试第二阶段任务方案生成？本次将进行第 %{1} / 3 次前端重试。"
+立即重试,立即重试
+暂不重试,暂不重试
+第二阶段任务方案生成失败，正在准备断点续跑重试...,第二阶段任务方案生成失败，正在准备断点续跑重试...
+当前仍有进行中的第二阶段任务方案任务，请稍后再试。,当前仍有进行中的第二阶段任务方案任务，请稍后再试。
+"前端重试已达上限（3 次），请检查错误后再手动重试或强制重建方案。","前端重试已达上限（3 次），请检查错误后再手动重试或强制重建方案。"
+"是否立即重试第一阶段方案生成？本次将进行第 %{1} / 3 次前端重试。","是否立即重试第一阶段方案生成？本次将进行第 %{1} / 3 次前端重试。"
+第二阶段任务方案生成失败，正在准备重试...,第二阶段任务方案生成失败，正在准备重试...
+第一阶段生成失败，正在准备重试...,第一阶段生成失败，正在准备重试...
+当前仍有进行中的第一阶段任务，请稍后再试。,当前仍有进行中的第一阶段任务，请稍后再试。
 开始执行工作区操作：,开始执行工作区操作：
 第一阶段方案阶段提示已生成，事件流将继续同步后续进度。,第一阶段方案阶段提示已生成，事件流将继续同步后续进度。
 第二阶段任务方案阶段提示已生成，事件流将继续同步后续进度。,第二阶段任务方案阶段提示已生成，事件流将继续同步后续进度。
@@ -992,6 +1016,8 @@ Footer,Footer
 页面已生成完成：,页面已生成完成：
 页面已更新，可提前编辑：,页面已更新，可提前编辑：
 任务已完成,任务已完成
+队列尚未完成，继续同步后台执行进度。,队列尚未完成，继续同步后台执行进度。
+工作区操作执行失败,工作区操作执行失败
 "操作已创建但缺少 SSE 参数","操作已创建但缺少 SSE 参数"
 启动发布失败,启动发布失败
 网络错误，请稍后重试,网络错误，请稍后重试
@@ -1014,23 +1040,22 @@ Footer,Footer
 暂停显示日志,暂停显示日志
 重试第一阶段,重试第一阶段
 保存草稿,"Save draft"
+方案重建,方案重建
 确认方案，继续下一步,确认方案，继续下一步
 "先看方案是否符合预期；需要改动时点「AI 调整方案」，确认后系统会自动进入第二阶段任务拆解。","先看方案是否符合预期；需要改动时点「AI 调整方案」，确认后系统会自动进入第二阶段任务拆解。"
 "长耗时 AI 任务在后台队列执行；页面只展示进度、队列状态与最终可确认结果。","长耗时 AI 任务在后台队列执行；页面只展示进度、队列状态与最终可确认结果。"
 确认后会发布到同一个草稿站点，不会额外创建第二个网站实体。,确认后会发布到同一个草稿站点，不会额外创建第二个网站实体。
-运行发布检查,运行发布检查
 第二阶段任务方案流,第二阶段任务方案流
 查看第二阶段任务方案,查看第二阶段任务方案
 生成第二阶段任务方案,生成第二阶段任务方案
 任务规划生成中…,任务规划生成中…
 尚未生成第二阶段任务方案。,尚未生成第二阶段任务方案。
 本阶段会把第一阶段已确认的建站方案拆解为可执行的页面与区块任务清单。微调只修改指定范围，重建会生成全量新方案；确认后才能进入构建。,本阶段会把第一阶段已确认的建站方案拆解为可执行的页面与区块任务清单。微调只修改指定范围，重建会生成全量新方案；确认后才能进入构建。
-第二阶段基于已确认方案自动拆解任务；确认任务方案后会直接进入后台构建。,第二阶段基于已确认方案自动拆解任务；确认任务方案后会直接进入后台构建。
+第二阶段基于已确认方案自动拆解任务；确认任务方案后可手动点击“构建网站”进入后台构建。,第二阶段基于已确认方案自动拆解任务；确认任务方案后可手动点击“构建网站”进入后台构建。
 单击任务方案预览区可全屏查看,单击任务方案预览区可全屏查看
 准备开始生成任务计划。,准备开始生成任务计划。
 收起第二阶段面板,收起第二阶段面板
-重新生成,重新生成
-确认任务方案并开始构建,确认任务方案并开始构建
+确认任务方案,确认任务方案
 可视化编辑,可视化编辑
 "切换页面时只会更新当前预览页和可视化 URL，不需要再手动填写 preview_page_id。","切换页面时只会更新当前预览页和可视化 URL，不需要再手动填写 preview_page_id。"
 可视化编辑器工具栏,可视化编辑器工具栏
@@ -1040,12 +1065,20 @@ PC,PC
 iPad,iPad
 手机,手机
 放大预览,放大预览
+可进入第三阶段,可进入第三阶段
+等待构建完成,等待构建完成
+虚拟主题已就绪，下一步进入确认发布,虚拟主题已就绪，下一步进入确认发布
+第三阶段确认发布入口会在虚拟主题就绪后开放,第三阶段确认发布入口会在虚拟主题就绪后开放
+进入第三阶段后可先运行发布前预检，再确认准备发布。,进入第三阶段后可先运行发布前预检，再确认准备发布。
+当前仍可继续预览和编辑；当虚拟主题构建完成后，这里会直接提供进入第三阶段的按钮。,当前仍可继续预览和编辑；当虚拟主题构建完成后，这里会直接提供进入第三阶段的按钮。
+阶段三,阶段三
+构建网站,构建网站
+进入第三阶段确认发布,进入第三阶段确认发布
 已生成页面,已生成页面
 当前还没有可用的可视化预览地址，请先完成虚拟主题构建。,当前还没有可用的可视化预览地址，请先完成虚拟主题构建。
 预览可视化编辑器,预览可视化编辑器
 "PageBuilder 可视化预览","PageBuilder 可视化预览"
 "完成虚拟主题构建后，这里会直接显示真实的 PageBuilder 可视化预览。","完成虚拟主题构建后，这里会直接显示真实的 PageBuilder 可视化预览。"
-工作区日志,工作区日志
 这里会持续镜像构建、单页重建和发布过程中的会话日志。,这里会持续镜像构建、单页重建和发布过程中的会话日志。
 SSE调试,SSE调试
 导出日志,导出日志
@@ -1057,7 +1090,9 @@ SSE调试,SSE调试
 预览页面尚未生成,"This preview page has not been generated yet"
 "当前预览页面尚未生成。完善并确认「生成细节任务规划方案」后，点击下方按钮即可由 AI 生成该页面。","This preview page has not been generated yet. After you complete and confirm the detailed task plan, click the button below to generate it with AI."
 "请先完善并确认细节任务规划方案，再进行 AI 生成。","Complete and confirm the detailed task plan before running AI generation."
+虚拟主题构建中，请等待当前构建完成。,虚拟主题构建中，请等待当前构建完成。
 AI生成,AI生成
+构建中,构建中
 其他,其他
 "1 说说你的网站","1 说说你的网站"
 "2 生成详细任务方案，开始生成主题","2 生成详细任务方案，开始生成主题"
@@ -1402,7 +1437,6 @@ IP地址或域名,IP地址或域名
 账户,账户
 "以下域名的 DNS 记录添加失败，可能原因：域名 DNS 已切换到其他服务商，需要到对应服务商处添加解析记录。","以下域名的 DNS 记录添加失败，可能原因：域名 DNS 已切换到其他服务商，需要到对应服务商处添加解析记录。"
 错误详情,错误详情
-我知道了,我知道了
 "请点击""添加账户""按钮添加","请点击""添加账户""按钮添加"
 请输入要搜索的域名,请输入要搜索的域名
 请输入有效的域名,请输入有效的域名
@@ -1824,6 +1858,7 @@ AI生成组件,AI生成组件
 可复制，便于调试,可复制，便于调试
 复制草稿内容,复制草稿内容
 重新描述,重新描述
+重新生成,重新生成
 保存组件,保存组件
 下一步（微调）,下一步（微调）
 微调日志,微调日志
@@ -2957,4 +2992,12 @@ Topic,Topic
 立即咨询,立即咨询
 "Premium Experience","Premium Experience"
 "EXCLUSIVE LUXURY","EXCLUSIVE LUXURY"
-阶段一方案队列正在等待 worker 执行。,"Stage-1 plan queue is waiting for the worker to run."
+点击选择语言（可多选）,点击选择语言（可多选）
+点击选择语言,点击选择语言
+搜索国家、语言或代码...,搜索国家、语言或代码...
+仅展示,仅展示
+未找到匹配的语言,未找到匹配的语言
+未分组国家,未分组国家
+移除,移除
+清空选择,清空选择
+未找到匹配服务商,未找到匹配服务商

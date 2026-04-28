@@ -1381,7 +1381,14 @@ SCRIPT;
                     'message' => $message,
                     'operation' => 'plan',
                     'progress_percent' => \max(0, \min(99, (int)($progressPayload['progress_percent'] ?? 0))),
-                    'progress_kind' => (string)($progressPayload['progress_kind'] ?? 'stage1_pipeline'),
+                    'progress_kind' => (string)($progressPayload['progress_kind'] ?? 'queue_info'),
+                    'token_usage' => \is_array($progressPayload['token_usage'] ?? null)
+                        ? $progressPayload['token_usage']
+                        : [
+                            'input_tokens' => null,
+                            'output_tokens' => null,
+                            'total_tokens' => null,
+                        ],
                 ];
                 foreach (['stage1_step', 'stage1_phase', 'page_type', 'page_total'] as $key) {
                     if (\array_key_exists($key, $progressPayload)) {
@@ -4660,7 +4667,14 @@ SCRIPT;
                     'message' => $message,
                     'operation' => 'plan',
                     'progress_percent' => \max(0, \min(99, (int)($progressPayload['progress_percent'] ?? 0))),
-                    'progress_kind' => (string)($progressPayload['progress_kind'] ?? 'stage1_pipeline'),
+                    'progress_kind' => (string)($progressPayload['progress_kind'] ?? 'queue_info'),
+                    'token_usage' => \is_array($progressPayload['token_usage'] ?? null)
+                        ? $progressPayload['token_usage']
+                        : [
+                            'input_tokens' => null,
+                            'output_tokens' => null,
+                            'total_tokens' => null,
+                        ],
                 ];
                 foreach (['stage1_step', 'stage1_phase', 'page_type', 'page_total'] as $key) {
                     if (\array_key_exists($key, $progressPayload)) {
@@ -7545,6 +7559,330 @@ SCRIPT;
     }
 
     /**
+     * 把已确认执行蓝图（execution_blueprint）的 tasks 反推成前端任务方案预览
+     * 期望的结构 {shared_tasks, page_tasks, ...}，并产出一份兜底 markdown 概览。
+     *
+     * 第二阶段方案确认后，task_plan_structured / virtual_theme_plan.draft|confirmed
+     * 都会被清空（实际数据沉到 execution_blueprint 中），如果不在内存中重新派生
+     * 一份，前端就会渲染出空白预览。
+     *
+     * @param array<string, mixed> $blueprint
+     * @return array{structured: array<string, mixed>, markdown: string}
+     */
+    private function deriveTaskPlanArtifactsFromExecutionBlueprint(array $blueprint): array
+    {
+        $tasks = \is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [];
+        if ($tasks === []) {
+            return ['structured' => [], 'markdown' => ''];
+        }
+
+        $sharedTasks = [];
+        $pageTasks = [];
+        $pageLabels = [];
+
+        foreach ($tasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            $taskType = \trim((string)($task['task_type'] ?? ''));
+            $isShared = $taskType === 'shared_component'
+                || \str_starts_with($taskKey, 'shared:')
+                || \str_starts_with($taskKey, 'theme:')
+                || \str_starts_with($taskKey, 'global:');
+
+            $normalizedTask = $this->normalizeTaskFromExecutionBlueprint($task);
+            if ($normalizedTask === []) {
+                continue;
+            }
+
+            if ($isShared) {
+                $sharedTasks[] = $normalizedTask;
+                continue;
+            }
+
+            $pageType = \trim((string)($task['page_type'] ?? ''));
+            if ($pageType === '' && \is_array($task['block'] ?? null)) {
+                $pageType = \trim((string)($task['block']['page_key'] ?? ''));
+            }
+            if ($pageType === '' && \str_starts_with($taskKey, 'page:')) {
+                $rest = \substr($taskKey, 5);
+                $colonPos = \strpos($rest, ':');
+                $pageType = $colonPos === false ? $rest : \substr($rest, 0, $colonPos);
+            }
+            if ($pageType === '') {
+                $pageType = 'unknown_page';
+            }
+
+            if (!isset($pageTasks[$pageType])) {
+                $pageTasks[$pageType] = [];
+            }
+            $pageTasks[$pageType][] = $normalizedTask;
+
+            $pageLabel = \trim((string)($task['page_label'] ?? ''));
+            if ($pageLabel !== '' && !isset($pageLabels[$pageType])) {
+                $pageLabels[$pageType] = $pageLabel;
+            }
+        }
+
+        if ($sharedTasks === [] && $pageTasks === []) {
+            return ['structured' => [], 'markdown' => ''];
+        }
+
+        $structured = [];
+        if ($sharedTasks !== []) {
+            $structured['shared_tasks'] = $sharedTasks;
+        }
+        if ($pageTasks !== []) {
+            $structured['page_tasks'] = $pageTasks;
+        }
+
+        $signature = \trim((string)($blueprint['signature'] ?? ''));
+        if ($signature !== '') {
+            $structured['signature'] = $signature;
+        }
+        if ($pageLabels !== []) {
+            $structured['page_label_hints'] = $pageLabels;
+        }
+
+        return [
+            'structured' => $structured,
+            'markdown' => $this->buildExecutionBlueprintTaskPlanMarkdown($sharedTasks, $pageTasks, $pageLabels),
+        ];
+    }
+
+    /**
+     * 渲染派生 task plan 的概览 markdown，附带任务标题、任务键，方便 markdown tab 也有内容。
+     *
+     * @param list<array<string, mixed>> $sharedTasks
+     * @param array<string, list<array<string, mixed>>> $pageTasks
+     * @param array<string, string> $pageLabels
+     */
+    private function buildExecutionBlueprintTaskPlanMarkdown(array $sharedTasks, array $pageTasks, array $pageLabels): string
+    {
+        $lines = ['# 第二阶段任务方案'];
+
+        if ($sharedTasks !== []) {
+            $lines[] = '';
+            $lines[] = '## 共享组件任务 (shared_tasks)';
+            foreach ($sharedTasks as $task) {
+                $lines[] = $this->renderExecutionBlueprintTaskMarkdownLine($task);
+            }
+        }
+
+        if ($pageTasks !== []) {
+            foreach ($pageTasks as $pageType => $tasks) {
+                $label = $pageLabels[$pageType] ?? '';
+                $lines[] = '';
+                $lines[] = '## ' . ($label !== '' ? ($label . ' (' . $pageType . ')') : $pageType);
+                foreach ($tasks as $task) {
+                    $lines[] = $this->renderExecutionBlueprintTaskMarkdownLine($task);
+                }
+            }
+        }
+
+        $lines[] = '';
+        return \implode("\n", $lines);
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     */
+    private function renderExecutionBlueprintTaskMarkdownLine(array $task): string
+    {
+        $taskKey = \trim((string)($task['task_key'] ?? ''));
+        $title = \trim((string)($task['label'] ?? ''));
+        if ($title === '') {
+            $title = $taskKey !== '' ? $taskKey : 'task';
+        }
+
+        $line = '- **' . $title . '**';
+        if ($taskKey !== '' && $taskKey !== $title) {
+            $line .= ' `' . $taskKey . '`';
+        }
+
+        $blockGoal = \trim((string)(($task['plan_context']['block_goal'] ?? '')));
+        if ($blockGoal !== '') {
+            $line .= ' — ' . $blockGoal;
+        } else {
+            $reason = \trim((string)($task['reason'] ?? ''));
+            if ($reason !== '') {
+                $line .= ' — ' . $reason;
+            }
+        }
+
+        return $line;
+    }
+
+    /**
+     * 把执行蓝图的单条任务归一化成前端 renderTaskPlanTaskCard 能直接消费的字段。
+     *
+     * @param array<string, mixed> $task
+     * @return array<string, mixed>
+     */
+    private function normalizeTaskFromExecutionBlueprint(array $task): array
+    {
+        $taskKey = \trim((string)($task['task_key'] ?? ''));
+        if ($taskKey === '') {
+            return [];
+        }
+
+        $blockObj = \is_array($task['block'] ?? null) ? $task['block'] : [];
+        $title = \trim((string)($task['title'] ?? ''));
+        if ($title === '') {
+            $title = \trim((string)($blockObj['title'] ?? ''));
+        }
+        $goal = \trim((string)($task['goal'] ?? ''));
+        if ($goal === '') {
+            $goal = \trim((string)($blockObj['goal'] ?? ''));
+        }
+        $styleBriefRaw = $task['style_brief'] ?? '';
+        $styleBrief = \is_scalar($styleBriefRaw) ? \trim((string)$styleBriefRaw) : '';
+        if ($styleBrief === '' && \is_array($styleBriefRaw) && isset($styleBriefRaw['summary']) && \is_scalar($styleBriefRaw['summary'])) {
+            $styleBrief = \trim((string)$styleBriefRaw['summary']);
+        }
+        if ($styleBrief === '') {
+            $styleDirection = $blockObj['style_direction'] ?? null;
+            if (\is_string($styleDirection)) {
+                $styleBrief = \trim($styleDirection);
+            } elseif (\is_array($styleDirection) && isset($styleDirection['summary']) && \is_string($styleDirection['summary'])) {
+                $styleBrief = \trim($styleDirection['summary']);
+            }
+        }
+        $seoBriefRaw = $task['seo_brief'] ?? '';
+        $seoBrief = \is_scalar($seoBriefRaw) ? \trim((string)$seoBriefRaw) : '';
+        if ($seoBrief === '' && \is_array($seoBriefRaw) && isset($seoBriefRaw['summary']) && \is_scalar($seoBriefRaw['summary'])) {
+            $seoBrief = \trim((string)$seoBriefRaw['summary']);
+        }
+        if ($seoBrief === '') {
+            $seoRole = $blockObj['seo_role'] ?? null;
+            if (\is_string($seoRole)) {
+                $seoBrief = \trim($seoRole);
+            } elseif (\is_array($seoRole) && isset($seoRole['summary']) && \is_string($seoRole['summary'])) {
+                $seoBrief = \trim($seoRole['summary']);
+            }
+        }
+        $blockKey = $this->normalizeBlueprintText($task['block_key'] ?? '');
+        if ($blockKey === '') {
+            $blockKey = $this->normalizeBlueprintText($blockObj['block_key'] ?? '');
+        }
+        $component = $this->normalizeBlueprintText($task['component'] ?? '');
+        $pageType = $this->normalizeBlueprintText($task['page_type'] ?? '');
+        $pageLabel = $this->normalizeBlueprintText($task['page_label'] ?? '');
+        $reason = $this->normalizeBlueprintText($task['reason'] ?? '');
+        if ($reason === '') {
+            $reason = $this->normalizeBlueprintText($blockObj['why'] ?? '');
+        }
+        $implementationDetail = $this->normalizeBlueprintText($task['implementation_detail'] ?? '');
+        if ($implementationDetail === '') {
+            $implementationDetail = $this->normalizeBlueprintText($blockObj['implementation_detail'] ?? '');
+        }
+
+        $fieldRequirements = [];
+        $fieldPlan = $blockObj['field_plan'] ?? null;
+        if (\is_array($fieldPlan)) {
+            foreach ($fieldPlan as $fieldRow) {
+                if (!\is_array($fieldRow)) {
+                    continue;
+                }
+                $fieldRequirements[] = $fieldRow;
+            }
+        }
+
+        $contentPlan = [];
+        $blockContent = $blockObj['content'] ?? null;
+        if (\is_array($blockContent)) {
+            $contentPlan = $blockContent;
+        }
+
+        $stylePlan = [];
+        $styleDirectionRaw = $blockObj['style_direction'] ?? null;
+        if (\is_array($styleDirectionRaw)) {
+            $stylePlan = $styleDirectionRaw;
+        } elseif (\is_string($styleDirectionRaw) && \trim($styleDirectionRaw) !== '') {
+            $stylePlan = ['summary' => \trim($styleDirectionRaw)];
+        }
+
+        $acceptance = [];
+        $completionRule = $task['completion_rule'] ?? ($blockObj['completion_rule'] ?? null);
+        if (\is_array($completionRule)) {
+            foreach ($completionRule as $rule) {
+                if (\is_string($rule) && \trim($rule) !== '') {
+                    $acceptance[] = \trim($rule);
+                } elseif (\is_array($rule) && isset($rule['text']) && \is_string($rule['text']) && \trim($rule['text']) !== '') {
+                    $acceptance[] = \trim($rule['text']);
+                }
+            }
+        } elseif (\is_string($completionRule) && \trim($completionRule) !== '') {
+            $acceptance[] = \trim($completionRule);
+        }
+
+        $label = $title !== '' ? $title : ($blockKey !== '' ? $blockKey : $taskKey);
+        $groupKey = $blockKey !== ''
+            ? $blockKey
+            : ($component !== '' ? $component : ($pageType !== '' ? $pageType : 'shared'));
+        $sceneHint = $taskKey;
+        $pageGoal = $pageLabel !== '' ? $pageLabel : $pageType;
+
+        return [
+            'task_key' => $taskKey,
+            'label' => $label,
+            'group_key' => $groupKey,
+            'plan_context' => [
+                'page_goal' => $pageGoal,
+                'block_goal' => $goal,
+                'block_why' => $reason,
+            ],
+            'task_script' => [
+                'scene' => $sceneHint,
+                'story_goal' => $goal !== '' ? $goal : $reason,
+                'content_fill_rule' => $styleBrief,
+                'stage3_directive' => $implementationDetail,
+                'field_content_requirements' => $fieldRequirements,
+            ],
+            'implementation_contract' => [
+                'acceptance' => $acceptance,
+            ],
+            'block_task' => [
+                'meta_fields' => $fieldRequirements,
+                'content_plan' => $contentPlan,
+                'style_plan' => $stylePlan,
+            ],
+            'reason' => $reason,
+            'planning_reason' => $reason,
+            'seo_brief' => $seoBrief,
+            'style_brief' => $styleBrief,
+            'block_key' => $blockKey,
+            'component' => $component,
+            'page_type' => $pageType,
+            'page_label' => $pageLabel,
+        ];
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private function normalizeBlueprintText(mixed $value): string
+    {
+        if (\is_scalar($value)) {
+            return \trim((string)$value);
+        }
+        if (!\is_array($value)) {
+            return '';
+        }
+        foreach (['summary', 'text', 'title', 'label', 'name', 'value'] as $key) {
+            $candidate = $value[$key] ?? null;
+            if (\is_scalar($candidate)) {
+                $text = \trim((string)$candidate);
+                if ($text !== '') {
+                    return $text;
+                }
+            }
+        }
+        return '';
+    }
+
+    /**
      * @param array<string, mixed> $scope
      * @return array{
      *   structured:array<string, mixed>,
@@ -8586,6 +8924,7 @@ SCRIPT;
         $normalized = $this->scopeCompatibilityService->normalizeConfirmedPlanFlag($normalized);
         $normalized = $this->hydrateStageOnePlanPayloadFromPlanStageScope($session, $adminId, $normalized);
         $normalized = $this->hydrateStageOnePlanPayloadFromWorkbench($normalized);
+        $normalized = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($normalized);
         // 读取工作区状态时避免触发外部 AI 生成，防止首开/轮询被远程调用阻塞。
         $profileStartedAt = \microtime(true);
         $normalized['website_profile'] = $this->profileGenerationService->generate($normalized, false);
@@ -8846,15 +9185,15 @@ SCRIPT;
         $taskPlanDraftMarkdown = (string)($normalized['task_plan_markdown'] ?? ($virtualThemePlan['draft_markdown'] ?? ''));
         $taskPlanConfirmedMarkdown = (string)($virtualThemePlan['confirmed_markdown'] ?? '');
 
-        // Stage-two task plan fallback：方案确认后真实数据全部沉到 execution_blueprint 中，
-        // task_plan_structured/draft/confirmed/markdown 都会被清空。这里在内存中把蓝图反推成
-        // 前端期望的 {shared_tasks, page_tasks} 形态以及一份概览 markdown，使预览始终能渲染。
+        // Stage-two task plan derive：阶段二预览始终从草稿读取，确认态不直接展示。
+        // - 任务方案确认后，virtual_theme_plan.draft / task_plan_structured / task_plan_markdown 会被清空。
+        // - 此时不读 confirmed_markdown / confirmed structured 作为预览源（避免“确认态泄漏到前端”），
+        //   而是从 execution_blueprint 反推一份等价于“最新草稿”的结构化 + 概览 markdown，
+        //   让 buildPlanPreviewHtml 始终能走结构化预览，不再退化成 markdown 列表。
         if (
             $taskPlanStructured === []
             && $taskPlanDraftStructured === []
-            && $taskPlanConfirmedStructured === []
             && \trim($taskPlanDraftMarkdown) === ''
-            && \trim($taskPlanConfirmedMarkdown) === ''
         ) {
             $blueprintForDerive = \is_array($normalized['execution_blueprint'] ?? null) && $normalized['execution_blueprint'] !== []
                 ? $normalized['execution_blueprint']
@@ -8952,17 +9291,16 @@ SCRIPT;
             // T36: 历史确认方案数据
             'confirmed_plan_markdown' => (string)($normalized['plan_markdown'] ?? ''),
             'confirmed_plan_signature' => (string)($normalized['execution_blueprint_confirmed_signature'] ?? ''),
+            // 阶段二预览契约：始终读取“草稿态”——
+            //  - markdown 仅取 draft（confirmed_markdown 不再注入前端，避免确认态展示）；
+            //  - structured 仅取 task_plan_structured / draft（confirmed structured 已在上方 derive 中由蓝图反推补齐）。
             'task_plan' => [
-                'markdown' => $taskPlanDraftMarkdown !== '' ? $taskPlanDraftMarkdown : $taskPlanConfirmedMarkdown,
-                'structured' => $taskPlanStructured !== []
-                    ? $taskPlanStructured
-                    : ($taskPlanDraftStructured !== [] ? $taskPlanDraftStructured : $taskPlanConfirmedStructured),
+                'markdown' => $taskPlanDraftMarkdown,
+                'structured' => $taskPlanStructured !== [] ? $taskPlanStructured : $taskPlanDraftStructured,
                 'virtual_theme_plan' => $virtualThemePlan,
             ],
-            'task_plan_markdown' => $taskPlanDraftMarkdown !== '' ? $taskPlanDraftMarkdown : $taskPlanConfirmedMarkdown,
-            'task_plan_structured' => $taskPlanStructured !== []
-                ? $taskPlanStructured
-                : ($taskPlanDraftStructured !== [] ? $taskPlanDraftStructured : $taskPlanConfirmedStructured),
+            'task_plan_markdown' => $taskPlanDraftMarkdown,
+            'task_plan_structured' => $taskPlanStructured !== [] ? $taskPlanStructured : $taskPlanDraftStructured,
             'task_plan_confirmed' => (int)($normalized['task_plan_confirmed'] ?? 0),
             'task_plan_confirmed_at' => $taskPlanConfirmedAt,
             'task_plan_generation_progress' => \is_array($normalized['task_plan_generation_progress'] ?? null) ? $normalized['task_plan_generation_progress'] : [],
@@ -9008,6 +9346,12 @@ SCRIPT;
      * 但 plan_markdown/plan_json/plan_structured 为空。此处在组装工作区状态时做只读回填，
      * 避免前端出现“方案已存在但预览空白”。
      *
+     * 设计约束（与前端预览契约一致）：
+     *  - 仅回填**结构化**字段（plan_structured / plan_json），让前端始终走结构化可编辑预览；
+     *  - 不再从 plan_workbench.confirmed.plan_book_markdown 拾回 plan_markdown，避免
+     *    “只剩 markdown”而触发前端 buildPlanPreviewHtml 的 markdown 兜底渲染分支
+     *    （该分支会以 markdown 列表形式展示已确认态，不符合“始终从草稿读取、确认态不展示”的约定）。
+     *
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
@@ -9015,8 +9359,7 @@ SCRIPT;
     {
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        $planMarkdown = \trim((string)($scope['plan_markdown'] ?? ''));
-        if ($planJson !== [] || $planStructured !== [] || $planMarkdown !== '') {
+        if ($planJson !== [] || $planStructured !== []) {
             return $scope;
         }
 
@@ -9028,16 +9371,87 @@ SCRIPT;
 
         $confirmedPlanJson = \is_array($confirmed['plan_json'] ?? null) ? $confirmed['plan_json'] : [];
         $confirmedStructured = \is_array($confirmed['structured_plan'] ?? null) ? $confirmed['structured_plan'] : [];
-        $confirmedMarkdown = \trim((string)($confirmed['plan_book_markdown'] ?? ''));
+        $confirmedPlanBookStructured = \is_array($confirmed['plan_book']['structured'] ?? null)
+            ? $confirmed['plan_book']['structured']
+            : [];
 
         if ($confirmedPlanJson !== []) {
             $scope['plan_json'] = $confirmedPlanJson;
         }
         if ($confirmedStructured !== []) {
             $scope['plan_structured'] = $confirmedStructured;
+        } elseif ($confirmedPlanBookStructured !== []) {
+            // structured_plan 已被压缩成 ref 时，回退用 plan_book.structured 反推一份给前端预览。
+            $scope['plan_structured'] = $confirmedPlanBookStructured;
         }
-        if ($confirmedMarkdown !== '') {
-            $scope['plan_markdown'] = $confirmedMarkdown;
+
+        return $scope;
+    }
+
+    /**
+     * 部分会话在确认后会把阶段一结构化内容压缩/迁移，导致 plan_markdown 仍在，
+     * 但 plan_json / plan_structured 为空数组，前端只能退化成 markdown 只读视图。
+     * 这里在工作区态做只读兜底：当 execution_blueprint 含 page_plans/pages 时，
+     * 反填一份 stage1 structured，使前端继续走块级可编辑预览。
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function hydrateStageOnePlanPayloadFromExecutionBlueprint(array $scope): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+        if ($planJson !== [] || $planStructured !== []) {
+            return $scope;
+        }
+
+        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        if ($executionBlueprint === []) {
+            $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null) ? $scope['execution_blueprint_draft'] : [];
+        }
+        if ($executionBlueprint === []) {
+            return $scope;
+        }
+
+        $pagePlans = \is_array($executionBlueprint['page_plans'] ?? null) ? $executionBlueprint['page_plans'] : [];
+        $pages = \is_array($executionBlueprint['pages'] ?? null) ? $executionBlueprint['pages'] : [];
+        $sharedComponents = \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : [];
+        $headerPlan = \is_array($executionBlueprint['navigation_plan'] ?? null)
+            ? $executionBlueprint['navigation_plan']
+            : (\is_array($sharedComponents['header'] ?? null) ? $sharedComponents['header'] : []);
+        $footerPlan = \is_array($executionBlueprint['footer_plan'] ?? null)
+            ? $executionBlueprint['footer_plan']
+            : (\is_array($sharedComponents['footer'] ?? null) ? $sharedComponents['footer'] : []);
+
+        if ($pagePlans === [] && $pages === [] && $sharedComponents === [] && $headerPlan === [] && $footerPlan === []) {
+            return $scope;
+        }
+
+        $structured = [];
+        if ($pagePlans !== []) {
+            $structured['page_plans'] = $pagePlans;
+        } elseif ($pages !== []) {
+            $structured['pages'] = $pages;
+        }
+        if ($sharedComponents !== []) {
+            $structured['shared_components'] = $sharedComponents;
+        }
+        if ($headerPlan !== []) {
+            $structured['navigation_plan'] = $headerPlan;
+        }
+        if ($footerPlan !== []) {
+            $structured['footer_plan'] = $footerPlan;
+        }
+        if (\is_array($executionBlueprint['signature'] ?? null) === false) {
+            $signature = \trim((string)($executionBlueprint['signature'] ?? ''));
+            if ($signature !== '') {
+                $structured['execution_blueprint_signature'] = $signature;
+            }
+        }
+
+        if ($structured !== []) {
+            $scope['plan_structured'] = $structured;
+            $scope['plan_json'] = $structured;
         }
 
         return $scope;

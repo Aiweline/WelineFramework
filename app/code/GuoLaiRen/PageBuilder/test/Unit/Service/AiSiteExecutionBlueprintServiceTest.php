@@ -1491,7 +1491,7 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertContains('about_page|start', $pageMarkers);
         self::assertContains('home_page|done', $pageMarkers);
         self::assertContains('about_page|done', $pageMarkers);
-        self::assertContains('stage1_pipeline', \array_map(static fn(array $row): string => (string)($row['progress_kind'] ?? ''), $progressEvents));
+        self::assertContains('queue_info', \array_map(static fn(array $row): string => (string)($row['progress_kind'] ?? ''), $progressEvents));
     }
 
     public function testBuildPlanArtifactsByAiStreamCapsMaxTokensBelowProviderLimit(): void

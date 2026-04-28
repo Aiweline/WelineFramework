@@ -262,9 +262,13 @@ $currentSearch = $currentSearch ?? '';
                                             </div>
                                         </td>
                                         <td>
-                                            <?php $currencySymbol = (($model['price_currency'] ?? 'USD') === 'CNY') ? '¥' : '$'; ?>
-                                            <div><lang>输入</lang> <?= $currencySymbol ?><?= number_format((float)($model['token_price_input'] ?? 0), 6) ?>/1K</div>
-                                            <div><lang>输出</lang> <?= $currencySymbol ?><?= number_format((float)($model['token_price_output'] ?? 0), 6) ?>/1K</div>
+                                            <?php
+                                            $currencySymbol = (($model['price_currency'] ?? 'USD') === 'CNY') ? '¥' : '$';
+                                            $inputPerMillion = (float)($model['token_price_input'] ?? 0) * 1000;
+                                            $outputPerMillion = (float)($model['token_price_output'] ?? 0) * 1000;
+                                            ?>
+                                            <div><lang>输入</lang> <?= $currencySymbol ?><?= number_format($inputPerMillion, 6) ?>/1M</div>
+                                            <div><lang>输出</lang> <?= $currencySymbol ?><?= number_format($outputPerMillion, 6) ?>/1M</div>
                                         </td>
                                         <td>
                                             <?php if (!empty($model['has_api_key'])): ?>

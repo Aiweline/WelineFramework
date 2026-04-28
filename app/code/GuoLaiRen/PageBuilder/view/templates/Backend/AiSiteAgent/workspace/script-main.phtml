@@ -57,6 +57,7 @@
     visualPreviewUrl = normalizeLocalPreviewUrlForCurrentHost(visualPreviewUrl);
     visualEditBaseUrl = normalizeLocalPreviewUrlForCurrentHost(visualEditBaseUrl);
     currentEmbeddedVisualUrl = normalizeLocalPreviewUrlForCurrentHost(currentEmbeddedVisualUrl);
+    var publishedSiteUrl = resolvePublishedSiteUrl(initialWorkspaceState || {});
     var currentWorkspaceStage = <?= \json_encode($currentStage, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var planConfirmedState = <?= \json_encode((bool)($state['plan_confirmed'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var hasVirtualThemePlanState = <?= \json_encode((bool)($pbAiPhaseTwoTaskPlanPresent), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -137,6 +138,81 @@
             return normalized;
         }
         return normalized.replace('/post-plan-sse', '/plan-sse');
+    }
+
+    function normalizePublishedSiteUrl(rawUrl) {
+        var value = String(rawUrl || '').trim();
+        if (!value) {
+            return '';
+        }
+        if (/^https?:\/\//i.test(value)) {
+            return value;
+        }
+        if (/^[a-z0-9.-]+\.[a-z]{2,}(\/.*)?$/i.test(value)) {
+            return 'https://' + value;
+        }
+        return '';
+    }
+
+    function resolvePublishedSiteUrl(workspaceState) {
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return '';
+        }
+        var scope = workspaceState.scope && typeof workspaceState.scope === 'object' ? workspaceState.scope : {};
+        var profile = workspaceState.website_profile && typeof workspaceState.website_profile === 'object'
+            ? workspaceState.website_profile
+            : {};
+        var candidates = [
+            workspaceState.published_site_url,
+            workspaceState.site_url,
+            workspaceState.live_url,
+            profile.target_domain,
+            scope.target_domain
+        ];
+        for (var i = 0; i < candidates.length; i++) {
+            var normalized = normalizePublishedSiteUrl(candidates[i]);
+            if (normalized) {
+                return normalized;
+            }
+        }
+        return '';
+    }
+
+    function isWorkspacePublished(workspaceState) {
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return false;
+        }
+        var publishStatus = String(workspaceState.publish_status || '').toLowerCase();
+        var workspaceStatus = String(workspaceState.workspace_status || '').toLowerCase();
+        return publishStatus === 'published' || workspaceStatus === 'published';
+    }
+
+    function syncPublishedSiteAccess(workspaceState) {
+        var panel = document.getElementById('pb-ai-published-site-access');
+        var link = document.getElementById('pb-ai-published-site-link');
+        var label = document.getElementById('pb-ai-site-access-label');
+        if (!panel || !link || !label) {
+            return;
+        }
+        var liveUrl = resolvePublishedSiteUrl(workspaceState || {});
+        var published = isWorkspacePublished(workspaceState || {});
+        var previewUrl = String(previewFullUrl || visualPreviewUrl || currentEmbeddedVisualUrl || '').trim();
+        var displayUrl = String(liveUrl || previewUrl).trim();
+        if (!displayUrl) {
+            panel.classList.add('d-none');
+            link.removeAttribute('href');
+            link.textContent = '';
+            return;
+        }
+        if (liveUrl) {
+            publishedSiteUrl = liveUrl;
+        }
+        panel.classList.remove('d-none');
+        label.textContent = published && liveUrl
+            ? '发布已完成：可直接访问真实站点地址'
+            : '当前为预览地址（未发布也可访问预览）';
+        link.href = displayUrl;
+        link.textContent = displayUrl;
     }
     // 若宿主页未注入该函数，提供空实现，避免 ReferenceError。
     if (typeof window.updateTaskSummaryFromState !== 'function') {
@@ -480,6 +556,23 @@
         return false;
     }
 
+    function hasBuildQueueRunningForUi(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var queueInfo = state && typeof state === 'object' && state.build_queue_info && typeof state.build_queue_info === 'object'
+            ? state.build_queue_info
+            : {};
+        return isQueueStatusRunningForUi(readQueueStatusForPrompt(queueInfo));
+    }
+
+    function isBuildActionLocked(workspaceState) {
+        return !!buildStartupPending
+            || isThemeBuildGenerationRunning()
+            || hasBuildQueueRunningForUi(workspaceState)
+            || hasAnyRunningQueueForUi();
+    }
+
     function getActiveOperationForPublishRepairState() {
         var state = latestWorkspaceState && typeof latestWorkspaceState === 'object'
             ? latestWorkspaceState
@@ -727,7 +820,7 @@
         if (confirmedWrap) {
             var title = confirmedWrap.querySelector('.fw-semibold');
             if (title) {
-                title.textContent = <?= \json_encode((string)__('已确认方案（只读）'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
+                title.textContent = <?= \json_encode((string)__('已确认方案快照'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
             }
             var stage1Btn = confirmedWrap.querySelector('.pb-ai-view-confirmed-plan[data-plan-type="stage1"]');
             if (stage1Btn) {
@@ -739,7 +832,7 @@
             }
             var hint = confirmedWrap.querySelector('.small.text-muted.mt-2');
             if (hint) {
-                hint.textContent = <?= \json_encode((string)__('历史方案仅供查看，不可编辑。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
+                hint.textContent = <?= \json_encode((string)__('确认仅更新状态；当前方案仍可继续修改与再次确认。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>;
             }
         }
     }
@@ -1182,7 +1275,7 @@
         if (!confirmBtn) {
             return;
         }
-        confirmBtn.disabled = planGenerationActionLockActive || planConfirmedState || !hasCurrentPhaseOnePlanDraft() || isPhaseOneQueueUnfinished();
+        confirmBtn.disabled = planGenerationActionLockActive || !hasCurrentPhaseOnePlanDraft() || isPhaseOneQueueUnfinished();
     }
 
     function syncPlanRebuildButtonVisibility() {
@@ -1228,7 +1321,7 @@
                 var mdEl = document.getElementById('pb-ai-plan-md-content');
                 latestMd = String(mdEl && mdEl.textContent ? mdEl.textContent : '').trim();
             }
-            var confirmEnabled = !planConfirmedState && (latestMd !== '' || hasCurrentPhaseOnePlanDraft());
+            var confirmEnabled = (latestMd !== '' || hasCurrentPhaseOnePlanDraft());
             if (typeof setPlanModalProgress === 'function') {
                 setPlanModalProgress(messages.planModeDone, 100, confirmEnabled);
             }
@@ -1300,6 +1393,8 @@
         planDeferred: <?= \json_encode((string)__('已保留当前第一阶段草稿，稍后可以继续。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planDraftSaved: <?= \json_encode((string)__('第一阶段草稿已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planDraftSaveFailed: <?= \json_encode((string)__('第一阶段草稿保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        stageOneFieldEditPending: <?= \json_encode((string)__('已修改阶段一综述/主题信息，系统会自动保存草稿。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        stageOneFieldAutosaved: <?= \json_encode((string)__('阶段一综述/主题微调已自动保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSortSaved: <?= \json_encode((string)__('第一阶段方案块顺序已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSortSaveFailed: <?= \json_encode((string)__('第一阶段方案块顺序保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSortUnavailable: <?= \json_encode((string)__('第一阶段排序接口暂不可用。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1413,6 +1508,7 @@
         blockSseRebuildStarted: <?= \json_encode((string)__('连接已建立，开始重建当前区块。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseRefineAwaitingConfirm: <?= \json_encode((string)__('区块微调等待确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseRebuildAwaitingConfirm: <?= \json_encode((string)__('区块重建等待确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        buildQueueBusyActionBlocked: <?= \json_encode((string)__('构建队列正在执行，请等待完成或失败后再操作。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editUnavailable: <?= \json_encode((string)__('当前区块暂时无法打开字段编辑弹窗。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editSaved: <?= \json_encode((string)__('区块字段已更新，已刷新当前块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseDoneConfirm: <?= \json_encode((string)__('区块生成已完成，但未返回可立即刷新的区块结果。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1444,7 +1540,7 @@
         publishStageEntryBuildingHint: <?= \json_encode((string)__('后台仍在处理页面和区块，当前入口先锁定；构建结束后会自动变为可点击。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryFailedBadge: <?= \json_encode((string)__('最新 AI 生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryFailedTitle: <?= \json_encode((string)__('最新 AI 生成未成功，禁止进入发布以避免发布旧内容'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        publishStageEntryFailedHint: <?= \json_encode((string)__('请先点击 AI 重新生成并修复，等待真实 AI 队列成功完成后再进入第三阶段。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryFailedHint: <?= \json_encode((string)__('请先等待真实 AI 队列成功完成后再进入第三阶段。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishBlockedLatestBuildFailure: <?= \json_encode((string)__('最新 AI 生成失败或仍在运行，禁止发布旧站点；请先重新生成并等待成功完成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryReadyBadge: <?= \json_encode((string)__('可进入第三阶段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStageEntryReadyTitle: <?= \json_encode((string)__('虚拟主题已就绪，下一步进入确认发布'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1465,9 +1561,13 @@
     var visualPreviewHeightResizeObserver = null;
     var visualPreviewHeightSyncTimer = null;
     var currentPreviewTabKeyByStage = {
-        plan: 'theme',
+        plan: 'overview',
         'task-plan': 'theme'
     };
+    var stageOneInlineEditPersistTimer = null;
+    var stageOneInlineEditPersisting = false;
+    var stageOneInlineEditPersistPromise = null;
+    var stageOneInlineEditDirty = false;
     var previewLabels = {
         visualPreviewEmpty: <?= \json_encode((string)__('暂无可预览页面，请先完成页面生成或选择预览页。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         field: <?= \json_encode((string)__('字段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1479,6 +1579,14 @@
         styleTone: <?= \json_encode((string)__('风格'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         typography: <?= \json_encode((string)__('字体与排版'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themeSummary: <?= \json_encode((string)__('主题规划'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        overviewTab: <?= \json_encode((string)__('综述'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        overviewTabEmpty: <?= \json_encode((string)__('当前方案暂未生成综述信息。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        overviewSummaryTitle: <?= \json_encode((string)__('方案综述'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        overviewExpandedBrief: <?= \json_encode((string)__('一句话描述扩展'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        overviewBusinessGoals: <?= \json_encode((string)__('业务目标（每行一项）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        overviewContentFocus: <?= \json_encode((string)__('内容重点'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        overviewDomainStrategy: <?= \json_encode((string)__('转化策略与主 CTA'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        overviewEditHint: <?= \json_encode((string)__('可直接修改，修改后自动写入阶段一草稿。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themeTab: <?= \json_encode((string)__('主题'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themeTabEmpty: <?= \json_encode((string)__('当前方案暂未写入主题级全局信息，请先生成或微调方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themePurpose: <?= \json_encode((string)__('主题宗旨'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1488,6 +1596,8 @@
         visualKeywords: <?= \json_encode((string)__('视觉关键词'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         toneOfVoice: <?= \json_encode((string)__('内容语气'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         ctaTone: <?= \json_encode((string)__('CTA 语气'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        themeDirectEditTitle: <?= \json_encode((string)__('主题微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        themeDirectEditHint: <?= \json_encode((string)__('支持直接编辑主题宗旨、视觉关键词、内容语气与选择原因。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         stageToolbarHint: <?= \json_encode((string)__('悬停后可直接微调、重建、删除或新增块；拖动排序后会自动保存；也可以对整个阶段重新生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineAction: <?= \json_encode((string)__('微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         rebuildAction: <?= \json_encode((string)__('重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -3996,6 +4106,8 @@
         if (!workspaceState || typeof workspaceState !== 'object') {
             return;
         }
+        publishedSiteUrl = resolvePublishedSiteUrl(workspaceState);
+        syncPublishedSiteAccess(workspaceState);
         if (workspaceState.visual_edit_url) {
             setVisualEditorUrl(String(workspaceState.visual_edit_url));
         }
@@ -7207,6 +7319,147 @@
         return renderThemeListSection(previewLabels.colorSystem || previewLabels.palette, colorScheme || value, { badges: true });
     }
 
+    function normalizePreviewEditorText(value) {
+        if (value === null || typeof value === 'undefined') {
+            return '';
+        }
+        if (Array.isArray(value)) {
+            return value.map(function (item) {
+                return String(item || '').trim();
+            }).filter(Boolean).join('\n');
+        }
+        return String(value || '').trim();
+    }
+
+    function splitPreviewEditorList(value) {
+        return String(value || '')
+            .split(/[\r\n,;]+/)
+            .map(function (item) { return String(item || '').trim(); })
+            .filter(Boolean);
+    }
+
+    function renderStageOneInlineEditor(label, value, fieldKey, options) {
+        var opts = options && typeof options === 'object' ? options : {};
+        var rows = Math.max(2, parseInt(String(opts.rows || 3), 10) || 3);
+        var placeholder = sanitizePreviewText(opts.placeholder || '', '');
+        return ''
+            + '<div class="mb-2">'
+            + '<label class="form-label small text-muted mb-1">' + escapeHtml(String(label || '')) + '</label>'
+            + '<textarea class="form-control form-control-sm"'
+            + ' rows="' + escapeHtml(String(rows)) + '"'
+            + ' data-pb-stage1-field-edit="1"'
+            + ' data-stage1-field-key="' + escapeHtml(String(fieldKey || '')) + '"'
+            + (placeholder ? (' placeholder="' + escapeHtml(placeholder) + '"') : '')
+            + '>'
+            + escapeHtml(normalizePreviewEditorText(value))
+            + '</textarea>'
+            + '</div>';
+    }
+
+    function renderPlanOverviewSummarySection(planRoot) {
+        if (!planRoot || typeof planRoot !== 'object') {
+            return '';
+        }
+        var briefInput = document.getElementById('pb-ai-brief-description');
+        var briefFallback = briefInput && typeof briefInput.value === 'string'
+            ? String(briefInput.value || '').trim()
+            : '';
+        var expandedBrief = pickPreviewValue(
+            planRoot.overview_expanded_brief,
+            planRoot.plan_summary,
+            planRoot.summary,
+            planRoot.one_sentence_expansion,
+            briefFallback
+        );
+        var businessGoals = pickPreviewValue(
+            planRoot.overview_business_goals,
+            planRoot.business_goals,
+            planRoot.goal_focus,
+            planRoot.website_goals
+        );
+        var contentFocus = pickPreviewValue(
+            planRoot.overview_content_focus,
+            planRoot.content_focus,
+            planRoot.content_strategy,
+            planRoot.value_proposition
+        );
+        var domainStrategy = pickPreviewValue(
+            planRoot.overview_domain_strategy,
+            planRoot.cta_strategy,
+            planRoot.conversion_strategy,
+            planRoot.action_strategy
+        );
+        var hasAny = String(expandedBrief || '').trim() !== ''
+            || normalizePreviewEditorText(businessGoals) !== ''
+            || String(contentFocus || '').trim() !== ''
+            || String(domainStrategy || '').trim() !== '';
+        if (!hasAny && briefFallback === '') {
+            return '';
+        }
+        return ''
+            + '<div class="card border-0 shadow-sm mb-0">'
+            + '<div class="card-body">'
+            + '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">'
+            + '<div class="fw-semibold">' + escapeHtml(String(previewLabels.overviewSummaryTitle || 'Overview')) + '</div>'
+            + '<span class="small text-muted">' + escapeHtml(String(previewLabels.overviewEditHint || '')) + '</span>'
+            + '</div>'
+            + renderStageOneInlineEditor(previewLabels.overviewExpandedBrief, expandedBrief, 'overview_expanded_brief', {
+                rows: 4,
+                placeholder: previewLabels.overviewExpandedBrief
+            })
+            + renderStageOneInlineEditor(previewLabels.overviewBusinessGoals, businessGoals, 'overview_business_goals', {
+                rows: 4,
+                placeholder: previewLabels.overviewBusinessGoals
+            })
+            + renderStageOneInlineEditor(previewLabels.overviewContentFocus, contentFocus, 'overview_content_focus', {
+                rows: 3,
+                placeholder: previewLabels.overviewContentFocus
+            })
+            + renderStageOneInlineEditor(previewLabels.overviewDomainStrategy, domainStrategy, 'overview_domain_strategy', {
+                rows: 3,
+                placeholder: previewLabels.overviewDomainStrategy
+            })
+            + '</div>'
+            + '</div>';
+    }
+
+    function renderThemeDirectEditSection(planRoot, selectionReason) {
+        var snapshot = pickPreviewObject(planRoot.theme_context_snapshot, planRoot.theme_context, planRoot.shared_theme_context);
+        var themeDesign = pickPreviewObject(
+            planRoot.theme_design,
+            planRoot.shared_theme_design,
+            snapshot && snapshot.theme_design,
+            snapshot
+        );
+        var themePurpose = pickPreviewValue(
+            themeDesign && themeDesign.theme_purpose,
+            themeDesign && themeDesign.site_positioning,
+            planRoot.theme_purpose,
+            planRoot.site_positioning
+        );
+        var visualKeywords = pickPreviewValue(
+            themeDesign && themeDesign.visual_keywords,
+            planRoot.style_tone,
+            planRoot.visual_style
+        );
+        var toneOfVoice = pickPreviewValue(
+            themeDesign && themeDesign.tone_of_voice,
+            themeDesign && themeDesign.content_tone,
+            planRoot.tone_of_voice
+        );
+        return ''
+            + '<div class="border rounded p-3 mt-3 bg-light-subtle">'
+            + '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">'
+            + '<div class="fw-semibold small">' + escapeHtml(String(previewLabels.themeDirectEditTitle || 'Theme edit')) + '</div>'
+            + '<span class="small text-muted">' + escapeHtml(String(previewLabels.themeDirectEditHint || '')) + '</span>'
+            + '</div>'
+            + renderStageOneInlineEditor(previewLabels.themePurpose, themePurpose, 'theme_purpose', { rows: 3, placeholder: previewLabels.themePurpose })
+            + renderStageOneInlineEditor(previewLabels.visualKeywords, visualKeywords, 'theme_visual_keywords', { rows: 3, placeholder: previewLabels.visualKeywords })
+            + renderStageOneInlineEditor(previewLabels.toneOfVoice, toneOfVoice, 'theme_tone_of_voice', { rows: 3, placeholder: previewLabels.toneOfVoice })
+            + renderStageOneInlineEditor(previewLabels.selectionReason || previewLabels.reason, selectionReason, 'theme_selection_reason', { rows: 3, placeholder: previewLabels.selectionReason || previewLabels.reason })
+            + '</div>';
+    }
+
     function renderThemeSummarySection(planRoot) {
         if (!planRoot || typeof planRoot !== 'object') {
             return '';
@@ -7307,7 +7560,8 @@
             parts.push(forbiddenHtml);
         }
 
-        if (parts.length === 0) {
+        var directEditHtml = renderThemeDirectEditSection(planRoot, selectionReason);
+        if (parts.length === 0 && directEditHtml === '') {
             return '';
         }
         return ''
@@ -7315,6 +7569,7 @@
             + '<div class="card-body">'
             + renderPreviewSectionHeadingWithReason(previewLabels.themeSummary, selectionReason)
             + parts.join('')
+            + directEditHtml
             + '</div>'
             + '</div>';
     }
@@ -7965,6 +8220,179 @@
         currentTaskPlanPayload.virtual_theme_plan.draft_generated_at = currentTaskPlanPayload.virtual_theme_plan.draft_generated_at || new Date().toISOString();
     }
 
+    function getCurrentStageOneStructuredRootForEdit() {
+        var payload = currentPlanPayload && typeof currentPlanPayload === 'object'
+            ? currentPlanPayload
+            : {};
+        var structured = pickStructuredPlanRoot(payload);
+        if (!structured || typeof structured !== 'object' || Array.isArray(structured)) {
+            structured = {};
+        } else {
+            structured = normalizeStageOneStructuredRootForPreview(structured);
+        }
+        payload.structured = structured;
+        if (!payload.json || typeof payload.json !== 'object' || Array.isArray(payload.json)) {
+            payload.json = structured;
+        }
+        currentPlanPayload = payload;
+        return structured;
+    }
+
+    function syncStageOneStructuredDraftAfterEdit(structuredRoot) {
+        if (!currentPlanPayload || typeof currentPlanPayload !== 'object') {
+            currentPlanPayload = {};
+        }
+        currentPlanPayload.structured = structuredRoot;
+        if (!currentPlanPayload.json || typeof currentPlanPayload.json !== 'object' || Array.isArray(currentPlanPayload.json)) {
+            currentPlanPayload.json = structuredRoot;
+        }
+    }
+
+    function markStageOneInlineEditDirty() {
+        stageOneInlineEditDirty = true;
+        var savePlanBtn = document.getElementById('pb-ai-save-plan-draft');
+        if (savePlanBtn) {
+            savePlanBtn.classList.remove('d-none');
+        }
+        setPlanModeStatus(messages.stageOneFieldEditPending || messages.planDraftSaved);
+    }
+
+    function persistStageOneInlineEdits(forcePersist) {
+        var force = forcePersist === true;
+        if (!force && !stageOneInlineEditDirty) {
+            return Promise.resolve(true);
+        }
+        if (!mergeScopeUrl || !String(publicId || '').trim()) {
+            return Promise.resolve(false);
+        }
+        if (stageOneInlineEditPersisting) {
+            if (stageOneInlineEditPersistPromise && typeof stageOneInlineEditPersistPromise.then === 'function') {
+                return stageOneInlineEditPersistPromise.then(function () {
+                    return !stageOneInlineEditDirty;
+                });
+            }
+            return Promise.resolve(!stageOneInlineEditDirty);
+        }
+        var structured = getCurrentStageOneStructuredRootForEdit();
+        if (!structured || typeof structured !== 'object') {
+            return Promise.resolve(false);
+        }
+        var planJson = (currentPlanPayload && currentPlanPayload.json && typeof currentPlanPayload.json === 'object')
+            ? currentPlanPayload.json
+            : structured;
+        stageOneInlineEditPersisting = true;
+        stageOneInlineEditPersistPromise = postJson(mergeScopeUrl, {
+            public_id: publicId,
+            autosave: '1',
+            scope_patch: {
+                plan_structured: structured,
+                plan_json: planJson,
+                plan_markdown: String((currentPlanPayload && currentPlanPayload.markdown) || '')
+            }
+        }).then(function (data) {
+            stageOneInlineEditPersisting = false;
+            stageOneInlineEditPersistPromise = null;
+            if (!data || !data.success) {
+                return false;
+            }
+            stageOneInlineEditDirty = false;
+            if (data.data && typeof data.data === 'object') {
+                hydrateWorkspaceFromState(data.data);
+            }
+            if (!force) {
+                setPlanModeStatus(messages.stageOneFieldAutosaved || messages.planDraftSaved);
+            }
+            return true;
+        }).catch(function () {
+            stageOneInlineEditPersisting = false;
+            stageOneInlineEditPersistPromise = null;
+            return false;
+        });
+        return stageOneInlineEditPersistPromise;
+    }
+
+    function scheduleStageOneInlineEditPersist() {
+        if (stageOneInlineEditPersistTimer) {
+            window.clearTimeout(stageOneInlineEditPersistTimer);
+        }
+        stageOneInlineEditPersistTimer = window.setTimeout(function () {
+            persistStageOneInlineEdits(false).catch(function () {});
+        }, 1200);
+    }
+
+    function applyStageOnePlanFieldEditorValue(editor) {
+        if (!editor || !editor.getAttribute) {
+            return false;
+        }
+        var fieldKey = String(editor.getAttribute('data-stage1-field-key') || '').trim();
+        if (fieldKey === '') {
+            return false;
+        }
+        var value = String(editor.value || '');
+        var structured = getCurrentStageOneStructuredRootForEdit();
+        var nowIso = new Date().toISOString();
+        if (!structured.theme_design || typeof structured.theme_design !== 'object' || Array.isArray(structured.theme_design)) {
+            structured.theme_design = {};
+        }
+        switch (fieldKey) {
+            case 'overview_expanded_brief':
+                structured.overview_expanded_brief = value;
+                break;
+            case 'overview_business_goals':
+                structured.overview_business_goals = splitPreviewEditorList(value);
+                break;
+            case 'overview_content_focus':
+                structured.overview_content_focus = value;
+                break;
+            case 'overview_domain_strategy':
+                structured.overview_domain_strategy = value;
+                break;
+            case 'theme_purpose':
+                structured.theme_purpose = value;
+                structured.theme_design.theme_purpose = value;
+                break;
+            case 'theme_visual_keywords':
+                structured.style_tone = splitPreviewEditorList(value);
+                structured.theme_design.visual_keywords = splitPreviewEditorList(value);
+                break;
+            case 'theme_tone_of_voice':
+                structured.tone_of_voice = value;
+                structured.theme_design.tone_of_voice = value;
+                break;
+            case 'theme_selection_reason':
+                structured.selection_reason = value;
+                structured.theme_design.selection_reason = value;
+                break;
+            default:
+                return false;
+        }
+        structured.last_inline_manual_edit = {
+            field_key: fieldKey,
+            edited_at: nowIso
+        };
+        syncStageOneStructuredDraftAfterEdit(structured);
+        markStageOneInlineEditDirty();
+        scheduleStageOneInlineEditPersist();
+        return true;
+    }
+
+    function bindStageOnePlanFieldEditors(container) {
+        var root = typeof container === 'string' ? document.getElementById(container) : container;
+        if (!root || root.dataset.pbStageOneFieldEditorsBound === '1') {
+            return;
+        }
+        root.dataset.pbStageOneFieldEditorsBound = '1';
+        var handle = function (event) {
+            var editor = event.target && event.target.closest ? event.target.closest('[data-pb-stage1-field-edit="1"]') : null;
+            if (!editor || !root.contains(editor)) {
+                return;
+            }
+            applyStageOnePlanFieldEditorValue(editor);
+        };
+        root.addEventListener('input', handle);
+        root.addEventListener('change', handle);
+    }
+
     function applyTaskPlanFieldEditorValue(editor) {
         if (!editor || !editor.getAttribute) {
             return false;
@@ -8278,7 +8706,7 @@
         if (queueStatus !== '' && runningStatuses.indexOf(queueStatus) !== -1) {
             return true;
         }
-        return !!isOperationRunning;
+        return false;
     }
 
     var phaseOneObserverResumeToken = '';
@@ -8396,6 +8824,14 @@
         }
         var themeSections = [];
         var tabs = [];
+        var overviewHtml = renderPlanOverviewSummarySection(planRoot);
+        if (overviewHtml) {
+            tabs.push({
+                key: 'overview',
+                label: previewLabels.overviewTab,
+                content: overviewHtml
+            });
+        }
         var themeHtml = renderThemeSummarySection(planRoot);
         var sharedBlocksHtml = renderPlanSharedBlocksSection(planRoot);
         var headerPlan = planRoot.navigation_plan || planRoot.header_plan || planRoot.header || null;
@@ -8449,7 +8885,7 @@
             + renderPreviewTabs('plan', tabs);
     }
 
-    function buildPlanPreviewHtml(markdownText, payload) {
+    function buildPlanPreviewHtml(markdownText, payload, options) {
         var md = String(markdownText || '').trim();
         var parsedFromMd = tryParseJsonObject(md);
         if (parsedFromMd && typeof parsedFromMd === 'object' && typeof parsedFromMd.markdown === 'string' && String(parsedFromMd.markdown || '').trim() !== '') {
@@ -8458,16 +8894,117 @@
             md = '';
         }
 
+        // 是否允许在结构化数据缺失时回退到 markdown 渲染。
+        // 仅 SSE 流式生成中才允许（提供渐进式可视化反馈）；稳定态严格不展示 markdown，
+        // 避免“确认后回到当前阶段，预览变成 markdown 列表”的错觉。
+        var allowMarkdownFallback = false;
+        if (options && typeof options === 'object' && Object.prototype.hasOwnProperty.call(options, 'allowMarkdownFallback')) {
+            allowMarkdownFallback = options.allowMarkdownFallback === true;
+        } else {
+            try {
+                allowMarkdownFallback = (typeof planSseRunning === 'boolean' && planSseRunning === true)
+                    || (typeof taskPlanSseRunning === 'boolean' && taskPlanSseRunning === true);
+            } catch (_) {
+                allowMarkdownFallback = false;
+            }
+        }
+
         var structuredRoot = pickStructuredPlanRoot(payload);
         if (!structuredRoot && parsedFromMd && typeof parsedFromMd === 'object') {
             structuredRoot = coerceStructuredPlanRootFromParsedJson(parsedFromMd);
         }
+        if (!structuredRoot && payload && typeof payload === 'object' && payload.execution_blueprint && typeof payload.execution_blueprint === 'object') {
+            var eb = payload.execution_blueprint;
+            var ebPages = (eb.page_plans && typeof eb.page_plans === 'object' && !Array.isArray(eb.page_plans))
+                ? eb.page_plans
+                : ((eb.pages && typeof eb.pages === 'object' && !Array.isArray(eb.pages)) ? eb.pages : null);
+            var ebShared = (eb.shared_components && typeof eb.shared_components === 'object' && !Array.isArray(eb.shared_components))
+                ? eb.shared_components
+                : null;
+            var ebHeader = (eb.navigation_plan && typeof eb.navigation_plan === 'object' && !Array.isArray(eb.navigation_plan))
+                ? eb.navigation_plan
+                : null;
+            var ebFooter = (eb.footer_plan && typeof eb.footer_plan === 'object' && !Array.isArray(eb.footer_plan))
+                ? eb.footer_plan
+                : null;
+            var ebStructured = {};
+            if (ebPages) {
+                ebStructured.pages = ebPages;
+            }
+            if (ebShared) {
+                ebStructured.shared_components = ebShared;
+            }
+            if (ebHeader) {
+                ebStructured.navigation_plan = ebHeader;
+            }
+            if (ebFooter) {
+                ebStructured.footer_plan = ebFooter;
+            }
+            if (Object.keys(ebStructured).length > 0) {
+                structuredRoot = ebStructured;
+            }
+        }
         if (structuredRoot && typeof structuredRoot === 'object') {
-            structuredRoot = normalizeStageOneStructuredRootForPreview(structuredRoot);
+            if (isTaskPlanStructuredRoot(structuredRoot)) {
+                structuredRoot = normalizeTaskPlanStructuredCandidate(structuredRoot);
+            } else {
+                structuredRoot = normalizeStageOneStructuredRootForPreview(structuredRoot);
+            }
         }
 
-        // 有结构化根数据时优先渲染结构化预览；当 Markdown 与结构化数据都为空时显示状态文案，避免空白区域。
+        // 优先结构化预览（含可编辑块）；只有完全没有结构化时才考虑回退 Markdown。
+        if (!structuredRoot && md !== '') {
+            // 若 payload 自身带有结构化根（但前置解析链未命中），再兜底尝试一次，避免误降级到纯 markdown。
+            if (payload && typeof payload === 'object') {
+                var directStructured = payload.structured && typeof payload.structured === 'object' ? payload.structured : null;
+                if (!directStructured && payload.plan_structured && typeof payload.plan_structured === 'object') {
+                    directStructured = payload.plan_structured;
+                }
+                if (!directStructured && payload.task_plan_structured && typeof payload.task_plan_structured === 'object') {
+                    directStructured = payload.task_plan_structured;
+                }
+                if (directStructured) {
+                    if (isTaskPlanStructuredRoot(directStructured)) {
+                        directStructured = normalizeTaskPlanStructuredCandidate(directStructured);
+                    } else {
+                        directStructured = normalizeStageOneStructuredRootForPreview(directStructured);
+                    }
+                    if (directStructured && typeof directStructured === 'object' && Object.keys(directStructured).length > 0) {
+                        return renderPlanStructuredPreviewHtml(directStructured);
+                    }
+                }
+            }
+            if (allowMarkdownFallback) {
+                // 流式生成期间（SSE 还在推送），允许渲染原始 markdown 提供渐进反馈。
+                return '<div class="pb-ai-plan-markdown-fallback">' + renderPlanPreviewHtml(md) + '</div>';
+            }
+            // 稳定态（已确认 / 重新进入阶段 / 历史会话）下，结构化数据应来自 hydrate / derive，
+            // 若仍缺失说明蓝图与方案数据均不可用，明确给出空态而不是退化成 markdown 列表。
+            return renderPlanPreviewEmptyStateHtml();
+        }
+        // Markdown 与结构化都为空时再显示状态文案，避免空白区域。
         if (!structuredRoot && md === '') {
+            var taskPlanSummary = payload && payload.task_plan_summary && typeof payload.task_plan_summary === 'object'
+                ? payload.task_plan_summary
+                : {};
+            if (hasTaskPlanSummaryEvidence(taskPlanSummary)) {
+                var sharedCount = Number(taskPlanSummary.shared_task_count || 0);
+                var pageCount = Number(taskPlanSummary.page_task_count || 0);
+                var summaryHtml = '';
+                if (sharedCount > 0) {
+                    summaryHtml += '<div class="small text-muted mb-1">' + escapeHtml(messages.taskPlanPlaceholderSharedTasks) + ': ' + escapeHtml(String(sharedCount)) + '</div>';
+                }
+                if (pageCount > 0) {
+                    summaryHtml += '<div class="small text-muted mb-1">' + escapeHtml(messages.taskPlanPlaceholderPageTasks) + ': ' + escapeHtml(String(pageCount)) + '</div>';
+                }
+                return ''
+                    + '<div class="d-flex align-items-center justify-content-center text-center w-100 h-100 py-5">'
+                    + '<div class="text-muted fs-5 fw-semibold">' + escapeHtml(messages.taskPlanPlaceholderSummaryTitle)
+                    + (summaryHtml ? '<div class="small mt-3 text-start">' + summaryHtml + '</div>' : '')
+                    + '<div class="small mt-3 text-muted">' + escapeHtml(messages.taskPlanPlaceholderSummaryHint) + '</div>'
+                    + '</div>'
+                    + '</div>';
+            }
             return renderPlanPreviewEmptyStateHtml();
         }
         return renderPlanStructuredPreviewHtml(structuredRoot);
@@ -9887,6 +10424,7 @@
             bindPreviewActionButtons(previewContent);
             bindPreviewTabButtons(previewContent);
             bindPreviewSortables(previewContent);
+            bindStageOnePlanFieldEditors(previewContent);
             bindTaskPlanFieldEditors(previewContent);
         }
         if (persistField && markdownField) {
@@ -10395,7 +10933,7 @@
                 var doneMdEl = document.getElementById('pb-ai-plan-md-content');
                 doneLatestMd = String(doneMdEl && doneMdEl.textContent ? doneMdEl.textContent : '').trim();
             }
-            setPlanModalProgress(messages.planModeDone, 100, !planConfirmedState && (doneLatestMd !== '' || hasCurrentPhaseOnePlanDraft()));
+            setPlanModalProgress(messages.planModeDone, 100, (doneLatestMd !== '' || hasCurrentPhaseOnePlanDraft()));
             clearPlanPreviewActionContext({ restoreStatus: false });
             setPlanRetryButtonVisible(true);
             if (typeof terminal.log === 'function') {
@@ -10501,7 +11039,7 @@
             if (data && data.success && data.data && typeof data.data === 'object') {
                 hydrateWorkspaceFromState(data.data);
                 setPlanModeStatus((data && data.message) ? String(data.message) : (messages.planPageRefineDone || messages.planModeDone));
-                setPlanModalProgress(messages.planPageRefineDone || messages.planModeDone, 100, !planConfirmedState && hasCurrentPhaseOnePlanDraft());
+                setPlanModalProgress(messages.planPageRefineDone || messages.planModeDone, 100, hasCurrentPhaseOnePlanDraft());
                 clearPlanPreviewActionContext({ restoreStatus: false });
                 toast('success', (data && data.message) ? String(data.message) : (messages.planPageRefineDone || messages.planModeDone));
                 return;
@@ -11201,22 +11739,32 @@
             cb(false);
             return;
         }
-        postJson(mergeScopeUrl, {
-            public_id: publicId,
-            autosave: '1',
-            save_target: 'plan',
-            save_plan_draft: '1'
-        }).then(function (data) {
-            if (data && data.success) {
-                if (data.data && typeof data.data === 'object') {
-                    hydrateWorkspaceFromState(data.data);
-                }
-                toast('success', messages.planDraftSaved);
-                cb(true);
+        persistStageOneInlineEdits(true).then(function (patched) {
+            if (!patched) {
+                toast('warning', messages.planDraftSaveFailed);
+                cb(false);
                 return;
             }
-            toast('warning', (data && data.message) ? String(data.message) : messages.planDraftSaveFailed);
-            cb(false);
+            postJson(mergeScopeUrl, {
+                public_id: publicId,
+                autosave: '1',
+                save_target: 'plan',
+                save_plan_draft: '1'
+            }).then(function (data) {
+                if (data && data.success) {
+                    if (data.data && typeof data.data === 'object') {
+                        hydrateWorkspaceFromState(data.data);
+                    }
+                    toast('success', messages.planDraftSaved);
+                    cb(true);
+                    return;
+                }
+                toast('warning', (data && data.message) ? String(data.message) : messages.planDraftSaveFailed);
+                cb(false);
+            }).catch(function () {
+                toast('error', messages.planDraftSaveFailed);
+                cb(false);
+            });
         }).catch(function () {
             toast('error', messages.planDraftSaveFailed);
             cb(false);
@@ -11858,7 +12406,7 @@
             confirmBtn.disabled = isThemeBuildGenerationRunning() || hasAnyRunningQueueForUi() || !enableConfirm;
         }
         if (buildBtn) {
-            buildBtn.disabled = isThemeBuildGenerationRunning() || hasAnyRunningQueueForUi() || !taskPlanConfirmedState;
+            buildBtn.disabled = isBuildActionLocked() || !taskPlanConfirmedState;
         }
         syncTaskPlanRegenerateButtonVisibility();
         applyTaskPlanEditingLockFromActiveOperation();
@@ -11869,7 +12417,7 @@
         if (!buildBtn) {
             return;
         }
-        buildBtn.disabled = isThemeBuildGenerationRunning() || hasAnyRunningQueueForUi() || !taskPlanConfirmedState;
+        buildBtn.disabled = isBuildActionLocked() || !taskPlanConfirmedState;
     }
 
     function hideTaskPlanGenerationModal() {
@@ -12346,7 +12894,7 @@
             }
             if (data.start_sse === false && !reuseRunningPlan) {
                 var keepMessage = (data && data.message) ? String(data.message) : messages.planGenerated;
-                setPlanModalProgress(keepMessage, 100, !planConfirmedState && hasCurrentPhaseOnePlanDraft());
+                setPlanModalProgress(keepMessage, 100, hasCurrentPhaseOnePlanDraft());
                 setPlanRetryButtonVisible(false);
                 toast('success', keepMessage);
                 planStartRequestPending = false;
@@ -12467,10 +13015,8 @@
             toast('warning', messages.phaseOnePlanMissingForTaskPlan);
             return;
         }
-        if (taskPlanConfirmedState) {
-            startConfirmedBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes, opts);
-            return;
-        }
+        // 确认态不是终态：第二阶段方案允许持续编辑，构建前始终优先使用当前草案链路。
+        // 因此这里不再因为 taskPlanConfirmedState=true 而直接短路到 build。
         // 真实数据链路：第二阶段常先落 draft（task_plan_markdown/task_plan_structured），
         // 此时应直接确认并构建，而不是再次触发生成队列。
         if (hasTaskPlanDraft()) {
@@ -12512,24 +13058,34 @@
             toast('error', messages.planStartUnavailable);
             return;
         }
-        postForm(confirmPlanUrl, {
-            public_id: publicId
-        }).then(function (data) {
-            if (!data || !data.success) {
-                toast('error', (data && data.message) ? String(data.message) : messages.networkError);
+        persistStageOneInlineEdits(true).then(function (patched) {
+            if (!patched) {
+                toast('warning', messages.planDraftSaveFailed);
                 syncConfirmPlanButtonEnabled();
                 return;
             }
-            if (data.data && typeof data.data === 'object') {
-                hydrateWorkspaceFromState(data.data);
-            }
-            hidePlanGenerationModal();
-            toast('success', (data && data.message) ? String(data.message) : messages.planConfirmSaved);
-            continueToTaskPlanAfterPlanConfirm(data && data.data && typeof data.data === 'object' ? data.data : null);
-        }).catch(function (error) {
-            toast('error', (error && error.message) ? String(error.message) : messages.networkError);
+            postForm(confirmPlanUrl, {
+                public_id: publicId
+            }).then(function (data) {
+                if (!data || !data.success) {
+                    toast('error', (data && data.message) ? String(data.message) : messages.networkError);
+                    syncConfirmPlanButtonEnabled();
+                    return;
+                }
+                if (data.data && typeof data.data === 'object') {
+                    hydrateWorkspaceFromState(data.data);
+                }
+                hidePlanGenerationModal();
+                toast('success', (data && data.message) ? String(data.message) : messages.planConfirmSaved);
+                continueToTaskPlanAfterPlanConfirm(data && data.data && typeof data.data === 'object' ? data.data : null);
+            }).catch(function (error) {
+                toast('error', (error && error.message) ? String(error.message) : messages.networkError);
+                syncConfirmPlanButtonEnabled();
+                syncPlanRebuildButtonVisibility();
+            });
+        }).catch(function () {
+            toast('warning', messages.planDraftSaveFailed);
             syncConfirmPlanButtonEnabled();
-            syncPlanRebuildButtonVisibility();
         });
     }
 
@@ -12610,6 +13166,11 @@
         if (startBuildSiteBtn && startBuildSiteBtn.dataset.pbBound !== '1') {
             startBuildSiteBtn.dataset.pbBound = '1';
             startBuildSiteBtn.addEventListener('click', function () {
+                if (isBuildActionLocked(latestWorkspaceState || initialWorkspaceState || {})) {
+                    toast('warning', messages.buildQueueBusyActionBlocked || messages.networkError);
+                    syncTaskPlanBuildButtonState();
+                    return;
+                }
                 ensureTaskPlanConfirmedBeforeBuild(currentPlanTriggerButton, currentPlanSelection, {});
             });
         }
@@ -12631,6 +13192,12 @@
         if (publishStageBtn && publishStageBtn.dataset.pbBound !== '1') {
             publishStageBtn.dataset.pbBound = '1';
             publishStageBtn.addEventListener('click', function () {
+                if (isBuildActionLocked(latestWorkspaceState || initialWorkspaceState || {})) {
+                    toast('warning', messages.buildQueueBusyActionBlocked || messages.networkError);
+                    syncTaskPlanBuildButtonState();
+                    syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
+                    return;
+                }
                 if (publishStageBtn.disabled || !setStageUrl) {
                     return;
                 }
@@ -13246,11 +13813,14 @@
 
     function bindPublishStageLogic() {
         syncPublishStartButtonFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
+        syncPublishedSiteAccess(latestWorkspaceState || initialWorkspaceState || {});
         var openPublishPreviewBtn = document.getElementById('pb-ai-open-publish-preview');
         if (openPublishPreviewBtn && openPublishPreviewBtn.dataset.pbBound !== '1') {
             openPublishPreviewBtn.dataset.pbBound = '1';
             openPublishPreviewBtn.addEventListener('click', function () {
-                var previewUrl = String(previewFullUrl || visualPreviewUrl || currentEmbeddedVisualUrl || '').trim();
+                var workspaceState = latestWorkspaceState || initialWorkspaceState || {};
+                var liveUrl = isWorkspacePublished(workspaceState) ? resolvePublishedSiteUrl(workspaceState) : '';
+                var previewUrl = String(liveUrl || publishedSiteUrl || previewFullUrl || visualPreviewUrl || currentEmbeddedVisualUrl || '').trim();
                 if (!previewUrl) {
                     toast('warning', messages.publishPreviewUnavailable || messages.networkError);
                     return;

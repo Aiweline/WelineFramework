@@ -258,8 +258,11 @@ class AccountService
      */
     public function testConnection(Account $account): array
     {
+        $trace = [];
+        $trace[] = '[1/8] 开始连接测试';
         try {
             $providerCode = $account->getData(Account::schema_fields_PROVIDER_CODE);
+            $trace[] = '[2/8] 读取供应商配置: ' . (string)$providerCode;
             $providerInfo = VendorConfigManager::getProviderConfig($providerCode);
             if (!$providerInfo) {
                 throw new Exception(__('涓嶆敮鎸佺殑渚涘簲鍟? %{provider}', ['provider' => $providerCode]));
@@ -269,6 +272,8 @@ class AccountService
             $apiKeyPlain = $account->getDecryptedApiKey();
             $apiKeyTail = $apiKeyPlain ? substr($apiKeyPlain, -4) : '';
             $baseUrl = $account->getData(Account::schema_fields_BASE_URL) ?: ($providerInfo['base_url'] ?? '');
+            $trace[] = '[3/8] 解析测试参数: model=' . (string)$testModelCode . ', base_url=' . (string)$baseUrl;
+            $trace[] = '[4/8] 检查API Key: ' . ($apiKeyPlain !== '' ? ('已配置(尾号:' . $apiKeyTail . ')') : '未配置');
             Env::log('ai_provider_test.log', sprintf('[testConnection] account_id=%s provider=%s model=%s base_url=%s api_key_tail=%s',
                 (string)$account->getId(), $providerCode, $testModelCode, $baseUrl, $apiKeyTail
             ));
@@ -290,15 +295,20 @@ class AccountService
             $proxyConfig = $account->getProxyConfig();
             if (!empty($proxyConfig)) {
                 $testModel->setData(AiModel::schema_fields_PROXY_INFO, json_encode($proxyConfig));
+                $trace[] = '[5/8] 检测到代理配置: host=' . (string)($proxyConfig['host'] ?? '-') . ', port=' . (string)($proxyConfig['port'] ?? '-');
+            } else {
+                $trace[] = '[5/8] 未启用代理';
             }
             
             // 鑾峰彇瀵瑰簲鐨凱rovider
+            $trace[] = '[6/8] 创建Provider实例';
             $provider = $this->getProviderInstance($account->getData(Account::schema_fields_PROVIDER_CODE));
             if (!$provider) {
                 throw new Exception('Unable to create provider instance.');
             }
             
             // 鎵ц娴嬭瘯璇锋眰
+            $trace[] = '[7/8] 发起API请求（内置重试最多3次）';
             $result = $provider->generate($testModel, 'Please reply with "OK" to indicate the connection is working.', [
                 'max_tokens' => 64,
                 'temperature' => 0,
@@ -332,6 +342,7 @@ class AccountService
                     ));
                 }
                 
+                $trace[] = '[8/8] 测试成功，连接状态已更新为 success';
                 return [
                     'success' => true,
                     'message' => 'Connection test successful',
@@ -342,13 +353,15 @@ class AccountService
                     'api_key_tail' => $apiKeyTail,
                     'connection_status' => Account::STATUS_SUCCESS,
                     'connection_test_time' => time(),
-                    'connection_test_message' => 'Connection successful'
+                    'connection_test_message' => 'Connection successful',
+                    'trace' => $trace
                 ];
             } else {
                 throw new Exception('API returned an empty response.');
             }
             
         } catch (\Exception $e) {
+            $trace[] = '[8/8] 测试失败: ' . $e->getMessage();
             Env::log('ai_provider_test.log', sprintf('[testConnection][error] account_id=%s provider=%s error=%s',
                 (string)$account->getId(), (string)$account->getData(Account::schema_fields_PROVIDER_CODE), $e->getMessage()
             ));
@@ -365,7 +378,8 @@ class AccountService
                 'account_id' => $account->getId(),
                 'provider' => $account->getData(Account::schema_fields_PROVIDER_CODE),
                 'base_url' => $account->getData(Account::schema_fields_BASE_URL) ?: ($providerInfo['base_url'] ?? ''),
-                'api_key_tail' => $apiKeyTail ?? ''
+                'api_key_tail' => $apiKeyTail ?? '',
+                'trace' => $trace
             ];
         }
     }
