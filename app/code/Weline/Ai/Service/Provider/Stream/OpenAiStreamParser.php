@@ -111,20 +111,70 @@ final class OpenAiStreamParser
             return true;
         }
 
-        if (!empty($delta['reasoning_content']) && $onReasoning !== null) {
+        $reasoningParts = [];
+        if (\array_key_exists('reasoning_content', $delta) && $delta['reasoning_content'] !== null) {
+            $reasoningParts[] = (string)$delta['reasoning_content'];
+        }
+        if (\array_key_exists('reasoning', $delta) && $delta['reasoning'] !== null) {
+            $reasoningParts[] = (string)$delta['reasoning'];
+        }
+
+        if ($reasoningParts !== []) {
             $this->hasValidChunk = true;
-            if ($onReasoning((string)$delta['reasoning_content']) === false) {
-                return false;
+            if ($onReasoning !== null) {
+                foreach ($reasoningParts as $reasoningPart) {
+                    if ($reasoningPart === '') {
+                        continue;
+                    }
+                    if ($onReasoning($reasoningPart) === false) {
+                        return false;
+                    }
+                }
             }
         }
 
         if (\array_key_exists('content', $delta) && $delta['content'] !== null) {
-            $this->hasValidChunk = true;
-            if ($onContent((string)$delta['content']) === false) {
-                return false;
+            [$cleanContent, $thinkSegments] = $this->splitThinkContent((string)$delta['content']);
+            if ($onReasoning !== null) {
+                foreach ($thinkSegments as $segment) {
+                    if ($segment === '') {
+                        continue;
+                    }
+                    $this->hasValidChunk = true;
+                    if ($onReasoning($segment) === false) {
+                        return false;
+                    }
+                }
+            }
+
+            if ($cleanContent !== '') {
+                $this->hasValidChunk = true;
+                if ($onContent($cleanContent) === false) {
+                    return false;
+                }
             }
         }
 
         return true;
+    }
+
+    /**
+     * @return array{0:string,1:list<string>} [formalContent, thinkSegments]
+     */
+    private function splitThinkContent(string $content): array
+    {
+        if ($content === '' || !\str_contains($content, '<think')) {
+            return [$content, []];
+        }
+
+        $thinkSegments = [];
+        if (\preg_match_all('/<think\b[^>]*>([\s\S]*?)<\/think>/i', $content, $matches)) {
+            foreach (($matches[1] ?? []) as $segment) {
+                $thinkSegments[] = (string)$segment;
+            }
+        }
+
+        $formal = (string)\preg_replace('/<think\b[^>]*>[\s\S]*?<\/think>/i', '', $content);
+        return [$formal, $thinkSegments];
     }
 }

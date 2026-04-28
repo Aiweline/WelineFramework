@@ -2741,6 +2741,25 @@ SCRIPT;
             $scopePatch['task_plan_confirmed'] = 1;
             $scopePatch['task_plan_confirmed_at'] = $confirmedAt;
         }
+        if ($this->isTaskPlanConfirmedForBuild($mergedScope)) {
+            $mergedScope = $this->buildTaskService->ensureTaskScope(
+                $mergedScope,
+                \is_array($mergedScope['website_profile'] ?? null) ? $mergedScope['website_profile'] : [],
+                (string)($mergedScope['workspace_track'] ?? '')
+            );
+            if (\is_array($mergedScope['build_blueprint'] ?? null) && $mergedScope['build_blueprint'] !== []) {
+                $scopePatch['build_blueprint'] = $mergedScope['build_blueprint'];
+            }
+            if (\is_array($mergedScope['build_tasks'] ?? null) && $mergedScope['build_tasks'] !== []) {
+                $scopePatch['build_tasks'] = $mergedScope['build_tasks'];
+            }
+            $buildSummary = \is_array($scopePatch['build_summary'] ?? null)
+                ? $scopePatch['build_summary']
+                : (\is_array($mergedScope['build_summary'] ?? null) ? $mergedScope['build_summary'] : []);
+            $scopePatch['build_summary'] = \array_replace($buildSummary, [
+                'task_summary' => $this->buildTaskService->summarize($mergedScope),
+            ]);
+        }
         if (!$this->isTaskPlanConfirmedForBuild($mergedScope)) {
             return $this->jsonError(
                 'TASK_PLAN_REQUIRED_BEFORE_BUILD',
@@ -10748,6 +10767,21 @@ SCRIPT;
                     'Fresh build repair after interrupted task execution'
                 );
             }
+            $scope = $this->buildTaskService->ensureTaskScope(
+                $scope,
+                \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
+                (string)($scope['workspace_track'] ?? '')
+            );
+            if (\is_array($scope['build_blueprint'] ?? null) && $scope['build_blueprint'] !== []) {
+                $scopePatch['build_blueprint'] = $scope['build_blueprint'];
+            }
+            if (\is_array($scope['build_tasks'] ?? null) && $scope['build_tasks'] !== []) {
+                $scopePatch['build_tasks'] = $scope['build_tasks'];
+            }
+            $scopePatch['build_summary'] = \array_replace(
+                \is_array($scopePatch['build_summary'] ?? null) ? $scopePatch['build_summary'] : [],
+                ['task_summary' => $this->buildTaskService->summarize($scope)]
+            );
         }
         if ($this->isPublishBlockingAiBuildOperation($operation)) {
             $scope['latest_build_failed'] = 0;

@@ -1983,6 +1983,31 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         ]);
     }
 
+    public function testBuildPlanArtifactsByAiStreamAcceptsThemeDesignFromSharedPlanShape(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            $this->createStreamingAiServiceStub($this->buildAiPlanResponseWithSharedPlanThemeDesignOnly())
+        );
+
+        $artifacts = $service->buildPlanArtifactsByAiStream([
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+            'page_types' => ['home_page', 'about_page'],
+            'workspace_track' => 'virtual_theme',
+            'plan_locale' => 'en_US',
+            'default_locale' => 'en_US',
+        ], [
+            'site_title' => 'Plan Service Test',
+            'brief_description' => 'Need home and about pages with strong CTA.',
+        ]);
+
+        $themeDesign = $artifacts['plan_json']['theme_design'] ?? [];
+        self::assertIsArray($themeDesign);
+        self::assertNotSame('', \trim((string)($themeDesign['theme_purpose'] ?? '')));
+        self::assertNotSame('', \trim((string)($themeDesign['selection_reason'] ?? '')));
+    }
+
     public function testBuildPlanArtifactsByAiStreamRejectsPromptLikePlanCopy(): void
     {
         $service = new AiSiteExecutionBlueprintService(
@@ -2620,6 +2645,28 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             $decoded['plan_json']['theme_design'] = [];
         }
         $decoded['plan_json']['theme_design']['selection_reason'] = $selectionReason;
+
+        return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    private function buildAiPlanResponseWithSharedPlanThemeDesignOnly(): string
+    {
+        $decoded = \json_decode($this->buildValidAiPlanResponse(), true);
+        if (!\is_array($decoded)) {
+            return '{}';
+        }
+
+        $planJson = \is_array($decoded['plan_json'] ?? null) ? $decoded['plan_json'] : [];
+        $themeDesign = \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : [];
+        if ($planJson === [] || $themeDesign === []) {
+            return '{}';
+        }
+
+        unset($planJson['theme_design']);
+        $planJson['shared_plan'] = [
+            'theme_design' => $themeDesign,
+        ];
+        $decoded['plan_json'] = $planJson;
 
         return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }
