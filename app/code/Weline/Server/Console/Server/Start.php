@@ -1644,7 +1644,17 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
      */
     protected function summarizeBackgroundStartupServices(array $instanceData): array
     {
-        $services = $instanceData['services'] ?? [];
+        $snapshotServices = [];
+        $currentSnapshot = $instanceData['current_snapshot'] ?? [];
+        if (\is_array($currentSnapshot)) {
+            $snapshotServices = $currentSnapshot['services'] ?? [];
+        }
+
+        // 优先使用 current_snapshot（由 ServerInstanceManager 共识化/去重），
+        // 避免直接读取 services 时被历史记录放大为 0/2、0/3 等假未就绪。
+        $services = \is_array($snapshotServices) && $snapshotServices !== []
+            ? $snapshotServices
+            : ($instanceData['services'] ?? []);
         if (!\is_array($services)) {
             return ['ready' => 0, 'total' => 0, 'pending_detail' => ''];
         }
