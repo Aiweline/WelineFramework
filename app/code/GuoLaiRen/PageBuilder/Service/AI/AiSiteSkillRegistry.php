@@ -173,6 +173,35 @@ final class AiSiteSkillRegistry
     }
 
     /**
+     * @param list<string> $extraCodes
+     */
+    public function buildPromptGuideText(string $stage, array $extraCodes = []): string
+    {
+        return \trim(\implode("\n", $this->buildPromptGuideLines($stage, $extraCodes))) . "\n";
+    }
+
+    /**
+     * @param list<string> $extraCodes
+     */
+    public function prependPromptGuide(string $prompt, string $stage = 'pagebuilder', array $extraCodes = []): string
+    {
+        if ($this->hasPromptGuide($prompt)) {
+            return $prompt;
+        }
+
+        $prompt = \ltrim($prompt);
+        $guide = $this->buildPromptGuideText($stage, $extraCodes);
+        return $prompt === '' ? $guide : $guide . "\n" . $prompt;
+    }
+
+    private function hasPromptGuide(string $prompt): bool
+    {
+        return \str_contains($prompt, 'AI BUILDER SKILL CAPABILITY')
+            || \str_contains($prompt, 'CLAUDE-DESIGN HARD RULES')
+            || \str_contains($prompt, 'code=claude-design');
+    }
+
+    /**
      * 兼容旧调用：返回包含 frontend-design 与默认技能的注入行（stage2 用）。
      *
      * @param array<string, mixed> $batch

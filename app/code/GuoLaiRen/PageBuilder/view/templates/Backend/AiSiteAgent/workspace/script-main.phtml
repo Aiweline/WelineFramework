@@ -5513,7 +5513,7 @@
         }
 
         if (terminal.stop) {
-            terminal.stop();
+            terminal.stop({ suppressTransportError: true });
         }
         if (terminal.clear) {
             terminal.clear();
@@ -5530,6 +5530,7 @@
             runningContext: options.runningContext || contextText || '',
             streamingMessage: options.streamingMessage || '',
             toastMessage: options.toastMessage || '',
+            openLogged: false,
             started: false
         };
         if (startBtn) {
@@ -5557,6 +5558,9 @@
                 pendingBlockSseResult = null;
                 pendingBlockSseStart = null;
                 clearBlockStreamingState();
+                if (terminal.stop) {
+                    terminal.stop({ suppressTransportError: true });
+                }
                 if (contextEl) {
                     contextEl.textContent = failureMessage;
                 }
@@ -5571,6 +5575,9 @@
             }
             pendingBlockSseResult = payload && typeof payload === 'object' ? payload : null;
             pendingBlockSseStart = null;
+            if (terminal.stop) {
+                terminal.stop({ suppressTransportError: true });
+            }
             if (startBtn) {
                 startBtn.classList.add('d-none');
                 startBtn.disabled = true;
@@ -5619,12 +5626,34 @@
             if (!pending || pending.terminal !== terminal || !pending.started) {
                 return;
             }
-            if (pending.openMessage && terminal.log) {
+            if (pending.openMessage && terminal.log && !pending.openLogged) {
                 terminal.log(pending.openMessage, 'success');
+                pending.openLogged = true;
             }
             if (contextEl && pending.runningContext) {
                 contextEl.textContent = String(pending.runningContext);
             }
+        });
+
+        terminal.on('error', function (event) {
+            var payload = parsePayload(event);
+            var failureMessage = String((payload && payload.message) || messages.networkError || '');
+            pendingBlockSseResult = null;
+            pendingBlockSseStart = null;
+            clearBlockStreamingState();
+            if (terminal.stop) {
+                terminal.stop({ suppressTransportError: true });
+            }
+            if (contextEl) {
+                contextEl.textContent = failureMessage;
+            }
+            if (terminal.setStatus) {
+                terminal.setStatus('error', failureMessage);
+            }
+            if (terminal.log && failureMessage) {
+                terminal.log(failureMessage, 'error', payload);
+            }
+            toast('error', failureMessage);
         });
 
         var modalInstance = resolveBootstrapModalInstance(modalEl);
