@@ -64,6 +64,34 @@ final class ProcesserBatchKillProcessTreesTest extends TestCase
         ], $method->invoke(null, [$pid]));
     }
 
+    public function testPrepareProcessLogFileForWriteRecoversReadOnlyLog(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('POSIX file mode behavior is verified on Linux-like systems.');
+        }
+
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-processer-log-' . bin2hex(random_bytes(4));
+        self::assertTrue(mkdir($dir, 0777, true));
+
+        $path = $dir . DIRECTORY_SEPARATOR . 'process.log';
+        file_put_contents($path, 'old');
+        chmod($path, 0444);
+
+        try {
+            $method = new \ReflectionMethod(Processer::class, 'prepareProcessLogFileForWrite');
+            $method->setAccessible(true);
+
+            self::assertTrue($method->invoke(null, $path));
+            self::assertFileExists($path);
+            self::assertTrue(is_writable($path));
+            self::assertNotFalse(file_put_contents($path, 'new', FILE_APPEND));
+        } finally {
+            @chmod($path, 0666);
+            @unlink($path);
+            @rmdir($dir);
+        }
+    }
+
     private function replaceProcessDriver(ProcessDriverInterface $driver): void
     {
         $reflection = new \ReflectionProperty(ProcessDriverFactory::class, 'driver');
