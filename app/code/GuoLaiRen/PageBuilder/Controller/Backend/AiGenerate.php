@@ -882,21 +882,21 @@ class AiGenerate extends BackendController
                 $index
             );
 
-            $sse->sendEvent('start', ['message' => __('开始生成组件配置...')]);
+            $sse->sendEventAndYield('start', ['message' => __('开始生成组件配置...')]);
 
             $context = $this->buildOperationContext($styleCode, $componentCode, $metadata, $textConfigs, $region, $index, $page);
-            $sse->sendEvent('context', $context);
+            $sse->sendEventAndYield('context', $context);
 
             $unpublished = $context['unpublished_pages'] ?? [];
             if (!empty($unpublished)) {
-                $sse->sendEvent('unpublished_warning', [
+                $sse->sendEventAndYield('unpublished_warning', [
                     'message' => __('以下页面未发布，请发布后再使用或注意核对导航链接。'),
                     'items' => $unpublished,
                     'severity' => 'danger',
                 ]);
             }
 
-            $sse->sendEvent('progress', ['message' => __('正在构建提示词...')]);
+            $sse->sendEventAndYield('progress', ['message' => __('正在构建提示词...')]);
 
             $userPrompt = trim((string) $this->request->getPost('ai_prompt', ''));
             $prompt = $this->buildComponentConfigPrompt(
@@ -910,9 +910,9 @@ class AiGenerate extends BackendController
             );
 
             // 将本次提示词通过 SSE 返回，便于排查「本站已有页面」等是否包含
-            $sse->sendEvent('prompt', ['prompt' => $prompt]);
+            $sse->sendEventAndYield('prompt', ['prompt' => $prompt]);
 
-            $sse->sendEvent('progress', ['message' => __('正在调用 AI 生成...')]);
+            $sse->sendEventAndYield('progress', ['message' => __('正在调用 AI 生成...')]);
 
             /** @var AiService $aiService */
             $aiService = ObjectManager::getInstance(AiService::class);
@@ -926,7 +926,7 @@ class AiGenerate extends BackendController
             $traceSteps = [];
 
             $traceSteps[] = sprintf('[1] %s：scenario=pagebuilder_content_generation, locale=%s, prompt_length=%d', __('准备调用 AI'), $locale, \strlen($prompt));
-            $sse->sendEvent('trace', ['step' => 1, 'message' => $traceSteps[0], 'display_text' => implode("\n", $traceSteps)]);
+            $sse->sendEventAndYield('trace', ['step' => 1, 'message' => $traceSteps[0], 'display_text' => implode("\n", $traceSteps)]);
 
             $beforeAi = microtime(true);
             try {
@@ -951,7 +951,7 @@ class AiGenerate extends BackendController
                                 return $sse->isAlive();
                             }
                             $thinkingBuffer .= $rChunk;
-                            $sse->sendEvent('thinking', [
+                            $sse->sendEventAndYield('thinking', [
                                 'content' => $rChunk,
                                 'total_length' => \strlen($thinkingBuffer),
                             ]);
@@ -966,8 +966,8 @@ class AiGenerate extends BackendController
             } catch (\Throwable $e) {
                 $streamError = $this->sanitizeErrorMessage($e->getMessage());
                 $traceSteps[] = sprintf('[2] %s：%s', __('AI 调用异常'), $streamError);
-                $sse->sendEvent('trace', ['step' => 2, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps), 'error' => $streamError]);
-                $sse->sendEvent('error', ['message' => $streamError]);
+                $sse->sendEventAndYield('trace', ['step' => 2, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps), 'error' => $streamError]);
+                $sse->sendEventAndYield('error', ['message' => $streamError]);
                 $sse->close();
                 return;
             }
@@ -975,37 +975,37 @@ class AiGenerate extends BackendController
             $afterAi = microtime(true);
             $elapsedMs = (int) (($afterAi - $beforeAi) * 1000);
             $traceSteps[] = sprintf('[2] %s：chunk_count=%d, total_length=%d, elapsed_ms=%d, raw_preview=%s', __('AI 流式返回完毕'), $chunkCount, \strlen($fullContent), $elapsedMs, mb_substr(trim($fullContent), 0, 300));
-            $sse->sendEvent('trace', ['step' => 2, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps), 'chunk_count' => $chunkCount, 'total_length' => \strlen($fullContent), 'elapsed_ms' => $elapsedMs]);
+            $sse->sendEventAndYield('trace', ['step' => 2, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps), 'chunk_count' => $chunkCount, 'total_length' => \strlen($fullContent), 'elapsed_ms' => $elapsedMs]);
 
             if (trim($fullContent) === '') {
                 $traceSteps[] = '[3] ' . __('AI 返回内容为空');
-                $sse->sendEvent('trace', ['step' => 3, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
+                $sse->sendEventAndYield('trace', ['step' => 3, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
                 $msg = $streamError ?: __('AI 未返回任何内容，请检查 AI 服务配置或网络连接');
-                $sse->sendEvent('error', ['message' => $msg]);
+                $sse->sendEventAndYield('error', ['message' => $msg]);
                 $sse->close();
                 return;
             }
 
-            $sse->sendEvent('progress', ['message' => __('解析生成结果...')]);
+            $sse->sendEventAndYield('progress', ['message' => __('解析生成结果...')]);
 
             try {
                 $data = $this->parseJsonResponse($fullContent);
                 $traceSteps[] = '[3] ' . __('解析 JSON 成功') . '：keys=' . implode(', ', array_keys($data));
-                $sse->sendEvent('trace', ['step' => 3, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
+                $sse->sendEventAndYield('trace', ['step' => 3, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
 
                 $data = $this->normalizeComponentConfigListFields($data, $textConfigs);
                 $data = $this->ensureUseCustomLinksWhenNavGenerated($data);
                 $traceSteps[] = '[4] ' . __('合并并下发配置') . '：keys=' . implode(', ', array_keys($data));
-                $sse->sendEvent('trace', ['step' => 4, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
+                $sse->sendEventAndYield('trace', ['step' => 4, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
 
-                $sse->sendEvent('done', ['data' => $data]);
+                $sse->sendEventAndYield('done', ['data' => $data]);
             } catch (\Throwable $e) {
                 $traceSteps[] = '[3] ' . __('解析/合并异常') . '：' . $this->sanitizeErrorMessage($e->getMessage());
-                $sse->sendEvent('trace', ['step' => 3, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
-                $sse->sendEvent('error', ['message' => $this->sanitizeErrorMessage($e->getMessage())]);
+                $sse->sendEventAndYield('trace', ['step' => 3, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
+                $sse->sendEventAndYield('error', ['message' => $this->sanitizeErrorMessage($e->getMessage())]);
             }
         } catch (\Throwable $e) {
-            $sse->sendEvent('error', ['message' => $this->sanitizeErrorMessage($e->getMessage())]);
+            $sse->sendEventAndYield('error', ['message' => $this->sanitizeErrorMessage($e->getMessage())]);
         }
 
         $sse->close();
@@ -2160,7 +2160,7 @@ class AiGenerate extends BackendController
         if (!$force && !$this->shouldFlushSseChunkBuffer($buffer)) {
             return;
         }
-        $sse->sendEvent('chunk', [
+        $sse->sendEventAndYield('chunk', [
             'content' => $buffer,
             'total_length' => $totalLength,
         ]);
