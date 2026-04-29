@@ -434,6 +434,27 @@ class AiSiteBuildTaskServiceTest extends TestCase
                     'message' => 'stale orphan',
                 ],
             ],
+            'retryable_ai_failures' => [
+                'build' => [
+                    'items' => [
+                        'page:contact_page:form' => [
+                            'operation' => 'build',
+                            'item_key' => 'page:contact_page:form',
+                            'item_type' => 'page_section',
+                            'retry_scope' => 'build_task',
+                            'message' => 'ledger-only failure',
+                        ],
+                        'orphan:ledger' => [
+                            'operation' => 'build',
+                            'item_key' => 'orphan:ledger',
+                            'item_type' => 'page_section',
+                            'retry_scope' => 'build_task',
+                            'message' => 'orphan ledger failure',
+                        ],
+                    ],
+                    'updated_at' => '2026-01-01 00:02:00',
+                ],
+            ],
         ];
 
         $scope = $service->resetFailedTasksForFreshRepair($scope, 'Fresh build repair');
@@ -442,7 +463,14 @@ class AiSiteBuildTaskServiceTest extends TestCase
         self::assertSame(0, $scope['build_tasks']['page:home_page:hero']['attempt_no']);
         self::assertSame([], $scope['build_tasks']['page:home_page:hero']['result_ref']);
         self::assertSame(AiSiteBuildTaskService::TASK_STATUS_DONE, $scope['build_tasks']['page:about_page:story']['status']);
+        self::assertSame(AiSiteBuildTaskService::TASK_STATUS_PENDING, $scope['build_tasks']['page:contact_page:form']['status']);
+        self::assertSame(0, $scope['build_tasks']['page:contact_page:form']['attempt_no']);
+        self::assertSame([], $scope['build_tasks']['page:contact_page:form']['result_ref']);
+        self::assertSame('Fresh build repair', $scope['build_tasks']['page:contact_page:form']['message']);
         self::assertSame(AiSiteBuildTaskService::TASK_STATUS_FAILED, $scope['build_tasks']['orphan:failed']['status']);
+        self::assertArrayNotHasKey('orphan:ledger', $scope['build_tasks']);
+        self::assertSame([], $scope['retryable_ai_failures'] ?? []);
+        self::assertSame(0, (int)($scope['retryable_ai_failure_count'] ?? 0));
     }
 
     public function testInterruptedBuildResetOnlyTouchesRunningBlueprintTasks(): void

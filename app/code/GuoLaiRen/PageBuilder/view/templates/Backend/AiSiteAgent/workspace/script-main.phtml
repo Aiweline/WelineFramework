@@ -5483,8 +5483,10 @@
         updateVirtualBlockState(targetPageType, nextBlock);
         replaceCurrentBlockHtml(targetPageType, nextBlock);
         bindEmbeddedPreviewFrameBridge();
-        clearBlockStreamingState();
-        pendingBlockSseResult = null;
+        if (!options.preserveStreamingState) {
+            clearBlockStreamingState();
+            pendingBlockSseResult = null;
+        }
         if (options.notify) {
             toast('success', messages.blockSseApplied);
         }
@@ -5592,6 +5594,23 @@
             }
             if (payload && payload.state && payload.state.virtual_pages_by_type) {
                 mergeVirtualPagesByTypeState(payload.state.virtual_pages_by_type);
+            }
+            if (!payload || ['block_refine', 'block_regenerate'].indexOf(String(payload.operation || '')) === -1) {
+                return;
+            }
+            pendingBlockSseResult = payload;
+            var applied = applyPendingBlockSseResult({ preserveStreamingState: true });
+            if (!applied) {
+                return;
+            }
+            if (contextEl) {
+                contextEl.textContent = String(payload.message || messages.blockSseApplied || '');
+            }
+            if (terminal.setStatus) {
+                terminal.setStatus('connected', String(payload.message || messages.blockSseApplied || ''));
+            }
+            if (terminal.log) {
+                terminal.log(String(payload.message), 'success', payload);
             }
         });
 
@@ -5706,6 +5725,17 @@
         }
         modalEl.addEventListener('hidden.bs.modal', function () {
             var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-block-sse-terminal'] : null;
+            var pending = pendingBlockSseStart;
+            var keepStreamingInBackground = !!(
+                pending && pending.started
+            ) || !!(
+                terminal
+                && typeof terminal.isRunning === 'function'
+                && terminal.isRunning()
+            );
+            if (keepStreamingInBackground) {
+                return;
+            }
             if (terminal && terminal.stop) {
                 terminal.stop();
             }

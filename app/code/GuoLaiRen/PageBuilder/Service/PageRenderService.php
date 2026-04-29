@@ -1479,6 +1479,12 @@ class PageRenderService
         // 清理 header/footer 中可能存在的 HTML 文档结构标签（兼容旧模板）
         $headerHtml = $this->cleanHtmlDocumentTags($headerHtml);
         $footerHtml = $this->cleanHtmlDocumentTags($footerHtml);
+        // header 若来自 header.phtml 等非 renderRegionComponents 路径，同样可能缺少 wrapper，
+        // 导致工作台 iframe 桥接无法识别为可悬浮操作的虚拟主题块。补包 wrapper 并注入动作按钮。
+        if (stripos($headerHtml, 'tpmst-component-wrapper') === false && stripos($headerHtml, 'pb-component-wrapper') === false) {
+            $headerComponentCode = 'header/ai-site-header';
+            $headerHtml = '<div class="tpmst-component-wrapper pb-component-wrapper" data-region="header" data-component="' . $headerComponentCode . '" data-index="0" data-page-type="' . htmlspecialchars((string)($page->getData(Page::schema_fields_TYPE) ?? ''), ENT_QUOTES, 'UTF-8') . '">' . $this->buildWorkspaceVisualActionsHtml($headerComponentCode, 'header', 0, $page) . $headerHtml . '</div>';
+        }
         // footer 若来自 footer.phtml 等非 renderRegionComponents 路径，缺少 tpmst-component-wrapper，
         // 导致 setupPreviewDropZones 无法注入 component-actions。补包 wrapper 并设置 data-component 供编辑/删除定位
         if (stripos($footerHtml, 'tpmst-component-wrapper') === false && stripos($footerHtml, 'pb-component-wrapper') === false) {
