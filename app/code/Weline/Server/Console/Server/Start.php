@@ -1094,8 +1094,8 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         $servers = \is_array($wlsConfig['servers'] ?? null) ? $wlsConfig['servers'] : [];
         $instanceConfig = \is_array($servers[$instanceName] ?? null) ? $servers[$instanceName] : [];
 
+        // 启动白名单仅以 env.php 为准，不读取历史实例/public_host，避免“旧值兜底导致不提示”。
         $publicCandidates = [
-            (string)($config['public_host'] ?? ''),
             (string)($instanceConfig['host'] ?? ''),
             (string)($instanceConfig['ssl_domain'] ?? ''),
             (string)($wlsConfig['public_host'] ?? ''),
