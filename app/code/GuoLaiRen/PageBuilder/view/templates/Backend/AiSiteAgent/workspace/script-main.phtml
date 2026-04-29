@@ -96,6 +96,8 @@
         blockId: '',
         blockType: '',
         blockLabel: '',
+        blockRegion: '',
+        blockIndex: 0,
         blockConfig: {},
         fieldSchema: {}
     };
@@ -4785,6 +4787,63 @@
         return null;
     }
 
+    function blockEditorFieldSchemaHasTextFields(fieldSchema) {
+        var hasText = false;
+        Object.keys(fieldSchema || {}).some(function (groupKey) {
+            var group = fieldSchema[groupKey] || {};
+            return Object.keys(group.fields || {}).some(function (fieldKey) {
+                var field = group.fields[fieldKey] || {};
+                var key = String(field.key || field.config_key || field.full_key || fieldKey || '');
+                var type = String(field.type || 'text');
+                if (key.indexOf('_') === 0) {
+                    return false;
+                }
+                if (type === 'text' || type === 'textarea') {
+                    hasText = true;
+                    return true;
+                }
+                return false;
+            });
+        });
+        return hasText;
+    }
+
+    function renderBlockEditorAiGenerateBar(container, blockConfig) {
+        var wrap = document.createElement('div');
+        wrap.className = 'border rounded p-3 mb-3';
+        wrap.style.background = 'linear-gradient(135deg, rgba(37,99,235,0.08) 0%, rgba(14,165,233,0.10) 100%)';
+        wrap.style.borderColor = 'rgba(37,99,235,0.18)';
+        var aiPromptValue = blockConfig && blockConfig._ai_prompt != null ? String(blockConfig._ai_prompt) : '';
+        var aiGenerateHint = <?= \json_encode((string)__('AI 可根据当前页面与区块上下文自动生成字段内容'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        var aiGenerateLabel = <?= \json_encode((string)__('AI生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        var aiPromptLabel = <?= \json_encode((string)__('AI生成提示词'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        var aiPromptPlaceholder = <?= \json_encode((string)__('例如：更强调转化、信任感，或保持原有语气但内容更具体'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        var aiTerminalTitle = <?= \json_encode((string)__('生成过程'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        var aiDisconnectedLabel = <?= \json_encode((string)__('已断开'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        wrap.innerHTML = ''
+            + '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">'
+            + '  <div class="small text-muted"><i class="mdi mdi-robot me-1"></i>' + escapeHtml(aiGenerateHint) + '</div>'
+            + '  <button type="button" class="btn btn-sm btn-primary" id="pb-ai-edit-block-generate-btn"><i class="mdi mdi-auto-fix"></i> ' + escapeHtml(aiGenerateLabel) + '</button>'
+            + '</div>'
+            + '<label class="form-label small mb-1" for="pb-ai-edit-block-ai-prompt">' + escapeHtml(aiPromptLabel) + '</label>'
+            + '<textarea class="form-control form-control-sm" id="pb-ai-edit-block-ai-prompt" data-field-key="_ai_prompt" data-field-type="textarea" data-field-format="" rows="2" placeholder="' + escapeHtml(aiPromptPlaceholder) + '">' + escapeHtml(aiPromptValue) + '</textarea>'
+            + '<div class="mt-3" id="pb-ai-edit-block-terminal" style="border:1px solid rgba(148,163,184,0.35); border-radius:8px; overflow:hidden; background:rgba(15,23,42,0.92); color:#e2e8f0;">'
+            + '  <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 12px; border-bottom:1px solid rgba(148,163,184,0.2); font-size:12px;">'
+            + '    <span style="font-weight:600;">' + escapeHtml(aiTerminalTitle) + '</span>'
+            + '    <span id="pb-ai-edit-block-terminal-status" style="opacity:0.75;">' + escapeHtml(aiDisconnectedLabel) + '</span>'
+            + '  </div>'
+            + '  <div style="max-height:220px; overflow:auto; padding:10px 12px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; line-height:1.6;">'
+            + '    <div id="pb-ai-edit-block-terminal-content"></div>'
+            + '  </div>'
+            + '</div>';
+        container.appendChild(wrap);
+
+        var aiBtn = wrap.querySelector('#pb-ai-edit-block-generate-btn');
+        if (aiBtn) {
+            aiBtn.addEventListener('click', submitBlockEditorAiGenerate);
+        }
+    }
+
     function updateVirtualBlockState(pageType, block) {
         if (!pageType || !block || typeof block !== 'object') {
             return;
@@ -4930,6 +4989,10 @@
         hintEl.classList.add('d-none');
         hintEl.textContent = '';
 
+        if (blockEditorFieldSchemaHasTextFields(fieldSchema)) {
+            renderBlockEditorAiGenerateBar(container, blockConfig || {});
+        }
+
         Object.keys(fieldSchema || {}).forEach(function (groupKey) {
             var group = fieldSchema[groupKey] || {};
             var card = document.createElement('div');
@@ -4942,6 +5005,10 @@
 
             Object.keys(group.fields || {}).forEach(function (fieldKey) {
                 var field = group.fields[fieldKey] || {};
+                var configFieldKey = String(field.key || field.config_key || field.full_key || fieldKey || '');
+                if (!configFieldKey || configFieldKey.indexOf('_') === 0) {
+                    return;
+                }
                 var wrap = document.createElement('div');
                 wrap.className = 'mb-3';
                 var label = document.createElement('label');
@@ -4983,10 +5050,10 @@
 
                 input.className = 'form-control';
                 input.id = 'pb-ai-edit-field-' + fieldKey.replace(/[^a-zA-Z0-9_-]/g, '-');
-                input.setAttribute('data-field-key', fieldKey);
+                input.setAttribute('data-field-key', configFieldKey);
                 input.setAttribute('data-field-type', fieldType);
                 input.setAttribute('data-field-format', String(field.format || ''));
-                input.value = fieldValueToText(fieldKey, field, blockConfig);
+                input.value = fieldValueToText(configFieldKey, field, blockConfig);
                 wrap.appendChild(input);
                 card.appendChild(wrap);
             });
@@ -5009,6 +5076,221 @@
             config[fieldKey] = parseFieldValue(fieldDef, input.value);
         });
         return config;
+    }
+
+    function findBlockEditorFieldInput(fieldKey) {
+        var target = String(fieldKey || '');
+        var inputs = document.querySelectorAll('#pb-ai-edit-block-fields [data-field-key]');
+        for (var i = 0; i < inputs.length; i += 1) {
+            if (String(inputs[i].getAttribute('data-field-key') || '') === target) {
+                return inputs[i];
+            }
+        }
+        return null;
+    }
+
+    function blockEditorTerminalLog(text, type) {
+        var content = document.getElementById('pb-ai-edit-block-terminal-content');
+        if (!content) {
+            return;
+        }
+        var line = document.createElement('div');
+        line.className = 'weline-sse-terminal-line ' + String(type || 'info');
+        line.style.marginBottom = '6px';
+        line.innerHTML = '<span style="opacity:0.55; margin-right:8px;">['
+            + new Date().toLocaleTimeString('zh-CN', { hour12: false })
+            + ']</span><span>'
+            + escapeHtml(String(text || ''))
+            + '</span>';
+        content.appendChild(line);
+        if (content.parentElement) {
+            content.parentElement.scrollTop = content.parentElement.scrollHeight;
+        }
+    }
+
+    function blockEditorTerminalSetStatus(text) {
+        var status = document.getElementById('pb-ai-edit-block-terminal-status');
+        if (status) {
+            status.textContent = String(text || '');
+        }
+    }
+
+    function applyBlockEditorGeneratedConfig(data) {
+        var filledCount = 0;
+        Object.keys(data || {}).forEach(function (key) {
+            if (!key || key.indexOf('_') === 0) {
+                return;
+            }
+            var input = findBlockEditorFieldInput(key);
+            if (!input) {
+                return;
+            }
+            var fieldDef = {
+                type: String(input.getAttribute('data-field-type') || 'text'),
+                format: String(input.getAttribute('data-field-format') || '')
+            };
+            var tmpConfig = {};
+            tmpConfig[key] = data[key];
+            input.value = fieldValueToText(key, fieldDef, tmpConfig);
+            input.style.borderColor = '#2563eb';
+            input.style.boxShadow = '0 0 0 2px rgba(37,99,235,0.18)';
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            window.setTimeout(function () {
+                input.style.borderColor = '';
+                input.style.boxShadow = '';
+            }, 1600);
+            filledCount++;
+        });
+        if (filledCount > 0) {
+            toast('success', <?= \json_encode((string)__('AI 已生成区块字段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+        }
+    }
+
+    async function submitBlockEditorAiGenerate() {
+        var aiBtn = document.getElementById('pb-ai-edit-block-generate-btn');
+        var content = document.getElementById('pb-ai-edit-block-terminal-content');
+        var aiPromptEl = document.getElementById('pb-ai-edit-block-ai-prompt');
+        if (!componentConfigStreamUrl || !blockEditorState.pageType || !blockEditorState.blockId) {
+            toast('error', messages.editUnavailable);
+            return;
+        }
+        var originalHtml = aiBtn ? aiBtn.innerHTML : '';
+        if (aiBtn) {
+            aiBtn.disabled = true;
+            aiBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> ' + <?= \json_encode((string)__('生成中...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        }
+        if (content) {
+            content.innerHTML = '';
+        }
+        blockEditorTerminalLog(<?= \json_encode((string)__('连接中...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'info');
+        blockEditorTerminalSetStatus(<?= \json_encode((string)__('连接中...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+
+        function restoreAiButton() {
+            if (aiBtn) {
+                aiBtn.disabled = false;
+                aiBtn.innerHTML = originalHtml;
+            }
+            blockEditorTerminalSetStatus(<?= \json_encode((string)__('已断开'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+        }
+
+        try {
+            var aiPromptValue = aiPromptEl && aiPromptEl.value ? String(aiPromptEl.value).trim() : '';
+            var promptSaveConfig = serializeBlockEditorConfig();
+            promptSaveConfig._ai_prompt = aiPromptValue;
+            if (updateBlockConfigUrl) {
+                try {
+                    await postForm(updateBlockConfigUrl, {
+                        public_id: publicId,
+                        page_type: blockEditorState.pageType,
+                        block_id: blockEditorState.blockId,
+                        block_config: JSON.stringify(promptSaveConfig)
+                    });
+                } catch (savePromptError) {
+                }
+            }
+
+            var pageState = getVirtualPageState(blockEditorState.pageType) || {};
+            var styleCode = String(pageState.style_code || 'default').trim() || 'default';
+            var formData = new FormData();
+            formData.append('public_id', publicId);
+            formData.append('page_type', blockEditorState.pageType);
+            formData.append('style_code', styleCode);
+            formData.append('component_code', blockEditorState.blockId);
+            formData.append('region', blockEditorState.blockRegion || 'content');
+            formData.append('index', String(blockEditorState.blockIndex || 0));
+            formData.append('ai_prompt', aiPromptValue);
+
+            var response = await fetch(componentConfigStreamUrl, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'text/event-stream'
+                },
+                credentials: 'same-origin',
+                body: formData
+            });
+            if (!response.ok) {
+                throw new Error(response.statusText || <?= \json_encode((string)__('请求失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+            }
+            if (!response.body) {
+                throw new Error(<?= \json_encode((string)__('当前环境不支持流式响应'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+            }
+
+            var reader = response.body.getReader();
+            var decoder = new TextDecoder();
+            var buffer = '';
+            var completed = false;
+
+            function handleEvent(eventName, eventData) {
+                var payload = {};
+                try {
+                    payload = eventData ? JSON.parse(eventData) : {};
+                } catch (parseError) {
+                    payload = {};
+                }
+                if (eventName === 'start' || eventName === 'progress') {
+                    if (payload.message) {
+                        blockEditorTerminalLog(payload.message, eventName);
+                        blockEditorTerminalSetStatus(<?= \json_encode((string)__('已连接'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+                    }
+                } else if (eventName === 'context' && payload.display_text) {
+                    blockEditorTerminalLog(payload.display_text, 'info');
+                } else if (eventName === 'prompt' && payload.prompt) {
+                    blockEditorTerminalLog(payload.prompt, 'info');
+                } else if (eventName === 'thinking' || eventName === 'chunk') {
+                    if (payload.content) {
+                        blockEditorTerminalLog(payload.content, eventName === 'thinking' ? 'progress' : 'info');
+                    }
+                } else if (eventName === 'done') {
+                    completed = true;
+                    applyBlockEditorGeneratedConfig(payload.data || payload);
+                    blockEditorTerminalLog(<?= \json_encode((string)__('生成完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'done');
+                    restoreAiButton();
+                } else if (eventName === 'error') {
+                    completed = true;
+                    restoreAiButton();
+                    throw new Error(String(payload.message || <?= \json_encode((string)__('生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>));
+                }
+            }
+
+            while (true) {
+                var readResult = await reader.read();
+                if (readResult && readResult.value) {
+                    buffer += decoder.decode(readResult.value, { stream: true });
+                } else if (readResult && readResult.done) {
+                    buffer += decoder.decode();
+                }
+                buffer = buffer.replace(/\r\n/g, '\n');
+                var parts = buffer.split('\n\n');
+                buffer = parts.pop() || '';
+                parts.forEach(function (part) {
+                    var eventName = '';
+                    var eventData = '';
+                    part.split('\n').forEach(function (line) {
+                        if (line.indexOf('event:') === 0) {
+                            eventName = line.replace(/^event:\s*/, '').trim();
+                        } else if (line.indexOf('data:') === 0) {
+                            var dataLine = line.replace(/^data:\s*/, '');
+                            eventData = eventData ? (eventData + '\n' + dataLine) : dataLine;
+                        }
+                    });
+                    if (eventName) {
+                        handleEvent(eventName, eventData);
+                    }
+                });
+                if (readResult && readResult.done) {
+                    break;
+                }
+            }
+            if (!completed) {
+                restoreAiButton();
+            }
+        } catch (error) {
+            restoreAiButton();
+            blockEditorTerminalLog(String((error && error.message) || <?= \json_encode((string)__('生成请求失败，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>), 'error');
+            toast('error', String((error && error.message) || <?= \json_encode((string)__('生成请求失败，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>));
+        }
     }
 
     function replaceCurrentBlockHtml(pageType, block) {
@@ -6073,6 +6355,8 @@
         blockEditorState.blockId = blockId;
         blockEditorState.blockType = String(block.type || '');
         blockEditorState.blockLabel = buildComponentLabel(payload);
+        blockEditorState.blockRegion = String((payload && payload.region) || '');
+        blockEditorState.blockIndex = parseInt(String((payload && payload.index) || '0'), 10) || 0;
         blockEditorState.blockConfig = cloneJson(block.config || {});
         blockEditorState.fieldSchema = cloneJson(block.field_schema || {});
         contextEl.textContent = buildBlockContextText(pageType, blockEditorState.blockLabel, blockId);
