@@ -22,9 +22,11 @@ class AiSitePageComponentGenerationService
     private const REQUEST_CTX_AI_CHUNK_FORWARDER = 'pagebuilder.ai.chunk.forwarder';
     public const REQUEST_KEY_FORCE_REAL_AI_IN_TEST = 'pagebuilder.ai.force_real_in_test';
     public const REQUEST_KEY_ALLOW_STUB_AI_IN_TEST = 'pagebuilder.ai.allow_stub_in_test';
-    private const JSON_REPAIR_MAX_ATTEMPTS = 3;
+    /** AI 结构修复（requestJsonRepair）轮次；0 表示解析失败后不再自动调用 AI。 */
+    private const JSON_REPAIR_MAX_ATTEMPTS = 0;
     private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
-    private const COMPONENT_GENERATION_MAX_ATTEMPTS = 2;
+    /** 单组件仅允许一次完整 AI 生成；失败入账「可重试失败项」，由用户手动触发重试。 */
+    private const COMPONENT_GENERATION_MAX_ATTEMPTS = 1;
     // 临时旁路：先跳过主观低质量文案门禁以解除卡在反复校验重试的问题；硬性语言/泄漏守卫仍执行。
     private const SKIP_COMPONENT_QUALITY_VALIDATION = true;
     private const ENABLE_CLAUDE_DESIGN_POLISH_PASS = true;
@@ -723,24 +725,10 @@ class AiSitePageComponentGenerationService
                     'result' => $artifact,
                 ];
             } catch (\Throwable $primary) {
-                try {
-                    yield $componentKey => [
-                        'status' => 'fulfilled',
-                        'result' => $this->generateComponent(
-                            (string)($spec['componentCode'] ?? ''),
-                            (string)($spec['name'] ?? ''),
-                            $region,
-                            (string)($spec['prompt'] ?? ''),
-                            \is_array($spec['defaultConfig'] ?? null) ? $spec['defaultConfig'] : [],
-                            \is_array($spec['renderContext'] ?? null) ? $spec['renderContext'] : [],
-                        ),
-                    ];
-                } catch (\Throwable $fallback) {
-                    yield $componentKey => [
-                        'status' => 'rejected',
-                        'error' => $fallback instanceof \Throwable ? $fallback : $primary,
-                    ];
-                }
+                yield $componentKey => [
+                    'status' => 'rejected',
+                    'error' => $primary,
+                ];
             }
         }
     }
@@ -760,8 +748,6 @@ class AiSitePageComponentGenerationService
      */
     public function generateSharedComponentsConcurrently(array $websiteProfile, array $scope): array
     {
-        $siteDisplayName = $this->getPageBlueprintService()->resolveSiteDisplayName($websiteProfile, $scope);
-        $footerConfig = $this->buildFooterDefaultConfig($websiteProfile, $scope, $siteDisplayName);
         $components = $this->buildSharedComponentGenerationSpecs($websiteProfile, $scope);
 
         $result = ['header' => null, 'footer' => null];
@@ -776,17 +762,12 @@ class AiSitePageComponentGenerationService
                 : new \RuntimeException('Unknown shared component generation error.');
         }
 
-        // Footer 是 build 阶段关键共享块：失败时先重试，再走保底组件，避免整站无 footer。
         if (!\is_array($result['footer'] ?? null)) {
             $footerError = $errors['footer'] ?? null;
-            $result['footer'] = $this->recoverSharedFooterComponent(
-                $websiteProfile,
-                $scope,
-                $siteDisplayName,
-                $footerConfig,
-                $components['footer'],
-                $footerError
-            );
+            if ($footerError instanceof \Throwable) {
+                throw new \RuntimeException('Shared footer generation failed: ' . $this->summarizeThrowable($footerError), 0, $footerError);
+            }
+            throw new \RuntimeException('Shared footer generation failed without a throwable.');
         }
 
         if (!\is_array($result['header'] ?? null)) {
@@ -2241,25 +2222,12 @@ class AiSitePageComponentGenerationService
             return $this->normalizeComponentPayload($partialPayload);
         }
 
-        if (!$this->isRetryableAiStreamTransportFailure($streamThrowable)) {
-            throw $streamThrowable;
-        }
-
-        $streamReason = $this->summarizeThrowable($streamThrowable);
-        $this->emitComponentStreamFallbackNotice($region, $streamReason);
-
-        try {
-            return $this->runAiGenerationWithoutStream($region, $prompt);
-        } catch (\Throwable $fallbackThrowable) {
-            throw new \RuntimeException(
-                'AI stream failed and non-stream fallback also failed: '
-                . $this->summarizeThrowable($fallbackThrowable)
-                . '; stream failure: '
-                . $streamReason,
-                0,
-                $fallbackThrowable
-            );
-        }
+        throw new \RuntimeException(
+            'AI component stream failed (automatic non-stream recovery disabled): '
+            . $this->summarizeThrowable($streamThrowable),
+            0,
+            $streamThrowable
+        );
     }
 
     /**
@@ -2278,31 +2246,6 @@ class AiSitePageComponentGenerationService
         }
 
         return \is_array($decoded) ? $decoded : null;
-    }
-
-    /**
-     * @return array<string,mixed>
-     */
-    private function runAiGenerationWithoutStream(string $region, string $prompt): array
-    {
-        $guardedPrompt = $this->prependComponentJsonOnlyGuard($prompt, true);
-        $response = $this->callAiOperation('generate', [
-            'prompt' => $guardedPrompt,
-            'scenario_code' => 'pagebuilder_component_generation',
-            'params' => $this->buildAiRuntimeParams([
-                'allow_zero_balance_provider' => true,
-                'temperature' => 0.35,
-                'max_tokens' => 4096,
-                'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
-                'response_format' => ['type' => 'json_object'],
-            ]),
-        ]);
-
-        return $this->decodeAndNormalizeComponentContent(
-            \is_string($response) ? $response : '',
-            $region,
-            'AI non-stream fallback did not return a valid component JSON payload'
-        );
     }
 
     /**
@@ -2384,69 +2327,6 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * @param array<string,mixed> $footerSpec
-     * @return array<string,mixed>
-     */
-    private function recoverSharedFooterComponent(
-        array $websiteProfile,
-        array $scope,
-        string $siteDisplayName,
-        array $footerConfig,
-        array $footerSpec,
-        ?\Throwable $footerError
-    ): array {
-        try {
-            return $this->generateComponent(
-                (string)($footerSpec['componentCode'] ?? 'footer/ai-site-footer'),
-                (string)($footerSpec['name'] ?? 'AI Site Footer'),
-                'footer',
-                (string)($footerSpec['prompt'] ?? $this->buildFooterGenerationPrompt($websiteProfile, $scope, $siteDisplayName, $footerConfig))
-                    . "\nCritical fallback requirement: this retry must output a complete visible footer component; do not return empty groups or hidden footer wrappers.",
-                \is_array($footerSpec['defaultConfig'] ?? null) ? $footerSpec['defaultConfig'] : $footerConfig,
-                \is_array($footerSpec['renderContext'] ?? null) ? $footerSpec['renderContext'] : $this->buildRenderContext(Page::TYPE_HOME, $websiteProfile, $scope, $footerConfig)
-            );
-        } catch (\Throwable $retryError) {
-            \w_log_warning('[AI Site Footer Recovery] retry failed: ' . $this->summarizeThrowable($retryError));
-        }
-
-        $componentCode = (string)($footerSpec['componentCode'] ?? 'footer/ai-site-footer');
-        $name = (string)($footerSpec['name'] ?? 'AI Site Footer');
-        $prompt = (string)($footerSpec['prompt'] ?? '');
-        $renderContext = \is_array($footerSpec['renderContext'] ?? null)
-            ? $footerSpec['renderContext']
-            : $this->buildRenderContext(Page::TYPE_HOME, $websiteProfile, $scope, $footerConfig);
-        $aiData = $this->ensureAiPayloadValid(
-            $this->buildStubAiPayload('footer', $prompt, $footerConfig, $renderContext),
-            'footer',
-            $componentCode
-        );
-        $componentInfo = [
-            'name' => $name,
-            'name_en' => $name,
-            'description' => $prompt,
-        ];
-        $phtml = $this->getFrameworkBuilder()->buildComponent('footer', $componentInfo, $aiData);
-        $syntaxCheck = $this->getCodeValidator()->checkSyntax($phtml);
-        if (empty($syntaxCheck['valid'])) {
-            $phtml = $this->attemptSyntaxFix($phtml, 'footer', $componentInfo, $aiData, $syntaxCheck);
-        }
-        $html = $this->renderTemplateToHtml($phtml, $footerConfig, $renderContext);
-
-        \w_log_warning('[AI Site Footer Recovery] deterministic fallback footer emitted'
-            . ($footerError ? ('; original error: ' . $this->summarizeThrowable($footerError)) : ''));
-
-        return [
-            'code' => $componentCode,
-            'name' => $name,
-            'region' => 'footer',
-            'phtml' => $phtml,
-            'html' => $html,
-            'default_config' => $footerConfig,
-            'ai_data' => $aiData,
-        ];
-    }
-
-    /**
      * @return array<string,mixed>
      */
     private function decodeAndNormalizeComponentContent(string $content, string $region, string $message): array
@@ -2457,57 +2337,6 @@ class AiSitePageComponentGenerationService
         }
 
         return $this->normalizeComponentPayload($payload);
-    }
-
-    private function isRetryableAiStreamTransportFailure(\Throwable $throwable): bool
-    {
-        if (!$this->shouldRetryComponentGeneration($throwable)) {
-            return false;
-        }
-
-        $message = \strtolower($this->collectThrowableMessages($throwable));
-        foreach ([
-            'http 401',
-            'http 402',
-            'http 403',
-            'api key',
-            'insufficient balance',
-            'quota',
-        ] as $nonRetryableMarker) {
-            if (\str_contains($message, $nonRetryableMarker)) {
-                return false;
-            }
-        }
-
-        foreach ([
-            'reasoning_content only',
-            'without final content',
-            'tls connect error',
-            'ssl routines',
-            'unexpected eof',
-            'eof while reading',
-            'curl error 35',
-            'curl error 56',
-            'connection reset',
-            'connection refused',
-            'connection aborted',
-            'empty reply',
-            'operation timed out',
-            'timeout was reached',
-            'timed out',
-            'network is unreachable',
-            'could not resolve host',
-            'failed to connect',
-            'stream ended early',
-            'upstream stream',
-            'peer closed',
-        ] as $transportMarker) {
-            if (\str_contains($message, $transportMarker)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private function prependComponentJsonOnlyGuard(string $prompt, bool $retry): string
@@ -2539,7 +2368,7 @@ class AiSitePageComponentGenerationService
 
     private function emitComponentStreamFallbackNotice(string $region, string $reason): void
     {
-        $message = 'AI component stream interrupted; switching to non-stream recovery: ' . $this->clipText($reason, 180);
+        $message = $this->clipText($reason, 220);
 
         $chunkForwarder = RequestContext::get(self::REQUEST_CTX_AI_CHUNK_FORWARDER);
         if (\is_callable($chunkForwarder)) {
@@ -2710,6 +2539,10 @@ class AiSitePageComponentGenerationService
                 (string)__('本地解析与修复成功，已得到有效组件 JSON。')
             );
             return $decoded;
+        }
+
+        if (self::JSON_REPAIR_MAX_ATTEMPTS <= 0) {
+            return null;
         }
 
         $this->emitJsonRepairChunk(
