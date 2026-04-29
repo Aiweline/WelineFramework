@@ -1044,7 +1044,7 @@ class Dispatcher
             return;
         }
 
-        if ($version <= 0 || $version < $this->lastAppliedWorkerPoolSnapshotVersion) {
+        if ($version <= 0 || $version <= $this->lastAppliedWorkerPoolSnapshotVersion) {
             return;
         }
 
@@ -1745,6 +1745,20 @@ class Dispatcher
         $instData = @\json_decode(\file_get_contents($instanceFile), true);
         $masterPid = (int) ($instData['master_pid'] ?? 0);
         $masterEnabled = (bool) ($instData['master_enabled'] ?? false);
+        $expectedControlPort = (int) ($instData['control_port'] ?? 0);
+        $expectedDispatcherPort = (int) ($instData['dispatcher_port'] ?? 0);
+
+        if (($expectedControlPort > 0 && $this->controlPort > 0 && $expectedControlPort !== $this->controlPort)
+            || ($expectedDispatcherPort > 0 && $this->port > 0 && $expectedDispatcherPort !== $this->port)
+        ) {
+            $this->log(
+                "Dispatcher runtime mismatch with instance file, self-exiting"
+                . " (control={$this->controlPort}/{$expectedControlPort}, port={$this->port}/{$expectedDispatcherPort})",
+                'ERROR'
+            );
+            $this->running = false;
+            return;
+        }
         
         if (!($masterEnabled && $masterPid > 0)) {
             return;

@@ -634,7 +634,7 @@ class OpenAiProvider implements ProviderInterface
         );
 
         if (empty(trim($fullContent))) {
-            $fallbackContent = $this->resolveReasoningOnlyFallbackContent($fullReasoning, $params);
+            $fallbackContent = $this->resolveReasoningOnlyFallbackContent($fullReasoning, $params, $prompt);
             if ($fallbackContent !== null) {
                 $fullContent = $fallbackContent;
             }
@@ -974,23 +974,58 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
+     * 模型只返回 reasoning_content（思维链）而没有最终 content 时的兜底逻辑：
+     *  - response_format=json_object 时直接尝试从 reasoning 中提取 JSON 对象
+     *  - 即便未显式要求 json_object，只要 prompt 里明显写了"JSON / 返回 JSON / json_object"
+     *    等结构化要求，也尝试按 JSON 兜底；这能覆盖 ContentGenerationAdapter / 类似 Adapter
+     *    在 prompt 末尾追加"必须返回有效的JSON格式数据"的场景，避免 deepseek-v4-pro 等模型
+     *    在 thinking 协议下"只产出思维链"导致前端"无响应"。
+     *
      * @param array<string, mixed> $params
      */
-    private function resolveReasoningOnlyFallbackContent(string $reasoningContent, array $params): ?string
+    private function resolveReasoningOnlyFallbackContent(string $reasoningContent, array $params, string $prompt = ''): ?string
     {
         if (\trim($reasoningContent) === '') {
             return null;
         }
 
-        $responseFormat = $params['response_format'] ?? null;
-        if (
-            !\is_array($responseFormat)
-            || \strtolower(\trim((string)($responseFormat['type'] ?? ''))) !== 'json_object'
-        ) {
+        if (!$this->shouldAttemptReasoningJsonFallback($params, $prompt)) {
             return null;
         }
 
         return $this->extractJsonObjectFromReasoningContent($reasoningContent);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function shouldAttemptReasoningJsonFallback(array $params, string $prompt): bool
+    {
+        $responseFormat = $params['response_format'] ?? null;
+        if (
+            \is_array($responseFormat)
+            && \strtolower(\trim((string)($responseFormat['type'] ?? ''))) === 'json_object'
+        ) {
+            return true;
+        }
+
+        $promptLower = \strtolower($prompt);
+        if ($promptLower === '') {
+            return false;
+        }
+
+        // 命中明显的 JSON 格式约束才放行兜底，避免对纯文本任务做 JSON 误提取。
+        return \str_contains($promptLower, 'json_object')
+            || \str_contains($promptLower, 'response_format')
+            || \str_contains($promptLower, 'return json')
+            || \str_contains($promptLower, 'return a json')
+            || \str_contains($promptLower, 'valid json')
+            || \str_contains($promptLower, '返回json')
+            || \str_contains($promptLower, '返回 json')
+            || \str_contains($promptLower, '必须返回有效的json')
+            || \str_contains($promptLower, '必须返回有效的 json')
+            || \str_contains($promptLower, 'json格式数据')
+            || \str_contains($promptLower, 'json 格式数据');
     }
 
     private function extractJsonObjectFromReasoningContent(string $reasoningContent): ?string

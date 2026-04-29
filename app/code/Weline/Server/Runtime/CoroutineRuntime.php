@@ -8,6 +8,8 @@ use Weline\Server\Scheduler\FiberScheduler;
 
 final class CoroutineRuntime
 {
+    private const MIN_READY_TIMER_WAIT_USEC = 1000;
+
     public function __construct(
         private readonly EventLoopInterface $loop,
         private readonly FiberScheduler $scheduler
@@ -24,7 +26,10 @@ final class CoroutineRuntime
         $timeoutUsec = $defaultUsec;
         $nextDelay = $this->scheduler->getNextTimerDelay();
         if ($nextDelay !== null) {
-            $delayUsec = (int) ($nextDelay * 1_000_000);
+            $delayUsec = (int) \ceil($nextDelay * 1_000_000);
+            if ($delayUsec < self::MIN_READY_TIMER_WAIT_USEC && $defaultUsec > 0) {
+                $delayUsec = \min($defaultUsec, self::MIN_READY_TIMER_WAIT_USEC);
+            }
             if ($delayUsec < $timeoutUsec) {
                 $timeoutUsec = \max(0, $delayUsec);
             }

@@ -163,6 +163,29 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringNotContainsString('confirmCurrentTaskPlanAndMaybeBuild(currentPlanTriggerButton, currentPlanSelection);', $bindBody);
     }
 
+    public function testRetryableAiFailuresExposeManualContinueButtonsForAllStages(): void
+    {
+        $layout = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
+        self::assertIsString($layout);
+        self::assertStringContainsString('id="pb-ai-retry-plan-failures"', $layout);
+        self::assertStringContainsString('id="pb-ai-retry-task-plan-failures"', $layout);
+        self::assertStringContainsString('id="pb-ai-retry-build-failures"', $layout);
+        self::assertStringContainsString('data-retryable-ai-operation="plan"', $layout);
+        self::assertStringContainsString('data-retryable-ai-operation="task_plan"', $layout);
+        self::assertStringContainsString('data-retryable-ai-operation="build"', $layout);
+
+        $script = $this->workspaceScript();
+        $syncButtonsBody = $this->extractFunctionBody($script, 'syncRetryableAiFailureButtons');
+        self::assertStringContainsString("syncRetryableAiFailureButton('pb-ai-retry-plan-failures', 'plan', state)", $syncButtonsBody);
+        self::assertStringContainsString("syncRetryableAiFailureButton('pb-ai-retry-task-plan-failures', 'task_plan', state)", $syncButtonsBody);
+        self::assertStringContainsString("syncRetryableAiFailureButton('pb-ai-retry-build-failures', 'build', state)", $syncButtonsBody);
+
+        $bindRetryBody = $this->extractFunctionBody($script, 'bindRetryableAiFailureButtons');
+        self::assertStringContainsString('api.retryPhaseOnePlanGeneration({ forceRebuild: false });', $bindRetryBody);
+        self::assertStringContainsString('api.retryPhaseTwoTaskPlanGeneration({ forceRebuild: false });', $bindRetryBody);
+        self::assertStringContainsString('startPublishStageQualityRepair(buildRetryBtn);', $bindRetryBody);
+    }
+
     public function testPublishStageStillKeepsPublishControlsAfterRemovingAiQualityRepairEntry(): void
     {
         $layout = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
@@ -190,10 +213,9 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('bindPublishRepairButton();', $bindBody);
         self::assertStringContainsString('bindPublishRepairButton();', $visualEditBindBody);
         $publishRepairBindBody = $this->extractFunctionBody($script, 'bindPublishRepairButton');
-        self::assertStringContainsString("var publishRepairBtn = document.getElementById('pb-ai-rebuild-publish-quality');", $publishRepairBindBody);
-        self::assertStringContainsString('startPublishStageQualityRepair(publishRepairBtn);', $publishRepairBindBody);
-        self::assertStringContainsString("document.getElementById('pb-ai-rebuild-publish-quality')", $syncBody);
-        self::assertStringContainsString('isPublishRepairOperationLocked()', $syncBody);
+        self::assertStringContainsString('bindRetryableAiFailureButtons();', $publishRepairBindBody);
+        self::assertStringContainsString('syncRetryableAiFailureButtons(latestWorkspaceState || initialWorkspaceState || {});', $syncBody);
+        self::assertStringNotContainsString("document.getElementById('pb-ai-rebuild-publish-quality')", $syncBody);
         self::assertStringContainsString('isOperationRunning = false;', $terminalBody);
         self::assertStringContainsString('isPublishBlockingOperationName(normalizedOperation)', $terminalBody);
         self::assertStringContainsString("previousOperation === 'build'", $terminalBody);

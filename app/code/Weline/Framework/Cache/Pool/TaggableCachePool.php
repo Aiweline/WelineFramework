@@ -34,9 +34,10 @@ class TaggableCachePool extends CachePool implements TaggableInterface
         string $tip = '',
         bool $permanent = false,
         int $defaultTtl = 1800,
-        bool $enabled = true
+        bool $enabled = true,
+        float $jitterRatio = 0.0
     ) {
-        parent::__construct($identity, $adapter, $tip, $permanent, $defaultTtl, $enabled);
+        parent::__construct($identity, $adapter, $tip, $permanent, $defaultTtl, $enabled, $jitterRatio);
     }
 
     public function setWithTags(string $key, mixed $value, array $tags, int $ttl = 0): bool

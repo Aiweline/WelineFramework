@@ -250,6 +250,7 @@ final class AiSiteVirtualThemePlanService
                 'batch_type' => (string)($batch['type'] ?? ''),
                 'batch_key' => (string)($batch['key'] ?? ''),
                 'block_key' => (string)($batch['block_key'] ?? ''),
+                'task_keys' => \array_values(\array_filter(\array_map('strval', \is_array($batch['task_keys'] ?? null) ? $batch['task_keys'] : []))),
                 'batch_index' => $batchIndex + 1,
                 'total_batches' => $totalBatches,
                 'completed_batches' => $completedBatches,

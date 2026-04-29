@@ -203,6 +203,44 @@ class OpenAiProviderJsonResponseFormatTest extends TestCase
         $this->assertNull($result);
     }
 
+    /**
+     * 即便没有显式 response_format=json_object，只要 prompt 明确写了"必须返回有效的 JSON"
+     * 等结构化要求（典型如 PageBuilder ContentGenerationAdapter 自动追加的指令），
+     * 也应当尝试从 reasoning_content 中提取 JSON 兜底，避免 deepseek-v4-pro 等模型
+     * 在 thinking 协议下"只返回思维链"导致前端"无响应"。
+     */
+    public function testResolveReasoningOnlyFallbackContentExtractsJsonFromPromptDrivenJsonRequirement(): void
+    {
+        $provider = new OpenAiProvider();
+        $method = new \ReflectionMethod($provider, 'resolveReasoningOnlyFallbackContent');
+        $method->setAccessible(true);
+
+        $result = $method->invoke(
+            $provider,
+            "我在思考...\n```json\n{\"texts.title\":\"hello\"}\n```\nDone.",
+            [],
+            "请生成组件配置。\n\n重要提示：\n1. 必须返回有效的JSON格式数据\n"
+        );
+
+        $this->assertSame('{"texts.title":"hello"}', $result);
+    }
+
+    public function testResolveReasoningOnlyFallbackContentDoesNotMisExtractJsonForPlainTextPrompts(): void
+    {
+        $provider = new OpenAiProvider();
+        $method = new \ReflectionMethod($provider, 'resolveReasoningOnlyFallbackContent');
+        $method->setAccessible(true);
+
+        $result = $method->invoke(
+            $provider,
+            "Random thought {x} not really json.",
+            [],
+            'Tell me a casual story about a cat.'
+        );
+
+        $this->assertNull($result);
+    }
+
     public function testBuildChatCompletionRequestDataSendsReasoningEffortForCodexModel(): void
     {
         $provider = new OpenAiProvider();
