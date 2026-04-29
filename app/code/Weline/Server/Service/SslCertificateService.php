@@ -3580,6 +3580,7 @@ CNF;
      * @param string $challengeStrategy 验证策略: auto|http01|dns01。auto 时若端口非80则自动用 dns01
      * @param int $poolId 域名池 ID（DNS-01 时用于解析 DNS 账户）
      * @param int $domainId 根域名 ID（DNS-01 时用于解析 DNS 账户）
+     * @param bool $forceReissue true 时即使本地已有未过期证书也强制执行 ACME
      * @param callable|null $onProgress 进度回调 function(string $message, array $extra=[])，用于 SSE 等实时展示
      * @return array ['success' => bool, 'message' => string, 'cert' => SslCertificate|null]
      */
@@ -3592,6 +3593,7 @@ CNF;
         string $challengeStrategy = self::CHALLENGE_AUTO,
         int $poolId = 0,
         int $domainId = 0,
+        bool $forceReissue = false,
         ?\Closure $onProgress = null
     ): array
     {
@@ -3661,7 +3663,7 @@ CNF;
             $chainPath = $certDir . 'chain.pem';
 
             // 3.5 若证书目录已有未过期证书，跳过申请，直接同步记录并返回
-            if ($this->isCertificateValid($certPath) && \is_file($keyPath)) {
+            if (!$forceReissue && $this->isCertificateValid($certPath) && \is_file($keyPath)) {
                 if ($onProgress) {
                     $onProgress((string) __('已存在未过期证书，跳过申请'), ['step' => 'skip_acme']);
                     $onProgress((string) __('证书存储位置：%{1}', [$certDir]), ['cert_dir' => $certDir]);
