@@ -152,4 +152,25 @@ final class WlsRuntimePendingResponseStatusTest extends TestCase
         self::assertSame('text/event-stream; charset=utf-8', $headers['Content-Type'] ?? null);
         self::assertTrue((bool)($status['sse_started'] ?? false));
     }
+
+    public function testSnapshotPendingResponseStateOverwritesConflictingContentTypeWhenSseStarted(): void
+    {
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        RequestContext::init();
+        RequestContext::set(RequestContext::SSE_WRITER_KEY, true);
+
+        $runtime = new class extends WlsRuntime {
+            public function capture(HeaderCollector $collector): void
+            {
+                $this->snapshotPendingResponseState($collector);
+            }
+        };
+
+        $collector = HeaderCollector::getInstance();
+        $collector->setHeader('Content-Type', 'text/plain; charset=utf-8');
+        $runtime->capture($collector);
+
+        $headers = $runtime->consumePendingHeaders();
+        self::assertSame('text/event-stream; charset=utf-8', $headers['Content-Type'] ?? null);
+    }
 }
