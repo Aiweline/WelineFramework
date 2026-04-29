@@ -4855,7 +4855,7 @@ SCRIPT;
                 }
                 $sse->maybeHeartbeat();
             };
-            $maxAttempts = 3;
+            $maxAttempts = 1;
             $attempt = 0;
             $artifacts = [];
             $lastAttemptThrowable = null;

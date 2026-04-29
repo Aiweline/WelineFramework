@@ -468,7 +468,7 @@ class AiGenerate extends BackendController
                     null,
                     'pagebuilder_content_generation',
                     $locale,
-                    []
+                    $this->withStructuredJsonStreamParams()
                 );
                 if ($chunkBuffer !== '') {
                     $this->flushSseChunkBuffer($sse, $chunkBuffer, \strlen($fullContent), true);
@@ -796,6 +796,7 @@ class AiGenerate extends BackendController
      * - start: 开始
      * - progress: 进度消息
      * - chunk: AI 逐块返回内容（content、total_length）
+     * - thinking: 模型推理/思考过程逐块（content、total_length），仅当供应商流式返回 reasoning 时有数据
      * - done: 成功，data 为解析后的配置 JSON
      * - error: 失败，message 为错误信息
      */
@@ -920,6 +921,7 @@ class AiGenerate extends BackendController
             $locale = $pageLocale !== '' ? $pageLocale : (State::getLang() ?: 'zh_Hans_CN');
             $fullContent = '';
             $chunkBuffer = '';
+            $thinkingBuffer = '';
             $streamError = null;
             $chunkCount = 0;
             $traceSteps = [];
@@ -943,7 +945,20 @@ class AiGenerate extends BackendController
                     null,
                     'pagebuilder_content_generation',
                     $locale,
-                    ['component_meta_text_configs' => $textConfigs] // 供适配器按 meta 提取格式与条数
+                    $this->withStructuredJsonStreamParams([
+                        'component_meta_text_configs' => $textConfigs, // 供适配器按 meta 提取格式与条数
+                        'reasoning_callback' => function (string $rChunk) use ($sse, &$thinkingBuffer): bool {
+                            if ($rChunk === '') {
+                                return $sse->isAlive();
+                            }
+                            $thinkingBuffer .= $rChunk;
+                            $sse->sendEvent('thinking', [
+                                'content' => $rChunk,
+                                'total_length' => \strlen($thinkingBuffer),
+                            ]);
+                            return $sse->isAlive();
+                        },
+                    ], true)
                 );
                 if ($chunkBuffer !== '') {
                     $chunkCount++;
@@ -2255,6 +2270,51 @@ class AiGenerate extends BackendController
     }
 
     /**
+     * 强制以结构化 JSON 模式调用 AiService::generateStream 的参数。
+     *
+     * 必要性：
+     * - 队列运行时（AiSitePlanQueue / AiSiteTaskPlanQueue / AiSiteBuildQueue）会通过
+     *   AiRuntimeContext::setDefaultParams() 注入 thinking_mode 默认参数；该默认参数
+     *   会随着 RequestContext 在同 Worker 内被合入后续 generateStream 调用。
+     * - DeepSeek V4 / GLM / Claude 等模型在 thinking 协议下，若未显式 disable，
+     *   只会返回 reasoning_content（思维链）而不返回最终 content，OpenAiProvider
+     *   的 reasoning-only 兜底又仅在 response_format=json_object 时生效，因此结构化
+     *   JSON 类的同步流式 endpoint（component-config-stream / page-content-stream /
+     *   component-stream）必须显式锁定结构化 JSON + 关闭 thinking。
+     * - 这里使用 array_replace 让结构化锁定覆盖调用方旧值，避免历史调用方意外打开
+     *   reasoning，从而触发"无响应"故障。
+     * - component-config-stream 等若需通过 SSE 推送 reasoning_callback（思考过程），可传入
+     *   `$allowThinkingStream=true`：仍强制 json_object，但不禁用 thinking，以便供应商同时流式
+     *   返回 reasoning 与最终 content。
+     *
+     * @param array<string, mixed> $callerParams generateStream 的 params 入参
+     * @param bool $allowThinkingStream 为 true 时不合并禁用 thinking 的参数，也不剔除 reasoning_effort / budget
+     * @return array<string, mixed>
+     */
+    private function withStructuredJsonStreamParams(array $callerParams = [], bool $allowThinkingStream = false): array
+    {
+        $forced = [
+            'response_format' => ['type' => 'json_object'],
+        ];
+        if (!$allowThinkingStream) {
+            $forced['thinking'] = ['type' => 'disabled'];
+            $forced['thinking_mode'] = 'disabled';
+            $forced['enable_thinking'] = false;
+            $forced['enable_reasoning'] = false;
+        }
+        $params = \array_replace($callerParams, $forced);
+        if (!$allowThinkingStream) {
+            unset(
+                $params['reasoning_effort'],
+                $params['thinking_budget'],
+                $params['thinking_budget_tokens']
+            );
+        }
+
+        return $params;
+    }
+
+    /**
      * 解析JSON响应
      */
     private function parseJsonResponse(string $response): array
@@ -2394,7 +2454,7 @@ class AiGenerate extends BackendController
                     null, // 自动选择模型
                     'pagebuilder_component_generation',
                     $locale,
-                    [
+                    $this->withStructuredJsonStreamParams([
                         'reference_component' => $referenceComponent,
                         'reference_code' => $referenceCode,
                         'reasoning_callback' => function($chunk) use (&$reasoningBuffer, $sse) {
@@ -2405,7 +2465,7 @@ class AiGenerate extends BackendController
                                 'total_length' => strlen($reasoningBuffer),
                             ]);
                         },
-                    ]
+                    ], true)
                 );
             } catch (\Throwable $e) {
                 // 清理 ANSI 颜色码，避免前端显示乱码
