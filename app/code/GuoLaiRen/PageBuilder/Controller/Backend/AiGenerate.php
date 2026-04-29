@@ -875,13 +875,12 @@ class AiGenerate extends BackendController
                 return;
             }
 
-            $currentConfig = [];
-            if ($region !== '' && isset($layoutConfig[$region]) && isset($layoutConfig[$region][$index])) {
-                $componentInLayout = $layoutConfig[$region][$index];
-                if (($componentInLayout['code'] ?? '') === $componentCode) {
-                    $currentConfig = $componentInLayout['config'] ?? [];
-                }
-            }
+            $currentConfig = $this->resolveCurrentComponentConfigForGeneration(
+                $context,
+                $componentCode,
+                $region,
+                $index
+            );
 
             $sse->sendEvent('start', ['message' => __('开始生成组件配置...')]);
 
@@ -1085,8 +1084,17 @@ class AiGenerate extends BackendController
                 }
                 
                 // 构建完整的配置 key
-                $fullKey = $fieldKey;
-                if (!str_contains($fieldKey, '.') && !empty($groupKey)) {
+                $explicitKey = '';
+                foreach (['config_key', 'key', 'full_key'] as $keyField) {
+                    if (isset($field[$keyField]) && \is_scalar($field[$keyField])) {
+                        $explicitKey = \trim((string)$field[$keyField]);
+                        if ($explicitKey !== '') {
+                            break;
+                        }
+                    }
+                }
+                $fullKey = $explicitKey !== '' ? $explicitKey : $fieldKey;
+                if ($explicitKey === '' && !str_contains($fieldKey, '.') && !empty($groupKey)) {
                     $fullKey = $groupKey . '.' . $fieldKey;
                 }
                 
@@ -1739,12 +1747,14 @@ class AiGenerate extends BackendController
         $page->setData('virtual_page_type', $pageType);
         $page->setData('virtual_theme_id', $virtualThemeId);
         $page->setData('virtual_pages_by_type', $virtualPages);
+        $page->setData('virtual_page_blocks', \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : []);
 
         return [
             'page' => $page,
             'layout_config' => $layoutConfig,
             'style_code' => $resolvedStyleCode,
             'is_virtual' => true,
+            'virtual_page' => $virtualPage,
         ];
     }
 
@@ -1783,19 +1793,50 @@ class AiGenerate extends BackendController
         $layoutConfig = \is_array($context['layout_config'] ?? null) ? $context['layout_config'] : [];
         $layoutEntry = $this->resolveLayoutComponentEntryForGeneration($layoutConfig, $componentCode, $region, $index);
         $fieldConfig = \is_array($layoutEntry['config'] ?? null) ? $layoutEntry['config'] : [];
-        if ($fieldConfig === []) {
+        if ($fieldConfig !== []) {
+            return [
+                'code' => $componentCode,
+                'name' => $componentCode,
+                'description' => 'Virtual theme component metadata fallback',
+                'region' => $region !== '' ? $region : 'content',
+                'category' => $region !== '' ? $region : 'content',
+                'type' => 'section',
+                'fields' => $this->buildVirtualFallbackFields($fieldConfig),
+            ];
+        }
+
+        $blockEntry = $this->resolveVirtualBlockEntryForGeneration($context, $componentCode, $region, $index);
+        if ($blockEntry === []) {
             return null;
         }
 
-        return [
-            'code' => $componentCode,
-            'name' => $componentCode,
-            'description' => 'Virtual theme component metadata fallback',
-            'region' => $region !== '' ? $region : 'content',
-            'category' => $region !== '' ? $region : 'content',
-            'type' => 'section',
-            'fields' => $this->buildVirtualFallbackFields($fieldConfig),
-        ];
+        return $this->buildVirtualBlockMetadataForGeneration($blockEntry, $componentCode, $region);
+    }
+
+    /**
+     * @param array{layout_config?:array<string,mixed>,is_virtual?:bool,virtual_page?:array<string,mixed>} $context
+     * @return array<string,mixed>
+     */
+    private function resolveCurrentComponentConfigForGeneration(
+        array $context,
+        string $componentCode,
+        string $region,
+        int $index
+    ): array {
+        $layoutConfig = \is_array($context['layout_config'] ?? null) ? $context['layout_config'] : [];
+        $layoutEntry = $this->resolveLayoutComponentEntryForGeneration($layoutConfig, $componentCode, $region, $index);
+        if (\is_array($layoutEntry['config'] ?? null)) {
+            return $layoutEntry['config'];
+        }
+
+        if (!empty($context['is_virtual'])) {
+            $blockEntry = $this->resolveVirtualBlockEntryForGeneration($context, $componentCode, $region, $index);
+            if (\is_array($blockEntry['config'] ?? null)) {
+                return $blockEntry['config'];
+            }
+        }
+
+        return [];
     }
 
     /**
@@ -1859,6 +1900,198 @@ class AiGenerate extends BackendController
     }
 
     /**
+     * @param array{virtual_page?:array<string,mixed>} $context
+     * @return array<string,mixed>
+     */
+    private function resolveVirtualBlockEntryForGeneration(
+        array $context,
+        string $componentCode,
+        string $region,
+        int $index
+    ): array {
+        $virtualPage = \is_array($context['virtual_page'] ?? null) ? $context['virtual_page'] : [];
+        $blocks = \array_values(\is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : []);
+        if ($blocks === []) {
+            return [];
+        }
+
+        if (isset($blocks[$index]) && \is_array($blocks[$index])) {
+            $indexedBlock = $blocks[$index];
+            if ($this->virtualBlockMatchesComponentCode((string)($indexedBlock['block_id'] ?? ''), $componentCode)) {
+                return $indexedBlock;
+            }
+        }
+
+        foreach ($blocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            if (!$this->virtualBlockMatchesComponentCode((string)($block['block_id'] ?? ''), $componentCode)) {
+                continue;
+            }
+            if ($region === 'header' || $region === 'footer') {
+                $blockRegion = $this->inferVirtualBlockRegion($block);
+                if ($blockRegion !== '' && $blockRegion !== $region) {
+                    continue;
+                }
+            }
+
+            return $block;
+        }
+
+        return [];
+    }
+
+    private function virtualBlockMatchesComponentCode(string $blockId, string $componentCode): bool
+    {
+        $blockId = \trim($blockId);
+        $componentCode = \trim($componentCode);
+        if ($blockId === '' || $componentCode === '') {
+            return false;
+        }
+        if ($blockId === $componentCode) {
+            return true;
+        }
+
+        return $this->normalizeVirtualBlockCodeForGeneration($blockId)
+            === $this->normalizeVirtualBlockCodeForGeneration($componentCode);
+    }
+
+    private function normalizeVirtualBlockCodeForGeneration(string $code): string
+    {
+        $code = \strtolower(\trim($code));
+        if (\str_starts_with($code, 'content/')) {
+            $code = \substr($code, \strlen('content/'));
+        }
+
+        return \trim((string)\preg_replace('/[\/_]+/', '-', $code), '-');
+    }
+
+    /**
+     * @param array<string,mixed> $block
+     */
+    private function inferVirtualBlockRegion(array $block): string
+    {
+        foreach (['region', '_pb_server_region'] as $key) {
+            $region = \trim((string)($block[$key] ?? ''));
+            if (\in_array($region, ['header', 'footer', 'content'], true)) {
+                return $region;
+            }
+        }
+
+        $type = \strtolower(\trim((string)($block['type'] ?? '')));
+        $blockId = \strtolower(\trim((string)($block['block_id'] ?? '')));
+        if (\str_contains($type, 'header') || \str_contains($blockId, 'header')) {
+            return 'header';
+        }
+        if (\str_contains($type, 'footer') || \str_contains($blockId, 'footer')) {
+            return 'footer';
+        }
+
+        return 'content';
+    }
+
+    /**
+     * @param array<string,mixed> $block
+     * @return array<string,mixed>|null
+     */
+    private function buildVirtualBlockMetadataForGeneration(array $block, string $componentCode, string $region): ?array
+    {
+        $config = \is_array($block['config'] ?? null) ? $block['config'] : [];
+        $fieldSchema = \is_array($block['field_schema'] ?? null) ? $block['field_schema'] : [];
+        $fields = $this->normalizeVirtualBlockFieldSchemaForGeneration($fieldSchema, $config);
+        if ($fields === [] && $config !== []) {
+            $fields = $this->buildVirtualBlockFallbackFields($config);
+        }
+        if ($fields === []) {
+            return null;
+        }
+
+        $label = \trim((string)($config['component_label'] ?? $block['block_id'] ?? $componentCode));
+
+        return [
+            'code' => $componentCode,
+            'name' => $label !== '' ? $label : $componentCode,
+            'description' => 'Virtual page block metadata fallback',
+            'region' => $region !== '' ? $region : $this->inferVirtualBlockRegion($block),
+            'category' => $region !== '' ? $region : 'content',
+            'type' => (string)($block['type'] ?? 'section'),
+            'fields' => $fields,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $fieldSchema
+     * @param array<string,mixed> $config
+     * @return array<string,array<string,mixed>>
+     */
+    private function normalizeVirtualBlockFieldSchemaForGeneration(array $fieldSchema, array $config): array
+    {
+        $groups = [];
+        foreach ($fieldSchema as $groupKey => $group) {
+            if (!\is_array($group) || !\is_array($group['fields'] ?? null)) {
+                continue;
+            }
+            $groupName = \trim((string)$groupKey);
+            $groupName = $groupName !== '' ? $groupName : 'content';
+            $groups[$groupName] = [
+                'label' => (string)($group['label'] ?? $groupName),
+                'fields' => [],
+            ];
+            foreach ($group['fields'] as $fieldKey => $field) {
+                if (!\is_array($field)) {
+                    continue;
+                }
+                $configKey = \trim((string)($field['config_key'] ?? $field['key'] ?? $field['full_key'] ?? $fieldKey));
+                if ($configKey === '' || \str_starts_with($configKey, '_')) {
+                    continue;
+                }
+                $normalizedField = $field;
+                $normalizedField['key'] = $configKey;
+                $normalizedField['default'] = \array_key_exists($configKey, $config)
+                    ? $config[$configKey]
+                    : ($field['default'] ?? '');
+                $groups[$groupName]['fields'][(string)$fieldKey] = $normalizedField;
+            }
+            if ($groups[$groupName]['fields'] === []) {
+                unset($groups[$groupName]);
+            }
+        }
+
+        return $groups;
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @return array<string,array<string,mixed>>
+     */
+    private function buildVirtualBlockFallbackFields(array $config): array
+    {
+        $groups = [];
+        foreach ($config as $fieldKey => $value) {
+            $configKey = \trim((string)$fieldKey);
+            if ($configKey === '' || \str_starts_with($configKey, '_') || \in_array($configKey, ['region', 'component_label'], true)) {
+                continue;
+            }
+            $parts = \explode('.', $configKey, 2);
+            $groupKey = isset($parts[1]) && $parts[0] !== '' ? $parts[0] : 'content';
+            $shortKey = $parts[1] ?? $configKey;
+            $groups[$groupKey] ??= [
+                'label' => \ucwords(\str_replace(['_', '-'], ' ', $groupKey)),
+                'fields' => [],
+            ];
+            $groups[$groupKey]['fields'][$shortKey] = [
+                'key' => $configKey,
+                'label' => \ucwords(\str_replace(['_', '-'], ' ', $shortKey)),
+                'type' => $this->inferVirtualFallbackFieldType($configKey, $value),
+                'default' => $value,
+            ];
+        }
+
+        return $groups;
+    }
+
+    /**
      * @param array<string,mixed> $fieldConfig
      * @return array<string,array<string,mixed>>
      */
@@ -1880,6 +2113,7 @@ class AiGenerate extends BackendController
                 ];
             }
             $groups[$groupKey]['fields'][$shortKey] = [
+                'key' => $fullKey,
                 'label' => $shortKey,
                 'type' => $this->inferVirtualFallbackFieldType($fullKey, $value),
                 'default' => $value,
