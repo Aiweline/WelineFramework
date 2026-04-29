@@ -2660,7 +2660,29 @@ CNF;
 
             $cert = $this->resolveDuplicateDomainCert($cert);
             // 保存前再次设置 domain，避免 resolveDuplicateDomainCert 返回的模型因 getData() 未含 domain 导致 INSERT 违反 NOT NULL
-            $cert->setDomain($domain);
+            $cert->setDomain($domain)
+                ->setWebsiteId($websiteId)
+                ->setCertType($certType)
+                ->setCertPath($certPath)
+                ->setKeyPath($keyPath)
+                ->setChainPath($chainPath)
+                ->setCertPem($certContents['cert_pem'])
+                ->setKeyPem($certContents['key_pem'])
+                ->setChainPem($certContents['chain_pem'])
+                ->setIssuer($issuer !== '' ? $issuer : $this->getIssuerByProvider($provider))
+                ->setProvider($provider)
+                ->setStatus($status)
+                ->setHttpsEnabled($httpsEnabled)
+                ->setAutoRenew(!$isLocalManaged);
+            if ($issuedAt !== '') {
+                $cert->setIssuedAt($issuedAt);
+            }
+            if ($expiresAt !== '') {
+                $cert->setExpiresAt($expiresAt);
+            }
+            if ($status === SslCertificate::STATUS_ACTIVE) {
+                $cert->setRenewError('');
+            }
             $cert->save();
             return $cert;
         } catch (\Throwable $e) {
@@ -3735,7 +3757,18 @@ CNF;
                         ->setCertPath($certPath)
                         ->setKeyPath($keyPath)
                         ->setChainPath($chainPath)
-                        ->setProvider($provider);
+                        ->setIssuedAt($certInfo['issued_at'] ?? \date('Y-m-d H:i:s'))
+                        ->setExpiresAt($expiresAt)
+                        ->setIssuer($issuer)
+                        ->setProvider($provider)
+                        ->setStatus(SslCertificate::STATUS_ACTIVE)
+                        ->setLastRenewAt(\date('Y-m-d H:i:s'))
+                        ->setRenewError('')
+                        ->setAutoRenew(true)
+                        ->setCertPem($certContents['cert_pem'])
+                        ->setKeyPem($certContents['key_pem'])
+                        ->setChainPem($certContents['chain_pem'])
+                        ->setCsrPem($certContents['csr_pem']);
                     $cert->save();
 
                     if ($onProgress) {
