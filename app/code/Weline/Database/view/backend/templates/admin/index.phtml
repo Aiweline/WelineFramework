@@ -1,0 +1,153 @@
+<div class="w-database-admin">
+    <h2>{{title}}</h2>
+
+    <div class="w-db-toolbar">
+        <label>
+            <lang>数据库</lang>
+            <select id="db-select"></select>
+        </label>
+        <label>
+            <lang>数据表</lang>
+            <select id="table-select"></select>
+        </label>
+        <button id="load-table">
+            <lang>加载数据</lang>
+        </button>
+        <button id="load-meta">
+            <lang>查看结构</lang>
+        </button>
+    </div>
+
+    <div class="w-db-section">
+        <h3><lang>行数据</lang></h3>
+        <pre id="rows-panel"><lang>请先选择数据库与数据表</lang></pre>
+    </div>
+
+    <div class="w-db-section">
+        <h3><lang>结构信息</lang></h3>
+        <pre id="meta-panel"><lang>点击“查看结构”加载字段和索引</lang></pre>
+    </div>
+
+    <div class="w-db-section">
+        <h3><lang>SQL 控制台（写操作需确认）</lang></h3>
+        <textarea id="sql-input" rows="8" style="width:100%" placeholder="SELECT * FROM table_name LIMIT 20;"></textarea>
+        <div class="w-db-toolbar">
+            <label><input id="sql-confirmed" type="checkbox"/> <lang>确认执行写操作</lang></label>
+            <label><lang>高危确认短语</lang> <input id="sql-confirm-phrase" value=""/></label>
+            <button id="sql-run"><lang>执行 SQL</lang></button>
+        </div>
+        <pre id="sql-panel"></pre>
+    </div>
+
+    <div class="w-db-section">
+        <h3><lang>审计日志（最近 50 条）</lang></h3>
+        <pre><?=json_encode($audit_logs ?? [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)?></pre>
+    </div>
+</div>
+
+<theme:js>
+(() => {
+  const dbSelect = document.getElementById('db-select');
+  const tableSelect = document.getElementById('table-select');
+  const rowsPanel = document.getElementById('rows-panel');
+  const metaPanel = document.getElementById('meta-panel');
+  const sqlPanel = document.getElementById('sql-panel');
+  const sqlInput = document.getElementById('sql-input');
+
+  const fetchJson = async (url, options = {}) => {
+    const response = await fetch(url, options);
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return { success: false, message: text };
+    }
+  };
+
+  const loadDatabases = async () => {
+    const data = await fetchJson('@backend-url(database/backend/admin/databases)');
+    dbSelect.innerHTML = '';
+    (data.data || []).forEach(db => {
+      const option = document.createElement('option');
+      option.value = db;
+      option.textContent = db;
+      dbSelect.appendChild(option);
+    });
+    if (dbSelect.value) {
+      loadTables(dbSelect.value);
+    }
+  };
+
+  const loadTables = async (database) => {
+    const data = await fetchJson('@backend-url(database/backend/admin/tables)?database=' + encodeURIComponent(database));
+    tableSelect.innerHTML = '';
+    (data.data || []).forEach(table => {
+      const option = document.createElement('option');
+      option.value = table;
+      option.textContent = table;
+      tableSelect.appendChild(option);
+    });
+  };
+
+  dbSelect.addEventListener('change', () => loadTables(dbSelect.value));
+
+  document.getElementById('load-table').addEventListener('click', async () => {
+    const data = await fetchJson('@backend-url(database/backend/admin/rows)?database=' + encodeURIComponent(dbSelect.value) + '&table=' + encodeURIComponent(tableSelect.value));
+    rowsPanel.textContent = JSON.stringify(data, null, 2);
+  });
+
+  document.getElementById('load-meta').addEventListener('click', async () => {
+    const data = await fetchJson('@backend-url(database/backend/admin/table-meta)?database=' + encodeURIComponent(dbSelect.value) + '&table=' + encodeURIComponent(tableSelect.value));
+    metaPanel.textContent = JSON.stringify(data, null, 2);
+  });
+
+  document.getElementById('sql-run').addEventListener('click', async () => {
+    const payload = new URLSearchParams({
+      database: dbSelect.value,
+      table: tableSelect.value,
+      sql: sqlInput.value,
+      confirmed: document.getElementById('sql-confirmed').checked ? '1' : '0',
+      confirm_phrase: document.getElementById('sql-confirm-phrase').value
+    });
+    const data = await fetchJson('@backend-url(database/backend/admin/execute-sql)', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: payload.toString()
+    });
+    sqlPanel.textContent = JSON.stringify(data, null, 2);
+  });
+
+  loadDatabases();
+})();
+</theme:js>
+
+<theme:css>
+.w-database-admin {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.w-db-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.w-db-section {
+  border: 1px solid var(--color-border, #d9d9d9);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--color-bg, #fff);
+}
+
+.w-db-section pre {
+  max-height: 320px;
+  overflow: auto;
+  background: #111827;
+  color: #f8fafc;
+  padding: 10px;
+  border-radius: 6px;
+}
+</theme:css>
