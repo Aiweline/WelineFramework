@@ -130,13 +130,32 @@ class DispatcherMasterHeartbeatWindowTest extends TestCase
         self::assertSame(0, $this->getProperty($dispatcher, 'masterMissingCount'));
     }
 
-    private function seedInstanceFile(int $masterPid): void
+    public function testMismatchedInstanceRuntimeStopsStaleDispatcher(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $this->seedInstanceFile(\PHP_INT_MAX, 26895, 443);
+
+        $this->setProperty($dispatcher, 'instanceName', $this->instanceName);
+        $this->setProperty($dispatcher, 'controlPort', 1);
+        $this->setProperty($dispatcher, 'port', 29981);
+        $this->setProperty($dispatcher, 'masterCheckInterval', 0);
+        $this->setProperty($dispatcher, 'running', true);
+        $this->setProperty($dispatcher, 'ipcReceivedShutdown', false);
+
+        $this->invokePrivate($dispatcher, 'checkMasterHeartbeat');
+
+        self::assertFalse($this->getProperty($dispatcher, 'running'));
+    }
+
+    private function seedInstanceFile(int $masterPid, int $controlPort = 0, int $dispatcherPort = 0): void
     {
         \file_put_contents(
             $this->instanceFile,
             \json_encode([
                 'master_pid' => $masterPid,
                 'master_enabled' => true,
+                'control_port' => $controlPort,
+                'dispatcher_port' => $dispatcherPort,
             ])
         );
     }

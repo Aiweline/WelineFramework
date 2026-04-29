@@ -16,18 +16,33 @@ namespace Weline\Framework\Cache\Pool;
 
 use Weline\Framework\Cache\Contract\CacheAdapterInterface;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
+use Weline\Framework\Cache\Contract\HotKeyAwareInterface;
+use Weline\Framework\Cache\Contract\RemembererInterface;
+use Weline\Framework\Cache\Contract\RememberOptions;
+use Weline\Framework\Cache\Contract\SingleFlightInterface;
 use Weline\Framework\Cache\Contract\StatsInterface;
+use Weline\Framework\Cache\Service\HotKeyTracker;
+use Weline\Framework\Cache\Service\SingleFlightCoordinator;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 
-class CachePool implements CachePoolInterface
+class CachePool implements CachePoolInterface, RemembererInterface
 {
+    /**
+     * 默认 TTL 抖动比例（避免缓存雪崩）。permanent 池强制 0；
+     * 短 TTL 池（< 60s）也会被自动忽略以保证语义。
+     */
+    public const DEFAULT_JITTER_RATIO = 0.10;
+
     private string $identity;
     private string $tip;
     private bool $permanent;
     private int $defaultTtl;
     private bool $enabled;
     private CacheAdapterInterface $adapter;
+    private float $jitterRatio;
+    private ?SingleFlightInterface $singleFlight = null;
+    private ?HotKeyAwareInterface $hotKeyTracker = null;
 
     private int $hits = 0;
     private int $misses = 0;
@@ -38,7 +53,8 @@ class CachePool implements CachePoolInterface
         string $tip = '',
         bool $permanent = false,
         int $defaultTtl = 1800,
-        bool $enabled = true
+        bool $enabled = true,
+        float $jitterRatio = 0.0
     ) {
         $this->identity = $identity;
         $this->adapter = $adapter;
@@ -46,6 +62,7 @@ class CachePool implements CachePoolInterface
         $this->permanent = $permanent;
         $this->defaultTtl = $defaultTtl;
         $this->enabled = $enabled;
+        $this->jitterRatio = $this->normalizeJitterRatio($jitterRatio);
     }
 
     public function getIdentity(): string
@@ -88,7 +105,92 @@ class CachePool implements CachePoolInterface
         }
 
         $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
+        $ttl = $this->applyJitter($ttl);
         return $this->adapter->set($this->buildKey($key), $value, $ttl);
+    }
+
+    /**
+     * 防穿透 + 防击穿 + 防雪崩 一体化回源 API。
+     *
+     * - 缓存命中（包括 null 哨兵）→ 直接返回；
+     * - 未命中 → 通过 single-flight 协调让一个 worker / 协程执行回调；
+     * - 回调返回 null → 写入 null 哨兵 + 短 TTL（防穿透）；
+     * - 回调返回真实值 → 写入正常 TTL（带抖动，防雪崩）。
+     */
+    public function remember(string $key, int $ttl, callable $callback, ?RememberOptions $options = null): mixed
+    {
+        $options ??= new RememberOptions();
+
+        if (!$this->enabled) {
+            return $callback();
+        }
+
+        $cached = $this->get($key);
+        if ($cached === RememberOptions::NULL_SENTINEL) {
+            $this->trackHotKey($key, $options);
+            return null;
+        }
+        if ($cached !== null) {
+            $this->trackHotKey($key, $options);
+            return $cached;
+        }
+
+        $token = null;
+        if ($options->singleFlight) {
+            $token = $this->getSingleFlight()->acquire($key, $options->singleFlightTimeoutMs);
+
+            if ($token === null) {
+                $retry = $this->get($key);
+                if ($retry === RememberOptions::NULL_SENTINEL) {
+                    return null;
+                }
+                if ($retry !== null) {
+                    return $retry;
+                }
+            }
+        }
+
+        try {
+            $value = $callback();
+        } catch (\Throwable $e) {
+            if ($token !== null) {
+                $this->getSingleFlight()->release($key, $token);
+            }
+            throw $e;
+        }
+
+        $resolvedTtl = $ttl > 0 ? $ttl : $this->defaultTtl;
+        if ($value === null) {
+            $nullTtl = $options->nullTtl > 0 ? $options->nullTtl : $resolvedTtl;
+            $this->setRaw($key, RememberOptions::NULL_SENTINEL, $nullTtl, false);
+        } else {
+            $jitterFlag = $options->jitter ?? null;
+            $useJitter = $jitterFlag !== false;
+            $this->setRaw($key, $value, $resolvedTtl, $useJitter, $options->jitterRatio);
+            $this->trackHotKey($key, $options, $value, $resolvedTtl);
+        }
+
+        if ($token !== null) {
+            $this->getSingleFlight()->release($key, $token);
+        }
+
+        return $value;
+    }
+
+    /**
+     * 注入自定义 single-flight 协调器（测试 / 高级场景使用）。
+     */
+    public function setSingleFlight(SingleFlightInterface $singleFlight): void
+    {
+        $this->singleFlight = $singleFlight;
+    }
+
+    /**
+     * 注入自定义热点 key 跟踪器。
+     */
+    public function setHotKeyTracker(HotKeyAwareInterface $tracker): void
+    {
+        $this->hotKeyTracker = $tracker;
     }
 
     public function delete(string $key): bool
@@ -178,6 +280,7 @@ class CachePool implements CachePoolInterface
             'permanent' => $this->permanent,
             'enabled' => $this->enabled,
             'default_ttl' => $this->defaultTtl,
+            'jitter_ratio' => $this->jitterRatio,
             'adapter' => get_class($this->adapter),
         ], $adapterStats);
     }
@@ -191,6 +294,99 @@ class CachePool implements CachePoolInterface
             return hash('xxh3', $this->identity . ':' . $key);
         }
         return sprintf('%08x%08x', crc32($this->identity . ':' . $key), crc32($key));
+    }
+
+    /**
+     * 不经常规 jitter 处理的内部写入（Remember 内部使用，可控制是否抖动）。
+     */
+    private function setRaw(string $key, mixed $value, int $ttl, bool $useJitter, ?float $jitterRatio = null): bool
+    {
+        $effectiveTtl = $ttl > 0 ? $ttl : $this->defaultTtl;
+        if ($useJitter) {
+            $ratio = $jitterRatio !== null ? $this->normalizeJitterRatio($jitterRatio) : $this->jitterRatio;
+            $effectiveTtl = $this->applyJitterWithRatio($effectiveTtl, $ratio);
+        }
+        return $this->adapter->set($this->buildKey($key), $value, $effectiveTtl);
+    }
+
+    private function applyJitter(int $ttl): int
+    {
+        return $this->applyJitterWithRatio($ttl, $this->jitterRatio);
+    }
+
+    private function applyJitterWithRatio(int $ttl, float $ratio): int
+    {
+        if ($ttl <= 0 || $this->permanent || $ratio <= 0.0 || $ttl < 60) {
+            return $ttl;
+        }
+
+        $delta = (int) \floor($ttl * $ratio);
+        if ($delta <= 0) {
+            return $ttl;
+        }
+
+        $jitter = \random_int(-$delta, $delta);
+        $result = $ttl + $jitter;
+        return $result > 0 ? $result : $ttl;
+    }
+
+    private function normalizeJitterRatio(float $ratio): float
+    {
+        if ($ratio <= 0.0) {
+            return 0.0;
+        }
+        if ($ratio >= 0.5) {
+            return 0.5;
+        }
+        return $ratio;
+    }
+
+    private function getSingleFlight(): SingleFlightInterface
+    {
+        if ($this->singleFlight === null) {
+            $this->singleFlight = new SingleFlightCoordinator();
+        }
+        return $this->singleFlight;
+    }
+
+    private function getHotKeyTracker(): HotKeyAwareInterface
+    {
+        if ($this->hotKeyTracker === null) {
+            $this->hotKeyTracker = new HotKeyTracker();
+        }
+        return $this->hotKeyTracker;
+    }
+
+    private function trackHotKey(string $key, RememberOptions $options, mixed $value = null, int $ttl = 0): void
+    {
+        if (!$options->hotKeyTrack) {
+            return;
+        }
+
+        $tracker = $this->getHotKeyTracker();
+        $tracker->touch($this->identity, $key);
+
+        if (\is_callable($options->hotKeyHandler) && $tracker->isHot($this->identity, $key)) {
+            try {
+                ($options->hotKeyHandler)([
+                    'identity' => $this->identity,
+                    'key' => $key,
+                    'value' => $value,
+                    'ttl' => $ttl,
+                    'hits' => $tracker->getHits($this->identity, $key),
+                ]);
+            } catch (\Throwable) {
+                // 热点处理失败不应影响主流程
+            }
+        }
+    }
+
+    /**
+     * 当前 jitter 比例（用于诊断）
+     */
+    public function getJitterRatio(): float
+    {
+        return $this->jitterRatio;
     }
 
     /**
