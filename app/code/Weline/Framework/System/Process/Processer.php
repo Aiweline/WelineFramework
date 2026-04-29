@@ -3906,17 +3906,92 @@ POWERSHELL;
             return $result;
         }
 
-        $pidArgs = \implode(' ', $targetPids);
-        @\exec('kill -TERM ' . $pidArgs . ' 2>/dev/null');
+        self::sendPosixSignalToPids($targetPids, 15);
         \Weline\Framework\Runtime\SchedulerSystem::usleep(150000);
-        @\exec('kill -KILL ' . $pidArgs . ' 2>/dev/null');
 
-        foreach ($rootPids as $pid) {
-            $result['killed']++;
-            self::finalizeBatchGracefulKillPid($pid, 'force tree kill dispatched');
+        $runningAfterTerm = self::partitionRunningPids($targetPids)['running'];
+        if ($runningAfterTerm !== []) {
+            self::sendPosixSignalToPids($runningAfterTerm, 9);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(150000);
         }
 
+        $remainingTargetPids = self::partitionRunningPids($targetPids)['running'];
+        if ($remainingTargetPids !== []) {
+            self::sendPosixSignalToPidsWithSudo($remainingTargetPids, 9);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(150000);
+            $remainingTargetPids = self::partitionRunningPids($targetPids)['running'];
+        }
+
+        $remainingMap = \array_fill_keys($remainingTargetPids, true);
+        foreach ($rootPids as $pid) {
+            if (isset($remainingMap[$pid])) {
+                $result['failed']++;
+                $result['remaining'][] = $pid;
+                continue;
+            }
+            $result['killed']++;
+            self::finalizeBatchGracefulKillPid($pid, 'force tree kill confirmed');
+        }
+        foreach ($remainingTargetPids as $pid) {
+            if (!\in_array($pid, $rootPids, true)) {
+                $result['remaining'][] = $pid;
+            }
+        }
+        $result['remaining'] = \array_values(\array_unique(\array_map('intval', $result['remaining'])));
+
         return $result;
+    }
+
+    /**
+     * @param int[] $pids
+     */
+    private static function sendPosixSignalToPids(array $pids, int $signal): void
+    {
+        $pids = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $pids),
+            static fn (int $pid): bool => $pid > 0
+        )));
+        if ($pids === []) {
+            return;
+        }
+
+        if (\function_exists('posix_kill')) {
+            foreach ($pids as $pid) {
+                @\posix_kill($pid, $signal);
+            }
+            return;
+        }
+
+        @\exec(self::buildPosixKillCommand($pids, $signal));
+    }
+
+    /**
+     * @param int[] $pids
+     */
+    private static function sendPosixSignalToPidsWithSudo(array $pids, int $signal): void
+    {
+        $pids = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $pids),
+            static fn (int $pid): bool => $pid > 0
+        )));
+        if ($pids === []) {
+            return;
+        }
+
+        @\exec(self::buildPosixKillCommand($pids, $signal, true));
+    }
+
+    /**
+     * @param int[] $pids
+     */
+    private static function buildPosixKillCommand(array $pids, int $signal, bool $sudo = false): string
+    {
+        $pidArgs = \implode(' ', \array_values(\array_unique(\array_filter(
+            \array_map('intval', $pids),
+            static fn (int $pid): bool => $pid > 0
+        ))));
+
+        return ($sudo ? 'sudo -n ' : '') . 'kill -' . $signal . ' ' . $pidArgs . ' 2>/dev/null';
     }
 
     /**
