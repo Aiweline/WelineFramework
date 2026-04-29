@@ -465,6 +465,31 @@ final class StopCommandResidualPidIndexTest extends TestCase
         self::assertSame([333], $stop->ownershipChecks);
     }
 
+    public function testCollectRunningResidualPidsSkipsZombieProcessesReportedByDriver(): void
+    {
+        $stop = new class extends Stop {
+            protected function batchGetStopProcessInfo(array $pids): array
+            {
+                unset($pids);
+
+                return [
+                    111 => ['exists' => true, 'name' => 'php', 'is_zombie' => true],
+                    222 => ['exists' => true, 'name' => 'php', 'is_zombie' => false],
+                ];
+            }
+
+            protected function isResidualPidStillOwnedByWls(int $pid): bool
+            {
+                return \in_array($pid, [111, 222], true);
+            }
+        };
+
+        self::assertSame(
+            [222],
+            $this->invokeProtected($stop, 'collectRunningResidualPids', [111, 222])
+        );
+    }
+
     public function testDirectForceCandidatesIgnoreAppendOnlyHistoryOnFirstPass(): void
     {
         $stop = new class extends Stop {
