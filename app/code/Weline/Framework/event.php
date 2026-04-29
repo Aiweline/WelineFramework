@@ -151,6 +151,19 @@ return [
         'description' => __('在后端控制器初始化时触发，允许其他模块添加未登录时的重定向URL。'),
         'doc' => 'router/后端未登录重定向URL.md',
     ],
+    'Weline_Framework_Router::guard::overflow' => [
+        'name' => __('URL 越界拦截'),
+        'description' => __('当 UrlGuardObserver 判定本次请求越界（如 max id 越界、参数白名单不通过等）时触发。事件数据包含 uri、guard_name、details、params_keys、timestamp，便于队列/CDN/告警模块订阅做后续处理（如把命中信息入队、推送 CDN 黑名单、通知告警）。'),
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'uri' => ['type' => 'string', 'required' => true, 'description' => '触发越界的请求 URI（不含 querystring）'],
+            'guard_name' => ['type' => 'string', 'required' => true, 'description' => '触发的 Guard 名称'],
+            'details' => ['type' => 'array', 'required' => true, 'description' => 'Guard 提供的诊断详情（如 actual/max/allowed）'],
+            'params_keys' => ['type' => 'array', 'required' => true, 'description' => '本次请求参数的 key 列表（不含值，避免泄漏）'],
+            'timestamp' => ['type' => 'int', 'required' => true, 'description' => '事件时间戳'],
+        ],
+    ],
     
     // ========== URL事件 ==========
     'Weline_Framework_Url::detect_language' => [
