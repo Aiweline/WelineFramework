@@ -5578,10 +5578,27 @@ window.editComponentInPreview = async function(wrapper) {
         // 使用组件的 style_code，如果没有则使用页面的，再空则用 tpmst 避免接口报缺样式代码
         const styleCode = (componentStyleCode || pageStyleCode || 'tpmst').trim() || 'tpmst';
         
-        // 获取组件元数据
-        const metadataUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/metadata') ?>' + 
-            '?component_code=' + encodeURIComponent(componentCode) + 
-            '&style_code=' + encodeURIComponent(styleCode);
+        // 获取组件元数据（虚拟编辑态需附带 public_id/page_type/virtual_theme_id）
+        let metadataUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/metadata') ?>' +
+            '?component_code=' + encodeURIComponent(componentCode) +
+            '&style_code=' + encodeURIComponent(styleCode) +
+            '&region=' + encodeURIComponent(region) +
+            '&index=' + encodeURIComponent(String(index));
+        if (typeof window.buildVisualRequestUrl === 'function') {
+            metadataUrl = window.buildVisualRequestUrl('<?= $this->getBackendUrl('*/backend/visual/api/component/metadata') ?>', {
+                component_code: componentCode,
+                style_code: styleCode,
+                region: region,
+                index: index
+            });
+        } else if (typeof window.visualPublicId === 'string' && window.visualPublicId.trim() !== ''
+            && typeof window.visualPageType === 'string' && window.visualPageType.trim() !== '') {
+            metadataUrl += '&public_id=' + encodeURIComponent(window.visualPublicId.trim());
+            metadataUrl += '&page_type=' + encodeURIComponent(window.visualPageType.trim());
+            if (typeof window.visualVirtualThemeId === 'number' && window.visualVirtualThemeId > 0) {
+                metadataUrl += '&virtual_theme_id=' + encodeURIComponent(String(window.visualVirtualThemeId));
+            }
+        }
         
         var metaRes = await window.Weline.Api.get(metadataUrl, { silent: true });
         // 兼容多种返回结构：直接 body、或 { data: body }、或 { data: { data: body } }
@@ -5599,8 +5616,22 @@ window.editComponentInPreview = async function(wrapper) {
         }
         
         // 获取当前布局配置中的组件配置
-        const layoutUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/layoutFields') ?>' + 
-            '?page_id=' + pageId;
+        let layoutUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/layoutFields') ?>' +
+            '?page_id=' + pageId +
+            '&style_code=' + encodeURIComponent(styleCode);
+        if (typeof window.buildVisualRequestUrl === 'function') {
+            layoutUrl = window.buildVisualRequestUrl('<?= $this->getBackendUrl('*/backend/visual/api/component/layoutFields') ?>', {
+                page_id: pageId,
+                style_code: styleCode
+            });
+        } else if (typeof window.visualPublicId === 'string' && window.visualPublicId.trim() !== ''
+            && typeof window.visualPageType === 'string' && window.visualPageType.trim() !== '') {
+            layoutUrl += '&public_id=' + encodeURIComponent(window.visualPublicId.trim());
+            layoutUrl += '&page_type=' + encodeURIComponent(window.visualPageType.trim());
+            if (typeof window.visualVirtualThemeId === 'number' && window.visualVirtualThemeId > 0) {
+                layoutUrl += '&virtual_theme_id=' + encodeURIComponent(String(window.visualVirtualThemeId));
+            }
+        }
         
         var layoutRes = await window.Weline.Api.get(layoutUrl, { silent: true });
         const layoutResult = (layoutRes && layoutRes.data) || layoutRes;
@@ -5843,7 +5874,7 @@ window.editComponentInPreview = async function(wrapper) {
                         let thinkingStreamingLineEl = null;
                         let thinkingStreamingTextEl = null;
                         try {
-                            const res = await fetch(streamUrl, { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                            const res = await fetch(streamUrl, { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/event-stream' } });
                             if (!res.ok) throw new Error(res.statusText || '<?= __("请求失败") ?>');
                             if (!res.body) throw new Error('<?= __("不支持流式响应") ?>');
                             const reader = res.body.getReader();
