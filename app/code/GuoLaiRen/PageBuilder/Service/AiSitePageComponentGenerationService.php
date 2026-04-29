@@ -29,12 +29,6 @@ class AiSitePageComponentGenerationService
     private const COMPONENT_GENERATION_MAX_ATTEMPTS = 1;
     // 临时旁路：先跳过主观低质量文案门禁以解除卡在反复校验重试的问题；硬性语言/泄漏守卫仍执行。
     private const SKIP_COMPONENT_QUALITY_VALIDATION = true;
-    private const ENABLE_CLAUDE_DESIGN_POLISH_PASS = true;
-    private const CLAUDE_DESIGN_PASS_MODEL_CODES = [
-        'claude-3-5-sonnet-20241022',
-        'claude-3-7-sonnet-20250219',
-        'claude-3-opus-20240229',
-    ];
     private const AI_REQUEST_TIMEOUT_SECONDS = 180;
     private const COMPONENT_CSS_CLASS_SCOPE_FALLBACK = 'pb-ai-site-component';
     private const COMPONENT_CSS_SCOPE_PLACEHOLDER = '#componentId';
@@ -715,7 +709,6 @@ class AiSitePageComponentGenerationService
                     (string)($spec['name'] ?? ''),
                     $region,
                     (string)($spec['prompt'] ?? ''),
-                    $this->appendComponentCssScopeInstruction((string)($spec['prompt'] ?? ''), (string)($spec['componentCode'] ?? '')),
                     \is_array($spec['defaultConfig'] ?? null) ? $spec['defaultConfig'] : [],
                     \is_array($spec['renderContext'] ?? null) ? $spec['renderContext'] : [],
                     $aiData
@@ -890,7 +883,6 @@ class AiSitePageComponentGenerationService
         string $name,
         string $region,
         string $originalPromptForDescription,
-        string $attemptPromptForPolish,
         array $defaultConfig,
         array $renderContext,
         array $aiData
@@ -901,7 +893,6 @@ class AiSitePageComponentGenerationService
             'description' => $originalPromptForDescription,
         ];
         $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode);
-        $aiData = $this->applyClaudeDesignPolishPass($region, $componentCode, $attemptPromptForPolish, $aiData);
 
         $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
 
@@ -957,7 +948,6 @@ class AiSitePageComponentGenerationService
                     $name,
                     $region,
                     $prompt,
-                    $attemptPrompt,
                     $defaultConfig,
                     $renderContext,
                     $aiData
@@ -2246,84 +2236,6 @@ class AiSitePageComponentGenerationService
         }
 
         return \is_array($decoded) ? $decoded : null;
-    }
-
-    /**
-     * @param array<string,mixed> $aiData
-     * @return array<string,mixed>
-     */
-    private function applyClaudeDesignPolishPass(
-        string $region,
-        string $componentCode,
-        string $originalPrompt,
-        array $aiData
-    ): array {
-        if (!self::ENABLE_CLAUDE_DESIGN_POLISH_PASS) {
-            return $aiData;
-        }
-        if (!\in_array($region, ['header', 'footer', 'content'], true)) {
-            return $aiData;
-        }
-
-        $payloadJson = \json_encode($aiData, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT);
-        if (!\is_string($payloadJson) || $payloadJson === '') {
-            return $aiData;
-        }
-
-        $expectedFields = match ($region) {
-            'header' => 'extra_fields, php_variables, css_extra, html_extra, js_content',
-            'footer' => 'extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content',
-            default => 'extra_fields, php_variables, css_extra, css_responsive, html_content, js_content',
-        };
-        $claudeDesignSkillGuide = $this->buildClaudeDesignSkillPromptAddon('stage3');
-        $polishPrompt = "You are a senior frontend design finisher for a PageBuilder component.\n"
-            . "Task: improve visual quality while keeping business meaning and JSON schema stable.\n"
-            . "Component code: {$componentCode}\n"
-            . "Region: {$region}\n"
-            . "Allowed edits: html/css text polish, hierarchy, spacing, contrast, hover/focus, responsive rhythm, trust details.\n"
-            . "Forbidden: prompt/instruction leakage in visible copy, changing JSON field names, adding PHP/script/style tags in html fields.\n"
-            . "Contrast fix requirement: correct any dark-on-dark or light-on-light text/link/button combinations; use readable foreground colors from the palette roles.\n"
-            . "Layering fix requirement: if the block looks like one flat theme-color slab, add surface depth, dividers, texture, or composition contrast without inventing unrelated colors.\n"
-            . "HTML structure requirement: every html_content/html_extra/html_extra_column fragment must be balanced and embeddable; close all non-void tags.\n"
-            . "Footer-specific floor: visible grouped links + support/contact path + policy/compliance labels; never hide footer.\n"
-            . "If any sentence reads like planning instruction (Use/Populate/Must/Ensure/请/必须/补充), rewrite it to visitor-facing copy.\n"
-            . "Return JSON object only with fields: {$expectedFields}\n"
-            . $claudeDesignSkillGuide
-            . "Original generation prompt context:\n"
-            . $this->clipText($originalPrompt, 2000) . "\n"
-            . "Current component JSON:\n"
-            . $payloadJson . "\n"
-            . $this->buildComponentJsonPhpSafetyRulesEn();
-
-        foreach (self::CLAUDE_DESIGN_PASS_MODEL_CODES as $modelCode) {
-            try {
-                $response = $this->callAiOperation('generate', [
-                    'prompt' => $polishPrompt,
-                    'model_code' => $modelCode,
-                    'scenario_code' => 'pagebuilder_component_generation',
-                    'params' => $this->buildAiRuntimeParams([
-                        'allow_zero_balance_provider' => true,
-                        'temperature' => 0.25,
-                        'max_tokens' => 4096,
-                        'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
-                        'response_format' => ['type' => 'json_object'],
-                    ]),
-                ]);
-                if (!\is_string($response) || \trim($response) === '') {
-                    continue;
-                }
-                $decoded = $this->decodeAndNormalizeComponentContent(
-                    $response,
-                    $region,
-                    'Claude design pass did not return valid component JSON payload'
-                );
-                return $this->ensureAiPayloadValid($decoded, $region, $componentCode);
-            } catch (\Throwable) {
-                continue;
-            }
-        }
-
-        return $aiData;
     }
 
     /**
