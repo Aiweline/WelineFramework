@@ -72,6 +72,7 @@ class Auto extends CommandAbstract
         $provider = $args['provider'] ?? $args['p'] ?? SslCertificateService::PROVIDER_LETS_ENCRYPT;
         $staging = isset($args['staging']) || isset($args['test']);
         $renewDays = (int) ($args['renew-days'] ?? 30);
+        $forceAcme = isset($args['force-acme']) || isset($args['force_acme']) || isset($args['f']);
         
         // 设置环境
         if ($staging) {
@@ -82,7 +83,7 @@ class Auto extends CommandAbstract
         switch ($action) {
             case 'request':
             case 'apply':
-                $this->requestCertificate($domain, $webroot, $email, (string) $provider);
+                $this->requestCertificate($domain, $webroot, $email, (string) $provider, $forceAcme);
                 break;
                 
             case 'renew':
@@ -116,7 +117,7 @@ class Auto extends CommandAbstract
     /**
      * 申请证书
      */
-    protected function requestCertificate(?string $domain, string $webroot, string $email, string $provider): void
+    protected function requestCertificate(?string $domain, string $webroot, string $email, string $provider, bool $forceAcme = false): void
     {
         if (empty($domain)) {
             $this->printer->error(__('请指定域名：--domain example.com'));
@@ -160,12 +161,12 @@ class Auto extends CommandAbstract
         
         $this->printer->note(__('证书提供商：%{1}', [$provider]));
         echo "\n";
-        if (!\is_dir($webroot)) {
+        if ($webroot !== SslCertificateService::WEBROOT_WLS_VIRTUAL && !\is_dir($webroot)) {
             $this->printer->error(__('Webroot 目录不存在：%{1}', [$webroot]));
             return;
         }
         
-        $result = $this->sslService->requestCertificate($domain, $webroot, $email, 0, $provider);
+        $result = $this->sslService->requestCertificate($domain, $webroot, $email, 0, $provider, SslCertificateService::CHALLENGE_AUTO, 0, 0, $forceAcme);
         
         if ($result['success']) {
             $this->printer->success(__('✓ 证书申请成功！'));
@@ -465,6 +466,7 @@ $this->printer->note('  ssl:auto list                    ' . __('- 查看证书�
                 '-e, --email <email>' => __('联系邮箱（Let\'s Encrypt 要求）'),
                 '-w, --webroot <path>' => __('Webroot 路径（默认：pub/）'),
                 '-p, --provider <provider>' => __('证书提供商（letsencrypt/litessl）'),
+                '-f, --force-acme' => __('强制执行 ACME（忽略本地未过期证书）'),
                 '--renew-days <days>' => __('提前续签天数（默认：30）'),
                 '--staging' => __('使用 Let\'s Encrypt 测试环境'),
             ],
