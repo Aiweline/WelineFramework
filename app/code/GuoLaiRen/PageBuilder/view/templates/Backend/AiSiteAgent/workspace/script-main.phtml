@@ -1771,7 +1771,7 @@
         blockOpIntentPrompt: <?= \json_encode((string)__('告诉 AI 你希望这个块怎么改'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockOpCreatePrompt: <?= \json_encode((string)__('告诉 AI 新增什么内容、放在哪里'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockOpDeleteReason: <?= \json_encode((string)__('可选：说明删除原因（留空表示直接删除）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        blockOpCommonHelp: <?= \json_encode((string)__('提交后进入后台队列异步执行，进度会同步到预览与队列信息区。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpCommonHelp: <?= \json_encode((string)__('提交后会实时执行并立即刷新预览与方案数据。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockOpDeleteHelp: <?= \json_encode((string)__('删除后该块从结构化数据中移除，Markdown 与预览会同步刷新。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockOpDeleteWarning: <?= \json_encode((string)__('删除操作不可直接撤销，建议先导出方案备份。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockOpQueued: <?= \json_encode((string)__('块级操作已入队，进度会同步到队列信息区。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -5903,6 +5903,15 @@
                                     currentData = '';
                                     return;
                                 }
+                                // 受 SseTerminal 思考输出开关控制：关闭时只解析事件、不写 DOM。
+                                try {
+                                    var __thinkTerm = window.WelineSseTerminal && window.WelineSseTerminal['aiComponentConfigSseTerminal'];
+                                    if (__thinkTerm && typeof __thinkTerm.getThinkingEnabled === 'function' && __thinkTerm.getThinkingEnabled() === false) {
+                                        currentEvent = '';
+                                        currentData = '';
+                                        return;
+                                    }
+                                } catch (e) {}
                                 if (!thinkingStreamingTextEl && sseContent) {
                                     thinkingStreamingLineEl = document.createElement('div');
                                     thinkingStreamingLineEl.style.marginBottom = '6px';
@@ -9891,7 +9900,7 @@
                 hydrateWorkspaceFromState(data.data);
             }
             if (data && data.success && window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function' && window.PbAiOperationRunner.startFromResponse(data, 'plan')) {
-                toast('success', data.message ? String(data.message) : (messages.blockOpQueued || <?= \json_encode((string)__('块级操作已入队，进度会同步到队列信息区。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>));
+                toast('success', data.message ? String(data.message) : (messages.blockOpSuccess || <?= \json_encode((string)__('块级操作已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>));
                 return;
             }
             if (data && data.success && data.data && typeof data.data === 'object') {
@@ -9939,7 +9948,7 @@
                 hydrateWorkspaceFromState(data.data);
             }
             if (data && data.success && window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function' && window.PbAiOperationRunner.startFromResponse(data, 'plan')) {
-                toast('success', (data && data.message) ? String(data.message) : (messages.blockOpQueued || messages.planPageRefineDone || 'Block refine queued.'));
+                toast('success', (data && data.message) ? String(data.message) : (messages.planPageRefineDone || messages.blockOpSuccess || 'Block refined.'));
                 return;
             }
             if (data && data.success) {
@@ -9993,7 +10002,7 @@
                 hydrateWorkspaceFromState(data.data);
             }
             if (data && data.success && window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function' && window.PbAiOperationRunner.startFromResponse(data, 'task_plan')) {
-                toast('success', (data && data.message) ? String(data.message) : (messages.blockOpQueued || 'Task operation queued.'));
+                toast('success', (data && data.message) ? String(data.message) : (messages.blockOpSuccess || 'Task operation completed.'));
                 return;
             }
             if (data && data.success && data.data && typeof data.data === 'object') {
@@ -10270,7 +10279,7 @@
         if (promptHelp) {
             promptHelp.textContent = config.action === 'delete'
                 ? (messages.blockOpDeleteHelp || <?= \json_encode((string)__('删除后该块从结构化数据中移除，Markdown 与预览会同步刷新。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
-                : (messages.blockOpCommonHelp || <?= \json_encode((string)__('提交后进入后台队列异步执行，进度会同步到预览与队列信息区。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+                : (messages.blockOpCommonHelp || <?= \json_encode((string)__('提交后会实时执行并立即刷新预览与方案数据。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
         }
         if (destructiveEl && destructiveText) {
             if (config.action === 'delete') {
