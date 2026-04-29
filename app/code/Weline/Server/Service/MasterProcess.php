@@ -1640,7 +1640,9 @@ class MasterProcess
         }
 
         return \str_contains($issuer, \strtolower(SslCertificateService::ISSUER_SELF_SIGNED))
-            || \str_contains($issuer, \strtolower(SslCertificateService::ISSUER_LOCAL_CA));
+            || \str_contains($issuer, \strtolower(SslCertificateService::ISSUER_LOCAL_CA))
+            || \str_contains($issuer, 'self')
+            || \str_contains($issuer, 'weline');
     }
 
     private function findRunningInstanceByControlPort(int $controlPort): ?string

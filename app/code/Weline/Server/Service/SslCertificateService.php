@@ -4075,7 +4075,7 @@ CNF;
     ): array {
         $strategy = $challengeStrategy;
         if ($strategy === self::CHALLENGE_AUTO) {
-            if ($this->canUseHttp01Challenge()) {
+            if ($webroot === self::WEBROOT_WLS_VIRTUAL || $this->canUseHttp01Challenge()) {
                 $strategy = self::CHALLENGE_HTTP01;
             } else {
                 $strategy = self::CHALLENGE_DNS01;
