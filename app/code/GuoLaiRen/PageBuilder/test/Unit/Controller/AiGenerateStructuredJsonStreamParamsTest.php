@@ -111,8 +111,8 @@ final class AiGenerateStructuredJsonStreamParamsTest extends TestCase
         ], true);
 
         self::assertSame(['type' => 'json_object'], $params['response_format'] ?? null);
-        self::assertSame(['type' => 'enabled', 'budget_tokens' => 1024], $params['thinking'] ?? null);
+        self::assertSame(['type' => 'enabled'], $params['thinking'] ?? null);
+        self::assertTrue((bool) ($params['thinking_mode'] ?? false));
         self::assertSame('medium', $params['reasoning_effort'] ?? null);
-        self::assertArrayNotHasKey('thinking_mode', $params);
     }
 }
