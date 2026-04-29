@@ -510,6 +510,9 @@ class PassthroughCore
             'open_time' => \microtime(true),
             'request_sent_at' => 0.0,
             'worker_responded' => false,
+            'request_line' => '',
+            'response_first_line' => '',
+            'response_status_line' => '',
         ];
         
         $this->stats['active_connections']++;
@@ -847,6 +850,9 @@ class PassthroughCore
             'open_time' => \microtime(true),
             'request_sent_at' => 0.0,
             'worker_responded' => false,
+            'request_line' => '',
+            'response_first_line' => '',
+            'response_status_line' => '',
         ];
         
         $this->stats['active_connections']++;
@@ -2771,6 +2777,7 @@ class PassthroughCore
             }
             
             $length = \strlen($data);
+            $this->recordWorkerResponseIngress($connId, $data, $workerPort);
             $this->markWorkerResponsive($connId, $workerPort);
             $this->stats['bytes_out'] += $length;
             
@@ -2884,6 +2891,34 @@ class PassthroughCore
         $this->recordWorkerSuccess($workerPort);
     }
 
+    private function recordWorkerResponseIngress(int $connId, string $data, int $workerPort): void
+    {
+        if (!isset($this->connections[$connId])) {
+            return;
+        }
+        if ((string)($this->connections[$connId]['response_first_line'] ?? '') !== '') {
+            return;
+        }
+
+        $responseLine = $this->extractHttpResponseFirstLine($data);
+        if ($responseLine === '') {
+            return;
+        }
+
+        $this->connections[$connId]['response_first_line'] = $responseLine;
+        if ($this->isHttpResponseStatusLine($responseLine)) {
+            $this->connections[$connId]['response_status_line'] = $responseLine;
+        }
+
+        $clientIp = (string)($this->connections[$connId]['clientIp'] ?? '');
+        $requestLine = (string)($this->connections[$connId]['request_line'] ?? '');
+        $message = "Worker response head: conn={$connId}, client={$clientIp}, worker={$workerPort}, response=\"{$responseLine}\"";
+        if ($requestLine !== '') {
+            $message .= ", request=\"{$requestLine}\"";
+        }
+        $this->logWarmup($message, 'INFO');
+    }
+
     private function logIncomingRequestIngress(int $connId, string $data): void
     {
         if (!isset($this->connections[$connId])) {
@@ -2909,6 +2944,7 @@ class PassthroughCore
         $this->requestIngressLogCountByConn[$connId] = $loggedCount + 1;
         if ($requestLine !== '') {
             $this->lastLoggedHttpRequestLineByConn[$connId] = $requestLine;
+            $this->connections[$connId]['request_line'] = $requestLine;
         }
 
         $conn = $this->connections[$connId];
@@ -2941,6 +2977,30 @@ class PassthroughCore
         }
 
         return \substr($firstLine, 0, 200);
+    }
+
+    private function extractHttpResponseFirstLine(string $data): string
+    {
+        $lineEnd = \strpos($data, "\r\n");
+        if ($lineEnd === false) {
+            $lineEnd = \strpos($data, "\n");
+        }
+
+        $firstLine = $lineEnd === false ? $data : \substr($data, 0, $lineEnd);
+        $firstLine = (string)\preg_replace('/\s+/', ' ', \trim($firstLine));
+        if ($firstLine === '' || \strlen($firstLine) > 512) {
+            return '';
+        }
+        if (\preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', $firstLine)) {
+            return '';
+        }
+
+        return \substr($firstLine, 0, 200);
+    }
+
+    private function isHttpResponseStatusLine(string $line): bool
+    {
+        return (bool)\preg_match('/^HTTP\/\d(?:\.\d)?\s+\d{3}\b/i', $line);
     }
 
     /**
@@ -3383,6 +3443,11 @@ class PassthroughCore
             'client_ip' => $conn['clientIp'],
             'sni' => $conn['sni'],
             'open_time' => $conn['open_time'] ?? 0.0,
+            'request_sent_at' => $conn['request_sent_at'] ?? 0.0,
+            'worker_responded' => $conn['worker_responded'] ?? false,
+            'request_line' => $conn['request_line'] ?? '',
+            'response_first_line' => $conn['response_first_line'] ?? '',
+            'response_status_line' => $conn['response_status_line'] ?? '',
         ];
     }
     
