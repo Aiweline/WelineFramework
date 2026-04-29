@@ -26,6 +26,7 @@ use GuoLaiRen\PageBuilder\Service\AI\CodeValidator;
 use GuoLaiRen\PageBuilder\Service\AI\CodeFixer;
 use GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer;
 use GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser;
+use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
 
 /**
  * AI内容生成控制器
@@ -277,6 +278,7 @@ class AiGenerate extends BackendController
                 $page,
                 $targetLocale
             );
+            $prompt = $this->withPageBuilderSkillGuide($prompt, 'legacy_content');
 
             // 调用AI服务（跟随页面选择的语言生成）
             /** @var AiService $aiService */
@@ -444,6 +446,7 @@ class AiGenerate extends BackendController
                 $page,
                 $targetLocale
             );
+            $prompt = $this->withPageBuilderSkillGuide($prompt, 'legacy_content');
 
             $sse->sendEvent('progress', ['message' => __('正在调用 AI 生成...')]);
 
@@ -588,6 +591,7 @@ class AiGenerate extends BackendController
                 $style,
                 $textConfigs
             );
+            $prompt = $this->withPageBuilderSkillGuide($prompt, 'legacy_content');
 
             // 调用AI服务
             /** @var AiService $aiService */
@@ -749,6 +753,7 @@ class AiGenerate extends BackendController
                 $index,
                 $userPrompt
             );
+            $prompt = $this->withPageBuilderSkillGuide($prompt, 'legacy_component_config');
 
             // 调用AI服务：生成语言与页面默认语言一致；传入 meta 供适配器提取格式与条数
             /** @var AiService $aiService */
@@ -908,6 +913,7 @@ class AiGenerate extends BackendController
                 $index,
                 $userPrompt
             );
+            $prompt = $this->withPageBuilderSkillGuide($prompt, 'legacy_component_config');
 
             // 将本次提示词通过 SSE 返回，便于排查「本站已有页面」等是否包含
             $sse->sendEventAndYield('prompt', ['prompt' => $prompt]);
@@ -2653,6 +2659,7 @@ class AiGenerate extends BackendController
             
             // 构建AI提示词（包含语言要求）
             $prompt = $this->buildComponentPrompt($name, $description, $region, $style, $configFields, $referenceCode, $language);
+            $prompt = $this->withPageBuilderSkillGuide($prompt, 'stage3');
             
             $sse->sendEvent('prompt', [
                 'message' => __('提示词已构建'),
@@ -2920,6 +2927,7 @@ class AiGenerate extends BackendController
             
             // 构建AI提示词（传递参考组件代码）
             $prompt = $this->buildComponentPrompt($name, $description, $region, $style, $configFields, $referenceCode);
+            $prompt = $this->withPageBuilderSkillGuide($prompt, 'stage3');
             
             // 调用AI生成
             $aiService = ObjectManager::getInstance(AiService::class);
@@ -4314,6 +4322,7 @@ PROMPT;
             . $validationError
             . "\n\nReply with ONLY the corrected JSON object. No explanation, no markdown. Previous (invalid) output:\n\n"
             . $previousSnippet;
+        $userMessage = $this->withPageBuilderSkillGuide($userMessage, 'stage3');
         $params = [
             'messages' => [['role' => 'user', 'content' => $userMessage]],
             'temperature' => 0.3,
@@ -4425,6 +4434,7 @@ PROMPT;
 
             // 构建用户提示词
             $prompt = $this->buildAgentUserPrompt($name, $description, $region, $style, $fieldsInput, $referenceCode);
+            $prompt = $this->withPageBuilderSkillGuide($prompt, 'stage3');
 
             $sse->sendEvent('prompt', [
                 'message' => __('提示词已构建'),
@@ -5164,6 +5174,16 @@ PROMPT;
                 'lengths' => $lengths,
             ],
         ], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function withPageBuilderSkillGuide(string $prompt, string $stage = 'pagebuilder'): string
+    {
+        return $this->getSkillRegistry()->prependPromptGuide($prompt, $stage);
+    }
+
+    private function getSkillRegistry(): AiSiteSkillRegistry
+    {
+        return ObjectManager::getInstance(AiSiteSkillRegistry::class);
     }
 
     private function invalidatePageCache(int $pageId): void
