@@ -787,7 +787,7 @@ class AiSiteHtmlBlocksBuildService
     {
         $schema = [];
         foreach ($config as $fieldKey => $value) {
-            if (!\is_string($fieldKey) || $fieldKey === '' || \str_starts_with($fieldKey, '_pb_server_')) {
+            if (!\is_string($fieldKey) || $fieldKey === '' || \str_starts_with($fieldKey, '_')) {
                 continue;
             }
             if ($fieldKey === 'region' || $fieldKey === 'component_label') {

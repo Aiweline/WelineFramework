@@ -185,4 +185,24 @@ class WlsLoggerTest extends TestCase
         $this->assertFileExists($processLog);
         $this->assertStringContainsString('process mirror line', (string)\file_get_contents($processLog));
     }
+
+    public function testProcessLogFileFlushesExistingBufferWhenAttached(): void
+    {
+        $processLog = $this->testLogDir . 'late-process.log';
+        $logger = WlsLogger::getInstance()
+            ->setProcessTag('Dispatcher:9981@test-process-log')
+            ->setMinLevel(LogLevel::INFO)
+            ->setStdoutEnabled(false)
+            ->setFileEnabled(true);
+
+        $logDir = new \ReflectionProperty(WlsLogger::class, 'logDir');
+        $logDir->setAccessible(true);
+        $logDir->setValue($logger, $this->testLogDir);
+
+        $logger->info('line before process log file');
+        $logger->setProcessLogFile($processLog);
+
+        $this->assertFileExists($processLog);
+        $this->assertStringContainsString('line before process log file', (string)\file_get_contents($processLog));
+    }
 }
