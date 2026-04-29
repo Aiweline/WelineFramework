@@ -5848,6 +5848,13 @@ window.editComponentInPreview = async function(wrapper) {
                                     } else if (currentEvent === 'thinking') {
                                         const ttxt = (payload.content && typeof payload.content === 'string') ? payload.content : '';
                                         if (!ttxt) return;
+                                        // 受 SseTerminal 思考输出开关控制：关闭时只解析事件、不写 DOM。
+                                        try {
+                                            const term = window.WelineSseTerminal && window.WelineSseTerminal['aiComponentConfigSseTerminal'];
+                                            if (term && typeof term.getThinkingEnabled === 'function' && term.getThinkingEnabled() === false) {
+                                                return;
+                                            }
+                                        } catch (e) {}
                                         if (!thinkingStreamingTextEl && sseContent) {
                                             const tline = document.createElement('div');
                                             tline.className = 'weline-sse-terminal-line progress weline-sse-terminal-streaming weline-sse-terminal-thinking';
