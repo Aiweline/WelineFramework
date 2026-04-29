@@ -32,6 +32,7 @@ use Weline\Server\Security\AttackDetector;
 use Weline\Server\Service\MainLoopUnblockedLogConfig;
 use Weline\Server\Service\AttackLogService;
 use Weline\Server\Service\AttackSignalFileService;
+use Weline\Server\Service\SslCertificateService;
 use Weline\Server\Service\StatusLogService;
 use Weline\Server\Supervisor\Client\SupervisorChildClient;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
@@ -2136,6 +2137,12 @@ class Dispatcher
                 );
             }
 
+            // ACME HTTP-01 must be answered before any HTTP->HTTPS redirect or worker routing.
+            if ($this->tryServeAcmeHttp01Challenge($clientSocket, $connId, $clientIp)) {
+                $accepted++;
+                continue;
+            }
+
             // HTTPS 模式：主端口收到明文 HTTP 时，直接返回 301 到 https://同主机同路径
             if ($this->httpsEnabled && $this->handlePlainHttpRedirect($clientSocket, $connId, $clientIp)) {
                 $accepted++;
@@ -2904,6 +2911,227 @@ HTML;
     private function isTlsHandshakePeek(string $peek): bool
     {
         return $peek !== '' && \ord($peek[0]) === 0x16;
+    }
+
+    private function tryServeAcmeHttp01Challenge($clientSocket, int $connId, string $clientIp): bool
+    {
+        $read = [$clientSocket];
+        $write = $except = [];
+        $ready = @\socket_select($read, $write, $except, 0, 5000);
+        if ($ready === false || $ready <= 0 || !\in_array($clientSocket, $read, true)) {
+            return false;
+        }
+
+        $peek = '';
+        $peekLen = @\socket_recv($clientSocket, $peek, 4096, \MSG_PEEK);
+        if ($peekLen === false || $peekLen <= 0 || $peek === '' || $this->isTlsHandshakePeek($peek)) {
+            return false;
+        }
+
+        $request = $this->parseAcmeHttp01Request($peek);
+        if ($request === null) {
+            return false;
+        }
+
+        $raw = $this->readHttpRequestHeader($clientSocket, 0.5);
+        if ($raw === '') {
+            @\socket_close($clientSocket);
+            return true;
+        }
+
+        $request = $this->parseAcmeHttp01Request($raw) ?? $request;
+        $host = $this->extractHttpHostForAcme($raw, (string)$request['target']);
+        $body = $this->resolveAcmeHttp01ChallengeBody($host, (string)$request['token']);
+
+        if ($body === null) {
+            $body = 'ACME challenge not found';
+            $this->writeAcmeHttpResponseAndClose($clientSocket, '404 Not Found', $body, (string)$request['method'] === 'HEAD');
+            $this->log("ACME HTTP-01 challenge not found: host={$host}, token={$request['token']}, client={$clientIp}, connId={$connId}", 'WARN');
+            return true;
+        }
+
+        $this->writeAcmeHttpResponseAndClose($clientSocket, '200 OK', $body, (string)$request['method'] === 'HEAD');
+        $this->log("ACME HTTP-01 challenge served by Dispatcher: host={$host}, token={$request['token']}, client={$clientIp}, connId={$connId}", 'ROUTE');
+        return true;
+    }
+
+    /**
+     * @return array{method:string,target:string,path:string,token:string}|null
+     */
+    private function parseAcmeHttp01Request(string $raw): ?array
+    {
+        if (!\preg_match('/^([A-Z]+)\s+(\S+)\s+HTTP\/\d(?:\.\d)?/i', $raw, $m)) {
+            return null;
+        }
+
+        $method = \strtoupper((string)$m[1]);
+        if ($method !== 'GET' && $method !== 'HEAD') {
+            return null;
+        }
+
+        $target = (string)$m[2];
+        $path = $target;
+        if (\preg_match('/^https?:\/\//i', $target)) {
+            $parsedPath = \parse_url($target, \PHP_URL_PATH);
+            $path = \is_string($parsedPath) && $parsedPath !== '' ? $parsedPath : '/';
+        } else {
+            $queryAt = \strpos($target, '?');
+            if ($queryAt !== false) {
+                $path = \substr($target, 0, $queryAt);
+            }
+        }
+
+        if (!\preg_match('#^/\.well-known/acme-challenge/([A-Za-z0-9_-]+)/?$#', $path, $matches)) {
+            return null;
+        }
+
+        return [
+            'method' => $method,
+            'target' => $target,
+            'path' => $path,
+            'token' => (string)$matches[1],
+        ];
+    }
+
+    private function readHttpRequestHeader($clientSocket, float $timeoutSec): string
+    {
+        @\socket_set_nonblock($clientSocket);
+        $raw = '';
+        $deadline = \microtime(true) + \max(0.05, $timeoutSec);
+
+        while (\strpos($raw, "\r\n\r\n") === false && \strlen($raw) < 65536) {
+            if (\microtime(true) >= $deadline) {
+                break;
+            }
+
+            $read = [$clientSocket];
+            $write = $except = [];
+            $ready = @\socket_select($read, $write, $except, 0, 50000);
+            if ($ready > 0 && \in_array($clientSocket, $read, true)) {
+                $chunk = '';
+                $bytes = @\socket_recv($clientSocket, $chunk, 8192, 0);
+                if ($bytes === false || $bytes <= 0) {
+                    break;
+                }
+                $raw .= $chunk;
+            }
+        }
+
+        return $raw;
+    }
+
+    private function extractHttpHostForAcme(string $raw, string $target): string
+    {
+        $host = '';
+        if (\preg_match('/^https?:\/\//i', $target)) {
+            $parsedHost = \parse_url($target, \PHP_URL_HOST);
+            if (\is_string($parsedHost)) {
+                $host = $parsedHost;
+            }
+        }
+
+        if ($host === '' && \preg_match('/(?:^|\r\n)Host:\s*([^\r\n]+)/i', $raw, $m)) {
+            $host = \trim((string)$m[1]);
+        }
+
+        $host = \trim($host);
+        if ($host === '') {
+            return '';
+        }
+
+        if ($host[0] === '[' && \preg_match('/^\[([^\]]+)\]/', $host, $m)) {
+            $host = (string)$m[1];
+        } elseif (\strpos($host, ':') !== false) {
+            $host = \explode(':', $host, 2)[0];
+        }
+
+        return \strtolower(\rtrim(\trim($host), '.'));
+    }
+
+    private function resolveAcmeHttp01ChallengeBody(string $host, string $token): ?string
+    {
+        $dir = \rtrim(BP, \DIRECTORY_SEPARATOR)
+            . \DIRECTORY_SEPARATOR . 'generated'
+            . \DIRECTORY_SEPARATOR . 'acme-http01'
+            . \DIRECTORY_SEPARATOR;
+        if (!\is_dir($dir)) {
+            return null;
+        }
+
+        $checked = [];
+        if ($host !== '') {
+            $file = $dir . SslCertificateService::domainToAcmeChallengeFilename($host) . '.json';
+            $checked[$file] = true;
+            $body = $this->readAcmeHttp01ChallengeFile($file, $token);
+            if ($body !== null) {
+                return $body;
+            }
+        }
+
+        $files = \glob($dir . '*.json') ?: [];
+        foreach ($files as $file) {
+            if (isset($checked[$file])) {
+                continue;
+            }
+            $body = $this->readAcmeHttp01ChallengeFile((string)$file, $token);
+            if ($body !== null) {
+                return $body;
+            }
+        }
+
+        return null;
+    }
+
+    private function readAcmeHttp01ChallengeFile(string $file, string $token): ?string
+    {
+        if (!\is_file($file)) {
+            return null;
+        }
+
+        $json = @\file_get_contents($file);
+        if ($json === false || $json === '') {
+            return null;
+        }
+
+        $data = \json_decode($json, true);
+        if (!\is_array($data)
+            || (string)($data['token'] ?? '') !== $token
+            || !isset($data['keyAuth'])
+            || !\is_string($data['keyAuth'])
+        ) {
+            return null;
+        }
+
+        return $data['keyAuth'];
+    }
+
+    private function writeAcmeHttpResponseAndClose($clientSocket, string $status, string $body, bool $headOnly): void
+    {
+        $responseBody = $headOnly ? '' : $body;
+        $response = "HTTP/1.1 {$status}\r\n"
+            . "Content-Type: text/plain; charset=UTF-8\r\n"
+            . "Cache-Control: no-store\r\n"
+            . 'Content-Length: ' . \strlen($body) . "\r\n"
+            . "Connection: close\r\n\r\n"
+            . $responseBody;
+
+        $toWrite = \strlen($response);
+        $written = 0;
+        $deadline = \microtime(true) + 0.5;
+        while ($written < $toWrite && \microtime(true) < $deadline) {
+            $write = [$clientSocket];
+            $read = $except = [];
+            $ready = @\socket_select($read, $write, $except, 0, 50000);
+            if ($ready > 0 && \in_array($clientSocket, $write, true)) {
+                $bytes = @\socket_send($clientSocket, \substr($response, $written), $toWrite - $written, 0);
+                if ($bytes === false || $bytes <= 0) {
+                    break;
+                }
+                $written += $bytes;
+            }
+        }
+
+        @\socket_close($clientSocket);
     }
 
     /**
