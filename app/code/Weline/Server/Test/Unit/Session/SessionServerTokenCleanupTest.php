@@ -87,4 +87,46 @@ final class SessionServerTokenCleanupTest extends TestCase
             }
         }
     }
+
+    public function testStartReplacesUnwritableStaleTokenFile(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('POSIX file mode behavior is verified on Linux-like systems.');
+        }
+
+        $tokenFileName = 'session_server.token-stale-' . \str_replace('.', '-', (string) \microtime(true)) . '.token';
+        $tokenPath = BP . 'var/session/' . $tokenFileName;
+        $persistPath = \sys_get_temp_dir() . '/wls_session_token_stale_' . \getmypid() . '/';
+        if (!\is_dir($persistPath)) {
+            @\mkdir($persistPath, 0755, true);
+        }
+        if (!\is_dir(\dirname($tokenPath))) {
+            @\mkdir(\dirname($tokenPath), 0755, true);
+        }
+
+        \file_put_contents($tokenPath, 'stale');
+        \chmod($tokenPath, 0400);
+
+        $server = new SessionServer([
+            'port' => 0,
+            'persist_path' => $persistPath,
+            'token_file_name' => $tokenFileName,
+        ]);
+
+        try {
+            self::assertTrue($server->start('127.0.0.1', 0));
+            $rawToken = \trim((string) @\file_get_contents($tokenPath));
+            self::assertStringStartsWith((string) $server->getAuthToken(), $rawToken);
+            self::assertTrue(\is_writable($tokenPath));
+        } finally {
+            $server->stop();
+            @\chmod($tokenPath, 0600);
+            if (\is_file($tokenPath)) {
+                @\unlink($tokenPath);
+            }
+            if (\is_dir($persistPath)) {
+                @\rmdir($persistPath);
+            }
+        }
+    }
 }

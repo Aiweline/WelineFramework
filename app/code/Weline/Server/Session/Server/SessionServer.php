@@ -1185,9 +1185,9 @@ final class SessionServer
             }
         }
 
-        $dir = \dirname($this->tokenFilePath);
-        if (!\is_dir($dir)) {
-            @\mkdir($dir, 0755, true);
+        if (!$this->prepareAuthTokenFileForWrite()) {
+            $this->log("Auth token file restore failed: {$this->tokenFilePath}");
+            return;
         }
 
         $content = $this->authToken . ':' . $this->authTokenVersion;
@@ -1216,6 +1216,10 @@ final class SessionServer
             return;
         }
         if (!\is_writable($dir)) {
+            $this->repairRuntimePathOwnershipWithSudo($dir, true);
+            \clearstatcache(true, $dir);
+        }
+        if (!\is_writable($dir)) {
             $this->lastBindError = "auth token directory not writable: {$dir}";
             $this->log($this->lastBindError);
             $this->authToken = null;
@@ -1224,6 +1228,14 @@ final class SessionServer
         }
 
         // Token 文件格式：token:version（用冒号分隔）
+        if (!$this->prepareAuthTokenFileForWrite()) {
+            $this->lastBindError = 'auth token file not writable: ' . $this->tokenFilePath;
+            $this->log($this->lastBindError);
+            $this->authToken = null;
+            $this->tokenFilePath = '';
+            return;
+        }
+
         $content = $this->authToken . ':' . $this->authTokenVersion;
         $written = @\file_put_contents($this->tokenFilePath, $content, \LOCK_EX);
         if ($written === false) {
@@ -1238,6 +1250,112 @@ final class SessionServer
         }
 
         @\chmod($this->tokenFilePath, 0600);
+    }
+
+    private function prepareAuthTokenFileForWrite(): bool
+    {
+        if ($this->tokenFilePath === '') {
+            return false;
+        }
+
+        $dir = \dirname($this->tokenFilePath);
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0755, true);
+        }
+        if (!\is_dir($dir)) {
+            return false;
+        }
+
+        if (!\is_writable($dir)) {
+            $this->repairRuntimePathOwnershipWithSudo($dir, true);
+            \clearstatcache(true, $dir);
+        }
+        if (!\is_writable($dir)) {
+            return false;
+        }
+
+        \clearstatcache(true, $this->tokenFilePath);
+        if (!\file_exists($this->tokenFilePath)) {
+            return true;
+        }
+
+        if (\is_file($this->tokenFilePath) && \is_writable($this->tokenFilePath)) {
+            return true;
+        }
+
+        @\chmod($this->tokenFilePath, 0600);
+        \clearstatcache(true, $this->tokenFilePath);
+        if (\is_file($this->tokenFilePath) && \is_writable($this->tokenFilePath)) {
+            return true;
+        }
+
+        // var/session is normally owned by the runtime user; remove stale
+        // root-owned token files from earlier privileged WLS launches.
+        @\unlink($this->tokenFilePath);
+        \clearstatcache(true, $this->tokenFilePath);
+        if (!\file_exists($this->tokenFilePath)) {
+            return true;
+        }
+
+        $this->repairRuntimePathOwnershipWithSudo($this->tokenFilePath, false);
+        \clearstatcache(true, $this->tokenFilePath);
+
+        return \is_file($this->tokenFilePath) && \is_writable($this->tokenFilePath);
+    }
+
+    private function repairRuntimePathOwnershipWithSudo(string $path, bool $directory): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            return;
+        }
+
+        $user = self::getEffectiveUserName();
+        if ($user === '') {
+            return;
+        }
+
+        $group = self::getEffectiveGroupName();
+        $owner = $group !== '' ? $user . ':' . $group : $user;
+        $script = $directory
+            ? 'mkdir -p "$1" && chown -- "$2" "$1" && chmod u+rwx,g+rwx "$1"'
+            : 'touch "$1" && chown -- "$2" "$1" && chmod u+rw "$1"';
+        $command = 'sudo -n sh -c ' . \escapeshellarg($script)
+            . ' sh ' . \escapeshellarg($path)
+            . ' ' . \escapeshellarg($owner)
+            . ' 2>/dev/null';
+
+        @\exec($command);
+    }
+
+    private static function getEffectiveUserName(): string
+    {
+        if (\function_exists('posix_geteuid') && \function_exists('posix_getpwuid')) {
+            $info = @\posix_getpwuid((int) \posix_geteuid());
+            if (\is_array($info) && !empty($info['name'])) {
+                return (string) $info['name'];
+            }
+        }
+
+        foreach (['USER', 'LOGNAME', 'USERNAME'] as $name) {
+            $value = \getenv($name);
+            if (\is_string($value) && $value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    private static function getEffectiveGroupName(): string
+    {
+        if (\function_exists('posix_getegid') && \function_exists('posix_getgrgid')) {
+            $info = @\posix_getgrgid((int) \posix_getegid());
+            if (\is_array($info) && !empty($info['name'])) {
+                return (string) $info['name'];
+            }
+        }
+
+        return '';
     }
 
     private function normalizeAuthToken(string $token): string
