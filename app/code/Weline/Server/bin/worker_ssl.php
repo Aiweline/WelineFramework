@@ -60,6 +60,82 @@ if (!\function_exists('wlsMemoryLimitToBytes')) {
         };
     }
 }
+if (!\function_exists('wlsRuntimeEffectiveUserName')) {
+    function wlsRuntimeEffectiveUserName(): string
+    {
+        if (\function_exists('posix_geteuid') && \function_exists('posix_getpwuid')) {
+            $info = @\posix_getpwuid((int) \posix_geteuid());
+            if (\is_array($info) && !empty($info['name'])) {
+                return (string) $info['name'];
+            }
+        }
+
+        foreach (['USER', 'LOGNAME', 'USERNAME'] as $name) {
+            $value = \getenv($name);
+            if (\is_string($value) && $value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+}
+if (!\function_exists('wlsRuntimeEffectiveGroupName')) {
+    function wlsRuntimeEffectiveGroupName(): string
+    {
+        if (\function_exists('posix_getegid') && \function_exists('posix_getgrgid')) {
+            $info = @\posix_getgrgid((int) \posix_getegid());
+            if (\is_array($info) && !empty($info['name'])) {
+                return (string) $info['name'];
+            }
+        }
+
+        return '';
+    }
+}
+if (!\function_exists('wlsEnsureRuntimeFileReadable')) {
+    function wlsEnsureRuntimeFileReadable(string $path, int $mode = 0640): bool
+    {
+        $path = \trim($path);
+        if ($path === '' || !\is_file($path)) {
+            return false;
+        }
+
+        \clearstatcache(true, $path);
+        if (\is_readable($path)) {
+            return true;
+        }
+
+        @\chmod($path, $mode);
+        \clearstatcache(true, $path);
+        if (\is_readable($path)) {
+            return true;
+        }
+
+        static $sudoAttempted = [];
+        if (isset($sudoAttempted[$path]) || DIRECTORY_SEPARATOR === '\\') {
+            return false;
+        }
+        $sudoAttempted[$path] = true;
+
+        $user = wlsRuntimeEffectiveUserName();
+        if ($user === '') {
+            return false;
+        }
+
+        $group = wlsRuntimeEffectiveGroupName();
+        $owner = $group !== '' ? $user . ':' . $group : $user;
+        $script = 'chown -- "$2" "$1" && chmod u+r "$1"';
+        $command = 'sudo -n sh -c ' . \escapeshellarg($script)
+            . ' sh ' . \escapeshellarg($path)
+            . ' ' . \escapeshellarg($owner)
+            . ' 2>/dev/null';
+        @\exec($command);
+
+        \clearstatcache(true, $path);
+        return \is_readable($path);
+    }
+}
 
 $wlsMemoryLimit = '256M';
 @\ini_set('memory_limit', $wlsMemoryLimit);
@@ -171,6 +247,9 @@ if ($sslKey && !\preg_match('/^[a-zA-Z]:[\\\\\\/]|^\//', $sslKey)) {
 
 
 // 定义前端模式常量（供 WlsRuntime 使用）
+wlsEnsureRuntimeFileReadable($sslCert, 0644);
+wlsEnsureRuntimeFileReadable($sslKey, 0600);
+
 if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
     \define('WLS_FRONTEND_MODE', true);
 }
@@ -285,7 +364,12 @@ function _loadSniCertsFromMap(): array
         foreach ($map as $domain => $pair) {
             $certPath = (string)($pair['cert'] ?? '');
             $keyPath = (string)($pair['key'] ?? '');
-            if ($domain !== '' && $certPath !== '' && $keyPath !== '' && \is_file($certPath) && \is_file($keyPath)) {
+            if ($domain !== '' && $certPath !== '' && $keyPath !== '') {
+                wlsEnsureRuntimeFileReadable($certPath, 0644);
+                wlsEnsureRuntimeFileReadable($keyPath, 0600);
+            }
+            if ($domain !== '' && $certPath !== '' && $keyPath !== '' && \is_file($certPath) && \is_file($keyPath)
+                && \is_readable($certPath) && \is_readable($keyPath)) {
                 $certs[(string)$domain] = [
                     'local_cert' => $certPath,
                     'local_pk' => $keyPath,
@@ -336,7 +420,9 @@ function _resolveWelineLocalWildcardCertFromDisk(string $host): ?array
     $certDir = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR . $segment . DIRECTORY_SEPARATOR;
     $certFile = $certDir . 'fullchain.pem';
     $keyFile = $certDir . 'privkey.pem';
-    if (!\is_file($certFile) || !\is_file($keyFile)) {
+    wlsEnsureRuntimeFileReadable($certFile, 0644);
+    wlsEnsureRuntimeFileReadable($keyFile, 0600);
+    if (!\is_file($certFile) || !\is_file($keyFile) || !\is_readable($certFile) || !\is_readable($keyFile)) {
         return null;
     }
 
@@ -370,7 +456,9 @@ function _resolveSniCert(string $domain, array &$cache): ?array
     $certDir = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR . $segment . DIRECTORY_SEPARATOR;
     $certFile = $certDir . 'fullchain.pem';
     $keyFile = $certDir . 'privkey.pem';
-    if (\is_file($certFile) && \is_file($keyFile)) {
+    wlsEnsureRuntimeFileReadable($certFile, 0644);
+    wlsEnsureRuntimeFileReadable($keyFile, 0600);
+    if (\is_file($certFile) && \is_file($keyFile) && \is_readable($certFile) && \is_readable($keyFile)) {
         $entry = ['local_cert' => $certFile, 'local_pk' => $keyFile];
         $cache[$domain] = $entry;
         return $entry;
@@ -381,7 +469,9 @@ function _resolveSniCert(string $domain, array &$cache): ?array
     if ($restored) {
         \clearstatcache(true, $certFile);
         \clearstatcache(true, $keyFile);
-        if (\is_file($certFile) && \is_file($keyFile)) {
+        wlsEnsureRuntimeFileReadable($certFile, 0644);
+        wlsEnsureRuntimeFileReadable($keyFile, 0600);
+        if (\is_file($certFile) && \is_file($keyFile) && \is_readable($certFile) && \is_readable($keyFile)) {
             $entry = ['local_cert' => $certFile, 'local_pk' => $keyFile];
             $cache[$domain] = $entry;
             WlsLogger::info_("证书已从数据库恢复到磁盘：{$domain}");
