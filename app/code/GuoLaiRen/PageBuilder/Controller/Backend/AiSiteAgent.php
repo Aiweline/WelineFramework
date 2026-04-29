@@ -3331,22 +3331,29 @@ SCRIPT;
                     $this->buildWorkspaceState($fresh, $adminId, 80, true),
                     [$pageType]
                 );
-            $sse->complete([
+            $sse->sendEvent('done', [
                 'success' => true,
                 'operation' => $operationLabel,
                 'message' => (string)($lastResult['message'] ?? ($refine ? __('区块微调完成') : __('区块重建完成'))),
-                'data' => $lastResult,
+                'page_type' => (string)($lastResult['page_type'] ?? $pageType),
+                'component_code' => $componentCode,
+                'section_code' => (string)($lastResult['section_code'] ?? ''),
+                'shared_region' => (string)($lastResult['shared_region'] ?? ''),
                 'state' => $state,
                 'realtime' => true,
             ]);
+            $sse->close();
         } catch (\Throwable $throwable) {
             $sse->sendError($throwable->getMessage(), $this->inferThrowableHttpCode($throwable));
-            $sse->complete([
+            $sse->sendEvent('done', [
                 'success' => false,
                 'operation' => $operationLabel,
                 'message' => $throwable->getMessage(),
+                'page_type' => $pageType,
+                'component_code' => $componentCode,
                 'realtime' => true,
             ]);
+            $sse->close();
         } finally {
             $this->clearAiChunkForwarder();
         }
@@ -3439,6 +3446,7 @@ SCRIPT;
         string $componentCode,
         string $instruction = ''
     ): array {
+        $opStartedAt = \microtime(true);
         $this->assertActiveStreamLeaseAlive($session, $adminId);
         $scope = $this->scopeCompatibilityService->normalizeScope(
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
@@ -3491,6 +3499,7 @@ SCRIPT;
         $pageComponentGenerationService = ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
 
         if ($sharedRegion !== '') {
+            $generateStartedAt = \microtime(true);
             $sharedComponent = $pageComponentGenerationService->generateSharedComponent(
                 $sharedRegion,
                 $scope['website_profile'],
@@ -3498,6 +3507,12 @@ SCRIPT;
                 '',
                 true
             );
+            $this->logHotPathStage('block_regenerate.generate_shared_component', $generateStartedAt, [
+                'page_type' => $pageType,
+                'component_code' => $componentCode,
+                'shared_region' => $sharedRegion,
+                'operation' => $instruction !== '' ? 'block_refine' : 'block_regenerate',
+            ]);
             $scope['shared_components'] = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
             $scope['shared_components'][$sharedRegion] = $sharedComponent;
             if (\is_array($scope['shared_component_refinements'] ?? null)) {
@@ -3537,6 +3552,24 @@ SCRIPT;
                     'section_code' => $sectionCode,
                     'shared_region' => $sharedRegion,
                 ]);
+                $this->logHotPathStage('block_regenerate.preview_ready_html_blocks', $opStartedAt, [
+                    'page_type' => $pageType,
+                    'component_code' => $componentCode,
+                    'shared_region' => $sharedRegion,
+                    'affected_page_types' => $affectedPageTypes,
+                ]);
+                $this->emitBlockPreviewReadyEvent(
+                    $sse,
+                    $instruction !== '' ? 'block_refine' : 'block_regenerate',
+                    (string)__('区块已生成，正在刷新当前预览'),
+                    $pageType,
+                    $componentCode,
+                    $sectionCode,
+                    $sharedRegion,
+                    $affectedPageTypes,
+                    $scope
+                );
+                $materializeStartedAt = \microtime(true);
                 $materialized = $this->materializeGeneratedPages(
                     AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS,
                     \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId()),
@@ -3545,10 +3578,17 @@ SCRIPT;
                     [],
                     $virtualPages
                 );
+                $this->logHotPathStage('block_regenerate.materialize_html_blocks', $materializeStartedAt, [
+                    'page_type' => $pageType,
+                    'component_code' => $componentCode,
+                    'shared_region' => $sharedRegion,
+                    'affected_page_types' => $affectedPageTypes,
+                ]);
                 $scope = $this->mergeMaterializedPagesIntoScope($scope, $materialized);
             } else {
                 $pageTypesAll = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
                 $affectedPageTypes = $pageTypesAll;
+                $layoutStartedAt = \microtime(true);
                 $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypesAll);
                 $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
                 $this->virtualThemeService->saveGeneratedSharedComponent($virtualThemeId, $sharedComponent);
@@ -3581,6 +3621,24 @@ SCRIPT;
                     'section_code' => $sectionCode,
                     'shared_region' => $sharedRegion,
                 ]);
+                $this->logHotPathStage('block_regenerate.preview_ready_virtual_theme_shared', $layoutStartedAt, [
+                    'page_type' => $pageType,
+                    'component_code' => $componentCode,
+                    'shared_region' => $sharedRegion,
+                    'affected_page_types' => $affectedPageTypes,
+                ]);
+                $this->emitBlockPreviewReadyEvent(
+                    $sse,
+                    $instruction !== '' ? 'block_refine' : 'block_regenerate',
+                    (string)__('区块已生成，正在刷新当前预览'),
+                    $pageType,
+                    $componentCode,
+                    $sectionCode,
+                    $sharedRegion,
+                    $affectedPageTypes,
+                    $scope
+                );
+                $materializeStartedAt = \microtime(true);
                 $materialized = $this->materializeGeneratedPages(
                     AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
                     \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId()),
@@ -3589,10 +3647,23 @@ SCRIPT;
                     $pageTypeLayouts,
                     $virtualPages
                 );
+                $this->logHotPathStage('block_regenerate.materialize_virtual_theme_shared', $materializeStartedAt, [
+                    'page_type' => $pageType,
+                    'component_code' => $componentCode,
+                    'shared_region' => $sharedRegion,
+                    'affected_page_types' => $affectedPageTypes,
+                ]);
                 $scope = $this->mergeMaterializedPagesIntoScope($scope, $materialized);
             }
         } else {
+            $generateStartedAt = \microtime(true);
             $sectionComponent = $pageComponentGenerationService->generatePageSection($pageType, $sectionCode, $scope['website_profile'], $scope);
+            $this->logHotPathStage('block_regenerate.generate_page_section', $generateStartedAt, [
+                'page_type' => $pageType,
+                'component_code' => $componentCode,
+                'section_code' => $sectionCode,
+                'operation' => $instruction !== '' ? 'block_refine' : 'block_regenerate',
+            ]);
 
             if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
                 $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
@@ -3618,6 +3689,23 @@ SCRIPT;
                 $scope['virtual_pages_by_type'] = $virtualPages;
                 $scope['preview_page_type'] = $pageType;
                 $scope = $this->buildTaskService->markTaskDone($scope, $taskKey, ['page_type' => $pageType, 'section_code' => $sectionCode]);
+                $this->logHotPathStage('block_regenerate.preview_ready_html_section', $generateStartedAt, [
+                    'page_type' => $pageType,
+                    'component_code' => $componentCode,
+                    'section_code' => $sectionCode,
+                ]);
+                $this->emitBlockPreviewReadyEvent(
+                    $sse,
+                    $instruction !== '' ? 'block_refine' : 'block_regenerate',
+                    (string)__('区块已生成，正在刷新当前预览'),
+                    $pageType,
+                    $componentCode,
+                    $sectionCode,
+                    '',
+                    [$pageType],
+                    $scope
+                );
+                $materializeStartedAt = \microtime(true);
                 $materialized = $this->materializeGeneratedPages(
                     AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS,
                     \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId()),
@@ -3626,8 +3714,14 @@ SCRIPT;
                     [],
                     [$pageType => $row]
                 );
+                $this->logHotPathStage('block_regenerate.materialize_html_section', $materializeStartedAt, [
+                    'page_type' => $pageType,
+                    'component_code' => $componentCode,
+                    'section_code' => $sectionCode,
+                ]);
                 $scope = $this->mergeMaterializedPagesIntoScope($scope, $materialized);
             } else {
+                $layoutStartedAt = \microtime(true);
                 $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
                 $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
                 $layout = $this->scopeCompatibilityService->normalizeLayoutConfig($pageTypeLayouts[$pageType] ?? [], $pageType);
@@ -3654,6 +3748,23 @@ SCRIPT;
                 $scope['virtual_pages_by_type'] = $virtualPages;
                 $scope['preview_page_type'] = $pageType;
                 $scope = $this->buildTaskService->markTaskDone($scope, $taskKey, ['page_type' => $pageType, 'section_code' => $sectionCode]);
+                $this->logHotPathStage('block_regenerate.preview_ready_virtual_theme_section', $layoutStartedAt, [
+                    'page_type' => $pageType,
+                    'component_code' => $componentCode,
+                    'section_code' => $sectionCode,
+                ]);
+                $this->emitBlockPreviewReadyEvent(
+                    $sse,
+                    $instruction !== '' ? 'block_refine' : 'block_regenerate',
+                    (string)__('区块已生成，正在刷新当前预览'),
+                    $pageType,
+                    $componentCode,
+                    $sectionCode,
+                    '',
+                    [$pageType],
+                    $scope
+                );
+                $materializeStartedAt = \microtime(true);
                 $materialized = $this->materializeGeneratedPages(
                     AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
                     \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId()),
@@ -3662,6 +3773,11 @@ SCRIPT;
                     [$pageType => $layout],
                     [$pageType => $virtualPages[$pageType] ?? []]
                 );
+                $this->logHotPathStage('block_regenerate.materialize_virtual_theme_section', $materializeStartedAt, [
+                    'page_type' => $pageType,
+                    'component_code' => $componentCode,
+                    'section_code' => $sectionCode,
+                ]);
                 $scope = $this->mergeMaterializedPagesIntoScope($scope, $materialized);
             }
         }
@@ -3687,6 +3803,13 @@ SCRIPT;
         }
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $this->logHotPathStage('block_regenerate.persist_and_reload_scope', $opStartedAt, [
+            'page_type' => $pageType,
+            'component_code' => $componentCode,
+            'section_code' => $sectionCode,
+            'shared_region' => $sharedRegion,
+            'operation' => $instruction !== '' ? 'block_refine' : 'block_regenerate',
+        ]);
         $state = $this->buildWorkspaceEventStatePayload(
             $this->buildWorkspaceState($fresh, $adminId, 80, true),
             $affectedPageTypes
@@ -3725,6 +3848,58 @@ SCRIPT;
             'shared_region' => $sharedRegion,
             'state' => $state,
         ];
+    }
+
+    /**
+     * 在组件生成完成、virtual_pages_by_type 已就绪后立即推送可刷新预览的最小状态，
+     * 不等待后续 materialize/持久化链路结束。
+     *
+     * @param list<string> $affectedPageTypes
+     * @param array<string, mixed> $scope
+     */
+    private function emitBlockPreviewReadyEvent(
+        SseWriter $sse,
+        string $operation,
+        string $message,
+        string $pageType,
+        string $componentCode,
+        string $sectionCode,
+        string $sharedRegion,
+        array $affectedPageTypes,
+        array $scope
+    ): void {
+        $minimalState = [
+            'virtual_pages_by_type' => \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [],
+            'page_type_layouts' => \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [],
+            'preview_page_type' => (string)($scope['preview_page_type'] ?? $pageType),
+            'build_summary' => [
+                'task_summary' => $this->buildTaskService->summarize($scope),
+            ],
+            'workspace_status' => (string)($scope['workspace_status'] ?? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH),
+        ];
+        $sse->sendEvent('page_generated', [
+            'operation' => $operation,
+            'message' => $message,
+            'page_type' => $pageType,
+            'component_code' => $componentCode,
+            'section_code' => $sectionCode,
+            'shared_region' => $sharedRegion,
+            'affected_page_types' => $affectedPageTypes,
+            'progress_percent' => 100,
+            'state' => $minimalState,
+            'realtime' => true,
+        ]);
+        $sse->sendEvent('progress', [
+            'operation' => $operation,
+            'message' => (string)__('区块已生成，当前预览已刷新'),
+            'page_type' => $pageType,
+            'component_code' => $componentCode,
+            'section_code' => $sectionCode,
+            'shared_region' => $sharedRegion,
+            'progress_percent' => 100,
+            'state' => $minimalState,
+            'realtime' => true,
+        ]);
     }
 
     private function handleStartPublish(): string
@@ -13264,6 +13439,15 @@ SCRIPT;
         if ($message === '') {
             $message = $throwable::class;
         }
+        $errorCode = (int)$throwable->getCode();
+        $errorClass = $throwable::class;
+        $reason = $message;
+        if ($errorCode !== 0) {
+            $reason .= ' [code=' . $errorCode . ']';
+        }
+        if ($errorClass !== '' && $errorClass !== $message) {
+            $reason .= ' [' . $errorClass . ']';
+        }
         $attemptNo = $this->buildTaskService->getTaskAttemptNo($scope, $taskKey);
         $progressPercent = \max(0, \min(99, (int)($context['progress_percent'] ?? 0)));
         $basePayload = \array_replace($context, [
@@ -13274,6 +13458,9 @@ SCRIPT;
             'attempt_no' => $attemptNo,
             'max_attempts' => self::BUILD_TASK_MAX_GENERATION_ATTEMPTS,
             'error_message' => $message,
+            'error_code' => $errorCode,
+            'error_class' => $errorClass,
+            'failure_reason' => $reason,
         ]);
 
         $scope = $this->buildTaskService->markTaskFailed($scope, $taskKey, $message);
@@ -13281,8 +13468,9 @@ SCRIPT;
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $this->emitBuildInfoEvent(
             $sse,
-            (string)__('Build task failed and is waiting for retry: %{task}', [
+            (string)__('Build task failed and is waiting for retry: %{task} — %{reason}', [
                 'task' => $taskKey,
+                'reason' => $reason,
             ]),
             \array_replace($basePayload, [
                 'event_type' => 'build_task_failed',
@@ -13293,12 +13481,12 @@ SCRIPT;
             $sse,
             $scope,
             'build',
-            (string)__('Build task failed: %{task}', ['task' => $taskKey]),
+            (string)__('Build task failed: %{task} — %{reason}', ['task' => $taskKey, 'reason' => $reason]),
             $progressPercent,
             'failed'
         );
         $sse->sendEvent('task_failed', $this->enrichTaskEventPayload($scope, \array_replace($basePayload, [
-            'message' => 'Build task failed: ' . $taskKey,
+            'message' => 'Build task failed: ' . $taskKey . ' — ' . $reason,
         ])));
 
         return [
