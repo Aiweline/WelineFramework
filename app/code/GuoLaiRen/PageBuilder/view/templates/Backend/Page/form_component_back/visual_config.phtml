@@ -42,7 +42,7 @@ $currentPageTypeName = $pageTypeNames[$pageType] ?? $pageType;
 // 渲染 SseTerminal 组件 HTML（用于组件配置弹窗内的 AI 生成过程展示）
 ob_start();
 ?>
-<w:theme:sse-terminal id="aiComponentConfigSseTerminal" title="@lang{生成过程}" height="180px" events="start,progress,chunk,done,error" show-toolbar="true" />
+<w:theme:sse-terminal id="aiComponentConfigSseTerminal" title="@lang{生成过程}" height="180px" events="start,progress,thinking,chunk,done,error" show-toolbar="true" />
 <?php
 $aiComponentConfigSseTerminalHtml = ob_get_clean();
 
@@ -5840,6 +5840,8 @@ window.editComponentInPreview = async function(wrapper) {
                         sseSetStatus('<?= __("连接中...") ?>');
                         let streamingLineEl = null;
                         let streamingTextEl = null;
+                        let thinkingStreamingLineEl = null;
+                        let thinkingStreamingTextEl = null;
                         try {
                             const res = await fetch(streamUrl, { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
                             if (!res.ok) throw new Error(res.statusText || '<?= __("请求失败") ?>');
@@ -5905,7 +5907,27 @@ window.editComponentInPreview = async function(wrapper) {
                                             sseContent.appendChild(pre);
                                             if (sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
                                         }
+                                    } else if (currentEvent === 'thinking') {
+                                        const ttxt = (payload.content && typeof payload.content === 'string') ? payload.content : '';
+                                        if (!ttxt) return;
+                                        if (!thinkingStreamingTextEl && sseContent) {
+                                            const tline = document.createElement('div');
+                                            tline.className = 'weline-sse-terminal-line progress weline-sse-terminal-streaming weline-sse-terminal-thinking';
+                                            tline.innerHTML = '<span class="weline-sse-terminal-time">[' + new Date().toLocaleTimeString('zh-CN', { hour12: false }) + ']</span><span class="weline-sse-terminal-label"><?= __("思考") ?> </span><span class="weline-sse-terminal-text"></span>';
+                                            sseContent.appendChild(tline);
+                                            thinkingStreamingLineEl = tline;
+                                            thinkingStreamingTextEl = tline.querySelector('.weline-sse-terminal-text');
+                                        }
+                                        if (thinkingStreamingTextEl) {
+                                            thinkingStreamingTextEl.textContent += ttxt;
+                                            if (sseContent && sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
+                                        }
                                     } else if (currentEvent === 'chunk') {
+                                        if (thinkingStreamingLineEl) {
+                                            thinkingStreamingLineEl.classList.remove('weline-sse-terminal-streaming');
+                                            thinkingStreamingLineEl = null;
+                                            thinkingStreamingTextEl = null;
+                                        }
                                         const txt = (payload.content && typeof payload.content === 'string') ? payload.content : '';
                                         if (!txt) return;
                                         if (!streamingTextEl && sseContent) {
@@ -5921,6 +5943,8 @@ window.editComponentInPreview = async function(wrapper) {
                                             if (sseContent && sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
                                         }
                                     } else if (currentEvent === 'done') {
+                                        if (thinkingStreamingLineEl) thinkingStreamingLineEl.classList.remove('weline-sse-terminal-streaming');
+                                        thinkingStreamingLineEl = null; thinkingStreamingTextEl = null;
                                         if (streamingLineEl) streamingLineEl.classList.remove('weline-sse-terminal-streaming');
                                         streamingLineEl = null; streamingTextEl = null;
                                         const d = payload.data || payload;
@@ -5928,6 +5952,8 @@ window.editComponentInPreview = async function(wrapper) {
                                         applyConfigData(d);
                                         sseLog('<?= __("生成完成") ?>', 'done');
                                     } else if (currentEvent === 'error') {
+                                        if (thinkingStreamingLineEl) thinkingStreamingLineEl.classList.remove('weline-sse-terminal-streaming');
+                                        thinkingStreamingLineEl = null; thinkingStreamingTextEl = null;
                                         if (streamingLineEl) streamingLineEl.classList.remove('weline-sse-terminal-streaming');
                                         streamingLineEl = null; streamingTextEl = null;
                                         if (payload.message) sseLog(payload.message, 'error');
