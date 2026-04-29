@@ -272,7 +272,12 @@ window.generatePageContent = function() {
             currentEvent=''; currentData='';
         }
         function processChunk(chunk){
-            if(chunk&&chunk.value) buffer+=decoder.decode(chunk.value,{stream:true});
+            if(chunk&&chunk.value) {
+                buffer+=decoder.decode(chunk.value,{stream:true});
+            } else if (chunk && chunk.done) {
+                buffer+=decoder.decode();
+            }
+            buffer = buffer.replace(/\r\n/g, '\n');
             var SEP_DBL = String.fromCharCode(10,10), SEP_SGL = String.fromCharCode(10);
             var parts = buffer.split(SEP_DBL);
             buffer = parts.pop()||'';
@@ -282,7 +287,10 @@ window.generatePageContent = function() {
                 for(var j=0;j<lines.length;j++){
                     var ln=lines[j];
                     if(ln.indexOf('event:')===0) currentEvent=ln.replace(/^event:\s*/,'').trim();
-                    else if(ln.indexOf('data:')===0) currentData=ln.replace(/^data:\s*/,'');
+                    else if(ln.indexOf('data:')===0) {
+                        var dataLine = ln.replace(/^data:\s*/,'');
+                        currentData = currentData ? (currentData + '\n' + dataLine) : dataLine;
+                    }
                 }
                 finishEvent();
             }
