@@ -1472,6 +1472,7 @@ final class AiSiteVirtualThemePlanService
         if ($ai === null) {
             throw new \RuntimeException('AI task plan generation failed: AiService unavailable.');
         }
+        $prompt = $this->getSkillRegistry()->prependPromptGuide($prompt, 'stage2');
 
         $publicId = \trim((string)($scope['public_id'] ?? ''));
         $requestParams = \array_merge([
@@ -6516,6 +6517,7 @@ final class AiSiteVirtualThemePlanService
         $prompt = $mode === 'refine_task_plan'
             ? $this->buildTaskPlanRefinePrompt($scope, $buildBlueprint, $baselineStructured, $baselineVirtualThemePlan, $payload)
             : $this->buildTaskPlanRebuildPrompt($scope, $buildBlueprint, $baselineStructured, $baselineVirtualThemePlan, $payload);
+        $prompt = $this->getSkillRegistry()->prependPromptGuide($prompt, 'stage2');
 
         $publicId = \trim((string)($scope['public_id'] ?? ''));
         $requestParams = [
@@ -6991,6 +6993,7 @@ final class AiSiteVirtualThemePlanService
             throw new \RuntimeException('AI task plan generation failed: AiService unavailable.');
         }
         $prompt = $this->buildTaskPlanGenerationPrompt($scope, $buildBlueprint, $structured, $virtualThemePlan);
+        $prompt = $this->getSkillRegistry()->prependPromptGuide($prompt, 'stage2');
         $requestParams = [
             'allow_zero_balance_provider' => true,
             'temperature' => 0.2,

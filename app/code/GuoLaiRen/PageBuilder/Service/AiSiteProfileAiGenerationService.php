@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser;
+use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -21,7 +22,7 @@ class AiSiteProfileAiGenerationService
             return [];
         }
 
-        $systemPrompt = $this->buildSystemPrompt($context);
+        $systemPrompt = $this->getSkillRegistry()->prependPromptGuide($this->buildSystemPrompt($context), 'profile');
         $userPrompt = $this->buildUserPrompt($context);
 
         $response = AiService::generateText(
@@ -112,6 +113,11 @@ PROMPT;
 
         return "Generate the website profile JSON from this input:\n"
             . \json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT);
+    }
+
+    private function getSkillRegistry(): AiSiteSkillRegistry
+    {
+        return ObjectManager::getInstance(AiSiteSkillRegistry::class);
     }
 
     /**
