@@ -56,6 +56,7 @@ class ServiceOrchestrator
     private const CONTROL_OPERATION_STATE_COMPLETED = 'completed';
     private const CONTROL_OPERATION_STATE_CANCELLED = 'cancelled';
     private const READY_CONFIRM_TIMEOUT_SEC = 3.0;
+    private const MIN_READY_TIMER_POLL_USEC = 1000;
     private const SLOT_GENERATIONS_KEY = 'slot_generations';
 
     private ServiceRegistry $registry;
@@ -887,7 +888,12 @@ class ServiceOrchestrator
             return $defaultUsec;
         }
 
-        return \max(0, \min($defaultUsec, (int) \floor($nextDelay * 1000000)));
+        $delayUsec = (int) \ceil($nextDelay * 1000000);
+        if ($delayUsec < self::MIN_READY_TIMER_POLL_USEC && $defaultUsec > 0) {
+            $delayUsec = \min($defaultUsec, self::MIN_READY_TIMER_POLL_USEC);
+        }
+
+        return \max(0, \min($defaultUsec, $delayUsec));
     }
 
     private function getMainLoopTaskAgeSec(string $key, float $now): ?float

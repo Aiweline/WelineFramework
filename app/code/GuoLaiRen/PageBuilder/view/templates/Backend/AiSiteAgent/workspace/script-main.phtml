@@ -757,6 +757,63 @@
         }
     }
 
+    function isRetryableAiFailureOperationBusy(operation, workspaceState) {
+        var normalizedOperation = String(operation || '').trim();
+        if (normalizedOperation === 'plan') {
+            return !!planStartRequestPending || !!planSseRunning || hasAnyRunningQueueForUi();
+        }
+        if (normalizedOperation === 'task_plan') {
+            return !!taskPlanStartRequestInFlight || !!taskPlanSseRunning || hasAnyRunningQueueForUi();
+        }
+        if (normalizedOperation === 'build') {
+            return isBuildActionLocked(workspaceState) || isPublishRepairOperationLocked();
+        }
+        return hasAnyRunningQueueForUi();
+    }
+
+    function syncRetryableAiFailureButton(buttonId, operation, workspaceState) {
+        var btn = document.getElementById(buttonId);
+        if (!btn) {
+            return 0;
+        }
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var count = getRetryableAiFailureCount(state, operation);
+        var visible = count > 0;
+        btn.classList.toggle('d-none', !visible);
+        var countEl = btn.querySelector('[data-retryable-ai-count]');
+        if (countEl) {
+            countEl.textContent = String(count);
+        }
+        var busy = visible && isRetryableAiFailureOperationBusy(operation, state);
+        btn.disabled = busy;
+        btn.setAttribute('aria-disabled', busy ? 'true' : 'false');
+        if (visible) {
+            btn.setAttribute(
+                'title',
+                busy ? getRetryableAiFailureMessage(state, operation) : String(btn.dataset.retryableAiLabel || '继续重试失败项')
+            );
+        } else {
+            btn.removeAttribute('title');
+        }
+        return visible ? 1 : 0;
+    }
+
+    function syncRetryableAiFailureButtons(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var visibleCount = 0;
+        visibleCount += syncRetryableAiFailureButton('pb-ai-retry-plan-failures', 'plan', state);
+        visibleCount += syncRetryableAiFailureButton('pb-ai-retry-task-plan-failures', 'task_plan', state);
+        visibleCount += syncRetryableAiFailureButton('pb-ai-retry-build-failures', 'build', state);
+        var panel = document.getElementById('pb-ai-retryable-failure-actions');
+        if (panel) {
+            panel.classList.toggle('d-none', visibleCount <= 0);
+        }
+    }
+
     function syncRetryableAiFailureActionGuards(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object'
             ? workspaceState
@@ -799,6 +856,7 @@
             buildBlocked,
             getRetryableAiFailureMessage(state, 'build')
         );
+        syncRetryableAiFailureButtons(state);
     }
 
     function hasBuildQueueRunningForUi(workspaceState) {
@@ -840,26 +898,56 @@
     }
 
     function syncPublishRepairButtonDisabledState() {
-        var btn = document.getElementById('pb-ai-rebuild-publish-quality');
-        if (!btn) {
-            return;
-        }
-        btn.disabled = isPublishRepairOperationLocked();
-        btn.setAttribute('aria-disabled', btn.disabled ? 'true' : 'false');
+        syncRetryableAiFailureButtons(latestWorkspaceState || initialWorkspaceState || {});
     }
 
-    function bindPublishRepairButton() {
-        var publishRepairBtn = document.getElementById('pb-ai-rebuild-publish-quality');
-        if (publishRepairBtn && publishRepairBtn.dataset.pbBound !== '1') {
-            publishRepairBtn.dataset.pbBound = '1';
-            publishRepairBtn.addEventListener('click', function () {
-                if (publishRepairBtn.disabled) {
+    function bindRetryableAiFailureButtons() {
+        var planRetryBtn = document.getElementById('pb-ai-retry-plan-failures');
+        if (planRetryBtn && planRetryBtn.dataset.pbBound !== '1') {
+            planRetryBtn.dataset.pbBound = '1';
+            planRetryBtn.addEventListener('click', function () {
+                if (planRetryBtn.disabled) {
+                    return;
+                }
+                var api = window.__pbWorkspaceApi || workspaceApi || {};
+                if (!api || typeof api.retryPhaseOnePlanGeneration !== 'function') {
+                    toast('error', messages.planStartUnavailable || messages.networkError);
+                    return;
+                }
+                api.retryPhaseOnePlanGeneration({ forceRebuild: false });
+            });
+        }
+        var taskPlanRetryBtn = document.getElementById('pb-ai-retry-task-plan-failures');
+        if (taskPlanRetryBtn && taskPlanRetryBtn.dataset.pbBound !== '1') {
+            taskPlanRetryBtn.dataset.pbBound = '1';
+            taskPlanRetryBtn.addEventListener('click', function () {
+                if (taskPlanRetryBtn.disabled) {
+                    return;
+                }
+                var api = window.__pbWorkspaceApi || workspaceApi || {};
+                if (!api || typeof api.retryPhaseTwoTaskPlanGeneration !== 'function') {
+                    toast('error', messages.taskPlanStartUnavailable || messages.networkError);
+                    return;
+                }
+                api.retryPhaseTwoTaskPlanGeneration({ forceRebuild: false });
+            });
+        }
+        var buildRetryBtn = document.getElementById('pb-ai-retry-build-failures');
+        if (buildRetryBtn && buildRetryBtn.dataset.pbBound !== '1') {
+            buildRetryBtn.dataset.pbBound = '1';
+            buildRetryBtn.addEventListener('click', function () {
+                if (buildRetryBtn.disabled) {
                     return;
                 }
                 closePublishChecklistModal();
-                startPublishStageQualityRepair(publishRepairBtn);
+                startPublishStageQualityRepair(buildRetryBtn);
             });
         }
+        syncRetryableAiFailureButtons(latestWorkspaceState || initialWorkspaceState || {});
+    }
+
+    function bindPublishRepairButton() {
+        bindRetryableAiFailureButtons();
         syncPublishRepairButtonDisabledState();
     }
 
@@ -5786,6 +5874,8 @@
                         var currentData = '';
                         var streamingLineEl = null;
                         var streamingTextEl = null;
+                        var thinkingStreamingLineEl = null;
+                        var thinkingStreamingTextEl = null;
 
                         function finishStreamEvent() {
                             var payloadData = {};
@@ -5806,7 +5896,34 @@
                             } else if (currentEvent === 'prompt' && payloadData.prompt) {
                                 sseLog('【<?= __('本次提示词') ?>】', 'info');
                                 sseLog(payloadData.prompt, 'info');
+                            } else if (currentEvent === 'thinking') {
+                                var thinkText = payloadData.content && typeof payloadData.content === 'string' ? payloadData.content : '';
+                                if (!thinkText) {
+                                    currentEvent = '';
+                                    currentData = '';
+                                    return;
+                                }
+                                if (!thinkingStreamingTextEl && sseContent) {
+                                    thinkingStreamingLineEl = document.createElement('div');
+                                    thinkingStreamingLineEl.style.marginBottom = '6px';
+                                    thinkingStreamingLineEl.style.opacity = '0.88';
+                                    thinkingStreamingLineEl.innerHTML = '<span style="opacity:0.55; margin-right:8px;">['
+                                        + new Date().toLocaleTimeString('zh-CN', { hour12: false })
+                                        + ']</span><span style="opacity:0.75; margin-right:6px;"><?= __('思考') ?></span><span class="pb-ai-component-thinking-text"></span>';
+                                    sseContent.appendChild(thinkingStreamingLineEl);
+                                    thinkingStreamingTextEl = thinkingStreamingLineEl.querySelector('.pb-ai-component-thinking-text');
+                                }
+                                if (thinkingStreamingTextEl) {
+                                    thinkingStreamingTextEl.textContent += thinkText;
+                                    if (sseContent && sseContent.parentElement) {
+                                        sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
+                                    }
+                                }
                             } else if (currentEvent === 'chunk') {
+                                if (thinkingStreamingLineEl) {
+                                    thinkingStreamingLineEl = null;
+                                    thinkingStreamingTextEl = null;
+                                }
                                 var chunkText = payloadData.content && typeof payloadData.content === 'string' ? payloadData.content : '';
                                 if (!chunkText) {
                                     currentEvent = '';
