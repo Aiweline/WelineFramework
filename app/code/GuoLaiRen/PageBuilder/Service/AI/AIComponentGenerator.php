@@ -1005,7 +1005,12 @@ HTML;
         $prompt .= "- 循环前检查数组：foreach ((\$items ?? []) as \$item)\n";
         $prompt .= "- htmlspecialchars 参数不能为 null：htmlspecialchars(\$text ?? '')\n";
         
-        return $prompt;
+        return $this->withPageBuilderSkillGuide($prompt, 'stage3');
+    }
+
+    private function withPageBuilderSkillGuide(string $prompt, string $stage = 'stage3'): string
+    {
+        return ObjectManager::getInstance(AiSiteSkillRegistry::class)->prependPromptGuide($prompt, $stage);
     }
     
     /**
