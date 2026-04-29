@@ -1220,6 +1220,10 @@ class AiSiteBuildTaskService
     public function resetFailedTasksForFreshRepair(array $scope, string $message): array
     {
         $taskState = $this->extractTaskState($scope);
+        $blueprintTaskKeys = \array_fill_keys(\array_values(\array_filter(\array_map(
+            static fn(array $task): string => \trim((string)($task['task_key'] ?? '')),
+            $this->extractBlueprintTasks($scope)
+        ))), true);
         foreach ($this->extractBlueprintTasks($scope) as $task) {
             $taskKey = \trim((string)($task['task_key'] ?? ''));
             if ($taskKey === '') {
@@ -1231,6 +1235,18 @@ class AiSiteBuildTaskService
             }
             $scope = $this->markTaskPendingForFreshRepair($scope, $taskKey, $message);
             $taskState = $this->extractTaskState($scope);
+        }
+
+        $retryableBuildFailures = $this->summarizeRetryableAiFailures($scope, 'build');
+        foreach (\is_array($retryableBuildFailures['items'] ?? null) ? $retryableBuildFailures['items'] : [] as $failure) {
+            if (!\is_array($failure)) {
+                continue;
+            }
+            $taskKey = \trim((string)($failure['item_key'] ?? ''));
+            if ($taskKey === '' || !isset($blueprintTaskKeys[$taskKey])) {
+                continue;
+            }
+            $scope = $this->markTaskPendingForFreshRepair($scope, $taskKey, $message);
         }
 
         return $this->clearRetryableAiFailures($scope, 'build');
