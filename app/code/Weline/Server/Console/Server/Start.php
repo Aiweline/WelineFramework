@@ -2800,6 +2800,29 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             $this->printer->note(__('正在为 %{1} 准备 SSL 证书...', [$domain]));
         }
 
+        // 冷启动阶段：如果此时无法保证 ACME HTTP-01 校验入口已经可用（例如 dispatcher/worker 尚未就绪），
+        // 则不要直接进入公网 ACME 申请流程，否则会出现必然 404（/.well-known/acme-challenge/* 未响应）。
+        // 这里先生成自签证书让服务尽快就绪，后续 Master 子服务就绪后统一再补做正式证书申请。
+        $deferAcmeForColdStartup = !$needsLocalCert
+            && !$willReuse
+            && $webroot !== SslCertificateService::WEBROOT_WLS_VIRTUAL;
+        if ($deferAcmeForColdStartup) {
+            $this->printer->warning(__('检测到冷启动阶段 ACME HTTP-01 校验入口尚未就绪：已先用自签证书启动（%{1}）。', [$domain]));
+
+            $primaryResult = $sslService->generateSelfSignedCertificate($domain);
+            if (($primaryResult['success'] ?? false) === true) {
+                $additionalDomains = $this->collectAdditionalCertificateDomains($instanceName, $config, $domain);
+                foreach ($additionalDomains as $addDomain) {
+                    $sslService->generateSelfSignedCertificate($addDomain);
+                }
+                // 启动阶段只更新映射文件，不广播 reload（避免启动窗口内触发不必要的热重载）。
+                $sslService->regenerateCertificateMap(false);
+                return $primaryResult;
+            }
+            // 自签生成失败：退回原先 ACME 路径让错误信息更明确。
+            $this->printer->warning(__('自签证书生成失败，继续走公网 ACME 申请：%{1}', [(string) ($primaryResult['message'] ?? '未知错误')]));
+        }
+
         $tStart = \hrtime(true);
         $result = $sslService->ensureCertificate($domain, $webroot, $email);
         if (($result['success'] ?? false) !== true
