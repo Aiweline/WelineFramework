@@ -2786,8 +2786,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         // 优先使用 host（项目唯一域名），忽略可能来自旧配置的 ssl_domain
         $domain = $certificateHost;
 
-        // WLS 启动流程统一使用虚拟 HTTP-01 校验，避免依赖站点静态目录映射导致 /.well-known 返回 404。
-        $webroot = SslCertificateService::WEBROOT_WLS_VIRTUAL;
+        $webroot = $this->resolveAcmeWebrootForStartup($instanceName, $config);
         $email = Env::get('admin_email', 'admin@' . $domain);
 
         // 3. 先快速探测本地是否已有可复用证书，避免「明明复用却先喊『正在准备...』」的误导性输出。
@@ -2803,6 +2802,13 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
 
         $tStart = \hrtime(true);
         $result = $sslService->ensureCertificate($domain, $webroot, $email);
+        if (($result['success'] ?? false) !== true
+            && \str_contains((string)($result['message'] ?? ''), '正在申请证书中')) {
+            // 自愈：上次流程异常退出残留锁时，释放后重试一次，避免“永远卡在申请中”。
+            $sslService->forceReleaseSslIssuanceLock($domain);
+            SchedulerSystem::sleep(1);
+            $result = $sslService->ensureCertificate($domain, $webroot, $email);
+        }
         $elapsedMs = (int) \round((\hrtime(true) - $tStart) / 1_000_000.0);
 
         if (($result['success'] ?? false) === true) {
@@ -2874,10 +2880,16 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             return;
         }
 
-        $webroot = SslCertificateService::WEBROOT_WLS_VIRTUAL;
+        $webroot = $this->resolveAcmeWebrootForStartup($instanceName, $config);
         foreach ($domains as $domain) {
             $email = Env::get('admin_email', 'admin@' . $domain);
             $result = $sslService->ensureCertificate($domain, $webroot, $email);
+            if (($result['success'] ?? false) !== true
+                && \str_contains((string)($result['message'] ?? ''), '正在申请证书中')) {
+                $sslService->forceReleaseSslIssuanceLock($domain);
+                SchedulerSystem::sleep(1);
+                $result = $sslService->ensureCertificate($domain, $webroot, $email);
+            }
             if (($result['success'] ?? false) === true) {
                 $issuer = (string)($result['issuer'] ?? __('未知'));
                 $this->printer->note(__('附加 Host 证书就绪：%{1}（签发方：%{2}）', [$domain, $issuer]));
@@ -2947,6 +2959,23 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         }
 
         return \rtrim($candidate, '.');
+    }
+
+    /**
+     * ACME 校验 webroot 选择：
+     * - 运行中实例：使用 WLS 虚拟 challenge（不中断服务）
+     * - 冷启动实例：回退 PUB webroot（避免没有运行中 WLS 时 challenge 必失败）
+     */
+    protected function resolveAcmeWebrootForStartup(string $instanceName, array $config): string
+    {
+        $port = (int)($config['port'] ?? self::DEFAULT_PORT_HTTPS);
+        $mainStop = ObjectManager::getInstance(MainStop::class);
+        $runningInstance = $mainStop->findWelineServerInstanceNameByPort($port);
+        if ($runningInstance !== null && $runningInstance === $instanceName) {
+            return SslCertificateService::WEBROOT_WLS_VIRTUAL;
+        }
+
+        return \defined('PUB') ? PUB : '';
     }
 
     /**
