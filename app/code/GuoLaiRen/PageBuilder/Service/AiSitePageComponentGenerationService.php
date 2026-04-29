@@ -22,7 +22,6 @@ class AiSitePageComponentGenerationService
     private const REQUEST_CTX_AI_CHUNK_FORWARDER = 'pagebuilder.ai.chunk.forwarder';
     public const REQUEST_KEY_FORCE_REAL_AI_IN_TEST = 'pagebuilder.ai.force_real_in_test';
     public const REQUEST_KEY_ALLOW_STUB_AI_IN_TEST = 'pagebuilder.ai.allow_stub_in_test';
-    public const REQUEST_KEY_SKIP_DESIGN_POLISH_PASS = 'pagebuilder.ai.skip_design_polish_pass';
     /** AI 结构修复（requestJsonRepair）轮次；0 表示解析失败后不再自动调用 AI。 */
     private const JSON_REPAIR_MAX_ATTEMPTS = 0;
     private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
