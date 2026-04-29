@@ -2558,6 +2558,14 @@ CNF;
     }
 
     /**
+     * 强制释放指定域名的颁发锁（用于启动流程自愈重试）。
+     */
+    public function forceReleaseSslIssuanceLock(string $domain): void
+    {
+        $this->releaseSslIssuanceLock($domain);
+    }
+
+    /**
      * 将当前正在使用的证书路径同步到证书表（框架级兜底）。
      *
      * 适用于以下场景：
