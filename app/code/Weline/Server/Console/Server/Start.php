@@ -2837,6 +2837,17 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             }
             $this->ensureAdditionalSslCertificates($instanceName, $config, $domain, $sslService);
         } else {
+            $deferredFallback = $this->tryBuildDeferredStartupSslFallback(
+                $sslService,
+                $domain,
+                $email,
+                $needsLocalCert,
+                $webroot,
+                $result
+            );
+            if ($deferredFallback !== null) {
+                return $deferredFallback;
+            }
             $this->printer->warning(__('SSL 证书准备失败：%{1}（耗时 %{2}ms）— %{3}', [
                 $domain,
                 (string) $elapsedMs,
@@ -2844,6 +2855,51 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             ]));
         }
         return $result;
+    }
+
+    /**
+     * 冷启动时若 ACME HTTP-01 因 challenge 404 失败，回退临时自签并记录「启动后重试」。
+     *
+     * @return array<string,mixed>|null
+     */
+    protected function tryBuildDeferredStartupSslFallback(
+        SslCertificateService $sslService,
+        string $domain,
+        string $email,
+        bool $needsLocalCert,
+        string $webroot,
+        array $result
+    ): ?array {
+        if ($needsLocalCert || $webroot === SslCertificateService::WEBROOT_WLS_VIRTUAL) {
+            return null;
+        }
+
+        $message = (string) ($result['message'] ?? '');
+        if (!$this->isAcmeHttp01Challenge404Failure($message)) {
+            return null;
+        }
+
+        $fallback = $sslService->generateSelfSignedCertificate($domain);
+        if (($fallback['success'] ?? false) !== true) {
+            return null;
+        }
+
+        $this->printer->warning(__('检测到冷启动阶段 ACME HTTP-01 校验失败：%{1}', [$message]));
+        $this->printer->note(__('已临时启用自签证书启动实例；待 Dispatcher/Worker 就绪后将自动重试正式证书申请。'));
+
+        return $fallback;
+    }
+
+    protected function isAcmeHttp01Challenge404Failure(string $message): bool
+    {
+        $message = \strtolower(\trim($message));
+        if ($message === '') {
+            return false;
+        }
+
+        return \str_contains($message, '/.well-known/acme-challenge/')
+            && \str_contains($message, 'invalid response from http://')
+            && \str_contains($message, '404');
     }
 
     protected function resolveCertificateHost(array $config, string $host): string
