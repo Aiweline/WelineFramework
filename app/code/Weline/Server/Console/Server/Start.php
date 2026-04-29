@@ -1109,10 +1109,18 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             (string)($wlsConfig['ssl_domain'] ?? ''),
             (string)($wlsConfig['host'] ?? ''),
         ];
+        // 兼容误配：wls.servers.default 写成纯索引数组时，提取首个可用值作为候选
+        if (isset($instanceConfig[0]) && \is_scalar($instanceConfig[0])) {
+            $publicCandidates[] = (string)$instanceConfig[0];
+        }
+        if (isset($instanceConfig[1]) && \is_scalar($instanceConfig[1])) {
+            $publicCandidates[] = (string)$instanceConfig[1];
+        }
         $hasConfiguredPublicHost = false;
         foreach ($publicCandidates as $candidate) {
             if ($this->isUsablePublicHost($candidate)) {
                 $hasConfiguredPublicHost = true;
+                $config['public_host'] = $candidate;
                 return true;
             }
         }
@@ -6003,12 +6011,16 @@ PHP;
         $this->printer->title(__('使用说明'), '═');
         
         // 访问地址
-        $this->printer->keyValue([
+        $urlRows = [
             __('前台/首页') => $urlFrontend,
             __('后台入口') => $urlBackend,
             __('后台 REST 接口') => $urlRestBackend,
             __('前台 REST 接口') => $urlRestFrontend,
-        ], '→', 18);
+        ];
+        if ($this->isUsablePublicHost($host)) {
+            $urlRows[__('默认外网地址')] = rtrim($baseUrl, '/');
+        }
+        $this->printer->keyValue($urlRows, '→', 18);
         
         $this->printer->separator('─');
         
