@@ -2786,7 +2786,8 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         // 优先使用 host（项目唯一域名），忽略可能来自旧配置的 ssl_domain
         $domain = $certificateHost;
 
-        $webroot = \defined('PUB') ? PUB : '';
+        // WLS 启动流程统一使用虚拟 HTTP-01 校验，避免依赖站点静态目录映射导致 /.well-known 返回 404。
+        $webroot = SslCertificateService::WEBROOT_WLS_VIRTUAL;
         $email = Env::get('admin_email', 'admin@' . $domain);
 
         // 3. 先快速探测本地是否已有可复用证书，避免「明明复用却先喊『正在准备...』」的误导性输出。
@@ -2873,7 +2874,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             return;
         }
 
-        $webroot = \defined('PUB') ? PUB : '';
+        $webroot = SslCertificateService::WEBROOT_WLS_VIRTUAL;
         foreach ($domains as $domain) {
             $email = Env::get('admin_email', 'admin@' . $domain);
             $result = $sslService->ensureCertificate($domain, $webroot, $email);
