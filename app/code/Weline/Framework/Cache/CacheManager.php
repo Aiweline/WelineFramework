@@ -42,6 +42,9 @@ class CacheManager implements CacheManagerInterface
 
     /**
      * 默认池配置
+     *
+     * jitter 字段为 TTL 抖动比例（0 ~ 0.5）。permanent=true 池强制 0，
+     * 实际值不会真正叠加，仅作语义记录；CachePool 内部会自动忽略。
      */
     private const DEFAULT_POOL_CONFIG = [
         'ttl' => 1800,
@@ -49,10 +52,13 @@ class CacheManager implements CacheManagerInterface
         'taggable' => false,
         'enabled' => true,
         'tip' => '',
+        'jitter' => CachePool::DEFAULT_JITTER_RATIO,
     ];
 
     /**
      * 预定义池配置
+     *
+     * jitter 缺省值由 DEFAULT_POOL_CONFIG 提供；短 TTL 池显式置 0 避免命中精度损失。
      */
     private const PREDEFINED_POOLS = [
         'router' => ['ttl' => 86400, 'permanent' => true, 'tip' => '路由缓存'],
@@ -64,8 +70,8 @@ class CacheManager implements CacheManagerInterface
         'event' => ['ttl' => 0, 'permanent' => true, 'tip' => '事件缓存'],
         'hook' => ['ttl' => 86400, 'tip' => '钩子缓存'],
         'controller' => ['ttl' => 86400, 'permanent' => true, 'tip' => '控制器缓存'],
-        'session' => ['ttl' => 7200, 'tip' => '会话缓存'],
-        'request' => ['ttl' => 300, 'tip' => '请求缓存'],
+        'session' => ['ttl' => 7200, 'tip' => '会话缓存', 'jitter' => 0.0],
+        'request' => ['ttl' => 300, 'tip' => '请求缓存', 'jitter' => 0.0],
         'object' => ['ttl' => 86400, 'permanent' => true, 'tip' => '对象缓存'],
         'acl' => ['ttl' => 3600, 'tip' => '权限缓存'],
         'currency' => ['ttl' => 3600, 'tip' => '货币缓存'],
@@ -76,13 +82,16 @@ class CacheManager implements CacheManagerInterface
         'module_router' => ['ttl' => 86400, 'permanent' => true, 'tip' => '模块路由缓存'],
         'taglib' => ['ttl' => 86400, 'permanent' => true, 'tip' => '标签库缓存'],
         'eav' => ['ttl' => 1800, 'tip' => 'EAV缓存'],
-        'queue' => ['ttl' => 300, 'tip' => '队列缓存'],
+        'queue' => ['ttl' => 300, 'tip' => '队列缓存', 'jitter' => 0.0],
         'system_config' => ['ttl' => 3600, 'tip' => '系统配置缓存'],
         'product' => ['ttl' => 1800, 'tip' => '产品缓存'],
         'file_manager' => ['ttl' => 86400, 'permanent' => true, 'tip' => '文件管理器缓存'],
         'editor' => ['ttl' => 86400, 'permanent' => true, 'tip' => '编辑器缓存'],
         'api_doc' => ['ttl' => 3600, 'tip' => 'API文档缓存'],
         'fpc' => ['ttl' => 3600, 'taggable' => true, 'tip' => '全页缓存'],
+        'single_flight' => ['ttl' => 30, 'tip' => '请求合并锁池', 'jitter' => 0.0],
+        'hot_key_tracker' => ['ttl' => 60, 'tip' => '热点 Key 跟踪', 'jitter' => 0.0],
+        'url_guard' => ['ttl' => 1800, 'tip' => 'URL 越界规则缓存'],
         'default' => ['ttl' => 1800, 'tip' => '默认缓存'],
     ];
 
@@ -167,12 +176,13 @@ class CacheManager implements CacheManagerInterface
         $ttl = $poolConfig['ttl'] ?? 1800;
         $taggable = $poolConfig['taggable'] ?? false;
         $enabled = $poolConfig['enabled'] ?? true;
+        $jitter = (float)($poolConfig['jitter'] ?? CachePool::DEFAULT_JITTER_RATIO);
 
         if ($taggable) {
-            return new TaggableCachePool($identity, $adapter, $tip, $permanent, $ttl, (bool)$enabled);
+            return new TaggableCachePool($identity, $adapter, $tip, $permanent, $ttl, (bool)$enabled, $jitter);
         }
 
-        return new CachePool($identity, $adapter, $tip, $permanent, $ttl, (bool)$enabled);
+        return new CachePool($identity, $adapter, $tip, $permanent, $ttl, (bool)$enabled, $jitter);
     }
 
     /**
