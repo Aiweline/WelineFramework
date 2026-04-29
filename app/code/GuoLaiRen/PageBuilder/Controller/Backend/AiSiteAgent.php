@@ -3292,157 +3292,60 @@ SCRIPT;
         }
 
         $componentCodes = $this->resolveRequestedBlockComponentCodes($componentCode);
-        $queueContext = $this->buildBlockRegenerateQueueContext(
-            $scope,
-            $pageTypes,
-            $pageType,
-            $componentCodes,
-            $refine ? $instruction : '',
-            $refine ? 'refine' : 'regenerate'
-        );
-        $operationLabel = $refine ? 'block_refine' : 'block_regenerate';
-
-        try {
-            $started = $this->startOperation(
-                $session,
-                $adminId,
-                'block_regenerate',
-                AiSiteAgentSession::STAGE_VISUAL_EDIT,
-                $queueContext['scope_patch'],
-                $pageType,
-                AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING,
-                $queueContext['details']
-            );
-            if (!(bool)($started['success'] ?? false)) {
-                $message = (string)($started['message'] ?? 'Failed to create queue row.');
-                $this->sendSseContractError($sse, 'QUEUE_CREATE_FAILED', $message, self::PARAMS_REGENERATE, 500);
-                $sse->complete(['success' => false, 'message' => $message, 'operation' => $operationLabel]);
-                return;
-            }
-
-            $queueWait = \is_array($started['queue_wait'] ?? null) ? $started['queue_wait'] : [];
-            $sse->sendEvent('start', [
-                'operation' => $operationLabel,
-                'queue_operation' => 'block_regenerate',
-                'page_type' => $pageType,
-                'component_code' => (string)($componentCodes[0] ?? ''),
-                'component_codes' => $componentCodes,
-                'queue_id' => (int)($started['queue_id'] ?? 0),
-                'message' => '区块 AI 操作已加入队列，正在等待系统调度执行。',
-                'queue_wait' => $queueWait,
-            ]);
-            if (\trim((string)($queueWait['message'] ?? '')) !== '') {
-                $sse->sendEvent('info', [
-                    'message' => (string)$queueWait['message'],
-                    'operation' => 'block_regenerate',
-                    'queue_id' => (int)($started['queue_id'] ?? 0),
-                    'queue_waiting_for_scheduler' => (bool)($queueWait['queue_waiting_for_scheduler'] ?? false),
-                    'can_close_stream' => (bool)($queueWait['can_close_stream'] ?? false),
-                    'continue_other_operations' => (bool)($queueWait['continue_other_operations'] ?? false),
-                ]);
-            }
-
-            $observed = $this->observeDuplicateOperationStream(
-                $sse,
-                $session,
-                $adminId,
-                'block_regenerate',
-                (string)($started['execution_token'] ?? ''),
-                !$this->shouldKeepQueuedObserverStreamOpen('block_regenerate')
-            );
-            $sse->complete([
-                'success' => (bool)($observed['success'] ?? true),
-                'operation' => $operationLabel,
-                'message' => (string)($observed['message'] ?? 'Block AI operation queued.'),
-                'data' => \is_array($observed['data'] ?? null) ? $observed['data'] : [],
-                'state' => \is_array($observed['state'] ?? null) ? $observed['state'] : [],
-                'queue_wait' => $queueWait,
-                'deferred_queue_progress' => true,
-            ]);
-        } catch (\Throwable $throwable) {
-            $sse->sendError($throwable->getMessage(), $this->inferThrowableHttpCode($throwable));
-            $sse->complete([
-                'success' => false,
-                'operation' => $operationLabel,
-                'message' => $throwable->getMessage(),
-            ]);
+        if ($componentCodes === []) {
+            $componentCodes = [$componentCode];
         }
-        return;
-
+        $operationLabel = $refine ? 'block_refine' : 'block_regenerate';
         $stageCode = AiSiteAgentSession::STAGE_VISUAL_EDIT;
-        $sharedRegion = $this->resolveSharedComponentRegionForComponentCode($pageType, $componentCode);
-        $originalActiveOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
-        $originalWorkspaceStatus = $this->scopeCompatibilityService->normalizeWorkspaceStatus((string)($scope['workspace_status'] ?? ''));
-        $preserveOriginalOperation = \in_array(\trim((string)($originalActiveOperation['status'] ?? '')), ['queued', 'running'], true);
-
-        if ($refine) {
-            if ($sharedRegion !== '') {
-                $sharedRefinements = \is_array($scope['shared_component_refinements'] ?? null)
-                    ? $scope['shared_component_refinements']
-                    : [];
-                $sharedRefinements[$sharedRegion] = $instruction;
-                $scope['shared_component_refinements'] = $sharedRefinements;
-            } else {
-                $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
-                $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-                $sectionRefinements = \is_array($virtualPage['section_refinements'] ?? null) ? $virtualPage['section_refinements'] : [];
-                $sectionRefinements[$componentCode] = $instruction;
-                $virtualPage['section_refinements'] = $sectionRefinements;
-                $virtualPages[$pageType] = $virtualPage;
-                $scope['virtual_pages_by_type'] = $virtualPages;
-            }
-            $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
-            $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        }
-
-        $operationLabel = $refine ? 'block_refine' : 'block_regenerate';
-        $sse->sendEvent('start', [
-            'operation' => $operationLabel,
-            'page_type' => $pageType,
-            'component_code' => $componentCode,
-            'shared_region' => $sharedRegion,
-            'message' => $refine ? 'Starting AI block refine' : 'Starting AI block regenerate',
-        ]);
+        $instructionText = $refine ? $instruction : '';
 
         $this->registerAiChunkForwarder($sse, $session, $adminId, $stageCode, $operationLabel);
-
         try {
-            throw new \RuntimeException('block_regenerate_sse_direct_execution_disabled');
-            if ($preserveOriginalOperation) {
-                $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-                $freshScope = $this->scopeCompatibilityService->normalizeScope(
-                    $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $lastResult = [];
+            foreach ($componentCodes as $idx => $candidateCode) {
+                $candidateCode = \trim((string)$candidateCode);
+                if ($candidateCode === '') {
+                    continue;
+                }
+                if ($idx > 0) {
+                    $sse->sendEvent('info', [
+                        'operation' => $operationLabel,
+                        'component_code' => $candidateCode,
+                        'message' => (string)__('继续处理下一个区块：%{1}', [$candidateCode]),
+                    ]);
+                }
+                $lastResult = $this->runRegenerateBlockOperation(
+                    $sse,
+                    $session,
+                    $adminId,
+                    $pageType,
+                    $candidateCode,
+                    $instructionText
                 );
-                $freshScope['active_operation'] = $originalActiveOperation;
-                $freshScope['workspace_status'] = $originalWorkspaceStatus;
-                $this->sessionService->replaceScope($fresh->getId(), $adminId, $freshScope);
+                $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
             }
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $state = \is_array($lastResult['state'] ?? null)
+                ? $lastResult['state']
+                : $this->buildWorkspaceEventStatePayload(
+                    $this->buildWorkspaceState($fresh, $adminId, 80, true),
+                    [$pageType]
+                );
             $sse->complete([
                 'success' => true,
                 'operation' => $operationLabel,
-                'message' => $refine ? 'AI block refine completed' : 'AI block regenerate completed',
-                'data' => $result,
-                'state' => $this->buildWorkspaceEventStatePayload(
-                    $this->buildWorkspaceState($fresh, $adminId, 80, true),
-                    [$pageType]
-                ),
+                'message' => (string)($lastResult['message'] ?? ($refine ? __('区块微调完成') : __('区块重建完成'))),
+                'data' => $lastResult,
+                'state' => $state,
+                'realtime' => true,
             ]);
         } catch (\Throwable $throwable) {
-            if ($preserveOriginalOperation) {
-                $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-                $freshScope = $this->scopeCompatibilityService->normalizeScope(
-                    $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
-                );
-                $freshScope['active_operation'] = $originalActiveOperation;
-                $freshScope['workspace_status'] = $originalWorkspaceStatus;
-                $this->sessionService->replaceScope($fresh->getId(), $adminId, $freshScope);
-            }
             $sse->sendError($throwable->getMessage(), $this->inferThrowableHttpCode($throwable));
             $sse->complete([
                 'success' => false,
                 'operation' => $operationLabel,
                 'message' => $throwable->getMessage(),
+                'realtime' => true,
             ]);
         } finally {
             $this->clearAiChunkForwarder();
