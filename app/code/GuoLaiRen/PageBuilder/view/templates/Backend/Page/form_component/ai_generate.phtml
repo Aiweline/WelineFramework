@@ -256,7 +256,7 @@ window.generatePageContent = function() {
     }
     if(sseContent) sseContent.innerHTML='';
     sseLog(_sseConnecting,'info'); sseSetStatus(_sseConnecting);
-    fetch(url,{method:'POST',body:formData,headers:{'X-Requested-With':'XMLHttpRequest'}})
+    fetch(url,{method:'POST',body:formData,headers:{'X-Requested-With':'XMLHttpRequest','Accept':'text/event-stream'}})
     .then(function(res){
         if(!res.ok) throw new Error(res.statusText||<?= json_encode(__('请求失败'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
         if(!res.body) throw new Error(<?= json_encode(__('不支持流式响应'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);

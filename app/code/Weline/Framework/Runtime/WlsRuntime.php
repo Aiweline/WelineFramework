@@ -1327,7 +1327,9 @@ class WlsRuntime implements RuntimeInterface
         $headers = $headerCollector->getHeaders();
         $sseStarted = (bool)RequestContext::get(RequestContext::SSE_WRITER_KEY, false);
         if ($sseStarted) {
-            $headers['Content-Type'] ??= 'text/event-stream; charset=utf-8';
+            // 强制覆盖：避免 HeaderCollector / 中间层先写入的 Content-Type（如 text/plain）
+            // 在 Worker 合并响应头时盖掉 SSE，导致浏览器/devtools 显示为普通文档请求。
+            $headers['Content-Type'] = 'text/event-stream; charset=utf-8';
         }
 
         $this->setPendingResponseState([
