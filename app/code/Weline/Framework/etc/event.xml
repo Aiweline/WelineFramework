@@ -47,6 +47,16 @@
         <observer name="Weline_Framework_Router::url_guard" instance="Weline\Framework\Router\Observer\UrlGuardObserver" disabled="false" shared="true" sort="-50"/>
     </event>
 
+    <!-- URL Guard 溢出追踪：把命中越界的请求样本/边界统计写入 url_guard 缓存池，CDN/告警/队列模块可据此扩展 -->
+    <event name="Weline_Framework_Router::guard::overflow">
+        <observer name="Weline_Framework_Router::url_guard_tracker" instance="Weline\Framework\Router\Observer\UrlGuardOverflowTracker" disabled="false" shared="true" sort="100"/>
+    </event>
+
+    <!-- WLS 服务器启动后：执行 CacheWarmerRegistry 全量预热（默认含 CachePoolHealthWarmer 自检） -->
+    <event name="Weline_Server::start_after">
+        <observer name="Weline_Framework_Cache::warm_on_server_start" instance="Weline\Framework\Cache\Observer\WarmCacheOnServerStart" disabled="false" shared="true" sort="100"/>
+    </event>
+
     <!-- 动态模块查询：任意 {Module}::query 自动路由到 FrameworkQueryService，由 QueryProviderRegistry 中已注册的查询器处理 -->
     <event name="{Module}::query">
         <observer name="Weline_Framework_Query::module_query_dispatcher" instance="Weline\Framework\Service\Query\Observer\ModuleQueryDispatcher" disabled="false" shared="true" sort="0"/>

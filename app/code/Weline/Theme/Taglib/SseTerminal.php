@@ -50,6 +50,9 @@ class SseTerminal implements TaglibInterface
             'class' => false,        // 额外CSS类
             'style' => false,        // 内联样式
             'max-stream-chars' => false, // 流式 chunk 单块最大字符数，超出截断尾部保留，防 DOM/内存拖垮浏览器，0 表示不限制
+            'show-thinking-toggle' => false, // 是否显示「思考输出」切换按钮（默认 true）
+            'thinking-default' => false,     // 思考输出默认值，'on'|'off'（默认 'on'，关闭时新到 thinking 事件不渲染）
+            'thinking-storage-key' => false, // 持久化 key，默认 weline_sse_terminal_thinking_{id}
         ];
     }
 
@@ -63,7 +66,15 @@ class SseTerminal implements TaglibInterface
             $eventsAttr = \trim((string) ($attributes['events'] ?? ''));
             $eventsList = $eventsAttr !== ''
                 ? \array_map('trim', \array_filter(\explode(',', $eventsAttr)))
-                : ['start', 'progress', 'chunk', 'total', 'done', 'error', 'info', 'warning', 'success', 'debug'];
+                : ['start', 'progress', 'chunk', 'total', 'done', 'error', 'info', 'warning', 'success', 'debug', 'thinking', 'reasoning'];
+            // 用户显式传 events 时也强制确保 thinking/reasoning 在列表内（除非显式排除），便于面板开关一致工作。
+            if ($eventsAttr !== '') {
+                foreach (['thinking', 'reasoning'] as $reqEvent) {
+                    if (!\in_array($reqEvent, $eventsList, true)) {
+                        $eventsList[] = $reqEvent;
+                    }
+                }
+            }
             $autoScroll = !isset($attributes['auto-scroll']) || $attributes['auto-scroll'] !== 'false';
             $showTimestamp = !isset($attributes['show-timestamp']) || $attributes['show-timestamp'] !== 'false';
             $showToolbar = !isset($attributes['show-toolbar']) || $attributes['show-toolbar'] !== 'false';
@@ -75,6 +86,16 @@ class SseTerminal implements TaglibInterface
             if ($maxStreamChars < 0) {
                 $maxStreamChars = 0;
             }
+            $showThinkingToggle = !isset($attributes['show-thinking-toggle']) || $attributes['show-thinking-toggle'] !== 'false';
+            $thinkingDefault = isset($attributes['thinking-default'])
+                ? \strtolower((string)$attributes['thinking-default'])
+                : 'on';
+            if (!\in_array($thinkingDefault, ['on', 'off'], true)) {
+                $thinkingDefault = 'on';
+            }
+            $thinkingStorageKey = isset($attributes['thinking-storage-key']) && (string)$attributes['thinking-storage-key'] !== ''
+                ? (string)$attributes['thinking-storage-key']
+                : 'weline_sse_terminal_thinking_' . $id;
 
             // 翻译文本
             $t_connecting = addslashes(__('正在连接...'));
@@ -88,6 +109,9 @@ class SseTerminal implements TaglibInterface
             $t_start = addslashes(__('开始'));
             $t_copied = addslashes(__('已复制'));
             $t_dns_response = addslashes(__('【DNS 供应商返回】'));
+            $t_thinking_on = addslashes(__('思考输出：开（点击关闭）'));
+            $t_thinking_off = addslashes(__('思考输出：关（点击开启）'));
+            $t_thinking_label_on = addslashes(__('思考'));
 
             // 解析属性
             $t_reconnecting = addslashes(__('连接重试中...'));
@@ -114,6 +138,12 @@ class SseTerminal implements TaglibInterface
                 $html[] = '      <span class="weline-sse-terminal-status-text" id="' . htmlspecialchars($id) . '_status">' . $t_disconnected . '</span>';
                 $html[] = '    </div>';
                 $html[] = '    <div class="weline-sse-terminal-actions">';
+                if ($showThinkingToggle) {
+                    // 思考输出按钮：高亮表示开启；点击切换；状态写 localStorage 按 key 记忆。
+                    $html[] = '      <button type="button" class="weline-sse-terminal-btn weline-sse-terminal-btn-thinking" id="' . htmlspecialchars($id) . '_btn_thinking" title="' . $t_thinking_on . '" aria-pressed="true">';
+                    $html[] = '        <i class="mdi mdi-brain"></i>';
+                    $html[] = '      </button>';
+                }
                 if ($showStartToggle) {
                     $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_toggle" title="' . $t_start . '">';
                     $html[] = '        <i class="mdi mdi-play"></i>';
@@ -156,6 +186,9 @@ class SseTerminal implements TaglibInterface
             $html[] = '.weline-sse-terminal-btn { width: 28px; height: 28px; border: none; border-radius: 4px; background: transparent; color: var(--backend-color-text-muted, #6c7086); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }';
             $html[] = '.weline-sse-terminal-btn:hover { background: var(--backend-color-hover-bg, #313244); color: var(--backend-color-text-primary, #cdd6f4); }';
             $html[] = '.weline-sse-terminal-btn.active { color: var(--backend-color-danger, #f38ba8); }';
+            $html[] = '.weline-sse-terminal-btn-thinking { color: var(--backend-color-info, #89dceb); }';
+            $html[] = '.weline-sse-terminal-btn-thinking[aria-pressed="false"] { color: var(--backend-color-text-muted, #6c7086); opacity: 0.55; }';
+            $html[] = '.weline-sse-terminal-line.thinking { color: var(--backend-color-info, #89dceb); opacity: 0.85; font-style: italic; }';
             $html[] = '.weline-sse-terminal-body { overflow-y: auto; padding: 12px; background: var(--backend-color-card-bg, #1e1e2e); }';
             $html[] = '.weline-sse-terminal-content { min-height: 100%; }';
             $html[] = '.weline-sse-terminal-line { padding: 2px 0; line-height: 1.5; word-break: break-all; display: flex; gap: 8px; }';
@@ -192,6 +225,12 @@ class SseTerminal implements TaglibInterface
             $html[] = 'var allowHtml = ' . ($allowHtml ? 'true' : 'false') . ';';
             $html[] = 'var maxStreamChars = ' . $maxStreamChars . ';';
             $html[] = 'var urlNotConfiguredText = ' . json_encode($t_url_not_configured, JSON_UNESCAPED_UNICODE) . ';';
+            $html[] = 'var thinkingShowToggle = ' . ($showThinkingToggle ? 'true' : 'false') . ';';
+            $html[] = 'var thinkingDefaultEnabled = ' . ($thinkingDefault === 'on' ? 'true' : 'false') . ';';
+            $html[] = 'var thinkingStorageKey = ' . json_encode($thinkingStorageKey, JSON_UNESCAPED_UNICODE) . ';';
+            $html[] = 'var thinkingTitleOn = ' . json_encode($t_thinking_on, JSON_UNESCAPED_UNICODE) . ';';
+            $html[] = 'var thinkingTitleOff = ' . json_encode($t_thinking_off, JSON_UNESCAPED_UNICODE) . ';';
+            $html[] = 'var thinkingLabel = ' . json_encode($t_thinking_label_on, JSON_UNESCAPED_UNICODE) . ';';
             $tStreamTrunc = addslashes(__('【输出过长，已省略前部】'));
             $html[] = 'var streamTruncMsg = ' . json_encode($tStreamTrunc . "\n", JSON_UNESCAPED_UNICODE) . ';';
 
@@ -206,6 +245,46 @@ var progressBar = document.getElementById(id + '_progress_bar');
 var btnToggle = document.getElementById(id + '_btn_toggle');
 var btnCopy = document.getElementById(id + '_btn_copy');
 var btnClear = document.getElementById(id + '_btn_clear');
+var btnThinking = document.getElementById(id + '_btn_thinking');
+
+// 思考输出开关：true 时把 thinking/reasoning 事件渲染到面板，false 时只触发 callback、不写 DOM
+var thinkingEnabled = thinkingDefaultEnabled;
+try {
+    if (thinkingShowToggle && thinkingStorageKey && typeof window.localStorage !== 'undefined') {
+        var stored = window.localStorage.getItem(thinkingStorageKey);
+        if (stored === 'on') { thinkingEnabled = true; }
+        else if (stored === 'off') { thinkingEnabled = false; }
+    }
+} catch (e) {}
+
+function persistThinkingState() {
+    try {
+        if (thinkingShowToggle && thinkingStorageKey && typeof window.localStorage !== 'undefined') {
+            window.localStorage.setItem(thinkingStorageKey, thinkingEnabled ? 'on' : 'off');
+        }
+    } catch (e) {}
+}
+
+function applyThinkingButtonState() {
+    if (!btnThinking) return;
+    btnThinking.setAttribute('aria-pressed', thinkingEnabled ? 'true' : 'false');
+    btnThinking.title = thinkingEnabled ? thinkingTitleOn : thinkingTitleOff;
+}
+applyThinkingButtonState();
+
+function setThinkingEnabled(next) {
+    var bool = !!next;
+    if (thinkingEnabled === bool) {
+        applyThinkingButtonState();
+        return;
+    }
+    thinkingEnabled = bool;
+    persistThinkingState();
+    applyThinkingButtonState();
+    if (eventCallbacks.thinking_toggle) {
+        try { eventCallbacks.thinking_toggle({ enabled: thinkingEnabled }); } catch (e) {}
+    }
+}
 
 var eventSource = null;
 var postAbortController = null;
@@ -228,7 +307,10 @@ window.WelineSseTerminal[id] = {
     getTransportState: function() { return container ? (container.dataset.transportState || 'disconnected') : 'disconnected'; },
     on: function(event, callback) { eventCallbacks[event] = callback; },
     setProgress: setProgress,
-    setStatus: setStatus
+    setStatus: setStatus,
+    setThinkingEnabled: setThinkingEnabled,
+    getThinkingEnabled: function() { return thinkingEnabled; },
+    toggleThinking: function() { setThinkingEnabled(!thinkingEnabled); }
 };
 
 var eventCallbacks = {};
@@ -278,6 +360,42 @@ function log(text, type) {
     if (autoScroll) {
         body.scrollTop = body.scrollHeight;
     }
+}
+
+// 思考输出独立流式行：与正常 chunk 区分行/颜色，关闭开关时跳过 DOM 注入。
+var thinkingStreamingLine = null;
+function appendThinkingChunkDom(s) {
+    if (!s) return;
+    if (!thinkingStreamingLine) {
+        thinkingStreamingLine = document.createElement('div');
+        thinkingStreamingLine.className = 'weline-sse-terminal-line weline-sse-terminal-streaming thinking';
+        if (showTimestamp) {
+            var time = document.createElement('span');
+            time.className = 'weline-sse-terminal-time';
+            time.textContent = '[' + formatTime() + ']';
+            thinkingStreamingLine.appendChild(time);
+        }
+        var labelEl = document.createElement('span');
+        labelEl.className = 'weline-sse-terminal-text weline-sse-terminal-thinking-label';
+        labelEl.style.opacity = '0.6';
+        labelEl.style.flex = '0 0 auto';
+        labelEl.textContent = thinkingLabel + '：';
+        thinkingStreamingLine.appendChild(labelEl);
+        var textEl0 = document.createElement('span');
+        textEl0.className = 'weline-sse-terminal-text';
+        thinkingStreamingLine.appendChild(textEl0);
+        content.appendChild(thinkingStreamingLine);
+    }
+    var textEls = thinkingStreamingLine.querySelectorAll('.weline-sse-terminal-text');
+    var textEl = textEls.length > 0 ? textEls[textEls.length - 1] : thinkingStreamingLine.lastChild;
+    if (textEl) {
+        textEl.textContent += s;
+        if (maxStreamChars > 0 && textEl.textContent.length > maxStreamChars) {
+            var keep = Math.floor(maxStreamChars * 0.85);
+            textEl.textContent = streamTruncMsg + textEl.textContent.slice(-keep);
+        }
+    }
+    if (autoScroll) body.scrollTop = body.scrollHeight;
 }
 
 var chunkRafPending = '';
@@ -367,6 +485,22 @@ function dispatchSseEvent(eventName, data, rawEvent) {
                 appendChunk(chunkContent);
             }
             if (data.progress !== undefined) setProgress(data.progress);
+            return;
+        }
+        // 思考输出（thinking/reasoning）：受 thinkingEnabled 控制是否渲染。
+        // callback 不受开关影响，业务侧仍可观察事件。
+        if (eventName === 'thinking' || eventName === 'reasoning') {
+            if (eventCallbacks[eventName]) {
+                try { eventCallbacks[eventName](callbackEvent); } catch (e) {}
+            }
+            if (!thinkingEnabled) {
+                return;
+            }
+            var thinkText = (data && typeof data.content === 'string') ? data.content
+                : ((data && typeof data.message === 'string') ? data.message : '');
+            if (thinkText !== '') {
+                appendThinkingChunkDom(thinkText);
+            }
             return;
         }
         var msg = data.message || data.result || data.keyword || data.msg;
@@ -594,6 +728,7 @@ function clear() {
     progressBar.style.width = '0%';
     progressContainer.style.display = 'none';
     streamingLine = null;
+    thinkingStreamingLine = null;
     chunkRafPending = '';
     chunkRafScheduled = false;
 }
@@ -606,6 +741,12 @@ if (btnToggle) {
         } else {
             start();
         }
+    });
+}
+
+if (btnThinking) {
+    btnThinking.addEventListener('click', function() {
+        setThinkingEnabled(!thinkingEnabled);
     });
 }
 
