@@ -21,6 +21,7 @@ use GuoLaiRen\PageBuilder\Service\AI\Tool\ListComponentsTool;
 use GuoLaiRen\PageBuilder\Service\AI\Tool\ValidateCodeTool;
 use GuoLaiRen\PageBuilder\Service\AI\Tool\GetPageLayoutTool;
 use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
+use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
 
 /**
  * PageBuilder 组件构建智能体
@@ -256,7 +257,12 @@ SYSTEM_PROMPT;
             $prompt .= "- 示例：如果目标语言是「简体中文」，按钮应该是「了解更多」而不是「Learn More」";
         }
 
-        return $prompt;
+        return $this->withPageBuilderSkillGuide($prompt, 'stage3');
+    }
+
+    private function withPageBuilderSkillGuide(string $prompt, string $stage = 'stage3'): string
+    {
+        return ObjectManager::getInstance(AiSiteSkillRegistry::class)->prependPromptGuide($prompt, $stage);
     }
 
     public function execute(
