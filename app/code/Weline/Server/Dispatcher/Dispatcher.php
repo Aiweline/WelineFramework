@@ -1630,6 +1630,7 @@ class Dispatcher
             'dispatcher_start:' . $this->formatMaintenanceRoutingContext(),
             0.0
         );
+        WlsLogger::flush_(true);
         
         // 设置服务器 socket 为非阻塞
         \socket_set_nonblock($this->serverSocket);
@@ -1692,6 +1693,7 @@ class Dispatcher
                 
                 // 定期统计
                 $this->printStats();
+                WlsLogger::tick_();
                 $consecutiveLoopErrors = 0;
             } catch (\Throwable $e) {
                 $consecutiveLoopErrors++;
@@ -1707,6 +1709,7 @@ class Dispatcher
                 }
                 $this->pumpIpcOnce();
                 SchedulerSystem::usleep(10000);
+                WlsLogger::tick_();
             }
         }
         
@@ -3196,6 +3199,7 @@ HTML;
     {
         if (isset($this->clientConnections[$connId])) {
             $clientSocket = $this->clientConnections[$connId];
+            $this->logConnectionCloseSummary($connId, $clientSocket, $reason);
             
             // 关闭透传核心中的连接
             $this->passthroughCore->closeConnection($clientSocket);
@@ -3212,6 +3216,106 @@ HTML;
             $this->connectionLastActivity[$connId],
             $this->connectionBytes[$connId]
         );
+    }
+
+    private function logConnectionCloseSummary(int $connId, $clientSocket, string $reason): void
+    {
+        $connInfo = $this->passthroughCore->getConnectionInfo($clientSocket) ?? [];
+        $terminalReason = $this->passthroughCore->peekConnectionTerminalReasonByConnId($connId);
+        $bytes = $this->connectionBytes[$connId] ?? ['in' => 0, 'out' => 0];
+        $inBytes = (int)($bytes['in'] ?? 0);
+        $outBytes = (int)($bytes['out'] ?? 0);
+        $isAbnormal = $this->isConnectionCloseReasonAbnormal($reason, $terminalReason, $inBytes, $outBytes);
+
+        if (!$isAbnormal && !$this->shouldLogIngressDiagnostics()) {
+            return;
+        }
+
+        $acceptedAt = (float)($this->connectionAcceptTime[$connId] ?? 0.0);
+        $ageMs = $acceptedAt > 0.0 ? \round((\microtime(true) - $acceptedAt) * 1000, 1) : 0.0;
+        $clientIp = (string)($connInfo['client_ip'] ?? 'unknown');
+        $workerPort = $connInfo['worker_port'] ?? null;
+        $worker = $workerPort !== null ? (string)$workerPort : 'unknown';
+        $requestLine = $this->sanitizeDiagnosticValue((string)($connInfo['request_line'] ?? ''));
+        $responseLine = $this->sanitizeDiagnosticValue((string)(
+            $connInfo['response_status_line']
+            ?? $connInfo['response_first_line']
+            ?? ''
+        ));
+
+        $parts = [
+            'connId=' . $connId,
+            'client=' . $clientIp,
+            'worker=' . $worker,
+            'reason=' . $reason,
+            'terminal=' . ($terminalReason ?: 'none'),
+            'bytes_in=' . $inBytes,
+            'bytes_out=' . $outBytes,
+            'age_ms=' . $ageMs,
+        ];
+
+        if ($requestLine !== '') {
+            $parts[] = 'request="' . $requestLine . '"';
+        }
+        if ($responseLine !== '') {
+            $parts[] = 'response="' . $responseLine . '"';
+        }
+
+        $this->log('[DispatcherIngress] CLOSE ' . \implode(' ', $parts), $isAbnormal ? 'WARN' : 'INFO');
+        if ($isAbnormal) {
+            WlsLogger::flush_(true);
+        }
+    }
+
+    private function isConnectionCloseReasonAbnormal(
+        string $reason,
+        ?string $terminalReason,
+        int $inBytes,
+        int $outBytes
+    ): bool {
+        $terminalReason = (string)$terminalReason;
+
+        if ($reason === 'worker_closed_or_client_disconnected'
+            && $terminalReason === 'forward_to_client_worker_eof_without_buffer') {
+            return $outBytes <= 0;
+        }
+
+        if (\in_array($reason, [
+            'client_half_closed_without_request',
+            'client_half_closed_without_request_timeout',
+            'connection_timeout',
+        ], true)) {
+            return false;
+        }
+
+        if (\str_contains($terminalReason, 'error')
+            || \str_contains($terminalReason, 'timeout')
+            || \str_contains($terminalReason, 'missing_connection')
+            || \str_contains($terminalReason, 'without_buffer')) {
+            return true;
+        }
+
+        return \in_array($reason, [
+            'worker_health_audit_failed',
+            'worker_removed',
+            'client_half_closed_after_request_timeout',
+            'stalled_first_response_timeout',
+            'receive_request_failed',
+            'forward_to_worker_failed',
+            'forward_to_client_failed',
+            'socket_select_exception_or_read_error',
+        ], true) || ($inBytes > 0 && $outBytes <= 0);
+    }
+
+    private function sanitizeDiagnosticValue(string $value, int $maxLength = 200): string
+    {
+        $value = (string)\preg_replace('/[[:cntrl:]]+/', ' ', $value);
+        $value = \trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        return \substr($value, 0, $maxLength);
     }
 
     private function shouldFastCloseHalfClosedWithoutRequest(
@@ -3255,7 +3359,9 @@ HTML;
 
     private function shouldLogIngressDiagnostics(): bool
     {
-        return $this->isDevMode || (\defined('WLS_FRONTEND_MODE') && WLS_FRONTEND_MODE);
+        return $this->isDevMode
+            || \Weline\Server\Log\LogConfig::isVerboseWlsLog()
+            || (\defined('WLS_FRONTEND_MODE') && WLS_FRONTEND_MODE);
     }
     
     /**
