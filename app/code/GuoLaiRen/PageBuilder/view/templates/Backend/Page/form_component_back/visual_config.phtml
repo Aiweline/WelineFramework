@@ -5965,7 +5965,12 @@ window.editComponentInPreview = async function(wrapper) {
                                 currentData = '';
                             }
                             function processChunk(chunk) {
-                                if (chunk && chunk.value) buffer += decoder.decode(chunk.value, { stream: true });
+                                if (chunk && chunk.value) {
+                                    buffer += decoder.decode(chunk.value, { stream: true });
+                                } else if (chunk && chunk.done) {
+                                    buffer += decoder.decode();
+                                }
+                                buffer = buffer.replace(/\r\n/g, '\n');
                                 const SEP_DBL = '\n\n', SEP_SGL = '\n';
                                 const parts = buffer.split(SEP_DBL);
                                 buffer = parts.pop() || '';
@@ -5976,7 +5981,10 @@ window.editComponentInPreview = async function(wrapper) {
                                     for (let j = 0; j < lines.length; j++) {
                                         const ln = lines[j];
                                         if (ln.indexOf('event:') === 0) currentEvent = ln.replace(/^event:\s*/, '').trim();
-                                        else if (ln.indexOf('data:') === 0) currentData = ln.replace(/^data:\s*/, '');
+                                        else if (ln.indexOf('data:') === 0) {
+                                            const dataLine = ln.replace(/^data:\s*/, '');
+                                            currentData = currentData ? (currentData + '\n' + dataLine) : dataLine;
+                                        }
                                     }
                                     finishEvent();
                                 }
