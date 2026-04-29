@@ -2306,6 +2306,9 @@ class Stop extends CommandAbstract
             if (!(bool) ($info['exists'] ?? false)) {
                 continue;
             }
+            if ((bool) ($info['is_zombie'] ?? false)) {
+                continue;
+            }
             if (!$this->isLikelyResidualWlsProcessName((string) ($info['name'] ?? ''))) {
                 continue;
             }
