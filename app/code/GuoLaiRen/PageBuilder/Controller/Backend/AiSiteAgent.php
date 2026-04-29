@@ -14934,76 +14934,124 @@ SCRIPT;
                 $targetScopes[] = $candidateTargetScope;
             }
         }
-        $mutation = [
-            'action' => $action,
-            'page_type' => $pageType,
-            'block_key' => $blockKey,
-            'block_keys' => $blockKeys,
-            'component_codes' => $blockKeys,
-            'section_codes' => $blockKeys,
-            'block_config' => $blockConfig,
-            'block_configs' => $blockConfigs,
-            'target_scope' => $targetScope,
-            'target_scopes' => $targetScopes,
-        ];
+
+        // 阶段一块级 mutate 实时执行：底层 mutateDraftPlanBlock 仅做本地结构计算/重排，
+        // 不调用 AI；为了避免"等队列调度"的体感成本，统一在当前请求内同步落库返回。
+        try {
+            $workingScope = $scope;
+            $mutationSummaries = [];
+            $resultArtifacts = [];
+            $resolvedBlockKeys = $action === 'create' ? ($blockKeys === [] ? [''] : $blockKeys) : $blockKeys;
+            foreach ($resolvedBlockKeys as $candidateBlockKey) {
+                $candidateBlockKey = (string)$candidateBlockKey;
+                $candidatePatch = \is_array($blockConfigs[$candidateBlockKey] ?? null)
+                    ? $blockConfigs[$candidateBlockKey]
+                    : $blockConfig;
+                $resultArtifacts = $this->executionBlueprintService->mutateDraftPlanBlock(
+                    $workingScope,
+                    $pageType,
+                    $action,
+                    $candidateBlockKey,
+                    $candidatePatch
+                );
+                $mutationSummary = \is_array($resultArtifacts['mutation_summary'] ?? null)
+                    ? $resultArtifacts['mutation_summary']
+                    : [];
+                if ($mutationSummary !== []) {
+                    $mutationSummaries[] = $mutationSummary;
+                }
+                $workingScope = $this->mergePlanBlockMutationArtifactsToScope($workingScope, $resultArtifacts);
+            }
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
+        }
+
+        $structured = \is_array($resultArtifacts['structured'] ?? null) ? $resultArtifacts['structured'] : [];
+        $executionBlueprint = \is_array($resultArtifacts['execution_blueprint'] ?? null) ? $resultArtifacts['execution_blueprint'] : [];
+        $planJson = \is_array($resultArtifacts['plan_json'] ?? null) ? $resultArtifacts['plan_json'] : [];
+        $planMarkdown = (string)($resultArtifacts['markdown'] ?? '');
+        $planWorkbench = \is_array($resultArtifacts['plan_workbench'] ?? null) ? $resultArtifacts['plan_workbench'] : [];
+        $combinedSummary = $mutationSummaries === []
+            ? (\is_array($resultArtifacts['mutation_summary'] ?? null) ? $resultArtifacts['mutation_summary'] : [])
+            : $mutationSummaries[\count($mutationSummaries) - 1];
+
         $scopePatch = [
+            'plan_json' => $planJson,
+            'plan_markdown' => $planMarkdown,
+            'plan_structured' => $structured,
+            'plan_workbench' => $planWorkbench,
+            'execution_blueprint_draft' => $executionBlueprint,
+            'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? $scope['execution_blueprint_signature'] ?? ''),
             'plan_confirmed' => 0,
             'plan_last_prompt_mode' => 'mutate_plan_block',
             'plan_last_target_scope' => $targetScope,
             'plan_last_round' => $round,
-            '_plan_sse_request' => [
-                'prompt_mode' => 'mutate_plan_block',
-                'instruction' => $instruction,
-                'target_scope' => $targetScope,
-                'target_scopes' => $targetScopes,
-                'round' => $round,
-                'mutation' => $mutation,
-                'mutations' => [$mutation],
-                'block_key' => $blockKey,
-                'block_keys' => $blockKeys,
-                'block_config' => $blockConfig,
-                'block_configs' => $blockConfigs,
-            ],
+            '_plan_sse_request' => [],
         ];
+        $saved = $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
+        if (!$saved) {
+            return $this->fetchJson(['success' => false, 'message' => 'Failed to persist plan block mutation.']);
+        }
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
 
-        return $this->fetchJson($this->startOperation(
-            $session,
+        $doneMessage = match ($action) {
+            'create' => (string)__('阶段一方案块已新增。'),
+            'delete' => (string)__('阶段一方案块已删除。'),
+            'rebuild' => (string)__('阶段一方案块已重建。'),
+            default => (string)__('阶段一方案块已微调。'),
+        };
+        $this->appendWorkspaceEvent(
+            $session->getId(),
             $adminId,
-            'plan',
-            AiSiteAgentSession::STAGE_PLAN,
-            $scopePatch,
-            $pageType,
-            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING,
+            $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
+            'plan_block_mutated',
+            $doneMessage,
             [
-                'stage_scope' => 'plan',
-                'prompt_mode' => 'mutate_plan_block',
-                'action' => $action,
+                'operation' => 'mutate_plan_block',
                 'page_type' => $pageType,
-                'block_key' => $blockKey,
-                'block_keys' => $blockKeys,
-                'component_codes' => $blockKeys,
-                'section_codes' => $blockKeys,
-                'target_scope' => $targetScope,
-                'target_scopes' => $targetScopes,
-                'instruction' => $instruction,
-                'round' => $round,
-                'mutation' => $mutation,
-                'mutations' => [$mutation],
-                'block_config' => $blockConfig,
-                'block_configs' => $blockConfigs,
-                'selected_blocks' => $blockKeys,
-                'targets' => \array_map(
-                    static fn (string $candidateBlockKey): array => [
-                        'page_type' => $pageType,
-                        'block_key' => $candidateBlockKey,
-                        'component_code' => $candidateBlockKey,
-                        'section_code' => $candidateBlockKey,
-                        'target_scope' => 'pages.' . $pageType . '.blocks.' . $candidateBlockKey,
-                    ],
-                    $blockKeys
-                ),
+                'action' => $action,
+                'details' => $combinedSummary,
             ]
-        ));
+        );
+
+        return $this->fetchJson([
+            'success' => true,
+            'message' => $doneMessage,
+            'page_type' => $pageType,
+            'mutation' => $combinedSummary,
+            'mutation_summaries' => $mutationSummaries,
+            'realtime' => true,
+            'data' => $this->buildWorkspaceState($fresh, $adminId, 80, true),
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $artifacts
+     * @return array<string, mixed>
+     */
+    private function mergePlanBlockMutationArtifactsToScope(array $scope, array $artifacts): array
+    {
+        $next = $scope;
+        if (\is_array($artifacts['structured'] ?? null)) {
+            $next['plan_structured'] = $artifacts['structured'];
+        }
+        if (\is_array($artifacts['execution_blueprint'] ?? null)) {
+            $next['execution_blueprint_draft'] = $artifacts['execution_blueprint'];
+            if (isset($artifacts['execution_blueprint']['signature'])) {
+                $next['execution_blueprint_signature'] = (string)$artifacts['execution_blueprint']['signature'];
+            }
+        }
+        if (\is_array($artifacts['plan_json'] ?? null)) {
+            $next['plan_json'] = $artifacts['plan_json'];
+        }
+        if (\array_key_exists('markdown', $artifacts)) {
+            $next['plan_markdown'] = (string)$artifacts['markdown'];
+        }
+        if (\is_array($artifacts['plan_workbench'] ?? null)) {
+            $next['plan_workbench'] = $artifacts['plan_workbench'];
+        }
+        return $next;
     }
 
     private function handleSortTaskPlanTasks(): string
