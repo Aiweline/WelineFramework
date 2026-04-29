@@ -280,6 +280,7 @@ class Start extends CommandAbstract
         if (!$this->validateExternalHostAllowlist($instanceName, $host, $config)) {
             return;
         }
+        $publicHost = (string)($config['public_host'] ?? $host);
         // -frontend/--frontend 要让 Master 保持在当前前台终端，子进程也按前台模式启动。
         $daemon = $this->resolveDaemonMode($config, $frontend);
         
@@ -808,7 +809,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             $workerScript = $this->ensureWorkerScript($workerSslEnabled);
             $orchestratorRuntimeOptions = $this->buildOrchestratorRuntimeOptions($frontend);
             $listenHost = $this->resolveServerListenHost((string)$host);
-            $this->saveInstanceInfo($instanceName, $listenHost, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime, $orchestratorRuntimeOptions, (string) ($config['worker_memory_limit'] ?? '256M'), (string) ($config['dispatcher_memory_limit'] ?? ''), (string)$host);
+            $this->saveInstanceInfo($instanceName, $listenHost, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime, $orchestratorRuntimeOptions, (string) ($config['worker_memory_limit'] ?? '256M'), (string) ($config['dispatcher_memory_limit'] ?? ''), $publicHost);
         } finally {
             if ($workerPortAllocationLocked) {
                 $this->releaseWorkerPortAllocationLock();
@@ -863,7 +864,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             $this->finalizeBackgroundStartupOutput(
                 $startupCompleted,
                 $instanceName,
-                $host,
+                $publicHost,
                 $port,
                 $count,
                 (string) ($config['source'] ?? ''),
@@ -886,9 +887,9 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         }
 
         // 前台模式也使用 listenHost；对外展示的访问域名保留为项目 host（如 *.weline.test / *.weline.localhost）
-        $config['public_host'] = $host;
+        $config['public_host'] = (string)($config['public_host'] ?? $host);
         $config['host'] = $listenHost;
-        $this->warnWindowsLocalDomainProxyRisk($host);
+        $this->warnWindowsLocalDomainProxyRisk((string)$config['public_host']);
 
         // Master 负责启动所有进程（不再传递 workerPids，由 Master 自己启动）
         $this->wlsChildProcessesMayExist = true;
@@ -1083,7 +1084,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         return !$this->isLoopbackLikeHost($host);
     }
 
-    protected function validateExternalHostAllowlist(string $instanceName, string $host, array $config): bool
+    protected function validateExternalHostAllowlist(string $instanceName, string $host, array &$config): bool
     {
         if (!$this->isWildcardBindHost($host)) {
             return true;
@@ -1113,9 +1114,10 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         $defaultProjectHost = $this->getDefaultHost();
         if ($this->isUsablePublicHost($defaultProjectHost)) {
             if (!$hasConfiguredPublicHost) {
-                $this->printer->warning(__('当前未显式配置启动白名单 Host，已回退到默认项目域名：%{1}', [$defaultProjectHost]));
-                $this->printer->note(__('该白名单仅用于启动主入口校验，不需要把后台域名池中的域名全部写到这里。'));
-                $this->printer->note(__('若需要公网 IP/域名直连，请配置 app/etc/env.php -> wls.servers.%{1}.host。', [$instanceName]));
+                $config['public_host'] = $defaultProjectHost;
+                $this->printer->warning(__('当前Wls没有配置白名单默认host，前端公网可能无法访问，请配置 app/etc/env.php -> wls.servers.%{1}.host。', [$instanceName]));
+                $this->printer->note(__('如果默认内网访问可忽略该提示。'));
+                $this->printer->note(__('已临时回退到默认项目域名：%{1}', [$defaultProjectHost]));
             }
             return true;
         }
