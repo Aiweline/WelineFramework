@@ -147,6 +147,9 @@ class WlsLogger
         }
 
         $this->processLogFile = $path;
+        if ($this->bufferSize > 0 || $this->pendingBatchFiles !== []) {
+            $this->flush(true);
+        }
         return $this;
     }
 
