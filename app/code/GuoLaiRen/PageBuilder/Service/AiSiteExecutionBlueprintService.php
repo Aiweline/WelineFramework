@@ -5301,6 +5301,7 @@ final class AiSiteExecutionBlueprintService
             'Instruction: ' . $instruction,
             'Target scope: ' . (\trim($targetScope) !== '' ? $targetScope : '-'),
         ]);
+        $prompt = $this->getSkillRegistry()->prependPromptGuide($prompt, 'stage1');
 
         try {
             $raw = (string)$this->getAiService()->generate(
