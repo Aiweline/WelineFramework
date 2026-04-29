@@ -5974,7 +5974,10 @@
                             var chunk = await reader.read();
                             if (chunk && chunk.value) {
                                 buffer += decoder.decode(chunk.value, { stream: true });
+                            } else if (chunk && chunk.done) {
+                                buffer += decoder.decode();
                             }
+                            buffer = buffer.replace(/\r\n/g, '\n');
                             var parts = buffer.split('\n\n');
                             buffer = parts.pop() || '';
                             for (var partIndex = 0; partIndex < parts.length; partIndex++) {
@@ -5986,7 +5989,8 @@
                                     if (line.indexOf('event:') === 0) {
                                         currentEvent = line.replace(/^event:\s*/, '').trim();
                                     } else if (line.indexOf('data:') === 0) {
-                                        currentData = line.replace(/^data:\s*/, '');
+                                        var dataLine = line.replace(/^data:\s*/, '');
+                                        currentData = currentData ? (currentData + '\n' + dataLine) : dataLine;
                                     }
                                 }
                                 finishStreamEvent();
