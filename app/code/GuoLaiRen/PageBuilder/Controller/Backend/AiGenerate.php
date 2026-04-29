@@ -2284,8 +2284,9 @@ class AiGenerate extends BackendController
      * - 这里使用 array_replace 让结构化锁定覆盖调用方旧值，避免历史调用方意外打开
      *   reasoning，从而触发"无响应"故障。
      * - component-config-stream 等若需通过 SSE 推送 reasoning_callback（思考过程），可传入
-     *   `$allowThinkingStream=true`：仍强制 json_object，但不禁用 thinking，以便供应商同时流式
-     *   返回 reasoning 与最终 content。
+     *   `$allowThinkingStream=true`：仍强制 json_object，且必须显式传入 thinking=enabled，
+     *   否则 OpenAiProvider 会对 json_object 默认禁用 thinking（shouldDisableThinkingByDefault），
+     *   同时 AiRuntimeContext 注入的禁用项会因 mergeDefaultParams 保留 thinking 键而无法仅靠「不传」覆盖。
      *
      * @param array<string, mixed> $callerParams generateStream 的 params 入参
      * @param bool $allowThinkingStream 为 true 时不合并禁用 thinking 的参数，也不剔除 reasoning_effort / budget
@@ -2301,6 +2302,12 @@ class AiGenerate extends BackendController
             $forced['thinking_mode'] = 'disabled';
             $forced['enable_thinking'] = false;
             $forced['enable_reasoning'] = false;
+        } else {
+            // 覆盖 Provider 对 json_object 的默认禁用 + RequestContext 默认参数里的禁用 thinking
+            $forced['thinking'] = ['type' => 'enabled'];
+            $forced['thinking_mode'] = true;
+            $forced['enable_thinking'] = true;
+            $forced['enable_reasoning'] = true;
         }
         $params = \array_replace($callerParams, $forced);
         if (!$allowThinkingStream) {
