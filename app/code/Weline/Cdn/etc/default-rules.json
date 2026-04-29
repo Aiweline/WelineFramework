@@ -22,6 +22,39 @@
             "cache": false
         },
         "description": "API路径不缓存"
+    },
+    {
+        "expression": "http.request.headers[\"x-weline-cache-bypass\"][0] eq \"1\"",
+        "action": {
+            "cache": false
+        },
+        "description": "Weline 缓存绕过：客户端显式声明 X-Weline-Cache-Bypass=1 时直接回源"
+    },
+    {
+        "expression": "http.request.headers[\"x-weline-idempotent\"][0] eq \"1\" and (http.request.method eq \"GET\" or http.request.method eq \"HEAD\")",
+        "action": {
+            "cache": {
+                "status_code": [200],
+                "ttl": 600
+            }
+        },
+        "description": "Weline 幂等请求：客户端声明 X-Weline-Idempotent=1 的 GET/HEAD 请求允许 CDN 短期缓存（10 分钟）"
+    },
+    {
+        "expression": "http.response.headers[\"x-weline-url-guard\"][0] matches \"^rejected:\"",
+        "action": {
+            "cache": {
+                "status_code": [410],
+                "ttl": 86400
+            }
+        },
+        "description": "Weline URL Guard 拒绝：把 410 越界响应缓存 1 天，避免恶意刷量穿透到源站"
+    },
+    {
+        "expression": "http.response.headers[\"x-weline-cache-status\"][0] eq \"hit\"",
+        "action": {
+            "cache_reserve": true
+        },
+        "description": "Weline 缓存命中：将源站标记为命中的响应放入 CDN 缓存层"
     }
 ]
-
