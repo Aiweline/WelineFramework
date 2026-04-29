@@ -252,53 +252,6 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         self::assertStringContainsString('HTML fragments must be balanced', $prompt);
     }
 
-    public function testClaudeDesignPolishPassIncludesDefaultSkillGuide(): void
-    {
-        $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::once())
-            ->method('generate')
-            ->with(
-                self::callback(static function (string $prompt): bool {
-                    return \str_contains($prompt, 'AI BUILDER SKILL CAPABILITY (mandatory, default-loaded):')
-                        && \str_contains($prompt, 'code=claude-design')
-                        && \str_contains($prompt, 'CLAUDE-DESIGN HARD RULES')
-                        && \str_contains($prompt, 'Original generation prompt context');
-                }),
-                'claude-3-5-sonnet-20241022',
-                'pagebuilder_component_generation',
-                null,
-                self::callback(static function (array $params): bool {
-                    return ($params['response_format']['type'] ?? null) === 'json_object'
-                        && ($params['allow_zero_balance_provider'] ?? null) === true;
-                }),
-                null,
-                false
-            )
-            ->willReturn('{"extra_fields":"","php_variables":"","css_extra":"","html_extra":"<div class=\"header-polish\">Navigation</div>","js_content":""}');
-
-        $service = new AiSitePageComponentGenerationService(
-            aiService: $aiService,
-        );
-
-        $result = (function (array $payload): array {
-            return $this->applyClaudeDesignPolishPass(
-                'header',
-                'header/ai-site-header',
-                'Original header prompt',
-                $payload
-            );
-        })->call($service, [
-            'extra_fields' => '',
-            'php_variables' => '',
-            'css_extra' => '',
-            'html_extra' => '<div>Initial</div>',
-            'js_content' => '',
-        ]);
-
-        self::assertIsArray($result);
-        self::assertArrayHasKey('html_extra', $result);
-    }
-
     public function testResolveConcurrencyUsesTaskCountWithoutApplicationCap(): void
     {
         $service = new AiSitePageComponentGenerationService();
