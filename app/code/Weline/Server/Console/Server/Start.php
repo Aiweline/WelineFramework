@@ -2804,8 +2804,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         // 则不要直接进入公网 ACME 申请流程，否则会出现必然 404（/.well-known/acme-challenge/* 未响应）。
         // 这里先生成自签证书让服务尽快就绪，后续 Master 子服务就绪后统一再补做正式证书申请。
         $deferAcmeForColdStartup = !$needsLocalCert
-            && !$willReuse
-            && $webroot !== SslCertificateService::WEBROOT_WLS_VIRTUAL;
+            && !$willReuse;
         if ($deferAcmeForColdStartup) {
             $this->printer->warning(__('检测到冷启动阶段 ACME HTTP-01 校验入口尚未就绪：已先用自签证书启动（%{1}）。', [$domain]));
 
