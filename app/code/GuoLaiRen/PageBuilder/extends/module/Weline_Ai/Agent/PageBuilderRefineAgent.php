@@ -16,6 +16,7 @@ use GuoLaiRen\PageBuilder\Service\AI\Tool\PreviewReferenceTool;
 use GuoLaiRen\PageBuilder\Service\AI\Tool\ValidateCodeTool;
 use GuoLaiRen\PageBuilder\Service\AI\Tool\LocateTemplateErrorTool;
 use GuoLaiRen\PageBuilder\Service\AI\Tool\ReplaceTemplateSnippetTool;
+use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
 use Weline\Ai\Agent\AgentResult;
 use Weline\Ai\Interface\AgentInterface;
 use Weline\Ai\Interface\ToolInterface;
@@ -171,7 +172,12 @@ SYSTEM_PROMPT;
             $prompt .= "- 示例：如果目标语言是「简体中文」，按钮应该是「了解更多」而不是「Learn More」";
         }
 
-        return $prompt;
+        return $this->withPageBuilderSkillGuide($prompt, 'stage3');
+    }
+
+    private function withPageBuilderSkillGuide(string $prompt, string $stage = 'stage3'): string
+    {
+        return ObjectManager::getInstance(AiSiteSkillRegistry::class)->prependPromptGuide($prompt, $stage);
     }
 
     public function execute(
