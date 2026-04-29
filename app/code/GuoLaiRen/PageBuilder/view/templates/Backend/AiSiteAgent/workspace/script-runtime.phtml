@@ -84,9 +84,6 @@
     var runningOperationKey = '';
     var runningOperationType = '';
     var runningStartAtByOperationKey = Object.create(null);
-    var phaseOneAutoRetryCountByKey = Object.create(null);
-    var phaseOneRetryPromptPendingByKey = Object.create(null);
-    var PHASE_ONE_AUTO_RETRY_MAX = 3;
     var lastFailurePayloadByOperation = Object.create(null);
     var queueCompletionReloadTimer = null;
     var observerSyncStatusPulseTimer = null;
@@ -411,19 +408,6 @@
 
     relayoutExpertWorkspaceWithRightLog();
 
-    function getPhaseOneRetryKey(operation, payload) {
-        var op = String((operation || (payload && payload.operation) || '')).trim().toLowerCase();
-        if (op !== 'plan' && op !== 'task_plan') {
-            return '';
-        }
-        var token = String(
-            (payload && payload.execution_token)
-            || (payload && payload.state && payload.state.active_operation && payload.state.active_operation.execution_token)
-            || ''
-        ).trim();
-        return publicId + ':' + op + ':' + (token || 'no-token');
-    }
-
     function rememberOperationFailurePayload(operation, payload, fallbackMessage) {
         var op = String((operation || (payload && payload.operation) || '')).trim().toLowerCase();
         if (!op) {
@@ -545,119 +529,13 @@
 
     function offerRetryForFailedOperation(operation, payload) {
         var op = String((operation || (payload && payload.operation) || '')).trim().toLowerCase();
-        if (op !== 'plan' && op !== 'task_plan') {
-            return showOperationFailureDetailModal(op, payload, {});
+        var modalOptions = {};
+        if (op === 'plan' || op === 'task_plan' || op === 'build') {
+            modalOptions.extraMessage = (typeof messages === 'object' && messages.retryableAiFailuresPending)
+                ? String(messages.retryableAiFailuresPending || '')
+                : '失败项已加入错误列表，请在进入下一阶段前点击“重试失败项”处理完成。';
         }
-        if (op === 'task_plan') {
-            var taskPlanApi = resolveWorkspaceApi();
-            var taskPlanRetryKey = getPhaseOneRetryKey(op, payload);
-            if (!taskPlanRetryKey || typeof taskPlanApi.retryPhaseTwoTaskPlanGeneration !== 'function') {
-                return showOperationFailureDetailModal(op, payload, {});
-            }
-            if (phaseOneRetryPromptPendingByKey[taskPlanRetryKey]) {
-                return Promise.resolve(false);
-            }
-            var taskPlanCurrent = parseInt(String(phaseOneAutoRetryCountByKey[taskPlanRetryKey] || 0), 10) || 0;
-            if (taskPlanCurrent >= PHASE_ONE_AUTO_RETRY_MAX) {
-                return showOperationFailureDetailModal(
-                    op,
-                    payload,
-                    {
-                        extraMessage: <?= \json_encode((string)__('前端重试已达上限，请检查错误后再手动重试或明确重建任务方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                    }
-                ).then(function () {
-                    return false;
-                });
-            }
-            phaseOneRetryPromptPendingByKey[taskPlanRetryKey] = true;
-            var taskPlanNextAttempt = taskPlanCurrent + 1;
-            return showOperationFailureDetailModal(
-                op,
-                payload,
-                {
-                    extraMessage: <?= \json_encode((string)__('是否立即重试第二阶段任务方案生成？本次将进行第 %{1} / 3 次前端重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>.replace('%{1}', String(taskPlanNextAttempt)),
-                    confirmText: <?= \json_encode((string)__('立即重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    cancelText: <?= \json_encode((string)__('暂不重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                }
-            ).then(function (confirmed) {
-                delete phaseOneRetryPromptPendingByKey[taskPlanRetryKey];
-                if (!confirmed) {
-                    return false;
-                }
-                phaseOneAutoRetryCountByKey[taskPlanRetryKey] = taskPlanNextAttempt;
-                toast('warning', <?= \json_encode((string)__('第二阶段任务方案生成失败，正在准备断点续跑重试...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
-                window.setTimeout(function () {
-                    var started = taskPlanApi.retryPhaseTwoTaskPlanGeneration({ forceRebuild: false });
-                    if (!started) {
-                        toast('warning', <?= \json_encode((string)__('当前仍有进行中的第二阶段任务方案任务，请稍后再试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
-                    }
-                }, 120);
-                return true;
-            }).catch(function () {
-                delete phaseOneRetryPromptPendingByKey[taskPlanRetryKey];
-                return false;
-            });
-        }
-        var api = resolveWorkspaceApi();
-        var retryKey = getPhaseOneRetryKey(op, payload);
-        var retryFn = op === 'task_plan'
-            ? api.retryPhaseTwoTaskPlanGeneration
-            : api.retryPhaseOnePlanGeneration;
-        if (!retryKey || typeof retryFn !== 'function') {
-            return showOperationFailureDetailModal(op, payload, {});
-        }
-        if (phaseOneRetryPromptPendingByKey[retryKey]) {
-            return Promise.resolve(false);
-        }
-        var current = parseInt(String(phaseOneAutoRetryCountByKey[retryKey] || 0), 10) || 0;
-        if (current >= PHASE_ONE_AUTO_RETRY_MAX) {
-            return showOperationFailureDetailModal(
-                op,
-                payload,
-                {
-                    extraMessage: <?= \json_encode((string)__('前端重试已达上限（3 次），请检查错误后再手动重试或强制重建方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                }
-            ).then(function () {
-                return false;
-            });
-        }
-        phaseOneRetryPromptPendingByKey[retryKey] = true;
-        var nextAttempt = current + 1;
-        var retryPromptMessage = op === 'task_plan'
-            ? <?= \json_encode((string)__('是否立即重试第二阶段任务方案生成？本次将进行第 %{1} / 3 次前端重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-            : <?= \json_encode((string)__('是否立即重试第一阶段方案生成？本次将进行第 %{1} / 3 次前端重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-        var retryPreparingMessage = op === 'task_plan'
-            ? <?= \json_encode((string)__('第二阶段任务方案生成失败，正在准备重试...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-            : <?= \json_encode((string)__('第一阶段生成失败，正在准备重试...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-        var retryBlockedMessage = op === 'task_plan'
-            ? <?= \json_encode((string)__('当前仍有进行中的第二阶段任务方案任务，请稍后再试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-            : <?= \json_encode((string)__('当前仍有进行中的第一阶段任务，请稍后再试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-        return showOperationFailureDetailModal(
-            op,
-            payload,
-            {
-                extraMessage: <?= \json_encode((string)__('是否立即重试第一阶段方案生成？本次将进行第 %{1} / 3 次前端重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>.replace('%{1}', String(nextAttempt)),
-                confirmText: <?= \json_encode((string)__('立即重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                cancelText: <?= \json_encode((string)__('暂不重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-            }
-        ).then(function (confirmed) {
-            delete phaseOneRetryPromptPendingByKey[retryKey];
-            if (!confirmed) {
-                return false;
-            }
-            phaseOneAutoRetryCountByKey[retryKey] = nextAttempt;
-            toast('warning', <?= \json_encode((string)__('第一阶段生成失败，正在准备重试...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
-            window.setTimeout(function () {
-                var started = api.retryPhaseOnePlanGeneration({ forceRebuild: false });
-                if (!started) {
-                    toast('warning', <?= \json_encode((string)__('当前仍有进行中的第一阶段任务，请稍后再试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
-                }
-            }, 120);
-            return true;
-        }).catch(function () {
-            delete phaseOneRetryPromptPendingByKey[retryKey];
-            return false;
-        });
+        return showOperationFailureDetailModal(op, payload, modalOptions);
     }
 
     var toast = typeof previewBridge.toast === 'function'
@@ -1908,6 +1786,77 @@
         return summary;
     }
 
+    /**
+     * 第二阶段「任务方案」按 batch 生成时，SSE progress_kind=task_plan_batch；侧栏任务列表来自 build_task_summary，
+     * 需把 batch_begin/done/failed 映射到对应 task_key，才能与终端 PROGRESS 一致。
+     *
+     * @param {object} summary
+     * @param {object} batch
+     * @return {object|null}
+     */
+    function mergeTaskPlanBatchIntoSummary(summary, batch) {
+        if (!summary || typeof summary !== 'object' || !batch || typeof batch !== 'object') {
+            return summary;
+        }
+        var ids = Object.create(null);
+        var batchId = String(batch.batch_id || '').trim();
+        if (batchId !== '') {
+            ids[batchId] = true;
+        }
+        var taskKeys = Array.isArray(batch.task_keys) ? batch.task_keys : [];
+        taskKeys.forEach(function (k) {
+            var key = String(k || '').trim();
+            if (key !== '') {
+                ids[key] = true;
+            }
+        });
+        if (!batchId && taskKeys.length === 0) {
+            return summary;
+        }
+        var statusRaw = String(batch.status || '').trim().toLowerCase();
+        var taskStatus;
+        if (statusRaw === 'batch_begin') {
+            taskStatus = 'running';
+        } else if (statusRaw === 'batch_done') {
+            taskStatus = 'done';
+        } else if (statusRaw === 'batch_failed') {
+            taskStatus = 'failed';
+        } else {
+            return summary;
+        }
+        var out = cloneTaskProgressSummary(summary);
+        var groups = out.groups && typeof out.groups === 'object' ? out.groups : null;
+        if (!groups) {
+            return summary;
+        }
+        var updatedAt = batch.updated_at ? String(batch.updated_at) : '';
+        var errMsg = batch.error_message != null ? String(batch.error_message) : '';
+        Object.keys(groups).forEach(function (groupKey) {
+            var group = groups[groupKey];
+            if (!group || !Array.isArray(group.tasks)) {
+                return;
+            }
+            group.tasks = group.tasks.map(function (task) {
+                if (!task || typeof task !== 'object') {
+                    return task;
+                }
+                var tk = String(task.task_key || '').trim();
+                if (tk === '' || !Object.prototype.hasOwnProperty.call(ids, tk)) {
+                    return task;
+                }
+                var next = Object.assign({}, task, { status: taskStatus });
+                if (updatedAt !== '') {
+                    next.updated_at = updatedAt;
+                }
+                if (taskStatus === 'failed' && errMsg !== '') {
+                    next.message = errMsg;
+                }
+                return next;
+            });
+        });
+        return normalizeTaskProgressSummary(out);
+    }
+
     function shouldShowBuildTaskProgressPanel(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
         var activeOperation = state.active_operation && typeof state.active_operation === 'object'
@@ -1915,11 +1864,11 @@
             : {};
         var activeOp = String(activeOperation.operation || '').trim().toLowerCase();
         var activeStatus = String(activeOperation.status || '').trim().toLowerCase();
+        // 仅第一阶段方案生成走独立队列进度；不压制第二阶段 task_plan（侧栏为蓝图任务列表，进度由 task_plan_batch 合并）。
         if (
-            (activeOp === 'plan' || activeOp === 'task_plan')
+            activeOp === 'plan'
             && ['queued', 'running', 'pending', 'processing', 'in_progress'].indexOf(activeStatus) !== -1
         ) {
-            // Plan and task-plan generation have their own queue progress channel.
             return false;
         }
         if (isBuildTaskProgressOperation(activeOp)) {
@@ -1952,6 +1901,21 @@
         var generatingChanged = updateTaskProgressGeneratingState(workspaceState);
         var shouldConsumeBuildSummary = shouldConsumeBuildTaskProgressSummary(workspaceState);
         var summary = extractTaskProgressSummary(workspaceState);
+        var pkState = workspaceState && typeof workspaceState === 'object'
+            ? String(workspaceState.progress_kind || '').trim().toLowerCase()
+            : '';
+        if (
+            pkState === 'task_plan_batch'
+            && workspaceState
+            && typeof workspaceState === 'object'
+            && workspaceState.task_plan_batch
+            && typeof workspaceState.task_plan_batch === 'object'
+        ) {
+            var baseForBatch = summary || cloneTaskProgressSummary(window.__pbTaskSummary);
+            if (baseForBatch && typeof baseForBatch === 'object' && readTaskProgressSummaryTotal(baseForBatch) > 0) {
+                summary = mergeTaskPlanBatchIntoSummary(baseForBatch, workspaceState.task_plan_batch);
+            }
+        }
         if (!summary && shouldConsumeBuildSummary && workspaceState && typeof workspaceState === 'object' && String(workspaceState.progress_kind || '') === 'task_progress') {
             summary = mergeSingleTaskProgressPayload(cloneTaskProgressSummary(window.__pbTaskSummary), workspaceState);
         }
@@ -2931,13 +2895,6 @@
             var normalizedDoneOperation = String(normalizedDonePayload.operation || '');
             if (success && (normalizedDoneOperation === 'plan' || normalizedDoneOperation === 'task_plan')) {
                 finishOperation(normalizedDonePayload);
-            }
-            if (success && normalizedDoneOperation === 'plan') {
-                var successRetryKey = getPhaseOneRetryKey(normalizedDoneOperation, normalizedDonePayload);
-                if (successRetryKey) {
-                    phaseOneAutoRetryCountByKey[successRetryKey] = 0;
-                    delete phaseOneRetryPromptPendingByKey[successRetryKey];
-                }
             }
             if (!success) {
                 var failureMessage = resolveQueueFailureMessage(normalizedDonePayload, normalizedDoneOperation) || lastServerError || <?= \json_encode((string)__('工作区操作执行失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;

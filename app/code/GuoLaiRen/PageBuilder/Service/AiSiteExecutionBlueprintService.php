@@ -643,82 +643,46 @@ final class AiSiteExecutionBlueprintService
         ?callable $onChunk = null,
         array $requestParamOverrides = []
     ): array {
-        $lastThrowable = null;
-        $attemptPrompts = [
-            $this->prependStageOneJsonOnlyGuard($prompt, false),
-            $this->prependStageOneJsonOnlyGuard($prompt, true),
-        ];
-        foreach ($attemptPrompts as $attemptIndex => $attemptPrompt) {
-            $fullContent = '';
-            $requestParams = \array_merge([
-                'allow_zero_balance_provider' => true,
-                'temperature' => $attemptIndex === 0 ? 0.15 : 0.05,
-                'max_tokens' => $maxTokens,
-                'timeout' => 0,
-                'disable_ai_timeout' => true,
-                'disable_cli_timeout' => true,
-                'enforce_timeout_in_stream' => false,
-                'response_format' => ['type' => 'json_object'],
-            ], $requestParamOverrides);
-            $requestParams = $this->sanitizeStageOneJsonRequestParams($requestParams);
-            try {
-                $this->getAiService()->generateStream(
-                    $attemptPrompt,
-                    static function (string $chunk) use (&$fullContent, $onChunk, $attemptIndex): bool {
-                        $fullContent .= $chunk;
-                        if ($attemptIndex === 0 && \is_callable($onChunk) && $chunk !== '') {
-                            $onChunk($chunk);
-                        }
-                        return true;
-                    },
-                    null,
-                    $scenarioCode,
-                    null,
-                    $requestParams
-                );
+        $attemptPrompt = $this->prependStageOneJsonOnlyGuard($prompt);
+        $fullContent = '';
+        $requestParams = \array_merge([
+            'allow_zero_balance_provider' => true,
+            'temperature' => 0.15,
+            'max_tokens' => $maxTokens,
+            'timeout' => 0,
+            'disable_ai_timeout' => true,
+            'disable_cli_timeout' => true,
+            'enforce_timeout_in_stream' => false,
+            'response_format' => ['type' => 'json_object'],
+        ], $requestParamOverrides);
+        $requestParams = $this->sanitizeStageOneJsonRequestParams($requestParams);
 
-                $decoded = $this->getResponseJsonParser()->extractAndDecode($fullContent);
-                if (\is_array($decoded)) {
-                    return $decoded;
+        $this->getAiService()->generateStream(
+            $attemptPrompt,
+            static function (string $chunk) use (&$fullContent, $onChunk): bool {
+                $fullContent .= $chunk;
+                if (\is_callable($onChunk) && $chunk !== '') {
+                    $onChunk($chunk);
                 }
+                return true;
+            },
+            null,
+            $scenarioCode,
+            null,
+            $requestParams
+        );
 
-                $lastThrowable = new \RuntimeException('invalid ai json: ' . \substr(\preg_replace('/\s+/', ' ', $fullContent), 0, 200));
-            } catch (\Throwable $throwable) {
-                $lastThrowable = $throwable;
-                $message = \strtolower($throwable->getMessage());
-                $reasoningOnlyError = \str_contains($message, 'reasoning_content only')
-                    || \str_contains($message, 'without final content');
-                $retryableStreamError = $this->isRetryableStageOneStreamError($message);
-                if (
-                    $attemptIndex >= 1
-                    && ($reasoningOnlyError || $retryableStreamError)
-                ) {
-                    return $this->generateStageOneJsonWithoutStream(
-                        $attemptPrompt,
-                        $scenarioCode,
-                        $maxTokens,
-                        $timeout,
-                        $requestParams
-                    );
-                }
-                if (
-                    $attemptIndex >= 1
-                    || (
-                        !$reasoningOnlyError
-                        && !$retryableStreamError
-                        && !\str_contains($message, 'invalid ai json')
-                        && !\str_contains($message, 'valid component json')
-                    )
-                ) {
-                    throw $throwable;
-                }
-            }
+        $decoded = $this->getResponseJsonParser()->extractAndDecode($fullContent);
+        if (\is_array($decoded)) {
+            return $decoded;
         }
 
-        throw $lastThrowable ?? new \RuntimeException('invalid ai json: empty response');
+        throw new \RuntimeException(
+            'invalid ai json: ' . \substr(\preg_replace('/\s+/', ' ', $fullContent), 0, 200)
+        );
     }
 
-    private function prependStageOneJsonOnlyGuard(string $prompt, bool $retry): string
+    private function prependStageOneJsonOnlyGuard(string $prompt): string
     {
         $guard = [
             'CRITICAL OUTPUT CONTRACT FOR STRUCTURED JSON:',
@@ -729,51 +693,8 @@ final class AiSiteExecutionBlueprintService
             '- Prefer compact strings and short arrays. Do not produce huge narrative paragraphs inside JSON values.',
             '- Escape all quotes inside string values; never use unescaped newlines in JSON strings.',
         ];
-        if ($retry) {
-            $guard[] = 'RETRY MODE: your previous answer was not usable JSON or contained only reasoning. Return the JSON object immediately, starting with `{`.';
-        }
 
         return \implode("\n", $guard) . "\n\n" . $prompt;
-    }
-
-    /**
-     * @param array<string, mixed> $requestParams
-     * @return array<string, mixed>
-     */
-    private function generateStageOneJsonWithoutStream(
-        string $prompt,
-        string $scenarioCode,
-        int $maxTokens,
-        int $timeout,
-        array $requestParams = []
-    ): array {
-        $requestParams = \array_merge([
-            'allow_zero_balance_provider' => true,
-            'temperature' => 0.0,
-            'max_tokens' => $maxTokens,
-            'timeout' => $timeout > 0 ? $timeout : 120,
-            'response_format' => ['type' => 'json_object'],
-        ], $requestParams);
-        unset(
-            $requestParams['disable_ai_timeout'],
-            $requestParams['disable_cli_timeout'],
-            $requestParams['enforce_timeout_in_stream']
-        );
-        $requestParams = $this->sanitizeStageOneJsonRequestParams($requestParams);
-
-        $raw = (string)$this->getAiService()->generate(
-            $prompt,
-            null,
-            $scenarioCode,
-            null,
-            $requestParams
-        );
-        $decoded = $this->getResponseJsonParser()->extractAndDecode($raw);
-        if (\is_array($decoded)) {
-            return $decoded;
-        }
-
-        throw new \RuntimeException('invalid ai json: non-stream recovery failed');
     }
 
     /**
@@ -795,25 +716,6 @@ final class AiSiteExecutionBlueprintService
         );
 
         return $params;
-    }
-
-    private function isRetryableStageOneStreamError(string $message): bool
-    {
-        foreach ([
-            'stream api request failed',
-            'unexpected eof while reading',
-            'ssl_read',
-            'stream terminated before the [done] marker',
-            'no response from ai api',
-            'timed out',
-            'timeout',
-        ] as $needle) {
-            if (\str_contains($message, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private function resolveStageOneCooperativeSessionId(array $scope, string $scopeKey): string
