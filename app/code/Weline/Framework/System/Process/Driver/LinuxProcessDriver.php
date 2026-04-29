@@ -826,9 +826,7 @@ class LinuxProcessDriver extends AbstractProcessDriver
             if (!\is_dir("/proc/{$pid}")) {
                 continue;
             }
-            
-            $result[$pid]['exists'] = true;
-            
+
             $commFile = "/proc/{$pid}/comm";
             if (\is_file($commFile)) {
                 $comm = @\file_get_contents($commFile);
@@ -848,10 +846,22 @@ class LinuxProcessDriver extends AbstractProcessDriver
             $statusFile = "/proc/{$pid}/status";
             if (\is_file($statusFile)) {
                 $status = @\file_get_contents($statusFile);
-                if ($status !== false && \preg_match('/VmRSS:\s+(\d+)\s+kB/', $status, $m)) {
-                    $result[$pid]['memory'] = \round(((int) $m[1]) / 1024, 2) . ' MB';
+                if ($status !== false) {
+                    $isZombie = \preg_match('/^State:\s+Z/m', $status) === 1;
+                    $result[$pid]['is_zombie'] = $isZombie;
+                    if ($isZombie) {
+                        $result[$pid]['exists'] = false;
+                        continue;
+                    }
+
+                    $result[$pid]['exists'] = true;
+                    if (\preg_match('/VmRSS:\s+(\d+)\s+kB/', $status, $m)) {
+                        $result[$pid]['memory'] = \round(((int) $m[1]) / 1024, 2) . ' MB';
+                    }
                 }
             }
+
+            $result[$pid]['exists'] = true;
         }
         
         return $result;
