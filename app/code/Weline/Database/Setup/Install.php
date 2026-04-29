@@ -12,6 +12,7 @@ namespace Weline\Database\Setup;
 
 use Weline\Database\Model\Migration;
 use Weline\Database\Model\MigrationBackup;
+use Weline\Database\Model\DatabaseAdminAuditLog;
 use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
@@ -26,6 +27,7 @@ class Install
         $modelSetup = ObjectManager::getInstance(ModelSetup::class);
         $this->createMigrationTable($modelSetup);
         $this->createMigrationBackupTable($modelSetup);
+        $this->createAdminAuditLogTable($modelSetup);
     }
 
     private function createMigrationTable(ModelSetup $modelSetup): void
@@ -67,6 +69,31 @@ class Install
             ->addColumn(MigrationBackup::schema_fields_BACKUP_DATA, TableInterface::column_type_TEXT, null, 'default null', 'Backup Data')
             ->addColumn(MigrationBackup::schema_fields_BACKUP_TYPE, TableInterface::column_type_VARCHAR, 50, 'not null', 'Backup Type')
             ->addColumn(MigrationBackup::schema_fields_CREATED_AT, TableInterface::column_type_TIMESTAMP, null, 'default CURRENT_TIMESTAMP', 'Created At')
+            ->create();
+    }
+
+    private function createAdminAuditLogTable(ModelSetup $modelSetup): void
+    {
+        /** @var DatabaseAdminAuditLog $model */
+        $model = ObjectManager::getInstance(DatabaseAdminAuditLog::class);
+        $modelSetup->putModel($model);
+        if ($modelSetup->tableExist()) {
+            return;
+        }
+        $modelSetup->createTable('Database Admin Audit Logs')
+            ->addColumn(DatabaseAdminAuditLog::schema_fields_ID, TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'Log ID')
+            ->addColumn(DatabaseAdminAuditLog::schema_fields_ACTION, TableInterface::column_type_VARCHAR, 64, 'not null', 'Action')
+            ->addColumn(DatabaseAdminAuditLog::schema_fields_DATABASE, TableInterface::column_type_VARCHAR, 128, 'default null', 'Database Name')
+            ->addColumn(DatabaseAdminAuditLog::schema_fields_TABLE, TableInterface::column_type_VARCHAR, 128, 'default null', 'Table Name')
+            ->addColumn(DatabaseAdminAuditLog::schema_fields_SQL, TableInterface::column_type_TEXT, null, 'default null', 'SQL Text')
+            ->addColumn(DatabaseAdminAuditLog::schema_fields_PAYLOAD, TableInterface::column_type_TEXT, null, 'default null', 'Payload JSON')
+            ->addColumn(DatabaseAdminAuditLog::schema_fields_AFFECTED_ROWS, TableInterface::column_type_INTEGER, null, 'default 0', 'Affected Rows')
+            ->addColumn(DatabaseAdminAuditLog::schema_fields_STATUS, TableInterface::column_type_VARCHAR, 32, 'not null default \'success\'', 'Status')
+            ->addColumn(DatabaseAdminAuditLog::schema_fields_MESSAGE, TableInterface::column_type_TEXT, null, 'default null', 'Message')
+            ->addColumn(DatabaseAdminAuditLog::schema_fields_USER_ID, TableInterface::column_type_VARCHAR, 64, 'default null', 'User ID')
+            ->addColumn(DatabaseAdminAuditLog::schema_fields_USERNAME, TableInterface::column_type_VARCHAR, 128, 'default null', 'Username')
+            ->addColumn(DatabaseAdminAuditLog::schema_fields_CLIENT_IP, TableInterface::column_type_VARCHAR, 64, 'default null', 'Client IP')
+            ->addColumn(DatabaseAdminAuditLog::schema_fields_CREATED_AT, TableInterface::column_type_TIMESTAMP, null, 'default CURRENT_TIMESTAMP', 'Created At')
             ->create();
     }
 }

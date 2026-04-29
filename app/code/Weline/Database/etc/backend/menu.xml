@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_Database::database_admin"
+          name="database_admin"
+          title="数据库管理"
+          parent="Weline_Backend::data_tools_group"
+          action="database/backend/admin/index"
+          icon="mdi mdi-database-cog-outline"
+          order="20">
+        <menu source="Weline_Database::database_admin_overview"
+              name="database_admin_overview"
+              title="总览"
+              action="database/backend/admin/index"
+              icon="mdi mdi-view-dashboard-outline"
+              order="10"/>
+        <menu source="Weline_Database::database_admin_sql_console"
+              name="database_admin_sql_console"
+              title="SQL 控制台"
+              action="database/backend/admin/index?tab=sql"
+              icon="mdi mdi-console-line"
+              order="20"/>
+    </menu>
+</menus>
