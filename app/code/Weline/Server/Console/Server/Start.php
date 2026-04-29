@@ -2734,7 +2734,8 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
                 $keyPath = (string) ($config['ssl_key'] ?? '');
 
                 // 本地/内网环境：证书文件不存在时尝试自动生成，而不是直接报错
-                if ($needsLocalCert) {
+                if ($needsLocalCert || !\is_file($certPath) || !\is_file($keyPath)) {
+                    $sslService->cleanupInvalidSslConfigAndMap();
                     $config['ssl_cert'] = '';
                     $config['ssl_key'] = '';
                     // 清除后 fall through 到下方 ensureCertificate 逻辑
