@@ -52,7 +52,7 @@
         }
     }
     function isRuntimePublishBlockingAiOperation(operation) {
-        return ['build', 'visual_edit', 'regenerate_page', 'block_regenerate'].indexOf(String(operation || '').trim().toLowerCase()) !== -1;
+        return ['build', 'visual_edit', 'regenerate_page', 'block_regenerate', 'block_refine'].indexOf(String(operation || '').trim().toLowerCase()) !== -1;
     }
     var compactPageDisplayLabel = typeof previewBridge.compactPageDisplayLabel === 'function'
         ? previewBridge.compactPageDisplayLabel
@@ -1465,6 +1465,43 @@
         blockRefreshState.blockId = '';
     }
 
+    function normalizeRuntimeBlockComponentCode(componentCode) {
+        var code = String(componentCode || '').trim();
+        if (code.indexOf('content/') === 0) {
+            code = code.slice('content/'.length);
+        }
+        return code;
+    }
+
+    function runtimeFindNextBlock(pageType, blocks, componentCode) {
+        if (!Array.isArray(blocks)) {
+            return null;
+        }
+        var requested = String(componentCode || '').trim();
+        if (!requested) {
+            return null;
+        }
+        var normalizedRequested = normalizeRuntimeBlockComponentCode(requested).replace(/\//g, '-');
+        for (var i = 0; i < blocks.length; i += 1) {
+            var block = blocks[i];
+            if (!block || typeof block !== 'object') {
+                continue;
+            }
+            var blockId = String(block.block_id || '').trim();
+            if (!blockId) {
+                continue;
+            }
+            if (blockId === requested) {
+                return block;
+            }
+            var normalizedBlockId = normalizeRuntimeBlockComponentCode(blockId).replace(/\//g, '-');
+            if (normalizedBlockId === normalizedRequested) {
+                return block;
+            }
+        }
+        return null;
+    }
+
     function refreshEmbeddedPreviewFrame(delayMs) {
         var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
         if (!previewFrame || !previewFrame.src) {
@@ -1653,7 +1690,7 @@
     }
 
     function isBuildTaskProgressOperation(operation) {
-        return ['build', 'regenerate_page', 'block_regenerate'].indexOf(String(operation || '').trim()) !== -1;
+        return ['build', 'regenerate_page', 'block_regenerate', 'block_refine'].indexOf(String(operation || '').trim()) !== -1;
     }
 
     function shouldConsumeBuildTaskProgressSummary(source) {
@@ -3026,7 +3063,7 @@
             }
             if (
                 blockRefreshState.active
-                && ['regenerate_page', 'block_regenerate'].indexOf(String(operation || '')) !== -1
+                && ['regenerate_page', 'block_regenerate', 'block_refine'].indexOf(String(operation || '')) !== -1
                 && payload
                 && payload.state
                 && payload.state.virtual_pages_by_type
@@ -3036,7 +3073,7 @@
                 }
                 var pageState = payload.state.virtual_pages_by_type[blockRefreshState.pageType] || null;
                 var nextBlock = pageState && Array.isArray(pageState.blocks)
-                    ? pageState.blocks.find(function (item) { return String(item.block_id || '') === String(blockRefreshState.blockId || ''); })
+                    ? runtimeFindNextBlock(blockRefreshState.pageType, pageState.blocks, blockRefreshState.blockId)
                     : null;
                 if (nextBlock) {
                     if (typeof previewBridge.updateVirtualBlockState === 'function') {
