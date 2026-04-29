@@ -682,6 +682,11 @@ class Processer
         // $enableLog=true: stdout/stderr 追加到进程日志文件
         // $enableLog=false: stdout/stderr 丢弃（输出到 NUL / /dev/null）
         $logFile = $enableLog ? self::getLogFile($pname) : '';
+        if ($enableLog && !self::prepareProcessLogFileForWrite($logFile)) {
+            self::logLifecycleEvent('log_unwritable', $pname, 0, 'path=' . $logFile);
+            $enableLog = false;
+            $logFile = '';
+        }
         $nullDevice = IS_WIN ? 'NUL' : '/dev/null';
 
         // Windows 后台默认优先走 argv 快速路径（Start-Process ArgumentList 数组），
@@ -1398,6 +1403,107 @@ class Processer
         return $path;
     }
 
+    private static function prepareProcessLogFileForWrite(string $path): bool
+    {
+        if ($path === '') {
+            return false;
+        }
+
+        $dir = \dirname($path);
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0777, true);
+        }
+        if (!\is_dir($dir)) {
+            return false;
+        }
+
+        \clearstatcache(true, $path);
+        if (\is_file($path) && \is_writable($path)) {
+            return true;
+        }
+
+        if (\file_exists($path)) {
+            @\chmod($path, 0664);
+            \clearstatcache(true, $path);
+            if (\is_file($path) && \is_writable($path)) {
+                return true;
+            }
+
+            // A writable process directory can remove stale root-owned logs even
+            // when the file itself is not writable by the current user.
+            @\unlink($path);
+            \clearstatcache(true, $path);
+        }
+
+        if (!\file_exists($path)) {
+            $handle = @\fopen($path, 'ab');
+            if (\is_resource($handle)) {
+                @\fclose($handle);
+                @\chmod($path, 0664);
+                return true;
+            }
+        }
+
+        if (!IS_WIN) {
+            self::repairProcessLogFileWithSudo($path);
+            \clearstatcache(true, $path);
+            if (\is_file($path) && \is_writable($path)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function repairProcessLogFileWithSudo(string $path): void
+    {
+        $user = self::getEffectiveUserName();
+        if ($user === '') {
+            return;
+        }
+
+        $group = self::getEffectiveGroupName();
+        $owner = $group !== '' ? $user . ':' . $group : $user;
+        $script = 'touch "$1" && chown -- "$2" "$1" && chmod u+rw,g+rw "$1"';
+        $command = 'sudo -n sh -c ' . \escapeshellarg($script)
+            . ' sh ' . \escapeshellarg($path)
+            . ' ' . \escapeshellarg($owner)
+            . ' 2>/dev/null';
+
+        @\exec($command);
+    }
+
+    private static function getEffectiveUserName(): string
+    {
+        if (\function_exists('posix_geteuid') && \function_exists('posix_getpwuid')) {
+            $info = @\posix_getpwuid((int) \posix_geteuid());
+            if (\is_array($info) && !empty($info['name'])) {
+                return (string) $info['name'];
+            }
+        }
+
+        foreach (['USER', 'LOGNAME', 'USERNAME'] as $name) {
+            $value = \getenv($name);
+            if (\is_string($value) && $value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    private static function getEffectiveGroupName(): string
+    {
+        if (\function_exists('posix_getegid') && \function_exists('posix_getgrgid')) {
+            $info = @\posix_getgrgid((int) \posix_getegid());
+            if (\is_array($info) && !empty($info['name'])) {
+                return (string) $info['name'];
+            }
+        }
+
+        return '';
+    }
+
     /**
      * @DESC          # 获取进程名
      *
@@ -1916,7 +2022,11 @@ class Processer
     public static function setOutput(string $pname, string $content, bool $append = true): false|int
     {
         $path = self::getLogFile($pname);
-        return file_put_contents($path, $content, $append ? FILE_APPEND : 0);
+        if (!self::prepareProcessLogFileForWrite($path)) {
+            return false;
+        }
+
+        return @file_put_contents($path, $content, $append ? FILE_APPEND : 0);
     }
 
     /*----------------------------------------进程日志配置区域------------------------------------------*/
@@ -6175,7 +6285,11 @@ POWERSHELL;
     {
         $pname = self::getNameByPid($pid);
         $path  = self::getLogFile($pname);
-        return file_put_contents($path, $content, FILE_APPEND);
+        if (!self::prepareProcessLogFileForWrite($path)) {
+            return false;
+        }
+
+        return @file_put_contents($path, $content, FILE_APPEND);
     }
 
     /**
