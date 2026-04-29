@@ -164,8 +164,15 @@ class BackendController extends PcController
 
         return \str_contains($routeUrlPath, 'stream-sse')
             || \str_contains($routeUrlPath, 'operation-sse')
+            // fetch+POST 的 AI 流式端点常不带 EventSource 风格 Accept，仍需按 SSE 处理登录失败响应
+            || \str_contains($routeUrlPath, 'component-config-stream')
+            || \str_contains($routeUrlPath, 'page-content-stream')
+            || (\str_contains($routeUrlPath, '/ai-generate/') && \str_contains($routeUrlPath, '-stream'))
             || \str_contains($requestUri, 'stream-sse')
-            || \str_contains($requestUri, 'operation-sse');
+            || \str_contains($requestUri, 'operation-sse')
+            || \str_contains($requestUri, 'component-config-stream')
+            || \str_contains($requestUri, 'page-content-stream')
+            || (\str_contains($requestUri, '/ai-generate/') && \str_contains($requestUri, '-stream'));
     }
 
     /**

@@ -5854,7 +5854,9 @@
                         var streamResponse = await fetch(componentConfigStreamUrl, {
                             method: 'POST',
                             headers: {
-                                'X-Requested-With': 'XMLHttpRequest'
+                                'X-Requested-With': 'XMLHttpRequest',
+                                // 与 EventSource 一致，便于 WLS SseMatcher 识别、devtools/Headers 显式协商 SSE
+                                'Accept': 'text/event-stream'
                             },
                             credentials: 'same-origin',
                             body: formData
