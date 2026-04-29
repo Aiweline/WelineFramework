@@ -3732,6 +3732,9 @@ CNF;
                         ->setCsrPem($certContents['csr_pem']);
                     $cert = $this->resolveDuplicateDomainCert($cert);
                     $cert->setDomain($normalizedDomain)
+                        ->setCertPath($certPath)
+                        ->setKeyPath($keyPath)
+                        ->setChainPath($chainPath)
                         ->setProvider($provider);
                     $cert->save();
 
@@ -5401,6 +5404,24 @@ CNF;
             
             if ($enabled) {
                 // 启用 HTTPS 前检查证书文件
+                if (!$cert->certificateFilesExist()) {
+                    $certDir = $this->getCertificateDir(\strtolower(\trim($domain)));
+                    $certPath = $certDir . 'fullchain.pem';
+                    $keyPath = $certDir . 'privkey.pem';
+                    if (\is_file($certPath) && \is_file($keyPath)) {
+                        $synced = $this->syncCertificateRecordFromFiles(
+                            $domain,
+                            $certPath,
+                            $keyPath,
+                            (int)$cert->getWebsiteId(),
+                            false,
+                            (string)($cert->getProvider() ?: self::PROVIDER_LETS_ENCRYPT)
+                        );
+                        if ($synced instanceof SslCertificate) {
+                            $cert = $synced;
+                        }
+                    }
+                }
                 if (!$cert->certificateFilesExist()) {
                     return ['success' => false, 'message' => __('证书文件不存在，无法启用 HTTPS')];
                 }
