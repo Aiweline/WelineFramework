@@ -109,6 +109,11 @@ class Start extends CommandAbstract
      * 已执行 startMasterInBackground / runMasterProcess 尝试拉起子进程；fatal 退出时需清理残留
      */
     private bool $wlsChildProcessesMayExist = false;
+
+    /**
+     * 启动完成后尾部输出的延迟告警（用于确保提示位于最后且醒目）
+     */
+    private ?string $deferredStartupWarning = null;
     
     /**
      * @inheritDoc
@@ -876,6 +881,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             );
             if ($startupCompleted) {
                 $this->printGoodbye(true, __('所有服务已就绪，可使用 %{1}php bin/w server:status%{2} 查看状态', ['<info>', '</info>']));
+                $this->flushDeferredStartupWarning();
             }
             return;
         }
@@ -1115,9 +1121,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         if ($this->isUsablePublicHost($defaultProjectHost)) {
             if (!$hasConfiguredPublicHost) {
                 $config['public_host'] = $defaultProjectHost;
-                $this->printer->warning(__('当前Wls没有配置白名单默认host，前端公网可能无法访问，请配置 app/etc/env.php -> wls.servers.%{1}.host。', [$instanceName]));
-                $this->printer->note(__('如果默认内网访问可忽略该提示。'));
-                $this->printer->note(__('已临时回退到默认项目域名：%{1}', [$defaultProjectHost]));
+                $this->deferredStartupWarning = __('当前Wls没有配置白名单默认host，前端公网可能无法访问，请配置 app/etc/env.php -> wls.servers.%{1}.host。', [$instanceName]);
             }
             return true;
         }
@@ -1127,6 +1131,18 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         $this->printer->note(__('后台域名池域名不需要写入此处。'));
 
         return false;
+    }
+
+    protected function flushDeferredStartupWarning(): void
+    {
+        if ($this->deferredStartupWarning === null || $this->deferredStartupWarning === '') {
+            return;
+        }
+
+        echo "\n";
+        $this->printer->error($this->deferredStartupWarning);
+        $this->printer->note(__('如果默认内网访问可忽略该提示。'));
+        $this->deferredStartupWarning = null;
     }
 
     protected function resolveServerListenHost(string $host): string
