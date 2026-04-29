@@ -277,6 +277,9 @@ class Start extends CommandAbstract
         $host = $config['host'];
         $port = $config['port'];
         $count = $config['worker_count'];
+        if (!$this->validateExternalHostAllowlist($instanceName, $host, $config)) {
+            return;
+        }
         // -frontend/--frontend 要让 Master 保持在当前前台终端，子进程也按前台模式启动。
         $daemon = $this->resolveDaemonMode($config, $frontend);
         
@@ -1058,6 +1061,70 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             || $host === '0.0.0.0'
             || $host === '127.0.0.1'
             || (bool)\preg_match('/^127\.\d+\.\d+\.\d+$/', $host);
+    }
+
+    protected function isWildcardBindHost(string $host): bool
+    {
+        $host = \strtolower(\trim($host));
+
+        return $host === '0.0.0.0' || $host === '::';
+    }
+
+    protected function isUsablePublicHost(string $host): bool
+    {
+        $host = \strtolower(\trim($host));
+        if ($host === '') {
+            return false;
+        }
+        if ($this->isWildcardBindHost($host)) {
+            return false;
+        }
+
+        return !$this->isLoopbackLikeHost($host);
+    }
+
+    protected function validateExternalHostAllowlist(string $instanceName, string $host, array $config): bool
+    {
+        if (!$this->isWildcardBindHost($host)) {
+            return true;
+        }
+
+        $envConfig = $this->getEnvConfig();
+        $wlsConfig = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
+        $servers = \is_array($wlsConfig['servers'] ?? null) ? $wlsConfig['servers'] : [];
+        $instanceConfig = \is_array($servers[$instanceName] ?? null) ? $servers[$instanceName] : [];
+
+        $publicCandidates = [
+            (string)($config['public_host'] ?? ''),
+            (string)($instanceConfig['host'] ?? ''),
+            (string)($instanceConfig['ssl_domain'] ?? ''),
+            (string)($wlsConfig['public_host'] ?? ''),
+            (string)($wlsConfig['ssl_domain'] ?? ''),
+            (string)($wlsConfig['host'] ?? ''),
+        ];
+        $hasConfiguredPublicHost = false;
+        foreach ($publicCandidates as $candidate) {
+            if ($this->isUsablePublicHost($candidate)) {
+                $hasConfiguredPublicHost = true;
+                return true;
+            }
+        }
+
+        $defaultProjectHost = $this->getDefaultHost();
+        if ($this->isUsablePublicHost($defaultProjectHost)) {
+            if (!$hasConfiguredPublicHost) {
+                $this->printer->warning(__('当前未显式配置启动白名单 Host，已回退到默认项目域名：%{1}', [$defaultProjectHost]));
+                $this->printer->note(__('该白名单仅用于启动主入口校验，不需要把后台域名池中的域名全部写到这里。'));
+                $this->printer->note(__('若需要公网 IP/域名直连，请配置 app/etc/env.php -> wls.servers.%{1}.host。', [$instanceName]));
+            }
+            return true;
+        }
+
+        $this->printer->error(__('启动已阻止：当前监听地址为 %{1}，且无法确定默认项目域名白名单。', [$host]));
+        $this->printer->note(__('请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。', [$instanceName]));
+        $this->printer->note(__('后台域名池域名不需要写入此处。'));
+
+        return false;
     }
 
     protected function resolveServerListenHost(string $host): string
