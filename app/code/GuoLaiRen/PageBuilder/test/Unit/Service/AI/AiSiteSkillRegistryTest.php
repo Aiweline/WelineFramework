@@ -94,4 +94,17 @@ final class AiSiteSkillRegistryTest extends TestCase
             $skill['local_path']
         );
     }
+
+    public function testPrependPromptGuideIsIdempotent(): void
+    {
+        $registry = new AiSiteSkillRegistry();
+
+        $prompt = $registry->prependPromptGuide('Return JSON only.', 'stage3');
+        $second = $registry->prependPromptGuide($prompt, 'stage3');
+
+        self::assertStringContainsString('AI BUILDER SKILL CAPABILITY', $prompt);
+        self::assertStringContainsString('CLAUDE-DESIGN HARD RULES', $prompt);
+        self::assertStringContainsString('Return JSON only.', $prompt);
+        self::assertSame($prompt, $second);
+    }
 }
