@@ -30,6 +30,7 @@ use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Control\HybridControlPlaneServer;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\LongRunningPhpRuntime;
+use Weline\Server\Service\SslCertificateService;
 
 class MasterProcess
 {
@@ -94,6 +95,7 @@ class MasterProcess
     protected ?WlsLogger $logger = null;
     protected ?ServiceOrchestrator $orchestrator = null;
     protected ?ServiceContext $context = null;
+    private bool $deferredSslRetryTriggered = false;
 
     /**
      * 启动完成后的回调（用于释放启动锁等）
@@ -1556,6 +1558,8 @@ class MasterProcess
      */
     private function releaseStartupLock(): void
     {
+        $this->triggerDeferredSslRetryAfterStartup();
+
         // 优先使用回调（Start.php 传入的 releaseStartLock 方法可正确关闭句柄）
         if ($this->onStartedCallback !== null) {
             ($this->onStartedCallback)();
@@ -1570,6 +1574,73 @@ class MasterProcess
             @\unlink($lockFile);
             $this->log(__('启动锁已释放'));
         }
+    }
+
+    private function triggerDeferredSslRetryAfterStartup(): void
+    {
+        if ($this->deferredSslRetryTriggered) {
+            return;
+        }
+
+        if (!$this->sslEnabled) {
+            return;
+        }
+
+        /** @var SslCertificateService $sslService */
+        $sslService = ObjectManager::getInstance(SslCertificateService::class);
+        $domain = \strtolower(\trim((string) ($this->config['public_host'] ?? ($this->config['host'] ?? ''))));
+        if ($domain === '') {
+            $this->log(__('跳过 SSL 启动后申请：缺少域名配置。'));
+            return;
+        }
+        if ($sslService->isLocalDomain($domain) || $sslService->resolvesToLoopback($domain)) {
+            return;
+        }
+
+        $email = \trim((string) Env::get('admin_email', 'admin@' . $domain));
+        if ($email === '') {
+            $email = Env::get('admin_email', 'admin@' . $domain);
+        }
+        $forceAcme = $this->shouldForceAcmeOnPostStartup($sslService);
+
+        $phpBinary = \defined('PHP_BINARY') ? (string) PHP_BINARY : 'php';
+        $script = BP . 'bin' . DS . 'w';
+        $command = \sprintf(
+            '%s %s ssl:auto request --domain=%s --email=%s --webroot=%s%s',
+            \escapeshellarg($phpBinary),
+            \escapeshellarg($script),
+            \escapeshellarg($domain),
+            \escapeshellarg($email),
+            \escapeshellarg(SslCertificateService::WEBROOT_WLS_VIRTUAL),
+            $forceAcme ? ' --force-acme' : ''
+        );
+
+        $pid = (int) Processer::create($command, false);
+        $this->deferredSslRetryTriggered = true;
+
+        if ($pid > 0) {
+            $this->log(__('已触发 SSL 延迟重试：%{1}（pid=%{2}）', [$domain, (string) $pid]));
+            return;
+        }
+
+        $this->log(__('已触发 SSL 延迟重试：%{1}（后台进程 PID 未返回，可通过 ssl:auto list 查看结果）', [$domain]));
+    }
+
+    private function shouldForceAcmeOnPostStartup(SslCertificateService $sslService): bool
+    {
+        $certPath = \trim($this->sslCert !== '' ? $this->sslCert : (string) ($this->config['ssl_cert'] ?? ''));
+        if ($certPath === '' || !\is_file($certPath)) {
+            return false;
+        }
+
+        $certInfo = $sslService->parseCertificate($certPath);
+        $issuer = \strtolower(\trim((string) ($certInfo['issuer'] ?? '')));
+        if ($issuer === '') {
+            return false;
+        }
+
+        return \str_contains($issuer, \strtolower(SslCertificateService::ISSUER_SELF_SIGNED))
+            || \str_contains($issuer, \strtolower(SslCertificateService::ISSUER_LOCAL_CA));
     }
 
     private function findRunningInstanceByControlPort(int $controlPort): ?string
