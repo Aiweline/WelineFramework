@@ -320,7 +320,7 @@ class Start extends CommandAbstract
             $sslEnabled = (bool) ($sslResult['ssl_enabled'] ?? true);
             $config['ssl_cert'] = $sslCert;
             $config['ssl_key'] = $sslKey;
-            $config['ssl_domain'] = $host;
+            $config['ssl_domain'] = (string)($config['public_host'] ?? $host);
             // 默认 80 且启用 HTTPS 时使用 443
             if ($port === self::DEFAULT_PORT) {
                 $port = self::DEFAULT_PORT_HTTPS;
@@ -2717,10 +2717,11 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         /** @var SslCertificateService $sslService */
         $sslService = ObjectManager::getInstance(SslCertificateService::class);
         $host = $config['host'] ?? '127.0.0.1';
-        $syncDomain = $this->resolveSslDomainForSync($host, (string)($config['ssl_domain'] ?? ''));
+        $certificateHost = $this->resolveCertificateHost($config, (string)$host);
+        $syncDomain = $this->resolveSslDomainForSync($certificateHost, (string)($config['ssl_domain'] ?? ''));
         
         // 智能判断是否为本地/内网环境（127.x, 10.x, 172.16-31.x, 192.168.x, localhost, *.local 等）
-        $needsLocalCert = $sslService->needsSelfSignedCertificate($host);
+        $needsLocalCert = $sslService->needsSelfSignedCertificate($certificateHost);
         
         // 1. 如果命令行或配置中已指定证书，验证并使用
         if (!empty($config['ssl_cert']) && !empty($config['ssl_key'])) {
@@ -2753,7 +2754,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
                     $config['ssl_cert'] = '';
                     $config['ssl_key'] = '';
                 // 本地/内网环境：仅使用适用于当前 host 的证书，否则触发自动签发
-                } elseif ($needsLocalCert && !$sslService->certificateMatchesHost($certPath, $host)) {
+                } elseif ($needsLocalCert && !$sslService->certificateMatchesHost($certPath, $certificateHost)) {
                     $config['ssl_cert'] = '';
                     $config['ssl_key'] = '';
                 } else {
@@ -2768,6 +2769,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
                     false
                 );
                 $certInfo = $sslService->parseCertificate($certPath);
+                $this->ensureAdditionalSslCertificates($instanceName, $config, $certificateHost, $sslService);
                 return [
                     'success' => true,
                     'cert_path' => $certPath,
@@ -2782,7 +2784,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
         
         // 2. 确定域名
         // 优先使用 host（项目唯一域名），忽略可能来自旧配置的 ssl_domain
-        $domain = $host;
+        $domain = $certificateHost;
 
         $webroot = \defined('PUB') ? PUB : '';
         $email = Env::get('admin_email', 'admin@' . $domain);
@@ -2826,6 +2828,7 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
                     ]));
                 }
             }
+            $this->ensureAdditionalSslCertificates($instanceName, $config, $domain, $sslService);
         } else {
             $this->printer->warning(__('SSL 证书准备失败：%{1}（耗时 %{2}ms）— %{3}', [
                 $domain,
@@ -2834,6 +2837,115 @@ $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPo
             ]));
         }
         return $result;
+    }
+
+    protected function resolveCertificateHost(array $config, string $host): string
+    {
+        $host = \strtolower(\trim($host));
+        if (!$this->isWildcardBindHost($host)) {
+            return $host === '' ? '127.0.0.1' : $host;
+        }
+
+        $publicHost = \strtolower(\trim((string)($config['public_host'] ?? '')));
+        if ($this->isUsablePublicHost($publicHost)) {
+            return $publicHost;
+        }
+
+        $defaultProjectHost = \strtolower(\trim($this->getDefaultHost()));
+        if ($this->isUsablePublicHost($defaultProjectHost)) {
+            return $defaultProjectHost;
+        }
+
+        return 'localhost';
+    }
+
+    /**
+     * 为实例配置中的附加 Host 自动准备证书（SaaS 多域名场景）。
+     */
+    protected function ensureAdditionalSslCertificates(
+        string $instanceName,
+        array $config,
+        string $primaryDomain,
+        SslCertificateService $sslService
+    ): void {
+        $domains = $this->collectAdditionalCertificateDomains($instanceName, $config, $primaryDomain);
+        if ($domains === []) {
+            return;
+        }
+
+        $webroot = \defined('PUB') ? PUB : '';
+        foreach ($domains as $domain) {
+            $email = Env::get('admin_email', 'admin@' . $domain);
+            $result = $sslService->ensureCertificate($domain, $webroot, $email);
+            if (($result['success'] ?? false) === true) {
+                $issuer = (string)($result['issuer'] ?? __('未知'));
+                $this->printer->note(__('附加 Host 证书就绪：%{1}（签发方：%{2}）', [$domain, $issuer]));
+            } else {
+                $this->printer->warning(__('附加 Host 证书准备失败：%{1} - %{2}', [
+                    $domain,
+                    (string)($result['message'] ?? __('未知错误')),
+                ]));
+            }
+        }
+    }
+
+    /**
+     * 收集需要额外签发证书的域名（排除当前主域名）。
+     *
+     * @return array<int, string>
+     */
+    protected function collectAdditionalCertificateDomains(string $instanceName, array $config, string $primaryDomain): array
+    {
+        $envConfig = $this->getEnvConfig();
+        $wlsConfig = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
+        $servers = \is_array($wlsConfig['servers'] ?? null) ? $wlsConfig['servers'] : [];
+        $instanceConfig = \is_array($servers[$instanceName] ?? null) ? $servers[$instanceName] : [];
+
+        $candidates = [
+            (string)($config['public_host'] ?? ''),
+            (string)($config['ssl_domain'] ?? ''),
+            (string)($instanceConfig['host'] ?? ''),
+            (string)($instanceConfig['ssl_domain'] ?? ''),
+        ];
+
+        foreach ($instanceConfig as $key => $value) {
+            if (\is_int($key) && \is_scalar($value)) {
+                $candidates[] = (string)$value;
+            }
+        }
+
+        $domains = [];
+        $primaryKey = \strtolower(\trim($primaryDomain));
+        foreach ($candidates as $candidate) {
+            $domain = $this->normalizeCertificateDomainCandidate($candidate);
+            if ($domain === '' || $domain === $primaryKey || $this->isWildcardBindHost($domain)) {
+                continue;
+            }
+            $domains[$domain] = $domain;
+        }
+
+        return \array_values($domains);
+    }
+
+    protected function normalizeCertificateDomainCandidate(string $candidate): string
+    {
+        $candidate = \strtolower(\trim($candidate));
+        if ($candidate === '') {
+            return '';
+        }
+
+        if (\str_starts_with($candidate, 'http://') || \str_starts_with($candidate, 'https://')) {
+            $host = (string)\parse_url($candidate, \PHP_URL_HOST);
+            $candidate = \strtolower(\trim($host));
+        }
+
+        if (\preg_match('/^\[([^\]]+)](?::\d+)?$/', $candidate, $matches)) {
+            $candidate = \strtolower(\trim((string)$matches[1]));
+        } elseif (\substr_count($candidate, ':') === 1 && !\str_contains($candidate, '::')) {
+            $candidate = \strtolower(\trim((string)\explode(':', $candidate, 2)[0]));
+        }
+
+        return \rtrim($candidate, '.');
     }
 
     /**
