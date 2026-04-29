@@ -3262,6 +3262,7 @@ SCRIPT;
         $pageType = \trim((string)$this->getRequestBodyValue('page_type', ''));
         $componentCode = \trim((string)$this->getRequestBodyValue('component_code', ''));
         $instruction = \trim((string)$this->getRequestBodyValue('instruction', ''));
+        $operationLabel = $refine ? 'block_refine' : 'block_regenerate';
 
         if ($adminId <= 0 || $publicId === '' || $pageType === '' || $componentCode === '' || ($refine && $instruction === '')) {
             $this->sendSseContractError(
@@ -3270,14 +3271,30 @@ SCRIPT;
                 (string)__('参数无效'),
                 $refine ? self::PARAMS_REFINE_COMPONENT : self::PARAMS_REGENERATE
             );
-            $sse->complete(['success' => false]);
+            $sse->sendEvent('done', [
+                'success' => false,
+                'operation' => $operationLabel,
+                'message' => (string)__('鍙傛暟鏃犳晥'),
+                'page_type' => $pageType,
+                'component_code' => $componentCode,
+                'realtime' => true,
+            ]);
+            $sse->close();
             return;
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
             $this->sendSseContractError($sse, 'SESSION_NOT_FOUND', 'Session not found or inaccessible', self::PARAMS_PUBLIC_ID, 404);
-            $sse->complete(['success' => false]);
+            $sse->sendEvent('done', [
+                'success' => false,
+                'operation' => $operationLabel,
+                'message' => 'Session not found or inaccessible',
+                'page_type' => $pageType,
+                'component_code' => $componentCode,
+                'realtime' => true,
+            ]);
+            $sse->close();
             return;
         }
 
@@ -3287,7 +3304,15 @@ SCRIPT;
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         if (!\in_array($pageType, $pageTypes, true)) {
             $this->sendSseContractError($sse, 'INVALID_PAGE_TYPE', 'Page type is not in the current workspace', self::PARAMS_REGENERATE, 400);
-            $sse->complete(['success' => false]);
+            $sse->sendEvent('done', [
+                'success' => false,
+                'operation' => $operationLabel,
+                'message' => 'Page type is not in the current workspace',
+                'page_type' => $pageType,
+                'component_code' => $componentCode,
+                'realtime' => true,
+            ]);
+            $sse->close();
             return;
         }
 
@@ -3295,7 +3320,6 @@ SCRIPT;
         if ($componentCodes === []) {
             $componentCodes = [$componentCode];
         }
-        $operationLabel = $refine ? 'block_refine' : 'block_regenerate';
         $stageCode = AiSiteAgentSession::STAGE_VISUAL_EDIT;
         $instructionText = $refine ? $instruction : '';
 
