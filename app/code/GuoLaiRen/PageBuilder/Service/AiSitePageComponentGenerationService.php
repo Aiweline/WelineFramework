@@ -893,7 +893,8 @@ class AiSitePageComponentGenerationService
             'name_en' => $name,
             'description' => $originalPromptForDescription,
         ];
-        $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode);
+        $verifiedAssets = $this->extractVerifiedAssetUrls($renderContext);
+        $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode, $verifiedAssets);
 
         $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
         if ((bool)RequestContext::get(self::REQUEST_KEY_FAST_BLOCK_ARTIFACT, false)) {
@@ -914,6 +915,7 @@ class AiSitePageComponentGenerationService
         }
 
         $html = $this->renderTemplateToHtml($phtml, $defaultConfig, $renderContext);
+        $this->assertNoBrokenGeneratedImageReferences($html, $verifiedAssets);
         $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
 
         return [
@@ -1331,11 +1333,12 @@ class AiSitePageComponentGenerationService
     private function ensureAiPayloadValid(
         array $aiData,
         string $region,
-        string $componentCode = ''
+        string $componentCode = '',
+        array $verifiedAssets = []
     ): array
     {
         $aiData = $this->getCodeFixer()->fixAiData($aiData);
-        $aiData = $this->applyStrictVirtualThemeComponentPolicy($aiData, $region);
+        $aiData = $this->applyStrictVirtualThemeComponentPolicy($aiData, $region, $verifiedAssets);
         $aiData = $this->normalizeVirtualThemeCssClassScope($aiData, $componentCode);
 
         $validation = $this->getCodeValidator()->validateAiData($aiData, $region);
@@ -1355,7 +1358,8 @@ class AiSitePageComponentGenerationService
      */
     private function applyStrictVirtualThemeComponentPolicy(
         array $aiData,
-        string $region
+        string $region,
+        array $verifiedAssets = []
     ): array
     {
         $aiData['extra_fields'] = '';
@@ -1371,7 +1375,7 @@ class AiSitePageComponentGenerationService
                 $aiData[$cssKey] = '';
                 continue;
             }
-            $this->assertNoBrokenGeneratedImageReferences($css);
+            $this->assertNoBrokenGeneratedImageReferences($css, $verifiedAssets);
             $aiData[$cssKey] = $this->normalizeVirtualThemeCssForValidation(
                 $css,
                 $this->resolveVirtualThemeCssValidationLimit($region, $cssKey)
@@ -1382,14 +1386,14 @@ class AiSitePageComponentGenerationService
             $aiData['html_extra'] = '';
             if ($region === 'footer') {
                 $aiData['html_extra_column'] = '';
-                $aiData['footer_extra_text'] = $this->cleanAiHtmlFragment((string)($aiData['footer_extra_text'] ?? ''));
+                $aiData['footer_extra_text'] = $this->cleanAiHtmlFragment((string)($aiData['footer_extra_text'] ?? ''), $verifiedAssets);
             }
 
             return $aiData;
         }
 
         if (\is_string($aiData['html_content'] ?? null)) {
-            $aiData['html_content'] = $this->cleanAiHtmlFragment((string)$aiData['html_content']);
+            $aiData['html_content'] = $this->cleanAiHtmlFragment((string)$aiData['html_content'], $verifiedAssets);
         }
 
         if ($region === 'content') {
@@ -1830,7 +1834,7 @@ class AiSitePageComponentGenerationService
             . "- Examples for this component: `#componentId .{$prefix}-card`, `#componentId .{$prefix}-icon`, `#componentId .{$prefix}-title`.\n";
     }
 
-    private function cleanAiHtmlFragment(string $html): string
+    private function cleanAiHtmlFragment(string $html, array $verifiedAssets = []): string
     {
         $html = \preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $html) ?? $html;
         $html = \preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html) ?? $html;
@@ -1843,7 +1847,7 @@ class AiSitePageComponentGenerationService
         $html = \preg_replace('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', '', $html) ?? $html;
         $html = \preg_replace('/(?:核心卖点|功能特性|把首页[^。！？.!?]{0,80}放出来|值得点击|页面类型|内容块)/u', '', $html) ?? $html;
         $html = $this->repairHtmlFragmentTagBalance($html);
-        $this->assertNoBrokenGeneratedImageReferences($html);
+        $this->assertNoBrokenGeneratedImageReferences($html, $verifiedAssets);
         $html = \preg_replace('/\s{2,}/u', ' ', $html) ?? $html;
         $html = \trim($html);
 
@@ -2041,13 +2045,79 @@ class AiSitePageComponentGenerationService
         return \preg_match('/<time\b|date|read|guide|review|tips|news|update|strategy|apk|teen patti|rummy|category|article/iu', $html . ' ' . $plain) === 1;
     }
 
-    private function assertNoBrokenGeneratedImageReferences(string $html): void
+    /**
+     * @param array<string,mixed> $context
+     * @return list<string>
+     */
+    private function extractVerifiedAssetUrls(array $context): array
+    {
+        $verified = \is_array($context['verified_assets'] ?? null) ? $context['verified_assets'] : [];
+        $urls = [];
+        foreach ($verified as $value) {
+            if (\is_string($value) || \is_numeric($value)) {
+                $url = \trim((string)$value);
+                if ($url !== '') {
+                    $urls[] = $url;
+                }
+                continue;
+            }
+            if (\is_array($value)) {
+                foreach (['final_url', 'url', 'src'] as $key) {
+                    $url = \trim((string)($value[$key] ?? ''));
+                    if ($url !== '') {
+                        $urls[] = $url;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return \array_values(\array_unique($urls));
+    }
+
+    /**
+     * @param list<string> $verifiedAssets
+     */
+    private function isVerifiedAssetUrl(string $src, array $verifiedAssets): bool
+    {
+        if ($verifiedAssets === []) {
+            return false;
+        }
+        $candidate = $this->normalizeVerifiedAssetUrl($src);
+        if ($candidate === '') {
+            return false;
+        }
+        foreach ($verifiedAssets as $assetUrl) {
+            if ($candidate === $this->normalizeVerifiedAssetUrl((string)$assetUrl)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizeVerifiedAssetUrl(string $url): string
+    {
+        $url = \trim(\html_entity_decode($url, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'));
+        if ($url === '') {
+            return '';
+        }
+        $parts = \parse_url($url);
+        if (\is_array($parts) && \trim((string)($parts['path'] ?? '')) !== '') {
+            $url = (string)$parts['path'];
+        }
+        $url = '/' . \ltrim(\str_replace('\\', '/', $url), '/');
+
+        return \preg_replace('#/+#', '/', $url) ?? $url;
+    }
+
+    private function assertNoBrokenGeneratedImageReferences(string $html, array $verifiedAssets = []): void
     {
         $broken = [];
         if (\preg_match_all('/<img\b[^>]*\bsrc\s*=\s*(["\'])(.*?)\1/iu', $html, $found, \PREG_SET_ORDER) > 0) {
             foreach ($found as $row) {
                 $src = \trim((string)($row[2] ?? ''));
-                if ($this->isBrokenGeneratedImageSource($src)) {
+                if ($this->isBrokenGeneratedImageSource($src, $verifiedAssets)) {
                     $broken[] = $src === '' ? '<empty img src>' : $src;
                 }
             }
@@ -2055,7 +2125,7 @@ class AiSitePageComponentGenerationService
         if (\preg_match_all('/url\(\s*([\'\"]?)([^\'\")]*)\1\s*\)/iu', $html, $found, \PREG_SET_ORDER) > 0) {
             foreach ($found as $row) {
                 $src = \trim((string)($row[2] ?? ''));
-                if ($this->isBrokenGeneratedImageSource($src)) {
+                if ($this->isBrokenGeneratedImageSource($src, $verifiedAssets)) {
                     $broken[] = $src;
                 }
             }
@@ -2077,11 +2147,14 @@ class AiSitePageComponentGenerationService
         return '';
     }
 
-    private function isBrokenGeneratedImageSource(string $src): bool
+    private function isBrokenGeneratedImageSource(string $src, array $verifiedAssets = []): bool
     {
         $src = \trim(\html_entity_decode($src, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'));
         if ($src === '' || $src === '#') {
             return true;
+        }
+        if ($this->isVerifiedAssetUrl($src, $verifiedAssets)) {
+            return false;
         }
 
         $lower = \strtolower($src);
@@ -2640,7 +2713,30 @@ class AiSitePageComponentGenerationService
             'is_preview' => true,
             '_content_locale' => $this->resolvePrimaryLocale($websiteProfile, $scope),
             '_content_locale_explicit' => \trim((string)($scope['content_locale'] ?? $websiteProfile['content_locale'] ?? '')) !== '',
+            'verified_assets' => \is_array($scope['verified_assets'] ?? null) ? $scope['verified_assets'] : $this->extractVerifiedAssetsFromManifest($scope),
         ], $blogContext);
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,string>
+     */
+    private function extractVerifiedAssetsFromManifest(array $scope): array
+    {
+        $manifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [];
+        $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
+        $assets = [];
+        foreach ($slots as $slotId => $slot) {
+            if (!\is_array($slot)) {
+                continue;
+            }
+            $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+            if ($finalUrl !== '') {
+                $assets[(string)($slot['slot_id'] ?? $slotId)] = $finalUrl;
+            }
+        }
+
+        return $assets;
     }
 
     /**
@@ -4112,6 +4208,16 @@ class AiSitePageComponentGenerationService
         $stage3LocaleRule = $contentLocale !== ''
             ? "- stage3 locale gate: source_of_truth_locale={$contentLocale} ({$localeHint}). stage-2 text is intent only; rewrite any non-{$contentLocale} planned sentence before it becomes visible copy.\n"
             : '';
+        $verifiedAssets = \is_array($runtimeContext['verified_assets'] ?? null)
+            ? $runtimeContext['verified_assets']
+            : (\is_array($scope['verified_assets'] ?? null) ? $scope['verified_assets'] : $this->extractVerifiedAssetsFromManifest($scope));
+        if ($verifiedAssets === [] && \is_array($runtimeContext['asset_manifest'] ?? null)) {
+            $verifiedAssets = $this->extractVerifiedAssetsFromManifest(['asset_manifest' => $runtimeContext['asset_manifest']]);
+        }
+        $verifiedAssetRule = $verifiedAssets !== []
+            ? "- verified_assets: " . $this->jsonEncodeForPrompt($verifiedAssets, 3000) . "\n"
+                . "- verified asset rule: use only these exact final_url values for real <img src> or CSS url(); if none match the needed slot, render an inline SVG/CSS fallback instead.\n"
+            : "- verified_assets: []\n- verified asset rule: no verified real image URL is available, so render visual media as inline SVG/CSS and do not invent image URLs.\n";
 
         return "Stage-2 task context for this {$contextLabel}:\n"
             . "- task_key: " . (string)($taskPlanTask['task_key'] ?? '') . "\n"
@@ -4140,6 +4246,7 @@ class AiSitePageComponentGenerationService
             . "- stage2 language rule: treat stage-2 planned text as source intent, not copy authority; rewrite any planned text that is not in the website content language before placing it in visible component output.\n"
             . "- anti-copy rule: never paste stage-2 observation/planning sentences directly into html_content. Rewrite phrases like \"访客看到...\", \"用户看到...\", \"从而产生...\", \"信任感增强\", \"知道如何...\", \"Visitors see...\", or \"Visitors can review...\" into finished visitor-facing headings, benefits, proof points, labels, and CTA copy.\n"
             . $stage3LocaleRule
+            . $verifiedAssetRule
             . "- theme_context: " . $this->jsonEncodeForPrompt($themeContext, 7000) . "\n"
             . "- acceptance: " . \json_encode($acceptance, \JSON_UNESCAPED_UNICODE) . "\n"
             . "- runtime_context: " . \json_encode($runtimeContext, \JSON_UNESCAPED_UNICODE) . "\n";
