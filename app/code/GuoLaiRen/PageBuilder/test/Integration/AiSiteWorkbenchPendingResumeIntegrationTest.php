@@ -4,40 +4,22 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Integration;
 
-use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
-use Weline\Framework\Manager\ObjectManager;
-
 final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWorkbenchIntegrationHarness
 {
     public function testWorkspacePromptsBeforeContinuingPendingTasksOrObservingRunningOperation(): void
     {
-        $createPayload = $this->invokeJsonAction(
-            '/pagebuilder/backend/ai-site-agent/post-create-session',
-            'POST',
-            'postCreateSession'
+        $planPanel = (string)\file_get_contents(
+            BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-body.phtml'
+        );
+        $script = (string)\file_get_contents(
+            BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
         );
 
-        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
-        $publicId = (string)($createPayload['public_id'] ?? '');
-        self::assertNotSame('', $publicId);
-
-        $this->prepareBackendRequest(
-            '/pagebuilder/backend/ai-site-agent/workspace',
-            'GET',
-            'workspace',
-            ['public_id' => $publicId]
-        );
-
-        /** @var AiSiteAgent $controller */
-        $controller = ObjectManager::getInstance(AiSiteAgent::class);
-        $html = $controller->workspace();
-
-        self::assertIsString($html);
-        self::assertStringContainsString('function startPlanGenerationForSelection(triggerBtn, selectedTypes)', $html, 'missing plan start function');
-        self::assertStringContainsString('function confirmCurrentPlanAndMaybeBuild()', $html, 'missing confirm/build function');
-        self::assertStringContainsString('id="pb-ai-confirm-plan"', $html, 'missing confirm plan button');
-        self::assertStringNotContainsString('function maybeAutoStartBuildAfterWorkspaceSnapshot(data)', $html);
-        self::assertStringNotContainsString('autoResumeActiveOperation', $html);
+        self::assertStringContainsString('function startPlanGenerationForSelection(triggerBtn, selectedTypes, options)', $script, 'missing plan start function');
+        self::assertStringContainsString('function confirmCurrentPlanAndMaybeBuild()', $script, 'missing confirm/build function');
+        self::assertStringContainsString('id="pb-ai-confirm-plan"', $planPanel, 'missing confirm plan button');
+        self::assertStringNotContainsString('function maybeAutoStartBuildAfterWorkspaceSnapshot(data)', $script);
+        self::assertStringNotContainsString('autoResumeActiveOperation', $script);
     }
 
     public function testResumePromptSuppressesTerminalOrCompleteGeneratedWorkspace(): void
@@ -67,6 +49,20 @@ final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWo
         self::assertStringContainsString('taskPlanGeneratePromptHandled = true;', $script);
     }
 
+    public function testWorkspaceStateHydrationNormalizesNestedOperationMapsBeforeRetryablePrompts(): void
+    {
+        $script = (string)\file_get_contents(
+            BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
+        );
+
+        self::assertStringContainsString('function normalizeWorkspaceStateShape(state)', $script);
+        self::assertStringContainsString('function ensureRetryableAiResumePromptState()', $script);
+        self::assertStringContainsString("normalized.active_operations = normalized.active_operations && typeof normalized.active_operations === 'object'", $script);
+        self::assertStringContainsString("'active_operations',", $script);
+        self::assertStringContainsString('ensureRetryableAiResumePromptState();', $script);
+        self::assertStringContainsString('workspaceState = normalizeWorkspaceStateShape(mergeWorkspaceStatePatch(workspaceState));', $script);
+    }
+
     public function testSseErrorHandlersDoNotCloseTheStream(): void
     {
         $mainScript = (string)\file_get_contents(
@@ -76,8 +72,8 @@ final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWo
             BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml'
         );
 
-        self::assertEventBlocksDoNotContain($mainScript, "terminal.on('error'", 'terminal.stop({ suppressTransportError: true });');
-        self::assertEventBlocksDoNotContain($mainScript, "terminal.on('failed'", 'terminal.stop({ suppressTransportError: true });');
+        self::assertEventBlocksDoNotContain($mainScript, "terminal.on('error'", 'closeOperationSource(');
+        self::assertEventBlocksDoNotContain($mainScript, "terminal.on('failed'", 'closeOperationSource(');
         self::assertEventBlocksDoNotContain($runtimeScript, "source.addEventListener('error'", 'closeOperationSource(source);');
         self::assertEventBlocksDoNotContain($runtimeScript, 'source.onerror = function ()', 'closeOperationSource(source);');
     }

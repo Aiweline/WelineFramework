@@ -121,12 +121,10 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
         $queueResult = (string)($planQueue['result'] ?? '');
         self::assertStringContainsString('第一阶段方案生成完成', $queueResult);
 
-        self::assertCount(4, $calls, \json_encode($calls, \JSON_UNESCAPED_UNICODE));
+        self::assertCount(2, $calls, \json_encode($calls, \JSON_UNESCAPED_UNICODE));
         self::assertStringContainsString('Stage-1 REQUIREMENT EXPANSION planner', (string)$calls[0]['prompt']);
         self::assertStringContainsString('Stage-1 THEME planner', (string)$calls[1]['prompt']);
         self::assertStringContainsString('Confirmed requirement expansion from step 1', (string)$calls[1]['prompt']);
-        self::assertStringContainsString('Stage-1 PAGE planner', (string)$calls[2]['prompt']);
-        self::assertStringContainsString('Confirmed shared Header/Footer blocks', (string)$calls[2]['prompt']);
         self::assertSame(0, (int)($calls[0]['params']['timeout'] ?? -1));
         self::assertFalse((bool)($calls[0]['params']['enforce_timeout_in_stream'] ?? true));
         self::assertTrue((bool)($calls[0]['params']['disable_ai_timeout'] ?? false));
@@ -199,34 +197,17 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
         self::assertIsArray($planJson['shared_components']['footer'] ?? null);
         self::assertNotSame('', (string)($planJson['shared_components']['header']['goal'] ?? ''));
         self::assertNotSame('', (string)($planJson['shared_components']['footer']['goal'] ?? ''));
+        self::assertIsArray($planJson['page_type_overviews'] ?? null);
 
         foreach ([Page::TYPE_HOME, Page::TYPE_ABOUT] as $pageType) {
-            $page = \is_array($planJson['pages'][$pageType] ?? null) ? $planJson['pages'][$pageType] : [];
-            self::assertNotSame([], $page, $pageType . ' page must be generated.');
-            self::assertNotSame('', (string)($page['page_goal'] ?? ''), $pageType . ' page_goal must be auxiliary metadata.');
-            self::assertIsArray($page['display_blocks'] ?? null, $pageType . ' must have assembled display blocks.');
-            $displayBlocks = \array_values($page['display_blocks']);
-            self::assertGreaterThanOrEqual(3, \count($displayBlocks), $pageType . ' must be framed by header/footer plus page blocks.');
-            self::assertSame('header', (string)($displayBlocks[0]['component'] ?? ''), $pageType . ' display must start with header.');
-            self::assertSame('footer', (string)($displayBlocks[\count($displayBlocks) - 1]['component'] ?? ''), $pageType . ' display must end with footer.');
-
-            $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
-            self::assertNotSame([], $blocks, $pageType . ' page blocks must exist.');
-            foreach ($blocks as $block) {
-                self::assertIsArray($block);
-                $content = \trim((string)($block['content'] ?? ''));
-                self::assertNotSame('', $content, $pageType . ' block content must be the actual website plan content.');
-                self::assertFalse($this->looksLikeInstructionalPlaceholder($content), $content);
-                self::assertNotSame('', \trim((string)($block['goal'] ?? '')), 'goal remains auxiliary metadata.');
-                $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
-                self::assertGreaterThanOrEqual(3, \count($fieldPlan), 'field_plan must contain concrete field samples.');
-                foreach ($fieldPlan as $fieldRow) {
-                    self::assertIsArray($fieldRow);
-                    $sample = \trim((string)($fieldRow['sample'] ?? ''));
-                    self::assertNotSame('', $sample);
-                    self::assertFalse($this->looksLikeInstructionalPlaceholder($sample), $sample);
-                }
-            }
+            $overview = \is_array($planJson['page_type_overviews'][$pageType] ?? null) ? $planJson['page_type_overviews'][$pageType] : [];
+            self::assertNotSame([], $overview, $pageType . ' overview must be generated.');
+            self::assertNotSame('', \trim((string)($overview['page_role'] ?? '')), $pageType . ' page_role must exist.');
+            self::assertNotSame('', \trim((string)($overview['content_focus'] ?? '')), $pageType . ' content_focus must exist.');
+            self::assertNotSame('', \trim((string)($overview['theme_color_application'] ?? '')), $pageType . ' theme_color_application must exist.');
+            self::assertNotSame('', \trim((string)($overview['section_layering_hint'] ?? '')), $pageType . ' section_layering_hint must exist.');
+            self::assertNotSame('', \trim((string)($overview['interaction_intent'] ?? '')), $pageType . ' interaction_intent must exist.');
+            self::assertNotSame('', \trim((string)($overview['differentiation_note'] ?? '')), $pageType . ' differentiation_note must exist.');
         }
 
         $planBook = \is_array($planWorkbench['confirmed']['plan_book']['structured'] ?? null)
@@ -234,7 +215,7 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
             : [];
         self::assertNotSame([], $planBook);
         self::assertNotSame('', (string)($planBook['requirement_expansion']['expanded_brief'] ?? ''));
-        self::assertIsArray($planBook['pages'][Page::TYPE_HOME]['display_blocks'] ?? null);
+        self::assertIsArray($planBook['page_type_overviews'][Page::TYPE_HOME] ?? null);
     }
 
     private function looksLikeInstructionalPlaceholder(string $text): bool

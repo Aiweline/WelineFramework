@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Session;
@@ -56,9 +57,9 @@ class ThemeContextService
     public function getActivationField(?string $area = null): string
     {
         return match ($this->normalizeActivationArea($area)) {
-            self::AREA_FRONTEND => WelineTheme::schema_fields_IS_ACTIVE_FRONTEND,
-            self::AREA_BACKEND => WelineTheme::schema_fields_IS_ACTIVE_BACKEND,
-            default => WelineTheme::schema_fields_IS_ACTIVE,
+            self::AREA_FRONTEND => $this->getFrontendActiveField(),
+            self::AREA_BACKEND => $this->getBackendActiveField(),
+            default => $this->getLegacyActiveField(),
         };
     }
 
@@ -177,7 +178,11 @@ class ThemeContextService
     public function getDirectActiveTheme(?string $area = null): ?WelineTheme
     {
         $theme = $this->newThemeModel();
-        $theme->load($this->getActivationField($area), 1);
+        try {
+            $theme->load($this->getActivationField($area), 1);
+        } catch (\Throwable) {
+            return null;
+        }
 
         return $theme->getId() ? $theme : null;
     }
@@ -196,8 +201,20 @@ class ThemeContextService
             }
         }
 
+        if ($normalizedArea !== null) {
+            $directTheme = $this->getDirectActiveTheme($normalizedArea);
+            if ($directTheme && $directTheme->getId()) {
+                return $directTheme;
+            }
+
+            $defaultTheme = $this->buildModuleDefaultTheme($normalizedArea);
+            if ($defaultTheme->getId()) {
+                return $defaultTheme;
+            }
+        }
+
         $resolvedTheme = $this->newThemeModel();
-        $resolvedTheme->getActiveTheme($normalizedArea);
+        $this->loadActiveTheme($resolvedTheme, $normalizedArea);
 
         return $resolvedTheme->getId() ? $resolvedTheme : null;
     }
@@ -337,5 +354,125 @@ class ThemeContextService
         /** @var PreviewContextService $service */
         $service = ObjectManager::getInstance(PreviewContextService::class);
         return $service;
+    }
+
+    private function loadActiveTheme(WelineTheme $theme, ?string $area = null): void
+    {
+        try {
+            $method = new \ReflectionMethod($theme, 'getActiveTheme');
+            if ($method->getNumberOfParameters() > 0) {
+                $theme->getActiveTheme($area);
+            } else {
+                $theme->getActiveTheme();
+            }
+        } catch (\ArgumentCountError) {
+            $theme->getActiveTheme();
+        }
+    }
+
+    private function buildModuleDefaultTheme(?string $area = null): WelineTheme
+    {
+        $module = Env::getInstance()->getModuleInfo('Weline_Theme');
+        $basePath = (string)($module['base_path'] ?? '');
+        $themePath = $basePath !== '' ? rtrim($basePath, '/\\') . \DIRECTORY_SEPARATOR . 'view' . \DIRECTORY_SEPARATOR . 'theme' : '';
+        $normalizedArea = $area === null ? null : $this->normalizeArea($area);
+
+        if ($themePath === '' || !is_dir($themePath)) {
+            return $this->newThemeModel();
+        }
+
+        if ($normalizedArea !== null && !is_dir($themePath . \DIRECTORY_SEPARATOR . $normalizedArea)) {
+            return $this->newThemeModel();
+        }
+
+        $theme = new class extends WelineTheme {
+            public string $runtimePath = '';
+            public string $runtimeOriginPath = '';
+
+            public function getPath(): string
+            {
+                return rtrim($this->runtimePath, '/\\') . \DIRECTORY_SEPARATOR;
+            }
+
+            public function getOriginPath(): string
+            {
+                return $this->runtimeOriginPath !== '' ? $this->runtimeOriginPath : $this->getPath();
+            }
+
+            public function getThemeChain(): array
+            {
+                return [$this];
+            }
+
+            public function getParentTheme(): ?WelineTheme
+            {
+                return null;
+            }
+        };
+
+        $theme->runtimePath = $themePath;
+        $theme->runtimeOriginPath = 'Weline_Theme::view/theme';
+        $theme->setData($this->getIdField(), $normalizedArea === self::AREA_BACKEND ? -2 : -1);
+        $theme->setData($this->getNameField(), 'Weline_Theme');
+        $theme->setData($this->getModuleNameField(), 'Weline_Theme');
+        $theme->setData($this->getPathField(), $themePath);
+        $theme->setData($this->getLegacyActiveField(), 1);
+        if ($normalizedArea === self::AREA_FRONTEND) {
+            $theme->setData($this->getFrontendActiveField(), 1);
+        }
+        if ($normalizedArea === self::AREA_BACKEND) {
+            $theme->setData($this->getBackendActiveField(), 1);
+        }
+
+        return $theme;
+    }
+
+    private function getIdField(): string
+    {
+        return \defined(WelineTheme::class . '::schema_fields_ID')
+            ? WelineTheme::schema_fields_ID
+            : (\defined(WelineTheme::class . '::fields_ID') ? WelineTheme::fields_ID : 'id');
+    }
+
+    private function getNameField(): string
+    {
+        return \defined(WelineTheme::class . '::schema_fields_NAME')
+            ? WelineTheme::schema_fields_NAME
+            : (\defined(WelineTheme::class . '::fields_NAME') ? WelineTheme::fields_NAME : 'name');
+    }
+
+    private function getModuleNameField(): string
+    {
+        return \defined(WelineTheme::class . '::schema_fields_MODULE_NAME')
+            ? WelineTheme::schema_fields_MODULE_NAME
+            : (\defined(WelineTheme::class . '::fields_MODULE_NAME') ? WelineTheme::fields_MODULE_NAME : 'module_name');
+    }
+
+    private function getPathField(): string
+    {
+        return \defined(WelineTheme::class . '::schema_fields_PATH')
+            ? WelineTheme::schema_fields_PATH
+            : (\defined(WelineTheme::class . '::fields_PATH') ? WelineTheme::fields_PATH : 'path');
+    }
+
+    private function getLegacyActiveField(): string
+    {
+        return \defined(WelineTheme::class . '::schema_fields_IS_ACTIVE')
+            ? WelineTheme::schema_fields_IS_ACTIVE
+            : (\defined(WelineTheme::class . '::fields_IS_ACTIVE') ? WelineTheme::fields_IS_ACTIVE : 'is_active');
+    }
+
+    private function getFrontendActiveField(): string
+    {
+        return \defined(WelineTheme::class . '::schema_fields_IS_ACTIVE_FRONTEND')
+            ? WelineTheme::schema_fields_IS_ACTIVE_FRONTEND
+            : 'is_active_frontend';
+    }
+
+    private function getBackendActiveField(): string
+    {
+        return \defined(WelineTheme::class . '::schema_fields_IS_ACTIVE_BACKEND')
+            ? WelineTheme::schema_fields_IS_ACTIVE_BACKEND
+            : 'is_active_backend';
     }
 }
