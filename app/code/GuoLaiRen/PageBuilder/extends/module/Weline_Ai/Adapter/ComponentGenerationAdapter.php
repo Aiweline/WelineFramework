@@ -87,6 +87,10 @@ class ComponentGenerationAdapter implements ScenarioAdapterInterface
      */
     public function adaptPrompt(string $prompt, array $params = []): string
     {
+        if (!empty($params['partial_patch_mode']) || !empty($params['block_partial_patch'])) {
+            return $this->adaptPartialPatchPrompt($prompt);
+        }
+
         // 检查是否是微调模式
         $isRefineMode = !empty($params['refine_mode']) && !empty($params['existing_code']);
         
@@ -150,6 +154,16 @@ class ComponentGenerationAdapter implements ScenarioAdapterInterface
         }
 
         return $prompt . $componentRequirement;
+    }
+
+    private function adaptPartialPatchPrompt(string $prompt): string
+    {
+        return $prompt
+            . "\n\n[PageBuilder block partial patch constraints]\n"
+            . "- Return one JSON object only. No markdown and no PHP component source wrapper.\n"
+            . "- Keep the same block_id and replace only the requested block object.\n"
+            . "- The block object must include type, config, html, and field_schema.\n"
+            . "- Preserve server metadata keys prefixed with _pb_server_ unless the template itself must change.\n";
     }
     
     /**
@@ -486,6 +500,10 @@ class ComponentGenerationAdapter implements ScenarioAdapterInterface
      */
     public function processResponse(string $response, array $params = []): string
     {
+        if (!empty($params['partial_patch_mode']) || !empty($params['block_partial_patch'])) {
+            return trim($response);
+        }
+
         // 尝试提取PHP代码（可能包含markdown代码块）
         $code = $response;
 

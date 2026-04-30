@@ -22,11 +22,12 @@ class AiSitePageComponentGenerationService
     private const REQUEST_CTX_AI_CHUNK_FORWARDER = 'pagebuilder.ai.chunk.forwarder';
     public const REQUEST_KEY_FORCE_REAL_AI_IN_TEST = 'pagebuilder.ai.force_real_in_test';
     public const REQUEST_KEY_ALLOW_STUB_AI_IN_TEST = 'pagebuilder.ai.allow_stub_in_test';
+    public const REQUEST_KEY_FAST_BLOCK_ARTIFACT = 'pagebuilder.ai.fast_block_artifact';
     /** AI 结构修复（requestJsonRepair）轮次；0 表示解析失败后不再自动调用 AI。 */
     private const JSON_REPAIR_MAX_ATTEMPTS = 0;
     private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
     /** 单组件仅允许一次完整 AI 生成；失败入账「可重试失败项」，由用户手动触发重试。 */
-    private const COMPONENT_GENERATION_MAX_ATTEMPTS = 1;
+    private const COMPONENT_GENERATION_MAX_ATTEMPTS = 2;
     // 临时旁路：先跳过主观低质量文案门禁以解除卡在反复校验重试的问题；硬性语言/泄漏守卫仍执行。
     private const SKIP_COMPONENT_QUALITY_VALIDATION = true;
     private const AI_REQUEST_TIMEOUT_SECONDS = 180;
@@ -153,7 +154,6 @@ class AiSitePageComponentGenerationService
                 $this->buildRenderContext(Page::TYPE_HOME, $websiteProfile, $scope, $footerConfig)
             ),
         };
-
         if ($useCache) {
             $sharedCache[$cacheKey] = $result;
         }
@@ -896,6 +896,17 @@ class AiSitePageComponentGenerationService
         $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode);
 
         $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
+        if ((bool)RequestContext::get(self::REQUEST_KEY_FAST_BLOCK_ARTIFACT, false)) {
+            return [
+                'code' => $componentCode,
+                'name' => $name,
+                'region' => $region,
+                'phtml' => $phtml,
+                'html' => (string)($aiData['html_content'] ?? $aiData['html_extra'] ?? ''),
+                'default_config' => $defaultConfig,
+                'ai_data' => $aiData,
+            ];
+        }
 
         $syntaxCheck = $this->getCodeValidator()->checkSyntax($phtml);
         if (empty($syntaxCheck['valid'])) {
@@ -968,7 +979,8 @@ class AiSitePageComponentGenerationService
                     $componentCode,
                     $prompt,
                     $reason,
-                    $attempt + 1
+                    $attempt + 1,
+                    $aiData
                 );
                 $this->emitComponentRetryNotice($region, $componentCode, $reason, $attempt + 1);
                 \w_log_warning('[AI Site Component Retry] ' . $componentCode . ' (' . $region . ') attempt '
@@ -2575,14 +2587,37 @@ class AiSitePageComponentGenerationService
      */
     private function buildAiRuntimeParams(array $params, bool $isStream = false): array
     {
-        if (\PHP_SAPI !== 'cli' || !$isStream) {
-            return $params;
+        if (
+            \is_array($params['response_format'] ?? null)
+            && \strtolower(\trim((string)($params['response_format']['type'] ?? ''))) === 'json_object'
+        ) {
+            $params = $this->sanitizeStructuredJsonRequestParams($params);
         }
 
-        $params['timeout'] = 0;
-        $params['disable_ai_timeout'] = true;
-        $params['disable_cli_timeout'] = true;
-        $params['enforce_timeout_in_stream'] = false;
+        if (\PHP_SAPI === 'cli' && $isStream) {
+            $params['timeout'] = 0;
+            $params['disable_ai_timeout'] = true;
+            $params['disable_cli_timeout'] = true;
+            $params['enforce_timeout_in_stream'] = false;
+        }
+
+        return $params;
+    }
+
+    /**
+     * DeepSeek/GLM 等 thinking 协议模型在 JSON 合约任务上可能只返回 reasoning_content。
+     * 对组件生成统一禁用 thinking，避免流式/非流式行为分叉。
+     *
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
+    private function sanitizeStructuredJsonRequestParams(array $params): array
+    {
+        $params['thinking'] = ['type' => 'disabled'];
+        $params['thinking_mode'] = 'disabled';
+        $params['enable_thinking'] = false;
+        $params['enable_reasoning'] = false;
+        unset($params['reasoning_effort'], $params['thinking_budget'], $params['thinking_budget_tokens']);
 
         return $params;
     }
@@ -2604,6 +2639,7 @@ class AiSitePageComponentGenerationService
             'component_config' => $defaultConfig,
             'is_preview' => true,
             '_content_locale' => $this->resolvePrimaryLocale($websiteProfile, $scope),
+            '_content_locale_explicit' => \trim((string)($scope['content_locale'] ?? $websiteProfile['content_locale'] ?? '')) !== '',
         ], $blogContext);
     }
 
@@ -2937,9 +2973,12 @@ class AiSitePageComponentGenerationService
      */
     private function buildHeaderGenerationPrompt(array $websiteProfile, array $scope, string $siteDisplayName, array $headerConfig): string
     {
-        $siteSummary = $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope);
-        $pageTypes = $this->resolveScopedPageTypes($scope);
         $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
+        $siteSummary = $this->filterVisibleCopyForLocale(
+            $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope),
+            $locale
+        );
+        $pageTypes = $this->resolveScopedPageTypes($scope);
         $pageTypeLabels = Page::getPageTypes();
         $pageList = [];
         foreach ($pageTypes as $pageType) {
@@ -2996,7 +3035,11 @@ class AiSitePageComponentGenerationService
 
     private function buildFooterGenerationPrompt(array $websiteProfile, array $scope, string $siteDisplayName, array $footerConfig): string
     {
-        $siteSummary = $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope);
+        $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
+        $siteSummary = $this->filterVisibleCopyForLocale(
+            $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope),
+            $locale
+        );
         $styleCode = $this->resolvePromptStyleCode($scope, Page::TYPE_HOME);
         $styleDirection = $this->describeStyleDirection($styleCode);
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
@@ -3048,10 +3091,13 @@ class AiSitePageComponentGenerationService
 
     private function buildSectionGenerationPrompt(string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): string
     {
-        $siteSummary = $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope);
+        $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
+        $siteSummary = $this->filterVisibleCopyForLocale(
+            $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope),
+            $locale
+        );
         $pageInstructionMap = Page::getPageTypePromptInstructionsMap();
         $pageInstruction = (string)($pageInstructionMap[$pageType] ?? '');
-        $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
         $sectionKey = (string)($section['key'] ?? '');
         $taskPlanTask = $this->resolveSectionTaskPlanTask($scope, $pageType, (string)($section['code'] ?? ''), $sectionKey);
         $planContext = \is_array($taskPlanTask['plan_context'] ?? null) ? $taskPlanTask['plan_context'] : [];
@@ -3067,7 +3113,10 @@ class AiSitePageComponentGenerationService
             $locale
         );
         $sectionTemplate = (string)($section['template'] ?? 'hero');
-        $sectionConfig = \json_encode($section['config'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT);
+        $sectionConfig = \json_encode(
+            $this->filterPromptArrayForLocale(\is_array($section['config'] ?? null) ? $section['config'] : [], $locale),
+            \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT
+        );
         $refinement = $this->resolveSectionRefinement($scope, $pageType, (string)($section['code'] ?? ''), $sectionKey);
         $blogPrompt = $this->buildBlogPromptAddon($pageType, $sectionKey, $scope);
         $styleCode = $this->resolvePromptStyleCode($scope, $pageType);
@@ -4837,6 +4886,29 @@ class AiSitePageComponentGenerationService
         return $value;
     }
 
+    /**
+     * @param mixed $value
+     * @return mixed
+     */
+    private function filterPromptArrayForLocale(mixed $value, string $locale): mixed
+    {
+        if (\is_string($value)) {
+            return $this->filterVisibleCopyForLocale($value, $locale);
+        }
+        if (!\is_array($value)) {
+            return $value;
+        }
+
+        foreach ($value as $key => $item) {
+            $value[$key] = $this->filterPromptArrayForLocale($item, $locale);
+            if ($value[$key] === '') {
+                unset($value[$key]);
+            }
+        }
+
+        return $value;
+    }
+
     private function localizePageTypeTitle(string $pageType, string $locale): string
     {
         $isZh = $this->isChineseLocale($locale);
@@ -5050,6 +5122,11 @@ class AiSitePageComponentGenerationService
     private function assertRenderedHtmlMatchesLocale(string $html, array $renderContext): void
     {
         $locale = \trim((string)($renderContext['_content_locale'] ?? ''));
+        $contentLocaleExplicit = !\array_key_exists('_content_locale_explicit', $renderContext)
+            || (bool)$renderContext['_content_locale_explicit'];
+        if (!$contentLocaleExplicit) {
+            return;
+        }
         if ($locale === '' || !$this->isNonCjkLocale($locale)) {
             return;
         }
@@ -5134,15 +5211,25 @@ class AiSitePageComponentGenerationService
         string $componentCode,
         string $basePrompt,
         string $reason,
-        int $attempt
+        int $attempt,
+        array $failedAiData = []
     ): string {
         $cssPrefix = $this->normalizeComponentCssPrefix($componentCode);
+        $failedPayload = '';
+        if ($failedAiData !== []) {
+            $failedPayload = $this->clipText(
+                (string)\json_encode($this->normalizeComponentPayload($failedAiData), \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR),
+                5000
+            );
+        }
 
         return $basePrompt
             . "\n\nAI enhanced repair/rewrite mode (attempt {$attempt}/" . self::COMPONENT_GENERATION_MAX_ATTEMPTS . "):"
             . "\n- The previous AI output failed validation because: {$reason}"
             . "\n- Regenerate the SAME component as a full-quality AI design repair, not a stub; keep the complete planned component scope."
             . "\n- Preserve the original page/task intent and customer brief; strengthen visitor-facing copy, hierarchy, surface depth, CTA states, and theme-specific visual devices."
+            . "\n- If the previous output used the wrong language, rewrite every visitor-visible heading, body paragraph, CTA label, nav label, badge, form label, legal/support sentence, and alt text into the website content locale before returning JSON."
+            . ($failedPayload !== '' ? "\n- Start from this failed component JSON and repair it in place instead of inventing a fresh unrelated block:\n" . $failedPayload : '')
             . "\n- Do not paste planning/observation copy into visible text. Rewrite \"访客看到\", \"用户看到\", \"从而产生\", \"信任感增强\", \"知道如何\", \"Visitors see\", and \"Visitors can review\" sentences into direct marketing, legal, support, or editorial copy."
             . "\n- Do not downgrade to a generic grid: preserve a distinctive composition, theme-matched surface treatment, and at least two visible design devices."
             . "\n- If the failed output looked like plain cards or a flat strip, rewrite the composition with richer layout, stronger art direction, and complete scoped CSS instead of reducing detail."

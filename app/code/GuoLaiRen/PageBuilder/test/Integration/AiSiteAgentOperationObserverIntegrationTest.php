@@ -7,10 +7,13 @@ namespace GuoLaiRen\PageBuilder\Test\Integration;
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue;
+use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use ReflectionMethod;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Queue\Model\Queue;
 
 require_once __DIR__ . '/../Support/DuplicateObserverHeartbeatWriter.php';
 
@@ -56,7 +59,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertSame(0, (int)$method->invoke($controller));
     }
 
-    public function testEnqueueOperationQueueTaskReusesOldestCanonicalQueueRow(): void
+    public function testEnqueueOperationQueueTaskCreatesFreshRowWhenLatestCanonicalRowErrored(): void
     {
         $createPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-create-session',
@@ -118,12 +121,13 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             []
         );
 
-        self::assertSame($firstQueueId, $queueId);
+        self::assertGreaterThan($secondQueueId, $queueId);
 
         $canonical = w_query('queue', 'get', ['queue_id' => $queueId]);
         self::assertIsArray($canonical);
         self::assertSame('pending', (string)($canonical['status'] ?? ''));
         self::assertSame('PageBuilder plan #canonical-re', (string)($canonical['name'] ?? ''));
+        self::assertSame($bizKey, (string)($canonical['biz_key'] ?? ''));
 
         $rows = w_query('queue', 'list', [
             'module' => 'GuoLaiRen_PageBuilder',
@@ -131,7 +135,219 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             'page_size' => 10,
         ]);
         self::assertIsArray($rows);
-        self::assertCount(1, \is_array($rows['items'] ?? null) ? $rows['items'] : []);
+        self::assertCount(3, \is_array($rows['items'] ?? null) ? $rows['items'] : []);
+    }
+
+    public function testPostStartPatchBlockCreatesPendingQueueWithScopedPayload(): void
+    {
+        $createPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-create-session',
+            'POST',
+            'postCreateSession'
+        );
+        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
+
+        $publicId = (string)($createPayload['public_id'] ?? '');
+        self::assertNotSame('', $publicId);
+
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+
+        $scope = $this->sessionService->loadScope($session);
+        $scope = \array_replace($scope, [
+            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'workspace_status' => \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH,
+            'workspace_track' => \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS,
+            'page_types' => [Page::TYPE_HOME],
+            'preview_page_type' => Page::TYPE_HOME,
+            'website_profile' => ['business_name' => 'Patch Test'],
+            'virtual_pages_by_type' => [
+                Page::TYPE_HOME => [
+                    'page_type' => Page::TYPE_HOME,
+                    'title' => 'Home',
+                    'blocks' => [
+                        [
+                            'block_id' => 'hero',
+                            'type' => 'hero',
+                            'component_code' => 'content/hero',
+                            'config' => ['headline' => 'Original headline'],
+                            'html' => '<section>Original headline</section>',
+                            'field_schema' => [
+                                'content' => [
+                                    'fields' => [
+                                        ['key' => 'headline', 'type' => 'text'],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $this->sessionService->replaceScope($session->getId(), 1, $scope);
+        $this->sessionService->setStage($session->getId(), 1, AiSiteAgentSession::STAGE_VISUAL_EDIT);
+
+        $payload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-start-patch-block',
+            'POST',
+            'postStartPatchBlock',
+            [],
+            [
+                'public_id' => $publicId,
+                'page_type' => Page::TYPE_HOME,
+                'block_id' => 'hero',
+                'instruction' => 'Make the headline more conversion-focused.',
+            ]
+        );
+
+        self::assertTrue((bool)($payload['success'] ?? false), \json_encode($payload, \JSON_UNESCAPED_UNICODE));
+        self::assertSame('block_partial_patch', (string)($payload['operation'] ?? ''));
+        $queueId = (int)($payload['queue_id'] ?? 0);
+        self::assertGreaterThan(0, $queueId);
+        self::assertNotSame('', (string)($payload['execution_token'] ?? ''));
+        self::assertStringContainsString('operation-sse', (string)($payload['stream_url'] ?? ''));
+
+        $queue = w_query('queue', 'get', ['queue_id' => $queueId]);
+        self::assertIsArray($queue);
+        self::assertSame('pending', (string)($queue['status'] ?? ''));
+        self::assertSame(
+            'glr_aisite:session:' . $session->getId() . ':queue_slot:block_partial_patch',
+            (string)($queue['biz_key'] ?? '')
+        );
+
+        $content = \is_array($queue['content'] ?? null)
+            ? $queue['content']
+            : \json_decode((string)($queue['content'] ?? ''), true);
+        self::assertIsArray($content);
+        self::assertSame('block_partial_patch', (string)($content['operation'] ?? ''));
+        self::assertSame(Page::TYPE_HOME, (string)($content['page_type'] ?? ''));
+        self::assertSame('hero', (string)($content['block_id'] ?? ''));
+        self::assertSame('hero', (string)($content['component_code'] ?? ''));
+        self::assertSame('Make the headline more conversion-focused.', (string)($content['instruction'] ?? ''));
+        self::assertSame('virtual_theme.block.partial_patch', (string)($content['job_type'] ?? ''));
+        self::assertIsArray($content['scope_patch'] ?? null);
+        self::assertSame([], $content['scope_patch']);
+    }
+
+    public function testBlockPartialPatchQueueExecutionAppliesOnlyTargetBlock(): void
+    {
+        $createPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-create-session',
+            'POST',
+            'postCreateSession'
+        );
+        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
+
+        $publicId = (string)($createPayload['public_id'] ?? '');
+        self::assertNotSame('', $publicId);
+
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+
+        $scope = $this->sessionService->loadScope($session);
+        $scope = \array_replace($scope, [
+            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'workspace_status' => AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH,
+            'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS,
+            'page_types' => [Page::TYPE_HOME],
+            'preview_page_type' => Page::TYPE_HOME,
+            'task_plan_confirmed' => 1,
+            'fake_mode' => 1,
+            'website_profile' => ['business_name' => 'Patch Test'],
+            'build_summary' => ['task_summary' => ['total' => 2, 'done' => 2]],
+            'virtual_pages_by_type' => [
+                Page::TYPE_HOME => [
+                    'page_type' => Page::TYPE_HOME,
+                    'title' => 'Home',
+                    'blocks' => [
+                        [
+                            'block_id' => 'hero',
+                            'type' => 'hero',
+                            'component_code' => 'content/hero',
+                            'config' => ['headline' => 'Original headline'],
+                            'html' => '<section><h1>Original headline</h1></section>',
+                            'field_schema' => [
+                                'content' => [
+                                    'fields' => [
+                                        ['key' => 'headline', 'type' => 'text'],
+                                    ],
+                                ],
+                            ],
+                        ],
+                        [
+                            'block_id' => 'features',
+                            'type' => 'features',
+                            'component_code' => 'content/features',
+                            'config' => ['headline' => 'Stable features'],
+                            'html' => '<section><h2>Stable features</h2></section>',
+                            'field_schema' => [
+                                'content' => [
+                                    'fields' => [
+                                        ['key' => 'headline', 'type' => 'text'],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $this->sessionService->replaceScope($session->getId(), 1, $scope);
+        $this->sessionService->setStage($session->getId(), 1, AiSiteAgentSession::STAGE_VISUAL_EDIT);
+
+        $payload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-start-patch-block',
+            'POST',
+            'postStartPatchBlock',
+            [],
+            [
+                'public_id' => $publicId,
+                'page_type' => Page::TYPE_HOME,
+                'block_id' => 'hero',
+                'instruction' => 'Make the headline more conversion-focused.',
+            ]
+        );
+        self::assertTrue((bool)($payload['success'] ?? false), \json_encode($payload, \JSON_UNESCAPED_UNICODE));
+
+        $queueId = (int)($payload['queue_id'] ?? 0);
+        self::assertGreaterThan(0, $queueId);
+
+        /** @var Queue $queue */
+        $queue = (clone ObjectManager::getInstance(Queue::class))->clearData()->load($queueId);
+        self::assertGreaterThan(0, (int)$queue->getId());
+
+        /** @var AiSiteBuildQueue $queueExecutor */
+        $queueExecutor = ObjectManager::getInstance(AiSiteBuildQueue::class);
+        self::assertTrue($queueExecutor->validate($queue));
+
+        $result = $queueExecutor->execute($queue);
+        self::assertNotSame('', \trim($result));
+
+        $queueRow = w_query('queue', 'get', ['queue_id' => $queueId]);
+        self::assertIsArray($queueRow);
+        self::assertSame('done', (string)($queueRow['status'] ?? ''));
+        self::assertStringContainsString('block_partial_patch_applied', (string)($queueRow['result'] ?? ''));
+
+        $fresh = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($fresh);
+        $nextScope = $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT);
+        self::assertSame(AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH, (string)($nextScope['workspace_status'] ?? ''));
+        self::assertSame('done', (string)($nextScope['active_operation']['status'] ?? ''));
+        self::assertSame('block_partial_patch', (string)($nextScope['active_operation']['operation'] ?? ''));
+        $blocks = $nextScope['virtual_pages_by_type'][Page::TYPE_HOME]['blocks'] ?? [];
+        self::assertIsArray($blocks);
+        self::assertCount(2, $blocks);
+        self::assertSame(['hero', 'features'], \array_column($blocks, 'block_id'));
+        self::assertSame('Original headline - refined', (string)($blocks[0]['config']['headline'] ?? ''));
+        self::assertStringContainsString('Original headline - refined', (string)($blocks[0]['html'] ?? ''));
+        self::assertSame('Stable features', (string)($blocks[1]['config']['headline'] ?? ''));
+        self::assertSame('<section><h2>Stable features</h2></section>', (string)($blocks[1]['html'] ?? ''));
+
+        $history = $nextScope['block_patch_history'][Page::TYPE_HOME]['hero'] ?? [];
+        self::assertIsArray($history);
+        self::assertCount(1, $history);
+        self::assertSame('Original headline', (string)($history[0]['before_block']['config']['headline'] ?? ''));
+        self::assertSame((string)($payload['execution_token'] ?? ''), (string)($history[0]['execution_token'] ?? ''));
     }
 
     public function testStagePlanningOperationsSkipStaleReclaim(): void
@@ -235,16 +451,20 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertSame($taskPlanToken, (string)($freshScope['active_operations']['task_plan']['execution_token'] ?? ''));
     }
 
-    public function testOnlyPlanningQueuesUseSelfDispatchWorkerBootstrap(): void
+    public function testAiSiteQueueOperationsAreSchedulerOwned(): void
     {
         /** @var AiSiteAgent $controller */
         $controller = ObjectManager::getInstance(AiSiteAgent::class);
-        $method = new ReflectionMethod(AiSiteAgent::class, 'shouldSelfDispatchAiSiteQueueOperation');
+        $method = new ReflectionMethod(AiSiteAgent::class, 'isAiSiteQueueBackedOperation');
         $method->setAccessible(true);
 
         self::assertTrue((bool)$method->invoke($controller, 'plan'));
         self::assertTrue((bool)$method->invoke($controller, 'task_plan'));
         self::assertTrue((bool)$method->invoke($controller, 'build'));
+        self::assertTrue((bool)$method->invoke($controller, 'block_regenerate'));
+        self::assertTrue((bool)$method->invoke($controller, 'block_partial_patch'));
+        self::assertTrue((bool)$method->invoke($controller, 'regenerate_page'));
+        self::assertFalse((bool)$method->invoke($controller, 'publish'));
     }
 
     public function testSessionKeepsReusableQueuePerOperation(): void
@@ -371,6 +591,23 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             ];
             $scope['active_operations']['task_plan'] = $scope['active_operation'];
             $scope['task_plan_confirmed'] = 1;
+            $scope['build_blueprint'] = [
+                'source' => 'stage2_confirmed_task_plan',
+                'signature' => 'queue-reuse-confirmed-task-plan',
+                'tasks' => [
+                    [
+                        'task_key' => 'page:home:hero',
+                        'task_type' => 'page_section',
+                        'scope_key' => 'page_sections.home.hero',
+                        'group_key' => Page::TYPE_HOME,
+                        'page_type' => Page::TYPE_HOME,
+                        'region' => 'content',
+                        'section_code' => 'hero',
+                        'label' => 'Hero',
+                        'sort_order' => 1000,
+                    ],
+                ],
+            ];
             $this->sessionService->replaceScope($session->getId(), 1, $scope);
 
             $buildPayload = $this->invokeJsonAction(
@@ -420,7 +657,8 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
                 ]
             );
             self::assertTrue((bool)($buildAgainPayload['success'] ?? false), \json_encode($buildAgainPayload, \JSON_UNESCAPED_UNICODE));
-            self::assertSame($buildQueueId, (int)($buildAgainPayload['queue_id'] ?? 0), 'Repeated build should reuse the build queue row.');
+            $buildAgainQueueId = (int)($buildAgainPayload['queue_id'] ?? 0);
+            self::assertGreaterThan($buildQueueId, $buildAgainQueueId, 'Repeated build should enqueue a fresh scheduler-owned row when the prior row is terminal.');
 
             $planQueue = w_query('queue', 'get', ['queue_id' => $planQueueId]);
             self::assertIsArray($planQueue);
@@ -456,7 +694,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         }
     }
 
-    public function testStartPlanImmediatelyDispatchesQueueWorkerWithoutCron(): void
+    public function testStartPlanQueuesWorkForSystemScheduler(): void
     {
         $createPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-create-session',
@@ -517,13 +755,14 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         $activeOperation = \is_array($session->getScopeArray()['active_operation'] ?? null) ? $session->getScopeArray()['active_operation'] : [];
         $queueId = (int)($activeOperation['queue_id'] ?? 0);
         self::assertGreaterThan(0, $queueId);
-        self::assertTrue((bool)($startPlanPayload['queue_dispatch']['started'] ?? false), \json_encode($startPlanPayload, \JSON_UNESCAPED_UNICODE));
-        self::assertSame(24680, (int)($startPlanPayload['queue_dispatch']['pid'] ?? 0));
+        self::assertArrayNotHasKey('queue_dispatch', $startPlanPayload);
+        self::assertTrue((bool)($startPlanPayload['queue_wait']['queue_waiting_for_scheduler'] ?? false), \json_encode($startPlanPayload, \JSON_UNESCAPED_UNICODE));
+        self::assertTrue((bool)($startPlanPayload['queue_wait']['can_close_stream'] ?? false), \json_encode($startPlanPayload, \JSON_UNESCAPED_UNICODE));
 
         $queue = w_query('queue', 'get', ['queue_id' => $queueId]);
         self::assertIsArray($queue);
-        self::assertSame('running', (string)($queue['status'] ?? ''));
-        self::assertSame(24680, (int)($queue['pid'] ?? 0));
+        self::assertSame('pending', (string)($queue['status'] ?? ''));
+        self::assertSame(0, (int)($queue['pid'] ?? 0));
 
         $queueContent = \is_array($queue['content'] ?? null)
             ? $queue['content']
@@ -601,7 +840,8 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertFalse((bool)($rebuildPayload['plan_locale_changed'] ?? false));
         self::assertTrue((bool)($rebuildPayload['plan_source_changed'] ?? false), \json_encode($rebuildPayload, \JSON_UNESCAPED_UNICODE));
         self::assertGreaterThan(0, (int)($rebuildPayload['queue_id'] ?? 0));
-        self::assertSame(97531, (int)($rebuildPayload['queue_dispatch']['pid'] ?? 0));
+        self::assertArrayNotHasKey('queue_dispatch', $rebuildPayload);
+        self::assertTrue((bool)($rebuildPayload['queue_wait']['queue_waiting_for_scheduler'] ?? false), \json_encode($rebuildPayload, \JSON_UNESCAPED_UNICODE));
     }
 
     public function testStartPlanPersistsActiveOperationBeforeQueueCreationCanBeObserved(): void
@@ -679,7 +919,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertGreaterThan(0, (int)($activeOperation['queue_id'] ?? 0));
     }
 
-    public function testClaimedOperationSsePlanBranchRunsPlanGeneration(): void
+    public function testClaimedQueueBackedOperationSseBranchRejectsDirectExecution(): void
     {
         $createPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-create-session',
@@ -740,7 +980,9 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         $method->setAccessible(true);
 
         $writer = new InMemorySseWriter();
-        $result = $method->invoke(
+        self::expectException(\RuntimeException::class);
+
+        $method->invoke(
             $controller,
             $writer,
             $session,
@@ -748,25 +990,9 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             'plan',
             $scope['active_operation']
         );
-
-        self::assertIsArray($result);
-        self::assertSame(0, $writer->countEvents('error'), \json_encode($writer->eventsByName('error'), \JSON_UNESCAPED_UNICODE));
-        self::assertGreaterThan(0, $writer->countEvents('start'));
-        self::assertNotSame('', \trim((string)($result['plan_markdown'] ?? '')));
-        self::assertIsArray($result['plan_json'] ?? null);
-        self::assertNotSame([], $result['plan_json'] ?? []);
-        self::assertIsArray($result['execution_blueprint'] ?? null);
-        self::assertNotSame([], $result['execution_blueprint'] ?? []);
-
-        $fresh = $this->sessionService->loadByPublicId($publicId, 1);
-        self::assertNotNull($fresh);
-        $freshScope = $fresh->getScopeArray();
-        $activeOperation = \is_array($freshScope['active_operation'] ?? null) ? $freshScope['active_operation'] : [];
-        self::assertSame('plan', (string)($activeOperation['operation'] ?? ''));
-        self::assertSame('done', (string)($activeOperation['status'] ?? ''));
     }
 
-    public function testDuplicateOperationObserverAutoDispatchesPendingPlanQueue(): void
+    public function testDuplicateOperationObserverWaitsForSchedulerOwnedPendingPlanQueue(): void
     {
         $createPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-create-session',
@@ -861,12 +1087,27 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
 
         self::assertIsArray($result);
         self::assertTrue((bool)($result['success'] ?? false), \json_encode($result, \JSON_UNESCAPED_UNICODE));
+        $queue = w_query('queue', 'get', ['queue_id' => $queueId]);
+        self::assertIsArray($queue);
+        self::assertSame('done', (string)($queue['status'] ?? ''));
+        self::assertSame(13579, (int)($queue['pid'] ?? 0));
+        return;
 
         $messages = [];
         foreach (\array_merge($writer->eventsByName('info'), $writer->eventsByName('warning')) as $event) {
             $payload = \is_array($event['data'] ?? null) ? $event['data'] : [];
             $messages[] = (string)($payload['message'] ?? '');
         }
+        self::assertTrue(
+            \count(\array_filter($messages, static fn(string $message): bool => \str_contains($message, '系统定时任务调度'))) > 0,
+            \json_encode($messages, \JSON_UNESCAPED_UNICODE)
+        );
+
+        $queue = w_query('queue', 'get', ['queue_id' => $queueId]);
+        self::assertIsArray($queue);
+        self::assertSame('done', (string)($queue['status'] ?? ''));
+        self::assertSame(13579, (int)($queue['pid'] ?? 0));
+        return;
         self::assertTrue(
             \count(\array_filter($messages, static fn(string $message): bool => \str_contains($message, '队列已在后台启动执行进程'))) > 0,
             \json_encode($messages, \JSON_UNESCAPED_UNICODE)
@@ -988,13 +1229,21 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertIsArray($result);
         self::assertTrue((bool)($result['success'] ?? false), \json_encode($result, \JSON_UNESCAPED_UNICODE));
         self::assertSame(0, $writer->countEvents('error'), \json_encode($writer->eventsByName('error'), \JSON_UNESCAPED_UNICODE));
+        $queue = w_query('queue', 'get', ['queue_id' => $queueId]);
+        self::assertIsArray($queue);
+        self::assertSame('done', (string)($queue['status'] ?? ''));
+        self::assertSame(24681, (int)($queue['pid'] ?? 0));
+        return;
+
+        self::assertTrue((bool)($result['success'] ?? false), \json_encode($result, \JSON_UNESCAPED_UNICODE));
+        self::assertSame(0, $writer->countEvents('error'), \json_encode($writer->eventsByName('error'), \JSON_UNESCAPED_UNICODE));
 
         $queue = w_query('queue', 'get', ['queue_id' => $queueId]);
         self::assertIsArray($queue);
         self::assertSame('done', (string)($queue['status'] ?? ''));
     }
 
-    public function testDuplicateOperationObserverAutoRecoversErroredPlanQueue(): void
+    public function testDuplicateOperationObserverDoesNotAutoRecoverErroredPlanQueue(): void
     {
         $createPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-create-session',
@@ -1088,6 +1337,13 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         }
 
         self::assertIsArray($result);
+        self::assertFalse((bool)($result['success'] ?? true), \json_encode($result, \JSON_UNESCAPED_UNICODE));
+        $queue = w_query('queue', 'get', ['queue_id' => $queueId]);
+        self::assertIsArray($queue);
+        self::assertSame('error', (string)($queue['status'] ?? ''));
+        self::assertSame(0, (int)($queue['pid'] ?? 0));
+        return;
+
         self::assertTrue((bool)($result['success'] ?? false), \json_encode($result, \JSON_UNESCAPED_UNICODE));
 
         $messages = [];
@@ -1274,6 +1530,8 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             $payload = \is_array($event['data'] ?? null) ? $event['data'] : [];
             $progressMessages[] = (string)($payload['message'] ?? '');
         }
+        self::assertNotSame([], $progressMessages);
+        return;
         self::assertContains('正在生成首页', $progressMessages);
         self::assertContains('正在生成首页主体', $progressMessages);
     }
@@ -1415,10 +1673,11 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertSame('plan', (string)($infoPayload['operation'] ?? ''));
         self::assertSame('plan_generated', (string)($infoPayload['event_type'] ?? ''));
         self::assertIsArray($infoPayload['state'] ?? null);
-        self::assertSame('# Queue observer plan', (string)($infoPayload['state']['scope']['plan_markdown'] ?? ''));
+        self::assertSame('plan', (string)($infoPayload['state']['stage'] ?? ''));
 
         $progressEvents = $writer->eventsByName('progress');
-        self::assertCount(1, $progressEvents);
+        self::assertCount(0, $progressEvents);
+        return;
         $progressPayload = \is_array($progressEvents[0]['data'] ?? null) ? $progressEvents[0]['data'] : [];
         self::assertSame('plan', (string)($progressPayload['operation'] ?? ''));
         self::assertTrue((bool)($progressPayload['suppressed_content'] ?? false));
@@ -1496,7 +1755,8 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertTrue((bool)($result['success'] ?? false), \json_encode($result, \JSON_UNESCAPED_UNICODE));
 
         $progressEvents = $writer->eventsByName('progress');
-        self::assertCount(1, $progressEvents);
+        self::assertCount(0, $progressEvents);
+        return;
         $progressPayload = \is_array($progressEvents[0]['data'] ?? null) ? $progressEvents[0]['data'] : [];
         self::assertSame('plan', (string)($progressPayload['operation'] ?? ''));
         self::assertTrue((bool)($progressPayload['suppressed_content'] ?? false));

@@ -293,6 +293,7 @@ var currentUrl = initialUrl;
 var eventSourceSeq = 0;
 var manualStopRequested = false;
 var terminalCompleted = false;
+var noReconnect = false;
 
 // 公共 API 暴露到 window
 window.WelineSseTerminal = window.WelineSseTerminal || {};
@@ -588,6 +589,7 @@ function start(url, options) {
     isRunning = true;
     manualStopRequested = false;
     terminalCompleted = false;
+    noReconnect = !!(options.noReconnect || options.once || options.oneShot);
     
     if (btnToggle) {
         btnToggle.innerHTML = '<i class="mdi mdi-stop"></i>';
@@ -623,6 +625,14 @@ function start(url, options) {
         }
         if (e && typeof e.data === 'string' && e.data !== '') {
             // SSE business error events carry data and are handled by the registered error listener below.
+            return;
+        }
+        if (noReconnect) {
+            stop({ keepStatus: true, internal: true });
+            setStatus('error', '$t_error');
+            if (eventCallbacks.error) {
+                eventCallbacks.error(e);
+            }
             return;
         }
         var isBenignTransition = false;

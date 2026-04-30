@@ -52,7 +52,7 @@
         }
     }
     function isRuntimePublishBlockingAiOperation(operation) {
-        return ['build', 'visual_edit', 'regenerate_page', 'block_regenerate', 'block_refine'].indexOf(String(operation || '').trim().toLowerCase()) !== -1;
+        return ['build', 'visual_edit', 'regenerate_page', 'block_regenerate', 'block_partial_patch', 'block_refine'].indexOf(String(operation || '').trim().toLowerCase()) !== -1;
     }
     var compactPageDisplayLabel = typeof previewBridge.compactPageDisplayLabel === 'function'
         ? previewBridge.compactPageDisplayLabel
@@ -607,6 +607,15 @@
             return data.state;
         }
         return data;
+    }
+
+    function fetchWorkspaceSnapshotState() {
+        if (!workspaceSnapshotUrl || !publicId) {
+            return Promise.reject(new Error('workspace snapshot unavailable'));
+        }
+        return submitWorkspaceForm(workspaceSnapshotUrl, { public_id: publicId }).then(function (data) {
+            return extractWorkspaceSnapshotState(data);
+        });
     }
 
     function syncDeferredQueueWorkspaceState(operation, workspaceState) {
@@ -2479,9 +2488,12 @@
     }
 
     var workspaceApiRef = window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object' ? window.__pbWorkspaceApi : {};
+    workspaceApiRef.clearBlockStreamingState = clearBlockStreamingState;
+    workspaceApiRef.fetchWorkspaceSnapshotState = fetchWorkspaceSnapshotState;
     workspaceApiRef.updateTaskSummaryFromState = updateTaskSummaryFromState;
     workspaceApiRef.updateStageStatusSummary = updateStageStatusSummary;
     window.__pbWorkspaceApi = workspaceApiRef;
+    window.clearBlockStreamingState = clearBlockStreamingState;
     window.updateTaskSummaryFromState = updateTaskSummaryFromState;
     window.updateStageStatusSummary = updateStageStatusSummary;
     syncBuildTaskProgressPanelVisibility({
@@ -2885,6 +2897,48 @@
             logOperationToWorkspaceTerminal('task_completed', payload, 'done', taskMessage);
         });
 
+        source.addEventListener('block_partial_patch_applied', function (event) {
+            var payload = parsePayload(event);
+            if (!payload || typeof payload !== 'object') {
+                return;
+            }
+            if (payload.state) {
+                hydrateWorkspaceFromState(payload.state);
+                updateTaskSummaryFromState(payload.state);
+            }
+            logOperationToWorkspaceTerminal('block_partial_patch_applied', payload, 'done', String(payload.change_summary || payload.message || 'Block partial patch applied'));
+            if (
+                blockRefreshState.active
+                && payload.state
+                && payload.state.virtual_pages_by_type
+            ) {
+                if (typeof previewBridge.setVirtualPagesByType === 'function') {
+                    previewBridge.setVirtualPagesByType(payload.state.virtual_pages_by_type);
+                }
+                var pageType = String(payload.page_type || blockRefreshState.pageType || '');
+                var blockId = String(payload.block_id || blockRefreshState.blockId || '');
+                var pageState = payload.state.virtual_pages_by_type[pageType] || null;
+                var nextBlock = pageState && Array.isArray(pageState.blocks)
+                    ? runtimeFindNextBlock(pageType, pageState.blocks, blockId)
+                    : null;
+                if (nextBlock && typeof previewBridge.updateVirtualBlockState === 'function') {
+                    previewBridge.updateVirtualBlockState(pageType, nextBlock);
+                }
+                if (nextBlock && typeof previewBridge.replaceCurrentBlockHtml === 'function') {
+                    previewBridge.replaceCurrentBlockHtml(pageType, nextBlock);
+                }
+                clearBlockStreamingState();
+            }
+        });
+
+        source.addEventListener('block_partial_patch_failed', function (event) {
+            var payload = parsePayload(event);
+            var message = payload && payload.message ? String(payload.message) : 'Block partial patch failed';
+            logOperationToWorkspaceTerminal('block_partial_patch_failed', payload || {}, 'error', message);
+            toast('error', message);
+            clearBlockStreamingState();
+        });
+
             source.addEventListener('done', function (event) {
             if (settled) {
                 return;
@@ -3063,7 +3117,7 @@
             }
             if (
                 blockRefreshState.active
-                && ['regenerate_page', 'block_regenerate', 'block_refine'].indexOf(String(operation || '')) !== -1
+                && ['regenerate_page', 'block_regenerate', 'block_partial_patch', 'block_refine'].indexOf(String(operation || '')) !== -1
                 && payload
                 && payload.state
                 && payload.state.virtual_pages_by_type

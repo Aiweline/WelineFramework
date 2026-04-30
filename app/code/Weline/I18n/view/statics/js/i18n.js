@@ -124,8 +124,13 @@
             return '/' + currency + '/' + targetLang + (safeSearch || '');
         }
 
-        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
+        const langPattern = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
         const currencyPattern = /^[A-Z]{3}$/;
+        const backendKey = String(
+            (window.site && window.site.area)
+            || (window.Weline && window.Weline.config && window.Weline.config.url && window.Weline.config.url.adminArea)
+            || ''
+        );
         let currency = '';
         for (const part of pathParts) {
             if (currencyPattern.test(part)) {
@@ -138,18 +143,33 @@
         }
 
         // 仅保留非货币/语言段，原有大小写保持不变
-        const filteredParts = pathParts.filter(part => !langPattern.test(part) && !currencyPattern.test(part));
+        const filteredParts = [];
 
-        // 若首段不是货币/语言，视为租户/后台前缀，保持在最前
-        let prefixSegment = '';
-        if (pathParts.length > 0 && !langPattern.test(pathParts[0]) && !currencyPattern.test(pathParts[0])) {
-            prefixSegment = pathParts[0];
+        // 前缀优先使用 backend key（即使它不在首段），否则退回首段非货币/语言段
+        let prefixIndex = -1;
+        if (backendKey) {
+            prefixIndex = pathParts.findIndex(part => !langPattern.test(part)
+                && !currencyPattern.test(part)
+                && String(part).toLowerCase() === backendKey.toLowerCase());
         }
+        if (prefixIndex < 0) {
+            prefixIndex = pathParts.findIndex(part => !langPattern.test(part) && !currencyPattern.test(part));
+        }
+        const prefixSegment = prefixIndex >= 0 ? pathParts[prefixIndex] : '';
+
+        pathParts.forEach((part, index) => {
+            if (langPattern.test(part) || currencyPattern.test(part)) {
+                return;
+            }
+            if (index === prefixIndex) {
+                return;
+            }
+            filteredParts.push(part);
+        });
 
         if (prefixSegment) {
-            const nonPrefix = filteredParts.filter((p, idx) => !(idx === 0 && p === prefixSegment));
             return '/' + prefixSegment + '/' + currency + '/' + targetLang +
-                (nonPrefix.length ? '/' + nonPrefix.join('/') : '') +
+                (filteredParts.length ? '/' + filteredParts.join('/') : '') +
                 (safeSearch || '');
         }
 
@@ -234,13 +254,7 @@
             return;
         }
 
-        // 优先使用 select_language 函数（来自 url-frontend 模块，会自动保持货币）
-        if (typeof window.select_language === 'function') {
-            window.select_language(lang);
-            return;
-        }
-
-        // 其余场景统一走本地安全构建，避免复杂路径重复拼接
+        // 统一走 i18n 自身的路径重建，避免多处 URL 语义互相覆盖
         const config = window.__WelineThemeConfig || {};
         const langUrl = buildLanguageUrl(
             lang,
@@ -263,39 +277,16 @@
      * 初始化语言切换器
      */
     function initLanguageSwitcher() {
-        // 等待 URL 模块加载（由 weline-modules 配置控制，不主动加载）
-        let urlModuleRetryCount = 0;
-        const MAX_URL_MODULE_RETRIES = 10; // 最多等待10次（给模块加载器时间）
-
-        function waitForUrlModule() {
-            // 如果 URL 函数已存在，直接使用
-            if (typeof window.urlWithLang === 'function' || typeof window.url === 'function') {
-                updateLanguageSwitcherLinks();
-                return;
-            }
-
-            // 重试次数限制
-            if (urlModuleRetryCount >= MAX_URL_MODULE_RETRIES) {
-                // 使用降级方案（即使 URL 模块未加载，也要更新链接）
-                updateLanguageSwitcherLinks();
-                return;
-            }
-
-            // 延迟重试（等待模块加载器从配置中加载模块）
-            urlModuleRetryCount++;
-            setTimeout(waitForUrlModule, 200);
-        }
-
         // 确保 DOM 完全加载后再执行
         function initAfterDOMReady() {
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', function () {
                     // DOM 加载完成后，再等待一小段时间确保所有元素都已渲染
-                    setTimeout(waitForUrlModule, 100);
+                    setTimeout(updateLanguageSwitcherLinks, 100);
                 });
             } else {
                 // DOM 已加载，等待一小段时间确保所有元素都已渲染
-                setTimeout(waitForUrlModule, 100);
+                setTimeout(updateLanguageSwitcherLinks, 100);
             }
         }
 
@@ -437,6 +428,7 @@
         updateCurrentLanguageDisplay: updateCurrentLanguageDisplay,
         updateLanguageSwitcherLinks: updateLanguageSwitcherLinks,
         switchLang: switchLang,
+        buildLanguageUrl: buildLanguageUrl,
         // 翻译相关 API
         currentLang: i18nObj.currentLang,
         dictionary: i18nObj.dictionary,

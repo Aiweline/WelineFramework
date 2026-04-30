@@ -32,6 +32,7 @@ $resumeBuildUrl = (string)($this->getData('resume_build_url') ?? '');
 $runVirtualThemeUrl = (string)($this->getData('run_virtual_theme_url') ?? '');
 $startRegeneratePageUrl = (string)($this->getData('start_regenerate_page_url') ?? '');
 $startRefineComponentUrl = (string)($this->getData('start_refine_component_url') ?? '');
+$startPatchBlockUrl = (string)($this->getData('start_patch_block_url') ?? '');
 $startBlockRefineSseUrl = (string)($this->getData('start_block_refine_sse_url') ?? '');
 $startBlockRegenerateSseUrl = (string)($this->getData('start_block_regenerate_sse_url') ?? '');
 $updateBlockConfigUrl = (string)($this->getData('update_block_config_url') ?? '');
@@ -359,21 +360,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 $workspaceRenderStage = \in_array($currentStage, ['plan', 'visual_edit', 'publish'], true)
     ? $currentStage
     : 'plan';
-$workspaceIsPlanStage = $workspaceRenderStage === 'plan';
-if ($workspaceIsPlanStage) {
     // 阶段一仅加载阶段一前端资源，避免提前注入阶段二/构建阶段前端入口。
-    $startTaskPlanUrl = '';
-    $confirmTaskPlanUrl = '';
-    $sortTaskPlanTasksUrl = '';
-    $taskPlanSseUrl = '';
-    $resumeBuildUrl = '';
-    $runVirtualThemeUrl = '';
-    $startRegeneratePageUrl = '';
-    $startRefineComponentUrl = '';
-    $startBlockRefineSseUrl = '';
-    $startBlockRegenerateSseUrl = '';
-    $updateBlockConfigUrl = '';
-}
 $workspaceTplData = \get_defined_vars();
 ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/styles-device.phtml', $workspaceTplData) ?>

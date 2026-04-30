@@ -7,6 +7,7 @@ use GuoLaiRen\PageBuilder\Helper\PageBuilderUrlCacheInvalidator;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
+use GuoLaiRen\PageBuilder\Model\VirtualTheme;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use GuoLaiRen\PageBuilder\Service\AiSitePreviewLinkRewriteService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualLayoutService;
@@ -36,6 +37,7 @@ class Preview extends BackendController
     private Page $pageModel;
     private LocalDescription $localDescriptionModel;
     private Style $styleModel;
+    private VirtualTheme $virtualThemeModel;
     private LayoutAssembler $layoutAssembler;
     private PageRenderService $pageRenderService;
     private ?AiSitePreviewLinkRewriteService $previewLinkRewriteService = null;
@@ -44,11 +46,13 @@ class Preview extends BackendController
         Page $pageModel,
         LocalDescription $localDescriptionModel,
         Style $styleModel,
-        PageRenderService $pageRenderService
+        PageRenderService $pageRenderService,
+        ?VirtualTheme $virtualThemeModel = null
     ) {
         $this->pageModel = $pageModel;
         $this->localDescriptionModel = $localDescriptionModel;
         $this->styleModel = $styleModel;
+        $this->virtualThemeModel = $virtualThemeModel ?? ObjectManager::getInstance(VirtualTheme::class);
         $this->layoutAssembler = ObjectManager::getInstance(LayoutAssembler::class);
         $this->pageRenderService = $pageRenderService;
     }
@@ -435,12 +439,16 @@ class Preview extends BackendController
         
         // 使用 PageRenderService 统一渲染
         // 这确保了可视化编辑器预览和前端正式页面的渲染逻辑完全一致
+        $resolvedThemeId = $virtualThemeId > 0
+            ? $virtualThemeId
+            : (int)($this->resolvePublishedPreviewVirtualThemeId($page) ?? 0);
+
         $html = $this->pageRenderService->render(
             $page,
             $renderMode,
             $currentLocale,
             $tempStyleCode,
-            $virtualThemeId > 0 ? $virtualThemeId : null
+            $resolvedThemeId > 0 ? $resolvedThemeId : null
         );
         if ($isVisualEditor) {
             $html = $this->injectVisualEditorNavLinks($html, $page);
@@ -448,7 +456,7 @@ class Preview extends BackendController
             $html = $this->getPreviewLinkRewriteService()->rewriteMaterializedPreviewLinks(
                 $html,
                 $this->getNavPagesForVisualEditor($page),
-                $virtualThemeId
+                $resolvedThemeId
             );
         }
         // 通过终止异常直接输出完整 HTML，避免被主题/布局包裹导致 header 等组件被塞进后台 layout 的 body
@@ -1674,6 +1682,31 @@ JS;
     private function resolveRequestedVirtualThemeId(): int
     {
         return \max(0, (int)$this->request->getGet('virtual_theme_id', 0));
+    }
+
+    private function resolvePublishedPreviewVirtualThemeId(Page $page): ?int
+    {
+        $pageThemeId = (int)($page->getData('virtual_theme_id') ?? 0);
+        if ($pageThemeId > 0) {
+            return $pageThemeId;
+        }
+
+        $websiteId = (int)($page->getData(Page::schema_fields_WEBSITE_ID) ?? 0);
+        if ($websiteId <= 0) {
+            return null;
+        }
+
+        $theme = clone $this->virtualThemeModel;
+        $theme->clearData()->clearQuery()
+            ->where(VirtualTheme::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(VirtualTheme::schema_fields_SOURCE, VirtualTheme::SOURCE_PAGEBUILDER_AI)
+            ->where(VirtualTheme::schema_fields_IS_ACTIVE, 1)
+            ->order(VirtualTheme::schema_fields_ID, 'DESC')
+            ->find()
+            ->fetch();
+
+        $themeId = (int)$theme->getId();
+        return $themeId > 0 ? $themeId : null;
     }
 
     private function getScopeCompatibilityService(): AiSiteScopeCompatibilityService
