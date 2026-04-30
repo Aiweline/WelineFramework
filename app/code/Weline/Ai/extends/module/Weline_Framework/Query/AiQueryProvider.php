@@ -38,6 +38,11 @@ class AiQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'generate' => $this->generate($params),
+            'generateText' => $this->generate($params),
+            'generateImage' => $this->generateImage($params),
+            'resolveModel' => $this->resolveModel($params),
+            'listModels' => $this->listModels($params),
+            'getAdapterModelBindings' => $this->getAdapterModelBindings($params),
             'generateStream' => $this->generateStream($params),
             'generateStreamResult' => $this->generateStreamResult($params),
             'generateStructured' => $this->generateStructured($params),
@@ -61,6 +66,42 @@ class AiQueryProvider implements QueryProviderInterface
             $this->optionalInt($params, 'user_id'),
             (bool)($params['is_backend'] ?? false)
         );
+    }
+
+    private function generateImage(array $params): array
+    {
+        $prompt = $this->requireNonEmptyString($params, 'prompt');
+
+        return $this->aiService->generateImage(
+            $prompt,
+            $this->optionalString($params, 'model_code'),
+            $this->optionalString($params, 'scenario_code'),
+            $this->optionalArray($params, 'params')
+        );
+    }
+
+    private function resolveModel(array $params): ?array
+    {
+        return $this->aiService->resolveModel(
+            $this->optionalString($params, 'model_code'),
+            $this->optionalString($params, 'scenario_code'),
+            $this->optionalString($params, 'primary_modality')
+                ?? $this->optionalString($params, 'modality')
+                ?? 'text2text'
+        );
+    }
+
+    private function listModels(array $params): array
+    {
+        return $this->aiService->listModels(
+            $this->optionalString($params, 'primary_modality') ?? $this->optionalString($params, 'modality')
+        );
+    }
+
+    private function getAdapterModelBindings(array $params): array
+    {
+        $scenarioCode = $this->requireNonEmptyString($params, 'scenario_code');
+        return $this->aiService->getAdapterModelBindings($scenarioCode);
     }
 
     private function generateStream(array $params): array
@@ -219,6 +260,50 @@ class AiQueryProvider implements QueryProviderInterface
                         ['name' => 'params', 'type' => 'array', 'required' => false, 'description' => __('temperature/max_tokens/response_format 等')],
                         ['name' => 'user_id', 'type' => 'int', 'required' => false],
                         ['name' => 'is_backend', 'type' => 'bool', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'generateText',
+                    'description' => __('同步生成文本，generate 的别名'),
+                    'params' => [
+                        ['name' => 'prompt', 'type' => 'string', 'required' => true],
+                        ['name' => 'model_code', 'type' => 'string', 'required' => false],
+                        ['name' => 'scenario_code', 'type' => 'string', 'required' => false],
+                        ['name' => 'locale', 'type' => 'string', 'required' => false],
+                        ['name' => 'params', 'type' => 'array', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'generateImage',
+                    'description' => __('文生图，必须解析到 text2image 模型且 provider 实现图片生成接口'),
+                    'params' => [
+                        ['name' => 'prompt', 'type' => 'string', 'required' => true],
+                        ['name' => 'model_code', 'type' => 'string', 'required' => false],
+                        ['name' => 'scenario_code', 'type' => 'string', 'required' => false],
+                        ['name' => 'params', 'type' => 'array', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'resolveModel',
+                    'description' => __('按模型/场景/模态解析最终模型'),
+                    'params' => [
+                        ['name' => 'model_code', 'type' => 'string', 'required' => false],
+                        ['name' => 'scenario_code', 'type' => 'string', 'required' => false],
+                        ['name' => 'primary_modality', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'listModels',
+                    'description' => __('列出可用模型，可按 primary_modality 过滤'),
+                    'params' => [
+                        ['name' => 'primary_modality', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'getAdapterModelBindings',
+                    'description' => __('读取场景适配器按模态绑定的模型'),
+                    'params' => [
+                        ['name' => 'scenario_code', 'type' => 'string', 'required' => true],
                     ],
                 ],
                 [
