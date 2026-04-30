@@ -141,7 +141,7 @@ class AiSiteBuildQueue implements QueueInterface
             );
             $this->appendQueueLifecycleLine(
                 $queue,
-                '已同步 active_operation=queued operation=build execution_token=' . \substr($effectiveExecutionToken, 0, 12) . '…'
+                '已同步 active_operation=queued operation=' . $operation . ' execution_token=' . \substr($effectiveExecutionToken, 0, 12) . '…'
             );
 
             $scope = $scopeService->normalizeScope(
@@ -157,7 +157,7 @@ class AiSiteBuildQueue implements QueueInterface
                 $normalizedScope = $buildTaskService->normalizeConfirmedTaskPlanFlag($scope);
                 $scopeChanged = $normalizedScope !== $confirmedScope;
                 $scope = $normalizedScope;
-            } elseif ($operation === 'block_regenerate' && $scopePatch !== []) {
+            } elseif (\in_array($operation, ['block_regenerate', 'block_partial_patch'], true) && $scopePatch !== []) {
                 $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
                 $scopeChanged = $scope !== $confirmedScope;
             } else {
@@ -206,7 +206,7 @@ class AiSiteBuildQueue implements QueueInterface
 
                 throw new \RuntimeException((string)($claim['message'] ?? '操作认领失败。'));
             }
-            $this->queueTrace($sse, '认领成功 claimActiveOperationExecution ok，进入 runBuildOperation');
+            $this->queueTrace($sse, '认领成功 claimActiveOperationExecution ok，进入队列操作执行 operation=' . $operation);
 
             // mergeScope 只更新库内 scope；内存中的 $session 可能仍带旧 build_tasks，会导致 ensureTaskScope 继续合并为 done 从而秒结束。
             $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
@@ -252,6 +252,17 @@ class AiSiteBuildQueue implements QueueInterface
                         ]);
                         $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
                     }
+                } elseif ($operation === 'block_partial_patch') {
+                    $operationContext = $this->resolveQueuedOperationContext($content, $sessionService, $session, $scopeService);
+                    $this->invokePrivate($controller, 'runBlockPartialPatchOperation', [
+                        $sse,
+                        $session,
+                        $adminId,
+                        (string)($operationContext['page_type'] ?? ''),
+                        (string)($operationContext['component_code'] ?? ''),
+                        (string)($operationContext['instruction'] ?? ''),
+                        $effectiveExecutionToken,
+                    ]);
                 } elseif ($operation === 'regenerate_page') {
                     $this->invokePrivate($controller, 'runRegeneratePageOperation', [
                         $sse,
@@ -267,7 +278,7 @@ class AiSiteBuildQueue implements QueueInterface
                     RequestContext::remove(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST);
                 }
             }
-            $this->queueTrace($sse, 'runBuildOperation 已返回');
+            $this->queueTrace($sse, '队列操作已返回 operation=' . $operation);
 
             if ($forceRebuild) {
                 $this->clearQueueForceBuildMarker($sessionService, (int)$session->getId(), $adminId);
@@ -314,7 +325,7 @@ class AiSiteBuildQueue implements QueueInterface
     {
         $operation = \trim($operation);
 
-        return \in_array($operation, ['build', 'block_regenerate', 'regenerate_page'], true) ? $operation : 'build';
+        return \in_array($operation, ['build', 'block_regenerate', 'block_partial_patch', 'regenerate_page'], true) ? $operation : 'build';
     }
 
     private function resolveQueuedPageType(
@@ -376,6 +387,10 @@ class AiSiteBuildQueue implements QueueInterface
         }
 
         $singleComponentCode = $this->firstNonEmptyString([
+            $content['block_id'] ?? null,
+            $details['block_id'] ?? null,
+            $active['block_id'] ?? null,
+            $activeDetails['block_id'] ?? null,
             $content['component_code'] ?? null,
             $details['component_code'] ?? null,
             $active['component_code'] ?? null,
@@ -395,6 +410,10 @@ class AiSiteBuildQueue implements QueueInterface
         ]);
         $componentCodes = $this->mergeStringLists([
             $singleComponentCode,
+            $content['block_ids'] ?? null,
+            $details['block_ids'] ?? null,
+            $active['block_ids'] ?? null,
+            $activeDetails['block_ids'] ?? null,
             $content['component_codes'] ?? null,
             $details['component_codes'] ?? null,
             $active['component_codes'] ?? null,
@@ -452,6 +471,10 @@ class AiSiteBuildQueue implements QueueInterface
 
         $pageType = $this->firstNonEmptyString([$content['page_type'] ?? null, $details['page_type'] ?? null, $active['page_type'] ?? null, $activeDetails['page_type'] ?? null]);
         $componentCode = $this->firstNonEmptyString([
+            $content['block_id'] ?? null,
+            $details['block_id'] ?? null,
+            $active['block_id'] ?? null,
+            $activeDetails['block_id'] ?? null,
             $content['component_code'] ?? null,
             $details['component_code'] ?? null,
             $active['component_code'] ?? null,
@@ -627,7 +650,7 @@ class AiSiteBuildQueue implements QueueInterface
                 }
             }
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
-            if (\in_array($operation, ['build', 'block_regenerate', 'regenerate_page'], true)) {
+            if (\in_array($operation, ['build', 'block_regenerate', 'block_partial_patch', 'regenerate_page'], true)) {
                 $failurePayload = $this->buildPublishBlockingAiFailurePayload($operation, $message);
                 $scope['latest_build_failed'] = 1;
                 $scope['latest_build_failure'] = $failurePayload;

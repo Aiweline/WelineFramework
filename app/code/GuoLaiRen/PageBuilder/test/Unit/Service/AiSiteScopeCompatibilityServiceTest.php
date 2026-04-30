@@ -69,6 +69,25 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         $this->assertSame(10, $layout['content'][0]['sort_order']);
     }
 
+    public function testNormalizePageTypeLayoutsAcceptsLegacyComponentCodeShorthand(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $layouts = $service->normalizePageTypeLayouts([
+            Page::TYPE_HOME => [
+                'header' => ['component_code' => 'header_default'],
+                'content' => ['component_code' => 'content_default'],
+                'footer' => ['component_code' => 'footer_default'],
+            ],
+        ], [Page::TYPE_HOME]);
+
+        $layout = $layouts[Page::TYPE_HOME];
+
+        $this->assertSame('header-default', $layout['header']['component']);
+        $this->assertSame('content-default', $layout['content'][0]['code'] ?? null);
+        $this->assertSame('footer-default', $layout['footer']['component']);
+    }
+
     public function testNormalizeScopeRestoresPreviewSelectionFromLegacyScope(): void
     {
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());

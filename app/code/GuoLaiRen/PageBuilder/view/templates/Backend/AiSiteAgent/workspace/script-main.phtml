@@ -36,6 +36,7 @@
     var runVirtualThemeUrl = <?= \json_encode($runVirtualThemeUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startRegeneratePageUrl = <?= \json_encode($startRegeneratePageUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startRefineComponentUrl = <?= \json_encode($startRefineComponentUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var startPatchBlockUrl = <?= \json_encode($startPatchBlockUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startBlockRefineSseUrl = <?= \json_encode($startBlockRefineSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startBlockRegenerateSseUrl = <?= \json_encode($startBlockRegenerateSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var updateBlockConfigUrl = <?= \json_encode($updateBlockConfigUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -132,6 +133,45 @@
             return window.updateTaskSummaryFromState;
         }
         return function () {};
+    }
+
+    function clearBlockStreamingState() {
+        var workspaceApi = window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object'
+            ? window.__pbWorkspaceApi
+            : null;
+        if (workspaceApi && typeof workspaceApi.clearBlockStreamingState === 'function') {
+            return workspaceApi.clearBlockStreamingState();
+        }
+        if (typeof window.clearBlockStreamingState === 'function') {
+            return window.clearBlockStreamingState();
+        }
+        if (blockRefreshState && typeof blockRefreshState === 'object') {
+            blockRefreshState.active = false;
+            blockRefreshState.pageType = '';
+            blockRefreshState.blockId = '';
+        }
+        return null;
+    }
+
+    function fetchWorkspaceSnapshotStateForBlockRefresh() {
+        var workspaceApi = window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object'
+            ? window.__pbWorkspaceApi
+            : null;
+        if (!workspaceApi || typeof workspaceApi.fetchWorkspaceSnapshotState !== 'function') {
+            return Promise.resolve(null);
+        }
+        return workspaceApi.fetchWorkspaceSnapshotState().then(function (workspaceState) {
+            if (!workspaceState || typeof workspaceState !== 'object') {
+                return null;
+            }
+            hydrateWorkspaceFromState(workspaceState);
+            if (workspaceState.virtual_pages_by_type) {
+                mergeVirtualPagesByTypeState(workspaceState.virtual_pages_by_type);
+            }
+            return workspaceState;
+        }).catch(function () {
+            return null;
+        });
     }
 
     function normalizePlanSseUrl(url) {
@@ -315,17 +355,35 @@
             : {};
     }
 
+    function normalizeWorkspaceStateShape(state) {
+        var normalized = state && typeof state === 'object' ? Object.assign({}, state) : {};
+        normalized.scope = normalized.scope && typeof normalized.scope === 'object'
+            ? normalized.scope
+            : {};
+        normalized.active_operation = normalized.active_operation && typeof normalized.active_operation === 'object'
+            ? normalized.active_operation
+            : {};
+        normalized.active_operations = normalized.active_operations && typeof normalized.active_operations === 'object'
+            ? normalized.active_operations
+            : {};
+        normalized.retryable_ai_failure_summary = normalized.retryable_ai_failure_summary && typeof normalized.retryable_ai_failure_summary === 'object'
+            ? normalized.retryable_ai_failure_summary
+            : {};
+
+        return normalized;
+    }
+
     function getLatestWorkspaceStateForQueuePrompt() {
         if (window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object') {
-            return window.__pbWorkspaceState;
+            return normalizeWorkspaceStateShape(window.__pbWorkspaceState);
         }
         if (latestWorkspaceState && typeof latestWorkspaceState === 'object') {
-            return latestWorkspaceState;
+            return normalizeWorkspaceStateShape(latestWorkspaceState);
         }
         if (window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object') {
-            return window.__pbLastWorkspaceState;
+            return normalizeWorkspaceStateShape(window.__pbLastWorkspaceState);
         }
-        return initialWorkspaceState && typeof initialWorkspaceState === 'object' ? initialWorkspaceState : {};
+        return normalizeWorkspaceStateShape(initialWorkspaceState);
     }
 
     function normalizeQueueStatusForPrompt(status) {
@@ -679,6 +737,18 @@
                     candidates.push(countRetryableAiFailureBucket(ledger[normalizedOperation]));
                 }
             });
+            if (normalizedOperation === 'build') {
+                [
+                    state.latest_build_failed,
+                    state.publish_blocked_by_latest_ai_failure,
+                    scope.latest_build_failed,
+                    scope.publish_blocked_by_latest_ai_failure
+                ].forEach(function (flag) {
+                    if (!!flag) {
+                        candidates.push(1);
+                    }
+                });
+            }
         } else {
             candidates.push(parseInt(String(state.retryable_ai_failure_count || 0), 10) || 0);
             candidates.push(parseInt(String(scope.retryable_ai_failure_count || 0), 10) || 0);
@@ -861,6 +931,147 @@
         syncRetryableAiFailureButtons(state);
     }
 
+    function resolveRetryableAiFailureOperationLabel(operation) {
+        var normalized = String(operation || '').trim();
+        if (normalized === 'plan') {
+            return String(messages.retryableAiResumeOperationPlan || '第一阶段方案');
+        }
+        if (normalized === 'task_plan') {
+            return String(messages.retryableAiResumeOperationTaskPlan || '第二阶段任务方案');
+        }
+        if (normalized === 'build') {
+            return String(messages.retryableAiResumeOperationBuild || '构建');
+        }
+        return normalized || String(messages.retryableAiResumeOperationBuild || '构建');
+    }
+
+    function triggerRetryableAiFailureResumeOperation(operation) {
+        var normalized = String(operation || '').trim();
+        var api = window.__pbWorkspaceApi || workspaceApi || {};
+        if (normalized === 'plan') {
+            if (!api || typeof api.retryPhaseOnePlanGeneration !== 'function') {
+                return false;
+            }
+            return !!api.retryPhaseOnePlanGeneration({ forceRebuild: false });
+        }
+        if (normalized === 'task_plan') {
+            if (!api || typeof api.retryPhaseTwoTaskPlanGeneration !== 'function') {
+                return false;
+            }
+            return !!api.retryPhaseTwoTaskPlanGeneration({ forceRebuild: false });
+        }
+        if (normalized === 'build') {
+            startPublishStageQualityRepair(document.getElementById('pb-ai-retry-build-failures'));
+            return true;
+        }
+        return false;
+    }
+
+    function resolveRetryableAiFailurePromptCandidate(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        if (hasAnyRunningQueueForUi()) {
+            return null;
+        }
+        var operations = ['plan', 'task_plan', 'build'];
+        for (var i = 0; i < operations.length; i += 1) {
+            var operation = operations[i];
+            var count = getRetryableAiFailureCount(state, operation);
+            if (count <= 0) {
+                continue;
+            }
+            if (isRetryableAiFailureOperationBusy(operation, state)) {
+                continue;
+            }
+            return { operation: operation, count: count };
+        }
+        return null;
+    }
+
+    function ensureRetryableAiResumePromptState() {
+        if (typeof retryableAiResumePromptTimer !== 'number') {
+            retryableAiResumePromptTimer = 0;
+        }
+        if (typeof retryableAiResumePromptFingerprint !== 'string') {
+            retryableAiResumePromptFingerprint = '';
+        }
+        if (!retryableAiResumePromptDismissed || typeof retryableAiResumePromptDismissed !== 'object') {
+            retryableAiResumePromptDismissed = {};
+        }
+    }
+
+    function scheduleRetryableAiFailureResumePrompt(workspaceState) {
+        ensureRetryableAiResumePromptState();
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        if (retryableAiResumePromptTimer) {
+            window.clearTimeout(retryableAiResumePromptTimer);
+            retryableAiResumePromptTimer = 0;
+        }
+        var candidate = resolveRetryableAiFailurePromptCandidate(state);
+        if (!candidate) {
+            retryableAiResumePromptFingerprint = '';
+            if (!hasRetryableAiFailures(state, null)) {
+                retryableAiResumePromptDismissed = {};
+            }
+            return;
+        }
+        var fingerprint = String(candidate.operation) + ':' + String(candidate.count);
+        if (retryableAiResumePromptDismissed[fingerprint]) {
+            return;
+        }
+        if (retryableAiResumePromptFingerprint === fingerprint) {
+            return;
+        }
+        retryableAiResumePromptFingerprint = fingerprint;
+        retryableAiResumePromptTimer = window.setTimeout(function () {
+            retryableAiResumePromptTimer = 0;
+            var latestState = latestWorkspaceState && typeof latestWorkspaceState === 'object'
+                ? latestWorkspaceState
+                : (initialWorkspaceState && typeof initialWorkspaceState === 'object' ? initialWorkspaceState : {});
+            var freshCandidate = resolveRetryableAiFailurePromptCandidate(latestState);
+            if (!freshCandidate) {
+                retryableAiResumePromptFingerprint = '';
+                return;
+            }
+            var freshFingerprint = String(freshCandidate.operation) + ':' + String(freshCandidate.count);
+            if (retryableAiResumePromptDismissed[freshFingerprint]) {
+                retryableAiResumePromptFingerprint = '';
+                return;
+            }
+            var operationLabel = resolveRetryableAiFailureOperationLabel(freshCandidate.operation);
+            var promptMessageTemplate = String(messages.retryableAiResumePromptMessage || '检测到 %{operation} 仍有 %{count} 个失败项。队列当前未运行，是否立即继续重试失败项？');
+            var promptMessage = promptMessageTemplate
+                .replace('%{operation}', operationLabel)
+                .replace('%{count}', String(freshCandidate.count));
+            if (!window.BackendConfirm || typeof window.BackendConfirm.show !== 'function') {
+                retryableAiResumePromptFingerprint = '';
+                return;
+            }
+            window.BackendConfirm.show(promptMessage, {
+                title: String(messages.retryableAiResumePromptTitle || '检测到可重试失败项'),
+                confirmText: String(messages.retryableAiResumePromptConfirm || '继续重试'),
+                cancelText: String(messages.retryableAiResumePromptCancel || '稍后再说'),
+                type: 'warning'
+            }).then(function (confirmed) {
+                retryableAiResumePromptFingerprint = '';
+                if (!confirmed) {
+                    retryableAiResumePromptDismissed[freshFingerprint] = 1;
+                    return;
+                }
+                delete retryableAiResumePromptDismissed[freshFingerprint];
+                var started = triggerRetryableAiFailureResumeOperation(freshCandidate.operation);
+                if (started) {
+                    toast('info', String(messages.retryableAiResumePromptStarted || '已继续重试 %{operation} 失败项。').replace('%{operation}', operationLabel));
+                }
+            }).catch(function () {
+                retryableAiResumePromptFingerprint = '';
+            });
+        }, 320);
+    }
+
     function hasBuildQueueRunningForUi(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object'
             ? workspaceState
@@ -904,6 +1115,26 @@
     }
 
     function bindRetryableAiFailureButtons() {
+        if (document.body && document.body.dataset.pbRetryableAiLabelClickBound !== '1') {
+            document.body.dataset.pbRetryableAiLabelClickBound = '1';
+            document.body.addEventListener('click', function (event) {
+                var target = event && event.target ? event.target : null;
+                if (!target || typeof target.closest !== 'function') {
+                    return;
+                }
+                var labelNode = target.closest('[data-retryable-ai-label-text]');
+                if (!labelNode) {
+                    return;
+                }
+                var retryBtn = labelNode.closest('button[data-retryable-ai-operation]');
+                if (!retryBtn || retryBtn.disabled) {
+                    return;
+                }
+                event.preventDefault();
+                retryBtn.click();
+            });
+        }
+
         var planRetryBtn = document.getElementById('pb-ai-retry-plan-failures');
         if (planRetryBtn && planRetryBtn.dataset.pbBound !== '1') {
             planRetryBtn.dataset.pbBound = '1';
@@ -1208,6 +1439,7 @@
         [
             'scope',
             'active_operation',
+            'active_operations',
             'plan',
             'task_plan',
             'plan_queue_info',
@@ -1222,14 +1454,14 @@
                 merged[key] = mergePlainWorkspaceObject(base[key], patch[key]);
             }
         });
-        return merged;
+        return normalizeWorkspaceStateShape(merged);
     }
 
     function hydrateWorkspaceFromState(workspaceState) {
         if (!workspaceState || typeof workspaceState !== 'object') {
             return;
         }
-        workspaceState = mergeWorkspaceStatePatch(workspaceState);
+        workspaceState = normalizeWorkspaceStateShape(mergeWorkspaceStatePatch(workspaceState));
         latestWorkspaceState = workspaceState;
         try {
             window.__pbLastWorkspaceState = workspaceState;
@@ -1446,6 +1678,7 @@
         syncTaskPlanRegenerateButtonVisibility();
         applyTaskPlanEditingLockFromActiveOperation();
         applyTaskPlanBuildDefaultCollapse();
+        scheduleRetryableAiFailureResumePrompt(workspaceState);
     }
 
     function hydrateInitialWorkspaceStateOnce() {
@@ -1840,7 +2073,7 @@
         focusEmbeddedPreview: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineInstructionRequired: <?= \json_encode((string)__('请先输入区块微调要求'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineUnavailable: <?= \json_encode((string)__('当前区块暂时无法发起 AI 微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        refineQueued: <?= \json_encode((string)__('已提交区块微调，正在重新生成当前页面'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        refineQueued: <?= \json_encode((string)__('已提交区块局部修改，正在替换当前块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineContextFallback: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineStreaming: <?= \json_encode((string)__('已开始区块微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         regenerateStreaming: <?= \json_encode((string)__('已开始区块重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1850,6 +2083,8 @@
         blockSseConfirmRefine: <?= \json_encode((string)__('确认微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseConfirmRebuild: <?= \json_encode((string)__('确认重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseConfirmDefault: <?= \json_encode((string)__('确认执行'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseRetryLabel: <?= \json_encode((string)__('重新请求重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseRetrying: <?= \json_encode((string)__('正在重新请求区块生成流...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseStartPending: <?= \json_encode((string)__('控制台已准备，等待确认后连接生成流。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseWaitingConnection: <?= \json_encode((string)__('等待连接区块生成流，连接建立后将自动开始。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseRefinePendingContext: <?= \json_encode((string)__('请确认微调，确认后将连接生成流并开始微调当前区块。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1864,6 +2099,14 @@
         retryableAiQueueRunning: <?= \json_encode((string)__('当前队列仍在运行，等待完成后再重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         retryableAiFailuresPending: <?= \json_encode((string)__('当前仍有 AI 生成失败项，请先点击“重试失败项”。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         retryableAiFailuresPendingWithCount: <?= \json_encode((string)__('当前仍有 %{count} 个 AI 生成失败项，请先点击“重试失败项”。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiResumePromptTitle: <?= \json_encode((string)__('检测到可重试失败项'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiResumePromptMessage: <?= \json_encode((string)__('检测到 %{operation} 仍有 %{count} 个失败项。队列当前未运行，是否立即继续重试失败项？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiResumePromptConfirm: <?= \json_encode((string)__('继续重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiResumePromptCancel: <?= \json_encode((string)__('稍后再说'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiResumePromptStarted: <?= \json_encode((string)__('已继续重试 %{operation} 失败项。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiResumeOperationPlan: <?= \json_encode((string)__('第一阶段方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiResumeOperationTaskPlan: <?= \json_encode((string)__('第二阶段任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiResumeOperationBuild: <?= \json_encode((string)__('构建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editUnavailable: <?= \json_encode((string)__('当前区块暂时无法打开字段编辑弹窗。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editSaved: <?= \json_encode((string)__('区块字段已更新，已刷新当前块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseDoneConfirm: <?= \json_encode((string)__('区块生成已完成，但未返回可立即刷新的区块结果。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1970,7 +2213,7 @@
         reorderQueued: <?= \json_encode((string)__('排序已提交，稍后刷新。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         sortHandle: <?= \json_encode((string)__('拖动排序'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editAction: <?= \json_encode((string)__('编辑'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        aiRefineAction: <?= \json_encode((string)__('AI 微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        aiRefineAction: <?= \json_encode((string)__('智能局部修改'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         aiRebuildAction: <?= \json_encode((string)__('AI 重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editBlockAction: <?= \json_encode((string)__('编辑当前区块字段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editBlockHint: <?= \json_encode((string)__('按 PageBuilder 字段编辑逻辑直接编辑当前区块，可先用 AI 生成再保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -5461,27 +5704,45 @@
 
     function applyPendingBlockSseResult(options) {
         options = options || {};
-        if (!pendingBlockSseResult || !pendingBlockSseResult.state || !pendingBlockSseResult.state.virtual_pages_by_type) {
+        var resolved = resolvePendingBlockSseResultTarget();
+        var effectiveState = resolved.effectiveState;
+        if (!pendingBlockSseResult || !effectiveState || !effectiveState.virtual_pages_by_type) {
             if (options.notify) {
                 toast('warning', messages.blockSseNoResult);
             }
             return false;
         }
-        var targetPageType = String(blockRefreshState.pageType || '');
-        var targetBlockId = String(blockRefreshState.blockId || '');
-        var pageState = pendingBlockSseResult.state.virtual_pages_by_type[targetPageType] || null;
-        var nextBlock = pageState && Array.isArray(pageState.blocks)
-            ? findVirtualBlockInList(targetPageType, pageState.blocks, targetBlockId)
-            : null;
+        var targetPageType = resolved.targetPageType;
+        var nextBlock = resolved.nextBlock;
+        var targetBlockId = resolved.targetBlockId;
+        var allPagesState = resolved.allPagesState;
+        if (!targetPageType) {
+            targetPageType = String(
+                (effectiveState && effectiveState.preview_page_type)
+                || (pendingBlockSseResult && pendingBlockSseResult.page_type)
+                || ''
+            );
+        }
+        if (!allPagesState || typeof allPagesState !== 'object') {
+            allPagesState = effectiveState.virtual_pages_by_type || {};
+        }
+        if (!targetBlockId) {
+            targetBlockId = String(blockRefreshState.blockId || '');
+        }
         if (!nextBlock) {
+            refreshEmbeddedPreviewPreservingScroll();
             if (options.notify) {
                 toast('warning', messages.blockSseNoResult);
             }
             clearBlockStreamingState();
-            return false;
+            return true;
         }
         updateVirtualBlockState(targetPageType, nextBlock);
-        replaceCurrentBlockHtml(targetPageType, nextBlock);
+        var replaced = replaceCurrentBlockHtml(targetPageType, nextBlock);
+        if (!replaced) {
+            // DOM 精确替换失败时，退化为 iframe 立即刷新，确保用户能看到微调后的内容。
+            refreshEmbeddedPreviewPreservingScroll();
+        }
         bindEmbeddedPreviewFrameBridge();
         if (!options.preserveStreamingState) {
             clearBlockStreamingState();
@@ -5493,17 +5754,78 @@
         return true;
     }
 
+    function resolvePendingBlockSseResultTarget() {
+        var payloadState = pendingBlockSseResult && pendingBlockSseResult.state && typeof pendingBlockSseResult.state === 'object'
+            ? pendingBlockSseResult.state
+            : null;
+        var fallbackState = latestWorkspaceState && typeof latestWorkspaceState === 'object'
+            ? latestWorkspaceState
+            : null;
+        var effectiveState = payloadState && payloadState.virtual_pages_by_type
+            ? payloadState
+            : (fallbackState && fallbackState.virtual_pages_by_type ? fallbackState : null);
+        var targetPageType = String(
+            blockRefreshState.pageType
+            || (pendingBlockSseResult && pendingBlockSseResult.page_type)
+            || (pendingBlockSseResult && pendingBlockSseResult.state && pendingBlockSseResult.state.preview_page_type)
+            || ''
+        );
+        var targetBlockId = String(blockRefreshState.blockId || '');
+        var allPagesState = effectiveState && effectiveState.virtual_pages_by_type && typeof effectiveState.virtual_pages_by_type === 'object'
+            ? effectiveState.virtual_pages_by_type
+            : {};
+        var pageState = targetPageType ? (allPagesState[targetPageType] || null) : null;
+        var nextBlock = pageState && Array.isArray(pageState.blocks)
+            ? findVirtualBlockInList(targetPageType, pageState.blocks, targetBlockId)
+            : null;
+        if (!nextBlock && targetBlockId) {
+            var pageKeys = Object.keys(allPagesState);
+            for (var p = 0; p < pageKeys.length; p += 1) {
+                var key = String(pageKeys[p] || '');
+                var stateItem = allPagesState[key] || {};
+                if (!Array.isArray(stateItem.blocks)) {
+                    continue;
+                }
+                var candidate = findVirtualBlockInList(key, stateItem.blocks, targetBlockId);
+                if (candidate) {
+                    nextBlock = candidate;
+                    targetPageType = key;
+                    break;
+                }
+            }
+        }
+        return {
+            effectiveState: effectiveState,
+            targetPageType: targetPageType,
+            targetBlockId: targetBlockId,
+            allPagesState: allPagesState,
+            nextBlock: nextBlock
+        };
+    }
+
+    function applyPendingBlockSseResultWithSnapshot(options) {
+        var resolved = resolvePendingBlockSseResultTarget();
+        if (resolved.effectiveState && resolved.nextBlock) {
+            return Promise.resolve(applyPendingBlockSseResult(options));
+        }
+        return fetchWorkspaceSnapshotStateForBlockRefresh().then(function () {
+            return applyPendingBlockSseResult(options);
+        });
+    }
+
     function openBlockSseModal(title, contextText, url, formData, options) {
         var modalEl = document.getElementById('pb-ai-block-sse-modal');
         var titleEl = document.getElementById('pb-ai-block-sse-modal-title');
         var contextEl = document.getElementById('pb-ai-block-sse-context');
         var startBtn = document.getElementById('pb-ai-block-sse-confirm-start');
+        var retryBtn = document.getElementById('pb-ai-block-sse-retry');
         var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-block-sse-terminal'] : null;
         if (!modalEl || !terminal) {
             toast('error', messages.blockSseUnavailable);
             return false;
         }
         options = options || {};
+        var allowRetry = options.retryEnabled !== false;
 
         if (titleEl) {
             titleEl.textContent = String(title || <?= \json_encode((string)__('区块生成详情'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
@@ -5525,6 +5847,7 @@
             terminal: terminal,
             contextEl: contextEl,
             startBtn: startBtn,
+            retryBtn: retryBtn,
             startMessage: options.startMessage || messages.blockSseWaitingConnection,
             openMessage: options.openMessage || '',
             runningContext: options.runningContext || contextText || '',
@@ -5538,15 +5861,37 @@
             startBtn.classList.remove('d-none');
             startBtn.disabled = false;
         }
+        if (retryBtn) {
+            retryBtn.textContent = String(options.retryLabel || messages.blockSseRetryLabel || '');
+            retryBtn.classList.add('d-none');
+            retryBtn.disabled = true;
+        }
         if (terminal.log) {
             terminal.log(options.pendingLogMessage || messages.blockSseStartPending, 'info');
         }
         if (terminal.setStatus) {
             terminal.setStatus('connecting', options.pendingStatusText || messages.blockSseStartPending);
         }
+        var parseSsePayload = function (event) {
+            if (!event || typeof event !== 'object') {
+                return null;
+            }
+            var raw = '';
+            if (Object.prototype.hasOwnProperty.call(event, 'data')) {
+                raw = String(event.data == null ? '' : event.data);
+            }
+            if (!raw) {
+                return null;
+            }
+            try {
+                return JSON.parse(raw);
+            } catch (error) {
+                return null;
+            }
+        };
 
         terminal.on('done', function (event) {
-            var payload = parsePayload(event);
+            var payload = parseSsePayload(event);
             if (payload && payload.state) {
                 hydrateWorkspaceFromState(payload.state);
             }
@@ -5556,7 +5901,9 @@
             if (payload && payload.success === false) {
                 var failureMessage = String(payload.message || messages.networkError || '');
                 pendingBlockSseResult = null;
-                pendingBlockSseStart = null;
+                if (pendingBlockSseStart) {
+                    pendingBlockSseStart.started = false;
+                }
                 clearBlockStreamingState();
                 if (terminal.stop) {
                     terminal.stop({ suppressTransportError: true });
@@ -5570,6 +5917,10 @@
                 if (terminal.log && failureMessage) {
                     terminal.log(failureMessage, 'error', payload);
                 }
+                if (retryBtn && allowRetry) {
+                    retryBtn.classList.remove('d-none');
+                    retryBtn.disabled = false;
+                }
                 toast('error', failureMessage);
                 return;
             }
@@ -5582,43 +5933,57 @@
                 startBtn.classList.add('d-none');
                 startBtn.disabled = true;
             }
-            var applied = applyPendingBlockSseResult({ notify: true });
-            if (contextEl) {
-                contextEl.textContent = applied ? messages.blockSseApplied : messages.blockSseDoneConfirm;
+            if (retryBtn) {
+                retryBtn.classList.add('d-none');
+                retryBtn.disabled = true;
             }
-            if (applied) {
-                var doneModalInstance = resolveBootstrapModalInstance(modalEl);
-                if (doneModalInstance && typeof doneModalInstance.hide === 'function') {
-                    doneModalInstance.hide();
+            applyPendingBlockSseResultWithSnapshot({
+                notify: true
+            }).then(function (applied) {
+                if (contextEl) {
+                    contextEl.textContent = applied ? messages.blockSseApplied : messages.blockSseDoneConfirm;
                 }
-            }
+                if (applied) {
+                    var doneModalInstance = resolveBootstrapModalInstance(modalEl);
+                    if (doneModalInstance && typeof doneModalInstance.hide === 'function') {
+                        doneModalInstance.hide();
+                    }
+                }
+            });
         });
 
         terminal.on('page_generated', function (event) {
-            var payload = parsePayload(event);
+            var payload = parseSsePayload(event);
             if (payload && payload.state) {
                 hydrateWorkspaceFromState(payload.state);
             }
             if (payload && payload.state && payload.state.virtual_pages_by_type) {
                 mergeVirtualPagesByTypeState(payload.state.virtual_pages_by_type);
             }
-            if (!payload || ['block_refine', 'block_regenerate'].indexOf(String(payload.operation || '')) === -1) {
+            var payloadOperation = String((payload && payload.operation) || '').trim();
+            var isBlockOperation = ['block_refine', 'block_regenerate', 'block_partial_patch'].indexOf(payloadOperation) !== -1;
+            var canUseActiveRefreshState = !!(blockRefreshState && blockRefreshState.active && blockRefreshState.blockId);
+            if (!payload || (!isBlockOperation && !canUseActiveRefreshState)) {
                 return;
             }
             pendingBlockSseResult = payload;
-            var applied = applyPendingBlockSseResult({ preserveStreamingState: true });
-            if (!applied) {
-                return;
-            }
-            if (contextEl) {
-                contextEl.textContent = String(payload.message || messages.blockSseApplied || '');
-            }
-            if (terminal.setStatus) {
-                terminal.setStatus('connected', String(payload.message || messages.blockSseApplied || ''));
-            }
-            if (terminal.log) {
-                terminal.log(String(payload.message), 'success', payload);
-            }
+            applyPendingBlockSseResultWithSnapshot({
+                preserveStreamingState: true
+            }).then(function (applied) {
+                if (!applied) {
+                    refreshEmbeddedPreviewPreservingScroll();
+                    return;
+                }
+                if (contextEl) {
+                    contextEl.textContent = String(payload.message || messages.blockSseApplied || '');
+                }
+                if (terminal.setStatus) {
+                    terminal.setStatus('connected', String(payload.message || messages.blockSseApplied || ''));
+                }
+                if (terminal.log) {
+                    terminal.log(String(payload.message), 'success', payload);
+                }
+            });
         });
 
         terminal.on('open', function () {
@@ -5636,10 +6001,12 @@
         });
 
         terminal.on('error', function (event) {
-            var payload = parsePayload(event);
+            var payload = parseSsePayload(event);
             var failureMessage = String((payload && payload.message) || messages.networkError || '');
             pendingBlockSseResult = null;
-            pendingBlockSseStart = null;
+            if (pendingBlockSseStart) {
+                pendingBlockSseStart.started = false;
+            }
             clearBlockStreamingState();
             if (terminal.stop) {
                 terminal.stop({ suppressTransportError: true });
@@ -5652,6 +6019,10 @@
             }
             if (terminal.log && failureMessage) {
                 terminal.log(failureMessage, 'error', payload);
+            }
+            if (retryBtn && allowRetry) {
+                retryBtn.classList.remove('d-none');
+                retryBtn.disabled = false;
             }
             toast('error', failureMessage);
         });
@@ -5666,6 +6037,36 @@
         }
 
         return true;
+    }
+
+    function retryPendingBlockSseRequest() {
+        var pending = pendingBlockSseStart;
+        if (!pending || !pending.terminal) {
+            toast('warning', messages.blockSseNoResult);
+            return;
+        }
+        pending.started = false;
+        if (pending.retryBtn) {
+            pending.retryBtn.disabled = true;
+            pending.retryBtn.classList.add('d-none');
+        }
+        if (pending.startBtn) {
+            pending.startBtn.classList.add('d-none');
+            pending.startBtn.disabled = true;
+        }
+        if (pending.contextEl) {
+            pending.contextEl.textContent = String(messages.blockSseRetrying || '');
+        }
+        if (pending.terminal.stop) {
+            pending.terminal.stop({ suppressTransportError: true });
+        }
+        if (pending.terminal.clear) {
+            pending.terminal.clear();
+        }
+        if (pending.terminal.log) {
+            pending.terminal.log(String(messages.blockSseRetrying || ''), 'info');
+        }
+        confirmPendingBlockSseStart();
     }
 
     function ensureWrapperActionButtons(wrapper) {
@@ -5736,7 +6137,12 @@
             if (pending.terminal.isRunning && pending.terminal.isRunning()) {
                 return;
             }
-            pending.terminal.start(pending.url, { method: 'POST', body: pending.formData });
+            pending.terminal.start(pending.url, {
+                method: 'POST',
+                body: pending.formData,
+                oneShot: true,
+                noReconnect: true
+            });
         }, PB_SSE_CONNECT_DELAY_MS);
         if (pending.toastMessage) {
             toast('success', pending.toastMessage);
@@ -5746,11 +6152,15 @@
     (function initBlockSseModal() {
         var modalEl = document.getElementById('pb-ai-block-sse-modal');
         var startBtn = document.getElementById('pb-ai-block-sse-confirm-start');
+        var retryBtn = document.getElementById('pb-ai-block-sse-retry');
         if (!modalEl) {
             return;
         }
         if (startBtn) {
             startBtn.addEventListener('click', confirmPendingBlockSseStart);
+        }
+        if (retryBtn) {
+            retryBtn.addEventListener('click', retryPendingBlockSseRequest);
         }
         modalEl.addEventListener('hidden.bs.modal', function () {
             var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-block-sse-terminal'] : null;
@@ -5773,6 +6183,10 @@
             if (startBtn) {
                 startBtn.classList.add('d-none');
                 startBtn.disabled = true;
+            }
+            if (retryBtn) {
+                retryBtn.classList.add('d-none');
+                retryBtn.disabled = true;
             }
             clearBlockStreamingState();
         });
@@ -6517,7 +6931,7 @@
             }
             return;
         }
-        if (!startBlockRefineSseUrl || !refineComponentState.pageType || !refineComponentState.componentCode) {
+        if ((!startPatchBlockUrl && !startBlockRefineSseUrl) || !refineComponentState.pageType || !refineComponentState.componentCode) {
             toast('error', messages.refineUnavailable);
             return;
         }
@@ -6546,6 +6960,34 @@
             refineComponentState.componentLabel || refineComponentState.componentCode,
             refineComponentState.componentCode
         );
+        if (startPatchBlockUrl && window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function') {
+            if (typeof renderBlockStreamingState === 'function') {
+                renderBlockStreamingState(messages.refineQueued);
+            }
+            postForm(startPatchBlockUrl, {
+                public_id: publicId,
+                page_type: refineComponentState.pageType,
+                block_id: refineComponentState.componentCode,
+                component_code: refineComponentState.componentCode,
+                component_label: refineComponentState.componentLabel || refineComponentState.componentCode,
+                instruction: instruction
+            }).then(function (data) {
+                if (data && data.success && window.PbAiOperationRunner.startFromResponse(data)) {
+                    toast('success', data.message ? String(data.message) : messages.refineStreaming);
+                    return;
+                }
+                clearBlockStreamingState();
+                toast('error', data && data.message ? String(data.message) : messages.refineUnavailable);
+            }).catch(function (error) {
+                clearBlockStreamingState();
+                toast('error', error && error.message ? error.message : messages.refineUnavailable);
+            }).then(function () {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                }
+            });
+            return;
+        }
         var opened = openBlockSseModal(
             'AI Block Refine',
             refineContextText,
@@ -6558,7 +7000,9 @@
                 startMessage: messages.blockSseRefineConnecting,
                 openMessage: messages.blockSseRefineStarted,
                 streamingMessage: messages.refineQueued,
-                toastMessage: messages.refineStreaming
+                toastMessage: messages.refineStreaming,
+                retryEnabled: true,
+                retryLabel: messages.blockSseRetryLabel
             }
         );
         if (!opened) {
@@ -7159,6 +7603,9 @@
     var taskPlanStartRequestInFlight = false;
     var pendingTaskPlanModeAfterBootstrap = '';
     var visualEditResumePrompted = false;
+    var retryableAiResumePromptTimer = 0;
+    var retryableAiResumePromptFingerprint = '';
+    var retryableAiResumePromptDismissed = {};
     var previewSortState = {
         active: false,
         pending: false,
@@ -11937,7 +12384,7 @@
     }
 
     function isPublishBlockingOperationName(operation) {
-        return ['build', 'visual_edit', 'regenerate_page', 'block_regenerate'].indexOf(String(operation || '').trim().toLowerCase()) !== -1;
+        return ['build', 'visual_edit', 'regenerate_page', 'block_regenerate', 'block_partial_patch'].indexOf(String(operation || '').trim().toLowerCase()) !== -1;
     }
 
     function isPublishFailureStatus(status) {
@@ -11969,6 +12416,9 @@
         }
         if (op === 'regenerate_page') {
             return <?= \json_encode((string)__('页面重生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        }
+        if (op === 'block_partial_patch') {
+            return <?= \json_encode((string)__('区块局部修改'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
         }
         if (op === 'block_regenerate') {
             return <?= \json_encode((string)__('区块重生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;

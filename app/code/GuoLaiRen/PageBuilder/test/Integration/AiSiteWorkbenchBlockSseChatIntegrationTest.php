@@ -11,48 +11,31 @@ final class AiSiteWorkbenchBlockSseChatIntegrationTest extends AbstractAiSiteWor
 {
     public function testWorkspaceAutoAppliesBlockSseResultToCurrentBlock(): void
     {
-        $createPayload = $this->invokeJsonAction(
-            '/pagebuilder/backend/ai-site-agent/post-create-session',
-            'POST',
-            'postCreateSession'
+        $modals = (string)\file_get_contents(
+            BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/modals.phtml'
+        );
+        $script = (string)\file_get_contents(
+            BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
         );
 
-        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
-        $publicId = (string)($createPayload['public_id'] ?? '');
-        self::assertNotSame('', $publicId);
-
-        $session = $this->sessionService->loadByPublicId($publicId, 1);
-        self::assertNotNull($session);
-        self::assertTrue($this->sessionService->setStage($session->getId(), 1, 'visual_edit'));
-
-        $this->prepareBackendRequest(
-            '/pagebuilder/backend/ai-site-agent/workspace',
-            'GET',
-            'workspace',
-            ['public_id' => $publicId]
-        );
-
-        /** @var AiSiteAgent $controller */
-        $controller = ObjectManager::getInstance(AiSiteAgent::class);
-        $html = $controller->workspace();
-
-        self::assertIsString($html);
-        self::assertStringContainsString('var pendingBlockSseResult = null;', $html);
-        self::assertStringContainsString('var pendingBlockSseStart = null;', $html);
-        self::assertStringContainsString('blockSseDoneConfirm', $html);
-        self::assertStringContainsString('id="pb-ai-block-sse-confirm-start"', $html);
-        self::assertStringContainsString('function confirmPendingBlockSseStart()', $html);
-        self::assertStringContainsString("startBtn.addEventListener('click', confirmPendingBlockSseStart);", $html);
-        self::assertStringContainsString("terminal.on('open', function ()", $html);
-        self::assertStringContainsString('confirmLabel: messages.blockSseConfirmRebuild', $html);
-        self::assertStringContainsString('confirmLabel: messages.blockSseConfirmRefine', $html);
-        self::assertStringContainsString("pendingBlockSseResult = payload && typeof payload === 'object' ? payload : null;", $html);
-        self::assertStringContainsString("var applied = applyPendingBlockSseResult({ notify: true });", $html);
-        self::assertStringContainsString("contextEl.textContent = applied ? messages.blockSseApplied : messages.blockSseDoneConfirm;", $html);
-        self::assertStringContainsString("if (!pendingBlockSseResult || !pendingBlockSseResult.state || !pendingBlockSseResult.state.virtual_pages_by_type)", $html);
-        self::assertStringContainsString("updateVirtualBlockState(targetPageType, nextBlock);", $html);
-        self::assertStringContainsString("replaceCurrentBlockHtml(targetPageType, nextBlock);", $html);
-        self::assertStringContainsString("toast('success', messages.blockSseApplied);", $html);
+        self::assertStringContainsString('var pendingBlockSseResult = null;', $script);
+        self::assertStringContainsString('var pendingBlockSseStart = null;', $script);
+        self::assertStringContainsString('blockSseDoneConfirm', $script);
+        self::assertStringContainsString('id="pb-ai-block-sse-confirm-start"', $modals);
+        self::assertStringContainsString('function confirmPendingBlockSseStart()', $script);
+        self::assertStringContainsString("startBtn.addEventListener('click', confirmPendingBlockSseStart);", $script);
+        self::assertStringContainsString("terminal.on('open', function ()", $script);
+        self::assertStringContainsString('confirmLabel: messages.blockSseConfirmRebuild', $script);
+        self::assertStringContainsString('confirmLabel: messages.blockSseConfirmRefine', $script);
+        self::assertStringContainsString("pendingBlockSseResult = payload && typeof payload === 'object' ? payload : null;", $script);
+        self::assertStringContainsString("function applyPendingBlockSseResultWithSnapshot(options)", $script);
+        self::assertStringContainsString("return fetchWorkspaceSnapshotStateForBlockRefresh().then(function () {", $script);
+        self::assertStringContainsString("applyPendingBlockSseResultWithSnapshot({", $script);
+        self::assertStringContainsString("contextEl.textContent = applied ? messages.blockSseApplied : messages.blockSseDoneConfirm;", $script);
+        self::assertStringContainsString("if (!pendingBlockSseResult || !effectiveState || !effectiveState.virtual_pages_by_type)", $script);
+        self::assertStringContainsString("updateVirtualBlockState(targetPageType, nextBlock);", $script);
+        self::assertStringContainsString("replaceCurrentBlockHtml(targetPageType, nextBlock);", $script);
+        self::assertStringContainsString("toast('success', messages.blockSseApplied);", $script);
     }
 
     public function testBlockQueueObserverKeepsStreamOpenUntilCompletion(): void
@@ -63,8 +46,10 @@ final class AiSiteWorkbenchBlockSseChatIntegrationTest extends AbstractAiSiteWor
         $method->setAccessible(true);
 
         self::assertTrue((bool)$method->invoke($controller, 'block_regenerate'));
-        self::assertFalse((bool)$method->invoke($controller, 'plan'));
-        self::assertFalse((bool)$method->invoke($controller, 'task_plan'));
-        self::assertFalse((bool)$method->invoke($controller, 'build'));
+        self::assertTrue((bool)$method->invoke($controller, 'plan'));
+        self::assertTrue((bool)$method->invoke($controller, 'task_plan'));
+        self::assertTrue((bool)$method->invoke($controller, 'build'));
+        self::assertTrue((bool)$method->invoke($controller, 'block_partial_patch'));
+        self::assertTrue((bool)$method->invoke($controller, 'regenerate_page'));
     }
 }

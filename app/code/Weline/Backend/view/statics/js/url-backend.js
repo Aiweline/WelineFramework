@@ -273,30 +273,29 @@
     // 按当前路径结构重建 lang/currency，避免 inject_path 在后台路径中重复拼接 admin 段
     function rebuildLocalizedPath(pathname, options = {}) {
         const config = getConfig();
-        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
+        const langPattern = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
         const currencyPattern = /^[A-Z]{3}$/;
         const parts = (pathname || '/').split('/').filter(Boolean);
-
-        let cursor = 0;
-        let prefix = '';
-        if (parts[cursor] && !currencyPattern.test(parts[cursor]) && !langPattern.test(parts[cursor])) {
-            prefix = parts[cursor];
-            cursor += 1;
-        }
+        const nonLocalizedParts = parts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
+        const prefix = nonLocalizedParts.length ? nonLocalizedParts[0] : '';
+        const remain = prefix ? nonLocalizedParts.slice(1) : nonLocalizedParts;
 
         let currentCurrency = '';
-        if (parts[cursor] && currencyPattern.test(parts[cursor])) {
-            currentCurrency = parts[cursor].toUpperCase();
-            cursor += 1;
+        for (const part of parts) {
+            if (currencyPattern.test(part)) {
+                currentCurrency = part.toUpperCase();
+                break;
+            }
         }
 
         let currentLang = '';
-        if (parts[cursor] && langPattern.test(parts[cursor])) {
-            currentLang = parts[cursor];
-            cursor += 1;
+        for (const part of parts) {
+            if (langPattern.test(part)) {
+                currentLang = part;
+                break;
+            }
         }
 
-        const remain = parts.slice(cursor);
         const targetCurrency = (options.currency || currentCurrency || getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || 'CNY').toUpperCase();
         const targetLang = options.lang || currentLang || getCookie('WELINE_USER_LANG') || config.currentLang || 'zh_Hans_CN';
 

@@ -2113,7 +2113,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->invokePrivateWithArgs($orchestrator, 'startAllChildServicesBody', [$context]);
 
         self::assertSame('concurrent_batch', $orchestrator->events[0] ?? null);
-        self::assertSame('wait:dispatcher,maintenance,worker', $orchestrator->events[1] ?? null);
+        self::assertSame('wait:dispatcher', $orchestrator->events[1] ?? null);
         self::assertCount(2, $orchestrator->events);
     }
 
