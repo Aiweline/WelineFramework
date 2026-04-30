@@ -63,14 +63,14 @@ final class AiSiteTaskPlanRenderIntegrationTest extends AbstractAiSiteWorkbenchI
         self::assertStringContainsString('pb-ai-task-plan-accordion', $html);
         self::assertStringContainsString('function isTaskPlanRequiredResponse(data)', $html);
         self::assertStringContainsString('function startTaskPlanGenerationForBuild(triggerBtn, selectedTypes, options)', $html);
-        self::assertStringContainsString('function confirmCurrentTaskPlanAndMaybeBuild(triggerBtn, selectedTypes)', $html);
+        self::assertStringContainsString('function confirmCurrentTaskPlanAndMaybeBuild(triggerBtn, selectedTypes, options)', $html);
         self::assertStringContainsString("workspaceTerminal.on('log', function (event) {", $html);
         self::assertStringContainsString('function normalizeQueuedStageWorkspaceLogEntry(entry)', $html);
         self::assertStringContainsString('function mirrorWorkspaceLogToQueuedStageUi(entry)', $html);
         self::assertStringContainsString('function startTaskPlanModeStream(mode', $html);
         self::assertStringContainsString("var persistedTaskPlanStructured = (workspaceState.task_plan_structured && typeof workspaceState.task_plan_structured === 'object')", $html);
         self::assertStringContainsString('if (isNonEmptyObject(payload.structured)) {', $html);
-        self::assertStringContainsString('var taskPlanDraftStructured = isNonEmptyObject(persistedTaskPlanStructured)', $html);
+        self::assertStringContainsString('var taskPlanDraftStructured = hasNonEmptyPlanArtifact(persistedTaskPlanStructured)', $html);
         self::assertStringContainsString('function isTaskPlanStructuredRoot(planRoot)', $html);
         self::assertStringContainsString('function renderTaskPlanStructuredPreviewHtml(planRoot)', $html);
         self::assertStringContainsString('function bindTaskPlanFieldEditors(container)', $html);
@@ -88,6 +88,6 @@ final class AiSiteTaskPlanRenderIntegrationTest extends AbstractAiSiteWorkbenchI
         self::assertStringContainsString('pb-ai-go-publish-stage', $html);
         self::assertStringContainsString('pb-ai-publish-stage-entry-hint', $html);
         self::assertStringContainsString('function syncPublishStageEntryFromWorkspaceState(workspaceState)', $html);
-        self::assertStringContainsString('确认任务方案并开始构建', $html);
+        self::assertStringContainsString('阶段二任务计划已保存，是否立即开始构建？', $html);
     }
 }

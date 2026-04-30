@@ -26,6 +26,7 @@ class AiSiteAgentSessionService
         '_workspace_stream_lease',
         'active_operation',
         'active_operations',
+        'block_patch_history',
         'brief_description',
         'build_summary',
         'can_publish',

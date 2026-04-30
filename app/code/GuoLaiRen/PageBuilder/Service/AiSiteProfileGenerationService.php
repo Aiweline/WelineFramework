@@ -118,6 +118,15 @@ class AiSiteProfileGenerationService
                 $this->buildFallbackIconDataUri($siteTitle, $siteTagline, $sourceBrief)
             );
 
+        $logo = $this->normalizeProfileAsset($logo);
+        if ($logo === '') {
+            $logo = $this->buildFallbackLogoDataUri($siteTitle, $siteTagline, $sourceBrief);
+        }
+        $icon = $this->normalizeProfileAsset($icon);
+        if ($icon === '') {
+            $icon = $this->buildFallbackIconDataUri($siteTitle, $siteTagline, $sourceBrief);
+        }
+
         $seoInput = $this->resolveSeoInput($scope, $existing);
         $metaTitle = \trim((string)($seoInput['meta_title'] ?? ''));
         if ($metaTitle === '') {
@@ -253,7 +262,7 @@ class AiSiteProfileGenerationService
      */
     private function resolveLockedAsset(array $scope, array $existing, string $key, bool $hasManualMap): string
     {
-        $scopeValue = $this->pickString($scope[$key] ?? null);
+        $scopeValue = $this->normalizeProfileAsset($this->pickString($scope[$key] ?? null));
         if ($scopeValue !== '' && !$this->isGeneratedPlaceholderImage($scopeValue)) {
             return $scopeValue;
         }
@@ -266,7 +275,7 @@ class AiSiteProfileGenerationService
             return '';
         }
 
-        $existingValue = $this->pickString($existing[$key] ?? null);
+        $existingValue = $this->normalizeProfileAsset($this->pickString($existing[$key] ?? null));
         if ($existingValue === '' || $this->isGeneratedPlaceholderImage($existingValue)) {
             return '';
         }
@@ -281,7 +290,7 @@ class AiSiteProfileGenerationService
     private function resolveLockedIcon(array $scope, array $existing, bool $hasManualMap): string
     {
         foreach (['icon', 'favicon'] as $key) {
-            $scopeValue = $this->pickString($scope[$key] ?? null);
+            $scopeValue = $this->normalizeProfileAsset($this->pickString($scope[$key] ?? null));
             if ($scopeValue !== '' && !$this->isGeneratedPlaceholderImage($scopeValue)) {
                 return $scopeValue;
             }
@@ -292,7 +301,7 @@ class AiSiteProfileGenerationService
         }
 
         foreach (['icon', 'favicon'] as $key) {
-            $existingValue = $this->pickString($existing[$key] ?? null);
+            $existingValue = $this->normalizeProfileAsset($this->pickString($existing[$key] ?? null));
             if ($existingValue !== '' && !$this->isGeneratedPlaceholderImage($existingValue)) {
                 return $existingValue;
             }
@@ -783,14 +792,95 @@ SVG;
         }
 
         if (\str_starts_with($value, 'data:image/svg+xml;base64,')) {
-            return $value;
+            $decoded = \base64_decode(\substr($value, 26), true);
+            return \is_string($decoded) && $this->isSafeGeneratedSvgMarkup($decoded) ? $value : '';
         }
 
-        if (\str_contains($value, '<svg') && \str_contains($value, '</svg>')) {
+        if ($this->isSafeGeneratedSvgMarkup($value)) {
             return 'data:image/svg+xml;base64,' . \base64_encode($value);
         }
 
         return '';
+    }
+
+    private function isSafeGeneratedSvgMarkup(string $value): bool
+    {
+        if (!\str_contains($value, '<svg') || !\str_contains($value, '</svg>')) {
+            return false;
+        }
+
+        $normalized = \strtolower($value);
+        foreach ([
+            '<script',
+            '<foreignobject',
+            '<iframe',
+            '<object',
+            '<embed',
+            '<!doctype',
+            '<!entity',
+            'javascript:',
+            'onload=',
+            'onclick=',
+            '<image',
+            'xlink:href=',
+            'href="http',
+            "href='http",
+            '<animate',
+            '<set ',
+        ] as $pattern) {
+            if (\str_contains($normalized, $pattern)) {
+                return false;
+            }
+        }
+
+        if (\strlen($value) > 12000) {
+            return false;
+        }
+
+        if (!\class_exists(\DOMDocument::class)) {
+            return true;
+        }
+
+        $previousUseInternalErrors = \libxml_use_internal_errors(true);
+        $document = new \DOMDocument('1.0', 'UTF-8');
+        $loaded = $document->loadXML($value, \LIBXML_NONET | \LIBXML_NOWARNING | \LIBXML_NOERROR);
+        $errors = \libxml_get_errors();
+        \libxml_clear_errors();
+        \libxml_use_internal_errors($previousUseInternalErrors);
+
+        if (!$loaded || $errors !== []) {
+            return false;
+        }
+
+        $root = $document->documentElement;
+        if (!$root instanceof \DOMElement) {
+            return false;
+        }
+
+        if (\strtolower($root->localName) !== 'svg') {
+            return false;
+        }
+
+        $namespace = \trim((string)$root->namespaceURI);
+        return $namespace === '' || $namespace === 'http://www.w3.org/2000/svg';
+    }
+
+    private function normalizeProfileAsset(string $value): string
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        if (
+            \str_starts_with($value, 'data:image/svg+xml;base64,')
+            || \str_contains($value, '<svg')
+            || \str_contains($value, '</svg>')
+        ) {
+            return $this->normalizeGeneratedSvgAsset($value);
+        }
+
+        return $value;
     }
 
     private function buildFallbackIconDataUri(string $siteTitle, string $siteTagline, string $briefDescription): string
