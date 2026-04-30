@@ -17,9 +17,9 @@
  * 
  * group:cta => 按钮设置
  * cta.primary_text => 主按钮文字:text:Play Now
- * cta.primary_url => 主按钮链接:text:#games（#download 等占位将解析为统一下载 APK）
+ * cta.primary_url => 主按钮链接:text:#games
  * cta.secondary_text => 次按钮文字:text:Download Free
- * cta.secondary_url => 次按钮链接:text:#download（与全站 GlrDownloadRegistry + footer-common 委托一致）
+ * cta.secondary_url => 次按钮链接:text:#download
  * 
  * group:stats => 统计数据
  * stats.items => 统计列表:textarea:10M+|Players Worldwide\r\n1M+|Daily Games\r\n100+|Tournaments|格式：数字|描述，一行一个
@@ -53,14 +53,9 @@ $title = $config['content.title'] ?? 'Roll the Dice, Rule the Board!';
 $description = $config['content.description'] ?? 'Join millions of players worldwide in the ultimate Ludo experience. Play with friends, win real prizes, and become the king of the board!';
 
 $primaryBtnText = $config['cta.primary_text'] ?? 'Play Now';
-$primaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.primary_url'] ?? '#games');
+$primaryBtnUrl = $config['cta.primary_url'] ?? '#games';
 $secondaryBtnText = $config['cta.secondary_text'] ?? 'Download Free';
-$secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.secondary_url'] ?? '#download');
-
-$primaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl);
-$secondaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl);
-$primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($primaryHref, 'primary');
-$secondaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($secondaryHref, 'secondary');
+$secondaryBtnUrl = $config['cta.secondary_url'] ?? '#download';
 
 $statsRaw = $config['stats.items'] ?? "10M+|Players Worldwide\n1M+|Daily Games\n100+|Tournaments";
 $stats = [];
@@ -425,14 +420,15 @@ $instanceId = 'le-hero-' . uniqid();
                 
                 <div class="le-hero-cta">
                     <?php if ($primaryBtnText): ?>
-                    <a role="button" tabindex="0" class="le-hero-btn-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($primaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($primaryRef) ?>">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+                    <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="le-hero-btn-primary">
+                        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                         <?= htmlspecialchars($primaryBtnText) ?>
                     </a>
                     <?php endif; ?>
+                    
                     <?php if ($secondaryBtnText): ?>
-                    <a role="button" tabindex="0" class="le-hero-btn-secondary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($secondaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($secondaryRef) ?>">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                    <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="le-hero-btn-secondary">
+                        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                         <?= htmlspecialchars($secondaryBtnText) ?>
                     </a>
                     <?php endif; ?>

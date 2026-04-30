@@ -13,6 +13,7 @@ use Weline\Websites\Model\WebsiteDomain;
 class AiSitePublishService
 {
     private readonly AiHtmlSanitizerService $htmlSanitizer;
+    private readonly ?VirtualTheme $virtualThemeModel;
     private readonly Page $pageModel;
     private readonly WebsiteDomain $websiteDomainModel;
     private readonly DomainPool $domainPoolModel;
@@ -21,13 +22,14 @@ class AiSitePublishService
     public function __construct(
         private readonly AiSiteMaterializationService $materializationService,
         private readonly AiSiteVisualUrlService $visualUrlService,
-        private readonly VirtualTheme $virtualThemeModel,
+        ?VirtualTheme $virtualThemeModel = null,
         ?AiHtmlSanitizerService $htmlSanitizer = null,
         ?Page $pageModel = null,
         ?WebsiteDomain $websiteDomainModel = null,
         ?DomainPool $domainPoolModel = null,
         ?AiSitePublishVerificationService $publishVerificationService = null,
     ) {
+        $this->virtualThemeModel = $virtualThemeModel;
         $this->htmlSanitizer = $htmlSanitizer ?? ObjectManager::getInstance(AiHtmlSanitizerService::class);
         $this->pageModel = $pageModel ?? ObjectManager::getInstance(Page::class);
         $this->websiteDomainModel = $websiteDomainModel ?? ObjectManager::getInstance(WebsiteDomain::class);
@@ -90,7 +92,7 @@ class AiSitePublishService
         $this->applyPublishSnapshotsForMaterializedPages($materialized['pagebuilder_pages_by_type'] ?? []);
         $this->ensureWebsiteDomainBinding($websiteId, $websiteProfile);
 
-        if ($virtualThemeId > 0) {
+        if ($virtualThemeId > 0 && $this->virtualThemeModel !== null) {
             $this->deactivateOtherActiveVirtualThemes($websiteId, $virtualThemeId);
             // 重新加载虚拟主题
             $theme = clone $this->virtualThemeModel;
@@ -134,6 +136,9 @@ class AiSitePublishService
     private function deactivateOtherActiveVirtualThemes(int $websiteId, int $keepVirtualThemeId): void
     {
         if ($websiteId <= 0 || $keepVirtualThemeId <= 0) {
+            return;
+        }
+        if ($this->virtualThemeModel === null) {
             return;
         }
 

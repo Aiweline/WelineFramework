@@ -878,9 +878,6 @@ $this->assign('providerAdd', $providerAdd);
                 var message = data.model_code ? 
                     data.message + '\n\n使用的测试模型: ' + data.model_code : 
                     data.message;
-                if (Array.isArray(data.trace) && data.trace.length) {
-                    message += '\n\n详细过程:\n' + data.trace.join('\n');
-                }
                 showResultModal('success', '连接测试成功', message);
                 loadAccounts(currentPage);
             } else {
@@ -888,9 +885,6 @@ $this->assign('providerAdd', $providerAdd);
                 var message = data.model_code ? 
                     '测试失败: ' + data.message + '\n\n尝试使用的模型: ' + data.model_code : 
                     '测试失败: ' + data.message;
-                if (Array.isArray(data.trace) && data.trace.length) {
-                    message += '\n\n详细过程:\n' + data.trace.join('\n');
-                }
                 showResultModal('error', '连接测试失败', message);
             }
         })

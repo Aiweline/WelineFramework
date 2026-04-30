@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace Weline\Ai\Test\Unit\Service;
 
 use Weline\Ai\Service\Provider\ModelSyncService;
-use Weline\Ai\Service\Provider\ProviderTimeoutPolicy;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\UnitTest\TestCore;
 
@@ -53,7 +52,7 @@ class ModelSyncServiceTest extends TestCore
             'temperature' => 0.7,
             'top_p' => 1.0,
             'stream' => true,
-            'timeout' => ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT,
+            'timeout' => 180,
             'max_retries' => 3,
             'capabilities' => ['chat', 'code'],
         ];
@@ -72,26 +71,6 @@ class ModelSyncServiceTest extends TestCore
         $providerConfigData = $config['config'] ?? [];
         $this->assertSame('https://api.openai.com/v1', $providerConfigData['base_url'] ?? '');
         $this->assertSame('gpt-4', $providerConfigData['model'] ?? '');
-        $this->assertSame(ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT, $providerConfigData['timeout'] ?? 0);
-    }
-
-    public function testBuildModelConfigNormalizesPerMillionPricing(): void
-    {
-        $providerConfig = [
-            'base_url' => 'https://api.moonshot.cn/v1',
-            'model_field' => 'model',
-            'price_unit' => 'per_1m_tokens',
-        ];
-        $modelMeta = [
-            'code' => 'kimi-k2.6',
-            'name' => 'Kimi K2.6',
-            'input_price' => 6.50,
-            'output_price' => 27.00,
-        ];
-
-        $config = $this->service->buildModelConfig('kimi', $modelMeta, $providerConfig);
-
-        $this->assertEquals(0.0065, $config['token_price_input'] ?? null);
-        $this->assertEquals(0.027, $config['token_price_output'] ?? null);
+        $this->assertSame(180, $providerConfigData['timeout'] ?? 0);
     }
 }

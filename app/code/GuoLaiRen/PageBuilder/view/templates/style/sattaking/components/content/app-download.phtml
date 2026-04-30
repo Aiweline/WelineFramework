@@ -63,7 +63,7 @@ $downloadDesc = $config['download.description'] ?? 'Get the official Android bui
 $primaryBtnText = $config['download.primary_text'] ?? 'Primary Download';
 $primaryBtnUrl = $config['download.primary_url'] ?? '#';
 $secondaryBtnText = $config['download.secondary_text'] ?? 'Need Help?';
-$secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['download.secondary_url'] ?? '#faq');
+$secondaryBtnUrl = $config['download.secondary_url'] ?? '#faq';
 
 // 特性列表
 $featuresRaw = $config['features.items'] ?? "Lightweight install\nResult history\nMarket reminders";
@@ -90,11 +90,6 @@ foreach ($lines as $line) {
         ];
     }
 }
-
-$primaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl);
-$secondaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl);
-$primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($primaryHref, 'primary');
-$secondaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($secondaryHref, 'secondary');
 
 $instanceId = 'sk-download-' . uniqid();
 ?>
@@ -321,6 +316,7 @@ $instanceId = 'sk-download-' . uniqid();
             }
         }
     </style>
+    
     <div class="sk-download-container">
         <div class="sk-download-header">
             <div class="sk-download-badge">
@@ -345,8 +341,8 @@ $instanceId = 'sk-download-' . uniqid();
                 <p class="sk-download-card-desc"><?= htmlspecialchars($downloadDesc) ?></p>
                 
                 <div class="sk-download-btns">
-                    <a role="button" tabindex="0" class="sk-download-btn-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($primaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($primaryRef) ?>"><?= htmlspecialchars($primaryBtnText) ?></a>
-                    <a role="button" tabindex="0" class="sk-download-btn-secondary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($secondaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($secondaryRef) ?>"><?= htmlspecialchars($secondaryBtnText) ?></a>
+                    <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="sk-download-btn-primary"><?= htmlspecialchars($primaryBtnText) ?></a>
+                    <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="sk-download-btn-secondary"><?= htmlspecialchars($secondaryBtnText) ?></a>
                 </div>
                 
                 <?php if (!empty($features)): ?>

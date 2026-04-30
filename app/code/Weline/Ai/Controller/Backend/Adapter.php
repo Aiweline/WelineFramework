@@ -49,6 +49,60 @@ class Adapter extends BackendController
         return \Weline\Framework\Manager\ObjectManager::getInstance(AdapterScanner::class);
     }
 
+    private function parseAdapterIds(mixed $ids): array
+    {
+        if (is_string($ids)) {
+            $ids = explode(',', $ids);
+        }
+        if (!is_array($ids)) {
+            return [];
+        }
+
+        $ids = array_map('intval', $ids);
+        $ids = array_filter($ids, static fn(int $id): bool => $id > 0);
+        return array_values(array_unique($ids));
+    }
+
+    private function parseModelBindings(mixed $bindings): array
+    {
+        if (is_string($bindings)) {
+            $decoded = json_decode($bindings, true);
+            $bindings = is_array($decoded) ? $decoded : [];
+        }
+        if (!is_array($bindings)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach (AiModel::getSupportedPrimaryModalities() as $modality) {
+            $modelCode = trim((string)($bindings[$modality] ?? ''));
+            if ($modelCode !== '') {
+                $normalized[$modality] = $modelCode;
+            }
+        }
+        return $normalized;
+    }
+
+    private function validateModelBindings(array $bindings): ?string
+    {
+        /** @var AiModel $aiModel */
+        $aiModel = ObjectManager::getInstance(AiModel::class);
+        foreach ($bindings as $modality => $modelCode) {
+            $model = $aiModel->reset()
+                ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+                ->find()
+                ->fetch();
+            if (!$model || !$model->getId()) {
+                return sprintf('Model "%s" is not active or does not exist.', $modelCode);
+            }
+            if (!$model->supportsPrimaryModality((string)$modality)) {
+                return sprintf('Model "%s" is not a %s model.', $modelCode, $modality);
+            }
+        }
+        return null;
+    }
+
     /**
      * 补充适配器列表中空版本和空状态，从实例读取并回写数据库
      *
@@ -290,21 +344,30 @@ class Adapter extends BackendController
         try {
             /** @var AiModel $aiModel */
             $aiModel = ObjectManager::getInstance(AiModel::class);
-            $rows = $aiModel->reset()
-                ->where(AiModel::schema_fields_IS_ACTIVE, 1)
-                ->fields(AiModel::schema_fields_MODEL_CODE . ',' . AiModel::schema_fields_NAME)
+            $requestedModality = trim((string)($this->request->getGet('primary_modality', $this->request->getGet('modality', ''))));
+            $query = $aiModel->reset()
+                ->where(AiModel::schema_fields_IS_ACTIVE, 1);
+            $normalizedRequestedModality = $requestedModality !== '' ? AiModel::normalizePrimaryModality($requestedModality) : '';
+            $rows = $query
+                ->fields(AiModel::schema_fields_MODEL_CODE . ',' . AiModel::schema_fields_NAME . ',' . AiModel::schema_fields_PRIMARY_MODALITY)
                 ->order(AiModel::schema_fields_MODEL_CODE, 'ASC')
                 ->select()
                 ->fetchArray();
             $items = [];
             foreach ($rows as $row) {
+                $primaryModality = AiModel::normalizePrimaryModality((string)($row['primary_modality'] ?? ''));
+                if ($normalizedRequestedModality !== '' && $primaryModality !== $normalizedRequestedModality) {
+                    continue;
+                }
                 $items[] = [
                     'model_code' => (string)($row['model_code'] ?? ''),
                     'name' => (string)($row['name'] ?? $row['model_code'] ?? ''),
+                    'primary_modality' => $primaryModality,
                 ];
             }
             return $this->jsonResponse([
                 'success' => true,
+                'primary_modality' => $normalizedRequestedModality,
                 'items' => $items,
             ]);
         } catch (\Throwable $e) {
@@ -324,7 +387,7 @@ class Adapter extends BackendController
     #[Acl('Weline_Ai::ai_adapter_toggle', '切换场景适配器状态', 'mdi-toggle-switch', '启用或禁用场景适配器')]
     public function postBatchSaveDefaultModel(): string
     {
-        $ids = $this->request->getBodyParam('ids', $this->request->getPost('ids', []));
+        $ids = $this->parseAdapterIds($this->request->getBodyParam('ids', $this->request->getPost('ids', [])));
         $defaultModel = trim((string)$this->request->getBodyParam('default_model', $this->request->getPost('default_model', '')));
 
         if (empty($ids)) {
@@ -333,15 +396,18 @@ class Adapter extends BackendController
                 'message' => __('请选择要设置的适配器'),
             ]);
         }
-        if (!is_array($ids)) {
-            $ids = array_filter(array_map('intval', explode(',', (string)$ids)));
-        } else {
-            $ids = array_filter(array_map('intval', $ids));
-        }
         if (empty($defaultModel)) {
             return $this->jsonResponse([
                 'success' => false,
                 'message' => __('请选择默认模型'),
+            ]);
+        }
+
+        $validationError = $this->validateModelBindings([AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT => $defaultModel]);
+        if ($validationError !== null) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => $validationError,
             ]);
         }
 
@@ -350,7 +416,10 @@ class Adapter extends BackendController
             foreach ($ids as $id) {
                 $adapter = $this->getScenarioAdapter()->reset()->load((int)$id);
                 if ($adapter->getId()) {
+                    $bindings = $adapter->getModelBindings();
+                    $bindings[AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT] = $defaultModel;
                     $adapter->setData(AiScenarioAdapter::schema_fields_DEFAULT_MODEL, $defaultModel);
+                    $adapter->setModelBindings($bindings);
                     $adapter->save();
                     $updated++;
                 }
@@ -364,6 +433,67 @@ class Adapter extends BackendController
             return $this->jsonResponse([
                 'success' => false,
                 'message' => __('批量设置失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * Save per-modality model bindings for selected adapters.
+     *
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_adapter_toggle', 'Save adapter model bindings', 'mdi-toggle-switch', 'Save adapter model bindings')]
+    public function postBatchSaveModelBindings(): string
+    {
+        $ids = $this->parseAdapterIds($this->request->getBodyParam('ids', $this->request->getPost('ids', [])));
+        $bindings = $this->parseModelBindings($this->request->getBodyParam('model_bindings', $this->request->getPost('model_bindings', [])));
+
+        if (empty($ids)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => 'Please select adapters.',
+            ]);
+        }
+        if (empty($bindings)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => 'Please select at least one modality model.',
+            ]);
+        }
+
+        $validationError = $this->validateModelBindings($bindings);
+        if ($validationError !== null) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => $validationError,
+            ]);
+        }
+
+        try {
+            $updated = 0;
+            foreach ($ids as $id) {
+                $adapter = $this->getScenarioAdapter()->reset()->load((int)$id);
+                if ($adapter->getId()) {
+                    $adapter->setModelBindings($bindings);
+                    $adapter->setData(
+                        AiScenarioAdapter::schema_fields_DEFAULT_MODEL,
+                        $bindings[AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT] ?? ''
+                    );
+                    $adapter->save();
+                    $updated++;
+                }
+            }
+
+            return $this->jsonResponse([
+                'success' => true,
+                'message' => sprintf('Saved model bindings for %d adapter(s).', $updated),
+                'updated' => $updated,
+                'model_bindings' => $bindings,
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => sprintf('Failed to save model bindings: %s', $e->getMessage()),
             ]);
         }
     }

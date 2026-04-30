@@ -11,6 +11,7 @@
 $adapter = $this->getData('adapter');
 $adapterInstance = $this->getData('adapterInstance');
 $supportedModels = $adapter->getSupportedModels();
+$modelBindings = method_exists($adapter, 'getModelBindings') ? $adapter->getModelBindings() : [];
 $paramTemplate = $adapter->getParamTemplate();
 $examples = $adapter->getExamples();
 ?>
@@ -94,6 +95,27 @@ $examples = $adapter->getExamples();
         </div>
     </div>
     <?php endif; ?>
+
+    <div class="card mb-3">
+        <div class="card-header bg-primary text-white">
+            <h6 class="mb-0">
+                <i class="mdi mdi-robot me-2"></i>模型绑定
+            </h6>
+        </div>
+        <div class="card-body">
+            <?php foreach (['text2text' => '文本', 'text2image' => '图片', 'text2video' => '视频'] as $modality => $label): ?>
+                <?php $boundModel = (string)($modelBindings[$modality] ?? ''); ?>
+                <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                    <span class="badge bg-light text-dark border"><?= $label ?></span>
+                    <?php if ($boundModel !== ''): ?>
+                        <code><?= htmlspecialchars($boundModel) ?></code>
+                    <?php else: ?>
+                        <span class="text-muted small">未配置</span>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
 
     <!-- 参数模板 -->
     <?php if (!empty($paramTemplate) && is_array($paramTemplate)): ?>

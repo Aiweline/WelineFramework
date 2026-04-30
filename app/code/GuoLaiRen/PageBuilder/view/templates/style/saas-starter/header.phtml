@@ -72,15 +72,13 @@ $logoUrl = ss_getConfig($styleSettings, 'logo.url', '');
 $logoWidth = ss_getConfig($styleSettings, 'logo.width', '36');
 
 $navDisplay = ss_getConfig($styleSettings, 'navigation.display', 'yes');
-$navBgColor = ss_getConfig($styleSettings, 'navigation.bg_color', ss_color($colors, 'nav_bg', 'rgba(11, 15, 25, 0.95)'));
+$navBgColor = ss_getConfig($styleSettings, 'navigation.bg_color', 'rgba(11, 15, 25, 0.95)');
 $navTextColor = ss_getConfig($styleSettings, 'navigation.text_color', '#f1f5f9');
 $navLinkHoverColor = ss_getConfig($styleSettings, 'navigation.link_hover_color', '#34d399');
 $navLinksRaw = ss_getConfig($styleSettings, 'navigation.links', "Features=>#features\nPricing=>#pricing\nTestimonials=>#testimonials\nFAQ=>#faq");
 $showCta = ss_getConfig($styleSettings, 'navigation.show_cta', 'yes');
 $ctaText = ss_getConfig($styleSettings, 'navigation.cta_text', 'Start Free Trial');
-$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(ss_getConfig($styleSettings, 'navigation.cta_url', '#pricing'));
-$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
-$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
+$ctaUrl = ss_getConfig($styleSettings, 'navigation.cta_url', '#pricing');
 
 $accentPrimary = ss_color($colors, 'accent_primary', '#10b981');
 $buttonPrimaryBg = ss_color($colors, 'button_primary_bg', 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)');
@@ -92,7 +90,7 @@ foreach ($lines as $line) {
     if (empty($line)) continue;
     $parts = explode('=>', $line, 2);
     $name = trim($parts[0] ?? '');
-    $url = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(trim($parts[1] ?? '#'));
+    $url = trim($parts[1] ?? '#');
     if (!empty($name)) {
         $navLinks[] = ['name' => $name, 'url' => $url];
     }
@@ -101,27 +99,27 @@ foreach ($lines as $line) {
 
 <?php if ($navDisplay === 'yes'): ?>
 <style>
-    .ss-header-outer { width: 100vw; margin-left: calc(-50vw + 50%); position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: <?= htmlspecialchars($navBgColor) ?>; backdrop-filter: blur(10px); padding: 15px 0; transition: all 0.3s ease; box-sizing: border-box; }
-    .ss-header-inner { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
-    .ss-header-inner .ss-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: <?= htmlspecialchars($navTextColor) ?>; }
-    .ss-header-inner .ss-logo-icon { width: <?= intval($logoWidth) ?>px; height: <?= intval($logoWidth) ?>px; background: <?= $buttonPrimaryBg ?>; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-    .ss-header-inner .ss-logo-icon svg { width: 20px; height: 20px; fill: #ffffff; }
-    .ss-header-inner .ss-logo-text { font-size: 1.25rem; font-weight: 700; }
-    .ss-header-inner .ss-nav { display: flex; align-items: center; gap: 32px; }
-    .ss-header-inner .ss-nav-links { display: flex; gap: 8px; list-style: none; margin: 0; padding: 0; flex-wrap: wrap; }
-    .ss-header-inner .ss-nav-link { color: <?= htmlspecialchars($navTextColor) ?>; text-decoration: none; font-size: 0.95rem; font-weight: 500; transition: color 0.3s ease; opacity: 0.8; }
-    .ss-header-inner .ss-nav-link:hover { color: <?= htmlspecialchars($navLinkHoverColor) ?>; opacity: 1; }
-    .ss-header-inner .ss-header-cta { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: <?= $buttonPrimaryBg ?>; color: #ffffff; text-decoration: none; border-radius: 10px; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; }
-    .ss-header-inner .ss-header-cta:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4); }
+    .ss-header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: <?= htmlspecialchars($navBgColor) ?>; backdrop-filter: blur(10px); padding: 15px 0; transition: all 0.3s ease; }
+    .ss-header-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
+    .ss-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: <?= htmlspecialchars($navTextColor) ?>; }
+    .ss-logo-icon { width: <?= intval($logoWidth) ?>px; height: <?= intval($logoWidth) ?>px; background: <?= $buttonPrimaryBg ?>; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .ss-logo-icon svg { width: 20px; height: 20px; fill: #ffffff; }
+    .ss-logo-text { font-size: 1.25rem; font-weight: 700; }
+    .ss-nav { display: flex; align-items: center; gap: 32px; }
+    .ss-nav-links { display: flex; gap: 28px; list-style: none; margin: 0; padding: 0; }
+    .ss-nav-link { color: <?= htmlspecialchars($navTextColor) ?>; text-decoration: none; font-size: 0.95rem; font-weight: 500; transition: color 0.3s ease; opacity: 0.8; }
+    .ss-nav-link:hover { color: <?= htmlspecialchars($navLinkHoverColor) ?>; opacity: 1; }
+    .ss-header-cta { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: <?= $buttonPrimaryBg ?>; color: #ffffff; text-decoration: none; border-radius: 10px; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; }
+    .ss-header-cta:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4); }
     @media (max-width: 768px) {
-        .ss-header-inner .ss-nav-links { display: none; }
-        .ss-header-inner .ss-header-cta span { display: none; }
-        .ss-header-inner .ss-header-cta { padding: 10px; }
+        .ss-nav-links { display: none; }
+        .ss-header-cta span { display: none; }
+        .ss-header-cta { padding: 10px; }
     }
 </style>
 
-<header class="ss-header-outer">
-    <div class="ss-header-inner">
+<header class="ss-header">
+    <div class="ss-header-container">
         <?php if ($logoDisplay === 'yes'): ?>
         <a href="/" class="ss-logo">
             <span class="ss-logo-icon">
@@ -143,7 +141,7 @@ foreach ($lines as $line) {
             </ul>
             
             <?php if ($showCta === 'yes'): ?>
-            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="ss-header-cta">
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="ss-header-cta">
                 <span><?= htmlspecialchars($ctaText) ?></span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </a>
@@ -151,4 +149,44 @@ foreach ($lines as $line) {
         </nav>
     </div>
 </header>
+<?php endif; ?>
+
+<?php
+$isPreviewMode = (bool)($this->getData('is_preview') ?? false);
+if (!$isPreviewMode && isset($_GET['preview']) && $_GET['preview'] === '1') {
+    $isPreviewMode = true;
+}
+$pixelEnabled = ss_getConfig($styleSettings, 'pixel.enabled', 'yes');
+$pixelEnabled = (string)($pixelEnabled ?? 'yes');
+$pixelName = ss_getConfig($styleSettings, 'pixel.name', '');
+if (empty($pixelName) && $page) {
+    $pixelName = $page->getData('handle') ?? '';
+}
+$websiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
+
+if ($websiteId > 0 && !empty($pixelName) && !$isPreviewMode):
+    \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_ID', (string)$websiteId, 3600 * 24 * 365);
+    $websiteUrl = '';
+    $websiteCode = '';
+    try {
+        if (class_exists('\Weline\Websites\Model\Website')) {
+            $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+            $website = clone $websiteModel;
+            $website->clear()->load($websiteId);
+            if ($website->getId()) {
+                $websiteUrl = $website->getData('url') ?? '';
+                $websiteCode = $website->getData('code') ?? '';
+            }
+        }
+    } catch (\Exception $e) {}
+    if (!empty($websiteUrl)) {
+        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_URL', $websiteUrl, 3600 * 24 * 365);
+    }
+    if (!empty($websiteCode)) {
+        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_CODE', $websiteCode, 3600 * 24 * 365);
+    }
+    $this->assign('pixel_name', htmlspecialchars($pixelName));
+    $this->assign('pixel_enabled', htmlspecialchars($pixelEnabled));
+?>
+    <pixel name="{{pixel_name}}" enabled="{{pixel_enabled}}" />
 <?php endif; ?>

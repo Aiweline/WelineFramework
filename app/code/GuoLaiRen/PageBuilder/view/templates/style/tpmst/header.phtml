@@ -18,13 +18,6 @@
  * header.navigation.link_color => 链接颜色:color:#ffffff
  * header.navigation.link_hover_color => 链接悬停颜色:color:#ffd700
  * header.navigation.items => 导航项配置:textarea:Home=>\r\nAbout=>\r\nBlog=>\r\nFAQs=>|配置格式：名字=>url，一行一个。示例：Home=>#home\nAbout=>#about\n联系我们=>/contact\n外部链接=>https://example.com。注意：1) 每行一个导航项；2) 使用=>分隔名字和URL；3) URL为空时自动使用#作为链接；4) 支持锚点链接(#开头)、相对路径(/开头)和完整URL(http/https开头)
- * group:header_nav_labels => 导航菜单显示名称（有对应页面时显示，留空使用页面标题）
- * header.navigation.label_home_page => 首页菜单名:text:|留空使用页面标题
- * header.navigation.label_about_page => 关于我们菜单名:text:
- * header.navigation.label_blog_list => 博客菜单名:text:
- * header.navigation.label_contact_page => 联系我们菜单名:text:
- * header.navigation.label_terms_of_service => 条款菜单名:text:
- * header.navigation.label_privacy_policy => 隐私政策菜单名:text:
  * header.download_button.text => 下载按钮文本:text:DOWNLOAD APP
  * header.download_button.display => 显示下载按钮:select:yes|yes,no
  * header.download_button.bg_color => 按钮背景颜色:color:#ff6b35
@@ -34,7 +27,6 @@
  * header.download_button.padding => 按钮内边距:responsive:12/16|px[MD]
  * header.download_button.border_radius => 按钮圆角:number:8|px
  * header.download_button.extra_classes => 按钮额外CSS类:textarea:common-dwn download-btn ml-10 pl-52 pr-52 pb-15 pt-15 md-pl-22 md-pr-22 md-pb-8 md-pt-8 fs-5 d-flex align-self-center fw-bolder|可配置额外的CSS类名，多个类名用空格分隔
- * header.download_button.url => 下载链接:text:/#download
  * 
  * group:banner => Banner横幅区域设置（Hero/Banner）【已独立为组件hero-slider】
  * banner.display => 显示Banner区域:select:no|yes,no【建议使用hero-slider组件代替】
@@ -219,56 +211,68 @@ if (!function_exists('tpmst_makeTransparent')) {
 }
 $navBgHover = tpmst_makeTransparent($navBgColor, 0.7);
 
+// 获取导航项配置（支持textarea格式：名字=>url，一行一个）
+$defaultNavItems = "Home=>
+About=>
+Blog=>
+FAQs=>";
+$navItemsConfig = tpmst_getConfig($styleSettings, 'header.navigation.items', $defaultNavItems);
+
+// 如果配置值中包含 \n 转义符，转换为实际换行符
+if (strpos($navItemsConfig, '\\n') !== false && strpos($navItemsConfig, "\n") === false) {
+    $navItemsConfig = str_replace('\\n', "\n", $navItemsConfig);
+}
+
 // 生成 SEO 元信息
 $metaTitle = $page ? ($page->getData('meta_title') ?: $page->getData('title')) : '';
 $metaDescription = $page ? ($page->getData('meta_description') ?: '') : '';
 $metaKeywords = $page ? ($page->getData('meta_keywords') ?: '') : '';
 
-// 导航项：优先来自当前站点页面类型，菜单名优先用配置项（有配置则显示配置名，否则用页面标题）
 $navItems = [];
-if ($page) {
-    $headerPages = $page->getHeaderNavigationPages(10);
-    foreach ($headerPages as $navPage) {
-        $type = $navPage['type'] ?? '';
-        $labelKey = 'header.navigation.label_' . $type;
-        $configuredLabel = trim((string)(tpmst_getConfig($styleSettings, $labelKey, '') ?? ''));
-        $navItems[] = [
-            'text' => $configuredLabel !== '' ? $configuredLabel : ($navPage['title'] ?? ''),
-            'href' => $navPage['url'] ?? '/',
-        ];
-    }
-}
 
-if (empty($navItems)) {
-    $defaultNavItems = "Home=>\nAbout=>\nBlog=>\nFAQs=>";
-    $navItemsConfig = tpmst_getConfig($styleSettings, 'header.navigation.items', $defaultNavItems);
-    if (strpos($navItemsConfig, '\\n') !== false && strpos($navItemsConfig, "\n") === false) {
-        $navItemsConfig = str_replace('\\n', "\n", $navItemsConfig);
-    }
-    if (!empty($navItemsConfig)) {
-        $jsonItems = json_decode($navItemsConfig, true);
-        if (json_last_error() === JSON_ERROR_NONE && is_array($jsonItems) && !empty($jsonItems)) {
-            $navItems = $jsonItems;
-        } else {
-            $lines = preg_split('/\r?\n/', $navItemsConfig);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (empty($line)) continue;
-                if (strpos($line, '=>') !== false) {
-                    $parts = explode('=>', $line, 2);
-                    $text = trim($parts[0]);
-                    $href = trim($parts[1] ?? '');
-                    if (!empty($text)) {
-                        $navItems[] = ['text' => $text, 'href' => !empty($href) ? $href : '#'];
-                    }
-                } else {
-                    if (!empty($line)) $navItems[] = ['text' => $line, 'href' => '#'];
+if (!empty($navItemsConfig)) {
+    // 尝试解析为JSON格式（向后兼容）
+    $jsonItems = json_decode($navItemsConfig, true);
+    if (json_last_error() === JSON_ERROR_NONE && is_array($jsonItems) && !empty($jsonItems)) {
+        // JSON格式
+        $navItems = $jsonItems;
+    } else {
+        // Textarea格式：名字=>url，一行一个
+        // 支持 \n 和 \r\n 换行符
+        $lines = preg_split('/\r?\n/', $navItemsConfig);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line)) {
+                continue;
+            }
+            
+            // 解析 "名字=>url" 格式
+            if (strpos($line, '=>') !== false) {
+                $parts = explode('=>', $line, 2);
+                $text = trim($parts[0]);
+                $href = trim($parts[1] ?? '');
+                
+                if (!empty($text)) {
+                    // 如果 URL 为空，使用 # 作为默认链接
+                    $navItems[] = [
+                        'text' => $text,
+                        'href' => !empty($href) ? $href : '#'
+                    ];
+                }
+            } else {
+                // 如果没有 =>，尝试作为纯文本，使用 # 作为链接
+                if (!empty($line)) {
+                    $navItems[] = [
+                        'text' => $line,
+                        'href' => '#'
+                    ];
                 }
             }
         }
     }
 }
 
+// 如果没有配置导航项，使用默认导航
 if (empty($navItems)) {
     $navItems = [
         ['text' => 'Home', 'href' => '#home'],
@@ -365,9 +369,6 @@ $downloadBtnShadowHover = tpmst_color($colors, 'button_primary_shadow_hover', 'r
 $downloadBtnSize = tpmst_genResponsiveCSS(tpmst_parseResponsive(tpmst_getConfig($styleSettings, 'header.download_button.size', '14/18') . 'px'));
 $downloadBtnPadding = tpmst_genResponsiveCSS(tpmst_parseResponsive(tpmst_getConfig($styleSettings, 'header.download_button.padding', '12/16') . 'px'));
 $downloadBtnRadius = tpmst_getConfig($styleSettings, 'header.download_button.border_radius', '8');
-$downloadBtnUrl = (string)(tpmst_getConfig($styleSettings, 'header.download_button.url', '/#download') ?? '/#download');
-$downloadBtnHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$downloadBtnUrl);
-$downloadBtnRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($downloadBtnHref, 'url');
 
 // SEO信息
 $metaTitle = ($page ? ($page->getData('meta_title') ?: $page->getData('title')) : null) ?: 'Teen Patti Master';
@@ -439,8 +440,8 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
     </script>
     <?php endif; ?>
     
-    <!-- 统计与像素：公用 head-common（与 layout 中引入一致） -->
-    <?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/head-common.phtml'); ?>
+    <!-- 统计代码 -->
+    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
     
     <!-- 本地CSS资源 -->
     <?php 
@@ -470,18 +471,16 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
             --base-main-color: <?= htmlspecialchars(tpmst_color($colors, 'base_main_color', '#ffed4e')) ?>;
         }
         
-        /* 导航栏 - 始终显示，半透明背景，全宽铺满 */
+        /* 导航栏 - 始终显示，半透明背景 */
         .tpmst-nav {
             display: block !important;
-            width: 100vw !important;
-            margin-left: calc(-50vw + 50%);
-            box-sizing: border-box;
             background: <?= htmlspecialchars($navBgHover) ?> !important;
             padding: 12px 24px;
             position: sticky;
             top: 0;
             left: 0;
             right: 0;
+            width: 100%;
             z-index: 9999;
             box-shadow: 0 2px 10px <?= htmlspecialchars(tpmst_color($colors, 'shadow_nav', 'rgba(0,0,0,0.5)')) ?>;
             transition: all 0.3s ease;
@@ -639,13 +638,6 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
             margin: 0;
         }
         
-        .slider-inner .download-btn > a {
-            display: inline-block;
-            line-height: 0;
-            text-decoration: none;
-            color: inherit;
-        }
-        
         .slider-inner .download-btn img {
             animation: zoomBtn 2s infinite;
         }
@@ -714,6 +706,68 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
             }
         }
     </style>
+    
+    <!-- 像素统计配置 -->
+    <?php
+    // 读取像素配置（默认启用）
+    // 确保 $pixelEnabled 始终有值，避免未定义变量错误
+    $pixelEnabled = tpmst_getConfig($styleSettings, 'pixel.enabled', 'yes');
+    $pixelEnabled = (string)($pixelEnabled ?? 'yes'); // 确保始终是字符串类型
+    $pixelName = tpmst_getConfig($styleSettings, 'pixel.name', '');
+    
+    // 如果像素名称为空，使用页面的 handle
+    if (empty($pixelName) && $page) {
+        $pixelName = (string)($page->getData('handle') ?? '');
+    }
+    // 确保 $pixelName 始终是字符串，不会是 null
+    $pixelName = (string)($pixelName ?? '');
+    
+    // 直接从页面对象获取 website_id（页面已有此字段，无需配置）
+    $websiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
+    
+    // 检测是否为预览模式
+    $pathInfo = $this->getRequest()->getPathInfo();
+    $isPreviewMode = $pathInfo ? (strpos($pathInfo, '/preview/') !== false) : false;
+    
+    // 如果页面绑定了网站且有像素名称，输出像素标签（通过 enabled 属性控制是否统计）
+    if ($websiteId > 0 && !empty($pixelName) && !$isPreviewMode):
+        // 设置 website_id Cookie，供像素代码读取
+        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_ID', (string)$websiteId, 3600 * 24 * 365);
+        
+        // 获取网站信息（用于像素统计）
+        $websiteUrl = '';
+        $websiteCode = '';
+        try {
+            if (class_exists('\Weline\Websites\Model\Website')) {
+                $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+                $website = clone $websiteModel;
+                $website->clear()->load($websiteId);
+                if ($website->getId()) {
+                    $websiteUrl = $website->getData('url') ?? '';
+                    $websiteCode = $website->getData('code') ?? '';
+                }
+            }
+        } catch (\Exception $e) {
+            // 如果获取网站信息失败，不影响像素功能
+        }
+        
+        // 设置 website_url Cookie
+        if (!empty($websiteUrl)) {
+            \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_URL', $websiteUrl, 3600 * 24 * 365);
+        }
+        
+        // 设置 website_code Cookie，用于区分不同站点
+        if (!empty($websiteCode)) {
+            \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_CODE', $websiteCode, 3600 * 24 * 365);
+        }
+        
+        // 使用变量传递方式，避免在标签属性中使用 PHP 标签
+        $this->assign('pixel_name', htmlspecialchars((string)($pixelName ?? '')));
+        $this->assign('pixel_enabled', htmlspecialchars((string)($pixelEnabled ?? 'yes')));
+    ?>
+        <!-- Weline Visitor Pixel - 通过 enabled 属性控制是否统计，遵循模板配置中的 pixel.enabled 设置 -->
+        <pixel name="{{pixel_name}}" enabled="{{pixel_enabled}}" />
+    <?php endif; ?>
 </head>
 <body>
     
@@ -739,7 +793,7 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
             </ul>
             
             <?php if ($downloadBtnDisplay === 'yes'): ?>
-            <a role="button" tabindex="0" class="tpmst-nav-download-btn <?= htmlspecialchars(trim((string)($downloadBtnExtraClasses ?? ''))) ?>" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($downloadBtnRef)) ?>" data-glr-ref="<?= htmlspecialchars($downloadBtnRef) ?>"><?= htmlspecialchars((string)($downloadBtnText ?? '')) ?></a>
+            <a href="#download" class="tpmst-nav-download-btn <?= htmlspecialchars(trim((string)($downloadBtnExtraClasses ?? ''))) ?>"><?= htmlspecialchars((string)($downloadBtnText ?? '')) ?></a>
             <?php endif; ?>
         </div>
     </nav>
@@ -772,7 +826,6 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
                         </div>
                         <?php if ($finalDownloadBtn): ?>
                         <p class="download-btn">
-                            <a role="button" tabindex="0" class="tpmst-banner-download-link" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($downloadBtnRef)) ?>" data-glr-ref="<?= htmlspecialchars($downloadBtnRef) ?>">
                             <img class="download-icon animation-scale lazy-loading" 
                                  src="<?= htmlspecialchars($finalDownloadBtn) ?>" 
                                  data-src="<?= htmlspecialchars($finalDownloadBtn) ?>" 
@@ -781,7 +834,6 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
                                  width="210" 
                                  height="54" 
                                  alt="<?= htmlspecialchars($bannerDownloadBtnAlt) ?>">
-                            </a>
                         </p>
                         <?php endif; ?>
                     </div>

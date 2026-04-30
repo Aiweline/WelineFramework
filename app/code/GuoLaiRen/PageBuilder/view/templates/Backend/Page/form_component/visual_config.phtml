@@ -21,31 +21,6 @@ $handle = $this->getData('visual_config_handle') ?: ($page ? $page->getData('han
 $styleSettings = $page ? $page->getStyleSettings() : [];
 $isTemplateConfigMode = $this->getData('is_template_config_mode') ?: false;
 
-// 虚拟主题 / 会话预览：由 virtual-edit 等入口 assign，普通编辑页为 0 / 空串（与 form_component_back 对齐）
-$virtualThemeIdForVisual = (int)($this->getData('visual_config_virtual_theme_id') ?: 0);
-$visualPublicId = (string)($this->getData('visual_public_id') ?? '');
-$visualPageTypeForPreview = (string)($this->getData('visual_page_type') ?? '');
-$visualPreviewUrlBootstrap = (string)($this->getData('visual_preview_url') ?? '');
-$isVisualVirtualMode = (bool)($this->getData('visual_is_virtual_mode') ?? false);
-$previewIframeSrc = ($isVisualVirtualMode && $visualPreviewUrlBootstrap !== '')
-    ? $visualPreviewUrlBootstrap
-    : $this->getBackendUrl('*/backend/preview/full', ['page_id' => (int)$pageId, 'visual_editor' => '1']);
-
-// AI 组件配置生成所需：页面类型、页面描述、各类型提示词（供前端手风琴展示）
-$pageType = $page ? (string)($page->getData('type') ?? 'custom_page') : 'custom_page';
-$aiDescription = $page ? (string)($page->getData('ai_description') ?? '') : '';
-$pageTypePromptMap = \GuoLaiRen\PageBuilder\Model\Page::getPageTypePromptInstructionsMap();
-$pageTypeNames = \GuoLaiRen\PageBuilder\Model\Page::getPageTypes();
-$currentPageTypePrompt = $pageTypePromptMap[$pageType] ?? $pageTypePromptMap['custom_page'] ?? '';
-$currentPageTypeName = $pageTypeNames[$pageType] ?? $pageType;
-
-// 渲染 SseTerminal 组件 HTML（用于组件配置弹窗内的 AI 生成过程展示）
-ob_start();
-?>
-<w:theme:sse-terminal id="aiComponentConfigSseTerminal" title="@lang{生成过程}" height="180px" events="start,progress,thinking,chunk,done,error" show-toolbar="true" />
-<?php
-$aiComponentConfigSseTerminalHtml = ob_get_clean();
-
 // 获取后端主题配置
 /**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
@@ -53,52 +28,17 @@ $themeModel = $themeConfig->getThemeModel();
 $themeMode = $themeModel ?: 'light'; // 默认为light
 ?>
 <style>
-/* 可视化配置容器：须高于 #page-topbar(10050)、.right-bar(10060)，低于 SweetAlert2(100000+) */
+/* 可视化配置容器 - 使用CSS变量支持主题 */
 .visual-config-wrapper {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 100500 !important;
-    isolation: isolate;
+    z-index: 9999;
     background: var(--visual-config-bg, #fff);
     color: var(--visual-config-text, #212529);
     display: none;
-}
-
-/* 工具栏与侧栏高于中间预览，避免 iframe 盖住操作区 */
-.visual-config-wrapper.active > .visual-toolbar {
-    position: relative;
-    z-index: 60;
-}
-.visual-config-wrapper.active > .visual-content {
-    position: relative;
-    z-index: 1;
-    min-height: 0;
-}
-.visual-config-wrapper.active .config-panel {
-    z-index: 20;
-}
-.visual-config-wrapper.active .preview-panel {
-    position: relative;
-    z-index: 0;
-}
-.visual-config-wrapper.active .visual-right-sidebar {
-    position: relative;
-    z-index: 40;
-}
-.visual-config-wrapper.active .component-panel {
-    position: relative;
-    z-index: 40;
-}
-
-/* 编辑器内若使用后台 .card，禁用 hover 位移（theme.css 全局 transform 会致弹窗内抖动） */
-.visual-config-wrapper .card {
-    transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-.visual-config-wrapper .card:hover {
-    transform: none;
 }
 
 /* 亮色主题（默认） */
@@ -144,34 +84,6 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     --visual-config-hover-bg: #3a3a3a;
     --visual-config-scrollbar-thumb: rgba(148, 163, 184, 0.3);
     --visual-config-scrollbar-thumb-hover: rgba(148, 163, 184, 0.5);
-}
-
-/* SSE 终端内 pre 块：写死颜色，亮/暗主题兼容，不依赖 CSS 变量加载顺序 */
-.weline-sse-terminal-context,
-.weline-sse-terminal-prompt,
-.weline-sse-terminal-trace {
-    margin: 6px 0 0 0;
-    padding: 8px;
-    font-size: 11px;
-    line-height: 1.4;
-    overflow: auto;
-    white-space: pre-wrap;
-    word-break: break-all;
-    border-radius: 4px;
-    background: #e9ecef;
-    color: #212529;
-    border: 1px solid #dee2e6;
-}
-.weline-sse-terminal-context { max-height: 280px; }
-.weline-sse-terminal-prompt { max-height: 200px; }
-.weline-sse-terminal-trace { max-height: 160px; }
-
-[data-theme="dark"] .weline-sse-terminal-context,
-[data-theme="dark"] .weline-sse-terminal-prompt,
-[data-theme="dark"] .weline-sse-terminal-trace {
-    background: #3a3a3a;
-    color: #e9ecef;
-    border-color: #495057;
 }
 
 .visual-config-wrapper.active {
@@ -636,6 +548,7 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
 .color-scheme-item:hover {
     border-color: #3498db;
     box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+    transform: translateY(-2px);
 }
 
 .color-scheme-item.selected {
@@ -886,7 +799,7 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     bottom: 0 !important;
     width: 100vw !important;
     height: 100vh !important;
-    z-index: 100500 !important;
+    z-index: 9999 !important;
     transform: none !important;
 }
 
@@ -1063,7 +976,8 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     margin-top: 1rem;
 }
 
-/* SweetAlert2 在可视化全屏层(100500)之上 */
+/* SweetAlert2 弹窗层级调整：确保在可视化窗口之上 */
+/* 可视化编辑器全屏模式的 z-index 是 99999，所以 SweetAlert2 需要更高 */
 .swal2-container {
     z-index: 100000 !important;
 }
@@ -1177,26 +1091,6 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
 .swal2-dark-theme .ai-generate-bar {
     background: linear-gradient(135deg, rgba(102,126,234,0.15) 0%, rgba(118,75,162,0.15) 100%) !important;
     border-color: rgba(102,126,234,0.3) !important;
-}
-
-/* 全屏层之上打开 Bootstrap Modal：抬高遮罩/对话框，并冻结可视化层指针（backdrop 默认 1040 低于 100500） */
-body.visual-config-editor-open.modal-open #visualConfigWrapper {
-    pointer-events: none !important;
-}
-body.visual-config-editor-open.modal-open .modal-backdrop.show {
-    z-index: 100510 !important;
-}
-body.visual-config-editor-open.modal-open .modal.show {
-    z-index: 100520 !important;
-}
-body.visual-config-editor-open .weline-component-config-modal .card,
-body.visual-config-editor-open #resetConfigConfirmModal .card {
-    transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-body.visual-config-editor-open .weline-component-config-modal .card:hover,
-body.visual-config-editor-open #resetConfigConfirmModal .card:hover,
-body.visual-config-editor-open .swal2-popup .card:hover {
-    transform: none;
 }
 </style>
 <!-- 可视化配置容器 -->
@@ -1694,7 +1588,7 @@ body.visual-config-editor-open .swal2-popup .card:hover {
         <!-- 中间预览面板 -->
         <div class="preview-panel">
             <div class="preview-container device-desktop" id="previewContainer">
-                <iframe id="previewIframe" class="preview-iframe" data-skip-parse="src" src="<?= htmlspecialchars($previewIframeSrc, ENT_QUOTES, 'UTF-8') ?>"></iframe>
+                <iframe id="previewIframe" class="preview-iframe" data-skip-parse="src" src="<?= $this->getBackendUrl('*/backend/preview/full', ['page_id' => $pageId, 'visual_editor' => '1']) ?>"></iframe>
                 <div class="preview-loading" id="previewLoading">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden"><?= __('加载中...') ?></span>
@@ -1704,141 +1598,49 @@ body.visual-config-editor-open .swal2-popup .card:hover {
             </div>
         </div>
         
-        <!-- 右侧栏：页面结构 + 组件库（独立模板） -->
-        <?php
+        <!-- 右侧组件面板 -->
+        <?php 
         $this->assign('style_code', $page ? $page->getData('style') : 'default');
-        $this->assign('page', $page);
+        // 根据页面类型自动选择布局：博客类型页面使用blog布局
+        $layoutCode = 'default';
+        if ($page) {
+            // 优先使用页面已设置的layout字段
+            $layoutCode = $page->getData('layout');
+            // 如果未设置layout，根据页面类型自动选择
+            if (empty($layoutCode)) {
+                $pageType = $page->getData('type');
+                // 博客类型页面使用blog布局
+                if (in_array($pageType, [
+                    \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG,
+                    \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_CATEGORY,
+                    \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_LIST
+                ])) {
+                    $layoutCode = 'blog';
+                } else {
+                    $layoutCode = 'default';
+                }
+            }
+        }
+        $this->assign('layout_code', $layoutCode);
         ?>
-        <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/visual_config_right_sidebar.phtml</w:template>
+        <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/component_panel.phtml</w:template>
     </div>
 </div>
 <!-- SweetAlert2 CSS -->
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
 <!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<script>
-window.visualVirtualThemeId = <?= (int)$virtualThemeIdForVisual ?>;
-window.visualPublicId = <?= json_encode($visualPublicId, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
-window.visualPageType = <?= json_encode($visualPageTypeForPreview, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
-window.visualIsVirtualMode = <?= $isVisualVirtualMode ? 'true' : 'false' ?>;
-
-window.hasVisualVirtualContext = function () {
-    return !!(
-        window.visualIsVirtualMode
-        && typeof window.visualPublicId === 'string'
-        && window.visualPublicId.trim() !== ''
-        && typeof window.visualPageType === 'string'
-        && window.visualPageType.trim() !== ''
-    );
-};
-
-window.buildVisualRequestPayload = function (payload, options) {
-    var nextPayload = Object.assign({}, payload || {});
-    var opts = options || {};
-    if (typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext()) {
-        delete nextPayload.page_id;
-        nextPayload.public_id = String(window.visualPublicId || '').trim();
-        nextPayload.page_type = String(window.visualPageType || '').trim();
-        if (opts.styleCode) {
-            nextPayload.style_code = String(opts.styleCode);
-        }
-        var virtualThemeId = Number(window.visualVirtualThemeId || 0);
-        if (virtualThemeId > 0) {
-            nextPayload.virtual_theme_id = virtualThemeId;
-        }
-        return nextPayload;
-    }
-
-    var fallbackPageId = Number(nextPayload.page_id || window.visualPageId || window.pageId || 0);
-    if (fallbackPageId > 0) {
-        nextPayload.page_id = fallbackPageId;
-    }
-    return nextPayload;
-};
-
-window.appendVisualRequestIdentityToFormData = function (formData, options) {
-    if (!(formData instanceof FormData)) {
-        return formData;
-    }
-    var opts = options || {};
-    if (typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext()) {
-        formData.delete('page_id');
-        formData.set('public_id', String(window.visualPublicId || '').trim());
-        formData.set('page_type', String(window.visualPageType || '').trim());
-        if (opts.styleCode) {
-            formData.set('style_code', String(opts.styleCode));
-        }
-        var virtualThemeId = Number(window.visualVirtualThemeId || 0);
-        if (virtualThemeId > 0) {
-            formData.set('virtual_theme_id', String(virtualThemeId));
-        } else {
-            formData.delete('virtual_theme_id');
-        }
-        return formData;
-    }
-
-    var fallbackPageId = Number(opts.pageId || formData.get('page_id') || window.visualPageId || window.pageId || 0);
-    if (fallbackPageId > 0) {
-        formData.set('page_id', String(fallbackPageId));
-    }
-    return formData;
-};
-
-window.buildVisualRequestUrl = function (baseUrl, params) {
-    var url = new URL(baseUrl, window.location.origin);
-    var searchParams = url.searchParams;
-    var nextParams = params || {};
-    Object.keys(nextParams).forEach(function (key) {
-        var value = nextParams[key];
-        if (value === undefined || value === null || value === '') {
-            return;
-        }
-        searchParams.set(key, String(value));
-    });
-
-    if (typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext()) {
-        searchParams.delete('page_id');
-        searchParams.set('public_id', String(window.visualPublicId || '').trim());
-        searchParams.set('page_type', String(window.visualPageType || '').trim());
-        var virtualThemeId = Number(window.visualVirtualThemeId || 0);
-        if (virtualThemeId > 0) {
-            searchParams.set('virtual_theme_id', String(virtualThemeId));
-        } else {
-            searchParams.delete('virtual_theme_id');
-        }
-    }
-
-    return url.toString();
-};
-</script>
 <!-- 早期挂载一个全局入口，确保表单可调用，即使主脚本延迟/异常 -->
 <script>
-/** 挂到 body，避免嵌在表单 .card 内时 theme .card:hover transform 产生层叠上下文锁住 fixed */
-window.ensureVisualConfigPortal = function () {
-    try {
-        var el = document.getElementById('visualConfigWrapper');
-        if (!el || el.getAttribute('data-weline-portal-body') === '1') {
-            return;
-        }
-        if (el.parentElement !== document.body) {
-            document.body.appendChild(el);
-        }
-        el.setAttribute('data-weline-portal-body', '1');
-    } catch (e) {}
-};
 if (typeof window.openVisualConfig === 'undefined') {
     window.openVisualConfig = function(passedHandle) {
         try {
             if (passedHandle && typeof passedHandle === 'string') {
                 window.visualConfigHandle = passedHandle.trim();
             }
-            if (typeof window.ensureVisualConfigPortal === 'function') {
-                window.ensureVisualConfigPortal();
-            }
             var wrapper = document.getElementById('visualConfigWrapper');
             if (wrapper) {
                 wrapper.classList.add('active');
-                document.body.classList.add('visual-config-editor-open');
                 document.body.style.overflow = 'hidden';
                 
                 // 默认进入全屏模式并收起配置栏
@@ -1896,12 +1698,6 @@ if (typeof window.openVisualConfig === 'undefined') {
     // 初始化全局变量（只在未定义时设置，避免覆盖已有值）
     window.visualConfigInitialized = window.visualConfigInitialized || false;
     window.visualPageId = window.visualPageId || null;
-    // AI 组件配置生成：当前页面类型、页面描述、类型提示词（供手风琴展示）
-    window.PB_AI_PAGE_TYPE = <?= json_encode($pageType, JSON_UNESCAPED_UNICODE) ?>;
-    window.PB_AI_AI_DESCRIPTION = <?= json_encode($aiDescription, JSON_UNESCAPED_UNICODE) ?>;
-    window.PB_AI_CURRENT_PAGE_TYPE_PROMPT = <?= json_encode($currentPageTypePrompt, JSON_UNESCAPED_UNICODE) ?>;
-    window.PB_AI_CURRENT_PAGE_TYPE_NAME = <?= json_encode($currentPageTypeName, JSON_UNESCAPED_UNICODE) ?>;
-    window.PB_AI_SSE_TERMINAL_HTML = <?= json_encode($aiComponentConfigSseTerminalHtml, JSON_UNESCAPED_UNICODE) ?>;
     window.visualConfigHandle = window.visualConfigHandle || null;
     window.currentVisualLanguage = window.currentVisualLanguage || '';
     window.defaultLanguage = window.defaultLanguage || '';
@@ -1919,9 +1715,6 @@ if (typeof window.openVisualConfig === 'undefined') {
             setTimeout(initVisualConfig, 100);
             return;
         }
-        if (typeof window.ensureVisualConfigPortal === 'function') {
-            window.ensureVisualConfigPortal();
-        }
         
         // 尝试从多个来源获取 handle 和 page_id（优先使用外部传入的全局值）
         let handle = (typeof window.visualConfigHandle !== 'undefined' && window.visualConfigHandle) ? window.visualConfigHandle : '<?= htmlspecialchars($handle ?? '') ?>';
@@ -1936,13 +1729,12 @@ if (typeof window.openVisualConfig === 'undefined') {
         }
         
         // 如果 pageId 为空，尝试从全局变量获取
-        const useVirtualIdentity = typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext();
-        if (!pageId && !useVirtualIdentity && typeof window.visualPageId !== 'undefined' && window.visualPageId) {
+        if (!pageId && typeof window.visualPageId !== 'undefined' && window.visualPageId) {
             pageId = window.visualPageId;
         }
         
         // 如果只有 handle 没有 pageId，需要通过 API 获取
-        if (handle && !pageId && !useVirtualIdentity) {
+        if (handle && !pageId) {
             var url = '<?= $this->getBackendUrl('*/backend/page/getPageByHandle') ?>?handle=' + encodeURIComponent(handle);
                         var req = window.Weline.Api.get(url, { silent: true });
             req.then(function(res) {
@@ -1965,13 +1757,13 @@ if (typeof window.openVisualConfig === 'undefined') {
                     }
                 });
         } else {
-            window.visualPageId = pageId || null;
+            window.visualPageId = pageId;
             window.visualConfigHandle = handle;
             window.visualConfigInitialized = true;
         }
         
-        if (!window.defaultLanguage && <?= $page && $page->getData('default_locale') ? json_encode($page->getData('default_locale'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) : 'null' ?>) {
-            window.defaultLanguage = <?= $page && $page->getData('default_locale') ? json_encode($page->getData('default_locale'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) : 'null' ?>;
+        if (!window.defaultLanguage && <?= $page && $page->getData('default_locale') ? json_encode($page->getData('default_locale')) : 'null' ?>) {
+            window.defaultLanguage = <?= $page && $page->getData('default_locale') ? json_encode($page->getData('default_locale')) : 'null' ?>;
             window.currentVisualLanguage = window.defaultLanguage;
         }
     };
@@ -2013,12 +1805,8 @@ const AUTO_SAVE_DELAY = 1000; // 1秒
 
 // 打开可视化配置
 function openVisualConfig(passedHandle) {
-    if (typeof window.ensureVisualConfigPortal === 'function') {
-        window.ensureVisualConfigPortal();
-    }
     const wrapper = document.getElementById('visualConfigWrapper');
     wrapper.classList.add('active');
-    document.body.classList.add('visual-config-editor-open');
     document.body.style.overflow = 'hidden';
     
     // 默认进入全屏模式并收起配置栏
@@ -2084,10 +1872,6 @@ function openVisualConfig(passedHandle) {
                 if (typeof window.refreshPreview === 'function') {
                     window.refreshPreview();
                 }
-                if (typeof window.visualEditorLoadPageTree === 'function') {
-                    var pid = window.visualPageId || window.pageId;
-                    if (pid) window.visualEditorLoadPageTree(pid);
-                }
             });
         }
     }
@@ -2111,7 +1895,6 @@ function closeVisualConfig() {
         return;
     }
     document.getElementById('visualConfigWrapper').classList.remove('active');
-    document.body.classList.remove('visual-config-editor-open');
     document.body.style.overflow = '';
 }
 
@@ -2259,9 +2042,6 @@ window.updateSaveStatus = function(status, text) {
                 if (window.currentVisualLanguage) {
                     requestBody.locale = window.currentVisualLanguage;
                 }
-                if (typeof window.buildVisualRequestPayload === 'function') {
-                    requestBody = window.buildVisualRequestPayload(requestBody, { styleCode: currentStyleCode || '' });
-                }
             }
             
             var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(requestBody) };
@@ -2357,24 +2137,17 @@ window.refreshPreview = function(savedPosition) {
     const styleCode = window.currentTemplateStyleCode || '';
     const templatePageId = window.currentTemplatePageId || 0;
     
-    // 构建预览 URL（page_id 模式 或 虚拟主题 public_id + page_type）
+    // 构建预览 URL（使用全局 pageId 或从 window 获取）
     const currentPageId = typeof pageId !== 'undefined' ? pageId : (window.pageId || window.visualPageId || 0);
-    const useVirtualPreview = typeof window.visualPublicId === 'string' && window.visualPublicId.trim() !== ''
-        && typeof window.visualPageType === 'string' && window.visualPageType.trim() !== '';
-    let previewUrl;
-    if (useVirtualPreview) {
-        previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?public_id=' + encodeURIComponent(window.visualPublicId)
-            + '&page_type=' + encodeURIComponent(window.visualPageType) + '&visual_editor=1';
-    } else {
-        previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?page_id=' + currentPageId + '&visual_editor=1';
-    }
+    let previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?page_id=' + currentPageId + '&visual_editor=1';
     
-    if (!useVirtualPreview && isTemplateMode && styleCode) {
+    if (isTemplateMode && styleCode) {
         previewUrl += '&style_code=' + encodeURIComponent(styleCode);
         if (templatePageId) {
             previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?page_id=' + templatePageId + '&style_code=' + encodeURIComponent(styleCode) + '&visual_editor=1';
         }
     } else {
+        // 普通页面配置模式：如果有外部样式选择，带上样式代码
         const externalStyleSelect = document.getElementById('style');
         const externalStyleCode = externalStyleSelect ? externalStyleSelect.value : (typeof window.currentStyle !== 'undefined' ? window.currentStyle : '');
         if (externalStyleCode) {
@@ -2383,10 +2156,6 @@ window.refreshPreview = function(savedPosition) {
         if (window.currentVisualLanguage) {
             previewUrl += '&locale=' + encodeURIComponent(window.currentVisualLanguage);
         }
-    }
-    
-    if (typeof window.visualVirtualThemeId === 'number' && window.visualVirtualThemeId > 0) {
-        previewUrl += '&virtual_theme_id=' + encodeURIComponent(String(window.visualVirtualThemeId));
     }
     
     previewUrl += '&t=' + Date.now();
@@ -2421,18 +2190,6 @@ window.refreshPreview = function(savedPosition) {
     };
 }
 
-// 可视化编辑内 iframe 点击 header/footer 链接时通过 postMessage 通知跳转，在此统一处理
-window.addEventListener('message', function(e) {
-    if (!e.data || e.data.type !== 'PageBuilderVisualEditor' || e.data.action !== 'navigate' || !e.data.page_id) return;
-    var targetPageId = parseInt(e.data.page_id, 10);
-    if (!targetPageId) return;
-    window.visualPageId = targetPageId;
-    if (typeof window.pageId !== 'undefined') window.pageId = targetPageId;
-    if (typeof window.refreshPreview === 'function') window.refreshPreview();
-    if (typeof window.visualEditorLoadPageTree === 'function') window.visualEditorLoadPageTree(targetPageId);
-    if (typeof window.visualEditorSelectPageInTree === 'function') window.visualEditorSelectPageInTree(targetPageId);
-});
-
 // 通过可视化面板自动保存 SEO / TDK（直接写入页面记录，而不是样式配置）
 window.saveSeoConfig = async function () {
     try {
@@ -2444,8 +2201,7 @@ window.saveSeoConfig = async function () {
         }
 
         const pageId = window.visualPageId || window.pageId || 0;
-        const useVirtualSeo = typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext();
-        if (!pageId && !useVirtualSeo) {
+        if (!pageId) {
             return;
         }
 
@@ -2455,16 +2211,13 @@ window.saveSeoConfig = async function () {
             window.updateSaveStatus('saving', '<?= __('保存中...') ?>');
         }
 
-        let payload = {
+        const payload = {
             page_id: pageId,
             locale: locale,
             meta_title: metaTitleInput.value || '',
             meta_description: metaDescInput.value || '',
             meta_keywords: metaKeywordsInput.value || ''
         };
-        if (typeof window.buildVisualRequestPayload === 'function') {
-            payload = window.buildVisualRequestPayload(payload);
-        }
 
         var url = '<?= $this->getBackendUrl('*/backend/page/autoSaveSeo') ?>';
         var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(payload) };
@@ -2896,10 +2649,8 @@ function renderTemplateConfig(configGroups) {
             fieldHtml += `</div>`;
             fieldHtml += `</div>`;
         } else if (config.type === 'color') {
-            // type="color" 只接受 #rrggbb，rgba 等会导致解析/验证错误
-            const colorHex = /^#[0-9A-Fa-f]{6}$/.test(String(rawValue || '')) ? rawValue : '#000000';
             fieldHtml += `<input type="color" id="${fieldId}" class="form-control form-control-color auto-save-field" 
-                    data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(colorHex)}">`;
+                    data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(rawValue)}">`;
         } else if (config.type === 'textarea') {
             // 处理 textarea 的值：将字面量 \n 和 \r\n 转换为实际换行符
             // 注意：textarea 内容中的换行符不需要 HTML 转义，但需要转义其他 HTML 特殊字符
@@ -3378,21 +3129,12 @@ async function loadVisualStyleConfig() {
             configPanel.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><div class="mt-2"><?= __('正在加载配置...') ?></div></div>';
         }
 
-        let url;
-        if (typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext() && typeof window.buildVisualRequestUrl === 'function') {
-            url = window.buildVisualRequestUrl('<?= $this->getBackendUrl('*/backend/page/getStyleConfig') ?>', {
-                style_code: styleCode,
-                page_id: currentPageId,
-                locale: locale || ''
-            });
-        } else {
-            // 复用模板配置的获取接口
-            url = '<?= $this->getBackendUrl('*/backend/template/getStyleConfig') ?>' +
-                '?style_code=' + encodeURIComponent(styleCode) +
-                '&page_id=' + encodeURIComponent(currentPageId);
-            if (locale) {
-                url += '&locale=' + encodeURIComponent(locale);
-            }
+        // 复用模板配置的获取接口
+        let url = '<?= $this->getBackendUrl('*/backend/template/getStyleConfig') ?>' +
+            '?style_code=' + encodeURIComponent(styleCode) +
+            '&page_id=' + encodeURIComponent(currentPageId);
+        if (locale) {
+            url += '&locale=' + encodeURIComponent(locale);
         }
 
         var res = await window.Weline.Api.get(url, { silent: true });
@@ -3588,7 +3330,7 @@ window.openPageSpeedMobile = function(){
     let handle = '';
     if (window.isTemplateConfigMode) {
         // 模板配置模式：使用测试页面句柄
-        const page = <?= ($page && $page->getId()) ? json_encode($page->getData('handle'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) : 'null' ?>;
+        const page = <?= ($page && $page->getId()) ? json_encode($page->getData('handle')) : 'null' ?>;
         handle = page || '';
     } else {
         // 正常模式：从表单获取
@@ -4058,16 +3800,13 @@ window.resetAllVisualConfig = function() {
                     url = '<?= $this->getBackendUrl('*/backend/preview/resetFieldsToDefault') ?>';
                     const styleSelect = document.getElementById('style');
                     let styleCode = styleSelect ? styleSelect.value : '';
-                requestData = {
-                    page_id: window.visualPageId || window.pageId || 0,
-                    style_code: styleCode,
-                    config_keys: configKeys,
-                    locale: window.currentVisualLanguage || ''
-                };
-                if (typeof window.buildVisualRequestPayload === 'function') {
-                    requestData = window.buildVisualRequestPayload(requestData, { styleCode: styleCode });
+                    requestData = {
+                        page_id: window.visualPageId || window.pageId || 0,
+                        style_code: styleCode,
+                        config_keys: configKeys,
+                        locale: window.currentVisualLanguage || ''
+                    };
                 }
-            }
                 
                 var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(requestData) };
                 var res = await window.Weline.Api.request(url, opts);
@@ -4159,16 +3898,13 @@ window.resetVisualConfigGroup = function(section) {
                     url = '<?= $this->getBackendUrl('*/backend/preview/resetFieldsToDefault') ?>';
                     const styleSelect = document.getElementById('style');
                     let styleCode = styleSelect ? styleSelect.value : '';
-                requestData = {
-                    page_id: window.visualPageId || window.pageId || 0,
-                    style_code: styleCode,
-                    config_keys: configKeys,
-                    locale: window.currentVisualLanguage || ''
-                };
-                if (typeof window.buildVisualRequestPayload === 'function') {
-                    requestData = window.buildVisualRequestPayload(requestData, { styleCode: styleCode });
+                    requestData = {
+                        page_id: window.visualPageId || window.pageId || 0,
+                        style_code: styleCode,
+                        config_keys: configKeys,
+                        locale: window.currentVisualLanguage || ''
+                    };
                 }
-            }
                 
                 var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(requestData) };
                 var res = await window.Weline.Api.request(url, opts);
@@ -4539,26 +4275,10 @@ window.setupPreviewDropZones = function() {
                     transition: box-shadow 0.2s ease;
                     z-index: 1 !important;
                 }
-                /* header/footer 区域的组件包装器需要更高的 z-index，footer 禁止裁剪以便显示操作按钮 */
+                /* header/footer 区域的组件包装器需要更高的 z-index */
                 [data-region="header"] .tpmst-component-wrapper,
-                [data-region="footer"] .tpmst-component-wrapper,
-                .pb-slot-footer .tpmst-component-wrapper,
-                .pb-slot-footer .pb-component-wrapper {
+                [data-region="footer"] .tpmst-component-wrapper {
                     z-index: 10000 !important;
-                }
-                [data-region="footer"],
-                .pb-slot-footer {
-                    overflow: visible !important;
-                }
-                /* footer 区取消 ::before 遮罩，避免阻挡 wrapper 的 mouseenter，与 header 行为一致 */
-                [data-region="footer"]::before,
-                .pb-slot-footer::before {
-                    display: none !important;
-                }
-                [data-region="footer"] .tpmst-component-wrapper,
-                .pb-slot-footer .tpmst-component-wrapper,
-                .pb-slot-footer .pb-component-wrapper {
-                    overflow: visible !important;
                 }
                 .tpmst-component-wrapper:hover {
                     /* 参照 header 样式：使用边框内部虚线阴影，不要背景蒙版 */
@@ -4584,10 +4304,6 @@ window.setupPreviewDropZones = function() {
                 [data-region="footer"] .tpmst-component-wrapper footer {
                     position: relative !important;
                 }
-                /* 确保 footer 区 wrapper 可被悬停：子元素不阻挡 wrapper 的 hover 传递 */
-                [data-region="footer"] .tpmst-component-wrapper {
-                    isolation: isolate;
-                }
                 .tpmst-component-wrapper .component-actions {
                     position: absolute !important;
                     top: 8px !important;
@@ -4611,37 +4327,13 @@ window.setupPreviewDropZones = function() {
                     height: auto !important;
                 }
                 .tpmst-component-wrapper:hover .component-actions,
-                .tpmst-component-wrapper .component-actions:hover,
-                .tpmst-component-wrapper .component-actions.pb-actions-visible {
+                .tpmst-component-wrapper .component-actions:hover {
                     display: flex !important;
                 }
-                /* header/footer 区域的操作按钮统一放在右上角，z-index 更高 */
+                /* header/footer 区域的操作按钮需要更高的 z-index */
                 [data-region="header"] .tpmst-component-wrapper .component-actions,
-                [data-region="footer"] .tpmst-component-wrapper .component-actions,
-                .pb-slot-footer .tpmst-component-wrapper .component-actions,
-                .pb-slot-footer .pb-component-wrapper .component-actions {
+                [data-region="footer"] .tpmst-component-wrapper .component-actions {
                     z-index: 100001 !important;
-                }
-                /* footer 区域：与 header 一致，仅 hover 时显示按钮，失去 hover 时隐藏 */
-                .pb-slot-footer .tpmst-component-wrapper .component-actions,
-                .pb-slot-footer .pb-component-wrapper .component-actions {
-                    display: none !important;
-                }
-                .pb-slot-footer footer,
-                .pb-slot-footer [data-region="footer"],
-                .pb-slot-footer .tpmst-region-footer,
-                [data-region="footer"] footer {
-                    overflow: visible !important;
-                }
-                .pb-slot-footer:hover .tpmst-component-wrapper .component-actions,
-                .pb-slot-footer:hover .pb-component-wrapper .component-actions,
-                [data-region="footer"]:hover .tpmst-component-wrapper .component-actions,
-                [data-region="footer"]:hover .pb-component-wrapper .component-actions,
-                [data-region="footer"] .tpmst-component-wrapper:hover .component-actions,
-                [data-region="footer"] .pb-component-wrapper:hover .component-actions,
-                .pb-slot-footer .tpmst-component-wrapper:hover .component-actions,
-                .pb-slot-footer .pb-component-wrapper:hover .component-actions {
-                    display: flex !important;
                 }
                 .tpmst-component-wrapper .component-actions button {
                     width: 32px;
@@ -4704,34 +4396,6 @@ window.setupPreviewDropZones = function() {
             zone.addEventListener('dragleave', handlePreviewDragLeave);
             zone.addEventListener('drop', handlePreviewDrop);
         });
-
-        // footer 区域：用 document 级 mouseover/mouseout 委托，辅助 hover 显示（与 header/content 一致）
-        (function() {
-            var footerSelector = '[data-region="footer"], .pb-slot-footer';
-            var footerZones = doc.querySelectorAll(footerSelector);
-            if (footerZones.length === 0) return;
-            var actionsSelector = '.tpmst-component-wrapper .component-actions, .pb-component-wrapper .component-actions';
-            var hideFooterActions = function(zone) {
-                if (!zone) return;
-                zone.querySelectorAll(actionsSelector).forEach(function(a) { a.classList.remove('pb-actions-visible'); });
-            };
-            var showFooterActions = function(zone) {
-                if (!zone) return;
-                zone.style.position = 'relative';
-                zone.querySelectorAll(actionsSelector).forEach(function(a) { a.classList.add('pb-actions-visible'); });
-            };
-            doc.addEventListener('mouseover', function(e) {
-                var zone = e.target && e.target.closest ? e.target.closest(footerSelector) : null;
-                if (zone) showFooterActions(zone);
-            }, true);
-            doc.addEventListener('mouseout', function(e) {
-                var zone = e.target && e.target.closest ? e.target.closest(footerSelector) : null;
-                var related = e.relatedTarget;
-                if (!zone) return;
-                if (related && zone.contains(related)) return;
-                hideFooterActions(zone);
-            }, true);
-        })();
         
         // 为每个组件添加操作按钮
         doc.querySelectorAll('.tpmst-component-wrapper').forEach(wrapper => {
@@ -4761,9 +4425,11 @@ window.setupPreviewDropZones = function() {
             // 创建新的操作按钮容器
             const actions = doc.createElement('div');
             actions.className = 'component-actions';
+            // 确保按钮容器有正确的定位样式
             actions.style.position = 'absolute';
-            actions.style.right = '8px';
             actions.style.top = '8px';
+            actions.style.right = '8px';
+            actions.style.zIndex = '99999';
             
             // content 区域添加排序按钮
             if (region === 'content') {
@@ -4889,11 +4555,6 @@ window.setupPreviewDropZones = function() {
             actions.appendChild(removeBtn);
             
             wrapper.appendChild(actions);
-            
-            // footer 区：始终显示按钮（不随 hover 切换），避免嵌套结构阻挡 hover
-            if (region === 'footer') {
-                actions.classList.add('pb-footer-actions', 'pb-actions-visible');
-            }
         });
         
         // 更新所有 content 区域组件的排序按钮状态
@@ -5341,8 +5002,7 @@ async function saveComponentOrder() {
         });
         
         const pageId = window.visualPageId || 0;
-        const useVirtualLayout = typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext();
-        if (!pageId && !useVirtualLayout) {
+        if (!pageId) {
             console.error('页面ID未定义');
             return;
         }
@@ -5359,10 +5019,7 @@ async function saveComponentOrder() {
         
         // 调用 API 保存新顺序
         var url = '<?= $this->getBackendUrl('*/backend/visual/api/component/reorder') ?>';
-        var requestData = typeof window.buildVisualRequestPayload === 'function'
-            ? window.buildVisualRequestPayload({ page_id: pageId, region: 'content', order: newOrder })
-            : { page_id: pageId, region: 'content', order: newOrder };
-        var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(requestData) };
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ page_id: pageId, region: 'content', order: newOrder }) };
         var res = await window.Weline.Api.request(url, opts);
         const result = (res && res.data) || res;
         
@@ -5407,14 +5064,13 @@ window.addComponentToLayout = async function(componentData, region, replace = fa
         // 忽略
     }
     
-    const useVirtualAdd = typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext();
-    if (!pageId && !useVirtualAdd) {
+    if (!pageId) {
         BackendToast.error('<?= __('错误：页面ID未定义，请刷新页面重试') ?>');
         return;
     }
     
     try {
-        let requestData = {
+        const requestData = {
             page_id: pageId,
             component_code: componentData.code,
             region: region,
@@ -5425,9 +5081,6 @@ window.addComponentToLayout = async function(componentData, region, replace = fa
         // 如果是 content 区域且指定了位置，添加 position 参数
         if (region === 'content' && position !== null && position !== undefined) {
             requestData.position = position;
-        }
-        if (typeof window.buildVisualRequestPayload === 'function') {
-            requestData = window.buildVisualRequestPayload(requestData);
         }
         
         var url = '<?= $this->getBackendUrl('*/backend/visual/api/component/add') ?>';
@@ -5458,7 +5111,6 @@ window.editComponentInPreview = async function(wrapper) {
     const region = wrapper.getAttribute('data-region');
     const index = parseInt(wrapper.getAttribute('data-index') || '0', 10);
     const pageId = window.visualPageId || 0;
-    const useVirtualComponent = typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext();
     
     
     // 在弹窗显示前保存滚动位置
@@ -5474,7 +5126,7 @@ window.editComponentInPreview = async function(wrapper) {
         console.warn('无法获取滚动位置:', e);
     }
     
-    if (!pageId && !useVirtualComponent) {
+    if (!pageId) {
         BackendToast.error('<?= __('错误：页面ID未定义') ?>');
         return;
     }
@@ -5488,40 +5140,24 @@ window.editComponentInPreview = async function(wrapper) {
         // 获取页面样式代码（作为后备）
         const styleSelect = document.getElementById('style');
         const pageStyleCode = styleSelect ? styleSelect.value : (window.currentStyle || 'tpmst');
-        // 使用组件的 style_code，如果没有则使用页面的，再空则用 tpmst 避免接口报缺样式代码
-        const styleCode = (componentStyleCode || pageStyleCode || 'tpmst').trim() || 'tpmst';
+        // 使用组件的 style_code，如果没有则使用页面的
+        const styleCode = componentStyleCode || pageStyleCode;
         
-        // 获取组件元数据（虚拟编辑态需附带 public_id/page_type/virtual_theme_id）
-        const metadataUrl = typeof window.buildVisualRequestUrl === 'function'
-            ? window.buildVisualRequestUrl('<?= $this->getBackendUrl('*/backend/visual/api/component/metadata') ?>', {
-                component_code: componentCode,
-                style_code: styleCode,
-                region: region,
-                index: index
-            })
-            : '<?= $this->getBackendUrl('*/backend/visual/api/component/metadata') ?>' +
-                '?component_code=' + encodeURIComponent(componentCode) +
-                '&style_code=' + encodeURIComponent(styleCode);
+        // 获取组件元数据
+        const metadataUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/metadata') ?>' + 
+            '?component_code=' + encodeURIComponent(componentCode) + 
+            '&style_code=' + encodeURIComponent(styleCode);
         
         var metaRes = await window.Weline.Api.get(metadataUrl, { silent: true });
-        // 兼容多种返回结构：直接 body、或 { data: body }、或 { data: { data: body } }
         const metaResult = (metaRes && metaRes.data) || metaRes;
-        const payload = (metaResult && metaResult.data != null) ? metaResult.data : metaResult;
-        const metadata = (payload && payload.metadata != null) ? payload.metadata : (metaResult && metaResult.metadata) || null;
         
-        if (!metadata || typeof metadata !== 'object') {
-            const errMsg = (payload && (payload.message || payload.msg)) || (metaResult && (metaResult.message || metaResult.msg)) || '<?= __('获取组件信息失败') ?>';
-            throw new Error(errMsg);
-        }
-        if (payload && payload.success === false) {
-            const errMsg = (payload.message || payload.msg) || '<?= __('获取组件信息失败') ?>';
-            throw new Error(errMsg);
+        if (!metaResult.success) {
+            throw new Error(metaResult.message || '<?= __('获取组件信息失败') ?>');
         }
         
         // 获取当前布局配置中的组件配置
-        const layoutUrl = typeof window.buildVisualRequestUrl === 'function'
-            ? window.buildVisualRequestUrl('<?= $this->getBackendUrl('*/backend/visual/api/component/layoutFields') ?>', { page_id: pageId, style_code: styleCode })
-            : '<?= $this->getBackendUrl('*/backend/visual/api/component/layoutFields') ?>?page_id=' + pageId;
+        const layoutUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/layoutFields') ?>' + 
+            '?page_id=' + pageId;
         
         var layoutRes = await window.Weline.Api.get(layoutUrl, { silent: true });
         const layoutResult = (layoutRes && layoutRes.data) || layoutRes;
@@ -5533,6 +5169,8 @@ window.editComponentInPreview = async function(wrapper) {
                 currentConfig = componentInLayout.config || {};
             }
         }
+        
+        const metadata = metaResult.metadata;
         const fields = metadata.fields || {};
         
         // 检查是否有文字类型的配置项（用于判断是否显示AI按钮）
@@ -5553,46 +5191,13 @@ window.editComponentInPreview = async function(wrapper) {
         // 添加 AI 生成按钮（仅当有文字配置项且AI功能开启时显示）
         <?php if (($ai_enabled ?? '0') === '1'): ?>
         if (hasTextFields && Object.keys(fields).length > 0) {
-            const currentTypePrompt = (typeof window.PB_AI_CURRENT_PAGE_TYPE_PROMPT !== 'undefined' ? window.PB_AI_CURRENT_PAGE_TYPE_PROMPT : '');
-            const currentTypeName = (typeof window.PB_AI_CURRENT_PAGE_TYPE_NAME !== 'undefined' ? window.PB_AI_CURRENT_PAGE_TYPE_NAME : '');
-            const accordionId = 'aiCompConfigAccordion_' + Date.now();
-            const collapse1 = 'aiCompTypePrompt_' + Date.now();
-            const collapse2 = 'aiCompHowItWorks_' + Date.now();
-            const aiPromptValue = (currentConfig._ai_prompt !== undefined && currentConfig._ai_prompt !== null) ? String(currentConfig._ai_prompt) : '';
             formHtml += '<div class="ai-generate-bar" style="margin-bottom: 16px; padding: 10px; background: linear-gradient(135deg, rgba(102,126,234,0.1) 0%, rgba(118,75,162,0.1) 100%); border-radius: 8px; border: 1px solid rgba(102,126,234,0.2);">';
-            formHtml += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">';
+            formHtml += '<div style="display: flex; align-items: center; justify-content: space-between;">';
             formHtml += '<span style="font-size: 12px; opacity: 0.8;"><i class="mdi mdi-robot" style="margin-right: 4px;"></i><?= __('AI可根据页面信息自动生成此组件的文字配置') ?></span>';
             formHtml += '<button type="button" id="aiGenerateComponentConfigBtn" class="btn btn-sm" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border: none; padding: 4px 12px; font-size: 12px;">';
             formHtml += '<i class="mdi mdi-auto-fix"></i> <?= __('AI生成') ?>';
             formHtml += '</button>';
             formHtml += '</div>';
-            formHtml += '<div style="margin-bottom: 10px;">';
-            formHtml += '<label style="display: block; margin-bottom: 4px; font-size: 12px; opacity: 0.85;"><?= __('AI生成提示词') ?> <span class="text-muted" style="font-weight: normal;">(<?= __('可选，与系统提示词拼接') ?>)</span></label>';
-            formHtml += '<textarea id="comp_config__ai_prompt" data-field="_ai_prompt" class="form-control form-control-sm" rows="2" style="width: 100%; font-size: 12px; resize: vertical;" placeholder="<?= __('例如：强调科技感、语气年轻化') ?>">' + escapeHtml(aiPromptValue) + '</textarea>';
-            formHtml += '</div>';
-            formHtml += '<div class="accordion accordion-flush" id="' + accordionId + '" style="font-size: 12px;">';
-            formHtml += '<div class="accordion-item" style="background: transparent; border: none;">';
-            formHtml += '<h2 class="accordion-header"><button class="accordion-button collapsed py-2" style="font-size: 12px; min-height: 32px;" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapse1 + '">';
-            formHtml += '<i class="mdi mdi-file-document-outline me-2"></i> <?= __('当前页面类型提示词') ?>' + (currentTypeName ? '（' + escapeHtml(currentTypeName) + '）' : '');
-            formHtml += '</button></h2>';
-            formHtml += '<div id="' + collapse1 + '" class="accordion-collapse collapse" data-bs-parent="#' + accordionId + '">';
-            formHtml += '<div class="accordion-body py-2 px-3 small text-muted">' + (currentTypePrompt ? escapeHtml(currentTypePrompt) : '<?= __('无') ?>') + '</div></div></div>';
-            formHtml += '<div class="accordion-item" style="background: transparent; border: none;">';
-            formHtml += '<h2 class="accordion-header"><button class="accordion-button collapsed py-2" style="font-size: 12px; min-height: 32px;" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapse2 + '">';
-            formHtml += '<i class="mdi mdi-information-outline me-2"></i> <?= __('生成原理') ?>';
-            formHtml += '</button></h2>';
-            formHtml += '<div id="' + collapse2 + '" class="accordion-collapse collapse" data-bs-parent="#' + accordionId + '">';
-            formHtml += '<div class="accordion-body py-2 px-3 small"><ol class="mb-0 ps-3" style="font-size: 11px;">';
-            formHtml += '<li><?= __('根据当前页面类型选择对应的提示词，生成内容遵循该类型侧重点。') ?></li>';
-            formHtml += '<li><?= __('页面的「AI内容生成」描述会作为参考；当前字段值仅供参考，以页面语言为准重新生成。') ?></li>';
-            formHtml += '<li><?= __('组件配置根据当前组件情况（组件角色、所在区域等）生成内容。') ?></li>';
-            formHtml += '<li><?= __('遵循组件 meta 的默认格式与条数生成；用户可在「AI生成提示词」中指定条数或风格。') ?></li>';
-            formHtml += '<li><?= __('生成语言与页面默认语言一致。') ?></li>';
-            formHtml += '<li><?= __('生成完成后请检查并微调。') ?></li></ol></div></div></div>';
-            formHtml += '</div>';
-            if (typeof window.PB_AI_SSE_TERMINAL_HTML !== 'undefined' && window.PB_AI_SSE_TERMINAL_HTML) {
-                formHtml += '<div class="mt-3" style="margin-top: 12px;">' + window.PB_AI_SSE_TERMINAL_HTML + '</div>';
-            }
             formHtml += '</div>';
         }
         <?php endif; ?>
@@ -5642,10 +5247,8 @@ window.editComponentInPreview = async function(wrapper) {
                         formHtml += '<textarea id="' + inputId + '" data-field="' + fullKey + '" class="form-control form-control-sm" rows="3" style="width: 100%;">' + 
                             escapeHtml(currentValue) + '</textarea>';
                     } else if (fieldType === 'color') {
-                        const colorVal = String(currentValue || '');
-                        const colorHex = /^#[0-9A-Fa-f]{6}$/.test(colorVal) ? colorVal : '#000000';
                         formHtml += '<div style="display: flex; gap: 8px; align-items: center;">';
-                        formHtml += '<input type="color" id="' + inputId + '" data-field="' + fullKey + '" value="' + escapeHtml(colorHex) + '" style="width: 40px; height: 32px; border-radius: 4px; padding: 2px; cursor: pointer;">';
+                        formHtml += '<input type="color" id="' + inputId + '" data-field="' + fullKey + '" value="' + (currentValue || '#000000') + '" style="width: 40px; height: 32px; border-radius: 4px; padding: 2px; cursor: pointer;">';
                         formHtml += '<input type="text" id="' + inputId + '_text" value="' + escapeHtml(currentValue) + '" class="form-control form-control-sm" style="flex: 1;" placeholder="#000000">';
                         formHtml += '</div>';
                     } else if (fieldType === 'image') {
@@ -5687,270 +5290,62 @@ window.editComponentInPreview = async function(wrapper) {
                     }
                 });
                 
-                // AI 生成按钮点击事件（SSE 流式，在「生成过程」终端中展示）
+                // AI 生成按钮点击事件
                 const aiBtn = document.getElementById('aiGenerateComponentConfigBtn');
                 if (aiBtn) {
                     aiBtn.addEventListener('click', async () => {
                         const originalHtml = aiBtn.innerHTML;
                         aiBtn.disabled = true;
                         aiBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> <?= __('生成中...') ?>';
-                        const aiPromptEl = document.querySelector('.weline-component-config-modal [data-field="_ai_prompt"]');
-                        const aiPromptValue = (aiPromptEl && aiPromptEl.value) ? aiPromptEl.value.trim() : '';
-                        const formData = new FormData();
-                        formData.append('page_id', pageId);
-                        formData.append('style_code', styleCode);
-                        formData.append('component_code', componentCode);
-                        formData.append('region', region);
-                        formData.append('index', index);
-                        formData.append('ai_prompt', aiPromptValue);
-                        if (typeof window.appendVisualRequestIdentityToFormData === 'function') {
-                            window.appendVisualRequestIdentityToFormData(formData, { pageId: pageId, styleCode: styleCode });
-                        }
-                        // 点击生成时更新并保存组件 AI 提示词到页面数据（与组件配置一起存放）
-                        const collectModalConfig = () => {
-                            const cfg = {};
-                            document.querySelectorAll('.weline-component-config-modal [data-field]').forEach(input => {
-                                const key = input.getAttribute('data-field');
-                                if (!key) return;
-                                let val = input.value;
-                                if (input.type === 'color' && input.id) {
-                                    const textEl = document.getElementById(input.id + '_text');
-                                    if (textEl) val = textEl.value;
-                                }
-                                cfg[key] = val;
-                            });
-                            return cfg;
-                        };
+                        
                         try {
-                            const configToSave = collectModalConfig();
-                            configToSave._ai_prompt = aiPromptValue;
-                            const saveUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/updateConfig') ?>';
-                            const savePayload = typeof window.buildVisualRequestPayload === 'function'
-                                ? window.buildVisualRequestPayload({ page_id: pageId, component_code: componentCode, region: region, index: index, config: configToSave }, { styleCode: styleCode })
-                                : { page_id: pageId, component_code: componentCode, region: region, index: index, config: configToSave };
-                            await window.Weline.Api.request(saveUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(savePayload) });
-                        } catch (e) { /* 保存提示词失败不影响本次生成 */ }
-                        const streamUrl = '<?= $this->getBackendUrl("*/backend/ai-generate/component-config-stream") ?>';
-                        const sseContent = document.querySelector('.weline-component-config-modal #aiComponentConfigSseTerminal_content');
-                        const sseStatus = document.querySelector('.weline-component-config-modal #aiComponentConfigSseTerminal_status');
-                        const sseContainer = document.querySelector('.weline-component-config-modal #aiComponentConfigSseTerminal');
-                        function sseLog(t, type) {
-                            type = type || 'info';
-                            if (!sseContent) return;
-                            const line = document.createElement('div');
-                            line.className = 'weline-sse-terminal-line ' + type;
-                            line.innerHTML = '<span class="weline-sse-terminal-time">[' + new Date().toLocaleTimeString('zh-CN', { hour12: false }) + ']</span><span class="weline-sse-terminal-text">' + (t || '').replace(/</g, '&lt;') + '</span>';
-                            sseContent.appendChild(line);
-                            if (sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
-                        }
-                        function sseSetStatus(t) {
-                            if (sseStatus) sseStatus.textContent = t || '';
-                            if (sseContainer) sseContainer.classList.toggle('connected', t === '<?= __("已连接") ?>');
-                        }
-                        function applyConfigData(data) {
-                            function toDisplayValue(val) {
-                                if (Array.isArray(val)) {
-                                    return val.map(function(item) {
-                                        if (item && typeof item === 'object') return Object.values(item).map(function(v) { return v != null ? String(v) : ''; }).join('|');
-                                        return String(item);
-                                    }).join('\n');
+                            const formData = new FormData();
+                            formData.append('page_id', pageId);
+                            formData.append('style_code', styleCode);
+                            formData.append('component_code', componentCode);
+                            formData.append('region', region);
+                            formData.append('index', index);
+                            
+                            var url = '<?= $this->getBackendUrl("*/backend/ai-generate/component-config") ?>';
+                            var opts = { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+                            var res = await window.Weline.Api.request(url, opts);
+                            const data = (res && res.data) || res;
+                            
+                            if (data.success && data.data) {
+                                // 填充生成的配置到表单
+                                let filledCount = 0;
+                                for (const [key, value] of Object.entries(data.data)) {
+                                    const inputId = 'comp_config_' + key.replace(/\./g, '_');
+                                    const input = document.getElementById(inputId);
+                                    if (input) {
+                                        input.value = value;
+                                        input.style.borderColor = '#667eea';
+                                        input.style.boxShadow = '0 0 0 2px rgba(102,126,234,0.2)';
+                                        // 触发 change 事件
+                                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                                        filledCount++;
+                                        
+                                        // 2秒后恢复样式
+                                        setTimeout(() => {
+                                            input.style.borderColor = '';
+                                            input.style.boxShadow = '';
+                                        }, 2000);
+                                    }
                                 }
-                                return val != null ? String(val) : '';
-                            }
-                            let filledCount = 0;
-                            for (const [key, value] of Object.entries(data)) {
-                                const inputId = 'comp_config_' + key.replace(/\./g, '_');
-                                const input = document.getElementById(inputId);
-                                if (input) {
-                                    input.value = toDisplayValue(value);
-                                    input.style.borderColor = '#667eea';
-                                    input.style.boxShadow = '0 0 0 2px rgba(102,126,234,0.2)';
-                                    input.dispatchEvent(new Event('change', { bubbles: true }));
-                                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                                    filledCount++;
-                                    setTimeout(() => { input.style.borderColor = ''; input.style.boxShadow = ''; }, 2000);
+                                
+                                if (filledCount > 0) {
+                                    BackendToast.success('<?= __('已生成') ?> ' + filledCount + ' <?= __('个配置项') ?>');
                                 }
+                            } else {
+                                BackendToast.error(data.message || '<?= __('生成失败') ?>');
                             }
-                            if (filledCount > 0) BackendToast.success('<?= __('已生成') ?> ' + filledCount + ' <?= __('个配置项') ?>');
-                        }
-                        function restoreBtn() {
+                        } catch (error) {
+                            console.error('AI生成组件配置错误:', error);
+                            BackendToast.error('<?= __('生成请求失败，请稍后重试') ?>');
+                        } finally {
                             aiBtn.disabled = false;
                             aiBtn.innerHTML = originalHtml;
-                            if (sseStatus) sseStatus.textContent = '<?= __("已断开") ?>';
-                            if (sseContainer) sseContainer.classList.remove('connected');
-                        }
-                        if (sseContent) sseContent.innerHTML = '';
-                        document.querySelectorAll('.weline-component-config-modal .weline-sse-unpublished-warning').forEach(function(el) { el.remove(); });
-                        sseLog('<?= __("连接中...") ?>', 'info');
-                        sseSetStatus('<?= __("连接中...") ?>');
-                        let streamingLineEl = null;
-                        let streamingTextEl = null;
-                        let thinkingStreamingLineEl = null;
-                        let thinkingStreamingTextEl = null;
-                        try {
-                            const res = await fetch(streamUrl, { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/event-stream' } });
-                            if (!res.ok) throw new Error(res.statusText || '<?= __("请求失败") ?>');
-                            if (!res.body) throw new Error('<?= __("不支持流式响应") ?>');
-                            const reader = res.body.getReader();
-                            const decoder = new TextDecoder();
-                            let buffer = '';
-                            let currentEvent = '', currentData = '';
-                            function finishEvent() {
-                                try {
-                                    const payload = currentData ? JSON.parse(currentData) : {};
-                                    if (currentEvent === 'start' || currentEvent === 'progress') {
-                                        if (payload.message) { sseLog(payload.message, currentEvent === 'start' ? 'start' : 'progress'); sseSetStatus('<?= __("已连接") ?>'); }
-                                    } else if (currentEvent === 'context') {
-                                        if (payload.display_text && sseContent) {
-                                            sseLog('【<?= __("操作上下文") ?>】', 'info');
-                                            const pre = document.createElement('pre');
-                                            pre.className = 'weline-sse-terminal-context';
-                                            pre.textContent = payload.display_text;
-                                            sseContent.appendChild(pre);
-                                            if (sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
-                                        }
-                                    } else if (currentEvent === 'unpublished_warning') {
-                                        const msg = (payload.message || '<?= __("以下页面未发布，请发布后再使用或注意核对导航链接。") ?>');
-                                        const items = payload.items || [];
-                                        let existing = document.querySelector('.weline-component-config-modal .weline-sse-unpublished-warning');
-                                        if (existing) existing.remove();
-                                        if (sseContainer && items.length > 0) {
-                                            const wrap = document.createElement('div');
-                                            wrap.className = 'weline-sse-unpublished-warning';
-                                            wrap.style.cssText = 'margin-top:10px; padding:12px; background:#dc3545; color:#fff; border-radius:6px; border:1px solid #c82333;';
-                                            let html = '<div style="font-weight:700; margin-bottom:8px;">⚠️ ' + (msg.replace(/</g, '&lt;')) + '</div>';
-                                            html += '<ul style="margin:0 0 10px 0; padding-left:20px; font-size:12px;">';
-                                            items.forEach(function(it) {
-                                                const t = (it.title || '') + (it.handle ? ' (' + it.handle + ')' : '');
-                                                html += '<li>' + (t.replace(/</g, '&lt;')) + '</li>';
-                                            });
-                                            html += '</ul>';
-                                            html += '<button type="button" class="btn btn-sm btn-light weline-sse-unpublished-confirm"><?= __("知道了") ?></button>';
-                                            wrap.innerHTML = html;
-                                            wrap.querySelector('.weline-sse-unpublished-confirm').addEventListener('click', function() { wrap.remove(); });
-                                            sseContainer.parentNode.insertBefore(wrap, sseContainer.nextSibling);
-                                            if (sseContent && sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
-                                        }
-                                    } else if (currentEvent === 'trace') {
-                                        if (payload.display_text && sseContent) {
-                                            let traceEl = document.querySelector('.weline-sse-terminal-trace');
-                                            if (!traceEl) {
-                                                sseLog('【<?= __("链路追踪") ?>】', 'info');
-                                                traceEl = document.createElement('pre');
-                                                traceEl.className = 'weline-sse-terminal-trace';
-                                                sseContent.appendChild(traceEl);
-                                            }
-                                            traceEl.textContent = payload.display_text;
-                                            if (sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
-                                        }
-                                    } else if (currentEvent === 'prompt') {
-                                        if (payload.prompt && sseContent) {
-                                            sseLog('【<?= __("本次提示词") ?>】', 'info');
-                                            const pre = document.createElement('pre');
-                                            pre.className = 'weline-sse-terminal-prompt';
-                                            pre.textContent = payload.prompt;
-                                            sseContent.appendChild(pre);
-                                            if (sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
-                                        }
-                                    } else if (currentEvent === 'thinking') {
-                                        const ttxt = (payload.content && typeof payload.content === 'string') ? payload.content : '';
-                                        if (!ttxt) return;
-                                        // 受 SseTerminal 思考输出开关控制：关闭时只解析事件、不写 DOM。
-                                        try {
-                                            const term = window.WelineSseTerminal && window.WelineSseTerminal['aiComponentConfigSseTerminal'];
-                                            if (term && typeof term.getThinkingEnabled === 'function' && term.getThinkingEnabled() === false) {
-                                                return;
-                                            }
-                                        } catch (e) {}
-                                        if (!thinkingStreamingTextEl && sseContent) {
-                                            const tline = document.createElement('div');
-                                            tline.className = 'weline-sse-terminal-line progress weline-sse-terminal-streaming weline-sse-terminal-thinking';
-                                            tline.innerHTML = '<span class="weline-sse-terminal-time">[' + new Date().toLocaleTimeString('zh-CN', { hour12: false }) + ']</span><span class="weline-sse-terminal-label"><?= __("思考") ?> </span><span class="weline-sse-terminal-text"></span>';
-                                            sseContent.appendChild(tline);
-                                            thinkingStreamingLineEl = tline;
-                                            thinkingStreamingTextEl = tline.querySelector('.weline-sse-terminal-text');
-                                        }
-                                        if (thinkingStreamingTextEl) {
-                                            thinkingStreamingTextEl.textContent += ttxt;
-                                            if (sseContent && sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
-                                        }
-                                    } else if (currentEvent === 'chunk') {
-                                        if (thinkingStreamingLineEl) {
-                                            thinkingStreamingLineEl.classList.remove('weline-sse-terminal-streaming');
-                                            thinkingStreamingLineEl = null;
-                                            thinkingStreamingTextEl = null;
-                                        }
-                                        const txt = (payload.content && typeof payload.content === 'string') ? payload.content : '';
-                                        if (!txt) return;
-                                        if (!streamingTextEl && sseContent) {
-                                            const line = document.createElement('div');
-                                            line.className = 'weline-sse-terminal-line progress weline-sse-terminal-streaming';
-                                            line.innerHTML = '<span class="weline-sse-terminal-time">[' + new Date().toLocaleTimeString('zh-CN', { hour12: false }) + ']</span><span class="weline-sse-terminal-text"></span>';
-                                            sseContent.appendChild(line);
-                                            streamingLineEl = line;
-                                            streamingTextEl = line.querySelector('.weline-sse-terminal-text');
-                                        }
-                                        if (streamingTextEl) {
-                                            streamingTextEl.textContent += txt;
-                                            if (sseContent && sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
-                                        }
-                                    } else if (currentEvent === 'done') {
-                                        if (thinkingStreamingLineEl) thinkingStreamingLineEl.classList.remove('weline-sse-terminal-streaming');
-                                        thinkingStreamingLineEl = null; thinkingStreamingTextEl = null;
-                                        if (streamingLineEl) streamingLineEl.classList.remove('weline-sse-terminal-streaming');
-                                        streamingLineEl = null; streamingTextEl = null;
-                                        const d = payload.data || payload;
-                                        restoreBtn();
-                                        applyConfigData(d);
-                                        sseLog('<?= __("生成完成") ?>', 'done');
-                                    } else if (currentEvent === 'error') {
-                                        if (thinkingStreamingLineEl) thinkingStreamingLineEl.classList.remove('weline-sse-terminal-streaming');
-                                        thinkingStreamingLineEl = null; thinkingStreamingTextEl = null;
-                                        if (streamingLineEl) streamingLineEl.classList.remove('weline-sse-terminal-streaming');
-                                        streamingLineEl = null; streamingTextEl = null;
-                                        if (payload.message) sseLog(payload.message, 'error');
-                                        restoreBtn();
-                                        BackendToast.error((payload && payload.message) || '<?= __("生成失败") ?>');
-                                    }
-                                } catch (e) {}
-                                currentEvent = '';
-                                currentData = '';
-                            }
-                            function processChunk(chunk) {
-                                if (chunk && chunk.value) {
-                                    buffer += decoder.decode(chunk.value, { stream: true });
-                                } else if (chunk && chunk.done) {
-                                    buffer += decoder.decode();
-                                }
-                                buffer = buffer.replace(/\r\n/g, '\n');
-                                const SEP_DBL = '\n\n', SEP_SGL = '\n';
-                                const parts = buffer.split(SEP_DBL);
-                                buffer = parts.pop() || '';
-                                for (let i = 0; i < parts.length; i++) {
-                                    const lines = parts[i].split(SEP_SGL);
-                                    currentEvent = '';
-                                    currentData = '';
-                                    for (let j = 0; j < lines.length; j++) {
-                                        const ln = lines[j];
-                                        if (ln.indexOf('event:') === 0) currentEvent = ln.replace(/^event:\s*/, '').trim();
-                                        else if (ln.indexOf('data:') === 0) {
-                                            const dataLine = ln.replace(/^data:\s*/, '');
-                                            currentData = currentData ? (currentData + '\n' + dataLine) : dataLine;
-                                        }
-                                    }
-                                    finishEvent();
-                                }
-                            }
-                            while (true) {
-                                const val = await reader.read();
-                                processChunk(val);
-                                if (val && val.done) break;
-                            }
-                        } catch (err) {
-                            console.error('AI生成组件配置错误:', err);
-                            restoreBtn();
-                            BackendToast.error(err && err.message ? err.message : '<?= __("生成请求失败，请稍后重试") ?>');
-                            if (sseContent) sseLog((err && err.message) || '<?= __("请求失败") ?>', 'error');
                         }
                     });
                 }
@@ -5971,10 +5366,7 @@ window.editComponentInPreview = async function(wrapper) {
             
             // 调用API保存配置
             var saveUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/updateConfig') ?>';
-            var savePayload = typeof window.buildVisualRequestPayload === 'function'
-                ? window.buildVisualRequestPayload({ page_id: pageId, component_code: componentCode, region: region, index: index, config: newConfig }, { styleCode: styleCode })
-                : { page_id: pageId, component_code: componentCode, region: region, index: index, config: newConfig };
-            var saveOpts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(savePayload) };
+            var saveOpts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ page_id: pageId, component_code: componentCode, region: region, index: index, config: newConfig }) };
             var saveRes = await window.Weline.Api.request(saveUrl, saveOpts);
             const saveResult = (saveRes && saveRes.data) || saveRes;
             
@@ -6003,7 +5395,7 @@ function showComponentConfigModal(options) {
         
         // 创建 modal HTML
         const modalHtml = `
-            <div class="modal fade weline-component-config-modal" id="${modalId}" tabindex="-1" aria-hidden="true" style="z-index: 100520;">
+            <div class="modal fade weline-component-config-modal" id="${modalId}" tabindex="-1" aria-hidden="true" style="z-index: 10000;">
                 <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 520px;">
                     <div class="modal-content" style="background: var(--backend-color-card-bg); border: 1px solid var(--backend-color-border); border-radius: 8px;">
                         <div class="modal-header" style="border-bottom: 1px solid var(--backend-color-border); padding: 12px 16px;">
@@ -6066,7 +5458,6 @@ window.removeComponentInPreview = async function(wrapper) {
     const region = wrapper.getAttribute('data-region');
     const index = wrapper.getAttribute('data-index');
     const pageId = window.visualPageId || 0;
-    const useVirtualComponent = typeof window.hasVisualVirtualContext === 'function' && window.hasVisualVirtualContext();
     
     
     // 在弹窗显示前保存滚动位置
@@ -6092,14 +5483,10 @@ window.removeComponentInPreview = async function(wrapper) {
     if (!confirmed) return;
     
     try {
-        if (!pageId && !useVirtualComponent) {
-            BackendToast.error('<?= __('错误：页面ID未定义') ?>');
-            return;
-        }
         // 显示加载提示
         BackendToast.info('<?= __('删除中...') ?>', 2000);
         
-        let requestData = {
+        const requestData = {
             page_id: pageId,
             component_code: componentCode,
             region: region
@@ -6108,9 +5495,6 @@ window.removeComponentInPreview = async function(wrapper) {
         // 如果有索引，添加到请求中（用于精确删除）
         if (index !== null && index !== undefined) {
             requestData.index = parseInt(index, 10);
-        }
-        if (typeof window.buildVisualRequestPayload === 'function') {
-            requestData = window.buildVisualRequestPayload(requestData);
         }
         
         
@@ -6149,8 +5533,8 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <!-- 恢复默认值确认模态框 -->
-<div class="modal fade" id="resetConfigConfirmModal" tabindex="-1" aria-labelledby="resetConfigConfirmModalLabel" aria-hidden="true" style="z-index: 100520;">
-    <div class="modal-dialog modal-dialog-centered" style="z-index: 100521;">
+<div class="modal fade" id="resetConfigConfirmModal" tabindex="-1" aria-labelledby="resetConfigConfirmModalLabel" aria-hidden="true" style="z-index: 9999;">
+    <div class="modal-dialog modal-dialog-centered" style="z-index: 10000;">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
                 <h5 class="modal-title" id="resetConfigConfirmModalLabel">

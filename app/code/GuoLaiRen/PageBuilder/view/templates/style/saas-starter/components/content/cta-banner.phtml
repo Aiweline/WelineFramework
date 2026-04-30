@@ -33,15 +33,10 @@ $borderLight = $colors['border_light'] ?? 'rgba(255, 255, 255, 0.08)';
 $title = $config['content.title'] ?? 'Ready to supercharge your workflow?';
 $description = $config['content.description'] ?? 'Join 10,000+ teams already using our platform. Start your free 14-day trial today.';
 $primaryText = $config['buttons.primary_text'] ?? 'Start Free Trial';
-$primaryUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['buttons.primary_url'] ?? '#pricing');
+$primaryUrl = $config['buttons.primary_url'] ?? '#pricing';
 $secondaryText = $config['buttons.secondary_text'] ?? 'Talk to Sales';
-$secondaryUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['buttons.secondary_url'] ?? '/contact');
+$secondaryUrl = $config['buttons.secondary_url'] ?? '/contact';
 $showSecondary = ($config['buttons.show_secondary'] ?? 'yes') !== 'no';
-
-$primaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryUrl);
-$secondaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryUrl);
-$primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($primaryHref, 'primary');
-$secondaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($secondaryHref, 'secondary');
 
 $instanceId = 'ss-cta-' . uniqid();
 ?>
@@ -72,12 +67,12 @@ $instanceId = 'ss-cta-' . uniqid();
             <h2 class="ss-cta-title"><?= htmlspecialchars($title) ?></h2>
             <p class="ss-cta-desc"><?= htmlspecialchars($description) ?></p>
             <div class="ss-cta-buttons">
-                <a role="button" tabindex="0" class="ss-cta-btn-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($primaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($primaryRef) ?>">
+                <a href="<?= htmlspecialchars($primaryUrl) ?>" class="ss-cta-btn-primary">
                     <?= htmlspecialchars($primaryText) ?>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 </a>
                 <?php if ($showSecondary): ?>
-                <a role="button" tabindex="0" class="ss-cta-btn-secondary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($secondaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($secondaryRef) ?>">
+                <a href="<?= htmlspecialchars($secondaryUrl) ?>" class="ss-cta-btn-secondary">
                     <?= htmlspecialchars($secondaryText) ?>
                 </a>
                 <?php endif; ?>

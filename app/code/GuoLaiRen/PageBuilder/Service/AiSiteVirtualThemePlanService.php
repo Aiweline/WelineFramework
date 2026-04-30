@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractMetaBuilder;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\LegacyContractAdapter;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\PermissionMatrix;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\QaGateHelper;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\SchedulerSystem;
@@ -837,7 +842,7 @@ final class AiSiteVirtualThemePlanService
             'Compact context for this batch only:',
             \json_encode($batchContext, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}',
         ];
-        \array_push($lines, ...$this->buildFrontendDesignSkillPromptGuide($batch));
+        \array_push($lines, ...$this->buildFrontendDesignSkillPromptGuide($batch, $scope));
         if ($instruction !== '') {
             $lines[] = 'User instruction: ' . $instruction;
         }
@@ -1280,9 +1285,13 @@ final class AiSiteVirtualThemePlanService
      * @param array<string, mixed> $batch
      * @return list<string>
      */
-    private function buildFrontendDesignSkillPromptGuide(array $batch): array
+    private function buildFrontendDesignSkillPromptGuide(array $batch, array $scope = []): array
     {
-        return $this->getSkillRegistry()->buildStageTwoComponentSkillGuide($batch);
+        return $this->getSkillRegistry()->buildStageTwoComponentSkillGuide(
+            $batch,
+            $this->getSkillRegistry()->resolveSelectedSkillCodesFromScope($scope),
+            $this->getSkillRegistry()->resolveSkillSnapshotsFromScope($scope)
+        );
     }
 
     /**
@@ -1472,7 +1481,7 @@ final class AiSiteVirtualThemePlanService
         if ($ai === null) {
             throw new \RuntimeException('AI task plan generation failed: AiService unavailable.');
         }
-        $prompt = $this->getSkillRegistry()->prependPromptGuide($prompt, 'stage2');
+        $prompt = $this->getSkillRegistry()->prependPromptGuideForScope($prompt, 'stage2', $scope);
 
         $publicId = \trim((string)($scope['public_id'] ?? ''));
         $requestParams = \array_merge([
@@ -3026,6 +3035,7 @@ final class AiSiteVirtualThemePlanService
                 'task_tree' => $deterministic['task_tree'] ?? [],
             ]);
             $virtualThemePlan['signature'] = $this->buildSignature($deterministic);
+            [$deterministic, $virtualThemePlan] = $this->attachStageTwoContracts($scope, $deterministic, $virtualThemePlan);
             return [
                 'markdown' => $markdown,
                 'structured' => $deterministic,
@@ -3050,6 +3060,7 @@ final class AiSiteVirtualThemePlanService
                 'execution_blueprint' => $structured['execution_blueprint'] ?? [],
             ]);
             $virtualThemePlan['signature'] = $this->buildSignature($structured);
+            [$structured, $virtualThemePlan] = $this->attachStageTwoContracts($scope, $structured, $virtualThemePlan);
             return [
                 'markdown' => $this->buildStageTwoMarkdown(
                     $pageTypes,
@@ -3103,6 +3114,7 @@ final class AiSiteVirtualThemePlanService
             'execution_blueprint' => $mergedStructured['execution_blueprint'] ?? [],
         ]);
         $mergedVirtualThemePlan['signature'] = $this->buildSignature($mergedStructured);
+        [$mergedStructured, $mergedVirtualThemePlan] = $this->attachStageTwoContracts($scope, $mergedStructured, $mergedVirtualThemePlan);
         return [
             'markdown' => $markdown,
             'structured' => $mergedStructured,
@@ -3111,6 +3123,438 @@ final class AiSiteVirtualThemePlanService
             'retryable_ai_failures' => $retryableAiFailures,
             'partial_retry_required' => $retryableAiFailures !== [] ? 1 : 0,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $structured
+     * @param array<string, mixed> $virtualThemePlan
+     * @return array{0:array<string,mixed>,1:array<string,mixed>}
+     */
+    private function attachStageTwoContracts(array $scope, array $structured, array $virtualThemePlan): array
+    {
+        $source = $this->resolveStageTwoSourceContracts($scope);
+        $this->validateStageTwoSourceConstraints($structured, $source['contracts']);
+
+        $skillRegistry = $this->getSkillRegistry();
+        $skillSnapshots = $skillRegistry->resolveSkillSnapshotsFromScope($scope);
+        $contractContext = [
+            'version' => 1,
+            'stage' => ContractType::STAGE_STAGE2,
+            'source_signature' => (string)($structured['plan_signature'] ?? $virtualThemePlan['signature'] ?? ''),
+            'adapter_type' => 'json_strict',
+            'requires_human_review' => true,
+            'source_contracts' => $source['refs'],
+            'selected_skill_codes' => $skillRegistry->resolveSelectedSkillCodesFromScope($scope),
+            'skill_snapshots' => $skillSnapshots,
+        ];
+        $contracts = [
+            ContractType::TYPE_BLOCK_VISUAL_CONTRACT => $this->buildStageTwoContract(
+                ContractType::TYPE_BLOCK_VISUAL_CONTRACT,
+                $this->buildStageTwoBlockVisualContractPayload($structured),
+                $contractContext,
+                $source['refs']
+            ),
+            ContractType::TYPE_BLOCK_TASK_CONTRACT => $this->buildStageTwoContract(
+                ContractType::TYPE_BLOCK_TASK_CONTRACT,
+                $this->buildStageTwoBlockTaskContractPayload($structured),
+                $contractContext,
+                $source['refs']
+            ),
+        ];
+        $workbench = [
+            'version' => 1,
+            'contract_context' => $contractContext,
+            'contracts' => $contracts,
+            'confirmed' => [
+                'contract_context' => $contractContext,
+                'contracts' => $contracts,
+            ],
+        ];
+
+        $structured['task_plan_workbench'] = $workbench;
+        $structured['stage2_contracts'] = $contracts;
+        $virtualThemePlan['task_plan_workbench'] = $workbench;
+        $virtualThemePlan['stage2_contracts'] = $contracts;
+
+        return [$structured, $virtualThemePlan];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array{
+     *   contracts:array<string,array<string,mixed>>,
+     *   refs:list<array{id:string,type:string,version:string,status:string}>
+     * }
+     */
+    private function resolveStageTwoSourceContracts(array $scope): array
+    {
+        $workbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
+        $confirmed = \is_array($workbench['confirmed'] ?? null) ? $workbench['confirmed'] : [];
+        $rawContracts = \is_array($confirmed['contracts'] ?? null) ? $confirmed['contracts'] : [];
+        $hasConfirmedStageOne = $rawContracts !== []
+            || $confirmed !== []
+            || \trim((string)($scope['execution_blueprint_confirmed_signature'] ?? '')) !== ''
+            || \trim((string)($scope['plan_workbench']['confirmed_signature'] ?? '')) !== '';
+
+        if ($rawContracts === []) {
+            if (!$hasConfirmedStageOne) {
+                throw new \RuntimeException('Stage-2 task plan requires confirmed Stage-1 source contracts or confirmed legacy plan data before task contract generation.');
+            }
+            $rawContracts = (new LegacyContractAdapter())->adaptStageOne([
+                'site_title' => (string)($scope['site_title'] ?? ''),
+                'brief_description' => (string)($scope['brief_description'] ?? ''),
+                'plan_json' => $this->firstArrayCandidate([
+                    $confirmed['plan_json'] ?? null,
+                    $scope['plan_json'] ?? null,
+                    $confirmed['structured_plan'] ?? null,
+                    $scope['plan_structured'] ?? null,
+                ]),
+                'structured' => $this->firstArrayCandidate([
+                    $confirmed['structured_plan'] ?? null,
+                    $confirmed['plan_book']['structured'] ?? null,
+                    $scope['plan_structured'] ?? null,
+                    $scope['structured_plan'] ?? null,
+                ]),
+                'execution_blueprint' => \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [],
+            ]);
+        }
+
+        $wantedTypes = [
+            ContractType::TYPE_SITE_BRIEF,
+            ContractType::TYPE_DESIGN_MANIFEST,
+            ContractType::TYPE_PAGE_CONTRACT,
+            ContractType::TYPE_BLOCK_PLAN,
+        ];
+        $contracts = [];
+        foreach ($rawContracts as $key => $contract) {
+            if (!\is_array($contract)) {
+                continue;
+            }
+            $type = $this->extractContractType($contract, $key);
+            if (!\in_array($type, $wantedTypes, true) || isset($contracts[$type])) {
+                continue;
+            }
+            $contracts[$type] = $contract;
+        }
+
+        $refs = [];
+        foreach ($contracts as $type => $contract) {
+            $refs[] = $this->buildSourceContractRef($type, $contract);
+        }
+        if ($refs === []) {
+            throw new \RuntimeException('Stage-2 task plan requires confirmed stage-1 source contracts before task contract generation.');
+        }
+
+        return [
+            'contracts' => $contracts,
+            'refs' => $refs,
+        ];
+    }
+
+    /**
+     * @param list<mixed> $candidates
+     * @return array<string, mixed>
+     */
+    private function firstArrayCandidate(array $candidates): array
+    {
+        foreach ($candidates as $candidate) {
+            if (\is_array($candidate) && $candidate !== []) {
+                return $candidate;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $contract
+     * @param int|string $fallbackKey
+     */
+    private function extractContractType(array $contract, int|string $fallbackKey): string
+    {
+        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
+        $type = \trim((string)($meta['type'] ?? $contract['type'] ?? ''));
+        if ($type !== '') {
+            return $type;
+        }
+
+        return \is_string($fallbackKey) ? $fallbackKey : '';
+    }
+
+    /**
+     * @param array<string, mixed> $contract
+     * @return array{id:string,type:string,version:string,status:string}
+     */
+    private function buildSourceContractRef(string $type, array $contract): array
+    {
+        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
+        $id = \trim((string)($meta['id'] ?? $meta['contract_id'] ?? $contract['id'] ?? $contract['contract_id'] ?? ''));
+        if ($id === '') {
+            $id = 'contract_' . \substr($this->buildSignature($contract), 0, 16);
+        }
+
+        return [
+            'id' => $id,
+            'type' => $type,
+            'version' => \trim((string)($meta['version'] ?? $contract['version'] ?? ContractType::VERSION_V1)),
+            'status' => \trim((string)($meta['status'] ?? $contract['status'] ?? ContractType::STATUS_CONFIRMED)),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $structured
+     * @return array<string, mixed>
+     */
+    private function buildStageTwoBlockVisualContractPayload(array $structured): array
+    {
+        return [
+            'style_tokens' => \is_array($structured['style_tokens'] ?? null) ? $structured['style_tokens'] : [
+                'palette' => \is_array($structured['palette'] ?? null) ? $structured['palette'] : [],
+                'theme_style' => \is_array($structured['theme_style'] ?? null) ? $structured['theme_style'] : [],
+            ],
+            'content_rules' => \is_array($structured['content_rules'] ?? null) ? $structured['content_rules'] : [],
+            'shared_visual_tasks' => $this->extractStageTwoVisualTasks(\is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : []),
+            'page_visual_tasks' => $this->extractStageTwoPageVisualTasks(\is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : []),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $structured
+     * @return array<string, mixed>
+     */
+    private function buildStageTwoBlockTaskContractPayload(array $structured): array
+    {
+        return [
+            'block_task_schema' => \is_array($structured['block_task_schema'] ?? null) ? $structured['block_task_schema'] : [],
+            'task_directory_tree' => \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [],
+            'task_tree' => \is_array($structured['task_tree'] ?? null) ? $structured['task_tree'] : [],
+            'execution_order' => \is_array($structured['execution_order'] ?? null) ? $structured['execution_order'] : [],
+            'execution_blueprint' => \is_array($structured['execution_blueprint'] ?? null) ? $structured['execution_blueprint'] : [],
+            'shared_tasks' => \is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : [],
+            'page_tasks' => \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [],
+        ];
+    }
+
+    /**
+     * @param array<int|string, mixed> $tasks
+     * @return list<array<string, mixed>>
+     */
+    private function extractStageTwoVisualTasks(array $tasks): array
+    {
+        $visualTasks = [];
+        foreach ($tasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
+            $visualTasks[] = [
+                'task_key' => (string)($task['task_key'] ?? ''),
+                'group_key' => (string)($task['group_key'] ?? ''),
+                'page_type' => (string)($task['page_type'] ?? ''),
+                'block_key' => (string)($task['block_key'] ?? ''),
+                'section_code' => (string)($task['section_code'] ?? ''),
+                'style_plan' => \is_array($task['style_plan'] ?? null) ? $task['style_plan'] : (\is_array($task['block_task']['style_plan'] ?? null) ? $task['block_task']['style_plan'] : []),
+                'asset_requirements' => \is_array($taskScript['asset_requirements'] ?? null) ? $taskScript['asset_requirements'] : [],
+                'responsive_contract' => \is_array($task['responsive_contract'] ?? null) ? $task['responsive_contract'] : [],
+                'accessibility_contract' => \is_array($task['accessibility_contract'] ?? null) ? $task['accessibility_contract'] : [],
+                'plan_context' => \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [],
+            ];
+        }
+
+        return $visualTasks;
+    }
+
+    /**
+     * @param array<string, mixed> $pageTasks
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function extractStageTwoPageVisualTasks(array $pageTasks): array
+    {
+        $visualTasks = [];
+        foreach ($pageTasks as $pageType => $tasks) {
+            if (!\is_array($tasks)) {
+                continue;
+            }
+            $visualTasks[(string)$pageType] = $this->extractStageTwoVisualTasks($tasks);
+        }
+
+        return $visualTasks;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $contractContext
+     * @param list<array{id:string,type:string,version:string,status:string}> $sourceContracts
+     * @return array<string, mixed>
+     */
+    private function buildStageTwoContract(string $type, array $payload, array $contractContext, array $sourceContracts): array
+    {
+        $isVisualContract = $type === ContractType::TYPE_BLOCK_VISUAL_CONTRACT;
+        $qaGateHelper = new QaGateHelper();
+
+        return [
+            'contract_meta' => (new ContractMetaBuilder())->build(
+                $type,
+                ContractType::STAGE_STAGE2,
+                ContractType::STATUS_DRAFT,
+                $isVisualContract ? 'stage2_visual_planner' : 'stage2_task_planner',
+                'json_strict',
+                [
+                    'payload_hash' => $this->buildSignature($payload),
+                    'source_signature' => (string)($contractContext['source_signature'] ?? ''),
+                    'skill_snapshot_hash' => $this->buildSignature(\is_array($contractContext['skill_snapshots'] ?? null) ? $contractContext['skill_snapshots'] : []),
+                ]
+            ),
+            'permission_matrix' => (new PermissionMatrix())->forStage(ContractType::STAGE_STAGE2),
+            'frozen_fields' => $isVisualContract
+                ? ['payload.style_tokens', 'payload.shared_visual_tasks.*.task_key', 'payload.page_visual_tasks.*.*.task_key']
+                : ['payload.block_task_schema', 'payload.execution_order', 'payload.shared_tasks.*.task_key', 'payload.page_tasks.*.*.task_key'],
+            'mutable_fields' => $isVisualContract
+                ? ['payload.shared_visual_tasks.*.style_plan', 'payload.page_visual_tasks.*.*.style_plan', 'payload.*.human_notes']
+                : ['payload.shared_tasks.*.human_notes', 'payload.page_tasks.*.*.human_notes'],
+            'source_contracts' => $sourceContracts,
+            'contract_context' => $contractContext,
+            'qa_gates' => [
+                'schema_shape' => $qaGateHelper->gate('schema_shape', QaGateHelper::STATUS_PASS, 'Stage-2 contract payload shape is present.'),
+                'source_contracts' => $qaGateHelper->gate('source_contracts', QaGateHelper::STATUS_PASS, 'Stage-2 contract is derived from confirmed stage-1 contracts.'),
+                'human_review' => $qaGateHelper->gate('human_review', QaGateHelper::STATUS_PENDING, 'Human review is required before downstream build contracts consume this task plan.'),
+            ],
+            'payload' => $payload,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $structured
+     * @param array<string, array<string, mixed>> $sourceContracts
+     */
+    private function validateStageTwoSourceConstraints(array $structured, array $sourceContracts): void
+    {
+        $pagePayload = \is_array($sourceContracts[ContractType::TYPE_PAGE_CONTRACT]['payload'] ?? null)
+            ? $sourceContracts[ContractType::TYPE_PAGE_CONTRACT]['payload']
+            : [];
+        $allowedPages = [];
+        foreach (\is_array($pagePayload['page_types'] ?? null) ? $pagePayload['page_types'] : [] as $pageType) {
+            $pageType = \trim((string)$pageType);
+            if ($pageType !== '') {
+                $allowedPages[$pageType] = true;
+            }
+        }
+        if (\is_array($pagePayload['pages'] ?? null)) {
+            foreach ($pagePayload['pages'] as $pageType => $_pageConfig) {
+                if (\is_string($pageType) && $pageType !== '') {
+                    $allowedPages[$pageType] = true;
+                }
+            }
+        }
+
+        $pageTasks = \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [];
+        if ($allowedPages !== []) {
+            foreach ($pageTasks as $pageType => $_tasks) {
+                $pageType = (string)$pageType;
+                if ($pageType !== '' && !isset($allowedPages[$pageType])) {
+                    throw new \RuntimeException('Stage-2 task plan attempted to add unconfirmed page type: ' . $pageType);
+                }
+            }
+        }
+
+        $allowedBlocksByPage = $this->collectStageTwoAllowedBlockKeysByPage($sourceContracts);
+        if ($allowedBlocksByPage === []) {
+            return;
+        }
+        foreach ($pageTasks as $pageType => $tasks) {
+            $pageType = (string)$pageType;
+            if (!\is_array($tasks) || !isset($allowedBlocksByPage[$pageType]) || $allowedBlocksByPage[$pageType] === []) {
+                continue;
+            }
+            foreach ($tasks as $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                if (!$this->stageTwoTaskMatchesAllowedBlock($task, $allowedBlocksByPage[$pageType])) {
+                    throw new \RuntimeException('Stage-2 task plan attempted to add or rewrite an unconfirmed block on page type: ' . $pageType);
+                }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $sourceContracts
+     * @return array<string, array<string, true>>
+     */
+    private function collectStageTwoAllowedBlockKeysByPage(array $sourceContracts): array
+    {
+        $blockPayload = \is_array($sourceContracts[ContractType::TYPE_BLOCK_PLAN]['payload'] ?? null)
+            ? $sourceContracts[ContractType::TYPE_BLOCK_PLAN]['payload']
+            : [];
+        $allowed = [];
+
+        if (\is_array($blockPayload['pages'] ?? null)) {
+            foreach ($blockPayload['pages'] as $pageType => $pagePlan) {
+                $blocks = \is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : (\is_array($pagePlan) && \array_is_list($pagePlan) ? $pagePlan : []);
+                $this->collectStageTwoAllowedBlockKeys($allowed, (string)$pageType, $blocks);
+            }
+        }
+        if (\is_array($blockPayload['page_plans'] ?? null)) {
+            foreach ($blockPayload['page_plans'] as $pageType => $pagePlan) {
+                if (!\is_array($pagePlan)) {
+                    continue;
+                }
+                $resolvedPageType = (string)($pagePlan['page_type'] ?? $pagePlan['page_key'] ?? (\is_string($pageType) ? $pageType : ''));
+                $blocks = \is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : (\is_array($pagePlan['sections'] ?? null) ? $pagePlan['sections'] : []);
+                $this->collectStageTwoAllowedBlockKeys($allowed, $resolvedPageType, $blocks);
+            }
+        }
+        if (\is_array($blockPayload['block_index'] ?? null)) {
+            foreach ($blockPayload['block_index'] as $block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $pageType = \trim((string)($block['page_type'] ?? $block['page_key'] ?? $block['group_key'] ?? ''));
+                $this->collectStageTwoAllowedBlockKeys($allowed, $pageType, [$block]);
+            }
+        }
+
+        return $allowed;
+    }
+
+    /**
+     * @param array<string, array<string, true>> $allowed
+     * @param array<int|string, mixed> $blocks
+     */
+    private function collectStageTwoAllowedBlockKeys(array &$allowed, string $pageType, array $blocks): void
+    {
+        $pageType = \trim($pageType);
+        if ($pageType === '') {
+            return;
+        }
+        foreach ($blocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            foreach (['task_key', 'block_key', 'source_block_key', 'section_code', 'component_key'] as $key) {
+                $value = \trim((string)($block[$key] ?? ''));
+                if ($value !== '') {
+                    $allowed[$pageType][$value] = true;
+                }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @param array<string, true> $allowedBlocks
+     */
+    private function stageTwoTaskMatchesAllowedBlock(array $task, array $allowedBlocks): bool
+    {
+        foreach (['task_key', 'block_key', 'source_block_key', 'section_code', 'component_key'] as $key) {
+            $value = \trim((string)($task[$key] ?? ''));
+            if ($value !== '' && isset($allowedBlocks[$value])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -6517,7 +6961,7 @@ final class AiSiteVirtualThemePlanService
         $prompt = $mode === 'refine_task_plan'
             ? $this->buildTaskPlanRefinePrompt($scope, $buildBlueprint, $baselineStructured, $baselineVirtualThemePlan, $payload)
             : $this->buildTaskPlanRebuildPrompt($scope, $buildBlueprint, $baselineStructured, $baselineVirtualThemePlan, $payload);
-        $prompt = $this->getSkillRegistry()->prependPromptGuide($prompt, 'stage2');
+        $prompt = $this->getSkillRegistry()->prependPromptGuideForScope($prompt, 'stage2', $scope);
 
         $publicId = \trim((string)($scope['public_id'] ?? ''));
         $requestParams = [
@@ -6533,7 +6977,7 @@ final class AiSiteVirtualThemePlanService
             'disable_conversation_history' => true,
             'disable_conversation_persist' => true,
         ];
-        
+
         $jsonRequestParams = \array_merge($requestParams, [
             'response_format' => ['type' => 'json_object'],
         ]);
@@ -6993,7 +7437,7 @@ final class AiSiteVirtualThemePlanService
             throw new \RuntimeException('AI task plan generation failed: AiService unavailable.');
         }
         $prompt = $this->buildTaskPlanGenerationPrompt($scope, $buildBlueprint, $structured, $virtualThemePlan);
-        $prompt = $this->getSkillRegistry()->prependPromptGuide($prompt, 'stage2');
+        $prompt = $this->getSkillRegistry()->prependPromptGuideForScope($prompt, 'stage2', $scope);
         $requestParams = [
             'allow_zero_balance_provider' => true,
             'temperature' => 0.2,
