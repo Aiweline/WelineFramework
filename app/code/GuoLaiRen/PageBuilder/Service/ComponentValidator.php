@@ -91,14 +91,13 @@ class ComponentValidator
         // 4. 验证每个组件
         $components = $config['components'] ?? [];
         foreach ($components as $code => $componentConfig) {
-            $this->validateComponent($styleCode, $code, $componentConfig);
+            $this->validateComponent($code, $componentConfig, $basePath);
         }
-        $componentsForValidation = $this->appendImplicitSystemComponents($components, $styleCode);
         
         // 5. 验证区域配置
         $regions = $config['regions'] ?? [];
         foreach ($regions as $regionName => $regionConfig) {
-            $this->validateRegion($regionName, $regionConfig, $componentsForValidation);
+            $this->validateRegion($regionName, $regionConfig, $components);
         }
         
         // 6. 检查是否有孤立的组件文件（在目录中但不在配置中）
@@ -129,7 +128,7 @@ class ComponentValidator
         }
         
         $config = json_decode(file_get_contents($componentJsonPath), true);
-        $validComponents = array_keys($this->appendImplicitSystemComponents($config['components'] ?? [], $styleCode));
+        $validComponents = array_keys($config['components'] ?? []);
         
         // 检查每个区域的组件
         foreach (['header', 'content', 'footer'] as $region) {
@@ -177,8 +176,8 @@ class ComponentValidator
         
         // 验证组件文件存在
         $filePath = $componentConfig['file'] ?? '';
-        $fullPath = $this->pathResolver->resolveComponentFilesystemPath($styleCode, $filePath);
-
+        $fullPath = $this->pathResolver->getComponentFilePath($styleCode, $filePath);
+        
         if (!file_exists($fullPath)) {
             return null;
         }
@@ -213,7 +212,7 @@ class ComponentValidator
     /**
      * 验证单个组件配置
      */
-    private function validateComponent(string $styleCode, string $code, array $config): void
+    private function validateComponent(string $code, array $config, string $basePath): void
     {
         // 1. 验证组件代码格式
         if (!$this->isValidComponentCode($code)) {
@@ -239,10 +238,10 @@ class ComponentValidator
         
         // 5. 验证文件存在
         if (isset($config['file'])) {
-            $filePath = (string)$config['file'];
-            $resolvedPath = $this->pathResolver->resolveComponentFilesystemPath($styleCode, $filePath);
-            if (!file_exists($resolvedPath)) {
-                $this->addError("组件 '{$code}' 的文件不存在: {$filePath}（完整路径: {$resolvedPath}）");
+            // basePath 已经是模板目录，需要拼接 components 子目录
+            $filePath = $basePath . '/components/' . $config['file'];
+            if (!file_exists($filePath)) {
+                $this->addError("组件 '{$code}' 的文件不存在: {$config['file']}（完整路径: {$filePath}）");
             }
         }
         
@@ -308,32 +307,6 @@ class ComponentValidator
                 }
             }
         }
-    }
-
-    /**
-     * default 主题等模板会把 header/footer 作为根级系统组件，
-     * 运行时扫描器可直接识别，这里补齐给校验器避免误报。
-     */
-    private function appendImplicitSystemComponents(array $components, string $styleCode): array
-    {
-        $basePath = $this->pathResolver->getTemplatePath($styleCode);
-        $implicitSystemFiles = [
-            'header-system' => $basePath . '/header.phtml',
-            'footer-system' => $basePath . '/footer.phtml',
-        ];
-
-        foreach ($implicitSystemFiles as $code => $path) {
-            if (!isset($components[$code]) && file_exists($path)) {
-                $components[$code] = [
-                    'name' => $code,
-                    'region' => str_starts_with($code, 'header-') ? 'header' : 'footer',
-                    'category' => str_starts_with($code, 'header-') ? 'header' : 'footer',
-                    'file' => basename($path),
-                ];
-            }
-        }
-
-        return $components;
     }
     
     /**

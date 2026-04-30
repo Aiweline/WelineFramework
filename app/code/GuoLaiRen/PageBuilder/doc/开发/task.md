@@ -98,6 +98,15 @@
   - [x] 显示域名状态信息（tooltip 或副标题）
   - [x] 表单提交使用 `pool_id[]` 字段名
 
+### 2.3 QuickBuild 向导
+
+- [x] **域名选择步骤改造** `view/templates/Backend/QuickBuild/wizard.phtml`
+  - [x] 确认域名列表来源为 DomainPool
+  - [x] 添加 `site_ready=1` 筛选
+  - [x] 显示域名状态
+
+---
+
 ## 阶段三：JavaScript 函数更新
 
 ### 3.1 状态渲染函数
