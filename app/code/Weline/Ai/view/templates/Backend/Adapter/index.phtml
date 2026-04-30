@@ -22,12 +22,23 @@ foreach ($adapters as $a) {
 
 <style>
 .weline-adapter-page .stats-card {
+    background: var(--backend-color-card-bg, var(--backend-color-bg-primary, #ffffff));
+    border: 1px solid var(--backend-color-card-border, var(--backend-color-border-default, #dee2e6));
+    color: var(--backend-color-text-primary, #212529);
     border-radius: 12px;
     transition: transform 0.2s, box-shadow 0.2s;
 }
+.weline-adapter-page .stats-card .card-body,
+.weline-adapter-page .stats-card .flex-grow-1,
+.weline-adapter-page .stats-card h4 {
+    color: inherit;
+}
+.weline-adapter-page .stats-card .text-muted {
+    color: var(--backend-color-text-secondary, var(--backend-color-text-muted, #6c757d)) !important;
+}
 .weline-adapter-page .stats-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    box-shadow: var(--backend-shadow-lg, 0 8px 25px rgba(0,0,0,0.1));
 }
 .weline-adapter-page .stats-icon {
     width: 48px;
