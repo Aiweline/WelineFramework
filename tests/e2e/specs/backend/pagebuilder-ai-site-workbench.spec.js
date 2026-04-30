@@ -2828,6 +2828,116 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
 
   moduleCase(
     test,
+    { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-SKILL-001' },
+    'skill manager selection is sent with plan start request without direct AI execution',
+    async ({ page }) => {
+      test.setTimeout(180000);
+      const backendRoot = await loginAsAdmin(page, { bootstrapOnly: true });
+      const directAiExecutionUrls = [];
+      const customSkillCode = `e2e-contract-skill-${Date.now().toString(36)}`;
+      let startPlanPostData = '';
+
+      page.on('request', (request) => {
+        const url = request.url();
+        if (/\/pagebuilder\/backend\/(?:ai-site-agent|aiSiteAgent)\/(?:post-ai|post-generate|post-execute|direct-ai|run-ai)/i.test(url)) {
+          directAiExecutionUrls.push(url);
+        }
+      });
+      await page.route(/\/pagebuilder\/backend\/(?:ai-site-agent|aiSiteAgent)\/post-skill-list\b/i, async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: {
+              default_skill_codes: [],
+              skills: [
+                {
+                  code: 'builtin-copy',
+                  name: 'Builtin Copy',
+                  description: 'Builtin copy style guard',
+                  source: 'builtin',
+                  status: 'active',
+                  exists: true,
+                  selectable: true,
+                },
+              ],
+            },
+          }),
+        });
+      });
+      await page.route(/\/pagebuilder\/backend\/(?:ai-site-agent|aiSiteAgent)\/post-skill-save\b/i, async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            item: {
+              code: customSkillCode,
+              name: 'E2E Contract Skill',
+              description: 'E2E custom skill',
+              body: 'Keep the generated plan concrete and customer visible.',
+              body_hash: 'e2e-hash',
+              source: 'custom',
+              status: 'active',
+              exists: true,
+              selectable: true,
+            },
+          }),
+        });
+      });
+      await page.route(/\/pagebuilder\/backend\/(?:ai-site-agent|aiSiteAgent)\/post-start-plan\b/i, async (route) => {
+        startPlanPostData = route.request().postData() || '';
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            start_sse: false,
+            message: 'E2E mocked plan start accepted.',
+            data: {
+              selected_skill_codes: [customSkillCode],
+            },
+          }),
+        });
+      });
+
+      const { workspaceUrl } = await createDirectPagebuilderWorkspace(page, backendRoot);
+      await gotoStable(page, workspaceUrl);
+      await page.locator('#pb-ai-site-title').fill('E2E Skill Contract Site');
+      await page.locator('#pb-ai-target-domain').fill(`skill-${Date.now().toString(36)}.weline.test`);
+      await page.locator('#pb-ai-brief-description').fill('Build a customer-visible website plan for skill selection propagation.');
+
+      await expect(page.locator('#pb-ai-skill-select-panel')).toBeVisible({ timeout: 30000 });
+      await expect(page.locator('#pb-ai-skill-option-list input[value="builtin-copy"]')).toBeVisible({ timeout: 30000 });
+      await page.locator('#pb-ai-skill-create-toggle').click();
+      await expect(page.locator('#pb-ai-skill-manager-panel')).toBeVisible({ timeout: 15000 });
+      await page.locator('#pb-ai-skill-code').fill(customSkillCode);
+      await page.locator('#pb-ai-skill-name').fill('E2E Contract Skill');
+      await page.locator('#pb-ai-skill-description').fill('E2E custom skill');
+      await page.locator('#pb-ai-skill-body').fill('Keep the generated plan concrete and customer visible.');
+      await page.locator('#pb-ai-skill-save-btn').click();
+
+      await expect(page.locator(`[data-skill-chip="${customSkillCode}"]`)).toBeVisible({ timeout: 30000 });
+      await expect(page.locator(`[data-pb-skill-summary-stage="plan"]`).first()).toContainText('E2E Contract Skill', { timeout: 15000 });
+      await expect(page.locator('.pb-ai-run-virtual-theme').first()).toBeEnabled({ timeout: 15000 });
+
+      const startRequestPromise = page.waitForRequest(
+        (request) => /\/pagebuilder\/backend\/(?:ai-site-agent|aiSiteAgent)\/post-start-plan\b/i.test(request.url())
+          && request.method() === 'POST',
+        { timeout: 60000 }
+      );
+      await page.locator('.pb-ai-run-virtual-theme').first().click({ force: true });
+      await startRequestPromise;
+
+      expect(startPlanPostData).toContain('selected_skill_codes');
+      expect(startPlanPostData).toContain(customSkillCode);
+      expect(directAiExecutionUrls).toEqual([]);
+    }
+  );
+
+  moduleCase(
+    test,
     { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-ASSET-010' },
     'asset panel renders asset_manifest slots and image generation start only queues work',
     async ({ page }) => {
@@ -2905,7 +3015,8 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       expect(Number(queued.queue_id || (queued.queue && queued.queue.queue_id) || 0)).toBeGreaterThan(0);
       expect(String(queued.slot_id || '')).toBe(slotId);
       expect(String(queued.execution_token || '')).toBe(executionToken);
-      expect(String(queued.status || queued.queue_status || (queued.queue && queued.queue.status) || 'queued')).toMatch(/^(pending|queued)$/i);
+      const queueStatus = String(queued.queue_status || (queued.queue && queued.queue.status) || queued.status || 'queued');
+      expect(queueStatus).toMatch(/^(preparing|pending|queued)$/i);
       expect(String(queued.image_url || queued.final_url || queued.generated_url || '')).toBe('');
     }
   );

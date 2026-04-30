@@ -72,6 +72,15 @@ end,end
 可清理空间,可清理空间
 文件数量,文件数量
 "缓存状态。[enable/disable]:开启/关闭 [identify...]:缓存识别名","缓存状态。[enable/disable]:开启/关闭 [identify...]:缓存识别名"
+"执行 CacheWarmerRegistry 中所有可用的预热器","执行 CacheWarmerRegistry 中所有可用的预热器"
+选项:,选项:
+示例:,示例:
+开始执行缓存预热...,开始执行缓存预热...
+"预热汇总：total=%{1} ran=%{2} skipped=%{3} warmed=%{4} duration=%{5}ms","预热汇总：total=%{1} ran=%{2} skipped=%{3} warmed=%{4} duration=%{5}ms"
+"预热中出现 %{1} 个错误","预热中出现 %{1} 个错误"
+预热完成,预热完成
+"尚未注册任何 CacheWarmer","尚未注册任何 CacheWarmer"
+已注册预热器：,已注册预热器：
 开始清理拓展全页缓存：,开始清理拓展全页缓存：
 模块,模块
 不存在！,不存在！
@@ -671,6 +680,8 @@ URI处理前,URI处理前
 在后端控制器初始化时触发，允许其他模块添加后端白名单URL。,在后端控制器初始化时触发，允许其他模块添加后端白名单URL。
 后端未登录重定向URL,后端未登录重定向URL
 在后端控制器初始化时触发，允许其他模块添加未登录时的重定向URL。,在后端控制器初始化时触发，允许其他模块添加未登录时的重定向URL。
+"URL 越界拦截","URL 越界拦截"
+"当 UrlGuardObserver 判定本次请求越界（如 max id 越界、参数白名单不通过等）时触发。事件数据包含 uri、guard_name、details、params_keys、timestamp，便于队列/CDN/告警模块订阅做后续处理（如把命中信息入队、推送 CDN 黑名单、通知告警）。","当 UrlGuardObserver 判定本次请求越界（如 max id 越界、参数白名单不通过等）时触发。事件数据包含 uri、guard_name、details、params_keys、timestamp，便于队列/CDN/告警模块订阅做后续处理（如把命中信息入队、推送 CDN 黑名单、通知告警）。"
 检测语言,检测语言
 在URL解析时检测语言时触发，允许其他模块自定义语言检测逻辑。,在URL解析时检测语言时触发，允许其他模块自定义语言检测逻辑。
 检测货币,检测货币
