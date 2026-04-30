@@ -1886,7 +1886,10 @@ class ServiceOrchestrator
                 $allInstances[$role] ?? [],
                 static fn (mixed $instance): bool => $instance instanceof ServiceInstance
             ));
-            if ($plannedCount > 0) {
+            if (
+                $plannedCount > 0
+                && ($context->frontend || $provider->requiresStartupReadyBarrier() || $provider->isCriticalRole())
+            ) {
                 $startupAcceptance[$role] = [
                     'displayName' => $displayName,
                     'expected' => $plannedCount,

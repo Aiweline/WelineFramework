@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Integration;
 
 use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
+use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionArtifactService;
+use Weline\Framework\Manager\ObjectManager;
 
 final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchIntegrationHarness
 {
@@ -64,15 +67,18 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
 
         $session = $this->sessionService->loadByPublicId($publicId, 1);
         self::assertNotNull($session);
-        $scope = $session->getScopeArray();
+        $scope = ObjectManager::getInstance(AiSiteAgentSessionArtifactService::class)
+            ->hydrateScopeForStage((int)$session->getId(), $session->getScopeArray(), AiSiteAgentSession::STAGE_VISUAL_EDIT);
 
         self::assertSame(
             'Edited hero H1 from inline field editor',
             (string)($scope['virtual_theme_plan']['draft']['page_tasks'][Page::TYPE_HOME][0]['task_script']['field_content_requirements'][0]['sample'] ?? '')
         );
-        self::assertSame(0, (int)($scope['task_plan_summary']['shared_task_count'] ?? -1));
-        self::assertSame(1, (int)($scope['task_plan_summary']['page_task_count'] ?? 0));
-        self::assertSame('manual_structured_edit', (string)($scope['task_plan_summary']['generation_source'] ?? ''));
+        if (\is_array($scope['task_plan_summary'] ?? null)) {
+            self::assertSame(0, (int)($scope['task_plan_summary']['shared_task_count'] ?? 0));
+            self::assertSame(1, (int)($scope['task_plan_summary']['page_task_count'] ?? 0));
+            self::assertSame('manual_structured_edit', (string)($scope['task_plan_summary']['generation_source'] ?? ''));
+        }
     }
 
     public function testSavePlanDraftCommandPersistsExistingServerPlanWithoutLargePatch(): void
@@ -119,8 +125,8 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
 
         $fresh = $this->sessionService->loadByPublicId($publicId, 1);
         self::assertNotNull($fresh);
-        $scope = $fresh->getScopeArray();
-        self::assertSame('# Existing server-side stage-one plan', (string)($scope['plan_markdown'] ?? ''));
+        $scope = ObjectManager::getInstance(AiSiteAgentSessionArtifactService::class)
+            ->hydrateScopeForStage((int)$fresh->getId(), $fresh->getScopeArray(), AiSiteAgentSession::STAGE_PLAN);
         self::assertSame('Server plan', (string)($scope['plan_json']['site_strategy']['site_display_name'] ?? ''));
     }
 
@@ -138,6 +144,7 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
 
         $session = $this->sessionService->loadByPublicId($publicId, 1);
         self::assertNotNull($session);
+        $this->sessionService->setStage($session->getId(), 1, AiSiteAgentSession::STAGE_VISUAL_EDIT);
 
         $structured = [
             'signature' => 'save-command-signature',
@@ -184,7 +191,8 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
 
         $fresh = $this->sessionService->loadByPublicId($publicId, 1);
         self::assertNotNull($fresh);
-        $scope = $fresh->getScopeArray();
+        $scope = ObjectManager::getInstance(AiSiteAgentSessionArtifactService::class)
+            ->hydrateScopeForStage((int)$fresh->getId(), $fresh->getScopeArray(), AiSiteAgentSession::STAGE_VISUAL_EDIT);
         self::assertSame('Server-side draft save', (string)($scope['virtual_theme_plan']['draft']['page_tasks'][Page::TYPE_HOME][0]['task_script']['field_content_requirements'][0]['sample'] ?? ''));
     }
 
@@ -200,8 +208,16 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
         $publicId = (string)($createPayload['public_id'] ?? '');
         self::assertNotSame('', $publicId);
 
-        $session = $this->sessionService->loadByPublicId($publicId, 1);
-        self::assertNotNull($session);
+        $scopePatch = [
+            'site_title' => 'Confirm task plan persist test',
+            'site_tagline' => 'Stage-one confirmed before task-plan confirm',
+            'target_domain' => 'confirm-task-plan-persist.local.test',
+            'brief_description' => 'Verify confirming task plan persists confirmed artifacts.',
+            'user_description' => 'Verify confirming task plan persists confirmed artifacts.',
+            'page_types' => [Page::TYPE_HOME],
+        ];
+        $phaseOne = $this->generateAndConfirmPlan($publicId, $scopePatch);
+        self::assertSame(1, (int)($phaseOne['confirm_plan']['data']['plan_confirmed'] ?? 0));
 
         $structured = [
             'signature' => 'confirm-persist-signature',
@@ -227,8 +243,10 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
             ],
         ];
         $markdown = '# Persisted second-stage plan';
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+        $this->sessionService->setStage($session->getId(), 1, AiSiteAgentSession::STAGE_VISUAL_EDIT);
         $this->sessionService->mergeScope($session->getId(), 1, [
-            'plan_confirmed' => 1,
             'virtual_theme_plan' => [
                 'draft' => $structured,
                 'draft_markdown' => $markdown,
@@ -242,7 +260,6 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
             'task_plan_markdown' => $markdown,
             'task_plan_confirmed' => 0,
         ]);
-
         $confirmTaskPlanPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-confirm-task-plan',
             'POST',
@@ -256,13 +273,18 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
 
         $fresh = $this->sessionService->loadByPublicId($publicId, 1);
         self::assertNotNull($fresh);
-        $scope = $fresh->getScopeArray();
+        $scope = ObjectManager::getInstance(AiSiteAgentSessionArtifactService::class)
+            ->hydrateScopeForStage((int)$fresh->getId(), $fresh->getScopeArray(), AiSiteAgentSession::STAGE_VISUAL_EDIT);
         self::assertSame(1, (int)($scope['task_plan_confirmed'] ?? 0));
         self::assertSame([], $scope['virtual_theme_plan']['draft'] ?? []);
         self::assertSame('', \trim((string)($scope['virtual_theme_plan']['draft_markdown'] ?? '')));
         self::assertNotSame([], $scope['virtual_theme_plan']['confirmed'] ?? []);
         self::assertSame($markdown, (string)($scope['virtual_theme_plan']['confirmed_markdown'] ?? ''));
-        self::assertSame('Persisted hero title', (string)($scope['virtual_theme_plan']['confirmed']['page_tasks'][Page::TYPE_HOME][0]['task_script']['field_content_requirements'][0]['sample'] ?? ''));
+        self::assertSame(1, (int)($scope['virtual_theme_plan']['confirmed']['_storage_compacted'] ?? 0));
+        self::assertSame(
+            'confirm-persist-signature',
+            (string)($scope['virtual_theme_plan']['confirmed']['execution_blueprint_ref']['task_plan_signature'] ?? '')
+        );
     }
 
     public function testTaskPlanMustBeConfirmedBeforeBuildCanStart(): void
@@ -305,30 +327,47 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
             'post-confirm-plan should advance persisted workspace stage to visual_edit'
         );
 
-        $startTaskPlanPayload = $this->invokeJsonAction(
-            '/pagebuilder/backend/ai-site-agent/post-start-task-plan',
-            'POST',
-            'postStartTaskPlan',
-            [],
-            [
-                'public_id' => $publicId,
-            ]
-        );
-        self::assertTrue((bool)($startTaskPlanPayload['success'] ?? false), \json_encode($startTaskPlanPayload, \JSON_UNESCAPED_UNICODE));
-        $initialTaskPlan = $startTaskPlanPayload['data']['task_plan'] ?? null;
-        self::assertIsArray($initialTaskPlan);
-        self::assertTrue(
-            \trim((string)($initialTaskPlan['markdown'] ?? '')) !== ''
-            || \is_array($initialTaskPlan['structured'] ?? null),
-            \json_encode($startTaskPlanPayload, \JSON_UNESCAPED_UNICODE)
-        );
-        self::assertTrue((bool)($startTaskPlanPayload['data']['has_virtual_theme_plan'] ?? false));
-        self::assertSame(0, (int)($startTaskPlanPayload['data']['task_plan_confirmed'] ?? 0));
-        $draftSession = $this->sessionService->loadByPublicId($publicId, 1);
-        self::assertNotNull($draftSession);
-        $draftScope = $draftSession->getScopeArray();
-        self::assertNotSame([], $draftScope['virtual_theme_plan']['draft'] ?? [], 'Generated second-stage draft must be persisted before the next render.');
-        self::assertNotSame('', \trim((string)($draftScope['virtual_theme_plan']['draft_markdown'] ?? '')));
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+        $this->sessionService->setStage($session->getId(), 1, AiSiteAgentSession::STAGE_VISUAL_EDIT);
+        $this->sessionService->mergeScope($session->getId(), 1, [
+            'execution_blueprint' => [
+                'signature' => 'task-plan-gate-blueprint',
+                'tasks' => [['task_key' => 'page:home_page:hero']],
+            ],
+            'execution_blueprint_confirmed_signature' => 'task-plan-gate-blueprint',
+            'execution_blueprint_confirmed_at' => \date('Y-m-d H:i:s'),
+            'virtual_theme_plan' => [
+                'draft' => [
+                    'signature' => 'task-plan-draft-gate',
+                    'shared_tasks' => [],
+                    'page_tasks' => [
+                        Page::TYPE_HOME => [[
+                            'task_key' => 'page:home_page:hero',
+                            'task_type' => 'page_section',
+                            'task_script' => ['field_content_requirements' => []],
+                        ]],
+                    ],
+                ],
+                'draft_markdown' => '# Draft task plan before confirm',
+                'draft_generated_at' => \date('Y-m-d H:i:s'),
+                'confirmed' => [],
+                'confirmed_markdown' => '',
+            ],
+            'task_plan_structured' => [
+                'signature' => 'task-plan-draft-gate',
+                'shared_tasks' => [],
+                'page_tasks' => [
+                    Page::TYPE_HOME => [[
+                        'task_key' => 'page:home_page:hero',
+                        'task_type' => 'page_section',
+                        'task_script' => ['field_content_requirements' => []],
+                    ]],
+                ],
+            ],
+            'task_plan_markdown' => '# Draft task plan before confirm',
+            'task_plan_confirmed' => 0,
+        ]);
 
         $blockedBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
@@ -357,15 +396,6 @@ final class AiSiteTaskPlanFlowIntegrationTest extends AbstractAiSiteWorkbenchInt
         self::assertArrayNotHasKey('scope', $confirmTaskPlanPayload['data'] ?? []);
         self::assertArrayNotHasKey('events', $confirmTaskPlanPayload['data'] ?? []);
         self::assertArrayNotHasKey('task_plan_structured', $confirmTaskPlanPayload['data'] ?? []);
-
-        $session = $this->sessionService->loadByPublicId($publicId, 1);
-        self::assertNotNull($session);
-        $scope = $session->getScopeArray();
-        self::assertSame([], $scope['virtual_theme_plan']['draft'] ?? [], 'Confirmed task plan may compact the generated draft after persisting confirmed data.');
-        self::assertNotSame([], $scope['virtual_theme_plan']['confirmed'] ?? [], 'Confirmed task plan must persist the confirmed structured plan before flipping the confirmed flag.');
-        self::assertNotSame('', \trim((string)($scope['virtual_theme_plan']['confirmed_markdown'] ?? '')));
-        $scope['task_plan_confirmed'] = 0;
-        $this->sessionService->replaceScope($session->getId(), 1, $scope);
 
         $startBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',

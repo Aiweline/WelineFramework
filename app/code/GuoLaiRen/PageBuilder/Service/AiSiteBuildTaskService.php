@@ -1557,6 +1557,10 @@ class AiSiteBuildTaskService
     public function syncBuildTaskFailuresToRetryableLedger(array $scope): array
     {
         $taskState = $this->extractTaskState($scope);
+        $existingBuildLedger = $this->getRetryableAiFailures($scope, 'build');
+        $existingBuildFailures = \is_array($existingBuildLedger['build']['items'] ?? null)
+            ? $existingBuildLedger['build']['items']
+            : [];
         $failures = [];
         foreach ($this->extractBlueprintTasks($scope) as $task) {
             $taskKey = \trim((string)($task['task_key'] ?? ''));
@@ -1578,6 +1582,40 @@ class AiSiteBuildTaskService
                 'section_code' => (string)($task['section_code'] ?? ''),
                 'message' => $message !== '' ? $message : 'Build task failed.',
                 'failed_at' => (string)($state['finished_at'] ?? $state['updated_at'] ?? \date('Y-m-d H:i:s')),
+            ];
+        }
+
+        if ($failures === [] && $existingBuildFailures !== []) {
+            $failures = $existingBuildFailures;
+        }
+        if (
+            $failures === []
+            && (!empty($scope['latest_build_failed']) || !empty($scope['publish_blocked_by_latest_ai_failure']))
+        ) {
+            $latestBuildFailure = \is_array($scope['latest_build_failure'] ?? null) ? $scope['latest_build_failure'] : [];
+            $fallbackKey = \trim((string)(
+                $latestBuildFailure['item_key']
+                ?? $latestBuildFailure['task_key']
+                ?? $latestBuildFailure['page_type']
+                ?? $latestBuildFailure['operation']
+                ?? ''
+            ));
+            if ($fallbackKey === '') {
+                $fallbackKey = 'latest_build_failure';
+            }
+            $failures[$fallbackKey] = [
+                'operation' => 'build',
+                'item_key' => $fallbackKey,
+                'item_type' => (string)($latestBuildFailure['item_type'] ?? 'build_task'),
+                'retry_scope' => (string)($latestBuildFailure['retry_scope'] ?? 'build_task'),
+                'page_type' => (string)($latestBuildFailure['page_type'] ?? ''),
+                'section_code' => (string)($latestBuildFailure['section_code'] ?? ''),
+                'message' => \trim((string)(
+                    $latestBuildFailure['message']
+                    ?? $scope['publish_blocked_reason']
+                    ?? ''
+                )) ?: 'Build task failed.',
+                'failed_at' => (string)($latestBuildFailure['failed_at'] ?? \date('Y-m-d H:i:s')),
             ];
         }
 

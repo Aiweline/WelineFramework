@@ -1875,6 +1875,30 @@ class Run implements \Weline\Framework\Console\CommandInterface
     }
     
     /**
+     * 测试文件名智能匹配（修复：避免 str_contains 反向匹配把 t.php 这类短 basename 错配到长 fileName）。
+     * 规则（任意一条命中即视为匹配）：
+     *   1) basename 与输入完全相等；
+     *   2) basename === input.'Test'（自动补 Test 后缀）；
+     *   3) basename 以 input 开头并以 'Test' 结尾，且 input 长度 >= 3（用于支持前缀搜索）。
+     */
+    private function isTestFileNameMatch(string $basename, string $actualFileName): bool
+    {
+        if ($basename === $actualFileName) {
+            return true;
+        }
+        if ($basename === $actualFileName . 'Test') {
+            return true;
+        }
+        if (\strlen($actualFileName) >= 3
+            && \str_starts_with($basename, $actualFileName)
+            && \str_ends_with($basename, 'Test')
+        ) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * 查找测试文件
      * 
      * @param string $fileName 文件名
@@ -1971,11 +1995,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                     foreach ($iterator as $file) {
                         if ($file->isFile() && strtolower($file->getExtension()) === 'php') {
                             $basename = $file->getBasename('.php');
-                            // 支持多种匹配方式
-                            if ($basename === $actualFileName || 
-                                $basename === $actualFileName . 'Test' ||
-                                str_contains($basename, $actualFileName) ||
-                                str_contains($actualFileName, $basename)) {
+                            if ($this->isTestFileNameMatch($basename, $actualFileName)) {
                                 if ($debug) {
                                     $this->printing->note(__('调试 - 递归找到文件: %{1}', [$file->getPathname()]));
                                 }
@@ -2120,12 +2140,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                             }
 
                             $basename = $file->getBasename('.php');
-                            if (
-                                $basename === $actualFileName
-                                || $basename === $actualFileName . 'Test'
-                                || str_contains($basename, $actualFileName)
-                                || str_contains($actualFileName, $basename)
-                            ) {
+                            if ($this->isTestFileNameMatch($basename, $actualFileName)) {
                                 return $file->getPathname();
                             }
                         }

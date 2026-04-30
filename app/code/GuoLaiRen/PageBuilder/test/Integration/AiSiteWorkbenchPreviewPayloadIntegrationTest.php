@@ -33,24 +33,14 @@ final class AiSiteWorkbenchPreviewPayloadIntegrationTest extends AbstractAiSiteW
         $html = $controller->workspace();
 
         self::assertIsString($html);
-        self::assertStringContainsString('function resolveLogicalBlockId(pageType, componentCode, region, index)', $html);
-        self::assertStringContainsString('function normalizePreviewActionPayload(payload)', $html);
-        self::assertStringContainsString(
-            "var rawComponent = String((payload && payload.raw_component) || (payload && payload.component) || '');",
-            $html
-        );
-        self::assertMatchesRegularExpression(
-            '/return\s+normalizePreviewActionPayload\(\s*\{/',
-            $html,
-            'Embedded preview payloads should be normalized before block actions use them.'
-        );
-        self::assertMatchesRegularExpression(
-            '/var\s+actionPayload\s*=\s*normalizePreviewActionPayload\(payload\);/',
-            $html,
-            'Posted preview actions should be normalized before refine/regenerate/editor flows consume them.'
-        );
-        self::assertStringContainsString('frontendHandlerError', $html);
-        self::assertStringContainsString('function handleWorkspaceAsyncError(error, fallbackMessage)', $html);
-        self::assertStringContainsString('pbWorkspaceRequestError', $html);
+        self::assertStringContainsString('function bindWorkspacePreviewMessages()', $html);
+        self::assertStringContainsString('function resolveWorkspaceVisualComponentContext(payload)', $html);
+        self::assertStringContainsString("var componentCode = String((payload && payload.component) || '').trim();", $html);
+        self::assertStringContainsString("var region = String((payload && payload.region) || '').trim();", $html);
+        self::assertStringContainsString("var rawIndex = String((payload && payload.index) || '').trim();", $html);
+        self::assertStringContainsString("if (payload.type === 'pb-component-action') {", $html);
+        self::assertStringContainsString('block_id: refineComponentState.componentCode,', $html);
+        self::assertStringContainsString('component_code: refineComponentState.componentCode,', $html);
+        self::assertStringContainsString("formData.append('component_code', componentCode);", $html);
     }
 }
