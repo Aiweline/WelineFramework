@@ -11,7 +11,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     : $this->getViewFileUrl('Weline_Websites::backend/domain-purchase-dialog.js');
 ?>
 <style>
-.pb-dm { margin: 0 auto; }
+.pb-dm { max-width: 1400px; margin: 0 auto; }
 .pb-dm-tabs {
     display: flex;
     gap: 0;
@@ -161,7 +161,6 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 .pb-dm-table#pb-dm-pool-table .pb-dm-col-site-ready { min-width: 6em; }
 .pb-dm-table#pb-dm-pool-table .pb-dm-col-ip { min-width: 8em; }
 .pb-dm-table#pb-dm-pool-table .pb-dm-col-time { min-width: 10em; white-space: nowrap; }
-.pb-dm-table#pb-dm-pool-table .pb-dm-col-flow { min-width: 12rem; max-width: 28rem; vertical-align: top; }
 .pb-dm-table#pb-dm-pool-table .pb-dm-col-ops { min-width: 12em; }
 .pb-dm-table#pb-dm-pool-table { direction: inherit; }
 .pb-dm-pool-ops {
@@ -283,83 +282,6 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 .pb-dm-provider--none {
     background: var(--backend-color-bg-tertiary, #f1f3f5);
     color: var(--backend-color-text-tertiary, #9a9cae);
-}
-.pb-dm-table--compact .pb-dm-col-check {
-    width: 42px;
-    text-align: center;
-}
-.pb-dm-table--compact .pb-dm-col-domain {
-    min-width: 14rem;
-}
-.pb-dm-table--compact .pb-dm-col-provider {
-    min-width: 12.5rem;
-}
-.pb-dm-table--compact .pb-dm-col-summary {
-    min-width: 16rem;
-}
-.pb-dm-table--compact .pb-dm-col-flow {
-    min-width: 13rem;
-    max-width: 28rem;
-    vertical-align: top;
-}
-.pb-dm-table--compact .pb-dm-col-ops {
-    min-width: 10rem;
-}
-.pb-dm-domain-cell {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-}
-.pb-dm-domain-name {
-    font-weight: 600;
-    color: var(--backend-color-text-primary, #212529);
-    word-break: break-all;
-}
-.pb-dm-domain-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    align-items: center;
-    color: var(--backend-color-text-secondary, #6c757d);
-    font-size: 0.78rem;
-}
-.pb-dm-domain-meta-chip {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.15rem 0.45rem;
-    border-radius: var(--backend-border-radius-pill, 999px);
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-}
-.pb-dm-summary-cell {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-}
-.pb-dm-summary-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.35rem;
-}
-.pb-dm-summary-note {
-    color: var(--backend-color-text-secondary, #6c757d);
-    font-size: 0.78rem;
-    line-height: 1.45;
-}
-.pb-dm-summary-code {
-    display: inline-flex;
-    align-items: center;
-    max-width: 100%;
-    padding: 0.15rem 0.45rem;
-    border-radius: 4px;
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    color: var(--backend-color-text-primary, #212529);
-    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-    font-size: 0.78rem;
-    word-break: break-all;
-}
-.pb-dm-actions-cell {
-    white-space: nowrap;
 }
 .pb-dm-modal-md {
     max-width: 600px;
@@ -1323,44 +1245,6 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     </div>
 </div>
 
-<!-- ==================== 拉取域名：确认 DNS/CDN 账户 ==================== -->
-<div class="pb-dm-form-modal" id="pb-dm-pull-bind-modal">
-    <div class="pb-dm-form-dialog" style="max-width:520px;">
-        <div class="pb-dm-form-dialog-title">
-            <span><i class="mdi mdi-dns"></i> <lang>拉取域名：确认 DNS / CDN 管理账户</lang></span>
-            <button type="button" class="pb-dm-form-dialog-close" id="pb-dm-pull-bind-close">&times;</button>
-        </div>
-        <div class="pb-dm-form-body" style="padding:var(--backend-spacing-lg,20px);">
-            <p style="font-size:0.85rem;color:var(--backend-color-text-secondary,#6c757d);margin-bottom:16px;">
-                <lang>请选择能管理该域名解析的账户；判断是否指向本站时优先通过服务商 API 读取 A/AAAA 的源站 IP（适合 CDN 代理）。至少选择一项。</lang>
-            </p>
-            <div class="pb-dm-fg" style="margin-bottom:12px;">
-                <label><lang>DNS 管理账户</lang></label>
-                <select id="pb-dm-pull-bind-dns" class="pb-dm-select" style="width:100%;">
-                    <option value="0"><lang>不指定</lang></option>
-                </select>
-            </div>
-            <div class="pb-dm-fg" style="margin-bottom:12px;">
-                <label><lang>CDN 管理账户</lang></label>
-                <select id="pb-dm-pull-bind-cdn" class="pb-dm-select" style="width:100%;">
-                    <option value="0"><lang>不指定</lang></option>
-                </select>
-            </div>
-            <p class="pb-dm-alert pb-dm-alert-danger" id="pb-dm-pull-bind-warn" style="display:none;font-size:0.85rem;padding:8px 12px;">
-                <lang>请至少选择 DNS 或 CDN 中的一项</lang>
-            </p>
-            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;margin-top:12px;">
-                <input type="checkbox" id="pb-dm-pull-bind-auto-resolve" checked style="margin-top:3px;">
-                <span style="font-size:0.88rem;"><lang>拉取后尝试在注册商处自动添加 A 记录指向本服务器</lang></span>
-            </label>
-        </div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;padding:0 var(--backend-spacing-lg,20px) var(--backend-spacing-lg,20px);">
-            <button type="button" class="pb-dm-btn pb-dm-btn-outline" id="pb-dm-pull-bind-cancel"><lang>取消</lang></button>
-            <button type="button" class="pb-dm-btn pb-dm-btn-success" id="pb-dm-pull-bind-confirm"><lang>确认拉取</lang></button>
-        </div>
-    </div>
-</div>
-
 <!-- ==================== HTTPS 证书申请弹窗 ==================== -->
 <div class="pb-dm-form-modal" id="pb-dm-https-request-modal">
     <div class="pb-dm-form-dialog pb-dm-modal-md">
@@ -1453,12 +1337,6 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     <option value=""><lang>-- 不切换 CDN --</lang></option>
                 </select>
             </div>
-            <div class="pb-dm-form-group" style="margin-top:12px;">
-                <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-weight:normal;">
-                    <input type="checkbox" id="pb-dm-root-dns-switch-verify-cdn" value="1" style="margin-top:3px;">
-                    <span><lang>切换完成后校验 CDN 响应</lang> <span class="pb-dm-text-muted">(<lang>仅当站点已可访问时勾选；未建站时勿选，否则会长时间重试</lang>)</span></span>
-                </label>
-            </div>
         </div>
         <div style="padding:12px 24px;border-top:1px solid var(--backend-color-border-default,#dee2e6);">
             <button type="button" class="pb-dm-btn pb-dm-btn-outline" id="pb-dm-root-dns-switch-cancel"><lang>取消</lang></button>
@@ -1507,7 +1385,6 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         purchase:         '<backend-url>pagebuilder/backend/domain-management/purchase</backend-url>',
         batchPurchase:    '<backend-url>pagebuilder/backend/domain-management/batch-purchase</backend-url>',
         getDomainPool:    '<backend-url>pagebuilder/backend/domain-management/get-domain-pool</backend-url>',
-        getPoolFlowLog:   '<backend-url>pagebuilder/backend/domain-management/get-pool-flow-log</backend-url>',
         addSubdomain:     '<backend-url>pagebuilder/backend/domain-management/add-subdomain</backend-url>',
         checkResolve:     '<backend-url>pagebuilder/backend/domain-management/check-resolve</backend-url>',
         deletePoolDomain: '<backend-url>pagebuilder/backend/domain-management/delete-pool-domain</backend-url>',
@@ -2080,7 +1957,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 html += '<table class="pb-dm-table" style="margin:0;border-radius:0;"><thead><tr>' +
                     '<th style="width:40px;"><input type="checkbox" class="pb-dm-select-all-group" data-account-id="' + group.account_id + '"></th>' +
                     '<th><?= __('域名') ?></th>' +
-                    '<th title="<?= __('DNS 列旁 ℹ 可查看：注册商默认 NS / 传播中 / 与「是否已注册」的关系说明') ?>"><?= __('服务商') ?> <small class="pb-dm-text-muted">(ℹ DNS)</small></th>' +
+                    '<th><?= __('服务商') ?></th>' +
                     '<th><?= __('可建站') ?></th>' +
                     '<th><?= __('已建站') ?></th>' +
                     '<th><?= __('本地状态') ?></th>' +
@@ -2100,7 +1977,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                           '<i class="mdi mdi-dns"></i></button>' +
                           '<button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm pb-dm-manage-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __('管理DNS记录') ?>" style="margin-left:4px;">' +
                           '<i class="mdi mdi-playlist-plus"></i></button>' +
-                          '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-switch-dns-btn' + (d.is_registering ? ' pb-dm-btn-disabled' : '') + '" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" data-dns-account-id="' + (d.dns_account_id || 0) + '" data-cdn-account-id="' + (d.cdn_account_id || 0) + '" data-dns-provider-name="' + escapeHtml(d.dns_provider_name || '') + '" data-cdn-provider-name="' + escapeHtml(d.cdn_provider_name || '') + '" data-is-registering="' + (d.is_registering ? '1' : '0') + '" title="' + (d.is_registering ? '<?= __("域名注册完成后将自动处理，无需手动切换") ?>' : '<?= __("切换DNS/CDN") ?>') + '" style="margin-left:4px;"' + (d.is_registering ? ' disabled' : '') + '>' +
+                          '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-switch-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" data-dns-account-id="' + (d.dns_account_id || 0) + '" data-cdn-account-id="' + (d.cdn_account_id || 0) + '" data-dns-provider-name="' + escapeHtml(d.dns_provider_name || '') + '" data-cdn-provider-name="' + escapeHtml(d.cdn_provider_name || '') + '" title="<?= __('切换DNS/CDN') ?>" style="margin-left:4px;">' +
                           '<i class="mdi mdi-swap-horizontal"></i></button>' +
                           '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-delete-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __('删除根域（含子域名与池记录）') ?>" style="margin-left:4px;"><i class="mdi mdi-delete-outline"></i></button>'
                         : '<button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm pb-dm-pull-single-btn" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" title="<?= __('拉取并入池') ?>">' +
@@ -2122,12 +1999,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                         '</div>' +
                         '<div class="pb-dm-provider-row">' +
                             '<span class="pb-dm-provider-label">DNS</span>' +
-                            '<span class="pb-dm-provider-badge ' + dnsClass + '" style="display:inline-flex;align-items:center;gap:4px;max-width:100%;">' +
-                            escapeHtml(dnsName) +
-                            (d.dns_status_hint
-                                ? '<i class="mdi mdi-information-outline pb-dm-dns-hint-icon" style="cursor:help;opacity:0.85;flex-shrink:0;" title="' + escapeAttr(d.dns_status_hint) + '" aria-label="<?= __('DNS 状态说明') ?>"></i>'
-                                : '') +
-                            '</span>' +
+                            '<span class="pb-dm-provider-badge ' + dnsClass + '">' + escapeHtml(dnsName) + '</span>' +
                         '</div>' +
                         '<div class="pb-dm-provider-row">' +
                             '<span class="pb-dm-provider-label">CDN</span>' +
@@ -2211,27 +2083,22 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     return;
                 }
 
-                openPullBindModal(function(bindDns, bindCdn, ar) {
-                    setBtnLoading(btn, true);
-                    postForm(API.pullDomains, {
-                        account_id: accountId,
-                        domains: notPulledDomains,
-                        auto_resolve: ar ? '1' : '0',
-                        bind_dns_account_id: bindDns,
-                        bind_cdn_account_id: bindCdn
-                    }).then(function(res) {
-                        setBtnLoading(btn, false, '<i class="mdi mdi-download-multiple"></i>');
-                        if (res.success) {
-                            BackendToast.success(res.message || res.msg || '<?= __('拉取成功') ?>');
-                            loadDomainList();
-                        } else {
-                            BackendToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
-                        }
-                    }).catch(function() {
-                        setBtnLoading(btn, false, '<i class="mdi mdi-download-multiple"></i>');
-                        BackendToast.error('<?= __('网络错误') ?>');
-                    });
-                }, true);
+                setBtnLoading(btn, true);
+                postForm(API.pullDomains, {
+                    account_id: accountId,
+                    domains: notPulledDomains
+                }).then(function(res) {
+                    setBtnLoading(btn, false, '<i class="mdi mdi-download-multiple"></i>');
+                    if (res.success) {
+                        BackendToast.success(res.message || '<?= __('拉取成功') ?>');
+                        loadDomainList();
+                    } else {
+                        BackendToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
+                    }
+                }).catch(function() {
+                    setBtnLoading(btn, false, '<i class="mdi mdi-download-multiple"></i>');
+                    BackendToast.error('<?= __('网络错误') ?>');
+                });
             });
         });
 
@@ -2263,15 +2130,6 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
-    }
-
-    function escapeAttr(str) {
-        if (!str) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;')
-            .replace(/</g, '&lt;');
     }
 
     function updatePagination() {
@@ -2361,10 +2219,6 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         domainContainer.querySelectorAll('.pb-dm-root-switch-dns-btn').forEach(function(btn) {
             btn.addEventListener('click', function(e) {
                 e.stopPropagation();
-                if (btn.dataset.isRegistering === '1' || btn.disabled) {
-                    BackendToast.info('<?= __('域名注册完成后将自动处理 DNS/CDN，无需手动切换。') ?>');
-                    return;
-                }
                 var domainId = parseInt(btn.dataset.domainId) || 0;
                 var domain = btn.dataset.domain || '';
                 var accountId = parseInt(btn.dataset.accountId) || 0;
@@ -2403,80 +2257,6 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         });
     }
 
-    var pullBindModalEl = document.getElementById('pb-dm-pull-bind-modal');
-    var pullBindOnConfirm = null;
-
-    function closePullBindModal() {
-        if (pullBindModalEl) {
-            pullBindModalEl.classList.remove('pb-dm-form-modal--open');
-        }
-    }
-
-    function fillPullBindSelects() {
-        var sd = document.getElementById('pb-dm-pull-bind-dns');
-        var sc = document.getElementById('pb-dm-pull-bind-cdn');
-        if (!sd || !sc) return;
-        sd.innerHTML = '<option value="0"><?= __('不指定') ?></option>';
-        sc.innerHTML = '<option value="0"><?= __('不指定') ?></option>';
-        fetch(API.getDnsAccounts).then(function(r) { return r.json(); }).then(function(data) {
-            if (data.code === 200 && data.data) {
-                (data.data.dns_accounts || []).forEach(function(a) {
-                    sd.innerHTML += '<option value="' + a.account_id + '">' + escapeHtml(a.name) + ' (' + escapeHtml(a.registrar_name || a.registrar_code || '') + ')</option>';
-                });
-                (data.data.cdn_accounts || []).forEach(function(a) {
-                    sc.innerHTML += '<option value="' + a.account_id + '">' + escapeHtml(a.name) + ' (' + escapeHtml(a.registrar_name || a.registrar_code || '') + ')</option>';
-                });
-            }
-        }).catch(function() {});
-    }
-
-    function openPullBindModal(onConfirm, defaultAutoResolve) {
-        pullBindOnConfirm = onConfirm;
-        var ar = document.getElementById('pb-dm-pull-bind-auto-resolve');
-        if (ar) ar.checked = defaultAutoResolve !== false;
-        var w = document.getElementById('pb-dm-pull-bind-warn');
-        if (w) w.style.display = 'none';
-        fillPullBindSelects();
-        if (pullBindModalEl) pullBindModalEl.classList.add('pb-dm-form-modal--open');
-    }
-
-    (function bindPullBindModal() {
-        var c = document.getElementById('pb-dm-pull-bind-confirm');
-        if (c) {
-            c.addEventListener('click', function() {
-                var dns = parseInt(document.getElementById('pb-dm-pull-bind-dns').value, 10) || 0;
-                var cdn = parseInt(document.getElementById('pb-dm-pull-bind-cdn').value, 10) || 0;
-                var w = document.getElementById('pb-dm-pull-bind-warn');
-                if (dns <= 0 && cdn <= 0) {
-                    if (w) w.style.display = 'block';
-                    return;
-                }
-                if (w) w.style.display = 'none';
-                var arChk = document.getElementById('pb-dm-pull-bind-auto-resolve');
-                var ar = !!(arChk && arChk.checked);
-                var fn = pullBindOnConfirm;
-                pullBindOnConfirm = null;
-                closePullBindModal();
-                if (fn) fn(dns, cdn, ar);
-            });
-        }
-        ['pb-dm-pull-bind-close', 'pb-dm-pull-bind-cancel'].forEach(function(id) {
-            var el = document.getElementById(id);
-            if (el) el.addEventListener('click', function() {
-                pullBindOnConfirm = null;
-                closePullBindModal();
-            });
-        });
-        if (pullBindModalEl) {
-            pullBindModalEl.addEventListener('click', function(e) {
-                if (e.target === pullBindModalEl) {
-                    pullBindOnConfirm = null;
-                    closePullBindModal();
-                }
-            });
-        }
-    })();
-
     function pullDomains(domainList, btn, accountId, autoResolve) {
         if (!domainList || domainList.length === 0) {
             BackendToast.warning('<?= __('请选择要拉取的域名') ?>');
@@ -2484,61 +2264,60 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         }
 
         accountId = accountId || domainListState.accountId || 0;
-        openPullBindModal(function(bindDns, bindCdn, ar) {
-            if (btn) setBtnLoading(btn, true);
-            postForm(API.pullDomains, {
-                account_id: accountId,
-                domains: domainList,
-                auto_resolve: ar ? '1' : '0',
-                bind_dns_account_id: bindDns,
-                bind_cdn_account_id: bindCdn
-            }).then(function(res) {
-                if (res.success) {
-                    var msg = res.message || res.msg || '<?= __('拉取成功') ?>';
-                    if (ar && res.auto_resolve_queued) {
-                        msg += ' <?= __('（自动解析任务已创建）') ?>';
-                    }
-                    BackendToast.success(msg);
-                    if (btn && res.domains && domainList.length === 1) {
-                        var domain = domainList[0];
-                        var domainId = res.domains[domain] || 0;
-                        if (domainId > 0) {
-                            btn.className = 'pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-resolve-dns-btn';
-                            btn.setAttribute('data-domain-id', domainId);
-                            btn.setAttribute('data-domain', domain);
-                            btn.setAttribute('title', '<?= __('解析到本地') ?>');
-                            btn.innerHTML = '<i class="mdi mdi-dns"></i>';
-                            btn.onclick = function(e) {
-                                e.stopPropagation();
-                                resolveDns(domainId, domain, btn);
-                            };
-                            var row = btn.closest('tr');
-                            if (row) {
-                                var pullBadge = row.querySelector('.pb-dm-badge--warn');
-                                if (pullBadge) {
-                                    pullBadge.className = 'pb-dm-badge pb-dm-badge--ok';
-                                    pullBadge.textContent = '<?= __('已拉取') ?>';
-                                }
-                                var checkbox = row.querySelector('.pb-dm-domain-select');
-                                if (checkbox) {
-                                    checkbox.checked = false;
-                                }
+        autoResolve = autoResolve !== false;
+
+        if (btn) setBtnLoading(btn, true);
+
+        postForm(API.pullDomains, {
+            account_id: accountId,
+            domains: domainList,
+            auto_resolve: autoResolve ? '1' : '0'
+        }).then(function(res) {
+            if (res.success) {
+                var msg = res.message || '<?= __('拉取成功') ?>';
+                if (autoResolve && res.auto_resolve_queued) {
+                    msg += ' <?= __('（自动解析任务已创建）') ?>';
+                }
+                BackendToast.success(msg);
+                if (btn && res.domains && domainList.length === 1) {
+                    var domain = domainList[0];
+                    var domainId = res.domains[domain] || 0;
+                    if (domainId > 0) {
+                        btn.className = 'pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-resolve-dns-btn';
+                        btn.setAttribute('data-domain-id', domainId);
+                        btn.setAttribute('data-domain', domain);
+                        btn.setAttribute('title', '<?= __('解析到本地') ?>');
+                        btn.innerHTML = '<i class="mdi mdi-dns"></i>';
+                        btn.onclick = function(e) {
+                            e.stopPropagation();
+                            resolveDns(domainId, domain, btn);
+                        };
+                        var row = btn.closest('tr');
+                        if (row) {
+                            var pullBadge = row.querySelector('.pb-dm-badge--warn');
+                            if (pullBadge) {
+                                pullBadge.className = 'pb-dm-badge pb-dm-badge--ok';
+                                pullBadge.textContent = '<?= __('已拉取') ?>';
                             }
-                        } else {
-                            setBtnLoading(btn, false, '<i class="mdi mdi-check"></i>');
+                            var checkbox = row.querySelector('.pb-dm-domain-select');
+                            if (checkbox) {
+                                checkbox.checked = false;
+                            }
                         }
-                    } else if (btn) {
+                    } else {
                         setBtnLoading(btn, false, '<i class="mdi mdi-check"></i>');
                     }
-                } else {
-                    if (btn) setBtnLoading(btn, false, '<i class="mdi mdi-download"></i>');
-                    BackendToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
+                } else if (btn) {
+                    setBtnLoading(btn, false, '<i class="mdi mdi-check"></i>');
                 }
-            }).catch(function() {
+            } else {
                 if (btn) setBtnLoading(btn, false, '<i class="mdi mdi-download"></i>');
-                BackendToast.error('<?= __('网络错误') ?>');
-            });
-        }, autoResolve !== false);
+                BackendToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
+            }
+        }).catch(function() {
+            if (btn) setBtnLoading(btn, false, '<i class="mdi mdi-download"></i>');
+            BackendToast.error('<?= __('网络错误') ?>');
+        });
     }
 
     function resolveDns(domainId, domainName, btn) {
@@ -3000,7 +2779,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var btn = this;
         var domainIds = selected.map(function(d) { return d.domain_id; });
 
-        BackendConfirm.show('<?= __('确定批量转存') ?> ' + selected.length + ' <?= __('个域名到域名池？') ?>\n\n<?= __('注意：已绑定 DNS/CDN 账户的域名将按服务商记录中的源站 IP 判断；否则按公网解析 IP。未指向本机的将跳过。') ?>', {
+        BackendConfirm.show('<?= __('确定批量转存') ?> ' + selected.length + ' <?= __('个域名到域名池？') ?>\n\n<?= __('注意：只有解析到本服务器IP的域名才会被转存，其他将跳过。') ?>', {
             title: '<?= __('批量转存确认') ?>',
             confirmText: '<?= __('确认转存') ?>',
             cancelText: '<?= __('取消') ?>'
@@ -3093,11 +2872,9 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 setBtnLoading(btn, false, '<i class="mdi mdi-server"></i> <?= __('批量解析到本地') ?>');
                 if (res.success) {
                     var msg = res.msg || res.message || '<?= __('解析完成') ?>';
-                    var hasFailed = res.data && res.data.failed > 0;
-                    if (hasFailed) {
-                        BackendToast.warning(msg);
-                    } else {
-                        BackendToast.success(msg);
+                    BackendToast.success(msg);
+                    if (res.data && res.data.errors && res.data.errors.length > 0) {
+                        console.log('<?= __('解析错误') ?>:', res.data.errors);
                     }
                     loadDomainList();
                 } else {
@@ -3961,34 +3738,31 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         }
 
         var autoResolveCheckbox = document.getElementById('pb-dm-batch-pull-auto-resolve');
-        var defaultAr = autoResolveCheckbox ? autoResolveCheckbox.checked : true;
+        var autoResolve = autoResolveCheckbox ? autoResolveCheckbox.checked : true;
 
-        openPullBindModal(function(bindDns, bindCdn, ar) {
-            setBtnLoading(batchSearchPullBtn, true);
-            postForm(API.pullDomains, {
-                account_id: domainListState.accountId,
-                domains: selectedDomains,
-                auto_resolve: ar ? '1' : '0',
-                bind_dns_account_id: bindDns,
-                bind_cdn_account_id: bindCdn
-            }).then(function(res) {
-                setBtnLoading(batchSearchPullBtn, false, '<i class="mdi mdi-download"></i> <?= __('拉取选中') ?>');
-                if (res.success) {
-                    var msg = res.message || res.msg || '<?= __('拉取成功') ?>';
-                    if (ar && res.auto_resolve_queued) {
-                        msg += ' <?= __('（自动解析任务已创建）') ?>';
-                    }
-                    BackendToast.success(msg);
-                    closeBatchSearchModal();
-                    loadDomainList();
-                } else {
-                    BackendToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
+        setBtnLoading(batchSearchPullBtn, true);
+
+        postForm(API.pullDomains, {
+            account_id: domainListState.accountId,
+            domains: selectedDomains,
+            auto_resolve: autoResolve ? '1' : '0'
+        }).then(function(res) {
+            setBtnLoading(batchSearchPullBtn, false, '<i class="mdi mdi-download"></i> <?= __('拉取选中') ?>');
+            if (res.success) {
+                var msg = res.message || '<?= __('拉取成功') ?>';
+                if (autoResolve && res.auto_resolve_queued) {
+                    msg += ' <?= __('（自动解析任务已创建）') ?>';
                 }
-            }).catch(function() {
-                setBtnLoading(batchSearchPullBtn, false, '<i class="mdi mdi-download"></i> <?= __('拉取选中') ?>');
-                BackendToast.error('<?= __('网络错误') ?>');
-            });
-        }, defaultAr);
+                BackendToast.success(msg);
+                closeBatchSearchModal();
+                loadDomainList();
+            } else {
+                BackendToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
+            }
+        }).catch(function() {
+            setBtnLoading(batchSearchPullBtn, false, '<i class="mdi mdi-download"></i> <?= __('拉取选中') ?>');
+            BackendToast.error('<?= __('网络错误') ?>');
+        });
     });
 
     /* ========== 域名注册 ========== */
@@ -4238,28 +4012,6 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         resolve: '',
         items: []
     };
-
-    function openPbDmPoolFlowModal(title, bodyHtml) {
-        var overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10002;display:flex;align-items:center;justify-content:center;padding:1rem;';
-        var dlg = document.createElement('div');
-        dlg.style.cssText = 'background:var(--backend-color-card-bg,#fff);border-radius:.75rem;padding:1.25rem;max-width:90vw;width:720px;max-height:85vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);';
-        dlg.innerHTML = '<h5 class="mb-3" style="margin:0 0 12px;font-size:1.1rem;">' + escapeHtml(title) + '</h5>' +
-            '<div class="pb-dm-pool-flow-body">' + bodyHtml + '</div>' +
-            '<button type="button" class="pb-dm-btn pb-dm-btn-primary mt-3 pb-dm-pool-flow-close"><?= __('关闭') ?></button>';
-        overlay.appendChild(dlg);
-        document.body.appendChild(overlay);
-        document.body.style.overflow = 'hidden';
-        function close() {
-            overlay.remove();
-            document.body.style.overflow = '';
-        }
-        dlg.querySelector('.pb-dm-pool-flow-close').addEventListener('click', close);
-        overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
-        document.addEventListener('keydown', function kw(e) {
-            if (e.key === 'Escape') { document.removeEventListener('keydown', kw); close(); }
-        });
-    }
 
     function loadDomainPool(page) {
         poolState.page = page || 1;
@@ -4512,16 +4264,12 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             '<th class="pb-dm-col-site-created"><?= __('已建站') ?></th>' +
             '<th class="pb-dm-col-ip"><?= __('解析IP') ?></th>' +
             '<th class="pb-dm-col-time"><?= __('入池时间') ?></th>' +
-            '<th class="pb-dm-col-flow"><?= __('流转') ?></th>' +
             '<th class="pb-dm-col-ops"><?= __('操作') ?></th>' +
             '</tr></thead><tbody>';
 
         items.forEach(function(item) {
             var statusBadge = '';
-            var isRegistering = !!(item.is_registering);
-            if (isRegistering && (item.lifecycle_stage_label || '')) {
-                statusBadge = '<span class="pb-dm-badge pb-dm-badge--warn" title="' + escapeHtml(item.lifecycle_stage_label) + '">' + escapeHtml(item.lifecycle_stage_label) + '</span>';
-            } else if (item.status === 'available') {
+            if (item.status === 'available') {
                 statusBadge = '<span class="pb-dm-badge pb-dm-badge--ok"><?= __('可用') ?></span>';
             } else if (item.status === 'allocated') {
                 statusBadge = '<span class="pb-dm-badge pb-dm-badge--info"><?= __('已分配') ?></span>';
@@ -4546,13 +4294,14 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 '<div class="pb-dm-provider-row"><span class="pb-dm-provider-label">CDN</span><span class="pb-dm-provider-badge ' + (cdnName !== '-' ? 'pb-dm-provider--cdn' : 'pb-dm-provider--none') + '">' + escapeHtml(cdnName) + '</span></div>' +
                 '</div>';
             var criticalOffLocal = String(item.resolve_status || '').toLowerCase() === 'resolved' && String(item.is_local_server || '0') !== '1';
+            var isRegistering = !!(item.is_registering);
 
             var poolId = item.pool_id || 0;
             var resolvedDisplay = (item.resolved_ip || '-');
             if (item.resolved_ipv6 && item.resolved_ipv6 !== item.resolved_ip) {
                 resolvedDisplay += ' / ' + item.resolved_ipv6;
             }
-            var registeringTitle = (item.lifecycle_stage_label && item.lifecycle_stage_label.trim()) ? item.lifecycle_stage_label : '<?= __('正在注册中') ?>';
+            var registeringTitle = '<?= __('正在注册中') ?>';
             var checkBtn = poolId > 0
                 ? (isRegistering
                     ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-check-btn pb-dm-btn--disabled" disabled title="' + registeringTitle + '"><i class="mdi mdi-dns"></i> <?= __('检查') ?></button>'
@@ -4570,10 +4319,6 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     : '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-delete-btn" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" title="<?= __('从域名池删除') ?>"><i class="mdi mdi-delete-outline"></i></button>')
                 : '';
             var opHtml = '<div class="pb-dm-pool-ops">' + [checkBtn, httpsBtn, delBtn].filter(Boolean).join('') + '</div>';
-            var flowHtml = (item.flow_html && String(item.flow_html).trim() !== '') ? String(item.flow_html) : '<span class="text-muted small">—</span>';
-            var flowTimeline = poolId > 0
-                ? '<div class="mt-1"><button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-flow-log-btn" data-pool-id="' + poolId + '" style="font-size:0.75rem;padding:2px 8px;"><?= __('时间线') ?></button></div>'
-                : '';
 
             html += '<tr class="' + (criticalOffLocal ? 'pb-dm-row--critical' : '') + '">' +
                 '<td class="pb-dm-col-domain"><strong>' + escapeHtml(item.full_domain || item.domain || '') + '</strong></td>' +
@@ -4586,7 +4331,6 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 '<td class="pb-dm-col-site-created">' + siteCreatedBadge + '</td>' +
                 '<td class="pb-dm-col-ip">' + resolvedDisplay + '</td>' +
                 '<td class="pb-dm-col-time">' + (item.allocated_at || '-') + '</td>' +
-                '<td class="pb-dm-col-flow">' + flowHtml + flowTimeline + '</td>' +
                 '<td class="pb-dm-col-ops">' + opHtml + '</td>' +
                 '</tr>';
         });
@@ -4617,28 +4361,6 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 doPoolDelete(poolId, domain, this);
             });
         });
-        container.querySelectorAll('.pb-dm-pool-flow-log-btn').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                var pid = parseInt(this.getAttribute('data-pool-id') || '0', 10);
-                if (pid <= 0) return;
-                postForm(API.getPoolFlowLog, { pool_id: String(pid) }).then(function(res) {
-                    if (!res || !res.success || !res.data || !res.data.items) {
-                        if (typeof BackendToast !== 'undefined') BackendToast.error((res && res.msg) || 'Error');
-                        return;
-                    }
-                    var lines = res.data.items.map(function(x) {
-                        return (x.at || '') + ' [' + (x.kind || '') + '] ' + (x.message || '');
-                    });
-                    var body = lines.length
-                        ? '<pre class="small mb-0 text-start" style="white-space:pre-wrap;max-height:70vh;overflow:auto;">' +
-                          lines.map(function(s) { return escapeHtml(s); }).join('\n') + '</pre>'
-                        : '<?= __('暂无记录') ?>';
-                    openPbDmPoolFlowModal('<?= __('流转记录') ?> #' + pid, body);
-                }).catch(function() {
-                    if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __('请求失败') ?>');
-                });
-            });
-        });
     }
 
     var httpsRequestPending = { poolId: 0, domain: '', btnEl: null };
@@ -4660,12 +4382,11 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         modal.classList.add('pb-dm-form-modal--open');
         fetch(API.getServerPort).then(function(r) { return r.json(); }).then(function(res) {
             var port = (res.port !== undefined) ? parseInt(res.port, 10) : 80;
-            var canUseHttp01 = res.can_use_http01 === true;
             httpsRequestPort = port;
             if (alertEl && alertText) {
-                if (!canUseHttp01) {
+                if (port !== 80) {
                     alertEl.className = 'pb-dm-alert pb-dm-alert-warning';
-                    alertText.textContent = '<?= __('当前服务未监听 80 端口（或未启用 80 重定向），只能通过 DNS 验证方式申请证书。请确保域名已关联 DNS 管理账户。') ?>';
+                    alertText.textContent = '<?= __('当前服务运行在非80端口，只能通过 DNS 验证方式申请证书。请确保域名已关联 DNS 管理账户。') ?>';
                 } else {
                     alertEl.className = 'pb-dm-alert pb-dm-alert-info';
                     alertText.textContent = '<?= __('将自动尝试文件验证（HTTP-01）。请确保域名已正确解析到本服务器。') ?>';
@@ -4769,334 +4490,6 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         nextBtn.disabled = poolState.page >= poolState.pages;
     }
 
-    function renderDomainAccordion(groups) {
-        if (!groups || groups.length === 0) {
-            domainContainer.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-domain"></i><p><?= __("暂无域名数据") ?></p></div>';
-            paginationEl.style.display = 'none';
-            return;
-        }
-
-        var html = '';
-
-        groups.forEach(function(group, gIdx) {
-            var isOpen = gIdx === 0 ? ' pb-dm-accordion--open' : '';
-            html += '<div class="pb-dm-accordion' + isOpen + '" data-account-id="' + group.account_id + '">';
-
-            var dnsOnlyLabel = group.is_dns_only
-                ? ' <span class="pb-dm-badge pb-dm-badge--warn" style="font-size:0.7rem;"><?= __("仅 DNS") ?></span>'
-                : '';
-            var registrarLabel = group.registrar_name
-                ? ' <span class="pb-dm-badge pb-dm-badge--info" style="font-size:0.7rem;">' + escapeHtml(group.registrar_name) + '</span>'
-                : '';
-
-            html += '<div class="pb-dm-accordion-header">' +
-                '<i class="mdi mdi-chevron-right pb-dm-accordion-icon"></i>' +
-                '<div class="pb-dm-accordion-title">' +
-                    '<i class="mdi mdi-account-key"></i> ' + escapeHtml(group.account_name) + registrarLabel + dnsOnlyLabel +
-                '</div>' +
-                '<div class="pb-dm-accordion-stats">' +
-                    '<span class="pb-dm-accordion-stat">' +
-                        '<i class="mdi mdi-domain"></i> ' + group.total + ' <?= __("个") ?>' +
-                    '</span>' +
-                    '<span class="pb-dm-accordion-stat pb-dm-accordion-stat--ok">' +
-                        '<i class="mdi mdi-check-circle"></i> ' + group.pulled + ' <?= __("已拉取") ?>' +
-                    '</span>' +
-                    '<span class="pb-dm-accordion-stat pb-dm-accordion-stat--warn">' +
-                        '<i class="mdi mdi-alert-circle"></i> ' + group.not_pulled + ' <?= __("未拉取") ?>' +
-                    '</span>' +
-                '</div>' +
-                '<div class="pb-dm-accordion-actions">' +
-                    '<button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm pb-dm-pull-all-btn" data-account-id="' + group.account_id + '" title="<?= __("拉取全部未拉取域名") ?>">' +
-                        '<i class="mdi mdi-download-multiple"></i>' +
-                    '</button>' +
-                '</div>' +
-            '</div>';
-
-            html += '<div class="pb-dm-accordion-body">';
-            if (group.items && group.items.length > 0) {
-                html += '<table class="pb-dm-table pb-dm-table--compact" style="margin:0;border-radius:0;"><thead><tr>' +
-                    '<th class="pb-dm-col-check"><input type="checkbox" class="pb-dm-select-all-group" data-account-id="' + group.account_id + '"></th>' +
-                    '<th class="pb-dm-col-domain"><?= __("域名") ?></th>' +
-                    '<th class="pb-dm-col-provider" title="<?= __("用于查看当前识别到的 DNS 管理信息，不等于 NS 已完全生效") ?>"><?= __("服务商") ?></th>' +
-                    '<th class="pb-dm-col-summary"><?= __("概览") ?></th>' +
-                    '<th class="pb-dm-col-ops"><?= __("操作") ?></th>' +
-                    '</tr></thead><tbody>';
-
-                group.items.forEach(function(d) {
-                    var isPulled = d.is_pulled === true || d.is_pulled === 1;
-                    var pullBadge = renderPulledStatusBadge(isPulled);
-                    var checkboxDisabled = '';
-                    var actionButtons = [];
-
-                    if (isPulled) {
-                        actionButtons.push('<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-resolve-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __("解析到本地") ?>"><i class="mdi mdi-dns"></i></button>');
-                        actionButtons.push('<button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm pb-dm-manage-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __("管理 DNS 记录") ?>"><i class="mdi mdi-playlist-plus"></i></button>');
-                        actionButtons.push('<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-switch-dns-btn' + (d.is_registering ? ' pb-dm-btn-disabled' : '') + '" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" data-dns-account-id="' + (d.dns_account_id || 0) + '" data-cdn-account-id="' + (d.cdn_account_id || 0) + '" data-dns-provider-name="' + escapeHtml(d.dns_provider_name || '') + '" data-cdn-provider-name="' + escapeHtml(d.cdn_provider_name || '') + '" data-is-registering="' + (d.is_registering ? '1' : '0') + '" title="' + (d.is_registering ? '<?= __("域名注册完成后将自动处理，无需手动切换") ?>' : '<?= __("切换 DNS/CDN") ?>') + '"' + (d.is_registering ? ' disabled' : '') + '><i class="mdi mdi-swap-horizontal"></i></button>');
-                        actionButtons.push('<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-delete-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __("删除根域，含子域名与域名池记录") ?>"><i class="mdi mdi-delete-outline"></i></button>');
-                    } else {
-                        actionButtons.push('<button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm pb-dm-pull-single-btn" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" title="<?= __("拉取并入池") ?>"><i class="mdi mdi-download"></i></button>');
-                    }
-
-                    var registrarName = d.registrar_name || group.registrar_name || '-';
-                    var dnsName = d.dns_provider_name || d.dns_provider || '-';
-                    var cdnName = d.cdn_provider_name || d.cdn_provider || '-';
-
-                    var registrarClass = registrarName !== '-' ? 'pb-dm-provider--registrar' : 'pb-dm-provider--none';
-                    var dnsClass = dnsName !== '-' ? 'pb-dm-provider--dns' : 'pb-dm-provider--none';
-                    var cdnClass = cdnName !== '-' ? 'pb-dm-provider--cdn' : 'pb-dm-provider--none';
-
-                    var providerCell = '<div class="pb-dm-provider-cell">' +
-                        '<div class="pb-dm-provider-row">' +
-                            '<span class="pb-dm-provider-label"><?= __("注册") ?></span>' +
-                            '<span class="pb-dm-provider-badge ' + registrarClass + '">' + escapeHtml(registrarName) + '</span>' +
-                        '</div>' +
-                        '<div class="pb-dm-provider-row">' +
-                            '<span class="pb-dm-provider-label">DNS</span>' +
-                            '<span class="pb-dm-provider-badge ' + dnsClass + '" style="display:inline-flex;align-items:center;gap:4px;max-width:100%;">' +
-                                escapeHtml(dnsName) +
-                                (d.dns_status_hint
-                                    ? '<i class="mdi mdi-information-outline pb-dm-dns-hint-icon" style="cursor:help;opacity:0.85;flex-shrink:0;" title="' + escapeAttr(d.dns_status_hint) + '" aria-label="<?= __("DNS 状态说明") ?>"></i>'
-                                    : '') +
-                            '</span>' +
-                        '</div>' +
-                        '<div class="pb-dm-provider-row">' +
-                            '<span class="pb-dm-provider-label">CDN</span>' +
-                            '<span class="pb-dm-provider-badge ' + cdnClass + '">' + escapeHtml(cdnName) + '</span>' +
-                        '</div>' +
-                    '</div>';
-
-                    var domainMeta = [];
-                    if (d.expires_at) {
-                        domainMeta.push('<span class="pb-dm-domain-meta-chip"><?= __("到期") ?> ' + escapeHtml(d.expires_at) + '</span>');
-                    }
-                    if (d.is_registering && d.lifecycle_stage_label) {
-                        domainMeta.push('<span class="pb-dm-domain-meta-chip">' + escapeHtml(d.lifecycle_stage_label) + '</span>');
-                    }
-
-                    var siteReadyBadge = (d.site_ready === 1 || d.site_ready === true)
-                        ? '<span class="pb-dm-badge pb-dm-badge--ok"><?= __("可建站") ?></span>'
-                        : '<span class="pb-dm-badge pb-dm-badge--no"><?= __("不可建站") ?></span>';
-                    var siteCreatedBadge = (d.site_created === 1 || d.site_created === true)
-                        ? '<span class="pb-dm-badge pb-dm-badge--info"><?= __("已建站") ?></span>'
-                        : '<span class="pb-dm-badge pb-dm-badge--no"><?= __("未建站") ?></span>';
-                    var domainCell = '<div class="pb-dm-domain-cell">' +
-                        '<div class="pb-dm-domain-name">' + escapeHtml(d.domain) + '</div>' +
-                        (domainMeta.length ? '<div class="pb-dm-domain-meta">' + domainMeta.join('') + '</div>' : '') +
-                    '</div>';
-                    var summaryCell = '<div class="pb-dm-summary-cell">' +
-                        '<div class="pb-dm-summary-row">' + pullBadge + renderDomainStatusBadge(d.status) + '</div>' +
-                        '<div class="pb-dm-summary-row">' + siteReadyBadge + siteCreatedBadge + '</div>' +
-                        (d.dns_status_hint ? '<div class="pb-dm-summary-note">' + escapeHtml(d.dns_status_hint) + '</div>' : '') +
-                    '</div>';
-
-                    html += '<tr data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '">' +
-                        '<td class="pb-dm-col-check"><input type="checkbox" class="pb-dm-domain-select" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" data-pulled="' + (isPulled ? '1' : '0') + '"' + checkboxDisabled + '></td>' +
-                        '<td class="pb-dm-col-domain">' + domainCell + '</td>' +
-                        '<td class="pb-dm-col-provider">' + providerCell + '</td>' +
-                        '<td class="pb-dm-col-summary">' + summaryCell + '</td>' +
-                        '<td class="pb-dm-col-ops pb-dm-actions-cell"><div class="pb-dm-pool-ops">' + actionButtons.join('') + '</div></td>' +
-                    '</tr>';
-                });
-
-                html += '</tbody></table>';
-            } else if (group.fetch_error) {
-                html += '<div class="pb-dm-empty" style="padding:20px;">' +
-                    '<i class="mdi mdi-alert-circle-outline" style="font-size:1.5rem;color:var(--backend-color-danger,#f46a6a);"></i>' +
-                    '<p style="color:var(--backend-color-danger,#f46a6a);"><?= __("拉取失败") ?>: ' + escapeHtml(group.fetch_error) + '</p>' +
-                    '<p style="font-size:0.85rem;color:var(--backend-color-text-secondary,#6c757d);"><?= __("请检查账户 API 凭据，或点击测试按钮验证连接。") ?></p>' +
-                '</div>';
-            } else if (group.is_dns_only) {
-                html += '<div class="pb-dm-empty" style="padding:20px;">' +
-                    '<i class="mdi mdi-dns" style="font-size:1.5rem;color:var(--backend-color-warning,#f1b44c);"></i>' +
-                    '<p style="color:var(--backend-color-warning,#f1b44c);">' + escapeHtml(group.registrar_name || '') + ' <?= __("是 DNS 服务商，不是域名注册商。域名归属以实际注册商为准。") ?></p>' +
-                '</div>';
-            } else {
-                if (domainListState.status === 'pulled') {
-                    html += '<div class="pb-dm-empty" style="padding:20px;">' +
-                        '<i class="mdi mdi-cloud-download-outline" style="font-size:1.5rem;color:var(--backend-color-primary,#556ee6);"></i>' +
-                        '<p><?= __("该账户下暂无已拉取域名") ?></p>' +
-                        '<p style="font-size:0.85rem;color:var(--backend-color-text-secondary,#6c757d);"><?= __("请切换到全部状态或未拉取状态，从线上选择域名拉取到本地。") ?></p>' +
-                        '<button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm" style="margin-top:8px;" onclick="document.getElementById(\'pb-dm-domain-status\').value=\'\';document.getElementById(\'pb-dm-domain-status\').dispatchEvent(new Event(\'change\'));">' +
-                            '<i class="mdi mdi-filter-off"></i> <?= __("查看全部状态") ?>' +
-                        '</button>' +
-                    '</div>';
-                } else {
-                    html += '<div class="pb-dm-empty" style="padding:20px;"><p><?= __("该账户下暂无域名") ?></p></div>';
-                }
-            }
-            html += '</div>';
-            html += '</div>';
-        });
-
-        domainContainer.innerHTML = html;
-        paginationEl.style.display = 'none';
-        bindAccordionEvents();
-        bindDomainSelectEvents();
-    }
-
-    function renderDomainPool(items) {
-        var container = document.getElementById('pb-dm-pool-container');
-        if (!items || items.length === 0) {
-            container.innerHTML = '<div class="pb-dm-empty">' +
-                '<i class="mdi mdi-database-off" style="font-size:2rem;color:var(--backend-color-text-secondary,#6c757d);"></i>' +
-                '<p><?= __("暂无域名池数据") ?></p>' +
-                '<p style="font-size:0.85rem;color:var(--backend-color-text-secondary,#6c757d);"><?= __("请先在根域列表中拉取域名，然后转存到域名池。") ?></p>' +
-                '<button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm" style="margin-top:8px;" onclick="document.querySelector(\'.pb-dm-tab[data-tab=domains]\').click();">' +
-                    '<i class="mdi mdi-earth"></i> <?= __("前往根域列表") ?>' +
-                '</button>' +
-            '</div>';
-            return;
-        }
-
-        var html = '<table class="pb-dm-table pb-dm-table--compact" id="pb-dm-pool-table"><thead><tr>' +
-            '<th class="pb-dm-col-domain"><?= __("域名") ?></th>' +
-            '<th class="pb-dm-col-provider"><?= __("服务商") ?></th>' +
-            '<th class="pb-dm-col-summary"><?= __("概览") ?></th>' +
-            '<th class="pb-dm-col-flow"><?= __("流转") ?></th>' +
-            '<th class="pb-dm-col-ops"><?= __("操作") ?></th>' +
-        '</tr></thead><tbody>';
-
-        items.forEach(function(item) {
-            var statusBadge = '';
-            var isRegistering = !!item.is_registering;
-            if (isRegistering && (item.lifecycle_stage_label || '')) {
-                statusBadge = '<span class="pb-dm-badge pb-dm-badge--warn" title="' + escapeHtml(item.lifecycle_stage_label) + '">' + escapeHtml(item.lifecycle_stage_label) + '</span>';
-            } else if (item.status === 'available') {
-                statusBadge = '<span class="pb-dm-badge pb-dm-badge--ok"><?= __("可用") ?></span>';
-            } else if (item.status === 'allocated') {
-                statusBadge = '<span class="pb-dm-badge pb-dm-badge--info"><?= __("已分配") ?></span>';
-            } else if (item.status === 'reserved') {
-                statusBadge = '<span class="pb-dm-badge pb-dm-badge--warn"><?= __("预留") ?></span>';
-            } else {
-                statusBadge = '<span class="pb-dm-badge">' + (item.status || '-') + '</span>';
-            }
-
-            var resolveBadge = renderResolveStatusBadge(item);
-            var httpsBadge = renderHttpsStatusBadge(item);
-            var siteReadyBadge = renderSiteReadyBadge(item);
-            var siteCreatedBadge = renderSiteCreatedBadge(item);
-            var typeText = item.subdomain ? '<?= __("子域名") ?>' : '<?= __("根域名") ?>';
-            var registrarName = item.registrar_name || '-';
-            var dnsName = item.dns_provider_name || '-';
-            var cdnName = item.cdn_provider_name || '-';
-            var providerCell = '<div class="pb-dm-provider-cell">' +
-                '<div class="pb-dm-provider-row"><span class="pb-dm-provider-label"><?= __("注册") ?></span><span class="pb-dm-provider-badge ' + (registrarName !== '-' ? 'pb-dm-provider--registrar' : 'pb-dm-provider--none') + '">' + escapeHtml(registrarName) + '</span></div>' +
-                '<div class="pb-dm-provider-row"><span class="pb-dm-provider-label">DNS</span><span class="pb-dm-provider-badge ' + (dnsName !== '-' ? 'pb-dm-provider--dns' : 'pb-dm-provider--none') + '">' + escapeHtml(dnsName) + '</span></div>' +
-                '<div class="pb-dm-provider-row"><span class="pb-dm-provider-label">CDN</span><span class="pb-dm-provider-badge ' + (cdnName !== '-' ? 'pb-dm-provider--cdn' : 'pb-dm-provider--none') + '">' + escapeHtml(cdnName) + '</span></div>' +
-            '</div>';
-            var criticalOffLocal = String(item.resolve_status || '').toLowerCase() === 'resolved' && String(item.is_local_server || '0') !== '1';
-            var localBadge = String(item.is_local_server || '0') === '1'
-                ? '<span class="pb-dm-badge pb-dm-badge--info"><?= __("本机") ?></span>'
-                : '';
-
-            var poolId = item.pool_id || 0;
-            var resolvedDisplay = item.resolved_ip || '-';
-            if (item.resolved_ipv6 && item.resolved_ipv6 !== item.resolved_ip) {
-                resolvedDisplay += ' / ' + item.resolved_ipv6;
-            }
-
-            var registeringTitle = (item.lifecycle_stage_label && item.lifecycle_stage_label.trim())
-                ? item.lifecycle_stage_label
-                : '<?= __("注册处理中") ?>';
-            var checkBtn = poolId > 0
-                ? (isRegistering
-                    ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-check-btn pb-dm-btn--disabled" disabled title="' + registeringTitle + '"><i class="mdi mdi-dns"></i> <?= __("检查") ?></button>'
-                    : '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-check-btn" data-pool-id="' + poolId + '" title="<?= __("快速检查解析并刷新状态") ?>"><i class="mdi mdi-dns"></i> <?= __("检查") ?></button>')
-                : '';
-            var needCert = String(item.https_status || '').toLowerCase() !== 'valid';
-            var httpsBtn = poolId > 0
-                ? (isRegistering
-                    ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-https-btn pb-dm-btn--disabled" disabled title="' + registeringTitle + '"><i class="mdi mdi-certificate"></i> <?= __("申请证书") ?></button>'
-                    : '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-https-btn' + (needCert ? '' : ' pb-dm-btn--disabled') + '" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" ' + (needCert ? 'title="<?= __("手动申请 HTTPS 证书") ?>"' : 'disabled title="<?= __("证书有效，无需申请") ?>"') + '><i class="mdi mdi-certificate"></i> <?= __("申请证书") ?></button>')
-                : '';
-            var delBtn = poolId > 0
-                ? (isRegistering
-                    ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-delete-btn pb-dm-btn--disabled" disabled title="' + registeringTitle + '"><i class="mdi mdi-delete-outline"></i></button>'
-                    : '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-delete-btn" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" title="<?= __("从域名池删除") ?>"><i class="mdi mdi-delete-outline"></i></button>')
-                : '';
-            var opHtml = '<div class="pb-dm-pool-ops">' + [checkBtn, httpsBtn, delBtn].filter(Boolean).join('') + '</div>';
-            var flowHtml = (item.flow_html && String(item.flow_html).trim() !== '')
-                ? String(item.flow_html)
-                : '<span class="text-muted small"><?= __("暂无流转") ?></span>';
-            var flowTimeline = poolId > 0
-                ? '<div class="mt-1"><button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-flow-log-btn" data-pool-id="' + poolId + '" style="font-size:0.75rem;padding:2px 8px;"><?= __("时间线") ?></button></div>'
-                : '';
-
-            var domainMeta = ['<span class="pb-dm-domain-meta-chip">' + typeText + '</span>'];
-            if (item.allocated_at) {
-                domainMeta.push('<span class="pb-dm-domain-meta-chip">' + escapeHtml(item.allocated_at) + '</span>');
-            }
-            var domainCell = '<div class="pb-dm-domain-cell">' +
-                '<div class="pb-dm-domain-name">' + escapeHtml(item.full_domain || item.domain || '') + '</div>' +
-                '<div class="pb-dm-domain-meta">' + domainMeta.join('') + '</div>' +
-            '</div>';
-            var summaryCell = '<div class="pb-dm-summary-cell">' +
-                '<div class="pb-dm-summary-row">' + statusBadge + resolveBadge + httpsBadge + '</div>' +
-                '<div class="pb-dm-summary-row">' + siteReadyBadge + siteCreatedBadge + localBadge + '</div>' +
-                (resolvedDisplay !== '-'
-                    ? '<div class="pb-dm-summary-row"><span class="pb-dm-summary-code">' + escapeHtml(resolvedDisplay) + '</span></div>'
-                    : '<div class="pb-dm-summary-note"><?= __("解析 IP 待同步") ?></div>') +
-            '</div>';
-
-            html += '<tr class="' + (criticalOffLocal ? 'pb-dm-row--critical' : '') + '">' +
-                '<td class="pb-dm-col-domain">' + domainCell + '</td>' +
-                '<td class="pb-dm-col-provider">' + providerCell + '</td>' +
-                '<td class="pb-dm-col-summary">' + summaryCell + '</td>' +
-                '<td class="pb-dm-col-flow">' + flowHtml + flowTimeline + '</td>' +
-                '<td class="pb-dm-col-ops pb-dm-actions-cell">' + opHtml + '</td>' +
-            '</tr>';
-        });
-
-        html += '</tbody></table>';
-        container.innerHTML = html;
-
-        container.querySelectorAll('.pb-dm-pool-check-btn').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                var poolId = parseInt(this.getAttribute('data-pool-id') || '0', 10);
-                if (poolId <= 0) return;
-                doPoolCheckResolve(poolId, this);
-            });
-        });
-        container.querySelectorAll('.pb-dm-pool-https-btn').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                var poolId = parseInt(this.getAttribute('data-pool-id') || '0', 10);
-                var domain = this.getAttribute('data-domain') || '';
-                if (poolId <= 0) return;
-                openHttpsRequestModal(poolId, domain, this);
-            });
-        });
-        container.querySelectorAll('.pb-dm-pool-delete-btn').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                var poolId = parseInt(this.getAttribute('data-pool-id') || '0', 10);
-                var domain = this.getAttribute('data-domain') || '';
-                if (poolId <= 0) return;
-                doPoolDelete(poolId, domain, this);
-            });
-        });
-        container.querySelectorAll('.pb-dm-pool-flow-log-btn').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                var pid = parseInt(this.getAttribute('data-pool-id') || '0', 10);
-                if (pid <= 0) return;
-                postForm(API.getPoolFlowLog, { pool_id: String(pid) }).then(function(res) {
-                    if (!res || !res.success || !res.data || !res.data.items) {
-                        if (typeof BackendToast !== 'undefined') BackendToast.error((res && res.msg) || 'Error');
-                        return;
-                    }
-                    var lines = res.data.items.map(function(x) {
-                        return (x.at || '') + ' [' + (x.kind || '') + '] ' + (x.message || '');
-                    });
-                    var body = lines.length
-                        ? '<pre class="small mb-0 text-start" style="white-space:pre-wrap;max-height:70vh;overflow:auto;">' +
-                            lines.map(function(s) { return escapeHtml(s); }).join('\n') +
-                          '</pre>'
-                        : '<?= __("暂无记录") ?>';
-                    openPbDmPoolFlowModal('<?= __("流转记录") ?> #' + pid, body);
-                }).catch(function() {
-                    if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __("请求失败") ?>');
-                });
-            });
-        });
-    }
     (function initHttpsRequestModal() {
         var modal = document.getElementById('pb-dm-https-request-modal');
         var closeBtn = document.getElementById('pb-dm-https-request-close');
@@ -5274,12 +4667,11 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         document.getElementById('pb-dm-root-dns-switch-modal').classList.remove('pb-dm-form-modal--open');
     }
 
-    function openDnsSwitchSseModalAndStart(domainId, dnsAccountId, cdnAccountId, verifyCdn) {
+    function openDnsSwitchSseModalAndStart(domainId, dnsAccountId, cdnAccountId) {
         var sseModal = document.getElementById('pb-dm-dns-switch-sse-modal');
         var doneBtn = document.getElementById('pb-dm-dns-switch-sse-done-btn');
         var streamUrl = API.dnsSwitchStream + '?domain_id=' + encodeURIComponent(domainId) + '&dns_account_id=' + encodeURIComponent(dnsAccountId);
         if (cdnAccountId) streamUrl += '&cdn_account_id=' + encodeURIComponent(cdnAccountId);
-        if (verifyCdn) streamUrl += '&verify_cdn=1';
         var terminal = window.WelineSseTerminal && window.WelineSseTerminal['pb-dm-dns-switch-sse-terminal'];
         if (!sseModal) return;
         if (doneBtn) doneBtn.style.display = 'none';
@@ -5325,10 +4717,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 return;
             }
             var cdnAccountId = document.getElementById('pb-dm-root-dns-switch-cdn-account') && document.getElementById('pb-dm-root-dns-switch-cdn-account').value;
-            var verifyCdnCb = document.getElementById('pb-dm-root-dns-switch-verify-cdn');
-            var verifyCdn = verifyCdnCb && verifyCdnCb.checked;
             closeRootDnsSwitchModal();
-            openDnsSwitchSseModalAndStart(rootDnsSwitchState.domainId, dnsAccountId, cdnAccountId || '', verifyCdn);
+            openDnsSwitchSseModalAndStart(rootDnsSwitchState.domainId, dnsAccountId, cdnAccountId || '');
         });
         if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeRootDnsSwitchModal(); });
     })();

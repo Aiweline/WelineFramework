@@ -18,11 +18,8 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service\Component;
 
 use GuoLaiRen\PageBuilder\Model\Component;
-use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
-use GuoLaiRen\PageBuilder\Service\Theme\PageBuilderThemeComponentBridge;
 use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Dto\ThemeComponentDefinition;
 
 class SlotValidator
 {
@@ -88,8 +85,6 @@ class SlotValidator
      * @param string|null $parentComponentCode 父组件代码（放入 slot 时）
      * @param string|null $targetSlot slot 名称（放入 slot 时）
      * @param string|null $parentInstanceId 父组件实例ID（用于检查数量限制）
-     * @param int $welineThemeId 大于 0 时从未注册部件（Weline 主题虚拟部件）解析元数据
-     * @param string $themeComponentArea frontend|backend
      * @return ValidationResult
      */
     public function canPlace(
@@ -98,12 +93,10 @@ class SlotValidator
         string $styleCode,
         ?string $parentComponentCode = null,
         ?string $targetSlot = null,
-        ?string $parentInstanceId = null,
-        int $welineThemeId = 0,
-        string $themeComponentArea = 'frontend'
+        ?string $parentInstanceId = null
     ): ValidationResult {
-        // 获取组件信息（文件/DB + 可选 Weline 虚拟）
-        $componentInfo = $this->resolvePlacementComponentInfo($componentCode, $styleCode, $welineThemeId, $themeComponentArea);
+        // 获取组件信息
+        $componentInfo = $this->getComponentInfo($componentCode, $styleCode);
         if ($componentInfo === null) {
             return ValidationResult::fail(
                 sprintf('组件 [%s] 不存在或未注册', $componentCode),
@@ -131,7 +124,7 @@ class SlotValidator
         
         // ========== 规则 2: Slot 放置验证 ==========
         if ($parentComponentCode && $targetSlot) {
-            $parentInfo = $this->resolvePlacementComponentInfo($parentComponentCode, $styleCode, $welineThemeId, $themeComponentArea);
+            $parentInfo = $this->getComponentInfo($parentComponentCode, $styleCode);
             if ($parentInfo === null) {
                 return ValidationResult::fail(
                     sprintf('父组件 [%s] 不存在', $parentComponentCode),
@@ -244,11 +237,9 @@ class SlotValidator
     public function canPlaceInRegion(
         string $componentCode,
         string $targetRegion,
-        string $styleCode,
-        int $welineThemeId = 0,
-        string $themeComponentArea = 'frontend'
+        string $styleCode
     ): ValidationResult {
-        return $this->canPlace($componentCode, $targetRegion, $styleCode, null, null, null, $welineThemeId, $themeComponentArea);
+        return $this->canPlace($componentCode, $targetRegion, $styleCode);
     }
     
     /**
@@ -266,12 +257,10 @@ class SlotValidator
         string $parentComponentCode,
         string $targetSlot,
         string $styleCode,
-        ?string $parentInstanceId = null,
-        int $welineThemeId = 0,
-        string $themeComponentArea = 'frontend'
+        ?string $parentInstanceId = null
     ): ValidationResult {
         // 获取父组件的区域
-        $parentInfo = $this->resolvePlacementComponentInfo($parentComponentCode, $styleCode, $welineThemeId, $themeComponentArea);
+        $parentInfo = $this->getComponentInfo($parentComponentCode, $styleCode);
         if ($parentInfo === null) {
             return ValidationResult::fail(
                 sprintf('父组件 [%s] 不存在', $parentComponentCode),
@@ -287,9 +276,7 @@ class SlotValidator
             $styleCode,
             $parentComponentCode,
             $targetSlot,
-            $parentInstanceId,
-            $welineThemeId,
-            $themeComponentArea
+            $parentInstanceId
         );
     }
     
@@ -373,105 +360,15 @@ class SlotValidator
     }
     
     /**
-     * 文件/DB 部件信息 + 可选 Weline 主题虚拟部件
-     *
-     * @return array<string, mixed>|null
-     */
-    public function resolvePlacementComponentInfo(
-        string $componentCode,
-        string $styleCode,
-        int $welineThemeId = 0,
-        string $themeComponentArea = 'frontend'
-    ): ?array {
-        $info = $this->getComponentInfo($componentCode, $styleCode);
-        if ($info !== null) {
-            return $info;
-        }
-        if ($welineThemeId > 0) {
-            return $this->getVirtualThemeComponentInfo($componentCode, $welineThemeId, $themeComponentArea);
-        }
-        return null;
-    }
-    
-    /**
-     * 将 Weline ThemeComponentDefinition 转为 Slot 校验用的结构
-     *
-     * @return array<string, mixed>
-     */
-    private function themeDefinitionToSlotInfo(ThemeComponentDefinition $def): array
-    {
-        $normalizedRegions = [];
-        foreach ($def->position as $p) {
-            $p = strtolower((string) $p);
-            if ($p === '' || $p === '*') {
-                continue;
-            }
-            if (in_array($p, ['header', 'footer', 'content', 'sidebar', 'hero', 'cta'], true)) {
-                $normalizedRegions[] = $p;
-            }
-        }
-        if ($normalizedRegions === []) {
-            $normalizedRegions = ['content'];
-        }
-        $placeableIn = $normalizedRegions;
-        $primary = $normalizedRegions[0];
-        $category = match (true) {
-            $normalizedRegions === ['header'] => 'header',
-            $normalizedRegions === ['footer'] => 'footer',
-            in_array('sidebar', $normalizedRegions, true) => 'widget',
-            default => in_array($def->category, ['header', 'footer', 'content', 'widget', 'sidebar'], true)
-                ? $def->category
-                : 'content',
-        };
-        $schema = $def->configSchema;
-        $compatible = is_array($schema) ? ($schema['compatible_slot_types'] ?? ['*']) : ['*'];
-        if (!is_array($compatible)) {
-            $compatible = ['*'];
-        }
-        
-        return [
-            'code' => $def->code,
-            'name' => $def->name,
-            'region' => $primary,
-            'category' => $category,
-            'type' => 'section',
-            'placeable_in' => $placeableIn,
-            'slots' => is_array($def->slots) ? $def->slots : [],
-            'compatible_slot_types' => $compatible,
-            'is_container' => $def->isContainer || (is_array($def->slots) && $def->slots !== []),
-        ];
-    }
-    
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function getVirtualThemeComponentInfo(string $componentCode, int $welineThemeId, string $themeComponentArea): ?array
-    {
-        $area = strtolower($themeComponentArea) === 'backend' ? 'backend' : 'frontend';
-        $bridge = ObjectManager::getInstance(PageBuilderThemeComponentBridge::class);
-        $def = $bridge->resolveDefinition($componentCode, $welineThemeId, $area);
-        if ($def === null) {
-            return null;
-        }
-        
-        return $this->themeDefinitionToSlotInfo($def);
-    }
-    
-    /**
      * 获取组件的 slots 定义
      * 
      * @param string $componentCode 组件代码
      * @param string $styleCode 模板代码
      * @return array slots 定义
      */
-    public function getComponentSlots(
-        string $componentCode,
-        string $styleCode,
-        int $welineThemeId = 0,
-        string $themeComponentArea = 'frontend'
-    ): array
+    public function getComponentSlots(string $componentCode, string $styleCode): array
     {
-        $info = $this->resolvePlacementComponentInfo($componentCode, $styleCode, $welineThemeId, $themeComponentArea);
+        $info = $this->getComponentInfo($componentCode, $styleCode);
         return $info['slots'] ?? [];
     }
     
@@ -482,14 +379,9 @@ class SlotValidator
      * @param string $styleCode 模板代码
      * @return bool
      */
-    public function isContainer(
-        string $componentCode,
-        string $styleCode,
-        int $welineThemeId = 0,
-        string $themeComponentArea = 'frontend'
-    ): bool
+    public function isContainer(string $componentCode, string $styleCode): bool
     {
-        $info = $this->resolvePlacementComponentInfo($componentCode, $styleCode, $welineThemeId, $themeComponentArea);
+        $info = $this->getComponentInfo($componentCode, $styleCode);
         return $info !== null && !empty($info['slots']);
     }
     
@@ -541,40 +433,21 @@ class SlotValidator
      * @param string $styleCode 模板代码
      * @return array 兼容的组件代码列表
      */
-    public function getCompatibleComponentsForRegion(
-        string $targetRegion,
-        string $styleCode,
-        int $welineThemeId = 0,
-        string $themeComponentArea = 'frontend'
-    ): array
+    public function getCompatibleComponentsForRegion(string $targetRegion, string $styleCode): array
     {
-        $seen = [];
         $jsonConfig = $this->getComponentJsonConfig($styleCode);
+        if (!$jsonConfig || !isset($jsonConfig['components'])) {
+            return [];
+        }
+        
         $compatible = [];
-        if ($jsonConfig && isset($jsonConfig['components'])) {
-            foreach ($jsonConfig['components'] as $code => $config) {
-                $placeableIn = $config['placeable_in'] ?? [$config['region'] ?? $config['category'] ?? 'content'];
-                if (in_array($targetRegion, $placeableIn)) {
-                    $compatible[] = $code;
-                    $seen[$code] = true;
-                }
+        foreach ($jsonConfig['components'] as $code => $config) {
+            $placeableIn = $config['placeable_in'] ?? [$config['region'] ?? $config['category'] ?? 'content'];
+            if (in_array($targetRegion, $placeableIn)) {
+                $compatible[] = $code;
             }
         }
-
-        if ($welineThemeId > 0) {
-            foreach ($this->listVirtualThemeComponentInfos($welineThemeId, $themeComponentArea) as $virtualInfo) {
-                $code = (string) ($virtualInfo['code'] ?? '');
-                if ($code === '' || isset($seen[$code])) {
-                    continue;
-                }
-                $placeableIn = $virtualInfo['placeable_in'] ?? [$virtualInfo['region'] ?? 'content'];
-                if (in_array($targetRegion, $placeableIn, true)) {
-                    $compatible[] = $code;
-                    $seen[$code] = true;
-                }
-            }
-        }
-
+        
         return $compatible;
     }
     
@@ -589,11 +462,9 @@ class SlotValidator
     public function getCompatibleComponentsForSlot(
         string $parentComponentCode,
         string $targetSlot,
-        string $styleCode,
-        int $welineThemeId = 0,
-        string $themeComponentArea = 'frontend'
+        string $styleCode
     ): array {
-        $parentInfo = $this->resolvePlacementComponentInfo($parentComponentCode, $styleCode, $welineThemeId, $themeComponentArea);
+        $parentInfo = $this->getComponentInfo($parentComponentCode, $styleCode);
         if (!$parentInfo || empty($parentInfo['slots'][$targetSlot])) {
             return [];
         }
@@ -602,130 +473,32 @@ class SlotValidator
         $slotAccepts = $slotConfig['accepts'] ?? [];
         $slotType = $slotConfig['slot_type'] ?? null;
         
-        $seen = [];
-        $compatible = [];
         $jsonConfig = $this->getComponentJsonConfig($styleCode);
-        if ($jsonConfig && isset($jsonConfig['components'])) {
-            foreach ($jsonConfig['components'] as $code => $config) {
-                $category = $config['category'] ?? $config['region'] ?? 'content';
-
-                // 检查类别是否被接受
-                if (!empty($slotAccepts) && !in_array($category, $slotAccepts, true)) {
-                    continue;
-                }
-
-                // 检查 slot_type 匹配
-                if ($slotType) {
-                    $compatibleTypes = $config['compatible_slot_types'] ?? ['*'];
-                    if (!in_array('*', $compatibleTypes, true) && !in_array($slotType, $compatibleTypes, true)) {
-                        continue;
-                    }
-                }
-
-                $compatible[] = $code;
-                $seen[$code] = true;
-            }
+        if (!$jsonConfig || !isset($jsonConfig['components'])) {
+            return [];
         }
-
-        if ($welineThemeId > 0) {
-            foreach ($this->listVirtualThemeComponentInfos($welineThemeId, $themeComponentArea) as $virtualInfo) {
-                $code = (string) ($virtualInfo['code'] ?? '');
-                if ($code === '' || isset($seen[$code])) {
-                    continue;
-                }
-                $category = (string) ($virtualInfo['category'] ?? 'content');
-                if (!empty($slotAccepts) && !in_array($category, $slotAccepts, true)) {
-                    continue;
-                }
-                if ($slotType) {
-                    $compatibleTypes = $virtualInfo['compatible_slot_types'] ?? ['*'];
-                    if (!is_array($compatibleTypes)) {
-                        $compatibleTypes = ['*'];
-                    }
-                    if (!in_array('*', $compatibleTypes, true) && !in_array($slotType, $compatibleTypes, true)) {
-                        continue;
-                    }
-                }
-                $compatible[] = $code;
-                $seen[$code] = true;
+        
+        $compatible = [];
+        foreach ($jsonConfig['components'] as $code => $config) {
+            $category = $config['category'] ?? $config['region'] ?? 'content';
+            
+            // 检查类别是否被接受
+            if (!empty($slotAccepts) && !in_array($category, $slotAccepts)) {
+                continue;
             }
+            
+            // 检查 slot_type 匹配
+            if ($slotType) {
+                $compatibleTypes = $config['compatible_slot_types'] ?? ['*'];
+                if (!in_array('*', $compatibleTypes) && !in_array($slotType, $compatibleTypes)) {
+                    continue;
+                }
+            }
+            
+            $compatible[] = $code;
         }
         
         return $compatible;
-    }
-
-    /**
-     * @return list<array<string, mixed>>
-     */
-    private function listVirtualThemeComponentInfos(int $welineThemeId, string $themeComponentArea): array
-    {
-        if ($welineThemeId <= 0) {
-            return [];
-        }
-        $area = strtolower($themeComponentArea) === 'backend' ? 'backend' : 'frontend';
-
-        /** @var VirtualThemeComponent $componentModel */
-        $componentModel = clone ObjectManager::getInstance(VirtualThemeComponent::class);
-        $componentModel->clearData()->clearQuery();
-        $components = $componentModel
-            ->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $welineThemeId)
-            ->where(VirtualThemeComponent::schema_fields_AREA, $area)
-            ->where(VirtualThemeComponent::schema_fields_IS_ACTIVE, 1)
-            ->select()
-            ->fetch()
-            ->getItems();
-        $rows = [];
-        foreach ($components as $component) {
-            if (!$component instanceof VirtualThemeComponent) {
-                continue;
-            }
-            $meta = $component->getMeta();
-            $positions = \is_array($meta['position'] ?? null) ? $meta['position'] : ['content'];
-            $position = [];
-            foreach ($positions as $p) {
-                if (\is_string($p) && \trim($p) !== '') {
-                    $position[] = $p;
-                }
-            }
-            if ($position === []) {
-                $position = ['content'];
-            }
-            $rows[] = $this->themeDefinitionToSlotInfo(new ThemeComponentDefinition(
-                module: 'GuoLaiRen_PageBuilder',
-                type: 'virtual_theme_component',
-                code: (string)$component->getComponentCode(),
-                name: (string)$component->getName(),
-                description: '',
-                area: $area,
-                sourceType: 'virtual',
-                category: (string)$component->getCategory(),
-                renderMode: \Weline\Theme\Dto\ThemeRenderable::MODE_TEMPLATE_CONTENT,
-                configSchema: [],
-                defaultConfig: $component->getDefaultConfig(),
-                meta: $meta,
-                params: [],
-                position: $position,
-                pageLayouts: \is_array($meta['page_layouts'] ?? null) ? $meta['page_layouts'] : ['*'],
-                slots: [],
-                slot: null,
-                exclusive: false,
-                compatible: true,
-                isContainer: false,
-                isAiGenerated: $component->isAiGenerated(),
-                icon: null,
-                templatePath: null,
-                templateContent: (string)$component->getTemplateContent(),
-                blockClass: null,
-                themeId: $welineThemeId,
-                themePath: null,
-                logicalKey: null,
-                layerKey: null,
-                componentId: (int)$component->getId(),
-                versionId: $component->getPublishedVersionId() ?: null,
-                sortOrder: (int)($meta['sort_order'] ?? 0),
-            ));
-        }
-        return $rows;
     }
     
     /**

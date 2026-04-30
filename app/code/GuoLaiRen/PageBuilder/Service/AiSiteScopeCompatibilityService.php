@@ -11,6 +11,7 @@ use Weline\Framework\Manager\ObjectManager;
 class AiSiteScopeCompatibilityService
 {
     public const PAGE_TYPES_USER_CUSTOMIZED_KEY = 'page_types_user_customized';
+    public const SELECTED_SKILL_CODES_KEY = 'selected_skill_codes';
     public const WORKSPACE_STATUS_PREPARING = 'preparing';
     public const WORKSPACE_STATUS_BUILDING = 'building';
     public const WORKSPACE_STATUS_EDITING = 'editing';
@@ -34,6 +35,9 @@ class AiSiteScopeCompatibilityService
         $normalized[self::PAGE_TYPES_USER_CUSTOMIZED_KEY] = $this->normalizePageTypesUserCustomized(
             $scope[self::PAGE_TYPES_USER_CUSTOMIZED_KEY] ?? null
         ) ? 1 : 0;
+        $normalized[self::SELECTED_SKILL_CODES_KEY] = $this->normalizeSelectedSkillCodes(
+            $scope[self::SELECTED_SKILL_CODES_KEY] ?? []
+        );
         $normalized['page_types'] = $this->resolveScopedPageTypes($scope);
         $normalized['page_type_layouts'] = $this->normalizePageTypeLayouts(
             $scope['page_type_layouts'] ?? [],
@@ -306,6 +310,38 @@ class AiSiteScopeCompatibilityService
         }
 
         return $pageTypes;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function normalizeSelectedSkillCodes(mixed $raw): array
+    {
+        if (\is_array($raw)) {
+            $items = $raw;
+        } elseif (\is_string($raw) && \trim($raw) !== '') {
+            $decoded = \json_decode($raw, true);
+            $items = \is_array($decoded) ? $decoded : \preg_split('/[\s,;]+/', $raw);
+            if (!\is_array($items)) {
+                $items = [];
+            }
+        } else {
+            $items = [];
+        }
+
+        $codes = [];
+        foreach ($items as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $code = \trim((string)$item);
+            if ($code === '' || !\preg_match('/^[A-Za-z0-9_.-]+$/', $code) || \in_array($code, $codes, true)) {
+                continue;
+            }
+            $codes[] = $code;
+        }
+
+        return $codes;
     }
 
     /**

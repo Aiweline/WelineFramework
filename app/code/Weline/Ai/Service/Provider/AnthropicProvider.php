@@ -13,8 +13,6 @@ namespace Weline\Ai\Service\Provider;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Framework\App\Exception;
-use Weline\Framework\Http\Sse\SseContext;
-use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * Anthropic Claude API提供者
@@ -42,25 +40,6 @@ class AnthropicProvider implements ProviderInterface
      * Anthropic API版本
      */
     private const API_VERSION = '2023-06-01';
-
-    /**
-     * @see OpenAiProvider::isCurlStreamWriteAbortError()
-     */
-    private function isCurlStreamWriteAbortError(string $error): bool
-    {
-        if ($error === '') {
-            return false;
-        }
-        if (stripos($error, 'failure writing output to destination') !== false) {
-            return true;
-        }
-        if (stripos($error, 'returned -1') !== false) {
-            return true;
-        }
-
-        return stripos($error, 'returned -1') !== false
-            && (stripos($error, 'writestring') !== false || stripos($error, 'callback') !== false);
-    }
 
     /**
      * 构造函数
@@ -104,22 +83,23 @@ class AnthropicProvider implements ProviderInterface
 
         $messages = $this->buildMessages($prompt, $params);
         $systemMessage = $this->extractSystemMessage($params);
-        $timeout = ProviderTimeoutPolicy::resolveRequestTimeout($params, $config);
+        
+        // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
+        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
         
         // 设置执行时间限制
         if ($timeout > 0) {
-            $timeLimit = $timeout + ProviderTimeoutPolicy::EXECUTION_TIME_BUFFER;
+            $timeLimit = $timeout + 10;
             @set_time_limit($timeLimit);
         } else {
             @set_time_limit(0);
         }
 
-        try {
-            $requestData = [
+        $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
             'max_tokens' => (int)($params['max_tokens'] ?? $config['max_tokens'] ?? 4096),
-            ];
+        ];
 
         // 添加可选参数（确保数值类型正确）
         if (isset($params['temperature']) || isset($config['temperature'])) {
@@ -177,16 +157,13 @@ class AnthropicProvider implements ProviderInterface
             'finish_reason' => $stopReason,
         ];
 
-            if (!empty($toolCalls)) {
-                $result['tool_calls'] = $toolCalls;
-                // 保留原始 content blocks 供 agent 构建后续消息
-                $result['assistant_content'] = $response['content'] ?? [];
-            }
-
-            return $result;
-        } finally {
-            @set_time_limit(0);
+        if (!empty($toolCalls)) {
+            $result['tool_calls'] = $toolCalls;
+            // 保留原始 content blocks 供 agent 构建后续消息
+            $result['assistant_content'] = $response['content'] ?? [];
         }
+
+        return $result;
     }
 
     /**
@@ -225,29 +202,23 @@ class AnthropicProvider implements ProviderInterface
         $messages = $this->buildMessages($prompt, $params);
         $systemMessage = $this->extractSystemMessage($params);
         
-        // 超时优先级：params.timeout > config.timeout > 默认超时；0 表示不限制
-        $timeout = $this->resolveStreamTimeout($params, $config);
+        // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
+        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
         
         // 设置执行时间限制
-        $shouldRestoreExecutionTimeLimit = !SseContext::isSseEnabled();
-        if ($shouldRestoreExecutionTimeLimit) {
-            if ($timeout > 0) {
-                @set_time_limit($timeout + ProviderTimeoutPolicy::EXECUTION_TIME_BUFFER);
-            } else {
-                @set_time_limit(0);
-            }
+        if ($timeout > 0) {
+            $timeLimit = $timeout + 10;
+            @set_time_limit($timeLimit);
         } else {
-            // SSE 模式下也需要移除执行时间限制，避免 PHP 默认请求超时
             @set_time_limit(0);
         }
 
-        try {
-            $requestData = [
+        $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
             'max_tokens' => (int)($params['max_tokens'] ?? $config['max_tokens'] ?? 4096),
             'stream' => true,
-            ];
+        ];
 
         // 添加可选参数（确保数值类型正确）
         if (isset($params['temperature']) || isset($config['temperature'])) {
@@ -277,7 +248,6 @@ class AnthropicProvider implements ProviderInterface
         ];
 
         $fullContent = '';
-        $onHeartbeat = \is_callable($params['on_heartbeat'] ?? null) ? $params['on_heartbeat'] : null;
         
         // 优先使用base_url，如果没有则使用api_url，最后使用默认值
         $apiUrl = $config['base_url'] ?? $config['api_url'] ?? 'https://api.anthropic.com/v1';
@@ -290,33 +260,28 @@ class AnthropicProvider implements ProviderInterface
         if (!is_array($proxyInfo)) {
             $proxyInfo = [];
         }
-
+        
         $this->callStreamApi(
             $apiUrl,
             $apiKey,
             $requestData,
             function($chunk, $usage = null) use ($callback, &$fullContent, &$totalTokens) {
                 $fullContent .= $chunk;
-                // CRITICAL-FIX-2026-04-02: Propagate callback return value for SSE abort signal
-                $result = $callback($chunk);
-
+                $callback($chunk);
+                
                 // 更新token使用量（如果有）
                 if ($usage) {
                     $totalTokens['prompt_tokens'] = $usage['input_tokens'] ?? $totalTokens['prompt_tokens'];
                     $totalTokens['completion_tokens'] = $usage['output_tokens'] ?? $totalTokens['completion_tokens'];
                 }
-
-                // 传递返回值，让底层能检测到连接断开
-                return $result;
             },
             $proxyInfo,
-            $timeout,
-            $onHeartbeat
+            $timeout
         );
 
         // 如果流式调用没有返回任何内容，抛出明确错误
         if (empty(trim($fullContent))) {
-            throw new Exception(__('AI 流式生成完成但未返回任何内容，请检查模型配置（API Key、Base URL、模型名称）是否正确'));
+            throw new Exception('AI 流式生成完成但未返回任何内容，请检查模型配置（API Key、Base URL、模型名称）是否正确');
         }
 
         // 如果没有从API获取到token统计，则估算
@@ -328,15 +293,10 @@ class AnthropicProvider implements ProviderInterface
         }
         $totalTokens['total_tokens'] = $totalTokens['prompt_tokens'] + $totalTokens['completion_tokens'];
 
-            return [
-                'content' => $fullContent,
-                'usage' => $totalTokens,
-            ];
-        } finally {
-            if ($shouldRestoreExecutionTimeLimit) {
-                @set_time_limit(0);
-            }
-        }
+        return [
+            'content' => $fullContent,
+            'usage' => $totalTokens,
+        ];
     }
 
     /**
@@ -539,7 +499,7 @@ class AnthropicProvider implements ProviderInterface
             }
         }
         
-        return $content === null ? false : $content;
+        return $content;
     }
 
     /**
@@ -574,7 +534,7 @@ class AnthropicProvider implements ProviderInterface
             
             error_clear_last();
             
-            $response = $this->executeCurl($ch);
+            $response = curl_exec($ch);
             
             // 检查是否超时
             $lastError = error_get_last();
@@ -597,23 +557,23 @@ class AnthropicProvider implements ProviderInterface
                 if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
                     throw new Exception($this->getTimeoutErrorMessage($timeout));
                 }
-                throw new Exception(__('API请求失败: %{error}', ['error' => $error]));
+                throw new Exception("API请求失败: {$error}");
             }
 
             $result = json_decode($response, true);
             
             if ($httpCode >= 500 && $retryCount < self::MAX_RETRIES) {
-                SchedulerSystem::sleep(self::RETRY_DELAY * ($retryCount + 1));
+                sleep(self::RETRY_DELAY * ($retryCount + 1));
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
 
             if ($httpCode !== 200) {
-                $errorMsg = $result['error']['message'] ?? __('HTTP错误: %{code}', ['code' => $httpCode]);
-                throw new Exception(__('API返回错误: %{error}', ['error' => $errorMsg]));
+                $errorMsg = $result['error']['message'] ?? "HTTP错误: {$httpCode}";
+                throw new Exception("API返回错误: {$errorMsg}");
             }
 
             if (empty($result['content'])) {
-                throw new Exception(__('API响应格式错误'));
+                throw new Exception("API响应格式错误");
             }
 
             return $result;
@@ -625,13 +585,10 @@ class AnthropicProvider implements ProviderInterface
             }
             
             if ($retryCount < self::MAX_RETRIES) {
-                SchedulerSystem::sleep(self::RETRY_DELAY * ($retryCount + 1));
+                sleep(self::RETRY_DELAY * ($retryCount + 1));
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
-            throw new Exception(__('API调用失败（已重试%{count}次）: %{msg}', [
-                'count' => $retryCount,
-                'msg' => $e->getMessage()
-            ]));
+            throw new Exception("API调用失败（已重试{$retryCount}次）: " . $e->getMessage());
         }
     }
 
@@ -646,21 +603,13 @@ class AnthropicProvider implements ProviderInterface
      * @param int $timeout
      * @throws Exception
      */
-    private function callStreamApi(
-        string $url,
-        string $apiKey,
-        array $data,
-        callable $callback,
-        array $proxyInfo,
-        int $timeout,
-        ?callable $onHeartbeat = null
-    ): void {
-        $isSseMode = SseContext::isSseEnabled();
+    private function callStreamApi(string $url, string $apiKey, array $data, callable $callback, array $proxyInfo, int $timeout): void
+    {
         $startTime = microtime(true);
-        $maxExecutionTime = $isSseMode ? 0 : (int)ini_get('max_execution_time');
-        $timeLimit = $maxExecutionTime > 0 ? $maxExecutionTime : null;
+        $maxExecutionTime = ini_get('max_execution_time');
+        $timeLimit = $maxExecutionTime > 0 ? (int)$maxExecutionTime : null;
         
-        $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, true);
+        $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout);
         
         if ($timeLimit !== null && $timeLimit > 0) {
             $elapsedBeforeRequest = microtime(true) - $startTime;
@@ -675,40 +624,9 @@ class AnthropicProvider implements ProviderInterface
         // 用于捕获非 SSE 格式的响应（API 错误等）
         $rawResponseBuffer = '';
         $hasValidChunk = false;
-        $streamLineBuffer = '';
-        $streamTerminatedNormally = false;
-        $streamKeepaliveIntervalSec = 5.0;
-        $lastStreamKeepaliveAt = microtime(true);
-        if ($onHeartbeat !== null) {
-            try {
-                $onHeartbeat();
-                $lastStreamKeepaliveAt = microtime(true);
-            } catch (\Throwable) {
-            }
-            curl_setopt($ch, CURLOPT_NOPROGRESS, false);
-            curl_setopt($ch, CURLOPT_PROGRESSFUNCTION, function (
-                $curl,
-                $dlTotal,
-                $dlNow,
-                $ulTotal,
-                $ulNow
-            ) use ($onHeartbeat, &$lastStreamKeepaliveAt, $streamKeepaliveIntervalSec) {
-                $now = microtime(true);
-                if (($now - $lastStreamKeepaliveAt) < $streamKeepaliveIntervalSec) {
-                    return 0;
-                }
-                $lastStreamKeepaliveAt = $now;
-                try {
-                    $onHeartbeat();
-                } catch (\Throwable) {
-                }
-
-                return 0;
-            });
-        }
         
         // 设置流式处理回调
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback, $startTime, $timeLimit, &$rawResponseBuffer, &$hasValidChunk, &$streamLineBuffer, &$streamTerminatedNormally, $onHeartbeat, &$lastStreamKeepaliveAt, $streamKeepaliveIntervalSec) {
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback, $startTime, $timeLimit, &$rawResponseBuffer, &$hasValidChunk) {
             // 检查是否超时
             if ($timeLimit !== null) {
                 $elapsedTime = microtime(true) - $startTime;
@@ -716,189 +634,97 @@ class AnthropicProvider implements ProviderInterface
                     return -1;
                 }
             }
-
-            // 检查 SSE 连接是否已断开，断开时主动退出脚本
-            if (SseContext::isSseEnabled() && (connection_aborted() || connection_status() !== CONNECTION_NORMAL)) {
-                return -1;
-            }
-
-            if ($onHeartbeat !== null) {
-                $nowHb = microtime(true);
-                if (($nowHb - $lastStreamKeepaliveAt) >= $streamKeepaliveIntervalSec) {
-                    $lastStreamKeepaliveAt = $nowHb;
-                    try {
-                        $onHeartbeat();
-                    } catch (\Throwable) {
-                    }
-                }
-            }
-
+            
             // 累积原始响应（限制大小，仅用于错误诊断）
             if (strlen($rawResponseBuffer) < 4096) {
                 $rawResponseBuffer .= $data;
             }
-
-            $streamLineBuffer .= $data;
-            $lines = explode("\n", $streamLineBuffer);
-            $streamLineBuffer = array_pop($lines) ?? '';
-
+            
+            $lines = explode("\n", $data);
+            
             foreach ($lines as $line) {
                 $line = trim($line);
-
+                
                 if (empty($line) || !str_starts_with($line, 'data: ')) {
                     continue;
                 }
-
+                
                 $jsonData = substr($line, 6);
-
+                
                 if ($jsonData === '[DONE]') {
                     continue;
                 }
-
+                
                 $event = json_decode($jsonData, true);
-
+                
                 if (!$event) {
                     continue;
                 }
-
+                
                 // Anthropic流式响应格式处理
                 $type = $event['type'] ?? '';
-
+                
                 switch ($type) {
                     case 'content_block_delta':
                         $delta = $event['delta'] ?? [];
                         if (($delta['type'] ?? '') === 'text_delta') {
                             $hasValidChunk = true;
-                            $result = $callback($delta['text'] ?? '');
-                            // CRITICAL-FIX-2026-04-02: Abort curl on SSE disconnect (return -1 stops CURLOPT_WRITEFUNCTION)
-                            if ($result === false) {
-                                return -1;
-                            }
+                            $callback($delta['text'] ?? '');
                         }
                         break;
-
+                    
                     case 'message_delta':
                         // 消息结束时可能包含usage信息
                         $usage = $event['usage'] ?? null;
-                        if (!empty($event['delta']['stop_reason'] ?? null) || !empty($event['stop_reason'] ?? null)) {
-                            $streamTerminatedNormally = true;
-                        }
                         if ($usage) {
-                            $result = $callback('', $usage);
-                            if ($result === false) {
-                                return -1;
-                            }
+                            $callback('', $usage);
                         }
                         break;
-                    case 'message_stop':
-                        $streamTerminatedNormally = true;
-                        break;
-
+                    
                     case 'error':
                         // Anthropic 错误事件
                         $errorMsg = $event['error']['message'] ?? ($event['message'] ?? 'Unknown Anthropic error');
-                        throw new Exception(__('Anthropic API 错误: %{error}', ['error' => $errorMsg]));
+                        throw new Exception("Anthropic API 错误: {$errorMsg}");
                 }
             }
-
-            if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent()) {
-                SchedulerSystem::yieldDelay(1);
-            }
-
+            
             return strlen($data);
         });
 
-        $this->executeCurl($ch);
-
-        // 兜底处理尾包：某些上游在结束时最后一行可能不带换行，若不补解析会丢失末尾 delta。
-        $tailLine = trim($streamLineBuffer);
-        if ($tailLine !== '' && str_starts_with($tailLine, 'data: ')) {
-            $jsonData = substr($tailLine, 6);
-            if ($jsonData !== '[DONE]') {
-                $event = json_decode($jsonData, true);
-                if (is_array($event)) {
-                    $type = $event['type'] ?? '';
-                    switch ($type) {
-                        case 'content_block_delta':
-                            $delta = $event['delta'] ?? [];
-                            if (($delta['type'] ?? '') === 'text_delta') {
-                                $hasValidChunk = true;
-                                $result = $callback($delta['text'] ?? '');
-                                if ($result === false) {
-                                    throw new Exception(__('SSE stream aborted by content callback'));
-                                }
-                            }
-                            break;
-                        case 'message_delta':
-                            $usage = $event['usage'] ?? null;
-                            if (!empty($event['delta']['stop_reason'] ?? null) || !empty($event['stop_reason'] ?? null)) {
-                                $streamTerminatedNormally = true;
-                            }
-                            if ($usage) {
-                                $result = $callback('', $usage);
-                                if ($result === false) {
-                                    throw new Exception(__('SSE stream aborted by usage callback'));
-                                }
-                            }
-                            break;
-                        case 'message_stop':
-                            $streamTerminatedNormally = true;
-                            break;
-                        case 'error':
-                            $errorMsg = $event['error']['message'] ?? ($event['message'] ?? __('Unknown Anthropic error'));
-                            throw new Exception(__('Anthropic API 错误: %{error}', ['error' => $errorMsg]));
-                    }
-                }
-            }
-        }
-
+        curl_exec($ch);
+        
         // 获取 HTTP 状态码
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
-        if (!$isSseMode) {
-            $lastError = error_get_last();
-            if ($lastError && (
-                strpos($lastError['message'], 'Maximum execution time') !== false ||
-                strpos($lastError['message'], 'exceeded') !== false
-            )) {
-                curl_close($ch);
-                throw new Exception($this->getTimeoutErrorMessage($timeout));
-            }
+        $lastError = error_get_last();
+        if ($lastError && (
+            strpos($lastError['message'], 'Maximum execution time') !== false ||
+            strpos($lastError['message'], 'exceeded') !== false
+        )) {
+            curl_close($ch);
+            throw new Exception($this->getTimeoutErrorMessage($timeout));
         }
         
         $error = curl_error($ch);
         curl_close($ch);
 
-        $streamWriteAborted = false;
         if ($error) {
             if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
                 throw new Exception($this->getTimeoutErrorMessage($timeout));
             }
-            if ($this->isCurlStreamWriteAbortError($error)) {
-                $streamWriteAborted = true;
-            } else {
-                throw new Exception(__('流式API调用失败: %{error}', ['error' => $error]));
-            }
+            throw new Exception("流式API调用失败: {$error}");
         }
         
         // 检查 HTTP 状态码
-        if (!$streamWriteAborted && $httpCode !== 200) {
+        if ($httpCode !== 200) {
             $errorMsg = $this->parseApiErrorResponse($rawResponseBuffer, $httpCode);
             throw new Exception($errorMsg);
         }
         
         // 检查是否收到了有效内容
-        if (!$streamWriteAborted && !$hasValidChunk && !empty($rawResponseBuffer)) {
+        if (!$hasValidChunk && !empty($rawResponseBuffer)) {
             $errorMsg = $this->parseApiErrorResponse($rawResponseBuffer, $httpCode);
             throw new Exception($errorMsg);
-        }
-
-        if (!$streamWriteAborted && $hasValidChunk && !$streamTerminatedNormally) {
-            $tailPreview = mb_substr(trim($streamLineBuffer), 0, 180);
-            throw new Exception(
-                'AI 上游流式输出提前终止：未收到 Anthropic 结束事件(message_stop/stop_reason)。'
-                . ($tailPreview !== '' ? " tail={$tailPreview}" : '')
-            );
         }
     }
 
@@ -912,14 +738,7 @@ class AnthropicProvider implements ProviderInterface
      * @param int $timeout
      * @return \CurlHandle|false
      */
-    private function initCurl(
-        string $url,
-        string $apiKey,
-        array $data,
-        array $proxyInfo,
-        int $timeout,
-        bool $isStream = false
-    ): \CurlHandle|false
+    private function initCurl(string $url, string $apiKey, array $data, array $proxyInfo, int $timeout): \CurlHandle|false
     {
         $ch = curl_init($url);
         
@@ -934,8 +753,12 @@ class AnthropicProvider implements ProviderInterface
             'anthropic-version: ' . self::API_VERSION,
         ]);
         
-        foreach ($this->buildCurlTimeoutOptions($timeout, $isStream) as $option => $value) {
-            curl_setopt($ch, $option, $value);
+        $timeout = max(0, (int)$timeout);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+        if ($timeout > 0) {
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($timeout, 60));
+        } else {
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);
         }
         
         // SSL配置
@@ -959,75 +782,6 @@ class AnthropicProvider implements ProviderInterface
         }
 
         return $ch;
-    }
-
-    private function resolveStreamTimeout(array $params, array $config): int
-    {
-        return ProviderTimeoutPolicy::resolveStreamTimeout($params, $config);
-    }
-
-    /**
-     * @return array<int, int>
-     */
-    private function buildCurlTimeoutOptions(int $timeout, bool $isStream = false): array
-    {
-        $timeout = max(0, (int)$timeout);
-
-        if ($isStream) {
-            return [
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_CONNECTTIMEOUT => ProviderTimeoutPolicy::DEFAULT_CONNECT_TIMEOUT,
-            ];
-        }
-
-        return [
-            CURLOPT_TIMEOUT => $timeout,
-            CURLOPT_CONNECTTIMEOUT => $timeout > 0 ? min($timeout, ProviderTimeoutPolicy::DEFAULT_CONNECT_TIMEOUT) : ProviderTimeoutPolicy::DEFAULT_CONNECT_TIMEOUT,
-        ];
-    }
-
-    private function executeCurl(\CurlHandle $ch): string|bool
-    {
-        if (!SchedulerSystem::isSchedulerActive() || !\Fiber::getCurrent()) {
-            return curl_exec($ch);
-        }
-
-        $multi = curl_multi_init();
-        curl_multi_add_handle($multi, $ch);
-
-        $running = 0;
-        $multiResult = \CURLM_OK;
-        $curlResult = \CURLE_OK;
-
-        do {
-            do {
-                $multiResult = curl_multi_exec($multi, $running);
-            } while ($multiResult === \CURLM_CALL_MULTI_PERFORM);
-
-            while ($info = curl_multi_info_read($multi)) {
-                if (($info['handle'] ?? null) === $ch) {
-                    $curlResult = (int)($info['result'] ?? \CURLE_OK);
-                }
-            }
-
-            if ($multiResult !== \CURLM_OK || $curlResult !== \CURLE_OK) {
-                break;
-            }
-
-            if ($running > 0) {
-                SchedulerSystem::yieldDelay(10);
-            }
-        } while ($running > 0);
-
-        $content = curl_multi_getcontent($ch);
-        curl_multi_remove_handle($multi, $ch);
-        curl_multi_close($multi);
-
-        if ($multiResult !== \CURLM_OK || $curlResult !== \CURLE_OK) {
-            return false;
-        }
-
-        return $content;
     }
 
     /**
