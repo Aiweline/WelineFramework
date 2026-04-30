@@ -1787,8 +1787,15 @@
         var status = readTaskProgressStatusSignal(source);
         var active = isQueueTaskProgressGenerating(source);
         var isBuildSignal = shouldConsumeBuildTaskProgressSummary(source);
-        if (isBuildSignal) {
-            taskProgressGeneratingState.active = active;
+        var operation = String(readTaskProgressOperation(source) || '').trim().toLowerCase();
+        var terminalQueueStatuses = { done: 1, complete: 1, completed: 1, stop: 1, stopped: 1, cancelled: 1, canceled: 1, error: 1 };
+        var st = String(status || '').trim().toLowerCase();
+        // 队列已标记完成（或失败）但 task_progress / active_operation 未归一时，避免因 shouldConsume=false 永远不清理生成中骨架态
+        if ((isBuildSignal || operation === 'build') && terminalQueueStatuses[st]) {
+            active = false;
+        }
+        if (isBuildSignal || operation === 'build') {
+            taskProgressGeneratingState.active = !!active && !terminalQueueStatuses[st];
             taskProgressGeneratingState.status = status;
             taskProgressGeneratingState.updatedAt = Date.now();
         }

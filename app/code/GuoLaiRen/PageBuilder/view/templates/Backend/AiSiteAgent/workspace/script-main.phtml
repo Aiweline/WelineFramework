@@ -34,6 +34,7 @@
     var mutateTaskPlanTaskUrl = <?= \json_encode((string)($mutateTaskPlanTaskUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var resumeBuildUrl = <?= \json_encode($resumeBuildUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var runVirtualThemeUrl = <?= \json_encode($runVirtualThemeUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var startAssetGenerationUrl = <?= \json_encode((string)$this->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-asset-generation'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startRegeneratePageUrl = <?= \json_encode($startRegeneratePageUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startRefineComponentUrl = <?= \json_encode($startRefineComponentUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startPatchBlockUrl = <?= \json_encode($startPatchBlockUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -86,6 +87,7 @@
     }
     var refineComponentState = {
         pageType: '',
+        blockId: '',
         componentCode: '',
         componentLabel: '',
         refineStreaming: <?= \json_encode((string)__('已开始区块微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -967,6 +969,31 @@
         return false;
     }
 
+    function buildRetryableAiResumePromptMessage(operation, count) {
+        var normalized = String(operation || '').trim();
+        var normalizedCount = parseInt(String(count || 0), 10) || 0;
+        var operationLabel = resolveRetryableAiFailureOperationLabel(normalized);
+        if (normalized === 'build') {
+            return String(messages.retryableAiResumePromptMessageBuild || '检测到构建仍有 %{count} 个失败项。队列当前未运行。继续后只会把未完成/失败项重新入队，已完成项会自动跳过。是否立即继续？')
+                .replace('%{operation}', operationLabel)
+                .replace('%{count}', String(normalizedCount));
+        }
+        return String(messages.retryableAiResumePromptMessage || '检测到 %{operation} 仍有 %{count} 个失败项。队列当前未运行，是否立即继续重试失败项？')
+            .replace('%{operation}', operationLabel)
+            .replace('%{count}', String(normalizedCount));
+    }
+
+    function buildRetryableAiResumeStartedMessage(operation) {
+        var normalized = String(operation || '').trim();
+        var operationLabel = resolveRetryableAiFailureOperationLabel(normalized);
+        if (normalized === 'build') {
+            return String(messages.retryableAiResumePromptStartedBuild || '已继续构建队列：未完成项会继续完成，已完成项会自动跳过。')
+                .replace('%{operation}', operationLabel);
+        }
+        return String(messages.retryableAiResumePromptStarted || '已继续重试 %{operation} 失败项。')
+            .replace('%{operation}', operationLabel);
+    }
+
     function resolveRetryableAiFailurePromptCandidate(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object'
             ? workspaceState
@@ -1046,6 +1073,7 @@
             var promptMessage = promptMessageTemplate
                 .replace('%{operation}', operationLabel)
                 .replace('%{count}', String(freshCandidate.count));
+            promptMessage = buildRetryableAiResumePromptMessage(freshCandidate.operation, freshCandidate.count);
             if (!window.BackendConfirm || typeof window.BackendConfirm.show !== 'function') {
                 retryableAiResumePromptFingerprint = '';
                 return;
@@ -1063,6 +1091,9 @@
                 }
                 delete retryableAiResumePromptDismissed[freshFingerprint];
                 var started = triggerRetryableAiFailureResumeOperation(freshCandidate.operation);
+                if (started) {
+                    messages.retryableAiResumePromptStarted = buildRetryableAiResumeStartedMessage(freshCandidate.operation);
+                }
                 if (started) {
                     toast('info', String(messages.retryableAiResumePromptStarted || '已继续重试 %{operation} 失败项。').replace('%{operation}', operationLabel));
                 }
@@ -1448,6 +1479,7 @@
             'build_task_summary',
             'build_summary',
             'workspace_entry_queue_notice',
+            'asset_manifest',
             'pre_publish_visual_urls'
         ].forEach(function (key) {
             if (Object.prototype.hasOwnProperty.call(patch, key)) {
@@ -1671,6 +1703,7 @@
         if (window.__pbPhase2TaskProgress && typeof window.__pbPhase2TaskProgress.syncFromWorkspaceState === 'function') {
             window.__pbPhase2TaskProgress.syncFromWorkspaceState(workspaceState);
         }
+        syncAssetPanelFromWorkspaceState(workspaceState);
         syncPublishStageEntryFromWorkspaceState(workspaceState);
         normalizeGuidedStaticLabels();
         syncConfirmPlanButtonEnabled();
@@ -2335,6 +2368,145 @@
             });
         }).catch(function (error) {
             throw error;
+        });
+    }
+
+    function normalizeAssetManifestSlots(manifest) {
+        var source = manifest && typeof manifest === 'object' ? manifest : {};
+        var rawSlots = source.slots && typeof source.slots === 'object' ? source.slots : source;
+        var slots = [];
+        if (Array.isArray(rawSlots)) {
+            rawSlots.forEach(function (slot, index) {
+                if (slot && typeof slot === 'object') {
+                    slots.push(Object.assign({ slot_id: String(slot.slot_id || slot.id || ('slot_' + index)) }, slot));
+                }
+            });
+            return slots;
+        }
+        Object.keys(rawSlots || {}).forEach(function (key) {
+            var slot = rawSlots[key];
+            if (slot && typeof slot === 'object') {
+                slots.push(Object.assign({ slot_id: String(slot.slot_id || slot.id || key) }, slot));
+            }
+        });
+        return slots;
+    }
+
+    function readAssetManifestFromWorkspaceState(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        return (state.asset_manifest && typeof state.asset_manifest === 'object')
+            ? state.asset_manifest
+            : ((scope.asset_manifest && typeof scope.asset_manifest === 'object') ? scope.asset_manifest : {});
+    }
+
+    function readAssetSlotValue(slot, keys) {
+        for (var i = 0; i < keys.length; i += 1) {
+            var key = keys[i];
+            if (slot && Object.prototype.hasOwnProperty.call(slot, key) && slot[key] != null && String(slot[key]).trim() !== '') {
+                return String(slot[key]);
+            }
+        }
+        return '';
+    }
+
+    function syncAssetPanelFromWorkspaceState(workspaceState) {
+        var list = document.getElementById('pb-ai-asset-slot-list');
+        var empty = document.getElementById('pb-ai-asset-panel-empty');
+        var count = document.getElementById('pb-ai-asset-panel-count');
+        if (!list) {
+            return;
+        }
+        var slots = normalizeAssetManifestSlots(readAssetManifestFromWorkspaceState(workspaceState));
+        if (count) {
+            count.textContent = String(slots.length);
+        }
+        if (empty) {
+            empty.classList.toggle('d-none', slots.length > 0);
+        }
+        list.innerHTML = slots.map(function (slot) {
+            var slotId = readAssetSlotValue(slot, ['slot_id', 'id', 'key']);
+            var status = readAssetSlotValue(slot, ['status', 'queue_status']) || 'pending';
+            var brief = readAssetSlotValue(slot, ['prompt_brief', 'brief', 'description', 'prompt']);
+            var preview = readAssetSlotValue(slot, ['preview', 'preview_url', 'url', 'final_url']);
+            var finalUrl = readAssetSlotValue(slot, ['final_url', 'url']);
+            var source = readAssetSlotValue(slot, ['source', 'provider', 'mode']);
+            var lockedBy = readAssetSlotValue(slot, ['locked_by_user', 'locked_by']);
+            var error = readAssetSlotValue(slot, ['error', 'error_message']);
+            var locked = lockedBy !== '' && lockedBy !== '0' && lockedBy.toLowerCase() !== 'false';
+            var previewHtml = preview
+                ? '<div class="pb-ai-asset-preview mb-2"><img alt="" src="' + escapeHtml(preview) + '"></div>'
+                : '';
+            return ''
+                + '<div class="pb-ai-asset-slot-card p-2 small" data-asset-slot-id="' + escapeHtml(slotId) + '">'
+                + '<div class="d-flex align-items-start justify-content-between gap-2 mb-1">'
+                + '<strong class="text-break">' + escapeHtml(slotId || '-') + '</strong>'
+                + '<span class="badge text-bg-secondary" data-asset-slot-status>' + escapeHtml(status) + '</span>'
+                + '</div>'
+                + previewHtml
+                + (brief ? '<div class="text-muted mb-1 pb-ai-asset-brief">' + escapeHtml(brief) + '</div>' : '')
+                + '<div class="d-flex flex-wrap gap-1 mb-2">'
+                + (finalUrl ? '<a class="badge text-bg-light border text-decoration-none" target="_blank" rel="noopener" href="' + escapeHtml(finalUrl) + '">final_url</a>' : '')
+                + (source ? '<span class="badge text-bg-light border">source: ' + escapeHtml(source) + '</span>' : '')
+                + (locked ? '<span class="badge text-bg-warning">locked</span>' : '')
+                + (error ? '<span class="badge text-bg-danger">error</span>' : '')
+                + '</div>'
+                + (error ? '<div class="text-danger mb-2">' + escapeHtml(error) + '</div>' : '')
+                + '<div class="d-flex flex-wrap gap-2 align-items-center">'
+                + '<button type="button" class="btn btn-sm btn-outline-primary" data-asset-generate="generate" data-slot-id="' + escapeHtml(slotId) + '"' + (locked ? ' disabled aria-disabled="true"' : '') + '>Generate</button>'
+                + '<button type="button" class="btn btn-sm btn-outline-secondary" data-asset-generate="regenerate" data-slot-id="' + escapeHtml(slotId) + '"' + (locked ? ' disabled aria-disabled="true"' : '') + '>Regenerate</button>'
+                + '<span class="text-muted" data-asset-queue-meta></span>'
+                + '</div>'
+                + '</div>';
+        }).join('');
+    }
+
+    function bindAssetPanelLogic() {
+        var root = document.getElementById('pb-ai-asset-panel');
+        if (!root || root.dataset.pbBound === '1') {
+            return;
+        }
+        root.dataset.pbBound = '1';
+        root.addEventListener('click', function (event) {
+            var button = event.target && event.target.closest ? event.target.closest('[data-asset-generate]') : null;
+            if (!button || button.disabled) {
+                return;
+            }
+            var slotId = String(button.getAttribute('data-slot-id') || '').trim();
+            if (!slotId || !startAssetGenerationUrl) {
+                return;
+            }
+            var mode = String(button.getAttribute('data-asset-generate') || 'generate');
+            var card = button.closest('[data-asset-slot-id]');
+            var meta = card ? card.querySelector('[data-asset-queue-meta]') : null;
+            button.disabled = true;
+            if (meta) {
+                meta.textContent = 'queue...';
+            }
+            postForm(startAssetGenerationUrl, {
+                public_id: publicId,
+                slot_id: slotId,
+                mode: mode,
+                execution_token: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
+            }).then(function (data) {
+                var payload = data && data.data && typeof data.data === 'object' ? data.data : (data || {});
+                var queueId = String(payload.queue_id || (payload.queue && payload.queue.queue_id) || '');
+                var status = String(payload.queue_status || payload.status || (payload.queue && payload.queue.status) || 'queued');
+                var token = String(payload.execution_token || '');
+                if (meta) {
+                    meta.textContent = 'queue_id=' + (queueId || '-') + ' status=' + status + (token ? ' token=' + token : '');
+                }
+                var nextState = payload.state || payload.workspace_state || payload;
+                if (nextState && typeof nextState === 'object' && (nextState.scope || nextState.asset_manifest)) {
+                    hydrateWorkspaceFromState(nextState);
+                }
+            }).catch(function (error) {
+                if (meta) {
+                    meta.textContent = String(error && error.message ? error.message : messages.networkError);
+                }
+            }).finally(function () {
+                button.disabled = false;
+            });
         });
     }
 
@@ -3805,6 +3977,20 @@
         bindBlockOperationModalRouter();
         bindReorderModalSubmit();
         bindTaskPlanModeSwitchers();
+        var planPreviewContent = document.getElementById('pb-ai-plan-rendered-content');
+        if (planPreviewContent) {
+            bindPreviewActionButtons(planPreviewContent);
+            bindPreviewTabButtons(planPreviewContent);
+            bindPreviewSortables(planPreviewContent);
+            bindStageOnePlanFieldEditors(planPreviewContent);
+            bindTaskPlanFieldEditors(planPreviewContent);
+        }
+        var taskPlanPreviewContent = document.getElementById('pb-ai-task-plan-rendered-content');
+        if (taskPlanPreviewContent) {
+            bindPreviewActionButtons(taskPlanPreviewContent);
+            bindPreviewTabButtons(taskPlanPreviewContent);
+            bindPreviewSortables(taskPlanPreviewContent);
+        }
         setPlanViewMode('pb-ai-plan-preview-content');
         // 绑定「查看已确认方案」按钮。
         document.querySelectorAll('.pb-ai-view-confirmed-plan').forEach(function (btn) {
@@ -5589,6 +5775,51 @@
         return new bootstrap.Modal(modalEl);
     }
 
+    /**
+     * 兼容 BS 5.0（无 getOrCreateInstance）、BS 5.1+、以及 jQuery 版 BS4 的弹层显示。
+     */
+    function showBootstrapModal(modalEl) {
+        if (!modalEl) {
+            return;
+        }
+        var inst = resolveBootstrapModalInstance(modalEl);
+        if (inst && typeof inst.show === 'function') {
+            inst.show();
+            return;
+        }
+        if (typeof $ !== 'undefined' && $.fn && typeof $.fn.modal === 'function') {
+            $(modalEl).modal('show');
+            return;
+        }
+        modalEl.classList.add('show');
+        modalEl.style.display = 'block';
+        modalEl.removeAttribute('aria-hidden');
+        modalEl.setAttribute('aria-modal', 'true');
+    }
+
+    /**
+     * 兼容多版本 Bootstrap 的弹层关闭（与 showBootstrapModal 成对使用）。
+     */
+    function hideBootstrapModal(modalEl) {
+        if (!modalEl) {
+            return;
+        }
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal && typeof bootstrap.Modal.getInstance === 'function') {
+            var existing = bootstrap.Modal.getInstance(modalEl);
+            if (existing && typeof existing.hide === 'function') {
+                existing.hide();
+                return;
+            }
+        }
+        if (typeof $ !== 'undefined' && $.fn && typeof $.fn.modal === 'function') {
+            $(modalEl).modal('hide');
+            return;
+        }
+        modalEl.classList.remove('show');
+        modalEl.style.display = 'none';
+        modalEl.setAttribute('aria-hidden', 'true');
+    }
+
     function showComponentConfigModal(options) {
         return new Promise(function (resolve) {
             var modalId = 'pbAiComponentConfigModal_' + Date.now();
@@ -6201,12 +6432,14 @@
             return;
         }
         var pageType = String((payload && payload.page_type) || getActivePreviewPageType() || '');
-        var componentCode = String((payload && payload.component) || '');
-        if (!pageType || !componentCode) {
+        var componentCode = String((payload && (payload.component_code || payload.component)) || '');
+        var blockId = String((payload && (payload.block_id || payload.component_code || payload.component)) || '');
+        if (!pageType || !componentCode || !blockId) {
             toast('error', messages.refineUnavailable);
             return;
         }
         refineComponentState.pageType = pageType;
+        refineComponentState.blockId = blockId;
         refineComponentState.componentCode = componentCode;
         refineComponentState.componentLabel = buildComponentLabel(payload);
         contextEl.textContent = buildBlockContextText(
@@ -6228,7 +6461,7 @@
 
     function resolveWorkspaceVisualComponentContext(payload) {
         var pageType = String((payload && payload.page_type) || getActivePreviewPageType() || '').trim();
-        var componentCode = String((payload && payload.component) || '').trim();
+        var componentCode = String((payload && (payload.component_code || payload.component)) || '').trim();
         var region = String((payload && payload.region) || '').trim();
         var rawIndex = String((payload && payload.index) || '').trim();
         if (!publicId || !pageType || !componentCode || !region) {
@@ -6810,7 +7043,7 @@
 
     function openLegacyBlockEditorModal(payload) {
         var pageType = String((payload && payload.page_type) || getActivePreviewPageType() || '');
-        var blockId = String((payload && payload.component) || '');
+        var blockId = String((payload && (payload.block_id || payload.component)) || '');
         var modalEl = document.getElementById('pb-ai-edit-block-modal');
         var contextEl = document.getElementById('pb-ai-edit-block-context');
         if (!pageType || !blockId || !modalEl || !contextEl) {
@@ -6931,7 +7164,7 @@
             }
             return;
         }
-        if ((!startPatchBlockUrl && !startBlockRefineSseUrl) || !refineComponentState.pageType || !refineComponentState.componentCode) {
+        if ((!startPatchBlockUrl && !startBlockRefineSseUrl) || !refineComponentState.pageType || !refineComponentState.componentCode || !refineComponentState.blockId) {
             toast('error', messages.refineUnavailable);
             return;
         }
@@ -6967,7 +7200,7 @@
             postForm(startPatchBlockUrl, {
                 public_id: publicId,
                 page_type: refineComponentState.pageType,
-                block_id: refineComponentState.componentCode,
+                block_id: refineComponentState.blockId,
                 component_code: refineComponentState.componentCode,
                 component_label: refineComponentState.componentLabel || refineComponentState.componentCode,
                 instruction: instruction
@@ -7015,7 +7248,7 @@
 
     function startBlockRegenerate(payload) {
         var pageType = String((payload && payload.page_type) || getActivePreviewPageType() || '');
-        var componentCode = String((payload && payload.component) || '');
+        var componentCode = String((payload && (payload.component_code || payload.component)) || '');
         if (!startBlockRegenerateSseUrl || !pageType || !componentCode) {
             toast('error', messages.refineUnavailable);
             return;
@@ -7102,24 +7335,21 @@
         return document.getElementById('pb-ai-visual-preview-frame');
     }
 
-    function resolvePayloadComponent(wrapper, sourceEl) {
+    function resolvePayloadIdentifier(wrapper, sourceEl, attributeNames) {
         var candidates = [];
         var actions = sourceEl && sourceEl.closest ? sourceEl.closest('.component-actions') : null;
-        if (sourceEl && sourceEl.getAttribute) {
-            candidates.push(String(sourceEl.getAttribute('data-component') || ''));
-            candidates.push(String(sourceEl.getAttribute('data-component-code') || ''));
-            candidates.push(String(sourceEl.getAttribute('data-block-id') || ''));
+        var attrs = Array.isArray(attributeNames) ? attributeNames : [];
+        function collect(el) {
+            if (!el || !el.getAttribute) {
+                return;
+            }
+            for (var i = 0; i < attrs.length; i++) {
+                candidates.push(String(el.getAttribute(attrs[i]) || ''));
+            }
         }
-        if (actions && actions.getAttribute) {
-            candidates.push(String(actions.getAttribute('data-component') || ''));
-            candidates.push(String(actions.getAttribute('data-component-code') || ''));
-            candidates.push(String(actions.getAttribute('data-block-id') || ''));
-        }
-        if (wrapper && wrapper.getAttribute) {
-            candidates.push(String(wrapper.getAttribute('data-component') || ''));
-            candidates.push(String(wrapper.getAttribute('data-component-code') || ''));
-            candidates.push(String(wrapper.getAttribute('data-block-id') || ''));
-        }
+        collect(sourceEl);
+        collect(actions);
+        collect(wrapper);
         for (var i = 0; i < candidates.length; i++) {
             if (candidates[i]) {
                 return candidates[i];
@@ -7128,13 +7358,33 @@
         return '';
     }
 
+    function resolvePayloadBlockId(wrapper, sourceEl) {
+        return resolvePayloadIdentifier(wrapper, sourceEl, [
+            'data-block-id',
+            'data-component-code',
+            'data-component'
+        ]);
+    }
+
+    function resolvePayloadComponentCode(wrapper, sourceEl) {
+        return resolvePayloadIdentifier(wrapper, sourceEl, [
+            'data-component-code',
+            'data-component',
+            'data-block-id'
+        ]);
+    }
+
     function buildEmbeddedPreviewPayload(wrapper, sourceEl) {
         var actions = sourceEl && sourceEl.closest ? sourceEl.closest('.component-actions') : null;
         if (!wrapper && !actions) {
             return null;
         }
+        var blockId = resolvePayloadBlockId(wrapper, sourceEl);
+        var componentCode = resolvePayloadComponentCode(wrapper, sourceEl);
         return {
-            component: resolvePayloadComponent(wrapper, sourceEl),
+            component: componentCode || blockId,
+            component_code: componentCode || blockId,
+            block_id: blockId || componentCode,
             region: String(
                 (wrapper && wrapper.getAttribute ? wrapper.getAttribute('data-region') : '')
                 || (actions && actions.getAttribute ? actions.getAttribute('data-region') : '')
@@ -8791,21 +9041,47 @@
             'target-scope': payload.targetScope || ''
         };
         var normalizedScope = String(scopeKind || '').trim().toLowerCase();
+        var buttons = [];
+        buttons.push(buildPreviewActionButton('refine', previewLabels.refineAction, 'btn-outline-primary', attrs));
+        buttons.push(buildPreviewActionButton('rebuild', previewLabels.rebuildAction, 'btn-outline-warning', attrs));
+        if (normalizedScope === 'block') {
+            buttons.push(buildPreviewActionButton('delete', previewLabels.deleteAction, 'btn-outline-danger', attrs));
+        }
+        if (normalizedScope === 'block' || normalizedScope === 'page') {
+            buttons.push(buildPreviewActionButton('add-block', previewLabels.addBlockAction, 'btn-outline-success', attrs));
+        }
         var moveBtnHtml = normalizedScope === 'block'
             ? buildPreviewActionButton('move', previewLabels.moveAction, 'btn-outline-info', attrs)
             : '';
         return ''
             + '<div class="pb-ai-plan-preview-actions">'
-            + buildPreviewActionButton('refine', previewLabels.refineAction, 'btn-outline-primary', attrs)
-            + buildPreviewActionButton('rebuild', previewLabels.rebuildAction, 'btn-outline-warning', attrs)
-            + buildPreviewActionButton('delete', previewLabels.deleteAction, 'btn-outline-danger', attrs)
-            + buildPreviewActionButton('add-block', previewLabels.addBlockAction, 'btn-outline-success', attrs)
+            + buttons.join('')
             + moveBtnHtml
             + '</div>';
     }
 
     function buildPreviewStageToolbar(stage) {
-        return '';
+        var normalizedStage = String(stage || 'plan').trim() === 'task-plan' ? 'task-plan' : 'plan';
+        var stageLabel = normalizedStage === 'task-plan'
+            ? String(messages.stageTwoBadge || <?= \json_encode((string)__('第二阶段'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
+            : String(messages.stageOneBadge || <?= \json_encode((string)__('第一阶段'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        var stageSubject = normalizedStage === 'task-plan'
+            ? String(messages.taskPlanStructuredPreviewTitle || <?= \json_encode((string)__('第二阶段任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
+            : String(messages.planStructuredPreviewTitle || <?= \json_encode((string)__('第一阶段建站方案'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
+        var attrs = {
+            'pb-preview-stage': normalizedStage,
+            'pb-scope-kind': 'stage',
+            'page-label': stageSubject,
+            'target-scope': ''
+        };
+        return ''
+            + '<div class="pb-ai-plan-preview-stage-toolbar d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">'
+            + '<div class="small text-muted">' + escapeHtml(stageLabel + ' · ' + stageSubject) + '</div>'
+            + '<div class="d-flex flex-wrap align-items-center gap-2">'
+            + buildPreviewActionButton('refine-stage', previewLabels.refineStage, 'btn-outline-primary', attrs)
+            + buildPreviewActionButton('rebuild-stage', previewLabels.rebuildStage, 'btn-outline-danger', attrs)
+            + '</div>'
+            + '</div>';
     }
 
     function buildPreviewTabId(stage, rawKey) {
@@ -10542,7 +10818,7 @@
                 blockLabel: blockLabel,
                 summary: actionContext && actionContext.summary ? String(actionContext.summary) : ''
             };
-            if (scopeKind === 'stage') {
+            if (scopeKind === 'stage' && false) {
                 window.__pbPreviewActionDebug.mode = 'stage-panel-removed';
                 toast('info', <?= \json_encode((string)__('阶段级微调/重建面板已移除，请在具体页面区块中执行新增、微调或删除。'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>);
                 return true;
@@ -11091,14 +11367,7 @@
             submitBtn.classList.toggle('btn-danger', config.action === 'delete');
             submitBtn.classList.toggle('btn-primary', config.action !== 'delete');
         }
-        if (window.bootstrap && window.bootstrap.Modal) {
-            window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
-        } else {
-            modalEl.classList.add('show');
-            modalEl.style.display = 'block';
-            modalEl.removeAttribute('aria-hidden');
-            modalEl.setAttribute('aria-modal', 'true');
-        }
+        showBootstrapModal(modalEl);
         return modalEl;
     }
 
@@ -11107,16 +11376,7 @@
         if (!modalEl) {
             return;
         }
-        if (window.bootstrap && window.bootstrap.Modal) {
-            var instance = window.bootstrap.Modal.getInstance(modalEl);
-            if (instance) {
-                instance.hide();
-                return;
-            }
-        }
-        modalEl.classList.remove('show');
-        modalEl.style.display = 'none';
-        modalEl.setAttribute('aria-hidden', 'true');
+        hideBootstrapModal(modalEl);
     }
 
     function bindBlockOperationModalSubmit() {
@@ -11310,14 +11570,7 @@
             warn.textContent = '';
         }
 
-        if (window.bootstrap && window.bootstrap.Modal) {
-            var instance = window.bootstrap.Modal.getOrCreateInstance(modalEl);
-            instance.show();
-        } else {
-            modalEl.classList.add('show');
-            modalEl.style.display = 'block';
-            modalEl.setAttribute('aria-hidden', 'false');
-        }
+        showBootstrapModal(modalEl);
         if (input && typeof input.focus === 'function') {
             setTimeout(function () { input.focus(); input.select && input.select(); }, 80);
         }
@@ -11329,16 +11582,7 @@
         if (!modalEl) {
             return;
         }
-        if (window.bootstrap && window.bootstrap.Modal) {
-            var instance = window.bootstrap.Modal.getInstance(modalEl);
-            if (instance) {
-                instance.hide();
-                return;
-            }
-        }
-        modalEl.classList.remove('show');
-        modalEl.style.display = 'none';
-        modalEl.setAttribute('aria-hidden', 'true');
+        hideBootstrapModal(modalEl);
     }
 
     function bindReorderModalSubmit() {
@@ -14981,11 +15225,8 @@
         if (alertEl) { alertEl.classList.add('d-none'); }
         if (confirmBtn) { confirmBtn.disabled = true; }
         try {
-            if (window.bootstrap && window.bootstrap.Modal) {
-                var inst = window.bootstrap.Modal.getOrCreateInstance(modal);
-                inst.show();
-                return inst;
-            }
+            showBootstrapModal(modal);
+            return resolveBootstrapModalInstance(modal);
         } catch (err) { /* fallthrough */ }
         modal.classList.add('show');
         modal.style.display = 'block';
@@ -14996,11 +15237,8 @@
         var modal = document.getElementById('pb-ai-publish-checklist-modal');
         if (!modal) { return; }
         try {
-            if (window.bootstrap && window.bootstrap.Modal) {
-                var inst = window.bootstrap.Modal.getOrCreateInstance(modal);
-                inst.hide();
-                return;
-            }
+            hideBootstrapModal(modal);
+            return;
         } catch (err) { /* fallthrough */ }
         modal.classList.remove('show');
         modal.style.display = 'none';
@@ -15237,6 +15475,7 @@
         hydrateInitialWorkspaceStateOnce();
         showWorkspaceEntryQueueNotice(initialWorkspaceState);
     }
+    bindAssetPanelLogic();
     bindPublishStageLogic();
 })();
 </script>

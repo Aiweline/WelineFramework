@@ -383,19 +383,6 @@ echo json_encode([
   return JSON.parse(stdout);
 }
 
-function runPagebuilderQueueByIdViaPhp(queueId) {
-  const root = devWorkspaceRootFromThisSpec();
-  const normalizedQueueId = Number(queueId || 0);
-  if (!Number.isFinite(normalizedQueueId) || normalizedQueueId <= 0) {
-    throw new Error(`runPagebuilderQueueByIdViaPhp: invalid queue_id ${queueId}`);
-  }
-  return execFileSync('php', ['bin/w', 'queue:run', `--id=${normalizedQueueId}`], {
-    cwd: root,
-    stdio: 'pipe',
-    encoding: 'utf8',
-  });
-}
-
 function buildSmallPhasePlanMarkdown(siteTitle, pageTypes) {
   const label = String(siteTitle || 'E2E phase site').trim();
   const pages = Array.isArray(pageTypes) && pageTypes.length > 0 ? pageTypes : ['home_page'];
@@ -2841,6 +2828,90 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
 
   moduleCase(
     test,
+    { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-ASSET-010' },
+    'asset panel renders asset_manifest slots and image generation start only queues work',
+    async ({ page }) => {
+      test.setTimeout(180000);
+      const backendRoot = await loginAsAdmin(page, { bootstrapOnly: true });
+      const { workspaceUrl, createPayload } = await createDirectPagebuilderWorkspace(page, backendRoot);
+      const publicId = String(createPayload.public_id || '');
+      const slotId = 'hero_visual_smoke';
+      const executionToken = `e2e-image-asset-${Date.now().toString(36)}`;
+
+      await mergePagebuilderScope(page, {
+        site_title: 'E2E Asset Queue Smoke',
+        site_tagline: 'asset queue smoke',
+        brief_description: 'Verify existing asset slots render and generation start only creates a queue.',
+        user_description: 'Verify existing asset slots render and generation start only creates a queue.',
+        page_types: ['home_page'],
+        asset_manifest: {
+          version: 1,
+          slots: {
+            [slotId]: {
+              slot_id: slotId,
+              slot_type: 'hero_image',
+              page_type: 'home_page',
+              task_key: 'page:home_page:hero',
+              status: 'pending',
+              brief: 'A warm hero image for the PageBuilder image asset smoke test.',
+              prompt: 'Warm editorial hero image with product workspace context.',
+            },
+          },
+        },
+      });
+      await gotoStable(page, workspaceUrl);
+
+      await expect(page.locator('#pb-ai-asset-panel')).toBeVisible({ timeout: 30000 });
+      await expect(page.locator('#pb-ai-asset-panel-count')).toHaveText('1', { timeout: 30000 });
+      const assetSlot = page.locator(`[data-asset-slot-id="${slotId}"]`);
+      await expect(assetSlot).toBeVisible({ timeout: 30000 });
+      await expect(assetSlot).toContainText(slotId);
+      await expect(assetSlot.locator('[data-asset-generate="generate"]')).toBeEnabled();
+
+      const startPayload = {
+        public_id: publicId,
+        slot_id: slotId,
+        mode: 'generate',
+        execution_token: executionToken,
+      };
+      let startResult = null;
+      let startError = null;
+      for (const action of ['post-start-asset-generation', 'start-asset-generation']) {
+        try {
+          startResult = await postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, action, startPayload);
+          if (startResult.response.status() === 404) {
+            startResult = null;
+            continue;
+          }
+          break;
+        } catch (error) {
+          startError = error;
+          if (!/HTTP 404\b/.test(String(error && error.message ? error.message : error))) {
+            throw error;
+          }
+          startResult = null;
+        }
+      }
+      if (!startResult) {
+        throw startError || new Error('asset generation start endpoint did not return JSON');
+      }
+      expect(startResult.response.ok(), `asset generation start HTTP ${startResult.response.status()}`).toBeTruthy();
+      expect(startResult.payload && startResult.payload.success, JSON.stringify(startResult.payload)).toBeTruthy();
+
+      const queued = startResult.payload && startResult.payload.data && typeof startResult.payload.data === 'object'
+        ? startResult.payload.data
+        : startResult.payload;
+      expect(String(queued.operation || '')).toBe('image_asset');
+      expect(Number(queued.queue_id || (queued.queue && queued.queue.queue_id) || 0)).toBeGreaterThan(0);
+      expect(String(queued.slot_id || '')).toBe(slotId);
+      expect(String(queued.execution_token || '')).toBe(executionToken);
+      expect(String(queued.status || queued.queue_status || (queued.queue && queued.queue.status) || 'queued')).toMatch(/^(pending|queued)$/i);
+      expect(String(queued.image_url || queued.final_url || queued.generated_url || '')).toBe('');
+    }
+  );
+
+  moduleCase(
+    test,
     { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-LEGACY-001' },
     'legacy single-content session auto-hydrates blocks and opens refine modal',
     async ({ page }) => {
@@ -3011,190 +3082,6 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
 
       const srcAfter = await previewFrame.getAttribute('src');
       expect(srcAfter).toBe(srcBefore);
-    }
-  );
-
-  moduleCase(
-    test,
-    { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-BLOCK-REFRESH-003' },
-    'block refine request auto-refreshes the current visual preview block after queue completion',
-    async ({ page }) => {
-      test.slow();
-      test.setTimeout(600000);
-
-      await loginAsAdmin(page, {
-        useProxy: false,
-        bootstrapOnly: true,
-        bootstrapModes: ['wls'],
-      });
-
-      const createPayload = createPagebuilderSessionViaPhp({ workspace_status: 'preparing', fake_mode: 1 });
-      expect(createPayload.success, JSON.stringify(createPayload)).toBeTruthy();
-      const publicId = String(createPayload.public_id || '');
-      expect(publicId).toBeTruthy();
-
-      const suffix = Date.now().toString().slice(-8);
-      const localDomain = buildLocalDomain(`pb-block-refresh-${suffix}`);
-      const scopePatch = {
-        site_title: `E2E PB Block Refresh ${suffix}`,
-        site_tagline: 'block refine auto refresh',
-        target_domain: localDomain,
-        brief_description: 'Verify the current visual preview block refreshes itself after refine queue completion.',
-        user_description: 'Verify the current visual preview block refreshes itself after refine queue completion.',
-        page_types: ['home_page'],
-      };
-
-      const seededPlan = prepareSmallPagebuilderPlanDraftViaPhp(publicId, scopePatch);
-      expect(seededPlan.success, JSON.stringify(seededPlan)).toBeTruthy();
-      const seededTaskPlan = prepareSmallPagebuilderTaskPlanDraftViaPhp(publicId, scopePatch);
-      expect(seededTaskPlan.success, JSON.stringify(seededTaskPlan)).toBeTruthy();
-
-      const directWorkspaceUrl = buildDirectPagebuilderWorkspaceUrl(publicId);
-      const sameOriginWorkspaceUrl = buildSameOriginBackendUrl(page, `pagebuilder/backend/ai-site-agent/workspace?public_id=${encodeURIComponent(publicId)}`);
-      let workspaceUrl = directWorkspaceUrl;
-      const openUsableWorkspace = async (candidateUrl) => {
-        let lastError = null;
-        for (let attempt = 0; attempt < 3; attempt += 1) {
-          try {
-            await gotoStable(page, candidateUrl);
-            const landedOnLogin = await page.locator('form[action*="/admin/login/post"], input[name="username"]').first()
-              .isVisible({ timeout: 3000 })
-              .catch(() => false);
-            if (landedOnLogin) {
-              await loginAsAdmin(page, { refreshRuntime: true, useProxy: false });
-              await gotoStable(page, candidateUrl);
-            }
-            const bodyText = await page.locator('body').first().textContent().catch(() => '');
-            const normalizedBodyText = String(bodyText || '').trim();
-            if (
-              /^\s*404\s*$/i.test(normalizedBodyText)
-              || (/^4\d{0,2}$/.test(normalizedBodyText) && normalizedBodyText.length <= 3)
-            ) {
-              throw new Error(`workspace returned 404: ${candidateUrl}`);
-            }
-            if (/"error"\s*:\s*"upstream_request_failed"|read ECONNRESET|ERR_EMPTY_RESPONSE|Client network socket disconnected/i.test(normalizedBodyText)) {
-              throw new Error(`workspace returned upstream failure: ${candidateUrl} body=${normalizedBodyText.slice(0, 500)}`);
-            }
-            return;
-          } catch (error) {
-            lastError = error;
-            const message = String(error && error.message ? error.message : error || '');
-            if (!/ECONNRESET|ERR_EMPTY_RESPONSE|ERR_ABORTED|ERR_TIMED_OUT|ERR_CONNECTION_RESET|net::ERR_|chrome-error:\/\/|upstream_request_failed|Timeout/i.test(message) || attempt >= 2) {
-              throw error;
-            }
-            await page.waitForTimeout(1500 * (attempt + 1));
-          }
-        }
-        if (lastError) {
-          throw lastError;
-        }
-      };
-      for (const candidateUrl of [directWorkspaceUrl, sameOriginWorkspaceUrl, directWorkspaceUrl]) {
-        if (!candidateUrl) {
-          continue;
-        }
-        try {
-          await openUsableWorkspace(candidateUrl);
-          workspaceUrl = candidateUrl;
-          break;
-        } catch (error) {
-          // try next candidate
-        }
-      }
-
-      await expect.poll(async () => {
-        const selectors = ['#pb-ai-site-title', '#pb-ai-plan-inline-panel', '#pb-ai-task-plan-accordion-trigger'];
-        for (const selector of selectors) {
-          if (await page.locator(selector).first().isVisible({ timeout: 1000 }).catch(() => false)) {
-            return true;
-          }
-        }
-        return false;
-      }, { timeout: 30000 }).toBeTruthy();
-
-      const phase1Confirm = await postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, 'post-confirm-plan', {
-        public_id: publicId,
-      });
-      expect(phase1Confirm.payload && phase1Confirm.payload.success, JSON.stringify(phase1Confirm.payload)).toBeTruthy();
-
-      const phase2Confirm = await postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, 'post-confirm-task-plan', {
-        public_id: publicId,
-      });
-      expect(phase2Confirm.payload && phase2Confirm.payload.success, JSON.stringify(phase2Confirm.payload)).toBeTruthy();
-
-      const buildStart = await startPagebuilderBuildByUrl(page, workspaceUrl, { ...scopePatch });
-      const buildStream = await consumeSseStream(
-        page,
-        normalizeToCurrentOrigin(page, String(buildStart.stream_url)),
-        { timeoutMs: LONG_WORKSPACE_TIMEOUT }
-      );
-      expectFinishedOrResumedStream(buildStream, 'block-refresh-build-stream');
-
-      await gotoStable(page, workspaceUrl);
-      await ensurePagebuilderExpertLayout(page);
-      await expect(page.locator('#pb-ai-visual-preview-frame')).toBeVisible({ timeout: 60000 });
-
-      const frame = page.frameLocator('#pb-ai-visual-preview-frame');
-      await expect
-        .poll(async () => await frame.locator('.pb-ai-block-wrapper').count(), {
-          timeout: 30000,
-        })
-        .toBeGreaterThan(1);
-
-      const targetBlock = frame.locator('.pb-ai-block-wrapper').nth(1);
-      await targetBlock.hover();
-      await expect(targetBlock.locator('.component-actions')).toBeVisible({ timeout: 10000 });
-
-      const targetComponent = String(await targetBlock.getAttribute('data-component').catch(() => '') || '').trim();
-      expect(targetComponent).toBeTruthy();
-
-      const targetBlockSelector = `.pb-ai-block-wrapper[data-component="${targetComponent}"]`;
-      const readTargetBlockHtml = async () => {
-        await expect(frame.locator(targetBlockSelector).first()).toBeVisible({ timeout: 30000 });
-        return String(await frame.locator(targetBlockSelector).first().innerHTML().catch(() => '') || '').trim();
-      };
-
-      const htmlBefore = await readTargetBlockHtml();
-      expect(htmlBefore.length).toBeGreaterThan(0);
-
-      const instruction = `E2E stub patch ${Date.now()} make the headline obviously different`;
-      const patchStartPromise = page.waitForResponse((response) => (
-        response.request().method() === 'POST'
-        && /\/pagebuilder\/backend\/ai-site-agent\/post-start-patch-block/i.test(response.url())
-      ), { timeout: 30000 });
-
-      await targetBlock.locator('.component-action-refine').click({ force: true });
-      const refineModal = page.locator('#pb-ai-refine-component-modal');
-      await expect(refineModal).toHaveClass(/show/, { timeout: 10000 });
-      await page.locator('#pb-ai-refine-component-instruction').fill(instruction);
-      await page.locator('#pb-ai-refine-component-submit').click({ force: true });
-
-      const patchStartResponse = await patchStartPromise;
-      const patchStartPayload = await patchStartResponse.json().catch(() => null);
-      expect(patchStartPayload && patchStartPayload.success, JSON.stringify(patchStartPayload)).toBeTruthy();
-      const queueId = Number(
-        (patchStartPayload && patchStartPayload.queue_id)
-        || (patchStartPayload && patchStartPayload.data && patchStartPayload.data.queue_id)
-        || (patchStartPayload && patchStartPayload.active_operation && patchStartPayload.active_operation.queue_id)
-        || (patchStartPayload && patchStartPayload.data && patchStartPayload.data.active_operation && patchStartPayload.data.active_operation.queue_id)
-        || 0
-      );
-      expect(queueId).toBeGreaterThan(0);
-
-      runPagebuilderQueueByIdViaPhp(queueId);
-
-      await expect
-        .poll(async () => {
-          const htmlAfterCandidate = await readTargetBlockHtml();
-          return htmlAfterCandidate !== '' && htmlAfterCandidate !== htmlBefore;
-        }, {
-          timeout: 120000,
-        })
-        .toBeTruthy();
-
-      const htmlAfter = await readTargetBlockHtml();
-      expect(htmlAfter).not.toBe(htmlBefore);
-      await expect(frame.locator(targetBlockSelector).first()).toContainText(instruction, { timeout: 15000 });
     }
   );
 

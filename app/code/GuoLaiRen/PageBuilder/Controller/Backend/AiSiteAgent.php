@@ -23,6 +23,7 @@ use GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspacePreviewService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspaceStateHelperService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentWebsitesMirrorService;
 use GuoLaiRen\PageBuilder\Service\AiSiteBlockPartialPatchService;
+use GuoLaiRen\PageBuilder\Service\AiSiteAssetManifestService;
 use GuoLaiRen\PageBuilder\Service\AiSiteDraftWebsiteService;
 use GuoLaiRen\PageBuilder\Service\AiSiteMaterializationService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
@@ -755,6 +756,12 @@ SCRIPT;
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '启动主题构建', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartBuild(): string { return $this->handleStartBuild(); }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI site agent API', 'mdi-api', 'Start AI asset generation', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postStartAssetGeneration(): string { return $this->handleStartAssetGeneration(); }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI site agent API', 'mdi-api', 'Start AI asset generation', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function startAssetGeneration(): string { return $this->handleStartAssetGeneration(); }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '执行虚拟主题编排（兼容）', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postRunVirtualTheme(): string { return $this->handleStartBuild(); }
@@ -1841,6 +1848,10 @@ SCRIPT;
                     'task_plan_confirmed' => 1,
                     'task_plan_confirmed_at' => (string)($scope['task_plan_confirmed_at'] ?? \date('Y-m-d H:i:s')),
                 ];
+                $confirmedScopeForAssets = \array_replace($scope, $scopePatch);
+                $assetManifest = $this->assetManifestService()->syncFromTaskPlan($confirmedScopeForAssets);
+                $scopePatch['asset_manifest'] = $assetManifest;
+                $scopePatch['verified_assets'] = $this->assetManifestService()->extractVerifiedAssets($assetManifest);
                 try {
                     $saved = $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
                     if (!$saved) {
@@ -1898,11 +1909,18 @@ SCRIPT;
         if (\is_array($confirmedScope['build_tasks'] ?? null) && $confirmedScope['build_tasks'] !== []) {
             $scopePatch['build_tasks'] = $confirmedScope['build_tasks'];
         }
+        $assetManifest = $this->assetManifestService()->syncFromTaskPlan($confirmedScope);
+        $scopePatch['asset_manifest'] = $assetManifest;
+        $scopePatch['verified_assets'] = $this->assetManifestService()->extractVerifiedAssets($assetManifest);
+        $confirmedScope['asset_manifest'] = $assetManifest;
+        $confirmedScope['verified_assets'] = $scopePatch['verified_assets'];
         $scopePatch['build_summary'] = \array_replace(
             \is_array($scopePatch['build_summary'] ?? null) ? $scopePatch['build_summary'] : [],
             ['task_summary' => $this->buildTaskService->summarize($confirmedScope)]
         );
         $scopePatch = $this->compactConfirmedTaskPlanScope($scopePatch);
+        $scopePatch['asset_manifest'] = $assetManifest;
+        $scopePatch['verified_assets'] = $confirmedScope['verified_assets'];
         try {
             $saved = $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
             if (!$saved) {
@@ -2905,6 +2923,216 @@ SCRIPT;
             $startResult['start_sse'] = true;
         }
         return $this->fetchJson($startResult);
+    }
+
+    private function handleStartAssetGeneration(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
+        $slotId = \trim((string)$this->getRequestBodyValue('slot_id', ''));
+        $mode = \trim((string)$this->getRequestBodyValue('mode', 'generate'));
+        $executionToken = \trim((string)$this->getRequestBodyValue('execution_token', ''));
+        if ($executionToken === '') {
+            $executionToken = \bin2hex(\random_bytes(16));
+        }
+        if (!\in_array($mode, ['generate', 'regenerate'], true)) {
+            $mode = 'generate';
+        }
+        if ($adminId <= 0 || $publicId === '' || $slotId === '') {
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), ['public_id', 'slot_id']);
+        }
+
+        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+        }
+
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+        );
+        $assetManifestService = $this->assetManifestService();
+        $manifest = $assetManifestService->syncFromTaskPlan($scope);
+        $slot = $assetManifestService->getSlot($manifest, $slotId);
+        if ($slot === []) {
+            return $this->jsonError('ASSET_SLOT_NOT_FOUND', 'Asset slot does not exist.', ['public_id', 'slot_id']);
+        }
+        if ((int)($slot['locked_by_user'] ?? 0) === 1) {
+            return $this->jsonError('ASSET_SLOT_LOCKED', 'Asset slot is locked by user.', ['public_id', 'slot_id']);
+        }
+
+        $manifest = $assetManifestService->markQueued($manifest, $slotId, $executionToken);
+        $verifiedAssets = $assetManifestService->extractVerifiedAssets($manifest);
+        $this->sessionService->mergeScope((int)$session->getId(), $adminId, [
+            'asset_manifest' => $manifest,
+            'verified_assets' => $verifiedAssets,
+        ]);
+        $session = $this->sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+
+        $normalizedSlotId = (string)($slot['slot_id'] ?? $slotId);
+        $jobType = $this->resolveAiSiteQueueJobType('image_asset');
+        $safeSlot = $this->sanitizeAiSiteAssetPathSegment($normalizedSlotId);
+        $content = \array_replace($this->buildOperationQueueEnvelope($session, 'image_asset', $executionToken, 'queued'), [
+            'public_id' => $session->getPublicId(),
+            'admin_id' => $adminId,
+            'operation' => 'image_asset',
+            'slot_id' => $normalizedSlotId,
+            'mode' => $mode,
+            'execution_token' => $executionToken,
+            'target_path' => $this->buildAiSiteAssetTargetPath($scope, $session, $normalizedSlotId, $executionToken),
+            'job_key' => $this->buildAiSiteQueueJobKey((int)$session->getId(), $jobType . ':' . $safeSlot),
+            'job_type' => $jobType,
+            'status' => 'queued',
+        ]);
+        $bizKey = $this->buildAiSiteAssetQueueBizKey((int)$session->getId(), $normalizedSlotId);
+        $queueName = 'PageBuilder image asset #' . \substr($normalizedSlotId, 0, 80);
+        $queueResult = $this->createOrReuseAiSiteAssetQueue($bizKey, $queueName, $content);
+        $queueId = (int)($queueResult['queue_id'] ?? 0);
+        $effectiveExecutionToken = (string)($queueResult['execution_token'] ?? $executionToken);
+        $queueStatus = (string)($queueResult['queue_status'] ?? 'pending');
+        if ($queueId <= 0) {
+            return $this->jsonError('ASSET_QUEUE_CREATE_FAILED', 'Failed to create image asset queue.', ['public_id', 'slot_id']);
+        }
+
+        $fresh = $this->sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+        $state = $this->buildWorkspaceState($fresh, $adminId, 24, true);
+        $data = $this->buildWorkspaceOperationPayload($state, 'image_asset');
+        $data = \array_replace($data, [
+            'queue_id' => $queueId,
+            'biz_key' => $bizKey,
+            'operation' => 'image_asset',
+            'execution_token' => $effectiveExecutionToken,
+            'slot_id' => $normalizedSlotId,
+            'queue_status' => $queueStatus,
+            'queue_waiting_for_scheduler' => true,
+            'asset_manifest' => \is_array($state['asset_manifest'] ?? null) ? $state['asset_manifest'] : $manifest,
+        ]);
+
+        return $this->fetchJson([
+            'success' => true,
+            'queue_id' => $queueId,
+            'biz_key' => $bizKey,
+            'operation' => 'image_asset',
+            'execution_token' => $effectiveExecutionToken,
+            'slot_id' => $normalizedSlotId,
+            'queue_status' => $queueStatus,
+            'queue_waiting_for_scheduler' => true,
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * @param array<string,mixed> $content
+     */
+    private function createOrReuseAiSiteAssetQueue(string $bizKey, string $queueName, array $content): array
+    {
+        $queueClass = \GuoLaiRen\PageBuilder\Queue\AiSiteAssetQueue::class;
+        $existing = $this->findAiSiteQueueRowByBizKey($bizKey);
+        if (\is_array($existing) && $existing !== []) {
+            $queueId = (int)($existing['queue_id'] ?? $existing['id'] ?? 0);
+            if ($queueId > 0) {
+                $status = \trim((string)($existing['status'] ?? ''));
+                if (\in_array($status, ['pending', 'queued', 'running'], true)) {
+                    $existingContent = $existing['content'] ?? [];
+                    if (\is_string($existingContent)) {
+                        $decoded = \json_decode($existingContent, true);
+                        $existingContent = \is_array($decoded) ? $decoded : [];
+                    }
+                    return [
+                        'queue_id' => $queueId,
+                        'execution_token' => (string)(\is_array($existingContent) ? ($existingContent['execution_token'] ?? $content['execution_token'] ?? '') : ($content['execution_token'] ?? '')),
+                        'queue_status' => $status,
+                        'reused' => true,
+                    ];
+                }
+                $updated = w_query('queue', 'update', [
+                    'queue_id' => $queueId,
+                    'patch' => [
+                        'name' => $queueName,
+                        'module' => 'GuoLaiRen_PageBuilder',
+                        'type_id' => $this->resolveAiSiteQueueTypeId($queueClass),
+                        'content' => $content,
+                        'status' => 'pending',
+                        'auto' => true,
+                        'biz_key' => $bizKey,
+                        'result' => '',
+                        'process' => '',
+                        'pid' => 0,
+                        'finished' => 0,
+                    ],
+                ]);
+                if (\is_array($updated) && !empty($updated['success'])) {
+                    return [
+                        'queue_id' => (int)($updated['queue_id'] ?? $queueId),
+                        'execution_token' => (string)($content['execution_token'] ?? ''),
+                        'queue_status' => 'pending',
+                        'reused' => true,
+                    ];
+                }
+            }
+        }
+
+        $created = w_query('queue', 'create', [
+            'class' => $queueClass,
+            'name' => $queueName,
+            'module' => 'GuoLaiRen_PageBuilder',
+            'content' => $content,
+            'status' => 'pending',
+            'auto' => true,
+            'biz_key' => $bizKey,
+        ]);
+
+        return [
+            'queue_id' => (int)(\is_array($created) && !empty($created['success']) ? ($created['queue_id'] ?? 0) : 0),
+            'execution_token' => (string)($content['execution_token'] ?? ''),
+            'queue_status' => 'pending',
+            'reused' => false,
+        ];
+    }
+
+    private function buildAiSiteAssetQueueBizKey(int $sessionId, string $slotId): string
+    {
+        $raw = 'glr_aisite:session:' . $sessionId . ':asset:' . $this->sanitizeAiSiteAssetPathSegment($slotId);
+        return \strlen($raw) > 191 ? \substr($raw, 0, 191) : $raw;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function buildAiSiteAssetTargetPath(array $scope, AiSiteAgentSession $session, string $slotId, string $executionToken): string
+    {
+        $handle = $this->resolveAiSiteAssetTargetHandle($scope, $session);
+        $safeSlot = $this->sanitizeAiSiteAssetPathSegment($slotId);
+        $hash = \substr(\sha1($slotId . ':' . $executionToken), 0, 12);
+
+        return 'pub/media/page-build/' . $handle . '/ai-generated/' . $safeSlot . '-' . $hash . '.webp';
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function resolveAiSiteAssetTargetHandle(array $scope, AiSiteAgentSession $session): string
+    {
+        foreach ([
+            $scope['target_domain'] ?? null,
+            $scope['selected_domain'] ?? null,
+            $scope['website_profile']['site_title'] ?? null,
+            $scope['site_title'] ?? null,
+            $session->getPublicId(),
+        ] as $value) {
+            $handle = $this->sanitizeAiSiteAssetPathSegment((string)$value);
+            if ($handle !== '') {
+                return $handle;
+            }
+        }
+
+        return 'site';
+    }
+
+    private function sanitizeAiSiteAssetPathSegment(string $value): string
+    {
+        $value = \strtolower(\trim($value));
+        $value = \preg_replace('/[^a-z0-9._-]+/', '-', $value) ?? '';
+        return \trim($value, '-_.') ?: 'asset';
     }
 
     /**
@@ -5843,6 +6071,7 @@ SCRIPT;
         ]);
 
         try {
+            $scope = $this->hydrateTaskPlanDraftScopeForMutation($scope);
             $mutationTargets = $this->buildTaskPlanMutationTargets(
                 $action,
                 $taskKeys,
@@ -6003,6 +6232,60 @@ SCRIPT;
                 throw $throwable;
             }
         }
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function hydrateTaskPlanDraftScopeForMutation(array $scope): array
+    {
+        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
+        $taskPlanStructured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
+        $draftStructured = \is_array($virtualThemePlan['draft'] ?? null) ? $virtualThemePlan['draft'] : [];
+        $taskPlanMarkdown = \trim((string)($scope['task_plan_markdown'] ?? ''));
+        $draftMarkdown = \trim((string)($virtualThemePlan['draft_markdown'] ?? ''));
+
+        if ($taskPlanStructured !== [] || $draftStructured !== []) {
+            return $scope;
+        }
+
+        $blueprint = \is_array($scope['execution_blueprint'] ?? null) && $scope['execution_blueprint'] !== []
+            ? $scope['execution_blueprint']
+            : (\is_array($scope['execution_blueprint_draft'] ?? null) && $scope['execution_blueprint_draft'] !== []
+                ? $scope['execution_blueprint_draft']
+                : (\is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : []));
+        if (!\is_array($blueprint['tasks'] ?? null) || $blueprint['tasks'] === []) {
+            return $scope;
+        }
+
+        $derived = $this->deriveTaskPlanArtifactsFromExecutionBlueprint($blueprint);
+        $derivedStructured = \is_array($derived['structured'] ?? null) ? $derived['structured'] : [];
+        if ($derivedStructured === []) {
+            return $scope;
+        }
+
+        $scope['task_plan_structured'] = $derivedStructured;
+        $virtualThemePlan['draft'] = $derivedStructured;
+        if ($taskPlanMarkdown === '') {
+            $taskPlanMarkdown = \trim((string)($derived['markdown'] ?? ''));
+        }
+        if ($draftMarkdown === '' && $taskPlanMarkdown !== '') {
+            $draftMarkdown = $taskPlanMarkdown;
+        }
+        if ($taskPlanMarkdown !== '') {
+            $scope['task_plan_markdown'] = $taskPlanMarkdown;
+            $virtualThemePlan['draft_markdown'] = $draftMarkdown !== '' ? $draftMarkdown : $taskPlanMarkdown;
+        }
+        if (\trim((string)($virtualThemePlan['draft_generated_at'] ?? '')) === '') {
+            $virtualThemePlan['draft_generated_at'] = \date('Y-m-d H:i:s');
+        }
+        if (\trim((string)($virtualThemePlan['plan_signature'] ?? '')) === '') {
+            $virtualThemePlan['plan_signature'] = (string)($derivedStructured['signature'] ?? $blueprint['signature'] ?? '');
+        }
+        $scope['virtual_theme_plan'] = $virtualThemePlan;
+
+        return $scope;
     }
 
     /**
@@ -7587,6 +7870,11 @@ SCRIPT;
         }
 
         return $this->blockPartialPatchService;
+    }
+
+    private function assetManifestService(): AiSiteAssetManifestService
+    {
+        return ObjectManager::getInstance(AiSiteAssetManifestService::class);
     }
 
     /**
@@ -9543,9 +9831,18 @@ SCRIPT;
             $workspaceTrack
         );
         $normalized = $this->normalizeTaskPlanConfirmationForBuild($normalized);
+        $assetManifestService = $this->assetManifestService();
+        $assetManifest = ['version' => 1, 'slots' => []];
+        if ((int)($normalized['task_plan_confirmed'] ?? 0) === 1 || \is_array($normalized['asset_manifest'] ?? null)) {
+            $assetManifest = $assetManifestService->syncFromTaskPlan($normalized);
+            $normalized['asset_manifest'] = $assetManifest;
+            $normalized['verified_assets'] = $assetManifestService->extractVerifiedAssets($assetManifest);
+        }
         $shouldPersistCompactedTaskPlan = $this->shouldCompactConfirmedTaskPlanScope($normalized);
         if ($shouldPersistCompactedTaskPlan) {
             $normalized = $this->compactConfirmedTaskPlanScope($normalized);
+            $normalized['asset_manifest'] = $assetManifest;
+            $normalized['verified_assets'] = $assetManifestService->extractVerifiedAssets($assetManifest);
         }
         $normalized['page_type_layouts'] = $this->scopeCompatibilityService->normalizePageTypeLayouts(
             $normalized['page_type_layouts'] ?? [],
@@ -9950,6 +10247,8 @@ SCRIPT;
             'build_queue_info' => $buildQueueInfo,
             'workspace_entry_notice' => $workspaceEntryQueueNotice,
             'build_summary' => \is_array($normalized['build_summary'] ?? null) ? $normalized['build_summary'] : [],
+            'asset_manifest' => \is_array($normalized['asset_manifest'] ?? null) ? $normalized['asset_manifest'] : ['version' => 1, 'slots' => []],
+            'verified_assets' => \is_array($normalized['verified_assets'] ?? null) ? $normalized['verified_assets'] : [],
             'top_logs' => $topLogs,
             'scope' => $clientScope,
             'events' => $events,
@@ -10272,6 +10571,8 @@ SCRIPT;
             'task_plan_generation_progress' => \is_array($state['task_plan_generation_progress'] ?? null) ? $state['task_plan_generation_progress'] : [],
             'task_plan_generation_summary' => \is_array($state['task_plan_generation_summary'] ?? null) ? $state['task_plan_generation_summary'] : [],
             'task_plan_generation_last_error' => \is_array($state['task_plan_generation_last_error'] ?? null) ? $state['task_plan_generation_last_error'] : [],
+            'asset_manifest' => \is_array($state['asset_manifest'] ?? null) ? $state['asset_manifest'] : ['version' => 1, 'slots' => []],
+            'verified_assets' => \is_array($state['verified_assets'] ?? null) ? $state['verified_assets'] : [],
             'workspace_entry_queue_notice' => \is_array($state['workspace_entry_queue_notice'] ?? null) ? $state['workspace_entry_queue_notice'] : [],
         ], $this->buildWorkspaceStatusEnvelope($state, 'queue'));
 
@@ -12464,6 +12765,7 @@ SCRIPT;
             'block_regenerate' => \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class,
             'block_partial_patch' => \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class,
             'regenerate_page' => \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class,
+            'image_asset' => \GuoLaiRen\PageBuilder\Queue\AiSiteAssetQueue::class,
             default => '',
         };
     }
@@ -12637,7 +12939,7 @@ SCRIPT;
     {
         return match ($operation) {
             'plan' => AiSiteAgentSession::STAGE_PLAN,
-            'task_plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'task_plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'publish' => AiSiteAgentSession::STAGE_PUBLISH,
             default => 'workspace',
         };
@@ -13228,14 +13530,15 @@ SCRIPT;
         $now = \date('Y-m-d H:i:s');
         $htmlTrackReady = $this->scopeCompatibilityService->htmlTrackHasCompleteBlocks($virtualPages, $pageTypes)
             || $this->htmlTrackHasMaterializedAiBlocks($scope, $virtualPages, $pageTypes);
-        $scope = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
+        $scope = $this->buildTaskService->finalizeBuildTaskStatesAfterRunLoop($scope);
         $scope = $this->buildTaskService->syncBuildTaskFailuresToRetryableLedger($scope);
         $taskSummary = $this->buildTaskService->summarize($scope);
         $hasBuildFailures = (int)($taskSummary['failed'] ?? 0) > 0 || $this->buildTaskService->hasRetryableAiFailures($scope, 'build');
+        $hasOutstandingTasks = $this->buildTaskService->hasUnfinishedBlueprintTasks($scope);
         if (!$htmlTrackReady && !$hasBuildFailures) {
             throw new \RuntimeException((string)__('HTML 区块构建未完整产出，请重新调度构建队列'));
         }
-        $canPublishBuild = !$this->buildTaskService->hasPendingTasks($scope) && $htmlTrackReady && !$hasBuildFailures;
+        $canPublishBuild = !$hasOutstandingTasks && $htmlTrackReady && !$hasBuildFailures;
         $scope['build_summary'] = [
             'page_count' => \count($virtualPages),
             'last_generated_at' => $now,
@@ -13243,15 +13546,17 @@ SCRIPT;
             'can_publish' => $canPublishBuild,
             'task_summary' => $taskSummary,
         ];
-        $scope['workspace_status'] = $hasBuildFailures
+        $scope['workspace_status'] = ($hasBuildFailures || $hasOutstandingTasks)
             ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED
             : AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
         $scope['active_operation'] = \array_replace(
             \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
-            $hasBuildFailures ? [
+            ($hasBuildFailures || $hasOutstandingTasks) ? [
                 'status' => 'error',
                 'updated_at' => $now,
-                'message' => (string)__('HTML blocks partially generated; retry failed items before publishing.'),
+                'message' => $hasBuildFailures
+                    ? (string)__('HTML blocks partially generated; retry failed items before publishing.')
+                    : (string)__('仍存在未归档的构建任务；请在工作区刷新后重试未完成任务再继续。'),
                 'retry_allowed' => 1,
                 'failure_mode' => 'partial_retry_required',
                 'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
@@ -13274,14 +13579,20 @@ SCRIPT;
             $adminId,
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'build',
-            $hasBuildFailures ? __('HTML blocks partially generated; retry failed items before publishing.') : __('HTML blocks ready for preview or publish'),
+            ($hasBuildFailures || $hasOutstandingTasks)
+                ? ($hasBuildFailures
+                    ? __('HTML blocks partially generated; retry failed items before publishing.')
+                    : __('仍存在未归档的 HTML 区块任务；请刷新后完成剩余任务后再试。'))
+                : __('HTML blocks ready for preview or publish'),
             100
         );
 
         return [
             'message' => $hasBuildFailures
                 ? (string)__('HTML block build partially complete; retry failed items before publishing.')
-                : (string)__('HTML block build complete'),
+                : ($hasOutstandingTasks
+                    ? (string)__('HTML 区块构建未完全归档；请刷新并完成剩余任务。')
+                    : (string)__('HTML block build complete')),
             'draft_website_id' => (int)$draftWebsite['website_id'],
             'virtual_theme_id' => 0,
             'page_types' => $pageTypes,
@@ -14475,13 +14786,14 @@ SCRIPT;
             );
         }
 
-        $scope = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
+        $scope = $this->buildTaskService->finalizeBuildTaskStatesAfterRunLoop($scope);
         $scope = $this->buildTaskService->syncBuildTaskFailuresToRetryableLedger($scope);
 
         $now = \date('Y-m-d H:i:s');
         $taskSummary = $this->buildTaskService->summarize($scope);
         $hasBuildFailures = (int)($taskSummary['failed'] ?? 0) > 0 || $this->buildTaskService->hasRetryableAiFailures($scope, 'build');
-        $canPublishBuild = !$this->buildTaskService->hasPendingTasks($scope) && !$hasBuildFailures;
+        $hasOutstandingTasks = $this->buildTaskService->hasUnfinishedBlueprintTasks($scope);
+        $canPublishBuild = !$hasOutstandingTasks && !$hasBuildFailures;
         $scope['build_summary'] = [
             'page_count' => \count($virtualPages),
             'last_generated_at' => $now,
@@ -14489,15 +14801,17 @@ SCRIPT;
             'can_publish' => $canPublishBuild,
             'task_summary' => $taskSummary,
         ];
-        $scope['workspace_status'] = $hasBuildFailures
+        $scope['workspace_status'] = ($hasBuildFailures || $hasOutstandingTasks)
             ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED
             : AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
         $scope['active_operation'] = \array_replace(
             \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
-            $hasBuildFailures ? [
+            ($hasBuildFailures || $hasOutstandingTasks) ? [
                 'status' => 'error',
                 'updated_at' => $now,
-                'message' => (string)__('Virtual theme partially generated; retry failed items before publishing.'),
+                'message' => $hasBuildFailures
+                    ? (string)__('Virtual theme partially generated; retry failed items before publishing.')
+                    : (string)__('仍存在未归档的虚拟主题构建任务；请刷新后重试未完成任务再继续。'),
                 'retry_allowed' => 1,
                 'failure_mode' => 'partial_retry_required',
                 'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
@@ -14522,13 +14836,19 @@ SCRIPT;
             $adminId,
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'build',
-            $hasBuildFailures ? __('Virtual theme partially generated; retry failed items before publishing.') : __('Virtual theme ready for editing'),
+            ($hasBuildFailures || $hasOutstandingTasks)
+                ? ($hasBuildFailures
+                    ? __('Virtual theme partially generated; retry failed items before publishing.')
+                    : __('仍存在未归档的虚拟主题构建任务；请刷新后重试未完成任务再继续。'))
+                : __('Virtual theme ready for editing'),
             100
         );
         return [
             'message' => $hasBuildFailures
                 ? (string)__('Virtual theme build partially complete; retry failed items before publishing.')
-                : (string)__('Virtual theme build complete'),
+                : ($hasOutstandingTasks
+                    ? (string)__('虚拟主题构建未完全归档；请刷新并完成剩余任务。')
+                    : (string)__('Virtual theme build complete')),
             'draft_website_id' => (int)$draftWebsite['website_id'],
             'virtual_theme_id' => (int)($scope['virtual_theme_id'] ?? 0),
             'page_types' => $pageTypes,
