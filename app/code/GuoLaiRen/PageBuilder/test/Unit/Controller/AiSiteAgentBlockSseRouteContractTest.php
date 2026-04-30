@@ -44,4 +44,15 @@ final class AiSiteAgentBlockSseRouteContractTest extends TestCase
         self::assertStringContainsString("resolveSharedComponentRegionFromCode(pageType, candidates[i].getAttribute('data-component') || '')", $scriptSource);
         self::assertStringContainsString('updateVirtualBlockState(targetPageType, nextBlock)', $scriptSource);
     }
+
+    public function testPreviewStageToolbarKeepsStageLevelActionsWired(): void
+    {
+        $scriptSource = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        self::assertIsString($scriptSource);
+
+        self::assertStringContainsString('function buildPreviewStageToolbar(stage)', $scriptSource);
+        self::assertStringContainsString('pb-ai-plan-preview-stage-toolbar', $scriptSource);
+        self::assertStringContainsString("buildPreviewActionButton('refine-stage'", $scriptSource);
+        self::assertStringContainsString("buildPreviewActionButton('rebuild-stage'", $scriptSource);
+    }
 }
