@@ -16,9 +16,8 @@
  * brand.show_logo => 显示Logo:select:yes|yes,no
  * 
  * group:links => 链接设置
- * links.use_custom_links => 使用自定义链接组:select:no|no,yes
  * links.column1_title => 栏目1标题:text:Games
- * links.column1_items => 栏目1链接:textarea:Texas Hold'em=>#holdem\r\nOmaha Poker=>#omaha\r\nSit & Go=>#sitandgo\r\nTournaments=>#tournaments|格式：名称=>链接（仅当开启自定义链接时生效）
+ * links.column1_items => 栏目1链接:textarea:Texas Hold'em=>#holdem\r\nOmaha Poker=>#omaha\r\nSit & Go=>#sitandgo\r\nTournaments=>#tournaments|格式：名称=>链接
  * links.column2_title => 栏目2标题:text:About
  * links.column2_items => 栏目2链接:textarea:About Us=>/about\r\nResponsible Gaming=>/responsible\r\nFair Play=>/fairplay\r\nCareers=>/careers|格式：名称=>链接
  * links.column3_title => 栏目3标题:text:Support
@@ -55,68 +54,22 @@ $parseLinks = function($raw) {
         if (empty($line)) continue;
         $parts = explode('=>', $line, 2);
         $name = trim($parts[0] ?? '');
-        $url = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(trim($parts[1] ?? '#'));
+        $url = trim($parts[1] ?? '#');
         if (!empty($name)) { $links[] = ['name' => $name, 'url' => $url]; }
     }
     return $links;
 };
 
-// 按页面类型分组的底栏列（4列）：与 header 一致使用 getHeaderNavigationPages
-$footerColTypes = [
-    1 => [\GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME, \GuoLaiRen\PageBuilder\Model\Page::TYPE_ABOUT, \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_LIST],
-    2 => [\GuoLaiRen\PageBuilder\Model\Page::TYPE_CONTACT],
-    3 => [\GuoLaiRen\PageBuilder\Model\Page::TYPE_TERMS_OF_SERVICE],
-    4 => [\GuoLaiRen\PageBuilder\Model\Page::TYPE_PRIVACY_POLICY],
-];
-$footerColDefaultTitles = [1 => 'Games', 2 => 'About', 3 => 'Support', 4 => 'Legal'];
-
-$useCustomLinks = ($config['links.use_custom_links'] ?? 'no') === 'yes';
-$page = $this->getData('page');
 $columns = [];
-if (!$useCustomLinks && $page && method_exists($page, 'getHeaderNavigationPages')) {
-    $navPages = $page->getHeaderNavigationPages(20);
-    $byCol = [1 => [], 2 => [], 3 => [], 4 => []];
-    foreach ($navPages as $item) {
-        $type = $item['type'] ?? '';
-        foreach ($footerColTypes as $colIndex => $types) {
-            if (in_array($type, $types, true)) {
-                $labelKey = 'links.footer_label_' . $type;
-                $label = isset($config[$labelKey]) && (string)$config[$labelKey] !== '' ? (string)$config[$labelKey] : ($item['title'] ?? '');
-                $url = $item['url'] ?? '/';
-                if (isset($item['type']) && $item['type'] === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME) {
-                    $label = __('Home');
-                    $url = '/';
-                }
-                $byCol[$colIndex][] = ['name' => $label, 'url' => $url];
-                break;
-            }
-        }
-    }
-    if (!empty($navPages)) {
-        $titles = [
-            1 => isset($config['links.column1_title']) && (string)$config['links.column1_title'] !== '' ? (string)$config['links.column1_title'] : $footerColDefaultTitles[1],
-            2 => isset($config['links.column2_title']) && (string)$config['links.column2_title'] !== '' ? (string)$config['links.column2_title'] : $footerColDefaultTitles[2],
-            3 => isset($config['links.column3_title']) && (string)$config['links.column3_title'] !== '' ? (string)$config['links.column3_title'] : $footerColDefaultTitles[3],
-            4 => isset($config['links.column4_title']) && (string)$config['links.column4_title'] !== '' ? (string)$config['links.column4_title'] : $footerColDefaultTitles[4],
-        ];
-        foreach ([1, 2, 3, 4] as $i) {
-            if (!empty($byCol[$i])) {
-                $columns[] = ['title' => $titles[$i], 'links' => $byCol[$i]];
-            }
-        }
+for ($i = 1; $i <= 4; $i++) {
+    $title = $config["links.column{$i}_title"] ?? '';
+    $raw = $config["links.column{$i}_items"] ?? '';
+    $links = $raw ? $parseLinks($raw) : [];
+    if ($title || !empty($links)) {
+        $columns[] = ['title' => $title, 'links' => $links];
     }
 }
-if ($useCustomLinks || empty($columns)) {
-    $columns = [];
-    for ($i = 1; $i <= 4; $i++) {
-        $title = $config["links.column{$i}_title"] ?? $footerColDefaultTitles[$i];
-        $raw = $config["links.column{$i}_items"] ?? '';
-        $links = $raw ? $parseLinks($raw) : [];
-        if ($title || !empty($links)) {
-            $columns[] = ['title' => $title, 'links' => $links];
-        }
-    }
-}
+
 if (empty($columns)) {
     $columns = [
         ['title' => 'Games', 'links' => [['name' => 'Texas Hold\'em', 'url' => '#'], ['name' => 'Omaha', 'url' => '#'], ['name' => 'Sit & Go', 'url' => '#'], ['name' => 'Tournaments', 'url' => '#']]],

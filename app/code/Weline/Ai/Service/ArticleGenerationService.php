@@ -41,7 +41,6 @@ class ArticleGenerationService
     {
         $params = array_merge([
             'keyword' => $keyword,
-            'locale' => $locale,
             'article_type' => ArticleGenerationAdapter::ARTICLE_TYPE_BLOG,
             'style' => ArticleGenerationAdapter::STYLE_PROFESSIONAL,
             'length' => ArticleGenerationAdapter::LENGTH_MEDIUM,

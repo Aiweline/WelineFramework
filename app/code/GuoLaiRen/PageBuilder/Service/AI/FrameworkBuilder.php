@@ -165,8 +165,9 @@ class FrameworkBuilder
         // 1. 预处理AI数据 - 移除危险内容
         $aiData = $this->sanitizeAiData($aiData);
         
+        // 兜底：content 组件必须有基础 HTML（根据当前语言生成预置文本）
         if ($category === 'content' && (empty($aiData['html_content']) || !is_string($aiData['html_content']))) {
-            throw new \InvalidArgumentException((string)__('AI 组件缺少必需的 html_content 字段'));
+            $aiData['html_content'] = '<div class="ai-empty">' . __('AI content placeholder') . '</div>';
         }
         
         // 2. 验证每个字段
@@ -427,27 +428,14 @@ class FrameworkBuilder
         $replacements = [];
         
         // 基本组件信息
-        $componentName = $componentInfo['name'] ?? 'AI Generated Component';
-        $replacements['COMPONENT_NAME'] = $this->sanitizeMetadataValue($componentName, 'AI Generated Component', 120);
-        $replacements['COMPONENT_NAME_EN'] = $this->sanitizeMetadataValue(
-            $componentInfo['name_en'] ?? $this->generateEnglishName((string)$componentName),
-            'AI Component',
-            120
-        );
-        $replacements['COMPONENT_DESC'] = $this->sanitizeMetadataValue(
-            $componentInfo['description'] ?? 'AI generated PageBuilder component',
-            'AI generated PageBuilder component',
-            240
-        );
+        $replacements['COMPONENT_NAME'] = $componentInfo['name'] ?? 'AI Generated Component';
+        $replacements['COMPONENT_NAME_EN'] = $componentInfo['name_en'] ?? $this->generateEnglishName($componentInfo['name'] ?? '');
+        $replacements['COMPONENT_DESC'] = $componentInfo['description'] ?? '';
         $replacements['CATEGORY'] = $category;
         $replacements['WRAPPER_TAG'] = $category === 'header' ? 'header' : ($category === 'footer' ? 'footer' : 'section');
         
-        // AI生成的代码 - 处理 extra_fields 可能是数组或字符串的情况
-        $extraFields = $aiData['extra_fields'] ?? '';
-        if (is_array($extraFields)) {
-            $extraFields = json_encode($extraFields, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-        }
-        $replacements['EXTRA_FIELDS'] = $this->formatExtraFields($extraFields);
+        // AI生成的代码
+        $replacements['EXTRA_FIELDS'] = $this->formatExtraFields($aiData['extra_fields'] ?? '');
         // 注入前再次移除含 { } 的行，避免 try{ {{PHP_VARIABLES}} } 内出现未闭合大括号导致 Parse error on line N
         $pv = $aiData['php_variables'] ?? '';
         $pvLines = explode("\n", str_replace("\r\n", "\n", $pv));
@@ -466,9 +454,9 @@ class FrameworkBuilder
             }
         }
         $replacements['PHP_VARIABLES'] = implode("\n", $pvSafe);
-        $replacements['CSS_EXTRA'] = $this->prepareCssReplacement((string)($aiData['css_extra'] ?? ''));
-        $replacements['CSS_RESPONSIVE'] = $this->prepareCssReplacement((string)($aiData['css_responsive'] ?? ''));
-        $replacements['CSS_CONTENT'] = $this->prepareCssReplacement((string)($aiData['css_content'] ?? ''));
+        $replacements['CSS_EXTRA'] = $aiData['css_extra'] ?? '';
+        $replacements['CSS_RESPONSIVE'] = $aiData['css_responsive'] ?? '';
+        $replacements['CSS_CONTENT'] = $aiData['css_content'] ?? '';
         $replacements['HTML_CONTENT'] = $aiData['html_content'] ?? '';
         $replacements['HTML_EXTRA'] = $aiData['html_extra'] ?? '';
         $replacements['HTML_EXTRA_COLUMN'] = $aiData['html_extra_column'] ?? '';
@@ -476,39 +464,6 @@ class FrameworkBuilder
         $replacements['JS_CONTENT'] = $aiData['js_content'] ?? '';
         
         return $replacements;
-    }
-
-    private function prepareCssReplacement(string $css): string
-    {
-        if (trim($css) === '') {
-            return '';
-        }
-
-        return preg_replace('/#componentId\b/i', '#<?= $componentId ?>', $css) ?? $css;
-    }
-
-    private function sanitizeMetadataValue(mixed $value, string $fallback, int $maxLength): string
-    {
-        if (!\is_scalar($value)) {
-            return $fallback;
-        }
-
-        $text = (string)$value;
-        $text = \str_replace(["\r\n", "\r"], "\n", $text);
-        $text = \preg_replace('/<\?(?:php|=)?|\?>|\*\//i', ' ', $text) ?? $text;
-        $text = \preg_replace('/@(?:component|fields)_(?:start|end)\b/i', ' ', $text) ?? $text;
-        $text = \preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]+/', ' ', $text) ?? $text;
-        $text = \preg_replace('/\s+/u', ' ', $text) ?? $text;
-        $text = \trim($text);
-        if ($text === '') {
-            $text = $fallback;
-        }
-
-        if (\function_exists('mb_strlen') && \function_exists('mb_substr')) {
-            return \mb_strlen($text) > $maxLength ? \mb_substr($text, 0, $maxLength) : $text;
-        }
-
-        return \strlen($text) > $maxLength ? \substr($text, 0, $maxLength) : $text;
     }
     
     /**
@@ -530,8 +485,6 @@ class FrameworkBuilder
         foreach ($lines as $line) {
             $line = trim($line);
             if (empty($line)) continue;
-            $line = $this->sanitizeMetadataValue($line, '', 300);
-            if ($line === '') continue;
             
             // 如果不是以 group: 或字段名开头，添加 * 前缀
             if (!preg_match('/^(group:|[a-z_]+\.)/', $line)) {

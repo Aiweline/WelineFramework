@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service\AI;
 
 use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\BuiltinSkillProvider;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\CustomSkillProvider;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillNormalizer;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillSelectionResolver;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillSnapshotBuilder;
 use PHPUnit\Framework\TestCase;
 
 final class AiSiteSkillRegistryTest extends TestCase
@@ -106,5 +111,172 @@ final class AiSiteSkillRegistryTest extends TestCase
         self::assertStringContainsString('CLAUDE-DESIGN HARD RULES', $prompt);
         self::assertStringContainsString('Return JSON only.', $prompt);
         self::assertSame($prompt, $second);
+    }
+
+    public function testBuildSkillSnapshotsDefaultsToClaudeDesign(): void
+    {
+        $registry = new AiSiteSkillRegistry();
+
+        $snapshots = $registry->buildSkillSnapshots([]);
+
+        self::assertCount(1, $snapshots);
+        self::assertSame('claude-design', $snapshots[0]['code']);
+        self::assertSame('builtin_file', $snapshots[0]['source']);
+        self::assertNotSame('', $snapshots[0]['normalized_body']);
+        self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $snapshots[0]['body_hash']);
+    }
+
+    public function testCustomSkillSnapshotUsesNormalizedBodyAndHash(): void
+    {
+        $normalizer = new SkillNormalizer();
+        $customProvider = new CustomSkillProvider(null, [
+            'conversion-copy' => [
+                'code' => 'conversion-copy',
+                'name' => 'Conversion Copy',
+                'description' => 'Write specific offer copy.',
+                'body' => "Line one\r\n\r\n\r\n\r\nLine two\r\n",
+                'status' => 'active',
+                'source' => 'custom_db',
+                'local_path' => '',
+                'abs_path' => '',
+                'exists' => true,
+            ],
+        ]);
+        $resolver = new SkillSelectionResolver(new BuiltinSkillProvider($normalizer), $customProvider);
+        $registry = new AiSiteSkillRegistry(
+            $normalizer,
+            null,
+            $customProvider,
+            $resolver,
+            new SkillSnapshotBuilder($resolver, $normalizer)
+        );
+
+        $snapshots = $registry->buildSkillSnapshots(['conversion-copy']);
+
+        self::assertSame('conversion-copy', $snapshots[0]['code']);
+        self::assertSame("Line one\n\n\nLine two", $snapshots[0]['normalized_body']);
+        self::assertSame(\hash('sha256', "Line one\n\n\nLine two"), $snapshots[0]['body_hash']);
+    }
+
+    public function testSelectedCustomSkillBodyIsInjectedIntoPromptGuide(): void
+    {
+        $customProvider = new CustomSkillProvider(null, [
+            'conversion-copy' => [
+                'code' => 'conversion-copy',
+                'name' => 'Conversion Copy',
+                'description' => 'Write offer copy.',
+                'body' => 'Always use direct offer copy with a measurable promise.',
+                'status' => 'active',
+                'source' => 'custom_db',
+                'exists' => true,
+            ],
+        ]);
+        $resolver = new SkillSelectionResolver(new BuiltinSkillProvider(), $customProvider);
+        $registry = new AiSiteSkillRegistry(
+            null,
+            null,
+            $customProvider,
+            $resolver,
+            new SkillSnapshotBuilder($resolver)
+        );
+
+        $payload = \implode("\n", $registry->buildPromptGuideLines('stage1', ['conversion-copy']));
+
+        self::assertStringContainsString('Skill code: conversion-copy', $payload);
+        self::assertStringContainsString('Always use direct offer copy with a measurable promise.', $payload);
+    }
+
+    public function testPromptGuideForScopePrefersFrozenSkillSnapshot(): void
+    {
+        $customProvider = new CustomSkillProvider(null, [
+            'conversion-copy' => [
+                'code' => 'conversion-copy',
+                'name' => 'Conversion Copy',
+                'description' => 'Current DB version.',
+                'body' => 'CURRENT DB BODY SHOULD NOT BE USED.',
+                'status' => 'active',
+                'source' => 'custom_db',
+                'exists' => true,
+            ],
+        ]);
+        $resolver = new SkillSelectionResolver(new BuiltinSkillProvider(), $customProvider);
+        $registry = new AiSiteSkillRegistry(
+            null,
+            null,
+            $customProvider,
+            $resolver,
+            new SkillSnapshotBuilder($resolver)
+        );
+
+        $payload = \implode("\n", $registry->buildPromptGuideLinesForScope('stage2', [
+            'plan_workbench' => [
+                'contract_context' => [
+                    'selected_skill_codes' => ['conversion-copy'],
+                    'skill_snapshots' => [[
+                        'code' => 'conversion-copy',
+                        'name' => 'Conversion Copy',
+                        'description' => 'Frozen version.',
+                        'source' => 'custom_db',
+                        'normalized_body' => 'FROZEN SNAPSHOT BODY MUST BE USED.',
+                        'body_hash' => \hash('sha256', 'FROZEN SNAPSHOT BODY MUST BE USED.'),
+                    ]],
+                ],
+            ],
+        ]));
+
+        self::assertStringContainsString('FROZEN SNAPSHOT BODY MUST BE USED.', $payload);
+        self::assertStringNotContainsString('CURRENT DB BODY SHOULD NOT BE USED.', $payload);
+    }
+
+    public function testDisabledOrMissingSkillCannotBeSelectedForSnapshot(): void
+    {
+        $customProvider = new CustomSkillProvider(null, [
+            'disabled-skill' => [
+                'code' => 'disabled-skill',
+                'name' => 'Disabled',
+                'description' => '',
+                'body' => 'Disabled body',
+                'status' => 'disabled',
+                'source' => 'custom_db',
+                'exists' => true,
+            ],
+        ]);
+        $resolver = new SkillSelectionResolver(new BuiltinSkillProvider(), $customProvider);
+        $registry = new AiSiteSkillRegistry(
+            null,
+            null,
+            $customProvider,
+            $resolver,
+            new SkillSnapshotBuilder($resolver)
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('disabled');
+
+        $registry->buildSkillSnapshots(['disabled-skill']);
+    }
+
+    public function testCustomSkillCannotOverrideBuiltinCodeInMergedRegistry(): void
+    {
+        $registry = new AiSiteSkillRegistry(
+            null,
+            null,
+            new CustomSkillProvider(null, [
+                'claude-design' => [
+                    'code' => 'claude-design',
+                    'name' => 'Hijack',
+                    'description' => 'Should not replace builtin.',
+                    'body' => 'Custom body',
+                    'status' => 'active',
+                    'source' => 'custom_db',
+                    'exists' => true,
+                ],
+            ])
+        );
+
+        $skills = $registry->listAvailableSkills();
+
+        self::assertSame('builtin_file', $skills['claude-design']['source'] ?? null);
+        self::assertNotSame('Hijack', $skills['claude-design']['name'] ?? null);
     }
 }

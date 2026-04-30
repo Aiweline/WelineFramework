@@ -16,16 +16,16 @@
         <h4 style="margin: 0; color: #89b4fa;">SSE连接调试面板</h4>
         <button onclick="document.getElementById('pb-ai-sse-debug-panel').style.display='none'" style="background: #45475a; border: none; color: #cdd6f4; padding: 5px 10px; border-radius: 4px; cursor: pointer;">✕</button>
     </div>
-    
+
     <div style="margin-bottom: 15px;">
         <button onclick="console.log(window.getPbAiSseHealthReport())" style="background: #45475a; border: none; color: #cdd6f4; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-right: 5px;">查看健康报告</button>
         <button onclick="window.exportPbAiSseLogs()" style="background: #45475a; border: none; color: #cdd6f4; padding: 5px 10px; border-radius: 4px; cursor: pointer;">导出日志</button>
     </div>
-    
+
     <div id="pb-ai-sse-stats" style="background: #313244; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
         <div>加载中...</div>
     </div>
-    
+
     <div id="pb-ai-sse-logs" style="background: #181825; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;">
         <div>日志将在这里显示...</div>
     </div>
@@ -147,7 +147,7 @@
                 enableDetailedLogging: true,
                 maxLogEntries: 500
             });
-            
+
             // 统一收敛到 workspace API
             workspaceApi.observability = workspaceApi.observability && typeof workspaceApi.observability === 'object'
                 ? workspaceApi.observability
@@ -155,9 +155,9 @@
             workspaceApi.observability.sseLogger = sseLogger;
             // 向后兼容
             window.pbAiWorkspaceSseLogger = sseLogger;
-            
+
             console.info('[SSE] P0可观测性增强已初始化');
-            
+
             if (sseLogger) {
                 sseLogger.log('info', 'P0可观测性增强初始化完成', {
                     event: 'observability_initialized',

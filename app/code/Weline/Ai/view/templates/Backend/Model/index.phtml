@@ -245,6 +245,9 @@ $currentSearch = $currentSearch ?? '';
                                                 <span class="badge bg-light text-dark border">
                                                     <lang>版本</lang> <?= $model['version'] ?? '' ?>
                                                 </span>
+                                                <span class="badge bg-primary-subtle text-primary border ms-1">
+                                                    <?= htmlspecialchars((string)($model['primary_modality'] ?? 'text2text'), ENT_QUOTES) ?>
+                                                </span>
                                                 <?php if (!empty($model['is_copied'])): ?>
                                                     <span class="badge bg-warning text-dark ms-1">
                                                         <i class="mdi mdi-content-copy"></i> <lang>复制</lang>
@@ -437,13 +440,13 @@ $currentSearch = $currentSearch ?? '';
                                                 />
                                                 <?php $canDelete = !empty($model['is_copied']) || !empty($model['is_custom_model']); ?>
                                                 <?php if ($canDelete): ?>
-                                                <button type="button" class="btn btn-outline-danger" 
-                                                        onclick="deleteModel(<?= $model['id'] ?? 0 ?>, '<?= $model['model_code'] ?? '' ?>', true)" 
+                                                <button type="button" class="btn btn-outline-danger"
+                                                        onclick="deleteModel(<?= $model['id'] ?? 0 ?>, '<?= $model['model_code'] ?? '' ?>', true)"
                                                         title="<?= __('删除') ?>">
                                                     <i class="mdi mdi-delete"></i>
                                                 </button>
                                                 <?php else: ?>
-                                                <button type="button" class="btn btn-outline-danger" 
+                                                <button type="button" class="btn btn-outline-danger"
                                                         disabled
                                                         title="<?= __('受保护模型不能删除') ?>">
                                                     <i class="mdi mdi-delete-off"></i>

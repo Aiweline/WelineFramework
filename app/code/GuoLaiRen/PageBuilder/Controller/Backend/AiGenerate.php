@@ -9,11 +9,8 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Controller\Backend;
 
-use GuoLaiRen\PageBuilder\Helper\PageBuilderUrlCacheInvalidator;
 use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Style;
-use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
-use GuoLaiRen\PageBuilder\Service\AiSiteVirtualLayoutService;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
@@ -26,7 +23,6 @@ use GuoLaiRen\PageBuilder\Service\AI\CodeValidator;
 use GuoLaiRen\PageBuilder\Service\AI\CodeFixer;
 use GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer;
 use GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser;
-use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
 
 /**
  * AI内容生成控制器
@@ -156,7 +152,7 @@ class AiGenerate extends BackendController
         
         if (!$this->request->isPost()) {
             // 记录详细的请求方法信息用于调试
-            $actualMethod = \w_env('request.method', 'UNKNOWN');
+            $actualMethod = $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN';
             w_log_error("[AiGenerate::pageContent] Request method check failed. isPost()=false, actual REQUEST_METHOD={$actualMethod}");
             
             return json_encode([
@@ -278,12 +274,12 @@ class AiGenerate extends BackendController
                 $page,
                 $targetLocale
             );
-            $prompt = $this->withPageBuilderSkillGuide($prompt, 'legacy_content');
 
-            // 调用AI服务（跟随页面选择的语言生成）
+            // 调用AI服务
             /** @var AiService $aiService */
             $aiService = ObjectManager::getInstance(AiService::class);
-            $locale = !empty($targetLocale) ? $targetLocale : (State::getLang() ?: 'zh_Hans_CN');
+            
+            $locale = State::getLang() ?: 'zh_Hans_CN';
             $response = $aiService->generate(
                 $prompt,
                 null, // 自动选择模型
@@ -316,197 +312,6 @@ class AiGenerate extends BackendController
     }
 
     /**
-     * 生成页面内容（SSE 流式，用于编辑/添加页面）
-     *
-     * POST /pagebuilder/backend/ai-generate/page-content-stream
-     *
-     * 参数与 pageContent 相同。响应为 text/event-stream，全过程流式输出：
-     * - start: 开始
-     * - progress: 进度消息
-     * - chunk: AI 逐块返回内容（content、total_length）
-     * - done: 成功，data 为解析后的生成结果
-     * - error: 失败，message 为错误信息
-     */
-    public function pageContentStream(): void
-    {
-        @set_time_limit(0);
-        @ignore_user_abort(true);
-
-        $sse = new \Weline\Framework\Http\Sse\SseWriter();
-        $sse->start();
-
-        try {
-            $input = function (string $key, mixed $default = '') {
-                $post = $this->request->getPost($key, null);
-                if ($post !== null) {
-                    return $post;
-                }
-                return $this->request->getGet($key, $default);
-            };
-
-            $description = trim((string)$input('description', ''));
-            $pageId = (int) $input('page_id', 0);
-
-            $page = null;
-            if ($pageId > 0) {
-                $page = clone $this->pageModel;
-                $page->load($pageId);
-                if (!$page->getId()) {
-                    $sse->sendEvent('error', ['message' => __('页面不存在')]);
-                    $sse->close();
-                    return;
-                }
-                // 生成前先保存 ai_description 到数据库
-                $aiDesc = trim((string)$input('description', ''));
-                if ($aiDesc !== '') {
-                    $page->setData(PageModel::schema_fields_AI_DESCRIPTION, $aiDesc)->save();
-                    $this->invalidatePageCache((int)$page->getId());
-                }
-            }
-
-            if (empty($description) && $page && $page->getId()) {
-                $pageTitle = $page->getData('title') ?: '';
-                $pageMetaTitle = $page->getData('meta_title') ?: '';
-                $pageMetaDescription = $page->getData('meta_description') ?: '';
-                $pageContent = $page->getData('content') ?: '';
-                $descriptionParts = [];
-                if ($pageTitle) {
-                    $descriptionParts[] = __('页面标题：%{1}', [$pageTitle]);
-                }
-                if ($pageMetaTitle) {
-                    $descriptionParts[] = __('SEO标题：%{1}', [$pageMetaTitle]);
-                }
-                if ($pageMetaDescription) {
-                    $descriptionParts[] = __('SEO描述：%{1}', [$pageMetaDescription]);
-                }
-                if ($pageContent) {
-                    $contentText = strip_tags($pageContent);
-                    $contentSummary = mb_strlen($contentText) > 200 ? mb_substr($contentText, 0, 200) . '...' : $contentText;
-                    if ($contentSummary) {
-                        $descriptionParts[] = __('当前页面内容摘要：%{1}', [$contentSummary]);
-                    }
-                }
-                if (!empty($descriptionParts)) {
-                    $description = implode("\n", $descriptionParts) . "\n\n" . __('请基于以上信息优化和完善页面内容。');
-                }
-            }
-
-            if (empty($description)) {
-                $sse->sendEvent('error', ['message' => __('请输入页面描述，或确保页面有标题、SEO信息或内容')]);
-                $sse->close();
-                return;
-            }
-
-            $sse->sendEvent('start', ['message' => __('开始生成页面内容...')]);
-
-            $pageType = (string)$input('page_type', '');
-            if (empty($pageType) && $page) {
-                $pageType = $page->getData('type') ?: 'page';
-            } else {
-                $pageType = $pageType ?: 'page';
-            }
-            $title = (string)$input('title', '');
-            if (empty($title) && $page) {
-                $title = $page->getData('title') ?: '';
-            }
-            $metaTitle = (string)$input('meta_title', '');
-            if (empty($metaTitle) && $page) {
-                $metaTitle = $page->getData('meta_title') ?: '';
-            }
-            $metaDescription = (string)$input('meta_description', '');
-            if (empty($metaDescription) && $page) {
-                $metaDescription = $page->getData('meta_description') ?: '';
-            }
-            $metaKeywords = (string)$input('meta_keywords', '');
-            if (empty($metaKeywords) && $page) {
-                $metaKeywords = $page->getData('meta_keywords') ?: '';
-            }
-            $handle = (string)$input('handle', '');
-            if (empty($handle) && $page) {
-                $handle = $page->getData('handle') ?: '';
-            }
-            $styleCode = (string)$input('style_code', '');
-            if (empty($styleCode) && $page) {
-                $styleCode = $page->getData('style') ?: '';
-            }
-            $targetLocale = (string)$input('default_locale', '');
-            if (empty($targetLocale) && $page) {
-                $targetLocale = $page->getData(PageModel::schema_fields_DEFAULT_LOCALE) ?: '';
-            }
-
-            $prompt = $this->buildPageContentPrompt(
-                $description,
-                $pageType,
-                $title,
-                $metaTitle,
-                $metaDescription,
-                $metaKeywords,
-                $handle,
-                $styleCode,
-                $page,
-                $targetLocale
-            );
-            $prompt = $this->withPageBuilderSkillGuide($prompt, 'legacy_content');
-
-            $sse->sendEvent('progress', ['message' => __('正在调用 AI 生成...')]);
-
-            /** @var AiService $aiService */
-            $aiService = ObjectManager::getInstance(AiService::class);
-            $locale = !empty($targetLocale) ? $targetLocale : (State::getLang() ?: 'zh_Hans_CN');
-            $fullContent = '';
-            $chunkBuffer = '';
-            $streamError = null;
-
-            try {
-                $aiService->generateStream(
-                    $prompt,
-                    function (string $chunk) use ($sse, &$fullContent, &$chunkBuffer): bool {
-                        $fullContent .= $chunk;
-                        $chunkBuffer .= $chunk;
-                        if ($this->shouldFlushSseChunkBuffer($chunkBuffer)) {
-                            $this->flushSseChunkBuffer($sse, $chunkBuffer, \strlen($fullContent));
-                        }
-                        return $sse->isAlive();
-                    },
-                    null,
-                    'pagebuilder_content_generation',
-                    $locale,
-                    $this->withStructuredJsonStreamParams()
-                );
-                if ($chunkBuffer !== '') {
-                    $this->flushSseChunkBuffer($sse, $chunkBuffer, \strlen($fullContent), true);
-                }
-            } catch (\Throwable $e) {
-                $streamError = $this->sanitizeErrorMessage($e->getMessage());
-                $sse->sendEvent('error', ['message' => $streamError]);
-                $sse->close();
-                return;
-            }
-
-            if (trim($fullContent) === '') {
-                $msg = $streamError ?: __('AI 未返回任何内容，请检查 AI 服务配置或网络连接');
-                $sse->sendEvent('error', ['message' => $msg]);
-                $sse->close();
-                return;
-            }
-
-            $sse->sendEvent('progress', ['message' => __('解析生成结果...')]);
-
-            try {
-                $data = $this->parseJsonResponse($fullContent);
-                $sse->sendEvent('done', ['data' => $data]);
-            } catch (\Throwable $e) {
-                $sse->sendEvent('error', ['message' => $this->sanitizeErrorMessage($e->getMessage())]);
-            }
-        } catch (\Throwable $e) {
-            $errorMessage = $this->sanitizeErrorMessage($e->getMessage());
-            $sse->sendEvent('error', ['message' => $errorMessage]);
-        }
-
-        $sse->close();
-    }
-
-    /**
      * 生成模板配置内容（用于可视化编辑器）
      * 
      * POST /pagebuilder/backend/ai-generate/template-config
@@ -527,11 +332,9 @@ class AiGenerate extends BackendController
 
         try {
             $pageId = (int)$this->request->getPost('page_id', 0);
-            $publicId = \trim((string)$this->request->getPost('public_id', ''));
-            $pageType = \trim((string)$this->request->getPost('page_type', ''));
             $styleCode = trim($this->request->getPost('style_code', ''));
 
-            if ($pageId <= 0 && ($publicId === '' || $pageType === '')) {
+            if ($pageId <= 0) {
                 $this->request->getResponse()->setHeader('Content-Type', 'application/json');
                 return json_encode([
                     'success' => false,
@@ -548,21 +351,10 @@ class AiGenerate extends BackendController
             }
 
             // 加载页面数据
-            $context = $this->resolveComponentGenerationContext($pageId, $publicId, $pageType, $styleCode);
-            if ($context === null) {
-                $this->request->getResponse()->setHeader('Content-Type', 'application/json');
-                return json_encode([
-                    'success' => false,
-                    'message' => $pageId > 0 ? __('页面不存在') : __('会话不存在或无访问权限')
-                ]);
-            }
+            $page = clone $this->pageModel;
+            $page->load($pageId);
 
-            /** @var PageModel $page */
-            $page = $context['page'];
-            $layoutConfig = $context['layout_config'];
-            $styleCode = (string)$context['style_code'];
-
-            if (!$context['is_virtual'] && !$page->getId()) {
+            if (!$page->getId()) {
                 $this->request->getResponse()->setHeader('Content-Type', 'application/json');
                 return json_encode([
                     'success' => false,
@@ -583,7 +375,7 @@ class AiGenerate extends BackendController
             }
 
             // 获取模板的文字配置项
-            $textConfigs = $this->getTextConfigsFromLayout($styleCode, $layoutConfig);
+            $textConfigs = $this->getTextConfigs($styleCode, $pageId);
 
             // 构建提示词
             $prompt = $this->buildTemplateConfigPrompt(
@@ -591,7 +383,6 @@ class AiGenerate extends BackendController
                 $style,
                 $textConfigs
             );
-            $prompt = $this->withPageBuilderSkillGuide($prompt, 'legacy_content');
 
             // 调用AI服务
             /** @var AiService $aiService */
@@ -653,14 +444,12 @@ class AiGenerate extends BackendController
 
         try {
             $pageId = (int)$this->request->getPost('page_id', 0);
-            $publicId = \trim((string)$this->request->getPost('public_id', ''));
-            $pageType = \trim((string)$this->request->getPost('page_type', ''));
             $styleCode = trim($this->request->getPost('style_code', ''));
             $componentCode = trim($this->request->getPost('component_code', ''));
             $region = trim($this->request->getPost('region', ''));
             $index = (int)$this->request->getPost('index', 0);
 
-            if ($pageId <= 0 && ($publicId === '' || $pageType === '')) {
+            if ($pageId <= 0) {
                 $this->request->getResponse()->setHeader('Content-Type', 'application/json');
                 return json_encode([
                     'success' => false,
@@ -685,21 +474,10 @@ class AiGenerate extends BackendController
             }
 
             // 加载页面数据
-            $context = $this->resolveComponentGenerationContext($pageId, $publicId, $pageType, $styleCode);
-            if ($context === null) {
-                $this->request->getResponse()->setHeader('Content-Type', 'application/json');
-                return json_encode([
-                    'success' => false,
-                    'message' => $pageId > 0 ? __('页面不存在') : __('会话不存在或无访问权限')
-                ]);
-            }
+            $page = clone $this->pageModel;
+            $page->load($pageId);
 
-            /** @var PageModel $page */
-            $page = $context['page'];
-            $layoutConfig = $context['layout_config'];
-            $styleCode = (string)$context['style_code'];
-
-            if (!$context['is_virtual'] && !$page->getId()) {
+            if (!$page->getId()) {
                 $this->request->getResponse()->setHeader('Content-Type', 'application/json');
                 return json_encode([
                     'success' => false,
@@ -707,14 +485,13 @@ class AiGenerate extends BackendController
                 ]);
             }
 
-            $metadata = $this->resolveComponentMetadataForGeneration(
-                $context,
-                $styleCode,
-                $componentCode,
-                $region,
-                $index
-            );
-            if ($metadata === null) {
+            // 获取 LayoutAssembler 服务
+            $layoutAssembler = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\LayoutAssembler::class);
+            
+            // 获取组件元数据（包含配置字段）
+            $metadata = $layoutAssembler->getComponentMetadata($styleCode, $componentCode);
+            
+            if (!$metadata) {
                 $this->request->getResponse()->setHeader('Content-Type', 'application/json');
                 return json_encode([
                     'success' => false,
@@ -735,6 +512,7 @@ class AiGenerate extends BackendController
 
             // 获取组件当前配置（如果有）
             $currentConfig = [];
+            $layoutConfig = $page->getFullLayoutConfig();
             if (!empty($region) && isset($layoutConfig[$region]) && isset($layoutConfig[$region][$index])) {
                 $componentInLayout = $layoutConfig[$region][$index];
                 if ($componentInLayout['code'] === $componentCode) {
@@ -742,38 +520,31 @@ class AiGenerate extends BackendController
                 }
             }
 
-            $userPrompt = trim((string) $this->request->getPost('ai_prompt', ''));
-            // 构建提示词（传入区域、序号及用户补充提示词）
+            // 构建提示词
             $prompt = $this->buildComponentConfigPrompt(
                 $page,
                 $metadata,
                 $textConfigs,
-                $currentConfig,
-                $region,
-                $index,
-                $userPrompt
+                $currentConfig
             );
-            $prompt = $this->withPageBuilderSkillGuide($prompt, 'legacy_component_config');
 
-            // 调用AI服务：生成语言与页面默认语言一致；传入 meta 供适配器提取格式与条数
+            // 调用AI服务
             /** @var AiService $aiService */
             $aiService = ObjectManager::getInstance(AiService::class);
-            $pageLocale = $page->getData(PageModel::schema_fields_DEFAULT_LOCALE) ?: '';
-            $locale = $pageLocale !== '' ? $pageLocale : (State::getLang() ?: 'zh_Hans_CN');
+            
+            $locale = State::getLang() ?: 'zh_Hans_CN';
             $response = $aiService->generate(
                 $prompt,
                 null, // 自动选择模型
                 'pagebuilder_content_generation', // 场景代码：页面构建器内容生成
                 $locale,
-                ['component_meta_text_configs' => $textConfigs], // 供适配器按 meta 提取格式与条数
+                [],
                 null, // userId
                 true  // isBackend
             );
 
-            // 解析JSON响应，并将列表类配置的数组规范化为多行竖线字符串
+            // 解析JSON响应
             $data = $this->parseJsonResponse($response);
-            $data = $this->normalizeComponentConfigListFields($data, $textConfigs);
-            $data = $this->ensureUseCustomLinksWhenNavGenerated($data);
 
             $this->request->getResponse()->setHeader('Content-Type', 'application/json');
             return json_encode([
@@ -790,262 +561,6 @@ class AiGenerate extends BackendController
                 'message' => $errorMessage
             ]);
         }
-    }
-
-    /**
-     * 组件配置生成（SSE 流式）
-     *
-     * POST /pagebuilder/backend/ai-generate/component-config-stream
-     *
-     * 参数与 componentConfig 相同。响应为 text/event-stream：
-     * - start: 开始
-     * - progress: 进度消息
-     * - chunk: AI 逐块返回内容（content、total_length）
-     * - thinking: 模型推理/思考过程逐块（content、total_length），仅当供应商流式返回 reasoning 时有数据
-     * - done: 成功，data 为解析后的配置 JSON
-     * - error: 失败，message 为错误信息
-     */
-    public function componentConfigStream(): void
-    {
-        @set_time_limit(0);
-        @ignore_user_abort(true);
-
-        $sse = new \Weline\Framework\Http\Sse\SseWriter();
-        $sse->start();
-
-        try {
-            if (!$this->request->isPost()) {
-                $sse->sendEvent('error', ['message' => __('仅支持POST请求')]);
-                $sse->close();
-                return;
-            }
-
-            $pageId = (int)$this->request->getPost('page_id', 0);
-            $publicId = \trim((string)$this->request->getPost('public_id', ''));
-            $pageType = \trim((string)$this->request->getPost('page_type', ''));
-            $styleCode = trim($this->request->getPost('style_code', ''));
-            $componentCode = trim($this->request->getPost('component_code', ''));
-            $region = trim($this->request->getPost('region', ''));
-            $index = (int)$this->request->getPost('index', 0);
-
-            if ($pageId <= 0 && ($publicId === '' || $pageType === '')) {
-                $sse->sendEvent('error', ['message' => __('页面ID不能为空')]);
-                $sse->close();
-                return;
-            }
-            if (empty($styleCode)) {
-                $sse->sendEvent('error', ['message' => __('模板代码不能为空')]);
-                $sse->close();
-                return;
-            }
-            if (empty($componentCode)) {
-                $sse->sendEvent('error', ['message' => __('组件代码不能为空')]);
-                $sse->close();
-                return;
-            }
-
-            $context = $this->resolveComponentGenerationContext($pageId, $publicId, $pageType, $styleCode);
-            if ($context === null) {
-                $sse->sendEvent('error', ['message' => $pageId > 0 ? __('页面不存在') : __('会话不存在或无访问权限')]);
-                $sse->close();
-                return;
-            }
-            /** @var PageModel $page */
-            $page = $context['page'];
-            $layoutConfig = $context['layout_config'];
-            $styleCode = (string)$context['style_code'];
-            if (!$context['is_virtual'] && !$page->getId()) {
-                $sse->sendEvent('error', ['message' => __('页面不存在')]);
-                $sse->close();
-                return;
-            }
-
-            $metadata = $this->resolveComponentMetadataForGeneration(
-                $context,
-                $styleCode,
-                $componentCode,
-                $region,
-                $index
-            );
-            if ($metadata === null) {
-                $sse->sendEvent('error', ['message' => __('组件不存在')]);
-                $sse->close();
-                return;
-            }
-
-            $textConfigs = $this->getComponentTextConfigs($metadata);
-            if (empty($textConfigs)) {
-                $sse->sendEvent('error', ['message' => __('此组件没有可生成的文字配置项')]);
-                $sse->close();
-                return;
-            }
-
-            $currentConfig = $this->resolveCurrentComponentConfigForGeneration(
-                $context,
-                $componentCode,
-                $region,
-                $index
-            );
-
-            $sse->sendEventAndYield('start', ['message' => __('开始生成组件配置...')]);
-
-            $context = $this->buildOperationContext($styleCode, $componentCode, $metadata, $textConfigs, $region, $index, $page);
-            $sse->sendEventAndYield('context', $context);
-
-            $unpublished = $context['unpublished_pages'] ?? [];
-            if (!empty($unpublished)) {
-                $sse->sendEventAndYield('unpublished_warning', [
-                    'message' => __('以下页面未发布，请发布后再使用或注意核对导航链接。'),
-                    'items' => $unpublished,
-                    'severity' => 'danger',
-                ]);
-            }
-
-            $sse->sendEventAndYield('progress', ['message' => __('正在构建提示词...')]);
-
-            $userPrompt = trim((string) $this->request->getPost('ai_prompt', ''));
-            $prompt = $this->buildComponentConfigPrompt(
-                $page,
-                $metadata,
-                $textConfigs,
-                $currentConfig,
-                $region,
-                $index,
-                $userPrompt
-            );
-            $prompt = $this->withPageBuilderSkillGuide($prompt, 'legacy_component_config');
-
-            // 将本次提示词通过 SSE 返回，便于排查「本站已有页面」等是否包含
-            $sse->sendEventAndYield('prompt', ['prompt' => $prompt]);
-
-            $sse->sendEventAndYield('progress', ['message' => __('正在调用 AI 生成...')]);
-
-            /** @var AiService $aiService */
-            $aiService = ObjectManager::getInstance(AiService::class);
-            $pageLocale = $page->getData(PageModel::schema_fields_DEFAULT_LOCALE) ?: '';
-            $locale = $pageLocale !== '' ? $pageLocale : (State::getLang() ?: 'zh_Hans_CN');
-            $fullContent = '';
-            $chunkBuffer = '';
-            $thinkingBuffer = '';
-            $streamError = null;
-            $chunkCount = 0;
-            $traceSteps = [];
-
-            $traceSteps[] = sprintf('[1] %s：scenario=pagebuilder_content_generation, locale=%s, prompt_length=%d', __('准备调用 AI'), $locale, \strlen($prompt));
-            $sse->sendEventAndYield('trace', ['step' => 1, 'message' => $traceSteps[0], 'display_text' => implode("\n", $traceSteps)]);
-
-            $beforeAi = microtime(true);
-            try {
-                $aiService->generateStream(
-                    $prompt,
-                    function (string $chunk) use ($sse, &$fullContent, &$chunkBuffer, &$chunkCount): bool {
-                        $fullContent .= $chunk;
-                        $chunkBuffer .= $chunk;
-                        if ($this->shouldFlushSseChunkBuffer($chunkBuffer)) {
-                            $chunkCount++;
-                            $this->flushSseChunkBuffer($sse, $chunkBuffer, \strlen($fullContent));
-                        }
-                        return $sse->isAlive();
-                    },
-                    null,
-                    'pagebuilder_content_generation',
-                    $locale,
-                    $this->withStructuredJsonStreamParams([
-                        'component_meta_text_configs' => $textConfigs, // 供适配器按 meta 提取格式与条数
-                        'reasoning_callback' => function (string $rChunk) use ($sse, &$thinkingBuffer): bool {
-                            if ($rChunk === '') {
-                                return $sse->isAlive();
-                            }
-                            $thinkingBuffer .= $rChunk;
-                            $sse->sendEventAndYield('thinking', [
-                                'content' => $rChunk,
-                                'total_length' => \strlen($thinkingBuffer),
-                            ]);
-                            return $sse->isAlive();
-                        },
-                    ], true)
-                );
-                if ($chunkBuffer !== '') {
-                    $chunkCount++;
-                    $this->flushSseChunkBuffer($sse, $chunkBuffer, \strlen($fullContent), true);
-                }
-            } catch (\Throwable $e) {
-                $streamError = $this->sanitizeErrorMessage($e->getMessage());
-                $traceSteps[] = sprintf('[2] %s：%s', __('AI 调用异常'), $streamError);
-                $sse->sendEventAndYield('trace', ['step' => 2, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps), 'error' => $streamError]);
-                $sse->sendEventAndYield('error', ['message' => $streamError]);
-                $sse->close();
-                return;
-            }
-
-            $afterAi = microtime(true);
-            $elapsedMs = (int) (($afterAi - $beforeAi) * 1000);
-            $traceSteps[] = sprintf('[2] %s：chunk_count=%d, total_length=%d, elapsed_ms=%d, raw_preview=%s', __('AI 流式返回完毕'), $chunkCount, \strlen($fullContent), $elapsedMs, mb_substr(trim($fullContent), 0, 300));
-            $sse->sendEventAndYield('trace', ['step' => 2, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps), 'chunk_count' => $chunkCount, 'total_length' => \strlen($fullContent), 'elapsed_ms' => $elapsedMs]);
-
-            if (trim($fullContent) === '') {
-                $traceSteps[] = '[3] ' . __('AI 返回内容为空');
-                $sse->sendEventAndYield('trace', ['step' => 3, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
-                $msg = $streamError ?: __('AI 未返回任何内容，请检查 AI 服务配置或网络连接');
-                $sse->sendEventAndYield('error', ['message' => $msg]);
-                $sse->close();
-                return;
-            }
-
-            $sse->sendEventAndYield('progress', ['message' => __('解析生成结果...')]);
-
-            try {
-                $data = $this->parseJsonResponse($fullContent);
-                $traceSteps[] = '[3] ' . __('解析 JSON 成功') . '：keys=' . implode(', ', array_keys($data));
-                $sse->sendEventAndYield('trace', ['step' => 3, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
-
-                $data = $this->normalizeComponentConfigListFields($data, $textConfigs);
-                $data = $this->ensureUseCustomLinksWhenNavGenerated($data);
-                $traceSteps[] = '[4] ' . __('合并并下发配置') . '：keys=' . implode(', ', array_keys($data));
-                $sse->sendEventAndYield('trace', ['step' => 4, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
-
-                $sse->sendEventAndYield('done', ['data' => $data]);
-            } catch (\Throwable $e) {
-                $traceSteps[] = '[3] ' . __('解析/合并异常') . '：' . $this->sanitizeErrorMessage($e->getMessage());
-                $sse->sendEventAndYield('trace', ['step' => 3, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
-                $sse->sendEventAndYield('error', ['message' => $this->sanitizeErrorMessage($e->getMessage())]);
-            }
-        } catch (\Throwable $e) {
-            $sse->sendEventAndYield('error', ['message' => $this->sanitizeErrorMessage($e->getMessage())]);
-        }
-
-        $sse->close();
-    }
-
-    /**
-     * 当 AI 生成了导航项/链接项时，自动启用「使用自定义导航链接」/「使用自定义链接组」，否则前端不生效
-     */
-    private function ensureUseCustomLinksWhenNavGenerated(array $data): array
-    {
-        foreach ($data as $key => $value) {
-            if ($value === '' || $value === null) {
-                continue;
-            }
-            $keyLower = strtolower($key);
-            if (($keyLower === 'navigation.items' || $keyLower === 'navigation.links')) {
-                $data['navigation.use_custom_links'] = 'yes';
-                break;
-            }
-        }
-        foreach ($data as $key => $value) {
-            if ($value === '' || $value === null) {
-                continue;
-            }
-            $keyLower = strtolower($key);
-            if (str_starts_with($keyLower, 'links.') && (str_contains($keyLower, 'items') || str_contains($keyLower, 'links'))) {
-                $data['links.use_custom_links'] = 'yes';
-                break;
-            }
-        }
-        if (isset($data['content.footer_links']) && $data['content.footer_links'] !== '' && $data['content.footer_links'] !== null) {
-            $data['content.use_custom_links'] = 'yes';
-        }
-        return $data;
     }
 
     /**
@@ -1090,17 +605,8 @@ class AiGenerate extends BackendController
                 }
                 
                 // 构建完整的配置 key
-                $explicitKey = '';
-                foreach (['config_key', 'key', 'full_key'] as $keyField) {
-                    if (isset($field[$keyField]) && \is_scalar($field[$keyField])) {
-                        $explicitKey = \trim((string)$field[$keyField]);
-                        if ($explicitKey !== '') {
-                            break;
-                        }
-                    }
-                }
-                $fullKey = $explicitKey !== '' ? $explicitKey : $fieldKey;
-                if ($explicitKey === '' && !str_contains($fieldKey, '.') && !empty($groupKey)) {
+                $fullKey = $fieldKey;
+                if (!str_contains($fieldKey, '.') && !empty($groupKey)) {
                     $fullKey = $groupKey . '.' . $fieldKey;
                 }
                 
@@ -1109,27 +615,13 @@ class AiGenerate extends BackendController
                     continue;
                 }
                 
-                $label = $field['label'] ?? $fieldKey;
-                $default = $field['default'] ?? '';
-                $format = $field['format'] ?? '';
-                $isListLike = $this->isListLikeConfigKey($fullKey, $label, $default);
-                $isNavOrLink = $this->isNavOrLinkConfigKey($fullKey, $label);
-                $item = [
+                $textConfigs[] = [
                     'key' => $fullKey,
-                    'label' => $label,
+                    'label' => $field['label'] ?? $fieldKey,
                     'type' => $type,
-                    'default' => $default,
+                    'default' => $field['default'] ?? '',
                     'group' => $groupKey,
-                    'is_list_like' => $isListLike,
-                    'is_nav_or_link' => $isNavOrLink,
-                    'format' => $format,
                 ];
-                if ($isListLike && $default !== '') {
-                    $lines = array_filter(preg_split('/[\r\n]+/', $default), static fn(string $l): bool => trim($l) !== '');
-                    $item['default_count'] = count($lines);
-                    $item['default_sample'] = mb_substr(implode("\n", array_slice($lines, 0, 2)), 0, 400);
-                }
-                $textConfigs[] = $item;
             }
         }
         
@@ -1165,368 +657,26 @@ class AiGenerate extends BackendController
     }
 
     /**
-     * 将列表类配置中 AI 返回的数组规范化为多行竖线字符串（与组件默认结构一致）
-     */
-    private function normalizeComponentConfigListFields(array $data, array $textConfigs): array
-    {
-        $listLikeKeys = [];
-        foreach ($textConfigs as $c) {
-            if (!empty($c['is_list_like'])) {
-                $listLikeKeys[$c['key']] = true;
-            }
-        }
-        foreach ($listLikeKeys as $key => $_) {
-            if (!isset($data[$key]) || !is_array($data[$key])) {
-                continue;
-            }
-            $rows = [];
-            foreach ($data[$key] as $item) {
-                if (is_array($item)) {
-                    $rows[] = implode('|', array_map('trim', array_values($item)));
-                } else {
-                    $rows[] = (string) $item;
-                }
-            }
-            $data[$key] = implode("\n", $rows);
-        }
-        return $data;
-    }
-
-    /**
-     * 构建「操作上下文」：当前模板、组件、meta、配置项、Header/Footer 时本站已有页面及操作说明，供 SSE 展示
-     */
-    private function buildOperationContext(
-        string $styleCode,
-        string $componentCode,
-        array $metadata,
-        array $textConfigs,
-        string $region,
-        int $index,
-        PageModel $page
-    ): array {
-        $typeNames = PageModel::getPageTypes();
-        $componentName = $metadata['name'] ?? $metadata['code'] ?? $componentCode;
-        $componentDesc = $metadata['description'] ?? '';
-        $componentRegion = $metadata['region'] ?? 'content';
-        $configFields = [];
-        foreach ($textConfigs as $c) {
-            $configFields[] = [
-                'key' => $c['key'],
-                'label' => $c['label'] ?? '',
-                'is_nav_or_link' => !empty($c['is_nav_or_link']),
-                'format' => $c['format'] ?? '',
-            ];
-        }
-
-        $sitePages = null;
-        $sitePagesNote = null;
-        $unpublishedPages = [];
-        $plan = __('将根据组件 meta 与当前配置生成各文字配置项。');
-        $regionLower = strtolower($region);
-        if ($regionLower === 'header' || $regionLower === 'footer') {
-            $siteData = $this->getExistingSitePagesList($page);
-            $sitePages = $siteData['list'] ?? [];
-            $unpublishedPages = $siteData['unpublished'] ?? [];
-            if (empty($sitePages)) {
-                $sitePagesNote = __('当前为主页时无子页面，或当前为子页时无同级页面，无法提供「本站已有页面」表。');
-                $plan = $regionLower === 'header'
-                    ? __('Header：因无已有页面表，将按组件默认示例生成导航项；生成后会自动启用「使用自定义导航链接」。')
-                    : __('Footer：因无已有页面表，将按组件默认示例生成链接；生成后会自动启用「使用自定义链接组」。');
-            } else {
-                $plan = $regionLower === 'header'
-                    ? __('Header：根据下方「本站已有页面」规划导航项，填充导航/链接类配置项（名称=>链接，一行一条），并自动启用「使用自定义导航链接」。')
-                    : __('Footer：根据下方「本站已有页面」规划多组链接，按 meta 字段含义归类归组填充，并自动启用「使用自定义链接组」。');
-            }
-        }
-
-        $lines = [
-            '========== ' . __('操作上下文') . ' ==========',
-            '',
-            __('【当前操作】') . ' ' . __('AI生成组件配置'),
-            __('【模板】') . ' ' . $styleCode,
-            __('【组件代码】') . ' ' . $componentCode,
-            __('【组件名称】') . ' ' . $componentName,
-            __('【组件描述】') . ' ' . ($componentDesc ?: '-'),
-            __('【组件区域(meta)】') . ' ' . $componentRegion,
-            __('【布局位置】') . ' ' . $region . ' / index=' . $index,
-            '',
-            '--- ' . __('组件可生成配置项（meta）') . ' ---',
-        ];
-        foreach ($configFields as $f) {
-            $navTag = $f['is_nav_or_link'] ? ' [导航/链接]' : '';
-            $lines[] = '  ' . $f['key'] . '  ' . $f['label'] . $navTag . ($f['format'] ? '  | ' . $f['format'] : '');
-        }
-        $lines[] = '';
-        $lines[] = '--- ' . __('本次将执行') . ' ---';
-        $lines[] = $plan;
-        $lines[] = '';
-
-        if ($sitePagesNote !== null) {
-            $lines[] = '--- ' . __('本站已有页面（Header/Footer）') . ' ---';
-            $lines[] = $sitePagesNote;
-        } elseif ($sitePages !== null && !empty($sitePages)) {
-            $lines[] = '--- ' . __('本站已有页面（类型、handle、标题、链接）') . ' ---';
-            foreach ($sitePages as $p) {
-                $lines[] = sprintf('  %s（%s）  handle=%s  标题=%s  链接=%s',
-                    $p['type_label'], $p['type'], $p['handle'], $p['title'], $p['url']);
-            }
-        }
-        if (!empty($unpublishedPages)) {
-            $lines[] = '';
-            $lines[] = '--- ' . __('未发布页面（请发布后再使用或注意核对）') . ' ---';
-            foreach ($unpublishedPages as $u) {
-                $lines[] = sprintf('  %s  %s（%s）', $u['type_label'] ?? '', $u['title'] ?? '', $u['handle'] ?? '');
-            }
-        }
-        $lines[] = '';
-        $lines[] = '==========================================';
-
-        return [
-            'style_code' => $styleCode,
-            'component_code' => $componentCode,
-            'component_name' => $componentName,
-            'component_description' => $componentDesc,
-            'component_region' => $componentRegion,
-            'slot_region' => $region,
-            'slot_index' => $index,
-            'operation' => __('AI生成组件配置'),
-            'config_fields' => $configFields,
-            'site_pages' => $sitePages,
-            'site_pages_note' => $sitePagesNote,
-            'unpublished_pages' => $unpublishedPages,
-            'plan' => $plan,
-            'display_text' => implode("\n", $lines),
-        ];
-    }
-
-    /**
-     * 获取「本站已有页面」列表，供 Header/Footer 导航给 AI 参考
-     * - 当前页为主页（无 parent_id）：查该主页下的所有子页面
-     * - 当前页有 parent_id：查该 parent 下的所有子页面（同级兄弟），且若父页是首页则含首页
-     *
-     * @return array ['list' => [['type','type_label','handle','title','url'], ...], 'unpublished' => [['type_label','title','handle'], ...]]
-     */
-    private function getExistingSitePagesList(PageModel $page): array
-    {
-        $virtualPagesByType = $page->getData('virtual_pages_by_type');
-        if (\is_array($virtualPagesByType) && $virtualPagesByType !== []) {
-            $list = [];
-            foreach ($virtualPagesByType as $type => $item) {
-                $handle = (string)($item['handle'] ?? '');
-                $list[] = [
-                    'type' => (string)$type,
-                    'handle' => $handle,
-                    'title' => (string)($item['title'] ?? $handle ?: $type),
-                    'url' => $type === PageModel::TYPE_HOME ? '/' : ($handle !== '' ? '/' . \ltrim($handle, '/') : '/'),
-                    'status' => PageModel::STATUS_PUBLISHED,
-                ];
-            }
-        } else {
-        $parentId = (int)$page->getData(PageModel::schema_fields_PARENT_ID);
-        try {
-            if ($parentId === 0) {
-                $list = $page->getChildPagesForNav(50);
-                // 当前为主页时，把首页自身插到最前，方便 AI 生成含「首页」的导航
-                if ($page->getId() && $page->getData(PageModel::schema_fields_TYPE) === PageModel::TYPE_HOME) {
-                    $h = $page->getData(PageModel::schema_fields_HANDLE);
-                    $hStr = $h === null || $h === '' ? '' : (string)$h;
-                    array_unshift($list, [
-                        'title' => $page->getData(PageModel::schema_fields_TITLE) ?: $page->getData(PageModel::schema_fields_NAME),
-                        'handle' => $hStr,
-                        'url' => '/', // 首页直接用域名，不拼 handle
-                        'type' => PageModel::TYPE_HOME,
-                        'page_id' => $page->getId(),
-                        'status' => (int)$page->getData(PageModel::schema_fields_STATUS),
-                    ]);
-                }
-            } else {
-                $list = $page->getSiblingPagesForNav(50);
-            }
-        } catch (\Throwable $e) {
-            return ['list' => [], 'unpublished' => []];
-        }
-        }
-        $typeNames = PageModel::getPageTypes();
-        $result = [];
-        $unpublished = [];
-        foreach ($list as $item) {
-            $type = $item['type'] ?? '';
-            $handle = $item['handle'] ?? '';
-            $title = $item['title'] ?? '';
-            $url = $item['url'] ?? '';
-            $status = (int)($item['status'] ?? PageModel::STATUS_PUBLISHED);
-            if ($type === PageModel::TYPE_HOME) {
-                $url = '/';
-            } elseif ($url === '' && ($handle === '' || $handle === null)) {
-                $url = '/';
-            } elseif ($url === '' && $handle !== '') {
-                $url = '/' . $handle;
-            }
-            $typeLabel = $typeNames[$type] ?? $type;
-            $result[] = [
-                'type' => $type,
-                'type_label' => $typeLabel,
-                'handle' => $handle === '' || $handle === null ? '(首页)' : (string) $handle,
-                'title' => $title,
-                'url' => $url,
-            ];
-            if ($status !== PageModel::STATUS_PUBLISHED) {
-                $unpublished[] = ['type_label' => $typeLabel, 'title' => $title, 'handle' => $handle === '' || $handle === null ? '(首页)' : (string)$handle];
-            }
-        }
-        return ['list' => $result, 'unpublished' => $unpublished];
-    }
-
-    /**
-     * 构建「本站已有页面」提示块，供 Header/Footer 的导航/链接生成使用
-     * 当前为主页时=该主页下所有子页面；当前为子页时=该父页下所有子页面（同级）+ 若父为首页则含首页
-     */
-    private function buildExistingSitePagesForNavPrompt(PageModel $page): string
-    {
-        $data = $this->getExistingSitePagesList($page);
-        $list = $data['list'] ?? [];
-        if (empty($list)) {
-            return '';
-        }
-        $lines = [
-            '【本站已有页面】以下为当前页对应的子页面列表（当前为主页=其子页面；当前为子页=同级子页面+父页首页若存在），供规划导航/链接时选用。链接请使用下表「链接」列，名称可自定义。',
-            '',
-        ];
-        foreach ($list as $item) {
-            $lines[] = sprintf('- %s（%s）| handle：%s | 标题：%s | 链接：%s',
-                $item['type_label'] ?? '',
-                $item['type'] ?? '',
-                $item['handle'] ?? '',
-                $item['title'] ?? '',
-                $item['url'] ?? '');
-        }
-        $lines[] = '';
-        return implode("\n", $lines);
-    }
-
-    /**
-     * 判断配置项是否为「导航/链接」类（由 meta 的 key 或 label 描述可知，需用页面类型规划填充）
-     */
-    private function isNavOrLinkConfigKey(string $fullKey, string $label): bool
-    {
-        $keyLower = strtolower($fullKey);
-        if (str_contains($keyLower, 'navigation.') && (str_contains($keyLower, 'items') || str_contains($keyLower, 'links'))) {
-            return true;
-        }
-        if (str_contains($keyLower, 'links.') && (str_contains($keyLower, 'items') || preg_match('/links\.\w+\.items/', $keyLower))) {
-            return true;
-        }
-        if (preg_match('/导航|链接(组|项)?|nav|link\s*list/u', $label)) {
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * 构建 Header/Footer 专属说明：让 AI 根据 meta 识别 nav/links 字段，用「本站所有页面类型」规划并归类归组填充
-     *
-     * @param string $region header 或 footer
-     * @param array $textConfigs 组件文字配置项（含 is_nav_or_link）
-     */
-    private function buildHeaderFooterNavInstruction(string $region, array $textConfigs): string
-    {
-        $navLinkKeys = [];
-        foreach ($textConfigs as $c) {
-            if (!empty($c['is_nav_or_link'])) {
-                $navLinkKeys[] = $c['key'] . '（' . ($c['label'] ?? '') . '）';
-            }
-        }
-        $navLinkList = empty($navLinkKeys) ? '' : implode('、', $navLinkKeys);
-
-        $regionLower = strtolower($region);
-        if ($regionLower === 'header') {
-            $lines = [
-                '【Header 导航规划】',
-                '请根据下方「本站已有页面」规划导航项（仅使用表中已有页面的链接）。Header 常用：首页、博客列表、关于我们、联系我们、政策类等。',
-                '请识别组件中属于「导航」的配置项（meta 中有描述），用「名称=>链接」、一行一条填充；链接使用上表链接，名称可自定义。',
-            ];
-            if ($navLinkList !== '') {
-                $lines[] = '导航/链接类配置项：' . $navLinkList . '。';
-            }
-        } else {
-            $lines = [
-                '【Footer 链接规划】',
-                '请根据下方「本站已有页面」规划链接（仅使用表中已有页面的链接）。Footer 常有多组链接：请根据组件 meta 中各配置项的含义（如「主要链接」「政策与条款」「联系与支持」等）归类归组。',
-                '每组对应一个配置字段，用「名称=>链接」、一行一条填充；链接使用上表链接，名称可自定义。',
-            ];
-            if ($navLinkList !== '') {
-                $lines[] = '链接类配置项（可能多组）：' . $navLinkList . '。请分析字段含义后归组填充。';
-            }
-        }
-        $lines[] = '';
-        return implode("\n", $lines);
-    }
-
-    /**
-     * 判断配置项是否为「列表/多行结构」（如优势列表、导航项），需按多行竖线格式生成
-     */
-    private function isListLikeConfigKey(string $fullKey, string $label, string $default): bool
-    {
-        if (str_contains($fullKey, '.items') || str_contains($fullKey, '.list')) {
-            return true;
-        }
-        if (preg_match('/列表|项配置|导航项|优势项|条目/u', $label)) {
-            return true;
-        }
-        if (str_contains($default, "\n") || (str_contains($default, '|') && mb_strlen($default) > 30)) {
-            return true;
-        }
-        return false;
-    }
-
-    /**
      * 构建单个组件配置生成的提示词
-     *
-     * 生成原理：根据当前页面类型选择对应提示词、遵循该类型侧重点；结合页面「AI内容生成」描述与当前组件在页面中的位置/用途，生成与该组件角色一致的内容；生成语言与页面默认语言一致。
-     *
-     * @param string $region 组件所在区域（如 header/content/footer），用于“当前组件情况”
-     * @param int $index 组件在区域中的序号
      */
-    /**
-     * 组件配置中用于保存「AI生成提示词」的 key，与系统提示词拼接后发给 AI
-     */
-    private const COMPONENT_CONFIG_AI_PROMPT_KEY = '_ai_prompt';
-
     private function buildComponentConfigPrompt(
         PageModel $page,
         array $metadata,
         array $textConfigs,
-        array $currentConfig = [],
-        string $region = '',
-        int $index = 0,
-        string $userPrompt = ''
+        array $currentConfig = []
     ): string {
         // 获取页面的目标语言
         $targetLocale = $page->getData(PageModel::schema_fields_DEFAULT_LOCALE) ?: '';
         
         $componentName = $metadata['name'] ?? $metadata['code'] ?? '未知组件';
         $componentDesc = $metadata['description'] ?? '';
-        $pageType = (string)($page->getData('type') ?? 'custom_page');
         
-        $prompt = "你是一个专业的网页组件配置生成助手。根据页面信息、页面类型提示词以及当前组件在页面中的情况，为【{$componentName}】组件生成配置内容，请返回JSON格式的数据。\n\n";
-        $prompt .= "【生成原理】根据当前页面类型选择对应的类型要求，生成内容遵循该类型侧重点；页面的「AI内容生成」描述作为参考；结合当前组件的角色与所在位置生成与该组件用途一致的内容；生成语言与页面默认语言一致。生成完成后请从逻辑与语气上自检并微调。\n\n";
-        $prompt .= "【生成原则-组件 meta】遵循组件 meta 的默认信息（格式、类型、条数）生成：按 meta 中默认值的格式与默认条数生成对应内容；若用户补充提示词中指定了条数或格式要求（如「生成 4 条」「只要 3 项」），则按用户要求生成。列表类配置的值必须是多行字符串（每行用竖线|分隔各列），不要返回 JSON 数组。\n\n";
-        $prompt .= "【示例】例如组件 meta 中优势列表默认 6 条、格式为「标题|图标|描述|颜色，一行一个」，则生成 6 行该格式的多行字符串；若用户写「生成 4 条」则生成 4 条。\n\n";
-        
-        // 根据当前页面类型撰写提示词
-        $pageTypeInstruction = $this->getPageTypePromptInstructions($pageType);
-        $prompt .= "【该页面类型要求】{$pageTypeInstruction}\n\n";
+        $prompt = "你是一个专业的网页组件配置生成助手。根据页面信息为【{$componentName}】组件生成配置内容，请返回JSON格式的数据。\n\n";
         
         $prompt .= "【页面信息】\n";
         $prompt .= "- 页面标题：{$page->getData('title')}\n";
         $prompt .= "- 页面句柄：{$page->getData('handle')}\n";
-        $prompt .= "- 页面类型：{$pageType}\n";
-        
-        // 页面AI内容生成描述作为参考
-        $aiDesc = (string)($page->getData('ai_description') ?? '');
-        if ($aiDesc !== '') {
-            $prompt .= "- 页面描述（AI内容生成参考）：" . mb_substr($aiDesc, 0, 500) . "\n";
-        }
+        $prompt .= "- 页面类型：{$page->getData('type')}\n";
         
         if ($page->getData('meta_description')) {
             $prompt .= "- SEO描述：{$page->getData('meta_description')}\n";
@@ -1542,120 +692,44 @@ class AiGenerate extends BackendController
         if ($componentDesc) {
             $prompt .= "- 组件描述：{$componentDesc}\n";
         }
-        $componentRegion = $metadata['region'] ?? 'content';
-        $prompt .= "- 组件区域：{$componentRegion}\n";
-        // 当前组件情况：在页面布局中的位置，便于生成与角色一致的内容
-        if ($region !== '') {
-            $positionHint = $index > 0
-                ? "该组件在页面布局中位于「{$region}」区域，为该区域中第 " . ($index + 1) . " 个组件，请根据此位置与前后文关系生成贴合场景的配置内容。"
-                : "该组件在页面布局中位于「{$region}」区域，请根据该区域的典型用途生成贴合场景的配置内容。";
-            $prompt .= "- 当前组件情况：{$positionHint}\n";
-        }
+        $prompt .= "- 组件区域：" . ($metadata['region'] ?? 'content') . "\n";
 
-        // Header/Footer 特殊：提供本站已有页面（主页下/同站顶级已发布页），由 AI 根据 meta 识别 nav/links 字段并仅用已有页面规划
-        $regionLower = strtolower($region);
-        if ($regionLower === 'header' || $regionLower === 'footer') {
-            $prompt .= "\n" . $this->buildHeaderFooterNavInstruction($region, $textConfigs);
-            $existingPagesBlock = $this->buildExistingSitePagesForNavPrompt($page);
-            if ($existingPagesBlock !== '') {
-                $prompt .= "\n" . $existingPagesBlock;
-            }
-        }
-
-        // 当前字段值仅作为参考，以页面语言为准重新生成（列表类若为数组则转为多行竖线字符串再展示）
+        // 如果有当前配置，显示当前值
         if (!empty($currentConfig)) {
-            $prompt .= "\n【当前配置值】（仅供参考，请按目标语言重新撰写）\n";
+            $prompt .= "\n【当前配置值】（可参考进行优化）\n";
             foreach ($textConfigs as $config) {
                 $key = $config['key'];
-                if (!isset($currentConfig[$key])) {
-                    continue;
-                }
-                $val = $currentConfig[$key];
-                if (is_array($val) && !empty($config['is_list_like'])) {
-                    $rows = [];
-                    foreach ($val as $item) {
-                        $rows[] = is_array($item) ? implode('|', array_map('trim', array_values($item))) : (string) $item;
-                    }
-                    $val = implode("\n", $rows);
-                } elseif (is_array($val)) {
-                    $val = json_encode($val, JSON_UNESCAPED_UNICODE);
-                } else {
-                    $val = (string) $val;
-                }
-                if ($val !== '') {
-                    $prompt .= "- {$config['label']}：" . mb_substr($val, 0, 800) . "\n";
+                if (isset($currentConfig[$key]) && !empty($currentConfig[$key])) {
+                    $prompt .= "- {$config['label']}：{$currentConfig[$key]}\n";
                 }
             }
         }
 
-        $prompt .= "\n【需要生成的配置项】（按 meta 默认格式与条数，用户有要求则从用户）\n";
-        $hasListLike = false;
+        $prompt .= "\n【需要生成的配置项】\n";
         foreach ($textConfigs as $config) {
-            $defaultHint = '';
-            if (!empty($config['is_list_like'])) {
-                $hasListLike = true;
-                $formatHint = $config['format'] ?? '';
-                $countHint = isset($config['default_count']) ? "默认条数：{$config['default_count']} 条。" : '';
-                $sampleHint = isset($config['default_sample']) && $config['default_sample'] !== ''
-                    ? "示例结构（前1～2条）：" . mb_substr($config['default_sample'], 0, 350) . "。" : '';
-                $defaultHint = "（列表类：{$countHint}{$formatHint} {$sampleHint} 值为多行字符串，每行用|分隔列，不要返回JSON数组；若用户补充提示词指定了条数则按用户）";
-            } else {
-                $defaultHint = $config['default'] ? "（默认值参考：" . mb_substr($config['default'], 0, 200) . "）" : '';
-            }
+            $defaultHint = $config['default'] ? "（默认值参考：{$config['default']}）" : '';
             $prompt .= "- {$config['key']}：{$config['label']}{$defaultHint}\n";
-        }
-
-        if ($hasListLike) {
-            $prompt .= "\n【重要-列表类配置】必须按组件 meta 的格式与默认条数生成多行字符串（每行竖线|分隔各列）；若用户补充提示词中指定了条数则按用户要求。不要返回 JSON 数组。\n";
-        }
-
-        // 若组件含下载/CTA 相关配置项，补充说明：URL 由 resolveAppDownloadUrl 解析，模板用 GlrDownloadRegistry + data-glr-ref
-        $downloadRelatedKeys = ['download.', 'primary_url', 'secondary_url', 'cta_url', 'download_url', 'button_url'];
-        $hasDownloadRelated = false;
-        foreach ($textConfigs as $c) {
-            $k = $c['key'] ?? '';
-            foreach ($downloadRelatedKeys as $dk) {
-                if (stripos($k, $dk) !== false) {
-                    $hasDownloadRelated = true;
-                    break 2;
-                }
-            }
-        }
-        if ($hasDownloadRelated) {
-            $prompt .= "\n【下载/CTA 配置说明】本组件包含下载或 CTA 链接类配置。这些 URL 会由 PageHelper::resolveAppDownloadUrl 解析后通过 GlrDownloadRegistry::register 登记，模板中只输出 data-glr-ref（DOM 不写真实 URL）。生成配置时请填写有意义的下载链接或 #download 等锚点，勿写 javascript:void(0)。\n";
         }
 
         $prompt .= "\n请生成所有配置项的值，返回JSON格式：\n";
         $prompt .= "{\n";
         foreach ($textConfigs as $config) {
-            $example = !empty($config['is_list_like'])
-                ? '多行字符串，每行用|分隔列，例如：标题1|图标1|描述1\\n标题2|图标2|描述2'
-                : '根据页面信息和组件用途生成合适的内容';
-            $prompt .= '  "' . $config['key'] . '": "' . $example . '",' . "\n";
+            $prompt .= '  "' . $config['key'] . '": "根据页面信息和组件用途生成合适的内容",' . "\n";
         }
         $prompt = rtrim($prompt, ",\n") . "\n";
         $prompt .= "}\n\n";
 
-        // 用户补充提示词（可选），与系统提示词拼接
-        $userPrompt = trim($userPrompt);
-        if ($userPrompt !== '') {
-            $prompt .= "【用户补充提示词】\n" . mb_substr($userPrompt, 0, 2000) . "\n\n";
-        }
-
         $prompt .= "要求：\n";
-        $prompt .= "1. 所有配置项的值必须符合页面主题、组件用途及【该页面类型要求】\n";
+        $prompt .= "1. 所有配置项的值必须符合页面主题和组件用途\n";
         $prompt .= "2. 内容要专业、准确、符合实际使用场景\n";
-        $prompt .= "3. 当前配置值仅供参考；按目标语言重新撰写，不要直接照抄\n";
+        $prompt .= "3. 如果有当前配置值，可以参考进行优化和完善\n";
         $prompt .= "4. 返回的JSON必须是有效的JSON格式，可以直接解析\n";
         $prompt .= "5. 只返回JSON，不要包含其他说明文字\n";
-        if ($hasListLike) {
-            $prompt .= "6. 列表类配置项（如优势列表）的值必须是多行竖线|分隔的字符串，不能是 JSON 数组。\n";
-        }
+        
         // 添加语言要求
         if (!empty($targetLocale)) {
             $languageName = $this->getLanguageNameFromLocale($targetLocale);
-            $num = $hasListLike ? '7' : '6';
-            $prompt .= "{$num}. 【重要-语言要求】所有生成的内容必须使用 {$languageName} ({$targetLocale}) 语言编写，无论提示词使用什么语言，生成结果都必须是 {$languageName}\n";
+            $prompt .= "6. 【重要-语言要求】所有生成的内容必须使用 {$languageName} ({$targetLocale}) 语言编写，无论提示词使用什么语言，生成结果都必须是 {$languageName}\n";
         }
 
         return $prompt;
@@ -1667,522 +741,6 @@ class AiGenerate extends BackendController
      * @param string $message 原始错误消息
      * @return string 清理后的纯文本消息
      */
-    /**
-     * @return array{
-     *   page:PageModel,
-     *   layout_config:array<string,mixed>,
-     *   style_code:string,
-     *   is_virtual:bool
-     * }|null
-     */
-    private function resolveComponentGenerationContext(int $pageId, string $publicId, string $requestedPageType, string $styleCode): ?array
-    {
-        if ($pageId > 0) {
-            $page = clone $this->pageModel;
-            $page->load($pageId);
-            if (!$page->getId()) {
-                return null;
-            }
-            $resolvedStyleCode = \trim($styleCode);
-            if ($resolvedStyleCode === '') {
-                $resolvedStyleCode = (string)($page->getData(PageModel::schema_fields_STYLE) ?: '');
-            }
-            return [
-                'page' => $page,
-                'layout_config' => $page->getFullLayoutConfig(),
-                'style_code' => $resolvedStyleCode,
-                'is_virtual' => false,
-            ];
-        }
-
-        $publicId = \trim($publicId);
-        $requestedPageType = \trim($requestedPageType);
-        $adminId = (int)$this->getLoginUserId();
-        if ($publicId === '' || $requestedPageType === '' || $adminId <= 0) {
-            return null;
-        }
-
-        $context = $this->getVirtualLayoutService()->loadContext($publicId, $adminId, $requestedPageType);
-        if ($context === null) {
-            return null;
-        }
-
-        $scopeService = $this->getScopeCompatibilityService();
-        $scope = $scopeService->normalizeScope($context['scope']);
-        $virtualPages = $scopeService->buildVirtualPagesByType(
-            $scopeService->normalizePageTypes($scope['page_types'] ?? []),
-            $scope
-        );
-        $pageType = $scopeService->resolvePreviewPageType($virtualPages, $requestedPageType);
-        if ($pageType === '' || !isset($virtualPages[$pageType])) {
-            return null;
-        }
-
-        $virtualThemeId = (int)$context['virtual_theme_id'];
-        $virtualPage = $virtualPages[$pageType];
-        $resolvedStyleCode = \trim($styleCode !== '' ? $styleCode : (string)($virtualPage['style_code'] ?? 'default'));
-        $resolvedStyleCode = $resolvedStyleCode !== '' ? $resolvedStyleCode : 'default';
-        $layoutConfig = $this->getVirtualLayoutService()->getResolvedLayout($virtualThemeId, $pageType);
-        $locale = \trim((string)($virtualPage['locale'] ?? ''));
-        $locale = $locale !== '' ? $locale : 'en_US';
-
-        /** @var PageModel $page */
-        $page = ObjectManager::make(PageModel::class);
-        $page->setData([
-            PageModel::schema_fields_ID => 0,
-            PageModel::schema_fields_WEBSITE_ID => (int)($scope['draft_website_id'] ?? 0),
-            PageModel::schema_fields_PARENT_ID => $pageType === PageModel::TYPE_HOME ? 0 : 1,
-            PageModel::schema_fields_STATUS => PageModel::STATUS_DRAFT,
-            PageModel::schema_fields_TITLE => (string)($virtualPage['title'] ?? ''),
-            PageModel::schema_fields_NAME => (string)($virtualPage['title'] ?? ''),
-            PageModel::schema_fields_HANDLE => (string)($virtualPage['handle'] ?? ''),
-            PageModel::schema_fields_STYLE => $resolvedStyleCode,
-            PageModel::schema_fields_TYPE => $pageType,
-            PageModel::schema_fields_META_TITLE => (string)($virtualPage['meta_title'] ?? ''),
-            PageModel::schema_fields_META_DESCRIPTION => (string)($virtualPage['meta_description'] ?? ''),
-            PageModel::schema_fields_META_KEYWORDS => (string)($virtualPage['meta_keywords'] ?? ''),
-            PageModel::schema_fields_AI_DESCRIPTION => (string)($virtualPage['ai_description'] ?? ''),
-            PageModel::schema_fields_LOCALES => \json_encode([$locale], JSON_UNESCAPED_UNICODE),
-            PageModel::schema_fields_DEFAULT_LOCALE => $locale,
-            PageModel::schema_fields_STYLE_SETTING => \json_encode([
-                $resolvedStyleCode => \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [],
-            ], JSON_UNESCAPED_UNICODE),
-            PageModel::schema_fields_LAYOUT_CONFIG => \json_encode($layoutConfig, JSON_UNESCAPED_UNICODE),
-        ]);
-        $page->setData('virtual_public_id', $publicId);
-        $page->setData('virtual_page_type', $pageType);
-        $page->setData('virtual_theme_id', $virtualThemeId);
-        $page->setData('virtual_pages_by_type', $virtualPages);
-        $page->setData('virtual_page_blocks', \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : []);
-
-        return [
-            'page' => $page,
-            'layout_config' => $layoutConfig,
-            'style_code' => $resolvedStyleCode,
-            'is_virtual' => true,
-            'virtual_page' => $virtualPage,
-        ];
-    }
-
-    /**
-     * @param array{
-     *   page:PageModel,
-     *   layout_config:array<string,mixed>,
-     *   style_code:string,
-     *   is_virtual:bool
-     * } $context
-     * @return array<string,mixed>|null
-     */
-    private function resolveComponentMetadataForGeneration(
-        array $context,
-        string $styleCode,
-        string $componentCode,
-        string $region,
-        int $index
-    ): ?array {
-        $layoutAssembler = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\LayoutAssembler::class);
-        try {
-            $metadata = $layoutAssembler->getComponentMetadata($styleCode, $componentCode);
-            if (\is_array($metadata) && $metadata !== []) {
-                return $metadata;
-            }
-        } catch (\Throwable $throwable) {
-            if (empty($context['is_virtual'])) {
-                throw $throwable;
-            }
-        }
-
-        if (empty($context['is_virtual'])) {
-            return null;
-        }
-
-        $layoutConfig = \is_array($context['layout_config'] ?? null) ? $context['layout_config'] : [];
-        $layoutEntry = $this->resolveLayoutComponentEntryForGeneration($layoutConfig, $componentCode, $region, $index);
-        $fieldConfig = \is_array($layoutEntry['config'] ?? null) ? $layoutEntry['config'] : [];
-        if ($fieldConfig !== []) {
-            return [
-                'code' => $componentCode,
-                'name' => $componentCode,
-                'description' => 'Virtual theme component metadata fallback',
-                'region' => $region !== '' ? $region : 'content',
-                'category' => $region !== '' ? $region : 'content',
-                'type' => 'section',
-                'fields' => $this->buildVirtualFallbackFields($fieldConfig),
-            ];
-        }
-
-        $blockEntry = $this->resolveVirtualBlockEntryForGeneration($context, $componentCode, $region, $index);
-        if ($blockEntry === []) {
-            return null;
-        }
-
-        return $this->buildVirtualBlockMetadataForGeneration($blockEntry, $componentCode, $region);
-    }
-
-    /**
-     * @param array{layout_config?:array<string,mixed>,is_virtual?:bool,virtual_page?:array<string,mixed>} $context
-     * @return array<string,mixed>
-     */
-    private function resolveCurrentComponentConfigForGeneration(
-        array $context,
-        string $componentCode,
-        string $region,
-        int $index
-    ): array {
-        $layoutConfig = \is_array($context['layout_config'] ?? null) ? $context['layout_config'] : [];
-        $layoutEntry = $this->resolveLayoutComponentEntryForGeneration($layoutConfig, $componentCode, $region, $index);
-        if (\is_array($layoutEntry['config'] ?? null)) {
-            return $layoutEntry['config'];
-        }
-
-        if (!empty($context['is_virtual'])) {
-            $blockEntry = $this->resolveVirtualBlockEntryForGeneration($context, $componentCode, $region, $index);
-            if (\is_array($blockEntry['config'] ?? null)) {
-                return $blockEntry['config'];
-            }
-        }
-
-        return [];
-    }
-
-    /**
-     * @param array<string,mixed> $layoutConfig
-     * @return array<string,mixed>
-     */
-    private function resolveLayoutComponentEntryForGeneration(
-        array $layoutConfig,
-        string $componentCode,
-        string $region,
-        int $index
-    ): array {
-        $regionItems = \is_array($layoutConfig[$region] ?? null) ? $layoutConfig[$region] : [];
-        if (($region === 'header' || $region === 'footer') && $regionItems !== []) {
-            // 虚拟主题与 toExportLayout：header/footer 为单块 { component|code, config }，不是区块列表
-            $singletonCode = \trim((string)($regionItems['code'] ?? $regionItems['component'] ?? ''));
-            if ($singletonCode !== '' && $singletonCode === \trim($componentCode)) {
-                return $regionItems;
-            }
-            foreach ($regionItems as $entry) {
-                if (!\is_array($entry)) {
-                    continue;
-                }
-                $entryCode = (string)($entry['code'] ?? $entry['component'] ?? '');
-                if ($entryCode === $componentCode) {
-                    return $entry;
-                }
-            }
-            return \is_array($regionItems[0] ?? null) ? $regionItems[0] : [];
-        }
-
-        if ($regionItems !== [] && isset($regionItems[$index]) && \is_array($regionItems[$index])) {
-            $entry = $regionItems[$index];
-            $entryCode = (string)($entry['code'] ?? $entry['component'] ?? '');
-            if ($entryCode === $componentCode) {
-                return $entry;
-            }
-        }
-        foreach ($regionItems as $entry) {
-            if (!\is_array($entry)) {
-                continue;
-            }
-            $entryCode = (string)($entry['code'] ?? $entry['component'] ?? '');
-            if ($entryCode === $componentCode) {
-                return $entry;
-            }
-        }
-
-        $contentItems = \array_values(\is_array($layoutConfig['content'] ?? null) ? $layoutConfig['content'] : []);
-        foreach ($contentItems as $entry) {
-            if (!\is_array($entry)) {
-                continue;
-            }
-            $entryCode = (string)($entry['code'] ?? $entry['component'] ?? '');
-            if ($entryCode === $componentCode) {
-                return $entry;
-            }
-        }
-
-        return [];
-    }
-
-    /**
-     * @param array{virtual_page?:array<string,mixed>} $context
-     * @return array<string,mixed>
-     */
-    private function resolveVirtualBlockEntryForGeneration(
-        array $context,
-        string $componentCode,
-        string $region,
-        int $index
-    ): array {
-        $virtualPage = \is_array($context['virtual_page'] ?? null) ? $context['virtual_page'] : [];
-        $blocks = \array_values(\is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : []);
-        if ($blocks === []) {
-            return [];
-        }
-
-        if (isset($blocks[$index]) && \is_array($blocks[$index])) {
-            $indexedBlock = $blocks[$index];
-            if ($this->virtualBlockMatchesComponentCode((string)($indexedBlock['block_id'] ?? ''), $componentCode)) {
-                return $indexedBlock;
-            }
-        }
-
-        foreach ($blocks as $block) {
-            if (!\is_array($block)) {
-                continue;
-            }
-            if (!$this->virtualBlockMatchesComponentCode((string)($block['block_id'] ?? ''), $componentCode)) {
-                continue;
-            }
-            if ($region === 'header' || $region === 'footer') {
-                $blockRegion = $this->inferVirtualBlockRegion($block);
-                if ($blockRegion !== '' && $blockRegion !== $region) {
-                    continue;
-                }
-            }
-
-            return $block;
-        }
-
-        return [];
-    }
-
-    private function virtualBlockMatchesComponentCode(string $blockId, string $componentCode): bool
-    {
-        $blockId = \trim($blockId);
-        $componentCode = \trim($componentCode);
-        if ($blockId === '' || $componentCode === '') {
-            return false;
-        }
-        if ($blockId === $componentCode) {
-            return true;
-        }
-
-        return $this->normalizeVirtualBlockCodeForGeneration($blockId)
-            === $this->normalizeVirtualBlockCodeForGeneration($componentCode);
-    }
-
-    private function normalizeVirtualBlockCodeForGeneration(string $code): string
-    {
-        $code = \strtolower(\trim($code));
-        if (\str_starts_with($code, 'content/')) {
-            $code = \substr($code, \strlen('content/'));
-        }
-
-        return \trim((string)\preg_replace('/[\/_]+/', '-', $code), '-');
-    }
-
-    /**
-     * @param array<string,mixed> $block
-     */
-    private function inferVirtualBlockRegion(array $block): string
-    {
-        foreach (['region', '_pb_server_region'] as $key) {
-            $region = \trim((string)($block[$key] ?? ''));
-            if (\in_array($region, ['header', 'footer', 'content'], true)) {
-                return $region;
-            }
-        }
-
-        $type = \strtolower(\trim((string)($block['type'] ?? '')));
-        $blockId = \strtolower(\trim((string)($block['block_id'] ?? '')));
-        if (\str_contains($type, 'header') || \str_contains($blockId, 'header')) {
-            return 'header';
-        }
-        if (\str_contains($type, 'footer') || \str_contains($blockId, 'footer')) {
-            return 'footer';
-        }
-
-        return 'content';
-    }
-
-    /**
-     * @param array<string,mixed> $block
-     * @return array<string,mixed>|null
-     */
-    private function buildVirtualBlockMetadataForGeneration(array $block, string $componentCode, string $region): ?array
-    {
-        $config = \is_array($block['config'] ?? null) ? $block['config'] : [];
-        $fieldSchema = \is_array($block['field_schema'] ?? null) ? $block['field_schema'] : [];
-        $fields = $this->normalizeVirtualBlockFieldSchemaForGeneration($fieldSchema, $config);
-        if ($fields === [] && $config !== []) {
-            $fields = $this->buildVirtualBlockFallbackFields($config);
-        }
-        if ($fields === []) {
-            return null;
-        }
-
-        $label = \trim((string)($config['component_label'] ?? $block['block_id'] ?? $componentCode));
-
-        return [
-            'code' => $componentCode,
-            'name' => $label !== '' ? $label : $componentCode,
-            'description' => 'Virtual page block metadata fallback',
-            'region' => $region !== '' ? $region : $this->inferVirtualBlockRegion($block),
-            'category' => $region !== '' ? $region : 'content',
-            'type' => (string)($block['type'] ?? 'section'),
-            'fields' => $fields,
-        ];
-    }
-
-    /**
-     * @param array<string,mixed> $fieldSchema
-     * @param array<string,mixed> $config
-     * @return array<string,array<string,mixed>>
-     */
-    private function normalizeVirtualBlockFieldSchemaForGeneration(array $fieldSchema, array $config): array
-    {
-        $groups = [];
-        foreach ($fieldSchema as $groupKey => $group) {
-            if (!\is_array($group) || !\is_array($group['fields'] ?? null)) {
-                continue;
-            }
-            $groupName = \trim((string)$groupKey);
-            $groupName = $groupName !== '' ? $groupName : 'content';
-            $groups[$groupName] = [
-                'label' => (string)($group['label'] ?? $groupName),
-                'fields' => [],
-            ];
-            foreach ($group['fields'] as $fieldKey => $field) {
-                if (!\is_array($field)) {
-                    continue;
-                }
-                $configKey = \trim((string)($field['config_key'] ?? $field['key'] ?? $field['full_key'] ?? $fieldKey));
-                if ($configKey === '' || \str_starts_with($configKey, '_')) {
-                    continue;
-                }
-                $normalizedField = $field;
-                $normalizedField['key'] = $configKey;
-                $normalizedField['default'] = \array_key_exists($configKey, $config)
-                    ? $config[$configKey]
-                    : ($field['default'] ?? '');
-                $groups[$groupName]['fields'][(string)$fieldKey] = $normalizedField;
-            }
-            if ($groups[$groupName]['fields'] === []) {
-                unset($groups[$groupName]);
-            }
-        }
-
-        return $groups;
-    }
-
-    /**
-     * @param array<string,mixed> $config
-     * @return array<string,array<string,mixed>>
-     */
-    private function buildVirtualBlockFallbackFields(array $config): array
-    {
-        $groups = [];
-        foreach ($config as $fieldKey => $value) {
-            $configKey = \trim((string)$fieldKey);
-            if ($configKey === '' || \str_starts_with($configKey, '_') || \in_array($configKey, ['region', 'component_label'], true)) {
-                continue;
-            }
-            $parts = \explode('.', $configKey, 2);
-            $groupKey = isset($parts[1]) && $parts[0] !== '' ? $parts[0] : 'content';
-            $shortKey = $parts[1] ?? $configKey;
-            $groups[$groupKey] ??= [
-                'label' => \ucwords(\str_replace(['_', '-'], ' ', $groupKey)),
-                'fields' => [],
-            ];
-            $groups[$groupKey]['fields'][$shortKey] = [
-                'key' => $configKey,
-                'label' => \ucwords(\str_replace(['_', '-'], ' ', $shortKey)),
-                'type' => $this->inferVirtualFallbackFieldType($configKey, $value),
-                'default' => $value,
-            ];
-        }
-
-        return $groups;
-    }
-
-    /**
-     * @param array<string,mixed> $fieldConfig
-     * @return array<string,array<string,mixed>>
-     */
-    private function buildVirtualFallbackFields(array $fieldConfig): array
-    {
-        $groups = [];
-        foreach ($fieldConfig as $fieldKey => $value) {
-            $fullKey = \trim((string)$fieldKey);
-            if ($fullKey === '' || \str_starts_with($fullKey, '_')) {
-                continue;
-            }
-            $parts = \explode('.', $fullKey, 2);
-            $groupKey = $parts[0] !== '' ? $parts[0] : 'config';
-            $shortKey = $parts[1] ?? $fullKey;
-            if (!isset($groups[$groupKey])) {
-                $groups[$groupKey] = [
-                    'label' => $groupKey,
-                    'fields' => [],
-                ];
-            }
-            $groups[$groupKey]['fields'][$shortKey] = [
-                'key' => $fullKey,
-                'label' => $shortKey,
-                'type' => $this->inferVirtualFallbackFieldType($fullKey, $value),
-                'default' => $value,
-            ];
-        }
-        return $groups;
-    }
-
-    private function inferVirtualFallbackFieldType(string $fieldKey, mixed $value): string
-    {
-        $field = \strtolower($fieldKey);
-        $raw = \is_scalar($value) || $value === null ? (string)$value : '';
-        if (\preg_match('/(^|\.|_)(color|colour)$/', $field) === 1 && \preg_match('/^#[0-9a-f]{6}$/i', $raw) === 1) {
-            return 'color';
-        }
-        if (\str_contains($field, 'image') || \str_contains($field, 'logo') || \str_contains($field, 'icon')) {
-            return 'image';
-        }
-        if (\strlen($raw) > 96 || \str_contains($field, 'description') || \str_contains($field, 'subtitle') || \str_ends_with($field, 'content')) {
-            return 'textarea';
-        }
-        return 'text';
-    }
-
-    private function shouldFlushSseChunkBuffer(string $buffer): bool
-    {
-        if ($buffer === '') {
-            return false;
-        }
-        if (\preg_match('/(\r?\n){2,}$/u', $buffer)) {
-            return true;
-        }
-        if (\preg_match('/[。！？；.!?;]\s*$/u', $buffer)) {
-            return true;
-        }
-        return \mb_strlen($buffer) >= 48;
-    }
-
-    private function flushSseChunkBuffer(\Weline\Framework\Http\Sse\SseWriter $sse, string &$buffer, int $totalLength, bool $force = false): void
-    {
-        if ($buffer === '') {
-            return;
-        }
-        if (!$force && !$this->shouldFlushSseChunkBuffer($buffer)) {
-            return;
-        }
-        $sse->sendEventAndYield('chunk', [
-            'content' => $buffer,
-            'total_length' => $totalLength,
-        ]);
-        $buffer = '';
-    }
-
-    private function getVirtualLayoutService(): AiSiteVirtualLayoutService
-    {
-        return ObjectManager::getInstance(AiSiteVirtualLayoutService::class);
-    }
-
-    private function getScopeCompatibilityService(): AiSiteScopeCompatibilityService
-    {
-        return ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
-    }
-
     private function sanitizeErrorMessage(string $message): string
     {
         // 去除所有HTML标签
@@ -2239,15 +797,6 @@ class AiGenerate extends BackendController
     }
 
     /**
-     * 根据页面类型返回对应的生成提示（页面内容侧重点与结构要求）
-     */
-    private function getPageTypePromptInstructions(string $pageType): string
-    {
-        $map = PageModel::getPageTypePromptInstructionsMap();
-        return $map[$pageType] ?? __('【通用页面】根据页面描述生成符合主题的完整内容；结构清晰、信息完整、风格一致。');
-    }
-
-    /**
      * 构建页面内容生成的提示词
      * 
      * @param string $targetLocale 目标语言代码（如 en_US, zh_Hans_CN 等）
@@ -2274,8 +823,7 @@ class AiGenerate extends BackendController
         }
         
         $prompt .= "页面描述：{$description}\n";
-        $prompt .= "页面类型：{$pageType}\n";
-        $prompt .= "【该类型页面要求】" . $this->getPageTypePromptInstructions($pageType) . "\n\n";
+        $prompt .= "页面类型：{$pageType}\n\n";
 
         if (!empty($title)) {
             $prompt .= "当前页面标题：{$title}\n";
@@ -2320,9 +868,8 @@ class AiGenerate extends BackendController
             $prompt .= '  "meta_keywords": "SEO关键词（如果没有提供则根据描述生成，用逗号分隔）"' . "\n";
         }
 
-        // 主页类型不需要 content 字段（由模板组件负责）
-        $isHomeType = in_array($pageType, [PageModel::TYPE_HOME, 'home', 'homepage'], true);
-        if (!$isHomeType) {
+        // 主页类型不需要content字段
+        if ($pageType !== 'home' && $pageType !== 'homepage') {
             if ($isEdit) {
                 $prompt .= ',\n  "content": "优化后的页面HTML内容（基于当前页面内容进行优化和完善，保持风格一致）"' . "\n";
             } else {
@@ -2420,20 +967,20 @@ class AiGenerate extends BackendController
      */
     private function getTextConfigs(string $styleCode, int $pageId): array
     {
+        // 获取 LayoutAssembler 服务
+        $layoutAssembler = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\LayoutAssembler::class);
+        
+        // 加载页面获取布局配置
         $page = clone $this->pageModel;
         $page->load($pageId);
+        
         if (!$page->getId()) {
             return [];
         }
-
-        return $this->getTextConfigsFromLayout($styleCode, $page->getFullLayoutConfig());
-    }
-
-    private function getTextConfigsFromLayout(string $styleCode, array $layoutConfig): array
-    {
-        // 获取 LayoutAssembler 服务
-        $layoutAssembler = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\LayoutAssembler::class);
-
+        
+        // 获取页面的完整布局配置（包含继承的 header/footer）
+        $layoutConfig = $page->getFullLayoutConfig();
+        
         // 从布局配置中提取所有使用的组件代码
         $usedComponents = [];
         foreach (['header', 'content', 'footer'] as $region) {
@@ -2510,58 +1057,6 @@ class AiGenerate extends BackendController
     }
 
     /**
-     * 强制以结构化 JSON 模式调用 AiService::generateStream 的参数。
-     *
-     * 必要性：
-     * - 队列运行时（AiSitePlanQueue / AiSiteTaskPlanQueue / AiSiteBuildQueue）会通过
-     *   AiRuntimeContext::setDefaultParams() 注入 thinking_mode 默认参数；该默认参数
-     *   会随着 RequestContext 在同 Worker 内被合入后续 generateStream 调用。
-     * - DeepSeek V4 / GLM / Claude 等模型在 thinking 协议下，若未显式 disable，
-     *   只会返回 reasoning_content（思维链）而不返回最终 content，OpenAiProvider
-     *   的 reasoning-only 兜底又仅在 response_format=json_object 时生效，因此结构化
-     *   JSON 类的同步流式 endpoint（component-config-stream / page-content-stream /
-     *   component-stream）必须显式锁定结构化 JSON + 关闭 thinking。
-     * - 这里使用 array_replace 让结构化锁定覆盖调用方旧值，避免历史调用方意外打开
-     *   reasoning，从而触发"无响应"故障。
-     * - component-config-stream 等若需通过 SSE 推送 reasoning_callback（思考过程），可传入
-     *   `$allowThinkingStream=true`：仍强制 json_object，且必须显式传入 thinking=enabled，
-     *   否则 OpenAiProvider 会对 json_object 默认禁用 thinking（shouldDisableThinkingByDefault），
-     *   同时 AiRuntimeContext 注入的禁用项会因 mergeDefaultParams 保留 thinking 键而无法仅靠「不传」覆盖。
-     *
-     * @param array<string, mixed> $callerParams generateStream 的 params 入参
-     * @param bool $allowThinkingStream 为 true 时不合并禁用 thinking 的参数，也不剔除 reasoning_effort / budget
-     * @return array<string, mixed>
-     */
-    private function withStructuredJsonStreamParams(array $callerParams = [], bool $allowThinkingStream = false): array
-    {
-        $forced = [
-            'response_format' => ['type' => 'json_object'],
-        ];
-        if (!$allowThinkingStream) {
-            $forced['thinking'] = ['type' => 'disabled'];
-            $forced['thinking_mode'] = 'disabled';
-            $forced['enable_thinking'] = false;
-            $forced['enable_reasoning'] = false;
-        } else {
-            // 覆盖 Provider 对 json_object 的默认禁用 + RequestContext 默认参数里的禁用 thinking
-            $forced['thinking'] = ['type' => 'enabled'];
-            $forced['thinking_mode'] = true;
-            $forced['enable_thinking'] = true;
-            $forced['enable_reasoning'] = true;
-        }
-        $params = \array_replace($callerParams, $forced);
-        if (!$allowThinkingStream) {
-            unset(
-                $params['reasoning_effort'],
-                $params['thinking_budget'],
-                $params['thinking_budget_tokens']
-            );
-        }
-
-        return $params;
-    }
-
-    /**
      * 解析JSON响应
      */
     private function parseJsonResponse(string $response): array
@@ -2630,8 +1125,8 @@ class AiGenerate extends BackendController
             
             $styleCode = $input['style_code'] ?? 'tpmst';
             $region = $input['region'] ?? 'content';
-            $name = trim((string)($input['name'] ?? $this->request->getGet('name', '') ?: (\w_env_get('name') ?? '')));
-            $description = trim((string)($input['description'] ?? $this->request->getGet('description', '') ?: (\w_env_get('description') ?? '')));
+            $name = trim((string)($input['name'] ?? $this->request->getGet('name', '') ?: ($_GET['name'] ?? '')));
+            $description = trim((string)($input['description'] ?? $this->request->getGet('description', '') ?: ($_GET['description'] ?? '')));
             $style = $input['style'] ?? 'modern';
             $fieldsInput = trim($input['fields'] ?? '');
             $referenceComponent = $input['reference_component'] ?? '';
@@ -2659,7 +1154,6 @@ class AiGenerate extends BackendController
             
             // 构建AI提示词（包含语言要求）
             $prompt = $this->buildComponentPrompt($name, $description, $region, $style, $configFields, $referenceCode, $language);
-            $prompt = $this->withPageBuilderSkillGuide($prompt, 'stage3');
             
             $sse->sendEvent('prompt', [
                 'message' => __('提示词已构建'),
@@ -2702,7 +1196,7 @@ class AiGenerate extends BackendController
                     null, // 自动选择模型
                     'pagebuilder_component_generation',
                     $locale,
-                    $this->withStructuredJsonStreamParams([
+                    [
                         'reference_component' => $referenceComponent,
                         'reference_code' => $referenceCode,
                         'reasoning_callback' => function($chunk) use (&$reasoningBuffer, $sse) {
@@ -2713,7 +1207,7 @@ class AiGenerate extends BackendController
                                 'total_length' => strlen($reasoningBuffer),
                             ]);
                         },
-                    ], true)
+                    ]
                 );
             } catch (\Throwable $e) {
                 // 清理 ANSI 颜色码，避免前端显示乱码
@@ -2927,7 +1421,6 @@ class AiGenerate extends BackendController
             
             // 构建AI提示词（传递参考组件代码）
             $prompt = $this->buildComponentPrompt($name, $description, $region, $style, $configFields, $referenceCode);
-            $prompt = $this->withPageBuilderSkillGuide($prompt, 'stage3');
             
             // 调用AI生成
             $aiService = ObjectManager::getInstance(AiService::class);
@@ -4322,7 +2815,6 @@ PROMPT;
             . $validationError
             . "\n\nReply with ONLY the corrected JSON object. No explanation, no markdown. Previous (invalid) output:\n\n"
             . $previousSnippet;
-        $userMessage = $this->withPageBuilderSkillGuide($userMessage, 'stage3');
         $params = [
             'messages' => [['role' => 'user', 'content' => $userMessage]],
             'temperature' => 0.3,
@@ -4411,8 +2903,8 @@ PROMPT;
             $agentCode = $input['agent_code'] ?? 'pagebuilder_component';
             $styleCode = $input['style_code'] ?? 'tpmst';
             $region = $input['region'] ?? 'content';
-            $name = trim((string)($input['name'] ?? $this->request->getGet('name', '') ?: (\w_env_get('name') ?? '')));
-            $description = trim((string)($input['description'] ?? $this->request->getGet('description', '') ?: (\w_env_get('description') ?? '')));
+            $name = trim((string)($input['name'] ?? $this->request->getGet('name', '') ?: ($_GET['name'] ?? '')));
+            $description = trim((string)($input['description'] ?? $this->request->getGet('description', '') ?: ($_GET['description'] ?? '')));
             $style = $input['style'] ?? 'modern';
             $fieldsInput = trim($input['fields'] ?? '');
             $referenceComponent = $input['reference_component'] ?? '';
@@ -4434,7 +2926,6 @@ PROMPT;
 
             // 构建用户提示词
             $prompt = $this->buildAgentUserPrompt($name, $description, $region, $style, $fieldsInput, $referenceCode);
-            $prompt = $this->withPageBuilderSkillGuide($prompt, 'stage3');
 
             $sse->sendEvent('prompt', [
                 'message' => __('提示词已构建'),
@@ -4459,13 +2950,9 @@ PROMPT;
                     'timeout' => 0, // 不限制单次 curl 超时，智能体多轮迭代依靠心跳保活
                     'max_tokens' => 16000, // 组件 JSON 可能较长，提高上限降低截断率
                 ],
-                function (string $eventType, array $data) use ($sse): bool {
+                function (string $eventType, array $data) use ($sse) {
                     // SSE 事件透传
-                    if (!$sse->isAlive()) {
-                        return false;
-                    }
                     $sse->sendEvent($eventType, $data);
-                    return $sse->isAlive();
                 }
             );
 
@@ -5131,7 +3618,6 @@ PROMPT;
         }
 
         $page->save();
-        $this->invalidatePageCache((int)$page->getId());
     }
 
     /**
@@ -5174,27 +3660,5 @@ PROMPT;
                 'lengths' => $lengths,
             ],
         ], JSON_UNESCAPED_UNICODE);
-    }
-
-    private function withPageBuilderSkillGuide(string $prompt, string $stage = 'pagebuilder'): string
-    {
-        return $this->getSkillRegistry()->prependPromptGuide($prompt, $stage);
-    }
-
-    private function getSkillRegistry(): AiSiteSkillRegistry
-    {
-        return ObjectManager::getInstance(AiSiteSkillRegistry::class);
-    }
-
-    private function invalidatePageCache(int $pageId): void
-    {
-        if ($pageId <= 0) {
-            return;
-        }
-
-        try {
-            PageBuilderUrlCacheInvalidator::invalidateForPageId($pageId);
-        } catch (\Throwable) {
-        }
     }
 }

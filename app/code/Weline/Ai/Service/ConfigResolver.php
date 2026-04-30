@@ -33,8 +33,6 @@ class ConfigResolver
     public function resolveConfig(string $modelCode, array $userConfig = [], ?int $userId = null, bool $isBackend = false, ?AiModel $existingModel = null): array
     {
         $config = [];
-        $allowZeroBalanceProvider = (bool)($userConfig['allow_zero_balance_provider'] ?? false);
-        unset($userConfig['allow_zero_balance_provider']);
         
         // 1. 获取模型信息
         // 如果传入了已存在的模型实例（已注入账户配置），直接使用
@@ -54,10 +52,10 @@ class ConfigResolver
         // 3. 按优先级解析配置
         if ($isBackend) {
             // 后端调用：使用后台配置
-            $config = $this->resolveBackendConfig($model, $providerCode, $userConfig, $allowZeroBalanceProvider);
+            $config = $this->resolveBackendConfig($model, $providerCode, $userConfig);
         } else {
             // 前端调用：使用前端用户配置
-            $config = $this->resolveFrontendConfig($model, $providerCode, $userConfig, $userId, $allowZeroBalanceProvider);
+            $config = $this->resolveFrontendConfig($model, $providerCode, $userConfig, $userId);
         }
         
         // 4. 验证必要配置
@@ -77,7 +75,7 @@ class ConfigResolver
      * 
      * array_merge 中后面的值会覆盖前面的值，所以低优先级的先合并
      */
-    private function resolveBackendConfig(AiModel $model, string $providerCode, array $userConfig, bool $allowZeroBalanceProvider = false): array
+    private function resolveBackendConfig(AiModel $model, string $providerCode, array $userConfig): array
     {
         // 优先级1（最低）: 模型的基础配置
         // 过滤空值，避免后续 array_merge 时用空字符串覆盖有效值
@@ -91,7 +89,7 @@ class ConfigResolver
             $account = $this->getAccountById($accountId);
         }
         if (!$account || !$account->getId()) {
-            $account = $this->getDefaultProviderAccount($providerCode, $allowZeroBalanceProvider);
+            $account = $this->getDefaultProviderAccount($providerCode);
         }
         if ($account && $account->getId()) {
             $config = array_merge($config, $this->extractAccountConfig($account));
@@ -122,7 +120,7 @@ class ConfigResolver
      * 4. 用户模型账户
      * 5. 用户提供的配置（最高优先级）
      */
-    private function resolveFrontendConfig(AiModel $model, string $providerCode, array $userConfig, ?int $userId, bool $allowZeroBalanceProvider = false): array
+    private function resolveFrontendConfig(AiModel $model, string $providerCode, array $userConfig, ?int $userId): array
     {
         // 优先级1（最低）: 模型的基础配置
         $config = $this->filterEmptyValues($model->getConfig());
@@ -132,7 +130,7 @@ class ConfigResolver
         $accountId = isset($modelProviderConfig['account_id']) ? (int)$modelProviderConfig['account_id'] : 0;
         $account = ($accountId > 0) ? $this->getAccountById($accountId) : null;
         if (!$account || !$account->getId()) {
-            $account = $this->getDefaultProviderAccount($providerCode, $allowZeroBalanceProvider);
+            $account = $this->getDefaultProviderAccount($providerCode);
         }
         if ($account && $account->getId()) {
             $config = array_merge($config, $this->extractAccountConfig($account));
@@ -191,21 +189,18 @@ class ConfigResolver
      * 首先尝试获取默认账户，如果没有则获取任意可用账户
      * 可用条件：激活 + 连接成功 + 余额 > 0
      */
-    private function getDefaultProviderAccount(string $providerCode, bool $allowZeroBalanceProvider = false): ?Account
+    private function getDefaultProviderAccount(string $providerCode): ?Account
     {
         /** @var Account $account */
         $account = ObjectManager::getInstance(Account::class);
         
         // 首先尝试获取默认且可用的账户
-        $defaultQuery = $account->reset()
+        $defaultAccount = $account->reset()
             ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
             ->where(Account::schema_fields_IS_DEFAULT, 1)
             ->where(Account::schema_fields_IS_ACTIVE, 1)
-            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS);
-        if (!$allowZeroBalanceProvider) {
-            $defaultQuery = $defaultQuery->where(Account::schema_fields_BALANCE, 0, '>');
-        }
-        $defaultAccount = $defaultQuery
+            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
+            ->where(Account::schema_fields_BALANCE, 0, '>')
             ->find()
             ->fetch();
         
@@ -214,14 +209,11 @@ class ConfigResolver
         }
         
         // 如果没有默认账户，获取任意可用账户
-        $availableQuery = $account->reset()
+        $availableAccount = $account->reset()
             ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
             ->where(Account::schema_fields_IS_ACTIVE, 1)
-            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS);
-        if (!$allowZeroBalanceProvider) {
-            $availableQuery = $availableQuery->where(Account::schema_fields_BALANCE, 0, '>');
-        }
-        $availableAccount = $availableQuery
+            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
+            ->where(Account::schema_fields_BALANCE, 0, '>')
             ->order(Account::schema_fields_BALANCE, 'DESC')
             ->find()
             ->fetch();

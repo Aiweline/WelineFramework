@@ -103,7 +103,10 @@ class AiSiteAssetQueue implements QueueInterface
             ]);
 
             $manifest = $manifestService->markGenerating($manifest, $slotId);
-            $sessionService->mergeScope((int)$session->getId(), $adminId, ['asset_manifest' => $manifest]);
+            $sessionService->mergeScope((int)$session->getId(), $adminId, [
+                'asset_manifest' => $manifest,
+                'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
+            ]);
             $sse->sendEvent('asset_manifest_updated', ['slot_id' => $slotId, 'asset_manifest' => $manifest]);
 
             $sse->sendEvent('asset_generation_progress', [
@@ -154,7 +157,10 @@ class AiSiteAssetQueue implements QueueInterface
                 'revised_prompt' => (string)($image['revised_prompt'] ?? ''),
             ];
             $manifest = $manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
-            $sessionService->mergeScope((int)$session->getId(), $adminId, ['asset_manifest' => $manifest]);
+            $sessionService->mergeScope((int)$session->getId(), $adminId, [
+                'asset_manifest' => $manifest,
+                'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
+            ]);
 
             $sse->sendEvent('asset_manifest_updated', ['slot_id' => $slotId, 'asset_manifest' => $manifest]);
             $sse->sendEvent('asset_generation_done', [
@@ -174,7 +180,10 @@ class AiSiteAssetQueue implements QueueInterface
                 $slotId,
                 $throwable->getMessage()
             );
-            $sessionService->mergeScope((int)$session->getId(), $adminId, ['asset_manifest' => $manifest]);
+            $sessionService->mergeScope((int)$session->getId(), $adminId, [
+                'asset_manifest' => $manifest,
+                'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
+            ]);
             $sse->sendEvent('asset_generation_failed', [
                 'slot_id' => $slotId,
                 'message' => $throwable->getMessage(),

@@ -10,10 +10,8 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service\Provider;
 
-use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Service\ModelCollector;
-use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * AI 供应商模型同步服务
@@ -308,10 +306,7 @@ class ModelSyncService
         $modelName = (string)($modelMeta['name'] ?? $modelCode);
         $modelField = $providerConfig['model_field'] ?? 'model';
         $baseUrl = $providerConfig['base_url'] ?? '';
-        $timeout = (int)($defaults['timeout'] ?? ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT);
-        $priceUnit = (string)($providerConfig['price_unit'] ?? 'per_1k_tokens');
-        $inputPrice = $this->normalizePricePerThousand((float)($modelMeta['input_price'] ?? 0), $priceUnit);
-        $outputPrice = $this->normalizePricePerThousand((float)($modelMeta['output_price'] ?? 0), $priceUnit);
+        $timeout = (int)($defaults['timeout'] ?? 180);
 
         $config = array_merge([
             'api_key' => '',
@@ -337,11 +332,8 @@ class ModelSyncService
             'model_code' => $modelCode,
             'model_name' => $modelName,
             'model_version' => $modelMeta['version'] ?? '1.0',
-            'primary_modality' => AiModel::normalizePrimaryModality(
-                (string)($modelMeta['primary_modality'] ?? ($defaults['primary_modality'] ?? AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT))
-            ),
-            'token_price_input' => $inputPrice,
-            'token_price_output' => $outputPrice,
+            'token_price_input' => $modelMeta['input_price'] ?? 0,
+            'token_price_output' => $modelMeta['output_price'] ?? 0,
             'max_tokens' => $modelMeta['max_tokens'] ?? ($defaults['max_tokens'] ?? 4096),
             'is_active' => 0,
             'is_default' => 0,
@@ -355,17 +347,6 @@ class ModelSyncService
                 'password' => '',
             ],
         ];
-    }
-
-    private function normalizePricePerThousand(float $price, string $priceUnit): float
-    {
-        if ($price <= 0) {
-            return 0.0;
-        }
-        if ($priceUnit === 'per_1m_tokens') {
-            return round($price / 1000, 6);
-        }
-        return round($price, 6);
     }
 
     /**
@@ -416,7 +397,6 @@ class ModelSyncService
                 'context_window' => $item[$contextKey] ?? null,
                 'max_tokens' => $item[$maxTokensKey] ?? null,
                 'capabilities' => $item['capabilities'] ?? [],
-                'primary_modality' => $item['primary_modality'] ?? null,
             ];
         }
 
@@ -458,7 +438,7 @@ class ModelSyncService
             }
         }
 
-        $response = $this->executeCurl($ch);
+        $response = curl_exec($ch);
         if ($response === false) {
             $error = curl_error($ch);
             throw new \Exception($error ?: __('模型列表请求失败'));
@@ -475,50 +455,6 @@ class ModelSyncService
         }
 
         return $decoded;
-    }
-
-    private function executeCurl(\CurlHandle $ch): string|bool
-    {
-        if (!SchedulerSystem::isSchedulerActive() || !\Fiber::getCurrent()) {
-            return curl_exec($ch);
-        }
-
-        $multi = curl_multi_init();
-        curl_multi_add_handle($multi, $ch);
-
-        $running = 0;
-        $multiResult = \CURLM_OK;
-        $curlResult = \CURLE_OK;
-
-        do {
-            do {
-                $multiResult = curl_multi_exec($multi, $running);
-            } while ($multiResult === \CURLM_CALL_MULTI_PERFORM);
-
-            while ($info = curl_multi_info_read($multi)) {
-                if (($info['handle'] ?? null) === $ch) {
-                    $curlResult = (int)($info['result'] ?? \CURLE_OK);
-                }
-            }
-
-            if ($multiResult !== \CURLM_OK || $curlResult !== \CURLE_OK) {
-                break;
-            }
-
-            if ($running > 0) {
-                SchedulerSystem::yieldDelay(10);
-            }
-        } while ($running > 0);
-
-        $content = curl_multi_getcontent($ch);
-        curl_multi_remove_handle($multi, $ch);
-        curl_multi_close($multi);
-
-        if ($multiResult !== \CURLM_OK || $curlResult !== \CURLE_OK) {
-            return false;
-        }
-
-        return $content === null ? false : $content;
     }
 
     /**
