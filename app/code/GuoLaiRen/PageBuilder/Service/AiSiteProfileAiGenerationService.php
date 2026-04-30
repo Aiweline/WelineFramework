@@ -192,6 +192,8 @@ PROMPT;
             '<iframe',
             '<object',
             '<embed',
+            '<!doctype',
+            '<!entity',
             'javascript:',
             'onload=',
             'onclick=',
@@ -216,6 +218,33 @@ PROMPT;
 
         if (\strlen($value) > 12000) {
             return '';
+        }
+
+        if (\class_exists(\DOMDocument::class)) {
+            $previousUseInternalErrors = \libxml_use_internal_errors(true);
+            $document = new \DOMDocument('1.0', 'UTF-8');
+            $loaded = $document->loadXML($value, \LIBXML_NONET | \LIBXML_NOWARNING | \LIBXML_NOERROR);
+            $errors = \libxml_get_errors();
+            \libxml_clear_errors();
+            \libxml_use_internal_errors($previousUseInternalErrors);
+
+            if (!$loaded || $errors !== []) {
+                return '';
+            }
+
+            $root = $document->documentElement;
+            if (!$root instanceof \DOMElement) {
+                return '';
+            }
+
+            if (\strtolower($root->localName) !== 'svg') {
+                return '';
+            }
+
+            $namespace = \trim((string)$root->namespaceURI);
+            if ($namespace !== '' && $namespace !== 'http://www.w3.org/2000/svg') {
+                return '';
+            }
         }
 
         return $value;
