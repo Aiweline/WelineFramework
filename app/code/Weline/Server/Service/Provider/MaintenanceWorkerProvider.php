@@ -73,7 +73,7 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
 
     public function requiresStartupReadyBarrier(): bool
     {
-        return true;
+        return false;
     }
 
     public function buildCommand(int $instanceId, ServiceContext $context): ServiceCommand
