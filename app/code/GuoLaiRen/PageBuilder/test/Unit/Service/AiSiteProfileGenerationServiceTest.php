@@ -199,4 +199,68 @@ class AiSiteProfileGenerationServiceTest extends TestCase
         self::assertSame('Orbit Studio', $second['site_title']);
         self::assertSame(1, $generator->calls);
     }
+
+    public function testGenerateRejectsMalformedAiSvgAndFallsBackToDeterministicAssets(): void
+    {
+        $generator = new class extends AiSiteProfileAiGenerationService {
+            public function generateProfile(array $context): array
+            {
+                return [
+                    'site_title' => 'Broken Brand',
+                    'site_tagline' => 'Malformed SVG should not leak into preview HTML',
+                    'brief_description' => 'Reject invalid SVG payloads before they reach the browser.',
+                    'logo_svg' => '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="48" viewBox="0 0 160 48"><path d="M10 10 L40 40</div></svg>',
+                    'icon_svg' => '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><path d="M8 8 L32 32</div></svg>',
+                ];
+            }
+        };
+        $service = new AiSiteProfileGenerationService($generator);
+
+        $profile = $service->generate([
+            'brief_description' => 'Reject invalid SVG payloads before they reach the browser.',
+            'website_profile' => [
+                'site_title' => 'AI Site',
+            ],
+        ]);
+
+        self::assertSame('Broken Brand', $profile['site_title']);
+        self::assertStringStartsWith('data:image/svg+xml;base64,', (string)$profile['logo']);
+        self::assertStringStartsWith('data:image/svg+xml;base64,', (string)$profile['icon']);
+
+        $logoSvg = \base64_decode((string)\substr((string)$profile['logo'], 26), true);
+        $iconSvg = \base64_decode((string)\substr((string)$profile['icon'], 26), true);
+
+        self::assertIsString($logoSvg);
+        self::assertIsString($iconSvg);
+        self::assertStringNotContainsString('</div>', $logoSvg);
+        self::assertStringNotContainsString('</div>', $iconSvg);
+        self::assertStringContainsString('brandLogoGradient', $logoSvg);
+        self::assertStringContainsString('brandIconGradient', $iconSvg);
+    }
+
+    public function testGenerateSanitizesPersistedMalformedSvgAssetsFromExistingProfile(): void
+    {
+        $service = new AiSiteProfileGenerationService();
+
+        $profile = $service->generate([
+            'brief_description' => 'Reject persisted malformed SVG assets before rendering preview pages.',
+            'website_profile' => [
+                'site_title' => 'Unsafe Cache',
+                'logo' => 'data:image/svg+xml;base64,' . \base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="48" viewBox="0 0 160 48"><path d="M10 10 L40 40</div></svg>'),
+                'icon' => 'data:image/svg+xml;base64,' . \base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><path d="M8 8 L32 32</div></svg>'),
+                'favicon' => 'data:image/svg+xml;base64,' . \base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><path d="M8 8 L32 32</div></svg>'),
+            ],
+        ]);
+
+        $logoSvg = \base64_decode((string)\substr((string)$profile['logo'], 26), true);
+        $iconSvg = \base64_decode((string)\substr((string)$profile['icon'], 26), true);
+
+        self::assertIsString($logoSvg);
+        self::assertIsString($iconSvg);
+        self::assertStringNotContainsString('</div>', $logoSvg);
+        self::assertStringNotContainsString('</div>', $iconSvg);
+        self::assertStringContainsString('brandLogoGradient', $logoSvg);
+        self::assertStringContainsString('brandIconGradient', $iconSvg);
+        self::assertSame((string)$profile['icon'], (string)$profile['favicon']);
+    }
 }

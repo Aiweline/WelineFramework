@@ -104,7 +104,7 @@ class LayoutConfigNormalizer
     public function normalizeComponent(array $component, string $region = ''): array
     {
         // 获取组件代码（优先使用 code，回退到 component）
-        $code = $component['code'] ?? $component['component'] ?? '';
+        $code = $component['code'] ?? $component['component'] ?? $component['component_code'] ?? '';
         
         // 标准化组件代码格式（移除模板前缀，如果有的话）
         $code = $this->normalizeComponentCode($code);
