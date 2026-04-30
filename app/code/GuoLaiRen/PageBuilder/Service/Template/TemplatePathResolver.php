@@ -13,26 +13,10 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service\Template;
 
+use Weline\Framework\Manager\ObjectManager;
+
 class TemplatePathResolver
 {
-    /**
-     * 防止 styleCode 被构造为路径穿越/任意目录拼接。
-     * 允许目录名字符：字母数字下划线与短横线，且首字符不得为空。
-     */
-    private function sanitizeStyleCode(string $styleCode): string
-    {
-        $styleCode = \trim($styleCode);
-        if ($styleCode === '') {
-            throw new \InvalidArgumentException((string) __('无效的样式代码'));
-        }
-        // 例如：default / tpmst / _shared / sattaking / fintech-hub
-        if (!\preg_match('/^[A-Za-z0-9_][A-Za-z0-9_-]*$/', $styleCode)) {
-            throw new \InvalidArgumentException((string) __('无效的样式代码'));
-        }
-
-        return $styleCode;
-    }
-
     /**
      * 模板基础路径（相对于 BP）
      */
@@ -74,7 +58,6 @@ class TemplatePathResolver
      */
     public function getTemplatePath(string $styleCode): string
     {
-        $styleCode = $this->sanitizeStyleCode($styleCode);
         $cacheKey = "template:{$styleCode}";
         if (!isset(self::$pathCache[$cacheKey])) {
             self::$pathCache[$cacheKey] = $this->getBasePath() . '/' . $styleCode;
@@ -136,33 +119,7 @@ class TemplatePathResolver
      */
     public function getComponentTemplateReference(string $styleCode, string $file): string
     {
-        $fs = $this->resolveComponentFilesystemPath($styleCode, $file);
-        $sharedFs = $this->getComponentFilePath(self::SHARED_STYLE_CODE, 'legal-content.phtml');
-        if ($fs === $sharedFs && is_file($sharedFs)) {
-            return self::TEMPLATE_REFERENCE_PREFIX . '/' . self::SHARED_STYLE_CODE . '/components/legal-content.phtml';
-        }
-
         return self::TEMPLATE_REFERENCE_PREFIX . "/{$styleCode}/components/{$file}";
-    }
-
-    /**
-     * 解析组件物理路径：当前主题下文件存在则用主题文件；否则 legal-content 回退到 style/_shared/components/legal-content.phtml。
-     */
-    public function resolveComponentFilesystemPath(string $styleCode, string $file): string
-    {
-        $primary = $this->getComponentFilePath($styleCode, $file);
-        if (is_file($primary)) {
-            return $primary;
-        }
-        $norm = str_replace('\\', '/', $file);
-        if (str_ends_with($norm, 'legal-content.phtml')) {
-            $shared = $this->getComponentFilePath(self::SHARED_STYLE_CODE, 'legal-content.phtml');
-            if (is_file($shared)) {
-                return $shared;
-            }
-        }
-
-        return $primary;
     }
     
     /**

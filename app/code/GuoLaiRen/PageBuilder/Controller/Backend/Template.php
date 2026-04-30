@@ -312,7 +312,7 @@ class Template extends BackendController
         $this->assign('is_template_config_mode', true);
         $this->assign('page', $testPage);
         $this->assign('visual_config_page_id', $pageId);
-        $this->assign('page_title', __('模板配置预览 - %{1}', $styleCode));
+        $this->assign('page_title', __('模板配置预览 - %1', $styleCode));
         
         return $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/Page/form_component/visual_config.phtml');
     }

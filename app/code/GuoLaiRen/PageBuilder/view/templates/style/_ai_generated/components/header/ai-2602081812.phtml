@@ -19,9 +19,7 @@ $showNav = $showNav ?? ($component_config['show_nav'] ?? true);
 $navItems = $navItems ?? ($component_config['nav_items'] ?? []);
 $showCta = $showCta ?? ($component_config['show_cta'] ?? true);
 $ctaText = $ctaText ?? ($component_config['cta_text'] ?? __('立即咨询'));
-$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl((string)($ctaUrl ?? ($component_config['cta_url'] ?? '#')));
-$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
-$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
+$ctaUrl = $ctaUrl ?? ($component_config['cta_url'] ?? '#');
 $accentColor = $accentColor ?? ($component_config['accent_color'] ?? '#7c3aed');
 $bgColor = $bgColor ?? ($component_config['bg_color'] ?? '#0b0f1a');
 $textColor = $textColor ?? ($component_config['text_color'] ?? '#e5e7eb');
@@ -66,7 +64,7 @@ $luxurySubtitle = $getConfig('luxury.subtitle', __('Premium Experience'));
         <!-- CTA按钮区域 -->
         <div class="luxury-header__actions">
             <?php if ($showCta): ?>
-            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="luxury-header__cta">
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="luxury-header__cta">
                 <span class="luxury-header__cta-text"><?= htmlspecialchars($ctaText) ?></span>
                 <span class="luxury-header__cta-icon">→</span>
             </a>

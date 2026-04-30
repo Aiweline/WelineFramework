@@ -18,17 +18,7 @@
                     "layout": "split",
                     "show_map": true,
                     "show_form": true,
-                    "show_social": true,
-                    "show_info": true,
-                    "hero.title": "联系我们",
-                    "hero.subtitle": "我们期待与您的交流，请随时通过以下方式与我们联系。",
-                    "contact_info.address": "上海市浦东新区XX路XXX号",
-                    "contact_info.phone": "+86 21 1234 5678",
-                    "contact_info.email": "contact@example.com",
-                    "contact_info.work_hours": "周一至周五 9:00-18:00",
-                    "form.title": "发送消息",
-                    "form.submit_text": "发送消息",
-                    "form.success_message": "感谢您的留言，我们会尽快回复！"
+                    "show_social": true
                 }
             }
         ],

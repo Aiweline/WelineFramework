@@ -258,6 +258,7 @@
             "region": "content",
             "category": "content",
             "type": "section",
+            "thumbnail": "asset/img/testimonials-preview.webp",
             "icon": "bi-chat-quote",
             "sort_order": 40,
             "is_default": true,

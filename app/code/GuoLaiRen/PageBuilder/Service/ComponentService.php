@@ -17,10 +17,6 @@ namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Component;
 use GuoLaiRen\PageBuilder\Model\Layout;
-use GuoLaiRen\PageBuilder\Model\Page as PageModel;
-use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
-use GuoLaiRen\PageBuilder\Service\Component\ComponentRenderer;
-use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
 use Weline\Framework\Manager\ObjectManager;
 
 class ComponentService
@@ -180,37 +176,16 @@ class ComponentService
      * @param string|null $layoutCode 布局代码（可选，用于过滤适合的组件）
      * @param bool $includePreview 是否包含预览HTML（默认true）
      * @param string|null $pageType 页面类型（可选，用于加载默认布局配置）
-     * @param int $welineThemeId 大于 0 时在 by_region 中追加该主题下虚拟部件（与文件部件 code 去重）
-     * @param string $themeComponentArea frontend|backend
      * @return array 组织好的组件数据
      */
-    public function getComponentsForBuilder(
-        string $styleCode,
-        ?string $layoutCode = null,
-        bool $includePreview = true,
-        ?string $pageType = null,
-        int $welineThemeId = 0,
-        string $themeComponentArea = 'frontend'
-    ): array {
+    public function getComponentsForBuilder(string $styleCode, ?string $layoutCode = null, bool $includePreview = true, ?string $pageType = null): array
+    {
         // 启用输出缓冲，防止模板渲染时的直接输出破坏JSON响应
         $obLevel = ob_get_level();
         ob_start();
         
         try {
             $allComponents = $this->getComponentsByStyle($styleCode, true);
-            
-            $virtualAppend = [];
-            if ($welineThemeId > 0 && $layoutCode) {
-                $existingCodes = $this->collectNormalizedComponentCodesFromStyleBuckets($allComponents);
-                $virtualAppend = $this->buildWelineVirtualComponentsForRegionAppend(
-                    $welineThemeId,
-                    $themeComponentArea,
-                    $styleCode,
-                    $includePreview,
-                    $layoutCode,
-                    $existingCodes
-                );
-            }
             
             $result = [
                 // 当前模板的组件（推荐）- 包含预览
@@ -246,7 +221,7 @@ class ComponentService
             
             // 如果指定了布局，按区域分组（不为兼容组件生成预览）
             if ($layoutCode) {
-                $result['by_region'] = $this->groupComponentsByRegion($allComponents, $layoutCode, $includePreview, $styleCode, $virtualAppend);
+                $result['by_region'] = $this->groupComponentsByRegion($allComponents, $layoutCode, $includePreview, $styleCode);
             }
             
             // 按分类分组
@@ -292,24 +267,7 @@ class ComponentService
         
         // 直接使用页面类型代码作为配置文件名
         $configFilePath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/layouts/default/{$pageType}.json";
-
-        if (!file_exists($configFilePath)) {
-            // 法律类页面：主题无专用布局时使用 _shared 默认（legal-content 组件 + 预设文案）
-            $legalTypes = [
-                PageModel::TYPE_PRIVACY_POLICY,
-                PageModel::TYPE_TERMS_OF_SERVICE,
-                PageModel::TYPE_REFUND_POLICY,
-                PageModel::TYPE_COOKIE_POLICY,
-                PageModel::TYPE_SHIPPING_POLICY,
-            ];
-            if (\in_array($pageType, $legalTypes, true)) {
-                $sharedLegal = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/style/_shared/layouts/default/' . $pageType . '.json';
-                if (\is_file($sharedLegal)) {
-                    $configFilePath = $sharedLegal;
-                }
-            }
-        }
-
+        
         if (!file_exists($configFilePath)) {
             // fallback 到 custom_page
             $configFilePath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/layouts/default/custom_page.json";
@@ -348,16 +306,9 @@ class ComponentService
     
     /**
      * 按区域分组组件
-     *
-     * @param list<array<string, mixed>> $welineVirtualAppend 每项含 _layout_region + 构建器行字段
      */
-    private function groupComponentsByRegion(
-        array $allComponents,
-        string $layoutCode,
-        bool $includePreview = false,
-        string $currentStyleCode = '',
-        array $welineVirtualAppend = []
-    ): array {
+    private function groupComponentsByRegion(array $allComponents, string $layoutCode, bool $includePreview = false, string $currentStyleCode = ''): array
+    {
         $regions = Layout::getLayoutRegions($layoutCode);
         $grouped = [];
         
@@ -405,197 +356,7 @@ class ComponentService
             }
         }
         
-        foreach ($welineVirtualAppend as $appendRow) {
-            $lr = $appendRow['_layout_region'] ?? null;
-            if (!is_string($lr) || $lr === '') {
-                continue;
-            }
-            if (!isset($grouped[$lr])) {
-                continue;
-            }
-            $clean = $appendRow;
-            unset($clean['_layout_region']);
-            $grouped[$lr]['components'][] = $clean;
-        }
-        
         return $grouped;
-    }
-    
-    /**
-     * @param array<string, true> $existingNormalizedCodes
-     * @return list<array<string, mixed>>
-     */
-    private function buildWelineVirtualComponentsForRegionAppend(
-        int $welineThemeId,
-        string $themeComponentArea,
-        string $styleCode,
-        bool $includePreview,
-        string $layoutCode,
-        array $existingNormalizedCodes
-    ): array {
-        $themeComponentArea = strtolower($themeComponentArea) === 'backend' ? 'backend' : 'frontend';
-        $layoutRegionKeys = array_keys(Layout::getLayoutRegions($layoutCode));
-        if ($layoutRegionKeys === []) {
-            return [];
-        }
-
-        /** @var VirtualThemeComponent $componentModel */
-        $componentModel = clone ObjectManager::getInstance(VirtualThemeComponent::class);
-        $componentModel->clearData()->clearQuery();
-        $components = $componentModel
-            ->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $welineThemeId)
-            ->where(VirtualThemeComponent::schema_fields_AREA, $themeComponentArea)
-            ->where(VirtualThemeComponent::schema_fields_IS_ACTIVE, 1)
-            ->select()
-            ->fetch()
-            ->getItems();
-
-        $normalizer = ObjectManager::getInstance(LayoutConfigNormalizer::class);
-        $renderer = ComponentRenderer::getInstance();
-        $rows = [];
-
-        foreach ($components as $component) {
-            if (!$component instanceof VirtualThemeComponent) {
-                continue;
-            }
-            $code = (string)$component->getComponentCode();
-            $normKey = strtolower($normalizer->normalizeComponentCode($code));
-            if ($normKey === '' || isset($existingNormalizedCodes[$normKey])) {
-                continue;
-            }
-            $existingNormalizedCodes[$normKey] = true;
-
-            $meta = $component->getMeta();
-            $positions = \is_array($meta['position'] ?? null) ? $meta['position'] : ['content'];
-            $primaryPos = 'content';
-            foreach ($positions as $p) {
-                $p = strtolower((string) $p);
-                if ($p !== '' && $p !== '*') {
-                    $primaryPos = $p;
-                    break;
-                }
-            }
-            $layoutRegion = $this->mapThemePositionToLayoutRegionKey($primaryPos, $layoutRegionKeys);
-            $pbCategory = match ($layoutRegion) {
-                Layout::REGION_HEADER => Component::CATEGORY_HEADER,
-                Layout::REGION_FOOTER => Component::CATEGORY_FOOTER,
-                Layout::REGION_SIDEBAR => Component::CATEGORY_WIDGET,
-                default => Component::CATEGORY_CONTENT,
-            };
-
-            $defaultConfig = $component->getDefaultConfig();
-            $row = [
-                '_layout_region' => $layoutRegion,
-                'id' => 0,
-                'code' => $code,
-                'name' => (string)$component->getName(),
-                'description' => '',
-                'style_code' => $styleCode,
-                'category' => $pbCategory,
-                'region' => $layoutRegion,
-                'type' => 'section',
-                'thumbnail' => '',
-                'thumbnail_url' => '',
-                'icon' => null,
-                'config_schema' => [],
-                'default_config' => $defaultConfig,
-                'compatible_styles' => [],
-                'is_system' => false,
-                'is_shared' => false,
-                'is_ai_generated' => $component->isAiGenerated(),
-                'sort_order' => (int)($meta['sort_order'] ?? 0),
-                'preview_html' => '',
-                'preview_html_encoded' => false,
-                'is_weline_virtual' => true,
-                'virtual_theme_id' => $welineThemeId,
-                'isOwn' => false,
-                'isShared' => false,
-                'templateCode' => 'weline_theme',
-                'templateName' => __('主题虚拟部件'),
-            ];
-            
-            if ($includePreview) {
-                $previewResult = $renderer->renderPreview(
-                    $code,
-                    $styleCode !== '' ? $styleCode : 'default',
-                    $defaultConfig,
-                    [
-                        'virtual_theme_id' => $welineThemeId,
-                        'theme_component_area' => $themeComponentArea,
-                        'style_settings' => [],
-                    ]
-                );
-                if ($previewResult->isSuccess()) {
-                    $row['preview_html'] = base64_encode($previewResult->getHtml());
-                    $row['preview_html_encoded'] = true;
-                } else {
-                    $row['preview_html'] = base64_encode('');
-                    $row['preview_html_encoded'] = true;
-                }
-            }
-            
-            $rows[] = $row;
-        }
-        
-        return $rows;
-    }
-    
-    /**
-     * @return array<string, true>
-     */
-    private function collectNormalizedComponentCodesFromStyleBuckets(array $allComponents): array
-    {
-        $normalizer = ObjectManager::getInstance(LayoutConfigNormalizer::class);
-        $set = [];
-        foreach (['own', 'shared'] as $bucket) {
-            foreach ($allComponents[$bucket] ?? [] as $component) {
-                if (!$component instanceof Component) {
-                    continue;
-                }
-                $code = (string) $component->getData(Component::schema_fields_CODE);
-                $k = strtolower($normalizer->normalizeComponentCode($code));
-                if ($k !== '') {
-                    $set[$k] = true;
-                }
-            }
-        }
-        foreach ($allComponents['compatible'] ?? [] as $components) {
-            foreach ($components as $component) {
-                if (!$component instanceof Component) {
-                    continue;
-                }
-                $code = (string) $component->getData(Component::schema_fields_CODE);
-                $k = strtolower($normalizer->normalizeComponentCode($code));
-                if ($k !== '') {
-                    $set[$k] = true;
-                }
-            }
-        }
-        
-        return $set;
-    }
-    
-    /**
-     * @param list<string> $layoutRegionKeys
-     */
-    private function mapThemePositionToLayoutRegionKey(string $position, array $layoutRegionKeys): string
-    {
-        $set = array_fill_keys($layoutRegionKeys, true);
-        $p = strtolower($position);
-        if ($p === 'header' && isset($set['header'])) {
-            return 'header';
-        }
-        if ($p === 'footer' && isset($set['footer'])) {
-            return 'footer';
-        }
-        if ($p === 'sidebar' && isset($set['sidebar'])) {
-            return 'sidebar';
-        }
-        if (isset($set['content'])) {
-            return 'content';
-        }
-        
-        return $layoutRegionKeys[0] ?? 'content';
     }
     
     /**
@@ -832,8 +593,8 @@ class ComponentService
         // 加载组件所属模板的颜色配置
         $colors = $this->loadTemplateColors($styleCode);
         
-        // 准备模板变量：预览时使用桩对象提供导航/页脚示例数据，避免 nav、footer 等组件渲染为空
-        $template->assign('page', new PreviewPageStub());
+        // 准备模板变量
+        $template->assign('page', null);
         $template->assign('style', $mergedConfig);
         $template->assign('style_settings', $mergedConfig);
         $template->assign('component_config', $mergedConfig);

@@ -77,7 +77,7 @@ $logoWidth = rr_getConfig($styleSettings, 'logo.width', '44');
 
 // 导航配置
 $navDisplay = rr_getConfig($styleSettings, 'navigation.display', 'yes');
-$navBgColor = rr_getConfig($styleSettings, 'navigation.bg_color', rr_color($colors, 'nav_bg', 'rgba(10, 5, 20, 0.95)'));
+$navBgColor = rr_getConfig($styleSettings, 'navigation.bg_color', 'rgba(10, 5, 20, 0.95)');
 $navTextColor = rr_getConfig($styleSettings, 'navigation.text_color', '#fef3c7');
 $navLinkHoverColor = rr_getConfig($styleSettings, 'navigation.link_hover_color', '#eab308');
 $navLinksRaw = rr_getConfig($styleSettings, 'navigation.links', "Home=>/\nGames=>/games\nDownload=>/download\nFAQ=>/faq");
@@ -97,7 +97,7 @@ foreach ($lines as $line) {
     if (empty($line)) continue;
     $parts = explode('=>', $line, 2);
     $name = trim($parts[0] ?? '');
-    $url = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(trim($parts[1] ?? '#'));
+    $url = trim($parts[1] ?? '#');
     if (!empty($name)) {
         $navLinks[] = ['name' => $name, 'url' => $url];
     }
@@ -111,4 +111,54 @@ foreach ($lines as $line) {
     $this->assign('component_config', $styleSettings);
     echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/rummy-royal/components/header/nav.phtml');
 ?>
+<?php endif; ?>
+
+<?php
+// === 像素统计代码 ===
+$isPreviewMode = (bool)($this->getData('is_preview') ?? false);
+if (!$isPreviewMode && isset($_GET['preview']) && $_GET['preview'] === '1') {
+    $isPreviewMode = true;
+}
+
+$pixelEnabled = rr_getConfig($styleSettings, 'pixel.enabled', 'yes');
+$pixelEnabled = (string)($pixelEnabled ?? 'yes');
+$pixelName = rr_getConfig($styleSettings, 'pixel.name', '');
+
+if (empty($pixelName) && $page) {
+    $pixelName = $page->getData('handle') ?? '';
+}
+
+$websiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
+
+if ($websiteId > 0 && !empty($pixelName) && !$isPreviewMode):
+    \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_ID', (string)$websiteId, 3600 * 24 * 365);
+    
+    $websiteUrl = '';
+    $websiteCode = '';
+    try {
+        if (class_exists('\Weline\Websites\Model\Website')) {
+            $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+            $website = clone $websiteModel;
+            $website->clear()->load($websiteId);
+            if ($website->getId()) {
+                $websiteUrl = $website->getData('url') ?? '';
+                $websiteCode = $website->getData('code') ?? '';
+            }
+        }
+    } catch (\Exception $e) {
+        // 不影响像素功能
+    }
+    
+    if (!empty($websiteUrl)) {
+        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_URL', $websiteUrl, 3600 * 24 * 365);
+    }
+    
+    if (!empty($websiteCode)) {
+        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_CODE', $websiteCode, 3600 * 24 * 365);
+    }
+    
+    $this->assign('pixel_name', htmlspecialchars($pixelName));
+    $this->assign('pixel_enabled', htmlspecialchars($pixelEnabled));
+?>
+    <pixel name="{{pixel_name}}" enabled="{{pixel_enabled}}" />
 <?php endif; ?>

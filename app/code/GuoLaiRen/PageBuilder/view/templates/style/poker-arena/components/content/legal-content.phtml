@@ -10,19 +10,11 @@
  * 
  * @fields_start
  * 
- * group:content => 内容设置
- * content.title => 标题:text:|留空使用页面标题
- * content.last_updated => 最后更新:text:
- * content.body => 引言/正文:textarea:
- *
- * group:toc => 章节（当页面内容为空时由配置渲染）
- * toc.items => 章节:textarea:标题|段落内容，一行一节
- *
  * group:layout => 布局设置
  * layout.show_toc => 显示目录:select:yes|yes,no
  * layout.show_last_updated => 显示更新时间:select:yes|yes,no
  * layout.content_width => 内容宽度:select:narrow|narrow,medium,wide
- *
+ * 
  * @fields_end
  */
 
@@ -44,42 +36,7 @@ $maxWidth = $contentWidth === 'wide' ? '1000px' : ($contentWidth === 'medium' ? 
 $page = $this->getData('page');
 $pageTitle = $page ? ($page->getData('title') ?? 'Legal Document') : 'Legal Document';
 $pageContent = $page ? ($page->getData('content') ?? '') : '';
-
-$title = trim($config['content.title'] ?? '') ?: $pageTitle;
-$lastUpdatedConfig = trim($config['content.last_updated'] ?? '');
-$lastUpdated = $lastUpdatedConfig ?: ($page ? ($page->getData('updated_at') ?? '') : '');
-if (!$lastUpdated) {
-    $lastUpdated = date('F j, Y');
-}
-
-if ($pageContent === '') {
-    $body = trim($config['content.body'] ?? '');
-    $tocRaw = $config['toc.items'] ?? '';
-    $sections = [];
-    foreach (preg_split('/[\r\n]+/', $tocRaw) as $line) {
-        $line = trim($line);
-        if ($line === '') continue;
-        $parts = explode('|', $line, 2);
-        $sTitle = trim($parts[0] ?? '');
-        $sContent = trim($parts[1] ?? '');
-        if ($sTitle !== '') {
-            $sections[] = ['title' => $sTitle, 'content' => $sContent];
-        }
-    }
-    if ($body !== '' || !empty($sections)) {
-        $pageContent = '';
-        if ($body !== '') {
-            $pageContent .= '<p>' . nl2br(htmlspecialchars($body)) . '</p>';
-        }
-        foreach ($sections as $s) {
-            $pageContent .= '<h2>' . htmlspecialchars($s['title']) . '</h2>';
-            $pageContent .= '<p>' . nl2br(htmlspecialchars($s['content'])) . '</p>';
-        }
-    }
-}
-if ($pageContent === '') {
-    $pageContent = '<p>' . __('Please add content to this page via the page editor or configure the component.') . '</p>';
-}
+$lastUpdated = $page ? ($page->getData('updated_at') ?? '') : '';
 
 $instanceId = 'pa-legal-' . uniqid();
 ?>
@@ -106,9 +63,9 @@ $instanceId = 'pa-legal-' . uniqid();
     
     <div class="pa-legal-container">
         <div class="pa-legal-header">
-            <h1 class="pa-legal-title"><?= htmlspecialchars($title) ?></h1>
-            <?php if ($showLastUpdated): ?>
-            <div class="pa-legal-updated"><?= __('Last updated') ?>: <?= htmlspecialchars(strtotime($lastUpdated) ? date('F j, Y', strtotime($lastUpdated)) : $lastUpdated) ?></div>
+            <h1 class="pa-legal-title"><?= htmlspecialchars($pageTitle) ?></h1>
+            <?php if ($showLastUpdated && $lastUpdated): ?>
+            <div class="pa-legal-updated">Last updated: <?= htmlspecialchars($lastUpdated) ?></div>
             <?php endif; ?>
         </div>
         

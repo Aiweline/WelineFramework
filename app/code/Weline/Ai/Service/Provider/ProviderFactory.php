@@ -31,6 +31,7 @@ class ProviderFactory
      * 
      * @var array
      */
+    private array $providers = [];
 
     /**
      * 提供者类映射
@@ -54,14 +55,21 @@ class ProviderFactory
     public function getProvider(AiModel $model): ProviderInterface
     {
         $modelCode = $model->getModelCode();
+        $vendor = $model->getVendor();
 
         // 尝试从缓存获取
+        $cacheKey = $vendor . '_' . $modelCode;
+        if (isset($this->providers[$cacheKey])) {
+            return $this->providers[$cacheKey];
+        }
 
         // 查找支持该模型的提供者
         foreach ($this->providerClasses as $providerClass) {
-            $provider = $this->instantiateProvider($providerClass);
+            /** @var ProviderInterface $provider */
+            $provider = ObjectManager::getInstance($providerClass);
             
             if ($provider->supports($modelCode)) {
+                $this->providers[$cacheKey] = $provider;
                 return $provider;
             }
         }
@@ -77,14 +85,10 @@ class ProviderFactory
      */
     private function getMockProvider(): ProviderInterface
     {
-        return $this->instantiateProvider(MockProvider::class);
-    }
-
-    private function instantiateProvider(string $providerClass): ProviderInterface
-    {
-        /** @var ProviderInterface $provider */
-        $provider = ObjectManager::make($providerClass);
-        return $provider;
+        if (!isset($this->providers['mock'])) {
+            $this->providers['mock'] = new MockProvider();
+        }
+        return $this->providers['mock'];
     }
 
     /**
@@ -120,7 +124,7 @@ class ProviderFactory
         $providers = [];
         
         foreach ($this->providerClasses as $providerClass) {
-            $provider = $this->instantiateProvider($providerClass);
+            $provider = ObjectManager::getInstance($providerClass);
             $providers[] = [
                 'class' => $providerClass,
                 'name' => basename(str_replace('\\', '/', $providerClass)),

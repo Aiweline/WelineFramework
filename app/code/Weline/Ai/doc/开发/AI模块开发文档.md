@@ -1,7 +1,7 @@
 # AI模块开发文档
 
 **版本**: 2.0（基于实际开发经验更新）  
-**更新日期**: 2026-04-28
+**更新日期**: 2025-10-09
 
 ## 功能概述
 
@@ -29,7 +29,6 @@ Weline_Ai 模块是一个企业级AI服务集成平台，提供统一的AI服务
 4. **双服务模式**
    - HTTP API接口模式
    - PHP静态方法调用模式
-   - 跨模块统一查询 `w_query('ai', ...)`（见下文）
    - 流式和非流式响应支持
 
 5. **多语言支持**
@@ -66,15 +65,6 @@ AiService::generateTextStream(
     'text_generation'
 );
 ```
-
-### 跨模块统一查询（推荐：w_query）
-
-其他业务模块**不应**为「调用 AI」再单独起事件或重复封装；应使用框架 **`w_query('ai', $operation, $params)`**，由本模块在 `extends/module/Weline_Framework/Query/AiQueryProvider.php` 中注册 `provider = 'ai'`，内部委托 `AiService`。
-
-- **同步示例**：`w_query('ai', 'generate', ['prompt' => '...', 'model_code' => '...', 'session_id' => '...'])`
-- **流式示例**：`w_query('ai', 'generate_stream', ['prompt' => '...', 'stream_callback' => fn($chunk) => ...])`（`stream_callback` 仅同请求/同进程，不可序列化、不可入队）
-- **智能体**：`w_query('ai', 'execute_agent', ['agent_code' => '...', 'prompt' => '...', ...])`
-- **详细参数与 operation 列表**：[doc/API/API.md 跨模块调用（w_query）](../API/API.md#跨模块调用w_query)
 
 ### API接口模式
 

@@ -3098,7 +3098,7 @@ class AiSitePageComponentGenerationService
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $visualExcellence = $this->buildVisualExcellencePromptAddon('header');
         $skillContract = $this->buildWelineSkillContractPromptAddon();
-        $claudeDesignSkill = $this->buildClaudeDesignSkillPromptAddon('stage3');
+        $claudeDesignSkill = $this->buildClaudeDesignSkillPromptAddon('stage3', $scope);
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
 
         return $langRule
@@ -3149,7 +3149,7 @@ class AiSitePageComponentGenerationService
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $visualExcellence = $this->buildVisualExcellencePromptAddon('footer');
         $skillContract = $this->buildWelineSkillContractPromptAddon();
-        $claudeDesignSkill = $this->buildClaudeDesignSkillPromptAddon('stage3');
+        $claudeDesignSkill = $this->buildClaudeDesignSkillPromptAddon('stage3', $scope);
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
 
         return $langRule
@@ -3223,7 +3223,7 @@ class AiSitePageComponentGenerationService
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $visualExcellence = $this->buildVisualExcellencePromptAddon('section');
         $skillContract = $this->buildWelineSkillContractPromptAddon();
-        $claudeDesignSkill = $this->buildClaudeDesignSkillPromptAddon('stage3');
+        $claudeDesignSkill = $this->buildClaudeDesignSkillPromptAddon('stage3', $scope);
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
         $pageLabel = $this->normalizePromptVisibleLabel(
             (string)($blueprint['page_label'] ?? ''),
@@ -3322,9 +3322,9 @@ class AiSitePageComponentGenerationService
             . "- queue-usage/sse-streaming: long generation is already queued; return the final component JSON only, not progress narration or markdown.\n";
     }
 
-    private function buildClaudeDesignSkillPromptAddon(string $stage): string
+    private function buildClaudeDesignSkillPromptAddon(string $stage, array $scope = []): string
     {
-        return \implode("\n", $this->getSkillRegistry()->buildPromptGuideLines($stage)) . "\n";
+        return \implode("\n", $this->getSkillRegistry()->buildPromptGuideLinesForScope($stage, $scope)) . "\n";
     }
 
     /**

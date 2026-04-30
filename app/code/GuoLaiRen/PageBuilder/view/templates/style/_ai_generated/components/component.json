@@ -57,20 +57,6 @@
                 "*"
             ],
             "sort_order": 100
-        },
-        "legal-content": {
-            "name": "法律文档",
-            "name_en": "Legal Content",
-            "description": "隐私政策、服务条款等；无本地文件时使用共享 legal-content 组件",
-            "region": "content",
-            "category": "content",
-            "type": "section",
-            "file": "legal-content.phtml",
-            "icon": "bi-file-earmark-text",
-            "compatible_styles": [
-                "*"
-            ],
-            "sort_order": 95
         }
     }
 }
