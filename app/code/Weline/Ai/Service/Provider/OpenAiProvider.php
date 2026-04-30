@@ -32,7 +32,7 @@ use Weline\Framework\Runtime\SchedulerSystem;
  * - 閿欒澶勭悊鍜岄噸璇曟満鍒?
  * - Token浣跨敤閲忕粺璁?
  */
-class OpenAiProvider implements ProviderInterface
+class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterface
 {
     private const THINKING_PROTOCOL_PAYLOAD = 'thinking_payload';
     private const THINKING_PROTOCOL_BOOLEAN = 'boolean_toggle';
@@ -211,6 +211,165 @@ class OpenAiProvider implements ProviderInterface
                 @set_time_limit(0);
             }
         }
+    }
+
+    /**
+     * Text-to-image generation through the OpenAI-compatible Images API.
+     *
+     * @return array<string,mixed>
+     * @throws Exception
+     */
+    public function generateImage(AiModel $model, string $prompt, array $params = []): array
+    {
+        $config = $this->mergeProviderRuntimeConfig($model);
+        $apiKey = $this->getApiKey($config);
+        if ($apiKey === '') {
+            throw new Exception(__('API key is required for image generation.'));
+        }
+
+        $proxyInfo = $model->getProxyInfo();
+        if (\is_string($proxyInfo) && $proxyInfo !== '') {
+            $proxyInfo = \json_decode($proxyInfo, true) ?: [];
+        }
+        if (!\is_array($proxyInfo)) {
+            $proxyInfo = [];
+        }
+
+        $requestData = $this->buildImageGenerationRequest($model, $prompt, $params, $config);
+        $response = $this->callApiWithRetry(
+            $this->resolveImageGenerationUrl($config),
+            $apiKey,
+            $requestData,
+            $proxyInfo,
+            ProviderTimeoutPolicy::resolveRequestTimeout($params, $config),
+            0,
+            false
+        );
+
+        return $this->normalizeImageGenerationResponse($response, (string)$requestData['model'], $requestData);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function mergeProviderRuntimeConfig(AiModel $model): array
+    {
+        $config = $model->getConfig();
+        $providerConfig = $model->getData('provider_config');
+        if (!empty($providerConfig)) {
+            $providerData = \is_string($providerConfig) ? \json_decode($providerConfig, true) : $providerConfig;
+            if (\is_array($providerData)) {
+                foreach ($providerData as $key => $value) {
+                    if ($value !== '' && $value !== null) {
+                        $config[$key] = $value;
+                    }
+                }
+            }
+        }
+
+        return \is_array($config) ? $config : [];
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    private function resolveImageGenerationUrl(array $config): string
+    {
+        $apiUrl = \trim((string)($config['image_api_url'] ?? $config['api_url'] ?? $config['base_url'] ?? 'https://api.openai.com/v1'));
+        if ($apiUrl === '') {
+            $apiUrl = 'https://api.openai.com/v1';
+        }
+        if (!\str_ends_with($apiUrl, '/images/generations')) {
+            $apiUrl = \rtrim($apiUrl, '/') . '/images/generations';
+        }
+
+        return $apiUrl;
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @param array<string,mixed> $config
+     * @return array<string,mixed>
+     */
+    private function buildImageGenerationRequest(AiModel $model, string $prompt, array $params, array $config): array
+    {
+        $modelCode = (string)$model->getModelCode();
+        $requestData = [
+            'model' => $modelCode,
+            'prompt' => $prompt,
+            'n' => \max(1, (int)($params['n'] ?? $params['count'] ?? 1)),
+            'size' => (string)($params['size'] ?? $config['image_size'] ?? $config['size'] ?? '1024x1024'),
+        ];
+
+        foreach ([
+            'quality' => $params['quality'] ?? $config['quality'] ?? null,
+            'style' => $params['style'] ?? $config['style'] ?? null,
+            'background' => $params['background'] ?? $config['background'] ?? null,
+            'output_format' => $params['output_format'] ?? $config['output_format'] ?? null,
+        ] as $key => $value) {
+            if ($value !== null && $value !== '') {
+                $requestData[$key] = $value;
+            }
+        }
+        $responseFormat = $params['response_format'] ?? $config['response_format'] ?? null;
+        if ($responseFormat !== null && $responseFormat !== '' && !\str_starts_with($modelCode, 'gpt-image')) {
+            $requestData['response_format'] = $responseFormat;
+        }
+
+        return $requestData;
+    }
+
+    /**
+     * @param array<string,mixed> $response
+     * @param array<string,mixed> $requestData
+     * @return array<string,mixed>
+     */
+    private function normalizeImageGenerationResponse(array $response, string $modelCode, array $requestData): array
+    {
+        $images = [];
+        foreach (\is_array($response['data'] ?? null) ? $response['data'] : [] as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $image = [];
+            foreach (['url', 'b64_json', 'revised_prompt'] as $key) {
+                if (isset($item[$key]) && \is_scalar($item[$key]) && \trim((string)$item[$key]) !== '') {
+                    $image[$key] = (string)$item[$key];
+                }
+            }
+            $mimeType = $this->normalizeImageMimeType(
+                (string)($item['mime_type'] ?? ''),
+                (string)($requestData['output_format'] ?? $requestData['response_format'] ?? '')
+            );
+            if ($mimeType !== '') {
+                $image['mime_type'] = $mimeType;
+            }
+            if ($image !== []) {
+                $images[] = $image;
+            }
+        }
+
+        return [
+            'images' => $images,
+            'usage' => \is_array($response['usage'] ?? null) ? $response['usage'] : [],
+            'model' => (string)($response['model'] ?? $modelCode),
+            'finish_reason' => 'stop',
+            'raw' => $response,
+        ];
+    }
+
+    private function normalizeImageMimeType(string $mimeType, string $format): string
+    {
+        $mimeType = \strtolower(\trim($mimeType));
+        if ($mimeType !== '') {
+            return $mimeType;
+        }
+        $format = \strtolower(\trim($format));
+        return match ($format) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'webp' => 'image/webp',
+            default => 'image/png',
+        };
     }
 
     /**
@@ -1302,7 +1461,15 @@ class OpenAiProvider implements ProviderInterface
      * @return array
      * @throws Exception
      */
-    private function callApiWithRetry(string $url, string $apiKey, array $data, array $proxyInfo, int $timeout, int $retryCount = 0): array
+    private function callApiWithRetry(
+        string $url,
+        string $apiKey,
+        array $data,
+        array $proxyInfo,
+        int $timeout,
+        int $retryCount = 0,
+        bool $requireChatMessage = true
+    ): array
     {
         // SSE 妯″紡涓嬩笉鍋?PHP 灞傞潰鐨勮秴鏃舵娴?
         $isSseMode = SseContext::isSseEnabled();
@@ -1358,11 +1525,14 @@ class OpenAiProvider implements ProviderInterface
             }
 
             $result = json_decode($response, true);
+            if (!\is_array($result)) {
+                throw new Exception(__('Invalid API JSON response.'));
+            }
             
             if ($httpCode >= 500 && $retryCount < self::MAX_RETRIES) {
                 // 鏈嶅姟鍣ㄩ敊璇紝閲嶈瘯
                 SchedulerSystem::sleep(self::RETRY_DELAY * ($retryCount + 1));
-                return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
+                return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1, $requireChatMessage);
             }
 
             if ($httpCode !== 200) {
@@ -1373,7 +1543,7 @@ class OpenAiProvider implements ProviderInterface
                 throw new Exception(__('API returned an error: %{error}', ['error' => $errorMsg]));
             }
 
-            if (!isset($result['choices'][0]['message']['content'])) {
+            if ($requireChatMessage && !isset($result['choices'][0]['message']['content'])) {
                 throw new Exception(__('Invalid API response format.'));
             }
 
@@ -1391,7 +1561,7 @@ class OpenAiProvider implements ProviderInterface
             
             if ($retryCount < self::MAX_RETRIES) {
                 SchedulerSystem::sleep(self::RETRY_DELAY * ($retryCount + 1));
-                return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
+                return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1, $requireChatMessage);
             }
             throw new Exception(__('API request failed after %{count} retries: %{msg}', [
                 'count' => $retryCount,
@@ -2224,6 +2394,8 @@ class OpenAiProvider implements ProviderInterface
         // 鏀寔OpenAI鍜屽吋瀹筄penAI API鐨勬ā鍨嬶紙濡侱eepSeek绛夛紝浣嗕笉鍖呮嫭Claude锛孋laude浣跨敤AnthropicProvider锛?
         return str_contains($modelCode, 'gpt') 
             || str_contains($modelCode, 'openai') 
+            || str_contains($modelCode, 'gpt-image')
+            || str_contains($modelCode, 'dall-e')
             || str_contains($modelCode, 'deepseek')
             || str_contains($modelCode, 'gemini')
             || str_contains($modelCode, 'kimi')

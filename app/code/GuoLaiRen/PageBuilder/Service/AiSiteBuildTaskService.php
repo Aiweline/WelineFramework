@@ -1391,6 +1391,58 @@ class AiSiteBuildTaskService
     }
 
     /**
+     * 蓝图维度「仍有工作未完成」：含 pending/running。
+     *
+     * 说明：`listPendingTasks()` / `hasPendingTasks()` 仅枚举 pending，
+     * 若主调度循环因全部为 running（无 pending）提前退出且未落盘 done，会出现
+     * 队列已标记完成但任务面板仍卡在「进行中」；发布门槛须显式计入 running。
+     *
+     * @param array<string, mixed> $scope
+     */
+    public function hasUnfinishedBlueprintTasks(array $scope): bool
+    {
+        $taskState = $this->extractTaskState($scope);
+        foreach ($this->extractBlueprintTasks($scope) as $task) {
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+            $state = \is_array($taskState[$taskKey] ?? null) ? $taskState[$taskKey] : [];
+            $status = $this->normalizeTaskStatus((string)($state['status'] ?? self::TASK_STATUS_PENDING));
+            if (\in_array($status, [self::TASK_STATUS_PENDING, self::TASK_STATUS_RUNNING], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 构建主循环退出后收敛任务标记：先做产物对齐，再在仍有 stuck running 时将 running 拉回 pending，
+     * 第二轮对齐把「已有产物但未落 done」的任务修正为 done。
+     *
+     * @param array<string, mixed> $scope
+     *
+     * @return array<string, mixed>
+     */
+    public function finalizeBuildTaskStatesAfterRunLoop(array $scope): array
+    {
+        $scope = $this->reconcileGeneratedArtifactsWithTaskState($scope);
+        $summary = $this->summarize($scope);
+        if ((int)($summary['running'] ?? 0) <= 0) {
+            return $scope;
+        }
+        $scope = $this->resetRunningTasksForInterruptedBuild(
+            $scope,
+            (string)__(
+                '构建主循环已结束，但仍有任务停留在执行中状态；已结合已生成内容与任务状态对齐。'
+            )
+        );
+
+        return $this->reconcileGeneratedArtifactsWithTaskState($scope);
+    }
+
+    /**
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
