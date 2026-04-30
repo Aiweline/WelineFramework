@@ -18,8 +18,7 @@
  * logo.width => Logo宽度:number:40|px
  * 
  * group:navigation => 导航设置
- * navigation.use_custom_links => 使用自定义导航链接:select:no|no,yes
- * navigation.items => 导航项配置:textarea:Home=>#hero\r\nDownload App=>#download\r\nGames=>#games\r\nFAQ=>#faq\r\nContact Us=>/contact|格式：名称=>链接，一行一个（仅当开启自定义链接时生效）
+ * navigation.items => 导航项配置:textarea:Home=>#hero\r\nDownload App=>#download\r\nGames=>#games\r\nFAQ=>#faq\r\nContact Us=>/contact|格式：名称=>链接，一行一个
  * navigation.show_cta => 显示CTA按钮:select:yes|yes,no
  * navigation.cta_text => CTA按钮文字:text:Download App
  * navigation.cta_url => CTA按钮链接:text:#download
@@ -37,7 +36,7 @@ if (!isset($colors) || !is_array($colors)) {
 // 颜色配置
 $navBg = $colors['nav_bg'] ?? 'rgba(10, 10, 26, 0.95)';
 $navText = $colors['nav_text'] ?? '#ffffff';
-$navLink = $colors['nav_link'] ?? '#e8e0f5';
+$navLink = $colors['nav_link'] ?? '#b8b8d0';
 $navLinkHover = $colors['nav_link_hover'] ?? '#a855f7';
 $accentPrimary = $colors['accent_primary'] ?? '#7c3aed';
 $buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%)';
@@ -49,154 +48,100 @@ $logoText = $config['logo.text'] ?? 'Satta King 786';
 $logoWidth = $config['logo.width'] ?? 40;
 
 // 导航配置
-$useCustomLinks = ($config['navigation.use_custom_links'] ?? 'no') === 'yes';
 $navItemsRaw = $config['navigation.items'] ?? "Home=>#hero\nDownload App=>#download\nGames=>#games\nFAQ=>#faq\nContact Us=>/contact";
 $showCta = ($config['navigation.show_cta'] ?? 'yes') !== 'no';
 $ctaText = $config['navigation.cta_text'] ?? 'Download App';
-$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['navigation.cta_url'] ?? '#download');
-$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
-$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
+$ctaUrl = $config['navigation.cta_url'] ?? '#download';
 
-// 导航项：默认按网站页面类型自动生成；开启「使用自定义导航链接」时用 navigation.items
+// 解析导航项
 $navItems = [];
-$page = $this->getData('page');
-if (!$useCustomLinks && $page && method_exists($page, 'getHeaderNavigationPages')) {
-    $headerPages = $page->getHeaderNavigationPages(10);
-    foreach ($headerPages as $navPage) {
-        $type = $navPage['type'] ?? '';
-        $labelKey = 'navigation.label_' . $type;
-        $configuredLabel = trim((string)($config[$labelKey] ?? ''));
-        $title = $navPage['title'] ?? '';
-        $url = $navPage['url'] ?? '/';
-        if (isset($navPage['type']) && $navPage['type'] === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME) {
-            $title = __('Home');
-            $url = '/';
-        }
-        $navItems[] = ['name' => $configuredLabel !== '' ? $configuredLabel : $title, 'url' => $url];
+$lines = preg_split('/[\r\n]+/', $navItemsRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    
+    $parts = explode('=>', $line, 2);
+    $name = trim($parts[0] ?? '');
+    $url = trim($parts[1] ?? '#');
+    
+    if (!empty($name)) {
+        $navItems[] = [
+            'name' => $name,
+            'url' => $url ?: '#',
+        ];
     }
-}
-if ($useCustomLinks || empty($navItems)) {
-    $navItems = [];
-    $lines = preg_split('/[\r\n]+/', $navItemsRaw);
-    foreach ($lines as $line) {
-        $line = trim($line);
-        if (empty($line)) continue;
-        $parts = explode('=>', $line, 2);
-        $name = trim($parts[0] ?? '');
-        $url = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(trim($parts[1] ?? '#'));
-        if (!empty($name)) {
-            $navItems[] = ['name' => $name, 'url' => $url ?: '#'];
-        }
-    }
-}
-if (empty($navItems)) {
-    $navItems = [
-        ['name' => 'Home', 'url' => '/#hero'],
-        ['name' => 'Download App', 'url' => '/#download'],
-        ['name' => 'Games', 'url' => '/#games'],
-        ['name' => 'FAQ', 'url' => '/#faq'],
-        ['name' => 'Contact Us', 'url' => '/contact'],
-    ];
 }
 
 $instanceId = 'sk-nav-' . uniqid();
 ?>
 
-<header class="sk-header-outer" id="<?= $instanceId ?>">
-    <div class="sk-nav-inner">
+<nav class="sk-nav" id="<?= $instanceId ?>">
     <style>
         #<?= $instanceId ?> {
-            width: 100vw;
-            margin-left: calc(-50vw + 50%);
-            box-sizing: border-box;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 1000;
-            background: <?= htmlspecialchars($navBg) ?>;
-            backdrop-filter: blur(10px);
-            padding: 0 0;
+            padding: 0 20px;
             height: 80px;
             display: flex;
             align-items: center;
-            justify-content: center;
-        }
-        #<?= $instanceId ?> .sk-nav-inner {
-            width: 100%;
+            justify-content: space-between;
             max-width: 1200px;
             margin: 0 auto;
-            padding: 0 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
         }
         
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-logo {
+        #<?= $instanceId ?> .sk-nav-logo {
             display: flex;
             align-items: center;
             gap: 12px;
             font-size: 1.25rem;
             font-weight: 700;
             color: <?= $navText ?>;
-            text-decoration: none;
-            flex-shrink: 0;
-            white-space: nowrap;
         }
         
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-logo:hover {
-            color: <?= $navText ?>;
-        }
-        
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-logo img {
+        #<?= $instanceId ?> .sk-nav-logo img {
             height: <?= $logoWidth ?>px;
             width: auto;
         }
         
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-logo-icon {
+        #<?= $instanceId ?> .sk-nav-logo-icon {
             width: <?= $logoWidth ?>px;
             height: <?= $logoWidth ?>px;
             background: <?= $buttonPrimaryBg ?>;
-            border-radius: 12px;
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            position: relative;
         }
         
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-logo-icon svg {
+        #<?= $instanceId ?> .sk-nav-logo-icon svg {
             width: 24px;
             height: 24px;
             fill: #ffffff;
         }
         
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-menu {
+        #<?= $instanceId ?> .sk-nav-menu {
             display: flex;
             align-items: center;
             gap: 32px;
         }
         
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-links {
+        #<?= $instanceId ?> .sk-nav-links {
             display: flex;
             align-items: center;
             gap: 32px;
         }
         
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-link {
+        #<?= $instanceId ?> .sk-nav-link {
             color: <?= $navLink ?>;
             font-size: 0.95rem;
-            font-weight: 600;
+            font-weight: 500;
             transition: color 0.3s ease;
             position: relative;
-            text-decoration: none;
-            white-space: nowrap;
         }
         
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-link:hover {
+        #<?= $instanceId ?> .sk-nav-link:hover {
             color: <?= $navLinkHover ?>;
         }
         
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-link::after {
+        #<?= $instanceId ?> .sk-nav-link::after {
             content: '';
             position: absolute;
             bottom: -4px;
@@ -205,60 +150,40 @@ $instanceId = 'sk-nav-' . uniqid();
             height: 2px;
             background: <?= $accentPrimary ?>;
             transition: width 0.3s ease;
-            border-radius: 1px;
         }
         
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-link:hover::after {
+        #<?= $instanceId ?> .sk-nav-link:hover::after {
             width: 100%;
         }
         
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-cta {
-            padding: 10px 24px;
+        #<?= $instanceId ?> .sk-nav-cta {
+            padding: 10px 20px;
             background: <?= $buttonPrimaryBg ?>;
             color: #ffffff;
             font-size: 0.9rem;
-            font-weight: 700;
-            border-radius: 50px;
+            font-weight: 600;
+            border-radius: 8px;
             transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            text-decoration: none;
-            flex-shrink: 0;
-            white-space: nowrap;
         }
         
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-cta:hover {
+        #<?= $instanceId ?> .sk-nav-cta:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(124, 58, 237, 0.4);
+            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
         }
         
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-cta svg {
-            width: 16px;
-            height: 16px;
-            fill: currentColor;
-        }
-        
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-toggle {
+        #<?= $instanceId ?> .sk-nav-toggle {
             display: none;
             flex-direction: column;
-            justify-content: center;
             gap: 5px;
-            width: 40px;
-            height: 40px;
-            padding: 0;
+            padding: 8px;
             cursor: pointer;
-            background: none;
-            border: none;
-            color: <?= $navText ?>;
         }
         
-        #<?= $instanceId ?> .sk-nav-inner .sk-nav-toggle span {
-            width: 22px;
+        #<?= $instanceId ?> .sk-nav-toggle span {
+            width: 24px;
             height: 2px;
-            background: currentColor;
-            transition: transform 0.25s ease, opacity 0.25s ease;
-            border-radius: 1px;
+            background: <?= $navText ?>;
+            transition: all 0.3s ease;
         }
         
         @media (max-width: 992px) {
@@ -275,7 +200,6 @@ $instanceId = 'sk-nav-' . uniqid();
                 gap: 0;
                 transform: translateX(100%);
                 transition: transform 0.3s ease;
-                backdrop-filter: blur(16px);
             }
             
             #<?= $instanceId ?> .sk-nav-menu.active {
@@ -304,7 +228,6 @@ $instanceId = 'sk-nav-' . uniqid();
                 margin-top: 24px;
                 width: 100%;
                 text-align: center;
-                justify-content: center;
                 padding: 16px;
             }
             
@@ -333,31 +256,30 @@ $instanceId = 'sk-nav-' . uniqid();
             <img src="<?= htmlspecialchars($logoImage) ?>" alt="<?= htmlspecialchars($logoText) ?>">
         <?php else: ?>
             <span class="sk-nav-logo-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2 4 4 .5-2 5 .5 4h-6l.5-4-2-5 4-.5L12 2z"/><path d="M4 20h16"/></svg>
+                <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
             </span>
         <?php endif; ?>
         <span><?= htmlspecialchars($logoText) ?></span>
     </a>
     <?php endif; ?>
     
-    <button type="button" class="sk-nav-toggle" aria-label="<?= __('菜单') ?>" onclick="this.classList.toggle('active'); document.querySelector('#<?= $instanceId ?> .sk-nav-menu').classList.toggle('active');">
+    <!-- Mobile Toggle -->
+    <button class="sk-nav-toggle" onclick="this.classList.toggle('active'); document.querySelector('#<?= $instanceId ?> .sk-nav-menu').classList.toggle('active');">
         <span></span>
         <span></span>
         <span></span>
     </button>
     
+    <!-- Navigation Menu -->
     <div class="sk-nav-menu">
         <div class="sk-nav-links">
             <?php foreach ($navItems as $item): ?>
             <a href="<?= htmlspecialchars($item['url']) ?>" class="sk-nav-link"><?= htmlspecialchars($item['name']) ?></a>
             <?php endforeach; ?>
         </div>
+        
         <?php if ($showCta): ?>
-        <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="sk-nav-cta">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            <?= htmlspecialchars($ctaText) ?>
-        </a>
+        <a href="<?= htmlspecialchars($ctaUrl) ?>" class="sk-nav-cta"><?= htmlspecialchars($ctaText) ?></a>
         <?php endif; ?>
     </div>
-</div>
-</header>
+</nav>

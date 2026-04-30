@@ -3,12 +3,6 @@
  * PageBuilder 网站管理 - 添加/编辑表单
  * 内容模板 - 由布局系统自动包裹
  *
- * 新建/编辑站点入口（均走 WebsiteManagement::add / ::edit，共用本模板；域名多选 bind-root-www 一处生效即可）：
- * - 网站列表工具栏「新建站点」：w:websites:website:build → 路由 backend/websiteManagement/add
- * - 页面列表侧栏「快速新建站点」：同上
- * - 页面表单（Page/form）侧栏 iframe 加载同上路由（backend/websiteManagement/add）
- * w:websites:domain:select 属性禁止写 PHP 短标签；动态值先赋变量再在属性里写变量名（见 Weline\Websites\Taglib\DomainSelect）。
- *
  * @var \Weline\Framework\View\Template $this
  */
 
@@ -25,19 +19,6 @@ $selected_pool_ids = $selected_pool_ids ?? [];
 $domain_options = $domain_options ?? [];
 $sub_path = $sub_path ?? '';
 $isEdit = isset($website['website_id']) && !empty($website['website_id']);
-$websiteDefaultLanguage = (string)($website['default_language'] ?? '');
-if ($websiteDefaultLanguage !== '' && !in_array($websiteDefaultLanguage, $selected_languages, true)) {
-    $selected_languages[] = $websiteDefaultLanguage;
-}
-$selected_languages = array_values(array_filter(array_map(
-    static function ($value): string {
-        return is_scalar($value) ? trim((string)$value) : '';
-    },
-    array_unique($selected_languages)
-), static function (string $value): bool {
-    return $value !== '';
-}));
-$websiteReadonlyLanguages = $websiteDefaultLanguage !== '' ? [$websiteDefaultLanguage] : [];
 ?>
 
 <!-- twitter-bootstrap-wizard css -->
@@ -189,8 +170,7 @@ $websiteReadonlyLanguages = $websiteDefaultLanguage !== '' ? [$websiteDefaultLan
                             multiple="true"
                             value-type="pool_id"
                             site-ready-only="true"
-                            bind-root-www="true"
-                            website-id="domainSelectWebsiteId"
+                            website-id="<?= $domainSelectWebsiteId ?>"
                             auto-fill-code="code"
                             auto-fill-name="name"
                         />
@@ -255,15 +235,6 @@ $websiteReadonlyLanguages = $websiteDefaultLanguage !== '' ? [$websiteDefaultLan
 
                     <div class="col-4 mb-3">
                         <label for="default_language" class="form-label"><lang>默认语言</lang></label>
-                        <w:i18n:language:select
-                            id="pagebuilder_website_default_language_selector"
-                            name="default_language"
-                            input-id="default_language"
-                            value="websiteDefaultLanguage"
-                            allow-empty="true"
-                            class="w-100"
-                        />
-                        <?php if (false): ?>
                         <select class="form-select form-control" name="default_language" id="default_language">
                             <option value="">-- <?= __('请选择') ?> --</option>
                             <?php foreach ($locales as $local): ?>
@@ -273,7 +244,6 @@ $websiteReadonlyLanguages = $websiteDefaultLanguage !== '' ? [$websiteDefaultLan
                                 </option>
                             <?php endforeach; ?>
                         </select>
-                        <?php endif; ?>
                         <div class="form-text-hint"><lang>不设置则从关联语言中选择第一个作为默认值</lang></div>
                     </div>
 
@@ -312,16 +282,6 @@ $websiteReadonlyLanguages = $websiteDefaultLanguage !== '' ? [$websiteDefaultLan
 
                     <div class="col-6 mb-3">
                         <label for="language_codes" class="form-label"><lang>关联语言</lang></label>
-                        <w:i18n:language:select
-                            id="pagebuilder_website_related_languages_selector"
-                            name="language_codes[]"
-                            input-id="language_codes"
-                            value="selected_languages"
-                            multiple="true"
-                            readonly-values="websiteReadonlyLanguages"
-                            class="w-100"
-                        />
-                        <?php if (false): ?>
                         <select class="form-select" name="language_codes[]" id="language_codes" multiple>
                             <?php foreach ($locales as $local): ?>
                                 <option value="<?= htmlspecialchars($local['code']) ?>" 
@@ -330,7 +290,6 @@ $websiteReadonlyLanguages = $websiteDefaultLanguage !== '' ? [$websiteDefaultLan
                                 </option>
                             <?php endforeach; ?>
                         </select>
-                        <?php endif; ?>
                         <div class="form-text-hint"><lang>不设置则使用i18n支持的所有语言（按住Ctrl或Cmd键可多选）</lang></div>
                     </div>
 
@@ -374,7 +333,7 @@ $websiteReadonlyLanguages = $websiteDefaultLanguage !== '' ? [$websiteDefaultLan
                             id="seo_account"
                             name="seo_account_id"
                             value="seoAccountId|''"
-                            display="seoAccountName|'@lang{请选择SEO账户}'"
+                            display="seoAccountName|'请选择SEO账户'"
                             class="w-100"
                             url="seo/backend/api/seo/accounts"
                         />
@@ -421,20 +380,6 @@ $websiteReadonlyLanguages = $websiteDefaultLanguage !== '' ? [$websiteDefaultLan
 <js:part name="debounce"/>
 
 <script>
-(function() {
-    'use strict';
-
-    var utils = window.WelineLanguageSelectUtils;
-    if (!utils || typeof utils.bindDefaultToMultiple !== 'function') {
-        return;
-    }
-
-    utils.bindDefaultToMultiple({
-        singleId: 'pagebuilder_website_default_language_selector',
-        multipleId: 'pagebuilder_website_related_languages_selector'
-    });
-})();
-
 (function() {
     'use strict';
     

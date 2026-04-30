@@ -1,11 +1,10 @@
 <?php
 /**
- * AI 管理顶部 Tab 栏（统计面板 | 模型 | 适配器 | 供应商账户）
- * @var string $activeTab 当前 Tab：statistics | model | adapter | account
+ * AI 管理顶部 Tab 栏（模型 | 适配器 | 供应商账户）
+ * @var string $activeTab 当前 Tab：model | adapter | account
  * @var \Weline\Framework\View\Template $this
  */
-$activeTab = $activeTab ?? 'statistics';
-$statsUrl = $this->getBackendUrl('ai/backend/statistics');
+$activeTab = $activeTab ?? 'model';
 $modelUrl = $this->getBackendUrl('ai/backend/model');
 $adapterUrl = $this->getBackendUrl('ai/backend/adapter');
 $providerUrl = $this->getBackendUrl('ai/backend/provider');
@@ -19,11 +18,6 @@ $providerUrl = $this->getBackendUrl('ai/backend/provider');
 </style>
 <div class="weline-ai-manager-tabs-wrap">
     <ul class="nav nav-tabs" role="tablist">
-        <li class="nav-item">
-            <a class="nav-link <?= $activeTab === 'statistics' ? 'active' : '' ?>" href="<?= htmlspecialchars($statsUrl) ?>">
-                <i class="mdi mdi-chart-box-outline me-1"></i><lang>统计面板</lang>
-            </a>
-        </li>
         <li class="nav-item">
             <a class="nav-link <?= $activeTab === 'model' ? 'active' : '' ?>" href="<?= htmlspecialchars($modelUrl) ?>">
                 <i class="mdi mdi-robot-outline me-1"></i><lang>模型</lang>

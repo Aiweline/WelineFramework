@@ -11,9 +11,6 @@ $isEdit = $page && $page->getId();
 $selectedLocales = $this->getData('selected_locales') ?? [];
 $parentId = $this->getData('parent_id') ?? 0;
 $i18n_enabled = $this->getData('i18n_enabled') ?? '0';
-$inheritedStyleCode = (string)($this->getData('inherited_style_code') ?? '');
-$inheritedStyleName = (string)($this->getData('inherited_style_name') ?? '');
-$isRootPage = $isEdit && $page && (int)($page->getData('parent_id') ?? 0) === 0;
 
 // 初始化可视化配置所需的 PHP 变量（必须在文件开头定义，避免在 JavaScript 中使用未定义变量）
 if ($isEdit && $page && $page->getId()) {
@@ -39,15 +36,6 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $pageLocales)) {
 if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
     $selectedLocales[] = $pageDefaultLocale;
 }
-$pageSelectedLanguageValues = array_values(array_filter(array_map(
-    static function ($value): string {
-        return is_scalar($value) ? trim((string)$value) : '';
-    },
-    array_unique($selectedLocales)
-), static function (string $value): bool {
-    return $value !== '';
-}));
-$pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
 ?>
 
 <!-- CSS控制local翻译标签显示 -->
@@ -85,14 +73,17 @@ $pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
 </div>
 <!-- end page title -->
 
-<!-- 消息由布局层统一展示，此处不再重复引入 message.phtml，避免同一条错误显示两次 -->
+<!-- start page message -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
 
 <form id="page-form" action="<?= $this->getData('action') ?>" method="post" class="needs-validation" novalidate>
     <!-- 隐藏字段：父页面ID（用于创建子页面） -->
     <?php if ($this->getData('parent_id')): ?>
     <input type="hidden" name="parent_id" value="<?= $this->getData('parent_id') ?>">
     <?php endif; ?>
-    <input type="hidden" name="ai_description" id="ai_description_hidden" value="<?= htmlspecialchars(($page && $page->getId()) ? (string)($page->getData('ai_description') ?? '') : '') ?>">
     
     <div class="row">
         <!-- 左侧主表单 -->
@@ -174,7 +165,7 @@ $pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
                         $handleForDisplay = $page ? ($page->getData('handle') ?? '') : '';
                         $pageType = $page ? ($page->getData('type') ?? '') : '';
                         $isHomePage = ($pageType === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME);
-                        $appendPortIfExists = function ($url) {
+                        function appendPortIfExists($url) {
                             $parsedUrl = parse_url($url);
                             $scheme = isset($parsedUrl['scheme']) ? $parsedUrl['scheme'] . '://' : '';
                             $host = $parsedUrl['host'] ?? '';
@@ -187,33 +178,29 @@ $pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
                             $query = isset($parsedUrl['query']) ? '?' . $parsedUrl['query'] : '';
                             $fragment = isset($parsedUrl['fragment']) ? '#' . $parsedUrl['fragment'] : '';
                             return "$scheme$auth$host$port$path$query$fragment";
-                        };
-                        $displayedBaseUrlWithPort = $appendPortIfExists($baseUrlForDisplay);
+                        }
+                        $displayedBaseUrlWithPort = appendPortIfExists($baseUrlForDisplay);
 
-                        $initialPageUrlWithHandle = ($isHomePage && empty($handleForDisplay))
-                            ? $displayedBaseUrlWithPort
+                        $initialPageUrl = ($isHomePage && empty($handleForDisplay)) 
+                            ? $displayedBaseUrlWithPort 
                             : ($displayedBaseUrlWithPort . '/' . ltrim($handleForDisplay, '/'));
-                        $currentPageId = ($page && $page->getId()) ? (int)$page->getId() : 0;
                         ?>
-                        <div style="min-width: 150px; flex: 2 1 200px;" id="pageUrlDisplayContainer" data-page-id="<?= $currentPageId ?>">
+                        <div style="min-width: 150px; flex: 2 1 200px;">
                             <label class="form-label mb-1 small">
                                 <i class="mdi mdi-link-variant"></i> <?= __('访问地址') ?>
                             </label>
-                            <div>
-                                <span class="small text-muted"><?= __('按 handle 访问') ?><a href="{{initialPageUrlWithHandle}}">{{initialPageUrlWithHandle}}</a></span>
-                                <div class="input-group input-group-sm mt-0">
-                                    <input type="text"
-                                           class="form-control bg-light"
-                                           id="pageUrlDisplay"
-                                           value="{{displayedBaseUrlWithPort}}"
-                                           readonly>
-                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyPageUrl()" title="<?= __('复制') ?>">
-                                        <i class="mdi mdi-content-copy"></i>
-                                    </button>
-                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="openPageUrl()" title="<?= __('打开') ?>">
-                                        <i class="mdi mdi-open-in-new"></i>
-                                    </button>
-                                </div>
+                            <div class="input-group input-group-sm">
+                                <input type="text" 
+                                       class="form-control bg-light" 
+                                       id="pageUrlDisplay" 
+                                       value="<?= htmlspecialchars($initialPageUrl) ?>"
+                                       readonly>
+                                <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyPageUrl()" title="<?= __('复制') ?>">
+                                    <i class="mdi mdi-content-copy"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" type="button" onclick="openPageUrl()" title="<?= __('打开') ?>">
+                                    <i class="mdi mdi-open-in-new"></i>
+                                </button>
                             </div>
                         </div>
                         
@@ -575,8 +562,8 @@ $pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
                         <i class="mdi mdi-palette"></i> <?= __('样式与配置') ?>
                     </h4>
 
-                    <!-- 样式选择：子页面继承自主页，不可切换 -->
-                    <div class="mb-4" id="pageStyleSection">
+                    <!-- 样式选择 -->
+                    <div class="mb-4">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <label class="form-label mb-0">
                                 <?= __('选择样式模板') ?> <span class="text-danger">*</span>
@@ -598,18 +585,6 @@ $pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
                             </div>
                             <?php endif; ?>
                         </div>
-                        <?php if ($inheritedStyleCode !== ''): ?>
-                        <!-- 子页面：主题继承自主页，不可变更主题，但可做可视化配置 -->
-                        <?php if ($isEdit && $page && $page->getId()): ?>
-                        <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/visual_config.phtml</w:template>
-                        <?php endif; ?>
-                        <div class="alert alert-secondary mb-0" id="inheritedStyleNotice">
-                            <i class="mdi mdi-lock"></i>
-                            <strong><?= __('子页面主题继承自主页，不可修改') ?></strong>
-                            <p class="mb-0 mt-2 small"><?= __('当前主题') ?>：<code><?= htmlspecialchars($inheritedStyleName ?: $inheritedStyleCode) ?></code>。<?= __('主题不可变更，仍可使用上方「可视化配置」调整当前主题的样式与布局。') ?></p>
-                        </div>
-                        <input type="hidden" name="style" id="style" value="<?= htmlspecialchars($inheritedStyleCode) ?>">
-                        <?php else: ?>
                         <?php if ($isEdit && $page && $page->getId()): ?>
                         <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/visual_config.phtml</w:template>
                         <?php endif; ?>
@@ -661,7 +636,6 @@ $pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
                             <?= __('选择页面的样式模板（Header、Content、Footer）') ?>
                         </div>
                         <div class="invalid-feedback"><?= __('请选择页面样式') ?></div>
-                        <?php endif; ?>
                     </div>
 
                     <!-- Google SEO JSON-LD 结构化数据（只读预览） -->
@@ -828,14 +802,6 @@ $pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
                                         <i class="mdi mdi-content-copy"></i> 链接
                                     </button>
                                     
-                                    <!-- 编辑按钮 -->
-                                    <a href="<?= $this->getBackendUrl('*/backend/page/edit', ['id' => $relPage->getId()]) ?>" 
-                                       target="_blank" 
-                                       class="btn btn-sm btn-outline-success"
-                                       title="<?= __('编辑页面') ?>">
-                                        <i class="mdi mdi-pencil-outline"></i> <?= __('编辑') ?>
-                                    </a>
-                                    
                                     <?php if ($isPublished): ?>
                                     <!-- 预览按钮（使用站点链接） -->
                                     <a href="<?= $pageUrl ?>" 
@@ -884,17 +850,8 @@ $pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
 
                     <!-- 操作按钮组 -->
                     <div class="d-flex flex-wrap gap-2">
-                        <?php if ($isEdit && $page && $page->getId()): ?>
-                        <acl source="GuoLaiRen_PageBuilder::page_builder_edit">
-                            <a class="btn btn-info btn-sm flex-fill"
-                               href="<?= $this->getBackendUrl('*/backend/page/edit') ?>?id=<?= $page->getId() ?>"
-                               title="<?= __('可视化编辑器') ?>">
-                                <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
-                            </a>
-                        </acl>
-                        <?php endif; ?>
-                        <button type="button"
-                                class="btn btn-success btn-sm flex-fill"
+                        <button type="button" 
+                                class="btn btn-success btn-sm flex-fill" 
                                 onclick="publishPage()"
                                 id="publishPageBtn"
                                 title="<?= __('将状态设置为"已发布"并保存') ?>">
@@ -1139,16 +1096,57 @@ $pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
                             <?= __('默认语言') ?> <span class="text-danger">*</span>
                         </label>
                         
+                        <?php 
+                        // 获取默认语言：优先使用页面设置的语言，如果没有则使用框架当前语言
+                        $currentDefaultLocale = $pageDefaultLocale;
+                        
+                        // 获取当前默认语言的名称
+                        $currentDefaultLocaleName = '';
+                        foreach ($this->getData('active_locales') as $locale) {
+                            if ($locale->getData('code') == $currentDefaultLocale) {
+                                $currentDefaultLocaleName = $locale->getData('name');
+                                break;
+                            }
+                        }
+                        ?>
                         
                         <!-- 当前选中的默认语言显示 -->
-                        <w:i18n:language:select
-                            id="pagebuilder_page_default_locale_selector"
-                            name="default_locale"
-                            input-id="default_locale"
-                            value="pageDefaultLocale"
-                            required="true"
-                            class="w-100"
-                        />
+                        <div class="input-group">
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="defaultLocaleSearch"
+                                   placeholder="<?= __('搜索语言...') ?>"
+                                   autocomplete="off"
+                                   value="<?= $currentDefaultLocaleName ?> (<?= $currentDefaultLocale ?>)">
+                            <button class="btn btn-outline-secondary dropdown-toggle" 
+                                    type="button" 
+                                    data-bs-toggle="dropdown" 
+                                    aria-expanded="false"
+                                    id="defaultLocaleDropdownBtn">
+                                <?= __('选择') ?>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" 
+                                id="defaultLocaleDropdown"
+                                style="max-height: 300px; overflow-y: auto; width: 100%;">
+                                <?php foreach ($this->getData('active_locales') as $locale): ?>
+                                <li>
+                                    <a class="dropdown-item default-locale-option <?= ($locale->getData('code') == $currentDefaultLocale) ? 'active' : '' ?>" 
+                                       href="javascript:void(0)"
+                                       data-locale-code="<?= $locale->getData('code') ?>"
+                                       data-locale-name="<?= $locale->getData('name') ?>"
+                                       onclick="selectDefaultLocale('<?= $locale->getData('code') ?>', '<?= $locale->getData('name') ?>')">
+                                        <?= $locale->getData('name') ?> (<?= $locale->getData('code') ?>)
+                                        <?php if ($locale->getData('code') == $currentDefaultLocale): ?>
+                                            <i class="mdi mdi-check float-end"></i>
+                                        <?php endif; ?>
+                                    </a>
+                                </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                        
+                        <!-- 隐藏的input用于表单提交 -->
+                        <input type="hidden" id="default_locale" name="default_locale" value="<?= $currentDefaultLocale ?>" required>
                         
                         <div class="form-text"><?= __('选择页面的主要语言版本') ?></div>
                     </div>
@@ -1160,15 +1158,79 @@ $pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
                         <label class="form-label"><?= __('支持的语言翻译') ?></label>
                         
                         <!-- 已选中的语言标签 -->
-                        <w:i18n:language:select
-                            id="pagebuilder_page_related_locales_selector"
-                            name="locales[]"
-                            input-id="locales"
-                            value="pageSelectedLanguageValues"
-                            multiple="true"
-                            readonly-values="pageReadonlyLocales"
-                            class="w-100"
-                        />
+                        <div id="selectedLocalesTags" class="mb-2" style="min-height: 38px; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; background-color: #f8f9fa;">
+                            <?php 
+                            $hasSelectedLocales = false;
+                            foreach ($this->getData('active_locales') as $locale): 
+                                if (in_array($locale->getData('code'), $selectedLocales)): 
+                                    $hasSelectedLocales = true;
+                                    ?>
+                                <span class="badge bg-primary me-2 mb-2 py-2 px-3 selected-locale-tag" 
+                                      data-locale-code="<?= $locale->getData('code') ?>"
+                                      style="font-size: 0.875rem;">
+                                    <?= $locale->getData('name') ?> (<?= $locale->getData('code') ?>)
+                                    <i class="mdi mdi-close ms-1" 
+                                       style="cursor: pointer;"
+                                       onclick="removeLocaleTag('<?= $locale->getData('code') ?>')"></i>
+                                </span>
+                            <?php endif; 
+                            endforeach; 
+                            
+                            // 如果没有选择任何语言，显示提示
+                            if (!$hasSelectedLocales): ?>
+                                <div class="text-muted" id="noLocalesHint" style="font-size: 0.875rem;">
+                                    <i class="mdi mdi-information-outline me-1"></i>
+                                    <?= __('暂未选择支持的语言，请使用下方搜索框添加语言') ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        
+                        <!-- 搜索添加语言 - 自定义下拉选择器 -->
+                        <div class="position-relative">
+                            <div class="input-group">
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="localeSearch"
+                                       placeholder="<?= __('搜索并选择语言...') ?>"
+                                       autocomplete="off">
+                                <button class="btn btn-outline-secondary" 
+                                        type="button" 
+                                        id="localeDropdownBtn"
+                                        onclick="toggleLocaleDropdown()">
+                                    <i class="mdi mdi-chevron-down"></i>
+                                </button>
+                            </div>
+                            
+                            <!-- 自定义下拉列表 -->
+                            <div id="localeDropdown" 
+                                 class="border rounded shadow-sm position-absolute w-100 mt-1" 
+                                 style="max-height: 300px; overflow-y: auto; display: none; z-index: 1050;">
+                                <?php foreach ($this->getData('active_locales') as $locale): ?>
+                                <div class="dropdown-item locale-option" 
+                                     data-locale-code="<?= $locale->getData('code') ?>"
+                                     data-locale-name="<?= $locale->getData('name') ?>"
+                                     onclick="addLocaleTag('<?= $locale->getData('code') ?>', '<?= $locale->getData('name') ?>')"
+                                     style="cursor: pointer; padding: 0.5rem 1rem; <?= in_array($locale->getData('code'), $selectedLocales) ? 'display: none;' : '' ?>">
+                                    <?= $locale->getData('name') ?> (<?= $locale->getData('code') ?>)
+                                </div>
+                                <?php endforeach; ?>
+                                <div id="noMatchHint" class="text-muted text-center py-2" style="display: none; font-size: 0.875rem;">
+                                    <?= __('未找到匹配的语言') ?>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 隐藏的checkbox用于表单提交 -->
+                        <div id="localeCheckboxes" style="display: none;">
+                            <?php foreach ($this->getData('active_locales') as $locale): ?>
+                                <input class="locale-checkbox" 
+                                       type="checkbox" 
+                                       name="locales[]" 
+                                       value="<?= $locale->getData('code') ?>"
+                                       id="locale_<?= $locale->getData('code') ?>"
+                                       <?= in_array($locale->getData('code'), $selectedLocales) ? 'checked' : '' ?>>
+                            <?php endforeach; ?>
+                        </div>
                         
                         <div class="form-text"><?= __('选择后可点击字段旁边的翻译按钮进行翻译') ?></div>
                     </div>
@@ -1262,7 +1324,7 @@ $pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
                         o.value = item.website_id;
                         o.textContent = (item.name || '') + ' (' + (item.code || '') + ')';
                         sel.appendChild(o);
-                    });
+                    }
                     if (currentVal) sel.value = currentVal;
                 }
             }).catch(function() {});
@@ -1271,11 +1333,75 @@ $pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
 })();
 </script>
 
-<!-- AI生成内容 START -->
+<!-- AI生成内容模态框 -->
 <?php if (($ai_enabled ?? '0') === '1'): ?>
-<w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/ai_generate.phtml</w:template>
+<div class="modal fade" id="aiGenerateModal" tabindex="-1" aria-labelledby="aiGenerateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="aiGenerateModalLabel">
+                    <i class="mdi mdi-robot"></i> <?= __('AI一键生成页面内容') ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="aiDescription" class="form-label">
+                        <?= __('页面描述') ?> <span class="text-danger">*</span>
+                    </label>
+                    <textarea class="form-control" 
+                              id="aiDescription" 
+                              rows="4" 
+                              placeholder="<?= $isEdit ? __('AI将基于当前页面的信息生成内容，您也可以修改描述以调整生成方向...') : __('请描述您想要创建的页面内容，例如：创建一个关于我们页面，介绍公司历史、团队和使命...') ?>"></textarea>
+                    <div class="form-text">
+                        <?php if ($isEdit): ?>
+                            <?= __('编辑模式下，AI将基于当前页面的标题、内容、SEO信息等自动生成提示词。您也可以修改描述以调整生成方向。') ?>
+                        <?php else: ?>
+                            <?= __('详细描述页面内容，AI将根据描述自动生成标题、SEO信息和页面内容') ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php if ($isEdit): ?>
+                <div class="alert alert-warning">
+                    <i class="mdi mdi-information-outline"></i>
+                    <strong><?= __('编辑模式') ?>：</strong>
+                    <?= __('将使用当前页面的以下信息作为提示词：') ?>
+                    <ul class="mb-0 mt-2">
+                        <?php if ($page->getData('title')): ?>
+                            <li><?= __('页面标题') ?>: <?= htmlspecialchars($page->getData('title')) ?></li>
+                        <?php endif; ?>
+                        <?php if ($page->getData('meta_title')): ?>
+                            <li><?= __('SEO标题') ?>: <?= htmlspecialchars($page->getData('meta_title')) ?></li>
+                        <?php endif; ?>
+                        <?php if ($page->getData('meta_description')): ?>
+                            <li><?= __('SEO描述') ?>: <?= htmlspecialchars(mb_substr($page->getData('meta_description'), 0, 100)) ?><?= mb_strlen($page->getData('meta_description')) > 100 ? '...' : '' ?></li>
+                        <?php endif; ?>
+                        <?php if ($page->getData('content')): ?>
+                            <li><?= __('页面内容摘要') ?>: <?= htmlspecialchars(mb_substr(strip_tags($page->getData('content')), 0, 100)) ?><?= mb_strlen(strip_tags($page->getData('content'))) > 100 ? '...' : '' ?></li>
+                        <?php endif; ?>
+                    </ul>
+                </div>
+                <?php else: ?>
+                <div class="alert alert-info">
+                    <i class="mdi mdi-information-outline"></i>
+                    <strong><?= __('提示') ?>：</strong>
+                    <?= __('AI将根据您填写的描述和页面现有信息生成内容。主页类型页面不会生成content字段。') ?>
+                </div>
+                <?php endif; ?>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <?= __('取消') ?>
+                </button>
+                <button type="button" class="btn btn-primary" onclick="generatePageContent()" id="aiGenerateSubmitBtn">
+                    <span class="spinner-border spinner-border-sm d-none" id="aiGenerateSpinner" role="status"></span>
+                    <i class="mdi mdi-robot"></i> <?= __('生成内容') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 <?php endif; ?>
-<!-- AI生成内容 END -->
 
 <!-- 样式预览模态框 -->
 <div id="stylePreviewModal" class="style-preview-modal">
@@ -1915,6 +2041,67 @@ if (typeof ClassicEditor === 'undefined') {
     text-align: center;
 }
 
+/* 自定义下拉选择器样式优化 */
+#localeDropdown .locale-option {
+    transition: background-color 0.2s ease;
+}
+
+#localeDropdown .locale-option:hover {
+    background-color: #f0f0f0;
+}
+
+#localeDropdown .locale-option:active {
+    background-color: #e0e0e0;
+}
+
+/* 语言标签样式优化 */
+.selected-locale-tag {
+    transition: all 0.2s ease;
+    display: inline-block;
+    max-width: 100%;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.4;
+}
+
+.selected-locale-tag:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.selected-locale-tag .mdi-close {
+    transition: transform 0.2s ease;
+}
+
+.selected-locale-tag .mdi-close:hover {
+    transform: scale(1.2);
+}
+
+/* 搜索框聚焦效果 */
+#localeSearch:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* 下拉列表滚动条样式 */
+#localeDropdown::-webkit-scrollbar {
+    width: 8px;
+}
+
+#localeDropdown::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+#localeDropdown::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+#localeDropdown::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
 </style>
 
 <script>
@@ -2143,7 +2330,7 @@ document.addEventListener('DOMContentLoaded', function() {
         $currentOriginForJs = rtrim($this->request->getBaseHost(), '/');
         $currentPortForJs = parse_url($currentOriginForJs, PHP_URL_PORT);
         ?>
-        const websiteUrlMap = <?= json_encode($websiteUrlMap, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        const websiteUrlMap = <?= json_encode($websiteUrlMap) ?>;
         const currentOriginForPort = '<?= htmlspecialchars($currentOriginForJs, ENT_QUOTES, 'UTF-8') ?>';
         const currentPortForDisplay = <?= json_encode($currentPortForJs !== null && $currentPortForJs !== '' ? (string)$currentPortForJs : '') ?>;
 
@@ -2178,41 +2365,42 @@ document.addEventListener('DOMContentLoaded', function() {
         window.getDisplayBaseUrlWithPort = getDisplayBaseUrlWithPort;
         window.currentOriginForPort = currentOriginForPort;
         
-        // 更新访问地址显示的函数（同时更新「按 ID 访问」与「按 handle 访问」）
+        // 更新访问地址显示的函数
         function updatePageUrlDisplay() {
             const urlInput = document.getElementById('pageUrlDisplay');
-            const urlByIdInput = document.getElementById('pageUrlDisplayById');
             const websiteSelect = document.getElementById('website_id');
             const handleInputEl = document.getElementById('handle');
             const pageTypeSelect = document.getElementById('type');
-            const container = document.getElementById('pageUrlDisplayContainer');
             
             if (!urlInput) return;
             
+            // 获取当前选中的网站ID
             const websiteId = websiteSelect ? parseInt(websiteSelect.value) || 0 : 0;
+            
+            // 展示用 base（站点 URL；同 host 且当前请求带端口时注入端口便于打开）
             const baseUrl = getDisplayBaseUrlWithPort(websiteId);
+            
+            // 获取当前handle
             const handle = handleInputEl ? handleInputEl.value.trim() : '';
+            
+            // 检查是否是首页类型
             const pageType = pageTypeSelect ? pageTypeSelect.value : '';
             const isHomePage = pageType === '<?= \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME ?>';
             
-            // 按 handle 访问
+            // 构建访问地址
             let pageUrl;
             if (isHomePage && !handle) {
+                // 首页类型且没有handle：直接使用网站地址
                 pageUrl = baseUrl;
             } else if (handle) {
+                // 有handle：网站地址 + handle
                 pageUrl = baseUrl + '/' + handle.replace(/^\//, '');
             } else {
+                // 没有handle：只显示网站地址
                 pageUrl = baseUrl;
             }
-            urlInput.value = pageUrl;
             
-            // 按 ID 访问（仅当有 page_id 时更新）
-            if (urlByIdInput && container) {
-                const pageId = parseInt(container.getAttribute('data-page-id') || '0', 10);
-                if (pageId > 0) {
-                    urlByIdInput.value = baseUrl + '?page_id=' + pageId;
-                }
-            }
+            urlInput.value = pageUrl;
         }
         
         // 监听 handle 输入变化更新访问地址
@@ -2306,7 +2494,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (currentHandle && lastCheckedHandle === currentHandle && !isHandleValid) {
                 event.preventDefault();
                 event.stopPropagation();
-                BackendToast.warning(<?= json_encode(__('页面句柄已被使用，请使用其他句柄后再提交！'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+                BackendToast.warning('<?= __('页面句柄已被使用，请使用其他句柄后再提交！') ?>');
                 handleInput.focus();
                 handleInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return false;
@@ -2323,11 +2511,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (invalidFields.length > 0) {
                     const firstInvalid = invalidFields[0];
                     const fieldName = firstInvalid.getAttribute('name') || firstInvalid.id || '字段';
-                    let errorMessage = (<?= json_encode(__('请填写必填字段：'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>) + fieldName;
+                    let errorMessage = `<?= __('请填写必填字段：') ?>${fieldName}`;
                     
                     // 特殊处理样式字段
                     if (firstInvalid.id === 'style' || firstInvalid.name === 'style') {
-                        errorMessage = <?= json_encode(__('请先选择页面样式模板！'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+                        errorMessage = '<?= __('请先选择页面样式模板！') ?>';
                     }
                     
                     // 滚动到第一个无效字段
@@ -2353,7 +2541,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (styleSelect && !styleSelect.value) {
                 event.preventDefault();
                 event.stopPropagation();
-                BackendToast.warning(<?= json_encode(__('请先选择页面样式模板！'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+                BackendToast.warning('<?= __('请先选择页面样式模板！') ?>');
                 // 滚动到样式选择区域
                 const styleSection = document.querySelector('#styleCardsContainer') || styleSelect;
                 if (styleSection) {
@@ -2397,7 +2585,7 @@ window.publishPage = function() {
     
     if (!statusSelect || !form) {
         console.error('❌ 找不到状态选择器或表单');
-        BackendToast.error(<?= json_encode(__('系统错误，请刷新页面重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+        BackendToast.error('<?= __('系统错误，请刷新页面重试') ?>');
         return;
     }
     
@@ -2418,7 +2606,7 @@ window.publishPage = function() {
         form.submit();
     } catch (error) {
         console.error('❌ 发布失败:', error);
-        BackendToast.error(<?= json_encode(__('发布失败，请重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+        BackendToast.error('<?= __('发布失败，请重试') ?>');
         
         // 恢复按钮状态
         publishBtn.disabled = false;
@@ -2481,8 +2669,6 @@ document.addEventListener('DOMContentLoaded', function() {
  */
 // 🚫 全局标志：正在应用继承配置，禁止自动保存
 window.isApplyingInheritance = false;
-// 是否为主页（根页面），用于改主题时提示子页面会随之变更
-window.isRootPageForStyleHint = <?= json_encode($isRootPage ?? false) ?>;
 
 document.addEventListener('DOMContentLoaded', function() {
     const parentIdSelect = document.getElementById('parent_id');
@@ -2498,12 +2684,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const isFromAddChildPage = urlParentId && urlParentId !== '0';
     
     // 获取父页面数据（从PHP传递）
-    const parentPageData = <?= json_encode($this->getData('parent_page_data'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-    // 子页面主题继承自主页（根页面），不可修改
-    const inheritedStyleCode = <?= json_encode($inheritedStyleCode) ?>;
-    if (inheritedStyleCode && parentPageData) {
-        parentPageData.style = inheritedStyleCode;
-    }
+    const parentPageData = <?= json_encode($this->getData('parent_page_data')) ?>;
     // 保存到 window 对象，以便在表单提交时使用
     window.parentPageData = parentPageData;
     
@@ -2601,19 +2782,6 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // 延迟执行以确保所有DOM元素已加载
             setTimeout(() => {
-                const defaultLocaleSelector = window.WelineLanguageSelect && window.WelineLanguageSelect['pagebuilder_page_default_locale_selector'];
-                const relatedLocalesSelector = window.WelineLanguageSelect && window.WelineLanguageSelect['pagebuilder_page_related_locales_selector'];
-
-                if (defaultLocaleSelector) {
-                    defaultLocaleSelector.setValue(parentDefaultLocale);
-                    defaultLocaleSelector.setDisplayOnly(true);
-                }
-
-                if (relatedLocalesSelector) {
-                    relatedLocalesSelector.setValues(parentLocales);
-                    relatedLocalesSelector.setReadonlyValues(parentDefaultLocale ? [parentDefaultLocale] : []);
-                    relatedLocalesSelector.setDisplayOnly(true);
-                }
                 // 3.1 锁定默认语言选择
                 const defaultLocaleInput = document.getElementById('default_locale');
                 if (defaultLocaleInput) {
@@ -2917,18 +3085,400 @@ document.addEventListener('DOMContentLoaded', function() {
 /**
  * 选择默认语言
  */
-document.addEventListener('DOMContentLoaded', function() {
-    var utils = window.WelineLanguageSelectUtils;
-    if (!utils || typeof utils.bindDefaultToMultiple !== 'function') {
-        return;
+function selectDefaultLocale(localeCode, localeName) {
+    // 更新搜索框显示
+    document.getElementById('defaultLocaleSearch').value = `${localeName} (${localeCode})`;
+    
+    // 更新隐藏的input值
+    document.getElementById('default_locale').value = localeCode;
+    
+    // 更新下拉列表中的active状态
+    document.querySelectorAll('.default-locale-option').forEach(option => {
+        const optionCode = option.getAttribute('data-locale-code');
+        if (optionCode === localeCode) {
+            option.classList.add('active');
+            // 添加勾选图标
+            if (!option.querySelector('.mdi-check')) {
+                option.innerHTML += '<i class="mdi mdi-check float-end"></i>';
+            }
+        } else {
+            option.classList.remove('active');
+            // 移除勾选图标
+            const checkIcon = option.querySelector('.mdi-check');
+            if (checkIcon) {
+                checkIcon.remove();
+            }
+        }
+    });
+    
+    // 自动将默认语言添加到支持的语言列表
+    const localeCheckbox = document.getElementById('locale_' + localeCode);
+    if (localeCheckbox && !localeCheckbox.checked) {
+        localeCheckbox.checked = true;
+        // 添加标签
+        addLocaleTag(localeCode, localeName);
     }
+    
+    // 更新所有语言标签的删除按钮状态（默认语言不能删除）
+    updateLocaleTagsDeleteButton();
+    
+    // 关闭下拉列表
+    const dropdownBtn = document.getElementById('defaultLocaleDropdownBtn');
+    if (dropdownBtn) {
+        const dropdown = bootstrap.Dropdown.getInstance(dropdownBtn);
+        if (dropdown) {
+            dropdown.hide();
+        }
+    }
+}
 
-    utils.bindDefaultToMultiple({
-        singleId: 'pagebuilder_page_default_locale_selector',
-        multipleId: 'pagebuilder_page_related_locales_selector'
+/**
+ * 搜索默认语言
+ */
+document.getElementById('defaultLocaleSearch')?.addEventListener('input', function() {
+    const searchText = this.value.toLowerCase();
+    const options = document.querySelectorAll('.default-locale-option');
+    
+    options.forEach(option => {
+        const localeCode = option.getAttribute('data-locale-code');
+        const localeName = option.getAttribute('data-locale-name');
+        const text = `${localeName} ${localeCode}`.toLowerCase();
+        
+        // 根据搜索文本显示/隐藏
+        const parentLi = option.parentElement;
+        if (text.includes(searchText)) {
+            parentLi.style.display = 'block';
+        } else {
+            parentLi.style.display = 'none';
+        }
     });
 });
 
+/**
+ * 点击搜索框时自动展开下拉列表
+ */
+document.getElementById('defaultLocaleSearch')?.addEventListener('focus', function() {
+    const dropdownBtn = document.getElementById('defaultLocaleDropdownBtn');
+    if (dropdownBtn && !dropdownBtn.classList.contains('show')) {
+        dropdownBtn.click();
+    }
+});
+
+/**
+ * 清空搜索框时恢复当前选中的语言显示
+ */
+document.getElementById('defaultLocaleSearch')?.addEventListener('blur', function(e) {
+    // 延迟执行，避免点击下拉选项时被清空
+    setTimeout(() => {
+        const currentCode = document.getElementById('default_locale').value;
+        if (currentCode) {
+            const currentOption = document.querySelector(`.default-locale-option[data-locale-code="${currentCode}"]`);
+            if (currentOption) {
+                const localeName = currentOption.getAttribute('data-locale-name');
+                this.value = `${localeName} (${currentCode})`;
+            }
+        }
+    }, 200);
+});
+
+// ==================== 语言标签管理功能 ====================
+
+/**
+ * 添加语言标签
+ */
+function addLocaleTag(localeCode, localeName) {
+    // 检查是否已存在
+    if (document.querySelector(`.selected-locale-tag[data-locale-code="${localeCode}"]`)) {
+        return;
+    }
+    
+    // 创建标签
+    const tag = document.createElement('span');
+    tag.className = 'badge bg-primary me-2 mb-2 py-2 px-3 selected-locale-tag';
+    tag.setAttribute('data-locale-code', localeCode);
+    tag.style.fontSize = '0.875rem';
+    tag.innerHTML = `
+        ${localeName} (${localeCode})
+        <i class="mdi mdi-close ms-1" 
+           style="cursor: pointer;"
+           onclick="removeLocaleTag('${localeCode}')"></i>
+    `;
+    
+    // 添加到标签区域
+    document.getElementById('selectedLocalesTags').appendChild(tag);
+    
+    // 勾选对应的checkbox
+    const checkbox = document.getElementById('locale_' + localeCode);
+    if (checkbox) {
+        checkbox.checked = true;
+    }
+    
+    // 隐藏下拉列表中的选项
+    const option = document.querySelector(`.locale-option[data-locale-code="${localeCode}"]`);
+    if (option) {
+        option.style.display = 'none';
+    }
+    
+    // 清空搜索框
+    const searchInput = document.getElementById('localeSearch');
+    searchInput.value = '';
+    
+    // 重置下拉列表显示
+    resetLocaleDropdown();
+    
+    // 隐藏提示信息（如果存在）
+    updateLocalesHint();
+    
+    // 更新删除按钮状态（如果是默认语言则禁用删除按钮）
+    updateLocaleTagsDeleteButton();
+    
+    // 保持下拉列表打开并聚焦搜索框，方便继续选择
+    const dropdown = document.getElementById('localeDropdown');
+    if (dropdown.style.display === 'block') {
+        searchInput.focus();
+    }
+}
+
+/**
+ * 移除语言标签
+ */
+function removeLocaleTag(localeCode) {
+    // 检查是否是默认语言，默认语言不能删除
+    const defaultLocale = document.getElementById('default_locale').value;
+    if (localeCode === defaultLocale) {
+        BackendToast.warning('<?= __('默认语言不能从支持的语言列表中删除！如需更改，请先切换默认语言。') ?>');
+        return false;
+    }
+    
+    // 移除标签
+    const tag = document.querySelector(`.selected-locale-tag[data-locale-code="${localeCode}"]`);
+    if (tag) {
+        tag.remove();
+    }
+    
+    // 取消勾选checkbox
+    const checkbox = document.getElementById('locale_' + localeCode);
+    if (checkbox) {
+        checkbox.checked = false;
+    }
+    
+    // 显示下拉列表中的选项
+    const option = document.querySelector(`.locale-option[data-locale-code="${localeCode}"]`);
+    if (option) {
+        option.style.display = 'block';
+    }
+    
+    // 重置下拉列表显示
+    resetLocaleDropdown();
+    
+    // 更新提示信息（如果没有标签了则显示提示）
+    updateLocalesHint();
+}
+
+/**
+ * 更新语言选择提示信息的显示/隐藏
+ */
+function updateLocalesHint() {
+    const tagsContainer = document.getElementById('selectedLocalesTags');
+    const existingHint = document.getElementById('noLocalesHint');
+    const selectedTags = document.querySelectorAll('.selected-locale-tag');
+    
+    if (selectedTags.length === 0) {
+        // 没有选择任何语言，显示提示
+        if (!existingHint) {
+            const hint = document.createElement('div');
+            hint.className = 'alert alert-info py-2 px-3 mb-0';
+            hint.id = 'noLocalesHint';
+            hint.style.fontSize = '0.875rem';
+            hint.innerHTML = '<i class="mdi mdi-information-outline me-1"></i>暂未选择支持的语言，请使用下方搜索框添加语言';
+            tagsContainer.appendChild(hint);
+        }
+    } else {
+        // 已有选择的语言，隐藏提示
+        if (existingHint) {
+            existingHint.remove();
+        }
+    }
+}
+
+/**
+ * 更新语言标签的删除按钮状态
+ * 默认语言的删除按钮应该被禁用
+ */
+function updateLocaleTagsDeleteButton() {
+    const defaultLocaleEl = document.getElementById('default_locale');
+    if (!defaultLocaleEl) return; // 元素不存在时直接返回
+    const defaultLocale = defaultLocaleEl.value;
+    const allTags = document.querySelectorAll('.selected-locale-tag');
+    
+    allTags.forEach(tag => {
+        const localeCode = tag.getAttribute('data-locale-code');
+        const closeIcon = tag.querySelector('.mdi-close');
+        
+        if (localeCode === defaultLocale) {
+            // 默认语言：禁用删除按钮
+            if (closeIcon) {
+                closeIcon.style.opacity = '0.3';
+                closeIcon.style.cursor = 'not-allowed';
+                closeIcon.title = '<?= __('默认语言不能删除') ?>';
+            }
+            // 添加一个标识符
+            tag.style.borderLeft = '3px solid #ffc107';
+        } else {
+            // 非默认语言：启用删除按钮
+            if (closeIcon) {
+                closeIcon.style.opacity = '1';
+                closeIcon.style.cursor = 'pointer';
+                closeIcon.title = '<?= __('移除此语言') ?>';
+            }
+            tag.style.borderLeft = 'none';
+        }
+    });
+}
+
+/**
+ * 切换语言下拉列表显示/隐藏
+ */
+function toggleLocaleDropdown() {
+    const dropdown = document.getElementById('localeDropdown');
+    const btn = document.getElementById('localeDropdownBtn');
+    const icon = btn.querySelector('i');
+    
+    if (dropdown.style.display === 'none' || dropdown.style.display === '') {
+        dropdown.style.display = 'block';
+        icon.classList.remove('mdi-chevron-down');
+        icon.classList.add('mdi-chevron-up');
+        // 自动聚焦搜索框
+        document.getElementById('localeSearch').focus();
+    } else {
+        dropdown.style.display = 'none';
+        icon.classList.remove('mdi-chevron-up');
+        icon.classList.add('mdi-chevron-down');
+    }
+}
+
+/**
+ * 搜索语言功能
+ */
+document.getElementById('localeSearch')?.addEventListener('input', function() {
+    const searchText = this.value.toLowerCase();
+    const options = document.querySelectorAll('.locale-option');
+    const dropdown = document.getElementById('localeDropdown');
+    const noMatchHint = document.getElementById('noMatchHint');
+    
+    let hasVisibleOptions = false;
+    
+    options.forEach(option => {
+        const localeCode = option.getAttribute('data-locale-code');
+        const localeName = option.getAttribute('data-locale-name');
+        const text = `${localeName} ${localeCode}`.toLowerCase();
+        
+        // 如果已被选中，不显示
+        const isSelected = document.querySelector(`.selected-locale-tag[data-locale-code="${localeCode}"]`);
+        if (isSelected) {
+            option.style.display = 'none';
+            return;
+        }
+        
+        // 根据搜索文本显示/隐藏
+        if (text.includes(searchText)) {
+            option.style.display = 'block';
+            hasVisibleOptions = true;
+        } else {
+            option.style.display = 'none';
+        }
+    });
+    
+    // 显示/隐藏"未找到匹配"提示
+    if (!hasVisibleOptions && searchText) {
+        noMatchHint.style.display = 'block';
+    } else {
+        noMatchHint.style.display = 'none';
+    }
+    
+    // 自动展开下拉列表
+    if (dropdown.style.display === 'none' && searchText) {
+        dropdown.style.display = 'block';
+        const btn = document.getElementById('localeDropdownBtn');
+        const icon = btn.querySelector('i');
+        icon.classList.remove('mdi-chevron-down');
+        icon.classList.add('mdi-chevron-up');
+    }
+});
+
+/**
+ * 点击搜索框时自动展开下拉列表
+ */
+document.getElementById('localeSearch')?.addEventListener('focus', function() {
+    const dropdown = document.getElementById('localeDropdown');
+    const btn = document.getElementById('localeDropdownBtn');
+    const icon = btn.querySelector('i');
+    
+    // 先过滤一遍选项（隐藏已选中的）
+    resetLocaleDropdown();
+    
+    // 展开下拉列表
+    dropdown.style.display = 'block';
+    icon.classList.remove('mdi-chevron-down');
+    icon.classList.add('mdi-chevron-up');
+});
+
+/**
+ * 点击页面其他地方关闭下拉列表
+ */
+document.addEventListener('click', function(event) {
+    const dropdown = document.getElementById('localeDropdown');
+    const searchInput = document.getElementById('localeSearch');
+    const dropdownBtn = document.getElementById('localeDropdownBtn');
+    
+    // 如果点击的不是下拉列表、搜索框或按钮，则关闭下拉列表
+    if (dropdown && 
+        !dropdown.contains(event.target) && 
+        event.target !== searchInput && 
+        event.target !== dropdownBtn &&
+        !dropdownBtn.contains(event.target)) {
+        dropdown.style.display = 'none';
+        const btn = document.getElementById('localeDropdownBtn');
+        const icon = btn.querySelector('i');
+        icon.classList.remove('mdi-chevron-up');
+        icon.classList.add('mdi-chevron-down');
+        // 清空搜索框
+        if (searchInput) {
+            searchInput.value = '';
+            resetLocaleDropdown();
+        }
+    }
+});
+/**
+ * 重置下拉列表显示（过滤已选中的）
+ */
+function resetLocaleDropdown() {
+    const options = document.querySelectorAll('.locale-option');
+    options.forEach(option => {
+        const localeCode = option.getAttribute('data-locale-code');
+        const isSelected = document.querySelector(`.selected-locale-tag[data-locale-code="${localeCode}"]`);
+        
+        if (isSelected) {
+            option.style.display = 'none';
+        } else {
+            // 如果有搜索文本，按搜索文本过滤
+            const searchText = document.getElementById('localeSearch').value.toLowerCase();
+            if (searchText) {
+                const localeName = option.getAttribute('data-locale-name');
+                const text = `${localeName} ${localeCode}`.toLowerCase();
+                option.style.display = text.includes(searchText) ? 'block' : 'none';
+            } else {
+                option.style.display = 'block';
+            }
+        }
+    });
+}
+// 页面加载时初始化下拉列表
+document.addEventListener('DOMContentLoaded', function() {
+    resetLocaleDropdown();
+    // 初始化语言标签的删除按钮状态
+    updateLocaleTagsDeleteButton();
+});
 
 /**
  * ========================================
@@ -2943,8 +3493,6 @@ const pageIdForm = <?= ($isEdit && $page && $page->getId()) ? $page->getId() : '
 const styleSelect = document.getElementById('style');
 const styleDescContainer = document.getElementById('style-description-container');
 const styleDescText = document.getElementById('style-description-text');
-// 当前已提交的主题（用于下拉框取消时还原）
-window.committedPageStyle = '<?= $page ? htmlspecialchars(($page->getData('style') ?? '') ?? '') : '' ?>';
 
 
 /**
@@ -2983,18 +3531,10 @@ async function loadStyleList() {
         
         var opts = { method: 'GET', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin', silent: true };
         var res = await window.Weline.Api.request(apiUrl, opts);
-        if (typeof res === 'string') {
-            try { res = JSON.parse(res); } catch (e) { res = null; }
-        }
-        var result = res;
-        if (res && typeof res.data === 'string') {
-            try { result = JSON.parse(res.data); } catch (e) { result = res; }
-        } else if (res && res.data && typeof res.data === 'object' && res.data !== null && !Array.isArray(res.data) && Object.prototype.hasOwnProperty.call(res.data, 'success')) {
-            result = res.data;
-        }
+        const result = (res && res.data) || res;
         console.log('📦 解析响应数据:', result);
         
-        if (result && result.success !== false && result.data) {
+        if (result.success && result.data) {
             allStyles = result.data; // 保存到全局变量
             
             // 更新隐藏的select（用于表单提交）
@@ -3320,49 +3860,35 @@ async function selectStyle(styleCode) {
     const styleSelect = document.getElementById('style');
     const oldStyle = styleSelect.value;
     
+    // 更新隐藏的select
+    styleSelect.value = styleCode;
+    
+    // 更新卡片选中状态
+    document.querySelectorAll('.style-card').forEach(card => {
+        if (card.dataset.styleCode === styleCode) {
+            card.classList.add('selected');
+        } else {
+            card.classList.remove('selected');
+        }
+    });
+    
+    // 启用可视化配置按钮
+    const visualBtn = document.getElementById('openVisualConfigBtn');
+    if (visualBtn) {
+        visualBtn.disabled = false;
+    }
+    
     // 🚫 如果正在应用继承配置，跳过自动保存
     if (window.isApplyingInheritance) {
         console.log('🚫 正在应用继承配置，跳过样式自动保存');
-        styleSelect.value = styleCode;
-        document.querySelectorAll('.style-card').forEach(card => {
-            if (card.dataset.styleCode === styleCode) card.classList.add('selected');
-            else card.classList.remove('selected');
-        });
-        const visualBtn = document.getElementById('openVisualConfigBtn');
-        if (visualBtn) visualBtn.disabled = false;
         return;
     }
     
+    // 如果是编辑模式，自动保存样式切换
     const pageIdForm = '<?= $isEdit && $page ? $page->getId() : '' ?>';
-    const needConfirm = pageIdForm && styleCode !== oldStyle && window.isRootPageForStyleHint;
-    
-    function applyStyleChoice() {
-        styleSelect.value = styleCode;
-        document.querySelectorAll('.style-card').forEach(card => {
-            if (card.dataset.styleCode === styleCode) card.classList.add('selected');
-            else card.classList.remove('selected');
-        });
-        const visualBtn = document.getElementById('openVisualConfigBtn');
-        if (visualBtn) visualBtn.disabled = false;
-        if (pageIdForm && styleCode !== oldStyle) {
-            autoSaveStyleChange(styleCode);
-            if (typeof BackendToast !== 'undefined') {
-                BackendToast.info(<?= json_encode(__("修改主页主题后，该站点下所有子页面的主题会随之变更。"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 4000);
-            }
-        }
+    if (pageIdForm && styleCode !== oldStyle) {
+        await autoSaveStyleChange(styleCode);
     }
-    
-    if (needConfirm && typeof BackendConfirm !== 'undefined') {
-        BackendConfirm.show(<?= json_encode(__("修改主页主题后，该站点下所有子页面的主题会随之变更。确定要修改吗？"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, {
-            title: <?= json_encode(__("确认修改主题"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
-            confirmText: <?= json_encode(__("确定"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
-        }).then(function(confirmed) {
-            if (confirmed) applyStyleChoice();
-        });
-        return;
-    }
-    
-    applyStyleChoice();
 }
 
 /**
@@ -3767,7 +4293,7 @@ if (refreshStyleBtn) {
             
         } catch (error) {
             console.error('❌ 刷新失败:', error);
-            BackendToast.error(<?= json_encode(__('刷新失败'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?> + '：' + error.message);
+            BackendToast.error('<?= __('刷新失败') ?>：' + error.message);
         } finally {
             // 恢复按钮状态
             this.disabled = false;
@@ -3792,90 +4318,45 @@ if (styleSelect) {
         }
         
         const selectedStyle = this.value;
-        const oldStyle = window.committedPageStyle || '';
+        const selectedOption = this.options[this.selectedIndex];
         
-        // 仅编辑模式且为主页且真的换了主题时才弹确认
-        const needConfirm = <?= ($isEdit && $page && $page->getId() && $isRootPage) ? 'true' : 'false' ?> && selectedStyle && selectedStyle !== oldStyle;
+        console.log('🎨 样式切换:', selectedStyle);
         
-        if (needConfirm && typeof BackendConfirm !== 'undefined') {
-            const self = this;
-            const selectedOption = this.options[this.selectedIndex];
-            BackendConfirm.show(<?= json_encode(__("修改主页主题后，该站点下所有子页面的主题会随之变更。确定要修改吗？"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, {
-                title: <?= json_encode(__("确认修改主题"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
-                confirmText: <?= json_encode(__("确定"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
-            }).then(async function(confirmed) {
-                if (!confirmed) {
-                    self.value = oldStyle;
-                    syncStyleUIFromSelect(self);
-                    return;
-                }
-                window.committedPageStyle = selectedStyle;
-                await doStyleChangeSave(self, selectedStyle, selectedOption);
-            });
-            return;
+        // 显示样式描述
+        const descContainer = document.getElementById('style-description-container');
+        const descText = document.getElementById('style-description-text');
+        
+        if (selectedOption && selectedOption.dataset.description && descContainer && descText) {
+            descText.textContent = selectedOption.dataset.description;
+            descContainer.style.display = 'block';
+        } else if (descContainer) {
+            descContainer.style.display = 'none';
         }
         
-        const selectedOption = this.options[this.selectedIndex];
-        syncStyleUIFromSelect(this);
+        // 显示样式预览图
+        const previewContainer = document.getElementById('style-preview-container');
+        const previewImage = document.getElementById('style-preview-image');
+        
+        if (selectedOption && selectedOption.dataset.previewImage && previewContainer && previewImage) {
+            const baseUrl = '<?= $this->getUrl('pub/static/Weline/Admin/templates/GuoLaiRen/PageBuilder/') ?>';
+            previewImage.src = baseUrl + selectedOption.dataset.previewImage;
+            previewContainer.style.display = 'block';
+            console.log('📷 显示预览图:', selectedOption.dataset.previewImage);
+        } else if (previewContainer) {
+            previewContainer.style.display = 'none';
+            console.log('ℹ️ 该样式没有预览图');
+        }
+        
+        // 加载样式配置
+        loadStyleConfig(selectedStyle);
+        
+        // 🔄 编辑模式下：自动保存样式切换
         <?php if ($isEdit && $page && $page->getId()): ?>
         if (selectedStyle) {
-            window.committedPageStyle = selectedStyle;
             await autoSaveStyleChange(selectedStyle);
-            if (window.isRootPageForStyleHint && typeof BackendToast !== 'undefined') {
-                BackendToast.info(<?= json_encode(__("修改主页主题后，该站点下所有子页面的主题会随之变更。"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 4000);
-            }
         }
         <?php endif; ?>
     });
-}
-
-function syncStyleUIFromSelect(selectEl) {
-    const selectedOption = selectEl.options[selectEl.selectedIndex];
-    const descContainer = document.getElementById('style-description-container');
-    const descText = document.getElementById('style-description-text');
-    if (selectedOption && selectedOption.dataset.description && descContainer && descText) {
-        descText.textContent = selectedOption.dataset.description;
-        descContainer.style.display = 'block';
-    } else if (descContainer) {
-        descContainer.style.display = 'none';
-    }
-    const previewContainer = document.getElementById('style-preview-container');
-    const previewImage = document.getElementById('style-preview-image');
-    if (selectedOption && selectedOption.dataset.previewImage && previewContainer && previewImage) {
-        const baseUrl = '<?= $this->getUrl('pub/static/Weline/Admin/templates/GuoLaiRen/PageBuilder/') ?>';
-        previewImage.src = baseUrl + selectedOption.dataset.previewImage;
-        previewContainer.style.display = 'block';
-    } else if (previewContainer) {
-        previewContainer.style.display = 'none';
-    }
-    document.querySelectorAll('.style-card').forEach(card => {
-        card.classList.toggle('selected', card.dataset.styleCode === selectEl.value);
-    });
-    if (selectEl.value) loadStyleConfig(selectEl.value);
-}
-
-async function doStyleChangeSave(selectEl, selectedStyle, selectedOption) {
-    const descContainer = document.getElementById('style-description-container');
-    const descText = document.getElementById('style-description-text');
-    if (selectedOption && selectedOption.dataset.description && descContainer && descText) {
-        descText.textContent = selectedOption.dataset.description;
-        descContainer.style.display = 'block';
-    } else if (descContainer) descContainer.style.display = 'none';
-    const previewContainer = document.getElementById('style-preview-container');
-    const previewImage = document.getElementById('style-preview-image');
-    if (selectedOption && selectedOption.dataset.previewImage && previewContainer && previewImage) {
-        const baseUrl = '<?= $this->getUrl('pub/static/Weline/Admin/templates/GuoLaiRen/PageBuilder/') ?>';
-        previewImage.src = baseUrl + selectedOption.dataset.previewImage;
-        previewContainer.style.display = 'block';
-    } else if (previewContainer) previewContainer.style.display = 'none';
-    document.querySelectorAll('.style-card').forEach(card => {
-        card.classList.toggle('selected', card.dataset.styleCode === selectedStyle);
-    });
-    loadStyleConfig(selectedStyle);
-    await autoSaveStyleChange(selectedStyle);
-    if (typeof BackendToast !== 'undefined') {
-        BackendToast.info(<?= json_encode(__("修改主页主题后，该站点下所有子页面的主题会随之变更。"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 4000);
-    }
 }
 
 /**
@@ -3996,13 +4477,9 @@ async function autoSaveStyleChange(newStyle) {
         
         var opts = { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData, credentials: 'same-origin' };
         var res = await window.Weline.Api.request(form.action, opts);
-        let result = (res && res.data) || res;
-        // 兼容：接口返回 JSON 但 Content-Type 非 application/json 时 res.data 为字符串
-        if (typeof result === 'string') {
-            try { result = JSON.parse(result); } catch (e) { /* 保持 result 为字符串 */ }
-        }
+        const result = (res && res.data) || res;
         
-        if (result && result.success) {
+        if (result.success) {
             console.log('✅ 样式保存成功');
             
             // 显示成功提示
@@ -4053,7 +4530,7 @@ document.addEventListener('click', function(e) {
  */
 function openStyleConfigTranslation(configKey, configLabel, currentValue) {
     if (!pageIdForm || pageIdForm === 'null') {
-        BackendToast.warning(<?= json_encode(__('只有在编辑模式下才能翻译配置项'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+        BackendToast.warning('<?= __('只有在编辑模式下才能翻译配置项') ?>');
         return;
     }
     
@@ -4275,7 +4752,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // 显示状态提示
             contentStatusAlert.classList.remove('d-none');
             const wordCount = content.length;
-            contentStatusText.textContent = (<?= json_encode(__('当前已填写 '), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>) + wordCount + (<?= json_encode(__(' 个字符。页面将使用此自定义内容替代 content.phtml 模板。'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+            contentStatusText.textContent = `<?= __('当前已填写 ') ?>${wordCount}<?= __(' 个字符。页面将使用此自定义内容替代 content.phtml 模板。') ?>`;
         } else {
             // 无内容时恢复默认
             badge.textContent = '<?= __('我要自定义内容') ?>';
@@ -4431,7 +4908,7 @@ function showToast(type, title, message) {
  */
 window.generateTemplateConfig = function() {
     // 获取页面ID和模板代码
-    let pageId = window.visualPageId || <?= ($visualPageId ?? ($page && $page->getId() ? $page->getId() : 0)) ?: 0 ?>;
+    let pageId = window.visualPageId || <?= $pageId ?: 0 ?>;
     let styleCode = window.currentTemplateStyleCode || window.currentStyle || '';
     
     // 如果还没有，尝试从全局变量获取
@@ -4456,12 +4933,12 @@ window.generateTemplateConfig = function() {
     }
     
     if (pageId <= 0) {
-        BackendToast.warning(<?= json_encode(__('页面ID不能为空'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+        BackendToast.warning('<?= __('页面ID不能为空') ?>');
         return;
     }
     
     if (!styleCode) {
-        BackendToast.warning(<?= json_encode(__('模板代码不能为空'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+        BackendToast.warning('<?= __('模板代码不能为空') ?>');
         return;
     }
     
@@ -4477,7 +4954,7 @@ window.generateTemplateConfig = function() {
 
     // 弹出“正在生成”等待框，禁止用户关闭（直到成功或失败）
     // 显示"正在生成"提示
-    BackendToast.info(<?= json_encode(__('AI正在生成配置，请稍候...'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 0);
+    BackendToast.info('<?= __('AI正在生成配置，请稍候...') ?>', 0);
     
     // 显示加载状态
     btn.disabled = true;
@@ -4506,7 +4983,7 @@ window.generateTemplateConfig = function() {
         // 检查响应数据
         if (!data) {
             console.error('[AI生成配置] 响应数据为空');
-            BackendToast.error(<?= json_encode(__('响应数据为空'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+            BackendToast.error('<?= __('响应数据为空') ?>');
             return;
         }
         
@@ -4519,7 +4996,7 @@ window.generateTemplateConfig = function() {
         
         if (!data.data || (typeof data.data === 'object' && Object.keys(data.data).length === 0)) {
             console.warn('[AI生成配置] 没有生成任何配置项');
-            BackendToast.warning(<?= json_encode(__('AI没有生成任何配置项'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+            BackendToast.warning('<?= __('AI没有生成任何配置项') ?>');
             return;
         }
         
@@ -4690,14 +5167,14 @@ window.generateTemplateConfig = function() {
                                 item.input.style.borderStyle = 'solid';
                             }
                         });
-                        BackendToast.success((<?= json_encode(__('已生成并填充'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>) + ' ' + configItems.length + (<?= json_encode(__('个配置项'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>));
+                        BackendToast.success('<?= __('已生成并填充') ?> ' + configItems.length + ' <?= __('个配置项') ?>');
                     }
                 } else {
                     console.log('[AI生成配置] 用户取消');
                 }
             });
         } else {
-            BackendToast.warning((<?= json_encode(__('共'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>) + ' ' + allConfigItems.length + (<?= json_encode(__('个配置项生成，但未找到对应的输入框'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>));
+            BackendToast.warning('<?= __('共') ?> ' + allConfigItems.length + ' <?= __('个配置项生成，但未找到对应的输入框') ?>');
         }
     })
     .catch(error => {
@@ -4711,7 +5188,7 @@ window.generateTemplateConfig = function() {
         btn.innerHTML = originalHtml;
         
         console.error('AI生成配置错误:', error);
-        BackendToast.error(<?= json_encode(__('生成请求失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+        BackendToast.error('<?= __('生成请求失败，请稍后重试') ?>');
     });
 }
 
@@ -4853,16 +5330,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (err) {
             console.error('<?= __("复制失败") ?>:', err);
             // 最后降级方案：提示用户手动复制
-            if (typeof BackendConfirm !== 'undefined' && typeof BackendConfirm.showInput === 'function') {
-                BackendConfirm.showInput(
-                    <?= json_encode(__("请手动复制以下内容"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
-                    {defaultValue: text}
-                );
-            } else if (typeof BackendToast !== 'undefined') {
-                BackendToast.warning(
-                    <?= json_encode(__("请手动复制以下内容"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?> + ': ' + text
-                );
-            }
+            prompt('<?= __("请手动复制以下内容") ?>:', text);
         } finally {
             document.body.removeChild(textArea);
         }
@@ -4887,7 +5355,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // ==================== 页面URL相关函数 ====================
-    // 复制页面URL（按 handle）
+    // 复制页面URL
     window.copyPageUrl = function(event) {
         const urlInput = document.getElementById('pageUrlDisplay');
         if (!urlInput) return;
@@ -4895,49 +5363,396 @@ document.addEventListener('DOMContentLoaded', function() {
         const url = urlInput.value;
         if (!url) return;
         
+        // 获取按钮元素
         const button = event ? event.target.closest('button') : document.querySelector('button[onclick*="copyPageUrl"]');
-        copyToClipboard(url, button, null, null,
-            '<?= __("地址已复制") ?>',
-            '<?= __("页面地址") ?>: ' + url);
-    };
-
-    // 复制页面URL（按 ID，可不带 handle）
-    window.copyPageUrlById = function(event) {
-        const urlInput = document.getElementById('pageUrlDisplayById');
-        if (!urlInput) return;
         
-        const url = urlInput.value;
-        if (!url) return;
-        
-        const button = event ? event.target.closest('button') : document.querySelector('button[onclick*="copyPageUrlById"]');
-        copyToClipboard(url, button, null, null,
-            '<?= __("地址已复制") ?>',
+        // 使用通用复制函数
+        copyToClipboard(url, button, null, null, 
+            '<?= __("地址已复制") ?>', 
             '<?= __("页面地址") ?>: ' + url);
     };
     
-    // 打开页面URL（按 handle）
+    // 打开页面URL
     window.openPageUrl = function() {
         const urlInput = document.getElementById('pageUrlDisplay');
         if (!urlInput || !urlInput.value) return;
         
+        // 在新窗口打开
         window.open(urlInput.value, '_blank');
         console.log('🌐 打开页面:', urlInput.value);
-    };
-
-    // 打开页面URL（按 ID）
-    window.openPageUrlById = function() {
-        const urlInput = document.getElementById('pageUrlDisplayById');
-        if (!urlInput || !urlInput.value) return;
-        
-        window.open(urlInput.value, '_blank');
-        console.log('🌐 打开页面(按ID):', urlInput.value);
     };
     
     // ==================== Toast 通知函数（已在全局定义） ====================
     // showToast 函数现在是全局函数，可以在任何地方调用
 });
 
-// AI生成内容功能已移至 form_component/ai_generate.phtml（通过 w:template 引入）
+// ==================== AI生成内容功能（全局函数，可在onclick中调用） ====================
+/**
+ * 打开AI生成内容模态框
+ */
+window.openAiGenerateModal = function() {
+    const modal = document.getElementById('aiGenerateModal');
+    if (modal) {
+        // 确保按钮状态已重置（如果之前有生成过程）
+        const closeBtn = modal.querySelector('.btn-close');
+        const cancelBtn = modal.querySelector('.btn-secondary[data-bs-dismiss="modal"]');
+        const submitBtn = document.getElementById('aiGenerateSubmitBtn');
+        const spinner = document.getElementById('aiGenerateSpinner');
+        
+        if (closeBtn) {
+            closeBtn.style.pointerEvents = '';
+            closeBtn.style.opacity = '';
+            closeBtn.removeAttribute('disabled');
+            closeBtn.removeAttribute('aria-disabled');
+        }
+        if (cancelBtn) {
+            cancelBtn.disabled = false;
+            cancelBtn.style.opacity = '';
+            cancelBtn.style.cursor = '';
+            cancelBtn.removeAttribute('aria-disabled');
+        }
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm d-none" id="aiGenerateSpinner" role="status"></span><i class="mdi mdi-robot"></i> <?= __('生成内容') ?>';
+        }
+        if (spinner) {
+            spinner.classList.add('d-none');
+        }
+        
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+        
+        // 如果是编辑模式，自动生成描述
+        <?php if ($isEdit && $page && $page->getId()): ?>
+        const descriptionTextarea = document.getElementById('aiDescription');
+        if (descriptionTextarea && !descriptionTextarea.value.trim()) {
+            // 基于当前页面信息生成描述
+            const pageTitle = document.getElementById('title')?.value || '';
+            const metaTitle = document.getElementById('meta_title')?.value || '';
+            const metaDescription = document.getElementById('meta_description')?.value || '';
+            const pageContent = document.getElementById('custom_content')?.value || '';
+            
+            let autoDescription = '';
+            if (pageTitle) {
+                autoDescription += `页面标题：${pageTitle}\n`;
+            }
+            if (metaTitle) {
+                autoDescription += `SEO标题：${metaTitle}\n`;
+            }
+            if (metaDescription) {
+                autoDescription += `SEO描述：${metaDescription}\n`;
+            }
+            if (pageContent) {
+                const contentText = pageContent.replace(/<[^>]*>/g, '').trim();
+                if (contentText) {
+                    const contentSummary = contentText.length > 200 ? contentText.substring(0, 200) + '...' : contentText;
+                    autoDescription += `当前页面内容摘要：${contentSummary}\n`;
+                }
+            }
+            
+            if (autoDescription) {
+                autoDescription += '\n请基于以上信息优化和完善页面内容。';
+                descriptionTextarea.value = autoDescription;
+            }
+        }
+        <?php endif; ?>
+    }
+};
+
+/**
+ * 生成页面内容
+ */
+window.generatePageContent = function() {
+    const descriptionTextarea = document.getElementById('aiDescription');
+    let description = descriptionTextarea?.value.trim() || '';
+    
+    // 如果是编辑模式且描述为空，自动从页面信息生成描述
+    <?php if ($isEdit && $page && $page->getId()): ?>
+    if (!description) {
+        // 从表单字段获取当前页面信息
+        const pageTitle = document.getElementById('title')?.value || '';
+        const metaTitle = document.getElementById('meta_title')?.value || '';
+        const metaDescription = document.getElementById('meta_description')?.value || '';
+        const pageContent = document.getElementById('custom_content')?.value || '';
+        
+        // 构建自动描述
+        let autoDescription = '';
+        if (pageTitle) {
+            autoDescription += `页面标题：${pageTitle}\n`;
+        }
+        if (metaTitle) {
+            autoDescription += `SEO标题：${metaTitle}\n`;
+        }
+        if (metaDescription) {
+            autoDescription += `SEO描述：${metaDescription}\n`;
+        }
+        if (pageContent) {
+            const contentText = pageContent.replace(/<[^>]*>/g, '').trim();
+            if (contentText) {
+                const contentSummary = contentText.length > 200 ? contentText.substring(0, 200) + '...' : contentText;
+                autoDescription += `当前页面内容摘要：${contentSummary}\n`;
+            }
+        }
+        
+        if (autoDescription) {
+            autoDescription += '\n请基于以上信息优化和完善页面内容。';
+            description = autoDescription;
+            // 同时更新文本框显示
+            if (descriptionTextarea) {
+                descriptionTextarea.value = description;
+            }
+        }
+    }
+    
+    if (!description) {
+        BackendToast.warning('<?= __('请输入页面描述，或确保页面有标题、SEO信息或内容') ?>');
+        return;
+    }
+    <?php else: ?>
+    if (!description) {
+        BackendToast.warning('<?= __('请输入页面描述') ?>');
+        return;
+    }
+    <?php endif; ?>
+
+    const submitBtn = document.getElementById('aiGenerateSubmitBtn');
+    const spinner = document.getElementById('aiGenerateSpinner');
+    if (!submitBtn) return;
+    
+    const originalHtml = submitBtn.innerHTML;
+
+    // 获取模态框元素
+    const modalElement = document.getElementById('aiGenerateModal');
+    const modal = bootstrap.Modal.getInstance(modalElement);
+    const closeBtn = modalElement?.querySelector('.btn-close');
+    const cancelBtn = modalElement?.querySelector('.btn-secondary[data-bs-dismiss="modal"]');
+    
+    // 标记正在生成中
+    let isGenerating = true;
+    
+    // 禁用关闭操作：防止生成过程中关闭弹窗
+    if (modal) {
+        // 保存原始配置
+        const originalBackdrop = modal._config.backdrop;
+        const originalKeyboard = modal._config.keyboard;
+        
+        // 设置不允许关闭
+        modal._config.backdrop = 'static';
+        modal._config.keyboard = false;
+        
+        // 更新模态框元素的属性
+        modalElement.setAttribute('data-bs-backdrop', 'static');
+        modalElement.setAttribute('data-bs-keyboard', 'false');
+        
+        // 监听 hide 事件，在生成过程中阻止关闭
+        const preventHideHandler = function(e) {
+            if (isGenerating) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                return false;
+            }
+        };
+        modalElement.addEventListener('hide.bs.modal', preventHideHandler, { capture: true });
+        
+        // 保存恢复函数到模态框实例
+        modal._restoreClose = function() {
+            isGenerating = false;
+            modal._config.backdrop = originalBackdrop;
+            modal._config.keyboard = originalKeyboard;
+            modalElement.removeAttribute('data-bs-backdrop');
+            modalElement.removeAttribute('data-bs-keyboard');
+            modalElement.removeEventListener('hide.bs.modal', preventHideHandler, { capture: true });
+        };
+    }
+    
+    // 禁用关闭按钮和取消按钮
+    if (closeBtn) {
+        closeBtn.style.pointerEvents = 'none';
+        closeBtn.style.opacity = '0.5';
+        closeBtn.setAttribute('disabled', 'disabled');
+        closeBtn.setAttribute('aria-disabled', 'true');
+    }
+    if (cancelBtn) {
+        cancelBtn.disabled = true;
+        cancelBtn.style.opacity = '0.5';
+        cancelBtn.style.cursor = 'not-allowed';
+        cancelBtn.setAttribute('aria-disabled', 'true');
+    }
+
+    // 显示加载状态
+    submitBtn.disabled = true;
+    if (spinner) spinner.classList.remove('d-none');
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> <?= __('生成中...') ?>';
+
+    // 收集页面信息
+    const pageType = document.getElementById('page_type')?.value || 'page';
+    const title = document.getElementById('title')?.value || '';
+    const metaTitle = document.getElementById('meta_title')?.value || '';
+    const metaDescription = document.getElementById('meta_description')?.value || '';
+    const metaKeywords = document.getElementById('meta_keywords')?.value || '';
+    const handle = document.getElementById('handle')?.value || '';
+    const styleCode = document.getElementById('style')?.value || '';
+    const defaultLocale = document.getElementById('default_locale')?.value || '';
+
+    // 准备请求数据
+    const formData = new FormData();
+    formData.append('description', description);
+    formData.append('page_type', pageType);
+    <?php if ($isEdit && $page && $page->getId()): ?>
+    formData.append('page_id', <?= $page->getId() ?>);
+    <?php endif; ?>
+    if (title) formData.append('title', title);
+    if (metaTitle) formData.append('meta_title', metaTitle);
+    if (metaDescription) formData.append('meta_description', metaDescription);
+    if (metaKeywords) formData.append('meta_keywords', metaKeywords);
+    if (handle) formData.append('handle', handle);
+    if (styleCode) formData.append('style_code', styleCode);
+    if (defaultLocale) formData.append('default_locale', defaultLocale);
+
+    var url = '<?= $this->getBackendUrl("*/backend/ai-generate/page-content") ?>';
+    var opts = { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+    var req = window.Weline.Api.request(url, opts);
+    req.then(function(res) {
+        var data = (res && res.data) || res;
+        // 恢复关闭功能
+        const modalElement = document.getElementById('aiGenerateModal');
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        const closeBtn = modalElement?.querySelector('.btn-close');
+        const cancelBtn = modalElement?.querySelector('.btn-secondary[data-bs-dismiss="modal"]');
+        
+        if (modal && modal._restoreClose) {
+            modal._restoreClose();
+        }
+        
+        if (closeBtn) {
+            closeBtn.style.pointerEvents = '';
+            closeBtn.style.opacity = '';
+            closeBtn.removeAttribute('disabled');
+            closeBtn.removeAttribute('aria-disabled');
+        }
+        if (cancelBtn) {
+            cancelBtn.disabled = false;
+            cancelBtn.style.opacity = '';
+            cancelBtn.style.cursor = '';
+            cancelBtn.removeAttribute('aria-disabled');
+        }
+        
+        // 恢复按钮状态
+        submitBtn.disabled = false;
+        if (spinner) spinner.classList.add('d-none');
+        submitBtn.innerHTML = originalHtml;
+
+        if (data.success && data.data) {
+            // 填充生成的内容，并添加 AI 填充标识
+            if (data.data.title && document.getElementById('title')) {
+                const titleInput = document.getElementById('title');
+                titleInput.value = data.data.title;
+                titleInput.classList.add('ai-filled');
+            }
+            if (data.data.meta_title && document.getElementById('meta_title')) {
+                const metaTitleInput = document.getElementById('meta_title');
+                metaTitleInput.value = data.data.meta_title;
+                metaTitleInput.classList.add('ai-filled');
+            }
+            if (data.data.meta_description && document.getElementById('meta_description')) {
+                const metaDescInput = document.getElementById('meta_description');
+                metaDescInput.value = data.data.meta_description;
+                metaDescInput.classList.add('ai-filled');
+            }
+            if (data.data.meta_keywords && document.getElementById('meta_keywords')) {
+                const metaKeywordsInput = document.getElementById('meta_keywords');
+                metaKeywordsInput.value = data.data.meta_keywords;
+                metaKeywordsInput.classList.add('ai-filled');
+            }
+            if (data.data.content && document.getElementById('custom_content')) {
+                const contentEditor = window.pageEditors && window.pageEditors['custom_content'];
+                if (contentEditor) {
+                    contentEditor.setData(data.data.content);
+                    // 为 CKEditor 编辑器添加 AI 填充标识
+                    // 方法1: 通过编辑器实例获取可编辑元素
+                    setTimeout(() => {
+                        try {
+                            if (contentEditor.editing && contentEditor.editing.view) {
+                                const domRoot = contentEditor.editing.view.domRoots.get(contentEditor.editing.view.document);
+                                if (domRoot) {
+                                    domRoot.classList.add('ai-filled');
+                                }
+                            }
+                        } catch (e) {
+                            console.log('CKEditor DOM root access failed:', e);
+                        }
+                        
+                        // 方法2: 通过 DOM 查询找到编辑器容器
+                        const customContentElement = document.getElementById('custom_content');
+                        if (customContentElement) {
+                            const editorContainer = customContentElement.closest('.ck-editor');
+                            if (editorContainer) {
+                                const editableElement = editorContainer.querySelector('.ck-editor__editable');
+                                if (editableElement) {
+                                    editableElement.classList.add('ai-filled');
+                                }
+                            }
+                        }
+                    }, 100);
+                } else {
+                    const contentInput = document.getElementById('custom_content');
+                    contentInput.value = data.data.content;
+                    contentInput.classList.add('ai-filled');
+                }
+            }
+
+            // 关闭模态框
+            if (modal) modal.hide();
+
+            // 显示成功消息
+            BackendToast.success('<?= __('AI已成功生成页面内容，请检查并调整') ?>');
+        } else {
+            // 清理错误消息中的HTML标签（双重保险）
+            let errorMessage = data.message || '<?= __('生成失败') ?>';
+            if (errorMessage) {
+                // 创建临时div来去除HTML标签
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = errorMessage;
+                errorMessage = tempDiv.textContent || tempDiv.innerText || errorMessage;
+            }
+            
+            BackendToast.error(errorMessage);
+        }
+    })
+    .catch(error => {
+        // 恢复关闭功能
+        const modalElement = document.getElementById('aiGenerateModal');
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        const closeBtn = modalElement?.querySelector('.btn-close');
+        const cancelBtn = modalElement?.querySelector('.btn-secondary[data-bs-dismiss="modal"]');
+        
+        if (modal && modal._restoreClose) {
+            modal._restoreClose();
+        }
+        
+        if (closeBtn) {
+            closeBtn.style.pointerEvents = '';
+            closeBtn.style.opacity = '';
+            closeBtn.removeAttribute('disabled');
+            closeBtn.removeAttribute('aria-disabled');
+        }
+        if (cancelBtn) {
+            cancelBtn.disabled = false;
+            cancelBtn.style.opacity = '';
+            cancelBtn.style.cursor = '';
+            cancelBtn.removeAttribute('aria-disabled');
+        }
+        
+        // 恢复按钮状态
+        submitBtn.disabled = false;
+        if (spinner) spinner.classList.add('d-none');
+        submitBtn.innerHTML = originalHtml;
+
+        console.error('AI生成错误:', error);
+        BackendToast.error('<?= __('生成请求失败，请稍后重试') ?>');
+    });
+};
 
 /**
  * ========================================
@@ -4974,7 +5789,7 @@ window.openFrontendPreview = function() {
         }
     }
     ?>
-    const websiteUrlsPreview = <?= json_encode($websiteUrls, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    const websiteUrlsPreview = <?= json_encode($websiteUrls) ?>;
     
     // 获取当前选中的网站ID
     const websiteSelect = document.getElementById('website_id');

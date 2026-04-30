@@ -1,19 +1,15 @@
 {
     "name": "Google",
     "code": "google",
-    "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-    "price_unit": "per_1m_tokens",
-    "price_currency": "USD",
-    "models_prefix": ["gemini-"],
-    "allow_custom_models": true,
-    "quick_create": true,
-    "test_model": "gemini-2.5-flash",
+    "base_url": "https://generativelanguage.googleapis.com/v1",
+    "models_prefix": ["gemini-", "bard-"],
+    "test_model": "gemini-pro",
     "api_key_field": "api_key",
     "base_url_field": "base_url",
     "model_field": "model",
-    "description": "Google Gemini API through the OpenAI compatibility endpoint",
+    "description": "Google Gemini API服务",
     "website": "https://ai.google.dev",
-    "documentation": "https://ai.google.dev/gemini-api/docs/models",
+    "documentation": "https://ai.google.dev/docs",
     "supported_features": {
         "chat": true,
         "completion": true,
@@ -27,55 +23,65 @@
     },
     "models_api": {
         "path": "/models",
-        "auth_type": "bearer",
-        "data_key": "data",
-        "id_key": "id",
-        "name_key": "id",
+        "auth_type": "query_key",
+        "auth_param": "key",
+        "data_key": "models",
+        "id_key": "name",
+        "name_key": "displayName",
         "desc_key": "description",
         "context_key": "inputTokenLimit",
-        "max_tokens_key": "outputTokenLimit"
+        "max_tokens_key": "outputTokenLimit",
+        "id_prefix_trim": "models/"
     },
     "model_config_defaults": {
-        "max_tokens": 4096,
+        "max_tokens": 8192,
         "temperature": 0.7,
         "top_p": 1.0,
         "stream": true,
-        "timeout": 900,
+        "timeout": 180,
         "max_retries": 3,
-        "capabilities": ["chat", "vision", "code", "function_calling", "structured_outputs"]
+        "capabilities": ["chat", "vision", "code"]
     },
     "models": [
         {
-            "code": "gemini-2.5-pro",
-            "name": "Gemini 2.5 Pro",
-            "description": "Google Gemini thinking model for complex coding, reasoning, and multimodal understanding.",
-            "max_tokens": 65536,
+            "code": "gemini-2.0-flash-exp",
+            "name": "Gemini 2.0 Flash",
+            "description": "Gemini 2.0 实验版，支持多模态",
+            "max_tokens": 8192,
             "context_window": 1048576,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "capabilities": ["chat", "vision", "code"]
+        },
+        {
+            "code": "gemini-1.5-pro",
+            "name": "Gemini 1.5 Pro",
+            "description": "强大的多模态模型，支持长上下文",
+            "max_tokens": 8192,
+            "context_window": 2097152,
             "input_price": 1.25,
-            "output_price": 10.00,
-            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "structured_outputs"]
+            "output_price": 5.00,
+            "capabilities": ["chat", "vision", "code"]
         },
         {
-            "code": "gemini-2.5-flash",
-            "name": "Gemini 2.5 Flash",
-            "description": "Google Gemini price-performance model for low-latency high-volume tasks.",
-            "max_tokens": 65536,
+            "code": "gemini-1.5-flash",
+            "name": "Gemini 1.5 Flash",
+            "description": "快速响应的多模态模型",
+            "max_tokens": 8192,
             "context_window": 1048576,
-            "input_price": 0.30,
-            "output_price": 2.50,
-            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "structured_outputs"]
+            "input_price": 0.075,
+            "output_price": 0.30,
+            "capabilities": ["chat", "vision", "code"]
         },
         {
-            "code": "gemini-2.5-flash-lite",
-            "name": "Gemini 2.5 Flash-Lite",
-            "description": "Google Gemini cost-efficient model for high-throughput workloads.",
-            "max_tokens": 65536,
-            "context_window": 1048576,
-            "input_price": 0.10,
-            "output_price": 0.40,
-            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "structured_outputs"]
+            "code": "gemini-pro",
+            "name": "Gemini Pro",
+            "description": "Gemini Pro 通用模型",
+            "max_tokens": 8192,
+            "context_window": 32768,
+            "input_price": 0.50,
+            "output_price": 1.50,
+            "capabilities": ["chat", "code"]
         }
-    ],
-    "models_updated_at": "2026-04-24",
-    "models_source": "https://ai.google.dev/gemini-api/docs/models"
+    ]
 }

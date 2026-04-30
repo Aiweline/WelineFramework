@@ -6,7 +6,6 @@ namespace GuoLaiRen\PageBuilder\Controller\Backend;
 use Weline\Admin\Controller\BaseController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Http\Sse\SseWriter;
-use Weline\Framework\Runtime\SchedulerSystem;
 
 #[Acl('GuoLaiRen_PageBuilder::server_manager', '服务器实例', 'mdi mdi-server', 'PageBuilder 服务器管理', 'GuoLaiRen_PageBuilder::server_management')]
 class ServerManager extends BaseController
@@ -145,197 +144,70 @@ class ServerManager extends BaseController
 
     public function getSessionList(): string
     {
-        $items = w_query('session', 'list', [
-            'filter' => ['__domain' => 'session'],
-            'limit' => (int) $this->request->getGet('limit', 50),
-        ]);
-        $rows = [];
-        foreach ((array) $items as $item) {
-            if (!\is_array($item)) {
-                continue;
-            }
-            $sessionId = (string) ($item['session_id'] ?? '');
-            $data = \is_array($item['data'] ?? null) ? $item['data'] : [];
-            if ($sessionId === '__ns__:sess:__kv__:sess') {
-                foreach ($data as $realSessionId => $payload) {
-                    if (!\is_string($realSessionId) || !\is_array($payload)) {
-                        continue;
-                    }
-                    $rows[] = [
-                        'session_id' => $realSessionId,
-                        'data_count' => \count($payload),
-                        'keys' => \array_slice(\array_keys($payload), 0, 8),
-                        'preview' => \array_slice($payload, 0, 5, true),
-                    ];
-                }
-                continue;
-            }
-            $rows[] = [
-                'session_id' => $sessionId,
-                'data_count' => \count($data),
-                'keys' => \array_slice(\array_keys($data), 0, 8),
-                'preview' => \array_slice($data, 0, 5, true),
-            ];
-        }
-
-        return $this->fetchJson([
-            'success' => true,
-            'message' => (string) __('Session list loaded'),
-            'data' => $rows,
-        ]);
+        return $this->fetchJson(w_query('server', 'sessionList', [
+            'limit' => (int)$this->request->getGet('limit', 50),
+        ]));
     }
 
     public function postSessionDestroy(): string
     {
-        $sessionId = (string) $this->request->getPost('session_id', '');
-        $ok = $sessionId !== '' && (bool) w_query('session', 'destroy', [
-            'session_id' => $sessionId,
-        ]);
-
-        return $this->fetchJson([
-            'success' => $ok,
-            'message' => $ok ? (string) __('Session destroyed') : (string) __('Session destroy failed'),
-        ]);
+        return $this->fetchJson(w_query('server', 'sessionDestroy', [
+            'session_id' => (string)$this->request->getPost('session_id', ''),
+        ]));
     }
 
     public function postSessionPersist(): string
     {
-        $ok = (bool) w_query('session', 'persist');
-
-        return $this->fetchJson([
-            'success' => $ok,
-            'message' => $ok ? (string) __('Session persisted') : (string) __('Session persist failed'),
-        ]);
+        return $this->fetchJson(w_query('server', 'sessionPersist'));
     }
 
     public function postSessionGc(): string
     {
-        w_query('session', 'gc', [
-            'max_lifetime' => (int) $this->request->getPost('max_lifetime', 3600),
-        ]);
-
-        return $this->fetchJson([
-            'success' => true,
-            'message' => (string) __('Session gc executed'),
-        ]);
+        return $this->fetchJson(w_query('server', 'sessionGc', [
+            'max_lifetime' => (int)$this->request->getPost('max_lifetime', 3600),
+        ]));
     }
 
     public function getMemoryNamespaces(): string
     {
-        $limit = (int) $this->request->getGet('limit', 200);
-        $items = w_query('memory', 'list', [
-            'filter' => [],
-            'limit' => $limit,
-        ]);
-
-        $result = [];
-        foreach ((array) $items as $item) {
-            if (!\is_array($item)) {
-                continue;
-            }
-            $sid = (string) ($item['session_id'] ?? '');
-            if (!\str_starts_with($sid, '__ns__:')) {
-                continue;
-            }
-            $body = \substr($sid, 7);
-            $pos = \strpos($body, ':__kv__:');
-            $namespace = $pos === false ? $body : \substr($body, 0, $pos);
-            if ($namespace === '') {
-                continue;
-            }
-            $data = \is_array($item['data'] ?? null) ? $item['data'] : [];
-            $result[$namespace] = [
-                'namespace' => $namespace,
-                'keys' => \count($data),
-                'sample_keys' => \array_slice(\array_keys($data), 0, 6),
-            ];
-        }
-        \ksort($result);
-
-        return $this->fetchJson([
-            'success' => true,
-            'message' => (string) __('Memory namespaces loaded'),
-            'data' => \array_values($result),
-        ]);
+        return $this->fetchJson(w_query('server', 'memoryNamespaces', [
+            'limit' => (int)$this->request->getGet('limit', 200),
+        ]));
     }
 
     public function getMemoryNamespaceDetail(): string
     {
-        $namespace = (string) $this->request->getGet('namespace', '');
-        $limit = (int) $this->request->getGet('limit', 100);
-        $payload = (array) w_query('memory', 'getAll', [
-            'namespace' => $namespace,
-        ]);
-        $rows = [];
-        $index = 0;
-        foreach ($payload as $key => $value) {
-            if ($index >= $limit) {
-                break;
-            }
-            $rows[] = [
-                'key' => (string) $key,
-                'type' => \gettype($value),
-                'preview' => \is_scalar($value) || $value === null ? (string) $value : (\is_array($value) ? 'array(' . \count($value) . ')' : \gettype($value)),
-                'preview_detail' => ['kind' => \gettype($value)],
-            ];
-            $index++;
-        }
-
-        return $this->fetchJson([
-            'success' => $namespace !== '',
-            'message' => $namespace !== '' ? (string) __('Memory namespace detail loaded') : (string) __('Missing namespace'),
-            'data' => $namespace !== '' ? $rows : [],
-        ]);
+        return $this->fetchJson(w_query('server', 'memoryNamespaceDetail', [
+            'namespace' => (string)$this->request->getGet('namespace', ''),
+            'limit' => (int)$this->request->getGet('limit', 100),
+        ]));
     }
 
     public function postMemoryNamespaceClear(): string
     {
-        $namespace = (string) $this->request->getPost('namespace', '');
-        $ok = $namespace !== '' && (bool) w_query('memory', 'clearNamespace', [
-            'namespace' => $namespace,
-        ]);
-
-        return $this->fetchJson([
-            'success' => $ok,
-            'message' => $ok ? (string) __('Memory namespace cleared') : (string) __('Memory namespace clear failed'),
-        ]);
+        return $this->fetchJson(w_query('server', 'memoryNamespaceClear', [
+            'namespace' => (string)$this->request->getPost('namespace', ''),
+        ]));
     }
 
     public function postMemoryKeyDelete(): string
     {
-        $namespace = (string) $this->request->getPost('namespace', '');
-        $key = (string) $this->request->getPost('key', '');
-        $ok = $namespace !== '' && $key !== '' && (bool) w_query('memory', 'delete', [
-            'namespace' => $namespace,
-            'key' => $key,
-        ]);
-
-        return $this->fetchJson([
-            'success' => $ok,
-            'message' => $ok ? (string) __('Memory key deleted') : (string) __('Memory key delete failed'),
-        ]);
+        return $this->fetchJson(w_query('server', 'memoryKeyDelete', [
+            'namespace' => (string)$this->request->getPost('namespace', ''),
+            'key' => (string)$this->request->getPost('key', ''),
+        ]));
     }
 
     public function postMemoryPersist(): string
     {
-        $ok = (bool) w_query('memory', 'persist');
-
-        return $this->fetchJson([
-            'success' => $ok,
-            'message' => $ok ? (string) __('Memory persisted') : (string) __('Memory persist failed'),
-        ]);
+        return $this->fetchJson(w_query('server', 'memoryPersist'));
     }
 
     public function postMemoryGc(): string
     {
-        w_query('memory', 'gc', [
-            'max_lifetime' => (int) $this->request->getPost('max_lifetime', 3600),
-        ]);
-
-        return $this->fetchJson([
-            'success' => true,
-            'message' => (string) __('Memory gc executed'),
-        ]);
+        return $this->fetchJson(w_query('server', 'memoryGc', [
+            'max_lifetime' => (int)$this->request->getPost('max_lifetime', 3600),
+        ]));
     }
 
     public function getOperationStream(): void
@@ -410,7 +282,7 @@ class ServerManager extends BaseController
                 ]);
                 return;
             }
-            SchedulerSystem::yieldDelay(500);
+            \usleep(500000);
         }
 
         $sse->complete([

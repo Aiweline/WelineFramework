@@ -66,10 +66,10 @@ $description = $config['content.description'] ?? 'A balanced, encyclopedia-style
 
 // CTA配置
 $primaryBtnText = $config['cta.primary_text'] ?? 'Get the Android App';
-$primaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.primary_url'] ?? '#download');
+$primaryBtnUrl = $config['cta.primary_url'] ?? '#download';
 $primaryBtnIcon = $config['cta.primary_icon'] ?? 'download';
 $secondaryBtnText = $config['cta.secondary_text'] ?? 'Explore Games';
-$secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.secondary_url'] ?? '#games');
+$secondaryBtnUrl = $config['cta.secondary_url'] ?? '#games';
 
 // 特性配置 - 使用原网站文案
 $featuresRaw = $config['features.items'] ?? "Result cycles decoded|Understand single, jodi, and panna formats used in satta king 786 listings.\nAndroid-first access|Lightweight app guidance with clear install steps and permission clarity.\nCompliance-friendly tone|Facts, definitions, and responsible use notes without promises of winnings.";
@@ -103,11 +103,6 @@ $paddingTop = $config['style.padding_top'] ?? '120';
 $paddingBottom = $config['style.padding_bottom'] ?? '80';
 $titleSize = $config['style.title_size'] ?? '3.5';
 $descSize = $config['style.desc_size'] ?? '1.25';
-
-$primaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl);
-$secondaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl);
-$primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($primaryHref, 'primary');
-$secondaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($secondaryHref, 'secondary');
 
 $instanceId = 'sk-hero-' . uniqid();
 ?>
@@ -411,6 +406,7 @@ $instanceId = 'sk-hero-' . uniqid();
             }
         }
     </style>
+    
     <div class="sk-hero-container">
         <!-- 主区域：左侧内容 + 右侧图片 -->
         <div class="sk-hero-main">
@@ -429,7 +425,7 @@ $instanceId = 'sk-hero-' . uniqid();
                 <p class="sk-hero-description"><?= htmlspecialchars($description) ?></p>
                 
                 <div class="sk-hero-cta">
-                    <a role="button" tabindex="0" class="sk-hero-btn-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($primaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($primaryRef) ?>">
+                    <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="sk-hero-btn-primary">
                         <?php if ($primaryBtnIcon === 'download'): ?>
                         <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                         <?php elseif ($primaryBtnIcon === 'android'): ?>
@@ -440,7 +436,7 @@ $instanceId = 'sk-hero-' . uniqid();
                         <?= htmlspecialchars($primaryBtnText) ?>
                     </a>
                     
-                    <a role="button" tabindex="0" class="sk-hero-btn-secondary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($secondaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($secondaryRef) ?>">
+                    <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="sk-hero-btn-secondary">
                         <?= htmlspecialchars($secondaryBtnText) ?>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M5 12h14M12 5l7 7-7 7"/>
