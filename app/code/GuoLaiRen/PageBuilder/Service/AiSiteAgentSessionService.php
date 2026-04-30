@@ -26,6 +26,7 @@ class AiSiteAgentSessionService
         '_workspace_stream_lease',
         'active_operation',
         'active_operations',
+        'asset_manifest',
         'block_patch_history',
         'brief_description',
         'build_summary',
@@ -75,6 +76,7 @@ class AiSiteAgentSessionService
         'website_profile',
         'workspace_status',
         'workspace_track',
+        'verified_assets',
     ];
 
     /** @var list<string> */
@@ -122,6 +124,8 @@ class AiSiteAgentSessionService
         'task_plan_markdown',
         'task_plan_structured',
         'task_plan_summary',
+        'asset_manifest',
+        'verified_assets',
         'virtual_theme_plan',
         '_ai_generated_shared_components',
         '_queue_force_build',

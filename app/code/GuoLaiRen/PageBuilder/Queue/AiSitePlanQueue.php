@@ -259,15 +259,32 @@ class AiSitePlanQueue implements QueueInterface
             : (\is_array($content['mutation'] ?? null)
                 ? $content['mutation']
                 : (\is_array($details['mutation'] ?? null) ? $details['mutation'] : []));
+        $mutations = \is_array($request['mutations'] ?? null)
+            ? $request['mutations']
+            : (\is_array($content['mutations'] ?? null)
+                ? $content['mutations']
+                : (\is_array($details['mutations'] ?? null) ? $details['mutations'] : []));
         $promptMode = $this->firstNonEmptyString([$content['prompt_mode'] ?? null, $details['prompt_mode'] ?? null, $request['prompt_mode'] ?? null]);
         $action = $this->firstNonEmptyString([$content['action'] ?? null, $details['action'] ?? null, $mutation['action'] ?? null]);
         $blockKey = $this->firstNonEmptyString([$content['block_key'] ?? null, $details['block_key'] ?? null, $mutation['block_key'] ?? null]);
+        $blockKeys = $this->normalizeStringList([
+            ...$this->normalizeStringList($content['block_keys'] ?? []),
+            ...$this->normalizeStringList($details['block_keys'] ?? []),
+            ...$this->normalizeStringList($request['block_keys'] ?? []),
+        ]);
         $targetScope = $this->firstNonEmptyString([$content['target_scope'] ?? null, $details['target_scope'] ?? null, $request['target_scope'] ?? null]);
+        $targetScopes = $this->normalizeStringList([
+            ...$this->normalizeStringList($content['target_scopes'] ?? []),
+            ...$this->normalizeStringList($details['target_scopes'] ?? []),
+            ...$this->normalizeStringList($request['target_scopes'] ?? []),
+        ]);
 
         return $promptMode === 'mutate_plan_block'
             || $action !== ''
             || $blockKey !== ''
+            || $blockKeys !== []
             || $mutation !== []
+            || $mutations !== []
             || \str_contains($targetScope, '.blocks.');
     }
 
@@ -333,11 +350,27 @@ class AiSitePlanQueue implements QueueInterface
         $action = $this->firstNonEmptyString([$content['action'] ?? null, $details['action'] ?? null, $mutation['action'] ?? null]);
         $pageType = $this->firstNonEmptyString([$content['page_type'] ?? null, $details['page_type'] ?? null, $mutation['page_type'] ?? null, $request['page_type'] ?? null]);
         $blockKey = $this->firstNonEmptyString([$content['block_key'] ?? null, $details['block_key'] ?? null, $mutation['block_key'] ?? null, $request['block_key'] ?? null]);
+        $blockKeys = $this->normalizeStringList([
+            ...$this->normalizeStringList($content['block_keys'] ?? []),
+            ...$this->normalizeStringList($details['block_keys'] ?? []),
+            ...$this->normalizeStringList($request['block_keys'] ?? []),
+            ...$this->normalizeStringList($mutation['block_keys'] ?? []),
+        ]);
+        if ($blockKey !== '' && !\in_array($blockKey, $blockKeys, true)) {
+            \array_unshift($blockKeys, $blockKey);
+        }
+        $targetScopes = $this->normalizeStringList([
+            ...$this->normalizeStringList($content['target_scopes'] ?? []),
+            ...$this->normalizeStringList($details['target_scopes'] ?? []),
+            ...$this->normalizeStringList($request['target_scopes'] ?? []),
+            ...$this->normalizeStringList($mutation['target_scopes'] ?? []),
+        ]);
         if ($mutation === [] && ($action !== '' || $pageType !== '' || $blockKey !== '')) {
             $mutation = [
                 'action' => $action,
                 'page_type' => $pageType,
                 'block_key' => $blockKey,
+                'block_keys' => $blockKeys,
                 'block_config' => $blockConfig,
             ];
         }
@@ -357,6 +390,9 @@ class AiSitePlanQueue implements QueueInterface
         if ($targetScope === '' && $pageType !== '') {
             $targetScope = 'pages.' . $pageType . '.blocks.' . ($blockKey !== '' ? $blockKey : 'new');
         }
+        if ($targetScope !== '' && !\in_array($targetScope, $targetScopes, true)) {
+            \array_unshift($targetScopes, $targetScope);
+        }
         $roundValue = $this->firstNonEmptyString([$content['round'] ?? null, $details['round'] ?? null, $request['round'] ?? null]);
         $round = \max(1, (int)($roundValue !== '' ? $roundValue : ((int)($scope['plan_last_round'] ?? 0) + 1)));
         $instruction = $this->firstNonEmptyString([
@@ -370,14 +406,39 @@ class AiSitePlanQueue implements QueueInterface
             'prompt_mode' => $promptMode,
             'instruction' => $instruction,
             'target_scope' => $targetScope,
+            'target_scopes' => $targetScopes,
             'round' => $round,
             'plan_locale' => $this->firstNonEmptyString([$content['plan_locale'] ?? null, $details['plan_locale'] ?? null, $request['plan_locale'] ?? null, $scope['plan_locale'] ?? null]),
+            'block_key' => $blockKey,
+            'block_keys' => $blockKeys,
         ]);
         if ($mutation !== []) {
             $request['mutation'] = $mutation;
         }
 
         return $request;
+    }
+
+    /**
+     * @param mixed $value
+     * @return list<string>
+     */
+    private function normalizeStringList(mixed $value): array
+    {
+        if (!\is_array($value)) {
+            return [];
+        }
+        $list = [];
+        foreach ($value as $item) {
+            if (!\is_scalar($item) && !(\is_object($item) && \method_exists($item, '__toString'))) {
+                continue;
+            }
+            $text = \trim((string)$item);
+            if ($text !== '' && !\in_array($text, $list, true)) {
+                $list[] = $text;
+            }
+        }
+        return $list;
     }
 
     /**
