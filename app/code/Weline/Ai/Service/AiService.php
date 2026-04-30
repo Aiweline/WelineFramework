@@ -22,6 +22,7 @@ use Weline\Ai\Service\AdapterScanner;
 use Weline\Ai\Service\AgentScanner;
 use Weline\Ai\Service\I18nIntegration;
 use Weline\Ai\Service\Provider\ProviderFactory;
+use Weline\Ai\Service\Provider\ImageGenerationProviderInterface;
 use Weline\Ai\Service\Provider\AccountService;
 use Weline\Ai\Service\ConfigResolver;
 use Weline\Ai\Interface\AgentInterface;
@@ -587,6 +588,92 @@ class AiService
     }
 
     /**
+     * Generate images from text. Text models are never used as image fallback.
+     *
+     * @return array<string,mixed>
+     * @throws ModelSelectionException
+     * @throws Exception
+     */
+    public function generateImage(
+        string $prompt,
+        ?string $modelCode = null,
+        ?string $scenarioCode = null,
+        array $params = []
+    ): array {
+        $params = AiRuntimeContext::mergeDefaultParams($params);
+        $model = $this->selectModel($modelCode, $scenarioCode, AiModel::PRIMARY_MODALITY_TEXT_TO_IMAGE);
+        if (!$model) {
+            throw new ModelSelectionException('未配置可用的 text2image 模型，图片生成不会回退到 text2text 模型');
+        }
+
+        $configResolver = ObjectManager::getInstance(ConfigResolver::class);
+        $userConfig = \is_array($params['user_config'] ?? null) ? $params['user_config'] : [];
+        if (\array_key_exists('allow_zero_balance_provider', $params)) {
+            $userConfig['allow_zero_balance_provider'] = $params['allow_zero_balance_provider'];
+        }
+        $resolvedConfig = $configResolver->resolveConfig(
+            $model->getModelCode(),
+            $userConfig,
+            isset($params['user_id']) ? (int)$params['user_id'] : null,
+            (bool)($params['is_backend'] ?? true),
+            $model
+        );
+        $this->applyResolvedConfigToModel($model, $resolvedConfig);
+        $params['resolved_config'] = $resolvedConfig;
+
+        $provider = $this->providerFactory->getProvider($model);
+        if (!$provider instanceof ImageGenerationProviderInterface) {
+            throw new Exception(__('模型 "%{1}" 的供应商未实现图片生成接口', [$model->getModelCode()]));
+        }
+
+        return $this->normalizeImageGenerationResult(
+            $provider->generateImage($model, $prompt, $params),
+            $model
+        );
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    public function resolveModel(?string $modelCode = null, ?string $scenarioCode = null, string $primaryModality = AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT): ?array
+    {
+        $model = $this->selectModel($modelCode, $scenarioCode, $primaryModality);
+        return $model ? $this->modelToArray($model) : null;
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    public function listModels(?string $primaryModality = null): array
+    {
+        $items = $this->newAiModelQuery()
+            ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+            ->select()
+            ->fetch();
+
+        $models = [];
+        foreach ($this->iterableItems($items) as $model) {
+            if (!$model instanceof AiModel) {
+                continue;
+            }
+            if ($primaryModality !== null && !$model->supportsPrimaryModality($primaryModality)) {
+                continue;
+            }
+            $models[] = $this->modelToArray($model);
+        }
+
+        return $models;
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    public function getAdapterModelBindings(string $scenarioCode): array
+    {
+        return $this->adapterScanner->getModelBindingsForAdapter($scenarioCode);
+    }
+
+    /**
      * 流式生成文本内容（实例方法）
      * 
      * 注意：此方法必须立即进入流式发送路径，不允许先同步等待完整结果再返回。
@@ -783,9 +870,10 @@ class AiService
      * @param string|null $scenarioCode 场景代码
      * @return AiModel|null
      */
-    private function selectModel(?string $modelCode, ?string $scenarioCode): ?AiModel
+    private function selectModel(?string $modelCode, ?string $scenarioCode, string $primaryModality = AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT): ?AiModel
     {
         $model = null;
+        $primaryModality = AiModel::normalizePrimaryModality($primaryModality);
         
         // 1. 如果指定了模型代码，优先使用
         if ($modelCode) {
@@ -803,18 +891,29 @@ class AiService
                     ->find()
                     ->fetch();
             }
+
+            if ($model && $model->getId() && !$model->supportsPrimaryModality($primaryModality)) {
+                return null;
+            }
         }
 
-        // 2. 根据场景适配器配置的默认模型选择（ai_scenario_adapter.default_model）
+        // 2. 根据场景适配器配置的模型绑定选择；default_model 仅作为 text2text fallback
         if (!$model || !$model->getId()) {
             if ($scenarioCode) {
-                $adapterDefaultModelCode = $this->adapterScanner->getDefaultModelCodeForAdapter($scenarioCode);
+                $adapterBindings = $this->adapterScanner->getModelBindingsForAdapter($scenarioCode);
+                $adapterDefaultModelCode = $adapterBindings[$primaryModality] ?? null;
+                if ($primaryModality === AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT && !$adapterDefaultModelCode) {
+                    $adapterDefaultModelCode = $this->adapterScanner->getDefaultModelCodeForAdapter($scenarioCode);
+                }
                 if ($adapterDefaultModelCode) {
                     $model = $this->newAiModelQuery()
                         ->where(AiModel::schema_fields_MODEL_CODE, $adapterDefaultModelCode)
                         ->where(AiModel::schema_fields_IS_ACTIVE, 1)
                         ->find()
                         ->fetch();
+                    if ($model && $model->getId() && !$model->supportsPrimaryModality($primaryModality)) {
+                        $model = null;
+                    }
                 }
             }
         }
@@ -823,12 +922,18 @@ class AiService
         if (!$model || !$model->getId()) {
             if ($scenarioCode) {
                 $model = $this->defaultModelManager->getDefaultModel($scenarioCode);
+                if ($model && $model->getId() && !$model->supportsPrimaryModality($primaryModality)) {
+                    $model = null;
+                }
             }
         }
 
         // 4. 使用全局默认模型
         if (!$model || !$model->getId()) {
             $model = $this->defaultModelManager->getDefaultModel(DefaultModelManager::SERVICE_TYPE_DEFAULT);
+            if ($model && $model->getId() && !$model->supportsPrimaryModality($primaryModality)) {
+                $model = null;
+            }
         }
 
         // 5. 如果找不到默认模型，使用任意一个已激活的默认标记模型
@@ -838,6 +943,9 @@ class AiService
                 ->where(AiModel::schema_fields_IS_DEFAULT, 1)
                 ->find()
                 ->fetch();
+            if ($model && $model->getId() && !$model->supportsPrimaryModality($primaryModality)) {
+                $model = null;
+            }
         }
 
         // 6. 如果没有显式默认，但系统已有可用模型，则使用任意已激活模型，避免功能入口误报未配置。
@@ -846,6 +954,9 @@ class AiService
                 ->where(AiModel::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
+            if ($model && $model->getId() && !$model->supportsPrimaryModality($primaryModality)) {
+                $model = null;
+            }
         }
 
         // 7. 如果找到模型，用 config 覆盖 provider_config（读取时覆盖，不保存到数据库）
@@ -856,6 +967,52 @@ class AiService
         }
 
         return null;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function normalizeImageGenerationResult(array $result, AiModel $model): array
+    {
+        $images = $result['images'] ?? [];
+        return [
+            'images' => \is_array($images) ? \array_values($images) : [],
+            'usage' => \is_array($result['usage'] ?? null) ? $result['usage'] : [],
+            'model' => (string)($result['model'] ?? $model->getModelCode()),
+            'finish_reason' => (string)($result['finish_reason'] ?? 'stop'),
+            'raw' => $result['raw'] ?? null,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function modelToArray(AiModel $model): array
+    {
+        return [
+            'id' => $model->getId(),
+            'model_code' => $model->getModelCode(),
+            'name' => $model->getName(),
+            'supplier' => $model->getSupplier(),
+            'primary_modality' => $model->getPrimaryModality(),
+            'capabilities' => $model->getCapabilities(),
+            'is_active' => $model->getIsActive(),
+            'is_default' => $model->getIsDefault(),
+        ];
+    }
+
+    /**
+     * @return iterable<int|string,mixed>
+     */
+    private function iterableItems(mixed $items): iterable
+    {
+        if (\is_array($items)) {
+            return $items;
+        }
+        if (\is_object($items) && \method_exists($items, 'getItems')) {
+            return $items->getItems();
+        }
+        return $items ? [$items] : [];
     }
     
     /**

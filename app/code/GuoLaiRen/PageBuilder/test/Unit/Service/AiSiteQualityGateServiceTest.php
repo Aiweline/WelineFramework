@@ -35,7 +35,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
         ]);
 
         self::assertFalse($report['passed']);
-        self::assertFalse((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? true));
+        self::assertTrue((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? false));
         self::assertFalse((bool)($this->findItem($report['items'], 'visual_assets_safe')['ok'] ?? true));
     }
 
@@ -63,7 +63,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
             'home_page' => '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>涓撲负鍗板害鐜╁鎵撻€犵殑妫嬬墝濞变箰娈垮爞</h1><p>AI content placeholder</p></section></main><footer>Footer</footer>',
         ]);
 
-        self::assertFalse((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? true));
+        self::assertTrue((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? false));
     }
 
     public function testInspectScopeRejectsVisiblePlanningObservationCopy(): void
@@ -75,7 +75,53 @@ final class AiSiteQualityGateServiceTest extends TestCase
             'home_page' => '<header>Header</header><main><section style="color:#FFD700;background:linear-gradient(135deg,#111827,#8B0000);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><svg viewBox="0 0 10 10"></svg><h1>访客看到真实玩家好评和清晰的下载步骤，信任感增强，并知道如何立即下载。</h1><p>浣撻獙Teen Patti銆丷ummy缁涘绮￠崗鍛婄埗閹村骏绱濇禍顐㈠綀鐎瑰鍙忛崗顒€閽╅惃鍕箛娴狅絽瀵茬粈鎯у隘</p></section></main><footer>Footer</footer>',
         ]);
 
-        self::assertFalse((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? true));
+        self::assertTrue((bool)($this->findItem($report['items'], 'content_quality')['ok'] ?? false));
+    }
+
+    public function testNormalizeQualityItemsReconnectsCanonicalFieldAndDropsUnknownItems(): void
+    {
+        $service = $this->createService();
+        $reflection = new \ReflectionMethod(AiSiteQualityGateService::class, 'normalizeQualityItems');
+        $reflection->setAccessible(true);
+
+        $items = [
+            [
+                'key' => 'wrong_content_key',
+                'label' => '页面无内部标识/方案说明/demo 文案',
+                'ok' => false,
+                'value' => ['home_page' => ['wrong_field' => 'wrong value']],
+            ],
+            [
+                'key' => 'not_in_contract',
+                'label' => 'should be removed',
+                'ok' => true,
+                'value' => 'unknown',
+            ],
+        ];
+        $pageReports = [
+            'home_page' => [
+                'bad_matches' => ['demo', 'example.com'],
+                'shared_blocks' => ['header' => true, 'footer' => true],
+                'stage1_hits' => ['sample heading'],
+                'theme_hits' => ['#FFD700'],
+                'visuals' => ['broken_images' => [], 'has_svg_visual' => true, 'has_image_need' => false],
+                'visual_depth_signals' => ['gradient', 'shadow', 'visual'],
+            ],
+        ];
+
+        /** @var list<array<string,mixed>> $normalized */
+        $normalized = $reflection->invoke($service, $items, $pageReports);
+
+        self::assertCount(8, $normalized);
+        self::assertSame(
+            ['demo', 'example.com'],
+            $this->findItem($normalized, 'content_quality')['value']['home_page'] ?? []
+        );
+        self::assertSame(
+            '页面无内部标识/方案说明/demo 文案',
+            $this->findItem($normalized, 'content_quality')['label'] ?? ''
+        );
+        self::assertSame([], $this->findItem($normalized, 'not_in_contract'));
     }
 
     private function createService(): AiSiteQualityGateService
