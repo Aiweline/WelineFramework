@@ -37,7 +37,10 @@ final class AiSitePageComponentGenerationServiceWQueryTest extends TestCase
         $aiService->expects(self::once())
             ->method('generate')
             ->with(
-                'hello',
+                self::callback(static function (string $prompt): bool {
+                    return \str_contains($prompt, 'AI BUILDER SKILL CAPABILITY')
+                        && \str_contains($prompt, 'hello');
+                }),
                 'gpt-test',
                 'pagebuilder_component_generation',
                 'en_US',
@@ -88,7 +91,9 @@ final class AiSitePageComponentGenerationServiceWQueryTest extends TestCase
             },
         ]);
 
-        self::assertSame(['streamed'], $received);
+        self::assertCount(1, $received);
+        self::assertStringContainsString('AI BUILDER SKILL CAPABILITY', $received[0]);
+        self::assertStringContainsString('streamed', $received[0]);
         self::assertSame(['chunk-1', 'chunk-2'], $captured);
         self::assertSame(['status' => 'fulfilled'], $result);
     }
@@ -142,7 +147,8 @@ final class AiSitePageComponentGenerationServiceWQueryTest extends TestCase
         self::assertSame('fake-text-response', $result);
         self::assertCount(1, $callRecord);
         self::assertSame('generate', $callRecord[0]['operation']);
-        self::assertSame('hello via w_query', $callRecord[0]['params']['prompt']);
+        self::assertStringContainsString('AI BUILDER SKILL CAPABILITY', $callRecord[0]['params']['prompt']);
+        self::assertStringContainsString('hello via w_query', $callRecord[0]['params']['prompt']);
         self::assertSame('pagebuilder_component_generation', $callRecord[0]['params']['scenario_code']);
         self::assertSame(['temperature' => 0.35], $callRecord[0]['params']['params']);
     }

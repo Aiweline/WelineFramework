@@ -528,6 +528,35 @@ class AiSiteBuildTaskServiceTest extends TestCase
         self::assertSame(AiSiteBuildTaskService::TASK_STATUS_RUNNING, $scope['build_tasks']['orphan:running']['status']);
     }
 
+    public function testSyncBuildTaskFailuresKeepsRetryEntryForLatestBuildFailureWithoutBlueprintTasks(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+        $scope = [
+            'latest_build_failed' => 1,
+            'publish_blocked_by_latest_ai_failure' => 1,
+            'publish_blocked_reason' => 'Home hero generation failed.',
+            'latest_build_failure' => [
+                'blocked' => true,
+                'operation' => 'build',
+                'status' => 'error',
+                'message' => 'Home hero generation failed.',
+                'page_type' => 'home_page',
+                'section_code' => 'hero',
+            ],
+            'retryable_ai_failures' => [],
+        ];
+
+        $scope = $service->syncBuildTaskFailuresToRetryableLedger($scope);
+
+        self::assertSame(1, (int)($scope['retryable_ai_failure_count'] ?? 0));
+        self::assertArrayHasKey('build', $scope['retryable_ai_failures']);
+        self::assertArrayHasKey('home_page', $scope['retryable_ai_failures']['build']['items']);
+        self::assertSame(
+            'Home hero generation failed.',
+            $scope['retryable_ai_failures']['build']['items']['home_page']['message'] ?? ''
+        );
+    }
+
     public function testEnsureTaskScopeReusesExistingConfirmedBuildBlueprintWhenConfirmedPlanWasCompacted(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
