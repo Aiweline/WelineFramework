@@ -553,6 +553,7 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         self::assertSame(['queue_id' => 2], $service->selectStatusQueueInfo($state, 'task_plan'));
         self::assertSame(['queue_id' => 3], $service->selectStatusQueueInfo($state, 'build'));
         self::assertSame(['queue_id' => 3], $service->selectStatusQueueInfo($state, 'regenerate_page'));
+        self::assertSame(['queue_id' => 3], $service->selectStatusQueueInfo($state, 'block_partial_patch'));
 
         // unknown operation → first available fallback
         self::assertSame(['queue_id' => 1], $service->selectStatusQueueInfo($state, 'publish'));
@@ -683,6 +684,7 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         self::assertSame('stage1.requirement_expand', $service->resolveQueueJobType('plan'));
         self::assertSame('stage2.shared.tasks', $service->resolveQueueJobType('task_plan'));
         self::assertSame('virtual_theme.tree.build', $service->resolveQueueJobType('build'));
+        self::assertSame('virtual_theme.block.partial_patch', $service->resolveQueueJobType('block_partial_patch'));
         self::assertSame('', $service->resolveQueueJobType('publish'));
         self::assertSame('', $service->resolveQueueJobType(''));
         self::assertSame('', $service->resolveQueueJobType('unknown_op'));

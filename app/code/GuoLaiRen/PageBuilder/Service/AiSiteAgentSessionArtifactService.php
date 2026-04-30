@@ -29,6 +29,11 @@ class AiSiteAgentSessionArtifactService
             'path' => ['plan_structured'],
             'empty' => [],
         ],
+        'plan_markdown' => [
+            'stage' => AiSiteAgentSession::STAGE_PLAN,
+            'path' => ['plan_markdown'],
+            'empty' => '',
+        ],
         'task_plan_structured' => [
             'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'path' => ['task_plan_structured'],
@@ -73,10 +78,12 @@ class AiSiteAgentSessionArtifactService
         AiSiteAgentSession::STAGE_PLAN => [
             'plan_json',
             'plan_structured',
+            'plan_markdown',
         ],
         AiSiteAgentSession::STAGE_VISUAL_EDIT => [
             'plan_json',
             'plan_structured',
+            'plan_markdown',
             'task_plan_structured',
             'task_plan_markdown',
             'task_plan_draft',
@@ -88,6 +95,7 @@ class AiSiteAgentSessionArtifactService
         AiSiteAgentSession::STAGE_PUBLISH => [
             'plan_json',
             'plan_structured',
+            'plan_markdown',
             'task_plan_structured',
             'task_plan_markdown',
             'task_plan_draft',
