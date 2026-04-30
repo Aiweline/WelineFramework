@@ -43,35 +43,24 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         self::assertSame('<div>AI generated header</div>', $payload['html_extra'] ?? null);
     }
 
-    public function testRunAiGenerationFallsBackToNonStreamForTransientTlsStreamFailure(): void
+    public function testRunAiGenerationThrowsWhenStreamFailsBeforeParseablePayload(): void
     {
         $aiService = $this->createMock(AiService::class);
         $aiService->expects(self::once())
             ->method('generateStream')
             ->willThrowException(new \RuntimeException('AI流式生成失败: 流式API调用失败: TLS connect error: error:0A000126:SSL routines::unexpected eof while reading'));
-        $aiService->expects(self::once())
-            ->method('generate')
-            ->with(
-                self::stringContains('Generate a simple header'),
-                null,
-                'pagebuilder_component_generation',
-                null,
-                self::callback(static function (array $params): bool {
-                    return ($params['response_format']['type'] ?? null) === 'json_object'
-                        && ($params['allow_zero_balance_provider'] ?? null) === true;
-                })
-            )
-            ->willReturn('{"html_extra":"<div>Recovered header</div>","css_extra":"","php_variables":"","extra_fields":"","js_content":""}');
+        $aiService->expects(self::never())->method('generate');
 
         $service = new AiSitePageComponentGenerationService(
             aiService: $aiService,
         );
 
-        $payload = (function (string $region, string $prompt): array {
+        self::expectException(\RuntimeException::class);
+        self::expectExceptionMessage('automatic non-stream recovery disabled');
+
+        (function (string $region, string $prompt): array {
             return $this->runAiGeneration($region, $prompt);
         })->call($service, 'header', 'Generate a simple header');
-
-        self::assertSame('<div>Recovered header</div>', $payload['html_extra'] ?? null);
     }
 
     public function testCliStreamUsesUnlimitedTransportButNonStreamFallbackKeepsFiniteTimeout(): void
@@ -91,14 +80,51 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         ], false);
 
         self::assertSame(0, $streamParams['timeout'] ?? null);
+        self::assertSame(['type' => 'json_object'], $streamParams['response_format'] ?? null);
+        self::assertSame(['type' => 'disabled'], $streamParams['thinking'] ?? null);
+        self::assertSame('disabled', $streamParams['thinking_mode'] ?? null);
+        self::assertFalse((bool)($streamParams['enable_thinking'] ?? true));
+        self::assertFalse((bool)($streamParams['enable_reasoning'] ?? true));
         self::assertTrue((bool)($streamParams['disable_ai_timeout'] ?? false));
         self::assertTrue((bool)($streamParams['disable_cli_timeout'] ?? false));
         self::assertFalse((bool)($streamParams['enforce_timeout_in_stream'] ?? true));
 
         self::assertSame(180, $fallbackParams['timeout'] ?? null);
+        self::assertSame(['type' => 'json_object'], $fallbackParams['response_format'] ?? null);
+        self::assertSame(['type' => 'disabled'], $fallbackParams['thinking'] ?? null);
+        self::assertSame('disabled', $fallbackParams['thinking_mode'] ?? null);
+        self::assertFalse((bool)($fallbackParams['enable_thinking'] ?? true));
+        self::assertFalse((bool)($fallbackParams['enable_reasoning'] ?? true));
         self::assertArrayNotHasKey('disable_ai_timeout', $fallbackParams);
         self::assertArrayNotHasKey('disable_cli_timeout', $fallbackParams);
         self::assertArrayNotHasKey('enforce_timeout_in_stream', $fallbackParams);
+    }
+
+    public function testBuildAiRuntimeParamsStripsThinkingBudgetAndReasoningEffortForStructuredJson(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+        $reflector = new \ReflectionMethod($service, 'buildAiRuntimeParams');
+        $reflector->setAccessible(true);
+
+        $params = $reflector->invoke($service, [
+            'timeout' => 180,
+            'response_format' => ['type' => 'json_object'],
+            'reasoning_effort' => 'high',
+            'thinking_budget' => 2048,
+            'thinking_budget_tokens' => 2048,
+            'thinking' => ['type' => 'enabled', 'budget_tokens' => 1024],
+            'thinking_mode' => true,
+            'enable_thinking' => true,
+            'enable_reasoning' => true,
+        ], true);
+
+        self::assertArrayNotHasKey('reasoning_effort', $params);
+        self::assertArrayNotHasKey('thinking_budget', $params);
+        self::assertArrayNotHasKey('thinking_budget_tokens', $params);
+        self::assertSame(['type' => 'disabled'], $params['thinking'] ?? null);
+        self::assertSame('disabled', $params['thinking_mode'] ?? null);
+        self::assertFalse((bool)($params['enable_thinking'] ?? true));
+        self::assertFalse((bool)($params['enable_reasoning'] ?? true));
     }
 
     public function testGenerateComponentThrowsAfterAiRetriesInsteadOfReturningStubFallback(): void
@@ -349,6 +375,38 @@ class AiSitePageComponentGenerationServiceTest extends TestCase
         })->call($service);
     }
 
+    public function testGenerateComponentRetriesRecoverableErrorsTwiceBeforeFailing(): void
+    {
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::exactly(2))
+            ->method('generateStream')
+            ->willThrowException(new \RuntimeException('Rendered component visible copy does not match website content locale.'));
+        $aiService->expects(self::never())
+            ->method('generate');
+
+        $service = new AiSitePageComponentGenerationService(
+            frameworkBuilder: new FrameworkBuilder(),
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+            aiService: $aiService,
+        );
+
+        self::expectException(\RuntimeException::class);
+        self::expectExceptionMessage('AI component generation failed after 2 real-AI attempts');
+        self::expectExceptionMessage('website content locale');
+
+        (function (): array {
+            return $this->generateComponent(
+                'content/home-page-featured-plugins-grid',
+                'Featured plugin grid',
+                'content',
+                'Generate a launch-ready featured plugin grid.',
+                [],
+                ['_content_locale' => 'en_US']
+            );
+        })->call($service);
+    }
+
     public function testGenerateComponentStillFailsForApiKeyConfigurationErrors(): void
     {
         $aiService = $this->createMock(AiService::class);
@@ -435,25 +493,16 @@ PHP,
         self::assertStringContainsString('pb-royal-header', $validatedPayload['css_extra']);
     }
 
-    public function testDecodeComponentPayloadWithRepairRetriesJsonRepairUpToThreeAttempts(): void
+    public function testDecodeComponentPayloadWithRepairDoesNotCallAiRepairWhenDisabled(): void
     {
         $parser = $this->createMock(AiResponseJsonParser::class);
-        $parser->expects(self::exactly(2))
+        $parser->expects(self::once())
             ->method('extractAndDecode')
-            ->willReturnOnConsecutiveCalls(
-                null,
-                ['html_extra' => '<div>ok</div>', 'css_extra' => '', 'php_variables' => '', 'extra_fields' => '', 'js_content' => '']
-            );
+            ->with('not-json')
+            ->willReturn(null);
 
         $aiService = $this->createMock(AiService::class);
-        $aiService->expects(self::once())
-            ->method('generate')
-            ->with(
-                self::stringContains('repairing a malformed PageBuilder header component JSON'),
-                null,
-                'pagebuilder_component_generation'
-            )
-            ->willReturn('{"html_extra":"<div>ok</div>","css_extra":"","php_variables":"","extra_fields":"","js_content":""}');
+        $aiService->expects(self::never())->method('generate');
 
         $service = new AiSitePageComponentGenerationService(
             responseJsonParser: $parser,
@@ -464,8 +513,7 @@ PHP,
             return $this->decodeComponentPayloadWithRepair($content, $region);
         })->call($service, 'not-json', 'header');
 
-        self::assertIsArray($decoded);
-        self::assertSame('<div>ok</div>', $decoded['html_extra'] ?? null);
+        self::assertNull($decoded);
     }
 
     public function testAttemptSyntaxFixRepairsMalformedPhpEchoTagInRequiredHtmlContent(): void

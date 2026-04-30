@@ -34,6 +34,10 @@ final class AiSiteAgentQueueReuseTest extends TestCase
             'glr_aisite:session:42:queue_slot:block_regenerate',
             $method->invoke($controller, 42, 'block_regenerate')
         );
+        self::assertSame(
+            'glr_aisite:session:42:queue_slot:block_partial_patch',
+            $method->invoke($controller, 42, 'block_partial_patch')
+        );
     }
 
     public function testQueueJobTypeStillDistinguishesPlanningAndBuildPhases(): void
@@ -46,6 +50,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertSame('stage2.shared.tasks', $method->invoke($controller, 'task_plan'));
         self::assertSame('virtual_theme.tree.build', $method->invoke($controller, 'build'));
         self::assertSame('virtual_theme.block.regenerate', $method->invoke($controller, 'block_regenerate'));
+        self::assertSame('virtual_theme.block.partial_patch', $method->invoke($controller, 'block_partial_patch'));
     }
 
     public function testLegacyFallbackKeysCoverOldPlanningAndBuildRows(): void
@@ -72,6 +77,10 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertSame(
             ['glr_aisite:session:7:stage:visual_edit:operation:block_regenerate'],
             $method->invoke($controller, 7, 'block_regenerate')
+        );
+        self::assertSame(
+            ['glr_aisite:session:7:stage:visual_edit:operation:block_partial_patch'],
+            $method->invoke($controller, 7, 'block_partial_patch')
         );
     }
 
@@ -112,11 +121,13 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertTrue($method->invoke($controller, 'task_plan', 'task_plan'));
         self::assertTrue($method->invoke($controller, 'build', 'build'));
         self::assertTrue($method->invoke($controller, 'block_regenerate', 'block_regenerate'));
+        self::assertTrue($method->invoke($controller, 'block_partial_patch', 'block_partial_patch'));
         self::assertTrue($method->invoke($controller, 'regenerate_page', 'regenerate_page'));
         self::assertFalse($method->invoke($controller, 'build', 'task_plan'));
         self::assertFalse($method->invoke($controller, 'block_regenerate', 'build'));
         self::assertFalse($method->invoke($controller, 'task_plan', 'build'));
         self::assertFalse($method->invoke($controller, 'regenerate_page', 'block_regenerate'));
+        self::assertFalse($method->invoke($controller, 'block_partial_patch', 'block_regenerate'));
         self::assertFalse($method->invoke($controller, 'task_plan', 'plan'));
         self::assertFalse($method->invoke($controller, 'plan', 'build'));
         self::assertFalse($method->invoke($controller, 'build', ''));
@@ -755,8 +766,10 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertNotFalse($methodOffset, $methodName . ' missing');
         $nextMethodOffset = \strpos($source, 'private function ', $methodOffset + 1);
 
-        return $nextMethodOffset === false
+        $methodSource = $nextMethodOffset === false
             ? \substr($source, $methodOffset)
             : \substr($source, $methodOffset, $nextMethodOffset - $methodOffset);
+
+        return \str_replace(["\r\n", "\r"], "\n", $methodSource);
     }
 }

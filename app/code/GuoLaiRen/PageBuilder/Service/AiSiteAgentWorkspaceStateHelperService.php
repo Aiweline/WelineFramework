@@ -627,7 +627,7 @@ class AiSiteAgentWorkspaceStateHelperService
         $key = match (\trim($operation)) {
             'plan' => 'plan_queue_info',
             'task_plan' => 'task_plan_queue_info',
-            'build', 'regenerate_page', 'block_regenerate' => 'build_queue_info',
+            'build', 'regenerate_page', 'block_regenerate', 'block_partial_patch' => 'build_queue_info',
             default => '',
         };
         if ($key !== '' && \is_array($state[$key] ?? null)) {
@@ -770,6 +770,7 @@ class AiSiteAgentWorkspaceStateHelperService
             'task_plan' => 'stage2.shared.tasks',
             'build' => 'virtual_theme.tree.build',
             'block_regenerate' => 'virtual_theme.block.regenerate',
+            'block_partial_patch' => 'virtual_theme.block.partial_patch',
             'regenerate_page' => 'virtual_theme.page.regenerate',
             default => '',
         };
