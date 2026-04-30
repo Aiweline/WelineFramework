@@ -21,18 +21,12 @@ use GuoLaiRen\PageBuilder\Model\Style;
 use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use GuoLaiRen\PageBuilder\Service\Component\ComponentResolver;
 use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
-use GuoLaiRen\PageBuilder\Service\Theme\PageBuilderVirtualThemeBridge;
-use Weline\Framework\App\State;
-use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Http\Request;
 use Weline\Framework\View\Template;
 
 class PageRenderService
 {
-    /** 与 layout.phtml 一致的公用片段（服务层拼整页时必须显式注入，否则 cleanHtmlDocumentTags* 会剥掉组件内 <head>） */
-    private const SHARED_PARTIAL_HEAD = 'GuoLaiRen_PageBuilder::templates/style/_shared/partials/head-common.phtml';
-    private const SHARED_PARTIAL_FOOTER = 'GuoLaiRen_PageBuilder::templates/style/_shared/partials/footer-common.phtml';
-
     /** 渲染模式常量 */
     public const MODE_VISUAL = 'visual';   // 可视化编辑模式
     public const MODE_PREVIEW = 'preview'; // 预览模式
@@ -40,7 +34,6 @@ class PageRenderService
     
     private LayoutAssembler $layoutAssembler;
     private LayoutOwnerResolver $layoutOwnerResolver;
-    private ?AiHtmlRenderService $aiHtmlRenderService;
     private Page $pageModel;
     private Style $styleModel;
     private LocalDescription $localDescriptionModel;
@@ -52,16 +45,10 @@ class PageRenderService
     
     /** @var array 模板变量 */
     private array $templateVars = [];
-
+    
     /** @var array 组件文件映射缓存 */
     private static array $componentFilesCache = [];
-
-    /** 当前 render() 调用内生效的 Weline 主题层 ID（用于 ThemeComponent 虚拟部件回退），0 表示关闭 */
-    private int $renderWelineThemeId = 0;
-
-    /** ai_html + virtual_theme_id 时 visual 模式注入到整页 head 的片段 */
-    private string $aiThemeShellHeadInject = '';
-
+    
     public function __construct(
         LayoutAssembler $layoutAssembler,
         LayoutOwnerResolver $layoutOwnerResolver,
@@ -70,13 +57,10 @@ class PageRenderService
         LocalDescription $localDescriptionModel,
         ?TemplatePathResolver $pathResolver = null,
         ?ComponentResolver $componentResolver = null,
-        ?LayoutConfigNormalizer $configNormalizer = null,
-        ?AiHtmlRenderService $aiHtmlRenderService = null
+        ?LayoutConfigNormalizer $configNormalizer = null
     ) {
         $this->layoutAssembler = $layoutAssembler;
         $this->layoutOwnerResolver = $layoutOwnerResolver;
-        $this->aiHtmlRenderService = $aiHtmlRenderService
-            ?? ObjectManager::getInstance(AiHtmlRenderService::class);
         $this->pageModel = $pageModel;
         $this->styleModel = $styleModel;
         $this->localDescriptionModel = $localDescriptionModel;
@@ -122,16 +106,6 @@ class PageRenderService
         $result = $this->getTemplate()->fetch($templatePath, $this->templateVars);
         return is_string($result) ? $result : '';
     }
-
-    private function fetchSharedHeadHtml(): string
-    {
-        return trim($this->fetch(self::SHARED_PARTIAL_HEAD));
-    }
-
-    private function fetchSharedFooterHtml(): string
-    {
-        return trim($this->fetch(self::SHARED_PARTIAL_FOOTER));
-    }
     
     /**
      * 渲染页面
@@ -140,32 +114,22 @@ class PageRenderService
      * @param string $mode 渲染模式 (visual/preview/live)
      * @param string|null $locale 语言代码
      * @param string|null $tempStyleCode 临时样式代码（用于预览）
-     * @param int|null $welineThemeId 可选 Weline 主题 ID：>0 时布局中的组件码可解析为该主题下虚拟部件（ThemeComponent 落库）
      * @return string 渲染后的 HTML
      */
     public function render(
         Page $page,
         string $mode = self::MODE_LIVE,
         ?string $locale = null,
-        ?string $tempStyleCode = null,
-        ?int $welineThemeId = null
+        ?string $tempStyleCode = null
     ): string {
-        $savedWelineThemeId = $this->renderWelineThemeId;
-        $this->renderWelineThemeId = ($welineThemeId !== null && $welineThemeId > 0) ? $welineThemeId : 0;
         // 重置模板变量
         $this->templateVars = [];
-        try {
-        $this->aiThemeShellHeadInject = '';
-        if ($page->isAiHtmlRenderMode() && $this->renderWelineThemeId <= 0) {
-            return $this->aiHtmlRenderService->render($page, $mode, $locale);
-        }
-        $aiWithVirtualThemeShell = $page->isAiHtmlRenderMode() && $this->renderWelineThemeId > 0;
-
+        
         // 获取样式代码
         $styleCode = $tempStyleCode ?: ($page->getData('style') ?: 'default');
         
         // 获取当前语言
-        $currentLocale = $locale ?: State::getLang();
+        $currentLocale = $locale ?: \Weline\Framework\Http\Cookie::getLang();
         
         // 构建样式配置
         $finalSettings = $this->buildStyleSettings($page, $styleCode, $currentLocale, $tempStyleCode);
@@ -174,19 +138,17 @@ class PageRenderService
         $isVirtualPage = !$page->getId();
         
         // 获取布局配置（通过 LayoutOwnerResolver 统一处理 layout_page_id 和 header/footer 继承）
-        // live 与 visual 使用同一套布局数据源（forBackend=true），保证前台渲染与预览/可视化一致；仅 visual 注入编辑脚本
-        // 预览时传入 tempStyleCode，使“无自定义布局”时按当前预览样式加载默认 header/footer
-        $forBackend = ($mode === self::MODE_VISUAL || $mode === self::MODE_LIVE);
+        // 可视化编辑模式下允许访问草稿状态首页的 header/footer
+        // 预览时传入 tempStyleCode，使“无自定义布局”时按当前预览样式加载默认 header/footer，避免页面 DB 为 default 时仍显示 default 头部
+        $forBackend = ($mode === self::MODE_VISUAL);
         $layoutConfig = $this->layoutOwnerResolver->getFullLayoutConfig($page, $forBackend, $tempStyleCode);
+        
         // 获取布局拥有者页面ID（用于可视化编辑时传递给脚本）
         $layoutOwnerPageId = $this->layoutOwnerResolver->resolveLayoutOwnerPageId($page);
         $this->assign('layout_owner_page_id', $layoutOwnerPageId);
         
-        // 获取布局页面信息：使用外部布局时返回该页面信息，使用自身布局时返回当前页面信息，保证模板始终有值
-        $layoutPageInfo = null;
-        if (!$isVirtualPage) {
-            $layoutPageInfo = $this->layoutOwnerResolver->getLayoutPageInfo($page);
-        }
+        // 获取布局页面信息（如果使用外部布局页面）
+        $layoutPageInfo = $isVirtualPage ? null : $this->layoutOwnerResolver->getLayoutPageInfo($page);
         $this->assign('layout_page_info', $layoutPageInfo);
         
         // 获取本地化内容（虚拟页面跳过数据库查询）
@@ -210,103 +172,86 @@ class PageRenderService
         // 如果是博客类型页面或布局中包含博客组件，加载博客数据
         // 虚拟页面跳过博客数据加载
         $hasBlogComponent = $this->hasBlogComponent($layoutConfig);
-        if ($page->isBlogType() || $hasBlogComponent) {
+        if (!$isVirtualPage && ($page->isBlogType() || $hasBlogComponent)) {
             $this->loadBlogData($page);
         }
         
-        // live/preview 与 MODE_VISUAL 走同一套渲染逻辑：用 renderRegion 按区域渲染组件，仅最后包装不同（live 用 renderLiveOrPreviewDocument，visual 用 renderVisualMode）
-        // 不再用 layout.phtml 分支，避免与可视化渲染路径不一致
+        // 渲染 header/content/footer
         $stylePath = "GuoLaiRen_PageBuilder::templates/style/{$styleCode}";
+        
+        // 获取页面类型
         $pageType = $page->getData(Page::schema_fields_TYPE);
+        
+        // 获取页面类型对应的布局信息
         $layoutInfo = $this->getLayoutInfoForPageType($styleCode, $pageType);
         $this->assign('page_type', $pageType);
         $this->assign('layout_info', $layoutInfo);
+        
+        // 如果页面没有自定义布局配置，加载该页面类型的默认布局配置
+        // 注意：需要检查区域是否真的有有效组件，而不仅仅是非空数组
         $hasCustomHeader = $this->regionHasValidComponents($layoutConfig['header'] ?? null);
         $hasCustomContent = $this->regionHasValidComponents($layoutConfig['content'] ?? null);
         $hasCustomFooter = $this->regionHasValidComponents($layoutConfig['footer'] ?? null);
         $hasCustomLayout = $hasCustomHeader || $hasCustomContent || $hasCustomFooter;
-        // 可视化模式：不拿默认配置覆盖 header/footer，只用刚读取的布局数据，避免渲染出旧数据
-        $allowDefaultHeaderFooter = ($mode !== self::MODE_VISUAL);
+        
+        // 如果 header、content 或 footer 没有有效组件，尝试从默认配置加载
         if (!$hasCustomHeader || !$hasCustomContent || !$hasCustomFooter) {
             $defaultLayoutConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $pageType);
-            if ($allowDefaultHeaderFooter && !$hasCustomHeader && !empty($defaultLayoutConfig['header'])) {
+            
+            // 如果 header 为空，使用默认 header
+            if (!$hasCustomHeader && !empty($defaultLayoutConfig['header'])) {
                 $layoutConfig['header'] = $defaultLayoutConfig['header'];
                 $this->assign('using_default_header', true);
             }
+            
+            // 如果 content 为空，使用默认 content
             if (!$hasCustomContent && !empty($defaultLayoutConfig['content'])) {
                 $layoutConfig['content'] = $defaultLayoutConfig['content'];
                 $this->assign('using_default_content', true);
             }
-            if ($allowDefaultHeaderFooter && !$hasCustomFooter && !empty($defaultLayoutConfig['footer'])) {
+            
+            // 如果 footer 为空，使用默认 footer
+            if (!$hasCustomFooter && !empty($defaultLayoutConfig['footer'])) {
                 $layoutConfig['footer'] = $defaultLayoutConfig['footer'];
                 $this->assign('using_default_footer', true);
             }
+            
+            // 更新布局配置
             $this->assign('layout_config', $layoutConfig);
         }
+        
         if (!$hasCustomLayout && $pageType) {
+            // 加载页面类型的默认布局配置
             $defaultLayoutConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $pageType);
-            $hasDefault = !empty($defaultLayoutConfig['header']) || !empty($defaultLayoutConfig['content']) || !empty($defaultLayoutConfig['footer']);
-            if ($hasDefault) {
-                // 与可视化一致：只填充空区域，不整块替换，避免覆盖已读取的 header/footer
-                if (!$hasCustomHeader && !empty($defaultLayoutConfig['header'])) {
-                    $layoutConfig['header'] = $defaultLayoutConfig['header'];
-                }
-                if (!$hasCustomContent && !empty($defaultLayoutConfig['content'])) {
-                    $layoutConfig['content'] = $defaultLayoutConfig['content'];
-                }
-                if (!$hasCustomFooter && !empty($defaultLayoutConfig['footer'])) {
-                    $layoutConfig['footer'] = $defaultLayoutConfig['footer'];
-                }
+            
+            if (!empty($defaultLayoutConfig['header']) || 
+                !empty($defaultLayoutConfig['content']) || 
+                !empty($defaultLayoutConfig['footer'])) {
+                $layoutConfig = $defaultLayoutConfig;
                 $this->assign('layout_config', $layoutConfig);
                 $this->assign('using_default_layout', true);
             }
         }
+        
         // 检查是否使用组件化渲染
         $useComponentRendering = !empty($layoutConfig) && (
             !empty($layoutConfig['header']) || 
             !empty($layoutConfig['content']) || 
             !empty($layoutConfig['footer'])
         );
-        if ($aiWithVirtualThemeShell && !$useComponentRendering && $pageType) {
-            $fallback = $this->getDefaultLayoutConfigForPageType($styleCode, (string)$pageType);
-            if (!empty($fallback['header']) || !empty($fallback['footer'])) {
-                if (empty($layoutConfig['header']) && !empty($fallback['header'])) {
-                    $layoutConfig['header'] = $fallback['header'];
-                }
-                if (empty($layoutConfig['footer']) && !empty($fallback['footer'])) {
-                    $layoutConfig['footer'] = $fallback['footer'];
-                }
-                $this->assign('layout_config', $layoutConfig);
-                $useComponentRendering = !empty($layoutConfig['header'])
-                    || !empty($layoutConfig['content'])
-                    || !empty($layoutConfig['footer']);
-            }
-        }
-
+        
         // 调试信息
         $debugInfo = $this->buildDebugInfo($useComponentRendering, $layoutConfig);
         
         if ($useComponentRendering) {
             // 使用组件化渲染
             $headerHtml = $this->renderRegion('header', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode);
-            if ($aiWithVirtualThemeShell) {
-                $frag = $this->aiHtmlRenderService->buildFragmentForThemeShell($page, $mode, $locale);
-                $contentHtml = $frag['content_html'];
-                $this->aiThemeShellHeadInject = $frag['head_inject'] ?? '';
-            } else {
-                $contentHtml = $this->renderRegion('content', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode, $localizedContent);
-            }
+            $contentHtml = $this->renderRegion('content', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode, $localizedContent);
             $footerHtml = $this->renderRegion('footer', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode);
         } else {
             // 使用传统渲染方式
             $headerHtml = $this->fetch("{$stylePath}/header.phtml");
-            if ($aiWithVirtualThemeShell) {
-                $frag = $this->aiHtmlRenderService->buildFragmentForThemeShell($page, $mode, $locale);
-                $contentHtml = $frag['content_html'];
-                $this->aiThemeShellHeadInject = $frag['head_inject'] ?? '';
-            } else {
-                $contentHtml = $this->renderTraditionalContent($page, $stylePath, $localizedContent);
-            }
+            $contentHtml = $this->renderTraditionalContent($page, $stylePath, $localizedContent);
             $footerHtml = $this->fetch("{$stylePath}/footer.phtml");
         }
         
@@ -316,39 +261,6 @@ class PageRenderService
         
         // 根据模式处理输出
         return $this->finalizeOutput($headerHtml, $contentHtml, $footerHtml, $debugInfo, $page, $styleCode, $mode);
-        } finally {
-            $this->renderWelineThemeId = $savedWelineThemeId;
-            $this->aiThemeShellHeadInject = '';
-        }
-    }
-
-    /**
-     * 布局组件在文件与 PageBuilder Component 模型均未命中时，尝试按当前 render 的 virtual_theme_id 渲染虚拟主题部件
-     */
-    private function renderVirtualThemeComponentHtml(
-        string $code,
-        array $config,
-        Page $page,
-        array $styleSettings,
-        string $mode
-    ): ?string {
-        if ($this->renderWelineThemeId <= 0) {
-            return null;
-        }
-        try {
-            $instanceConfig = array_merge($this->templateVars, $config, [
-                'page' => $page,
-                'style' => $styleSettings,
-                'style_settings' => $styleSettings,
-                'component_config' => $config,
-            ]);
-            $instanceConfig['preview_mode'] = $mode !== self::MODE_LIVE;
-            $bridge = ObjectManager::getInstance(PageBuilderVirtualThemeBridge::class);
-            $html = $bridge->render($code, $this->renderWelineThemeId, 'frontend', $instanceConfig);
-            return is_string($html) ? $html : '';
-        } catch (\Throwable) {
-            return null;
-        }
     }
     
     /**
@@ -557,10 +469,7 @@ class PageRenderService
         foreach (['header', 'content', 'footer'] as $region) {
             if (!empty($layoutConfig[$region])) {
                 foreach ($layoutConfig[$region] as $component) {
-                    $code = $component['code'] ?? $component['component'] ?? '';
-                    if (!is_string($code)) {
-                        continue;
-                    }
+                    $code = $component['code'] ?? '';
                     if (in_array($code, $blogComponents) || strpos($code, 'blog') !== false) {
                         return true;
                     }
@@ -683,7 +592,6 @@ class PageRenderService
         // 博客文章列表：优先使用预设数据
         if (!empty($existingBlogPosts)) {
             $this->assign('blog_posts', $existingBlogPosts);
-            $blogPosts = \is_array($existingBlogPosts) ? $existingBlogPosts : [];
         } else {
             $blogPosts = $page->getBlogPosts(20, 'published_at', 'DESC');
             $this->assign('blog_posts', $blogPosts);
@@ -692,7 +600,6 @@ class PageRenderService
         // 博客分类：优先使用预设数据
         if (!empty($existingCategories)) {
             $this->assign('blog_categories', $existingCategories);
-            $blogCategories = \is_array($existingCategories) ? $existingCategories : [];
         } else {
             $blogCategories = $page->getBlogCategories();
             $this->assign('blog_categories', $blogCategories);
@@ -722,14 +629,6 @@ class PageRenderService
                         $relatedPosts = $this->getRelatedBlogPosts($currentPost, 6);
                         $this->assign('related_posts', $relatedPosts);
                     }
-                } elseif (!empty($blogPosts[0]) && \is_array($blogPosts[0])) {
-                    $currentPost = $blogPosts[0];
-                    $this->assign('current_post', $currentPost);
-                    if (!empty($existingRelatedPosts)) {
-                        $this->assign('related_posts', $existingRelatedPosts);
-                    } else {
-                        $this->assign('related_posts', \array_values(\array_slice($blogPosts, 1, 6)));
-                    }
                 }
             }
         }
@@ -744,18 +643,6 @@ class PageRenderService
                 if ($currentCategory) {
                     $categoryPosts = $this->getBlogPostsByCategory($currentCategory['category_id'], 20);
                     $this->assign('category_posts', $categoryPosts);
-                }
-            } elseif (!empty($blogCategories[0]) && \is_array($blogCategories[0])) {
-                $currentCategory = $blogCategories[0];
-                $this->assign('current_category', $currentCategory);
-                $categoryId = (int)($currentCategory['category_id'] ?? $currentCategory['id'] ?? 0);
-                if ($categoryId > 0) {
-                    $this->assign('category_posts', \array_values(\array_filter(
-                        $blogPosts,
-                        static fn(array $post): bool => (int)($post['category_id'] ?? 0) === $categoryId
-                    )));
-                } else {
-                    $this->assign('category_posts', $blogPosts);
                 }
             }
         }
@@ -877,58 +764,30 @@ class PageRenderService
         if (empty($config)) {
             return [];
         }
-        // 必须先识别 PageLayout.exportConfig() 单对象格式，否则会被下面的「首元素为字符串」误判为字符串数组导致 config 丢失
-        if (is_array($config) && isset($config['component']) && !isset($config[0])) {
+        
+        // 如果已经是正确的组件数组格式 [{code: ..., ...}, ...]
+        if (is_array($config) && isset($config[0]) && isset($config[0]['code'])) {
+            return $config;
+        }
+        
+        // 如果是 PageLayout.exportConfig() 格式的 header/footer: {component: ..., config: ...}
+        if (is_array($config) && isset($config['component'])) {
             $component = $config['component'];
             if (empty($component)) {
                 return [];
             }
-            $rawConfig = $config['config'] ?? [];
             return [
                 [
                     'code' => $component,
                     'enabled' => true,
-                    'config' => $this->ensureComponentConfigArray($rawConfig),
+                    'config' => $config['config'] ?? [],
                 ]
             ];
         }
-        // 数组且元素为字符串（如 ['header-nav']）→ 转为 [{code, enabled, config}]
-        if (is_array($config)) {
-            $first = reset($config);
-            if (is_string($first)) {
-                $out = [];
-                foreach ($config as $c) {
-                    $out[] = ['code' => $c, 'enabled' => true, 'config' => []];
-                }
-                return $out;
-            }
-        }
-        // 如果已经是正确的组件数组格式 [{code: ..., ...}, ...]
-        if (is_array($config) && isset($config[0]) && is_array($config[0]) && isset($config[0]['code'])) {
-            $out = [];
-            foreach ($config as $item) {
-                $item['config'] = $this->ensureComponentConfigArray($item['config'] ?? []);
-                $out[] = $item;
-            }
-            return $out;
-        }
-        // 组件数组但使用 component 键：[{component: ..., config: ...}]，统一为 code 并保留 config
-        if (is_array($config) && isset($config[0]) && is_array($config[0]) && isset($config[0]['component'])) {
-            return array_map(function($item) {
-                return [
-                    'code' => $item['component'] ?? '',
-                    'enabled' => $item['enabled'] ?? true,
-                    'config' => $this->ensureComponentConfigArray($item['config'] ?? []),
-                ];
-            }, $config);
-        }
+        
         // 如果是带有 code 的单组件配置 {code: ..., config: ...}
         if (is_array($config) && isset($config['code'])) {
-            $item = $config;
-            if (array_key_exists('config', $item)) {
-                $item['config'] = $this->ensureComponentConfigArray($item['config'] ?? []);
-            }
-            return [$item];
+            return [$config];
         }
         
         // content 区域可能直接是组件数组（不需要转换）
@@ -945,7 +804,7 @@ class PageRenderService
                         return [
                             'code' => $item['component'] ?? '',
                             'enabled' => $item['enabled'] ?? true,
-                            'config' => $this->ensureComponentConfigArray($item['config'] ?? []),
+                            'config' => $item['config'] ?? [],
                         ];
                     }, $config);
                 }
@@ -953,43 +812,6 @@ class PageRenderService
         }
         
         return [];
-    }
-    
-    /**
-     * 保证组件 config 为数组（模板期望 array；若为 JSON 字符串则解码）
-     */
-    private function ensureComponentConfigArray($config): array
-    {
-        if (is_array($config)) {
-            return $config;
-        }
-        if (is_string($config)) {
-            $decoded = json_decode($config, true);
-            return is_array($decoded) ? $decoded : [];
-        }
-        return [];
-    }
-    
-    /**
-     * 保证 layout_config 内各区域组件项的 code 均为字符串（供 layout.phtml 等模板 htmlspecialchars(code) 使用）
-     */
-    private function ensureLayoutConfigComponentCodesString(array $layoutConfig): array
-    {
-        foreach (['header', 'content', 'footer'] as $region) {
-            if (empty($layoutConfig[$region]) || !is_array($layoutConfig[$region])) {
-                continue;
-            }
-            foreach ($layoutConfig[$region] as $i => $comp) {
-                if (!is_array($comp)) {
-                    continue;
-                }
-                $code = $comp['code'] ?? $comp['component'] ?? '';
-                if (!is_string($code)) {
-                    $layoutConfig[$region][$i]['code'] = '';
-                }
-            }
-        }
-        return $layoutConfig;
     }
     
     /**
@@ -1036,16 +858,12 @@ class PageRenderService
         
         $componentIndex = 0;
         foreach ($components as $componentConfig) {
-            $code = $componentConfig['code'] ?? $componentConfig['component'] ?? '';
-            if (!is_string($code)) {
-                $componentIndex++;
-                continue;
-            }
+            $code = $componentConfig['code'] ?? '';
             $enabled = $componentConfig['enabled'] ?? true;
-            $config = $this->ensureComponentConfigArray($componentConfig['config'] ?? []);
+            $config = $componentConfig['config'] ?? [];
             $componentTemplateCode = $componentConfig['template_code'] ?? '';
             
-            if (!$enabled || $code === '') {
+            if (!$enabled || empty($code)) {
                 $componentIndex++;
                 continue;
             }
@@ -1120,68 +938,42 @@ class PageRenderService
                 }
             }
             
-            $virtualThemeHtml = $this->renderVirtualThemeComponentHtml($code, $config, $page, $styleSettings, $mode);
-            if ($virtualThemeHtml !== null) {
-                $componentFile = null;
-                $componentPath = null;
-                $html .= "<!-- Component {$code} resolved via Weline_Theme virtual theme (theme_id={$this->renderWelineThemeId}) -->\n";
-            } elseif (!$componentFile && !$componentPath) {
-                if ($virtualThemeHtml === null) {
-                    $this->logMissingComponentResolution(
-                        $page,
-                        $region,
-                        $styleCode,
-                        $code,
-                        $componentTemplateCode,
-                        $componentFiles,
-                        $mode
-                    );
-                    $html .= "<!-- Component not found: {$code} (tried file-based, Component model, virtual theme) -->\n";
-                    $componentIndex++;
-                    continue;
-                }
+            if (!$componentFile && !$componentPath) {
+                $html .= "<!-- Component not found: {$code} (tried file-based and Component model) -->\n";
+                $componentIndex++;
+                continue;
             }
             
-            // 构建组件模板路径（如果未通过 Component 模型解析且非虚拟主题）
-            if ($virtualThemeHtml === null) {
-                if (!$componentPath) {
-                    $componentPath = $this->pathResolver->getComponentTemplateReference($useTemplateCode, $componentFile);
-                }
+            // 构建组件模板路径（如果未通过 Component 模型解析）
+            if (!$componentPath) {
+                $componentPath = $this->pathResolver->getComponentTemplateReference($useTemplateCode, $componentFile);
             }
             
-            // 传递数据到组件（文件/模型路径与虚拟主题路径共用，便于片段内 @var 一致）
+            // 传递数据到组件
             $this->assign('page', $page);
             $this->assign('style', $styleSettings);
             $this->assign('style_settings', $styleSettings);
             $this->assign('component_config', $config);
             
-            if ($virtualThemeHtml === null) {
-                try {
-                    $componentHtml = $this->fetch($componentPath);
-                } catch (\Throwable $e) {
-                    $html .= "<!-- Error rendering component {$code}: " . htmlspecialchars($e->getMessage()) . " -->\n";
-                    $componentIndex++;
-                    continue;
+            try {
+                $componentHtml = $this->fetch($componentPath);
+                
+                if (empty($componentHtml)) {
+                    $html .= "<!-- Component {$code} rendered but output is empty -->\n";
+                } else {
+                    // 在可视化编辑器模式下，添加组件包装器
+                    if ($isVisualEditor) {
+                        $escapedCode = htmlspecialchars($code);
+                        $escapedRegion = htmlspecialchars($region);
+                        // 存储组件实际所属的模板代码（用于跨模板组件编辑）
+                        $escapedStyleCode = htmlspecialchars($useTemplateCode);
+                        $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"{$escapedStyleCode}\">{$componentHtml}</div>";
+                    }
+                    $html .= $componentHtml;
+                    $html .= "<!-- Component {$code} rendered successfully -->\n";
                 }
-            } else {
-                $componentHtml = $virtualThemeHtml;
-            }
-            
-            if ($componentHtml === '') {
-                $html .= "<!-- Component {$code} rendered but output is empty -->\n";
-            } else {
-                // 在可视化编辑器模式下，添加组件包装器
-                if ($isVisualEditor) {
-                    $escapedCode = htmlspecialchars($code);
-                    $escapedRegion = htmlspecialchars($region);
-                    $escapedStyleCode = htmlspecialchars($useTemplateCode);
-                    $escapedPageType = htmlspecialchars((string)($page->getData(Page::schema_fields_TYPE) ?? ''), ENT_QUOTES, 'UTF-8');
-                    $componentLabel = $this->buildVisualComponentLabelHtml($code, $region);
-                    $componentActions = $this->buildWorkspaceVisualActionsHtml($code, $region, $componentIndex, $page);
-                    $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"{$escapedStyleCode}\" data-page-type=\"{$escapedPageType}\">{$componentLabel}{$componentActions}{$componentHtml}</div>";
-                }
-                $html .= $componentHtml;
-                $html .= "<!-- Component {$code} rendered successfully -->\n";
+            } catch (\Throwable $e) {
+                $html .= "<!-- Error rendering component {$code}: " . htmlspecialchars($e->getMessage()) . " -->\n";
             }
             
             $componentIndex++;
@@ -1189,50 +981,7 @@ class PageRenderService
         
         return $html;
     }
-
-    private function buildVisualComponentActionsHtml(string $componentCode, string $region, int $index, Page $page): string
-    {
-        $pageType = htmlspecialchars((string)($page->getData(Page::schema_fields_TYPE) ?? ''), ENT_QUOTES, 'UTF-8');
-        $escapedCode = htmlspecialchars($componentCode, ENT_QUOTES, 'UTF-8');
-        $escapedRegion = htmlspecialchars($region, ENT_QUOTES, 'UTF-8');
-        $escapedIndex = (string)$index;
-
-        return '<div class="component-actions" data-page-type="' . $pageType . '" data-component="' . $escapedCode . '" data-region="' . $escapedRegion . '" data-index="' . $escapedIndex . '">'
-            . '<button type="button" class="component-action-btn component-action-refine" data-pb-action="refine" title="AI 微调当前区块">AI 微调</button>'
-            . '<button type="button" class="component-action-btn component-action-editor" data-pb-action="edit-block" title="编辑当前区块字段">编辑</button>'
-            . '</div>';
-    }
     
-    private function buildWorkspaceVisualActionsHtml(string $componentCode, string $region, int $index, Page $page): string
-    {
-        $pageType = htmlspecialchars((string)($page->getData(Page::schema_fields_TYPE) ?? ''), ENT_QUOTES, 'UTF-8');
-        $escapedCode = htmlspecialchars($componentCode, ENT_QUOTES, 'UTF-8');
-        $escapedRegion = htmlspecialchars($region, ENT_QUOTES, 'UTF-8');
-        $escapedIndex = (string)$index;
-
-        return '<div class="component-actions" data-page-type="' . $pageType . '" data-component="' . $escapedCode . '" data-region="' . $escapedRegion . '" data-index="' . $escapedIndex . '">'
-            . '<button type="button" class="component-action-btn component-action-refine" data-pb-action="refine" title="AI 微调当前区块">AI 微调</button>'
-            . '<button type="button" class="component-action-btn component-action-editor" data-pb-action="edit-block" title="编辑当前区块字段">编辑</button>'
-            . '</div>';
-    }
-
-    private function buildVisualComponentLabelHtml(string $componentCode, string $region): string
-    {
-        $regionLabel = match ($region) {
-            'header' => '页头',
-            'footer' => '页脚',
-            default => '内容',
-        };
-        $simpleCode = \trim($componentCode);
-        if (\str_contains($simpleCode, '/')) {
-            $simpleCode = (string)\substr($simpleCode, (int)\strrpos($simpleCode, '/') + 1);
-        }
-        $simpleCode = \str_replace(['-', '_'], ' ', $simpleCode);
-        $label = $regionLabel . ' · ' . ($simpleCode !== '' ? $simpleCode : 'block');
-
-        return '<div class="pb-component-label">' . \htmlspecialchars($label, \ENT_QUOTES, 'UTF-8') . '</div>';
-    }
-
     /**
      * 获取组件文件映射
      * 
@@ -1241,54 +990,6 @@ class PageRenderService
     private function getComponentFilesMap(string $styleCode): array
     {
         return $this->componentResolver->getComponentFilesMap($styleCode);
-    }
-
-    /**
-     * @param array<string, string> $componentFiles
-     */
-    private function logMissingComponentResolution(
-        Page $page,
-        string $region,
-        string $styleCode,
-        string $code,
-        string $componentTemplateCode,
-        array $componentFiles,
-        string $mode
-    ): void {
-        if (!\function_exists('w_log_warning')) {
-            return;
-        }
-
-        $availableCodes = \array_keys($componentFiles);
-        \sort($availableCodes);
-        $sampleCodes = \array_slice($availableCodes, 0, 10);
-
-        w_log_warning(
-            '[PageRenderService] Component resolution failed for PageBuilder preview/page render.'
-            . ' page_id=' . (int)$page->getId()
-            . ' page_type=' . (string)$page->getData(Page::schema_fields_TYPE)
-            . ' page_style=' . (string)$page->getData(Page::schema_fields_STYLE)
-            . ' render_style=' . $styleCode
-            . ' region=' . $region
-            . ' code=' . $code
-            . ' template_code=' . ($componentTemplateCode !== '' ? $componentTemplateCode : '-')
-            . ' available_count=' . \count($availableCodes)
-            . ' available_sample=' . \implode(',', $sampleCodes),
-            [
-                'page_id' => (int)$page->getId(),
-                'page_type' => (string)$page->getData(Page::schema_fields_TYPE),
-                'page_style' => (string)$page->getData(Page::schema_fields_STYLE),
-                'render_style_code' => $styleCode,
-                'region' => $region,
-                'component_code' => $code,
-                'component_template_code' => $componentTemplateCode,
-                'mode' => $mode,
-                'available_component_count' => \count($availableCodes),
-                'available_component_codes_sample' => \array_slice($availableCodes, 0, 20),
-                'render_weline_theme_id' => $this->renderWelineThemeId,
-            ],
-            'pagebuilder'
-        );
     }
     
     /**
@@ -1429,7 +1130,7 @@ class PageRenderService
         string $styleCode,
         string $mode
     ): string {
-        // 预览标记脚本（preview 和 visual 模式需要）
+        // 预览标记脚本（preview 和 visual 模式都需要）
         $previewBoot = '';
         if ($mode !== self::MODE_LIVE) {
             $previewBoot = '<script>(function(){
@@ -1444,14 +1145,13 @@ class PageRenderService
             })();</script>';
         }
         
-        $extraHead = $this->aiThemeShellHeadInject;
         if ($mode === self::MODE_VISUAL) {
             // 可视化编辑器模式：添加插槽容器和拖拽支持
-            return $this->renderVisualMode($headerHtml, $contentHtml, $footerHtml, $debugInfo, $previewBoot, $page, $styleCode, $extraHead);
+            return $this->renderVisualMode($headerHtml, $contentHtml, $footerHtml, $debugInfo, $previewBoot, $page, $styleCode);
         }
         
-        // preview 和 live 模式：输出完整 HTML 文档
-        return $this->renderLiveOrPreviewDocument($headerHtml, $contentHtml, $footerHtml, $previewBoot, $page, $styleCode, $extraHead);
+        // preview 和 live 模式：纯净输出
+        return $previewBoot . $headerHtml . $contentHtml . $footerHtml;
     }
     
     /**
@@ -1467,8 +1167,7 @@ class PageRenderService
         string $debugInfo,
         string $previewBoot,
         Page $page,
-        string $styleCode,
-        string $aiHtmlExtraHead = ''
+        string $styleCode
     ): string {
         $dropZoneStyles = $this->getDropZoneStyles();
         
@@ -1479,142 +1178,36 @@ class PageRenderService
         // 清理 header/footer 中可能存在的 HTML 文档结构标签（兼容旧模板）
         $headerHtml = $this->cleanHtmlDocumentTags($headerHtml);
         $footerHtml = $this->cleanHtmlDocumentTags($footerHtml);
-        // header 若来自 header.phtml 等非 renderRegionComponents 路径，同样可能缺少 wrapper，
-        // 导致工作台 iframe 桥接无法识别为可悬浮操作的虚拟主题块。补包 wrapper 并注入动作按钮。
-        if (stripos($headerHtml, 'tpmst-component-wrapper') === false && stripos($headerHtml, 'pb-component-wrapper') === false) {
-            $headerComponentCode = 'header/ai-site-header';
-            $headerHtml = '<div class="tpmst-component-wrapper pb-component-wrapper" data-region="header" data-component="' . $headerComponentCode . '" data-index="0" data-page-type="' . htmlspecialchars((string)($page->getData(Page::schema_fields_TYPE) ?? ''), ENT_QUOTES, 'UTF-8') . '">' . $this->buildWorkspaceVisualActionsHtml($headerComponentCode, 'header', 0, $page) . $headerHtml . '</div>';
-        }
-        // footer 若来自 footer.phtml 等非 renderRegionComponents 路径，缺少 tpmst-component-wrapper，
-        // 导致 setupPreviewDropZones 无法注入 component-actions。补包 wrapper 并设置 data-component 供编辑/删除定位
-        if (stripos($footerHtml, 'tpmst-component-wrapper') === false && stripos($footerHtml, 'pb-component-wrapper') === false) {
-            $footerComponentCode = 'footer-links';
-            $footerHtml = '<div class="tpmst-component-wrapper pb-component-wrapper" data-region="footer" data-component="' . $footerComponentCode . '" data-index="0" data-page-type="' . htmlspecialchars((string)($page->getData(Page::schema_fields_TYPE) ?? ''), ENT_QUOTES, 'UTF-8') . '">' . $this->buildWorkspaceVisualActionsHtml($footerComponentCode, 'footer', 0, $page) . $footerHtml . '</div>';
-        }
         
         // 组件化模式：构建完整 HTML
         $pageTitle = $page ? ($page->getData('title') ?: 'Preview') : 'Preview';
         $templateHelper = Template::getInstance();
         $baseCssUrl = $templateHelper->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/' . $styleCode . '/asset/css/home.css');
-        $sharedHeadHtml = $this->fetchSharedHeadHtml();
-        $sharedHeadBlock = $sharedHeadHtml !== '' ? "\n    " . $sharedHeadHtml : '';
-        $sharedFooterHtml = $this->fetchSharedFooterHtml();
-        $sharedFooterBlock = $sharedFooterHtml !== '' ? "\n    " . $sharedFooterHtml : '';
-
+        
         return '<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>' . htmlspecialchars($pageTitle) . '</title>
-    ' . $aiHtmlExtraHead . '
-    <link rel="stylesheet" href="' . htmlspecialchars($baseCssUrl, ENT_QUOTES, 'UTF-8') . '">
+    <link rel="stylesheet" href="' . $baseCssUrl . '">
     ' . $dropZoneStyles . '
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    </style>' . $sharedHeadBlock . '
+    </style>
 </head>
-<body data-page-type="' . htmlspecialchars((string)($page->getData(Page::schema_fields_TYPE) ?? ''), ENT_QUOTES, 'UTF-8') . '">
+<body>
     ' . $debugInfo . '
     ' . $previewBoot . '
     <div class="pb-slot pb-slot-header" data-region="header" data-multiple="false" data-slot-name="Header">' . $headerHtml . '</div>
     <div class="pb-slot pb-slot-content" data-region="content" data-multiple="true" data-slot-name="Content">' . $contentHtml . '</div>
     <div class="pb-slot pb-slot-footer" data-region="footer" data-multiple="false" data-slot-name="Footer">' . $footerHtml . '</div>
-    ' . $sharedFooterBlock . '
     ' . $dropZoneScripts . '
 </body>
 </html>';
     }
     
-    /**
-     * live/preview 模式：输出完整 HTML 文档，将主题样式放入 <head>，避免 head 为空、样式错位
-     */
-    private function renderLiveOrPreviewDocument(
-        string $headerHtml,
-        string $contentHtml,
-        string $footerHtml,
-        string $previewBoot,
-        Page $page,
-        string $styleCode,
-        string $aiHtmlExtraHead = ''
-    ): string {
-        $headerResult = $this->cleanHtmlDocumentTagsAndExtractStyles($headerHtml);
-        $contentResult = $this->cleanHtmlDocumentTagsAndExtractStyles($contentHtml);
-        $footerResult = $this->cleanHtmlDocumentTagsAndExtractStyles($footerHtml);
-
-        $headStyles = $headerResult['styles'] . $contentResult['styles'] . $footerResult['styles'];
-        $pageTitle = $page ? ($page->getData('title') ?: '') : '';
-        if ($pageTitle === '') {
-            $pageTitle = 'Preview';
-        }
-        $templateHelper = Template::getInstance();
-        $baseCssUrl = $templateHelper->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/' . $styleCode . '/asset/css/home.css');
-        $baseCssLink = '';
-        if ($baseCssUrl !== '' && $baseCssUrl !== null) {
-            $baseCssLink = '<link rel="stylesheet" href="' . htmlspecialchars($baseCssUrl, ENT_QUOTES, 'UTF-8') . '">';
-        }
-        $headerCustomCode = $page->getData(Page::schema_fields_HEADER_CUSTOM_CODE) ?? '';
-        $footerCustomCode = $page->getData(Page::schema_fields_FOOTER_CUSTOM_CODE) ?? '';
-
-        $sharedHeadHtml = $this->fetchSharedHeadHtml();
-        $sharedFooterHtml = $this->fetchSharedFooterHtml();
-        $headEnd = (!empty($sharedHeadHtml) ? "\n    " . $sharedHeadHtml : '')
-            . (!empty($headerCustomCode) ? "\n    " . $headerCustomCode : '') . "\n</head>";
-        $bodyEnd = (!empty($sharedFooterHtml) ? "\n    " . $sharedFooterHtml : '')
-            . (!empty($footerCustomCode) ? "\n    " . $footerCustomCode : '') . "\n</body>";
-
-        $headContent = '    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>' . htmlspecialchars($pageTitle) . '</title>
-    ' . $aiHtmlExtraHead . '
-    ' . $baseCssLink . '
-    ' . $headStyles . '
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    </style>';
-        $html = '<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-' . $headContent . $headEnd . '
-<body>
-    ' . $previewBoot . '
-    ' . $headerResult['html'] . '
-    ' . $contentResult['html'] . '
-    ' . $footerResult['html'] . $bodyEnd . '
-</html>';
-        // 防止 head 被误清空：若最终仍出现空 head 则强制注入最小 head 内容
-        if (preg_match('/<head[^>]*>\s*<\/head>/is', $html)) {
-            $html = preg_replace(
-                '/<head[^>]*>\s*<\/head>/is',
-                '<head>' . trim($headContent) . '</head>',
-                $html,
-                1
-            );
-        }
-        return $html;
-    }
-
-    /**
-     * 清理文档标签并从片段中提取 <style>，返回 body 片段与要放入 head 的样式（供 live/preview 使用）
-     */
-    private function cleanHtmlDocumentTagsAndExtractStyles(string $html): array
-    {
-        $styles = '';
-        if (preg_match_all('/<style[^>]*>.*?<\/style>/is', $html, $matches)) {
-            $styles = implode("\n", $matches[0]);
-            $html = preg_replace('/<style[^>]*>.*?<\/style>/is', '', $html);
-        }
-        $html = preg_replace('/<!DOCTYPE[^>]*>/i', '', $html);
-        $html = preg_replace('/<html[^>]*>/i', '', $html);
-        $html = preg_replace('/<\/html>/i', '', $html);
-        $html = preg_replace('/<head[^>]*>.*?<\/head>/is', '', $html);
-        $html = preg_replace('/<body[^>]*>/i', '', $html);
-        $html = preg_replace('/<\/body>/i', '', $html);
-        return ['html' => trim($html), 'styles' => $styles];
-    }
-
     /**
      * 清理 HTML 文档结构标签
      * 
@@ -1703,27 +1296,7 @@ class PageRenderService
             .tpmst-component-wrapper,
             .pb-component-wrapper {
                 position: relative !important;
-                overflow: visible !important;
-                isolation: isolate !important;
                 transition: box-shadow 0.2s ease;
-            }
-            .tpmst-component-wrapper .pb-component-label,
-            .pb-component-wrapper .pb-component-label {
-                position: absolute !important;
-                top: 8px !important;
-                left: 8px !important;
-                z-index: 99998 !important;
-                display: inline-flex !important;
-                align-items: center !important;
-                padding: 6px 10px !important;
-                border-radius: 999px !important;
-                background: rgba(15, 23, 42, 0.86) !important;
-                color: #ffffff !important;
-                font-size: 11px !important;
-                font-weight: 700 !important;
-                letter-spacing: 0.04em !important;
-                text-transform: uppercase !important;
-                pointer-events: none !important;
             }
             .tpmst-component-wrapper:hover,
             .pb-component-wrapper:hover {
@@ -1731,7 +1304,6 @@ class PageRenderService
                 box-shadow: inset 0 0 0 2px rgba(52, 152, 219, 0.3) !important;
                 background: transparent !important;
                 background-color: transparent !important;
-                z-index: 10001 !important;
             }
             .tpmst-component-wrapper.selected,
             .pb-component-wrapper.selected {
@@ -1762,45 +1334,10 @@ class PageRenderService
                 box-shadow: 0 2px 12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05) !important;
                 pointer-events: auto !important;
             }
-            .tpmst-component-wrapper .component-actions .component-action-btn,
-            .pb-component-wrapper .component-actions .component-action-btn {
-                border: 0;
-                border-radius: 999px;
-                padding: 8px 12px;
-                font-size: 12px;
-                font-weight: 700;
-                line-height: 1;
-                cursor: pointer;
-                transition: transform 0.15s ease, opacity 0.15s ease;
-            }
-            .tpmst-component-wrapper .component-actions .component-action-btn:hover,
-            .pb-component-wrapper .component-actions .component-action-btn:hover {
-                transform: translateY(-1px);
-            }
-            .tpmst-component-wrapper .component-actions .component-action-refine,
-            .pb-component-wrapper .component-actions .component-action-refine {
-                background: #2563eb;
-                color: #ffffff;
-            }
-            .tpmst-component-wrapper .component-actions .component-action-editor,
-            .pb-component-wrapper .component-actions .component-action-editor {
-                background: #e2e8f0;
-                color: #0f172a;
-            }
             .tpmst-component-wrapper:hover .component-actions,
             .pb-component-wrapper:hover .component-actions,
             .tpmst-component-wrapper .component-actions:hover,
-            .pb-component-wrapper .component-actions:hover,
-            .tpmst-component-wrapper .component-actions.pb-actions-visible,
-            .pb-component-wrapper .component-actions.pb-actions-visible,
-            .tpmst-component-wrapper.selected .component-actions,
-            .pb-component-wrapper.selected .component-actions {
-                display: flex !important;
-            }
-            /* footer 区域：因主题结构常阻挡 hover，工具按钮始终显示 */
-            .pb-slot-footer .component-actions,
-            [data-region="footer"] .tpmst-component-wrapper .component-actions,
-            [data-region="footer"] .pb-component-wrapper .component-actions {
+            .pb-component-wrapper .component-actions:hover {
                 display: flex !important;
             }
         </style>';
@@ -1820,12 +1357,6 @@ class PageRenderService
                 window.__PAGEBUILDER_PAGE_ID__ = ' . $pageId . ';
                 // 布局拥有者页面ID（API调用时使用此ID）
                 window.__PAGEBUILDER_LAYOUT_OWNER_PAGE_ID__ = ' . $layoutOwnerPageId . ';
-                var hasParentWindow = window.parent && window.parent !== window;
-                if (!hasParentWindow) {
-                    document.querySelectorAll(".component-actions").forEach(function(actions) {
-                        actions.remove();
-                    });
-                }
                 
                 // 初始化拖拽区域
                 document.querySelectorAll(".pb-slot").forEach(function(slot) {
@@ -1851,85 +1382,22 @@ class PageRenderService
                 });
                 
                 // 组件选择
-                document.querySelectorAll(".tpmst-component-wrapper, .pb-component-wrapper").forEach(function(wrapper) {
+                document.querySelectorAll(".tpmst-component-wrapper").forEach(function(wrapper) {
                     wrapper.addEventListener("click", function(e) {
-                        if (e.target && e.target.closest && e.target.closest(".component-actions")) {
-                            return;
-                        }
                         e.stopPropagation();
-                        document.querySelectorAll(".tpmst-component-wrapper.selected, .pb-component-wrapper.selected").forEach(function(el) {
+                        document.querySelectorAll(".tpmst-component-wrapper.selected").forEach(function(el) {
                             el.classList.remove("selected");
                         });
                         this.classList.add("selected");
                         // 通知父窗口
-                        if (hasParentWindow) {
+                        if (window.parent && window.parent !== window) {
                             window.parent.postMessage({
                                 type: "pb-component-select",
                                 component: this.dataset.component,
                                 region: this.dataset.region,
-                                index: this.dataset.index,
-                                page_type: this.dataset.pageType || document.body.getAttribute("data-page-type") || ""
+                                index: this.dataset.index
                             }, "*");
                         }
-                    });
-                });
-
-                var wrapperSelector = ".tpmst-component-wrapper, .pb-component-wrapper";
-                function toggleWrapperActions(wrapper, visible) {
-                    if (!wrapper) {
-                        return;
-                    }
-                    var actions = wrapper.querySelector(".component-actions");
-                    if (!actions) {
-                        return;
-                    }
-                    if (visible) {
-                        actions.classList.add("pb-actions-visible");
-                        wrapper.classList.add("pb-actions-hover");
-                    } else {
-                        actions.classList.remove("pb-actions-visible");
-                        wrapper.classList.remove("pb-actions-hover");
-                    }
-                }
-                document.addEventListener("mouseover", function(e) {
-                    var wrapper = e.target && e.target.closest ? e.target.closest(wrapperSelector) : null;
-                    if (!wrapper) {
-                        return;
-                    }
-                    toggleWrapperActions(wrapper, true);
-                }, true);
-                document.addEventListener("mouseout", function(e) {
-                    var wrapper = e.target && e.target.closest ? e.target.closest(wrapperSelector) : null;
-                    if (!wrapper) {
-                        return;
-                    }
-                    var related = e.relatedTarget;
-                    if (related && wrapper.contains(related)) {
-                        return;
-                    }
-                    toggleWrapperActions(wrapper, false);
-                }, true);
-
-                document.querySelectorAll(".component-actions [data-pb-action]").forEach(function(button) {
-                    button.addEventListener("click", function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        e.stopImmediatePropagation();
-                        if (!hasParentWindow) {
-                            return;
-                        }
-                        var wrapper = this.closest(".tpmst-component-wrapper, .pb-component-wrapper");
-                        if (!wrapper) {
-                            return;
-                        }
-                        window.parent.postMessage({
-                            type: "pb-component-action",
-                            action: this.getAttribute("data-pb-action") || "",
-                            component: wrapper.dataset.component || "",
-                            region: wrapper.dataset.region || "",
-                            index: wrapper.dataset.index || "",
-                            page_type: wrapper.dataset.pageType || document.body.getAttribute("data-page-type") || ""
-                        }, "*");
                     });
                 });
             })();

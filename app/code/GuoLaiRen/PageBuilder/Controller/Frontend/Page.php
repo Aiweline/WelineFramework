@@ -12,30 +12,26 @@ namespace GuoLaiRen\PageBuilder\Controller\Frontend;
 use GuoLaiRen\PageBuilder\Helper\PageHelper;
 use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Style;
-use GuoLaiRen\PageBuilder\Model\VirtualTheme;
 use GuoLaiRen\PageBuilder\Service\PageRenderService;
 use Weline\Framework\App\Controller\FrontendController;
-use Weline\Framework\Manager\ObjectManager;
+
 class Page extends FrontendController
 {
     private PageModel $pageModel;
     private PageHelper $pageHelper;
     private Style $styleModel;
     private PageRenderService $pageRenderService;
-    private VirtualTheme $virtualThemeModel;
 
     public function __construct(
         PageModel $pageModel,
         PageHelper $pageHelper,
         Style $styleModel,
-        PageRenderService $pageRenderService,
-        ?VirtualTheme $virtualThemeModel = null
+        PageRenderService $pageRenderService
     ) {
         $this->pageModel = $pageModel;
         $this->pageHelper = $pageHelper;
         $this->styleModel = $styleModel;
         $this->pageRenderService = $pageRenderService;
-        $this->virtualThemeModel = $virtualThemeModel ?? ObjectManager::getInstance(VirtualTheme::class);
     }
 
     /**
@@ -188,18 +184,23 @@ class Page extends FrontendController
 
         $response->setHeader('Website-Id', (string)$websiteId);
         
-        // 如果 handle 为空且未按 page_id 加载到页面，尝试加载该站点的首页（含 website_id=0，便于 localhost 等直接预览）
-        if (($page === null || !$page->getId()) && empty($handle)) {
+        // 如果 handle 为空且未按 page_id 加载到页面，尝试加载该站点的首页
+        if (($page === null || !$page->getId()) && empty($handle) && $websiteId > 0) {
             $page = clone $this->pageModel;
             $page->clearData();
             $page->clear()
                 ->where(PageModel::schema_fields_WEBSITE_ID, $websiteId)
                 ->where(PageModel::schema_fields_TYPE, PageModel::TYPE_HOME);
+            
+            // 如果不是预览模式，只显示已发布的页面
             if (!$isPreview) {
                 $page->where(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
             }
+            
             $page->find()->fetch();
-            if (!$page->getId() && $websiteId !== 0) {
+            
+            // 如果没找到，尝试 website_id = 0 的全局首页
+            if (!$page->getId()) {
                 $page = clone $this->pageModel;
                 $page->clearData();
                 $page->clear()
@@ -284,60 +285,61 @@ class Page extends FrontendController
         // 如果是博客类型页面，加载博客数据
         $this->loadBlogData($page);
 
-        // 使用页面绑定的模板渲染（与 backend preview/full 一致）：从当前页取得 style，不依赖 Style 表记录
+        // 获取页面的样式代码
         $styleCode = $page->getData(PageModel::schema_fields_STYLE);
-        if ($styleCode === null || $styleCode === '') {
-            $this->assign('style', []);
-            return $this->fetch();
-        }
-
-        // 确定渲染模式：preview 或 live
-        $renderMode = $isPreview ? PageRenderService::MODE_PREVIEW : PageRenderService::MODE_LIVE;
-        $tempStyleCode = null;
-        if ($isPreview && $previewStyleCode !== '') {
-            $previewStyle = clone $this->styleModel;
-            $previewStyle->clearData();
-            $previewStyle->clear()
-                ->where(Style::schema_fields_CODE, $previewStyleCode)
+        
+        if ($styleCode) {
+            // 验证样式是否存在
+            $style = clone $this->styleModel;
+            $style->clearData();
+            $style->clear()
+                ->where(Style::schema_fields_CODE, $styleCode)
                 ->find()
                 ->fetch();
-            if ($previewStyle->getId()) {
-                $tempStyleCode = $previewStyleCode;
+            
+            if ($style->getId()) {
+                // 确定渲染模式：preview 或 live
+                $renderMode = $isPreview ? PageRenderService::MODE_PREVIEW : PageRenderService::MODE_LIVE;
+                
+                // 使用统一的 PageRenderService 渲染页面
+                // 这确保了可视化编辑器预览和正式上线页面的渲染逻辑完全一致
+                // 预览模式下允许通过 URL 的 style_code 临时覆盖模板，避免编辑器已切换模板但页面尚未保存时仍渲染旧模板
+                $tempStyleCode = null;
+                if ($isPreview && $previewStyleCode !== '') {
+                    $previewStyle = clone $this->styleModel;
+                    $previewStyle->clearData();
+                    $previewStyle->clear()
+                        ->where(Style::schema_fields_CODE, $previewStyleCode)
+                        ->find()
+                        ->fetch();
+                    if ($previewStyle->getId()) {
+                        $tempStyleCode = $previewStyleCode;
+                    }
+                }
+
+                $html = $this->pageRenderService->render(
+                    $page,
+                    $renderMode,
+                    $currentLocale,
+                    $tempStyleCode
+                );
+                
+                echo $html;
+                
+                // 如果是预览模式，添加语言切换悬浮按钮
+                if ($isPreview && !empty($availableLocales) && count($availableLocales) > 1) {
+                    echo $this->renderLanguageSwitcher($page, $availableLocales, $currentLocale);
+                }
+                
+                return;
             }
         }
-
-        $html = $this->pageRenderService->render(
-            $page,
-            $renderMode,
-            $currentLocale,
-            $tempStyleCode,
-            $this->resolveLiveVirtualThemeId($websiteId, $isPreview)
-        );
-
-        echo $html;
-        if ($isPreview && !empty($availableLocales) && count($availableLocales) > 1) {
-            echo $this->renderLanguageSwitcher($page, $availableLocales, $currentLocale);
-        }
-        return;
-    }
-
-    private function resolveLiveVirtualThemeId(int $websiteId, bool $isPreview): ?int
-    {
-        if ($isPreview || $websiteId <= 0) {
-            return null;
-        }
-
-        $theme = clone $this->virtualThemeModel;
-        $theme->clearData()->clearQuery()
-            ->where(VirtualTheme::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(VirtualTheme::schema_fields_SOURCE, VirtualTheme::SOURCE_PAGEBUILDER_AI)
-            ->where(VirtualTheme::schema_fields_IS_ACTIVE, 1)
-            ->order(VirtualTheme::schema_fields_ID, 'DESC')
-            ->find()
-            ->fetch();
-
-        $themeId = (int)$theme->getId();
-        return $themeId > 0 ? $themeId : null;
+        
+        // 如果没有指定样式或样式不存在，设置空的样式配置
+        $this->assign('style', []);
+        
+        // 使用默认模板
+        return $this->fetch();
     }
     
     /**
@@ -646,18 +648,16 @@ class Page extends FrontendController
         $params['locale'] = $locale;
         
         // 如果当前请求是预览模式，保留 preview 参数
-        if (\w_env_get('preview') == '1') {
+        if (isset($_GET['preview']) && $_GET['preview'] == '1') {
             $params['preview'] = '1';
         }
         // 预览时保留 page_id，确保语言切换后仍预览同一页面
-        $pageId = \w_env_get('page_id');
-        if ($pageId !== null && $pageId !== '') {
-            $params['page_id'] = (int)$pageId;
+        if (!empty($_GET['page_id'])) {
+            $params['page_id'] = (int)$_GET['page_id'];
         }
         // 预览时保留 style_code，确保语言切换后仍预览当前模板
-        $styleCode = \w_env_get('style_code');
-        if ($styleCode !== null && $styleCode !== '') {
-            $params['style_code'] = (string)$styleCode;
+        if (!empty($_GET['style_code'])) {
+            $params['style_code'] = (string)$_GET['style_code'];
         }
         
         // 重新构建URL

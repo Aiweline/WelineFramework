@@ -392,11 +392,6 @@ class AdapterScanner
      */
     public function getDefaultModelCodeForAdapter(string $code): ?string
     {
-        $bindings = $this->getModelBindingsForAdapter($code);
-        if (!empty($bindings[\Weline\Ai\Model\AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT])) {
-            return $bindings[\Weline\Ai\Model\AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT];
-        }
-
         $record = $this->scenarioAdapter->reset()
             ->where(AiScenarioAdapter::schema_fields_CODE, $code)
             ->where(AiScenarioAdapter::schema_fields_IS_ACTIVE, 1)
@@ -407,23 +402,6 @@ class AdapterScanner
         }
         $defaultModel = $record->getData(AiScenarioAdapter::schema_fields_DEFAULT_MODEL);
         return $defaultModel !== null && $defaultModel !== '' ? (string)$defaultModel : null;
-    }
-
-    /**
-     * @return array<string,string>
-     */
-    public function getModelBindingsForAdapter(string $code): array
-    {
-        $record = $this->scenarioAdapter->reset()
-            ->where(AiScenarioAdapter::schema_fields_CODE, $code)
-            ->where(AiScenarioAdapter::schema_fields_IS_ACTIVE, 1)
-            ->find()
-            ->fetch();
-        if (!$record || !$record->getId()) {
-            return [];
-        }
-
-        return $record->getModelBindings();
     }
 
     /**

@@ -115,7 +115,7 @@ $logoLink = '/'; // 链接到首页
 $logoPosition = getConfig($styleSettings, 'layout.logo_position', 'left');
 
 // 样式配置
-$bgColor = getConfig($styleSettings, 'style.header_background_color', 'rgba(0, 0, 0, 0.04)');
+$bgColor = getConfig($styleSettings, 'style.header_background_color', 'transparent');
 $borderBottom = getConfig($styleSettings, 'style.border_bottom', 'yes');
 $borderColor = getConfig($styleSettings, 'style.border_color', '#eeeeee');
 
@@ -164,6 +164,11 @@ $maxWidthResponsive = $maxWidth['desktop'] . $maxWidth['unit']; // 最大宽度�
 // 自定义CSS配置
 $customCssEnabled = getConfig($styleSettings, 'custom_css.enabled', 'no');
 $customCssCode = getConfig($styleSettings, 'custom_css.code', '');
+
+// 从页面配置中读取跟踪代码 ID
+$ga4Id = $page ? $page->getData('ga4_id') : '';
+$gtmId = $page ? $page->getData('gtm_id') : '';
+$fbPixelId = $page ? $page->getData('fb_pixel_id') : '';
 
 // 检测是否为预览模式
 $pathInfo = $this->getRequest()->getPathInfo();
@@ -266,15 +271,28 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
     </script>
     <?php endif; ?>
     
-    <?php
-    // 与带 layout 的主题一致：统计 + Visitor 像素见 base/tracking.phtml（勿在此重复 <pixel>）
-    $this->assign('is_preview', (bool)$isPreview);
-    $this->assign('page', $page);
-    $ss = is_array($styleSettings) ? $styleSettings : [];
-    $this->assign('style', $ss);
-    $this->assign('style_settings', $ss);
-    echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/head-common.phtml');
-    ?>
+    <!-- Head 跟踪代码（仅在非预览模式下执行） -->
+<?php if (!$isPreview): ?>
+    <!-- Google Analytics 4 -->
+    <?php if ($ga4Id): ?>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=<?= htmlspecialchars($ga4Id ?? '') ?>"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '<?= htmlspecialchars($ga4Id ?? '') ?>');
+    </script>
+    <?php endif; ?>
+    
+    <!-- Google Tag Manager -->
+    <?php if ($gtmId): ?>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','<?= htmlspecialchars($gtmId ?? '') ?>');</script>
+    <?php endif; ?>
+<?php endif; ?>
     
     <!-- Header 自定义代码 -->
     <?php 
@@ -284,12 +302,68 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
         <?= $headerCustomCode ?>
     <?php endif; ?>
     
-    <!-- 预览模式调试信息（log 文案经 json_encode 输出为 \\u 转义，避免页面 charset 误判时控制台乱码） -->
+    <!-- 像素统计配置 -->
+    <?php
+    // 读取像素配置（默认启用）
+    // 确保 $pixelEnabled 始终有值，避免未定义变量错误
+    $pixelEnabled = getConfig($styleSettings, 'pixel.enabled', 'yes');
+    $pixelEnabled = (string)($pixelEnabled ?? 'yes'); // 确保始终是字符串类型
+    $pixelName = getConfig($styleSettings, 'pixel.name', '');
+    
+    // 如果像素名称为空，使用页面的 handle
+    if (empty($pixelName) && $page) {
+        $pixelName = $page->getData('handle') ?? '';
+    }
+    
+    // 直接从页面对象获取 website_id（页面已有此字段，无需配置）
+    $websiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
+    
+    // 如果页面绑定了网站且有像素名称，输出像素标签（通过 enabled 属性控制是否统计）
+    if ($websiteId > 0 && !empty($pixelName) && !$isPreview):
+        // 设置 website_id Cookie，供像素代码读取
+        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_ID', (string)$websiteId, 3600 * 24 * 365);
+        
+        // 获取网站信息（用于像素统计）
+        $websiteUrl = '';
+        $websiteCode = '';
+        try {
+            if (class_exists('\Weline\Websites\Model\Website')) {
+                $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+                $website = clone $websiteModel;
+                $website->clear()->load($websiteId);
+                if ($website->getId()) {
+                    $websiteUrl = $website->getData('url') ?? '';
+                    $websiteCode = $website->getData('code') ?? '';
+                }
+            }
+        } catch (\Exception $e) {
+            // 如果获取网站信息失败，不影响像素功能
+        }
+        
+        // 设置 website_url Cookie
+        if (!empty($websiteUrl)) {
+            \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_URL', $websiteUrl, 3600 * 24 * 365);
+        }
+        
+        // 设置 website_code Cookie，用于区分不同站点
+        if (!empty($websiteCode)) {
+            \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_CODE', $websiteCode, 3600 * 24 * 365);
+        }
+        
+        // 使用变量传递方式，避免在标签属性中使用 PHP 标签
+        $this->assign('pixel_name', htmlspecialchars($pixelName));
+        $this->assign('pixel_enabled', htmlspecialchars($pixelEnabled));
+    ?>
+        <!-- Weline Visitor Pixel - 通过 enabled 属性控制是否统计，遵循模板配置中的 pixel.enabled 设置 -->
+        <pixel name="{{pixel_name}}" enabled="{{pixel_enabled}}" />
+    <?php endif; ?>
+    
+    <!-- 预览模式调试信息 -->
     <?php if ($isPreview): ?>
     <script>
-        console.log(<?= json_encode('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━') ?>, 'color: #00ff00; font-weight: bold;');
-        console.log(<?= json_encode('%c🔍 页面预览调试信息 (Page Preview Debug Info)') ?>, 'color: #00ff00; font-size: 16px; font-weight: bold;');
-        console.log(<?= json_encode('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━') ?>, 'color: #00ff00; font-weight: bold;');
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
+        console.log('%c🔍 页面预览调试信息 (Page Preview Debug Info)', 'color: #00ff00; font-size: 16px; font-weight: bold;');
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
         
         // 页面数据
         const pageData = <?= json_encode([
@@ -311,13 +385,13 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
             'locales' => $page ? $page->getData('locales') : '',
         ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) ?>;
         
-        console.log(<?= json_encode('%c📄 页面数据 (Page Data):') ?>, 'color: #ffcc00; font-weight: bold;');
+        console.log('%c📄 页面数据 (Page Data):', 'color: #ffcc00; font-weight: bold;');
         console.log(pageData);
         
         // 样式配置
         const styleSettings = <?= json_encode($styleSettings, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) ?>;
         
-        console.log(<?= json_encode('%c🎨 样式配置 (Style Settings):') ?>, 'color: #ffcc00; font-weight: bold;');
+        console.log('%c🎨 样式配置 (Style Settings):', 'color: #ffcc00; font-weight: bold;');
         console.log(styleSettings);
         
         // Logo 配置
@@ -326,7 +400,7 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
             position: '<?= htmlspecialchars($logoPosition ?? '') ?>'
         };
         
-        console.log(<?= json_encode('%c🖼️ Logo 配置 (Logo Config):') ?>, 'color: #ffcc00; font-weight: bold;');
+        console.log('%c🖼️ Logo 配置 (Logo Config):', 'color: #ffcc00; font-weight: bold;');
         console.log(logoConfig);
         
         // 头部样式配置
@@ -341,7 +415,7 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
             padding_h_desktop: '<?= htmlspecialchars($paddingH['desktop'] ?? '') ?>'
         };
         
-        console.log(<?= json_encode('%c📐 头部样式 (Header Style):') ?>, 'color: #ffcc00; font-weight: bold;');
+        console.log('%c📐 头部样式 (Header Style):', 'color: #ffcc00; font-weight: bold;');
         console.log(headerStyle);
         
         // 环境信息
@@ -352,13 +426,13 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
             user_agent: navigator.userAgent
         };
         
-        console.log(<?= json_encode('%c⚙️ 环境信息 (Environment Info):') ?>, 'color: #ffcc00; font-weight: bold;');
+        console.log('%c⚙️ 环境信息 (Environment Info):', 'color: #ffcc00; font-weight: bold;');
         console.log(envInfo);
         
-        console.log(<?= json_encode('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━') ?>, 'color: #00ff00; font-weight: bold;');
-        console.log(<?= json_encode('%c✅ 调试信息输出完成！') ?>, 'color: #00ff00; font-size: 14px; font-weight: bold;');
-        console.log(<?= json_encode('%c💡 提示：展开上面的对象可以查看详细配置信息') ?>, 'color: #999999; font-style: italic;');
-        console.log(<?= json_encode('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━') ?>, 'color: #00ff00; font-weight: bold;');
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
+        console.log('%c✅ 调试信息输出完成！', 'color: #00ff00; font-size: 14px; font-weight: bold;');
+        console.log('%c💡 提示：展开上面的对象可以查看详细配置信息', 'color: #999999; font-style: italic;');
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
     </script>
     <?php endif; ?>
 
@@ -377,9 +451,6 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
     }
     
     .page-header {
-        width: 100vw;
-        margin-left: calc(-50vw + 50%);
-        box-sizing: border-box;
         background: <?= $bgColor ?>;
         height: <?= $heightResponsive ?>;
         display: flex;
@@ -436,6 +507,12 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
     </style>
 </head>
 <body>
+    <!-- Google Tag Manager (noscript) -->
+    <?php if (!$isPreview && $gtmId): ?>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars($gtmId ?? '') ?>"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <?php endif; ?>
+    
     <!-- Header 头部 -->
     <header class="page-header" 
         data-bg-color="<?= htmlspecialchars($bgColor ?? '') ?>" 

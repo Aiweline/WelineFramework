@@ -9,17 +9,12 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Controller\Backend;
 
-use GuoLaiRen\PageBuilder\Helper\PageBuilderUrlCacheInvalidator;
 use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
 use GuoLaiRen\PageBuilder\Model\WebsiteUser;
-use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
-use GuoLaiRen\PageBuilder\Service\AiSiteVirtualLayoutService;
-use GuoLaiRen\PageBuilder\Service\AiSiteVisualUrlService;
 use GuoLaiRen\PageBuilder\Service\LayoutService;
 use GuoLaiRen\PageBuilder\Service\LayoutAssembler;
-use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -37,8 +32,6 @@ use Weline\I18n\Model\Locals;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\UrlManager\Model\UrlRewrite;
 use Weline\Websites\Model\Website as WebsiteModel;
-use Weline\Websites\Model\WebsiteDomain;
-use Weline\Websites\Model\DomainPool;
 use Weline\Acl\Model\RoleAccess;
 
 #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder', '页面构建器', 'mdi mdi-file-document-edit', '管理和构建页面')]
@@ -56,8 +49,6 @@ class Page extends BackendController
      * 缓存的用户权限列表
      */
     private static ?array $userPermissionsCache = null;
-    private ?array $accessibleWebsiteIdsCache = null;
-    private ?array $accessibleWebsitesCache = null;
 
     public function __construct(
         PageModel $pageModel,
@@ -96,7 +87,6 @@ class Page extends BackendController
         }
         
         // 获取用户角色
-        /** @var mixed $user */
         $user = $this->getLoginUser();
         if (!$user) {
             return false;
@@ -150,7 +140,6 @@ class Page extends BackendController
         $userId = (int)$this->getLoginUserId();
         $isSuperAdmin = ($userId === 1); // 超管ID为1
         $hasWebsiteAssignmentPermission = false;
-        $accessibleWebsiteIds = [];
         if ($userId > 0 && !$isSuperAdmin) {
             $hasWebsiteAssignmentPermission = $this->hasPermission($userId, 'GuoLaiRen_PageBuilder::website_assignment');
         }
@@ -203,6 +192,7 @@ class Page extends BackendController
             
             // 应用相同的站点权限过滤
             if (!$isSuperAdmin && !$hasWebsiteAssignmentPermission) {
+                $accessibleWebsiteIds = $this->getAccessibleWebsiteIds();
                 if (!empty($accessibleWebsiteIds)) {
                     $childModel->where(PageModel::schema_fields_WEBSITE_ID, $accessibleWebsiteIds, 'in');
                 } else {
@@ -234,18 +224,9 @@ class Page extends BackendController
             }
         }
         
-        $websiteMap = $this->buildWebsiteMap($parentPages, $childPages);
         $this->assign('parent_pages', $parentPages);
         $this->assign('child_pages', $childPages);
-        $this->assign('website_map', $websiteMap);
-
-        // Transform pagination data to match template expectations
-        $paginationData = $parentPagesResult->getPaginationData();
-        if (is_array($paginationData)) {
-            $paginationData['currentPage'] = $paginationData['page'] ?? 1;
-            $paginationData['totalPages'] = $paginationData['lastPage'] ?? 1;
-        }
-        $this->assign('pagination', $paginationData);
+        $this->assign('pagination', $parentPagesResult->getPagination());
         
         // 获取可用站点列表（用于一键建站功能）
         $websitesList = $this->getAccessibleWebsites();
@@ -259,10 +240,6 @@ class Page extends BackendController
      */
     private function getAccessibleWebsites(): array
     {
-        if ($this->accessibleWebsitesCache !== null) {
-            return $this->accessibleWebsitesCache;
-        }
-
         $userId = (int)$this->getLoginUserId();
         $isSuperAdmin = ($userId === 1);
         $hasWebsiteAssignmentPermission = false;
@@ -306,99 +283,7 @@ class Page extends BackendController
                 }
             }
         }
-        $this->accessibleWebsitesCache = $websites;
-        return $this->accessibleWebsitesCache;
-    }
-
-    private function buildWebsiteMap(array $parentPages, array $childPages): array
-    {
-        $websiteIds = [];
-        foreach ($parentPages as $page) {
-            $websiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
-            if ($websiteId > 0) {
-                $websiteIds[$websiteId] = true;
-            }
-        }
-        foreach ($childPages as $children) {
-            foreach ($children as $childPage) {
-                $websiteId = (int)($childPage->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
-                if ($websiteId > 0) {
-                    $websiteIds[$websiteId] = true;
-                }
-            }
-        }
-
-        if (empty($websiteIds)) {
-            return [];
-        }
-
-        $websiteModel = clone $this->websiteModel;
-        $websiteRows = $websiteModel->clear()
-            ->where(WebsiteModel::schema_fields_ID, array_keys($websiteIds), 'in')
-            ->select()
-            ->fetchArray();
-
-        $websiteMap = [];
-        foreach ($websiteRows as $websiteRow) {
-            $websiteId = (int)($websiteRow[WebsiteModel::schema_fields_ID] ?? 0);
-            if ($websiteId <= 0) {
-                continue;
-            }
-
-            $rawUrl = (string)($websiteRow[WebsiteModel::schema_fields_URL] ?? '');
-            $websiteMap[$websiteId] = [
-                'website_id' => $websiteId,
-                'name' => (string)($websiteRow[WebsiteModel::schema_fields_NAME] ?? ''),
-                'code' => (string)($websiteRow[WebsiteModel::schema_fields_CODE] ?? ''),
-                'url' => $rawUrl,
-                'display_url' => $this->buildWebsiteDisplayUrl($rawUrl),
-            ];
-        }
-
-        return $websiteMap;
-    }
-
-    private function buildWebsiteDisplayUrl(string $rawWebsiteUrl): string
-    {
-        $rawWebsiteUrl = trim($rawWebsiteUrl);
-        if ($rawWebsiteUrl === '') {
-            return '';
-        }
-
-        $requestBaseUrl = $this->request ? (string)$this->request->getDisplayBaseUrl() : '';
-        $requestPort = $requestBaseUrl !== '' ? parse_url($requestBaseUrl, PHP_URL_PORT) : null;
-        $websiteUrls = preg_split('/[\s,;]+/', $rawWebsiteUrl, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        foreach ($websiteUrls as $websiteUrl) {
-            $websiteUrl = rtrim(trim($websiteUrl), '/');
-            if ($websiteUrl === '') {
-                continue;
-            }
-
-            $parsedUrl = parse_url($websiteUrl);
-            if (!is_array($parsedUrl) || empty($parsedUrl['host'])) {
-                continue;
-            }
-
-            $scheme = (string)($parsedUrl['scheme'] ?? 'http');
-            $port = $parsedUrl['port'] ?? null;
-            $path = (string)($parsedUrl['path'] ?? '');
-            $query = isset($parsedUrl['query']) ? ('?' . $parsedUrl['query']) : '';
-            $fragment = isset($parsedUrl['fragment']) ? ('#' . $parsedUrl['fragment']) : '';
-
-            if ($port) {
-                $portString = ':' . $port;
-            } elseif ($requestPort
-                && (($scheme === 'http' && (int)$requestPort !== 80)
-                    || ($scheme === 'https' && (int)$requestPort !== 443))) {
-                $portString = ':' . $requestPort;
-            } else {
-                $portString = '';
-            }
-
-            return $scheme . '://' . $parsedUrl['host'] . $portString . $path . $query . $fragment;
-        }
-
-        return '';
+        return $websites;
     }
 
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_create', '新建页面', 'mdi mdi-plus', '新建页面', 'GuoLaiRen_PageBuilder::page_builder')]
@@ -479,10 +364,8 @@ class Page extends BackendController
         $parentId = $this->request->getGet('parent_id', 0);
         $this->assign('parent_id', $parentId);
         
-        // 如果指定了父页面，获取父页面的配置用于继承；子页面主题继承自主页（根页面），不可切换
+        // 如果指定了父页面，获取父页面的配置用于继承
         $parentPageData = null;
-        $inheritedStyleCode = '';
-        $inheritedStyleName = '';
         if ($parentId) {
             $parentPageModel = clone $this->pageModel;
             $parentPageModel->clear()->load($parentId);
@@ -497,32 +380,20 @@ class Page extends BackendController
                     'gtm_id' => $parentPageModel->getData('gtm_id'),
                     'fb_pixel_id' => $parentPageModel->getData('fb_pixel_id'),
                 ];
-                $rootPage = $parentPageModel->getRootPage();
-                if ($rootPage && $rootPage->getId()) {
-                    $inheritedStyleCode = (string)($rootPage->getData(PageModel::schema_fields_STYLE) ?? '');
-                    if ($inheritedStyleCode !== '') {
-                        $styleModel = clone $this->styleModel;
-                        $styleModel->clear()->where(Style::schema_fields_CODE, $inheritedStyleCode)->find()->fetch();
-                        $inheritedStyleName = $styleModel->getId() ? (string)($styleModel->getData(Style::schema_fields_NAME) ?? $inheritedStyleCode) : $inheritedStyleCode;
-                    }
-                }
             }
         }
         $this->assign('parent_page_data', $parentPageData);
-        $this->assign('inherited_style_code', $inheritedStyleCode);
-        $this->assign('inherited_style_name', $inheritedStyleName);
         
         // 读取AI功能配置
         /** @var SystemConfig $systemConfig */
         $systemConfig = ObjectManager::getInstance(SystemConfig::class);
         $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
-        $aiEnabled = $this->normalizeSwitchValue($aiEnabled);
+        $aiEnabled = $aiEnabled === null ? '0' : $aiEnabled; // 默认不开启
         $this->assign('ai_enabled', $aiEnabled);
-        $this->assign('page_type_prompt_map', PageModel::getPageTypePromptInstructionsMap());
 
         // 读取多语言功能配置
         $i18nEnabled = $systemConfig->getConfig('i18n_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
-        $i18nEnabled = $this->normalizeSwitchValue($i18nEnabled);
+        $i18nEnabled = $i18nEnabled === null ? '0' : $i18nEnabled; // 默认不开启
         $this->assign('i18n_enabled', $i18nEnabled);
 
         // 如果多语言功能关闭，清空active_locales和selected_locales
@@ -599,27 +470,20 @@ class Page extends BackendController
      */
     private function getAccessibleWebsiteIds(): array
     {
-        if ($this->accessibleWebsiteIdsCache !== null) {
-            return $this->accessibleWebsiteIdsCache;
-        }
-
         try {
             $userId = (int)$this->getLoginUserId();
             if ($userId <= 0) {
-                $this->accessibleWebsiteIdsCache = [];
-                return $this->accessibleWebsiteIdsCache;
+                return [];
             }
 
             // 超管（ID为1）可以查看所有站点
             if ($userId === 1) {
-                $this->accessibleWebsiteIdsCache = [];
-                return $this->accessibleWebsiteIdsCache;
+                return [];
             }
 
             // 如果拥有站点分配权限，则不限制站点（查看所有站点）
             if ($this->hasPermission($userId, 'GuoLaiRen_PageBuilder::website_assignment')) {
-                $this->accessibleWebsiteIdsCache = [];
-                return $this->accessibleWebsiteIdsCache;
+                return [];
             }
 
             // 普通用户：查找其被分配到的站点
@@ -634,11 +498,9 @@ class Page extends BackendController
             foreach ($items as $item) {
                 $ids[] = (int)$item->getData(WebsiteUser::schema_fields_WEBSITE_ID);
             }
-            $this->accessibleWebsiteIdsCache = array_values(array_unique(array_filter($ids)));
-            return $this->accessibleWebsiteIdsCache;
+            return array_values(array_unique(array_filter($ids)));
         } catch (\Throwable $e) {
-            $this->accessibleWebsiteIdsCache = [];
-            return $this->accessibleWebsiteIdsCache;
+            return [];
         }
     }
 
@@ -794,7 +656,6 @@ class Page extends BackendController
                 ->setData(PageModel::schema_fields_DEFAULT_LOCALE, $defaultLocale)
                 ->setData(PageModel::schema_fields_META_TITLE, $data['meta_title'] ?? '')
                 ->setData(PageModel::schema_fields_META_DESCRIPTION, $data['meta_description'] ?? '')
-                ->setData(PageModel::schema_fields_AI_DESCRIPTION, $data['ai_description'] ?? '')
                 ->setData(PageModel::schema_fields_META_KEYWORDS, $data['meta_keywords'] ?? '')
                 ->setData(PageModel::schema_fields_REDIRECT_URL, $data['redirect_url'] ?? '')
                 ->setData(PageModel::schema_fields_HEADER_CUSTOM_CODE, $data['header_custom_code'] ?? '')
@@ -813,72 +674,19 @@ class Page extends BackendController
             }
             
             $page->save(true);
-
-            // 创建时实时更新页面的重写路由（含首页空重写）
+            
+            // 自动创建 URL 重写规则
             $this->createOrUpdateUrlRewrite($page);
-            $cacheOk = $this->clearRouterAndPageBuilderCache((int)$page->getId());
-
+            
             MessageManager::success(__('页面创建成功！'));
-            if ($cacheOk) {
-                MessageManager::success(__('路由与访问缓存已清除。'));
-            }
             $this->redirect('*/backend/page/edit', ['id' => $page->getId()]);
         } catch (\Exception $exception) {
-            try {
-                $this->pageModel->getQuery()->rollBack();
-            } catch (\Throwable) {
-            }
             MessageManager::warning(__('页面创建失败！'));
             if (DEV) {
                 MessageManager::exception($exception);
             }
             $this->redirect('*/backend/page/create');
         }
-    }
-
-    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_edit', '虚拟编辑页面', 'mdi mdi-pencil', '虚拟编辑页面', 'GuoLaiRen_PageBuilder::page_builder')]
-    public function getVirtualEdit()
-    {
-        Style::forceScan();
-
-        $publicId = \trim((string)$this->request->getGet('public_id', ''));
-        $requestedPageType = \trim((string)$this->request->getGet('page_type', ''));
-        if ($publicId === '' || $requestedPageType === '') {
-            MessageManager::error(__('参数无效'));
-            $this->redirect('*/backend/ai-site-agent/index');
-            return;
-        }
-
-        $context = $this->resolveVirtualEditorContext($publicId, $requestedPageType);
-        if ($context === null) {
-            MessageManager::error(__('会话不存在或无访问权限'));
-            $this->redirect('*/backend/ai-site-agent/index');
-            return;
-        }
-
-        $urls = $this->getAiSiteVisualUrlService()->resolveVirtualUrls(
-            $publicId,
-            $context['page_type'],
-            (int)$context['virtual_theme_id']
-        );
-
-        $this->assign('page_title', __('虚拟可视化编辑'));
-        $this->assign('breadcrumb_parent', __('AI建站工作区'));
-        $this->assign('breadcrumb_current', (string)($context['virtual_page']['title'] ?? __('虚拟可视化编辑')));
-        $this->assign('page', $context['page']);
-        $this->assign('visual_config_page_id', 0);
-        $this->assign('visual_config_handle', (string)($context['virtual_page']['handle'] ?? ''));
-        $this->assign('visual_config_virtual_theme_id', (int)$context['virtual_theme_id']);
-        $this->assign('visual_is_virtual_mode', true);
-        $this->assign('visual_public_id', $publicId);
-        $this->assign('visual_page_type', $context['page_type']);
-        $this->assign('virtual_pages_by_type', $context['virtual_pages_by_type']);
-        $this->assign('visual_style_code', (string)($context['virtual_page']['style_code'] ?? 'default'));
-        $this->assign('visual_preview_url', $urls['visual_preview_url']);
-        $this->assign('visual_edit_url', $urls['visual_edit_url']);
-        $this->assign('style_code', (string)($context['virtual_page']['style_code'] ?? 'default'));
-
-        return $this->fetch('virtual_edit');
     }
 
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_edit', '编辑页面', 'mdi mdi-pencil', '编辑页面', 'GuoLaiRen_PageBuilder::page_builder')]
@@ -976,11 +784,9 @@ class Page extends BackendController
             ->getItems();
         $this->assign('parent_pages', $parentPages);
         
-        // 如果当前页面有父页面，获取父页面的配置用于继承锁定；子页面主题继承自主页（根页面），不可切换
+        // 如果当前页面有父页面，获取父页面的配置用于继承锁定
         $currentParentId = $page->getData(PageModel::schema_fields_PARENT_ID);
         $parentPageData = null;
-        $inheritedStyleCode = '';
-        $inheritedStyleName = '';
         if ($currentParentId && $currentParentId > 0) {
             $parentPageModel = clone $this->pageModel;
             $parentPageModel->clear()->load($currentParentId);
@@ -996,20 +802,9 @@ class Page extends BackendController
                     'fb_pixel_id' => $parentPageModel->getData('fb_pixel_id'),
                 ];
             }
-            $rootPage = $page->getRootPage();
-            if ($rootPage && $rootPage->getId()) {
-                $inheritedStyleCode = (string)($rootPage->getData(PageModel::schema_fields_STYLE) ?? '');
-                if ($inheritedStyleCode !== '') {
-                    $styleModel = clone $this->styleModel;
-                    $styleModel->clear()->where(Style::schema_fields_CODE, $inheritedStyleCode)->find()->fetch();
-                    $inheritedStyleName = $styleModel->getId() ? (string)($styleModel->getData(Style::schema_fields_NAME) ?? $inheritedStyleCode) : $inheritedStyleCode;
-                }
-            }
         }
         $this->assign('parent_page_data', $parentPageData);
         $this->assign('parent_id', $currentParentId ?? 0);
-        $this->assign('inherited_style_code', $inheritedStyleCode);
-        $this->assign('inherited_style_name', $inheritedStyleName);
         
         // 获取已翻译的语言数据
         $localDescriptions = clone $this->localDescriptionModel;
@@ -1041,7 +836,7 @@ class Page extends BackendController
         /** @var SystemConfig $systemConfig */
         $systemConfig = ObjectManager::getInstance(SystemConfig::class);
         $i18nEnabled = $systemConfig->getConfig('i18n_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
-        $i18nEnabled = $this->normalizeSwitchValue($i18nEnabled);
+        $i18nEnabled = $i18nEnabled === null ? '0' : $i18nEnabled; // 默认不开启
         $this->assign('i18n_enabled', $i18nEnabled);
 
         // 未翻译语言提示已移除（页面表单内的语言 Tab 已有未翻译标记，无需重复提示）
@@ -1116,11 +911,10 @@ class Page extends BackendController
         // 读取AI功能配置
         /** @var SystemConfig $systemConfig */
         $systemConfig = ObjectManager::getInstance(SystemConfig::class);
-$aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
-        $aiEnabled = $this->normalizeSwitchValue($aiEnabled);
+        $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
+        $aiEnabled = $aiEnabled === null ? '0' : $aiEnabled; // 默认不开启
         $this->assign('ai_enabled', $aiEnabled);
-        $this->assign('page_type_prompt_map', PageModel::getPageTypePromptInstructionsMap());
-
+        
         // 获取可用的布局页面列表（排除当前页面）
         $layoutPages = $page->getAvailableLayoutPages((int)$pageId);
         $this->assign('layout_pages', $layoutPages);
@@ -1147,10 +941,6 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             }
 
             $pageId = (int)($data['page_id'] ?? 0);
-            if ($pageId <= 0 && !empty($data['public_id']) && !empty($data['page_type'])) {
-                return $this->autoSaveVirtualSeo($data);
-            }
-
             if ($pageId <= 0) {
                 return $this->fetchJson([
                     'success' => false,
@@ -1212,7 +1002,6 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                     ->save();
             }
 
-            $this->clearRouterAndPageBuilderCache($pageId);
             return $this->fetchJson([
                 'success' => true,
                 'message' => __('SEO 配置已保存'),
@@ -1236,7 +1025,6 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_edit_post', '编辑页面请求', '', '编辑页面请求')]
     public function postEdit()
     {
-        $routerCacheCleared = false;
         try {
             $pageId = $this->request->getGet('id');
             $data = $this->request->getPost();
@@ -1360,17 +1148,8 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                 }
             }
             
-            // 🔧 确保 style 字段有值（使用处理后的值）；子页面强制继承根页面主题，不可修改
+            // 🔧 确保 style 字段有值（使用处理后的值）
             $styleToSave = !empty($currentStyleCode) ? $currentStyleCode : ($data['style'] ?? '');
-            if ($currentParentId && $currentParentId > 0) {
-                $rootPage = $page->getRootPage();
-                if ($rootPage && $rootPage->getId()) {
-                    $rootStyle = (string)($rootPage->getData(PageModel::schema_fields_STYLE) ?? '');
-                    if ($rootStyle !== '') {
-                        $styleToSave = $rootStyle;
-                    }
-                }
-            }
             
             // 处理parent_id：检查子页面不能分配给子页面
             $newParentId = (int)($data['parent_id'] ?? 0);
@@ -1440,7 +1219,6 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                 PageModel::schema_fields_DEFAULT_LOCALE => $defaultLocale,
                 PageModel::schema_fields_META_TITLE => $data['meta_title'] ?? '',
                 PageModel::schema_fields_META_DESCRIPTION => $data['meta_description'] ?? '',
-                PageModel::schema_fields_AI_DESCRIPTION => $data['ai_description'] ?? '',
                 PageModel::schema_fields_META_KEYWORDS => $data['meta_keywords'] ?? '',
                 PageModel::schema_fields_REDIRECT_URL => $data['redirect_url'] ?? '',
                 PageModel::schema_fields_HEADER_CUSTOM_CODE => $data['header_custom_code'] ?? '',
@@ -1470,62 +1248,56 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             if (!$checkPage->getId()) {
                 throw new \Exception(__('页面不存在，无法更新！'));
             }
-
-            // ========== 核心保存流程（顺序不可乱） ==========
-            // 1. page 主表更新（Query::update，无事务）
-            $page->clear()
-                ->where(PageModel::schema_fields_ID, $pageIdInt)
-                ->update($updateData, PageModel::schema_fields_ID)
-                ->fetch();
-
-            // 2. 更新后重新加载
+            
+            // 使用条件更新：where()->update()->fetch()
+            try {
+                $saveResult = $page->clear()
+                    ->where(PageModel::schema_fields_ID, $pageIdInt)
+                    ->update($updateData, PageModel::schema_fields_ID)
+                    ->fetch();
+            } catch (\PDOException $e) {
+                throw $e;
+            } catch (\Exception $e) {
+                throw $e;
+            }
+            
+            // 更新后重新加载数据到 Model（使用整数类型的 pageId）
             $page->clear()->load($pageIdInt);
-
-            // 3. URL 重写（Model->save，自有事务）
+            
+            // 自动创建或更新 URL 重写规则（统一用 page_id，handle 变更时自动覆盖旧条目）
             $this->createOrUpdateUrlRewrite($page);
-
-            // 4. 清理旧格式 url_identify，失败则 rollBack 并中止保存
+            
+            // 清理旧格式的 url_identify 条目（pagebuilder_page_{websiteId}_{handle}）
             $newHandle = $page->getData(PageModel::schema_fields_HANDLE);
             $newWebsiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
             if ($oldHandle !== '' && $oldHandle !== null) {
-                $cleanupRewrite = ObjectManager::getInstance(UrlRewrite::class);
-                $cleanupRewrite = clone $cleanupRewrite;
                 try {
                     $oldUrlIdentify = "pagebuilder_page_{$oldWebsiteId}_{$oldHandle}";
+                    /**@var UrlRewrite $cleanupRewrite */
+                    $cleanupRewrite = ObjectManager::getInstance(UrlRewrite::class);
+                    $cleanupRewrite = clone $cleanupRewrite;
                     $cleanupRewrite->clear()
                         ->where(UrlRewrite::schema_fields_URL_IDENTIFY, $oldUrlIdentify)
                         ->delete()
                         ->fetch();
                 } catch (\Throwable $e) {
-                    $cleanupRewrite->getQuery()->rollBack();
-                    throw $e;
+                    // 忽略
                 }
             }
-
-            // 5. 按页面清除路由 / 统一 dispatch 缓存并通知 WLS Worker
-            $routerCacheCleared = $this->clearRouterAndPageBuilderCache($pageIdInt);
-
-            // 6. 主页主题变更时同步子页面（逐条 save，避免 PostgreSQL IN+update 导致事务中止）
-            if ((int)$newParentId === 0 && $page->getId() && (string)$oldStyleCode !== (string)$styleToSave) {
-                $descendantIds = $page->getDescendantIds();
-                if (!empty($descendantIds)) {
-                    $childUpdater = clone $this->pageModel;
-                    foreach ($descendantIds as $id) {
-                        $childUpdater->clear()->load((int)$id)->setData(PageModel::schema_fields_STYLE, $styleToSave)->save();
-                    }
-                    MessageManager::success(
-                        __('主页主题已更新，已同步 %{1} 个子页面的主题。', [count($descendantIds)])
-                    );
-                }
+            
+            // handle / website_id / style 有变更时清除路由与重写缓存
+            if ($oldHandle !== $newHandle || $oldWebsiteId !== $newWebsiteId || $oldStyleCode !== $styleToSave) {
+                $this->clearRouterAndPageBuilderCache();
             }
-
-            // 7. 多语言翻译（非默认语言的 LocalDescription，find + insert/update）
+            
+            // 处理多语言内容翻译
             if (!empty($selectedLocales)) {
                 foreach ($selectedLocales as $locale) {
                     // 跳过默认语言（默认语言内容已经保存在主表中）
                     if ($locale == $defaultLocale) {
                         continue;
                     }
+                    
                     // 从多语言 Tab 表单获取该语言的翻译内容
                     $titleKey = 'title_' . $locale;
                     $contentKey = 'content_' . $locale;
@@ -1539,67 +1311,54 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                     $translatedMetaDesc = $data[$metaDescKey] ?? '';
                     $translatedMetaKeywords = $data[$metaKeywordsKey] ?? '';
                     
-                    // 查找或创建翻译记录（用 insert/update 代替 save，避免 Model 事务/事件引发 25P02）
+                    // 查找或创建翻译记录
                     $localDesc = clone $this->localDescriptionModel;
                     $existing = $localDesc->clear()
-                        ->where(LocalDescription::schema_fields_ID, $pageIdInt)
+                        ->where(LocalDescription::schema_fields_ID, $pageId)
                         ->where('local_code', $locale)
                         ->find()
                         ->fetch();
-
-                    $query = $this->localDescriptionModel->getQuery()->clearQuery()->table(LocalDescription::schema_table);
-                    $rowData = [
-                        LocalDescription::schema_fields_NAME => $data['name'] ?? '',
-                        LocalDescription::schema_fields_TITLE => $translatedTitle,
-                        LocalDescription::schema_fields_CONTENT => $translatedContent,
-                        LocalDescription::schema_fields_META_TITLE => $translatedMetaTitle,
-                        LocalDescription::schema_fields_META_DESCRIPTION => $translatedMetaDesc,
-                        LocalDescription::schema_fields_META_KEYWORDS => $translatedMetaKeywords,
-                    ];
+                    
                     if ($existing && $existing->getId()) {
-                        $query->where(LocalDescription::schema_fields_ID, $pageIdInt)
-                            ->where('local_code', $locale)
-                            ->update($rowData, LocalDescription::schema_fields_ID)
-                            ->fetch();
+                        // 更新现有翻译
+                        $existing->setData(LocalDescription::schema_fields_NAME, $data['name'] ?? '')
+                            ->setData(LocalDescription::schema_fields_TITLE, $translatedTitle)
+                            ->setData(LocalDescription::schema_fields_CONTENT, $translatedContent)
+                            ->setData(LocalDescription::schema_fields_META_TITLE, $translatedMetaTitle)
+                            ->setData(LocalDescription::schema_fields_META_DESCRIPTION, $translatedMetaDesc)
+                            ->setData(LocalDescription::schema_fields_META_KEYWORDS, $translatedMetaKeywords)
+                            ->save();
                     } else {
-                        $insertData = array_merge($rowData, [
-                            LocalDescription::schema_fields_ID => $pageIdInt,
-                            'local_code' => $locale,
-                            'locale_code' => $locale,
-                        ]);
-                        $query->insert($insertData)->fetch();
+                        // 创建新翻译
+                        $newTranslation = clone $this->localDescriptionModel;
+                        $newTranslation->clearData()
+                            ->setData(LocalDescription::schema_fields_ID, $pageId)
+                            ->setData('local_code', $locale)
+                            ->setData(LocalDescription::schema_fields_NAME, $data['name'] ?? '')
+                            ->setData(LocalDescription::schema_fields_TITLE, $translatedTitle)
+                            ->setData(LocalDescription::schema_fields_CONTENT, $translatedContent)
+                            ->setData(LocalDescription::schema_fields_META_TITLE, $translatedMetaTitle)
+                            ->setData(LocalDescription::schema_fields_META_DESCRIPTION, $translatedMetaDesc)
+                            ->setData(LocalDescription::schema_fields_META_KEYWORDS, $translatedMetaKeywords)
+                            ->save();
                     }
                 }
             }
             
             MessageManager::success(__('页面更新成功！'));
-            if ($routerCacheCleared) {
-                MessageManager::success(__('路由与访问缓存已清除。'));
-            }
-
+            
             // 检查是否为AJAX请求
             if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
-                $ajaxMsg = __('页面更新成功！');
-                if ($routerCacheCleared) {
-                    $ajaxMsg .= ' ' . __('路由与访问缓存已清除。');
-                }
                 return $this->fetchJson([
                     'success' => true,
-                    'message' => $ajaxMsg,
+                    'message' => __('页面更新成功！'),
                     'page_id' => $pageId,
-                    'style' => $data['style'] ?? '',
-                    'router_cache_cleared' => $routerCacheCleared,
+                    'style' => $data['style'] ?? ''
                 ]);
             }
             
             $this->redirect('*/backend/page/edit', ['id' => $pageId]);
         } catch (\Exception $exception) {
-            // PostgreSQL：任一 SQL 失败后连接处于 aborted 状态，必须 rollBack 才能恢复，否则后续请求会报 25P02
-            try {
-                $this->pageModel->getQuery()->rollBack();
-            } catch (\Throwable) {
-                // 忽略 rollBack 自身异常
-            }
             $errorMessage = $exception->getMessage();
             
             // 如果是数据库约束错误，提供更友好的提示
@@ -1607,11 +1366,6 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                 $errorMessage = __('必填字段不能为空，请检查表单数据是否完整');
             } elseif (strpos($errorMessage, 'Duplicate entry') !== false) {
                 $errorMessage = __('数据重复，请检查页面句柄是否已被使用');
-            } elseif (strpos($errorMessage, '25P02') !== false) {
-                // DEV 模式保留原始信息便于定位首次失败的 SQL；生产用友好提示
-                if (!DEV) {
-                    $errorMessage = __('数据库事务失败，通常由前置操作异常导致，请重试或检查数据');
-                }
             }
             
             MessageManager::warning(__('页面更新失败！'));
@@ -1638,66 +1392,12 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
         }
     }
 
-    /**
-     * 发布单个页面（AJAX：POST id，返回 JSON）
-     */
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_publish', '发布页面', 'mdi mdi-publish', '发布页面')]
     public function postPublish()
     {
-        $bodyParams = $this->request->getBodyParams();
-        $data = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : []);
-        $pageId = (int)($data['id'] ?? $this->request->getPost('id') ?? 0);
-        if ($pageId <= 0) {
-            return $this->fetchJson(['success' => false, 'message' => __('页面ID不能为空')]);
-        }
-        $page = clone $this->pageModel;
-        $page->clear()->load($pageId);
-        if (!$page->getId()) {
-            return $this->fetchJson(['success' => false, 'message' => __('页面不存在')]);
-        }
-        $websiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
-        $accessibleWebsiteIds = $this->getAccessibleWebsiteIds();
-        if ($websiteId > 0 && !empty($accessibleWebsiteIds) && !in_array($websiteId, $accessibleWebsiteIds, true)) {
-            return $this->fetchJson(['success' => false, 'message' => __('您没有权限发布该页面所属的站点')]);
-        }
-        $page->setData(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
-        $page->save();
-        $this->clearRouterAndPageBuilderCache((int)$page->getId());
-        return $this->fetchJson(['success' => true, 'message' => __('页面已发布')]);
-    }
-
-    /**
-     * 一键发布本站：发布指定站点下所有页面（AJAX：POST website_id，返回 JSON）
-     */
-    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_publish', '一键发布本站', 'mdi mdi-publish', '发布该站点下所有页面')]
-    public function postPublishSite()
-    {
-        $bodyParams = $this->request->getBodyParams();
-        $data = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : []);
-        $websiteId = (int)($data['website_id'] ?? $this->request->getPost('website_id') ?? 0);
-        if ($websiteId <= 0) {
-            return $this->fetchJson(['success' => false, 'message' => __('请选择要发布的站点')]);
-        }
-        $accessibleWebsiteIds = $this->getAccessibleWebsiteIds();
-        if (!empty($accessibleWebsiteIds) && !in_array($websiteId, $accessibleWebsiteIds, true)) {
-            return $this->fetchJson(['success' => false, 'message' => __('您没有权限发布该站点')]);
-        }
-        $listModel = clone $this->pageModel;
-        $listModel->clear()
-            ->where(PageModel::schema_fields_WEBSITE_ID, $websiteId);
-        $pages = $listModel->select()->fetch()->getItems();
-        $count = 0;
-        foreach ($pages as $page) {
-            $page->setData(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
-            $page->save();
-            $count++;
-        }
-        $this->clearRouterAndPageBuilderCache();
-        return $this->fetchJson([
-            'success' => true,
-            'message' => __('本站已发布，共 %{count} 个页面', ['count' => $count]),
-            'count' => $count,
-        ]);
+        // 功能建设中
+        MessageManager::warning(__('功能建设中，敬请期待！'));
+        $this->redirect('*/backend/page/index');
     }
 
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_delete', '删除页面', 'mdi mdi-delete', '删除页面')]
@@ -1818,36 +1518,13 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                 
                 $deletedCount++;
             }
-
-            // 站点删除后释放域名绑定：同步域名池 site_created（进而影响“可建站”可选性）
-            $websiteId = (int) ($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
-            if ($websiteId > 0) {
-                try {
-                    $websiteDomainModel = ObjectManager::getInstance(WebsiteDomain::class);
-                    $websiteDomainModel->clearQuery()
-                        ->where(WebsiteDomain::schema_fields_WEBSITE_ID, $websiteId)
-                        ->delete()
-                        ->fetch();
-
-                    $domainPool = ObjectManager::getInstance(DomainPool::class);
-                    $domainPool->syncSiteCreatedFromWebsiteDomainTable();
-                } catch (\Throwable $e) {
-                    // 页面内容已删除：不阻断返回，但需要排查后台日志
-                    w_log_error('[GuoLaiRen_PageBuilder][postDeleteSite] domain sync failed: ' . $e->getMessage());
-                }
-            }
             
             // 清除路由缓存（仅使用框架 CacheManager，不使用不存在的 UrlRewriteCache）
-            $cacheOk = $this->clearRouterAndPageBuilderCache();
-            $delMsg = __('站点删除成功，共删除 %{1} 个页面', [$deletedCount]);
-            if ($cacheOk) {
-                $delMsg .= ' ' . __('路由与访问缓存已清除。');
-            }
-
+            $this->clearRouterAndPageBuilderCache();
+            
             return $this->fetchJson([
                 'success' => true,
-                'message' => $delMsg,
-                'router_cache_cleared' => $cacheOk,
+                'message' => __('站点删除成功，共删除 %{1} 个页面', [$deletedCount])
             ]);
             
         } catch (\Exception $e) {
@@ -1875,24 +1552,25 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
     
     /**
      * 清除路由与 PageBuilder 静态缓存（避免依赖不存在的 UrlRewriteCache）
-     *
-     * @param int|null $pageId 有值时仅失效该页相关缓存；批量/删站等传 null 全量清理
-     * @return bool 是否视为清理成功（用于后台消息提示）
      */
-    private function clearRouterAndPageBuilderCache(?int $pageId = null): bool
+    private function clearRouterAndPageBuilderCache(): void
     {
         try {
-            if ($pageId !== null && $pageId > 0) {
-                $r = PageBuilderUrlCacheInvalidator::invalidateForPageId($pageId);
-
-                return (bool)($r['ok'] ?? false);
+            if (class_exists(\Weline\Framework\Cache\CacheManager::class)) {
+                $cacheManager = ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class);
+                $routerPool = $cacheManager->pool('router');
+                if (method_exists($routerPool, 'clear')) {
+                    $routerPool->clear();
+                }
+                $rewritePool = $cacheManager->pool('url_rewrite');
+                if (method_exists($rewritePool, 'clear')) {
+                    $rewritePool->clear();
+                }
             }
-            PageBuilderUrlCacheInvalidator::invalidateRouterAndRewrite();
-
-            return true;
-        } catch (\Throwable) {
-            return false;
+        } catch (\Throwable $e) {
+            // 忽略
         }
+        \GuoLaiRen\PageBuilder\Controller\Router::clearCache();
     }
 
     /**
@@ -1912,11 +1590,7 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                     ->where(UrlRewrite::schema_fields_URL_IDENTIFY, "pagebuilder_page_{$pageId}")
                     ->delete()
                     ->fetch();
-                // 首页可能还有一条空重写 pagebuilder_page_{id}_root
-                $urlRewriteModel->clear()
-                    ->where(UrlRewrite::schema_fields_URL_IDENTIFY, "pagebuilder_page_{$pageId}_root")
-                    ->delete()
-                    ->fetch();
+                
                 $fallback = clone $urlRewriteModel;
                 $fallback->clear()
                     ->where(UrlRewrite::schema_fields_URL_ID, "pagebuilder_page_{$pageId}")
@@ -2013,10 +1687,6 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             MessageManager::success(__('翻译保存成功！'));
             $this->redirect('*/backend/page/edit', ['id' => $pageId]);
         } catch (\Exception $exception) {
-            try {
-                $this->pageModel->getQuery()->rollBack();
-            } catch (\Throwable) {
-            }
             MessageManager::warning(__('翻译保存失败！'));
             if (DEV) {
                 MessageManager::exception($exception);
@@ -2151,15 +1821,14 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
     public function quickSite()
     {
         try {
-            // 获取参数（ParameterBag::getRequest 已自动回退 Body，FPM/WLS 均可正常读取）
-            $styleCode = $this->request->getPost('style_code', '');
-            $siteName = trim((string) $this->request->getPost('site_name', ''));
-            $siteHandle = trim((string) $this->request->getPost('site_handle', ''));
-            $websiteId = (int) $this->request->getPost('website_id', 0);
-            $defaultLocale = (string) $this->request->getPost('default_locale', 'zh_Hans_CN');
-            $pageTypesRaw = $this->request->getPost('page_types', '[]');
-            $pageTypes = \is_array($pageTypesRaw) ? $pageTypesRaw : (json_decode((string) $pageTypesRaw, true) ?: []);
-            $seoAccountId = $this->request->getPost('seo_account_id', '');
+            // 获取参数
+            $styleCode = $this->request->getPost('style_code');
+            $siteName = trim($this->request->getPost('site_name', ''));
+            $siteHandle = trim($this->request->getPost('site_handle', ''));
+            $websiteId = (int)$this->request->getPost('website_id', 0);
+            $defaultLocale = $this->request->getPost('default_locale', 'zh_Hans_CN');
+            $pageTypesJson = $this->request->getPost('page_types', '[]');
+            $pageTypes = json_decode($pageTypesJson, true) ?: [];
             
             // 验证参数
             if (empty($styleCode)) {
@@ -2181,10 +1850,9 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                 array_unshift($pageTypes, PageModel::TYPE_HOME);
             }
             
-            // 页面类型配置：一键建站使用英文（类型名首字母大写 + 网站名），有 URL 前缀时用 prefix-type
+            // 页面类型配置：有 URL 前缀时用 prefix-type，无前缀时用 type（同一 website_id 下 handle 唯一即可）
             $prefix = $siteHandle !== '' ? $siteHandle : '';
-            $homeHandle = $prefix !== '' ? $prefix : '';
-            $typeNames = $this->getQuickSiteEnglishTypeNames();
+            $homeHandle = $prefix !== '' ? $prefix : ''; // 空前缀时首页 handle 在下面由 generateSlugFromName 生成
             $pageTypeConfigs = [
                 PageModel::TYPE_HOME => [
                     'name' => $siteName,
@@ -2193,54 +1861,54 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                     'is_home' => true,
                 ],
                 PageModel::TYPE_ABOUT => [
-                    'name' => $typeNames[PageModel::TYPE_ABOUT],
+                    'name' => __('关于我们'),
                     'handle' => $prefix !== '' ? $prefix . '-about' : 'about',
-                    'title' => $typeNames[PageModel::TYPE_ABOUT] . ' - ' . $siteName,
+                    'title' => __('关于我们') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_CONTACT => [
-                    'name' => $typeNames[PageModel::TYPE_CONTACT],
+                    'name' => __('联系我们'),
                     'handle' => $prefix !== '' ? $prefix . '-contact' : 'contact',
-                    'title' => $typeNames[PageModel::TYPE_CONTACT] . ' - ' . $siteName,
+                    'title' => __('联系我们') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_PRIVACY_POLICY => [
-                    'name' => $typeNames[PageModel::TYPE_PRIVACY_POLICY],
+                    'name' => __('隐私政策'),
                     'handle' => $prefix !== '' ? $prefix . '-privacy' : 'privacy',
-                    'title' => $typeNames[PageModel::TYPE_PRIVACY_POLICY] . ' - ' . $siteName,
+                    'title' => __('隐私政策') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_TERMS_OF_SERVICE => [
-                    'name' => $typeNames[PageModel::TYPE_TERMS_OF_SERVICE],
+                    'name' => __('服务条款'),
                     'handle' => $prefix !== '' ? $prefix . '-terms' : 'terms',
-                    'title' => $typeNames[PageModel::TYPE_TERMS_OF_SERVICE] . ' - ' . $siteName,
+                    'title' => __('服务条款') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_REFUND_POLICY => [
-                    'name' => $typeNames[PageModel::TYPE_REFUND_POLICY],
+                    'name' => __('退款政策'),
                     'handle' => $prefix !== '' ? $prefix . '-refund' : 'refund',
-                    'title' => $typeNames[PageModel::TYPE_REFUND_POLICY] . ' - ' . $siteName,
+                    'title' => __('退款政策') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_SHIPPING_POLICY => [
-                    'name' => $typeNames[PageModel::TYPE_SHIPPING_POLICY],
+                    'name' => __('配送政策'),
                     'handle' => $prefix !== '' ? $prefix . '-shipping' : 'shipping',
-                    'title' => $typeNames[PageModel::TYPE_SHIPPING_POLICY] . ' - ' . $siteName,
+                    'title' => __('配送政策') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_COOKIE_POLICY => [
-                    'name' => $typeNames[PageModel::TYPE_COOKIE_POLICY],
+                    'name' => __('Cookie政策'),
                     'handle' => $prefix !== '' ? $prefix . '-cookies' : 'cookies',
-                    'title' => $typeNames[PageModel::TYPE_COOKIE_POLICY] . ' - ' . $siteName,
+                    'title' => __('Cookie政策') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_BLOG_LIST => [
-                    'name' => $typeNames[PageModel::TYPE_BLOG_LIST],
+                    'name' => __('博客列表'),
                     'handle' => $prefix !== '' ? $prefix . '-blog' : 'blog',
-                    'title' => $typeNames[PageModel::TYPE_BLOG_LIST] . ' - ' . $siteName,
+                    'title' => __('博客列表') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_BLOG => [
-                    'name' => $typeNames[PageModel::TYPE_BLOG],
+                    'name' => __('博客文章详情'),
                     'handle' => $prefix !== '' ? $prefix . '-post' : 'post',
-                    'title' => $typeNames[PageModel::TYPE_BLOG] . ' - ' . $siteName,
+                    'title' => __('博客文章详情') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_BLOG_CATEGORY => [
-                    'name' => $typeNames[PageModel::TYPE_BLOG_CATEGORY],
+                    'name' => __('博客分类'),
                     'handle' => $prefix !== '' ? $prefix . '-blog-category' : 'blog-category',
-                    'title' => $typeNames[PageModel::TYPE_BLOG_CATEGORY] . ' - ' . $siteName,
+                    'title' => __('博客分类') . ' - ' . $siteName,
                 ],
             ];
             
@@ -2319,14 +1987,6 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                     $homePageId = $savedPageId;
                 }
                 
-                // 应用该页面类型的默认布局（含法律页 legal-content 等组件配置；正文以布局组件为准，不写入 page.content）
-                $componentService = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\ComponentService::class);
-                $defaultLayout = $componentService->getDefaultLayoutConfigForPageType($styleCode, $pageType);
-                if ($defaultLayout && !empty($defaultLayout['layout_config'])) {
-                    $page->setData(PageModel::schema_fields_LAYOUT_CONFIG, json_encode($defaultLayout['layout_config'], \JSON_UNESCAPED_UNICODE));
-                }
-                $page->save(true);
-                
                 // 创建URL重写
                 $urlRewriteSuccess = $this->createOrUpdateUrlRewrite($page);
                 
@@ -2339,10 +1999,10 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                 ];
             }
             
-            $cacheOk = $this->clearRouterAndPageBuilderCache();
+            $this->clearRouterAndPageBuilderCache();
             
             // 绑定 SEO 账户（如果提供了 seo_account_id）
-            $seoAccountId = (int) $seoAccountId;
+            $seoAccountId = (int)$this->request->getPost('seo_account_id', 0);
             if ($seoAccountId > 0 && $websiteId > 0) {
                 try {
                     $eventsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
@@ -2361,17 +2021,11 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                 }
             }
             
-            $createMsg = __('站点创建成功，共创建 %{count} 个页面', ['count' => count($createdPages)]);
-            if ($cacheOk) {
-                $createMsg .= ' ' . __('路由与访问缓存已清除。');
-            }
-
             return $this->fetchJson([
                 'success' => true,
-                'message' => $createMsg,
+                'message' => __('站点创建成功，共创建 %{count} 个页面', ['count' => count($createdPages)]),
                 'pages' => $createdPages,
                 'home_page_id' => $homePageId,
-                'router_cache_cleared' => $cacheOk,
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
@@ -2379,25 +2033,6 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                 'message' => __('创建失败：') . $e->getMessage(),
             ]);
         }
-    }
-
-    /**
-     * 一键建站时使用的英文类型名（首字母大写），用于页面 name/title：类型名 - 网站名
-     */
-    private function getQuickSiteEnglishTypeNames(): array
-    {
-        return [
-            PageModel::TYPE_ABOUT => 'About',
-            PageModel::TYPE_CONTACT => 'Contact',
-            PageModel::TYPE_PRIVACY_POLICY => 'Privacy Policy',
-            PageModel::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
-            PageModel::TYPE_REFUND_POLICY => 'Refund Policy',
-            PageModel::TYPE_SHIPPING_POLICY => 'Shipping Policy',
-            PageModel::TYPE_COOKIE_POLICY => 'Cookie Policy',
-            PageModel::TYPE_BLOG_LIST => 'Blog List',
-            PageModel::TYPE_BLOG => 'Blog Post',
-            PageModel::TYPE_BLOG_CATEGORY => 'Blog Category',
-        ];
     }
     
     /**
@@ -2410,8 +2045,6 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             $styleCode = $this->request->getGet('style_code');
             $pageId = (int)$this->request->getGet('page_id');
             $locale = $this->request->getGet('locale');
-            $publicId = \trim((string)$this->request->getGet('public_id', ''));
-            $pageType = \trim((string)$this->request->getGet('page_type', ''));
             
             if (empty($styleCode)) {
                 return $this->fetchJson([
@@ -2920,9 +2553,8 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
      * 自动创建或更新页面的 URL 重写规则
      * @param PageModel $page 页面模型
      * @return bool 是否成功
-     *
-     * 注意：URL 重写按 website_id 隔离，同 website_id 下 (website_id, rewrite) 唯一。
-     * 首页需保存两条：有 handle 时一条 handle 重写、一条空重写，否则根路径 "/" 查不到网站。
+     * 
+     * 注意：URL 重写按 website_id 隔离，同 website_id 下 handle 唯一
      */
     private function createOrUpdateUrlRewrite(PageModel $page): bool
     {
@@ -2930,99 +2562,60 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             $handle = $page->getData(PageModel::schema_fields_HANDLE);
             $pageId = $page->getId();
             $websiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
-            $isHomePage = ($page->getData(PageModel::schema_fields_TYPE) ?? '') === PageModel::TYPE_HOME;
-
+            
             if (empty($pageId)) {
                 if (DEV) {
                     w_log_info("createOrUpdateUrlRewrite: Missing page ID.");
                 }
                 return false;
             }
-
+            
             $originalPath = "pagebuilder/frontend/page/view?page_id={$pageId}";
             $rewritePath = !empty($handle) ? $handle : '';
             $urlIdentify = "pagebuilder_page_{$pageId}";
-
+            
             /**@var UrlRewrite $urlRewriteModel */
             $urlRewriteModel = ObjectManager::getInstance(UrlRewrite::class);
-
-            $this->saveOneUrlRewrite(
-                $urlRewriteModel,
-                $urlIdentify,
-                "pagebuilder_page_{$pageId}",
-                $websiteId,
-                $originalPath,
-                $rewritePath,
-                true
-            );
-
-            // 首页且有 handle 时：再保存一条空重写，使根路径 "/" 能解析到本站首页
-            if ($isHomePage && $rewritePath !== '') {
-                $rootIdentify = "pagebuilder_page_{$pageId}_root";
-                $this->saveOneUrlRewrite(
-                    $urlRewriteModel,
-                    $rootIdentify,
-                    "pagebuilder_page_{$pageId}",
-                    $websiteId,
-                    $originalPath,
-                    '',
-                    false
-                );
+            
+            $existingRewrite = clone $urlRewriteModel;
+            $existingRewrite->clear()
+                ->where(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
+                ->find()
+                ->fetch();
+            
+            if (!$existingRewrite->getId()) {
+                $existingRewrite = clone $urlRewriteModel;
+                $existingRewrite->clear()
+                    ->where(UrlRewrite::schema_fields_URL_ID, "pagebuilder_page_{$pageId}")
+                    ->find()
+                    ->fetch();
             }
-
+            
+            if ($existingRewrite->getId()) {
+                $existingRewrite
+                    ->setData(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
+                    ->setData(UrlRewrite::schema_fields_URL_ID, "pagebuilder_page_{$pageId}")
+                    ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
+                    ->setData(UrlRewrite::schema_fields_PATH, $originalPath)
+                    ->setData(UrlRewrite::schema_fields_REWRITE, $rewritePath)
+                    ->save();
+            } else {
+                $newRewrite = clone $urlRewriteModel;
+                $newRewrite->clearData()
+                    ->setData(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
+                    ->setData(UrlRewrite::schema_fields_URL_ID, "pagebuilder_page_{$pageId}")
+                    ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
+                    ->setData(UrlRewrite::schema_fields_PATH, $originalPath)
+                    ->setData(UrlRewrite::schema_fields_REWRITE, $rewritePath)
+                    ->save(true);
+            }
+            
             return true;
         } catch (\Exception $e) {
             if (DEV) {
                 w_log_error("Failed to create URL rewrite for page [{$page->getId()}]: " . $e->getMessage());
             }
-            // 必须 rethrow：若吞掉异常，PostgreSQL 事务会保持 aborted，后续 LocalDescription 保存将报 25P02
-            throw $e;
-        }
-    }
-
-    /**
-     * 保存或更新单条 URL 重写（按 url_identify 查找，主记录可再按 url_id 回退）
-     * @param bool $fallbackByUrlId 未按 url_identify 命中时是否按 url_id 再查（首页空重写条用 false）
-     */
-    private function saveOneUrlRewrite(
-        UrlRewrite $urlRewriteModel,
-        string $urlIdentify,
-        string $urlId,
-        int $websiteId,
-        string $originalPath,
-        string $rewritePath,
-        bool $fallbackByUrlId = true
-    ): void {
-        $existingRewrite = clone $urlRewriteModel;
-        $existingRewrite->clear()
-            ->where(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
-            ->find()
-            ->fetch();
-
-        if ($fallbackByUrlId && !$existingRewrite->getId()) {
-            $existingRewrite->clear()
-                ->where(UrlRewrite::schema_fields_URL_ID, $urlId)
-                ->find()
-                ->fetch();
-        }
-
-        if ($existingRewrite->getId()) {
-            $existingRewrite
-                ->setData(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
-                ->setData(UrlRewrite::schema_fields_URL_ID, $urlId)
-                ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
-                ->setData(UrlRewrite::schema_fields_PATH, $originalPath)
-                ->setData(UrlRewrite::schema_fields_REWRITE, $rewritePath)
-                ->save();
-        } else {
-            $newRewrite = clone $urlRewriteModel;
-            $newRewrite->clearData()
-                ->setData(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
-                ->setData(UrlRewrite::schema_fields_URL_ID, $urlId)
-                ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
-                ->setData(UrlRewrite::schema_fields_PATH, $originalPath)
-                ->setData(UrlRewrite::schema_fields_REWRITE, $rewritePath)
-                ->save(true);
+            return false;
         }
     }
 
@@ -3033,10 +2626,10 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
     public function uploadAsset()
     {
         try {
-            $file = \w_env_files('file');
-            if ($file === null || !is_array($file)) {
+            if (!isset($_FILES['file'])) {
                 return $this->fetchJson(['success' => false, 'message' => '缺少文件参数']);
             }
+            $file = $_FILES['file'];
             if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
                 return $this->fetchJson(['success' => false, 'message' => '文件上传失败']);
             }
@@ -3177,10 +2770,10 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             if ($handle === '') {
                 throw new \Exception(__('缺少 handle'));
             }
-            $file = \w_env_files('file');
-            if ($file === null || !is_array($file) || ($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+            if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
                 throw new \Exception(__('文件上传失败或未选择文件'));
             }
+            $file = $_FILES['file'];
             $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
             $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
             if (!in_array($ext, $allowed)) {
@@ -3472,10 +3065,9 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             return;
         }
         
-        // 读取组件文件获取字段定义（legal-content 等可回退 _shared）
-        $pathResolver = ObjectManager::getInstance(TemplatePathResolver::class);
-        $componentPath = $pathResolver->resolveComponentFilesystemPath($styleCode, $componentFile);
-
+        // 读取组件文件获取字段定义
+        $componentPath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/components/{$componentFile}";
+        
         if (!file_exists($componentPath)) {
             return;
         }
@@ -3648,9 +3240,9 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             // 获取上传的文件
             $uploadedFile = $this->request->getFile('config_file');
             
-            // 如果 Request/FileBag 尚未拿到，回退到统一环境入口
-            if (!$uploadedFile) {
-                $uploadedFile = \w_env_files('config_file');
+            // 如果没有获取到，尝试直接从 $_FILES 获取
+            if (!$uploadedFile && isset($_FILES['config_file'])) {
+                $uploadedFile = $_FILES['config_file'];
             }
             
             if ($pageId <= 0 || empty($styleCode)) {
@@ -3665,8 +3257,8 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                     'success' => false,
                     'message' => __('请选择要导入的Excel文件'),
                     'debug' => [
-                        'has_file' => \w_env_files('config_file') !== null,
-                        'files_keys' => array_keys((array)(\w_env_files() ?? [])),
+                        'has_file' => isset($_FILES['config_file']),
+                        'files_keys' => array_keys($_FILES),
                         'uploaded_file' => $uploadedFile ? 'exists' : 'null'
                     ]
                 ]);
@@ -5026,304 +4618,5 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
         
         return $slug;
     }
-
-    /**
-     * @return array{
-     *   session:mixed,
-     *   scope:array<string,mixed>,
-     *   page:PageModel,
-     *   page_type:string,
-     *   virtual_theme_id:int,
-     *   virtual_page:array<string,mixed>,
-     *   virtual_pages_by_type:array<string,array<string,mixed>>,
-     *   layout:array<string,mixed>,
-     *   locale:string,
-     *   style_code:string
-     * }|null
-     */
-    private function resolveVirtualEditorContext(string $publicId, string $requestedPageType): ?array
-    {
-        $publicId = \trim($publicId);
-        $requestedPageType = \trim($requestedPageType);
-        $adminId = (int)$this->getLoginUserId();
-        if ($publicId === '' || $requestedPageType === '' || $adminId <= 0) {
-            return null;
-        }
-
-        $context = $this->getVirtualLayoutService()->loadContext($publicId, $adminId, $requestedPageType);
-        if ($context === null) {
-            return null;
-        }
-
-        $scopeService = $this->getScopeCompatibilityService();
-        $scope = $scopeService->normalizeScope($context['scope']);
-        $virtualPages = $scopeService->buildVirtualPagesByType(
-            $scopeService->normalizePageTypes($scope['page_types'] ?? []),
-            $scope,
-            false
-        );
-        $pageType = $scopeService->resolvePreviewPageType($virtualPages, $requestedPageType);
-        if ($pageType === '' || !isset($virtualPages[$pageType])) {
-            return null;
-        }
-
-        $virtualThemeId = (int)$context['virtual_theme_id'];
-        $virtualPage = $virtualPages[$pageType];
-        $styleCode = \trim((string)($virtualPage['style_code'] ?? 'default'));
-        $styleCode = $styleCode !== '' ? $styleCode : 'default';
-        $locale = \trim((string)($virtualPage['locale'] ?? ''));
-        $locale = $locale !== '' ? $locale : 'en_US';
-        $layout = $this->getVirtualLayoutService()->getResolvedLayout($virtualThemeId, $pageType);
-
-        return [
-            'session' => $context['session'],
-            'scope' => $scope,
-            'page' => $this->buildVirtualEditorPage(
-                $publicId,
-                $scope,
-                $pageType,
-                $virtualThemeId,
-                $virtualPages,
-                $virtualPage,
-                $layout,
-                $styleCode,
-                $locale
-            ),
-            'page_type' => $pageType,
-            'virtual_theme_id' => $virtualThemeId,
-            'virtual_page' => $virtualPage,
-            'virtual_pages_by_type' => $virtualPages,
-            'layout' => $layout,
-            'locale' => $locale,
-            'style_code' => $styleCode,
-        ];
-    }
-
-    /**
-     * @param array<string,mixed> $scope
-     * @param array<string,array<string,mixed>> $virtualPagesByType
-     * @param array<string,mixed> $virtualPage
-     * @param array<string,mixed> $layout
-     */
-    private function buildVirtualEditorPage(
-        string $publicId,
-        array $scope,
-        string $pageType,
-        int $virtualThemeId,
-        array $virtualPagesByType,
-        array $virtualPage,
-        array $layout,
-        string $styleCode,
-        string $locale
-    ): PageModel {
-        /** @var PageModel $page */
-        $page = ObjectManager::make(PageModel::class);
-        $virtualBlocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
-        $renderMode = $virtualBlocks === [] ? PageModel::RENDER_MODE_THEME : PageModel::RENDER_MODE_AI_HTML;
-        $page->setData([
-            PageModel::schema_fields_ID => 0,
-            PageModel::schema_fields_WEBSITE_ID => (int)($scope['draft_website_id'] ?? 0),
-            PageModel::schema_fields_PARENT_ID => $pageType === PageModel::TYPE_HOME ? 0 : 1,
-            PageModel::schema_fields_LAYOUT_PAGE_ID => 0,
-            PageModel::schema_fields_STATUS => PageModel::STATUS_DRAFT,
-            PageModel::schema_fields_TITLE => (string)($virtualPage['title'] ?? ''),
-            PageModel::schema_fields_NAME => (string)($virtualPage['title'] ?? ''),
-            PageModel::schema_fields_HANDLE => (string)($virtualPage['handle'] ?? ''),
-            PageModel::schema_fields_STYLE => $styleCode,
-            PageModel::schema_fields_TYPE => $pageType,
-            PageModel::schema_fields_CONTENT => '',
-            PageModel::schema_fields_META_TITLE => (string)($virtualPage['meta_title'] ?? ''),
-            PageModel::schema_fields_META_DESCRIPTION => (string)($virtualPage['meta_description'] ?? ''),
-            PageModel::schema_fields_META_KEYWORDS => (string)($virtualPage['meta_keywords'] ?? ''),
-            PageModel::schema_fields_AI_DESCRIPTION => (string)($virtualPage['ai_description'] ?? ''),
-            PageModel::schema_fields_LOCALES => \json_encode([$locale], JSON_UNESCAPED_UNICODE),
-            PageModel::schema_fields_DEFAULT_LOCALE => $locale,
-            PageModel::schema_fields_STYLE_SETTING => \json_encode([
-                $styleCode => \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [],
-            ], JSON_UNESCAPED_UNICODE),
-            PageModel::schema_fields_LAYOUT_CONFIG => \json_encode($layout, JSON_UNESCAPED_UNICODE),
-            PageModel::schema_fields_RENDER_MODE => $renderMode,
-            PageModel::schema_fields_AI_LAYOUT => \json_encode(['blocks' => $virtualBlocks], JSON_UNESCAPED_UNICODE),
-        ]);
-        $page->setData('virtual_public_id', $publicId);
-        $page->setData('virtual_page_type', $pageType);
-        $page->setData('virtual_theme_id', $virtualThemeId);
-        $page->setData('virtual_layout_config', $layout);
-        $page->setData('virtual_pages_by_type', $virtualPagesByType);
-
-        return $page;
-    }
-
-        #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_get_style_config', '虚拟样式配置', '', '获取虚拟样式配置', 'GuoLaiRen_PageBuilder::page_builder')]
-    public function getVirtualStyleConfig()
-    {
-        try {
-            $styleCode = (string)$this->request->getGet('style_code', '');
-            $publicId = \trim((string)$this->request->getGet('public_id', ''));
-            $pageType = \trim((string)$this->request->getGet('page_type', ''));
-            $locale = (string)$this->request->getGet('locale', '');
-
-            if ($styleCode === '') {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('缺少样式代码'),
-                ]);
-            }
-
-            $context = $this->resolveVirtualEditorContext($publicId, $pageType);
-            if ($context === null) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('会话不存在或无访问权限'),
-                ]);
-            }
-
-            Style::forceScan();
-            $styleModel = clone $this->styleModel;
-            $styleModel->clear()->where(Style::schema_fields_CODE, $styleCode)->find()->fetch();
-            if (!$styleModel->getId()) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('样式不存在'),
-                ]);
-            }
-
-            $configGroups = $styleModel->getConfigGroups();
-            $virtualPage = $context['virtual_page'];
-            $pageSettings = [];
-            $styleSettings = \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [];
-            foreach ($styleSettings as $key => $value) {
-                if (!\is_array($value)) {
-                    $pageSettings[$key] = $value;
-                }
-            }
-
-            if ($pageSettings !== []) {
-                foreach ($configGroups as &$fileGroup) {
-                    if (!isset($fileGroup['groups']) || !\is_array($fileGroup['groups'])) {
-                        continue;
-                    }
-                    foreach ($fileGroup['groups'] as &$group) {
-                        if (!isset($group['configs']) || !\is_array($group['configs'])) {
-                            continue;
-                        }
-                        foreach ($group['configs'] as $configKey => &$config) {
-                            if (!\array_key_exists($configKey, $pageSettings)) {
-                                continue;
-                            }
-                            $savedValue = $pageSettings[$configKey];
-                            if (($config['type'] ?? '') === 'select' && !empty($config['options']) && !isset($config['options'][$savedValue])) {
-                                $config['value'] = $config['default'] ?? '';
-                            } else {
-                                $config['value'] = $savedValue;
-                            }
-                        }
-                        unset($config);
-                    }
-                    unset($group);
-                }
-                unset($fileGroup);
-            }
-
-            $resolvedLocale = \trim($locale) !== '' ? \trim($locale) : (string)$context['locale'];
-
-            return $this->fetchJson([
-                'success' => true,
-                'data' => $configGroups,
-                'style_info' => [
-                    'code' => (string)$styleModel->getData(Style::schema_fields_CODE),
-                    'name' => (string)$styleModel->getData(Style::schema_fields_NAME),
-                ],
-                'debug' => [
-                    'page_id' => 0,
-                    'public_id' => $publicId,
-                    'page_type' => $context['page_type'],
-                    'style_code' => $styleCode,
-                    'locale' => $resolvedLocale,
-                    'default_locale' => (string)$context['locale'],
-                    'is_default_locale' => $resolvedLocale === (string)$context['locale'],
-                    'page_settings' => $pageSettings,
-                    'main_settings' => $pageSettings,
-                    'has_locale_override' => false,
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-    /**
-     * @param array<string,mixed> $data
-     */
-    private function autoSaveVirtualSeo(array $data)
-    {
-        $context = $this->resolveVirtualEditorContext(
-            (string)($data['public_id'] ?? ''),
-            (string)($data['page_type'] ?? '')
-        );
-        if ($context === null) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('会话不存在或无访问权限'),
-            ]);
-        }
-
-        $resolvedLocale = \trim((string)($data['locale'] ?? ''));
-        if ($resolvedLocale === '') {
-            $resolvedLocale = (string)$context['locale'];
-        }
-
-        $updatedPage = $this->getVirtualLayoutService()->saveVirtualPagePatch(
-            (int)$context['session']->getId(),
-            (int)$this->getLoginUserId(),
-            $context['scope'],
-            $context['page_type'],
-            [
-                'locale' => $resolvedLocale,
-                'meta_title' => (string)($data['meta_title'] ?? ''),
-                'meta_description' => (string)($data['meta_description'] ?? ''),
-                'meta_keywords' => (string)($data['meta_keywords'] ?? ''),
-            ]
-        );
-
-        return $this->fetchJson([
-            'success' => true,
-            'message' => __('SEO 已保存'),
-            'data' => [
-                'page_id' => 0,
-                'public_id' => (string)($data['public_id'] ?? ''),
-                'page_type' => $context['page_type'],
-                'locale' => $resolvedLocale,
-                'scope' => 'virtual_page',
-                'meta_title' => (string)($updatedPage['meta_title'] ?? ''),
-                'meta_description' => (string)($updatedPage['meta_description'] ?? ''),
-                'meta_keywords' => (string)($updatedPage['meta_keywords'] ?? ''),
-            ],
-        ]);
-    }
-    private function getVirtualLayoutService(): AiSiteVirtualLayoutService
-    {
-        return ObjectManager::getInstance(AiSiteVirtualLayoutService::class);
-    }
-
-    private function getScopeCompatibilityService(): AiSiteScopeCompatibilityService
-    {
-        return ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
-    }
-
-    private function getAiSiteVisualUrlService(): AiSiteVisualUrlService
-    {
-        return ObjectManager::getInstance(AiSiteVisualUrlService::class);
-    }
-
-    private function normalizeSwitchValue(mixed $value): string
-    {
-        if ($value === null) {
-            return '0';
-        }
-
-        return ((string)$value === '1' || $value === true || $value === 1) ? '1' : '0';
-    }
 }
+

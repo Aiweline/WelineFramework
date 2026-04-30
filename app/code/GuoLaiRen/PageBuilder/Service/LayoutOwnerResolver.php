@@ -119,10 +119,6 @@ class LayoutOwnerResolver
         
         // 虚拟页面（id=0）处理：直接使用默认布局配置，不访问数据库
         if ($layoutOwnerPageId === 0) {
-            $virtualLayout = $page->getData('virtual_layout_config');
-            if (\is_array($virtualLayout) && $virtualLayout !== []) {
-                return $virtualLayout;
-            }
             $layoutConfig = [];
             if ($pageType) {
                 $defaultConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $pageType);
@@ -135,13 +131,6 @@ class LayoutOwnerResolver
         
         // 获取布局拥有者的布局配置
         $layoutOwnerLayout = $this->layoutService->getOrCreate($layoutOwnerPageId);
-        // 可视化/后台：强制从 DB 再读一次，与 content 一致，避免 header/footer 渲染用旧数据
-        if ($forBackend) {
-            $fresh = $this->layoutService->getByPageId($layoutOwnerPageId);
-            if ($fresh !== null) {
-                $layoutOwnerLayout = $fresh;
-            }
-        }
         $layoutConfig = $layoutOwnerLayout->exportConfig();
         
         // 检查是否有自定义布局配置
@@ -165,12 +154,6 @@ class LayoutOwnerResolver
         $homePage = $page->getHomePage(null, !$forBackend);
         if ($homePage && $homePage->getId()) {
             $homeLayout = $this->layoutService->getOrCreate((int)$homePage->getId());
-            if ($forBackend) {
-                $freshHome = $this->layoutService->getByPageId((int)$homePage->getId());
-                if ($freshHome !== null) {
-                    $homeLayout = $freshHome;
-                }
-            }
             $homeConfig = $homeLayout->exportConfig();
             
             // 检查首页是否有自定义布局

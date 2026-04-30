@@ -40,8 +40,8 @@
  * style.bg_color => 背景颜色:color:#0f0f1a
  * style.text_color => 文字颜色:color:#ffffff
  * style.link_color => 链接颜色:color:#a0a0b8
- * style.link_hover_color => 链接悬停颜色:color:#f59e0b
- * style.accent_color => 强调色:color:#f59e0b
+ * style.link_hover_color => 链接悬停颜色:color:#6366f1
+ * style.accent_color => 强调色:color:#6366f1
  * 
  * {{EXTRA_FIELDS}}
  * 
@@ -57,17 +57,6 @@ $config = array_merge($styleSettings, $componentConfig);
 $getConfig = function($key, $default = '') use ($config) {
     return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
 };
-$sanitizeVisibleText = static function (string $text, string $fallback = ''): string {
-    $text = trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
-    if ($text === '') {
-        return $fallback;
-    }
-    if (preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|home_page|about_page|shared:[a-z0-9:_-]+|page:[a-z0-9:_-]+)\b/iu', $text)) {
-        return $fallback;
-    }
-
-    return $text;
-};
 
 $componentId = 'header-' . substr(uniqid(), -8);
 $cls = $componentId;
@@ -75,7 +64,7 @@ $cls = $componentId;
 // Logo配置
 $showLogo = $getConfig('logo.display', 'yes') !== 'no';
 $logoImage = $getConfig('logo.image', '');
-$logoText = $sanitizeVisibleText((string)$getConfig('logo.text', 'Brand Name'), 'Brand Name');
+$logoText = $getConfig('logo.text', 'Brand Name');
 $logoWidth = (int)$getConfig('logo.width', 40);
 
 // 导航配置（必须使用真实子页面）
@@ -83,55 +72,12 @@ $showNav = $getConfig('navigation.display', 'yes') !== 'no';
 $navItems = [];
 
 if ($page) {
-    if (method_exists($page, 'getHeaderNavigationPages')) {
-        $navigationPages = $page->getHeaderNavigationPages(10);
-    } else {
-        $navigationPages = $page->getNavigationPages([], 10);
-    }
+    $navigationPages = $page->getNavigationPages([], 10);
     foreach ($navigationPages as $navPage) {
         $navItems[] = [
-            'text' => $sanitizeVisibleText((string)($navPage['title'] ?? ($navPage['text'] ?? '')), ''),
-            'href' => $navPage['url'] ?? ($navPage['href'] ?? '#'),
+            'text' => $navPage['title'] ?? '',
+            'href' => $navPage['url'] ?? '#',
         ];
-    }
-}
-
-if (empty($navItems)) {
-    $configNavItems = $componentConfig['nav_items'] ?? [];
-    if (is_array($configNavItems)) {
-        foreach ($configNavItems as $navItem) {
-            if (!is_array($navItem)) {
-                continue;
-            }
-            $text = $sanitizeVisibleText((string)($navItem['text'] ?? $navItem['label'] ?? ''), '');
-            if ($text === '') {
-                continue;
-            }
-            $navItems[] = [
-                'text' => $text,
-                'href' => trim((string)($navItem['href'] ?? '#')) ?: '#',
-            ];
-        }
-    }
-
-    if (empty($navItems)) {
-        $navItemsRaw = (string)$getConfig('navigation.items', '');
-        $navItemsLines = preg_split('/\r?\n/', $navItemsRaw) ?: [];
-        foreach ($navItemsLines as $navLine) {
-            $navLine = trim((string)$navLine);
-            if ($navLine === '') {
-                continue;
-            }
-            $parts = explode('=>', $navLine, 2);
-            $text = $sanitizeVisibleText((string)($parts[0] ?? ''), '');
-            if ($text === '') {
-                continue;
-            }
-            $navItems[] = [
-                'text' => $text,
-                'href' => trim((string)($parts[1] ?? '#')) ?: '#',
-            ];
-        }
     }
 }
 
@@ -141,17 +87,15 @@ if (empty($navItems)) {
 
 // CTA配置
 $showCta = $getConfig('cta.show', 'yes') !== 'no';
-$ctaText = $sanitizeVisibleText((string)$getConfig('cta.text', 'Get Started'), 'Get Started');
-$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl((string)$getConfig('cta.url', '#contact'));
-$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
-$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
+$ctaText = $getConfig('cta.text', 'Get Started');
+$ctaUrl = $getConfig('cta.url', '#contact');
 
 // 样式配置
 $bgColor = $getConfig('style.bg_color', '#0f0f1a');
 $textColor = $getConfig('style.text_color', '#ffffff');
 $linkColor = $getConfig('style.link_color', '#a0a0b8');
-$linkHoverColor = $getConfig('style.link_hover_color', '#f59e0b');
-$accentColor = $getConfig('style.accent_color', '#f59e0b');
+$linkHoverColor = $getConfig('style.link_hover_color', '#6366f1');
+$accentColor = $getConfig('style.accent_color', '#6366f1');
 
 // ===== AI生成的额外PHP变量 =====
 try {
@@ -265,7 +209,7 @@ try {
 
 #<?= $componentId ?> .<?= $cls ?>-cta:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px color-mix(in srgb, var(--header-primary) 42%, transparent);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
 }
 
 #<?= $componentId ?> .<?= $cls ?>-toggle {
@@ -368,7 +312,7 @@ try {
             </ul>
             
             <?php if ($showCta): ?>
-            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="<?= $cls ?>-cta"><?= htmlspecialchars($ctaText) ?></a>
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="<?= $cls ?>-cta"><?= htmlspecialchars($ctaText) ?></a>
             <?php endif; ?>
         </nav>
         <?php endif; ?>

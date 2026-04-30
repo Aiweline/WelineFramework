@@ -203,6 +203,25 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         $this->assertSame(\array_keys(Page::getPageTypes()), $service->normalizePageTypes(''));
     }
 
+    public function testNormalizeScopeKeepsSelectedSkillCodes(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $scope = $service->normalizeScope([
+            'selected_skill_codes' => [' claude-design ', '', 'claude-design', 'custom-skill'],
+        ]);
+
+        $this->assertSame(['claude-design', 'custom-skill'], $scope['selected_skill_codes']);
+    }
+
+    public function testSessionScopeWhitelistKeepsSelectedSkillCodes(): void
+    {
+        $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/AiSiteAgentSessionService.php');
+
+        $this->assertIsString($source);
+        $this->assertStringContainsString("'selected_skill_codes'", $source);
+    }
+
     public function testNormalizeScopeExpandsLegacyDefaultPageTypesWhenSelectionWasNotCustomized(): void
     {
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
