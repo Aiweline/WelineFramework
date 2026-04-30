@@ -1,9 +1,9 @@
 <?php
 /**
  * AI 模型 Offcanvas 编辑模板
- * 
+ *
  * 用于新建和编辑 AI 模型（在 iframe 中加载）
- * 
+ *
  * @var \Weline\Ai\Model\AiModel $model
  */
 
@@ -36,6 +36,7 @@ if (empty($providerConfig) && !empty($config)) {
     $providerConfig = $config;
 }
 $selectedAccountId = (string)($providerConfig['account_id'] ?? '');
+$modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
 ?>
 
 <style>
@@ -163,19 +164,78 @@ $selectedAccountId = (string)($providerConfig['account_id'] ?? '');
             <i class="bi bi-cpu me-2"></i><?= $title ?>
         </h5>
     </div>
-    
+
     <form id="modelEditForm" method="post" action="<?= $this->getUrl('*/backend/model/save') ?>">
-            
+
             <!-- 隐藏字段 -->
             <?php if ($isEdit): ?>
             <input type="hidden" name="id" value="<?= $model->getId() ?>" />
             <?php endif; ?>
-            
+
             <?= $this->getFormKey($this->getUrl('*/backend/model/save')) ?>
-            
+            <input type="hidden"
+                   id="token_price_input"
+                   name="token_price_input"
+                   value="<?= htmlspecialchars((string)($model ? $model->getData('token_price_input') : '0')) ?>">
+            <input type="hidden"
+                   id="token_price_output"
+                   name="token_price_output"
+                   value="<?= htmlspecialchars((string)($model ? $model->getData('token_price_output') : '0')) ?>">
+
             <!-- 使用网格布局 -->
             <div class="row g-2">
-                
+                <?php if (!$isEdit): ?>
+                <div class="col-12">
+                    <div class="card border-primary">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-lightning-charge me-2"></i><?= __('常用模型快速新增') ?>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                <div class="col-md-3">
+                                    <label for="common_provider_preset" class="form-label">
+                                        <?= __('供应商') ?>
+                                    </label>
+                                    <select class="form-select" id="common_provider_preset">
+                                        <option value=""><?= __('选择供应商') ?></option>
+                                    </select>
+                                    <div class="form-text">
+                                        <?= __('先选供应商，减少模型列表干扰。') ?>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="common_model_preset" class="form-label">
+                                        <?= __('模型') ?>
+                                    </label>
+                                    <select class="form-select" id="common_model_preset" disabled>
+                                        <option value=""><?= __('先选择供应商') ?></option>
+                                    </select>
+                                    <div class="form-text">
+                                        <?= __('自动填充模型代码、Base URL、最大输出和价格参数。') ?>
+                                    </div>
+                                </div>
+                                <div class="col-md-5">
+                                    <label for="api_key_input" class="form-label">
+                                        <?= __('API Key') ?>
+                                    </label>
+                                    <input type="password"
+                                           class="form-control"
+                                           id="api_key_input"
+                                           name="api_key_input"
+                                           autocomplete="off"
+                                           placeholder="<?= __('填入 API Key 即可保存常用模型') ?>">
+                                    <div class="form-text">
+                                        <?= __('常见模型填 API Key 即可；也可以留空后使用供应商账户。') ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
                 <!-- 基础信息卡片 -->
                 <div class="col-12">
                     <div class="card">
@@ -189,7 +249,7 @@ $selectedAccountId = (string)($providerConfig['account_id'] ?? '');
                         </div>
                         <div class="card-body">
                             <div class="row g-2">
-                                
+
                                 <!-- 供应商 -->
                                 <div class="col-md-6">
                                     <div class="mb-2">
@@ -246,25 +306,53 @@ $selectedAccountId = (string)($providerConfig['account_id'] ?? '');
                                     </div>
                                 </div>
                                 <?php endif; ?>
-                                
+
                                 <!-- 模型代码 -->
                                 <div class="col-md-6">
                                     <div class="mb-2">
                                         <label for="model_code" class="form-label required">
                                             <?= __('模型代码') ?>
                                         </label>
-                                        <input type="text" 
-                                               class="form-control" 
-                                               id="model_code" 
-                                               name="model_code" 
-                                               value="<?= $model ? $model->getData('model_code') : '' ?>" 
+                                        <input type="text"
+                                               class="form-control"
+                                               id="model_code"
+                                               name="model_code"
+                                               value="<?= $model ? $model->getData('model_code') : '' ?>"
                                                required
                                                <?= $isEdit && !$model->getData('is_copy') ? 'readonly' : '' ?>
                                                placeholder="<?= __('例如：gpt-3.5-turbo') ?>">
                                         <div class="form-text"><?= __('模型的唯一标识符') ?></div>
                                     </div>
                                 </div>
-                                
+
+                                <!-- 供应商模型代码映射 -->
+                                <div class="col-md-6">
+                                    <div class="mb-2">
+                                        <label for="provider_model_code" class="form-label">
+                                            <?= __('供应商模型代码') ?>
+                                        </label>
+                                        <?php
+                                        $providerModelCode = '';
+                                        if (!empty($providerConfig['provider_model_code'])) {
+                                            $providerModelCode = (string)$providerConfig['provider_model_code'];
+                                        } elseif (!empty($providerConfig['model'])) {
+                                            $providerModelCode = (string)$providerConfig['model'];
+                                        } elseif ($model) {
+                                            $providerModelCode = (string)$model->getData('model_code');
+                                        }
+                                        ?>
+                                        <input type="text"
+                                               class="form-control"
+                                               id="provider_model_code"
+                                               name="provider_model_code"
+                                               value="<?= htmlspecialchars($providerModelCode) ?>"
+                                               placeholder="<?= __('留空默认使用模型代码') ?>">
+                                        <div class="form-text">
+                                            <?= __('用于映射供应商真实模型 code，切换供应商时会按此值做支持校验') ?>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- 模型名称 -->
                                 <div class="col-md-6">
                                     <div class="mb-2">
@@ -284,43 +372,43 @@ $selectedAccountId = (string)($providerConfig['account_id'] ?? '');
                                         <label for="name" class="form-label required">
                                             <?= __('模型名称') ?>
                                         </label>
-                                        <input type="text" 
-                                               class="form-control" 
-                                               id="name" 
-                                               name="name" 
-                                               value="<?= $model ? $model->getData('name') : '' ?>" 
+                                        <input type="text"
+                                               class="form-control"
+                                               id="name"
+                                               name="name"
+                                               value="<?= $model ? $model->getData('name') : '' ?>"
                                                required
                                                placeholder="<?= __('例如：GPT-3.5 Turbo') ?>">
                                         <div class="form-text"><?= __('模型的显示名称') ?></div>
                                     </div>
                                 </div>
-                                
+
                                 <!-- 版本号 -->
                                 <div class="col-md-6">
                                     <div class="mb-2">
                                         <label for="version" class="form-label required">
                                             <?= __('版本号') ?>
                                         </label>
-                                        <input type="text" 
-                                               class="form-control" 
-                                               id="version" 
-                                               name="version" 
-                                               value="<?= $model ? $model->getData('version') : '1.0' ?>" 
+                                        <input type="text"
+                                               class="form-control"
+                                               id="version"
+                                               name="version"
+                                               value="<?= $model ? $model->getData('version') : '1.0' ?>"
                                                required
                                                placeholder="<?= __('例如：1.0') ?>">
                                         <div class="form-text"><?= __('模型的版本号') ?></div>
                                     </div>
                                 </div>
-                                
+
                                 <!-- 是否拷贝模型 -->
                                 <?php if ($isEdit): ?>
                                 <div class="col-12">
                                     <div class="mb-2">
                                         <div class="form-check">
-                                            <input class="form-check-input" 
-                                                   type="checkbox" 
-                                                   id="is_copy" 
-                                                   name="is_copy" 
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   id="is_copy"
+                                                   name="is_copy"
                                                    value="1"
                                                    disabled
                                                    <?= $model->getData('is_copy') ? 'checked' : '' ?>>
@@ -336,7 +424,7 @@ $selectedAccountId = (string)($providerConfig['account_id'] ?? '');
                                     </div>
                                 </div>
                                 <?php endif; ?>
-                                
+
                             </div>
                         </div>
                     </div>
@@ -356,9 +444,9 @@ $selectedAccountId = (string)($providerConfig['account_id'] ?? '');
                                 <label for="provider_config_json" class="form-label">
                                     <?= __('配置JSON') ?>
                                 </label>
-                                <textarea class="form-control" 
-                                          id="provider_config_json" 
-                                          name="provider_config_json" 
+                                <textarea class="form-control"
+                                          id="provider_config_json"
+                                          name="provider_config_json"
                                           rows="14"
                                           style="font-family: 'Courier New', monospace; font-size: 0.85rem;"
                                           placeholder='{
@@ -371,7 +459,7 @@ $selectedAccountId = (string)($providerConfig['account_id'] ?? '');
   "frequency_penalty": 0.0,
   "presence_penalty": 0.0,
   "stream": true,
-  "timeout": 30,
+                                    "timeout": 900,
   "max_retries": 3
 }'><?php
 $displayConfig = $providerConfig;
@@ -401,7 +489,7 @@ if (!empty($displayConfig)) {
                         </div>
                     </div>
                 </div>
-            
+
             <!-- 技术参数与定价卡片 -->
                 <div class="col-md-6">
                     <div class="card">
@@ -416,50 +504,49 @@ if (!empty($displayConfig)) {
                                 <label for="max_tokens" class="form-label">
                                     <?= __('最大令牌数') ?>
                                 </label>
-                                <?php 
+                                <?php
                                     $maxTokens = $model ? $model->getData('max_tokens') : 4096;
                                     $maxTokens = empty($maxTokens) || $maxTokens == 0 ? 4096 : $maxTokens;
                                 ?>
-                                <input type="number" 
-                                       class="form-control" 
-                                       id="max_tokens" 
-                                       name="max_tokens" 
-                                       value="<?= $maxTokens ?>" 
+                                <input type="number"
+                                       class="form-control"
+                                       id="max_tokens"
+                                       name="max_tokens"
+                                       value="<?= $maxTokens ?>"
                                        min="1"
-                                       max="128000"
+                                       max="384000"
                                        placeholder="推荐: 4096 (适合大多数场景)">
                                 <div class="form-text">
-                                    <?= __('模型支持的最大令牌数') ?> 
-                                    <span class="text-muted">· 推荐值: 2048-8192</span>
+                                    <?= __('模型支持的最大令牌数') ?>
+                                    <span class="text-muted">· 常用值: 4096-128000，DeepSeek V4 最高 384000</span>
                                 </div>
                             </div>
-                            
+
                             <!-- 每令牌成本 -->
                             <div class="mb-2">
                                 <label for="cost_per_token" class="form-label">
                                     <?= __('每令牌成本') ?>
                                 </label>
-                                <?php 
+                                <?php
                                     $costPerToken = $model ? $model->getData('cost_per_token') : 0.0015;
                                     $costPerToken = empty($costPerToken) || $costPerToken == 0 ? 0.0015 : $costPerToken;
                                 ?>
-                                <input type="number" 
-                                       class="form-control" 
-                                       id="cost_per_token" 
-                                       name="cost_per_token" 
-                                       value="<?= $costPerToken ?>" 
+                                <input type="number"
+                                       class="form-control"
+                                       id="cost_per_token"
+                                       name="cost_per_token"
+                                       value="<?= $costPerToken ?>"
                                        step="0.000001"
                                        min="0"
-                                       placeholder="推荐: 0.0015 (GPT-3.5标准价格)">
+                                       placeholder="<?= __('按供应商官方价格自动填充') ?>">
                                 <div class="form-text">
-                                    <?= __('每1000个令牌的成本（美元）') ?> 
-                                    <span class="text-muted">· GPT-3.5: $0.0015 | GPT-4: $0.03</span>
+                                    <?= __('每1000个令牌的成本；常用模型会按供应商官方币种自动填充') ?>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            
+
             <!-- 配置参数卡片 -->
                 <div class="col-md-6">
                     <div class="card">
@@ -475,49 +562,49 @@ if (!empty($displayConfig)) {
                                     <span><?= __('Temperature') ?></span>
                                     <span class="badge bg-primary" id="tempValue">0.7</span>
                                 </label>
-                                <input type="range" 
-                                       class="form-range" 
-                                       id="config_temperature" 
-                                       name="config[temperature]" 
-                                       min="0" 
-                                       max="2" 
+                                <input type="range"
+                                       class="form-range"
+                                       id="config_temperature"
+                                       name="config[temperature]"
+                                       min="0"
+                                       max="2"
                                        step="0.1"
                                        value="0.7"
                                        oninput="document.getElementById('tempValue').textContent = this.value">
                                 <div class="form-text">
-                                    <?= __('控制输出随机性 (0.0 - 2.0)') ?> 
+                                    <?= __('控制输出随机性 (0.0 - 2.0)') ?>
                                     <span class="text-muted">· 推荐: 0.7 (平衡模式) | 精确: 0.0-0.3 | 创造: 1.0-2.0</span>
                                 </div>
                             </div>
-                            
+
                             <!-- Top P -->
                             <div class="mb-2">
                                 <label for="config_top_p" class="form-label d-flex justify-content-between align-items-center">
                                     <span><?= __('Top P') ?></span>
                                     <span class="badge bg-primary" id="topPValue">1</span>
                                 </label>
-                                <input type="range" 
-                                       class="form-range" 
-                                       id="config_top_p" 
-                                       name="config[top_p]" 
-                                       min="0" 
-                                       max="1" 
+                                <input type="range"
+                                       class="form-range"
+                                       id="config_top_p"
+                                       name="config[top_p]"
+                                       min="0"
+                                       max="1"
                                        step="0.05"
                                        value="1"
                                        oninput="document.getElementById('topPValue').textContent = this.value">
                                 <div class="form-text">
-                                    <?= __('核采样参数 (0.0 - 1.0)') ?> 
+                                    <?= __('核采样参数 (0.0 - 1.0)') ?>
                                     <span class="text-muted">· 推荐: 1.0 (标准设置)</span>
                                 </div>
                             </div>
-                            
+
                             <!-- Stream -->
                             <div class="mb-2">
                                 <div class="form-check">
-                                    <input class="form-check-input" 
-                                           type="checkbox" 
-                                           id="config_stream" 
-                                           name="config[stream]" 
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           id="config_stream"
+                                           name="config[stream]"
                                            value="1"
                                            <?= $model && $model->getConfig()['stream'] ? 'checked' : '' ?>>
                                     <label class="form-check-label" for="config_stream">
@@ -528,31 +615,31 @@ if (!empty($displayConfig)) {
                                     <?= __('启用流式输出，实时返回生成的内容') ?>
                                 </div>
                             </div>
-                            
+
                             <!-- Timeout -->
                             <div class="mb-2">
                                 <label for="config_timeout" class="form-label">
                                     <?= __('超时时间（秒）') ?>
                                 </label>
-                                <?php 
-                                    $timeout = $model && isset($model->getConfig()['timeout']) ? $model->getConfig()['timeout'] : '180';
+                                <?php
+                                $timeout = $model && isset($model->getConfig()['timeout']) ? $model->getConfig()['timeout'] : (string)\Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT;
                                 ?>
-                                <input type="number" 
-                                       class="form-control" 
-                                       id="config_timeout" 
-                                       name="config[timeout]" 
-                                       value="<?= $timeout ?>" 
+                                <input type="number"
+                                       class="form-control"
+                                       id="config_timeout"
+                                       name="config[timeout]"
+                                       value="<?= $timeout ?>"
                                        min="0"
-                                       placeholder="180">
+                                   placeholder="<?= (string)\Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT ?>">
                                 <div class="form-text">
-                                    <?= __('API请求超时时间，0表示不限制，默认180秒') ?> 
+                                <?= __('API请求超时时间，0表示不限制，默认900秒') ?>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            
-            
+
+
             <!-- 状态管理卡片 -->
                 <div class="col-12">
                     <div class="card">
@@ -569,7 +656,7 @@ if (!empty($displayConfig)) {
                                         <label for="status" class="form-label required">
                                             <?= __('状态') ?>
                                         </label>
-                                        <?php 
+                                        <?php
                                         $providerOk = (($model ? $model->getData('provider_test_status') : 'pending') === 'success');
                                         $hasSelfConfig = false;
                                         $providerCfgRaw = $model ? $model->getData('provider_config') : '';
@@ -608,14 +695,14 @@ if (!empty($displayConfig)) {
                                             <?= __('模型的当前状态') ?>
                                             <?php if (!$canActivate): ?>
                                                 <br><small class="text-warning">
-                                                    <i class="mdi mdi-alert-circle"></i> 
+                                                    <i class="mdi mdi-alert-circle"></i>
                                                     无法激活：<?= $disableReason ?>。请先配置API密钥并进行连通性测试。
                                                 </small>
                                             <?php endif; ?>
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <!-- 操作按钮 -->
                                 <div class="col-md-6 d-flex align-items-end">
                                     <div class="d-flex gap-2 w-100">
@@ -629,9 +716,9 @@ if (!empty($displayConfig)) {
                         </div>
                     </div>
                 </div>
-                
+
             </div><!-- 关闭 row -->
-            
+
     </form>
 </div>
 
@@ -645,16 +732,16 @@ if (!empty($displayConfig)) {
     <div class="card-body" style="padding: 16px;">
         <div class="mb-3">
             <label for="test_prompt" class="form-label"><?= __('测试提示词') ?></label>
-            <textarea class="form-control" 
-                      id="test_prompt" 
+            <textarea class="form-control"
+                      id="test_prompt"
                       rows="3"
                       placeholder="<?= __('例如: 你好，请介绍一下你自己') ?>">Hello, this is a connection test.</textarea>
         </div>
-        
+
         <button type="button" class="btn btn-success w-100 mb-3" id="testModelBtn">
             <i class="bi bi-play-circle"></i> <?= __('开始测试') ?>
         </button>
-        
+
         <div id="testResult" style="display: none;">
             <div class="alert alert-light border">
                 <small class="text-muted d-block mb-2 fw-bold"><?= __('测试结果') ?></small>
@@ -665,8 +752,8 @@ if (!empty($displayConfig)) {
 </div>
 
 <!-- 浮动测试按钮 -->
-<button type="button" 
-        id="toggleTestPanel" 
+<button type="button"
+        id="toggleTestPanel"
         class="btn btn-success shadow weline-ai-model-test-btn">
     <i class="mdi mdi-test-tube"></i> <span>测试</span>
 </button>
@@ -682,12 +769,13 @@ if (!empty($displayConfig)) {
     'use strict';
 
     var modelConfig = <?= $model ? json_encode($model->getConfig()) : '{}' ?>;
+    var commonModelPresets = <?= $modelPresetsJson ?>;
 
     window.WelineAiModelEdit = {
         toggleProviderConfig: function() {
             var body = document.getElementById('providerConfigBody');
             var icon = document.getElementById('providerConfigIcon');
-            
+
             if (body.style.display === 'none') {
                 body.style.display = 'block';
                 icon.classList.remove('bi-chevron-right');
@@ -696,6 +784,160 @@ if (!empty($displayConfig)) {
                 body.style.display = 'none';
                 icon.classList.remove('bi-chevron-down');
                 icon.classList.add('bi-chevron-right');
+            }
+        },
+
+        dispatchChange: function(element) {
+            if (!element) return;
+            if (typeof Event === 'function') {
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+                return;
+            }
+            var event = document.createEvent('HTMLEvents');
+            event.initEvent('change', true, false);
+            element.dispatchEvent(event);
+        },
+
+        setFieldValue: function(id, value) {
+            var element = document.getElementById(id);
+            if (!element) return;
+            element.value = value;
+            this.dispatchChange(element);
+        },
+
+        setRangeValue: function(id, badgeId, value) {
+            var element = document.getElementById(id);
+            if (!element || value === undefined || value === null) return;
+            element.value = value;
+            var badge = document.getElementById(badgeId);
+            if (badge) {
+                badge.textContent = value;
+            }
+        },
+
+        applyPreset: function(preset) {
+            if (!preset) return;
+
+            this.setFieldValue('supplier', preset.provider || '');
+            this.setFieldValue('supplier_value', preset.provider || '');
+            this.setFieldValue('model_code', preset.model_code || '');
+            this.setFieldValue('provider_model_code', preset.provider_model_code || preset.model_code || '');
+            this.setFieldValue('name', preset.name || preset.model_code || '');
+            this.setFieldValue('version', preset.version || '1.0');
+            this.setFieldValue('max_tokens', preset.max_tokens || 4096);
+
+            this.setFieldValue('token_price_input', preset.token_price_input || 0);
+            this.setFieldValue('token_price_output', preset.token_price_output || 0);
+            if (preset.cost_per_token !== undefined) {
+                this.setFieldValue('cost_per_token', preset.cost_per_token || 0);
+            }
+
+            this.setRangeValue('config_temperature', 'tempValue', preset.temperature !== undefined ? preset.temperature : 0.7);
+            this.setRangeValue('config_top_p', 'topPValue', preset.top_p !== undefined ? preset.top_p : 1);
+                    this.setFieldValue('config_timeout', preset.timeout || <?= \Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT ?>);
+
+            var streamInput = document.getElementById('config_stream');
+            if (streamInput) {
+                streamInput.checked = preset.stream !== false;
+            }
+
+            var providerConfigTextarea = document.getElementById('provider_config_json');
+            if (providerConfigTextarea) {
+                var config = Object.assign({}, preset.config || {});
+                var apiKeyInput = document.getElementById('api_key_input');
+                if (apiKeyInput && apiKeyInput.value.trim()) {
+                    config.api_key = apiKeyInput.value.trim();
+                }
+                providerConfigTextarea.value = JSON.stringify(config, null, 2);
+            }
+        },
+
+        syncApiKeyToProviderConfig: function() {
+            var apiKeyInput = document.getElementById('api_key_input');
+            var providerConfigTextarea = document.getElementById('provider_config_json');
+            if (!apiKeyInput || !providerConfigTextarea || !apiKeyInput.value.trim()) {
+                return;
+            }
+
+            try {
+                var config = {};
+                if (providerConfigTextarea.value.trim()) {
+                    config = JSON.parse(providerConfigTextarea.value);
+                }
+                config.api_key = apiKeyInput.value.trim();
+                providerConfigTextarea.value = JSON.stringify(config, null, 2);
+            } catch (e) {
+                // Keep manual JSON untouched until submit-time validation can report the exact error.
+            }
+        },
+
+        fillModelPresetOptions: function(providerCode) {
+            var select = document.getElementById('common_model_preset');
+            if (!select) return;
+
+            select.innerHTML = '';
+            var placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = providerCode ? '<?= addslashes(__('选择模型')) ?>' : '<?= addslashes(__('先选择供应商')) ?>';
+            select.appendChild(placeholder);
+            select.disabled = !providerCode;
+
+            if (!providerCode || !Array.isArray(commonModelPresets)) return;
+
+            var presets = commonModelPresets.filter(function(preset) {
+                return preset.provider === providerCode;
+            });
+            presets.forEach(function(preset) {
+                var option = document.createElement('option');
+                option.value = preset.key;
+                option.textContent = (preset.name || preset.model_code || '') + ' (' + (preset.model_code || '') + ')';
+                select.appendChild(option);
+            });
+
+            if (presets.length === 1) {
+                select.value = presets[0].key;
+                this.applyPreset(presets[0]);
+            }
+        },
+
+        initPresetSelector: function() {
+            var providerSelect = document.getElementById('common_provider_preset');
+            var modelSelect = document.getElementById('common_model_preset');
+            if (!providerSelect || !modelSelect || !Array.isArray(commonModelPresets)) return;
+
+            var self = this;
+            var providers = {};
+            commonModelPresets.forEach(function(preset) {
+                if (!preset.provider) return;
+                providers[preset.provider] = preset.provider_name || preset.provider;
+            });
+
+            Object.keys(providers).sort(function(a, b) {
+                return providers[a].localeCompare(providers[b]);
+            }).forEach(function(providerCode) {
+                var option = document.createElement('option');
+                option.value = providerCode;
+                option.textContent = providers[providerCode];
+                providerSelect.appendChild(option);
+            });
+
+            providerSelect.addEventListener('change', function() {
+                self.fillModelPresetOptions(this.value || '');
+            });
+
+            modelSelect.addEventListener('change', function() {
+                if (!this.value) return;
+                var preset = commonModelPresets.find(function(item) {
+                    return item.key === modelSelect.value;
+                });
+                self.applyPreset(preset);
+            });
+
+            var apiKeyInput = document.getElementById('api_key_input');
+            if (apiKeyInput) {
+                apiKeyInput.addEventListener('input', function() {
+                    self.syncApiKeyToProviderConfig();
+                });
             }
         },
 
@@ -716,8 +958,9 @@ if (!empty($displayConfig)) {
                 }
             }
 
-            this.initForm();
             this.initAccountSelect();
+            this.initPresetSelector();
+            this.initForm();
             this.initTestPanel();
         },
 
@@ -754,18 +997,18 @@ if (!empty($displayConfig)) {
         initForm: function() {
             var form = document.getElementById('modelEditForm');
             if (!form) return;
-            
+
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
-                
+
                 var submitBtn = form.querySelector('button[type="submit"]');
                 var originalText = submitBtn.innerHTML;
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __('保存中...') ?>';
-                
+
                 var apiKeyInput = document.getElementById('api_key_input');
                 var providerConfigTextarea = document.getElementById('provider_config_json');
-                
+
                 if (apiKeyInput && apiKeyInput.value.trim() && providerConfigTextarea) {
                     try {
                         var config = {};
@@ -778,7 +1021,7 @@ if (!empty($displayConfig)) {
                         console.error('同步API密钥到JSON配置失败:', e);
                     }
                 }
-                
+
                 if (providerConfigTextarea && providerConfigTextarea.value.trim()) {
                     try {
                         JSON.parse(providerConfigTextarea.value);
@@ -796,7 +1039,7 @@ if (!empty($displayConfig)) {
                         return;
                     }
                 }
-                
+
                 var formData = new FormData(form);
                 var opts = { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
                 var req = window.Weline.Api.request(form.action, opts).then(function(res) { return (res && res.data) || res; });
@@ -857,25 +1100,26 @@ if (!empty($displayConfig)) {
             var toggleTestPanel = document.getElementById('toggleTestPanel');
             var testModelPanel = document.getElementById('testModelPanel');
             var closeTestPanel = document.getElementById('closeTestPanel');
-            
+
             if (toggleTestPanel && testModelPanel) {
                 toggleTestPanel.addEventListener('click', function() {
                     testModelPanel.style.display = testModelPanel.style.display === 'none' ? 'block' : 'none';
                 });
             }
-            
+
             if (closeTestPanel && testModelPanel) {
                 closeTestPanel.addEventListener('click', function() {
                     testModelPanel.style.display = 'none';
                 });
             }
-            
+
             if (testModelBtn) {
                 testModelBtn.addEventListener('click', function() {
                     var prompt = document.getElementById('test_prompt').value.trim();
                     var modelCodeInput = document.getElementById('model_code');
                     var modelCode = modelCodeInput ? modelCodeInput.value : '<?= $model ? addslashes($model->getData('model_code')) : '' ?>';
-                    
+                    var form = document.getElementById('modelEditForm');
+
                     if (!prompt) {
                         if (typeof Swal !== 'undefined') {
                             Swal.fire({
@@ -887,26 +1131,46 @@ if (!empty($displayConfig)) {
                         }
                         return;
                     }
-                    
+
                     testModelBtn.disabled = true;
                     testModelBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> <?= __('测试中...') ?>';
-                    
+
                     document.getElementById('testResult').style.display = 'none';
-                    
-                    var formData = new FormData();
-                    formData.append('model_code', modelCode);
-                    formData.append('prompt', prompt);
-                    
+
+                    var providerConfigTextarea = document.getElementById('provider_config_json');
+                    if (providerConfigTextarea && providerConfigTextarea.value.trim()) {
+                        try {
+                            JSON.parse(providerConfigTextarea.value);
+                        } catch (e) {
+                            testModelBtn.disabled = false;
+                            testModelBtn.innerHTML = '<i class="bi bi-play-circle"></i> Test model';
+                            if (typeof Swal !== 'undefined') {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Invalid JSON',
+                                    text: 'Provider config JSON is invalid. Please check the syntax.',
+                                    confirmButtonText: 'OK'
+                                });
+                            }
+                            return;
+                        }
+                    }
+
+                    var formData = form ? new FormData(form) : new FormData();
+                    formData.set('model_code', modelCode);
+                    formData.set('prompt', prompt);
+                    formData.set('test_only', '1');
+
                     var tcUrl = '<?= $this->getBackendUrl("*/backend/model/testConnection") ?>';
                     var tcReq = window.Weline.Api.request(tcUrl, { method: 'POST', body: formData });
                     tcReq.then(function(res) {
                         var data = (res && res.data) || res;
                         testModelBtn.disabled = false;
                         testModelBtn.innerHTML = '<i class="bi bi-play-circle"></i> <?= __('测试模型') ?>';
-                        
+
                         var resultDiv = document.getElementById('testResult');
                         var resultContent = document.getElementById('testResultContent');
-                        
+
                         if (data && data.data && data.data.results) {
                             var r = data.data.results;
                             var s = r.self_config || {};
@@ -921,19 +1185,19 @@ if (!empty($displayConfig)) {
                         } else {
                             resultContent.innerHTML = '<div class="alert alert-danger py-1 px-2 mb-2"><small><strong>失败!</strong> ' + data.message + '</small></div>';
                         }
-                        
+
                         resultDiv.style.display = 'block';
                         resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                     })
                     .catch(function(error) {
                         testModelBtn.disabled = false;
                         testModelBtn.innerHTML = '<i class="bi bi-play-circle"></i> <?= __('测试模型') ?>';
-                        
+
                         var resultDiv = document.getElementById('testResult');
                         var resultContent = document.getElementById('testResultContent');
-                        
+
                         resultContent.innerHTML = '<div class="alert alert-danger py-1 px-2"><small><strong>网络错误!</strong> ' + error.message + '</small></div>';
-                        
+
                         resultDiv.style.display = 'block';
                     });
                 });
