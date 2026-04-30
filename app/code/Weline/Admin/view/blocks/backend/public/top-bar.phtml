@@ -31,6 +31,14 @@
         <div class="d-flex align-items-center">
             <w:i18n:language:switcher />
 
+            <button type="button"
+                    class="btn header-item noti-icon waves-effect ms-1"
+                    id="theme-mode-toggle"
+                    title="<?= __('Toggle light/dark mode') ?>"
+                    aria-label="<?= __('Toggle light/dark mode') ?>">
+                <i class="ri-moon-clear-line"></i>
+            </button>
+
             <?php echo framework_view_process_block([
                 'class' => 'Weline\\Backend\\Block\\System\\Notification',
             ], $vars = []); ?>
@@ -137,5 +145,62 @@
             }
             closeManualDropdowns();
         }, true);
+
+        var themeToggle = document.getElementById('theme-mode-toggle');
+        if (!themeToggle) {
+            return;
+        }
+
+        function getThemeMode() {
+            var body = document.body;
+            var root = document.documentElement;
+            var mode = body.getAttribute('data-topbar')
+                || body.getAttribute('data-sidebar')
+                || root.getAttribute('data-theme-mode')
+                || root.getAttribute('data-bs-theme');
+            return mode === 'dark' ? 'dark' : 'light';
+        }
+
+        function updateThemeToggleIcon(mode) {
+            var icon = themeToggle.querySelector('i');
+            if (!icon) {
+                return;
+            }
+            icon.className = mode === 'dark' ? 'ri-sun-line' : 'ri-moon-clear-line';
+        }
+
+        function applyThemeMode(mode) {
+            var normalizedMode = mode === 'dark' ? 'dark' : 'light';
+            var body = document.body;
+            var root = document.documentElement;
+
+            body.setAttribute('data-topbar', normalizedMode);
+            body.setAttribute('data-sidebar', normalizedMode);
+            body.setAttribute('data-bs-theme', normalizedMode);
+            root.setAttribute('data-theme-mode', normalizedMode);
+            root.setAttribute('data-bs-theme', normalizedMode);
+
+            updateThemeToggleIcon(normalizedMode);
+        }
+
+        applyThemeMode(getThemeMode());
+
+        themeToggle.addEventListener('click', function (event) {
+            event.preventDefault();
+
+            var nextMode = getThemeMode() === 'dark' ? 'light' : 'dark';
+            applyThemeMode(nextMode);
+
+            if (typeof window.setThemeConfig === 'function') {
+                window.setThemeConfig({
+                    layouts: {
+                        'data-topbar': nextMode,
+                        'data-sidebar': nextMode
+                    },
+                    'theme-mode-switch': nextMode,
+                    'rtl-mode-switch': false
+                });
+            }
+        });
     })();
 </script>
