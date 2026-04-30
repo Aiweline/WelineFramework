@@ -55,6 +55,87 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('openBlockEditorModal(payload);', $messageBody);
     }
 
+    public function testBlockRefineUsesQueuedPartialPatchBeforeLegacySseFallback(): void
+    {
+        $script = $this->workspaceScript();
+        $submitBody = $this->extractFunctionBody($script, 'submitRefineComponent');
+
+        self::assertStringContainsString('if ((!startPatchBlockUrl && !startBlockRefineSseUrl)', $submitBody);
+        self::assertStringContainsString('blockRefreshState.blockId = refineComponentState.componentCode;', $submitBody);
+        self::assertStringContainsString('renderBlockStreamingState(messages.refineQueued);', $submitBody);
+        self::assertStringContainsString('postForm(startPatchBlockUrl, {', $submitBody);
+        self::assertStringContainsString('block_id: refineComponentState.componentCode,', $submitBody);
+        self::assertStringContainsString('component_code: refineComponentState.componentCode,', $submitBody);
+        self::assertStringContainsString('window.PbAiOperationRunner.startFromResponse(data)', $submitBody);
+
+        $queuedPatch = \strpos($submitBody, 'postForm(startPatchBlockUrl, {');
+        $legacySseFallback = \strpos($submitBody, 'var opened = openBlockSseModal(');
+        self::assertIsInt($queuedPatch);
+        self::assertIsInt($legacySseFallback);
+        self::assertLessThan(
+            $legacySseFallback,
+            $queuedPatch,
+            'Block refine should enqueue block_partial_patch before falling back to the legacy block SSE flow.'
+        );
+    }
+
+    public function testRuntimePartialPatchEventRefreshesOnlyCurrentBlock(): void
+    {
+        $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        self::assertIsString($runtime);
+
+        self::assertStringContainsString("'build', 'visual_edit', 'regenerate_page', 'block_regenerate', 'block_partial_patch', 'block_refine'", $runtime);
+        self::assertStringContainsString("source.addEventListener('block_partial_patch_applied'", $runtime);
+        self::assertStringContainsString('hydrateWorkspaceFromState(payload.state);', $runtime);
+        self::assertStringContainsString('previewBridge.setVirtualPagesByType(payload.state.virtual_pages_by_type);', $runtime);
+        self::assertStringContainsString('runtimeFindNextBlock(pageType, pageState.blocks, blockId)', $runtime);
+        self::assertStringContainsString('previewBridge.replaceCurrentBlockHtml(blockRefreshState.pageType, nextBlock)', $runtime);
+        self::assertStringContainsString("source.addEventListener('block_partial_patch_failed'", $runtime);
+        self::assertStringContainsString("['regenerate_page', 'block_regenerate', 'block_partial_patch', 'block_refine']", $runtime);
+    }
+
+    public function testBlockStreamingStateCleanupResolvesThroughWorkspaceApiBridge(): void
+    {
+        $script = $this->workspaceScript();
+        $clearBody = $this->extractFunctionBody($script, 'clearBlockStreamingState');
+
+        self::assertStringContainsString('var workspaceApi = window.__pbWorkspaceApi', $clearBody);
+        self::assertStringContainsString("typeof workspaceApi.clearBlockStreamingState === 'function'", $clearBody);
+        self::assertStringContainsString('return workspaceApi.clearBlockStreamingState();', $clearBody);
+        self::assertStringContainsString("typeof window.clearBlockStreamingState === 'function'", $clearBody);
+        self::assertStringContainsString('blockRefreshState.active = false;', $clearBody);
+
+        $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        self::assertIsString($runtime);
+        self::assertStringContainsString('workspaceApiRef.clearBlockStreamingState = clearBlockStreamingState;', $runtime);
+        self::assertStringContainsString('window.clearBlockStreamingState = clearBlockStreamingState;', $runtime);
+    }
+
+    public function testBlockRefreshFallsBackToWorkspaceSnapshotWhenSseStateIsIncomplete(): void
+    {
+        $script = $this->workspaceScript();
+        $snapshotBody = $this->extractFunctionBody($script, 'fetchWorkspaceSnapshotStateForBlockRefresh');
+        $resolverBody = $this->extractFunctionBody($script, 'resolvePendingBlockSseResultTarget');
+        $applyBody = $this->extractFunctionBody($script, 'applyPendingBlockSseResultWithSnapshot');
+
+        self::assertStringContainsString('workspaceApi.fetchWorkspaceSnapshotState()', $snapshotBody);
+        self::assertStringContainsString('hydrateWorkspaceFromState(workspaceState);', $snapshotBody);
+        self::assertStringContainsString('mergeVirtualPagesByTypeState(workspaceState.virtual_pages_by_type);', $snapshotBody);
+
+        self::assertStringContainsString('var payloadState = pendingBlockSseResult && pendingBlockSseResult.state', $resolverBody);
+        self::assertStringContainsString('var nextBlock = pageState && Array.isArray(pageState.blocks)', $resolverBody);
+        self::assertStringContainsString('findVirtualBlockInList(key, stateItem.blocks, targetBlockId);', $resolverBody);
+
+        self::assertStringContainsString('if (resolved.effectiveState && resolved.nextBlock) {', $applyBody);
+        self::assertStringContainsString('return fetchWorkspaceSnapshotStateForBlockRefresh().then(function () {', $applyBody);
+        self::assertStringContainsString('return applyPendingBlockSseResult(options);', $applyBody);
+
+        $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        self::assertIsString($runtime);
+        self::assertStringContainsString('function fetchWorkspaceSnapshotState()', $runtime);
+        self::assertStringContainsString('workspaceApiRef.fetchWorkspaceSnapshotState = fetchWorkspaceSnapshotState;', $runtime);
+    }
+
     public function testVisualPreviewEmitsComponentActionPayloadWithBlockIdentity(): void
     {
         $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/PageRenderService.php');
@@ -165,14 +246,20 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
 
     public function testRetryableAiFailuresExposeManualContinueButtonsForAllStages(): void
     {
-        $layout = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
-        self::assertIsString($layout);
-        self::assertStringContainsString('id="pb-ai-retry-plan-failures"', $layout);
-        self::assertStringContainsString('id="pb-ai-retry-task-plan-failures"', $layout);
-        self::assertStringContainsString('id="pb-ai-retry-build-failures"', $layout);
-        self::assertStringContainsString('data-retryable-ai-operation="plan"', $layout);
-        self::assertStringContainsString('data-retryable-ai-operation="task_plan"', $layout);
-        self::assertStringContainsString('data-retryable-ai-operation="build"', $layout);
+        $planPanel = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-body.phtml');
+        self::assertIsString($planPanel);
+        self::assertStringContainsString('id="pb-ai-retry-plan-failures"', $planPanel);
+        self::assertStringContainsString('data-retryable-ai-operation="plan"', $planPanel);
+
+        $taskPlanPanel = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/stages/sections/task-plan-accordion-panel.phtml');
+        self::assertIsString($taskPlanPanel);
+        self::assertStringContainsString('id="pb-ai-retry-task-plan-failures"', $taskPlanPanel);
+        self::assertStringContainsString('data-retryable-ai-operation="task_plan"', $taskPlanPanel);
+
+        $visualEditPanel = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/stages/sections/visual-edit-card.phtml');
+        self::assertIsString($visualEditPanel);
+        self::assertStringContainsString('id="pb-ai-retry-build-failures"', $visualEditPanel);
+        self::assertStringContainsString('data-retryable-ai-operation="build"', $visualEditPanel);
 
         $script = $this->workspaceScript();
         $syncButtonsBody = $this->extractFunctionBody($script, 'syncRetryableAiFailureButtons');
@@ -184,6 +271,11 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('api.retryPhaseOnePlanGeneration({ forceRebuild: false });', $bindRetryBody);
         self::assertStringContainsString('api.retryPhaseTwoTaskPlanGeneration({ forceRebuild: false });', $bindRetryBody);
         self::assertStringContainsString('startPublishStageQualityRepair(buildRetryBtn);', $bindRetryBody);
+
+        $countBody = $this->extractFunctionBody($script, 'getRetryableAiFailureCount');
+        self::assertStringContainsString("if (normalizedOperation === 'build') {", $countBody);
+        self::assertStringContainsString('state.latest_build_failed,', $countBody);
+        self::assertStringContainsString('state.publish_blocked_by_latest_ai_failure,', $countBody);
     }
 
     public function testPublishStageStillKeepsPublishControlsAfterRemovingAiQualityRepairEntry(): void

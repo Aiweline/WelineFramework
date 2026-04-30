@@ -1,17 +1,10 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this */
 ?>
 <header id="page-topbar">
     <div class="navbar-header">
-        <div class="d-flex">
-            <!-- LOGO（可由 Weline_Theme::backend::partials::topbar::logo 覆盖，如 Backend 模块实现则使用其配置） -->
+        <div class="d-flex align-items-center">
             <div class="navbar-brand-box text-center">
-<?php
-$logoHook = $this->getHook('Weline_Theme::backend::partials::topbar::logo');
-if ((string) $logoHook !== '') {
-    echo $logoHook;
-} else {
-?>
                 <a href="<?= $this->getBackendUrl('admin') ?>" class="logo logo-dark">
                     <span class="logo-sm">
                         <img src="<?= $this->getViewFileUrl('Weline_Admin::assets/images/logo-sm.png') ?>" alt="logo-sm-dark" height="50">
@@ -28,148 +21,33 @@ if ((string) $logoHook !== '') {
                         <img src="<?= $this->getViewFileUrl('Weline_Admin::assets/images/logo-light.png') ?>" alt="logo-light" height="70">
                     </span>
                 </a>
-<?php } ?>
             </div>
 
             <button type="button" class="btn btn-sm px-3 font-size-24 header-item waves-effect" id="vertical-menu-btn">
                 <i class="ri-menu-2-line align-middle"></i>
             </button>
-
-            <!-- App Search-->
-            <form class="app-search d-none d-lg-block" onkeydown='appSearch(event)'>
-                <div class="position-relative">
-                    <input type="text" class="form-control" placeholder="<?= __('搜索 ...') ?>">
-                    <span class="ri-search-line"></span>
-                </div>
-            </form>
         </div>
 
-        <div class="d-flex">
-
-            <div class="dropdown d-inline-block d-lg-none ms-2">
-                <button type="button" class="btn header-item noti-icon waves-effect" id="page-header-search-dropdown"
-                        data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    <i class="ri-search-line"></i>
-                </button>
-                <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0"
-                     aria-labelledby="page-header-search-dropdown">
-
-                    <form class="p-3">
-                        <div class="mb-3 m-0">
-                            <div class="input-group">
-                                <input type="text" class="form-control" placeholder="<?= __('搜索 ...') ?>">
-                                <div class="input-group-append">
-                                    <button class="btn btn-primary" type="submit"><i class="ri-search-line"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- 语言选择 start-->
+        <div class="d-flex align-items-center">
             <w:i18n:language:switcher />
-            <!-- 语言选择 end -->
 
-            <button type="button"
-                    class="btn header-item noti-icon waves-effect ms-1"
-                    id="theme-mode-toggle"
-                    title="<?= __('主题色系切换') ?>"
-                    aria-label="<?= __('主题色系切换') ?>">
-                <i class="ri-sun-line"></i>
-            </button>
-
-            <div class="dropdown d-none d-lg-inline-block ms-1">
-                <button type="button" class="btn header-item noti-icon waves-effect"
-                        data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    <i class="ri-apps-2-line"></i>
-                </button>
-                <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end">
-                    <div class="px-lg-2">
-                        <div class="row g-0">
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="@static(Weline_Admin::assets/images/brands/github.png)" alt="Github">
-                                    <span>GitHub</span>
-                                </a>
-                            </div>
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="@static(Weline_Admin::assets/images/brands/bitbucket.png)"
-                                         alt="bitbucket">
-                                    <span>Bitbucket</span>
-                                </a>
-                            </div>
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="@static(Weline_Admin::assets/images/brands/dribbble.png)" alt="dribbble">
-                                    <span>Dribbble</span>
-                                </a>
-                            </div>
-                        </div>
-
-                        <div class="row g-0">
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="@static(Weline_Admin::assets/images/brands/dropbox.png)" alt="dropbox">
-                                    <span>Dropbox</span>
-                                </a>
-                            </div>
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="@static(Weline_Admin::assets/images/brands/mail_chimp.png)"
-                                         alt="mail_chimp">
-                                    <span>Mail Chimp</span>
-                                </a>
-                            </div>
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="@static(Weline_Admin::assets/images/brands/slack.png)" alt="slack">
-                                    <span>Slack</span>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="dropdown d-none d-lg-inline-block ms-1">
-                <button type="button" class="btn header-item noti-icon waves-effect" data-toggle="fullscreen">
-                    <i class="ri-fullscreen-line"></i>
-                </button>
-            </div>
-            <!--通知 开始-->
-
-            <w:block class="Weline\Backend\Block\System\Notification"/>
-
-            <!--通知 结束-->
+            <?php echo framework_view_process_block([
+                'class' => 'Weline\\Backend\\Block\\System\\Notification',
+            ], $vars = []); ?>
 
             <div class="dropdown d-inline-block user-dropdown">
                 <button type="button" class="btn header-item waves-effect" id="page-header-user-dropdown"
                         data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <img class="rounded-circle header-profile-user"
                          src="<?= $this->getAvatar() ?>"
-                         alt="<?= __('头像') ?>">
+                         alt="avatar">
                     <span class="d-none d-xl-inline-block ms-1"><?= $this->getUser()->getUsername() ?></span>
                     <i class="mdi mdi-chevron-down d-none d-xl-inline-block"></i>
                 </button>
                 <div class="dropdown-menu dropdown-menu-end">
-                    <!-- item-->
-                    <!--                    <a class="dropdown-item" href="#"><i class="ri-user-line align-middle me-1"></i>-->
-                    <? //= __('资料') ?><!--</a>-->
-                    <!--                    <a class="dropdown-item" href="#"><i-->
-                    <!--                                class="ri-wallet-2-line align-middle me-1"></i> -->
-                    <? //= __('我的钱包') ?><!--</a>-->
-                    <!--                    <a class="dropdown-item d-block" href="#"><span class="badge bg-success float-end mt-1">11</span><i-->
-                    <!--                                class="ri-settings-2-line align-middle me-1"></i> -->
-                    <? //= __('设置') ?><!--</a>-->
-                    <!--                    <a class="dropdown-item" href="#"><i-->
-                    <!--                                class="ri-lock-unlock-line align-middle me-1"></i> -->
-                    <? //= __('锁定屏幕') ?><!--</a>-->
-                    <!--                    <div class="dropdown-divider"></div>-->
-                    <a class="dropdown-item text-danger" href="<?= $this->getBackendUrl('admin/login/logout') ?>"><i
-                                class="ri-shut-down-line align-middle me-1 text-danger"></i> <?= __('退出') ?></a>
+                    <a class="dropdown-item text-danger" href="<?= $this->getBackendUrl('admin/login/logout') ?>">
+                        <i class="ri-shut-down-line align-middle me-1 text-danger"></i> Logout
+                    </a>
                 </div>
             </div>
 
@@ -178,7 +56,6 @@ if ((string) $logoHook !== '') {
                     <i class="mdi mdi-cog"></i>
                 </button>
             </div>
-
         </div>
     </div>
 </header>
@@ -191,160 +68,74 @@ if ((string) $logoHook !== '') {
         z-index: 10055;
     }
 
-    .rightbar-overlay {
-        z-index: 10040;
-    }
-
-    .right-bar {
-        z-index: 10060;
+    /* 顶栏右侧下拉强制右对齐，避免窄视口时被裁切 */
+    #page-topbar .dropdown-menu.dropdown-menu-end,
+    #page-topbar .weline-notif-menu,
+    #page-topbar .weline-notification-menu {
+        left: auto;
+        right: 0;
+        max-width: min(420px, calc(100vw - 16px));
     }
 </style>
 <script>
     (function () {
-        function initTopbarDropdownFallback() {
-            var topbar = document.getElementById('page-topbar');
-            if (!topbar || typeof window.bootstrap === 'undefined' || !window.bootstrap.Dropdown) {
-                return;
-            }
+        var topbar = document.getElementById('page-topbar');
+        if (!topbar) {
+            return;
+        }
 
-            var Dropdown = window.bootstrap.Dropdown;
-            // Bootstrap 新版会自动处理 data-bs-toggle="dropdown"，
-            // 这里仅在旧版缺失 getOrCreateInstance 时做兜底，避免拦截其它组件点击逻辑（如语言切换器）
-            if (Dropdown && typeof Dropdown.getOrCreateInstance === 'function') {
-                return;
-            }
+        var triggers = topbar.querySelectorAll('[data-bs-toggle="dropdown"]');
+        if (!triggers.length) {
+            return;
+        }
 
-            var triggers = topbar.querySelectorAll('[data-bs-toggle="dropdown"]');
-            triggers.forEach(function (trigger) {
-                if (trigger.dataset.welineDropdownBound === '1') {
+        var hasBootstrapDropdown = !!(window.bootstrap && window.bootstrap.Dropdown);
+
+        function closeManualDropdowns(exclude) {
+            triggers.forEach(function (btn) {
+                var menu = btn.nextElementSibling;
+                if (!menu || !menu.classList.contains('dropdown-menu')) {
                     return;
                 }
-                trigger.dataset.welineDropdownBound = '1';
-
-                trigger.addEventListener('click', function (event) {
-                    event.preventDefault();
-                    var config = {autoClose: true};
-
-                    var instance = null;
-                    if (Dropdown && typeof Dropdown.getInstance === 'function') {
-                        instance = Dropdown.getInstance(trigger);
-                        if (!instance) {
-                            instance = new Dropdown(trigger, config);
-                        }
-                    } else {
-                        instance = new Dropdown(trigger, config);
-                    }
-                    instance.toggle();
-                });
+                if (exclude && btn === exclude) {
+                    return;
+                }
+                menu.classList.remove('show');
+                btn.setAttribute('aria-expanded', 'false');
             });
         }
 
-        function getThemeConfig() {
-            var site = window.site || {};
-            var rawThemeConfig = site.themeConfig;
-            if (rawThemeConfig && typeof rawThemeConfig === 'object') {
-                return rawThemeConfig;
-            }
-            return {};
-        }
-
-        function resolveBoolean(value, fallback) {
-            if (value === undefined || value === null) {
-                return typeof fallback === 'boolean' ? fallback : !!fallback;
-            }
-            if (typeof value === 'string') {
-                var normalized = value.trim().toLowerCase();
-                if (['true', '1', 'on', 'yes'].indexOf(normalized) !== -1) {
-                    return true;
-                }
-                if (['false', '0', 'off', 'no'].indexOf(normalized) !== -1) {
-                    return false;
-                }
-            }
-            return !!value;
-        }
-
-        function detectCurrentMode(themeConfig) {
-            // 优先使用新的 theme-mode-switch 配置
-            if (themeConfig && themeConfig['theme-mode-switch']) {
-                return themeConfig['theme-mode-switch'] === 'dark';
-            }
-            // 兼容旧的配置方式
-            return resolveBoolean(themeConfig ? themeConfig['dark-mode-switch'] : false, false);
-        }
-
-        function translate(text) {
-            if (typeof window.lang === 'function') {
-                return window.lang(text);
-            }
-            if (typeof window.phrase === 'function') {
-                return window.phrase(text);
-            }
-            return text;
-        }
-
-        function applyState(button, icon, isDark) {
-            button.setAttribute('data-mode', isDark ? 'dark' : 'light');
-            button.setAttribute('aria-pressed', isDark ? 'true' : 'false');
-            button.setAttribute('title', isDark ? translate('切换到亮色模式') : translate('切换到暗色模式'));
-            button.classList.toggle('theme-toggle-dark', isDark);
-            button.classList.toggle('theme-toggle-light', !isDark);
-            if (icon) {
-                icon.classList.remove('ri-sun-line', 'ri-moon-line', 'text-warning', 'text-info');
-                if (isDark) {
-                    icon.classList.add('ri-moon-line', 'text-info');
-                } else {
-                    icon.classList.add('ri-sun-line', 'text-warning');
-                }
-            }
-        }
-
-        function handleToggle(button) {
-            var icon = button.querySelector('i');
-            var themeConfig = getThemeConfig();
-            var isDark = detectCurrentMode(themeConfig);
-
-            applyState(button, icon, isDark);
-
-            button.addEventListener('click', function () {
-                isDark = !isDark;
-                applyState(button, icon, isDark);
-                if (!themeConfig.layouts) {
-                    themeConfig.layouts = {};
-                }
-                themeConfig.layouts['data-topbar'] = isDark ? 'dark' : 'light';
-                themeConfig.layouts['data-sidebar'] = isDark ? 'dark' : 'light';
-                themeConfig['theme-mode-switch'] = isDark ? 'dark' : 'light';
-                // 兼容旧的配置方式
-                themeConfig['dark-mode-switch'] = isDark;
-                themeConfig['light-mode-switch'] = !isDark;
-                if (typeof window.setThemeConfig === 'function') {
-                    window.setThemeConfig({
-                        layouts: {
-                            'data-topbar': isDark ? 'dark' : 'light',
-                            'data-sidebar': isDark ? 'dark' : 'light'
-                        },
-                        'theme-mode-switch': isDark ? 'dark' : 'light',
-                        'rtl-mode-switch': !!themeConfig['rtl-mode-switch']
-                    });
-                }
-            });
-        }
-
-        function initPaletteToggle() {
-            var button = document.getElementById('theme-mode-toggle');
-            if (!button) {
+        triggers.forEach(function (trigger) {
+            if (trigger.dataset.welineDropdownBound === '1') {
                 return;
             }
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', function () {
-                    handleToggle(button);
-                });
-            } else {
-                handleToggle(button);
-            }
-        }
+            trigger.dataset.welineDropdownBound = '1';
 
-        initPaletteToggle();
+            trigger.addEventListener('click', function (event) {
+                if (hasBootstrapDropdown) {
+                    var dropdown = window.bootstrap.Dropdown.getOrCreateInstance(trigger);
+                    dropdown.toggle();
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+                var menu = trigger.nextElementSibling;
+                if (!menu || !menu.classList.contains('dropdown-menu')) {
+                    return;
+                }
+                var willOpen = !menu.classList.contains('show');
+                closeManualDropdowns(trigger);
+                menu.classList.toggle('show', willOpen);
+                trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            });
+        });
+
+        document.addEventListener('click', function (event) {
+            if (topbar.contains(event.target)) {
+                return;
+            }
+            closeManualDropdowns();
+        }, true);
     })();
 </script>
