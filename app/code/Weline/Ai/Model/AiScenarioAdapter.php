@@ -52,6 +52,8 @@ class AiScenarioAdapter extends \Weline\Framework\Database\Model
     public const schema_fields_IS_ACTIVE = 'is_active';
     #[Col(type: 'varchar', length: 128, nullable: true, comment: '默认模型代码')]
     public const schema_fields_DEFAULT_MODEL = 'default_model';
+    #[Col(type: 'text', nullable: true, comment: '按模态绑定模型JSON')]
+    public const schema_fields_MODEL_BINDINGS = 'model_bindings';
     #[Col(type: 'int', nullable: false, comment: '创建时间')]
     public const schema_fields_CREATED_TIME = 'created_time';
     #[Col(type: 'int', nullable: false, comment: '更新时间')]
@@ -131,6 +133,57 @@ class AiScenarioAdapter extends \Weline\Framework\Database\Model
         return $this;
     }
     /**
+     * 获取按模态绑定的模型代码。
+     *
+     * 兼容旧数据：default_model 仅作为 text2text fallback，不作为图片/视频模型。
+     *
+     * @return array<string,string>
+     */
+    public function getModelBindings(): array
+    {
+        $bindings = $this->decodeJsonArray($this->getData(self::schema_fields_MODEL_BINDINGS));
+        $normalized = [];
+        foreach ($bindings as $modality => $modelCode) {
+            if (!is_string($modality) || (!is_string($modelCode) && !is_numeric($modelCode))) {
+                continue;
+            }
+            $modelCode = trim((string)$modelCode);
+            if ($modelCode === '') {
+                continue;
+            }
+            $normalized[AiModel::normalizePrimaryModality((string)$modality)] = $modelCode;
+        }
+
+        $defaultModel = trim((string)($this->getData(self::schema_fields_DEFAULT_MODEL) ?? ''));
+        if ($defaultModel !== '' && empty($normalized[AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT])) {
+            $normalized[AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT] = $defaultModel;
+        }
+
+        return $normalized;
+    }
+    /**
+     * @param array<string,string> $bindings
+     */
+    public function setModelBindings(array $bindings): self
+    {
+        $normalized = [];
+        foreach ($bindings as $modality => $modelCode) {
+            $modelCode = trim((string)$modelCode);
+            if ($modelCode === '') {
+                continue;
+            }
+            $normalized[AiModel::normalizePrimaryModality((string)$modality)] = $modelCode;
+        }
+        $this->setData(self::schema_fields_MODEL_BINDINGS, json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        return $this;
+    }
+    public function getModelBinding(string $primaryModality): ?string
+    {
+        $bindings = $this->getModelBindings();
+        $primaryModality = AiModel::normalizePrimaryModality($primaryModality);
+        return $bindings[$primaryModality] ?? null;
+    }
+    /**
      * 检查是否激活
      *
      * @return bool
@@ -173,5 +226,20 @@ class AiScenarioAdapter extends \Weline\Framework\Database\Model
         }
         $this->setData(self::schema_fields_UPDATED_TIME, $currentTime);
         return $this;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function decodeJsonArray(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+        if (!is_string($value) || trim($value) === '') {
+            return [];
+        }
+        $decoded = json_decode($value, true);
+        return is_array($decoded) ? $decoded : [];
     }
 }

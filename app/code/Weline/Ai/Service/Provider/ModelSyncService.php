@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service\Provider;
 
+use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Service\ModelCollector;
 use Weline\Framework\Runtime\SchedulerSystem;
@@ -336,6 +337,9 @@ class ModelSyncService
             'model_code' => $modelCode,
             'model_name' => $modelName,
             'model_version' => $modelMeta['version'] ?? '1.0',
+            'primary_modality' => AiModel::normalizePrimaryModality(
+                (string)($modelMeta['primary_modality'] ?? ($defaults['primary_modality'] ?? AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT))
+            ),
             'token_price_input' => $inputPrice,
             'token_price_output' => $outputPrice,
             'max_tokens' => $modelMeta['max_tokens'] ?? ($defaults['max_tokens'] ?? 4096),
@@ -412,6 +416,7 @@ class ModelSyncService
                 'context_window' => $item[$contextKey] ?? null,
                 'max_tokens' => $item[$maxTokensKey] ?? null,
                 'capabilities' => $item['capabilities'] ?? [],
+                'primary_modality' => $item['primary_modality'] ?? null,
             ];
         }
 

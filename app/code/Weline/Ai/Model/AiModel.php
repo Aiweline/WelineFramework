@@ -42,6 +42,8 @@ class AiModel extends Model
     public const schema_fields_CONFIG = 'config';
     #[Col(type: 'text', nullable: true, comment: '能力JSON')]
     public const schema_fields_CAPABILITIES = 'capabilities';
+    #[Col(type: 'varchar', length: 32, default: 'text2text', comment: '主要模态')]
+    public const schema_fields_PRIMARY_MODALITY = 'primary_modality';
     #[Col(type: 'int', nullable: true, comment: '最大Token数')]
     public const schema_fields_MAX_TOKENS = 'max_tokens';
     #[Col(type: 'varchar', length: 20, nullable: true, comment: '每Token成本')]
@@ -83,6 +85,12 @@ class AiModel extends Model
     public const STATUS_MAINTENANCE = 'maintenance';
     public const SOURCE_LOCAL = 'local';
     public const SOURCE_REMOTE = 'remote';
+    public const PRIMARY_MODALITY_TEXT_TO_TEXT = 'text2text';
+    public const PRIMARY_MODALITY_TEXT_TO_IMAGE = 'text2image';
+    public const PRIMARY_MODALITY_TEXT_TO_VIDEO = 'text2video';
+    public const CAPABILITY_VISION = 'vision';
+    public const CAPABILITY_IMAGE_OUTPUT = 'image_output';
+    public const CAPABILITY_VIDEO_OUTPUT = 'video_output';
     public function _init(): void
     {
         $this->useMainDbMaster();
@@ -176,6 +184,47 @@ class AiModel extends Model
         }
         return is_array($capabilities) ? $capabilities : [];
     }
+    public function getPrimaryModality(): string
+    {
+        $modality = (string)($this->getData(self::schema_fields_PRIMARY_MODALITY) ?? '');
+        return self::normalizePrimaryModality($modality);
+    }
+    public function setPrimaryModality(string $modality): self
+    {
+        return $this->setData(self::schema_fields_PRIMARY_MODALITY, self::normalizePrimaryModality($modality));
+    }
+    public function supportsPrimaryModality(string $modality): bool
+    {
+        return $this->getPrimaryModality() === self::normalizePrimaryModality($modality);
+    }
+    public function hasCapability(string $capability): bool
+    {
+        $capabilities = $this->getCapabilities();
+        if (\array_key_exists($capability, $capabilities)) {
+            return (bool)$capabilities[$capability];
+        }
+        return \in_array($capability, $capabilities, true);
+    }
+    public function hasImageOutputCapability(): bool
+    {
+        return $this->supportsPrimaryModality(self::PRIMARY_MODALITY_TEXT_TO_IMAGE)
+            || $this->hasCapability(self::CAPABILITY_IMAGE_OUTPUT);
+    }
+    public static function normalizePrimaryModality(?string $modality): string
+    {
+        $modality = \trim((string)$modality);
+        return \in_array($modality, self::getSupportedPrimaryModalities(), true)
+            ? $modality
+            : self::PRIMARY_MODALITY_TEXT_TO_TEXT;
+    }
+    public static function getSupportedPrimaryModalities(): array
+    {
+        return [
+            self::PRIMARY_MODALITY_TEXT_TO_TEXT,
+            self::PRIMARY_MODALITY_TEXT_TO_IMAGE,
+            self::PRIMARY_MODALITY_TEXT_TO_VIDEO,
+        ];
+    }
     public function isActive(): bool
     {
         return $this->getIsActive();
@@ -205,6 +254,7 @@ class AiModel extends Model
         if (empty($this->getData(self::schema_fields_NAME))) {
             throw new \InvalidArgumentException('Name is required');
         }
+        $this->setPrimaryModality($this->getPrimaryModality());
         return true;
     }
     public function beforeSave(): self
