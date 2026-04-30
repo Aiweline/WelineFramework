@@ -263,7 +263,7 @@ foreach ($adapters as $a) {
                             <input type="text"
                                    class="form-control"
                                    id="adapterSearchInput"
-                                   placeholder="Search code, name, description, default model">
+                                   placeholder="<?= __('搜索代码、名称、描述、模型绑定') ?>">
                         </div>
                         <button type="button" class="btn btn-outline-danger btn-sm" onclick="WelineAdapterManager.cleanup()">
                             <i class="mdi mdi-delete-sweep me-1"></i>
@@ -279,9 +279,9 @@ foreach ($adapters as $a) {
                                 <lang>已选择</lang> <span class="select-count" id="selectCount">0</span> <lang>项</lang>
                             </span>
                             <div class="btn-group btn-group-sm">
-                                <button type="button" class="btn btn-outline-primary" onclick="WelineAdapterManager.batchSetDefaultModel()">
+                                <button type="button" class="btn btn-outline-primary" onclick="WelineAdapterManager.batchSetModelBindings()">
                                     <i class="mdi mdi-robot me-1"></i>
-                                    <lang>批量设置默认模型</lang>
+                                    <lang>批量配置模型绑定</lang>
                                 </button>
                                 <button type="button" class="btn btn-outline-success" onclick="WelineAdapterManager.batchToggle(1)">
                                     <i class="mdi mdi-check-circle me-1"></i>
@@ -315,17 +315,24 @@ foreach ($adapters as $a) {
                                         <th><lang>版本</lang></th>
                                         <th><lang>描述</lang></th>
                                         <th><lang>状态</lang></th>
-                                        <th><lang>默认模型</lang></th>
+                                        <th><lang>模型绑定</lang></th>
                                         <th><lang>创建时间</lang></th>
                                         <th class="text-center" style="width: 150px;"><lang>操作</lang></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php foreach ($adapters as $adapter): ?>
+                                        <?php
+                                        $bindings = method_exists($adapter, 'getModelBindings') ? $adapter->getModelBindings() : [];
+                                        if (empty($bindings) && $adapter->getData('default_model')) {
+                                            $bindings = ['text2text' => (string)$adapter->getData('default_model')];
+                                        }
+                                        ?>
                                         <tr data-id="<?= $adapter->getId() ?>">
                                             <td class="checkbox-cell">
                                                 <input type="checkbox" class="form-check-input row-checkbox" 
-                                                       value="<?= $adapter->getId() ?>" 
+                                                       value="<?= $adapter->getId() ?>"
+                                                       data-model-bindings="<?= htmlspecialchars(json_encode($bindings, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>"
                                                        onchange="WelineAdapterManager.updateSelection()">
                                             </td>
                                             <td>
@@ -357,12 +364,19 @@ foreach ($adapters as $a) {
                                             </td>
                                             <td>
                                                 <?php
-                                                $defaultModel = $adapter->getData('default_model');
-                                                if (!empty($defaultModel)): ?>
-                                                    <code class="adapter-code"><?= htmlspecialchars($defaultModel) ?></code>
-                                                <?php else: ?>
-                                                    <span class="text-muted small">—</span>
-                                                <?php endif; ?>
+                                                $bindings = method_exists($adapter, 'getModelBindings') ? $adapter->getModelBindings() : [];
+                                                if (empty($bindings) && $adapter->getData('default_model')) {
+                                                    $bindings = ['text2text' => (string)$adapter->getData('default_model')];
+                                                }
+                                                $textModel = $bindings['text2text'] ?? '';
+                                                $imageModel = $bindings['text2image'] ?? '';
+                                                $videoModel = $bindings['text2video'] ?? '';
+                                                ?>
+                                                <div class="adapter-model-bindings small">
+                                                    <div><span class="badge bg-light text-dark me-1">文本</span><?= $textModel ? '<code class="adapter-code">' . htmlspecialchars($textModel) . '</code>' : '<span class="text-muted">未配置</span>' ?></div>
+                                                    <div><span class="badge bg-light text-dark me-1">图片</span><?= $imageModel ? '<code class="adapter-code">' . htmlspecialchars($imageModel) . '</code>' : '<span class="text-muted">未配置</span>' ?></div>
+                                                    <div><span class="badge bg-light text-dark me-1">视频</span><?= $videoModel ? '<code class="adapter-code">' . htmlspecialchars($videoModel) . '</code>' : '<span class="text-muted">未配置</span>' ?></div>
+                                                </div>
                                             </td>
                                             <td>
                                                 <small class="text-muted">
@@ -397,6 +411,12 @@ foreach ($adapters as $a) {
                                                             title="<?= $adapter->getData('is_active') ? __('禁用') : __('激活') ?>">
                                                         <i class="mdi mdi-toggle-switch<?= $adapter->getData('is_active') ? '' : '-off' ?>"></i>
                                                     </button>
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-info action-btn"
+                                                            onclick='WelineAdapterManager.batchSetModelBindings([<?= (int)$adapter->getId() ?>], <?= htmlspecialchars(json_encode($bindings, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>)'
+                                                            title="<?= __('配置模型绑定') ?>">
+                                                        <i class="mdi mdi-robot-outline"></i>
+                                                    </button>
                                                     <button type="button" 
                                                             class="btn btn-sm btn-outline-danger action-btn" 
                                                             onclick="WelineAdapterManager.delete(<?= $adapter->getId() ?>)"
@@ -412,9 +432,9 @@ foreach ($adapters as $a) {
                         </div>
                         <div class="adapter-search-empty" id="adapterSearchEmpty">
                             <i class="mdi mdi-magnify-close fs-2 d-block mb-2"></i>
-                            <lang>娌℃湁鍖归厤鐨勯€傞厤鍣?/lang>
+                            <lang>没有匹配的适配器</lang>
                         </div>
-
+                        
                         <?php if (isset($pagination)): ?>
                             <div class="card-footer bg-transparent d-flex justify-content-center">
                                 <?= $pagination ?>
@@ -437,27 +457,35 @@ foreach ($adapters as $a) {
     </div>
 </div>
 
-<!-- 批量设置默认模型弹窗 -->
-<div class="modal fade weline-adapter-page" id="batchDefaultModelModal" tabindex="-1" aria-labelledby="batchDefaultModelModalLabel" aria-hidden="true">
+<!-- 配置模型绑定弹窗 -->
+<div class="modal fade weline-adapter-page" id="batchModelBindingModal" tabindex="-1" aria-labelledby="batchModelBindingModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="batchDefaultModelModalLabel">
-                    <i class="mdi mdi-robot me-2"></i><lang>批量设置默认模型</lang>
+                <h5 class="modal-title" id="batchModelBindingModalLabel">
+                    <i class="mdi mdi-robot me-2"></i><lang>配置模型绑定</lang>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted small mb-3"><lang>为当前选中的适配器统一设置默认使用的 AI 模型。</lang></p>
-                <label for="batchDefaultModelSelect" class="form-label"><lang>默认模型</lang></label>
-                <select class="form-select" id="batchDefaultModelSelect">
-                    <option value=""><lang>请选择模型</lang></option>
-                </select>
+                <p class="text-muted small mb-3"><lang>为适配器分别绑定文本推理、文生图、文生视频模型；留空表示该能力不启用。</lang></p>
+                <div class="mb-3">
+                    <label for="batchTextModelSelect" class="form-label"><lang>文本推理模型</lang> text2text</label>
+                    <select class="form-select js-modality-model-select" id="batchTextModelSelect" data-modality="text2text"><option value=""><lang>不启用</lang></option></select>
+                </div>
+                <div class="mb-3">
+                    <label for="batchImageModelSelect" class="form-label"><lang>文生图模型</lang> text2image</label>
+                    <select class="form-select js-modality-model-select" id="batchImageModelSelect" data-modality="text2image"><option value=""><lang>不启用</lang></option></select>
+                </div>
+                <div>
+                    <label for="batchVideoModelSelect" class="form-label"><lang>文生视频模型</lang> text2video</label>
+                    <select class="form-select js-modality-model-select" id="batchVideoModelSelect" data-modality="text2video"><option value=""><lang>不启用</lang></option></select>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><lang>取消</lang></button>
-                <button type="button" class="btn btn-primary" id="batchDefaultModelSaveBtn">
-                    <i class="mdi mdi-content-save me-1"></i><lang>确定设置</lang>
+                <button type="button" class="btn btn-primary" id="batchModelBindingSaveBtn">
+                    <i class="mdi mdi-content-save me-1"></i><lang>保存绑定</lang>
                 </button>
             </div>
         </div>
@@ -476,6 +504,7 @@ foreach ($adapters as $a) {
             batchDelete: '<?= $this->getBackendUrl('*/backend/adapter/batchDelete') ?>',
             batchToggle: '<?= $this->getBackendUrl('*/backend/adapter/batchToggle') ?>',
             batchSaveDefaultModel: '<?= $this->getBackendUrl('*/backend/adapter/batchSaveDefaultModel') ?>',
+            batchSaveModelBindings: '<?= $this->getBackendUrl('*/backend/adapter/batchSaveModelBindings') ?>',
             getModelOptions: '<?= $this->getBackendUrl('*/backend/adapter/getModelOptions') ?>',
             cleanup: '<?= $this->getBackendUrl('*/backend/adapter/cleanup') ?>'
         },
@@ -697,66 +726,119 @@ foreach ($adapters as $a) {
         },
 
         batchSetDefaultModel: function() {
-            var ids = this.getSelectedIds();
+            return this.batchSetModelBindings();
+        },
+
+        batchSetModelBindings: function(ids, presetBindings) {
+            ids = Array.isArray(ids) && ids.length ? ids : this.getSelectedIds();
+            presetBindings = this.normalizeModelBindingPreset(presetBindings || {});
             if (ids.length === 0) {
-                BackendToast.warning('<?= __('请先选择要设置默认模型的适配器') ?>');
+                BackendToast.warning('<?= __('请先选择要配置模型绑定的适配器') ?>');
                 return;
             }
-            var modal = document.getElementById('batchDefaultModelModal');
-            var select = document.getElementById('batchDefaultModelSelect');
-            if (!modal || !select) return;
-            select.innerHTML = '<option value=""><?= __('请选择模型') ?></option>';
-            select.disabled = true;
-            var saveBtn = document.getElementById('batchDefaultModelSaveBtn');
+            if (Object.keys(presetBindings).length === 0 && ids.length === 1) {
+                presetBindings = this.getSelectedRowModelBindings(ids[0]);
+            }
+            this.activeBindingIds = ids;
+            var modal = document.getElementById('batchModelBindingModal');
+            var selects = Array.prototype.slice.call(document.querySelectorAll('.js-modality-model-select'));
+            if (!modal || !selects.length) return;
+            var saveBtn = document.getElementById('batchModelBindingSaveBtn');
             if (saveBtn) saveBtn.disabled = true;
             var api = window.Weline && window.Weline.Api ? window.Weline.Api : { request: function(u, o) { return fetch(u, o).then(function(r) { return r.json(); }); } };
-            api.request(WelineAdapterManager.urls.getModelOptions, { method: 'GET' }).then(function(res) {
-                var data = (res && res.data) || res;
-                if (data.success && data.items && data.items.length) {
-                    data.items.forEach(function(item) {
-                        var opt = document.createElement('option');
-                        opt.value = item.model_code || '';
-                        opt.textContent = (item.name || item.model_code || '').trim() || item.model_code;
-                        select.appendChild(opt);
-                    });
-                } else {
-                    BackendToast.warning('<?= __('暂无可用的 AI 模型，请先在模型管理中配置并激活模型。') ?>');
-                }
-                select.disabled = false;
-                if (saveBtn) saveBtn.disabled = false;
-            }).catch(function(e) {
-                BackendToast.error('<?= __('加载模型列表失败：') ?>' + (e.message || e));
-                select.disabled = false;
-                if (saveBtn) saveBtn.disabled = false;
+            var requests = selects.map(function(select) {
+                var modality = select.getAttribute('data-modality') || '';
+                select.innerHTML = '';
+                var emptyOption = document.createElement('option');
+                emptyOption.value = '';
+                emptyOption.textContent = '<?= __('不启用') ?>';
+                select.appendChild(emptyOption);
+                select.disabled = true;
+                return api.request(WelineAdapterManager.urls.getModelOptions + '?primary_modality=' + encodeURIComponent(modality), { method: 'GET' }).then(function(res) {
+                    var data = (res && res.data) || res;
+                    if (data.success && data.items && data.items.length) {
+                        data.items.forEach(function(item) {
+                            var opt = document.createElement('option');
+                            opt.value = item.model_code || '';
+                            opt.textContent = ((item.name || item.model_code || '').trim() || item.model_code) + ' (' + modality + ')';
+                            select.appendChild(opt);
+                        });
+                    }
+                    if (presetBindings[modality]) {
+                        select.value = presetBindings[modality];
+                        if (select.value !== presetBindings[modality]) {
+                            var presetOption = document.createElement('option');
+                            presetOption.value = presetBindings[modality];
+                            presetOption.textContent = presetBindings[modality] + ' (' + modality + ')';
+                            presetOption.dataset.missingModel = '1';
+                            select.appendChild(presetOption);
+                            select.value = presetBindings[modality];
+                        }
+                    }
+                }).catch(function(e) {
+                    BackendToast.error('<?= __('加载模型列表失败：') ?>' + (e.message || e));
+                }).finally(function() {
+                    select.disabled = false;
+                });
             });
+            Promise.all(requests).finally(function() { if (saveBtn) saveBtn.disabled = false; });
             var bsModal = typeof bootstrap !== 'undefined' && bootstrap.Modal ? new bootstrap.Modal(modal) : null;
             if (bsModal) bsModal.show();
         },
 
+        normalizeModelBindingPreset: function(presetBindings) {
+            var normalized = {};
+            if (!presetBindings || typeof presetBindings !== 'object') return normalized;
+            ['text2text', 'text2image', 'text2video'].forEach(function(modality) {
+                var value = presetBindings[modality];
+                if (value == null || String(value).trim() === '') return;
+                normalized[modality] = String(value).trim();
+            });
+            return normalized;
+        },
+
+        getSelectedRowModelBindings: function(id) {
+            var checkbox = document.querySelector('.row-checkbox[value="' + String(id).replace(/"/g, '\\"') + '"]');
+            if (!checkbox) return {};
+            try {
+                return this.normalizeModelBindingPreset(JSON.parse(checkbox.getAttribute('data-model-bindings') || '{}'));
+            } catch (e) {
+                return {};
+            }
+        },
+
         _doBatchSaveDefaultModel: function() {
-            var ids = this.getSelectedIds();
-            var select = document.getElementById('batchDefaultModelSelect');
-            var defaultModel = select ? (select.value || '').trim() : '';
-            if (!defaultModel) {
-                BackendToast.warning('<?= __('请选择默认模型') ?>');
+            return this._doBatchSaveModelBindings();
+        },
+
+        _doBatchSaveModelBindings: function() {
+            var ids = this.activeBindingIds && this.activeBindingIds.length ? this.activeBindingIds : this.getSelectedIds();
+            var bindings = {};
+            document.querySelectorAll('.js-modality-model-select').forEach(function(select) {
+                var modality = select.getAttribute('data-modality') || '';
+                var modelCode = (select.value || '').trim();
+                if (modality && modelCode) bindings[modality] = modelCode;
+            });
+            if (Object.keys(bindings).length === 0) {
+                BackendToast.warning('<?= __('请至少选择一个能力模型') ?>');
                 return;
             }
             showLoading();
-            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ ids: ids, default_model: defaultModel }) };
+            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ ids: ids, model_bindings: bindings }) };
             var api = window.Weline && window.Weline.Api ? window.Weline.Api : { request: function(u, o) { return fetch(u, o).then(function(r) { return r.json(); }); } };
-            api.request(WelineAdapterManager.urls.batchSaveDefaultModel, opts).then(function(res) {
+            api.request(WelineAdapterManager.urls.batchSaveModelBindings, opts).then(function(res) {
                 var data = (res && res.data) || res;
                 hideLoading();
                 if (data.success) {
-                    BackendToast.success(data.message || '<?= __('设置成功') ?>');
-                    var modal = document.getElementById('batchDefaultModelModal');
+                    BackendToast.success(data.message || '<?= __('模型绑定已保存') ?>');
+                    var modal = document.getElementById('batchModelBindingModal');
                     if (modal && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
                         var m = bootstrap.Modal.getInstance(modal);
                         if (m) m.hide();
                     }
                     setTimeout(function() { location.reload(); }, 500);
                 } else {
-                    BackendToast.error(data.message || '<?= __('设置失败') ?>');
+                    BackendToast.error(data.message || '<?= __('模型绑定保存失败') ?>');
                 }
             }).catch(function(e) {
                 hideLoading();
@@ -798,8 +880,8 @@ foreach ($adapters as $a) {
 
     window.WelineAdapterManager = WelineAdapterManager;
 
-    (function bindBatchDefaultModelSave() {
-        var saveBtn = document.getElementById('batchDefaultModelSaveBtn');
+    (function bindBatchModelBindingSave() {
+        var saveBtn = document.getElementById('batchModelBindingSaveBtn');
         if (saveBtn) {
             saveBtn.addEventListener('click', function() {
                 WelineAdapterManager._doBatchSaveDefaultModel();

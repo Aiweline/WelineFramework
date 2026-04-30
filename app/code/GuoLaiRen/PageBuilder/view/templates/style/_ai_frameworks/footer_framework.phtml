@@ -49,8 +49,8 @@
  * style.text_color => 文字颜色:color:#a0a0b8
  * style.title_color => 标题颜色:color:#ffffff
  * style.link_color => 链接颜色:color:#a0a0b8
- * style.link_hover_color => 链接悬停颜色:color:#f59e0b
- * style.accent_color => 强调色:color:#f59e0b
+ * style.link_hover_color => 链接悬停颜色:color:#6366f1
+ * style.accent_color => 强调色:color:#6366f1
  * 
  * {{EXTRA_FIELDS}}
  * 
@@ -65,17 +65,6 @@ $config = array_merge($styleSettings, $componentConfig);
 
 $getConfig = function($key, $default = '') use ($config) {
     return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
-};
-$sanitizeVisibleText = static function (string $text, string $fallback = ''): string {
-    $text = trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
-    if ($text === '') {
-        return $fallback;
-    }
-    if (preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|home_page|about_page|shared:[a-z0-9:_-]+|page:[a-z0-9:_-]+)\b/iu', $text)) {
-        return $fallback;
-    }
-
-    return $text;
 };
 
 $parseLinks = function($raw) {
@@ -101,50 +90,14 @@ $cls = $componentId;
 
 // 品牌配置
 $brandLogo = $getConfig('brand.logo', '');
-$brandName = $sanitizeVisibleText((string)$getConfig('brand.name', 'Brand Name'), 'Brand Name');
-$brandDesc = $sanitizeVisibleText((string)$getConfig('brand.description', 'Your trusted partner for quality services.'), '');
+$brandName = $getConfig('brand.name', 'Brand Name');
+$brandDesc = $getConfig('brand.description', 'Your trusted partner for quality services.');
 
 // 链接配置
-$col1Title = $sanitizeVisibleText((string)$getConfig('links.column1_title', 'Quick Links'), 'Quick Links');
+$col1Title = $getConfig('links.column1_title', 'Quick Links');
 $col1Items = $parseLinks($getConfig('links.column1_items', "Home=>/\nAbout=>/about\nServices=>/services\nContact=>/contact"));
-$col2Title = $sanitizeVisibleText((string)$getConfig('links.column2_title', 'Legal'), 'Legal');
+$col2Title = $getConfig('links.column2_title', 'Legal');
 $col2Items = $parseLinks($getConfig('links.column2_items', "Privacy Policy=>/privacy\nTerms of Service=>/terms"));
-
-if ($page && method_exists($page, 'getNavigationPages')) {
-    $navigationPages = $page->getNavigationPages([], 30);
-    $dynamicPrimary = [];
-    $dynamicLegal = [];
-    foreach ($navigationPages as $navPage) {
-        if (!is_array($navPage)) {
-            continue;
-        }
-        $text = $sanitizeVisibleText((string)($navPage['title'] ?? $navPage['text'] ?? ''), '');
-        if ($text === '') {
-            continue;
-        }
-        $item = [
-            'text' => $text,
-            'href' => trim((string)($navPage['url'] ?? $navPage['href'] ?? '#')) ?: '#',
-        ];
-        $pageType = (string)($navPage['type'] ?? '');
-        if (in_array($pageType, [
-            \GuoLaiRen\PageBuilder\Model\Page::TYPE_TERMS_OF_SERVICE,
-            \GuoLaiRen\PageBuilder\Model\Page::TYPE_PRIVACY_POLICY,
-            \GuoLaiRen\PageBuilder\Model\Page::TYPE_COOKIE_POLICY,
-        ], true)) {
-            $dynamicLegal[] = $item;
-        } else {
-            $dynamicPrimary[] = $item;
-        }
-    }
-
-    if (!empty($dynamicPrimary)) {
-        $col1Items = $dynamicPrimary;
-    }
-    if (!empty($dynamicLegal)) {
-        $col2Items = $dynamicLegal;
-    }
-}
 
 // 社交媒体配置
 $showSocial = $getConfig('social.show', 'yes') !== 'no';
@@ -155,7 +108,7 @@ if ($getConfig('social.instagram')) $socialLinks['instagram'] = $getConfig('soci
 if ($getConfig('social.linkedin')) $socialLinks['linkedin'] = $getConfig('social.linkedin');
 
 // 版权配置
-$copyrightText = $sanitizeVisibleText((string)$getConfig('copyright.text', 'All rights reserved.'), 'All rights reserved.');
+$copyrightText = $getConfig('copyright.text', 'All rights reserved.');
 $startYear = $getConfig('copyright.year', date('Y'));
 $currentYear = date('Y');
 $yearDisplay = $startYear == $currentYear ? $currentYear : $startYear . '-' . $currentYear;
@@ -165,8 +118,8 @@ $bgColor = $getConfig('style.bg_color', '#1a1a2e');
 $textColor = $getConfig('style.text_color', '#a0a0b8');
 $titleColor = $getConfig('style.title_color', '#ffffff');
 $linkColor = $getConfig('style.link_color', '#a0a0b8');
-$linkHoverColor = $getConfig('style.link_hover_color', '#f59e0b');
-$accentColor = $getConfig('style.accent_color', '#f59e0b');
+$linkHoverColor = $getConfig('style.link_hover_color', '#6366f1');
+$accentColor = $getConfig('style.accent_color', '#6366f1');
 
 // ===== AI生成的额外PHP变量 =====
 try {

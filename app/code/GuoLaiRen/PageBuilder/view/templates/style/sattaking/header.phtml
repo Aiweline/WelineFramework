@@ -77,15 +77,13 @@ $logoWidth = sk_getConfig($styleSettings, 'logo.width', '40');
 
 // 导航配置
 $navDisplay = sk_getConfig($styleSettings, 'navigation.display', 'yes');
-$navBgColor = sk_getConfig($styleSettings, 'navigation.bg_color', sk_color($colors, 'nav_bg', 'rgba(8, 8, 26, 0.95)'));
+$navBgColor = sk_getConfig($styleSettings, 'navigation.bg_color', 'rgba(8, 8, 26, 0.95)');
 $navTextColor = sk_getConfig($styleSettings, 'navigation.text_color', '#ffffff');
 $navLinkHoverColor = sk_getConfig($styleSettings, 'navigation.link_hover_color', '#a855f7');
 $navLinksRaw = sk_getConfig($styleSettings, 'navigation.links', "Home=>/\nGames=>/games\nDownload=>/download\nFAQ=>/faq");
 $showCta = sk_getConfig($styleSettings, 'navigation.show_cta', 'yes');
 $ctaText = sk_getConfig($styleSettings, 'navigation.cta_text', 'Download App');
-$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(sk_getConfig($styleSettings, 'navigation.cta_url', '#download'));
-$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
-$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
+$ctaUrl = sk_getConfig($styleSettings, 'navigation.cta_url', '#download');
 
 // 颜色配置
 $accentPrimary = sk_color($colors, 'accent_primary', '#7c3aed');
@@ -99,7 +97,7 @@ foreach ($lines as $line) {
     if (empty($line)) continue;
     $parts = explode('=>', $line, 2);
     $name = trim($parts[0] ?? '');
-    $url = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(trim($parts[1] ?? '#'));
+    $url = trim($parts[1] ?? '#');
     if (!empty($name)) {
         $navLinks[] = ['name' => $name, 'url' => $url];
     }
@@ -109,9 +107,6 @@ foreach ($lines as $line) {
 <?php if ($navDisplay === 'yes'): ?>
 <style>
     .sk-header {
-        width: 100vw;
-        margin-left: calc(-50vw + 50%);
-        box-sizing: border-box;
         position: fixed;
         top: 0;
         left: 0;
@@ -235,7 +230,7 @@ foreach ($lines as $line) {
                 <?php if ($logoUrl): ?>
                     <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($logoText) ?>" style="width: 100%; height: 100%; object-fit: contain;">
                 <?php else: ?>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2 4 4 .5-2 5 .5 4h-6l.5-4-2-5 4-.5L12 2z"/><path d="M4 20h16"/></svg>
+                    <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
                 <?php endif; ?>
             </span>
             <span class="sk-logo-text"><?= htmlspecialchars($logoText) ?></span>
@@ -250,12 +245,73 @@ foreach ($lines as $line) {
             </ul>
             
             <?php if ($showCta === 'yes'): ?>
-            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="sk-cta-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="sk-cta-btn">
+                <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                 <span><?= htmlspecialchars($ctaText) ?></span>
             </a>
             <?php endif; ?>
         </nav>
     </div>
 </header>
+<?php endif; ?>
+
+<?php
+// === 像素统计代码 ===
+// 检测预览模式
+$isPreviewMode = (bool)($this->getData('is_preview') ?? false);
+if (!$isPreviewMode && isset($_GET['preview']) && $_GET['preview'] === '1') {
+    $isPreviewMode = true;
+}
+
+// 读取像素配置（默认启用）
+$pixelEnabled = sk_getConfig($styleSettings, 'pixel.enabled', 'yes');
+$pixelEnabled = (string)($pixelEnabled ?? 'yes');
+$pixelName = sk_getConfig($styleSettings, 'pixel.name', '');
+
+// 如果像素名称为空，使用页面的 handle
+if (empty($pixelName) && $page) {
+    $pixelName = $page->getData('handle') ?? '';
+}
+
+// 获取 website_id（页面已有此字段，无需配置）
+$websiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
+
+// 输出像素标签
+if ($websiteId > 0 && !empty($pixelName) && !$isPreviewMode):
+    // 设置 website_id Cookie，供像素代码读取
+    \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_ID', (string)$websiteId, 3600 * 24 * 365);
+    
+    // 获取网站信息（用于像素统计）
+    $websiteUrl = '';
+    $websiteCode = '';
+    try {
+        if (class_exists('\Weline\Websites\Model\Website')) {
+            $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+            $website = clone $websiteModel;
+            $website->clear()->load($websiteId);
+            if ($website->getId()) {
+                $websiteUrl = $website->getData('url') ?? '';
+                $websiteCode = $website->getData('code') ?? '';
+            }
+        }
+    } catch (\Exception $e) {
+        // 如果获取网站信息失败，不影响像素功能
+    }
+    
+    // 设置 website_url Cookie
+    if (!empty($websiteUrl)) {
+        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_URL', $websiteUrl, 3600 * 24 * 365);
+    }
+    
+    // 设置 website_code Cookie，用于区分不同站点
+    if (!empty($websiteCode)) {
+        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_CODE', $websiteCode, 3600 * 24 * 365);
+    }
+    
+    // 使用变量传递方式，避免在标签属性中使用 PHP 标签
+    $this->assign('pixel_name', htmlspecialchars($pixelName));
+    $this->assign('pixel_enabled', htmlspecialchars($pixelEnabled));
+?>
+    <!-- Weline Visitor Pixel - 通过 enabled 属性控制是否统计，遵循模板配置中的 pixel.enabled 设置 -->
+    <pixel name="{{pixel_name}}" enabled="{{pixel_enabled}}" />
 <?php endif; ?>

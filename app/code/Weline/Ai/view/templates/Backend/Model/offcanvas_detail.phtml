@@ -120,7 +120,7 @@ $proxyInfo = $this->getData('proxyInfo') ?? [];
                         <th class="text-end text-muted py-2 px-3"><?= __('输入Token价格') ?></th>
                         <td class="py-2 px-3">
                             <span class="text-success fw-bold">
-                                $<?= number_format(((float)$model->getTokenPriceInput()) * 1000, 6) ?>/1M
+                                $<?= number_format($model->getTokenPriceInput(), 6) ?>/1K
                             </span>
                         </td>
                     </tr>
@@ -128,7 +128,7 @@ $proxyInfo = $this->getData('proxyInfo') ?? [];
                         <th class="text-end text-muted py-2 px-3"><?= __('输出Token价格') ?></th>
                         <td class="py-2 px-3">
                             <span class="text-danger fw-bold">
-                                $<?= number_format(((float)$model->getTokenPriceOutput()) * 1000, 6) ?>/1M
+                                $<?= number_format($model->getTokenPriceOutput(), 6) ?>/1K
                             </span>
                         </td>
                     </tr>

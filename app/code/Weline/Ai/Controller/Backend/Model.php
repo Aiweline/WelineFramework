@@ -39,8 +39,6 @@ use Weline\Framework\App\Env;
 #[Acl('Weline_Ai::ai_model_manager', 'AI模型管理', 'mdi-robot', 'AI模型管理', 'Weline_Backend::ai_group')]
 class Model extends BackendController
 {
-    private bool $vendorModelsEnsured = false;
-
     /**
      * 获取AI模型（懒加载）
      */
@@ -65,328 +63,6 @@ class Model extends BackendController
         return \Weline\Framework\Manager\ObjectManager::getInstance(ModelSyncService::class);
     }
 
-    private function getTestRequestData(): array
-    {
-        $data = $this->request->getParams();
-        if (!is_array($data)) {
-            $data = [];
-        }
-
-        $raw = method_exists($this->request, 'getContent') ? ($this->request->getContent() ?: '') : '';
-        if (!empty($raw)) {
-            $decoded = json_decode($raw, true);
-            if (is_array($decoded)) {
-                $data = array_replace_recursive($data, $decoded);
-            }
-        }
-
-        return $data;
-    }
-
-    private function isTestOnlyRequest(array $data): bool
-    {
-        $value = $data['test_only'] ?? false;
-        if (is_bool($value)) {
-            return $value;
-        }
-        if (is_int($value) || is_float($value)) {
-            return (bool)$value;
-        }
-
-        $normalized = strtolower(trim((string)$value));
-        return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
-    }
-
-    private function buildTestModel(AiModel $model, array $data): AiModel
-    {
-        $testModel = clone $model;
-        $this->applyTestRequestToModel($testModel, $data);
-        return $testModel;
-    }
-
-    private function applyTestRequestToModel(AiModel $model, array $data): void
-    {
-        $supplier = trim((string)($data['supplier'] ?? $data['vendor'] ?? ''));
-        if ($supplier !== '') {
-            $model->setData(AiModel::schema_fields_SUPPLIER, $supplier);
-        }
-
-        $modelCode = trim((string)($data['model_code'] ?? ''));
-        if ($modelCode !== '') {
-            $model->setData(AiModel::schema_fields_MODEL_CODE, $modelCode);
-        }
-
-        $providerModelCode = trim((string)($data['provider_model_code'] ?? ''));
-        if ($providerModelCode === '') {
-            $providerModelCode = (string)($data['model_code'] ?? $model->getData(AiModel::schema_fields_MODEL_CODE) ?? '');
-        }
-
-        if (isset($data['config']) && is_array($data['config']) || array_key_exists('config_json', $data)) {
-            $config = $this->buildIncomingConfigData($data);
-            $model->setData(AiModel::schema_fields_CONFIG, $this->encodeJsonConfig($config));
-        }
-
-        if (isset($data['provider_config']) && is_array($data['provider_config']) || array_key_exists('provider_config_json', $data)) {
-            $config = $this->buildIncomingConfigData($data);
-            $providerConfig = $this->buildIncomingProviderConfigData($data, $providerModelCode, $config);
-            $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, $this->encodeJsonConfig($providerConfig));
-        }
-    }
-
-    private function hasSelfConfig(AiModel $model): bool
-    {
-        return $this->hasApiCredential($model->getProviderConfig()) || $this->hasApiCredential($model->getConfig());
-    }
-
-    private function hasApiCredential(array $config): bool
-    {
-        return !empty($config['api_key']) || !empty($config['api_key_env']);
-    }
-
-    private function getRequestedProviderAccountId(AiModel $model): int
-    {
-        $providerConfig = $model->getProviderConfig();
-        return isset($providerConfig['account_id']) ? (int)$providerConfig['account_id'] : 0;
-    }
-
-    private function getBoundProviderAccountUnavailableMessage(?Account $account, int $requestedAccountId): ?string
-    {
-        if ($requestedAccountId <= 0) {
-            return null;
-        }
-
-        if (!$account || !$account->getId()) {
-            return (string)__('模型绑定的供应商账户不存在（account_id: %{1}）', [$requestedAccountId]);
-        }
-
-        if ((int)$account->getData(Account::schema_fields_IS_ACTIVE) !== 1) {
-            return (string)__('模型绑定的供应商账户未启用（account_id: %{1}，account_name: %{2}）', [
-                $requestedAccountId,
-                (string)($account->getData(Account::schema_fields_ACCOUNT_NAME) ?: '-')
-            ]);
-        }
-
-        return null;
-    }
-
-    private function normalizeBooleanValue(mixed $value): bool
-    {
-        if (is_bool($value)) {
-            return $value;
-        }
-        if (is_int($value) || is_float($value)) {
-            return (bool)$value;
-        }
-
-        $normalized = strtolower(trim((string)$value));
-        if ($normalized === '') {
-            return false;
-        }
-
-        return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
-    }
-
-    private function filterConfigValues(array $config): array
-    {
-        return array_filter($config, static function ($value) {
-            if (is_array($value)) {
-                return !empty($value);
-            }
-            return $value !== '' && $value !== null;
-        });
-    }
-
-    private function decodeStoredConfig(mixed $config): array
-    {
-        if (is_array($config)) {
-            return $config;
-        }
-        if (!is_string($config) || trim($config) === '') {
-            return [];
-        }
-
-        $decoded = json_decode($config, true);
-        return is_array($decoded) ? $decoded : [];
-    }
-
-    private function isSelectedModelRow(array $row, array $supportedProviders): bool
-    {
-        if (!empty($row[AiModel::schema_fields_IS_ACTIVE]) || !empty($row[AiModel::schema_fields_IS_DEFAULT])) {
-            return true;
-        }
-        if (!empty($row['is_copy']) || !empty($row['is_copied'])) {
-            return true;
-        }
-
-        $supplier = trim((string)($row[AiModel::schema_fields_SUPPLIER] ?? ($row['vendor'] ?? '')));
-        $modelSource = (string)($row[AiModel::schema_fields_MODEL_SOURCE] ?? '');
-        if ($modelSource === AiModel::SOURCE_LOCAL || ($supplier !== '' && !isset($supportedProviders[$supplier]))) {
-            return true;
-        }
-
-        $config = $this->decodeStoredConfig($row[AiModel::schema_fields_CONFIG] ?? null);
-        $providerConfig = $this->decodeStoredConfig($row[AiModel::schema_fields_PROVIDER_CONFIG] ?? null);
-        if ($this->hasApiCredential($config) || $this->hasApiCredential($providerConfig)) {
-            return true;
-        }
-        if (!empty($config['selected_model_preset']) || !empty($providerConfig['selected_model_preset'])) {
-            return true;
-        }
-        if (!empty($providerConfig['account_id'])) {
-            return true;
-        }
-
-        foreach (['connection_test_status', 'self_config_test_status', 'provider_test_status'] as $statusField) {
-            $status = (string)($row[$statusField] ?? '');
-            if ($status === 'success' || $status === 'failed') {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function normalizePricePerThousand(float $price, string $priceUnit): float
-    {
-        if ($price <= 0) {
-            return 0.0;
-        }
-        if ($priceUnit === 'per_1m_tokens') {
-            return round($price / 1000, 6);
-        }
-        return round($price, 6);
-    }
-
-    private function buildIncomingConfigData(array $data): array
-    {
-        $config = [];
-
-        if (array_key_exists('config_json', $data)) {
-            $configJson = trim((string)$data['config_json']);
-            if ($configJson !== '') {
-                $config = $this->decodeJsonConfig($configJson, 'config_json');
-            }
-        }
-
-        if (isset($data['config']) && is_array($data['config'])) {
-            $config = array_replace($config, $data['config']);
-        }
-
-        $quickApiKey = trim((string)($data['api_key_input'] ?? $data['api_key'] ?? ''));
-        if ($quickApiKey !== '') {
-            $config['api_key'] = $quickApiKey;
-        }
-
-        $config = $this->filterConfigValues($config);
-
-        if (array_key_exists('stream', $config)) {
-            $config['stream'] = $this->normalizeBooleanValue($config['stream']);
-        }
-
-        if (isset($config['api_key'])) {
-            $config['api_key'] = $this->normalizeApiKeyValue((string)$config['api_key']);
-        }
-
-        if (isset($config['api_url'])) {
-            $config['api_url'] = trim((string)$config['api_url']);
-        }
-
-        if (isset($config['base_url'])) {
-            $config['base_url'] = trim((string)$config['base_url']);
-        }
-
-        return $config;
-    }
-
-    private function buildIncomingProviderConfigData(array $data, string $providerModelCode, array $config = []): array
-    {
-        $providerConfig = [];
-        $requestedAccountId = null;
-
-        if (array_key_exists('provider_config_json', $data)) {
-            $providerConfigJson = trim((string)$data['provider_config_json']);
-            if ($providerConfigJson !== '') {
-                $providerConfig = $this->decodeJsonConfig($providerConfigJson, 'provider_config_json');
-            }
-        }
-
-        if (isset($data['provider_config']) && is_array($data['provider_config'])) {
-            if (array_key_exists('account_id', $data['provider_config'])) {
-                $requestedAccountId = trim((string)$data['provider_config']['account_id']);
-            }
-            $providerConfig = array_replace($providerConfig, $data['provider_config']);
-        }
-
-        $providerConfig = $this->filterConfigValues($providerConfig);
-
-        if ($requestedAccountId !== null && $requestedAccountId === '') {
-            unset($providerConfig['account_id']);
-        }
-
-        if (!empty($config['api_key'])) {
-            $providerConfig['api_key'] = $config['api_key'];
-        }
-
-        if (!empty($config['api_key_env']) && empty($providerConfig['api_key'])) {
-            $providerConfig['api_key_env'] = $config['api_key_env'];
-        }
-
-        if (!empty($config['api_url'])) {
-            $providerConfig['base_url'] = trim((string)$config['api_url']);
-        }
-
-        if (!empty($config['base_url'])) {
-            $providerConfig['base_url'] = trim((string)$config['base_url']);
-        }
-
-        if (array_key_exists('stream', $providerConfig)) {
-            $providerConfig['stream'] = $this->normalizeBooleanValue($providerConfig['stream']);
-        }
-
-        if (isset($providerConfig['api_key'])) {
-            $providerConfig['api_key'] = $this->normalizeApiKeyValue((string)$providerConfig['api_key']);
-        }
-
-        if (isset($providerConfig['base_url'])) {
-            $providerConfig['base_url'] = trim((string)$providerConfig['base_url']);
-        }
-
-        if ($providerModelCode !== '') {
-            $providerConfig['provider_model_code'] = $providerModelCode;
-            $providerConfig['model'] = $providerModelCode;
-            $providerConfig['model_id'] = $providerModelCode;
-        }
-
-        return $providerConfig;
-    }
-
-    private function encodeJsonConfig(array $config): string
-    {
-        return empty($config) ? '' : json_encode($config, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-    }
-
-    private function normalizeApiKeyValue(string $apiKey): string
-    {
-        $apiKey = trim($apiKey);
-
-        // Repair the known duplicated-prefix corruption seen on OpenAI-style keys: sk-... -> ssk-...
-        if (str_starts_with($apiKey, 'ssk-')) {
-            return 'sk-' . substr($apiKey, 4);
-        }
-
-        return $apiKey;
-    }
-
-    private function decodeJsonConfig(string $json, string $fieldName): array
-    {
-        $decoded = json_decode($json, true);
-        if (!is_array($decoded)) {
-            throw new \InvalidArgumentException(__('字段 %{field} 不是有效的 JSON 配置', ['field' => $fieldName]));
-        }
-
-        return $decoded;
-    }
-
     /**
      * 模型列表页面
      * 
@@ -395,7 +71,6 @@ class Model extends BackendController
     #[Acl('Weline_Ai::ai_model_list', '查看AI模型列表', 'mdi-view-list', '查看AI模型列表')]
     public function index(): string
     {
-        // The static vendor catalog is only used as quick-create presets; do not flood the list with every vendor model.
         if ($this->request->isAjax() || $this->request->getGet('format') === 'json') {
             return $this->indexJson();
         }
@@ -403,55 +78,17 @@ class Model extends BackendController
             $this->layoutType = 'default.blank';
         }
         try {
-            $page = max(1, (int)$this->request->getGet('page', 1));
+            $page = (int)$this->request->getGet('page', 1);
             $pageSize = 20;
-            $vendorFilter = trim((string)$this->request->getGet('vendor', ''));
-            $statusFilter = trim((string)$this->request->getGet('status', ''));
-            $searchFilter = trim((string)$this->request->getGet('search', ''));
 
-            // 先按供应商/状态做数据库过滤，再在内存中做搜索匹配（名称/代码/供应商）
-            $query = $this->getAiModel()->reset();
-            if ($vendorFilter !== '') {
-                $query->where(AiModel::schema_fields_SUPPLIER, $vendorFilter);
-            }
-            if ($statusFilter === '1' || $statusFilter === '0') {
-                $query->where(AiModel::schema_fields_IS_ACTIVE, (int)$statusFilter);
-            }
-
-            $allFilteredRows = $query
+            // 获取模型列表 - 使用fetchArray避免内存问题
+            $modelData = $this->getAiModel()->reset()
+                ->pagination($page, $pageSize)
                 ->order(AiModel::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetchArray();
 
-            $supportedProviders = VendorConfigManager::getSupportedProviders();
-            $allFilteredRows = array_values(array_filter($allFilteredRows, function (array $row) use ($supportedProviders): bool {
-                return $this->isSelectedModelRow($row, $supportedProviders);
-            }));
-
-            if ($searchFilter !== '') {
-                $needle = mb_strtolower($searchFilter);
-                $allFilteredRows = array_values(array_filter($allFilteredRows, static function (array $row) use ($needle): bool {
-                    $haystacks = [
-                        (string)($row['name'] ?? ''),
-                        (string)($row['model_code'] ?? ''),
-                        (string)($row['supplier'] ?? ''),
-                        (string)($row['vendor'] ?? ''),
-                    ];
-                    foreach ($haystacks as $text) {
-                        if ($text !== '' && str_contains(mb_strtolower($text), $needle)) {
-                            return true;
-                        }
-                    }
-                    return false;
-                }));
-            }
-
-            $total = count($allFilteredRows);
-            $totalPages = max(1, (int)ceil($total / $pageSize));
-            $page = min($page, $totalPages);
-            $offset = ($page - 1) * $pageSize;
-            $modelData = array_slice($allFilteredRows, $offset, $pageSize);
-
+            // 简化数据，只获取必要字段
             $models = [];
             foreach ($modelData as $data) {
                 // 检查配置状态
@@ -480,19 +117,13 @@ class Model extends BackendController
                 // 检查供应商连通性状态
                 $providerTestStatus = $data['provider_test_status'] ?? 'pending';
                 
-                $supplier = (string)($data['supplier'] ?? '');
-                $modelSource = (string)($data[AiModel::schema_fields_MODEL_SOURCE] ?? '');
-                $isCustomSupplier = ($supplier !== '' && !isset($supportedProviders[$supplier]));
-                $isCustomModel = $isCustomSupplier || $modelSource === AiModel::SOURCE_LOCAL;
-                $priceCurrency = (string)($supportedProviders[$supplier]['price_currency'] ?? 'USD');
-
                 $models[] = [
                     'id' => $data['id'] ?? '',
                     // 显示供应商：优先使用配置中的vendor，退回到数据库字段supplier
                     'vendor' => $data['vendor'] ?? ($data['supplier'] ?? ''),
-                    'supplier' => $supplier,
                     'name' => $data['name'] ?? '',
                     'model_code' => $data['model_code'] ?? '',
+                    'primary_modality' => AiModel::normalizePrimaryModality((string)($data['primary_modality'] ?? '')),
                     'version' => $data['version'] ?? '',
                     'status' => $data['status'] ?? '',
                     'is_active' => $data['is_active'] ?? 0,
@@ -501,15 +132,12 @@ class Model extends BackendController
                     'is_copied' => $data['is_copied'] ?? 0,
                     'token_price_input' => $data['token_price_input'] ?? 0,
                     'token_price_output' => $data['token_price_output'] ?? 0,
-                    'price_currency' => $priceCurrency,
                     'has_api_key' => $hasApiKey,
                     'has_config' => !empty($config) || !empty($providerConfig),
                     'connection_test_status' => $data['connection_test_status'] ?? 'pending',
                     'connection_test_time' => $data['connection_test_time'] ?? 0,
                     'self_config_test_status' => $selfConfigTestStatus,
                     'provider_test_status' => $providerTestStatus,
-                    'is_custom_model' => $isCustomModel,
-                    'is_custom_supplier' => $isCustomSupplier,
                 ];
             }
 
@@ -520,28 +148,23 @@ class Model extends BackendController
                 return $bid <=> $aid;
             });
 
+            // 获取总数
+            $total = $this->getAiModel()->reset()->select()->count();
+
             // 获取所有供应商列表（用于筛选）
-            // 注意：不能只从当前分页 models 提取，否则会漏掉非当前页供应商（如 deepseek）。
-            $vendors = $this->collectAllVendorsForFilter();
-
-            $pagination = [
-                'page' => $page,
-                'page_size' => $pageSize,
-                'total' => $total,
-                'total_pages' => $totalPages,
-                'has_prev' => $page > 1,
-                'has_next' => $page < $totalPages,
-                'prev_page' => max(1, $page - 1),
-                'next_page' => min($totalPages, $page + 1),
-            ];
-
+            $vendors = [];
+            foreach ($models as $model) {
+                $vendor = $model['vendor'] ?? '';
+                if ($vendor && !in_array($vendor, $vendors)) {
+                    $vendors[] = $vendor;
+                }
+            }
+            sort($vendors);
+            
             $this->assign('models', $models);
-            $this->assign('pagination', $pagination);
+            $this->assign('pagination', null); // 简化分页
             $this->assign('total', (string)$total);
             $this->assign('vendors', $vendors);
-            $this->assign('currentVendor', $vendorFilter);
-            $this->assign('currentStatus', $statusFilter);
-            $this->assign('currentSearch', $searchFilter);
             $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
             $this->assign('activeTab', 'model');
 
@@ -565,10 +188,6 @@ class Model extends BackendController
                 ->order(\Weline\Ai\Model\AiModel::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetchArray();
-            $supportedProviders = VendorConfigManager::getSupportedProviders();
-            $models = array_values(array_filter($models, function (array $row) use ($supportedProviders): bool {
-                return $this->isSelectedModelRow($row, $supportedProviders);
-            }));
             usort($models, function ($a, $b) {
                 $aid = (int)($a['id'] ?? 0);
                 $bid = (int)($b['id'] ?? 0);
@@ -858,8 +477,14 @@ class Model extends BackendController
     public function testConnection(): string
     {
         // 兼容 JSON 请求体与表单/查询参数
-        $data = $this->getTestRequestData();
-        $testOnly = $this->isTestOnlyRequest($data);
+        $data = $this->request->getParams();
+        $raw = method_exists($this->request, 'getContent') ? ($this->request->getContent() ?: '') : '';
+        if (!empty($raw)) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $data = array_merge($data, $decoded);
+            }
+        }
         $modelCode = $data['model_code'] ?? ($this->request->getPost('model_code') ?: $this->request->getGet('model_code'));
         
         if (!$modelCode) {
@@ -874,10 +499,7 @@ class Model extends BackendController
             $accountService = ObjectManager::getInstance(AccountService::class);
 
             // 自动检测供应商
-            $providerCode = trim((string)($data['supplier'] ?? $data['vendor'] ?? ''));
-            if ($providerCode === '') {
-                $providerCode = $accountService->getProviderByModelCode($modelCode);
-            }
+            $providerCode = $accountService->getProviderByModelCode($modelCode);
             if (!$providerCode) {
                 return $this->jsonResponse([
                     'success' => false,
@@ -891,8 +513,6 @@ class Model extends BackendController
                 ->find()
                 ->fetch();
             // 结果容器
-            $testModel = $this->buildTestModel($model, $data);
-            $providerCode = (string)($testModel->getData(AiModel::schema_fields_SUPPLIER) ?: $providerCode);
             $results = [
                 'self_config' => [
                     'tested' => false,
@@ -912,38 +532,34 @@ class Model extends BackendController
             ];
 
             // 先测自配置（如存在），但不提前返回
-            $hasSelfConfig = $this->hasSelfConfig($testModel);
+            $hasSelfConfig = ($model->getId() && $model->getProviderConfig());
             if ($hasSelfConfig) {
                 $results['self_config']['tested'] = true;
                 try {
-                    $selfRes = $this->testModelSelfConfig($testModel);
+                    $selfRes = $this->testModelSelfConfig($model, $modelCode);
                     $results['self_config']['success'] = true;
                     $results['self_config']['message'] = __('自配置测试成功');
                     $results['self_config']['response'] = $selfRes['response'] ?? '';
                     $results['self_config']['duration'] = $selfRes['duration'] ?? 0;
 
                     // 保存自配置测试成功状态
-                    if (!$testOnly) {
-                        $this->getAiModel()->reset()
-                            ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-                            ->update([
-                                AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'success',
-                                AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
-                            ])->fetch();
-                    }
+                    $this->getAiModel()->reset()
+                        ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                        ->update([
+                            AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'success',
+                            AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
+                        ])->fetch();
                 } catch (\Exception $e) {
                     $results['self_config']['success'] = false;
                     $results['self_config']['message'] = $e->getMessage();
 
                     // 保存自配置测试失败状态
-                    if (!$testOnly) {
-                        $this->getAiModel()->reset()
-                            ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-                            ->update([
-                                AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'failed',
-                                AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
-                            ])->fetch();
-                    }
+                    $this->getAiModel()->reset()
+                        ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                        ->update([
+                            AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'failed',
+                            AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
+                        ])->fetch();
                 }
             }
 
@@ -951,35 +567,13 @@ class Model extends BackendController
             // 检查是否有可用的供应商账户（不限制连接状态，以便测试所有账户）
             /** @var Account $accountModel */
             $accountModel = ObjectManager::getInstance(Account::class);
-            $requestedAccountId = $this->getRequestedProviderAccountId($testModel);
-            if ($requestedAccountId > 0) {
-                $requestedAccount = $accountModel->clear()->load($requestedAccountId);
-                $boundAccountUnavailableMessage = $this->getBoundProviderAccountUnavailableMessage($requestedAccount, $requestedAccountId);
-                if ($boundAccountUnavailableMessage !== null) {
-                    $accounts = [];
-                    $results['provider_account']['tested'] = false;
-                    $results['provider_account']['success'] = false;
-                    $results['provider_account']['message'] = $boundAccountUnavailableMessage;
-                } else {
-                    $accounts = [['id' => $requestedAccountId]];
-                }
-            } else {
-                $accounts = $accountModel->clear()
-                    ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
-                    ->where(Account::schema_fields_IS_ACTIVE, 1)
-                    ->order(Account::schema_fields_IS_DEFAULT, 'DESC')
-                    ->order(Account::schema_fields_BALANCE, 'DESC')
-                    ->select()
-                    ->fetchArray();
-                if (empty($accounts)) {
-                    $accounts = $accountModel->clear()
-                        ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
-                        ->order(Account::schema_fields_IS_DEFAULT, 'DESC')
-                        ->order(Account::schema_fields_BALANCE, 'DESC')
-                        ->select()
-                        ->fetchArray();
-                }
-            }
+            $accounts = $accountModel->clear()
+                ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
+                ->where(Account::schema_fields_IS_ACTIVE, 1)
+                ->order(Account::schema_fields_IS_DEFAULT, 'DESC')
+                ->order(Account::schema_fields_BALANCE, 'DESC')
+                ->select()
+                ->fetchArray();
             
             if (!empty($accounts) && is_array($accounts)) {
                 $results['provider_account']['tested'] = true;
@@ -1012,17 +606,14 @@ class Model extends BackendController
                             $results['provider_account']['account_name'] = $testAccount->getData('account_name');
                             $results['provider_account']['account_id'] = $testAccount->getId();
                             $results['provider_account']['connection_status'] = $testAccount->getData(Account::schema_fields_CONNECTION_STATUS);
-                            $results['provider_account']['trace'] = $testResult['trace'] ?? [];
                             
                             // 保存供应商测试成功状态
-                            if (!$testOnly) {
-                                $this->getAiModel()->reset()
-                                    ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-                                    ->update([
-                                        AiModel::schema_fields_PROVIDER_TEST_STATUS => 'success',
-                                        AiModel::schema_fields_PROVIDER_TEST_TIME => time()
-                                    ])->fetch();
-                            }
+                            $this->getAiModel()->reset()
+                                ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                                ->update([
+                                    AiModel::schema_fields_PROVIDER_TEST_STATUS => 'success',
+                                    AiModel::schema_fields_PROVIDER_TEST_TIME => time()
+                                ])->fetch();
                             
                             // 找到可用的账户后，跳出循环
                             break;
@@ -1040,19 +631,14 @@ class Model extends BackendController
                 if (!$testSuccess) {
                     $results['provider_account']['success'] = false;
                     $results['provider_account']['message'] = __('所有供应商账户测试均失败');
-                    if (!isset($results['provider_account']['trace'])) {
-                        $results['provider_account']['trace'] = [];
-                    }
                     
                     // 保存供应商测试失败状态
-                    if (!$testOnly) {
-                        $this->getAiModel()->reset()
-                            ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-                            ->update([
-                                AiModel::schema_fields_PROVIDER_TEST_STATUS => 'failed',
-                                AiModel::schema_fields_PROVIDER_TEST_TIME => time()
-                            ])->fetch();
-                    }
+                    $this->getAiModel()->reset()
+                        ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                        ->update([
+                            AiModel::schema_fields_PROVIDER_TEST_STATUS => 'failed',
+                            AiModel::schema_fields_PROVIDER_TEST_TIME => time()
+                        ])->fetch();
                 }
             } else {
                 // 无可用账户，记录状态
@@ -1063,17 +649,15 @@ class Model extends BackendController
 
             // 计算整体连通性（任一成功视为成功）
             $overallSuccess = ($results['self_config']['success'] || $results['provider_account']['success']);
-            if (!$testOnly) {
-                try {
-                    $this->getAiModel()->reset()
-                        ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-                        ->update([
-                            AiModel::schema_fields_CONNECTION_TEST_STATUS => $overallSuccess ? 'success' : 'failed',
-                            AiModel::schema_fields_CONNECTION_TEST_TIME => time()
-                        ])->fetch();
-                } catch (\Exception $saveEx) {
-                    Env::log('ai_model.log', 'Failed to save connection test status: ' . $saveEx->getMessage(), 'WARNING');
-                }
+            try {
+                $this->getAiModel()->reset()
+                    ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                    ->update([
+                        AiModel::schema_fields_CONNECTION_TEST_STATUS => $overallSuccess ? 'success' : 'failed',
+                        AiModel::schema_fields_CONNECTION_TEST_TIME => time()
+                    ])->fetch();
+            } catch (\Exception $saveEx) {
+                Env::log('ai_model.log', 'Failed to save connection test status: ' . $saveEx->getMessage(), 'WARNING');
             }
 
             // 组合返回
@@ -1083,7 +667,6 @@ class Model extends BackendController
                 'data' => [
                     'model_code' => $modelCode,
                     'provider' => $providerCode,
-                    'test_only' => $testOnly,
                     'results' => $results
                 ]
             ]);
@@ -1103,23 +686,26 @@ class Model extends BackendController
     /**
      * 测试模型自配置
      */
-    private function testModelSelfConfig(AiModel $model): array
+    private function testModelSelfConfig(AiModel $model, string $modelCode): array
     {
         $prompt = 'Hello, this is a connection test. Please respond with "OK".';
-        $hasSelfConfig = $this->hasSelfConfig($model);
+        $providerConfig = $model->getProviderConfig();
         
-        if (!$hasSelfConfig) {
+        if (!$providerConfig || !isset($providerConfig['api_key'])) {
             throw new \Exception(__('模型自配置不完整'));
         }
         
         // 创建临时模型用于测试
+        $testModel = clone $model;
+        $testModel->setData(AiModel::schema_fields_CONFIG, json_encode([
+            'api_key' => $providerConfig['api_key'],
+            'base_url' => $providerConfig['base_url'] ?? '',
+            'model' => $modelCode
+        ]));
         
         // 获取对应的Provider
-        $providerCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
+        $providerCode = $model->getData(AiModel::schema_fields_SUPPLIER);
         $accountService = ObjectManager::getInstance(AccountService::class);
-        if ($providerCode === '') {
-            $providerCode = $accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
-        }
         $provider = $accountService->getProviderInstance($providerCode);
         
         if (!$provider) {
@@ -1127,7 +713,7 @@ class Model extends BackendController
         }
         
         $startTime = microtime(true);
-        $result = $provider->generate($model, $prompt, ['temperature' => 0, 'test_mode' => true]);
+        $result = $provider->generate($testModel, $prompt, ['temperature' => 0, 'test_mode' => true]);
         $duration = round((microtime(true) - $startTime) * 1000, 2);
         
         if (empty($result['content'])) {
@@ -1150,8 +736,14 @@ class Model extends BackendController
     public function testSelfConfig(): string
     {
         // 兼容 JSON 请求体与表单/查询参数
-        $data = $this->getTestRequestData();
-        $testOnly = $this->isTestOnlyRequest($data);
+        $data = $this->request->getParams();
+        $raw = method_exists($this->request, 'getContent') ? ($this->request->getContent() ?: '') : '';
+        if (!empty($raw)) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $data = array_merge($data, $decoded);
+            }
+        }
         $modelCode = $data['model_code'] ?? ($this->request->getPost('model_code') ?: $this->request->getGet('model_code'));
         
         if (!$modelCode) {
@@ -1176,8 +768,7 @@ class Model extends BackendController
             }
             
             // 检查是否有自配置
-            $testModel = $this->buildTestModel($model, $data);
-            if (!$this->hasSelfConfig($testModel)) {
+            if (!$model->getProviderConfig()) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('模型没有自配置密钥')
@@ -1185,24 +776,21 @@ class Model extends BackendController
             }
             
             // 测试自配置
-            $testResult = $this->testModelSelfConfig($testModel);
+            $testResult = $this->testModelSelfConfig($model, $modelCode);
             
             // 保存自配置测试成功状态
-            if (!$testOnly) {
-                $this->getAiModel()->reset()
-                    ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-                    ->update([
-                        AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'success',
-                        AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
-                    ])->fetch();
-            }
+            $this->getAiModel()->reset()
+                ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                ->update([
+                    AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'success',
+                    AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
+                ])->fetch();
             
             return $this->jsonResponse([
                 'success' => true,
                 'message' => __('自配置测试成功'),
                 'data' => [
                     'model_code' => $modelCode,
-                    'test_only' => $testOnly,
                     'response' => $testResult['response'],
                     'duration' => $testResult['duration']
                 ]
@@ -1210,17 +798,15 @@ class Model extends BackendController
 
         } catch (\Exception $e) {
             // 保存自配置测试失败状态
-            if (!$testOnly) {
-                try {
-                    $this->getAiModel()->reset()
-                        ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-                        ->update([
-                            AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'failed',
-                            AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
-                        ])->fetch();
-                } catch (\Exception $saveEx) {
-                    Env::log('ai_model.log', 'Failed to save self config test status: ' . $saveEx->getMessage(), 'WARNING');
-                }
+            try {
+                $this->getAiModel()->reset()
+                    ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                    ->update([
+                        AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'failed',
+                        AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
+                    ])->fetch();
+            } catch (\Exception $saveEx) {
+                Env::log('ai_model.log', 'Failed to save self config test status: ' . $saveEx->getMessage(), 'WARNING');
             }
 
             return $this->jsonResponse([
@@ -1256,104 +842,8 @@ class Model extends BackendController
             // 新建模型
             $this->assign('model', null);
         }
-
-        $modelPresetsJson = json_encode($this->getCommonModelPresets(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $this->assign('modelPresetsJson', $modelPresetsJson ?: '[]');
         
         return $this->fetch();
-    }
-
-    private function getCommonModelPresets(): array
-    {
-        $presets = [];
-
-        try {
-            $providers = VendorConfigManager::getSupportedProviders();
-            foreach ($providers as $providerCode => $providerConfig) {
-                if (isset($providerConfig['quick_create']) && !$providerConfig['quick_create']) {
-                    continue;
-                }
-
-                $models = $providerConfig['models'] ?? [];
-                if (!is_array($models) || empty($models)) {
-                    continue;
-                }
-
-                $defaults = is_array($providerConfig['model_config_defaults'] ?? null)
-                    ? $providerConfig['model_config_defaults']
-                    : [];
-                $providerCode = (string)$providerCode;
-                $providerName = (string)($providerConfig['name'] ?? $providerCode);
-                $baseUrl = (string)($providerConfig['base_url'] ?? '');
-                $modelField = (string)($providerConfig['model_field'] ?? 'model');
-                $priceUnit = (string)($providerConfig['price_unit'] ?? 'per_1k_tokens');
-                $priceCurrency = (string)($providerConfig['price_currency'] ?? 'USD');
-
-                foreach ($models as $modelMeta) {
-                    if (!is_array($modelMeta)) {
-                        continue;
-                    }
-                    if (isset($modelMeta['preset']) && !$modelMeta['preset']) {
-                        continue;
-                    }
-
-                    $modelCode = trim((string)($modelMeta['code'] ?? ''));
-                    if ($modelCode === '') {
-                        continue;
-                    }
-
-                    $maxTokens = (int)($modelMeta['max_tokens'] ?? ($defaults['max_tokens'] ?? 4096));
-                    $temperature = $defaults['temperature'] ?? 0.7;
-                    $topP = $defaults['top_p'] ?? 1.0;
-                    $stream = $defaults['stream'] ?? true;
-                $timeout = (int)($defaults['timeout'] ?? \Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT);
-                    $maxRetries = (int)($defaults['max_retries'] ?? 3);
-
-                    $providerRuntimeConfig = [
-                        'base_url' => $baseUrl,
-                        'max_tokens' => $maxTokens,
-                        'temperature' => $temperature,
-                        'top_p' => $topP,
-                        'stream' => $stream,
-                        'timeout' => $timeout,
-                        'max_retries' => $maxRetries,
-                        'selected_model_preset' => true,
-                        'provider_model_code' => $modelCode,
-                        'model' => $modelCode,
-                        'model_id' => $modelCode,
-                    ];
-                    $providerRuntimeConfig[$modelField] = $modelCode;
-
-                    $inputPrice = $this->normalizePricePerThousand((float)($modelMeta['input_price'] ?? 0), $priceUnit);
-                    $outputPrice = $this->normalizePricePerThousand((float)($modelMeta['output_price'] ?? 0), $priceUnit);
-                    $presets[] = [
-                        'key' => $providerCode . ':' . $modelCode,
-                        'provider' => $providerCode,
-                        'provider_name' => $providerName,
-                        'model_code' => $modelCode,
-                        'provider_model_code' => $modelCode,
-                        'name' => (string)($modelMeta['name'] ?? $modelCode),
-                        'version' => (string)($modelMeta['version'] ?? '1.0'),
-                        'max_tokens' => $maxTokens,
-                        'context_window' => (int)($modelMeta['context_window'] ?? 0),
-                        'token_price_input' => $inputPrice,
-                        'token_price_output' => $outputPrice,
-                        'price_currency' => $priceCurrency,
-                        'cost_per_token' => $inputPrice,
-                        'temperature' => $temperature,
-                        'top_p' => $topP,
-                        'stream' => (bool)$stream,
-                        'timeout' => $timeout,
-                        'capabilities' => $modelMeta['capabilities'] ?? ($defaults['capabilities'] ?? []),
-                        'config' => $this->filterConfigValues($providerRuntimeConfig),
-                    ];
-                }
-            }
-        } catch (\Throwable $e) {
-            Env::log('ai_model.log', '[Model::getCommonModelPresets] ' . $e->getMessage(), 'WARNING');
-        }
-
-        return $presets;
     }
 
     /**
@@ -1386,29 +876,11 @@ class Model extends BackendController
 
         // 供应商选项（供 search-select 使用）
         $providers = VendorConfigManager::getSupportedProviders();
-        $optsMap = [];
-        foreach ($providers as $code => $info) {
-            $optsMap[$code] = ($info['name'] ?? $code);
-        }
-        // 合并账户中已有的自定义供应商代码，确保“新建供应商账户后可在模型里选择”
-        /** @var Account $accountModel */
-        $accountModel = ObjectManager::getInstance(Account::class);
-        $accounts = $accountModel->reset()->select()->fetchArray();
-        if (is_array($accounts)) {
-            foreach ($accounts as $acc) {
-                $code = (string)($acc['provider_code'] ?? '');
-                if ($code !== '' && !isset($optsMap[$code])) {
-                    $optsMap[$code] = $code;
-                }
-            }
-        }
         $opts = [];
-        foreach ($optsMap as $code => $name) {
-            $opts[] = $code . ':' . $name;
+        foreach ($providers as $code => $info) {
+            $opts[] = $code . ':' . ($info['name'] ?? $code);
         }
         $this->assign('providerOptionsStr', implode(',', $opts));
-        $modelPresetsJson = json_encode($this->getCommonModelPresets(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $this->assign('modelPresetsJson', $modelPresetsJson ?: '[]');
         
         return $this->fetch('offcanvas_edit');
     }
@@ -1429,22 +901,34 @@ class Model extends BackendController
         try {
             $model = $this->getAiModel()->reset();
             
-            if (!empty($modelCodeFromRequest)) {
-                $loaded = $model->reset()
-                    ->where(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE, $modelCodeFromRequest)
-                    ->find()
-                    ->fetch();
-                if ($loaded && $loaded->getId()) {
-                    $model = $loaded;
-                    $id = (int)$model->getId();
+            $isNew = ($id === 0);
+            // 新建（id=0）：不加载，后续直接 setData + save
+            if (!$isNew) {
+                // 优先根据模型代码加载（以模型代码作为唯一标识）
+                if (!empty($modelCodeFromRequest)) {
+                    $loaded = $model->reset()
+                        ->where(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE, $modelCodeFromRequest)
+                        ->find()
+                        ->fetch();
+                    if ($loaded && $loaded->getId()) {
+                        $model = $loaded;
+                    } else {
+                        $model->load($id);
+                    }
+                } else {
+                    $model->load($id);
+                }
+                if (!$model->getId()) {
+                    if ($isAjax) {
+                        return $this->jsonResponse([
+                            'success' => false,
+                            'message' => __('模型不存在或模型代码无效')
+                        ]);
+                    }
+                    $this->getMessageManager()->addError(__('模型不存在或模型代码无效'));
+                    return $this->redirect('*/backend/model/index');
                 }
             }
-
-            if (!$model->getId() && $id > 0) {
-                $model->load($id);
-            }
-
-            $isNew = !$model->getId();
             
             // 设置基本数据
             // 如果是编辑原始模型（非复制模型），基本信息不可修改
@@ -1464,10 +948,10 @@ class Model extends BackendController
             // 模型名称始终可以修改（用于区分复制模型）
             $model->setData(AiModel::schema_fields_NAME, $data['model_name'] ?? $data['name'] ?? '');
 
-            // 供应商模型 code 映射：provider_model_code 可与 model_code 不同
-            $providerModelCode = trim((string)($data['provider_model_code'] ?? ''));
-            if ($providerModelCode === '') {
-                $providerModelCode = (string)($data['model_code'] ?? $model->getData(AiModel::schema_fields_MODEL_CODE) ?? '');
+            if (isset($data['primary_modality'])) {
+                $model->setPrimaryModality((string)$data['primary_modality']);
+            } elseif (!$model->getData(AiModel::schema_fields_PRIMARY_MODALITY)) {
+                $model->setPrimaryModality(AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT);
             }
             
             // 令牌价格：只在字段存在时更新，避免清空已有数据
@@ -1558,8 +1042,19 @@ class Model extends BackendController
             }
             
             // 处理配置JSON
-            $config = $this->buildIncomingConfigData($data);
-            $model->setData(AiModel::schema_fields_CONFIG, $this->encodeJsonConfig($config));
+            if (isset($data['config']) && is_array($data['config'])) {
+                // 过滤空值
+                $config = array_filter($data['config'], function($value) {
+                    return $value !== '' && $value !== null;
+                });
+                // 转换stream为布尔值
+                if (isset($config['stream'])) {
+                    $config['stream'] = (bool)$config['stream'];
+                }
+                $model->setData(AiModel::schema_fields_CONFIG, json_encode($config, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+            } else {
+                $model->setData(AiModel::schema_fields_CONFIG, $data['config_json'] ?? '');
+            }
             
             // 处理代理信息JSON
             if (isset($data['proxy']) && is_array($data['proxy'])) {
@@ -1577,22 +1072,18 @@ class Model extends BackendController
             }
             
             // 处理提供商配置JSON
-            $providerConfig = $this->buildIncomingProviderConfigData($data, $providerModelCode, $config);
-            $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, $this->encodeJsonConfig($providerConfig));
-
-            // 保存前校验：供应商必须支持映射后的供应商模型 code
-            $supplierCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
-            if ($supplierCode !== '' && $providerModelCode !== '') {
-                /** @var AccountService $accService */
-                $accService = ObjectManager::getInstance(AccountService::class);
-                if (!$accService->supportsModel($supplierCode, $providerModelCode)) {
-                    $msg = __('供应商 %{1} 不支持模型 %{2}，不允许切换。请先同步供应商支持模型或更换模型代码。', [$supplierCode, $providerModelCode]);
-                    if ($isAjax) {
-                        return $this->jsonResponse(['success' => false, 'message' => $msg]);
-                    }
-                    $this->getMessageManager()->addError($msg);
-                    return $this->redirect('*/backend/model/edit', ['id' => $id]);
+            if (isset($data['provider_config']) && is_array($data['provider_config'])) {
+                // 过滤空值
+                $providerConfig = array_filter($data['provider_config'], function($value) {
+                    return $value !== '' && $value !== null;
+                });
+                if (!empty($providerConfig)) {
+                    $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, json_encode($providerConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                } else {
+                    $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, '');
                 }
+            } else {
+                $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, $data['provider_config_json'] ?? '');
             }
             
             // 处理其他字段
@@ -1815,15 +1306,15 @@ class Model extends BackendController
                 return $this->redirect('*/backend/model/index');
             }
             
-            // 仅允许删除：复制模型或自定义模型
-            if (!$model->canDelete()) {
+            // 检查是否为原始模型（非复制模型）
+            if (!$model->isCopied()) {
                 if ($isAjax) {
                     return $this->jsonResponse([
                         'success' => false,
-                        'message' => __('该模型受保护，只有复制模型或自定义模型可以删除')
+                        'message' => __('原始模型不能删除，只能删除复制的模型')
                     ]);
                 }
-                $this->getMessageManager()->addError(__('该模型受保护，只有复制模型或自定义模型可以删除'));
+                $this->getMessageManager()->addError(__('原始模型不能删除，只能删除复制的模型'));
                 return $this->redirect('*/backend/model/index');
             }
             
@@ -1862,11 +1353,11 @@ class Model extends BackendController
         if (isset($this->request)) {
             $id = (int)$this->request->getParam('id');
         }
-        if (!$id) {
-            $id = (int)\w_env_get('id', 0);
+        if (!$id && isset($_GET['id'])) {
+            $id = (int)$_GET['id'];
         }
-        if (!$id) {
-            $id = (int)\w_env_post('id', 0);
+        if (!$id && isset($_POST['id'])) {
+            $id = (int)$_POST['id'];
         }
 
         if (!$id) {
@@ -1992,7 +1483,9 @@ class Model extends BackendController
     #[Acl('Weline_Ai::ai_model_bulk_delete', '批量删除模型', 'mdi-delete-sweep', '批量删除模型')]
     public function bulkDelete(): string
     {
-        $ids = $this->resolveBulkModelIds();
+        $bodyParams = $this->request->getBodyParams();
+        $jsonData = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
+        $ids = $jsonData['ids'] ?? [];
         
         if (empty($ids)) {
             return $this->jsonResponse([
@@ -2009,9 +1502,9 @@ class Model extends BackendController
             foreach ($ids as $id) {
                 $model = $this->getAiModel()->reset()->load((int)$id);
                 if ($model->getId()) {
-                    // 允许删除复制模型与自定义模型
-                    if ($model->canDelete()) {
-                        $model->delete()->fetch();
+                    // 只能删除复制的模型
+                    if ($model->isCopied()) {
+                        $model->delete();
                         $successCount++;
                     } else {
                         $skipCount++;
@@ -2021,19 +1514,14 @@ class Model extends BackendController
             
             $message = '';
             if ($successCount > 0) {
-                $message .= __('成功删除 %{1} 个模型', $successCount);
+                $message .= __('成功删除 %{1} 个复制模型', $successCount);
             }
             if ($skipCount > 0) {
-                $message .= ($successCount > 0 ? '；' : '') . __('跳过 %{1} 个受保护模型（仅复制/自定义模型可删除）', $skipCount);
+                $message .= ($successCount > 0 ? '；' : '') . __('跳过 %{1} 个原始模型（原始模型不可删除）', $skipCount);
             }
             
-            $deleted = $successCount > 0;
-            if (!$deleted && $skipCount > 0 && $message === '') {
-                $message = __('所选模型均为受保护模型，仅复制/自定义模型可删除');
-            }
-
             return $this->jsonResponse([
-                'success' => $deleted,
+                'success' => true,
                 'message' => $message ?: __('没有模型被删除')
             ]);
             
@@ -2043,54 +1531,6 @@ class Model extends BackendController
                 'message' => __('批量删除失败：%{1}', $e->getMessage())
             ]);
         }
-    }
-
-    /**
-     * 兼容多种传参方式解析批量模型 ID：
-     * - JSON Body: {"ids":[1,2]}
-     * - 表单: ids[]=1&ids[]=2 或 ids=1,2
-     * - Query: ?id=1 或 ?ids=1,2
-     */
-    private function resolveBulkModelIds(): array
-    {
-        $ids = [];
-
-        $bodyParams = $this->request->getBodyParams();
-        $jsonData = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
-        if (is_array($jsonData) && isset($jsonData['ids'])) {
-            $ids = $jsonData['ids'];
-        }
-
-        if (empty($ids)) {
-            $ids = $this->request->getPost('ids', []);
-        }
-
-        if (empty($ids)) {
-            $ids = $this->request->getGet('ids', []);
-        }
-
-        if (empty($ids)) {
-            $singleId = (int)$this->request->getParam('id', 0);
-            if ($singleId > 0) {
-                $ids = [$singleId];
-            }
-        }
-
-        if (is_string($ids)) {
-            $ids = array_map('trim', explode(',', $ids));
-        }
-
-        if (!is_array($ids)) {
-            return [];
-        }
-
-        $ids = array_values(array_unique(array_filter(array_map(static function ($id): int {
-            return (int)$id;
-        }, $ids), static function (int $id): bool {
-            return $id > 0;
-        })));
-
-        return $ids;
     }
 
     /**
@@ -2328,78 +1768,5 @@ class Model extends BackendController
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
         return json_encode($data);
-    }
-
-    /**
-     * 收集筛选下拉需要的全量供应商列表。
-     * 来源：数据库模型表（supplier/vendor）+ 供应商配置文件，避免分页导致漏项。
-     */
-    private function collectAllVendorsForFilter(): array
-    {
-        $vendors = [];
-
-        try {
-            $supportedProviders = VendorConfigManager::getSupportedProviders();
-            $rows = $this->getAiModel()->reset()
-                ->select()
-                ->fetchArray();
-            foreach ($rows as $row) {
-                if (!$this->isSelectedModelRow($row, $supportedProviders)) {
-                    continue;
-                }
-                $candidateVendors = [
-                    trim((string)($row['vendor'] ?? '')),
-                    trim((string)($row['supplier'] ?? '')),
-                ];
-                foreach ($candidateVendors as $vendorCode) {
-                    if ($vendorCode !== '' && !in_array($vendorCode, $vendors, true)) {
-                        $vendors[] = $vendorCode;
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            Env::log('ai_model.log', '[Model::collectAllVendorsForFilter][db] ' . $e->getMessage(), 'WARNING');
-        }
-
-        sort($vendors);
-        return $vendors;
-    }
-
-    /**
-     * 自动确保供应商静态模型已同步到数据库，避免后台列表缺失模型。
-     */
-    private function ensureVendorModelsAvailable(): void
-    {
-        if ($this->vendorModelsEnsured) {
-            return;
-        }
-        $this->vendorModelsEnsured = true;
-
-        try {
-            $providers = VendorConfigManager::getSupportedProviders();
-            foreach ($providers as $providerCode => $providerConfig) {
-                $providerCode = trim((string)$providerCode);
-                if ($providerCode === '') {
-                    continue;
-                }
-                if (empty($providerConfig['models']) || !is_array($providerConfig['models'])) {
-                    continue;
-                }
-
-                $exists = $this->getAiModel()->reset()
-                    ->where(AiModel::schema_fields_SUPPLIER, $providerCode)
-                    ->find()
-                    ->fetch();
-                if ($exists && $exists->getId()) {
-                    continue;
-                }
-
-                $this->getModelSyncService()->syncProvider($providerCode, [
-                    'keep_existing' => true,
-                ]);
-            }
-        } catch (\Throwable $e) {
-            Env::log('ai_model.log', '[Model::ensureVendorModelsAvailable] ' . $e->getMessage(), 'WARNING');
-        }
     }
 }

@@ -14,9 +14,6 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Controller\Backend\Visual\Api;
 
-use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
-use GuoLaiRen\PageBuilder\Service\AiSiteVirtualLayoutService;
-use GuoLaiRen\PageBuilder\Helper\PageBuilderUrlCacheInvalidator;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use GuoLaiRen\PageBuilder\Service\ComponentService;
@@ -24,10 +21,8 @@ use GuoLaiRen\PageBuilder\Service\LayoutAssembler;
 use GuoLaiRen\PageBuilder\Service\LayoutService;
 use GuoLaiRen\PageBuilder\Service\Component\SlotValidator;
 use GuoLaiRen\PageBuilder\Service\Component\ComponentRenderer;
-use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\PageLayout;
-use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
 
 class Component extends BackendController
 {
@@ -62,9 +57,11 @@ class Component extends BackendController
      */
     public function list()
     {
-        // Capture noisy scan output without clearing WLS global buffers.
-        $bufferLevel = \ob_get_level();
-        \ob_start();
+        // 清除之前可能存在的输出缓冲（防止PHP警告/错误混入JSON响应）
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        ob_start();
         
         try {
             $styleCode = $this->request->getParam('style_code', '');
@@ -87,32 +84,25 @@ class Component extends BackendController
             
             // 是否包含预览HTML（默认不包含，减小响应大小）
             $includePreview = $this->request->getParam('include_preview', '0') === '1';
-            $virtualThemeId = $this->resolveRequestVirtualThemeId();
-            $themeComponentArea = (string) $this->request->getParam('theme_component_area', 'frontend');
             
             // 获取为构建器格式化的组件数据
-            $data = $this->componentService->getComponentsForBuilder(
-                $styleCode,
-                $layoutCode ?: null,
-                $includePreview,
-                $pageType ?: null,
-                $virtualThemeId,
-                $themeComponentArea
-            );
+            $data = $this->componentService->getComponentsForBuilder($styleCode, $layoutCode ?: null, $includePreview, $pageType ?: null);
+            
+            // 清除缓冲区中可能存在的PHP警告/错误输出
+            ob_get_clean();
             
             return $this->fetchJson([
                 'success' => true,
                 'data' => $data,
             ]);
         } catch (\Exception $e) {
+            // 清除缓冲区
+            $unexpectedOutput = ob_get_clean();
+            
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
             ]);
-        } finally {
-            while (\ob_get_level() > $bufferLevel) {
-                \ob_end_clean();
-            }
         }
     }
     
@@ -163,56 +153,9 @@ class Component extends BackendController
             $componentCode = $this->request->getParam('component_code', '');
             $styleCode = $this->request->getParam('style_code', '');
             $config = $this->request->getParam('config', '');
-            $virtualThemeId = $this->resolveRequestVirtualThemeId();
-            $themeComponentArea = (string) $this->request->getParam('theme_component_area', 'frontend');
             
             if (!$componentCode) {
                 throw new \Exception('缺少组件代码');
-            }
-            
-            $configArray = json_decode($config, true) ?: [];
-            
-            // 绑定 Weline 主题虚拟部件时：走 ComponentRenderer（虚拟未命中仍可回落到文件模板）
-            if ($virtualThemeId > 0) {
-                $styleForRender = $styleCode !== '' ? $styleCode : 'default';
-                $virtualPreview = $this->componentRenderer->renderPreview(
-                    $componentCode,
-                    $styleForRender,
-                    $configArray,
-                    [
-                        'virtual_theme_id' => $virtualThemeId,
-                        'theme_component_area' => $themeComponentArea,
-                        'style_settings' => [],
-                    ]
-                );
-                if ($virtualPreview->isSuccess()) {
-                    $html = $virtualPreview->getHtml();
-                    $htmlTrimmed = trim(strip_tags($html));
-                    if (empty($htmlTrimmed) || strpos($html, '组件渲染错误') !== false) {
-                        if (preg_match('/<!--\s*组件渲染错误:\s*(.+?)\s*-->/', $html, $matches)) {
-                            throw new \Exception('组件渲染失败: ' . $matches[1]);
-                        }
-                        if (empty($htmlTrimmed)) {
-                            throw new \Exception('组件渲染结果为空，请检查组件模板文件是否正确');
-                        }
-                    }
-                    $componentRow = $this->componentService->getByCode($componentCode, $styleCode ?: null);
-                    $componentPayload = $componentRow
-                        ? $this->componentService->toArray($componentRow)
-                        : [
-                            'code' => $componentCode,
-                            'style_code' => $styleForRender,
-                            'virtual_theme_id' => $virtualThemeId,
-                        ];
-                    $componentPayload['virtual_theme_id'] = $virtualThemeId;
-                    $componentPayload['render_source'] = $virtualPreview->getData()['render_source'] ?? '';
-                    
-                    return $this->fetchJson([
-                        'success' => true,
-                        'html' => $html,
-                        'component' => $componentPayload,
-                    ]);
-                }
             }
             
             // 使用 styleCode 进行精确查找
@@ -227,6 +170,7 @@ class Component extends BackendController
                 throw new \Exception('组件文件不存在: ' . $path);
             }
             
+            $configArray = json_decode($config, true) ?: [];
             // 传递组件所属的模板代码以确保正确渲染
             $actualStyleCode = $component->getData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_STYLE_CODE);
             $html = $this->componentService->renderPreview($componentCode, $configArray, $actualStyleCode);
@@ -306,10 +250,6 @@ class Component extends BackendController
         try {
             $bodyParams = $this->request->getBodyParams();
             $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
-
-            if ($this->isVirtualRequest($body)) {
-                return $this->postAddVirtual($body);
-            }
             
             $pageId = (int)($body['page_id'] ?? 0);
             $componentCode = $body['component_code'] ?? '';
@@ -320,8 +260,6 @@ class Component extends BackendController
             $parentComponentId = $body['parent_component_id'] ?? null; // 父组件实例ID（嵌套时）
             $targetSlot = $body['slot'] ?? null; // 目标 slot 名称（嵌套时）
             $returnHtml = $body['return_html'] ?? true; // 是否返回渲染的 HTML（用于局部刷新）
-            $virtualThemeId = $this->resolvePayloadVirtualThemeId($body);
-            $themeComponentArea = (string) ($body['theme_component_area'] ?? 'frontend');
             
             if (!$pageId) {
                 throw new \Exception('缺少页面ID');
@@ -362,18 +300,14 @@ class Component extends BackendController
                     $parentComponentCode,
                     $targetSlot,
                     $styleCode,
-                    $parentComponentId,
-                    $welineThemeId,
-                    $themeComponentArea
+                    $parentComponentId
                 );
             } else {
                 // 顶级放置：验证区域规则
                 $validation = $this->slotValidator->canPlaceInRegion(
                     $componentCode,
                     $region,
-                    $styleCode,
-                    $welineThemeId,
-                    $themeComponentArea
+                    $styleCode
                 );
             }
             
@@ -460,7 +394,6 @@ class Component extends BackendController
             // 同时同步到 Page.layout_config 保持向后兼容
             $layoutConfig = $layout->exportConfig();
             $this->syncLayoutConfigToPage($targetPageId, $layoutConfig);
-            $this->invalidatePageCache($pageId);
             
             // 记录日志
             w_log_debug("[Component API add()] Page ID: {$pageId}, Type: {$pageType}, IsHome: " . ($isHomePage ? 'yes' : 'no'));
@@ -471,27 +404,17 @@ class Component extends BackendController
             // ========== 局部刷新：渲染组件 HTML ==========
             $componentHtml = '';
             if ($returnHtml) {
-                $pageStyleSettings = $page->getStyleSettings();
-                $styleSettings = is_array($pageStyleSettings) ? $pageStyleSettings : [];
-                
-                $renderOptions = [
-                    'region' => $region,
-                    'index' => $actualPosition,
-                    'visual_mode' => true,
-                    'page' => $page,
-                    'style_settings' => $styleSettings,
-                ];
-                if ($virtualThemeId > 0) {
-                    $renderOptions['virtual_theme_id'] = $virtualThemeId;
-                    $renderOptions['theme_component_area'] = $themeComponentArea;
-                }
-                
                 $renderResult = $this->componentRenderer->renderSingle(
                     $componentCode,
                     $instanceId,
                     $styleCode,
                     [],
-                    $renderOptions
+                    [
+                        'region' => $region,
+                        'index' => $actualPosition,
+                        'visual_mode' => true,
+                        'page' => $page,
+                    ]
                 );
                 
                 if ($renderResult->isSuccess()) {
@@ -754,8 +677,6 @@ class Component extends BackendController
             $parentComponentCode = $body['parent_component_code'] ?? null;
             $targetSlot = $body['slot'] ?? null;
             $parentInstanceId = $body['parent_instance_id'] ?? null;
-            $virtualThemeId = $this->resolvePayloadVirtualThemeId($body);
-            $themeComponentArea = (string) ($body['theme_component_area'] ?? 'frontend');
             
             if (!$componentCode) {
                 return $this->fetchJson([
@@ -783,9 +704,7 @@ class Component extends BackendController
                     $parentComponentCode,
                     $targetSlot,
                     $styleCode,
-                    $parentInstanceId,
-                    $welineThemeId,
-                    $themeComponentArea
+                    $parentInstanceId
                 );
                 
                 // 如果验证失败，返回可放置的组件列表
@@ -802,9 +721,7 @@ class Component extends BackendController
                 $validation = $this->slotValidator->canPlaceInRegion(
                     $componentCode,
                     $region,
-                    $styleCode,
-                    $welineThemeId,
-                    $themeComponentArea
+                    $styleCode
                 );
                 
                 // 如果验证失败，返回可放置的组件列表
@@ -855,21 +772,17 @@ class Component extends BackendController
             $styleCode = $this->request->getParam('style_code', '');
             $parentComponentCode = $this->request->getParam('parent_component_code', '');
             $targetSlot = $this->request->getParam('slot', '');
-            $virtualThemeId = $this->resolveRequestVirtualThemeId();
-            $themeComponentArea = (string) $this->request->getParam('theme_component_area', 'frontend');
             
             if ($parentComponentCode && $targetSlot) {
                 // 获取 slot 兼容组件
                 $components = $this->slotValidator->getCompatibleComponentsForSlot(
                     $parentComponentCode,
                     $targetSlot,
-                    $styleCode,
-                    $virtualThemeId,
-                    $themeComponentArea
+                    $styleCode
                 );
                 
                 // 获取 slot 信息
-                $slotInfo = $this->slotValidator->getComponentSlots($parentComponentCode, $styleCode, $virtualThemeId, $themeComponentArea);
+                $slotInfo = $this->slotValidator->getComponentSlots($parentComponentCode, $styleCode);
                 $slotConfig = $slotInfo[$targetSlot] ?? [];
                 
                 return $this->fetchJson([
@@ -884,9 +797,7 @@ class Component extends BackendController
                 // 获取区域兼容组件
                 $components = $this->slotValidator->getCompatibleComponentsForRegion(
                     $region,
-                    $styleCode,
-                    $virtualThemeId,
-                    $themeComponentArea
+                    $styleCode
                 );
                 
                 return $this->fetchJson([
@@ -918,8 +829,6 @@ class Component extends BackendController
         try {
             $componentCode = $this->request->getParam('component_code', '');
             $styleCode = $this->request->getParam('style_code', '');
-            $virtualThemeId = $this->resolveRequestVirtualThemeId();
-            $themeComponentArea = (string) $this->request->getParam('theme_component_area', 'frontend');
             
             if (!$componentCode) {
                 return $this->fetchJson([
@@ -928,9 +837,9 @@ class Component extends BackendController
                 ]);
             }
             
-            $slots = $this->slotValidator->getComponentSlots($componentCode, $styleCode, $virtualThemeId, $themeComponentArea);
+            $slots = $this->slotValidator->getComponentSlots($componentCode, $styleCode);
             $isContainer = !empty($slots);
-            $componentInfo = $this->slotValidator->resolvePlacementComponentInfo($componentCode, $styleCode, $virtualThemeId, $themeComponentArea);
+            $componentInfo = $this->slotValidator->getComponentInfo($componentCode, $styleCode);
             
             return $this->fetchJson([
                 'success' => true,
@@ -966,10 +875,6 @@ class Component extends BackendController
         try {
             $bodyParams = $this->request->getBodyParams();
             $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
-
-            if ($this->isVirtualRequest($body)) {
-                return $this->postRemoveVirtual($body);
-            }
             
             $pageId = (int)($body['page_id'] ?? 0);
             $componentCode = $body['component_code'] ?? '';
@@ -1087,7 +992,6 @@ class Component extends BackendController
             
             // 同步到 Page.layout_config 保持向后兼容
             $this->syncLayoutConfigToPage($targetPageId, $layoutConfig);
-            $this->invalidatePageCache($pageId);
             
             w_log_info("[Component API remove()] Removed {$removedCount} component(s) from PageLayout");
             
@@ -1126,10 +1030,6 @@ class Component extends BackendController
         try {
             $bodyParams = $this->request->getBodyParams();
             $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
-
-            if ($this->isVirtualRequest($body)) {
-                return $this->postUpdateConfigVirtual($body);
-            }
             
             $pageId = (int)($body['page_id'] ?? 0);
             $componentCode = $body['component_code'] ?? '';
@@ -1175,35 +1075,20 @@ class Component extends BackendController
             // 使用 LayoutService 获取 PageLayout
             $layout = $this->layoutService->getOrCreate($targetPageId);
             
-            // 目标页面的 styleCode（用于 header/footer 组件代码规范化比较）
-            $targetPage = clone $this->pageModel;
-            $targetPage->load($targetPageId);
-            $styleCode = $targetPage->getData(Page::schema_fields_STYLE) ?: '';
-            
             // 根据区域类型更新配置
             if ($region === 'header') {
+                // 验证组件代码
                 $currentComponent = $layout->getData(PageLayout::schema_fields_HEADER_COMPONENT);
-                $currentComponent = $currentComponent === null ? '' : trim((string)$currentComponent);
-                if ($currentComponent !== '') {
-                    $storedCanonical = $this->normalizeHeaderFooterComponentCode($currentComponent, 'header', $styleCode);
-                    $requestCanonical = $this->normalizeHeaderFooterComponentCode($componentCode, 'header', $styleCode);
-                    if ($storedCanonical !== $requestCanonical) {
-                        throw new \Exception('组件代码不匹配');
-                    }
+                if ($currentComponent !== $componentCode) {
+                    throw new \Exception('组件代码不匹配');
                 }
-                $layout->setData(PageLayout::schema_fields_HEADER_COMPONENT, $componentCode);
                 $layout->setData(PageLayout::schema_fields_HEADER_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
             } elseif ($region === 'footer') {
+                // 验证组件代码
                 $currentComponent = $layout->getData(PageLayout::schema_fields_FOOTER_COMPONENT);
-                $currentComponent = $currentComponent === null ? '' : trim((string)$currentComponent);
-                if ($currentComponent !== '') {
-                    $storedCanonical = $this->normalizeHeaderFooterComponentCode($currentComponent, 'footer', $styleCode);
-                    $requestCanonical = $this->normalizeHeaderFooterComponentCode($componentCode, 'footer', $styleCode);
-                    if ($storedCanonical !== $requestCanonical) {
-                        throw new \Exception('组件代码不匹配');
-                    }
+                if ($currentComponent !== $componentCode) {
+                    throw new \Exception('组件代码不匹配');
                 }
-                $layout->setData(PageLayout::schema_fields_FOOTER_COMPONENT, $componentCode);
                 $layout->setData(PageLayout::schema_fields_FOOTER_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
             } else {
                 // Content 区域：更新指定索引的组件配置
@@ -1252,7 +1137,6 @@ class Component extends BackendController
             
             // 同步到 Page.layout_config 保持向后兼容
             $this->syncLayoutConfigToPage($targetPageId, $layoutConfig);
-            $this->invalidatePageCache($pageId);
             
             return $this->fetchJson([
                 'success' => true,
@@ -1269,32 +1153,6 @@ class Component extends BackendController
     }
     
     /**
-     * 将 header/footer 组件代码规范化为与 LayoutAssembler 一致的 canonical 形式，用于比较
-     * 例如：sattaking-header -> header-nav，sattaking-footer -> footer-links
-     */
-    private function normalizeHeaderFooterComponentCode(string $code, string $region, string $styleCode): string
-    {
-        $code = trim($code);
-        if ($region === 'header') {
-            if ($code === $styleCode . '-header' || $code === 'header') {
-                return 'header-nav';
-            }
-            if (preg_match('/^' . preg_quote($styleCode, '/') . '_header_header$/i', $code)) {
-                return 'header-nav';
-            }
-        }
-        if ($region === 'footer') {
-            if ($code === $styleCode . '-footer' || $code === 'footer') {
-                return 'footer-links';
-            }
-            if (preg_match('/^' . preg_quote($styleCode, '/') . '_footer_(footer|links)$/i', $code)) {
-                return 'footer-links';
-            }
-        }
-        return $code;
-    }
-    
-    /**
      * API: 调整组件顺序
      * POST /backend/visual/api/component/reorder
      * 
@@ -1305,10 +1163,6 @@ class Component extends BackendController
         try {
             $bodyParams = $this->request->getBodyParams();
             $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
-
-            if ($this->isVirtualRequest($body)) {
-                return $this->postReorderVirtual($body);
-            }
             
             $pageId = (int)($body['page_id'] ?? 0);
             $region = $body['region'] ?? '';
@@ -1395,7 +1249,6 @@ class Component extends BackendController
             
             // 同步到 Page.layout_config 保持向后兼容
             $this->syncLayoutConfigToPage($pageId, $layoutConfig);
-            $this->invalidatePageCache($pageId);
             
             return $this->fetchJson([
                 'success' => true,
@@ -1442,18 +1295,6 @@ class Component extends BackendController
         
         return $layoutComponents;
     }
-
-    private function invalidatePageCache(int $pageId): void
-    {
-        if ($pageId <= 0) {
-            return;
-        }
-
-        try {
-            PageBuilderUrlCacheInvalidator::invalidateForPageId($pageId);
-        } catch (\Throwable) {
-        }
-    }
     
     /**
      * API: 获取布局中组件的配置字段
@@ -1465,15 +1306,6 @@ class Component extends BackendController
     public function layoutFields()
     {
         try {
-            $params = [
-                'public_id' => (string)$this->request->getParam('public_id', ''),
-                'page_type' => (string)$this->request->getParam('page_type', ''),
-                'style_code' => (string)$this->request->getParam('style_code', ''),
-            ];
-            if ($this->isVirtualRequest($params)) {
-                return $this->layoutFieldsVirtual($params);
-            }
-
             $pageId = (int)$this->request->getParam('page_id', 0);
             
             if (!$pageId) {
@@ -1517,47 +1349,20 @@ class Component extends BackendController
     {
         try {
             $componentCode = $this->request->getParam('component_code', '');
-            $styleCode = trim((string)$this->request->getParam('style_code', ''));
-            $virtualParams = [
-                'public_id' => (string)$this->request->getParam('public_id', ''),
-                'page_type' => (string)$this->request->getParam('page_type', ''),
-                'component_code' => (string)$componentCode,
-                'style_code' => $styleCode,
-                'region' => (string)$this->request->getParam('region', ''),
-                'index' => (string)$this->request->getParam('index', ''),
-            ];
+            $styleCode = $this->request->getParam('style_code', '');
             
-            if ($componentCode === '' || $componentCode === null) {
+            if (!$componentCode) {
                 throw new \Exception('缺少组件代码');
             }
             
-            if ($this->isVirtualRequest($virtualParams)) {
-                $virtualMetadata = $this->buildVirtualComponentMetadata($virtualParams);
-                if ($virtualMetadata !== null) {
-                    return $this->fetchJson([
-                        'success' => true,
-                        'metadata' => $virtualMetadata,
-                    ]);
-                }
-            }
-
-            $metadata = null;
-            if ($styleCode !== '') {
-                $metadata = $this->layoutAssembler->getComponentMetadata($styleCode, $componentCode);
-            }
-            // style_code 为空时依次尝试常见模板，避免前端未传 style_code 时直接报“缺少样式代码”
-            if (!$metadata && $styleCode === '') {
-                $styleCandidates = ['tpmst', 'default', 'saas-starter', 'fitness-pro', 'fintech-hub'];
-                foreach ($styleCandidates as $candidate) {
-                    $metadata = $this->layoutAssembler->getComponentMetadata($candidate, $componentCode);
-                    if ($metadata) {
-                        break;
-                    }
-                }
+            if (!$styleCode) {
+                throw new \Exception('缺少样式代码');
             }
             
+            $metadata = $this->layoutAssembler->getComponentMetadata($styleCode, $componentCode);
+            
             if (!$metadata) {
-                throw new \Exception('组件不存在: ' . $componentCode . ($styleCode !== '' ? " (模板: {$styleCode})" : ''));
+                throw new \Exception('组件不存在');
             }
             
             return $this->fetchJson([
@@ -1628,17 +1433,6 @@ class Component extends BackendController
                             break;
                         }
                     }
-                    // legal-content：主题无本地文件时回退 _shared（与 TemplatePathResolver 一致）
-                    if ($templateCode === '' && ($componentCode === 'legal-content' || str_ends_with((string) $componentCode, 'legal-content'))) {
-                        $resolver = ObjectManager::getInstance(TemplatePathResolver::class);
-                        foreach (['content/legal-content.phtml', 'legal-content.phtml'] as $rel) {
-                            $resolved = $resolver->resolveComponentFilesystemPath($componentStyleCode, $rel);
-                            if (is_file($resolved)) {
-                                $templateCode = (string) file_get_contents($resolved);
-                                break;
-                            }
-                        }
-                    }
                 }
             }
             
@@ -1664,780 +1458,5 @@ class Component extends BackendController
                 'message' => $e->getMessage(),
             ]);
         }
-    }
-
-    private function isVirtualRequest(array $payload): bool
-    {
-        return \trim((string)($payload['public_id'] ?? '')) !== ''
-            && \trim((string)($payload['page_type'] ?? '')) !== '';
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     * @return array{
-     *   session:mixed,
-     *   scope:array<string,mixed>,
-     *   page:Page,
-     *   public_id:string,
-     *   page_type:string,
-     *   virtual_theme_id:int,
-     *   virtual_page:array<string,mixed>,
-     *   virtual_pages_by_type:array<string,array<string,mixed>>,
-     *   layout:array<string,mixed>,
-     *   style_code:string
-     * }|null
-     */
-    private function resolveVirtualContext(array $payload): ?array
-    {
-        $publicId = \trim((string)($payload['public_id'] ?? ''));
-        $requestedPageType = \trim((string)($payload['page_type'] ?? ''));
-        $adminId = (int)$this->getLoginUserId();
-        if ($publicId === '' || $requestedPageType === '' || $adminId <= 0) {
-            return null;
-        }
-
-        $context = $this->getVirtualLayoutService()->loadContext($publicId, $adminId, $requestedPageType);
-        if ($context === null) {
-            return null;
-        }
-
-        $scopeService = $this->getScopeCompatibilityService();
-        $scope = $scopeService->normalizeScope($context['scope']);
-        $virtualPages = $scopeService->buildVirtualPagesByType(
-            $scopeService->normalizePageTypes($scope['page_types'] ?? []),
-            $scope,
-            false
-        );
-        $pageType = $scopeService->resolvePreviewPageType($virtualPages, $requestedPageType);
-        if ($pageType === '' || !isset($virtualPages[$pageType])) {
-            return null;
-        }
-
-        $virtualThemeId = (int)$context['virtual_theme_id'];
-        $virtualPage = $virtualPages[$pageType];
-        $styleCode = \trim((string)($payload['style_code'] ?? ($virtualPage['style_code'] ?? 'default')));
-        $styleCode = $styleCode !== '' ? $styleCode : 'default';
-        $layout = $this->getVirtualLayoutService()->getResolvedLayout($virtualThemeId, $pageType);
-
-        return [
-            'session' => $context['session'],
-            'scope' => $scope,
-            'page' => $this->buildVirtualPage($publicId, $scope, $pageType, $virtualThemeId, $virtualPages, $virtualPage, $layout, $styleCode),
-            'public_id' => $publicId,
-            'page_type' => $pageType,
-            'virtual_theme_id' => $virtualThemeId,
-            'virtual_page' => $virtualPage,
-            'virtual_pages_by_type' => $virtualPages,
-            'layout' => $layout,
-            'style_code' => $styleCode,
-        ];
-    }
-
-    /**
-     * @param array<string,mixed> $scope
-     * @param array<string,array<string,mixed>> $virtualPagesByType
-     * @param array<string,mixed> $virtualPage
-     * @param array<string,mixed> $layout
-     */
-    private function buildVirtualPage(
-        string $publicId,
-        array $scope,
-        string $pageType,
-        int $virtualThemeId,
-        array $virtualPagesByType,
-        array $virtualPage,
-        array $layout,
-        string $styleCode
-    ): Page {
-        /** @var Page $page */
-        $page = ObjectManager::make(Page::class);
-        $locale = \trim((string)($virtualPage['locale'] ?? ''));
-        $locale = $locale !== '' ? $locale : 'en_US';
-        $virtualBlocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
-        $renderMode = $virtualBlocks === [] ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;
-        $page->setData([
-            Page::schema_fields_ID => 0,
-            Page::schema_fields_WEBSITE_ID => (int)($scope['draft_website_id'] ?? 0),
-            Page::schema_fields_PARENT_ID => $pageType === Page::TYPE_HOME ? 0 : 1,
-            Page::schema_fields_STATUS => Page::STATUS_DRAFT,
-            Page::schema_fields_TITLE => (string)($virtualPage['title'] ?? ''),
-            Page::schema_fields_NAME => (string)($virtualPage['title'] ?? ''),
-            Page::schema_fields_HANDLE => (string)($virtualPage['handle'] ?? ''),
-            Page::schema_fields_STYLE => $styleCode,
-            Page::schema_fields_TYPE => $pageType,
-            Page::schema_fields_META_TITLE => (string)($virtualPage['meta_title'] ?? ''),
-            Page::schema_fields_META_DESCRIPTION => (string)($virtualPage['meta_description'] ?? ''),
-            Page::schema_fields_META_KEYWORDS => (string)($virtualPage['meta_keywords'] ?? ''),
-            Page::schema_fields_AI_DESCRIPTION => (string)($virtualPage['ai_description'] ?? ''),
-            Page::schema_fields_LOCALES => \json_encode([$locale], JSON_UNESCAPED_UNICODE),
-            Page::schema_fields_DEFAULT_LOCALE => $locale,
-            Page::schema_fields_STYLE_SETTING => \json_encode([
-                $styleCode => \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [],
-            ], JSON_UNESCAPED_UNICODE),
-            Page::schema_fields_LAYOUT_CONFIG => \json_encode($layout, JSON_UNESCAPED_UNICODE),
-            Page::schema_fields_RENDER_MODE => $renderMode,
-            Page::schema_fields_AI_LAYOUT => \json_encode(['blocks' => $virtualBlocks], JSON_UNESCAPED_UNICODE),
-        ]);
-        $page->setData('virtual_public_id', $publicId);
-        $page->setData('virtual_page_type', $pageType);
-        $page->setData('virtual_theme_id', $virtualThemeId);
-        $page->setData('virtual_pages_by_type', $virtualPagesByType);
-        return $page;
-    }
-
-    /**
-     * @param array<string, mixed> $body
-     */
-    private function postAddVirtual(array $body)
-    {
-        $context = $this->resolveVirtualContext($body);
-        if ($context === null) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('会话不存在或无访问权限'),
-            ]);
-        }
-
-        try {
-            $componentCode = \trim((string)($body['component_code'] ?? ''));
-            $region = \trim((string)($body['region'] ?? ''));
-            $position = $body['position'] ?? null;
-            $parentComponentId = $body['parent_component_id'] ?? null;
-            $targetSlot = $body['slot'] ?? null;
-            $returnHtml = $body['return_html'] ?? true;
-            $virtualThemeId = $this->resolvePayloadVirtualThemeId($body);
-            $themeComponentArea = (string)($body['theme_component_area'] ?? 'frontend');
-
-            if ($componentCode === '' || $region === '') {
-                throw new \Exception('缺少组件编码或区域');
-            }
-
-            $layout = $context['layout'];
-            if ($parentComponentId && $targetSlot) {
-                $parentComponentCode = $this->getVirtualComponentCodeByInstanceId(
-                    \is_array($layout['content'] ?? null) ? $layout['content'] : [],
-                    (string)$parentComponentId
-                );
-                if (!$parentComponentCode) {
-                    throw new \Exception('父组件不存在');
-                }
-                $validation = $this->slotValidator->canPlaceInSlot(
-                    $componentCode,
-                    $parentComponentCode,
-                    (string)$targetSlot,
-                    $context['style_code'],
-                    (string)$parentComponentId,
-                    $virtualThemeId,
-                    $themeComponentArea
-                );
-            } else {
-                $validation = $this->slotValidator->canPlaceInRegion(
-                    $componentCode,
-                    $region,
-                    $context['style_code'],
-                    $virtualThemeId,
-                    $themeComponentArea
-                );
-            }
-
-            if (!$validation->isValid()) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => $validation->getMessage(),
-                    'error_code' => $validation->getErrorCode(),
-                    'validation_failed' => true,
-                ]);
-            }
-
-            $instanceId = 'comp-' . \uniqid();
-            $newComponent = [
-                'code' => $componentCode,
-                'instance_id' => $instanceId,
-                'enabled' => true,
-                'config' => [],
-                'children' => [],
-            ];
-            $actualPosition = 0;
-
-            if ($region === 'header' || $region === 'footer') {
-                $layout[$region] = [
-                    'component' => $componentCode,
-                    'config' => [],
-                    'instance_id' => $instanceId,
-                ];
-            } else {
-                $contentComponents = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
-                if ($parentComponentId && $targetSlot) {
-                    $contentComponents = $this->addToParentSlot(
-                        $contentComponents,
-                        (string)$parentComponentId,
-                        (string)$targetSlot,
-                        $newComponent
-                    );
-                } elseif ($position !== null && (int)$position >= 0 && (int)$position < \count($contentComponents)) {
-                    \array_splice($contentComponents, (int)$position, 0, [$newComponent]);
-                    $actualPosition = (int)$position;
-                } else {
-                    $contentComponents[] = $newComponent;
-                    $actualPosition = \count($contentComponents) - 1;
-                }
-                $layout['content'] = \array_values($contentComponents);
-            }
-
-            $resolvedLayout = $this->getVirtualLayoutService()->saveResolvedLayout(
-                (int)$context['virtual_theme_id'],
-                (string)$context['page_type'],
-                $layout,
-                $region
-            );
-
-            $componentHtml = '';
-            if ($returnHtml) {
-                $styleSettings = \is_array($context['virtual_page']['style_settings'] ?? null)
-                    ? $context['virtual_page']['style_settings']
-                    : [];
-                $renderOptions = [
-                    'region' => $region,
-                    'index' => $actualPosition,
-                    'visual_mode' => true,
-                    'page' => $context['page'],
-                    'style_settings' => $styleSettings,
-                ];
-                if ($virtualThemeId > 0) {
-                    $renderOptions['virtual_theme_id'] = $virtualThemeId;
-                    $renderOptions['theme_component_area'] = $themeComponentArea;
-                }
-                $renderResult = $this->componentRenderer->renderSingle(
-                    $componentCode,
-                    $instanceId,
-                    $context['style_code'],
-                    [],
-                    $renderOptions
-                );
-                if ($renderResult->isSuccess()) {
-                    $componentHtml = $renderResult->getHtml();
-                }
-            }
-
-            return $this->fetchJson([
-                'success' => true,
-                'message' => __('组件已添加'),
-                'instance_id' => $instanceId,
-                'component_html' => $componentHtml,
-                'position' => $actualPosition,
-                'partial' => true,
-                'layout_config' => $this->buildEditorLayoutConfig($resolvedLayout),
-                'target_page_id' => 0,
-                'is_global' => \in_array($region, ['header', 'footer'], true),
-                'public_id' => $context['public_id'],
-                'page_type' => $context['page_type'],
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $body
-     */
-    private function postRemoveVirtual(array $body)
-    {
-        $context = $this->resolveVirtualContext($body);
-        if ($context === null) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('会话不存在或无访问权限'),
-            ]);
-        }
-
-        try {
-            $componentCode = \trim((string)($body['component_code'] ?? ''));
-            $region = \trim((string)($body['region'] ?? ''));
-            $index = $body['index'] ?? null;
-            if ($region === '') {
-                throw new \Exception('缺少区域');
-            }
-
-            $layout = $context['layout'];
-            $removedCount = 0;
-            if ($region === 'header' || $region === 'footer') {
-                if (!empty($layout[$region]['component'])) {
-                    $layout[$region] = ['component' => '', 'config' => []];
-                    $removedCount = 1;
-                }
-            } else {
-                $contentComponents = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
-                if ($index !== null && isset($contentComponents[(int)$index])) {
-                    \array_splice($contentComponents, (int)$index, 1);
-                    $removedCount = 1;
-                } elseif ($componentCode !== '') {
-                    $originalCount = \count($contentComponents);
-                    $contentComponents = \array_values(\array_filter(
-                        $contentComponents,
-                        static fn(array $comp): bool => (string)($comp['code'] ?? $comp['component'] ?? '') !== $componentCode
-                    ));
-                    $removedCount = $originalCount - \count($contentComponents);
-                }
-                $layout['content'] = $contentComponents;
-            }
-
-            $resolvedLayout = $this->getVirtualLayoutService()->saveResolvedLayout(
-                (int)$context['virtual_theme_id'],
-                (string)$context['page_type'],
-                $layout,
-                $region
-            );
-
-            return $this->fetchJson([
-                'success' => true,
-                'message' => __('组件已删除'),
-                'layout_config' => $this->buildEditorLayoutConfig($resolvedLayout),
-                'target_page_id' => 0,
-                'is_global' => \in_array($region, ['header', 'footer'], true),
-                'removed_count' => $removedCount,
-                'public_id' => $context['public_id'],
-                'page_type' => $context['page_type'],
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $body
-     */
-    private function postUpdateConfigVirtual(array $body)
-    {
-        $context = $this->resolveVirtualContext($body);
-        if ($context === null) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('会话不存在或无访问权限'),
-            ]);
-        }
-
-        try {
-            $componentCode = \trim((string)($body['component_code'] ?? ''));
-            $region = \trim((string)($body['region'] ?? ''));
-            $index = (int)($body['index'] ?? 0);
-            $config = \is_array($body['config'] ?? null) ? $body['config'] : [];
-            if ($componentCode === '' || $region === '') {
-                throw new \Exception('缺少组件编码或区域');
-            }
-
-            $layout = $context['layout'];
-            if ($region === 'header' || $region === 'footer') {
-                $currentComponent = (string)($layout[$region]['component'] ?? '');
-                if (
-                    $currentComponent !== ''
-                    && $this->normalizeHeaderFooterComponentCode($currentComponent, $region, $context['style_code'])
-                        !== $this->normalizeHeaderFooterComponentCode($componentCode, $region, $context['style_code'])
-                ) {
-                    throw new \Exception('当前区域组件与请求组件不匹配');
-                }
-                $layout[$region] = [
-                    'component' => $componentCode,
-                    'config' => $config,
-                    'instance_id' => (string)($layout[$region]['instance_id'] ?? ('virtual-' . $region)),
-                ];
-            } else {
-                $contentComponents = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
-                if (!isset($contentComponents[$index])) {
-                    throw new \Exception('组件不存在');
-                }
-                $storedCode = (string)($contentComponents[$index]['code'] ?? $contentComponents[$index]['component'] ?? '');
-                if ($storedCode !== $componentCode) {
-                    throw new \Exception('当前组件与请求组件不匹配');
-                }
-                $contentComponents[$index]['config'] = $config;
-                $layout['content'] = $contentComponents;
-            }
-
-            $resolvedLayout = $this->getVirtualLayoutService()->saveResolvedLayout(
-                (int)$context['virtual_theme_id'],
-                (string)$context['page_type'],
-                $layout,
-                $region
-            );
-
-            return $this->fetchJson([
-                'success' => true,
-                'message' => __('组件配置已保存'),
-                'layout_config' => $this->buildEditorLayoutConfig($resolvedLayout),
-                'target_page_id' => 0,
-                'public_id' => $context['public_id'],
-                'page_type' => $context['page_type'],
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $body
-     */
-    private function postReorderVirtual(array $body)
-    {
-        $context = $this->resolveVirtualContext($body);
-        if ($context === null) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('会话不存在或无访问权限'),
-            ]);
-        }
-
-        try {
-            $region = \trim((string)($body['region'] ?? ''));
-            $newOrder = \is_array($body['order'] ?? null) ? $body['order'] : [];
-            if ($region !== 'content') {
-                throw new \Exception('只支持对内容区域排序');
-            }
-
-            $layout = $context['layout'];
-            $currentComponents = \array_values(\is_array($layout['content'] ?? null) ? $layout['content'] : []);
-            $componentCount = \count($currentComponents);
-            if (\count($newOrder) !== $componentCount) {
-                throw new \Exception('排序数量与当前组件数量不一致');
-            }
-
-            $ordered = [];
-            foreach ($newOrder as $oldIndex) {
-                $oldIndex = (int)$oldIndex;
-                if (!isset($currentComponents[$oldIndex])) {
-                    throw new \Exception('无效的原始索引: ' . $oldIndex);
-                }
-                $ordered[] = $currentComponents[$oldIndex];
-            }
-            $layout['content'] = $ordered;
-
-            $resolvedLayout = $this->getVirtualLayoutService()->saveResolvedLayout(
-                (int)$context['virtual_theme_id'],
-                (string)$context['page_type'],
-                $layout,
-                'content'
-            );
-
-            return $this->fetchJson([
-                'success' => true,
-                'message' => __('排序已保存'),
-                'layout_config' => $this->buildEditorLayoutConfig($resolvedLayout),
-                'public_id' => $context['public_id'],
-                'page_type' => $context['page_type'],
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $params
-     */
-    private function layoutFieldsVirtual(array $params)
-    {
-        $context = $this->resolveVirtualContext($params);
-        if ($context === null) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('会话不存在或无访问权限'),
-            ]);
-        }
-
-        return $this->fetchJson([
-            'success' => true,
-            'layout_config' => $this->buildEditorLayoutConfig($context['layout']),
-            'component_fields' => [],
-            'style_code' => $context['style_code'],
-            'public_id' => $context['public_id'],
-            'page_type' => $context['page_type'],
-        ]);
-    }
-
-    /**
-     * @param array<string, mixed> $layout
-     * @return array<string, array<int, array<string, mixed>>>
-     */
-    private function buildEditorLayoutConfig(array $layout): array
-    {
-        $normalized = [
-            'header' => [],
-            'content' => [],
-            'footer' => [],
-        ];
-
-        if (!empty($layout['header']['component'])) {
-            $normalized['header'][] = [
-                'code' => (string)$layout['header']['component'],
-                'enabled' => true,
-                'config' => \is_array($layout['header']['config'] ?? null) ? $layout['header']['config'] : [],
-                'instance_id' => (string)($layout['header']['instance_id'] ?? 'virtual-header'),
-            ];
-        }
-
-        foreach ((array)($layout['content'] ?? []) as $component) {
-            if (!\is_array($component)) {
-                continue;
-            }
-            $normalized['content'][] = [
-                'code' => (string)($component['code'] ?? $component['component'] ?? ''),
-                'enabled' => (bool)($component['enabled'] ?? true),
-                'config' => \is_array($component['config'] ?? null) ? $component['config'] : [],
-                'instance_id' => (string)($component['instance_id'] ?? $component['id'] ?? ('comp-' . \uniqid())),
-                'children' => \is_array($component['children'] ?? null) ? $component['children'] : [],
-            ];
-        }
-
-        if (!empty($layout['footer']['component'])) {
-            $normalized['footer'][] = [
-                'code' => (string)$layout['footer']['component'],
-                'enabled' => true,
-                'config' => \is_array($layout['footer']['config'] ?? null) ? $layout['footer']['config'] : [],
-                'instance_id' => (string)($layout['footer']['instance_id'] ?? 'virtual-footer'),
-            ];
-        }
-
-        return $normalized;
-    }
-
-    /**
-     * @param array<int, array<string, mixed>> $components
-     */
-    private function getVirtualComponentCodeByInstanceId(array $components, string $instanceId): ?string
-    {
-        foreach ($components as $comp) {
-            if ((string)($comp['instance_id'] ?? $comp['id'] ?? '') === $instanceId) {
-                return (string)($comp['code'] ?? $comp['component'] ?? '');
-            }
-            if (!empty($comp['children']) && \is_array($comp['children'])) {
-                $found = $this->findComponentCodeInChildren($comp['children'], $instanceId);
-                if ($found) {
-                    return $found;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @param array<string, mixed> $params
-     * @return array<string, mixed>|null
-     */
-    private function buildVirtualComponentMetadata(array $params): ?array
-    {
-        $context = $this->resolveVirtualContext($params);
-        if ($context === null) {
-            return null;
-        }
-
-        $componentCode = \trim((string)($params['component_code'] ?? ''));
-        if ($componentCode === '') {
-            return null;
-        }
-
-        $component = $this->loadVirtualThemeComponent((int)$context['virtual_theme_id'], $componentCode);
-        if (!$component) {
-            return null;
-        }
-
-        $region = \trim((string)($params['region'] ?? ''));
-        $layoutEntry = $this->findVirtualLayoutComponentEntry(
-            $context['layout'],
-            $componentCode,
-            $region,
-            (int)($params['index'] ?? -1)
-        );
-        $defaultConfig = $component->getDefaultConfig();
-        $currentConfig = \is_array($layoutEntry['config'] ?? null) ? $layoutEntry['config'] : [];
-        $fieldConfig = \array_replace($defaultConfig, $currentConfig);
-        $meta = $component->getMeta();
-        $category = $component->getCategory();
-
-        return [
-            'code' => $componentCode,
-            'actual_code' => $component->getComponentCode(),
-            'style_code' => (string)$context['style_code'],
-            'virtual_theme_id' => (int)$context['virtual_theme_id'],
-            'name' => $component->getName() !== '' ? $component->getName() : $componentCode,
-            'description' => \is_string($meta['description'] ?? null) ? (string)$meta['description'] : '',
-            'region' => $region !== '' ? $region : $category,
-            'category' => $category,
-            'type' => 'section',
-            'thumbnail' => '',
-            'config_groups' => [],
-            'fields' => $this->buildVirtualComponentFields($fieldConfig),
-        ];
-    }
-
-    private function loadVirtualThemeComponent(int $virtualThemeId, string $componentCode): ?VirtualThemeComponent
-    {
-        if ($virtualThemeId <= 0 || $componentCode === '') {
-            return null;
-        }
-
-        /** @var VirtualThemeComponent $component */
-        $component = clone ObjectManager::getInstance(VirtualThemeComponent::class);
-        $component->clear()
-            ->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $virtualThemeId)
-            ->where(VirtualThemeComponent::schema_fields_COMPONENT_CODE, $componentCode)
-            ->where(VirtualThemeComponent::schema_fields_AREA, VirtualThemeComponent::AREA_FRONTEND)
-            ->where(VirtualThemeComponent::schema_fields_IS_ACTIVE, 1)
-            ->order(VirtualThemeComponent::schema_fields_ID, 'DESC')
-            ->find()
-            ->fetch();
-
-        if (!$component->getId()) {
-            $component = clone ObjectManager::getInstance(VirtualThemeComponent::class);
-            $component->clear()
-                ->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $virtualThemeId)
-                ->where(VirtualThemeComponent::schema_fields_COMPONENT_CODE, $componentCode)
-                ->where(VirtualThemeComponent::schema_fields_IS_ACTIVE, 1)
-                ->order(VirtualThemeComponent::schema_fields_ID, 'DESC')
-                ->find()
-                ->fetch();
-        }
-
-        return $component->getId() ? $component : null;
-    }
-
-    /**
-     * @param array<string, mixed> $layout
-     * @return array<string, mixed>
-     */
-    private function findVirtualLayoutComponentEntry(array $layout, string $componentCode, string $region, int $index): array
-    {
-        if (($region === 'header' || $region === 'footer') && \is_array($layout[$region] ?? null)) {
-            $entry = $layout[$region];
-            $entryCode = (string)($entry['component'] ?? $entry['code'] ?? '');
-            return $entryCode === $componentCode ? $entry : [];
-        }
-
-        $contentComponents = \array_values(\is_array($layout['content'] ?? null) ? $layout['content'] : []);
-        if ($region === 'content' && isset($contentComponents[$index]) && \is_array($contentComponents[$index])) {
-            $entry = $contentComponents[$index];
-            $entryCode = (string)($entry['code'] ?? $entry['component'] ?? '');
-            if ($entryCode === $componentCode) {
-                return $entry;
-            }
-        }
-
-        foreach ($contentComponents as $entry) {
-            if (!\is_array($entry)) {
-                continue;
-            }
-            $entryCode = (string)($entry['code'] ?? $entry['component'] ?? '');
-            if ($entryCode === $componentCode) {
-                return $entry;
-            }
-        }
-
-        return [];
-    }
-
-    /**
-     * @param array<string, mixed> $config
-     * @return array<string, array<string, mixed>>
-     */
-    private function buildVirtualComponentFields(array $config): array
-    {
-        $groups = [];
-        foreach ($config as $key => $value) {
-            $fieldKey = \trim((string)$key);
-            if ($fieldKey === '' || \str_starts_with($fieldKey, '_')) {
-                continue;
-            }
-
-            $parts = \explode('.', $fieldKey, 2);
-            $groupKey = $parts[0] !== '' ? $parts[0] : 'config';
-            $shortKey = $parts[1] ?? $fieldKey;
-            if (!isset($groups[$groupKey])) {
-                $groups[$groupKey] = [
-                    'label' => $this->humanizeVirtualFieldLabel($groupKey),
-                    'fields' => [],
-                ];
-            }
-
-            $groups[$groupKey]['fields'][$shortKey] = [
-                'label' => $this->humanizeVirtualFieldLabel($shortKey),
-                'type' => $this->inferVirtualFieldType($fieldKey, $value),
-                'default' => $value,
-            ];
-
-            $lowerValue = \is_scalar($value) || $value === null ? \strtolower((string)$value) : '';
-            if (\in_array($lowerValue, ['yes', 'no'], true)) {
-                $groups[$groupKey]['fields'][$shortKey]['type'] = 'select';
-                $groups[$groupKey]['fields'][$shortKey]['options'] = ['yes', 'no'];
-            }
-        }
-
-        return $groups;
-    }
-
-    private function inferVirtualFieldType(string $key, mixed $value): string
-    {
-        $key = \strtolower($key);
-        $fieldName = $key;
-        if (\str_contains($fieldName, '.')) {
-            $fieldName = (string)\substr($fieldName, (int)\strrpos($fieldName, '.') + 1);
-        }
-        $stringValue = \is_scalar($value) || $value === null ? (string)$value : \json_encode($value, \JSON_UNESCAPED_UNICODE);
-        $stringValue = \is_string($stringValue) ? $stringValue : '';
-        if (\preg_match('/(^|\.|_)(color|colour)$/', $key) === 1 && \preg_match('/^#[0-9a-f]{6}$/i', $stringValue) === 1) {
-            return 'color';
-        }
-        if (\str_contains($key, 'image') || \str_contains($key, 'logo') || \str_contains($key, 'icon') || \str_contains($key, 'media')) {
-            return 'image';
-        }
-        if (
-            \strlen($stringValue) > 96
-            || \str_contains($fieldName, 'description')
-            || \str_contains($fieldName, 'subtitle')
-            || $fieldName === 'content'
-            || \str_ends_with($fieldName, '_content')
-        ) {
-            return 'textarea';
-        }
-
-        return 'text';
-    }
-
-    private function humanizeVirtualFieldLabel(string $key): string
-    {
-        $label = \trim(\preg_replace('/[_-]+/', ' ', $key) ?: $key);
-        return $label !== '' ? \ucfirst($label) : $key;
-    }
-
-    private function resolveRequestVirtualThemeId(): int
-    {
-        return \max(0, (int)$this->request->getParam('virtual_theme_id', 0));
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     */
-    private function resolvePayloadVirtualThemeId(array $payload): int
-    {
-        return \max(0, (int)($payload['virtual_theme_id'] ?? 0));
-    }
-
-    private function getVirtualLayoutService(): AiSiteVirtualLayoutService
-    {
-        return ObjectManager::getInstance(AiSiteVirtualLayoutService::class);
-    }
-
-    private function getScopeCompatibilityService(): AiSiteScopeCompatibilityService
-    {
-        return ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
     }
 }

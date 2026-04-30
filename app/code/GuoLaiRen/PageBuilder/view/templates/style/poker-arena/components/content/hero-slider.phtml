@@ -51,14 +51,9 @@ $title = $config['content.title'] ?? 'Where Champions Play';
 $description = $config['content.description'] ?? 'Experience the thrill of Texas Hold\'em, Omaha, and world-class tournaments. Join millions of players at the most trusted poker platform with $10M+ in daily prize pools.';
 
 $primaryBtnText = $config['cta.primary_text'] ?? 'Join Free';
-$primaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.primary_url'] ?? '#register');
+$primaryBtnUrl = $config['cta.primary_url'] ?? '#register';
 $secondaryBtnText = $config['cta.secondary_text'] ?? 'Download App';
-$secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.secondary_url'] ?? '#download');
-
-$primaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl);
-$secondaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl);
-$primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($primaryHref, 'primary');
-$secondaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($secondaryHref, 'secondary');
+$secondaryBtnUrl = $config['cta.secondary_url'] ?? '#download';
 
 $statsRaw = $config['stats.items'] ?? "\$10M+|Prize Pools\n500K+|Players\n1000+|Daily Tournaments\n24/7|Action";
 $stats = [];
@@ -277,6 +272,7 @@ $instanceId = 'pa-hero-' . uniqid();
             #<?= $instanceId ?> .pa-hero-stat::after { display: none; }
         }
     </style>
+    
     <!-- Floating card suit decorations -->
     <span class="pa-hero-suit">♠</span>
     <span class="pa-hero-suit">♥</span>
@@ -295,13 +291,13 @@ $instanceId = 'pa-hero-' . uniqid();
         
         <div class="pa-hero-cta">
             <?php if ($primaryBtnText): ?>
-            <a role="button" tabindex="0" class="pa-hero-btn-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($primaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($primaryRef) ?>">
+            <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="pa-hero-btn-primary">
                 <?= htmlspecialchars($primaryBtnText) ?>
             </a>
             <?php endif; ?>
             
             <?php if ($secondaryBtnText): ?>
-            <a role="button" tabindex="0" class="pa-hero-btn-secondary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($secondaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($secondaryRef) ?>">
+            <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="pa-hero-btn-secondary">
                 <?= htmlspecialchars($secondaryBtnText) ?>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </a>

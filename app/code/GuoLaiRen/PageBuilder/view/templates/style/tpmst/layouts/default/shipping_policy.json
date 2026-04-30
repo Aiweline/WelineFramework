@@ -16,13 +16,9 @@
                 "enabled": true,
                 "instance_id": "legal-content-default",
                 "config": {
-                    "header.title": "配送政策",
-                    "header.icon": "🚚",
-                    "content.body": "我们主要提供数字服务。成功注册或购买后，将通过电子方式开通访问，数字产品不涉及实体配送。",
-                    "toc.items": "数字产品与服务|我们主要提供数字服务。成功注册或购买后，将通过电子方式开通访问。数字产品不涉及实体配送。\n实体商品（如适用）|若我们提供实体商品，配送时间与方式将在结账时说明。配送时间为预估，可能因承运人或海关而有所变化。\n配送与访问|您有责任提供准确的联系与收货信息。因信息错误或我们无法控制的情况导致的延误或失败，我们不承担责任。\n国际用户|可用性与配送选项可能因地区而异。部分司法管辖区可能适用限制。",
-                    "display.show_toc": "yes",
-                    "display.show_last_updated": "yes",
-                    "layout.content_width": "medium"
+                    "show_toc": true,
+                    "show_last_updated": true,
+                    "content_width": "narrow"
                 }
             }
         ],

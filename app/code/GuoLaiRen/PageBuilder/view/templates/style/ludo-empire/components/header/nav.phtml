@@ -17,8 +17,7 @@
  * logo.width => Logo宽度:number:42|px
  * 
  * group:navigation => 导航设置
- * navigation.use_custom_links => 使用自定义导航链接:select:no|no,yes
- * navigation.items => 导航项配置:textarea:Home=>#hero\r\nGames=>#games\r\nDownload=>#download\r\nFAQ=>#faq\r\nContact=>/contact|格式：名称=>链接，一行一个（仅当开启自定义链接时生效）
+ * navigation.items => 导航项配置:textarea:Home=>#hero\r\nGames=>#games\r\nDownload=>#download\r\nFAQ=>#faq\r\nContact=>/contact|格式：名称=>链接，一行一个
  * navigation.show_cta => 显示CTA按钮:select:yes|yes,no
  * navigation.cta_text => CTA按钮文字:text:Play Now
  * navigation.cta_url => CTA按钮链接:text:#games
@@ -45,83 +44,40 @@ $logoImage = $config['logo.image'] ?? '';
 $logoText = $config['logo.text'] ?? 'LudoEmpire';
 $logoWidth = $config['logo.width'] ?? 42;
 
-$useCustomLinks = ($config['navigation.use_custom_links'] ?? 'no') === 'yes';
 $navItemsRaw = $config['navigation.items'] ?? "Home=>#hero\nGames=>#games\nDownload=>#download\nFAQ=>#faq\nContact=>/contact";
 $showCta = ($config['navigation.show_cta'] ?? 'yes') !== 'no';
 $ctaText = $config['navigation.cta_text'] ?? 'Play Now';
-$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['navigation.cta_url'] ?? '#games');
-$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
-$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
+$ctaUrl = $config['navigation.cta_url'] ?? '#games';
 
 $navItems = [];
-$page = $this->getData('page');
-if (!$useCustomLinks && $page && method_exists($page, 'getHeaderNavigationPages')) {
-    $headerPages = $page->getHeaderNavigationPages(10);
-    foreach ($headerPages as $navPage) {
-        $type = $navPage['type'] ?? '';
-        $labelKey = 'navigation.label_' . $type;
-        $configuredLabel = trim((string)($config[$labelKey] ?? ''));
-        $title = $navPage['title'] ?? '';
-        $url = $navPage['url'] ?? '/';
-        if (isset($navPage['type']) && $navPage['type'] === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME) {
-            $title = __('Home');
-            $url = '/';
-        }
-        $navItems[] = ['name' => $configuredLabel !== '' ? $configuredLabel : $title, 'url' => $url];
+$lines = preg_split('/[\r\n]+/', $navItemsRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('=>', $line, 2);
+    $name = trim($parts[0] ?? '');
+    $url = trim($parts[1] ?? '#');
+    if (!empty($name)) {
+        $navItems[] = ['name' => $name, 'url' => $url ?: '#'];
     }
-}
-if ($useCustomLinks || empty($navItems)) {
-    $navItems = [];
-    $lines = preg_split('/[\r\n]+/', $navItemsRaw);
-    foreach ($lines as $line) {
-        $line = trim($line);
-        if (empty($line)) continue;
-        $parts = explode('=>', $line, 2);
-        $name = trim($parts[0] ?? '');
-        $url = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(trim($parts[1] ?? '#'));
-        if (!empty($name)) {
-            $navItems[] = ['name' => $name, 'url' => $url ?: '#'];
-        }
-    }
-}
-if (empty($navItems)) {
-    $navItems = [
-        ['name' => 'Home', 'url' => '/#hero'],
-        ['name' => 'Games', 'url' => '/#games'],
-        ['name' => 'Download', 'url' => '/#download'],
-        ['name' => 'FAQ', 'url' => '/#faq'],
-        ['name' => 'Contact', 'url' => '/contact'],
-    ];
 }
 
 $instanceId = 'le-nav-' . uniqid();
 ?>
 
-<div class="le-nav-outer" id="<?= $instanceId ?>">
+<nav id="<?= $instanceId ?>">
     <style>
         #<?= $instanceId ?> {
-            width: 100vw;
-            margin-left: calc(-50vw + 50%);
-            background: <?= htmlspecialchars($navBg) ?>;
-            backdrop-filter: blur(10px);
-            padding: 0 0;
+            padding: 0 20px;
             height: 80px;
             display: flex;
             align-items: center;
-            justify-content: center;
-            box-sizing: border-box;
-        }
-        #<?= $instanceId ?> .le-nav-inner {
-            width: 100%;
+            justify-content: space-between;
             max-width: 1200px;
             margin: 0 auto;
-            padding: 0 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
         }
         
-        #<?= $instanceId ?> .le-nav-inner .le-nav-logo {
+        #<?= $instanceId ?> .le-nav-logo {
             display: flex;
             align-items: center;
             gap: 12px;
@@ -131,12 +87,12 @@ $instanceId = 'le-nav-' . uniqid();
             text-decoration: none;
         }
         
-        #<?= $instanceId ?> .le-nav-inner .le-nav-logo img {
+        #<?= $instanceId ?> .le-nav-logo img {
             height: <?= intval($logoWidth) ?>px;
             width: auto;
         }
         
-        #<?= $instanceId ?> .le-nav-inner .le-nav-logo-icon {
+        #<?= $instanceId ?> .le-nav-logo-icon {
             width: <?= intval($logoWidth) ?>px;
             height: <?= intval($logoWidth) ?>px;
             background: <?= $buttonPrimaryBg ?>;
@@ -147,25 +103,25 @@ $instanceId = 'le-nav-' . uniqid();
             position: relative;
         }
         
-        #<?= $instanceId ?> .le-nav-inner .le-nav-logo-icon svg {
+        #<?= $instanceId ?> .le-nav-logo-icon svg {
             width: 24px;
             height: 24px;
             fill: #ffffff;
         }
         
-        #<?= $instanceId ?> .le-nav-inner .le-nav-menu {
+        #<?= $instanceId ?> .le-nav-menu {
             display: flex;
             align-items: center;
             gap: 32px;
         }
         
-        #<?= $instanceId ?> .le-nav-inner .le-nav-links {
+        #<?= $instanceId ?> .le-nav-links {
             display: flex;
             align-items: center;
             gap: 32px;
         }
         
-        #<?= $instanceId ?> .le-nav-inner .le-nav-link {
+        #<?= $instanceId ?> .le-nav-link {
             color: <?= $navLink ?>;
             font-size: 0.95rem;
             font-weight: 600;
@@ -174,11 +130,11 @@ $instanceId = 'le-nav-' . uniqid();
             text-decoration: none;
         }
         
-        #<?= $instanceId ?> .le-nav-inner .le-nav-link:hover {
+        #<?= $instanceId ?> .le-nav-link:hover {
             color: <?= $navLinkHover ?>;
         }
         
-        #<?= $instanceId ?> .le-nav-inner .le-nav-link::after {
+        #<?= $instanceId ?> .le-nav-link::after {
             content: '';
             position: absolute;
             bottom: -4px;
@@ -190,11 +146,11 @@ $instanceId = 'le-nav-' . uniqid();
             border-radius: 1px;
         }
         
-        #<?= $instanceId ?> .le-nav-inner .le-nav-link:hover::after {
+        #<?= $instanceId ?> .le-nav-link:hover::after {
             width: 100%;
         }
         
-        #<?= $instanceId ?> .le-nav-inner .le-nav-cta {
+        #<?= $instanceId ?> .le-nav-cta {
             padding: 10px 24px;
             background: <?= $buttonPrimaryBg ?>;
             color: #ffffff;
@@ -208,18 +164,18 @@ $instanceId = 'le-nav-' . uniqid();
             text-decoration: none;
         }
         
-        #<?= $instanceId ?> .le-nav-inner .le-nav-cta:hover {
+        #<?= $instanceId ?> .le-nav-cta:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
         }
         
-        #<?= $instanceId ?> .le-nav-inner .le-nav-cta svg {
+        #<?= $instanceId ?> .le-nav-cta svg {
             width: 16px;
             height: 16px;
             fill: currentColor;
         }
         
-        #<?= $instanceId ?> .le-nav-inner .le-nav-toggle {
+        #<?= $instanceId ?> .le-nav-toggle {
             display: none;
             flex-direction: column;
             gap: 5px;
@@ -229,7 +185,7 @@ $instanceId = 'le-nav-' . uniqid();
             border: none;
         }
         
-        #<?= $instanceId ?> .le-nav-inner .le-nav-toggle span {
+        #<?= $instanceId ?> .le-nav-toggle span {
             width: 24px;
             height: 2px;
             background: <?= $navText ?>;
@@ -302,7 +258,6 @@ $instanceId = 'le-nav-' . uniqid();
         }
     </style>
     
-    <div class="le-nav-inner">
     <?php if ($showLogo): ?>
     <a href="/" class="le-nav-logo">
         <?php if ($logoImage): ?>
@@ -330,11 +285,10 @@ $instanceId = 'le-nav-' . uniqid();
         </div>
         
         <?php if ($showCta): ?>
-        <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="le-nav-cta">
+        <a href="<?= htmlspecialchars($ctaUrl) ?>" class="le-nav-cta">
             <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             <?= htmlspecialchars($ctaText) ?>
         </a>
         <?php endif; ?>
     </div>
-    </div>
-</div>
+</nav>

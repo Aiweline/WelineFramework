@@ -22,20 +22,14 @@ use Weline\Ai\Service\AdapterScanner;
 use Weline\Ai\Service\AgentScanner;
 use Weline\Ai\Service\I18nIntegration;
 use Weline\Ai\Service\Provider\ProviderFactory;
-use Weline\Ai\Service\Provider\ImageGenerationProviderInterface;
 use Weline\Ai\Service\Provider\AccountService;
 use Weline\Ai\Service\ConfigResolver;
 use Weline\Ai\Interface\AgentInterface;
 use Weline\Ai\Agent\AgentResult;
 use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Ai\Exception\ModelSelectionException;
-use Weline\Ai\Exception\StreamCancelledException;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\Env;
-use Weline\Framework\Php\FiberTaskRunner;
-use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * AI服务核心类
@@ -50,41 +44,6 @@ use Weline\Framework\Runtime\SchedulerSystem;
 class AiService
 {
     /**
-     * Windows-1252 visible placeholders that often appear when UTF-8 bytes are decoded with the wrong code page.
-     *
-     * @var array<string, string>
-     */
-    private const MOJIBAKE_CP1252_BYTES = [
-        '€' => "\x80",
-        '‚' => "\x82",
-        'ƒ' => "\x83",
-        '„' => "\x84",
-        '…' => "\x85",
-        '†' => "\x86",
-        '‡' => "\x87",
-        'ˆ' => "\x88",
-        '‰' => "\x89",
-        'Š' => "\x8A",
-        '‹' => "\x8B",
-        'Œ' => "\x8C",
-        'Ž' => "\x8E",
-        '‘' => "\x91",
-        '’' => "\x92",
-        '“' => "\x93",
-        '”' => "\x94",
-        '•' => "\x95",
-        '–' => "\x96",
-        '—' => "\x97",
-        '˜' => "\x98",
-        '™' => "\x99",
-        'š' => "\x9A",
-        '›' => "\x9B",
-        'œ' => "\x9C",
-        'ž' => "\x9E",
-        'Ÿ' => "\x9F",
-    ];
-
-    /**
      * 服务模式：API接口模式
      */
     public const MODE_API = 'api';
@@ -93,6 +52,7 @@ class AiService
      * 服务模式：PHP服务模式
      */
     public const MODE_PHP = 'php';
+
     /**
      * @var AiModel
      */
@@ -134,11 +94,6 @@ class AiService
     private AgentScanner $agentScanner;
 
     /**
-     * 会话历史存储（按需加载，避免影响现有构造签名）。
-     */
-    private ?AiConversationFileSessionService $conversationSessionService = null;
-
-    /**
      * 构造函数
      * 
      * @param AiModel $aiModel
@@ -168,53 +123,6 @@ class AiService
         $this->usageLog = $usageLog;
         $this->accountService = $accountService;
         $this->agentScanner = $agentScanner;
-    }
-
-    /**
-     * @param array<string,mixed> $resolvedConfig
-     */
-    private function applyResolvedConfigToModel(AiModel $model, array $resolvedConfig): void
-    {
-        $filteredConfig = $this->filterConfigOverrides($resolvedConfig);
-        if (empty($filteredConfig)) {
-            return;
-        }
-
-        $mergedConfig = array_merge($model->getConfig(), $filteredConfig);
-        $mergedProviderConfig = array_merge($model->getProviderConfig(), $filteredConfig);
-        $model->setData(
-            AiModel::schema_fields_CONFIG,
-            json_encode($mergedConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
-        );
-        $model->setData(
-            AiModel::schema_fields_PROVIDER_CONFIG,
-            json_encode($mergedProviderConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
-        );
-    }
-
-    private function newAiModelQuery(): AiModel
-    {
-        /** @var AiModel $model */
-        $model = ObjectManager::make(AiModel::class);
-        return $model->clearData()->reset();
-    }
-
-    private function createDetachedModel(AiModel $model): AiModel
-    {
-        /** @var AiModel $runtimeModel */
-        $runtimeModel = ObjectManager::make(AiModel::class);
-        $runtimeModel->setData($model->getData());
-        return $runtimeModel;
-    }
-
-    private function newProviderAccount(array $accountData = []): Account
-    {
-        /** @var Account $account */
-        $account = ObjectManager::make(Account::class);
-        if (!empty($accountData)) {
-            $account->setData($accountData);
-        }
-        return $account;
     }
 
     /**
@@ -266,35 +174,14 @@ class AiService
     }
 
     /**
-     * 获取文件会话历史（仅当调用方使用 session_id 时有意义）。
-     *
-     * @param string $sessionId
-     * @return array<string,mixed>
-     */
-    public function getSessionConversation(string $sessionId): array
-    {
-        return $this->getConversationSessionService()->getSession($sessionId);
-    }
-
-    /**
-     * 清理文件会话历史。
-     *
-     * @param string $sessionId
-     * @return bool
-     */
-    public function clearSessionConversation(string $sessionId): bool
-    {
-        return $this->getConversationSessionService()->clearSession($sessionId);
-    }
-
-    /**
      * 检查是否默认启用流式输出
      * 
      * @return bool
      */
     public static function isStreamEnabled(): bool
     {
-        return true;
+        $config = \Weline\Framework\App\Env::getInstance()->getModuleConfig('Weline_Ai');
+        return $config['stream']['enabled'] ?? true; // 默认启用
     }
 
     /**
@@ -304,118 +191,66 @@ class AiService
      */
     public static function getStreamConfig(): array
     {
-        return [
+        $config = \Weline\Framework\App\Env::getInstance()->getModuleConfig('Weline_Ai');
+        return $config['stream'] ?? [
             'enabled' => true,
             'chunk_size' => 1024,
             'flush_interval' => 100,
         ];
     }
 
-    public function supportsCooperativeConcurrency(?int $concurrency = null): bool
-    {
-        $concurrency = $concurrency ?? 2;
-        // WLS 开启全局调度时仍允许并发：FiberTaskRunner 会临时 suppress 外层 Scheduler 再装本地 Fiber 等待环。
-        return $concurrency > 1 && \class_exists(\Fiber::class);
-    }
-
     /**
-     * Run independent AI sub-tasks in child sessions when local cooperative scheduling is available.
-     *
-     * @param array<string|int, callable(array<string, mixed>, string|int): mixed> $tasks
-     * @param array{concurrency?:int,session_id?:string,params?:array<string,mixed>,disable_conversation_history?:bool,disable_conversation_persist?:bool} $options
-     * @return array<string|int, mixed>
+     * 生成文本内容（实例方法）
+     * 
+     * @param string $prompt 提示词
+     * @param string|null $modelCode 指定模型代码
+     * @param string|null $scenarioCode 场景代码
+     * @param string|null $locale 语言代码
+     * @param array $params 额外参数
+     * @return string
+     * @throws Exception
      */
-    public function runCooperativeSessionTasks(array $tasks, array $options = []): array
-    {
-        if ($tasks === []) {
-            return [];
-        }
-
-        $concurrency = \max(1, (int)($options['concurrency'] ?? \count($tasks)));
-        $baseSessionId = \trim((string)($options['session_id'] ?? ''));
-        $baseParams = \is_array($options['params'] ?? null) ? $options['params'] : [];
-        $runnerTasks = [];
-
-        foreach ($tasks as $taskKey => $task) {
-            if (!\is_callable($task)) {
-                throw new \InvalidArgumentException('Cooperative AI task must be callable.');
-            }
-            $sessionParams = $this->buildCooperativeChildSessionParams($baseParams, $baseSessionId, $taskKey, $options);
-            $runnerTasks[$taskKey] = static fn(string|int $key): mixed => $task($sessionParams, $key);
-        }
-
-        if (!$this->supportsCooperativeConcurrency($concurrency)) {
-            $results = [];
-            foreach ($runnerTasks as $taskKey => $task) {
-                $results[$taskKey] = $task($taskKey);
-            }
-            return $results;
-        }
-
-        return (new FiberTaskRunner(defaultConcurrency: $concurrency))->run($runnerTasks, $concurrency);
-    }
-
     /**
-     * Run independent AI sub-tasks and return every child outcome.
+     * Run independent AI subtasks and return a settled result map.
      *
-     * @param array<string|int, callable(array<string, mixed>, string|int): mixed> $tasks
-     * @param array{concurrency?:int,session_id?:string,params?:array<string,mixed>,disable_conversation_history?:bool,disable_conversation_persist?:bool} $options
+     * This dev branch does not yet carry the Fiber runner used by the feature
+     * branch, so keep the contract stable with sequential execution.
+     *
+     * @param array<string|int, callable(array<string,mixed>, string|int):mixed> $tasks
+     * @param array<string, mixed> $options
      * @return array<string|int, array{status:string,result?:mixed,error?:\Throwable}>
      */
+    public function supportsCooperativeConcurrency(int $concurrency): bool
+    {
+        return false;
+    }
+
     public function runCooperativeSessionTasksSettled(array $tasks, array $options = []): array
     {
         if ($tasks === []) {
             return [];
         }
 
-        $concurrency = \max(1, (int)($options['concurrency'] ?? \count($tasks)));
         $baseSessionId = \trim((string)($options['session_id'] ?? ''));
         $baseParams = \is_array($options['params'] ?? null) ? $options['params'] : [];
-        $runnerTasks = [];
+        $settled = [];
 
         foreach ($tasks as $taskKey => $task) {
             if (!\is_callable($task)) {
                 throw new \InvalidArgumentException('Cooperative AI task must be callable.');
             }
-            $sessionParams = $this->buildCooperativeChildSessionParams($baseParams, $baseSessionId, $taskKey, $options);
-            $runnerTasks[$taskKey] = static fn(string|int $key): mixed => $task($sessionParams, $key);
-        }
 
-        if (!$this->supportsCooperativeConcurrency($concurrency)) {
-            $settled = [];
-            foreach ($runnerTasks as $taskKey => $task) {
-                try {
-                    $settled[$taskKey] = [
-                        'status' => 'fulfilled',
-                        'result' => $task($taskKey),
-                    ];
-                } catch (\Throwable $throwable) {
-                    $settled[$taskKey] = [
-                        'status' => 'rejected',
-                        'error' => $throwable,
-                    ];
-                }
-            }
-
-            return $settled;
-        }
-
-        $settled = [];
-        foreach ((new FiberTaskRunner(defaultConcurrency: $concurrency))->runEvents($runnerTasks, $concurrency) as $taskKey => $event) {
-            if (($event['status'] ?? '') === 'fulfilled') {
+            try {
                 $settled[$taskKey] = [
                     'status' => 'fulfilled',
-                    'result' => $event['result'] ?? null,
+                    'result' => $task($this->buildCooperativeChildSessionParams($baseParams, $baseSessionId, $taskKey, $options), $taskKey),
                 ];
-                continue;
+            } catch (\Throwable $throwable) {
+                $settled[$taskKey] = [
+                    'status' => 'rejected',
+                    'error' => $throwable,
+                ];
             }
-
-            $settled[$taskKey] = [
-                'status' => 'rejected',
-                'error' => ($event['error'] ?? null) instanceof \Throwable
-                    ? $event['error']
-                    : new \RuntimeException('Cooperative AI task failed without an exception payload.'),
-            ];
         }
 
         return $settled;
@@ -453,21 +288,10 @@ class AiService
             $safeBase = 'ai';
         }
         $hash = \substr(\sha1($baseSessionId . '|' . $taskKey), 0, 16);
+
         return $safeBase . '.task.' . $hash;
     }
 
-    /**
-     * 生成文本内容（实例方法）
-     * 
-     * @param string $prompt 提示词
-     * @param string|null $modelCode 指定模型代码
-     * @param string|null $scenarioCode 场景代码
-     * @param string|null $locale 语言代码
-     * @param array $params 额外参数
-     * @return string
-     * @throws ModelSelectionException 未配置可用模型（场景/全局默认均无）
-     * @throws Exception
-     */
     public function generate(
         string $prompt, 
         ?string $modelCode = null, 
@@ -477,21 +301,16 @@ class AiService
         ?int $userId = null,
         bool $isBackend = false
     ): string {
-        $params = AiRuntimeContext::mergeDefaultParams($params);
-
         // 1. 模型选择
         $model = $this->selectModel($modelCode, $scenarioCode);
         if (!$model) {
             $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
-            throw new ModelSelectionException($reason);
+            throw new Exception($reason);
         }
 
         // 2. 配置解析
         $configResolver = ObjectManager::getInstance(ConfigResolver::class);
         $userConfig = $params['user_config'] ?? [];
-        if (\array_key_exists('allow_zero_balance_provider', $params)) {
-            $userConfig['allow_zero_balance_provider'] = $params['allow_zero_balance_provider'];
-        }
         // 解析测试模式（多来源并规范化）：
         // - 顶层 params['test_mode']
         // - user_config['test_mode']
@@ -521,25 +340,20 @@ class AiService
         if (!$isBackend && $userId) {
             $estimatedTokens = $this->estimateTokens($prompt);
             if (!$configResolver->checkUserBalance($userId, $model->getModelCode(), $estimatedTokens)) {
-                throw new Exception(__('用户余额不足，请充值后使用'));
+                throw new Exception('用户余额不足，请充值后使用');
             }
         }
-
-        // 可选会话模式：调用方传 session_id 时，自动注入历史。
-        $params = $this->attachConversationHistory($params);
 
         // 4. 场景适配器处理
         $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
 
         // 5. 语言验证
-        $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
         if ($locale && !$this->i18nIntegration->isLocaleSupported($locale)) {
-            throw new Exception(__('不支持的语言: %{locale}', ['locale' => $locale]));
+            throw new Exception("不支持的语言: {$locale}");
         }
 
         // 6. 调用AI模型API
-        $params['resolved_config'] = $resolvedConfig;
-        $response = $this->callModelApi($model, $adaptedPrompt, $params);
+        $response = $this->callModelApi($model, $adaptedPrompt, $resolvedConfig, $params);
 
         // 7. 场景适配器后处理
         $processedResponse = $this->processScenarioResponse($response, $scenarioCode, $params);
@@ -549,8 +363,6 @@ class AiService
             $processedResponse = $this->processLanguageResponse($processedResponse, $locale);
         }
 
-        $this->persistConversationTurn($params, $prompt, $processedResponse);
-
         // 9. 记录使用情况
         $this->recordUsage($model, $adaptedPrompt, $processedResponse, $userId, $isBackend);
 
@@ -558,125 +370,7 @@ class AiService
     }
 
     /**
-     * Generate a structured provider response for tool-loop callers.
-     *
-     * This keeps provider metadata such as `tool_calls` intact.
-     *
-     * @param string $prompt
-     * @param string|null $modelCode
-     * @param string|null $scenarioCode
-     * @param array $params
-     * @return array
-     * @throws ModelSelectionException 未配置可用模型（场景/全局默认均无）
-     * @throws Exception
-     */
-    public function generateStructured(
-        string $prompt,
-        ?string $modelCode = null,
-        ?string $scenarioCode = null,
-        array $params = []
-    ): array {
-        $params = AiRuntimeContext::mergeDefaultParams($params);
-
-        $model = $this->selectModel($modelCode, $scenarioCode);
-        if (!$model) {
-            $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
-            throw new ModelSelectionException($reason);
-        }
-
-        return $this->callModelApiStructured($model, $prompt, $params);
-    }
-
-    /**
-     * Generate images from text. Text models are never used as image fallback.
-     *
-     * @return array<string,mixed>
-     * @throws ModelSelectionException
-     * @throws Exception
-     */
-    public function generateImage(
-        string $prompt,
-        ?string $modelCode = null,
-        ?string $scenarioCode = null,
-        array $params = []
-    ): array {
-        $params = AiRuntimeContext::mergeDefaultParams($params);
-        $model = $this->selectModel($modelCode, $scenarioCode, AiModel::PRIMARY_MODALITY_TEXT_TO_IMAGE);
-        if (!$model) {
-            throw new ModelSelectionException('未配置可用的 text2image 模型，图片生成不会回退到 text2text 模型');
-        }
-
-        $configResolver = ObjectManager::getInstance(ConfigResolver::class);
-        $userConfig = \is_array($params['user_config'] ?? null) ? $params['user_config'] : [];
-        if (\array_key_exists('allow_zero_balance_provider', $params)) {
-            $userConfig['allow_zero_balance_provider'] = $params['allow_zero_balance_provider'];
-        }
-        $resolvedConfig = $configResolver->resolveConfig(
-            $model->getModelCode(),
-            $userConfig,
-            isset($params['user_id']) ? (int)$params['user_id'] : null,
-            (bool)($params['is_backend'] ?? true),
-            $model
-        );
-        $this->applyResolvedConfigToModel($model, $resolvedConfig);
-        $params['resolved_config'] = $resolvedConfig;
-
-        $provider = $this->providerFactory->getProvider($model);
-        if (!$provider instanceof ImageGenerationProviderInterface) {
-            throw new Exception(__('模型 "%{1}" 的供应商未实现图片生成接口', [$model->getModelCode()]));
-        }
-
-        return $this->normalizeImageGenerationResult(
-            $provider->generateImage($model, $prompt, $params),
-            $model
-        );
-    }
-
-    /**
-     * @return array<string,mixed>|null
-     */
-    public function resolveModel(?string $modelCode = null, ?string $scenarioCode = null, string $primaryModality = AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT): ?array
-    {
-        $model = $this->selectModel($modelCode, $scenarioCode, $primaryModality);
-        return $model ? $this->modelToArray($model) : null;
-    }
-
-    /**
-     * @return array<int,array<string,mixed>>
-     */
-    public function listModels(?string $primaryModality = null): array
-    {
-        $items = $this->newAiModelQuery()
-            ->where(AiModel::schema_fields_IS_ACTIVE, 1)
-            ->select()
-            ->fetch();
-
-        $models = [];
-        foreach ($this->iterableItems($items) as $model) {
-            if (!$model instanceof AiModel) {
-                continue;
-            }
-            if ($primaryModality !== null && !$model->supportsPrimaryModality($primaryModality)) {
-                continue;
-            }
-            $models[] = $this->modelToArray($model);
-        }
-
-        return $models;
-    }
-
-    /**
-     * @return array<string,string>
-     */
-    public function getAdapterModelBindings(string $scenarioCode): array
-    {
-        return $this->adapterScanner->getModelBindingsForAdapter($scenarioCode);
-    }
-
-    /**
      * 流式生成文本内容（实例方法）
-     * 
-     * 注意：此方法必须立即进入流式发送路径，不允许先同步等待完整结果再返回。
      * 
      * @param string $prompt 提示词
      * @param callable $callback 回调函数
@@ -685,7 +379,6 @@ class AiService
      * @param string|null $locale 语言代码
      * @param array $params 额外参数
      * @return void
-     * @throws ModelSelectionException 未配置可用模型（场景/全局默认均无）
      * @throws Exception
      */
     public function generateStream(
@@ -696,171 +389,23 @@ class AiService
         ?string $locale = null,
         array $params = []
     ): void {
-        $params = AiRuntimeContext::mergeDefaultParams($params);
-
+        // 1. 模型选择
         $model = $this->selectModel($modelCode, $scenarioCode);
         if (!$model) {
             $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
-            throw new ModelSelectionException($reason);
+            throw new Exception($reason);
         }
 
-        $configResolver = ObjectManager::getInstance(ConfigResolver::class);
-        $userConfig = \is_array($params['user_config'] ?? null) ? $params['user_config'] : [];
-        if (\array_key_exists('allow_zero_balance_provider', $params)) {
-            $userConfig['allow_zero_balance_provider'] = $params['allow_zero_balance_provider'];
-        }
-        $userId = isset($params['user_id']) ? (int)$params['user_id'] : null;
-        $isBackend = (bool)($params['is_backend'] ?? false);
-        $isTestMode = false;
-        if (\array_key_exists('test_mode', $params)) {
-            $isTestMode = \in_array($params['test_mode'], [true, 1, '1', 'true', 'TRUE'], true);
-        } elseif (isset($userConfig['test_mode'])) {
-            $isTestMode = \in_array($userConfig['test_mode'], [true, 1, '1', 'true', 'TRUE'], true);
-        }
-        if ($isTestMode) {
-            $userConfig['test_mode'] = true;
-        } elseif (isset($userConfig['test_mode'])) {
-            unset($userConfig['test_mode']);
-        }
-
-        $params['resolved_config'] = $configResolver->resolveConfig(
-            $model->getModelCode(),
-            $userConfig,
-            $userId,
-            $isBackend
-        );
-
-        $params = $this->attachConversationHistory($params);
+        // 2. 场景适配器处理
         $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
 
+        // 3. 语言验证
         if ($locale && !$this->i18nIntegration->isLocaleSupported($locale)) {
-            throw new Exception(__('不支持的语言: %{locale}', ['locale' => $locale]));
+            throw new Exception("不支持的语言: {$locale}");
         }
 
-        $assistantBuffer = '';
-        $wrappedCallback = function ($chunk) use ($callback, &$assistantBuffer) {
-            if (is_string($chunk) && trim($chunk) !== '') {
-                $assistantBuffer .= $chunk;
-            }
-            return $callback($chunk);
-        };
-
-        $this->callModelApiStream($model, $adaptedPrompt, $wrappedCallback, $scenarioCode, $locale, $params);
-        $this->persistConversationTurn($params, $prompt, $assistantBuffer);
-    }
-
-    /**
-     * 流式生成文本内容，并返回最终结构化结果。
-     *
-     * @param string $prompt
-     * @param callable $callback function(string $eventType, array $data): mixed
-     * @param string|null $modelCode
-     * @param string|null $scenarioCode
-     * @param string|null $locale
-     * @param array $params
-     * @return array<string, mixed>
-     */
-    public function generateStreamResult(
-        string $prompt,
-        callable $callback,
-        ?string $modelCode = null,
-        ?string $scenarioCode = null,
-        ?string $locale = null,
-        array $params = []
-    ): array {
-        $params = AiRuntimeContext::mergeDefaultParams($params);
-
-        $model = $this->selectModel($modelCode, $scenarioCode);
-        if (!$model) {
-            $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
-            throw new ModelSelectionException($reason);
-        }
-
-        $configResolver = ObjectManager::getInstance(ConfigResolver::class);
-        $userConfig = \is_array($params['user_config'] ?? null) ? $params['user_config'] : [];
-        $userId = isset($params['user_id']) ? (int)$params['user_id'] : null;
-        $isBackend = (bool)($params['is_backend'] ?? false);
-        $isTestMode = false;
-        if (\array_key_exists('test_mode', $params)) {
-            $isTestMode = \in_array($params['test_mode'], [true, 1, '1', 'true', 'TRUE'], true);
-        } elseif (isset($userConfig['test_mode'])) {
-            $isTestMode = \in_array($userConfig['test_mode'], [true, 1, '1', 'true', 'TRUE'], true);
-        }
-        if ($isTestMode) {
-            $userConfig['test_mode'] = true;
-        } elseif (isset($userConfig['test_mode'])) {
-            unset($userConfig['test_mode']);
-        }
-        $params['resolved_config'] = $configResolver->resolveConfig(
-            $model->getModelCode(),
-            $userConfig,
-            $userId,
-            $isBackend
-        );
-        $params = $this->attachConversationHistory($params);
-        $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
-
-        if ($locale && !$this->i18nIntegration->isLocaleSupported($locale)) {
-            throw new Exception(__('不支持的语言: %{locale}', ['locale' => $locale]));
-        }
-
-        $assistantBuffer = '';
-        $wrappedCallback = function ($chunk) use ($callback, &$assistantBuffer) {
-            if (is_string($chunk) && trim($chunk) !== '') {
-                $assistantBuffer .= $chunk;
-            }
-            return $callback($chunk);
-        };
-
-        $this->callModelApiStream($model, $adaptedPrompt, $wrappedCallback, $scenarioCode, $locale, $params);
-        $this->persistConversationTurn($params, $prompt, $assistantBuffer);
-        return ['success' => true, 'mode' => 'stream'];
-    }
-
-    private function attachConversationHistory(array $params): array
-    {
-        if (isset($params['messages']) && is_array($params['messages']) && $params['messages'] !== []) {
-            return $params;
-        }
-        if (!empty($params['disable_conversation_history'])) {
-            return $params;
-        }
-
-        $service = $this->getConversationSessionService();
-        if (!$service->hasSessionId($params)) {
-            return $params;
-        }
-
-        $history = $service->buildHistoryMessages($params);
-        if ($history !== []) {
-            $params['history'] = $history;
-        }
-        return $params;
-    }
-
-    private function persistConversationTurn(array $params, string $prompt, string $response): void
-    {
-        if (!empty($params['disable_conversation_persist'])) {
-            return;
-        }
-        $service = $this->getConversationSessionService();
-        if (!$service->hasSessionId($params)) {
-            return;
-        }
-        if (trim($prompt) === '' || trim($response) === '') {
-            return;
-        }
-        $service->appendTurn($params, $prompt, $response);
-    }
-
-    private function getConversationSessionService(): AiConversationFileSessionService
-    {
-        if ($this->conversationSessionService === null) {
-            /** @var AiConversationFileSessionService $service */
-            $service = ObjectManager::getInstance(AiConversationFileSessionService::class);
-            $this->conversationSessionService = $service;
-        }
-        return $this->conversationSessionService;
+        // 4. 流式调用AI模型API
+        $this->callModelApiStream($model, $adaptedPrompt, $callback, $scenarioCode, $locale, $params);
     }
 
     /**
@@ -870,15 +415,14 @@ class AiService
      * @param string|null $scenarioCode 场景代码
      * @return AiModel|null
      */
-    private function selectModel(?string $modelCode, ?string $scenarioCode, string $primaryModality = AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT): ?AiModel
+    private function selectModel(?string $modelCode, ?string $scenarioCode): ?AiModel
     {
         $model = null;
-        $primaryModality = AiModel::normalizePrimaryModality($primaryModality);
         
         // 1. 如果指定了模型代码，优先使用
         if ($modelCode) {
             // 优先取已激活模型
-            $model = $this->newAiModelQuery()
+            $model = $this->aiModel->reset()
                 ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                 ->where(AiModel::schema_fields_IS_ACTIVE, 1)
                 ->find()
@@ -886,34 +430,23 @@ class AiService
 
             if (!$model->getId()) {
                 // 若未激活，则放宽激活限制，用于连接测试等场景
-                $model = $this->newAiModelQuery()
+                $model = $this->aiModel->reset()
                     ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                     ->find()
                     ->fetch();
             }
-
-            if ($model && $model->getId() && !$model->supportsPrimaryModality($primaryModality)) {
-                return null;
-            }
         }
 
-        // 2. 根据场景适配器配置的模型绑定选择；default_model 仅作为 text2text fallback
+        // 2. 根据场景适配器配置的默认模型选择（ai_scenario_adapter.default_model）
         if (!$model || !$model->getId()) {
             if ($scenarioCode) {
-                $adapterBindings = $this->adapterScanner->getModelBindingsForAdapter($scenarioCode);
-                $adapterDefaultModelCode = $adapterBindings[$primaryModality] ?? null;
-                if ($primaryModality === AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT && !$adapterDefaultModelCode) {
-                    $adapterDefaultModelCode = $this->adapterScanner->getDefaultModelCodeForAdapter($scenarioCode);
-                }
+                $adapterDefaultModelCode = $this->adapterScanner->getDefaultModelCodeForAdapter($scenarioCode);
                 if ($adapterDefaultModelCode) {
-                    $model = $this->newAiModelQuery()
+                    $model = $this->aiModel->reset()
                         ->where(AiModel::schema_fields_MODEL_CODE, $adapterDefaultModelCode)
                         ->where(AiModel::schema_fields_IS_ACTIVE, 1)
                         ->find()
                         ->fetch();
-                    if ($model && $model->getId() && !$model->supportsPrimaryModality($primaryModality)) {
-                        $model = null;
-                    }
                 }
             }
         }
@@ -922,97 +455,30 @@ class AiService
         if (!$model || !$model->getId()) {
             if ($scenarioCode) {
                 $model = $this->defaultModelManager->getDefaultModel($scenarioCode);
-                if ($model && $model->getId() && !$model->supportsPrimaryModality($primaryModality)) {
-                    $model = null;
-                }
             }
         }
 
         // 4. 使用全局默认模型
         if (!$model || !$model->getId()) {
             $model = $this->defaultModelManager->getDefaultModel(DefaultModelManager::SERVICE_TYPE_DEFAULT);
-            if ($model && $model->getId() && !$model->supportsPrimaryModality($primaryModality)) {
-                $model = null;
-            }
         }
 
         // 5. 如果找不到默认模型，使用任意一个已激活的默认标记模型
         if (!$model || !$model->getId()) {
-            $model = $this->newAiModelQuery()
+            $model = $this->aiModel->reset()
                 ->where(AiModel::schema_fields_IS_ACTIVE, 1)
                 ->where(AiModel::schema_fields_IS_DEFAULT, 1)
                 ->find()
                 ->fetch();
-            if ($model && $model->getId() && !$model->supportsPrimaryModality($primaryModality)) {
-                $model = null;
-            }
         }
 
-        // 6. 如果没有显式默认，但系统已有可用模型，则使用任意已激活模型，避免功能入口误报未配置。
-        if (!$model || !$model->getId()) {
-            $model = $this->newAiModelQuery()
-                ->where(AiModel::schema_fields_IS_ACTIVE, 1)
-                ->find()
-                ->fetch();
-            if ($model && $model->getId() && !$model->supportsPrimaryModality($primaryModality)) {
-                $model = null;
-            }
-        }
-
-        // 7. 如果找到模型，用 config 覆盖 provider_config（读取时覆盖，不保存到数据库）
+        // 6. 如果找到模型，用 config 覆盖 provider_config（读取时覆盖，不保存到数据库）
         if ($model && $model->getId()) {
-            $model = $this->createDetachedModel($model);
             $this->mergeConfigToProviderConfig($model);
             return $model;
         }
 
         return null;
-    }
-
-    /**
-     * @return array<string,mixed>
-     */
-    private function normalizeImageGenerationResult(array $result, AiModel $model): array
-    {
-        $images = $result['images'] ?? [];
-        return [
-            'images' => \is_array($images) ? \array_values($images) : [],
-            'usage' => \is_array($result['usage'] ?? null) ? $result['usage'] : [],
-            'model' => (string)($result['model'] ?? $model->getModelCode()),
-            'finish_reason' => (string)($result['finish_reason'] ?? 'stop'),
-            'raw' => $result['raw'] ?? null,
-        ];
-    }
-
-    /**
-     * @return array<string,mixed>
-     */
-    private function modelToArray(AiModel $model): array
-    {
-        return [
-            'id' => $model->getId(),
-            'model_code' => $model->getModelCode(),
-            'name' => $model->getName(),
-            'supplier' => $model->getSupplier(),
-            'primary_modality' => $model->getPrimaryModality(),
-            'capabilities' => $model->getCapabilities(),
-            'is_active' => $model->getIsActive(),
-            'is_default' => $model->getIsDefault(),
-        ];
-    }
-
-    /**
-     * @return iterable<int|string,mixed>
-     */
-    private function iterableItems(mixed $items): iterable
-    {
-        if (\is_array($items)) {
-            return $items;
-        }
-        if (\is_object($items) && \method_exists($items, 'getItems')) {
-            return $items->getItems();
-        }
-        return $items ? [$items] : [];
     }
     
     /**
@@ -1024,24 +490,16 @@ class AiService
      */
     private function mergeConfigToProviderConfig(AiModel $model): void
     {
-        $config = $this->filterConfigOverrides($model->getConfig());
+        $config = $model->getConfig();
         $providerConfig = $model->getProviderConfig();
-
+        
+        // 如果 config 不为空，用 config 的值覆盖 provider_config 的对应键
         if (!empty($config)) {
+            // 合并配置：config 的值覆盖 provider_config 的值
             $mergedProviderConfig = array_merge($providerConfig, $config);
+            // 更新 provider_config（仅在内存中，不保存到数据库）
             $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, json_encode($mergedProviderConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
         }
-    }
-
-    private function filterConfigOverrides(array $config): array
-    {
-        return array_filter($config, static function ($value): bool {
-            if (is_array($value)) {
-                return $value !== [];
-            }
-
-            return $value !== '' && $value !== null;
-        });
     }
     
     /**
@@ -1057,7 +515,7 @@ class AiService
         
         // 检查指定模型
         if ($modelCode) {
-            $model = $this->newAiModelQuery()
+            $model = $this->aiModel->reset()
                 ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                 ->find()
                 ->fetch();
@@ -1073,7 +531,7 @@ class AiService
         if ($scenarioCode) {
             $adapterDefaultModelCode = $this->adapterScanner->getDefaultModelCodeForAdapter($scenarioCode);
             if ($adapterDefaultModelCode) {
-                $model = $this->newAiModelQuery()
+                $model = $this->aiModel->reset()
                     ->where(AiModel::schema_fields_MODEL_CODE, $adapterDefaultModelCode)
                     ->find()
                     ->fetch();
@@ -1092,7 +550,7 @@ class AiService
                 $reasons[] = __('场景 "%{1}" 未配置默认模型（可在「场景适配器」中为该适配器设置默认模型，或在「默认模型配置」中配置）', [$scenarioCode]);
             } elseif ($defaultConfig) {
                 $modelCode = $defaultConfig->getData(\Weline\Ai\Model\AiDefaultModel::schema_fields_MODEL_CODE);
-                $model = $this->newAiModelQuery()
+                $model = $this->aiModel->reset()
                     ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                     ->find()
                     ->fetch();
@@ -1110,7 +568,7 @@ class AiService
             $reasons[] = __('未配置全局默认模型');
         } else {
             $modelCode = $globalDefault->getData(\Weline\Ai\Model\AiDefaultModel::schema_fields_MODEL_CODE);
-            $model = $this->newAiModelQuery()
+            $model = $this->aiModel->reset()
                 ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                 ->find()
                 ->fetch();
@@ -1122,7 +580,7 @@ class AiService
         }
         
         // 检查是否有已激活的默认标记模型
-        $activeDefaultCount = $this->newAiModelQuery()
+        $activeDefaultCount = $this->aiModel->reset()
             ->where(AiModel::schema_fields_IS_ACTIVE, 1)
             ->where(AiModel::schema_fields_IS_DEFAULT, 1)
             ->count();
@@ -1131,7 +589,7 @@ class AiService
         }
         
         // 检查是否有任何已激活的模型
-        $activeModelCount = $this->newAiModelQuery()
+        $activeModelCount = $this->aiModel->reset()
             ->where(AiModel::schema_fields_IS_ACTIVE, 1)
             ->count();
         if ($activeModelCount == 0) {
@@ -1185,7 +643,7 @@ class AiService
         // 验证参数
         $validationErrors = $adapter->validateParams($params);
         if (!empty($validationErrors)) {
-            throw new Exception(__('参数验证失败: %{errors}', ['errors' => implode(', ', $validationErrors)]));
+            throw new Exception('参数验证失败: ' . implode(', ', $validationErrors));
         }
 
         return $adapter->adaptPrompt($prompt, $params);
@@ -1240,43 +698,30 @@ class AiService
     {
         $startTime = microtime(true);
         $account = null;
-        $requestModel = $model;
         $usage = [];
         try {
             // 1. 获取供应商代码
-            $providerCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
-            if ($providerCode === '') {
-                $providerCode = $this->accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
-            }
+            $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::schema_fields_MODEL_CODE));
             if (!$providerCode) {
-                throw new Exception(__('无法确定模型的供应商'));
+                throw new Exception('无法确定模型的供应商');
             }
             
             // 2. 获取该供应商的账户列表（用于回退重试）
             $allAccounts = $this->accountService->getProviderAccounts($providerCode);
-            $resolvedConfig = \is_array($params['resolved_config'] ?? null) ? $params['resolved_config'] : [];
-            if (!empty($resolvedConfig)) {
-                $this->applyResolvedConfigToModel($model, $resolvedConfig);
-            }
-            $baseModel = $this->createDetachedModel($model);
             if (empty($allAccounts)) {
                 throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
 
             // 测试模式放宽筛选：仅要求激活；非测试模式要求激活+连通成功+余额>0
             $isTestMode = (bool)($params['test_mode'] ?? false);
-            $allowZeroBalanceProvider = (bool)($params['allow_zero_balance_provider'] ?? false);
-            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) use ($isTestMode, $allowZeroBalanceProvider) {
+            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) use ($isTestMode) {
                 if ((int)($acc['is_active'] ?? 0) !== 1) {
                     return false;
                 }
                 if ($isTestMode) {
                     return true;
                 }
-                if (($acc['connection_status'] ?? '') !== 'success') {
-                    return false;
-                }
-                return $allowZeroBalanceProvider || (float)($acc['balance'] ?? 0) > 0;
+                return (($acc['connection_status'] ?? '') === 'success') && (float)($acc['balance'] ?? 0) > 0;
             }));
             if (empty($candidateAccounts)) {
                 $message = $isTestMode 
@@ -1293,23 +738,26 @@ class AiService
                 return $bal2 <=> $bal1;
             });
 
+            // 3. 获取提供者实例一次
+            $provider = null;
             $lastError = null;
 
             foreach ($candidateAccounts as $accData) {
                 // 将数组账户加载为模型实例以便复用现有注入逻辑
                 /** @var Account $accModel */
-                $accModel = $this->newProviderAccount($accData);
-                $requestModel = $this->createDetachedModel($baseModel);
-                $model = $requestModel;
+                $accModel = ObjectManager::getInstance(Account::class);
+                $accModel->setData($accData);
 
                 // 注入账户配置并尝试请求
                 $this->injectAccountConfig($model, $accModel);
-                $provider = $this->providerFactory->getProvider($model);
+
+                if ($provider === null) {
+                    $provider = $this->providerFactory->getProvider($model);
+                }
 
                 try {
                     $result = $provider->generate($model, $prompt, $params);
                     $usage = $result['usage'] ?? [];
-                    $this->publishTokenUsage($usage, $params, $model, 'chat');
 
                     // 记录使用量（兼容旧系统）
                     $this->logUsage($model, $usage, $params);
@@ -1339,7 +787,13 @@ class AiService
                     return $result['content'];
                 } catch (\Exception $eTry) {
                     $lastError = $eTry;
-                    if (!$this->shouldRetryWithAnotherAccount($eTry)) {
+                    $msg = $eTry->getMessage();
+                    // 遇到认证失败/密钥无效时继续尝试下一个账户；其它错误直接抛出
+                    $isAuthError = stripos($msg, 'Authentication') !== false
+                        || stripos($msg, 'api key') !== false
+                        || stripos($msg, 'unauthorized') !== false
+                        || stripos($msg, '401') !== false;
+                    if (!$isAuthError) {
                         throw $eTry;
                     }
                     // 继续下一账户
@@ -1350,7 +804,7 @@ class AiService
             if ($lastError) {
                 throw $lastError;
             }
-            throw new Exception(__('未能使用任何账户完成请求'));
+            throw new Exception('未能使用任何账户完成请求');
             
         } catch (\Exception $e) {
             // 记录错误到供应商使用记录
@@ -1368,160 +822,8 @@ class AiService
             
             // 记录错误
             w_log_error("AI API调用失败: " . $e->getMessage());
-            throw new Exception(__('AI生成失败: %{msg}', ['msg' => $e->getMessage()]));
+            throw new Exception("AI生成失败: " . $e->getMessage());
         }
-    }
-
-    /**
-     * Call the model provider and keep the structured response.
-     *
-     * @param AiModel $model
-     * @param string $prompt
-     * @param array $params
-     * @return array
-     * @throws Exception
-     */
-    private function callModelApiStructured(AiModel $model, string $prompt, array $params): array
-    {
-        $startTime = microtime(true);
-        $account = null;
-        $requestModel = $model;
-        $usage = [];
-
-        try {
-            $providerCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
-            if ($providerCode === '') {
-                $providerCode = $this->accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
-            }
-            if (!$providerCode) {
-                throw new Exception(__('无法确定模型的供应商'));
-            }
-
-            $allAccounts = $this->accountService->getProviderAccounts($providerCode);
-            $resolvedConfig = \is_array($params['resolved_config'] ?? null) ? $params['resolved_config'] : [];
-            if (!empty($resolvedConfig)) {
-                $this->applyResolvedConfigToModel($model, $resolvedConfig);
-            }
-            $baseModel = $this->createDetachedModel($model);
-            if (empty($allAccounts)) {
-                throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
-            }
-
-            $isTestMode = (bool)($params['test_mode'] ?? false);
-            $allowZeroBalanceProvider = (bool)($params['allow_zero_balance_provider'] ?? false);
-            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) use ($isTestMode, $allowZeroBalanceProvider) {
-                if ((int)($acc['is_active'] ?? 0) !== 1) {
-                    return false;
-                }
-                if ($isTestMode) {
-                    return true;
-                }
-                return (($acc['connection_status'] ?? '') === 'success') && ($allowZeroBalanceProvider || (float)($acc['balance'] ?? 0) > 0);
-            }));
-            if (empty($candidateAccounts)) {
-                $message = $isTestMode
-                    ? __('没有满足条件的%{provider}供应商账户（需激活）', ['provider' => $providerCode])
-                    : __('没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）', ['provider' => $providerCode]);
-                throw new Exception(ErrorMessageHelper::getErrorMessageWithConfigLink($message, 'provider', ['provider_code' => $providerCode]));
-            }
-            usort($candidateAccounts, function ($a, $b) {
-                $d1 = (int)($a['is_default'] ?? 0);
-                $d2 = (int)($b['is_default'] ?? 0);
-                if ($d1 !== $d2) {
-                    return $d2 <=> $d1;
-                }
-                $bal1 = (float)($a['balance'] ?? 0);
-                $bal2 = (float)($b['balance'] ?? 0);
-                return $bal2 <=> $bal1;
-            });
-
-            $lastError = null;
-
-            foreach ($candidateAccounts as $accData) {
-                $accModel = $this->newProviderAccount($accData);
-                $requestModel = $this->createDetachedModel($baseModel);
-                $model = $requestModel;
-
-                $this->injectAccountConfig($model, $accModel);
-                $provider = $this->providerFactory->getProvider($model);
-
-                try {
-                    $result = $provider->generate($model, $prompt, $params);
-                    $usage = $result['usage'] ?? [];
-                    $this->publishTokenUsage($usage, $params, $model, 'chat');
-
-                    $this->logUsage($model, $usage, $params);
-
-                    $account = $accModel;
-                    $requestTime = (int)((microtime(true) - $startTime) * 1000);
-                    $this->accountService->recordUsage($account, $model, $usage, [
-                        'request_type' => 'chat',
-                        'user_id' => $params['user_id'] ?? null,
-                        'user_name' => $params['user_name'] ?? null,
-                        'request_time' => $requestTime,
-                        'status' => 'success',
-                    ]);
-
-                    return $result;
-                } catch (\Exception $eTry) {
-                    $lastError = $eTry;
-                    if (!$this->shouldRetryWithAnotherAccount($eTry)) {
-                        throw $eTry;
-                    }
-                }
-            }
-
-            if ($lastError) {
-                throw $lastError;
-            }
-            throw new Exception(__('未能使用任何账户完成请求'));
-        } catch (\Exception $e) {
-            if ($account) {
-                $requestTime = (int)((microtime(true) - $startTime) * 1000);
-                $this->accountService->recordUsage($account, $model, $usage, [
-                    'request_type' => 'chat',
-                    'user_id' => $params['user_id'] ?? null,
-                    'user_name' => $params['user_name'] ?? null,
-                    'request_time' => $requestTime,
-                    'status' => 'failed',
-                    'error_message' => $e->getMessage(),
-                ]);
-            }
-
-            w_log_error('AI structured API调用失败: ' . $e->getMessage());
-            throw new Exception(__('AI生成失败: %{msg}', ['msg' => $e->getMessage()]));
-        }
-    }
-
-    /**
-     * 是否应继续尝试其他供应商账户
-     *
-     * @param \Throwable $e
-     * @return bool
-     */
-    private function shouldRetryWithAnotherAccount(\Throwable $e): bool
-    {
-        $message = strtolower($e->getMessage());
-        $keywords = [
-            'authentication',
-            'api key',
-            'unauthorized',
-            'insufficient balance',
-            '余额不足',
-            '额度不足',
-            'quota',
-            'rate limit',
-            'request rate',
-            '429',
-            '401',
-            '402'
-        ];
-        foreach ($keywords as $keyword) {
-            if (strpos($message, $keyword) !== false) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -1536,69 +838,37 @@ class AiService
      * @return void
      */
     private function callModelApiStream(
-        AiModel $model,
-        string $prompt,
-        callable $callback,
-        ?string $scenarioCode,
-        ?string $locale,
+        AiModel $model, 
+        string $prompt, 
+        callable $callback, 
+        ?string $scenarioCode, 
+        ?string $locale, 
         array $params
     ): void {
-        if (false) {
-            throw new Exception(__('AI流式生成失败: AI API 错误 (HTTP 402, unknown_error): Insufficient Balance'));
-        }
-
         $startTime = microtime(true);
         $account = null;
-        $requestModel = $model;
         $usage = [];
-
+        
         try {
-            $providerCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
-            if ($providerCode === '') {
-                $providerCode = $this->accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
-            }
+            // 1. 获取供应商代码
+            $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::schema_fields_MODEL_CODE));
             if (!$providerCode) {
-                throw new Exception(__('无法确定模型的供应商'));
+                throw new Exception('无法确定模型的供应商');
             }
-
-            $allAccounts = $this->accountService->getProviderAccounts($providerCode);
-            $resolvedConfig = \is_array($params['resolved_config'] ?? null) ? $params['resolved_config'] : [];
-            if (!empty($resolvedConfig)) {
-                $this->applyResolvedConfigToModel($model, $resolvedConfig);
-            }
-            $baseModel = $this->createDetachedModel($model);
-            if (empty($allAccounts)) {
+            
+            // 2. 获取可用的供应商账户
+            $account = $this->accountService->getAvailableAccount($providerCode);
+            if (!$account) {
                 throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
+            
+            // 3. 将账户配置注入到模型中
+            $this->injectAccountConfig($model, $account);
+            
+            // 4. 获取合适的提供者
+            $provider = $this->providerFactory->getProvider($model);
 
-            $allowZeroBalanceProvider = (bool)($params['allow_zero_balance_provider'] ?? false);
-            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) use ($allowZeroBalanceProvider) {
-                if ((int)($acc['is_active'] ?? 0) !== 1) {
-                    return false;
-                }
-                if (($acc['connection_status'] ?? '') !== 'success') {
-                    return false;
-                }
-                return $allowZeroBalanceProvider || (float)($acc['balance'] ?? 0) > 0;
-            }));
-            if (empty($candidateAccounts)) {
-                throw new Exception(ErrorMessageHelper::getErrorMessageWithConfigLink(
-                    __('没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）', ['provider' => $providerCode]),
-                    'provider',
-                    ['provider_code' => $providerCode]
-                ));
-            }
-            usort($candidateAccounts, function ($a, $b) {
-                $d1 = (int)($a['is_default'] ?? 0);
-                $d2 = (int)($b['is_default'] ?? 0);
-                if ($d1 !== $d2) {
-                    return $d2 <=> $d1;
-                }
-                $bal1 = (float)($a['balance'] ?? 0);
-                $bal2 = (float)($b['balance'] ?? 0);
-                return $bal2 <=> $bal1;
-            });
-
+            // 4.1 包装 callback：流式 chunk 写入 ai_activity.log
             $modelCode = $model->getData(AiModel::schema_fields_MODEL_CODE) ?? '';
             $wrappedCallback = function ($chunk) use ($callback, $modelCode) {
                 $line = '[' . date('Y-m-d H:i:s') . '][stream] model=' . $modelCode . ' chunk=' . (is_string($chunk) && mb_strlen($chunk) > 500 ? mb_substr($chunk, 0, 500) . '...' : (is_string($chunk) ? $chunk : json_encode($chunk, JSON_UNESCAPED_UNICODE)));
@@ -1606,52 +876,28 @@ class AiService
                     $line = mb_substr($line, 0, 2000) . '...';
                 }
                 Env::log('ai_activity.log', $line, 'INFO', true, true, 0);
-                return $callback($chunk);
+                $callback($chunk);
             };
-
-            $lastError = null;
-            foreach ($candidateAccounts as $accData) {
-                $accModel = $this->newProviderAccount($accData);
-                $account = $accModel;
-                $requestModel = $this->createDetachedModel($baseModel);
-                $model = $requestModel;
-
-                $this->injectAccountConfig($model, $accModel);
-                $provider = $this->providerFactory->getProvider($model);
-
-                try {
-                    $result = $provider->generateStream($model, $prompt, $wrappedCallback, $params);
-                    $usage = $result['usage'] ?? [];
-                    $this->publishTokenUsage($usage, $params, $model, 'stream');
-
-                    $this->logUsage($model, $usage, $params);
-                    $requestTime = (int)((microtime(true) - $startTime) * 1000);
-                    $this->accountService->recordUsage($accModel, $model, $usage, [
-                        'request_type' => 'stream',
-                        'user_id' => $params['user_id'] ?? null,
-                        'user_name' => $params['user_name'] ?? null,
-                        'request_time' => $requestTime,
-                        'status' => 'success'
-                    ]);
-
-                    return;
-                } catch (\Exception $eTry) {
-                    if ($this->isInsufficientBalanceError($eTry)) {
-                        $this->markAccountBalanceDepleted($accModel);
-                    }
-                    $lastError = $eTry;
-                    if (!$this->shouldRetryWithAnotherAccount($eTry)) {
-                        throw $eTry;
-                    }
-                }
-            }
-
-            if ($lastError) {
-                throw $lastError;
-            }
-
-            throw new Exception(__('未能使用任何账户完成请求'));
+            
+            // 5. 流式调用API
+            $result = $provider->generateStream($model, $prompt, $wrappedCallback, $params);
+            $usage = $result['usage'] ?? [];
+            
+            // 6. 记录使用量（兼容旧系统）
+            $this->logUsage($model, $usage, $params);
+            
+            // 7. 记录到新的供应商使用记录
+            $requestTime = (int)((microtime(true) - $startTime) * 1000);
+            $this->accountService->recordUsage($account, $model, $usage, [
+                'request_type' => 'stream',
+                'user_id' => $params['user_id'] ?? null,
+                'user_name' => $params['user_name'] ?? null,
+                'request_time' => $requestTime,
+                'status' => 'success'
+            ]);
+            
         } catch (\Exception $e) {
+            // 记录错误到供应商使用记录
             if ($account) {
                 $requestTime = (int)((microtime(true) - $startTime) * 1000);
                 $this->accountService->recordUsage($account, $model, $usage, [
@@ -1663,248 +909,12 @@ class AiService
                     'error_message' => $e->getMessage()
                 ]);
             }
-
-            if ($this->isInsufficientBalanceError($e)) {
-                w_log_error("AI流式API调用失败: " . $e->getMessage());
-            } else {
-                w_log_error("AI流式API调用失败: " . $e->getMessage());
-            }
+            
+            // 记录错误（保留原始信息用于日志）
+            w_log_error("AI流式API调用失败: " . $e->getMessage());
+            // 清理 ANSI 颜色码后再抛出，避免前端显示乱码
             $cleanMessage = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
-            $friendlyMessage = $this->normalizeStreamErrorMessage((string)$cleanMessage);
-            throw new Exception(__('AI流式生成失败: %{msg}', ['msg' => $friendlyMessage]));
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $usage
-     * @param array<string, mixed> $params
-     */
-    private function publishTokenUsage(array $usage, array $params, AiModel $model, string $requestType): void
-    {
-        if ($usage === []) {
-            return;
-        }
-
-        $meta = [
-            'request_type' => $requestType,
-            'model_code' => $model->getModelCode(),
-            'provider' => $model->getSupplier(),
-            'scenario_code' => \is_string($params['scenario_code'] ?? null) ? $params['scenario_code'] : null,
-        ];
-
-        $callback = $params['token_usage_callback'] ?? null;
-        if (\is_callable($callback)) {
-            try {
-                $callback($usage, $meta);
-            } catch (\Throwable) {
-                // Usage callbacks are telemetry only and must not affect generation.
-            }
-        }
-
-        $writer = RequestContext::get(RequestContext::SSE_WRITER_KEY);
-        if (\is_object($writer) && \method_exists($writer, 'recordTokenUsage')) {
-            try {
-                $writer->recordTokenUsage($usage, $meta);
-            } catch (\Throwable) {
-                // Queue token accounting is best-effort telemetry.
-            }
-        }
-    }
-
-    /**
-     * Normalize stream errors before surfacing them to PageBuilder and SSE logs.
-     */
-    private function normalizeStreamErrorMessage(string $message): string
-    {
-        $trimmed = trim($message);
-        if ($trimmed === '') {
-            return (string)__('AI 服务返回空错误，请检查供应商连接与账户状态。');
-        }
-
-        $canonicalMessage = $this->canonicalizeKnownStreamErrorMessage($trimmed);
-        if ($canonicalMessage !== null) {
-            return $canonicalMessage;
-        }
-
-        $trimmed = $this->repairLikelyUtf8AsGb18030Mojibake($trimmed);
-        $canonicalMessage = $this->canonicalizeKnownStreamErrorMessage($trimmed);
-        if ($canonicalMessage !== null) {
-            return $canonicalMessage;
-        }
-
-        $lower = strtolower($trimmed);
-        if (str_contains($lower, 'invalid max_tokens value') || str_contains($lower, 'valid range of max_tokens')) {
-            return (string)__('max_tokens 超出模型上限。请降低调用方 max_tokens（例如 <=8192），或切换支持更大输出的模型。原始错误：%{msg}', ['msg' => $trimmed]);
-        }
-        if (str_contains($lower, 'timed out') || str_contains($lower, 'timeout')) {
-            return (string)__('AI 上游请求超时。请稍后重试，或减少一次性输出内容并提高保活频率。原始错误：%{msg}', ['msg' => $trimmed]);
-        }
-        if (str_contains($trimmed, '未收到 [DONE]') || str_contains($trimmed, '未收到 Anthropic 结束事件')) {
-            return (string)__('AI 上游流式输出提前终止（未返回完整结束标记）。请重试或更换供应商线路。原始错误：%{msg}', ['msg' => $trimmed]);
-        }
-
-        return $trimmed;
-    }
-
-    private function repairLikelyUtf8AsGb18030Mojibake(string $message): string
-    {
-        if ($message === '' || !$this->containsLikelyMojibakeMarker($message)) {
-            return $message;
-        }
-
-        $candidate = $this->rebuildUtf8BytesFromGarbledMessage($message);
-        if ($candidate === '' || !mb_check_encoding($candidate, 'UTF-8')) {
-            return $message;
-        }
-
-        return $this->scoreReadableErrorMessage($candidate) >= ($this->scoreReadableErrorMessage($message) + 3)
-            ? $candidate
-            : $message;
-    }
-
-    private function rebuildUtf8BytesFromGarbledMessage(string $message): string
-    {
-        $chars = \preg_split('//u', $message, -1, \PREG_SPLIT_NO_EMPTY);
-        if (!\is_array($chars) || $chars === []) {
-            return '';
-        }
-
-        $rebuilt = '';
-        foreach ($chars as $char) {
-            if (\strlen($char) === 1 && \ord($char) < 0x80) {
-                $rebuilt .= $char;
-                continue;
-            }
-            if (isset(self::MOJIBAKE_CP1252_BYTES[$char])) {
-                $rebuilt .= self::MOJIBAKE_CP1252_BYTES[$char];
-                continue;
-            }
-
-            $encoded = @\mb_convert_encoding($char, 'GB18030', 'UTF-8');
-            if (!\is_string($encoded) || $encoded === '') {
-                return '';
-            }
-
-            $rebuilt .= $encoded;
-        }
-
-        return $rebuilt;
-    }
-
-    private function containsLikelyMojibakeMarker(string $message): bool
-    {
-        $matches = \preg_match_all('/锛|銆|鈥|€|�|娴|鏂|璇|闃|绗|鍒|浠|鍐|缁|鍚|鎴|妫|璁|瀹|璋|姝/u', $message);
-        return \is_int($matches) && $matches >= 2;
-    }
-
-    private function scoreReadableErrorMessage(string $message): int
-    {
-        $score = 0;
-        $punctuationMatches = \preg_match_all('/[，。！？：；（）《》“”]/u', $message);
-        if (\is_int($punctuationMatches) && $punctuationMatches > 0) {
-            $score += $punctuationMatches * 2;
-        }
-
-        foreach ([
-            '请检查',
-            '未返回',
-            '任何内容',
-            '模型配置',
-            '是否正确',
-            '网络连接',
-            '稍后重试',
-            '上游',
-            '流式',
-            '生成',
-            '完成',
-            '错误',
-            '失败',
-            '内容',
-            '返回',
-            '模型',
-            '配置',
-            '名称',
-            '请求',
-            '输出',
-            '服务',
-            '超时',
-            '网络',
-            '账户',
-        ] as $needle) {
-            $score += \substr_count($message, $needle) * (\mb_strlen($needle, 'UTF-8') >= 4 ? 4 : 2);
-        }
-
-        $markerMatches = \preg_match_all('/锛|銆|鈥|€|�|娴|鏂|璇|闃|绗|鍒|浠|鍐|缁|鍚|鎴|妫|璁|瀹|璋|姝/u', $message);
-        if (\is_int($markerMatches) && $markerMatches > 0) {
-            $score -= $markerMatches * 2;
-        }
-
-        return $score;
-    }
-
-    private function canonicalizeKnownStreamErrorMessage(string $message): ?string
-    {
-        $hasBaseUrlMarker = \str_contains($message, 'Base URL')
-            || \str_contains($message, '丅ase URL')
-            || \str_contains($message, 'ase URL');
-        if (!\str_contains($message, 'API Key') || !$hasBaseUrlMarker) {
-            return null;
-        }
-
-        $canonical = (string)__('AI 流式生成完成但未返回任何内容，请检查模型配置（API Key、Base URL、模型名称）是否正确');
-        if (\str_contains($message, $canonical)) {
-            return $canonical;
-        }
-
-        $garbledMarkerCount = 0;
-        foreach ([
-            '娴佸紡',
-            '鍐呭',
-            '鍨嬮厤缃',
-            '姝ｇ',
-        ] as $marker) {
-            if (\str_contains($message, $marker)) {
-                $garbledMarkerCount++;
-            }
-        }
-        if (\preg_match('/妫(?:€|\?|�)?鏌/u', $message) === 1) {
-            $garbledMarkerCount++;
-        }
-        if ($garbledMarkerCount >= 3) {
-            return $canonical;
-        }
-
-        if (
-            \str_contains($message, '流式生成完成')
-            && \str_contains($message, '未返回任何内容')
-            && \str_contains($message, '模型配置')
-        ) {
-            return $canonical;
-        }
-
-        return null;
-    }
-
-    private function isInsufficientBalanceError(\Throwable $throwable): bool
-    {
-        $message = \strtolower((string)$throwable->getMessage());
-        return \str_contains($message, 'http 402')
-            || \str_contains($message, 'insufficient balance')
-            || \str_contains($message, '余额不足')
-            || \str_contains($message, '额度不足');
-    }
-
-    private function markAccountBalanceDepleted(Account $account): void
-    {
-        try {
-            $balance = (float)$account->getData(Account::schema_fields_BALANCE);
-            if ($balance <= 0.0) {
-                return;
-            }
-            $account->setData(Account::schema_fields_BALANCE, 0);
-            $account->save();
-        } catch (\Throwable) {
-            // 余额兜底更新失败不影响主流程
+            throw new Exception("AI流式生成失败: " . $cleanMessage);
         }
     }
 
@@ -1928,15 +938,6 @@ class AiService
         if ($account->getData(Account::schema_fields_BASE_URL)) {
             $modelConfig['base_url'] = $account->getData(Account::schema_fields_BASE_URL);
             $modelConfig['api_url'] = $account->getData(Account::schema_fields_BASE_URL);
-        }
-
-        // 应用模型到供应商模型 code 的映射
-        $providerConfigRaw = $model->getData(AiModel::schema_fields_PROVIDER_CONFIG);
-        $providerConfig = is_string($providerConfigRaw) ? (json_decode($providerConfigRaw, true) ?: []) : (is_array($providerConfigRaw) ? $providerConfigRaw : []);
-        $providerModelCode = (string)($providerConfig['provider_model_code'] ?? $providerConfig['model'] ?? '');
-        if ($providerModelCode !== '') {
-            $modelConfig['model'] = $providerModelCode;
-            $modelConfig['model_id'] = $providerModelCode;
         }
         
         // 注入代理配置
@@ -1963,8 +964,8 @@ class AiService
     private function logUsage(AiModel $model, array $usage, array $params = []): void
     {
         try {
-            $usageLog = $this->newUsageLog();
-            $usageLog->setData([
+            $this->usageLog->reset();
+            $this->usageLog->setData([
                 'model_code' => $model->getModelCode(),
                 'vendor' => $model->getVendor(),
                 'prompt_tokens' => $usage['prompt_tokens'] ?? 0,
@@ -1977,56 +978,13 @@ class AiService
                 'scenario_code' => $params['scenario_code'] ?? null,
                 'locale' => $params['locale'] ?? null,
                 'user_id' => $params['user_id'] ?? 0,
-                'created_at' => date('Y-m-d H:i:s.u'),
-                'status' => AiUsageLog::STATUS_SUCCESS,
+                'created_time' => time(),
             ]);
-            $usageLog->save();
+            $this->usageLog->save();
         } catch (\Exception $e) {
-            if ($this->isDbConnectionLostException($e)) {
-                try {
-                    $usageLog = $this->newUsageLog();
-                    $usageLog->setData([
-                        'model_code' => $model->getModelCode(),
-                        'vendor' => $model->getVendor(),
-                        'prompt_tokens' => $usage['prompt_tokens'] ?? 0,
-                        'completion_tokens' => $usage['completion_tokens'] ?? 0,
-                        'total_tokens' => $usage['total_tokens'] ?? 0,
-                        'input_cost' => ($usage['prompt_tokens'] ?? 0) * $model->getData('token_price_input') / 1000,
-                        'output_cost' => ($usage['completion_tokens'] ?? 0) * $model->getData('token_price_output') / 1000,
-                        'total_cost' => (($usage['prompt_tokens'] ?? 0) * $model->getData('token_price_input') +
-                                ($usage['completion_tokens'] ?? 0) * $model->getData('token_price_output')) / 1000,
-                        'scenario_code' => $params['scenario_code'] ?? null,
-                        'locale' => $params['locale'] ?? null,
-                        'user_id' => $params['user_id'] ?? 0,
-                        'created_at' => date('Y-m-d H:i:s.u'),
-                        'status' => AiUsageLog::STATUS_SUCCESS,
-                    ]);
-                    $usageLog->save();
-                    return;
-                } catch (\Exception $retryException) {
-                    w_log_error("记录AI使用量失败(重试后): " . $retryException->getMessage());
-                    return;
-                }
-            }
             // 记录失败不影响主流程
             w_log_error("记录AI使用量失败: " . $e->getMessage());
         }
-    }
-
-    private function newUsageLog(): AiUsageLog
-    {
-        /** @var AiUsageLog $usageLog */
-        $usageLog = ObjectManager::make(AiUsageLog::class);
-        return $usageLog->reset();
-    }
-
-    private function isDbConnectionLostException(\Exception $e): bool
-    {
-        $message = strtolower($e->getMessage());
-        return str_contains($message, 'no connection to the server')
-            || str_contains($message, 'server has gone away')
-            || str_contains($message, 'lost connection')
-            || str_contains($message, 'broken pipe');
     }
 
     /**
@@ -2095,7 +1053,7 @@ class AiService
 
         // 验证模型代码
         if (isset($params['model_code']) && !empty($params['model_code'])) {
-            $model = $this->newAiModelQuery()
+            $model = $this->aiModel->reset()
                 ->where(AiModel::schema_fields_MODEL_CODE, $params['model_code'])
                 ->where(AiModel::schema_fields_STATUS, 'active')
                 ->find()
@@ -2132,7 +1090,7 @@ class AiService
     public function getServiceStats(): array
     {
         $modelStats = [];
-        $models = $this->newAiModelQuery()
+        $models = $this->aiModel->reset()
             ->where(AiModel::schema_fields_STATUS, 'active')
             ->select()
             ->fetch();
@@ -2230,8 +1188,7 @@ class AiService
             'cost' => $cost,
             'prompt_length' => strlen($prompt),
             'response_length' => strlen($response),
-            'created_at' => date('Y-m-d H:i:s'),
-            'status' => AiUsageLog::STATUS_SUCCESS,
+            'created_at' => date('Y-m-d H:i:s')
         ]);
         $usageLog->save();
     }
@@ -2247,9 +1204,8 @@ class AiService
      * @param string $prompt 用户提示词
      * @param string|null $modelCode 指定模型代码（null 则使用场景默认模型）
      * @param array $params 额外参数
-     * @param callable|null $streamCallback SSE 事件回调，返回 false 时应中止下游流式调用
+     * @param callable|null $streamCallback SSE 事件回调
      * @return AgentResult
-     * @throws ModelSelectionException 未配置可用模型（场景/全局默认均无）
      * @throws Exception
      */
     public function executeAgent(
@@ -2259,8 +1215,6 @@ class AiService
         array $params = [],
         ?callable $streamCallback = null
     ): AgentResult {
-        $params = AiRuntimeContext::mergeDefaultParams($params);
-
         // 1. 获取智能体
         $agent = $this->agentScanner->getAgent($agentCode);
         if (!$agent) {
@@ -2272,14 +1226,11 @@ class AiService
         $model = $this->selectModel($modelCode, $scenarioCode);
         if (!$model) {
             $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
-            throw new ModelSelectionException($reason);
+            throw new Exception($reason);
         }
 
         // 3. 注入供应商账户配置（base_url、api_key、proxy 等）
-        $providerCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
-        if ($providerCode === '') {
-            $providerCode = $this->accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
-        }
+        $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::schema_fields_MODEL_CODE));
         Env::log('ai_agent_debug.log', sprintf(
             '[executeAgent] modelCode=%s, providerCode=%s',
             $model->getData(AiModel::schema_fields_MODEL_CODE),
@@ -2337,23 +1288,12 @@ class AiService
                     $line = mb_substr($line, 0, 2000) . '...';
                 }
                 Env::log('ai_activity.log', $line, 'INFO', true, true, 0);
-                $result = $streamCallback($eventType, $data);
-                if ($result === false) {
-                    throw new StreamCancelledException('AI stream cancelled by upstream');
-                }
-                return $result;
+                $streamCallback($eventType, $data);
             };
         }
 
         // 6. 委托给智能体执行（Agent 自行管理 Tool 调用循环）
-        try {
-            $result = $agent->execute($prompt, $model, $params, $wrappedCallback);
-        } catch (StreamCancelledException) {
-            return AgentResult::failure(
-                __('上游已取消 AI 流式任务'),
-                $agentCode
-            );
-        }
+        $result = $agent->execute($prompt, $model, $params, $wrappedCallback);
         $result->agentCode = $agentCode;
         $result->modelCode = $model->getModelCode();
 

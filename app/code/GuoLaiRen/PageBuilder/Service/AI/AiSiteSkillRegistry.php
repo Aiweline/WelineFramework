@@ -17,9 +17,15 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service\AI;
 
+use GuoLaiRen\PageBuilder\Service\AI\Skill\BuiltinSkillProvider;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\CustomSkillProvider;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillNormalizer;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillSelectionResolver;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillSnapshotBuilder;
+
 final class AiSiteSkillRegistry
 {
-    public const SKILLS_RELATIVE_ROOT = 'app/code/GuoLaiRen/PageBuilder/skills';
+    public const SKILLS_RELATIVE_ROOT = BuiltinSkillProvider::SKILLS_RELATIVE_ROOT;
 
     public const FRONTEND_DESIGN_SKILL_LOCAL_PATH = 'app/code/GuoLaiRen/PageBuilder/Service/AI/prompt_guides/frontend-design/SKILL.md';
 
@@ -33,8 +39,27 @@ final class AiSiteSkillRegistry
      */
     private const DEFAULT_SKILL_CODES = ['claude-design'];
 
-    /** @var array<string, array<string, mixed>>|null */
-    private static ?array $skillCache = null;
+    private readonly SkillNormalizer $normalizer;
+    private readonly BuiltinSkillProvider $builtinProvider;
+    private readonly CustomSkillProvider $customProvider;
+    private readonly SkillSelectionResolver $selectionResolver;
+    private readonly SkillSnapshotBuilder $snapshotBuilder;
+
+    public function __construct(
+        ?SkillNormalizer $normalizer = null,
+        ?BuiltinSkillProvider $builtinProvider = null,
+        ?CustomSkillProvider $customProvider = null,
+        ?SkillSelectionResolver $selectionResolver = null,
+        ?SkillSnapshotBuilder $snapshotBuilder = null
+    ) {
+        $this->normalizer = $normalizer ?? new SkillNormalizer();
+        $this->builtinProvider = $builtinProvider ?? new BuiltinSkillProvider($this->normalizer);
+        $this->customProvider = $customProvider ?? new CustomSkillProvider();
+        $this->selectionResolver = $selectionResolver
+            ?? new SkillSelectionResolver($this->builtinProvider, $this->customProvider);
+        $this->snapshotBuilder = $snapshotBuilder
+            ?? new SkillSnapshotBuilder($this->selectionResolver, $this->normalizer);
+    }
 
     /**
      * @return list<string>
@@ -47,52 +72,17 @@ final class AiSiteSkillRegistry
     /**
      * 列出 skills 根目录下所有可加载技能（每个目录内必须含 SKILL.md）。
      *
-     * @return array<string, array{code:string,name:string,description:string,local_path:string,abs_path:string,exists:bool}>
+     * @return array<string, array<string, mixed>>
      */
     public function listAvailableSkills(): array
     {
-        if (self::$skillCache !== null) {
-            return self::$skillCache;
-        }
-
-        $absRoot = $this->resolveSkillsAbsoluteRoot();
-        $result = [];
-        if ($absRoot !== '' && \is_dir($absRoot)) {
-            $entries = @\scandir($absRoot) ?: [];
-            foreach ($entries as $entry) {
-                if ($entry === '.' || $entry === '..') {
-                    continue;
-                }
-                $skillDir = $absRoot . DIRECTORY_SEPARATOR . $entry;
-                if (!\is_dir($skillDir)) {
-                    continue;
-                }
-                $skillFile = $skillDir . DIRECTORY_SEPARATOR . 'SKILL.md';
-                if (!\is_file($skillFile)) {
-                    continue;
-                }
-                $front = $this->parseSkillFrontmatter($skillFile);
-                $code = (string)$entry;
-                $localPath = self::SKILLS_RELATIVE_ROOT . '/' . $code . '/SKILL.md';
-                $result[$code] = [
-                    'code' => $code,
-                    'name' => (string)($front['name'] ?? $code),
-                    'description' => (string)($front['description'] ?? ''),
-                    'local_path' => $localPath,
-                    'abs_path' => $skillFile,
-                    'exists' => true,
-                ];
-            }
-        }
-        \ksort($result);
-
-        return self::$skillCache = $result;
+        return $this->selectionResolver->listAvailableSkills();
     }
 
     /**
      * 单个技能元信息。
      *
-     * @return array{code:string,name:string,description:string,local_path:string,abs_path:string,exists:bool}
+     * @return array<string, mixed>
      */
     public function getSkill(string $code): array
     {
@@ -106,6 +96,11 @@ final class AiSiteSkillRegistry
             'code' => $code,
             'name' => $code,
             'description' => '',
+            'body' => '',
+            'normalized_body' => '',
+            'body_hash' => '',
+            'status' => 'missing',
+            'source' => '',
             'local_path' => self::SKILLS_RELATIVE_ROOT . '/' . $code . '/SKILL.md',
             'abs_path' => '',
             'exists' => false,
@@ -113,15 +108,38 @@ final class AiSiteSkillRegistry
     }
 
     /**
+     * @param list<string> $selectedCodes Empty means the default claude-design selection.
+     * @return list<array{code:string,name:string,description:string,source:string,normalized_body:string,body_hash:string}>
+     */
+    public function buildSkillSnapshots(array $selectedCodes = []): array
+    {
+        return $this->snapshotBuilder->buildSnapshots($selectedCodes);
+    }
+
+    /**
+     * @param list<string> $selectedCodes
+     * @return list<string>
+     */
+    public function resolveSelectedSkillCodes(array $selectedCodes = []): array
+    {
+        return $this->selectionResolver->resolveCodes($selectedCodes);
+    }
+
+    /**
      * 输出注入到 Stage1 / Stage2 提示词的“技能加载能力”段。
      *
      * @param string $stage 'stage1' | 'stage2' | 'stage2_shared' | 'stage2_page' | 'stage3'
      * @param list<string> $extraCodes 额外要求加载的技能 code（与默认列表合并、去重）
+     * @param list<array<string, mixed>> $skillSnapshots 已冻结的技能快照，优先于当前 DB/文件内容
      * @return list<string>
      */
-    public function buildPromptGuideLines(string $stage, array $extraCodes = []): array
+    public function buildPromptGuideLines(string $stage, array $extraCodes = [], array $skillSnapshots = []): array
     {
-        $codes = \array_values(\array_unique(\array_merge($this->getDefaultSkillCodes(), $extraCodes)));
+        $codes = \array_values(\array_unique(\array_merge(
+            $this->getDefaultSkillCodes(),
+            $extraCodes,
+            $this->extractCodesFromSnapshots($skillSnapshots)
+        )));
         $skills = $this->listAvailableSkills();
 
         $lines = [];
@@ -168,30 +186,249 @@ final class AiSiteSkillRegistry
         $lines[] = '- Code craft gate: generated HTML fragments must be structurally balanced, component-scoped, and safe to embed; close every non-void tag before returning JSON.';
         $lines[] = '- Final gut check (silently before output): would this look like it came from a specific designer for this exact brief, or like generic AI? If generic, rebalance toward specificity (bolder color, heavier type weight, bigger hero, fewer decorative sections).';
         $lines[] = '';
+        \array_push($lines, ...$this->buildSelectedSkillRuleLines($codes, $skillSnapshots));
 
         return $lines;
     }
 
     /**
-     * @param list<string> $extraCodes
+     * @param array<string, mixed> $scope
+     * @return list<string>
      */
-    public function buildPromptGuideText(string $stage, array $extraCodes = []): string
+    public function resolveSelectedSkillCodesFromScope(array $scope): array
     {
-        return \trim(\implode("\n", $this->buildPromptGuideLines($stage, $extraCodes))) . "\n";
+        $candidates = [
+            $scope['_task_plan_sse_request']['selected_skill_codes'] ?? null,
+            $scope['_plan_sse_request']['selected_skill_codes'] ?? null,
+            $scope['selected_skill_codes'] ?? null,
+            $scope['plan_workbench']['confirmed']['contract_context']['selected_skill_codes'] ?? null,
+            $scope['plan_workbench']['contract_context']['selected_skill_codes'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            $codes = $this->normalizeSkillCodeList($candidate);
+            if ($codes !== []) {
+                return $this->resolveSelectedSkillCodes($codes);
+            }
+        }
+
+        return $this->resolveSelectedSkillCodes([]);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    public function resolveSkillSnapshotsFromScope(array $scope): array
+    {
+        $candidates = [
+            $scope['plan_workbench']['confirmed']['contract_context']['skill_snapshots'] ?? null,
+            $scope['plan_workbench']['contract_context']['skill_snapshots'] ?? null,
+            $scope['contract_context']['skill_snapshots'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            $snapshots = $this->normalizeSkillSnapshots($candidate);
+            if ($snapshots !== []) {
+                return $snapshots;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param mixed $raw
+     * @return list<string>
+     */
+    private function normalizeSkillCodeList(mixed $raw): array
+    {
+        if (\is_array($raw)) {
+            $items = $raw;
+        } elseif (\is_string($raw) && \trim($raw) !== '') {
+            $decoded = \json_decode($raw, true);
+            $items = \is_array($decoded) ? $decoded : \preg_split('/[\s,;]+/', $raw);
+            if (!\is_array($items)) {
+                $items = [];
+            }
+        } else {
+            $items = [];
+        }
+
+        $codes = [];
+        foreach ($items as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $code = \trim((string)$item);
+            if ($code === '' || !\preg_match('/^[A-Za-z0-9_.-]+$/', $code) || \in_array($code, $codes, true)) {
+                continue;
+            }
+            $codes[] = $code;
+        }
+
+        return $codes;
+    }
+
+    /**
+     * @param mixed $raw
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeSkillSnapshots(mixed $raw): array
+    {
+        if (!\is_array($raw)) {
+            return [];
+        }
+
+        $snapshots = [];
+        foreach ($raw as $snapshot) {
+            if (!\is_array($snapshot)) {
+                continue;
+            }
+            $code = \trim((string)($snapshot['code'] ?? ''));
+            if ($code === '' || !\preg_match('/^[A-Za-z0-9_.-]+$/', $code)) {
+                continue;
+            }
+            $snapshots[] = [
+                'code' => $code,
+                'name' => \trim((string)($snapshot['name'] ?? $code)),
+                'description' => \trim((string)($snapshot['description'] ?? '')),
+                'source' => \trim((string)($snapshot['source'] ?? 'snapshot')),
+                'normalized_body' => (string)($snapshot['normalized_body'] ?? $snapshot['body'] ?? ''),
+                'body_hash' => \trim((string)($snapshot['body_hash'] ?? '')),
+            ];
+        }
+
+        return $snapshots;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $skillSnapshots
+     * @return list<string>
+     */
+    private function extractCodesFromSnapshots(array $skillSnapshots): array
+    {
+        $codes = [];
+        foreach ($this->normalizeSkillSnapshots($skillSnapshots) as $snapshot) {
+            $code = (string)$snapshot['code'];
+            if ($code !== '' && !\in_array($code, $codes, true)) {
+                $codes[] = $code;
+            }
+        }
+
+        return $codes;
+    }
+
+    /**
+     * @param list<string> $codes
+     * @param list<array<string, mixed>> $skillSnapshots
+     * @return list<string>
+     */
+    private function buildSelectedSkillRuleLines(array $codes, array $skillSnapshots): array
+    {
+        $snapshotByCode = [];
+        foreach ($this->normalizeSkillSnapshots($skillSnapshots) as $snapshot) {
+            $snapshotByCode[(string)$snapshot['code']] = $snapshot;
+        }
+
+        $rules = [];
+        $validatedSkills = [];
+        $lookupCodes = [];
+        foreach ($codes as $code) {
+            $code = \trim((string)$code);
+            if ($code === '' || \in_array($code, self::DEFAULT_SKILL_CODES, true) || isset($snapshotByCode[$code])) {
+                continue;
+            }
+            $lookupCodes[] = $code;
+        }
+        if ($lookupCodes !== []) {
+            foreach ($this->selectionResolver->resolveSelectedSkills(\array_values(\array_unique($lookupCodes))) as $skill) {
+                $validatedSkills[(string)$skill['code']] = $skill;
+            }
+        }
+
+        foreach ($codes as $code) {
+            $code = \trim((string)$code);
+            if ($code === '' || \in_array($code, self::DEFAULT_SKILL_CODES, true)) {
+                continue;
+            }
+            $skill = $snapshotByCode[$code] ?? $validatedSkills[$code] ?? null;
+            if (!\is_array($skill)) {
+                continue;
+            }
+            $body = \trim((string)($skill['normalized_body'] ?? $skill['body'] ?? ''));
+            if ($body === '') {
+                continue;
+            }
+            $rules[] = '';
+            $rules[] = 'SELECTED AI BUILDER SKILL RULES (must override generic behavior):';
+            $rules[] = '- Skill code: ' . $code;
+            $rules[] = '- Skill name: ' . \trim((string)($skill['name'] ?? $code));
+            $rules[] = '- Skill source: ' . \trim((string)($skill['source'] ?? ''));
+            $hash = \trim((string)($skill['body_hash'] ?? ''));
+            if ($hash !== '') {
+                $rules[] = '- Skill body hash: ' . $hash;
+            }
+            $rules[] = '- Apply this skill to every generated contract, task, and visible content field in this stage.';
+            $rules[] = 'Skill body begins:';
+            $rules[] = $this->excerptSkillBody($body);
+            $rules[] = 'Skill body ends.';
+        }
+
+        return $rules;
     }
 
     /**
      * @param list<string> $extraCodes
+     * @param list<array<string, mixed>> $skillSnapshots
      */
-    public function prependPromptGuide(string $prompt, string $stage = 'pagebuilder', array $extraCodes = []): string
+    public function buildPromptGuideText(string $stage, array $extraCodes = [], array $skillSnapshots = []): string
     {
-        if ($this->hasPromptGuide($prompt)) {
+        return \trim(\implode("\n", $this->buildPromptGuideLines($stage, $extraCodes, $skillSnapshots))) . "\n";
+    }
+
+    /**
+     * @param list<string> $extraCodes
+     * @param list<array<string, mixed>> $skillSnapshots
+     */
+    public function prependPromptGuide(string $prompt, string $stage = 'pagebuilder', array $extraCodes = [], array $skillSnapshots = []): string
+    {
+        if ($this->hasPromptGuide($prompt) && $this->promptContainsSelectedSkills($prompt, $extraCodes, $skillSnapshots)) {
             return $prompt;
         }
 
         $prompt = \ltrim($prompt);
-        $guide = $this->buildPromptGuideText($stage, $extraCodes);
+        if ($this->hasPromptGuide($prompt)) {
+            $guide = \trim(\implode("\n", $this->buildSelectedSkillRuleLines(
+                \array_values(\array_unique(\array_merge($extraCodes, $this->extractCodesFromSnapshots($skillSnapshots)))),
+                $skillSnapshots
+            ))) . "\n";
+        } else {
+            $guide = $this->buildPromptGuideText($stage, $extraCodes, $skillSnapshots);
+        }
         return $prompt === '' ? $guide : $guide . "\n" . $prompt;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function buildPromptGuideLinesForScope(string $stage, array $scope): array
+    {
+        return $this->buildPromptGuideLines(
+            $stage,
+            $this->resolveSelectedSkillCodesFromScope($scope),
+            $this->resolveSkillSnapshotsFromScope($scope)
+        );
+    }
+
+    public function prependPromptGuideForScope(string $prompt, string $stage, array $scope): string
+    {
+        return $this->prependPromptGuide(
+            $prompt,
+            $stage,
+            $this->resolveSelectedSkillCodesFromScope($scope),
+            $this->resolveSkillSnapshotsFromScope($scope)
+        );
     }
 
     private function hasPromptGuide(string $prompt): bool
@@ -202,19 +439,41 @@ final class AiSiteSkillRegistry
     }
 
     /**
+     * @param list<string> $extraCodes
+     * @param list<array<string, mixed>> $skillSnapshots
+     */
+    private function promptContainsSelectedSkills(string $prompt, array $extraCodes, array $skillSnapshots): bool
+    {
+        $codes = \array_values(\array_unique(\array_merge($extraCodes, $this->extractCodesFromSnapshots($skillSnapshots))));
+        foreach ($codes as $code) {
+            $code = \trim((string)$code);
+            if ($code === '' || \in_array($code, self::DEFAULT_SKILL_CODES, true)) {
+                continue;
+            }
+            if (!\str_contains($prompt, 'Skill code: ' . $code) && !\str_contains($prompt, 'code=' . $code)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * 兼容旧调用：返回包含 frontend-design 与默认技能的注入行（stage2 用）。
      *
      * @param array<string, mixed> $batch
+     * @param list<string> $extraCodes
+     * @param list<array<string, mixed>> $skillSnapshots
      * @return list<string>
      */
-    public function buildStageTwoComponentSkillGuide(array $batch): array
+    public function buildStageTwoComponentSkillGuide(array $batch, array $extraCodes = [], array $skillSnapshots = []): array
     {
         $batchType = (string)($batch['type'] ?? '');
         $componentScope = $batchType === 'shared'
             ? 'shared theme component such as header/footer'
             : 'page-owned theme block component';
 
-        $lines = $this->buildPromptGuideLines('stage2');
+        $lines = $this->buildPromptGuideLines('stage2', $extraCodes, $skillSnapshots);
         $lines[] = 'Frontend design skill reference (mandatory for every generated theme component task):';
         $lines[] = '- Local skill file: ' . self::FRONTEND_DESIGN_SKILL_LOCAL_PATH;
         $lines[] = '- Source skill: ' . self::FRONTEND_DESIGN_SKILL_SOURCE;
@@ -239,81 +498,6 @@ final class AiSiteSkillRegistry
         return $lines;
     }
 
-    /**
-     * 解析 SKILL.md 顶部 YAML frontmatter，返回 name/description。
-     *
-     * @return array{name?:string,description?:string}
-     */
-    private function parseSkillFrontmatter(string $absSkillFile): array
-    {
-        $contents = @\file_get_contents($absSkillFile);
-        if (!\is_string($contents) || $contents === '') {
-            return [];
-        }
-        $contents = \ltrim($contents);
-        if (!\str_starts_with($contents, '---')) {
-            return [];
-        }
-        $end = \strpos($contents, "\n---", 3);
-        if ($end === false) {
-            return [];
-        }
-        $front = \substr($contents, 3, $end - 3);
-        $front = \str_replace(["\r\n", "\r"], "\n", $front);
-        $lines = \explode("\n", $front);
-
-        $result = [];
-        $currentKey = '';
-        $accumulator = '';
-        foreach ($lines as $rawLine) {
-            $line = \rtrim($rawLine);
-            if ($line === '') {
-                continue;
-            }
-            if (\preg_match('/^([a-zA-Z_][a-zA-Z0-9_-]*)\s*:\s*(.*)$/u', $line, $m) === 1) {
-                if ($currentKey !== '') {
-                    $result[$currentKey] = \trim($accumulator);
-                }
-                $currentKey = (string)$m[1];
-                $value = (string)$m[2];
-                if ($value === '>-' || $value === '>' || $value === '|') {
-                    $accumulator = '';
-                } else {
-                    $accumulator = $value;
-                }
-            } else {
-                $accumulator .= ' ' . \trim($line);
-            }
-        }
-        if ($currentKey !== '') {
-            $result[$currentKey] = \trim($accumulator);
-        }
-
-        $clean = [];
-        if (isset($result['name'])) {
-            $clean['name'] = $this->stripQuotes((string)$result['name']);
-        }
-        if (isset($result['description'])) {
-            $clean['description'] = $this->stripQuotes((string)$result['description']);
-        }
-
-        return $clean;
-    }
-
-    private function stripQuotes(string $value): string
-    {
-        $value = \trim($value);
-        if ($value === '') {
-            return '';
-        }
-        if ((\str_starts_with($value, '"') && \str_ends_with($value, '"'))
-            || (\str_starts_with($value, "'") && \str_ends_with($value, "'"))) {
-            return \trim(\substr($value, 1, -1));
-        }
-
-        return $value;
-    }
-
     private function compactDescription(string $description): string
     {
         if ($description === '') {
@@ -328,6 +512,23 @@ final class AiSiteSkillRegistry
         }
 
         return $description;
+    }
+
+    private function excerptSkillBody(string $body): string
+    {
+        $body = \trim((string)\preg_replace('/\R/u', "\n", $body));
+        if ($body === '') {
+            return '';
+        }
+        $max = 6000;
+        if (\function_exists('mb_strlen') && \mb_strlen($body) > $max) {
+            return \mb_substr($body, 0, $max - 3) . '...';
+        }
+        if (\strlen($body) > $max) {
+            return \substr($body, 0, $max - 3) . '...';
+        }
+
+        return $body;
     }
 
     private function resolveSkillsAbsoluteRoot(): string

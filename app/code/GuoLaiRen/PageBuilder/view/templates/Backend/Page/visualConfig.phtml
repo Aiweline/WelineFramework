@@ -6,20 +6,18 @@
  */
 $page = $this->getData('page');
 $pageId = $page && $page->getId() ? $page->getId() : 0;
-$virtualThemeId = (int) ($this->getData('visual_config_virtual_theme_id') ?: \w_env_get('virtual_theme_id', 0));
 $styleSettings = $page ? $page->getStyleSettings() : [];
 ?>
 
 <style>
-/* 可视化配置容器（须高于后台顶栏/右侧栏，见 theme.css / app.css） */
+/* 可视化配置容器 */
 .visual-config-wrapper {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 100500 !important;
-    isolation: isolate;
+    z-index: 9999;
     background: #fff;
     display: none;
 }
@@ -323,31 +321,28 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
                         <!-- 背景颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('背景颜色') ?></label>
-                            <input type="text"
-                                   class="form-control auto-save-field"
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
                                    data-config-key="header.bg_color"
-                                   value="<?= $styleSettings['header.bg_color'] ?? '#ffffff' ?>"
-                                   placeholder="rgba(255,255,255,0.05)">
+                                   value="<?= $styleSettings['header.bg_color'] ?? '#ffffff' ?>">
                         </div>
                         
                         <!-- 文字颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('文字颜色') ?></label>
-                            <input type="text"
-                                   class="form-control auto-save-field"
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
                                    data-config-key="header.text_color"
-                                   value="<?= $styleSettings['header.text_color'] ?? '#000000' ?>"
-                                   placeholder="rgba(255,255,255,0.05)">
+                                   value="<?= $styleSettings['header.text_color'] ?? '#000000' ?>">
                         </div>
                         
                         <!-- 链接颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('链接颜色') ?></label>
-                            <input type="text"
-                                   class="form-control auto-save-field"
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
                                    data-config-key="header.link_color"
-                                   value="<?= $styleSettings['header.link_color'] ?? '#0066cc' ?>"
-                                   placeholder="rgba(255,255,255,0.05)">
+                                   value="<?= $styleSettings['header.link_color'] ?? '#0066cc' ?>">
                         </div>
                         
                         <!-- 字体大小 -->
@@ -372,31 +367,28 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
                         <!-- 背景颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('背景颜色') ?></label>
-                            <input type="text"
-                                   class="form-control auto-save-field"
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
                                    data-config-key="content.bg_color"
-                                   value="<?= $styleSettings['content.bg_color'] ?? '#ffffff' ?>"
-                                   placeholder="rgba(255,255,255,0.05)">
+                                   value="<?= $styleSettings['content.bg_color'] ?? '#ffffff' ?>">
                         </div>
                         
                         <!-- 文字颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('文字颜色') ?></label>
-                            <input type="text"
-                                   class="form-control auto-save-field"
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
                                    data-config-key="content.text_color"
-                                   value="<?= $styleSettings['content.text_color'] ?? '#333333' ?>"
-                                   placeholder="rgba(255,255,255,0.05)">
+                                   value="<?= $styleSettings['content.text_color'] ?? '#333333' ?>">
                         </div>
                         
                         <!-- 标题颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('标题颜色') ?></label>
-                            <input type="text"
-                                   class="form-control auto-save-field"
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
                                    data-config-key="content.heading_color"
-                                   value="<?= $styleSettings['content.heading_color'] ?? '#000000' ?>"
-                                   placeholder="rgba(255,255,255,0.05)">
+                                   value="<?= $styleSettings['content.heading_color'] ?? '#000000' ?>">
                         </div>
                         
                         <!-- H1大小 -->
@@ -432,11 +424,10 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
                         <!-- 链接颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('链接颜色') ?></label>
-                            <input type="text"
-                                   class="form-control auto-save-field"
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
                                    data-config-key="content.link_color"
-                                   value="<?= $styleSettings['content.link_color'] ?? '#0066cc' ?>"
-                                   placeholder="rgba(255,255,255,0.05)">
+                                   value="<?= $styleSettings['content.link_color'] ?? '#0066cc' ?>">
                         </div>
                         
                         <!-- 字体家族 -->
@@ -462,31 +453,28 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
                         <!-- 背景颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('背景颜色') ?></label>
-                            <input type="text"
-                                   class="form-control auto-save-field"
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
                                    data-config-key="footer.bg_color"
-                                   value="<?= $styleSettings['footer.bg_color'] ?? '#343a40' ?>"
-                                   placeholder="rgba(255,255,255,0.05)">
+                                   value="<?= $styleSettings['footer.bg_color'] ?? '#343a40' ?>">
                         </div>
                         
                         <!-- 文字颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('文字颜色') ?></label>
-                            <input type="text"
-                                   class="form-control auto-save-field"
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
                                    data-config-key="footer.text_color"
-                                   value="<?= $styleSettings['footer.text_color'] ?? '#ffffff' ?>"
-                                   placeholder="rgba(255,255,255,0.05)">
+                                   value="<?= $styleSettings['footer.text_color'] ?? '#ffffff' ?>">
                         </div>
                         
                         <!-- 标题颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('标题颜色') ?></label>
-                            <input type="text"
-                                   class="form-control auto-save-field"
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
                                    data-config-key="footer.heading_color"
-                                   value="<?= $styleSettings['footer.heading_color'] ?? '#ffffff' ?>"
-                                   placeholder="rgba(255,255,255,0.05)">
+                                   value="<?= $styleSettings['footer.heading_color'] ?? '#ffffff' ?>">
                         </div>
                         
                         <!-- 标题大小 -->
@@ -502,21 +490,19 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
                         <!-- 链接颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('链接颜色') ?></label>
-                            <input type="text"
-                                   class="form-control auto-save-field"
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
                                    data-config-key="footer.link_color"
-                                   value="<?= $styleSettings['footer.link_color'] ?? '#adb5bd' ?>"
-                                   placeholder="rgba(255,255,255,0.05)">
+                                   value="<?= $styleSettings['footer.link_color'] ?? '#adb5bd' ?>">
                         </div>
                         
                         <!-- 链接悬停颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('链接悬停颜色') ?></label>
-                            <input type="text"
-                                   class="form-control auto-save-field"
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
                                    data-config-key="footer.link_hover_color"
-                                   value="<?= $styleSettings['footer.link_hover_color'] ?? '#ffffff' ?>"
-                                   placeholder="rgba(255,255,255,0.05)">
+                                   value="<?= $styleSettings['footer.link_hover_color'] ?? '#ffffff' ?>">
                         </div>
                         
                         <!-- 字体大小 -->
@@ -601,7 +587,6 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
         <?php 
         $this->assign('style_code', $page ? $page->getData('style') : 'default');
         $this->assign('layout_code', $page ? ($page->getData('layout') ?: 'default') : 'default');
-        $this->assign('visual_virtual_theme_id', $virtualThemeId);
         ?>
         <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/component_panel.phtml</w:template>
     </div>
@@ -612,7 +597,6 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
 if (typeof pageId === 'undefined') {
     var pageId = <?= $pageId ?>;
 }
-window.visualVirtualThemeId = <?= (int) $virtualThemeId ?>;
 
 // 自动保存防抖定时器
 let autoSaveTimer = null;
@@ -620,19 +604,13 @@ const AUTO_SAVE_DELAY = 1000; // 1秒
 
 // 打开可视化配置
 function openVisualConfig() {
-    var w = document.getElementById('visualConfigWrapper');
-    if (w && w.parentElement !== document.body) {
-        document.body.appendChild(w);
-    }
-    w.classList.add('active');
-    document.body.classList.add('visual-config-editor-open');
+    document.getElementById('visualConfigWrapper').classList.add('active');
     document.body.style.overflow = 'hidden';
 }
 
 // 关闭可视化配置
 function closeVisualConfig() {
     document.getElementById('visualConfigWrapper').classList.remove('active');
-    document.body.classList.remove('visual-config-editor-open');
     document.body.style.overflow = '';
 }
 
@@ -716,11 +694,7 @@ function refreshPreview() {
     loading.classList.add('active');
     
     // 重新加载iframe
-    let previewQs = '?page_id=' + pageId + '&t=' + Date.now();
-    if (typeof window.visualVirtualThemeId === 'number' && window.visualVirtualThemeId > 0) {
-        previewQs += '&virtual_theme_id=' + encodeURIComponent(String(window.visualVirtualThemeId));
-    }
-    iframe.src = iframe.src.split('?')[0] + previewQs;
+    iframe.src = iframe.src.split('?')[0] + '?page_id=' + pageId + '&t=' + Date.now();
     
     // 监听加载完成
     iframe.onload = function() {

@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
+use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\BuiltinSkillProvider;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\CustomSkillProvider;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillSelectionResolver;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillSnapshotBuilder;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemePlanService;
 use PHPUnit\Framework\TestCase;
 use Weline\Ai\Service\AiService;
@@ -12,7 +18,25 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
 {
     public function testStageTwoBatchPromptIncludesFrontendDesignSkillReference(): void
     {
-        $service = new AiSiteVirtualThemePlanService();
+        $customProvider = new CustomSkillProvider(null, [
+            'conversion-copy' => [
+                'code' => 'conversion-copy',
+                'name' => 'Conversion Copy',
+                'description' => 'Selected skill for prompt verification.',
+                'body' => 'CURRENT DB BODY SHOULD NOT BE USED.',
+                'status' => 'active',
+                'source' => 'custom_db',
+                'exists' => true,
+            ],
+        ]);
+        $resolver = new SkillSelectionResolver(new BuiltinSkillProvider(), $customProvider);
+        $service = new AiSiteVirtualThemePlanService(null, new AiSiteSkillRegistry(
+            null,
+            null,
+            $customProvider,
+            $resolver,
+            new SkillSnapshotBuilder($resolver)
+        ));
         $method = new \ReflectionMethod($service, 'buildTaskPlanGenerationBatchPrompt');
         $method->setAccessible(true);
 
@@ -23,6 +47,19 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
                 'content_locale' => 'en_US',
                 'default_locale' => 'en_US',
                 'plan_locale' => 'zh_Hans_CN',
+                'selected_skill_codes' => ['conversion-copy'],
+                'plan_workbench' => [
+                    'contract_context' => [
+                        'selected_skill_codes' => ['conversion-copy'],
+                        'skill_snapshots' => [[
+                            'code' => 'conversion-copy',
+                            'name' => 'Conversion Copy',
+                            'source' => 'custom_db',
+                            'normalized_body' => 'FROZEN STAGE2 SKILL BODY MUST GUIDE EVERY TASK.',
+                            'body_hash' => \hash('sha256', 'FROZEN STAGE2 SKILL BODY MUST GUIDE EVERY TASK.'),
+                        ]],
+                    ],
+                ],
                 'plan_structured' => [
                     'theme_context_snapshot' => ['site_positioning' => 'premium analytics'],
                     'palette' => ['name' => 'Deep graphite with electric lime'],
@@ -84,6 +121,9 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('explicit readable contrast pairs', $prompt);
         self::assertStringContainsString('theme palette as role tokens', $prompt);
         self::assertStringContainsString('Dark surfaces require light foregrounds', $prompt);
+        self::assertStringContainsString('Skill code: conversion-copy', $prompt);
+        self::assertStringContainsString('FROZEN STAGE2 SKILL BODY MUST GUIDE EVERY TASK.', $prompt);
+        self::assertStringNotContainsString('CURRENT DB BODY SHOULD NOT BE USED.', $prompt);
     }
 
     public function testStageTwoFullTaskPlanPromptLocksPlannedContentToWebsiteLanguage(): void
@@ -274,6 +314,190 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
             (string)($artifacts['structured']['plan_signature'] ?? ''),
             (string)($artifacts['virtual_theme_plan']['page_tasks']['home_page'][0]['runtime_context']['stage2_context_hash'] ?? '')
         );
+        $workbench = $artifacts['structured']['task_plan_workbench'] ?? [];
+        self::assertIsArray($workbench);
+        self::assertArrayHasKey(ContractType::TYPE_BLOCK_VISUAL_CONTRACT, $workbench['contracts'] ?? []);
+        self::assertArrayHasKey(ContractType::TYPE_BLOCK_TASK_CONTRACT, $workbench['contracts'] ?? []);
+        self::assertSame(
+            ContractType::STAGE_STAGE2,
+            (string)($workbench['contracts'][ContractType::TYPE_BLOCK_TASK_CONTRACT]['contract_meta']['stage'] ?? '')
+        );
+        self::assertNotEmpty($workbench['contracts'][ContractType::TYPE_BLOCK_TASK_CONTRACT]['source_contracts'] ?? []);
+        self::assertSame($workbench['contracts'] ?? [], $artifacts['virtual_theme_plan']['task_plan_workbench']['contracts'] ?? []);
+    }
+
+    public function testStageTwoContractValidationRejectsUnconfirmedPageType(): void
+    {
+        $service = new AiSiteVirtualThemePlanService();
+        $method = new \ReflectionMethod($service, 'attachStageTwoContracts');
+        $method->setAccessible(true);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('unconfirmed page type');
+
+        $method->invokeArgs($service, [
+            [
+                'plan_workbench' => [
+                    'confirmed' => [
+                        'contracts' => [
+                            ContractType::TYPE_PAGE_CONTRACT => [
+                                'contract_meta' => [
+                                    'id' => 'page-contract',
+                                    'type' => ContractType::TYPE_PAGE_CONTRACT,
+                                    'version' => ContractType::VERSION_V1,
+                                    'status' => ContractType::STATUS_CONFIRMED,
+                                ],
+                                'payload' => [
+                                    'page_types' => ['home_page'],
+                                    'pages' => ['home_page' => []],
+                                ],
+                            ],
+                            ContractType::TYPE_BLOCK_PLAN => [
+                                'contract_meta' => [
+                                    'id' => 'block-plan',
+                                    'type' => ContractType::TYPE_BLOCK_PLAN,
+                                    'version' => ContractType::VERSION_V1,
+                                    'status' => ContractType::STATUS_CONFIRMED,
+                                ],
+                                'payload' => [
+                                    'pages' => [
+                                        'home_page' => [
+                                            'blocks' => [
+                                                [
+                                                    'task_key' => 'page:home_page:hero',
+                                                    'block_key' => 'hero',
+                                                    'section_code' => 'hero',
+                                                ],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            [
+                'plan_signature' => 'sig',
+                'page_tasks' => [
+                    'about_page' => [
+                        [
+                            'task_key' => 'page:about_page:hero',
+                            'block_key' => 'hero',
+                            'section_code' => 'hero',
+                        ],
+                    ],
+                ],
+            ],
+            ['signature' => 'sig'],
+        ]);
+    }
+
+    public function testStageTwoContractValidationRejectsUnconfirmedStageOneDraft(): void
+    {
+        $service = new AiSiteVirtualThemePlanService();
+        $method = new \ReflectionMethod($service, 'attachStageTwoContracts');
+        $method->setAccessible(true);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('confirmed Stage-1');
+
+        $method->invokeArgs($service, [
+            [
+                'plan_workbench' => [
+                    'contracts' => [
+                        ContractType::TYPE_PAGE_CONTRACT => [
+                            'contract_meta' => [
+                                'id' => 'draft-page-contract',
+                                'type' => ContractType::TYPE_PAGE_CONTRACT,
+                                'version' => ContractType::VERSION_V1,
+                                'status' => ContractType::STATUS_DRAFT,
+                            ],
+                            'payload' => [
+                                'page_types' => ['home_page'],
+                                'pages' => ['home_page' => []],
+                            ],
+                        ],
+                    ],
+                ],
+                'plan_structured' => [
+                    'page_types' => ['home_page'],
+                    'pages' => ['home_page' => []],
+                ],
+            ],
+            [
+                'plan_signature' => 'sig',
+                'page_tasks' => ['home_page' => []],
+            ],
+            ['signature' => 'sig'],
+        ]);
+    }
+
+    public function testStageTwoContractValidationRejectsUnconfirmedBlockRewrite(): void
+    {
+        $service = new AiSiteVirtualThemePlanService();
+        $method = new \ReflectionMethod($service, 'attachStageTwoContracts');
+        $method->setAccessible(true);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('unconfirmed block');
+
+        $method->invokeArgs($service, [
+            [
+                'plan_workbench' => [
+                    'confirmed' => [
+                        'contracts' => [
+                            ContractType::TYPE_PAGE_CONTRACT => [
+                                'contract_meta' => [
+                                    'id' => 'page-contract',
+                                    'type' => ContractType::TYPE_PAGE_CONTRACT,
+                                    'version' => ContractType::VERSION_V1,
+                                    'status' => ContractType::STATUS_CONFIRMED,
+                                ],
+                                'payload' => [
+                                    'page_types' => ['home_page'],
+                                    'pages' => ['home_page' => []],
+                                ],
+                            ],
+                            ContractType::TYPE_BLOCK_PLAN => [
+                                'contract_meta' => [
+                                    'id' => 'block-plan',
+                                    'type' => ContractType::TYPE_BLOCK_PLAN,
+                                    'version' => ContractType::VERSION_V1,
+                                    'status' => ContractType::STATUS_CONFIRMED,
+                                ],
+                                'payload' => [
+                                    'pages' => [
+                                        'home_page' => [
+                                            'blocks' => [
+                                                [
+                                                    'task_key' => 'page:home_page:hero',
+                                                    'block_key' => 'hero',
+                                                    'section_code' => 'hero',
+                                                ],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            [
+                'plan_signature' => 'sig',
+                'page_tasks' => [
+                    'home_page' => [
+                        [
+                            'task_key' => 'page:home_page:faq',
+                            'block_key' => 'faq',
+                            'section_code' => 'faq',
+                        ],
+                    ],
+                ],
+            ],
+            ['signature' => 'sig'],
+        ]);
     }
 
     public function testBuildTaskPlanArtifactsRecordsStageTwoLocalRegenReportWhenTaskCopyIsInstructionLike(): void

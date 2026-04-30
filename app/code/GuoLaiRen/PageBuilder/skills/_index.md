@@ -1,7 +1,7 @@
 # AI 建站工作台技能索引（PageBuilder Skills）
 
-> 状态：active  
-> 模块：`GuoLaiRen_PageBuilder`  
+> 状态：active
+> 模块：`GuoLaiRen_PageBuilder`
 > 注册表实现：`app/code/GuoLaiRen/PageBuilder/Service/AI/AiSiteSkillRegistry.php`
 
 ## 用途
