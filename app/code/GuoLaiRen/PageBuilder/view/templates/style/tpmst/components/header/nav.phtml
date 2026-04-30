@@ -38,15 +38,8 @@
  * navigation.min_height => 最小高度:number:70|px
  * navigation.box_shadow => 阴影:text:0 2px 10px rgba(0,0,0,0.5)
  * navigation.backdrop_blur => 背景模糊:number:10|px
- * navigation.use_custom_links => 使用自定义导航链接:select:no|no,yes
- * navigation.items => 导航项配置:textarea:Home=>\r\nAbout=>\r\nBlog=>\r\nFAQs=>|配置格式：名字=>url，一行一个（仅当开启自定义链接时生效）
- * group:navigation_labels => 导航菜单显示名称（有对应页面时显示，留空使用页面标题）
- * navigation.label_home_page => 首页菜单名:text:
- * navigation.label_about_page => 关于我们菜单名:text:
- * navigation.label_blog_list => 博客菜单名:text:
- * navigation.label_contact_page => 联系我们菜单名:text:
- * navigation.label_terms_of_service => 条款菜单名:text:
- * navigation.label_privacy_policy => 隐私政策菜单名:text:
+ * navigation.items => 导航项配置:textarea:Home=>\r\nAbout=>\r\nBlog=>\r\nFAQs=>|配置格式：名字=>url，一行一个
+ * navigation.use_subpages => 使用子页面作为导航:select:no|yes,no
  * 
  * group:download_button => 下载按钮
  * download_button.display => 显示下载按钮:select:yes|yes,no
@@ -114,12 +107,10 @@ $logoWidth = $genResponsiveCSS($parseResponsive($getConfig('logo.width', '70/70'
 $logoHeightConfig = $getConfig('logo.height', '');
 $logoHeight = empty($logoHeightConfig) ? $logoWidth : $genResponsiveCSS($parseResponsive($logoHeightConfig . 'px'));
 
-// 导航配置（背景优先用配置，否则用主题色 nav_bg）
-$themeNavBg = (isset($colors) && is_array($colors) && !empty($colors['nav_bg'])) ? $colors['nav_bg'] : '#0a0a0f';
-$themeNavBgScrolled = (isset($colors) && is_array($colors) && !empty($colors['nav_bg_scrolled'])) ? $colors['nav_bg_scrolled'] : 'rgba(10, 10, 15, 0.98)';
+// 导航配置
 $navDisplay = $getConfig('navigation.display', 'yes') !== 'no';
-$navBgColor = $getConfig('navigation.bg_color', $themeNavBg);
-$navBgColorScrolled = $getConfig('navigation.bg_color_scrolled', $themeNavBgScrolled);
+$navBgColor = $getConfig('navigation.bg_color', '#0a0a0f');
+$navBgColorScrolled = $getConfig('navigation.bg_color_scrolled', 'rgba(10, 10, 15, 0.98)');
 $navTextColor = $getConfig('navigation.text_color', '#ffffff');
 $navLinkColor = $getConfig('navigation.link_color', '#ffffff');
 $navLinkHoverColor = $getConfig('navigation.link_hover_color', '#ffd700');
@@ -131,25 +122,25 @@ $navPaddingY = $getConfig('navigation.padding_y', '12');
 $navMinHeight = $getConfig('navigation.min_height', '70');
 $navBoxShadow = $getConfig('navigation.box_shadow', '0 2px 10px rgba(0,0,0,0.5)');
 $navBackdropBlur = $getConfig('navigation.backdrop_blur', '10');
+$useSubpages = $getConfig('navigation.use_subpages', 'no') === 'yes';
 
-// 导航项：默认按页面类型自动生成；开启「使用自定义导航链接」时用 navigation.items
+// 导航项
 $navItems = [];
-$useCustomLinks = $getConfig('navigation.use_custom_links', 'no') === 'yes';
-if (!$useCustomLinks && $page) {
-    $headerPages = $page->getHeaderNavigationPages(10);
-    foreach ($headerPages as $navPage) {
-        $type = $navPage['type'] ?? '';
-        $configuredLabel = trim((string)($getConfig('navigation.label_' . $type, '') ?? ''));
+if ($useSubpages && $page) {
+    // 使用真实的子页面作为导航（从同站点已发布页面获取）
+    // 获取导航页面，使用 handle 作为 SEO 友好的 URL
+    $navigationPages = $page->getNavigationPages([], 10);
+    foreach ($navigationPages as $navPage) {
         $navItems[] = [
-            'text' => $configuredLabel !== '' ? $configuredLabel : ($navPage['title'] ?? ''),
-            'href' => $navPage['url'] ?? '/',
-            'type' => $type,
+            'text' => $navPage['title'] ?? '',
+            'href' => $navPage['url'] ?? '#', // 使用 /handle 格式的 SEO 友好 URL
+            'type' => $navPage['type'] ?? '',
         ];
     }
 }
 
-if ($useCustomLinks || empty($navItems)) {
-    $navItems = [];
+if (empty($navItems)) {
+    // 使用配置的导航项
     $navItemsConfig = $getConfig('navigation.items', "Home=>\nAbout=>\nBlog=>\nFAQs=>");
     if (strpos($navItemsConfig, '\\n') !== false && strpos($navItemsConfig, "\n") === false) {
         $navItemsConfig = str_replace('\\n', "\n", $navItemsConfig);
@@ -163,6 +154,7 @@ if ($useCustomLinks || empty($navItems)) {
             $text = trim($parts[0]);
             $href = trim($parts[1] ?? '');
             if (!empty($text)) {
+                // 如果 href 为空，生成基于文本的默认 URL（小写、连字符）
                 if (empty($href)) {
                     $href = '/' . strtolower(preg_replace('/[^a-zA-Z0-9]+/', '-', trim($text)));
                 }
@@ -173,20 +165,32 @@ if ($useCustomLinks || empty($navItems)) {
 }
 
 if (empty($navItems)) {
-    $navItems = [
-        ['text' => 'Home', 'href' => '/'],
-        ['text' => 'About', 'href' => '/about'],
-        ['text' => 'Blog', 'href' => '/blog'],
-        ['text' => 'FAQs', 'href' => '/faqs'],
-    ];
+    // 默认导航项 - 如果有页面对象，尝试从数据库获取真实页面
+    if ($page) {
+        $defaultPages = $page->getNavigationPages([], 5);
+        foreach ($defaultPages as $navPage) {
+            $navItems[] = [
+                'text' => $navPage['title'] ?? '',
+                'href' => $navPage['url'] ?? '#',
+            ];
+        }
+    }
+    
+    // 如果还是空的，使用硬编码的默认值
+    if (empty($navItems)) {
+        $navItems = [
+            ['text' => 'Home', 'href' => '/'],
+            ['text' => 'About', 'href' => '/about'],
+            ['text' => 'Blog', 'href' => '/blog'],
+            ['text' => 'FAQs', 'href' => '/faqs'],
+        ];
+    }
 }
 
 // 下载按钮配置
 $downloadBtnDisplay = $getConfig('download_button.display', 'yes') !== 'no';
 $downloadBtnText = $getConfig('download_button.text', 'DOWNLOAD APP');
 $downloadBtnUrl = $getConfig('download_button.url', '#download');
-$downloadBtnHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$downloadBtnUrl);
-$downloadBtnRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($downloadBtnHref, 'url');
 $downloadBtnBgColor = $getConfig('download_button.bg_color', '#ff6b35');
 $downloadBtnBgHoverColor = $getConfig('download_button.bg_hover_color', '#e55a2b');
 $downloadBtnTextColor = $getConfig('download_button.text_color', '#ffffff');
@@ -225,12 +229,6 @@ body {
     margin: 0 !important;
 }
    
-#<?= $componentId ?> {
-    width: 100vw;
-    margin-left: calc(-50vw + 50%);
-    box-sizing: border-box;
-}
-
 #<?= $componentId ?> * {
     margin: 0;
     padding: 0;
@@ -396,7 +394,7 @@ body {
 }
 </style>
 
-<header id="<?= $componentId ?>" class="tpmst-header-nav-component">
+<div id="<?= $componentId ?>" class="tpmst-header-nav-component">
     <!-- 导航栏 - Logo居中布局 -->
     <nav class="tpmst-nav" id="<?= $componentId ?>-nav">
         <div class="tpmst-section-inner">
@@ -410,7 +408,7 @@ body {
                 
                 <?php if ($downloadBtnDisplay): ?>
                 <div class="tpmst-nav-download-wrapper">
-                    <a role="button" tabindex="0" class="tpmst-nav-download-btn" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($downloadBtnRef)) ?>" data-glr-ref="<?= htmlspecialchars($downloadBtnRef) ?>"><?= htmlspecialchars($downloadBtnText) ?></a>
+                    <a href="<?= htmlspecialchars($downloadBtnUrl) ?>" class="tpmst-nav-download-btn"><?= htmlspecialchars($downloadBtnText) ?></a>
                 </div>
                 <?php endif; ?>
             </div>
@@ -430,7 +428,7 @@ body {
             <?php endif; ?>
         </div>
     </nav>
-</header>
+</div>
 
 <script>
 /* TPMST Header Nav Component - Scoped JavaScript */

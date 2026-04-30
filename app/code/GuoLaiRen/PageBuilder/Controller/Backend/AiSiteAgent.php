@@ -42,6 +42,8 @@ use GuoLaiRen\PageBuilder\Service\AiSiteHtmlBlocksBuildService;
 use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSiteTaskPlanSseService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemePlanService;
+use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\CustomSkillRepository;
 use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\App\State;
@@ -81,7 +83,7 @@ class AiSiteAgent extends BaseController
      * 工作区 stream-sse 续约窗口：超过此时间未收到续约请求（POST post-touch-stream-lease）则视为断连，
      * 服务端将结束事件流并清理与本 lease 关联的排队/运行中操作。
      * 前端心跳间隔应显著小于本值（当前页面约 20s 一次 POST 续约）。
-     * 
+     *
      * 注意：此值需要与 observeDuplicateOperationStream 中的 $maxIdleLoops 协调，
      * 确保长时间运行的 AI 生成任务（如大型页面构建）不会被误判为过时。
      * 当前设置为 600 秒（10分钟），以支持复杂的 AI 内容生成场景。
@@ -296,6 +298,9 @@ class AiSiteAgent extends BaseController
         $this->assign('replace_scope_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-replace-scope'));
         $this->assign('set_stage_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-set-stage'));
         $this->assign('start_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-plan'));
+        $this->assign('skill_list_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-skill-list'));
+        $this->assign('skill_save_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-skill-save'));
+        $this->assign('skill_disable_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-skill-disable'));
         $this->assign('confirm_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-confirm-plan'));
         $this->assign('sort_plan_blocks_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-sort-plan-blocks'));
         $this->assign('mutate_plan_block_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-mutate-plan-block'));
@@ -725,6 +730,21 @@ SCRIPT;
         ]);
     }
 
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站技能 API', 'mdi-api', '列出 AI 建站技能', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postSkillList(): string { return $this->handleSkillList(); }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站技能 API', 'mdi-api', '列出 AI 建站技能 GET 兼容', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function getPostSkillList(): string { return $this->handleSkillList(); }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站技能 API', 'mdi-api', '列出 AI 建站技能 GET', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function getSkillList(): string { return $this->handleSkillList(); }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站技能 API', 'mdi-api', '保存 AI 建站技能', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postSkillSave(): string { return $this->handleSkillSave(); }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站技能 API', 'mdi-api', '禁用 AI 建站技能', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postSkillDisable(): string { return $this->handleSkillDisable(); }
+
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '生成阶段一方案书', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartPlan(): string { return $this->handleStartPlan(); }
 
@@ -976,6 +996,160 @@ SCRIPT;
         ]);
     }
 
+    private function handleSkillList(): string
+    {
+        try {
+            $includeBody = $this->isTruthyRequestFlag('include_body');
+            $items = [];
+            foreach ($this->aiSiteSkillRegistry()->listAvailableSkills() as $skill) {
+                $items[] = $this->formatSkillApiItem($skill, $includeBody);
+            }
+
+            return $this->fetchJson([
+                'success' => true,
+                'items' => $items,
+                'default_skill_codes' => $this->aiSiteSkillRegistry()->getDefaultSkillCodes(),
+            ]);
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $throwable->getMessage(),
+            ]);
+        }
+    }
+
+    private function handleSkillSave(): string
+    {
+        $error = '';
+        $skillPayload = $this->getRequestJsonObject('skill', $error);
+        if ($error !== '') {
+            return $this->fetchJson(['success' => false, 'message' => $error]);
+        }
+
+        $data = [
+            'code' => $this->getRequestBodyValue('code', $skillPayload['code'] ?? ''),
+            'name' => $this->getRequestBodyValue('name', $skillPayload['name'] ?? ''),
+            'description' => $this->getRequestBodyValue('description', $skillPayload['description'] ?? ''),
+            'body' => $this->getRequestBodyValue('body', $skillPayload['body'] ?? ''),
+            'status' => $this->getRequestBodyValue('status', $skillPayload['status'] ?? 'active'),
+        ];
+
+        try {
+            $saved = $this->customSkillRepository()->saveFromArray($data);
+            $item = $this->customSkillRepository()->findArrayByCode($saved->getCode()) ?? [
+                'code' => $saved->getCode(),
+                'name' => (string)$saved->getData('name'),
+                'description' => (string)$saved->getData('description'),
+                'body' => (string)$saved->getData('body'),
+                'status' => $saved->getStatus(),
+                'source' => 'custom_db',
+                'exists' => true,
+            ];
+
+            return $this->fetchJson([
+                'success' => true,
+                'item' => $this->formatSkillApiItem($item, true),
+            ]);
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
+        } catch (\InvalidArgumentException $invalidArgumentException) {
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'VALIDATION_ERROR',
+                'message' => $invalidArgumentException->getMessage(),
+            ]);
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'SKILL_SAVE_FAILED',
+                'message' => $throwable->getMessage(),
+            ]);
+        }
+    }
+
+    private function handleSkillDisable(): string
+    {
+        $code = \trim((string)$this->getRequestBodyValue('code', ''));
+        if ($code === '') {
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'INVALID_SKILL_CODE',
+                'message' => 'Skill code is required.',
+            ]);
+        }
+
+        try {
+            $existing = $this->customSkillRepository()->findArrayByCode($code);
+            if (!\is_array($existing)) {
+                $builtin = $this->aiSiteSkillRegistry()->getSkill($code);
+                return $this->fetchJson([
+                    'success' => false,
+                    'code' => !empty($builtin['exists']) ? 'BUILTIN_SKILL_READONLY' : 'SKILL_NOT_FOUND',
+                    'message' => !empty($builtin['exists'])
+                        ? 'Builtin skills are read-only and cannot be disabled by this endpoint.'
+                        : 'Skill not found.',
+                ]);
+            }
+
+            $existing['status'] = 'disabled';
+            $saved = $this->customSkillRepository()->saveFromArray($existing);
+            $item = $this->customSkillRepository()->findArrayByCode($saved->getCode()) ?? $existing;
+
+            return $this->fetchJson([
+                'success' => true,
+                'item' => $this->formatSkillApiItem($item, true),
+            ]);
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'SKILL_DISABLE_FAILED',
+                'message' => $throwable->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $skill
+     * @return array<string, mixed>
+     */
+    private function formatSkillApiItem(array $skill, bool $includeBody = false): array
+    {
+        $status = (string)($skill['status'] ?? 'active');
+        $source = (string)($skill['source'] ?? '');
+        $item = [
+            'id' => (int)($skill['id'] ?? 0),
+            'code' => (string)($skill['code'] ?? ''),
+            'name' => (string)($skill['name'] ?? $skill['code'] ?? ''),
+            'description' => (string)($skill['description'] ?? ''),
+            'status' => $status,
+            'source' => $source,
+            'body_hash' => (string)($skill['body_hash'] ?? ''),
+            'local_path' => (string)($skill['local_path'] ?? ''),
+            'readonly' => $source !== 'custom_db',
+            'selectable' => !empty($skill['exists']) && $status === 'active',
+            'exists' => !empty($skill['exists']),
+        ];
+        if ($includeBody) {
+            $item['body'] = (string)($skill['body'] ?? $skill['normalized_body'] ?? '');
+        }
+
+        return $item;
+    }
+
+    private function aiSiteSkillRegistry(): AiSiteSkillRegistry
+    {
+        return ObjectManager::getInstance(AiSiteSkillRegistry::class);
+    }
+
+    private function customSkillRepository(): CustomSkillRepository
+    {
+        return ObjectManager::getInstance(CustomSkillRepository::class);
+    }
+
     private function handleStartPlan(): string
     {
         $adminId = (int)$this->getLoginUserId();
@@ -996,6 +1170,12 @@ SCRIPT;
         if (isset($scopePatch['page_types'])) {
             $scopePatch[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
         }
+        $requestedSelectedSkillCodes = $this->getRequestBodyValue(AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY, null);
+        if ($requestedSelectedSkillCodes !== null || \array_key_exists(AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY, $scopePatch)) {
+            $scopePatch[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] = $this->scopeCompatibilityService->normalizeSelectedSkillCodes(
+                $requestedSelectedSkillCodes ?? $scopePatch[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] ?? []
+            );
+        }
         $scope = $this->scopeCompatibilityService->normalizeScope(\array_replace(
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN),
             $scopePatch
@@ -1013,10 +1193,15 @@ SCRIPT;
             $scope['plan_locale'] = $requestedPlanLocale;
         }
         $scope['plan_locale'] = $this->resolvePlanLocale($scope);
+        $selectedSkillCodes = $this->scopeCompatibilityService->normalizeSelectedSkillCodes(
+            $scope[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] ?? []
+        );
+        $scope[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] = $selectedSkillCodes;
         // 第一阶段开始时先持久化用户本轮输入（域名/一句话描述/语言/页面类型等），再入队生成任务。
         $persistPatch = \array_replace($scopePatch, [
             'plan_locale' => (string)$scope['plan_locale'],
             'plan_confirmed' => 0,
+            AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY => $selectedSkillCodes,
         ]);
         $this->sessionService->mergeScope($session->getId(), $adminId, $persistPatch);
         $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
@@ -1121,6 +1306,7 @@ SCRIPT;
                 'target_scope' => $requestedTargetScope,
                 'round' => $requestedRound,
                 'plan_locale' => (string)$scope['plan_locale'],
+                AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY => $selectedSkillCodes,
             ],
         ]));
         if (empty($result['success'])) {
@@ -1164,6 +1350,7 @@ SCRIPT;
                         'target_scope' => $requestedTargetScope,
                         'round' => $requestedRound,
                         'plan_locale' => (string)$scope['plan_locale'],
+                        AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY => $selectedSkillCodes,
                     ],
                 ]));
                 if (empty($result['success'])) {
@@ -1646,6 +1833,10 @@ SCRIPT;
         $requestedInstruction = \trim((string)$this->getRequestBodyValue('instruction', ''));
         $requestedTargetScope = \trim((string)$this->getRequestBodyValue('target_scope', ''));
         $requestedRound = \max(1, (int)$this->getRequestBodyValue('round', 1));
+        $requestedSelectedSkillCodes = $this->getRequestBodyValue(AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY, null);
+        $selectedSkillCodes = $requestedSelectedSkillCodes === null
+            ? $this->scopeCompatibilityService->normalizeSelectedSkillCodes($scope[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] ?? [])
+            : $this->scopeCompatibilityService->normalizeSelectedSkillCodes($requestedSelectedSkillCodes);
         if ($this->shouldReusePersistedTaskPlanWithoutQueue($scope, $effectivePromptMode, $requestedInstruction, $requestedTargetScope)) {
             $responseState = $this->buildWorkspaceOperationPayload(
                 $this->buildWorkspaceState($session, $adminId, 24, true),
@@ -1679,11 +1870,13 @@ SCRIPT;
         $scopePatch = \array_replace($regenerationResetPatch, [
             'build_blueprint' => $buildBlueprint,
             'build_tasks' => \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [],
+            AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY => $selectedSkillCodes,
             '_task_plan_sse_request' => [
                 'prompt_mode' => $effectivePromptMode,
                 'instruction' => $requestedInstruction,
                 'target_scope' => $requestedTargetScope,
                 'round' => $requestedRound,
+                AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY => $selectedSkillCodes,
             ],
         ]);
         $result = $this->startOperation(
@@ -12595,6 +12788,28 @@ SCRIPT;
         ]);
         if ((int)($scopePatch['_force_rebuild'] ?? 0) === 1) {
             $content['_force_rebuild'] = 1;
+        }
+        $requestPayload = \is_array($scopePatch['_plan_sse_request'] ?? null)
+            ? $scopePatch['_plan_sse_request']
+            : (\is_array($scopePatch['_task_plan_sse_request'] ?? null) ? $scopePatch['_task_plan_sse_request'] : []);
+        $detailRequestPayload = \is_array($operationDetails['_plan_sse_request'] ?? null)
+            ? $operationDetails['_plan_sse_request']
+            : (\is_array($operationDetails['_task_plan_sse_request'] ?? null) ? $operationDetails['_task_plan_sse_request'] : []);
+        $selectedSkillCodes = $this->scopeCompatibilityService->normalizeSelectedSkillCodes(
+            $scopePatch[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY]
+                ?? $operationDetails[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY]
+                ?? $requestPayload[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY]
+                ?? $detailRequestPayload[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY]
+                ?? []
+        );
+        if (
+            $selectedSkillCodes !== []
+            || \array_key_exists(AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY, $scopePatch)
+            || \array_key_exists(AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY, $operationDetails)
+            || \array_key_exists(AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY, $requestPayload)
+            || \array_key_exists(AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY, $detailRequestPayload)
+        ) {
+            $content[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] = $selectedSkillCodes;
         }
         if ($this->isTaskPlanSchemeRebuildRequest($operation, $scopePatch, $operationDetails)) {
             $content['_force_rebuild'] = 1;

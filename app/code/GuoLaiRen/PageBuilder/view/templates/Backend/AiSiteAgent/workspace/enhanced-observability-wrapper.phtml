@@ -1,7 +1,7 @@
 <?php
 /**
  * P0可观测性增强：SSE连接追踪与日志
- * 
+ *
  * 提供详细的SSE连接状态追踪，帮助诊断重复订阅、连接泄露等问题
  * 此文件包含增强的SSE日志功能，用于调试和监控PageBuilder工作区的SSE连接
  */
@@ -14,7 +14,7 @@
 <script>
 (function () {
     'use strict';
-    
+
     // P0可观测性：初始化增强SSE日志器
     var sseLogger = null;
     try {
@@ -24,20 +24,20 @@
                 enableDetailedLogging: true,
                 maxLogEntries: 500
             });
-            
+
             // 暴露全局访问接口
             window.pbAiWorkspaceSseLogger = sseLogger;
         }
     } catch (e) {
         console.warn('[SSE] 初始化增强日志器失败:', e);
     }
-    
+
     // 增强的连接状态追踪
     var connectionStartTime = null;
     var currentConnectionId = null;
     var connectionRetryCount = 0;
     var connectionAttempts = new Map(); // 追踪所有连接尝试
-    
+
     // 连接健康监控
     var connectionHealthMonitor = {
         startTime: Date.now(),
@@ -45,15 +45,15 @@
         duplicateMessages: 0,
         lastMessageTime: Date.now(),
         connectionDrops: 0,
-        
+
         recordMessage: function(eventType, data, isDuplicate = false) {
             this.totalMessages++;
             this.lastMessageTime = Date.now();
-            
+
             if (isDuplicate) {
                 this.duplicateMessages++;
             }
-            
+
             if (sseLogger) {
                 sseLogger.log('debug', '消息健康监控', {
                     event: 'message_health',
@@ -65,10 +65,10 @@
                 });
             }
         },
-        
+
         recordConnectionDrop: function(reason) {
             this.connectionDrops++;
-            
+
             if (sseLogger) {
                 sseLogger.log('warn', '连接断开', {
                     event: 'connection_drop',
@@ -78,7 +78,7 @@
                 });
             }
         },
-        
+
         getHealthReport: function() {
             var now = Date.now();
             return {
@@ -92,17 +92,17 @@
             };
         }
     };
-    
+
     // 重复连接检测器
     var duplicateConnectionDetector = {
         activeConnections: new Map(),
         connectionHistory: [],
         maxHistorySize: 100,
-        
+
         registerConnection: function(url, connectionId, metadata = {}) {
             var connectionKey = this.generateConnectionKey(url);
             var existingConnection = this.activeConnections.get(connectionKey);
-            
+
             if (existingConnection) {
                 // 检测到重复连接
                 var duplicateInfo = {
@@ -113,16 +113,16 @@
                     url: url,
                     metadata: metadata
                 };
-                
+
                 this.recordDuplicateConnection(duplicateInfo);
-                
+
                 if (sseLogger) {
                     sseLogger.logDuplicateConnectionDetected(url, existingConnection.connectionId);
                 }
-                
+
                 return false; // 表示这是重复连接
             }
-            
+
             // 注册新连接
             var connectionInfo = {
                 connectionId: connectionId,
@@ -131,38 +131,38 @@
                 metadata: metadata,
                 messageCount: 0
             };
-            
+
             this.activeConnections.set(connectionKey, connectionInfo);
             this.recordConnectionHistory('registered', connectionInfo);
-            
+
             return true; // 表示这是新连接
         },
-        
+
         unregisterConnection: function(url, connectionId, reason = '') {
             var connectionKey = this.generateConnectionKey(url);
             var connectionInfo = this.activeConnections.get(connectionKey);
-            
+
             if (connectionInfo && connectionInfo.connectionId === connectionId) {
                 var duration = Date.now() - connectionInfo.startTime;
-                
+
                 this.activeConnections.delete(connectionKey);
-                
+
                 this.recordConnectionHistory('unregistered', {
                     ...connectionInfo,
                     duration: duration,
                     reason: reason
                 });
-                
+
                 if (sseLogger) {
                     sseLogger.logConnectionClosed(url, connectionId, reason);
                 }
-                
+
                 return true;
             }
-            
+
             return false;
         },
-        
+
         generateConnectionKey: function(url) {
             // 基于URL和会话生成连接键，忽略时间戳等动态参数
             try {
@@ -175,16 +175,16 @@
                 return url.split('?')[0]; // 降级处理
             }
         },
-        
+
         recordDuplicateConnection: function(duplicateInfo) {
             this.connectionHistory.push({
                 type: 'duplicate_detected',
                 timestamp: Date.now(),
                 ...duplicateInfo
             });
-            
+
             this.trimHistory();
-            
+
             // 在控制台输出详细的重复连接信息
             console.warn('[SSE] 检测到重复连接:', {
                 url: duplicateInfo.url,
@@ -193,23 +193,23 @@
                 timeDiff: duplicateInfo.newStartTime - duplicateInfo.existingStartTime
             });
         },
-        
+
         recordConnectionHistory: function(type, connectionInfo) {
             this.connectionHistory.push({
                 type: type,
                 timestamp: Date.now(),
                 ...connectionInfo
             });
-            
+
             this.trimHistory();
         },
-        
+
         trimHistory: function() {
             if (this.connectionHistory.length > this.maxHistorySize) {
                 this.connectionHistory = this.connectionHistory.slice(-this.maxHistorySize);
             }
         },
-        
+
         getDuplicateReport: function() {
             var duplicates = this.connectionHistory.filter(entry => entry.type === 'duplicate_detected');
             return {
@@ -219,7 +219,7 @@
             };
         }
     };
-    
+
     // 增强的SSE连接包装器
     function EnhancedSseConnection(originalTerminal, options = {}) {
         this.originalTerminal = originalTerminal;
@@ -228,7 +228,7 @@
         this.isActive = false;
         this.messageCount = 0;
         this.options = options;
-        
+
         if (sseLogger) {
             sseLogger.log('info', '创建增强SSE连接', {
                 event: 'enhanced_connection_created',
@@ -237,7 +237,7 @@
             });
         }
     }
-    
+
     EnhancedSseConnection.prototype.start = function(url, startOptions = {}) {
         if (this.isActive) {
             if (sseLogger) {
@@ -248,13 +248,13 @@
             }
             return false;
         }
-        
+
         // 检查重复连接
         var isUnique = duplicateConnectionDetector.registerConnection(url, this.connectionId, {
             startOptions: startOptions,
             timestamp: Date.now()
         });
-        
+
         if (!isUnique) {
             if (sseLogger) {
                 sseLogger.log('warn', '检测到重复连接，阻止启动', {
@@ -265,17 +265,17 @@
             }
             return false;
         }
-        
+
         this.isActive = true;
         this.connectionStartTime = Date.now();
         connectionStartTime = this.connectionStartTime;
         currentConnectionId = this.connectionId;
-        
+
         if (sseLogger) {
             sseLogger.logConnectionAttempt(url, startOptions);
             currentConnectionId = sseLogger.logConnectionSuccess(url, this);
         }
-        
+
         // 增强原始终端的start方法
         var enhancedStartOptions = {
             ...startOptions,
@@ -287,7 +287,7 @@
                         url: url
                     });
                 }
-                
+
                 if (startOptions.onOpen) {
                     startOptions.onOpen(event);
                 }
@@ -295,11 +295,11 @@
             onMessage: (event) => {
                 this.messageCount++;
                 connectionHealthMonitor.recordMessage('message', event.data);
-                
+
                 if (sseLogger) {
                     sseLogger.logMessageReceived(this.connectionId, 'message', event.data);
                 }
-                
+
                 if (startOptions.onMessage) {
                     startOptions.onMessage(event);
                 }
@@ -308,30 +308,30 @@
                 if (sseLogger) {
                     sseLogger.logConnectionError(url, event.error || event, event.target?.readyState);
                 }
-                
+
                 if (startOptions.onError) {
                     startOptions.onError(event);
                 }
             }
         };
-        
+
         return this.originalTerminal.start(url, enhancedStartOptions);
     };
-    
+
     EnhancedSseConnection.prototype.stop = function(options = {}) {
         if (!this.isActive) {
             return;
         }
-        
+
         this.isActive = false;
         var duration = Date.now() - this.connectionStartTime;
-        
+
         duplicateConnectionDetector.unregisterConnection(
             this.originalTerminal.getUrl ? this.originalTerminal.getUrl() : 'unknown',
             this.connectionId,
             options.reason || 'manual_stop'
         );
-        
+
         if (sseLogger) {
             sseLogger.logConnectionClosed(
                 this.originalTerminal.getUrl ? this.originalTerminal.getUrl() : 'unknown',
@@ -339,60 +339,60 @@
                 options.reason || 'manual_stop'
             );
         }
-        
+
         if (this.originalTerminal.stop) {
             return this.originalTerminal.stop(options);
         }
     };
-    
+
     // 增强终端方法
     function enhanceTerminal(originalTerminal) {
         if (!originalTerminal) {
             return originalTerminal;
         }
-        
+
         var enhancedConnection = new EnhancedSseConnection(originalTerminal);
-        
+
         // 包装原始方法
         var enhancedTerminal = Object.create(originalTerminal);
-        
+
         enhancedTerminal.start = function(url, options) {
             return enhancedConnection.start(url, options);
         };
-        
+
         enhancedTerminal.stop = function(options) {
             return enhancedConnection.stop(options);
         };
-        
+
         enhancedTerminal.getConnectionStats = function() {
             return {
                 connectionId: enhancedConnection.connectionId,
                 isActive: enhancedConnection.isActive,
                 messageCount: enhancedConnection.messageCount,
-                duration: enhancedConnection.isActive ? 
+                duration: enhancedConnection.isActive ?
                     Date.now() - enhancedConnection.connectionStartTime : 0
             };
         };
-        
+
         return enhancedTerminal;
     }
-    
+
     // 全局增强函数
     window.enhancePbAiWorkspaceTerminal = function(terminal) {
         return enhanceTerminal(terminal);
     };
-    
+
     // 获取健康报告
     window.getPbAiSseHealthReport = function() {
         return {
             connectionHealth: connectionHealthMonitor.getHealthReport(),
             duplicateConnections: duplicateConnectionDetector.getDuplicateReport(),
-            globalStats: window.PbAiSseConnectionManager ? 
+            globalStats: window.PbAiSseConnectionManager ?
                 window.PbAiSseConnectionManager.getGlobalStats() : null,
             workspaceStats: sseLogger ? sseLogger.getStats() : null
         };
     };
-    
+
     // 导出日志（用于调试）
     window.exportPbAiSseLogs = function() {
         var exportData = {
@@ -401,7 +401,7 @@
             workspaceLogs: sseLogger ? sseLogger.exportLogs() : null,
             connectionHistory: duplicateConnectionDetector.connectionHistory
         };
-        
+
         // 创建下载链接
         var blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
         var url = URL.createObjectURL(blob);
@@ -412,10 +412,10 @@
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        
+
         return exportData;
     };
-    
+
     console.info('[SSE] P0可观测性增强已加载');
     if (sseLogger) {
         sseLogger.log('info', 'P0可观测性增强初始化完成', {
@@ -433,16 +433,16 @@
         <h4 style="margin: 0; color: #89b4fa;">SSE连接调试面板</h4>
         <button onclick="document.getElementById('pb-ai-sse-debug-panel').style.display='none'" style="background: #45475a; border: none; color: #cdd6f4; padding: 5px 10px; border-radius: 4px; cursor: pointer;">✕</button>
     </div>
-    
+
     <div style="margin-bottom: 15px;">
         <button onclick="console.log(window.getPbAiSseHealthReport())" style="background: #45475a; border: none; color: #cdd6f4; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-right: 5px;">查看健康报告</button>
         <button onclick="window.exportPbAiSseLogs()" style="background: #45475a; border: none; color: #cdd6f4; padding: 5px 10px; border-radius: 4px; cursor: pointer;">导出日志</button>
     </div>
-    
+
     <div id="pb-ai-sse-stats" style="background: #313244; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
         <div>加载中...</div>
     </div>
-    
+
     <div id="pb-ai-sse-logs" style="background: #181825; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;">
         <div>日志将在这里显示...</div>
     </div>
@@ -465,7 +465,7 @@ window.updatePbAiSseDebugPanel = function() {
         var healthReport = window.getPbAiSseHealthReport();
         var statsEl = document.getElementById('pb-ai-sse-stats');
         var logsEl = document.getElementById('pb-ai-sse-logs');
-        
+
         if (statsEl && healthReport) {
             statsEl.innerHTML = `
                 <div><strong>连接状态:</strong> ${healthReport.connectionHealth.isHealthy ? '✅ 健康' : '❌ 异常'}</div>
@@ -476,7 +476,7 @@ window.updatePbAiSseDebugPanel = function() {
                 <div><strong>最后消息:</strong> ${healthReport.connectionHealth.lastMessageAgo}ms 前</div>
             `;
         }
-        
+
         // 这里可以添加更多实时日志显示逻辑
     } catch (e) {
         console.error('更新调试面板失败:', e);

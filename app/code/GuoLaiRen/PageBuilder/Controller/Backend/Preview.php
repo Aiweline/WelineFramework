@@ -3,19 +3,12 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Controller\Backend;
 
-use GuoLaiRen\PageBuilder\Helper\PageBuilderUrlCacheInvalidator;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
-use GuoLaiRen\PageBuilder\Model\VirtualTheme;
-use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
-use GuoLaiRen\PageBuilder\Service\AiSitePreviewLinkRewriteService;
-use GuoLaiRen\PageBuilder\Service\AiSiteVirtualLayoutService;
 use GuoLaiRen\PageBuilder\Service\LayoutAssembler;
 use GuoLaiRen\PageBuilder\Service\PageRenderService;
-use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\App\State;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -37,22 +30,18 @@ class Preview extends BackendController
     private Page $pageModel;
     private LocalDescription $localDescriptionModel;
     private Style $styleModel;
-    private VirtualTheme $virtualThemeModel;
     private LayoutAssembler $layoutAssembler;
     private PageRenderService $pageRenderService;
-    private ?AiSitePreviewLinkRewriteService $previewLinkRewriteService = null;
 
     public function __construct(
         Page $pageModel,
         LocalDescription $localDescriptionModel,
         Style $styleModel,
-        PageRenderService $pageRenderService,
-        ?VirtualTheme $virtualThemeModel = null
+        PageRenderService $pageRenderService
     ) {
         $this->pageModel = $pageModel;
         $this->localDescriptionModel = $localDescriptionModel;
         $this->styleModel = $styleModel;
-        $this->virtualThemeModel = $virtualThemeModel ?? ObjectManager::getInstance(VirtualTheme::class);
         $this->layoutAssembler = ObjectManager::getInstance(LayoutAssembler::class);
         $this->pageRenderService = $pageRenderService;
     }
@@ -65,39 +54,7 @@ class Preview extends BackendController
         try {
             $pageId = (int)$this->request->getGet('page_id');
             $locale = $this->request->getGet('locale');
-
-            // 兼容虚拟页面：page_id 为空时通过 body/post 提供 public_id/page_type/style_config/style_code
-            $data = [];
-            $rawBody = $this->request->getBodyParams();
-            if (\is_array($rawBody)) {
-                $data = $rawBody;
-            } elseif (\is_string($rawBody)) {
-                $decoded = \json_decode($rawBody, true);
-                $data = \is_array($decoded) ? $decoded : [];
-            }
-            if (!\is_array($data)) {
-                $data = [];
-            }
-            if (empty($data['public_id'])) {
-                $data['public_id'] = (string)$this->request->getGet('public_id', '');
-            }
-            if (empty($data['page_type'])) {
-                $data['page_type'] = (string)$this->request->getGet('page_type', '');
-            }
-            if (!\array_key_exists('style_config', $data)) {
-                $data['style_config'] = $this->request->getPost('style_config', []);
-            }
-            if (empty($data['style_code'])) {
-                $data['style_code'] = (string)$this->request->getPost('style_code', (string)$this->request->getGet('style_code', 'default'));
-            }
-            if (empty($data['locale'])) {
-                $data['locale'] = $locale;
-            }
-
-            if ($pageId <= 0 && !empty($data['public_id']) && !empty($data['page_type'])) {
-                return $this->autoSaveVirtualPageConfig($data);
-            }
-
+            
             if (!$pageId) {
                 return $this->fetchJson([
                     'success' => false,
@@ -368,52 +325,10 @@ class Preview extends BackendController
         $response->setHeader('Pragma', 'no-cache');
         $response->setHeader('Expires', '0');
         $response->setHeader('X-Accel-Expires', '0');
-        $previewPublicId = (string)$this->request->getGet('public_id', '');
 
         $pageId = (int)$this->request->getGet('page_id');
         $locale = $this->request->getGet('locale');
         $tempStyleCode = $this->request->getGet('style_code'); // 临时样式代码（用于预览）
-        $virtualThemeId = $this->resolveRequestedVirtualThemeId();
-
-        if (!$pageId && $previewPublicId !== '') {
-            $virtualContext = $this->resolveVirtualPreviewContext();
-            if ($virtualContext !== null) {
-                /** @var Page $page */
-                $page = $virtualContext['page'];
-                $currentLocale = $locale ?: (string)($virtualContext['locale'] ?? State::getLang());
-                $resolvedStyleCode = $tempStyleCode ?: (string)($virtualContext['style_code'] ?? '');
-                $resolvedThemeId = $virtualThemeId > 0 ? $virtualThemeId : (int)($virtualContext['virtual_theme_id'] ?? 0);
-                $isVisualEditor = $this->request->getGet('visual_editor') === '1';
-                $renderMode = $isVisualEditor ? PageRenderService::MODE_VISUAL : PageRenderService::MODE_PREVIEW;
-
-                $html = $this->pageRenderService->render(
-                    $page,
-                    $renderMode,
-                    $currentLocale,
-                    $resolvedStyleCode !== '' ? $resolvedStyleCode : null,
-                    $resolvedThemeId > 0 ? $resolvedThemeId : null
-                );
-                if ($isVisualEditor) {
-                    $html = $this->injectVisualEditorNavLinks($html, $page);
-                } else {
-                    $html = $this->getPreviewLinkRewriteService()->rewriteVirtualPreviewLinks(
-                        $html,
-                        (string)($virtualContext['public_id'] ?? $previewPublicId),
-                        \is_array($page->getData('virtual_pages_by_type')) ? $page->getData('virtual_pages_by_type') : [],
-                        $resolvedThemeId
-                    );
-                }
-
-                $headers = [
-                    'Content-Type' => 'text/html; charset=UTF-8',
-                    'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0',
-                    'Pragma' => 'no-cache',
-                    'Expires' => '0',
-                    'X-Accel-Expires' => '0',
-                ];
-                throw new ResponseTerminateException(200, $html, $headers);
-            }
-        }
         
         if (!$pageId) {
             echo '<div style="padding: 20px; color: red;">页面ID不能为空</div>';
@@ -431,7 +346,7 @@ class Preview extends BackendController
         }
 
         // 获取当前语言（从Cookie或URL参数）
-        $currentLocale = $locale ?: State::getLang();
+        $currentLocale = $locale ?: \Weline\Framework\Http\Cookie::getLang();
         
         // 检测渲染模式
         $isVisualEditor = $this->request->getGet('visual_editor') === '1';
@@ -439,26 +354,12 @@ class Preview extends BackendController
         
         // 使用 PageRenderService 统一渲染
         // 这确保了可视化编辑器预览和前端正式页面的渲染逻辑完全一致
-        $resolvedThemeId = $virtualThemeId > 0
-            ? $virtualThemeId
-            : (int)($this->resolvePublishedPreviewVirtualThemeId($page) ?? 0);
-
         $html = $this->pageRenderService->render(
             $page,
             $renderMode,
             $currentLocale,
-            $tempStyleCode,
-            $resolvedThemeId > 0 ? $resolvedThemeId : null
+            $tempStyleCode
         );
-        if ($isVisualEditor) {
-            $html = $this->injectVisualEditorNavLinks($html, $page);
-        } else {
-            $html = $this->getPreviewLinkRewriteService()->rewriteMaterializedPreviewLinks(
-                $html,
-                $this->getNavPagesForVisualEditor($page),
-                $resolvedThemeId
-            );
-        }
         // 通过终止异常直接输出完整 HTML，避免被主题/布局包裹导致 header 等组件被塞进后台 layout 的 body
         $headers = [
             'Content-Type' => 'text/html; charset=UTF-8',
@@ -468,250 +369,6 @@ class Preview extends BackendController
             'X-Accel-Expires' => '0',
         ];
         throw new ResponseTerminateException(200, $html, $headers);
-    }
-
-    /**
-     * @return array{
-     *   public_id:string,
-     *   page_type:string,
-     *   virtual_theme_id:int,
-     *   scope:array<string, mixed>,
-     *   virtual_page:array<string, mixed>,
-     *   page:Page,
-     *   style_code:string,
-     *   locale:string
-     * }|null
-     */
-    private function resolveVirtualPreviewContext(): ?array
-    {
-        $publicId = \trim((string)$this->request->getGet('public_id', ''));
-        $requestedPageType = \trim((string)$this->request->getGet('page_type', ''));
-        $adminId = (int)$this->getLoginUserId();
-
-        if ($publicId === '' || $requestedPageType === '' || $adminId <= 0) {
-            return null;
-        }
-
-        $context = $this->getVirtualLayoutService()->loadContext($publicId, $adminId, $requestedPageType);
-        if ($context === null) {
-            return null;
-        }
-
-        $scopeService = $this->getScopeCompatibilityService();
-        $scope = $scopeService->normalizeScope($context['scope']);
-        $virtualPages = $scopeService->buildVirtualPagesByType(
-            $scopeService->normalizePageTypes($scope['page_types'] ?? []),
-            $scope,
-            false
-        );
-        $pageType = $scopeService->resolvePreviewPageType($virtualPages, $requestedPageType);
-        if ($pageType === '' || !isset($virtualPages[$pageType])) {
-            return null;
-        }
-
-        $virtualThemeId = (int)$context['virtual_theme_id'];
-        $virtualPage = $virtualPages[$pageType];
-        $styleCode = \trim((string)($this->request->getGet('style_code') ?: ($virtualPage['style_code'] ?? 'default')));
-        $styleCode = $styleCode !== '' ? $styleCode : 'default';
-        $locale = \trim((string)($this->request->getGet('locale') ?: ($virtualPage['locale'] ?? '')));
-        $locale = $locale !== '' ? $locale : 'en_US';
-        $layout = $this->getVirtualLayoutService()->getResolvedLayout($virtualThemeId, $pageType);
-        $virtualBlocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
-        $renderMode = $virtualBlocks === [] ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;
-
-        $page = ObjectManager::make(Page::class);
-        $page->setData([
-            Page::schema_fields_ID => 0,
-            Page::schema_fields_WEBSITE_ID => (int)($scope['draft_website_id'] ?? 0),
-            Page::schema_fields_PARENT_ID => $pageType === Page::TYPE_HOME ? 0 : 1,
-            Page::schema_fields_LAYOUT_PAGE_ID => 0,
-            Page::schema_fields_STATUS => Page::STATUS_DRAFT,
-            Page::schema_fields_TITLE => (string)($virtualPage['title'] ?? ''),
-            Page::schema_fields_NAME => (string)($virtualPage['title'] ?? ''),
-            Page::schema_fields_HANDLE => (string)($virtualPage['handle'] ?? ''),
-            Page::schema_fields_STYLE => $styleCode,
-            Page::schema_fields_TYPE => $pageType,
-            Page::schema_fields_CONTENT => '',
-            Page::schema_fields_META_TITLE => (string)($virtualPage['meta_title'] ?? ''),
-            Page::schema_fields_META_DESCRIPTION => (string)($virtualPage['meta_description'] ?? ''),
-            Page::schema_fields_META_KEYWORDS => (string)($virtualPage['meta_keywords'] ?? ''),
-            Page::schema_fields_AI_DESCRIPTION => (string)($virtualPage['ai_description'] ?? ''),
-            Page::schema_fields_LOCALES => \json_encode([$locale], JSON_UNESCAPED_UNICODE),
-            Page::schema_fields_DEFAULT_LOCALE => $locale,
-            Page::schema_fields_STYLE_SETTING => \json_encode([
-                $styleCode => \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [],
-            ], JSON_UNESCAPED_UNICODE),
-            Page::schema_fields_LAYOUT_CONFIG => \json_encode($layout, JSON_UNESCAPED_UNICODE),
-            Page::schema_fields_RENDER_MODE => $renderMode,
-            Page::schema_fields_AI_LAYOUT => \json_encode(['blocks' => $virtualBlocks], JSON_UNESCAPED_UNICODE),
-        ]);
-        $page->setData('virtual_public_id', $publicId);
-        $page->setData('virtual_page_type', $pageType);
-        $page->setData('virtual_theme_id', $virtualThemeId);
-        $page->setData('virtual_layout_config', $layout);
-        $page->setData('virtual_pages_by_type', $virtualPages);
-
-        return [
-            'public_id' => $publicId,
-            'page_type' => $pageType,
-            'virtual_theme_id' => $virtualThemeId,
-            'scope' => $scope,
-            'virtual_page' => $virtualPage,
-            'page' => $page,
-            'style_code' => $styleCode,
-            'locale' => $locale,
-        ];
-    }
-
-    /**
-     * 获取当前页对应的「本站页面」列表（用于可视化编辑内 nav 链接转预览地址）
-     * 逻辑与 AiGenerate::getExistingSitePagesList 一致：主页=子页面+首页自身，子页=同级+父页首页
-     *
-     * @return list<array{page_id: int, handle: string, url: string, title: string}>
-     */
-    private function getNavPagesForVisualEditor(Page $page): array
-    {
-        $parentId = (int)$page->getData(Page::schema_fields_PARENT_ID);
-        try {
-            if ($parentId === 0) {
-                $list = $page->getChildPagesForNav(50);
-                if ($page->getId() && $page->getData(Page::schema_fields_TYPE) === Page::TYPE_HOME) {
-                    $h = $page->getData(Page::schema_fields_HANDLE);
-                    $hStr = $h === null || $h === '' ? '' : (string)$h;
-                    array_unshift($list, [
-                        'title' => $page->getData(Page::schema_fields_TITLE) ?: $page->getData(Page::schema_fields_NAME),
-                        'handle' => $hStr,
-                        'url' => '/', // 首页直接用域名，不拼 handle
-                        'type' => Page::TYPE_HOME,
-                        'page_id' => $page->getId(),
-                    ]);
-                }
-            } else {
-                $list = $page->getSiblingPagesForNav(50);
-            }
-        } catch (\Throwable $e) {
-            return [];
-        }
-        $out = [];
-        foreach ($list as $item) {
-            $handle = $item['handle'] ?? '';
-            $type = $item['type'] ?? '';
-            $url = $item['url'] ?? '';
-            if ($type === Page::TYPE_HOME) {
-                $url = '/';
-            } elseif ($url === '' && ($handle === '' || $handle === null)) {
-                $url = '/';
-            } elseif ($url === '' && $handle !== '') {
-                $url = '/' . $handle;
-            }
-            $out[] = [
-                'page_id' => (int)($item['page_id'] ?? 0),
-                'handle' => $handle === '' || $handle === null ? '' : (string)$handle,
-                'url' => $url,
-                'title' => $item['title'] ?? '',
-            ];
-        }
-        return $out;
-    }
-
-    /**
-     * 可视化编辑模式下注入脚本：将 header/footer 内站内链接转为 postMessage 通知父窗口跳转预览地址，避免离开编辑器
-     */
-    private function injectVisualEditorNavLinks(string $html, Page $page): string
-    {
-        $pages = !$page->getId()
-            ? $this->getVirtualNavPagesForVisualEditor($page)
-            : $this->getNavPagesForVisualEditor($page);
-        if (empty($pages)) {
-            return $html;
-        }
-        $pagesJson = json_encode($pages, JSON_UNESCAPED_UNICODE);
-        $script = <<<SCRIPT
-<script>
-(function(){
-  var pages = {$pagesJson};
-  function findPageByHref(href) {
-    if (!href || href.charAt(0) === '#') return null;
-    var path = href.replace(/^https?:\\/\\/[^/]*/, '').replace(/\\?.*\$/, '').split('#')[0] || '/';
-    if (path === '') path = '/';
-    for (var i = 0; i < pages.length; i++) {
-      if (pages[i].url === path) return pages[i];
-    }
-    return null;
-  }
-  var sel = 'header a[href^="/"], footer a[href^="/"], [data-region="header"] a[href^="/"], [data-region="footer"] a[href^="/"], nav a[href^="/"]';
-  var links = document.querySelectorAll(sel);
-  for (var j = 0; j < links.length; j++) {
-    var a = links[j];
-    var href = a.getAttribute('href');
-    var page = findPageByHref(href);
-    if (page != null) {
-      if (page.page_id) {
-        a.setAttribute('data-ve-page-id', String(page.page_id));
-      }
-      if (page.page_type) {
-        a.setAttribute('data-ve-page-type', String(page.page_type));
-      }
-      a.setAttribute('href', '#');
-      a.addEventListener('click', function(e) {
-        e.preventDefault();
-        var id = this.getAttribute('data-ve-page-id');
-        var pageType = this.getAttribute('data-ve-page-type');
-        if (id && window.parent !== window) {
-          window.parent.postMessage({ type: 'PageBuilderVisualEditor', action: 'navigate', page_id: parseInt(id, 10), page_type: pageType || '' }, '*');
-        } else if (pageType && window.parent !== window) {
-          window.parent.postMessage({ type: 'PageBuilderVisualEditor', action: 'navigate', page_type: pageType }, '*');
-        }
-      });
-    }
-  }
-})();
-</script>
-SCRIPT;
-        $pos = strripos($html, '</body>');
-        if ($pos !== false) {
-            return substr($html, 0, $pos) . $script . "\n" . substr($html, $pos);
-        }
-        return $html . $script;
-    }
-
-    /**
-     * @return list<array{page_id:int,page_type:string,handle:string,url:string,title:string}>
-     */
-    private function getVirtualNavPagesForVisualEditor(Page $page): array
-    {
-        $virtualPages = $page->getData('virtual_pages_by_type');
-        if (!\is_array($virtualPages) || $virtualPages === []) {
-            return [];
-        }
-
-        $result = [];
-        foreach ($virtualPages as $pageType => $row) {
-            if (!\is_string($pageType) || !\is_array($row)) {
-                continue;
-            }
-
-            $handle = \trim((string)($row['handle'] ?? ''));
-            $title = \trim((string)($row['title'] ?? ''));
-            $result[] = [
-                'page_id' => 0,
-                'page_type' => $pageType,
-                'handle' => $handle,
-                'url' => $handle !== '' ? '/' . \ltrim($handle, '/') : '/',
-                'title' => $title !== '' ? $title : $pageType,
-            ];
-        }
-
-        return $result;
-    }
-
-    private function getPreviewLinkRewriteService(): AiSitePreviewLinkRewriteService
-    {
-        if ($this->previewLinkRewriteService === null) {
-            $this->previewLinkRewriteService = ObjectManager::getInstance(AiSitePreviewLinkRewriteService::class);
-        }
-
-        return $this->previewLinkRewriteService;
     }
 
     /**
@@ -731,7 +388,6 @@ SCRIPT;
         $styleCode = $this->request->getGet('style_code');
         $locale = $this->request->getGet('locale', 'zh_Hans_CN'); // 默认语言
         $pageType = $this->request->getGet('page_type', Page::TYPE_HOME); // 默认首页类型
-        $virtualThemeId = $this->resolveRequestedVirtualThemeId();
         
         if (!$styleCode) {
             echo '<div style="padding: 20px; color: red;">样式代码不能为空</div>';
@@ -786,8 +442,7 @@ SCRIPT;
                 $dummyPage,
                 PageRenderService::MODE_PREVIEW,
                 $locale,
-                $styleCode,
-                $virtualThemeId > 0 ? $virtualThemeId : null
+                $styleCode // 传递样式代码
             );
             
             echo $html;
@@ -920,7 +575,7 @@ SCRIPT;
                         ->setData('content', $page->getData('content'))
                         ->save(true);
                 }
-                $this->invalidatePageCache($pageId);
+                
                 return $this->fetchJson([
                     'success' => true,
                     'message' => __('语言配置已保存到 %{1}', $locale),
@@ -960,7 +615,7 @@ SCRIPT;
                 // 保存配置
                 $page->setData('style_setting', json_encode($currentSettings));
                 $page->save();
-                $this->invalidatePageCache($pageId);
+
                 return $this->fetchJson([
                     'success' => true,
                     'message' => __('默认配置已保存'),
@@ -981,72 +636,6 @@ SCRIPT;
      * 批量重置字段为默认值
      * 删除指定字段的自定义配置，使其回退到模板默认值
      */
-    /**
-     * @param array<string, mixed> $data
-     */
-    private function autoSaveVirtualPageConfig(array $data)
-    {
-        $publicId = \trim((string)($data['public_id'] ?? ''));
-        $pageType = \trim((string)($data['page_type'] ?? ''));
-        $adminId = (int)$this->getLoginUserId();
-        $context = $this->getVirtualLayoutService()->loadContext($publicId, $adminId, $pageType);
-        if ($context === null) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('会话不存在或无访问权限'),
-            ]);
-        }
-
-        $scopeService = $this->getScopeCompatibilityService();
-        $scope = $scopeService->normalizeScope($context['scope']);
-        $virtualPages = $scopeService->buildVirtualPagesByType(
-            $scopeService->normalizePageTypes($scope['page_types'] ?? []),
-            $scope,
-            false
-        );
-        $pageType = $scopeService->resolvePreviewPageType($virtualPages, $pageType);
-        if ($pageType === '') {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('参数无效'),
-            ]);
-        }
-
-        $virtualPage = $virtualPages[$pageType] ?? [];
-        $styleConfig = \is_array($data['style_config'] ?? null) ? $data['style_config'] : [];
-        $filteredStyleConfig = [];
-        foreach ($styleConfig as $key => $value) {
-            if ($value === '' || $value === null) {
-                continue;
-            }
-            $filteredStyleConfig[$key] = $value;
-        }
-
-        $styleCode = \trim((string)($data['style_code'] ?? ($virtualPage['style_code'] ?? 'default')));
-        $styleCode = $styleCode !== '' ? $styleCode : 'default';
-        $currentSettings = \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [];
-
-        $updatedPage = $this->getVirtualLayoutService()->saveVirtualPagePatch(
-            (int)$context['session']->getId(),
-            $adminId,
-            $scope,
-            $pageType,
-            [
-                'style_code' => $styleCode,
-                'style_settings' => \array_merge($currentSettings, $filteredStyleConfig),
-            ]
-        );
-
-        return $this->fetchJson([
-            'success' => true,
-            'message' => __('虚拟页面配置已保存'),
-            'storage' => 'VirtualTheme.scope',
-            'page_type' => $pageType,
-            'page' => $updatedPage,
-            'saved_at' => \date('Y-m-d H:i:s'),
-        ]);
-    }
-
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_reset_fields', '重置字段为默认值', '', '批量重置配置字段为模板默认值', 'GuoLaiRen_PageBuilder::page_builder')]
     public function resetFieldsToDefault()
     {
@@ -1075,9 +664,6 @@ SCRIPT;
             $configKeys = $data['config_keys'] ?? [];
             $locale = $data['locale'] ?? '';
             $styleCode = $data['style_code'] ?? '';
-            if ($pageId <= 0 && !empty($data['public_id']) && !empty($data['page_type'])) {
-                return $this->resetVirtualFieldsToDefault($data, \is_array($configKeys) ? $configKeys : []);
-            }
             
             w_log_debug('🔵 pageId: ' . $pageId);
             w_log_debug('🔵 configKeys: ' . json_encode($configKeys));
@@ -1153,7 +739,6 @@ SCRIPT;
                     }
                 }
                 
-                $this->invalidatePageCache($pageId);
                 w_log_info('✅ 重置成功（LocalDescription），字段数: ' . count($configKeys));
                 return $this->fetchJson([
                     'success' => true,
@@ -1180,7 +765,6 @@ SCRIPT;
                     $page->save();
                 }
                 
-                $this->invalidatePageCache($pageId);
                 w_log_info('✅ 重置成功（Page.style_setting），字段数: ' . count($configKeys));
                 return $this->fetchJson([
                     'success' => true,
@@ -1529,9 +1113,8 @@ JS;
                 continue;
             }
             
-            // 构建组件模板路径（legal-content 等可回退 _shared）
-            $pathResolver = ObjectManager::getInstance(TemplatePathResolver::class);
-            $componentPath = $pathResolver->getComponentTemplateReference($useTemplateCode, $componentFile);
+            // 构建组件模板路径（使用 templates/style/ 与其他模板路径保持一致）
+            $componentPath = "GuoLaiRen_PageBuilder::templates/style/{$useTemplateCode}/components/{$componentFile}";
             
             // 传递数据到组件
             $this->assign('page', $page);
@@ -1601,129 +1184,9 @@ JS;
         foreach ($jsonConfig['components'] as $code => $config) {
             $map[$code] = $config['file'] ?? ($code . '.phtml');
         }
-        if ($styleCode !== '_shared' && !isset($map['legal-content'])) {
-            $sharedLegal = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/style/_shared/components/legal-content.phtml';
-            if (is_file($sharedLegal)) {
-                $map['legal-content'] = 'legal-content.phtml';
-            }
-        }
-
+        
         $cache[$styleCode] = $map;
         return $map;
-    }
-
-    /**
-     * @param array<string, mixed> $data
-     * @param array<int, string> $configKeys
-     */
-    private function resetVirtualFieldsToDefault(array $data, array $configKeys)
-    {
-        $publicId = \trim((string)($data['public_id'] ?? ''));
-        $pageType = \trim((string)($data['page_type'] ?? ''));
-        $adminId = (int)$this->getLoginUserId();
-        $context = $this->getVirtualLayoutService()->loadContext($publicId, $adminId, $pageType);
-        if ($context === null) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('会话不存在或无访问权限'),
-            ]);
-        }
-
-        if ($configKeys === []) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('配置键列表不能为空'),
-            ]);
-        }
-
-        $scopeService = $this->getScopeCompatibilityService();
-        $scope = $scopeService->normalizeScope($context['scope']);
-        $virtualPages = $scopeService->buildVirtualPagesByType(
-            $scopeService->normalizePageTypes($scope['page_types'] ?? []),
-            $scope,
-            false
-        );
-        $pageType = $scopeService->resolvePreviewPageType($virtualPages, $pageType);
-        if ($pageType === '') {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('参数无效'),
-            ]);
-        }
-
-        $virtualPage = $virtualPages[$pageType] ?? [];
-        $styleSettings = \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [];
-        foreach ($configKeys as $key) {
-            unset($styleSettings[$key]);
-        }
-
-        $updatedPage = $this->getVirtualLayoutService()->saveVirtualPagePatch(
-            (int)$context['session']->getId(),
-            $adminId,
-            $scope,
-            $pageType,
-            ['style_settings' => $styleSettings]
-        );
-
-        return $this->fetchJson([
-            'success' => true,
-            'message' => __('虚拟页面配置已重置为默认值'),
-            'reset_count' => \count($configKeys),
-            'page_type' => $pageType,
-            'page' => $updatedPage,
-        ]);
-    }
-
-    private function getVirtualLayoutService(): AiSiteVirtualLayoutService
-    {
-        return ObjectManager::getInstance(AiSiteVirtualLayoutService::class);
-    }
-
-    private function resolveRequestedVirtualThemeId(): int
-    {
-        return \max(0, (int)$this->request->getGet('virtual_theme_id', 0));
-    }
-
-    private function resolvePublishedPreviewVirtualThemeId(Page $page): ?int
-    {
-        $pageThemeId = (int)($page->getData('virtual_theme_id') ?? 0);
-        if ($pageThemeId > 0) {
-            return $pageThemeId;
-        }
-
-        $websiteId = (int)($page->getData(Page::schema_fields_WEBSITE_ID) ?? 0);
-        if ($websiteId <= 0) {
-            return null;
-        }
-
-        $theme = clone $this->virtualThemeModel;
-        $theme->clearData()->clearQuery()
-            ->where(VirtualTheme::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(VirtualTheme::schema_fields_SOURCE, VirtualTheme::SOURCE_PAGEBUILDER_AI)
-            ->where(VirtualTheme::schema_fields_IS_ACTIVE, 1)
-            ->order(VirtualTheme::schema_fields_ID, 'DESC')
-            ->find()
-            ->fetch();
-
-        $themeId = (int)$theme->getId();
-        return $themeId > 0 ? $themeId : null;
-    }
-
-    private function getScopeCompatibilityService(): AiSiteScopeCompatibilityService
-    {
-        return ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
-    }
-
-    private function invalidatePageCache(int $pageId): void
-    {
-        if ($pageId <= 0) {
-            return;
-        }
-
-        try {
-            PageBuilderUrlCacheInvalidator::invalidateForPageId($pageId);
-        } catch (\Throwable) {
-        }
     }
 }
 

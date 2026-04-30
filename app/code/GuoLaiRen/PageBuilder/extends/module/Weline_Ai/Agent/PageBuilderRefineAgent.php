@@ -16,7 +16,6 @@ use GuoLaiRen\PageBuilder\Service\AI\Tool\PreviewReferenceTool;
 use GuoLaiRen\PageBuilder\Service\AI\Tool\ValidateCodeTool;
 use GuoLaiRen\PageBuilder\Service\AI\Tool\LocateTemplateErrorTool;
 use GuoLaiRen\PageBuilder\Service\AI\Tool\ReplaceTemplateSnippetTool;
-use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
 use Weline\Ai\Agent\AgentResult;
 use Weline\Ai\Interface\AgentInterface;
 use Weline\Ai\Interface\ToolInterface;
@@ -118,7 +117,6 @@ You are an excellent full-stack engineer. This is production code. Deliver excep
 7. **遵循原有规范**：CSS 选择器前缀、BEM 命名、JS 结构保持一致。
 8. **禁止任何注释**：输出代码中不允许出现 HTML/CSS/JS/PHP 注释。
 9. **代码必须符合 PHP 8.4 语法**
-10. **下载/CTA 按钮**：若组件含下载或 CTA 跳转下载，须 GlrDownloadRegistry::register + data-glr-ref（URL 用 PageHelper::resolveAppDownloadUrl）；禁止为下载写 addEventListener 或 href=\"javascript:void(0)\"。
 
 ## 输出格式
 
@@ -172,12 +170,7 @@ SYSTEM_PROMPT;
             $prompt .= "- 示例：如果目标语言是「简体中文」，按钮应该是「了解更多」而不是「Learn More」";
         }
 
-        return $this->withPageBuilderSkillGuide($prompt, 'stage3');
-    }
-
-    private function withPageBuilderSkillGuide(string $prompt, string $stage = 'stage3'): string
-    {
-        return ObjectManager::getInstance(AiSiteSkillRegistry::class)->prependPromptGuide($prompt, $stage);
+        return $prompt;
     }
 
     public function execute(
@@ -219,8 +212,6 @@ SYSTEM_PROMPT;
         $allToolCalls = [];
         $finalContent = '';
         $useStreamFull = method_exists($provider, 'generateStreamFull');
-        /** @var callable(AiModel, string, array): array|null $streamFullCallable */
-        $streamFullCallable = $useStreamFull ? [$provider, 'generateStreamFull'] : null;
 
         while ($iteration < self::MAX_ITERATIONS) {
             if ($streamCallback) {
@@ -242,37 +233,37 @@ SYSTEM_PROMPT;
                     $streamCallback('heartbeat', ['ts' => time()]);
                 }
 
-                if ($streamFullCallable !== null) {
-                    $response = $streamFullCallable($model, '', [
+                if ($useStreamFull) {
+                    $response = $provider->generateStreamFull($model, '', [
                         'messages' => $messages,
                         'tools' => $toolDefs,
                         'temperature' => (float)($params['temperature'] ?? 0.6),
                         'max_tokens' => (int)($params['max_tokens'] ?? 8000),
                         'timeout' => (int)($params['timeout'] ?? 180),
-                        'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration): bool {
-                            return $streamCallback('thinking', [
+                        'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration) {
+                            $streamCallback('thinking', [
                                 'content' => $chunk,
                                 'iteration' => $currentIteration,
                                 'streaming' => true,
-                            ]) !== false;
+                            ]);
                         } : null,
-                        'on_content' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration): bool {
-                            return $streamCallback('ai_response', [
+                        'on_content' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration) {
+                            $streamCallback('ai_response', [
                                 'content' => $chunk,
                                 'iteration' => $currentIteration,
                                 'streaming' => true,
-                            ]) !== false;
+                            ]);
                         } : null,
-                        'on_heartbeat' => $streamCallback ? function () use ($streamCallback): bool {
-                            return $streamCallback('heartbeat', ['ts' => time()]) !== false;
+                        'on_heartbeat' => $streamCallback ? function () use ($streamCallback) {
+                            $streamCallback('heartbeat', ['ts' => time()]);
                         } : null,
-                        'on_waiting' => $streamCallback ? function (int $elapsed) use ($streamCallback, $currentIteration): bool {
-                            return $streamCallback('agent_status', [
+                        'on_waiting' => $streamCallback ? function (int $elapsed) use ($streamCallback, $currentIteration) {
+                            $streamCallback('agent_status', [
                                 'status' => 'waiting_ai',
                                 'message' => __('等待 AI 响应中... (已等待 %{1} 秒)', [$elapsed]),
                                 'iteration' => $currentIteration,
                                 'elapsed' => $elapsed,
-                            ]) !== false;
+                            ]);
                         } : null,
                     ]);
                 } else {

@@ -61,8 +61,6 @@ AiService::generateTextStream('写文章', function($chunk) {
 });
 ```
 
-**跨模块调用（其他模块内）**：优先使用统一查询 `w_query('ai', 'generate', [...])` / `w_query('ai', 'generate_stream', [...])`，由 `AiQueryProvider` 委托 `AiService`，见 `doc/API/API.md`「跨模块调用（w_query）」与 `doc/开发/AI模块开发文档.md`。
-
 #### 🔧 场景适配器
 - **翻译适配器**: 专业翻译优化
 - **代码生成适配器**: 多语言代码生成

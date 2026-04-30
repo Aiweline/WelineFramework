@@ -42,21 +42,24 @@ class Router implements RouterInterface
             $websiteId = self::getCurrentWebsiteId();
             // 无站点时按请求 host 解析站点，便于直接用域名访问首页
             if ($websiteId <= 0) {
-                $websiteId = self::resolveWebsiteIdByCurrentHost();
+                $host = $_SERVER['HTTP_HOST'] ?? '';
+                if ($host !== '') {
+                    $websiteId = self::findWebsiteIdByHost($host) ?? 0;
+                    if ($websiteId > 0) {
+                        $_SERVER['WELINE_WEBSITE_ID'] = (string)$websiteId;
+                        if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
+                            \Weline\Framework\Runtime\RequestContext::websiteId($websiteId);
+                        }
+                    }
+                }
             }
             // 预览模式：优先用 query 的 handle + website_id 配合 URL 解码
-            $isPreview = \w_env_get('preview') == '1';
-            $queryHandle = \w_env_get('handle');
-            if ($queryHandle !== null) {
-                $queryHandle = is_string($queryHandle) ? trim(rawurldecode($queryHandle)) : '';
-            } else {
-                $queryHandle = '';
-            }
+            $isPreview = isset($_GET['preview']) && $_GET['preview'] == '1';
+            $queryHandle = isset($_GET['handle']) && is_string($_GET['handle']) ? trim(rawurldecode($_GET['handle'])) : '';
             if ($isPreview && $queryHandle !== '') {
-                $websiteIdParam = \w_env_get('website_id');
-                $websiteIdParam = $websiteIdParam !== null ? (int)$websiteIdParam : 0;
+                $websiteIdParam = isset($_GET['website_id']) ? (int)$_GET['website_id'] : 0;
                 if ($websiteIdParam > 0) {
-                    \w_env_set('website_id', (string)$websiteIdParam);
+                    $_SERVER['WELINE_WEBSITE_ID'] = (string)$websiteIdParam;
                     if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
                         \Weline\Framework\Runtime\RequestContext::websiteId($websiteIdParam);
                     }
@@ -64,30 +67,20 @@ class Router implements RouterInterface
                 $path = '/pagebuilder/frontend/page/view';
                 $rule['module'] = 'GuoLaiRen_PageBuilder';
                 $rule['handle'] = $queryHandle;
-                self::setQueryParam('handle', $queryHandle);
+                $_GET['handle'] = $queryHandle;
                 return;
             }
             if ($websiteId > 0) {
                 $homePageHandle = self::getHomePageHandle($websiteId);
-                // 有首页即重写。live 模式：根路径直接以域名为首页，不传 handle；预览模式仍传 handle
+                // 有首页即重写（handle 可为空，同站首页用域名即可）
                 if ($homePageHandle !== null) {
                     $path = '/pagebuilder/frontend/page/view';
                     $rule['module'] = 'GuoLaiRen_PageBuilder';
-                    if ($isPreview) {
-                        $rule['handle'] = $homePageHandle ?? '';
-                        self::setQueryParam('handle', (string)$rule['handle']);
-                    } else {
-                        $rule['handle'] = '';
-                        self::setQueryParam('handle', '');
-                    }
+                    $rule['handle'] = $homePageHandle;
+                    $_GET['handle'] = $homePageHandle;
                     return;
                 }
             }
-            // 无站点（如 localhost）时也重写到 PageBuilder，由控制器尝试加载 website_id=0 的首页，避免根路径预览为空
-            $path = '/pagebuilder/frontend/page/view';
-            $rule['module'] = 'GuoLaiRen_PageBuilder';
-            $rule['handle'] = '';
-            self::setQueryParam('handle', '');
             return;
         }
         
@@ -100,10 +93,7 @@ class Router implements RouterInterface
         
         // 5. 检查当前站点下 handle 是否存在；同站可省略前缀，如 /about 匹配 handle about 或 home-about
         $websiteId = self::getCurrentWebsiteId();
-        if ($websiteId <= 0) {
-            $websiteId = self::resolveWebsiteIdByCurrentHost();
-        }
-        $isPreview = \w_env_get('preview') == '1';
+        $isPreview = isset($_GET['preview']) && $_GET['preview'] == '1';
         if (!self::handleExists($handle, $websiteId, $isPreview)) {
             // 同站短路径：先试 path 作为 handle，再试「首页handle- path」
             if ($websiteId > 0) {
@@ -121,7 +111,7 @@ class Router implements RouterInterface
             } else {
                 $resolvedWebsiteId = self::findWebsiteIdByHandle($handle, $isPreview);
                 if ($resolvedWebsiteId !== null) {
-                    \w_env_set('website_id', (string)$resolvedWebsiteId);
+                    $_SERVER['WELINE_WEBSITE_ID'] = (string)$resolvedWebsiteId;
                     if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
                         \Weline\Framework\Runtime\RequestContext::websiteId($resolvedWebsiteId);
                     }
@@ -137,15 +127,12 @@ class Router implements RouterInterface
         // 设置路由参数
         $rule['module'] = 'GuoLaiRen_PageBuilder';
         $rule['handle'] = $handle;
-        self::setQueryParam('handle', $handle);
+        
+        // 将handle参数写入$_GET，确保控制器能接收到
+        $_GET['handle'] = $handle;
         
         // 保留原始URL参数（如 preview、locale 等）
-        // Query 参数由 Context/Request 统一同步，无需直接改超全局。
-    }
-
-    private static function setQueryParam(string $key, string $value): void
-    {
-        \Weline\Framework\Context::current()->set('input.query.' . $key, $value);
+        // $_GET中的参数会自动保留，无需特殊处理
     }
     
     /**
@@ -156,7 +143,6 @@ class Router implements RouterInterface
         $systemPaths = [
             '/admin',
             '/api',
-            '/blog',
             '/pagebuilder',
             '/media',
             '/static',
@@ -166,10 +152,6 @@ class Router implements RouterInterface
         ];
         
         $lowerPath = strtolower($path);
-
-        if (str_starts_with($lowerPath, 'theme/')) {
-            return true;
-        }
         
         foreach ($systemPaths as $systemPath) {
             if (str_starts_with($lowerPath, $systemPath)) {
@@ -321,30 +303,8 @@ class Router implements RouterInterface
     }
 
     /**
-     * Resolve the current website from the request host when the framework
-     * website context has not been initialized yet.
-     */
-    private static function resolveWebsiteIdByCurrentHost(): int
-    {
-        $host = \w_env('server.http_host', '');
-        if ($host === '') {
-            return 0;
-        }
-
-        $websiteId = self::findWebsiteIdByHost((string)$host) ?? 0;
-        if ($websiteId <= 0) {
-            return 0;
-        }
-
-        \w_env_set('website_id', (string)$websiteId);
-        if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
-            \Weline\Framework\Runtime\RequestContext::websiteId($websiteId);
-        }
-
-        return $websiteId;
-    }
-
-    /**
+     * 获取当前站点ID
+     * 
      * @return int
      */
     private static function getCurrentWebsiteId(): int
@@ -358,7 +318,7 @@ class Router implements RouterInterface
             if ($websiteId > 0) {
                 return $websiteId;
             }
-            return (int)(\w_env('website_id') ?? 0);
+            return (int)($_SERVER['WELINE_WEBSITE_ID'] ?? 0);
         } catch (\Exception $e) {
             return 0;
         }
@@ -414,29 +374,5 @@ class Router implements RouterInterface
     {
         self::$handleCache = [];
     }
-
-    /**
-     * 按页面粒度清理 handle 存在性缓存（WLS Worker 进程内静态缓存）。
-     *
-     * 首页 handle 变更会影响「首页前缀 + 子路径」类 handle，故首页保存时清除该站点下全部 handle 缓存项。
-     */
-    public static function clearHandleCacheForPage(int $websiteId, string $handle, bool $isHomePage): void
-    {
-        if ($isHomePage) {
-            $prefix = (string)$websiteId . '_';
-            foreach (\array_keys(self::$handleCache) as $key) {
-                if (\is_string($key) && \str_starts_with($key, $prefix)) {
-                    unset(self::$handleCache[$key]);
-                }
-            }
-
-            return;
-        }
-        if ($handle !== '') {
-            unset(
-                self::$handleCache[$websiteId . '_' . $handle],
-                self::$handleCache[$websiteId . '_' . $handle . '_preview']
-            );
-        }
-    }
 }
+

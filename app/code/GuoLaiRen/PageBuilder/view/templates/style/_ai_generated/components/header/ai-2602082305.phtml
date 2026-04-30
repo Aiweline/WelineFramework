@@ -18,9 +18,7 @@ $showNav = $getConfig('nav.show', 'yes') !== 'no';
 $navItems = $getConfig('nav.items', []);
 $showCta = $getConfig('cta.show', 'yes') !== 'no';
 $ctaText = $getConfig('cta.text', __('立即咨询'));
-$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl((string)$getConfig('cta.url', '#'));
-$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
-$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
+$ctaUrl = $getConfig('cta.url', '#');
 ?>
 <header id="<?= $componentId ?>" class="luxury-header">
     <div class="luxury-header__container">
@@ -54,7 +52,7 @@ $ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolv
 
         <div class="luxury-header__actions">
             <?php if ($showCta): ?>
-            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="luxury-header__cta">
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="luxury-header__cta">
                 <span class="luxury-header__cta-text"><?= htmlspecialchars($ctaText) ?></span>
                 <span class="luxury-header__cta-icon">→</span>
             </a>

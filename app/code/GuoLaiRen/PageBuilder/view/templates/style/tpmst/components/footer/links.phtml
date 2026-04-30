@@ -50,15 +50,8 @@
  * copyright.margin_top => 版权上边距:number:15|px
  * 
  * group:content => 内容配置
- * content.use_custom_links => 使用自定义链接组:select:no|no,yes
- * content.footer_links => 页脚链接:textarea:Home|/,FAQ|/faq,Blog|/blog,About|/about,Privacy|/privacy|格式：名称|链接（仅当开启自定义链接时生效）
- * group:content_footer_labels => 页脚菜单显示名称（有对应页面时显示，留空使用页面标题）
- * content.footer_label_home_page => 首页:text:
- * content.footer_label_about_page => 关于我们:text:
- * content.footer_label_blog_list => 博客:text:
- * content.footer_label_contact_page => 联系我们:text:
- * content.footer_label_terms_of_service => 条款:text:
- * content.footer_label_privacy_policy => 隐私政策:text:
+ * content.use_subpages => 使用子页面作为链接:select:no|yes,no
+ * content.footer_links => 页脚链接:textarea:Home|/,FAQ|/faq,Blog|/blog,About|/about,Privacy|/privacy
  * content.copyright_text => 版权信息:text:© 2025 Teen Patti Master | All rights reserved
  * content.disclaimer_text => 免责声明:textarea:Please be cautious with in-game recharges as they involve real money. Only spend what you can afford.
  * 
@@ -120,25 +113,19 @@ $useSubpages = $getConfig('content.use_subpages', 'no') === 'yes';
 $copyrightText = $getConfig('content.copyright_text', '© 2025 Teen Patti Master | All rights reserved');
 $disclaimerText = $getConfig('content.disclaimer_text', '');
 
-// 链接配置：默认按页面类型自动生成；开启「使用自定义链接组」时用 content.footer_links
-$useCustomLinks = $getConfig('content.use_custom_links', 'no') === 'yes';
+// 链接配置
 $footerLinks = [];
-if (!$useCustomLinks && $page && method_exists($page, 'getHeaderNavigationPages')) {
-    $footerPages = $page->getHeaderNavigationPages(30);
-    foreach ($footerPages as $fp) {
-        $ft = $fp['type'] ?? '';
-        $configuredLabel = trim((string)($getConfig('content.footer_label_' . $ft, '') ?? ''));
-        $text = $configuredLabel !== '' ? $configuredLabel : ($fp['title'] ?? '');
-        $url = $fp['url'] ?? '/';
-        if (isset($fp['type']) && $fp['type'] === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME) {
-            $text = __('Home');
-            $url = '/';
-        }
-        $footerLinks[] = ['text' => $text, 'url' => $url];
+if ($useSubpages && $page) {
+    $subpages = $page->getData('subpages') ?: [];
+    foreach ($subpages as $subpage) {
+        $footerLinks[] = [
+            'text' => $subpage['title'] ?? '',
+            'url' => $subpage['url'] ?? '#'
+        ];
     }
 }
-if ($useCustomLinks || empty($footerLinks)) {
-    $footerLinks = [];
+
+if (empty($footerLinks)) {
     $footerLinksText = $getConfig('content.footer_links', 'Home|/,FAQ|/faq,Blog|/blog,About|/about');
     $links = explode(',', $footerLinksText);
     foreach ($links as $link) {
@@ -146,7 +133,7 @@ if ($useCustomLinks || empty($footerLinks)) {
         if (count($parts) >= 2) {
             $footerLinks[] = [
                 'text' => trim($parts[0]),
-                'url' => trim($parts[1]),
+                'url' => trim($parts[1])
             ];
         }
     }

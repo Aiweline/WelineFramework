@@ -7,6 +7,10 @@ namespace GuoLaiRen\PageBuilder\Service;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser;
 use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractMetaBuilder;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\PermissionMatrix;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\QaGateHelper;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -2288,7 +2292,7 @@ final class AiSiteExecutionBlueprintService
             '3) Use proper nouns / numbers / offers / brand voice; avoid generic "突出价值/说明亮点/完善导航" sentences.',
             '4) When facts are uncertain, use prefix "[假设]" and STILL output a concrete sample value (not a placeholder).',
             '5) navigation_plan.header_items, footer_plan.featured, footer_plan.policies must be non-empty arrays of {label, href} with real labels and routes.',
-            ...$this->getSkillRegistry()->buildPromptGuideLines('stage1'),
+            ...$this->getSkillRegistry()->buildPromptGuideLinesForScope('stage1', $scope),
             'STAGE-1 SHARED THEME PLAN CONTRACT (theme_design must satisfy ALL):',
             '- theme_design is the concrete shared plan for Header/Footer and later page prompts; never output it as abstract direction, brand adjectives, or design-method notes.',
             '- theme_design.theme_purpose must name the site mission, target visitor, first-screen emotion, and conversion promise derived from the user one-line requirement.',
@@ -7779,10 +7783,22 @@ final class AiSiteExecutionBlueprintService
             'block_index' => $blockIndex,
         ];
         $planBookStructured = $this->buildStageOnePlanBookStructured($structured, $executionBlueprint, $planLocale);
+        $contractContext = $this->buildStageOneContractContext($scope, $executionBlueprint, $planLocale);
+        $contracts = $this->buildStageOneContracts(
+            $scope,
+            $structured,
+            $executionBlueprint,
+            $planJson,
+            $planBookStructured,
+            $planLocale,
+            $contractContext
+        );
 
         return [
             'version' => 2,
             'plan_locale' => $planLocale,
+            'contract_context' => $contractContext,
+            'contracts' => $contracts,
             'stage1' => $stage1,
             'confirmed' => [
                 'plan_book_markdown' => $markdown,
@@ -7795,8 +7811,415 @@ final class AiSiteExecutionBlueprintService
                 'block_index' => \is_array($structured['block_index'] ?? null) ? $structured['block_index'] : [],
                 'shared_prompt_context' => \is_array($structured['shared_plan']['shared_prompt_context'] ?? null) ? $structured['shared_plan']['shared_prompt_context'] : [],
                 'confirmed_signature' => (string)($executionBlueprint['signature'] ?? ''),
+                'contract_context' => $contractContext,
+                'contracts' => $contracts,
             ],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $executionBlueprint
+     * @return array<string, mixed>
+     */
+    private function buildStageOneContractContext(array $scope, array $executionBlueprint, string $planLocale): array
+    {
+        $registry = $this->getSkillRegistry();
+        $selectedCodes = $registry->resolveSelectedSkillCodes($this->normalizeStageOneSelectedSkillCodes(
+            $scope[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] ?? []
+        ));
+        $skillSnapshots = $registry->buildSkillSnapshots($selectedCodes);
+        $snapshotHashSource = [];
+        foreach ($skillSnapshots as $snapshot) {
+            $snapshotHashSource[] = [
+                'code' => (string)($snapshot['code'] ?? ''),
+                'source' => (string)($snapshot['source'] ?? ''),
+                'body_hash' => (string)($snapshot['body_hash'] ?? ''),
+            ];
+        }
+
+        return [
+            'version' => 1,
+            'stage' => ContractType::STAGE_STAGE1,
+            'plan_locale' => $planLocale,
+            'source_signature' => (string)($executionBlueprint['signature'] ?? ''),
+            'adapter_type' => 'json_strict',
+            'requires_human_review' => true,
+            'selected_skill_codes' => $selectedCodes,
+            'skill_snapshots' => $skillSnapshots,
+            'skill_snapshot_hash' => \sha1((string)\json_encode($snapshotHashSource, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES)),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $structured
+     * @param array<string, mixed> $executionBlueprint
+     * @param array<string, mixed> $planJson
+     * @param array<string, mixed> $planBookStructured
+     * @param array<string, mixed> $contractContext
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildStageOneContracts(
+        array $scope,
+        array $structured,
+        array $executionBlueprint,
+        array $planJson,
+        array $planBookStructured,
+        string $planLocale,
+        array $contractContext
+    ): array {
+        $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
+        $requestSummary = \is_array($structured['request_summary'] ?? null)
+            ? $structured['request_summary']
+            : $this->buildStageOneRequestSummary($scope, [], '');
+        $pageTypes = $this->normalizeStageOneContractStringList(
+            \is_array($planJson['page_types'] ?? null)
+                ? $planJson['page_types']
+                : (\is_array($structured['page_types'] ?? null) ? $structured['page_types'] : ($scope['page_types'] ?? []))
+        );
+        $sharedComponents = $this->resolveStageOneSharedComponents($structured, $executionBlueprint);
+        $blockIndex = \is_array($structured['block_index'] ?? null)
+            ? $structured['block_index']
+            : (\is_array($executionBlueprint['block_index'] ?? null) ? $executionBlueprint['block_index'] : []);
+        $queueJobs = \is_array($structured['stage1_queue']['jobs'] ?? null)
+            ? $structured['stage1_queue']['jobs']
+            : (\is_array($executionBlueprint['stage1_queue']['jobs'] ?? null)
+                ? $executionBlueprint['stage1_queue']['jobs']
+                : (\is_array($executionBlueprint['queue_jobs'] ?? null) ? $executionBlueprint['queue_jobs'] : []));
+        $briefDescription = \trim((string)(
+            $scope['brief_description']
+            ?? $scope['user_description']
+            ?? $requestSummary['raw_requirement']
+            ?? ''
+        ));
+        $siteTitle = \trim((string)(
+            $siteStrategy['site_display_name']
+            ?? $scope['site_title']
+            ?? $scope['website_profile']['site_title']
+            ?? ''
+        ));
+
+        $siteBrief = $this->buildStageOneContract(
+            ContractType::TYPE_SITE_BRIEF,
+            [
+                'site_title' => $siteTitle,
+                'brief_description' => $briefDescription,
+                'request_summary' => $requestSummary,
+                'requirement_expansion' => \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [],
+                'site_strategy' => $siteStrategy,
+                'seo_strategy' => \is_array($planJson['seo_strategy'] ?? null) ? $planJson['seo_strategy'] : [],
+                'content_locale' => \trim((string)($planJson['content_locale'] ?? $structured['content_locale'] ?? '')),
+            ],
+            $contractContext,
+            [],
+            [
+                'payload.site_title',
+                'payload.brief_description',
+                'payload.requirement_expansion',
+                'payload.site_strategy',
+                'payload.seo_strategy',
+            ],
+            [
+                'payload.assumptions',
+                'payload.human_notes',
+            ]
+        );
+
+        $designManifest = $this->buildStageOneContract(
+            ContractType::TYPE_DESIGN_MANIFEST,
+            [
+                'theme_design' => \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : [],
+                'theme_style' => \is_array($planJson['theme_style'] ?? null) ? $planJson['theme_style'] : [],
+                'palette' => \is_array($planJson['palette'] ?? null) ? $planJson['palette'] : [],
+                'shared_components' => $sharedComponents,
+                'shared_prompt_context' => \is_array($structured['shared_plan']['shared_prompt_context'] ?? null)
+                    ? $structured['shared_plan']['shared_prompt_context']
+                    : (\is_array($executionBlueprint['shared_prompt_context'] ?? null) ? $executionBlueprint['shared_prompt_context'] : []),
+                'theme_context_snapshot' => \is_array($structured['theme_context_snapshot'] ?? null)
+                    ? $structured['theme_context_snapshot']
+                    : (\is_array($executionBlueprint['theme_context_snapshot'] ?? null) ? $executionBlueprint['theme_context_snapshot'] : []),
+            ],
+            $contractContext,
+            [$this->buildStageOneSourceContractRef($siteBrief)],
+            [
+                'payload.theme_design',
+                'payload.theme_style',
+                'payload.palette',
+                'payload.shared_components',
+            ],
+            [
+                'payload.human_notes',
+            ]
+        );
+
+        $pageContract = $this->buildStageOneContract(
+            ContractType::TYPE_PAGE_CONTRACT,
+            [
+                'page_types' => $pageTypes,
+                'pages' => \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [],
+                'page_type_overviews' => \is_array($planBookStructured['page_type_overviews'] ?? null) ? $planBookStructured['page_type_overviews'] : [],
+                'navigation_plan' => \is_array($planJson['navigation_plan'] ?? null) ? $planJson['navigation_plan'] : [],
+                'footer_plan' => \is_array($planJson['footer_plan'] ?? null) ? $planJson['footer_plan'] : [],
+                'seo_strategy' => \is_array($planJson['seo_strategy'] ?? null) ? $planJson['seo_strategy'] : [],
+            ],
+            $contractContext,
+            [
+                $this->buildStageOneSourceContractRef($siteBrief),
+                $this->buildStageOneSourceContractRef($designManifest),
+            ],
+            [
+                'payload.page_types',
+                'payload.pages',
+                'payload.navigation_plan',
+                'payload.footer_plan',
+                'payload.seo_strategy',
+            ],
+            [
+                'payload.pages.*.human_notes',
+            ]
+        );
+
+        $blockPlan = $this->buildStageOneContract(
+            ContractType::TYPE_BLOCK_PLAN,
+            [
+                'shared_blocks' => \is_array($planBookStructured['shared_blocks'] ?? null) ? \array_values($planBookStructured['shared_blocks']) : [],
+                'pages' => $this->buildStageOneBlockPlanContractPages($planBookStructured),
+                'block_index' => $blockIndex,
+                'queue_jobs' => $queueJobs,
+                'counts' => \is_array($planBookStructured['counts'] ?? null) ? $planBookStructured['counts'] : [],
+            ],
+            $contractContext,
+            [
+                $this->buildStageOneSourceContractRef($siteBrief),
+                $this->buildStageOneSourceContractRef($designManifest),
+                $this->buildStageOneSourceContractRef($pageContract),
+            ],
+            [
+                'payload.shared_blocks',
+                'payload.pages',
+                'payload.block_index',
+                'payload.queue_jobs',
+            ],
+            [
+                'payload.pages.*.blocks.*.human_notes',
+                'payload.pages.*.blocks.*.editable_fields',
+            ]
+        );
+
+        return [
+            ContractType::TYPE_SITE_BRIEF => $siteBrief,
+            ContractType::TYPE_DESIGN_MANIFEST => $designManifest,
+            ContractType::TYPE_PAGE_CONTRACT => $pageContract,
+            ContractType::TYPE_BLOCK_PLAN => $blockPlan,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $contractContext
+     * @param list<array{id:string,type:string,version:string,status:string}> $sourceContracts
+     * @param list<string> $frozenFields
+     * @param list<string> $mutableFields
+     * @return array<string, mixed>
+     */
+    private function buildStageOneContract(
+        string $type,
+        array $payload,
+        array $contractContext,
+        array $sourceContracts,
+        array $frozenFields,
+        array $mutableFields
+    ): array {
+        $meta = (new ContractMetaBuilder())->build(
+            $type,
+            ContractType::STAGE_STAGE1,
+            ContractType::STATUS_DRAFT,
+            $this->stageOneContractCreator($type),
+            'json_strict',
+            [
+                'payload_hash' => $this->buildStageOneContractHash($payload),
+                'source_signature' => (string)($contractContext['source_signature'] ?? ''),
+                'skill_snapshot_hash' => (string)($contractContext['skill_snapshot_hash'] ?? ''),
+            ]
+        );
+        $meta['requires_human_review'] = true;
+        $meta['frozen_fields'] = $frozenFields;
+        $meta['mutable_fields'] = $mutableFields;
+        $meta['source_contracts'] = $sourceContracts;
+
+        $qa = new QaGateHelper();
+
+        return [
+            'contract_meta' => $meta,
+            'permission_matrix' => $this->stageOnePermissionMatrixForContract($type),
+            'frozen_fields' => $frozenFields,
+            'mutable_fields' => $mutableFields,
+            'source_contracts' => $sourceContracts,
+            'qa_gates' => [
+                'schema_shape' => $qa->gate(
+                    'schema_shape',
+                    QaGateHelper::STATUS_PASS,
+                    'Generated from normalized Stage1 plan artifacts.'
+                ),
+                'human_review' => $qa->gate(
+                    'human_review',
+                    QaGateHelper::STATUS_PENDING,
+                    'Requires human confirmation before downstream stages treat frozen fields as authoritative.'
+                ),
+            ],
+            'payload' => $payload,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $contract
+     * @return array{id:string,type:string,version:string,status:string}
+     */
+    private function buildStageOneSourceContractRef(array $contract): array
+    {
+        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
+
+        return [
+            'id' => (string)($meta['id'] ?? $meta['contract_id'] ?? ''),
+            'type' => (string)($meta['type'] ?? ''),
+            'version' => (string)($meta['version'] ?? ContractType::VERSION_V1),
+            'status' => (string)($meta['status'] ?? ''),
+        ];
+    }
+
+    private function stageOneContractCreator(string $type): string
+    {
+        return match ($type) {
+            ContractType::TYPE_SITE_BRIEF => 'site_strategist',
+            ContractType::TYPE_DESIGN_MANIFEST => 'design_director',
+            ContractType::TYPE_PAGE_CONTRACT => 'page_architect',
+            ContractType::TYPE_BLOCK_PLAN => 'block_planner',
+            default => 'stage1_contract_binder',
+        };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function stageOnePermissionMatrixForContract(string $type): array
+    {
+        $matrix = (new PermissionMatrix())->forStage(ContractType::STAGE_STAGE1);
+        $booleans = [
+            'can_create_new_pages' => $type === ContractType::TYPE_PAGE_CONTRACT,
+            'can_delete_pages' => $type === ContractType::TYPE_PAGE_CONTRACT,
+            'can_change_page_type' => $type === ContractType::TYPE_PAGE_CONTRACT,
+            'can_create_new_blocks' => $type === ContractType::TYPE_BLOCK_PLAN,
+            'can_delete_blocks' => $type === ContractType::TYPE_BLOCK_PLAN,
+            'can_reorder_blocks' => $type === ContractType::TYPE_BLOCK_PLAN,
+            'can_change_component_variant' => $type === ContractType::TYPE_BLOCK_PLAN,
+            'can_create_new_design_tokens' => $type === ContractType::TYPE_DESIGN_MANIFEST,
+            'can_select_existing_design_tokens' => true,
+            'can_write_copy' => true,
+            'can_change_cta_text' => $type !== ContractType::TYPE_DESIGN_MANIFEST,
+            'can_change_seo_keywords' => $type === ContractType::TYPE_SITE_BRIEF || $type === ContractType::TYPE_PAGE_CONTRACT,
+            'can_create_image_prompts' => false,
+            'can_generate_assets' => false,
+            'can_patch_render_data' => false,
+        ];
+
+        return \array_replace($matrix, [
+            'contract_type' => $type,
+            'permissions' => $booleans,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $planBookStructured
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildStageOneBlockPlanContractPages(array $planBookStructured): array
+    {
+        $pages = [];
+        foreach (\is_array($planBookStructured['pages'] ?? null) ? $planBookStructured['pages'] : [] as $pageKey => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $blocks = [];
+            foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $blocks[] = [
+                    'task_key' => (string)($block['task_key'] ?? ''),
+                    'block_key' => (string)($block['block_key'] ?? ''),
+                    'source_block_key' => (string)($block['source_block_key'] ?? ''),
+                    'component_kind' => (string)($block['component_kind'] ?? ''),
+                    'sort_order' => (int)($block['sort_order'] ?? 0),
+                    'title' => (string)($block['title'] ?? ''),
+                    'goal' => (string)($block['goal'] ?? ''),
+                    'context_hash' => (string)($block['context_hash'] ?? ''),
+                    'editable_fields' => \is_array($block['editable_fields'] ?? null) ? $block['editable_fields'] : [],
+                ];
+            }
+            $pages[(string)$pageKey] = [
+                'page_key' => (string)($page['page_key'] ?? $pageKey),
+                'page_label' => (string)($page['page_label'] ?? $pageKey),
+                'page_goal' => (string)($page['page_goal'] ?? ''),
+                'page_context_hash' => (string)($page['page_context_hash'] ?? ''),
+                'theme_context_hash' => (string)($page['theme_context_hash'] ?? ''),
+                'shared_context_hash' => (string)($page['shared_context_hash'] ?? ''),
+                'blocks' => $blocks,
+            ];
+        }
+
+        return $pages;
+    }
+
+    private function buildStageOneContractHash(array $payload): string
+    {
+        return \sha1((string)\json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeStageOneSelectedSkillCodes(mixed $raw): array
+    {
+        if (\is_array($raw)) {
+            $items = $raw;
+        } elseif (\is_string($raw) && \trim($raw) !== '') {
+            $decoded = \json_decode($raw, true);
+            $items = \is_array($decoded) ? $decoded : \preg_split('/[\s,;]+/', $raw);
+            if (!\is_array($items)) {
+                $items = [];
+            }
+        } elseif (\is_scalar($raw)) {
+            $items = [(string)$raw];
+        } else {
+            $items = [];
+        }
+
+        return $this->normalizeStageOneContractStringList($items);
+    }
+
+    /**
+     * @param mixed $raw
+     * @return list<string>
+     */
+    private function normalizeStageOneContractStringList(mixed $raw): array
+    {
+        if (!\is_array($raw)) {
+            return [];
+        }
+        $values = [];
+        foreach ($raw as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $value = \trim((string)$value);
+            if ($value === '' || \in_array($value, $values, true)) {
+                continue;
+            }
+            $values[] = $value;
+        }
+
+        return $values;
     }
 
     /**
