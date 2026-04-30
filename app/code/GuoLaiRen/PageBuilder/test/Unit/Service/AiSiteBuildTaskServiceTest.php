@@ -963,4 +963,100 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertTrue($service->arePageTasksComplete($scope, 'home_page'));
         $this->assertFalse($service->arePageTasksComplete($scope, 'about_page'));
     }
+
+    public function testHasUnfinishedBlueprintTasksCountsRunningMarkers(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = [
+            'build_blueprint' => [
+                'tasks' => [
+                    [
+                        'task_key' => 'page:contact_page:faq',
+                        'task_type' => 'page_section',
+                        'page_type' => 'contact_page',
+                        'section_code' => 'faq',
+                        'group_key' => 'contact_page',
+                    ],
+                ],
+            ],
+            'build_tasks' => [
+                'page:contact_page:faq' => [
+                    'task_key' => 'page:contact_page:faq',
+                    'status' => AiSiteBuildTaskService::TASK_STATUS_RUNNING,
+                ],
+            ],
+        ];
+
+        self::assertTrue($service->hasUnfinishedBlueprintTasks($scope));
+        self::assertSame([], $service->listPendingTasks($scope));
+    }
+
+    public function testFinalizeBuildTaskStatesMarksDoneWhenArtifactAlreadyPresent(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = [
+            'build_blueprint' => [
+                'tasks' => [
+                    [
+                        'task_key' => 'page:contact_page:faq',
+                        'task_type' => 'page_section',
+                        'page_type' => 'contact_page',
+                        'section_code' => 'faq',
+                        'group_key' => 'contact_page',
+                    ],
+                ],
+            ],
+            'build_tasks' => [
+                'page:contact_page:faq' => [
+                    'task_key' => 'page:contact_page:faq',
+                    'status' => AiSiteBuildTaskService::TASK_STATUS_RUNNING,
+                ],
+            ],
+            'page_type_layouts' => [
+                'contact_page' => [
+                    'content' => [
+                        ['code' => 'faq'],
+                    ],
+                ],
+            ],
+        ];
+
+        $next = $service->finalizeBuildTaskStatesAfterRunLoop($scope);
+        self::assertSame(AiSiteBuildTaskService::TASK_STATUS_DONE, $next['build_tasks']['page:contact_page:faq']['status']);
+        self::assertFalse($service->hasUnfinishedBlueprintTasks($next));
+    }
+
+    public function testFinalizeBuildTaskStatesLeavesPendingWhenNoArtifact(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = [
+            'build_blueprint' => [
+                'tasks' => [
+                    [
+                        'task_key' => 'page:contact_page:missing',
+                        'task_type' => 'page_section',
+                        'page_type' => 'contact_page',
+                        'section_code' => 'missing_section',
+                        'group_key' => 'contact_page',
+                    ],
+                ],
+            ],
+            'build_tasks' => [
+                'page:contact_page:missing' => [
+                    'task_key' => 'page:contact_page:missing',
+                    'status' => AiSiteBuildTaskService::TASK_STATUS_RUNNING,
+                ],
+            ],
+            'page_type_layouts' => [
+                'contact_page' => ['content' => []],
+            ],
+        ];
+
+        $next = $service->finalizeBuildTaskStatesAfterRunLoop($scope);
+        self::assertSame(AiSiteBuildTaskService::TASK_STATUS_PENDING, $next['build_tasks']['page:contact_page:missing']['status']);
+        self::assertTrue($service->hasUnfinishedBlueprintTasks($next));
+    }
 }
