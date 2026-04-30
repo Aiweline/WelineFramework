@@ -36,7 +36,6 @@ if (empty($providerConfig) && !empty($config)) {
     $providerConfig = $config;
 }
 $selectedAccountId = (string)($providerConfig['account_id'] ?? '');
-$modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
 ?>
 
 <style>
@@ -173,69 +172,10 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
             <?php endif; ?>
             
             <?= $this->getFormKey($this->getUrl('*/backend/model/save')) ?>
-            <input type="hidden"
-                   id="token_price_input"
-                   name="token_price_input"
-                   value="<?= htmlspecialchars((string)($model ? $model->getData('token_price_input') : '0')) ?>">
-            <input type="hidden"
-                   id="token_price_output"
-                   name="token_price_output"
-                   value="<?= htmlspecialchars((string)($model ? $model->getData('token_price_output') : '0')) ?>">
-             
+            
             <!-- 使用网格布局 -->
             <div class="row g-2">
-                <?php if (!$isEdit): ?>
-                <div class="col-12">
-                    <div class="card border-primary">
-                        <div class="card-header">
-                            <h6 class="mb-0">
-                                <i class="bi bi-lightning-charge me-2"></i><?= __('常用模型快速新增') ?>
-                            </h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="row g-2">
-                                <div class="col-md-3">
-                                    <label for="common_provider_preset" class="form-label">
-                                        <?= __('供应商') ?>
-                                    </label>
-                                    <select class="form-select" id="common_provider_preset">
-                                        <option value=""><?= __('选择供应商') ?></option>
-                                    </select>
-                                    <div class="form-text">
-                                        <?= __('先选供应商，减少模型列表干扰。') ?>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <label for="common_model_preset" class="form-label">
-                                        <?= __('模型') ?>
-                                    </label>
-                                    <select class="form-select" id="common_model_preset" disabled>
-                                        <option value=""><?= __('先选择供应商') ?></option>
-                                    </select>
-                                    <div class="form-text">
-                                        <?= __('自动填充模型代码、Base URL、最大输出和价格参数。') ?>
-                                    </div>
-                                </div>
-                                <div class="col-md-5">
-                                    <label for="api_key_input" class="form-label">
-                                        <?= __('API Key') ?>
-                                    </label>
-                                    <input type="password"
-                                           class="form-control"
-                                           id="api_key_input"
-                                           name="api_key_input"
-                                           autocomplete="off"
-                                           placeholder="<?= __('填入 API Key 即可保存常用模型') ?>">
-                                    <div class="form-text">
-                                        <?= __('常见模型填 API Key 即可；也可以留空后使用供应商账户。') ?>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <?php endif; ?>
-                 
+                
                 <!-- 基础信息卡片 -->
                 <div class="col-12">
                     <div class="card">
@@ -324,36 +264,21 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
                                         <div class="form-text"><?= __('模型的唯一标识符') ?></div>
                                     </div>
                                 </div>
-
-                                <!-- 供应商模型代码映射 -->
-                                <div class="col-md-6">
-                                    <div class="mb-2">
-                                        <label for="provider_model_code" class="form-label">
-                                            <?= __('供应商模型代码') ?>
-                                        </label>
-                                        <?php
-                                        $providerModelCode = '';
-                                        if (!empty($providerConfig['provider_model_code'])) {
-                                            $providerModelCode = (string)$providerConfig['provider_model_code'];
-                                        } elseif (!empty($providerConfig['model'])) {
-                                            $providerModelCode = (string)$providerConfig['model'];
-                                        } elseif ($model) {
-                                            $providerModelCode = (string)$model->getData('model_code');
-                                        }
-                                        ?>
-                                        <input type="text"
-                                               class="form-control"
-                                               id="provider_model_code"
-                                               name="provider_model_code"
-                                               value="<?= htmlspecialchars($providerModelCode) ?>"
-                                               placeholder="<?= __('留空默认使用模型代码') ?>">
-                                        <div class="form-text">
-                                            <?= __('用于映射供应商真实模型 code，切换供应商时会按此值做支持校验') ?>
-                                        </div>
-                                    </div>
-                                </div>
                                 
                                 <!-- 模型名称 -->
+                                <div class="col-md-6">
+                                    <div class="mb-2">
+                                        <label for="primary_modality" class="form-label">Primary modality</label>
+                                        <?php $primaryModality = $model ? $model->getPrimaryModality() : \Weline\Ai\Model\AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT; ?>
+                                        <select class="form-select" id="primary_modality" name="primary_modality">
+                                            <option value="text2text" <?= $primaryModality === 'text2text' ? 'selected' : '' ?>>text2text</option>
+                                            <option value="text2image" <?= $primaryModality === 'text2image' ? 'selected' : '' ?>>text2image</option>
+                                            <option value="text2video" <?= $primaryModality === 'text2video' ? 'selected' : '' ?>>text2video</option>
+                                        </select>
+                                        <div class="form-text">Used by adapters to route text, image, and video calls.</div>
+                                    </div>
+                                </div>
+
                                 <div class="col-md-6">
                                     <div class="mb-2">
                                         <label for="name" class="form-label required">
@@ -446,7 +371,7 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
   "frequency_penalty": 0.0,
   "presence_penalty": 0.0,
   "stream": true,
-                                    "timeout": 900,
+  "timeout": 30,
   "max_retries": 3
 }'><?php
 $displayConfig = $providerConfig;
@@ -501,11 +426,11 @@ if (!empty($displayConfig)) {
                                        name="max_tokens" 
                                        value="<?= $maxTokens ?>" 
                                        min="1"
-                                       max="384000"
+                                       max="128000"
                                        placeholder="推荐: 4096 (适合大多数场景)">
                                 <div class="form-text">
                                     <?= __('模型支持的最大令牌数') ?> 
-                                    <span class="text-muted">· 常用值: 4096-128000，DeepSeek V4 最高 384000</span>
+                                    <span class="text-muted">· 推荐值: 2048-8192</span>
                                 </div>
                             </div>
                             
@@ -525,9 +450,10 @@ if (!empty($displayConfig)) {
                                        value="<?= $costPerToken ?>" 
                                        step="0.000001"
                                        min="0"
-                                       placeholder="<?= __('按供应商官方价格自动填充') ?>">
+                                       placeholder="推荐: 0.0015 (GPT-3.5标准价格)">
                                 <div class="form-text">
-                                    <?= __('每1000个令牌的成本；常用模型会按供应商官方币种自动填充') ?>
+                                    <?= __('每1000个令牌的成本（美元）') ?> 
+                                    <span class="text-muted">· GPT-3.5: $0.0015 | GPT-4: $0.03</span>
                                 </div>
                             </div>
                         </div>
@@ -609,7 +535,7 @@ if (!empty($displayConfig)) {
                                     <?= __('超时时间（秒）') ?>
                                 </label>
                                 <?php 
-                                $timeout = $model && isset($model->getConfig()['timeout']) ? $model->getConfig()['timeout'] : (string)\Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT;
+                                    $timeout = $model && isset($model->getConfig()['timeout']) ? $model->getConfig()['timeout'] : '180';
                                 ?>
                                 <input type="number" 
                                        class="form-control" 
@@ -617,9 +543,9 @@ if (!empty($displayConfig)) {
                                        name="config[timeout]" 
                                        value="<?= $timeout ?>" 
                                        min="0"
-                                   placeholder="<?= (string)\Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT ?>">
+                                       placeholder="180">
                                 <div class="form-text">
-                                <?= __('API请求超时时间，0表示不限制，默认900秒') ?>
+                                    <?= __('API请求超时时间，0表示不限制，默认180秒') ?> 
                                 </div>
                             </div>
                         </div>
@@ -756,7 +682,6 @@ if (!empty($displayConfig)) {
     'use strict';
 
     var modelConfig = <?= $model ? json_encode($model->getConfig()) : '{}' ?>;
-    var commonModelPresets = <?= $modelPresetsJson ?>;
 
     window.WelineAiModelEdit = {
         toggleProviderConfig: function() {
@@ -771,160 +696,6 @@ if (!empty($displayConfig)) {
                 body.style.display = 'none';
                 icon.classList.remove('bi-chevron-down');
                 icon.classList.add('bi-chevron-right');
-            }
-        },
-
-        dispatchChange: function(element) {
-            if (!element) return;
-            if (typeof Event === 'function') {
-                element.dispatchEvent(new Event('change', { bubbles: true }));
-                return;
-            }
-            var event = document.createEvent('HTMLEvents');
-            event.initEvent('change', true, false);
-            element.dispatchEvent(event);
-        },
-
-        setFieldValue: function(id, value) {
-            var element = document.getElementById(id);
-            if (!element) return;
-            element.value = value;
-            this.dispatchChange(element);
-        },
-
-        setRangeValue: function(id, badgeId, value) {
-            var element = document.getElementById(id);
-            if (!element || value === undefined || value === null) return;
-            element.value = value;
-            var badge = document.getElementById(badgeId);
-            if (badge) {
-                badge.textContent = value;
-            }
-        },
-
-        applyPreset: function(preset) {
-            if (!preset) return;
-
-            this.setFieldValue('supplier', preset.provider || '');
-            this.setFieldValue('supplier_value', preset.provider || '');
-            this.setFieldValue('model_code', preset.model_code || '');
-            this.setFieldValue('provider_model_code', preset.provider_model_code || preset.model_code || '');
-            this.setFieldValue('name', preset.name || preset.model_code || '');
-            this.setFieldValue('version', preset.version || '1.0');
-            this.setFieldValue('max_tokens', preset.max_tokens || 4096);
-
-            this.setFieldValue('token_price_input', preset.token_price_input || 0);
-            this.setFieldValue('token_price_output', preset.token_price_output || 0);
-            if (preset.cost_per_token !== undefined) {
-                this.setFieldValue('cost_per_token', preset.cost_per_token || 0);
-            }
-
-            this.setRangeValue('config_temperature', 'tempValue', preset.temperature !== undefined ? preset.temperature : 0.7);
-            this.setRangeValue('config_top_p', 'topPValue', preset.top_p !== undefined ? preset.top_p : 1);
-                    this.setFieldValue('config_timeout', preset.timeout || <?= \Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT ?>);
-
-            var streamInput = document.getElementById('config_stream');
-            if (streamInput) {
-                streamInput.checked = preset.stream !== false;
-            }
-
-            var providerConfigTextarea = document.getElementById('provider_config_json');
-            if (providerConfigTextarea) {
-                var config = Object.assign({}, preset.config || {});
-                var apiKeyInput = document.getElementById('api_key_input');
-                if (apiKeyInput && apiKeyInput.value.trim()) {
-                    config.api_key = apiKeyInput.value.trim();
-                }
-                providerConfigTextarea.value = JSON.stringify(config, null, 2);
-            }
-        },
-
-        syncApiKeyToProviderConfig: function() {
-            var apiKeyInput = document.getElementById('api_key_input');
-            var providerConfigTextarea = document.getElementById('provider_config_json');
-            if (!apiKeyInput || !providerConfigTextarea || !apiKeyInput.value.trim()) {
-                return;
-            }
-
-            try {
-                var config = {};
-                if (providerConfigTextarea.value.trim()) {
-                    config = JSON.parse(providerConfigTextarea.value);
-                }
-                config.api_key = apiKeyInput.value.trim();
-                providerConfigTextarea.value = JSON.stringify(config, null, 2);
-            } catch (e) {
-                // Keep manual JSON untouched until submit-time validation can report the exact error.
-            }
-        },
-
-        fillModelPresetOptions: function(providerCode) {
-            var select = document.getElementById('common_model_preset');
-            if (!select) return;
-
-            select.innerHTML = '';
-            var placeholder = document.createElement('option');
-            placeholder.value = '';
-            placeholder.textContent = providerCode ? '<?= addslashes(__('选择模型')) ?>' : '<?= addslashes(__('先选择供应商')) ?>';
-            select.appendChild(placeholder);
-            select.disabled = !providerCode;
-
-            if (!providerCode || !Array.isArray(commonModelPresets)) return;
-
-            var presets = commonModelPresets.filter(function(preset) {
-                return preset.provider === providerCode;
-            });
-            presets.forEach(function(preset) {
-                var option = document.createElement('option');
-                option.value = preset.key;
-                option.textContent = (preset.name || preset.model_code || '') + ' (' + (preset.model_code || '') + ')';
-                select.appendChild(option);
-            });
-
-            if (presets.length === 1) {
-                select.value = presets[0].key;
-                this.applyPreset(presets[0]);
-            }
-        },
-
-        initPresetSelector: function() {
-            var providerSelect = document.getElementById('common_provider_preset');
-            var modelSelect = document.getElementById('common_model_preset');
-            if (!providerSelect || !modelSelect || !Array.isArray(commonModelPresets)) return;
-
-            var self = this;
-            var providers = {};
-            commonModelPresets.forEach(function(preset) {
-                if (!preset.provider) return;
-                providers[preset.provider] = preset.provider_name || preset.provider;
-            });
-
-            Object.keys(providers).sort(function(a, b) {
-                return providers[a].localeCompare(providers[b]);
-            }).forEach(function(providerCode) {
-                var option = document.createElement('option');
-                option.value = providerCode;
-                option.textContent = providers[providerCode];
-                providerSelect.appendChild(option);
-            });
-
-            providerSelect.addEventListener('change', function() {
-                self.fillModelPresetOptions(this.value || '');
-            });
-
-            modelSelect.addEventListener('change', function() {
-                if (!this.value) return;
-                var preset = commonModelPresets.find(function(item) {
-                    return item.key === modelSelect.value;
-                });
-                self.applyPreset(preset);
-            });
-
-            var apiKeyInput = document.getElementById('api_key_input');
-            if (apiKeyInput) {
-                apiKeyInput.addEventListener('input', function() {
-                    self.syncApiKeyToProviderConfig();
-                });
             }
         },
 
@@ -945,9 +716,8 @@ if (!empty($displayConfig)) {
                 }
             }
 
-            this.initAccountSelect();
-            this.initPresetSelector();
             this.initForm();
+            this.initAccountSelect();
             this.initTestPanel();
         },
 
@@ -1105,7 +875,6 @@ if (!empty($displayConfig)) {
                     var prompt = document.getElementById('test_prompt').value.trim();
                     var modelCodeInput = document.getElementById('model_code');
                     var modelCode = modelCodeInput ? modelCodeInput.value : '<?= $model ? addslashes($model->getData('model_code')) : '' ?>';
-                    var form = document.getElementById('modelEditForm');
                     
                     if (!prompt) {
                         if (typeof Swal !== 'undefined') {
@@ -1123,30 +892,10 @@ if (!empty($displayConfig)) {
                     testModelBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> <?= __('测试中...') ?>';
                     
                     document.getElementById('testResult').style.display = 'none';
-
-                    var providerConfigTextarea = document.getElementById('provider_config_json');
-                    if (providerConfigTextarea && providerConfigTextarea.value.trim()) {
-                        try {
-                            JSON.parse(providerConfigTextarea.value);
-                        } catch (e) {
-                            testModelBtn.disabled = false;
-                            testModelBtn.innerHTML = '<i class="bi bi-play-circle"></i> Test model';
-                            if (typeof Swal !== 'undefined') {
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: 'Invalid JSON',
-                                    text: 'Provider config JSON is invalid. Please check the syntax.',
-                                    confirmButtonText: 'OK'
-                                });
-                            }
-                            return;
-                        }
-                    }
                     
-                    var formData = form ? new FormData(form) : new FormData();
-                    formData.set('model_code', modelCode);
-                    formData.set('prompt', prompt);
-                    formData.set('test_only', '1');
+                    var formData = new FormData();
+                    formData.append('model_code', modelCode);
+                    formData.append('prompt', prompt);
                     
                     var tcUrl = '<?= $this->getBackendUrl("*/backend/model/testConnection") ?>';
                     var tcReq = window.Weline.Api.request(tcUrl, { method: 'POST', body: formData });

@@ -33,6 +33,7 @@ PageBuilder 模块的域名管理界面需要与 Weline_Websites 同步改造，
 | 域名列表 | 改为查询 `DomainPool`，显示域名池状态 |
 | 建站选择 | 从 `DomainPool` 选择 `site_ready=1` 的域名 |
 | 网站表单 | 使用 `pool_id` 关联，而非域名字符串 |
+| QuickBuild 向导 | 域名选择步骤同步调整 |
 
 ---
 
@@ -56,6 +57,7 @@ $this->assign('domain_options', $domainPool->getSelectOptions());
 | 🔴 高 | `Weline\Websites\Service\DomainSyncService::getDomains()` | 内部使用 `Domain` 模型（line 257） | 依赖 Weline_Websites 改造 |
 | 🟡 中 | `view/templates/Backend/DomainManagement/index.phtml` | 表格未显示域名池状态列 | 添加 resolve_status、https_status、site_ready 列 |
 | 🟡 中 | `view/templates/Backend/WebsiteManagement/form.phtml` | 域名选择未显示状态、未筛选 site_ready | 添加状态显示，默认只显示就绪域名 |
+| 🟢 待确认 | `view/templates/Backend/QuickBuild/wizard.phtml` | 域名选择步骤状态 | 同步使用 DomainPool + site_ready 筛选 |
 
 ### 2.3 依赖关系
 
@@ -97,6 +99,16 @@ PageBuilder 依赖 Weline_Websites 模块以下改造完成：
 2. 显示域名状态信息（解析/HTTPS）
 3. 提交时使用 `pool_id` 列表
 
+### 3.4 QuickBuild 向导改造
+
+**文件**: `view/templates/Backend/QuickBuild/wizard.phtml`
+
+1. 域名选择步骤使用 DomainPool 数据
+2. 只显示 `site_ready=1` 的域名
+3. 显示域名状态
+
+---
+
 ## 四、依赖 Weline_Websites 模块
 
 以下功能由 Weline_Websites 模块提供，PageBuilder 直接复用：
@@ -118,6 +130,7 @@ PageBuilder 依赖 Weline_Websites 模块以下改造完成：
 | 修改 | `Controller/Backend/WebsiteManagement.php` | 确保读取 DomainPool 新增字段 |
 | 修改 | `view/templates/Backend/DomainManagement/index.phtml` | 表格新增状态列 |
 | 修改 | `view/templates/Backend/WebsiteManagement/form.phtml` | 域名选择显示状态，使用 pool_id |
+| 修改 | `view/templates/Backend/QuickBuild/wizard.phtml` | 域名选择步骤同步调整 |
 
 ---
 
@@ -127,12 +140,78 @@ PageBuilder 依赖 Weline_Websites 模块以下改造完成：
 2. **建站选择从域名池**：只显示 `site_ready=1` 的域名
 3. **网站关联使用 pool_id**：而非域名字符串
 4. **与 Weline_Websites 功能一致**：两个模块的域名管理体验一致
+5. **QuickBuild 向导同步**：域名选择步骤使用域名池
 
 ---
 
-## 七、进度记录
+## 七、SSE 实时进度功能（已完成）
+
+> 2026-02-27 新增
+
+### 功能描述
+
+快速建站向导的一站式配置流程现在支持 SSE（Server-Sent Events）实时进度展示：
+
+1. **步骤指示器**：顶部显示配置进度节点条（域名 → DNS → CDN → 解析 → 验证 → SSL）
+2. **日志终端**：下方实时打印配置日志
+3. **主题兼容**：使用 `--backend-color-*` CSS 变量，支持亮色/暗色主题
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `Weline\Theme\Taglib\SseProgress.php` | SSE 进度组件 Taglib |
+| `Weline\Saas\Controller\Backend\Api\Provisioning.php` | SSE 端点控制器 |
+
+### 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `view/templates/Backend/QuickBuild/wizard.phtml` | Step 4 改为使用 SSE 进度组件 |
+| `i18n/zh_Hans_CN.csv` | 添加进度相关翻译 |
+| `i18n/en_US.csv` | 添加进度相关翻译 |
+
+### SSE 事件协议
+
+后端通过以下事件类型向前端发送进度：
+
+| 事件 | 说明 |
+|------|------|
+| `step_start` | 步骤开始，包含 `step` 和 `message` |
+| `step_success` | 步骤成功 |
+| `step_failed` | 步骤失败 |
+| `step_skipped` | 步骤跳过 |
+| `step_info` | 步骤信息日志 |
+| `step_warning` | 步骤警告 |
+| `done` | 全部完成 |
+| `failed` | 配置失败 |
+
+### 使用方式
+
+```html
+<w:theme:sse-progress 
+    id="my-progress"
+    title="执行日志"
+    height="220px"
+/>
+
+<script>
+var progress = window.WelineSseProgress['my-progress'];
+progress.setSteps([
+    {key: 'step1', label: '步骤1', icon: 'mdi-numeric-1-circle'},
+    {key: 'step2', label: '步骤2', icon: 'mdi-numeric-2-circle'},
+]);
+progress.setUrl('/api/sse-endpoint');
+progress.start();
+</script>
+```
+
+---
+
+## 八、进度记录
 
 | 日期 | 进度 | 说明 |
 |------|------|------|
 | 2026-02-27 | 计划创建 | 完成计划文档 |
 | 2026-02-27 | 代码审计 | 补充代码现状问题分析 |
+| 2026-02-27 | SSE 进度功能 | ✅ 完成一站式配置 SSE 实时进度展示 |

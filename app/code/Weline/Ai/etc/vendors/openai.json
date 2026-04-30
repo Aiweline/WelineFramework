@@ -2,18 +2,14 @@
     "name": "OpenAI",
     "code": "openai",
     "base_url": "https://api.openai.com/v1",
-    "price_unit": "per_1m_tokens",
-    "price_currency": "USD",
-    "models_prefix": ["gpt-", "gpt-image-", "dall-e-", "o1-", "o3-", "o4-"],
-    "allow_custom_models": true,
-    "quick_create": true,
-    "test_model": "gpt-5.5",
+    "models_prefix": ["gpt-", "text-", "davinci", "curie", "babbage", "ada", "o1-", "o3-"],
+    "test_model": "gpt-3.5-turbo",
     "api_key_field": "api_key",
     "base_url_field": "base_url",
     "model_field": "model",
-    "description": "OpenAI official API service",
+    "description": "OpenAI官方API服务",
     "website": "https://openai.com",
-    "documentation": "https://platform.openai.com/docs/models",
+    "documentation": "https://platform.openai.com/docs",
     "supported_features": {
         "chat": true,
         "completion": true,
@@ -40,188 +36,80 @@
         "temperature": 0.7,
         "top_p": 1.0,
         "stream": true,
-        "timeout": 900,
+        "timeout": 180,
         "max_retries": 3,
-        "capabilities": ["chat", "vision", "code", "function_calling", "structured_outputs"]
+        "capabilities": ["chat", "code"]
     },
     "models": [
         {
-            "code": "gpt-image-2",
-            "name": "GPT Image 2",
-            "description": "OpenAI latest text-to-image model for high-quality generated images.",
-            "max_tokens": 0,
-            "context_window": 0,
-            "input_price": 0.00,
-            "output_price": 0.00,
-            "primary_modality": "text2image",
-            "capabilities": ["image_generation", "image_output"]
-        },
-        {
-            "code": "gpt-image-1.5",
-            "name": "GPT Image 1.5",
-            "description": "OpenAI text-to-image model for fast, high-quality asset generation.",
-            "max_tokens": 0,
-            "context_window": 0,
-            "input_price": 0.00,
-            "output_price": 0.00,
-            "primary_modality": "text2image",
-            "capabilities": ["image_generation", "image_output"]
-        },
-        {
-            "code": "gpt-image-1-mini",
-            "name": "GPT Image 1 Mini",
-            "description": "OpenAI lower-latency text-to-image model for lightweight asset generation.",
-            "max_tokens": 0,
-            "context_window": 0,
-            "input_price": 0.00,
-            "output_price": 0.00,
-            "primary_modality": "text2image",
-            "capabilities": ["image_generation", "image_output"]
-        },
-        {
-            "code": "gpt-image-1",
-            "name": "GPT Image 1",
-            "description": "OpenAI text-to-image model for web and product imagery.",
-            "max_tokens": 0,
-            "context_window": 0,
-            "input_price": 0.00,
-            "output_price": 0.00,
-            "primary_modality": "text2image",
-            "capabilities": ["image_generation", "image_output"]
-        },
-        {
-            "code": "dall-e-3",
-            "name": "DALL-E 3",
-            "description": "OpenAI text-to-image generation model.",
-            "max_tokens": 0,
-            "context_window": 0,
-            "input_price": 0.00,
-            "output_price": 0.00,
-            "primary_modality": "text2image",
-            "capabilities": ["image_generation", "image_output"]
-        },
-        {
-            "code": "dall-e-2",
-            "name": "DALL-E 2",
-            "description": "OpenAI legacy text-to-image generation model.",
-            "max_tokens": 0,
-            "context_window": 0,
-            "input_price": 0.00,
-            "output_price": 0.00,
-            "primary_modality": "text2image",
-            "capabilities": ["image_generation", "image_output"]
-        },
-        {
-            "code": "gpt-5.5",
-            "name": "GPT-5.5",
-            "description": "OpenAI 最新一代旗舰推理模型，统一驱动 ChatGPT 与 Codex，擅长复杂编码、研究与专业工作。",
-            "max_tokens": 128000,
-            "context_window": 1050000,
-            "input_price": 5.00,
-            "output_price": 30.00,
-            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "structured_outputs", "codex"]
-        },
-        {
-            "code": "gpt-5.5-pro",
-            "name": "GPT-5.5 Pro",
-            "description": "GPT-5.5 高强度推理版本，面向最复杂的研究、编码与多步专业任务。",
-            "max_tokens": 128000,
-            "context_window": 1050000,
-            "input_price": 30.00,
-            "output_price": 180.00,
-            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "structured_outputs", "codex"]
-        },
-        {
-            "code": "gpt-5.3-codex",
-            "name": "GPT-5.3 Codex",
-            "description": "OpenAI 面向 Codex 编码场景优化的模型，长任务稳定，性价比更高。",
-            "max_tokens": 128000,
-            "context_window": 400000,
-            "input_price": 1.75,
-            "output_price": 14.00,
-            "capabilities": ["chat", "code", "reasoning", "function_calling", "structured_outputs", "codex"]
-        },
-        {
-            "code": "gpt-5.4",
-            "name": "GPT-5.4",
-            "description": "OpenAI flagship reasoning model for complex agentic, coding, and professional workflows.",
-            "max_tokens": 128000,
-            "context_window": 1050000,
-            "input_price": 2.50,
-            "output_price": 15.00,
-            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "structured_outputs"]
-        },
-        {
-            "code": "gpt-5.4-mini",
-            "name": "GPT-5.4 Mini",
-            "description": "Lower-latency GPT-5.4 variant for coding, computer use, and subagent workloads.",
-            "max_tokens": 128000,
-            "context_window": 400000,
-            "input_price": 0.75,
-            "output_price": 4.50,
-            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "structured_outputs"]
-        },
-        {
-            "code": "gpt-5.4-nano",
-            "name": "GPT-5.4 Nano",
-            "description": "Lowest-cost GPT-5.4 class model for simple high-volume tasks.",
-            "max_tokens": 128000,
-            "context_window": 400000,
-            "input_price": 0.20,
-            "output_price": 1.25,
-            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "structured_outputs"]
-        },
-        {
-            "code": "gpt-4.1",
-            "name": "GPT-4.1",
-            "description": "Smart non-reasoning model with strong instruction following and tool calling.",
-            "max_tokens": 32768,
-            "context_window": 1047576,
-            "input_price": 2.00,
-            "output_price": 8.00,
-            "capabilities": ["chat", "vision", "code", "function_calling", "structured_outputs"]
-        },
-        {
-            "code": "gpt-4.1-mini",
-            "name": "GPT-4.1 Mini",
-            "description": "Smaller and faster GPT-4.1 variant.",
-            "max_tokens": 32768,
-            "context_window": 1047576,
-            "input_price": 0.40,
-            "output_price": 1.60,
-            "capabilities": ["chat", "vision", "code", "function_calling", "structured_outputs"]
-        },
-        {
-            "code": "gpt-4.1-nano",
-            "name": "GPT-4.1 Nano",
-            "description": "Fastest and most cost-efficient GPT-4.1 variant.",
-            "max_tokens": 32768,
-            "context_window": 1047576,
-            "input_price": 0.10,
-            "output_price": 0.40,
-            "capabilities": ["chat", "vision", "code", "function_calling", "structured_outputs"]
-        },
-        {
             "code": "gpt-4o",
             "name": "GPT-4o",
-            "description": "Versatile GPT model for text and image input with text output.",
+            "description": "OpenAI最新的多模态模型，支持文本和视觉",
             "max_tokens": 16384,
             "context_window": 128000,
             "input_price": 2.50,
             "output_price": 10.00,
-            "capabilities": ["chat", "vision", "code", "function_calling", "structured_outputs"]
+            "capabilities": ["chat", "vision", "code", "function_calling"]
         },
         {
             "code": "gpt-4o-mini",
             "name": "GPT-4o Mini",
-            "description": "Fast and affordable GPT-4o variant for focused tasks.",
+            "description": "GPT-4o的精简版，更快更便宜",
             "max_tokens": 16384,
             "context_window": 128000,
             "input_price": 0.15,
             "output_price": 0.60,
-            "capabilities": ["chat", "vision", "code", "function_calling", "structured_outputs"]
+            "capabilities": ["chat", "vision", "code", "function_calling"]
+        },
+        {
+            "code": "gpt-4-turbo",
+            "name": "GPT-4 Turbo",
+            "description": "GPT-4的增强版本，更快响应",
+            "max_tokens": 4096,
+            "context_window": 128000,
+            "input_price": 10.00,
+            "output_price": 30.00,
+            "capabilities": ["chat", "vision", "code", "function_calling"]
+        },
+        {
+            "code": "gpt-4",
+            "name": "GPT-4",
+            "description": "强大的推理和分析能力",
+            "max_tokens": 8192,
+            "context_window": 8192,
+            "input_price": 30.00,
+            "output_price": 60.00,
+            "capabilities": ["chat", "code", "function_calling"]
+        },
+        {
+            "code": "gpt-3.5-turbo",
+            "name": "GPT-3.5 Turbo",
+            "description": "快速且经济的对话模型",
+            "max_tokens": 4096,
+            "context_window": 16385,
+            "input_price": 0.50,
+            "output_price": 1.50,
+            "capabilities": ["chat", "code", "function_calling"]
+        },
+        {
+            "code": "o1-preview",
+            "name": "o1 Preview",
+            "description": "新一代推理模型预览版，擅长复杂推理任务",
+            "max_tokens": 32768,
+            "context_window": 128000,
+            "input_price": 15.00,
+            "output_price": 60.00,
+            "capabilities": ["chat", "reasoning", "code"]
+        },
+        {
+            "code": "o1-mini",
+            "name": "o1 Mini",
+            "description": "o1的精简版，适合编程和数学任务",
+            "max_tokens": 65536,
+            "context_window": 128000,
+            "input_price": 3.00,
+            "output_price": 12.00,
+            "capabilities": ["chat", "reasoning", "code"]
         }
-    ],
-    "models_updated_at": "2026-04-27",
-    "models_source": "https://developers.openai.com/api/docs/models/gpt-5.5"
+    ]
 }

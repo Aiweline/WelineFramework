@@ -13,19 +13,5 @@
                   shared="1"
                   disabled="0"/>
     </event>
-
-    <!--
-        虚拟主题请求拦截：
-        - 在路由处理前检测 virtual_theme_id 参数
-        - 注入虚拟主题上下文到 Request，让 Theme 模块能够识别
-        - 优先级设为 5，早于 ACL 检查（sort=1）和其他业务逻辑
-    -->
-    <event name="Weline_Framework_Router::route_before">
-        <observer name="GuoLaiRen_PageBuilder::virtual_theme_request_interceptor"
-                  instance="GuoLaiRen\PageBuilder\Observer\VirtualThemeRequestInterceptor"
-                  sort="5"
-                  shared="1"
-                  disabled="0"/>
-    </event>
 </config>
 

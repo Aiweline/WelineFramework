@@ -16,13 +16,9 @@
                 "enabled": true,
                 "instance_id": "legal-content-default",
                 "config": {
-                    "header.title": "隐私政策",
-                    "header.icon": "🔒",
-                    "content.body": "本隐私政策描述我们如何收集、使用和保护您在使用我们平台与服务时的个人信息。",
-                    "toc.items": "我们收集的信息|我们收集您直接提供的信息（如账户注册、联系表单）、使用数据（如访问的页面、使用的功能）以及技术数据（如IP地址、设备类型），以运营和改进我们的服务。\n信息使用方式|我们使用您的信息以提供和改进服务、处理交易、发送重要通知、个性化您的体验并履行法律义务。\n信息共享|我们不会出售您的个人信息。我们可能与协助运营的服务商共享数据，或在法律要求或为保护我们权利与安全时共享。\n数据安全|我们采取适当的技术与组织措施，保护您的个人数据免遭未经授权的访问、篡改或破坏。\n您的权利|根据您所在司法管辖区，您可能有权访问、更正或删除您的个人数据，或反对某些处理。请联系我们行使这些权利。\nCookie|我们使用Cookie及类似技术，详见我们的Cookie政策。您可在浏览器设置中管理偏好。\n政策更新|我们可能不时更新本隐私政策。更新版本将发布在本页面并注明修订生效日期。",
-                    "display.show_toc": "yes",
-                    "display.show_last_updated": "yes",
-                    "layout.content_width": "medium"
+                    "show_toc": true,
+                    "show_last_updated": true,
+                    "content_width": "narrow"
                 }
             }
         ],

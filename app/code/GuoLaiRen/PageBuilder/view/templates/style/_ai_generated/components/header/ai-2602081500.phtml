@@ -1,8 +1,3 @@
-<?php
-$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl((string)($ctaUrl ?? '#'));
-$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
-$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
-?>
 <div id="<?= $componentId ?>" class="ai-header-luxury">
     <div class="ai-header-luxury__container">
         <?php if ($showLogo): ?>
@@ -34,7 +29,7 @@ $ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolv
 
         <div class="ai-header-luxury__actions">
             <?php if ($showCta): ?>
-            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="ai-header-luxury__cta">
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="ai-header-luxury__cta">
                 <span class="ai-header-luxury__cta-text"><?= htmlspecialchars($ctaText) ?></span>
                 <span class="ai-header-luxury__cta-icon">→</span>
             </a>

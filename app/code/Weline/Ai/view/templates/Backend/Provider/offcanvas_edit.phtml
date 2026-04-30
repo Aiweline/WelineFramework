@@ -74,13 +74,6 @@ $title = $isEdit ? __('编辑供应商账户') : __('新建供应商账户');
                     </option>
                 <?php endforeach; ?>
             </select>
-            <?php if (!$isEdit): ?>
-            <input type="text"
-                   class="form-control mt-2"
-                   id="weline-ai-oc-provider-custom"
-                   placeholder="<?= __('或输入自定义供应商代码（如 my-provider）') ?>">
-            <small class="form-text"><?= __('当下拉中没有目标供应商时可直接输入自定义代码') ?></small>
-            <?php endif; ?>
         </div>
 
         <div class="mb-3">
@@ -155,11 +148,6 @@ $title = $isEdit ? __('编辑供应商账户') : __('新建供应商账户');
 
     form.addEventListener('submit', function(e) {
         e.preventDefault();
-        var customProviderInput = document.getElementById('weline-ai-oc-provider-custom');
-        var providerSelect = document.getElementById('weline-ai-oc-provider');
-        if (providerSelect && customProviderInput && customProviderInput.value.trim()) {
-            providerSelect.value = customProviderInput.value.trim();
-        }
         if (!form.checkValidity()) {
             form.reportValidity();
             return;

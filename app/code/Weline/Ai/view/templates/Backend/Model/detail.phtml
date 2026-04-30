@@ -67,11 +67,11 @@
             <table class="table table-bordered">
                 <tr>
                     <th width="200"><?= __('输入Token价格') ?></th>
-                    <td><?= number_format(((float)$model->getData('token_price_input')) * 1000, 6) ?> / 1M tokens</td>
+                    <td><?= $model->getData('token_price_input') ?> / 1K tokens</td>
                 </tr>
                 <tr>
                     <th><?= __('输出Token价格') ?></th>
-                    <td><?= number_format(((float)$model->getData('token_price_output')) * 1000, 6) ?> / 1M tokens</td>
+                    <td><?= $model->getData('token_price_output') ?> / 1K tokens</td>
                 </tr>
             </table>
         </div>

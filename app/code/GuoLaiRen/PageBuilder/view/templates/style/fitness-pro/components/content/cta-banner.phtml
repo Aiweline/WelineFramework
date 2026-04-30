@@ -38,11 +38,6 @@ $secondaryText = $config['buttons.secondary_text'] ?? 'Book Free Trial';
 $secondaryUrl = $config['buttons.secondary_url'] ?? '/contact';
 $showSecondary = ($config['buttons.show_secondary'] ?? 'yes') !== 'no';
 
-$primaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryUrl);
-$secondaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryUrl);
-$primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($primaryHref, 'primary');
-$secondaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($secondaryHref, 'secondary');
-
 $instanceId = 'fp-cta-' . uniqid();
 ?>
 
@@ -68,18 +63,19 @@ $instanceId = 'fp-cta-' . uniqid();
             #<?= $instanceId ?> .fp-cta-btn-primary, #<?= $instanceId ?> .fp-cta-btn-secondary { width: 100%; max-width: 320px; justify-content: center; }
         }
     </style>
+    
     <div class="fp-cta-container" id="cta">
         <div class="fp-cta-card">
             <div class="fp-cta-icon">🔥</div>
             <h2 class="fp-cta-title"><?= htmlspecialchars($title) ?></h2>
             <p class="fp-cta-desc"><?= htmlspecialchars($description) ?></p>
             <div class="fp-cta-buttons">
-                <a role="button" tabindex="0" class="fp-cta-btn-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($primaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($primaryRef) ?>">
+                <a href="<?= htmlspecialchars($primaryUrl) ?>" class="fp-cta-btn-primary">
                     <?= htmlspecialchars($primaryText) ?>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 </a>
                 <?php if ($showSecondary): ?>
-                <a role="button" tabindex="0" class="fp-cta-btn-secondary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($secondaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($secondaryRef) ?>">
+                <a href="<?= htmlspecialchars($secondaryUrl) ?>" class="fp-cta-btn-secondary">
                     <?= htmlspecialchars($secondaryText) ?>
                 </a>
                 <?php endif; ?>

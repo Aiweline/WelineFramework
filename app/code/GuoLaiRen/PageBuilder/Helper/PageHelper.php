@@ -209,7 +209,7 @@ class PageHelper
             'module' => 'GuoLaiRen_PageBuilder',
             'area' => 'backend',
         ]);
-        $i18nEnabled = $this->normalizeSwitchValue($i18nEnabled);
+        $i18nEnabled = $i18nEnabled === null ? '0' : $i18nEnabled; // 默认不开启
         
         // 获取所有已翻译的语言（始终生成，但通过CSS控制显示）
         $translatedLocales = $this->getTranslatedLocales($page);
@@ -252,15 +252,6 @@ class PageHelper
         }
         
         return $url;
-    }
-
-    private function normalizeSwitchValue(mixed $value): string
-    {
-        if ($value === null) {
-            return '0';
-        }
-
-        return ((string)$value === '1' || $value === true || $value === 1) ? '1' : '0';
     }
 
     /**
@@ -319,57 +310,6 @@ class PageHelper
             return $scheme . '://' . $host . $path . $query . $fragment;
         }
         return $url;
-    }
-
-    /**
-     * 将纯锚点链接转为根路径，避免相对路径导致跨页跳错。例如 #games -> /#games
-     * 仅对以 # 开头且长度>1 的链接加前缀 /，其它（/、http 等）原样返回
-     *
-     * @param string $url 原始链接（如 #games、#download、/contact）
-     * @return string 规范化后的链接
-     */
-    public static function normalizeAnchorUrl(string $url): string
-    {
-        $url = trim($url);
-        if ($url === '' || $url === '#') {
-            return $url !== '' ? $url : '#';
-        }
-        if ($url[0] === '#') {
-            return '/' . $url;
-        }
-        return $url;
-    }
-
-    /**
-     * 落地页「下载 / Android 包」占位链接解析为默认 APK 直链（调起浏览器下载）。
-     * 已为完整 http(s) 且含 .apk 的地址则原样返回；iOS App Store 等请填完整 URL，勿用 #ios 当下载链。
-     * 修改包地址：改常量或后台把按钮链接写成完整 APK URL。
-     */
-    public const DEFAULT_APP_DOWNLOAD_APK_URL = 'https://dld7y2twp0cax.cloudfront.net/TeenPattiMaster-6201-0119.apk';
-
-    public static function resolveAppDownloadUrl(string $url): string
-    {
-        $u = trim($url);
-        $apk = self::DEFAULT_APP_DOWNLOAD_APK_URL;
-        $t = strtolower($u);
-        if ($t === '' || $t === '#' || in_array($t, ['#download', '/#download', '#android', '/#android'], true)) {
-            return $apk;
-        }
-        if (preg_match('#^https?://#i', $u)) {
-            if (preg_match('~\.apk(\?|#|$)~i', $u)) {
-                return $u;
-            }
-            $frag = strtolower((string)(parse_url($u, PHP_URL_FRAGMENT) ?? ''));
-            if (in_array($frag, ['download', 'android'], true)) {
-                return $apk;
-            }
-            return $u;
-        }
-        $tl = strtolower($u);
-        if (str_ends_with($tl, '/#download') || str_ends_with($tl, '/#android')) {
-            return $apk;
-        }
-        return $u;
     }
 }
 

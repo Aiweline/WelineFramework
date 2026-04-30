@@ -16,7 +16,6 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
-use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use Weline\Framework\Manager\ObjectManager;
 
 class LayoutAssembler
@@ -229,10 +228,9 @@ class LayoutAssembler
                 continue;
             }
             
-            // 构建组件路径（legal-content 可回退 _shared）
-            $pathResolver = ObjectManager::getInstance(TemplatePathResolver::class);
-            $componentPath = $pathResolver->getComponentTemplateReference($useTemplateCode, $componentFile);
-
+            // 构建组件路径
+            $componentPath = "GuoLaiRen_PageBuilder::templates/style/{$useTemplateCode}/components/{$componentFile}";
+            
             // 调用渲染回调
             try {
                 $componentHtml = $renderCallback($componentPath, $page, $styleSettings, $config);
@@ -311,14 +309,7 @@ class LayoutAssembler
         foreach ($jsonConfig['components'] as $code => $config) {
             $map[$code] = $config['file'] ?? ($code . '.phtml');
         }
-        // 未在 component.json 声明时仍允许布局使用 legal-content（物理文件回退 _shared）
-        if ($styleCode !== '_shared' && !isset($map['legal-content'])) {
-            $sharedLegal = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/style/_shared/components/legal-content.phtml';
-            if (is_file($sharedLegal)) {
-                $map['legal-content'] = 'legal-content.phtml';
-            }
-        }
-
+        
         self::$componentFilesCache[$styleCode] = $map;
         return $map;
     }
@@ -417,11 +408,10 @@ class LayoutAssembler
                 }
                 
                 if (!$componentFile) continue;
-
-                // 读取组件文件获取元数据（legal-content 可回退 _shared）
-                $pathResolver = ObjectManager::getInstance(TemplatePathResolver::class);
-                $componentPath = $pathResolver->resolveComponentFilesystemPath($styleCode, $componentFile);
-
+                
+                // 读取组件文件获取元数据
+                $componentPath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/components/{$componentFile}";
+                
                 if (file_exists($componentPath)) {
                     $fields = $this->parseComponentFields($componentPath);
                     $result[$region][] = [
@@ -488,15 +478,10 @@ class LayoutAssembler
                     $type = trim($parts[1] ?? 'text');
                     $defaultAndOptions = trim($parts[2] ?? '');
                     
-                    // 分离默认值、格式提示与选项
+                    // 分离默认值和选项
                     $defaultValue = '';
-                    $formatHint = '';
                     $options = [];
-                    if (strpos($defaultAndOptions, '|格式：') !== false) {
-                        list($defaultValue, $formatHint) = explode('|格式：', $defaultAndOptions, 2);
-                        $defaultValue = trim($defaultValue);
-                        $formatHint = trim($formatHint);
-                    } elseif (strpos($defaultAndOptions, '|') !== false) {
+                    if (strpos($defaultAndOptions, '|') !== false) {
                         list($defaultValue, $optionsStr) = explode('|', $defaultAndOptions, 2);
                         if (!empty($optionsStr)) {
                             $options = array_map('trim', explode(',', $optionsStr));
@@ -512,16 +497,12 @@ class LayoutAssembler
                         ];
                     }
                     
-                    $fieldData = [
+                    $fields[$currentGroup]['fields'][$fieldKey] = [
                         'label' => $label,
                         'type' => $type,
                         'default' => $defaultValue,
                         'options' => $options,
                     ];
-                    if ($formatHint !== '') {
-                        $fieldData['format'] = $formatHint;
-                    }
-                    $fields[$currentGroup]['fields'][$fieldKey] = $fieldData;
                 }
             }
         }
@@ -651,13 +632,12 @@ class LayoutAssembler
             return null;
         }
         
-        $pathResolver = ObjectManager::getInstance(TemplatePathResolver::class);
-        $componentPath = $pathResolver->resolveComponentFilesystemPath($styleCode, $componentFile);
-
+        $componentPath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/components/{$componentFile}";
+        
         if (!file_exists($componentPath)) {
             return null;
         }
-
+        
         $content = file_get_contents($componentPath);
         $metadata = [
             'code' => $componentCode,          // 保留原始请求的代码（可能带前缀）

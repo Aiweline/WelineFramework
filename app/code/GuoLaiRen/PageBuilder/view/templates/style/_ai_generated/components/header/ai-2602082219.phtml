@@ -1,9 +1,6 @@
 <?php
 $showGoldEffect = $getConfig('style.gold_effect', 'yes') !== 'no';
 $showScrollEffect = $getConfig('style.scroll_effect', 'yes') !== 'no';
-$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl((string)($ctaUrl ?? '#'));
-$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
-$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
 ?>
 <header id="<?= $componentId ?>" class="luxury-header">
     <div class="luxury-header__container">
@@ -33,7 +30,7 @@ $ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolv
 
         <div class="luxury-header__actions">
             <?php if ($showCta): ?>
-            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="luxury-header__cta">
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="luxury-header__cta">
                 <?= htmlspecialchars($ctaText) ?>
             </a>
             <?php endif; ?>
