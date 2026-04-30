@@ -21,7 +21,6 @@ use GuoLaiRen\PageBuilder\Service\AI\Tool\ListComponentsTool;
 use GuoLaiRen\PageBuilder\Service\AI\Tool\ValidateCodeTool;
 use GuoLaiRen\PageBuilder\Service\AI\Tool\GetPageLayoutTool;
 use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
-use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
 
 /**
  * PageBuilder 组件构建智能体
@@ -182,13 +181,6 @@ You are an expert front-end/full-stack engineer. Your task is to generate a Page
 - 一行一条：group:组名 => 组标题，或 key => 标签:类型:默认值|选项；类型为 text、textarea、number、color、select、image。不需要时填 ""。
 - 每行仅一个星号开头（* key => ...），禁止 "* * key" 双星号开头。
 
-### 下载按钮与 CTA（应用下载）
-- **凡组件含「下载」/「应用下载」/ CTA 跳转下载**：推荐 **GlrDownloadRegistry::register(解析后的href, slot)** + **data-glr-ref**，由 footer-common 输出 JSON 并统一委托（先发像素再跳转）。禁止在 DOM 写真实下载 URL、禁止 javascript:void(0)、禁止为下载写 addEventListener/onclick。
-- **slot 取值**：主按钮 primary，次要 secondary，单一链接 url，商店区 android/ios。
-- **解析**：PageHelper::resolveAppDownloadUrl(配置 URL) 后再 register。
-- **新窗口**：register 第三参 \'_blank\' 或 <a> 上 data-glr-target=\"_blank\"。
-- **配置字段**：download.primary_url、cta_url 等 text；组件内 resolve 后 register，HTML 仅 data-glr-ref。
-
 ## 五、一次性生成流程（第一轮就按此执行，勿探讨）
 
 1. **第一步（必做）**：调用 get_component_framework(category) 获取当前区域的框架说明与**框架已注入变量**列表。
@@ -257,12 +249,7 @@ SYSTEM_PROMPT;
             $prompt .= "- 示例：如果目标语言是「简体中文」，按钮应该是「了解更多」而不是「Learn More」";
         }
 
-        return $this->withPageBuilderSkillGuide($prompt, 'stage3');
-    }
-
-    private function withPageBuilderSkillGuide(string $prompt, string $stage = 'stage3'): string
-    {
-        return ObjectManager::getInstance(AiSiteSkillRegistry::class)->prependPromptGuide($prompt, $stage);
+        return $prompt;
     }
 
     public function execute(
@@ -309,10 +296,8 @@ SYSTEM_PROMPT;
         $allToolCalls = [];
         $finalContent = '';
 
-        // 检查 Provider 是否支持 generateStreamFull（流式 + tool_calls）；用 callable 包装以满足静态分析（接口未声明该方法）
+        // 检查 Provider 是否支持 generateStreamFull（流式 + tool_calls）
         $useStreamFull = method_exists($provider, 'generateStreamFull');
-        /** @var callable(AiModel, string, array): array|null $streamFullCallable */
-        $streamFullCallable = $useStreamFull ? [$provider, 'generateStreamFull'] : null;
 
         // Tool 调用编排循环
         while ($iteration < self::MAX_ITERATIONS) {
@@ -337,38 +322,38 @@ SYSTEM_PROMPT;
                     $streamCallback('heartbeat', ['ts' => time()]);
                 }
 
-                if ($streamFullCallable !== null) {
+                if ($useStreamFull) {
                     // 流式调用：实时推送 thinking/content，保持 SSE 连接活跃
-                    $response = $streamFullCallable($model, '', [
+                    $response = $provider->generateStreamFull($model, '', [
                         'messages' => $messages,
                         'tools' => $toolDefs,
                         'temperature' => (float)($params['temperature'] ?? 0.7),
                         'max_tokens' => (int)($params['max_tokens'] ?? 16000),
                         'timeout' => (int)($params['timeout'] ?? 180),
-                        'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration): bool {
-                            return $streamCallback('thinking', [
+                        'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration) {
+                            $streamCallback('thinking', [
                                 'content' => $chunk,
                                 'iteration' => $currentIteration,
                                 'streaming' => true,
-                            ]) !== false;
+                            ]);
                         } : null,
-                        'on_content' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration): bool {
-                            return $streamCallback('ai_response', [
+                        'on_content' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration) {
+                            $streamCallback('ai_response', [
                                 'content' => $chunk,
                                 'iteration' => $currentIteration,
                                 'streaming' => true,
-                            ]) !== false;
+                            ]);
                         } : null,
-                        'on_heartbeat' => $streamCallback ? function () use ($streamCallback): bool {
-                            return $streamCallback('heartbeat', ['ts' => time()]) !== false;
+                        'on_heartbeat' => $streamCallback ? function () use ($streamCallback) {
+                            $streamCallback('heartbeat', ['ts' => time()]);
                         } : null,
-                        'on_waiting' => $streamCallback ? function (int $elapsed) use ($streamCallback, $currentIteration): bool {
-                            return $streamCallback('agent_status', [
+                        'on_waiting' => $streamCallback ? function (int $elapsed) use ($streamCallback, $currentIteration) {
+                            $streamCallback('agent_status', [
                                 'status' => 'waiting_ai',
                                 'message' => __('等待 AI 响应中... (已等待 %{1} 秒)', [$elapsed]),
                                 'iteration' => $currentIteration,
                                 'elapsed' => $elapsed,
-                            ]) !== false;
+                            ]);
                         } : null,
                     ]);
                 } else {
@@ -532,24 +517,24 @@ SYSTEM_PROMPT;
                     'response_format' => ['type' => 'json_object'],
                 ];
                 try {
-                    if ($streamFullCallable !== null) {
-                        $jsonResponse = $streamFullCallable($model, '', array_merge($jsonOnlyParams, [
-                            'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $iteration): bool {
-                                return $streamCallback('thinking', ['content' => $chunk, 'iteration' => $iteration + 1, 'streaming' => true]) !== false;
+                    if ($useStreamFull) {
+                        $jsonResponse = $provider->generateStreamFull($model, '', array_merge($jsonOnlyParams, [
+                            'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $iteration) {
+                                $streamCallback('thinking', ['content' => $chunk, 'iteration' => $iteration + 1, 'streaming' => true]);
                             } : null,
-                            'on_content' => $streamCallback ? function (string $chunk) use ($streamCallback, $iteration): bool {
-                                return $streamCallback('ai_response', ['content' => $chunk, 'iteration' => $iteration + 1, 'streaming' => true]) !== false;
+                            'on_content' => $streamCallback ? function (string $chunk) use ($streamCallback, $iteration) {
+                                $streamCallback('ai_response', ['content' => $chunk, 'iteration' => $iteration + 1, 'streaming' => true]);
                             } : null,
-                            'on_heartbeat' => $streamCallback ? function () use ($streamCallback): bool {
-                                return $streamCallback('heartbeat', ['ts' => time()]) !== false;
+                            'on_heartbeat' => $streamCallback ? function () use ($streamCallback) {
+                                $streamCallback('heartbeat', ['ts' => time()]);
                             } : null,
-                            'on_waiting' => $streamCallback ? function (int $elapsed) use ($streamCallback, $iteration): bool {
-                                return $streamCallback('agent_status', [
+                            'on_waiting' => $streamCallback ? function (int $elapsed) use ($streamCallback, $iteration) {
+                                $streamCallback('agent_status', [
                                     'status' => 'waiting_ai',
                                     'message' => __('等待最终 JSON 输出... (已等待 %{1} 秒)', [$elapsed]),
                                     'iteration' => $iteration + 1,
                                     'elapsed' => $elapsed,
-                                ]) !== false;
+                                ]);
                             } : null,
                         ]));
                     } else {
@@ -599,29 +584,29 @@ SYSTEM_PROMPT;
                     'content' => 'Reply with ONLY the component JSON object. No explanation, no markdown. The entire message must be a single valid JSON starting with { and ending with }. html_content must contain full HTML. In JSON string values use \n for newlines; do not use literal line breaks.',
                 ];
 
-                if ($streamFullCallable !== null) {
-                    $forceResponse = $streamFullCallable($model, '', [
+                if ($useStreamFull) {
+                    $forceResponse = $provider->generateStreamFull($model, '', [
                         'messages' => $finalMessages,
                         'temperature' => 0.3,
                         'max_tokens' => (int)($params['max_tokens'] ?? 16000),
                         'timeout' => (int)($params['timeout'] ?? 180),
                         'response_format' => ['type' => 'json_object'],
-                        'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $iteration): bool {
-                            return $streamCallback('thinking', ['content' => $chunk, 'iteration' => $iteration + 1, 'streaming' => true]) !== false;
+                        'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $iteration) {
+                            $streamCallback('thinking', ['content' => $chunk, 'iteration' => $iteration + 1, 'streaming' => true]);
                         } : null,
-                        'on_content' => $streamCallback ? function (string $chunk) use ($streamCallback, $iteration): bool {
-                            return $streamCallback('ai_response', ['content' => $chunk, 'iteration' => $iteration + 1, 'streaming' => true]) !== false;
+                        'on_content' => $streamCallback ? function (string $chunk) use ($streamCallback, $iteration) {
+                            $streamCallback('ai_response', ['content' => $chunk, 'iteration' => $iteration + 1, 'streaming' => true]);
                         } : null,
-                        'on_heartbeat' => $streamCallback ? function () use ($streamCallback): bool {
-                            return $streamCallback('heartbeat', ['ts' => time()]) !== false;
+                        'on_heartbeat' => $streamCallback ? function () use ($streamCallback) {
+                            $streamCallback('heartbeat', ['ts' => time()]);
                         } : null,
-                        'on_waiting' => $streamCallback ? function (int $elapsed) use ($streamCallback, $iteration): bool {
-                            return $streamCallback('agent_status', [
+                        'on_waiting' => $streamCallback ? function (int $elapsed) use ($streamCallback, $iteration) {
+                            $streamCallback('agent_status', [
                                 'status' => 'waiting_ai',
                                 'message' => __('等待 AI 最终响应... (已等待 %{1} 秒)', [$elapsed]),
                                 'iteration' => $iteration + 1,
                                 'elapsed' => $elapsed,
-                            ]) !== false;
+                            ]);
                         } : null,
                     ]);
                 } else {

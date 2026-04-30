@@ -5,6 +5,12 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractMetaBuilder;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\LegacyContractAdapter;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\PermissionMatrix;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\QaGateHelper;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceContractHelper;
 
 class AiSiteBuildTaskService
 {
@@ -22,6 +28,8 @@ class AiSiteBuildTaskService
     public const TASK_STATUS_FAILED = 'failed';
     public const TASK_STATUS_CANCELLED = 'cancelled';
     public const RETRYABLE_AI_FAILURES_SCOPE_KEY = 'retryable_ai_failures';
+    private const CONTRACT_SOURCE_BLOCK_TASK = 'stage2_block_task_contract';
+    private const CONTRACT_SOURCE_LEGACY_ADAPTER = 'legacy_contract_adapter';
     private const BUILD_LOCKED_PLAN_SCOPE_KEYS = [
         'page_types',
         'page_types_user_customized',
@@ -494,20 +502,35 @@ class AiSiteBuildTaskService
             ), static fn(string $value): bool => $value !== ''));
         }
 
+        $stageTwoContracts = \is_array($confirmedPlan['_stage2_contracts'] ?? null) ? $confirmedPlan['_stage2_contracts'] : [];
+        $sourceContracts = \is_array($confirmedPlan['_source_contracts'] ?? null) ? $confirmedPlan['_source_contracts'] : [];
         $confirmedSignature = \trim((string)($confirmedPlan['signature'] ?? $virtualThemePlan['confirmed_signature'] ?? ''));
+        $contractSource = \trim((string)($confirmedPlan['_stage2_contract_source'] ?? ''));
+        if ($contractSource === '') {
+            $contractSource = 'legacy_task_plan';
+        }
+        $stageTwoContractRefs = $this->buildStageTwoContractRefsForBuild($stageTwoContracts);
+        $sourceContractRefs = (new SourceContractHelper())->normalize($sourceContracts);
+
         return [
             'version' => self::BLUEPRINT_VERSION,
             'source' => 'stage2_confirmed_task_plan',
+            'contract_source' => $contractSource,
             'workspace_track' => $workspaceTrack,
             'page_types' => $pageTypes,
             'page_blueprints' => [],
             'task_plan_signature' => $confirmedSignature,
+            'block_task_contract_id' => \trim((string)($confirmedPlan['_block_task_contract_id'] ?? '')),
+            'source_contracts' => $sourceContractRefs,
+            'stage2_contracts' => $stageTwoContractRefs,
             'tasks' => $tasks,
             'signature' => \sha1((string)\json_encode([
                 'version' => self::BLUEPRINT_VERSION,
                 'source' => 'stage2_confirmed_task_plan',
+                'contract_source' => $contractSource,
                 'workspace_track' => $workspaceTrack,
                 'task_plan_signature' => $confirmedSignature,
+                'stage2_contracts' => $stageTwoContractRefs,
                 'page_types' => $pageTypes,
                 'tasks' => $tasks,
             ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
@@ -723,6 +746,14 @@ class AiSiteBuildTaskService
     }
 
     /**
+     * @param array<string, mixed> $payload
+     */
+    private function buildSignature(array $payload): string
+    {
+        return \sha1((string)\json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+    }
+
+    /**
      * 合并阶段一锁定蓝图任务、第二阶段结构化任务卡片与 confirmed 内嵌 EB.tasks，避免「预览 38 个 / 构建只有 5 个」的割裂。
      *
      * @param array<string, mixed> $confirmedPlan virtual_theme_plan.confirmed
@@ -804,6 +835,26 @@ class AiSiteBuildTaskService
      */
     private function extractConfirmedTaskPlan(array $scope): array
     {
+        $contractPlan = $this->extractConfirmedTaskPlanFromStageTwoContracts($scope);
+        if ($contractPlan !== []) {
+            return $contractPlan;
+        }
+
+        $legacyPlan = $this->extractConfirmedLegacyTaskPlan($scope);
+        if ($legacyPlan === []) {
+            return [];
+        }
+
+        $compatibilityPlan = $this->adaptLegacyConfirmedTaskPlanToStageTwoContract($scope, $legacyPlan);
+        return $compatibilityPlan !== [] ? $compatibilityPlan : $legacyPlan;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function extractConfirmedLegacyTaskPlan(array $scope): array
+    {
         $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
         $candidates = [
             \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [],
@@ -817,6 +868,259 @@ class AiSiteBuildTaskService
         }
 
         return $this->selectRichestStageTwoTaskPlanPayload($candidates);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function extractConfirmedTaskPlanFromStageTwoContracts(array $scope): array
+    {
+        $contracts = $this->resolveConfirmedStageTwoContractsForBuild($scope);
+        $blockTaskContract = \is_array($contracts[ContractType::TYPE_BLOCK_TASK_CONTRACT] ?? null)
+            ? $contracts[ContractType::TYPE_BLOCK_TASK_CONTRACT]
+            : [];
+        $payload = \is_array($blockTaskContract['payload'] ?? null) ? $blockTaskContract['payload'] : [];
+        if ($payload === [] || $this->countStageTwoTaskPlanRows($payload) <= 0) {
+            return [];
+        }
+
+        $meta = \is_array($blockTaskContract['contract_meta'] ?? null) ? $blockTaskContract['contract_meta'] : [];
+        $contractId = $this->extractContractIdForBuild($blockTaskContract);
+        $contractContext = \is_array($blockTaskContract['contract_context'] ?? null) ? $blockTaskContract['contract_context'] : [];
+        $sourceContracts = \is_array($blockTaskContract['source_contracts'] ?? null)
+            ? $blockTaskContract['source_contracts']
+            : (\is_array($contractContext['source_contracts'] ?? null) ? $contractContext['source_contracts'] : []);
+        $sourceContracts = (new SourceContractHelper())->normalize($sourceContracts);
+
+        $payload['signature'] = \trim((string)($payload['signature'] ?? $payload['plan_signature'] ?? $meta['id'] ?? $meta['contract_id'] ?? $contractId));
+        $payload['_stage2_contract_source'] = self::CONTRACT_SOURCE_BLOCK_TASK;
+        $payload['_stage2_contracts'] = $contracts;
+        $payload['_source_contracts'] = $sourceContracts;
+        $payload['_block_task_contract_id'] = $contractId;
+
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, array<string, mixed>>
+     */
+    private function resolveConfirmedStageTwoContractsForBuild(array $scope): array
+    {
+        $virtualThemePlan = \is_array($scope['virtual_theme_plan'] ?? null) ? $scope['virtual_theme_plan'] : [];
+        $confirmed = \is_array($virtualThemePlan['confirmed'] ?? null) ? $virtualThemePlan['confirmed'] : [];
+        $structured = \is_array($scope['task_plan_structured'] ?? null) ? $scope['task_plan_structured'] : [];
+        $candidates = [
+            $confirmed['task_plan_workbench']['confirmed']['contracts'] ?? null,
+            $confirmed['task_plan_workbench']['contracts'] ?? null,
+            $confirmed['stage2_contracts'] ?? null,
+        ];
+
+        if ((int)($scope['task_plan_confirmed'] ?? 0) === 1) {
+            $candidates[] = $structured['task_plan_workbench']['confirmed']['contracts'] ?? null;
+            $candidates[] = $structured['task_plan_workbench']['contracts'] ?? null;
+            $candidates[] = $structured['stage2_contracts'] ?? null;
+            $candidates[] = $virtualThemePlan['task_plan_workbench']['confirmed']['contracts'] ?? null;
+            $candidates[] = $virtualThemePlan['task_plan_workbench']['contracts'] ?? null;
+            $candidates[] = $virtualThemePlan['stage2_contracts'] ?? null;
+        }
+
+        foreach ($candidates as $candidate) {
+            if (!\is_array($candidate) || $candidate === []) {
+                continue;
+            }
+            $contracts = $this->normalizeStageTwoContractSetForBuild($candidate);
+            if (\is_array($contracts[ContractType::TYPE_BLOCK_TASK_CONTRACT] ?? null)) {
+                return $contracts;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<int|string, mixed> $rawContracts
+     * @return array<string, array<string, mixed>>
+     */
+    private function normalizeStageTwoContractSetForBuild(array $rawContracts): array
+    {
+        $wantedTypes = [
+            ContractType::TYPE_BLOCK_VISUAL_CONTRACT,
+            ContractType::TYPE_BLOCK_TASK_CONTRACT,
+        ];
+        $contracts = [];
+        foreach ($rawContracts as $key => $contract) {
+            if (!\is_array($contract) || $contract === []) {
+                continue;
+            }
+            $type = $this->extractContractTypeForBuild($contract, $key);
+            if (!\in_array($type, $wantedTypes, true) || isset($contracts[$type])) {
+                continue;
+            }
+            $contracts[$type] = $contract;
+        }
+
+        return $contracts;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $legacyPlan
+     * @return array<string, mixed>
+     */
+    private function adaptLegacyConfirmedTaskPlanToStageTwoContract(array $scope, array $legacyPlan): array
+    {
+        $contracts = (new LegacyContractAdapter())->adaptStageTwo([
+            'virtual_theme_plan' => ['confirmed' => $legacyPlan],
+            'task_plan_structured' => $legacyPlan,
+        ], $this->resolveStageOneSourceContractRefsForBuild($scope));
+
+        $blockTaskContract = \is_array($contracts[ContractType::TYPE_BLOCK_TASK_CONTRACT] ?? null)
+            ? $contracts[ContractType::TYPE_BLOCK_TASK_CONTRACT]
+            : [];
+        $payload = \is_array($blockTaskContract['payload'] ?? null) ? $blockTaskContract['payload'] : [];
+        if ($payload === []) {
+            return [];
+        }
+
+        foreach ([
+            'signature',
+            'plan_signature',
+            'execution_blueprint',
+            'execution_order',
+            'block_task_schema',
+            'task_directory_tree',
+            'task_tree',
+            'shared_tasks',
+            'page_tasks',
+        ] as $key) {
+            if (\array_key_exists($key, $legacyPlan)) {
+                $payload[$key] = $legacyPlan[$key];
+            }
+        }
+        if ($this->countStageTwoTaskPlanRows($payload) <= 0) {
+            return [];
+        }
+
+        $sourceContracts = \is_array($blockTaskContract['source_contracts'] ?? null) ? $blockTaskContract['source_contracts'] : [];
+        $sourceContracts = (new SourceContractHelper())->normalize($sourceContracts);
+        $contractId = $this->extractContractIdForBuild($blockTaskContract);
+        $payload['signature'] = \trim((string)($payload['signature'] ?? $payload['plan_signature'] ?? $contractId));
+        $payload['_stage2_contract_source'] = self::CONTRACT_SOURCE_LEGACY_ADAPTER;
+        $payload['_stage2_contracts'] = $contracts;
+        $payload['_source_contracts'] = $sourceContracts;
+        $payload['_block_task_contract_id'] = $contractId;
+
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array{id:string,type:string,version:string,status:string}>
+     */
+    private function resolveStageOneSourceContractRefsForBuild(array $scope): array
+    {
+        $workbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
+        $confirmed = \is_array($workbench['confirmed'] ?? null) ? $workbench['confirmed'] : [];
+        $candidates = [
+            $confirmed['contracts'] ?? null,
+            $workbench['contracts'] ?? null,
+        ];
+        $wantedTypes = [
+            ContractType::TYPE_SITE_BRIEF,
+            ContractType::TYPE_DESIGN_MANIFEST,
+            ContractType::TYPE_PAGE_CONTRACT,
+            ContractType::TYPE_BLOCK_PLAN,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (!\is_array($candidate) || $candidate === []) {
+                continue;
+            }
+            $refs = [];
+            foreach ($candidate as $key => $contract) {
+                if (!\is_array($contract) || $contract === []) {
+                    continue;
+                }
+                $type = $this->extractContractTypeForBuild($contract, $key);
+                if (!\in_array($type, $wantedTypes, true)) {
+                    continue;
+                }
+                $refs[] = $this->buildContractRefForBuild($type, $contract);
+            }
+            if ($refs !== []) {
+                return (new SourceContractHelper())->normalize($refs);
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<int|string, mixed> $contracts
+     * @return list<array{id:string,type:string,version:string,status:string}>
+     */
+    private function buildStageTwoContractRefsForBuild(array $contracts): array
+    {
+        $refs = [];
+        foreach ($contracts as $key => $contract) {
+            if (!\is_array($contract) || $contract === []) {
+                continue;
+            }
+            $type = $this->extractContractTypeForBuild($contract, $key);
+            if (!\in_array($type, [ContractType::TYPE_BLOCK_VISUAL_CONTRACT, ContractType::TYPE_BLOCK_TASK_CONTRACT], true)) {
+                continue;
+            }
+            $refs[] = $this->buildContractRefForBuild($type, $contract);
+        }
+
+        return (new SourceContractHelper())->normalize($refs);
+    }
+
+    /**
+     * @param array<string, mixed> $contract
+     * @param int|string $fallbackKey
+     */
+    private function extractContractTypeForBuild(array $contract, int|string $fallbackKey): string
+    {
+        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
+        $type = \trim((string)($meta['type'] ?? $contract['type'] ?? ''));
+        if ($type !== '') {
+            return $type;
+        }
+
+        return \is_string($fallbackKey) ? $fallbackKey : '';
+    }
+
+    /**
+     * @param array<string, mixed> $contract
+     */
+    private function extractContractIdForBuild(array $contract): string
+    {
+        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
+        $id = \trim((string)($meta['id'] ?? $meta['contract_id'] ?? $contract['id'] ?? $contract['contract_id'] ?? ''));
+        if ($id !== '') {
+            return $id;
+        }
+
+        return 'contract_' . \substr($this->buildSignature($contract), 0, 16);
+    }
+
+    /**
+     * @param array<string, mixed> $contract
+     * @return array{id:string,type:string,version:string,status:string}
+     */
+    private function buildContractRefForBuild(string $type, array $contract): array
+    {
+        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
+
+        return [
+            'id' => $this->extractContractIdForBuild($contract),
+            'type' => $type,
+            'version' => \trim((string)($meta['version'] ?? $contract['version'] ?? ContractType::VERSION_V1)),
+            'status' => \trim((string)($meta['status'] ?? $contract['status'] ?? '')),
+        ];
     }
 
     /**
@@ -1430,7 +1734,7 @@ class AiSiteBuildTaskService
         $scope = $this->reconcileGeneratedArtifactsWithTaskState($scope);
         $summary = $this->summarize($scope);
         if ((int)($summary['running'] ?? 0) <= 0) {
-            return $scope;
+            return $this->attachBuildRenderDataContract($scope);
         }
         $scope = $this->resetRunningTasksForInterruptedBuild(
             $scope,
@@ -1439,7 +1743,177 @@ class AiSiteBuildTaskService
             )
         );
 
-        return $this->reconcileGeneratedArtifactsWithTaskState($scope);
+        return $this->attachBuildRenderDataContract($this->reconcileGeneratedArtifactsWithTaskState($scope));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function attachBuildRenderDataContract(array $scope): array
+    {
+        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
+        $blueprintTasks = \is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [];
+        if ($buildBlueprint === [] || $blueprintTasks === []) {
+            return $scope;
+        }
+
+        $summary = $this->summarize($scope);
+        if (
+            (int)($summary['total'] ?? 0) <= 0
+            || (int)($summary['pending'] ?? 0) > 0
+            || (int)($summary['running'] ?? 0) > 0
+            || (int)($summary['failed'] ?? 0) > 0
+            || (int)($summary['cancelled'] ?? 0) > 0
+            || (int)($summary['done'] ?? 0) < (int)($summary['total'] ?? 0)
+        ) {
+            return $scope;
+        }
+
+        $sourceContracts = $this->resolveBuildRenderSourceContracts($buildBlueprint);
+        $payload = $this->buildRenderDataContractPayload($scope, $buildBlueprint, $summary);
+        $contractContext = [
+            'version' => 1,
+            'stage' => ContractType::STAGE_BUILD,
+            'build_blueprint_signature' => \trim((string)($buildBlueprint['signature'] ?? '')),
+            'task_plan_signature' => \trim((string)($buildBlueprint['task_plan_signature'] ?? '')),
+            'source_contracts' => $sourceContracts,
+        ];
+        $qaGateHelper = new QaGateHelper();
+        $permissionMatrix = new PermissionMatrix();
+        $contract = [
+            'contract_meta' => (new ContractMetaBuilder())->build(
+                ContractType::TYPE_RENDER_DATA,
+                ContractType::STAGE_BUILD,
+                ContractType::STATUS_DRAFT,
+                'build_renderer',
+                'build_render_data',
+                [
+                    'payload_hash' => $this->buildSignature($payload),
+                    'source_signature' => (string)($contractContext['build_blueprint_signature'] ?? ''),
+                ]
+            ),
+            'permission_matrix' => $permissionMatrix->forStage(ContractType::STAGE_BUILD),
+            'frozen_fields' => \array_values(\array_unique(\array_merge(
+                $permissionMatrix->defaultFrozenFields(ContractType::STAGE_BUILD),
+                [
+                    'payload.page_type_layouts',
+                    'payload.shared_components',
+                    'payload.materialized_pages_by_type',
+                    'source_contracts',
+                ]
+            ))),
+            'mutable_fields' => [
+                'payload.human_notes',
+                'qa_gates.*',
+            ],
+            'source_contracts' => $sourceContracts,
+            'contract_context' => $contractContext,
+            'qa_gates' => [
+                'schema_shape' => $qaGateHelper->gate('schema_shape', QaGateHelper::STATUS_PASS, 'Build render-data contract payload shape is present.'),
+                'source_contracts' => $qaGateHelper->gate(
+                    'source_contracts',
+                    $sourceContracts !== [] ? QaGateHelper::STATUS_PASS : QaGateHelper::STATUS_WARN,
+                    $sourceContracts !== []
+                        ? 'Build render-data contract is derived from upstream build and stage contracts.'
+                        : 'Build render-data contract has no upstream contract references.'
+                ),
+                'human_review' => $qaGateHelper->gate('human_review', QaGateHelper::STATUS_PENDING, 'Human review is required before QA and repair contracts consume render data.'),
+            ],
+            'payload' => $payload,
+        ];
+
+        $buildContracts = \is_array($scope['build_contracts'] ?? null) ? $scope['build_contracts'] : [];
+        $buildContracts[ContractType::TYPE_RENDER_DATA] = $contract;
+        $scope['build_contracts'] = $buildContracts;
+        $scope['render_data_contract'] = $contract;
+
+        $buildWorkbench = \is_array($scope['build_workbench'] ?? null) ? $scope['build_workbench'] : [];
+        $workbenchContracts = \is_array($buildWorkbench['contracts'] ?? null) ? $buildWorkbench['contracts'] : [];
+        $workbenchContracts[ContractType::TYPE_RENDER_DATA] = $contract;
+        $scope['build_workbench'] = \array_replace($buildWorkbench, [
+            'version' => 1,
+            'contract_context' => $contractContext,
+            'contracts' => $workbenchContracts,
+        ]);
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $buildBlueprint
+     * @param array<string, mixed> $summary
+     * @return array<string, mixed>
+     */
+    private function buildRenderDataContractPayload(array $scope, array $buildBlueprint, array $summary): array
+    {
+        return [
+            'build_blueprint_signature' => \trim((string)($buildBlueprint['signature'] ?? '')),
+            'task_plan_signature' => \trim((string)($buildBlueprint['task_plan_signature'] ?? '')),
+            'workspace_track' => \trim((string)($buildBlueprint['workspace_track'] ?? $scope['workspace_track'] ?? '')),
+            'page_types' => \array_values(\array_filter(\array_map(
+                static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+                \is_array($buildBlueprint['page_types'] ?? null) ? $buildBlueprint['page_types'] : []
+            ), static fn(string $value): bool => $value !== '')),
+            'page_type_layouts' => \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [],
+            'shared_components' => \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [],
+            'materialized_pages_by_type' => \is_array($scope['materialized_pages_by_type'] ?? null) ? $scope['materialized_pages_by_type'] : [],
+            'virtual_pages_by_type' => \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [],
+            'pagebuilder_pages_by_type' => \is_array($scope['pagebuilder_pages_by_type'] ?? null) ? $scope['pagebuilder_pages_by_type'] : [],
+            'asset_manifest' => \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [],
+            'build_summary' => $summary,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $buildBlueprint
+     * @return list<array{id:string,type:string,version:string,status:string}>
+     */
+    private function resolveBuildRenderSourceContracts(array $buildBlueprint): array
+    {
+        $refs = [];
+        $stageTwoRefs = \is_array($buildBlueprint['stage2_contracts'] ?? null) ? $buildBlueprint['stage2_contracts'] : [];
+        foreach ((new SourceContractHelper())->normalize($stageTwoRefs) as $ref) {
+            $refs[] = $ref;
+        }
+
+        $blockTaskContractId = \trim((string)($buildBlueprint['block_task_contract_id'] ?? ''));
+        if ($blockTaskContractId !== '') {
+            $refs[] = [
+                'id' => $blockTaskContractId,
+                'type' => ContractType::TYPE_BLOCK_TASK_CONTRACT,
+                'version' => ContractType::VERSION_V1,
+                'status' => '',
+            ];
+        }
+
+        $stageOneRefs = \is_array($buildBlueprint['source_contracts'] ?? null) ? $buildBlueprint['source_contracts'] : [];
+        foreach ((new SourceContractHelper())->normalize($stageOneRefs) as $ref) {
+            $refs[] = $ref;
+        }
+
+        return $this->dedupeContractRefsForBuild($refs);
+    }
+
+    /**
+     * @param list<array{id:string,type:string,version:string,status:string}> $refs
+     * @return list<array{id:string,type:string,version:string,status:string}>
+     */
+    private function dedupeContractRefsForBuild(array $refs): array
+    {
+        $deduped = [];
+        $seen = [];
+        foreach ((new SourceContractHelper())->normalize($refs) as $ref) {
+            $key = $ref['type'] . ':' . $ref['id'];
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $deduped[] = $ref;
+        }
+
+        return $deduped;
     }
 
     /**

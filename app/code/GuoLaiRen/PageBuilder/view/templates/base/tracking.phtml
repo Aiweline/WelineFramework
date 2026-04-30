@@ -248,13 +248,13 @@ $websiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
         hasFB: trackingConfig.hasFB
     };
     
-    // 预览模式提示（json_encode 避免页面 charset 误判时控制台乱码）
+    // 预览模式提示
     if (isPreview) {
-        console.log(<?= json_encode('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━') ?>, 'color: #00ff00; font-weight: bold;');
-        console.log(<?= json_encode('%c🔍 预览模式 - 统计代码已禁用') ?>, 'color: #00ff00; font-size: 14px; font-weight: bold;');
-        console.log(<?= json_encode('%c📊 跟踪配置:') ?>, 'color: #ffcc00; font-weight: bold;', window.__TRACKING_CONFIG__);
-        console.log(<?= json_encode('%c💡 提示: 所有 trackEvent() 调用将只打印日志，不会发送真实数据') ?>, 'color: #999999; font-style: italic;');
-        console.log(<?= json_encode('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━') ?>, 'color: #00ff00; font-weight: bold;');
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
+        console.log('%c🔍 预览模式 - 统计代码已禁用', 'color: #00ff00; font-size: 14px; font-weight: bold;');
+        console.log('%c📊 跟踪配置:', 'color: #ffcc00; font-weight: bold;', window.__TRACKING_CONFIG__);
+        console.log('%c💡 提示: 所有 trackEvent() 调用将只打印日志，不会发送真实数据', 'color: #999999; font-style: italic;');
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
     }
     
     // 统一事件处理：自动为所有带有 data-track-event 或 data-handle 属性的元素绑定点击事件

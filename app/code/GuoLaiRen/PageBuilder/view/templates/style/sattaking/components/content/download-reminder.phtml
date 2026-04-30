@@ -58,11 +58,6 @@ $secondaryText = $config['buttons.secondary_text'] ?? 'Read FAQ';
 $secondaryUrl = $config['buttons.secondary_url'] ?? '#faq';
 $showSecondary = ($config['buttons.show_secondary'] ?? 'yes') !== 'no';
 
-$primaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryUrl);
-$secondaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryUrl);
-$primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($primaryHref, 'primary');
-$secondaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($secondaryHref, 'secondary');
-
 // 样式配置
 $bgGradientStart = $config['style.bg_gradient_start'] ?? ($colors['section_bg_2'] ?? '#1a1a3e');
 $bgGradientEnd = $config['style.bg_gradient_end'] ?? ($colors['section_bg_3'] ?? '#0f0f2e');
@@ -245,6 +240,7 @@ $instanceId = 'sk-download-reminder-' . uniqid();
             }
         }
     </style>
+    
     <!-- 装饰元素 -->
     <div class="sk-dr-decor sk-dr-decor-1"></div>
     <div class="sk-dr-decor sk-dr-decor-2"></div>
@@ -260,13 +256,13 @@ $instanceId = 'sk-download-reminder-' . uniqid();
         <p class="sk-dr-desc"><?= htmlspecialchars($description) ?></p>
         
         <div class="sk-dr-buttons">
-            <a role="button" tabindex="0" class="sk-dr-btn sk-dr-btn-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($primaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($primaryRef) ?>">
+            <a href="<?= htmlspecialchars($primaryUrl) ?>" class="sk-dr-btn sk-dr-btn-primary">
                 <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                 <?= htmlspecialchars($primaryText) ?>
             </a>
             
             <?php if ($showSecondary): ?>
-            <a role="button" tabindex="0" class="sk-dr-btn sk-dr-btn-secondary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($secondaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($secondaryRef) ?>">
+            <a href="<?= htmlspecialchars($secondaryUrl) ?>" class="sk-dr-btn sk-dr-btn-secondary">
                 <?= htmlspecialchars($secondaryText) ?>
             </a>
             <?php endif; ?>

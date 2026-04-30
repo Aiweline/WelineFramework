@@ -18,8 +18,7 @@
  * logo.width => Logo宽度:number:40|px
  * 
  * group:navigation => 导航设置
- * navigation.use_custom_links => 使用自定义导航链接:select:no|no,yes
- * navigation.items => 导航项配置:textarea:Features=>#features\r\nServices=>#services\r\nAbout=>#stats\r\nFAQ=>#faq\r\nContact=>/contact|格式：名称=>链接，一行一个（仅当开启自定义链接时生效）
+ * navigation.items => 导航项配置:textarea:Features=>#features\r\nServices=>#services\r\nAbout=>#stats\r\nFAQ=>#faq\r\nContact=>/contact|格式：名称=>链接，一行一个
  * navigation.show_cta => 显示CTA按钮:select:yes|yes,no
  * navigation.cta_text => CTA按钮文字:text:Open Account
  * navigation.cta_url => CTA按钮链接:text:#hero
@@ -49,89 +48,46 @@ $logoText = $config['logo.text'] ?? 'VaultPay';
 $logoWidth = $config['logo.width'] ?? 40;
 
 // 导航配置
-$useCustomLinks = ($config['navigation.use_custom_links'] ?? 'no') === 'yes';
 $navItemsRaw = $config['navigation.items'] ?? "Features=>#features\nServices=>#services\nAbout=>#stats\nFAQ=>#faq\nContact=>/contact";
 $showCta = ($config['navigation.show_cta'] ?? 'yes') !== 'no';
 $ctaText = $config['navigation.cta_text'] ?? 'Open Account';
-$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['navigation.cta_url'] ?? '#hero');
-$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
-$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
+$ctaUrl = $config['navigation.cta_url'] ?? '#hero';
 
-// 导航项：默认按网站页面类型自动生成；开启「使用自定义导航链接」时用 navigation.items
+// 解析导航项
 $navItems = [];
-$page = $this->getData('page');
-if (!$useCustomLinks && $page && method_exists($page, 'getHeaderNavigationPages')) {
-    $headerPages = $page->getHeaderNavigationPages(10);
-    foreach ($headerPages as $navPage) {
-        $type = $navPage['type'] ?? '';
-        $labelKey = 'navigation.label_' . $type;
-        $configuredLabel = trim((string)($config[$labelKey] ?? ''));
-        $title = $navPage['title'] ?? '';
-        $url = $navPage['url'] ?? '/';
-        if (isset($navPage['type']) && $navPage['type'] === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME) {
-            $title = __('Home');
-            $url = '/';
-        }
-        $navItems[] = ['name' => $configuredLabel !== '' ? $configuredLabel : $title, 'url' => $url];
+$lines = preg_split('/[\r\n]+/', $navItemsRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    
+    $parts = explode('=>', $line, 2);
+    $name = trim($parts[0] ?? '');
+    $url = trim($parts[1] ?? '#');
+    
+    if (!empty($name)) {
+        $navItems[] = [
+            'name' => $name,
+            'url' => $url ?: '#',
+        ];
     }
-}
-if ($useCustomLinks || empty($navItems)) {
-    $navItems = [];
-    $lines = preg_split('/[\r\n]+/', $navItemsRaw);
-    foreach ($lines as $line) {
-        $line = trim($line);
-        if (empty($line)) continue;
-        $parts = explode('=>', $line, 2);
-        $name = trim($parts[0] ?? '');
-        $url = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(trim($parts[1] ?? '#'));
-        if (!empty($name)) {
-            $navItems[] = ['name' => $name, 'url' => $url ?: '#'];
-        }
-    }
-}
-if (empty($navItems)) {
-    $navItems = [
-        ['name' => 'Features', 'url' => '/#features'],
-        ['name' => 'Services', 'url' => '/#services'],
-        ['name' => 'About', 'url' => '/#stats'],
-        ['name' => 'FAQ', 'url' => '/#faq'],
-        ['name' => 'Contact', 'url' => '/contact'],
-    ];
 }
 
 $instanceId = 'fh-nav-' . uniqid();
 ?>
 
-<header class="fh-header-outer" id="<?= $instanceId ?>">
+<nav class="fh-nav" id="<?= $instanceId ?>">
     <style>
         #<?= $instanceId ?> {
-            width: 100vw;
-            margin-left: calc(-50vw + 50%);
-            box-sizing: border-box;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 1000;
-            background: <?= htmlspecialchars($navBg) ?>;
-            backdrop-filter: blur(10px);
-            padding: 0 0;
+            padding: 0 20px;
             height: 80px;
             display: flex;
             align-items: center;
-            justify-content: center;
-        }
-        #<?= $instanceId ?> .fh-nav-inner {
-            width: 100%;
+            justify-content: space-between;
             max-width: 1200px;
             margin: 0 auto;
-            padding: 0 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
         }
         
-        #<?= $instanceId ?> .fh-nav-inner .fh-nav-logo {
+        #<?= $instanceId ?> .fh-nav-logo {
             display: flex;
             align-items: center;
             gap: 12px;
@@ -140,12 +96,12 @@ $instanceId = 'fh-nav-' . uniqid();
             color: <?= $navText ?>;
         }
         
-        #<?= $instanceId ?> .fh-nav-inner .fh-nav-logo img {
+        #<?= $instanceId ?> .fh-nav-logo img {
             height: <?= $logoWidth ?>px;
             width: auto;
         }
         
-        #<?= $instanceId ?> .fh-nav-inner .fh-nav-logo-icon {
+        #<?= $instanceId ?> .fh-nav-logo-icon {
             width: <?= $logoWidth ?>px;
             height: <?= $logoWidth ?>px;
             background: <?= $buttonPrimaryBg ?>;
@@ -155,25 +111,25 @@ $instanceId = 'fh-nav-' . uniqid();
             justify-content: center;
         }
         
-        #<?= $instanceId ?> .fh-nav-inner .fh-nav-logo-icon svg {
+        #<?= $instanceId ?> .fh-nav-logo-icon svg {
             width: 24px;
             height: 24px;
             fill: #ffffff;
         }
         
-        #<?= $instanceId ?> .fh-nav-inner .fh-nav-menu {
+        #<?= $instanceId ?> .fh-nav-menu {
             display: flex;
             align-items: center;
             gap: 32px;
         }
         
-        #<?= $instanceId ?> .fh-nav-inner .fh-nav-links {
+        #<?= $instanceId ?> .fh-nav-links {
             display: flex;
             align-items: center;
             gap: 32px;
         }
         
-        #<?= $instanceId ?> .fh-nav-inner .fh-nav-link {
+        #<?= $instanceId ?> .fh-nav-link {
             color: <?= $navLink ?>;
             font-size: 0.95rem;
             font-weight: 500;
@@ -181,11 +137,11 @@ $instanceId = 'fh-nav-' . uniqid();
             position: relative;
         }
         
-        #<?= $instanceId ?> .fh-nav-inner .fh-nav-link:hover {
+        #<?= $instanceId ?> .fh-nav-link:hover {
             color: <?= $navLinkHover ?>;
         }
         
-        #<?= $instanceId ?> .fh-nav-inner .fh-nav-link::after {
+        #<?= $instanceId ?> .fh-nav-link::after {
             content: '';
             position: absolute;
             bottom: -4px;
@@ -196,11 +152,11 @@ $instanceId = 'fh-nav-' . uniqid();
             transition: width 0.3s ease;
         }
         
-        #<?= $instanceId ?> .fh-nav-inner .fh-nav-link:hover::after {
+        #<?= $instanceId ?> .fh-nav-link:hover::after {
             width: 100%;
         }
         
-        #<?= $instanceId ?> .fh-nav-inner .fh-nav-cta {
+        #<?= $instanceId ?> .fh-nav-cta {
             padding: 10px 20px;
             background: <?= $buttonPrimaryBg ?>;
             color: #ffffff;
@@ -210,12 +166,12 @@ $instanceId = 'fh-nav-' . uniqid();
             transition: all 0.3s ease;
         }
         
-        #<?= $instanceId ?> .fh-nav-inner .fh-nav-cta:hover {
+        #<?= $instanceId ?> .fh-nav-cta:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 20px rgba(37, 99, 235, 0.4);
         }
         
-        #<?= $instanceId ?> .fh-nav-inner .fh-nav-toggle {
+        #<?= $instanceId ?> .fh-nav-toggle {
             display: none;
             flex-direction: column;
             gap: 5px;
@@ -223,7 +179,7 @@ $instanceId = 'fh-nav-' . uniqid();
             cursor: pointer;
         }
         
-        #<?= $instanceId ?> .fh-nav-inner .fh-nav-toggle span {
+        #<?= $instanceId ?> .fh-nav-toggle span {
             width: 24px;
             height: 2px;
             background: <?= $navText ?>;
@@ -323,8 +279,7 @@ $instanceId = 'fh-nav-' . uniqid();
         </div>
         
         <?php if ($showCta): ?>
-        <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="fh-nav-cta"><?= htmlspecialchars($ctaText) ?></a>
+        <a href="<?= htmlspecialchars($ctaUrl) ?>" class="fh-nav-cta"><?= htmlspecialchars($ctaText) ?></a>
         <?php endif; ?>
     </div>
-    </div>
-</header>
+</nav>

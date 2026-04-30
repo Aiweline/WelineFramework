@@ -17,10 +17,7 @@
                 "config": {
                     "content.badge": "Get in Touch",
                     "content.title": "Contact Us",
-                    "content.description": "Have questions? Our support team is available 24/7 to help with anything you need.",
-                    "contact.email": "support@pokerarena.com",
-                    "contact.live_chat": "Available 24/7",
-                    "contact.response_time": "Under 2 hours"
+                    "content.description": "Have questions? Our support team is available 24/7 to help with anything you need."
                 }
             }
         ],

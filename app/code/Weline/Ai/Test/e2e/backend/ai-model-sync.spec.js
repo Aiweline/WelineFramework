@@ -1,20 +1,28 @@
-// @weline-e2e-runtime fallback
 // @ts-check
-const { test, expect, gotoBackend, loginAsAdmin } = require('../../../../../../../tests/e2e/framework');
+const { test, expect } = require('@playwright/test');
 
-test.describe('AI model list page', () => {
-  test.beforeEach(async ({ page }) => {
-    await loginAsAdmin(page);
-  });
+test.describe('AI模型列表页面', () => {
+    test.beforeEach(async ({ page }) => {
+        await page.goto('http://127.0.0.1:9981/admin');
+        await page.waitForSelector('input[name="username"], input[type="text"]', { timeout: 5000 }).catch(() => {});
 
-  test('shows the model list and add button', async ({ page }) => {
-    await gotoBackend(page, 'ai/backend/model', { timeout: 60000, settleMs: 1000 });
+        const usernameInput = await page.$('input[name="username"], input[type="text"]');
+        if (usernameInput) {
+            await page.fill('input[name="username"], input[type="text"]', 'admin');
+            await page.fill('input[name="password"], input[type="password"]', 'admin');
+            await page.click('button[type="submit"], input[type="submit"]');
+            await page.waitForTimeout(2000);
+        }
+    });
 
-    await expect(page.locator('table').first()).toBeVisible({ timeout: 5000 });
+    test('应该显示模型列表页面和新增模型按钮', async ({ page }) => {
+        await page.goto('http://127.0.0.1:9981/ai/backend/model');
+        await page.waitForTimeout(1000);
 
-    const addButton = page
-      .locator('a[href*="/ai/backend/model/edit"], a:has-text("新增模型"), button:has-text("新增模型")')
-      .first();
-    await expect(addButton).toBeVisible({ timeout: 5000 });
-  });
+        const title = page.locator('text=/模型列表|AI模型列表|AI模型管理/i');
+        await expect(title).toBeVisible({ timeout: 5000 });
+
+        const addButton = page.locator('a:has-text("新增模型"), button:has-text("新增模型")');
+        await expect(addButton).toBeVisible({ timeout: 5000 });
+    });
 });

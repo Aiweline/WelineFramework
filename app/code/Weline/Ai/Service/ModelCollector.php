@@ -397,7 +397,6 @@ class ModelCollector
             'supplier' => $modelData['vendor'],
             'version' => $modelData['model_version'] ?? '1.0',
             'config' => json_encode($modelData['config'] ?? []),
-            'primary_modality' => AiModel::normalizePrimaryModality((string)($modelData['primary_modality'] ?? AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT)),
             'cost_per_token' => (string)($modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000),
             // TODO(临时): 注释掉这两个字段，因为ORM报告字段不存在（虽然数据库中确实有这些字段）
             // 'token_price_input' => (float)($modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000),
@@ -451,14 +450,6 @@ class ModelCollector
         
         if (empty($existingModel->getData('version')) && !empty($modelData['model_version'])) {
             $existingModel->setData('version', $modelData['model_version'] ?? '1.0');
-        }
-
-        if (isset($modelData['primary_modality'])) {
-            $newPrimaryModality = AiModel::normalizePrimaryModality((string)$modelData['primary_modality']);
-            $currentPrimaryModality = (string)($existingModel->getData(AiModel::schema_fields_PRIMARY_MODALITY) ?? '');
-            if ($currentPrimaryModality === '' || $existingModel->getPrimaryModality() !== $newPrimaryModality) {
-                $existingModel->setData(AiModel::schema_fields_PRIMARY_MODALITY, $newPrimaryModality);
-            }
         }
 
         // 2. 配置字段：合并配置，只添加不存在的项

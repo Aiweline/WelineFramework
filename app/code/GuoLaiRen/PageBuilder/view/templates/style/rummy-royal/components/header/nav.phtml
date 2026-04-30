@@ -18,8 +18,7 @@
  * 
  * group:navigation => 导航设置
  * navigation.display => 显示导航:select:yes|yes,no
- * navigation.use_custom_links => 使用自定义导航链接:select:no|no,yes
- * navigation.links => 导航链接:textarea:Home=>/\r\nGames=>#games\r\nDownload=>#download\r\nFAQ=>#faq|格式：名称=>链接，一行一个（仅当开启自定义链接时生效）
+ * navigation.links => 导航链接:textarea:Home=>/\r\nGames=>#games\r\nDownload=>#download\r\nFAQ=>#faq|格式：名称=>链接，一行一个
  * navigation.show_cta => 显示CTA按钮:select:yes|yes,no
  * navigation.cta_text => CTA按钮文字:text:Play Now
  * navigation.cta_url => CTA按钮链接:text:#hero
@@ -49,61 +48,23 @@ $logoUrl = $config['logo.url'] ?? '';
 $logoWidth = $config['logo.width'] ?? '44';
 
 $navDisplay = $config['navigation.display'] ?? 'yes';
-$useCustomLinks = ($config['navigation.use_custom_links'] ?? 'no') === 'yes';
 $navLinksRaw = $config['navigation.links'] ?? "Home=>/\nGames=>#games\nDownload=>#download\nFAQ=>#faq";
 $showCta = $config['navigation.show_cta'] ?? 'yes';
 $ctaText = $config['navigation.cta_text'] ?? 'Play Now';
-$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['navigation.cta_url'] ?? '#hero');
-$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
-$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
+$ctaUrl = $config['navigation.cta_url'] ?? '#hero';
 
-// 导航项：默认按页面类型自动生成；开启「使用自定义导航链接」时用 navigation.links
+// 解析导航链接
 $navLinks = [];
-$page = $this->getData('page');
-if (!$useCustomLinks && $page && method_exists($page, 'getHeaderNavigationPages')) {
-    $headerPages = $page->getHeaderNavigationPages(10);
-    foreach ($headerPages as $navPage) {
-        $type = $navPage['type'] ?? '';
-        $labelKey = 'navigation.label_' . $type;
-        $configuredLabel = trim((string)($config[$labelKey] ?? ''));
-        $title = $navPage['title'] ?? '';
-        $url = $navPage['url'] ?? '/';
-
-        // 如果是首页，标题强制为 'Home'
-        if (isset($navPage['type']) && $navPage['type'] == GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME) {
-            $title = __('Home');
-            $url = '/';
-        }
-
-        $navLinks[] = [
-            'name' => $configuredLabel !== '' ? $configuredLabel : $title,
-            'url' => $url,
-        ];
+$lines = preg_split('/[\r\n]+/', $navLinksRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('=>', $line, 2);
+    $name = trim($parts[0] ?? '');
+    $url = trim($parts[1] ?? '#');
+    if (!empty($name)) {
+        $navLinks[] = ['name' => $name, 'url' => $url];
     }
-}
-
-// 开启自定义链接或无页面数据时解析 navigation.links
-if ($useCustomLinks || empty($navLinks)) {
-    $navLinks = [];
-    $lines = preg_split('/[\r\n]+/', $navLinksRaw);
-    foreach ($lines as $line) {
-        $line = trim($line);
-        if (empty($line)) continue;
-        $parts = explode('=>', $line, 2);
-        $name = trim($parts[0] ?? '');
-        $url = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(trim($parts[1] ?? '#'));
-        if (!empty($name)) {
-            $navLinks[] = ['name' => $name, 'url' => $url];
-        }
-    }
-}
-if (empty($navLinks)) {
-    $navLinks = [
-        ['name' => 'Home', 'url' => '/'],
-        ['name' => 'Games', 'url' => '/#games'],
-        ['name' => 'Download', 'url' => '/#download'],
-        ['name' => 'FAQ', 'url' => '/#faq'],
-    ];
 }
 
 $instanceId = 'rr-nav-' . uniqid();
@@ -112,11 +73,6 @@ $instanceId = 'rr-nav-' . uniqid();
 <?php if ($navDisplay !== 'no'): ?>
 <style>
     #<?= $instanceId ?> {
-        width: 100vw;
-        margin-left: calc(-50vw + 50%);
-        box-sizing: border-box;
-        background: <?= htmlspecialchars($navBg) ?>;
-        backdrop-filter: blur(10px);
         padding: 14px 0;
         transition: all 0.3s ease;
     }
@@ -298,7 +254,7 @@ $instanceId = 'rr-nav-' . uniqid();
             </div>
             
             <?php if ($showCta === 'yes'): ?>
-            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="rr-nav-cta">
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="rr-nav-cta">
                 <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                 <span><?= htmlspecialchars($ctaText) ?></span>
             </a>

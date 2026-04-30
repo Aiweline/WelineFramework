@@ -5,6 +5,12 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\BuiltinSkillProvider;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\CustomSkillProvider;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillSelectionResolver;
+use GuoLaiRen\PageBuilder\Service\AI\Skill\SkillSnapshotBuilder;
 use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemePlanService;
@@ -191,6 +197,36 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             $artifacts['plan_workbench']['stage1']['interaction_state']['page_actions']['home_page'] ?? []
         );
         self::assertIsArray($artifacts['plan_workbench']['confirmed']['block_index'] ?? null);
+        $contractContext = $artifacts['plan_workbench']['contract_context'] ?? [];
+        self::assertSame('stage1', (string)($contractContext['stage'] ?? ''));
+        self::assertSame(['claude-design'], $contractContext['selected_skill_codes'] ?? []);
+        self::assertSame('claude-design', (string)($contractContext['skill_snapshots'][0]['code'] ?? ''));
+        self::assertMatchesRegularExpression('/^[a-f0-9]{40}$/', (string)($contractContext['skill_snapshot_hash'] ?? ''));
+        $contracts = $artifacts['plan_workbench']['contracts'] ?? [];
+        self::assertArrayHasKey(ContractType::TYPE_SITE_BRIEF, $contracts);
+        self::assertArrayHasKey(ContractType::TYPE_DESIGN_MANIFEST, $contracts);
+        self::assertArrayHasKey(ContractType::TYPE_PAGE_CONTRACT, $contracts);
+        self::assertArrayHasKey(ContractType::TYPE_BLOCK_PLAN, $contracts);
+        self::assertSame(
+            ContractType::STATUS_DRAFT,
+            (string)($contracts[ContractType::TYPE_SITE_BRIEF]['contract_meta']['status'] ?? '')
+        );
+        self::assertSame(
+            (string)($contracts[ContractType::TYPE_SITE_BRIEF]['contract_meta']['id'] ?? ''),
+            (string)($contracts[ContractType::TYPE_SITE_BRIEF]['contract_meta']['contract_id'] ?? '')
+        );
+        self::assertSame('Plan Service Test', (string)($contracts[ContractType::TYPE_SITE_BRIEF]['payload']['site_title'] ?? ''));
+        self::assertSame(['home_page', 'about_page'], $contracts[ContractType::TYPE_PAGE_CONTRACT]['payload']['page_types'] ?? []);
+        self::assertSame(
+            (string)($contracts[ContractType::TYPE_PAGE_CONTRACT]['contract_meta']['id'] ?? ''),
+            (string)($contracts[ContractType::TYPE_BLOCK_PLAN]['source_contracts'][2]['id'] ?? '')
+        );
+        self::assertSame('pass', (string)($contracts[ContractType::TYPE_BLOCK_PLAN]['qa_gates']['schema_shape']['status'] ?? ''));
+        self::assertStringStartsWith(
+            'page:home_page:',
+            (string)($contracts[ContractType::TYPE_BLOCK_PLAN]['payload']['pages']['home_page']['blocks'][0]['task_key'] ?? '')
+        );
+        self::assertSame($contracts, $artifacts['plan_workbench']['confirmed']['contracts'] ?? []);
         $sharedTask = $artifacts['execution_blueprint']['tasks'][0] ?? [];
         foreach (['implementation_detail', 'realtime_content', 'reason', 'completion_rule', 'editable_fields'] as $requiredBlockField) {
             self::assertArrayHasKey($requiredBlockField, $sharedTask);
@@ -242,6 +278,59 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('Interaction/effects rule', $prompt);
         self::assertStringContainsString('Style-diversity rule', $prompt);
         self::assertStringContainsString('generic Inter/Roboto/system-font hierarchy', $prompt);
+    }
+
+    public function testStageOneAiPlanPromptIncludesSelectedCustomSkillBody(): void
+    {
+        $customProvider = new CustomSkillProvider(null, [
+            'conversion-copy' => [
+                'code' => 'conversion-copy',
+                'name' => 'Conversion Copy',
+                'description' => 'Selected skill for Stage1 prompt verification.',
+                'body' => 'Stage1 must use concrete conversion copy from this selected skill.',
+                'status' => 'active',
+                'source' => 'custom_db',
+                'exists' => true,
+            ],
+        ]);
+        $resolver = new SkillSelectionResolver(new BuiltinSkillProvider(), $customProvider);
+        $service = new AiSiteExecutionBlueprintService(
+            new AiSitePageBlueprintService(),
+            null,
+            null,
+            new AiSiteSkillRegistry(
+                null,
+                null,
+                $customProvider,
+                $resolver,
+                new SkillSnapshotBuilder($resolver)
+            )
+        );
+        $method = new \ReflectionMethod($service, 'buildAiPlanPrompt');
+        $method->setAccessible(true);
+
+        $prompt = $method->invokeArgs($service, [
+            [
+                'site_title' => 'Skill Prompt Site',
+                'brief_description' => 'Build a conversion-focused analytics landing page.',
+                'selected_skill_codes' => ['conversion-copy'],
+                'workspace_track' => 'virtual_theme',
+            ],
+            [
+                'site_title' => 'Skill Prompt Site',
+                'brief_description' => 'Build a conversion-focused analytics landing page.',
+            ],
+            ['home_page'],
+            'en_US',
+            '',
+            '',
+            'Skill Prompt Site',
+            'Analytics landing page.',
+        ]);
+
+        self::assertIsString($prompt);
+        self::assertStringContainsString('Skill code: conversion-copy', $prompt);
+        self::assertStringContainsString('Stage1 must use concrete conversion copy from this selected skill.', $prompt);
     }
 
     public function testAiPluginDownloadBriefUsesDistinctiveFallbackVisualSystem(): void

@@ -322,8 +322,8 @@ class ComponentResolver
         
         // 提取文件路径
         $file = $this->extractFileFromPath($path);
-
-        return $this->getPathResolver()->resolveComponentFilesystemPath($styleCode, $file);
+        
+        return $this->getPathResolver()->getComponentFilePath($styleCode, $file);
     }
     
     /**
@@ -373,13 +373,7 @@ class ComponentResolver
         foreach ($jsonConfig['components'] as $code => $config) {
             $map[$code] = $config['file'] ?? ($code . '.phtml');
         }
-        if ($styleCode !== '_shared' && !isset($map['legal-content'])) {
-            $sharedLegal = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/style/_shared/components/legal-content.phtml';
-            if (is_file($sharedLegal)) {
-                $map['legal-content'] = 'legal-content.phtml';
-            }
-        }
-
+        
         self::$componentFilesCache[$styleCode] = $map;
         return $map;
     }
@@ -401,14 +395,14 @@ class ComponentResolver
         
         // 直接匹配
         if (isset($filesMap[$normalizedCode])) {
-            return $this->getPathResolver()->resolveComponentFilesystemPath($styleCode, $filesMap[$normalizedCode]);
+            return $this->getPathResolver()->getComponentFilePath($styleCode, $filesMap[$normalizedCode]);
         }
-
+        
         // 尝试各种转换格式
         $alternativeCodes = $this->generateAlternativeCodes($code, $styleCode);
         foreach ($alternativeCodes as $altCode) {
             if (isset($filesMap[$altCode])) {
-                return $this->getPathResolver()->resolveComponentFilesystemPath($styleCode, $filesMap[$altCode]);
+                return $this->getPathResolver()->getComponentFilePath($styleCode, $filesMap[$altCode]);
             }
         }
         

@@ -36,11 +36,11 @@
  * group:style => 样式设置
  * style.bg_type => 背景类型:select:color|color,gradient,image
  * style.bg_color => 背景颜色:color:#ffffff
- * style.bg_gradient => 渐变背景:text:linear-gradient(135deg, #111827 0%, #f59e0b 100%)
+ * style.bg_gradient => 渐变背景:text:linear-gradient(135deg, #667eea 0%, #764ba2 100%)
  * style.bg_image => 背景图片:textarea:
  * style.text_color => 文字颜色:color:#374151
  * style.title_color => 标题颜色:color:#111827
- * style.accent_color => 强调色:color:#f59e0b
+ * style.accent_color => 强调色:color:#6366f1
  * 
  * {{EXTRA_FIELDS}}
  * 
@@ -56,25 +56,14 @@ $config = array_merge($styleSettings, $componentConfig);
 $getConfig = function($key, $default = '') use ($config) {
     return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
 };
-$sanitizeVisibleText = static function (string $text, string $fallback = ''): string {
-    $text = trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
-    if ($text === '') {
-        return $fallback;
-    }
-    if (preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|home_page|about_page|shared:[a-z0-9:_-]+|page:[a-z0-9:_-]+)\b/iu', $text)) {
-        return $fallback;
-    }
-
-    return $text;
-};
 
 $componentId = 'content-' . substr(uniqid(), -8);
 $cls = $componentId;
 
 // 内容配置
-$title = $sanitizeVisibleText((string)$getConfig('content.title', 'Section Title'), 'Section Title');
-$subtitle = $sanitizeVisibleText((string)$getConfig('content.subtitle', ''), '');
-$description = $sanitizeVisibleText((string)$getConfig('content.description', ''), '');
+$title = $getConfig('content.title', 'Section Title');
+$subtitle = $getConfig('content.subtitle', '');
+$description = $getConfig('content.description', '');
 
 // 布局配置
 $containerWidth = $getConfig('layout.container_width', '1200');
@@ -85,11 +74,11 @@ $textAlign = $getConfig('layout.text_align', 'center');
 // 样式配置
 $bgType = $getConfig('style.bg_type', 'color');
 $bgColor = $getConfig('style.bg_color', '#ffffff');
-$bgGradient = $getConfig('style.bg_gradient', 'linear-gradient(135deg, #111827 0%, #f59e0b 100%)');
+$bgGradient = $getConfig('style.bg_gradient', 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)');
 $bgImage = $getConfig('style.bg_image', '');
 $textColor = $getConfig('style.text_color', '#374151');
 $titleColor = $getConfig('style.title_color', '#111827');
-$accentColor = $getConfig('style.accent_color', '#f59e0b');
+$accentColor = $getConfig('style.accent_color', '#6366f1');
 
 // 计算背景样式
 $bgStyle = match($bgType) {

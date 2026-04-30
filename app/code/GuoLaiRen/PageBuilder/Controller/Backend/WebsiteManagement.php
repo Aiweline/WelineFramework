@@ -320,9 +320,7 @@ class WebsiteManagement extends BaseController
         // 获取域名池数据（按根域名分组）
         $domainPool = $this->objectManager->getInstance(\Weline\Websites\Model\DomainPool::class);
         $this->assign('domain_options', $domainPool->getSelectOptions());
-        // 与多入口新建站点共用 form.phtml：根域 + www 域名池内成对勾选
-        $this->assign('domain_select_bind_root_www', true);
-
+        
         return $this->fetch('form');
     }
 
@@ -561,8 +559,7 @@ class WebsiteManagement extends BaseController
         // 获取域名池数据（按根域名分组）
         $domainPool = $this->objectManager->getInstance(\Weline\Websites\Model\DomainPool::class);
         $this->assign('domain_options', $domainPool->getSelectOptions());
-        $this->assign('domain_select_bind_root_www', true);
-
+        
         return $this->fetch('form');
     }
 
