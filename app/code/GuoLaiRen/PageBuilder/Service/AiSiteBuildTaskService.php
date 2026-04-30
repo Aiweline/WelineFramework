@@ -6,11 +6,13 @@ namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractMetaBuilder;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractQaReportBuilder;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\LegacyContractAdapter;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\PermissionMatrix;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\QaGateHelper;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceContractHelper;
+use GuoLaiRen\PageBuilder\Service\AI\QA\RenderDataQualityLinter;
 
 class AiSiteBuildTaskService
 {
@@ -1824,13 +1826,31 @@ class AiSiteBuildTaskService
         ];
 
         $buildContracts = \is_array($scope['build_contracts'] ?? null) ? $scope['build_contracts'] : [];
+        $previousRenderDataContract = \is_array($buildContracts[ContractType::TYPE_RENDER_DATA] ?? null)
+            ? $buildContracts[ContractType::TYPE_RENDER_DATA]
+            : [];
+        $contentQualityFindings = (new RenderDataQualityLinter())->lint($contract);
+        $qaReportContract = (new ContractQaReportBuilder())->build(
+            [ContractType::TYPE_RENDER_DATA => $contract],
+            [
+                ContractType::TYPE_RENDER_DATA => [
+                    ContractType::TYPE_BLOCK_TASK_CONTRACT,
+                    ContractType::TYPE_BLOCK_PLAN,
+                ],
+            ],
+            $previousRenderDataContract !== [] ? [ContractType::TYPE_RENDER_DATA => $previousRenderDataContract] : [],
+            $contentQualityFindings
+        );
         $buildContracts[ContractType::TYPE_RENDER_DATA] = $contract;
+        $buildContracts[ContractType::TYPE_QA_REPORT] = $qaReportContract;
         $scope['build_contracts'] = $buildContracts;
         $scope['render_data_contract'] = $contract;
+        $scope['qa_report_contract'] = $qaReportContract;
 
         $buildWorkbench = \is_array($scope['build_workbench'] ?? null) ? $scope['build_workbench'] : [];
         $workbenchContracts = \is_array($buildWorkbench['contracts'] ?? null) ? $buildWorkbench['contracts'] : [];
         $workbenchContracts[ContractType::TYPE_RENDER_DATA] = $contract;
+        $workbenchContracts[ContractType::TYPE_QA_REPORT] = $qaReportContract;
         $scope['build_workbench'] = \array_replace($buildWorkbench, [
             'version' => 1,
             'contract_context' => $contractContext,
