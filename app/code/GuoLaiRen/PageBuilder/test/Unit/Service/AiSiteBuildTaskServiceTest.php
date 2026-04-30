@@ -1249,13 +1249,30 @@ class AiSiteBuildTaskServiceTest extends TestCase
             ],
             'page_type_layouts' => [
                 'home_page' => [
+                    'title' => 'Ready Home Page',
+                    'description' => 'Ready home page with trustworthy conversion copy for visitors.',
+                    'h1' => 'Ready Home Page',
                     'content' => [
-                        ['code' => 'content/home-page-hero', 'component' => 'content/home-page-hero'],
+                        [
+                            'code' => 'content/home-page-hero',
+                            'component' => 'content/home-page-hero',
+                            'title' => 'Ready Home Page',
+                            'description' => 'A concrete home section with visitor-facing proof and a direct action.',
+                            'design_tags' => [
+                                'visual' => ['trust band'],
+                                'motion' => ['subtle reveal'],
+                            ],
+                        ],
                     ],
                 ],
             ],
             'materialized_pages_by_type' => [
-                'home_page' => ['page_id' => 123],
+                'home_page' => [
+                    'page_id' => 123,
+                    'seo_title' => 'Ready Home Page Conversion Guide',
+                    'seo_description' => 'Ready home page content with trust proof, action copy, and a clear visitor path.',
+                    'h1' => 'Ready Home Page',
+                ],
             ],
             'asset_manifest' => [
                 'version' => 1,
@@ -1274,6 +1291,13 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertSame(ContractType::TYPE_BLOCK_TASK_CONTRACT, $contract['source_contracts'][0]['type'] ?? null);
         $this->assertSame($contract, $next['build_contracts'][ContractType::TYPE_RENDER_DATA] ?? null);
         $this->assertSame($contract, $next['build_workbench']['contracts'][ContractType::TYPE_RENDER_DATA] ?? null);
+
+        $qaReport = $next['qa_report_contract'] ?? [];
+        $this->assertSame(ContractType::TYPE_QA_REPORT, $qaReport['contract_meta']['type'] ?? null);
+        $this->assertSame('pass', $qaReport['payload']['status'] ?? null);
+        $this->assertSame(0, $qaReport['payload']['summary']['finding_count'] ?? null);
+        $this->assertSame($qaReport, $next['build_contracts'][ContractType::TYPE_QA_REPORT] ?? null);
+        $this->assertSame($qaReport, $next['build_workbench']['contracts'][ContractType::TYPE_QA_REPORT] ?? null);
     }
 
     public function testFinalizeBuildTaskStatesLeavesPendingWhenNoArtifact(): void
