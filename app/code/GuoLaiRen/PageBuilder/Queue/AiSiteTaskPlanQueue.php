@@ -415,15 +415,32 @@ class AiSiteTaskPlanQueue implements QueueInterface
             : (\is_array($content['mutation'] ?? null)
                 ? $content['mutation']
                 : (\is_array($details['mutation'] ?? null) ? $details['mutation'] : []));
+        $mutations = \is_array($request['mutations'] ?? null)
+            ? $request['mutations']
+            : (\is_array($content['mutations'] ?? null)
+                ? $content['mutations']
+                : (\is_array($details['mutations'] ?? null) ? $details['mutations'] : []));
         $promptMode = $this->firstNonEmptyString([$content['prompt_mode'] ?? null, $details['prompt_mode'] ?? null, $request['prompt_mode'] ?? null]);
         $action = $this->firstNonEmptyString([$content['action'] ?? null, $details['action'] ?? null, $mutation['action'] ?? null]);
         $taskKey = $this->firstNonEmptyString([$content['task_key'] ?? null, $details['task_key'] ?? null, $mutation['task_key'] ?? null, $request['task_key'] ?? null]);
+        $taskKeys = $this->normalizeStringList([
+            ...$this->normalizeStringList($content['task_keys'] ?? []),
+            ...$this->normalizeStringList($details['task_keys'] ?? []),
+            ...$this->normalizeStringList($request['task_keys'] ?? []),
+        ]);
         $targetScope = $this->firstNonEmptyString([$content['target_scope'] ?? null, $details['target_scope'] ?? null, $request['target_scope'] ?? null]);
+        $targetScopes = $this->normalizeStringList([
+            ...$this->normalizeStringList($content['target_scopes'] ?? []),
+            ...$this->normalizeStringList($details['target_scopes'] ?? []),
+            ...$this->normalizeStringList($request['target_scopes'] ?? []),
+        ]);
 
         return \in_array($promptMode, ['mutate_task_plan_task', 'refine_task_plan', 'rebuild_task_plan'], true)
             || $action !== ''
             || $taskKey !== ''
+            || $taskKeys !== []
             || $mutation !== []
+            || $mutations !== []
             || ($targetScope !== '' && $targetScope !== 'task_plan' && $targetScope !== 'full_task_plan');
     }
 
@@ -488,12 +505,28 @@ class AiSiteTaskPlanQueue implements QueueInterface
         $bucket = \strtolower($bucket) === 'shared' ? 'shared' : 'page';
         $pageType = $this->firstNonEmptyString([$content['page_type'] ?? null, $details['page_type'] ?? null, $mutation['page_type'] ?? null, $request['page_type'] ?? null]);
         $taskKey = $this->firstNonEmptyString([$content['task_key'] ?? null, $details['task_key'] ?? null, $mutation['task_key'] ?? null, $request['task_key'] ?? null]);
+        $taskKeys = $this->normalizeStringList([
+            ...$this->normalizeStringList($content['task_keys'] ?? []),
+            ...$this->normalizeStringList($details['task_keys'] ?? []),
+            ...$this->normalizeStringList($request['task_keys'] ?? []),
+            ...$this->normalizeStringList($mutation['task_keys'] ?? []),
+        ]);
+        if ($taskKey !== '' && !\in_array($taskKey, $taskKeys, true)) {
+            \array_unshift($taskKeys, $taskKey);
+        }
+        $targetScopes = $this->normalizeStringList([
+            ...$this->normalizeStringList($content['target_scopes'] ?? []),
+            ...$this->normalizeStringList($details['target_scopes'] ?? []),
+            ...$this->normalizeStringList($request['target_scopes'] ?? []),
+            ...$this->normalizeStringList($mutation['target_scopes'] ?? []),
+        ]);
         if ($mutation === [] && ($action !== '' || $taskKey !== '' || $pageType !== '')) {
             $mutation = [
                 'action' => $action,
                 'bucket' => $bucket,
                 'page_type' => $pageType,
                 'task_key' => $taskKey,
+                'task_keys' => $taskKeys,
                 'task_config' => $taskConfig,
             ];
         }
@@ -515,6 +548,9 @@ class AiSiteTaskPlanQueue implements QueueInterface
                 ? $taskKey
                 : ($bucket === 'shared' ? 'shared_tasks' : ($pageType !== '' ? 'page_tasks.' . $pageType : 'task_plan'));
         }
+        if ($targetScope !== '' && !\in_array($targetScope, $targetScopes, true)) {
+            \array_unshift($targetScopes, $targetScope);
+        }
         $roundValue = $this->firstNonEmptyString([$content['round'] ?? null, $details['round'] ?? null, $request['round'] ?? null]);
         $round = \max(1, (int)($roundValue !== '' ? $roundValue : ((int)($scope['virtual_theme_plan']['last_round'] ?? 0) + 1)));
         $instruction = $this->firstNonEmptyString([
@@ -528,13 +564,38 @@ class AiSiteTaskPlanQueue implements QueueInterface
             'prompt_mode' => $promptMode,
             'instruction' => $instruction,
             'target_scope' => $targetScope,
+            'target_scopes' => $targetScopes,
             'round' => $round,
+            'task_key' => $taskKey,
+            'task_keys' => $taskKeys,
         ]);
         if ($mutation !== []) {
             $request['mutation'] = $mutation;
         }
 
         return $request;
+    }
+
+    /**
+     * @param mixed $value
+     * @return list<string>
+     */
+    private function normalizeStringList(mixed $value): array
+    {
+        if (!\is_array($value)) {
+            return [];
+        }
+        $list = [];
+        foreach ($value as $item) {
+            if (!\is_scalar($item) && !(\is_object($item) && \method_exists($item, '__toString'))) {
+                continue;
+            }
+            $text = \trim((string)$item);
+            if ($text !== '' && !\in_array($text, $list, true)) {
+                $list[] = $text;
+            }
+        }
+        return $list;
     }
 
     /**

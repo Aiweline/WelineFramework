@@ -772,6 +772,7 @@ class AiSiteAgentWorkspaceStateHelperService
             'block_regenerate' => 'virtual_theme.block.regenerate',
             'block_partial_patch' => 'virtual_theme.block.partial_patch',
             'regenerate_page' => 'virtual_theme.page.regenerate',
+            'image_asset' => 'image.asset.generate',
             default => '',
         };
     }
