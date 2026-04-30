@@ -27,6 +27,13 @@
     var startTaskPlanUrl = <?= \json_encode($startTaskPlanUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var confirmTaskPlanUrl = <?= \json_encode($confirmTaskPlanUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var taskPlanSseUrl = <?= \json_encode($taskPlanSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var skillListUrl = <?= \json_encode((string)($skillListUrl ?? $this->getData('skillListUrl') ?? $this->getData('skill_list_url') ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var skillSaveUrl = <?= \json_encode((string)($skillSaveUrl ?? $this->getData('skillSaveUrl') ?? $this->getData('skill_save_url') ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var skillDisableUrl = <?= \json_encode((string)($skillDisableUrl ?? $this->getData('skillDisableUrl') ?? $this->getData('skill_disable_url') ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var initialSelectedSkillCodes = <?= \json_encode(\array_values(\array_filter(\array_map('strval', \is_array($scope['selected_skill_codes'] ?? null) ? $scope['selected_skill_codes'] : (\is_array($state['selected_skill_codes'] ?? null) ? $state['selected_skill_codes'] : (\is_array($state['scope']['selected_skill_codes'] ?? null) ? $state['scope']['selected_skill_codes'] : []))))), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var queueUiStateByStage = {};
+    var taskPlanSkillOverrideEnabled = false;
+    var taskPlanOverrideSkillCodes = [];
     var sortPlanBlocksUrl = <?= \json_encode((string)($sortPlanBlocksUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var mutatePlanBlockUrl = <?= \json_encode((string)($mutatePlanBlockUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var refinePlanPageUrl = <?= \json_encode((string)($refinePlanPageUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -673,6 +680,258 @@
         return false;
     }
 
+    function normalizeQueueUiStage(stage) {
+        var normalized = String(stage || '').trim().toLowerCase();
+        if (normalized === 'task' || normalized === 'task-plan' || normalized === 'task_plan') {
+            return 'task_plan';
+        }
+        if (normalized === 'build' || normalized === 'publish') {
+            return 'build';
+        }
+        return 'plan';
+    }
+
+    function queueUiOperationMatchesStage(stage, operation) {
+        var normalizedStage = normalizeQueueUiStage(stage);
+        var normalizedOperation = String(operation || '').trim().toLowerCase();
+        if (normalizedStage === 'task_plan') {
+            return normalizedOperation === 'task_plan' || normalizedOperation === 'task-plan';
+        }
+        if (normalizedStage === 'build') {
+            return normalizedOperation === 'build';
+        }
+        return normalizedOperation === 'plan' || normalizedOperation === 'phase_one_plan';
+    }
+
+    function normalizeQueueUiStateName(status, queueInfo) {
+        var normalized = normalizeQueueStatusForPrompt(status);
+        if (normalized === 'saving') {
+            return 'saving';
+        }
+        if (normalized === 'queued') {
+            return 'queued';
+        }
+        if (normalized === 'pending') {
+            return 'waiting';
+        }
+        if (normalized === 'running' || normalized === 'processing') {
+            return 'running';
+        }
+        if (normalized === 'done' || normalized === 'success' || normalized === 'finished' || normalized === 'complete' || normalized === 'completed') {
+            return 'completed';
+        }
+        if (normalized === 'error' || normalized === 'failed' || normalized === 'cancelled' || normalized === 'canceled' || normalized === 'stop') {
+            return 'failed';
+        }
+        if (queueInfo && typeof queueInfo === 'object' && !!queueInfo.queue_waiting_for_scheduler) {
+            return 'waiting';
+        }
+        return 'idle';
+    }
+
+    function isQueueUiStateBusy(stage) {
+        var state = queueUiStateByStage[normalizeQueueUiStage(stage)];
+        var name = state && typeof state === 'object' ? String(state.state || '') : '';
+        return ['saving', 'queued', 'waiting', 'running'].indexOf(name) !== -1;
+    }
+
+    function pickQueueInfoForUiState(stage, source) {
+        var normalizedStage = normalizeQueueUiStage(stage);
+        var payload = source && typeof source === 'object' ? source : {};
+        var nestedData = payload.data && typeof payload.data === 'object' ? payload.data : {};
+        var state = nestedData.scope || nestedData.active_operation || nestedData.plan_queue_info || nestedData.task_plan_queue_info || nestedData.build_queue_info
+            ? nestedData
+            : payload;
+        var key = normalizedStage === 'task_plan'
+            ? 'task_plan_queue_info'
+            : (normalizedStage === 'build' ? 'build_queue_info' : 'plan_queue_info');
+        if (state[key] && typeof state[key] === 'object') {
+            return state[key];
+        }
+        if (payload[key] && typeof payload[key] === 'object') {
+            return payload[key];
+        }
+        return {};
+    }
+
+    function readQueueUiId(stage, source, queueInfo) {
+        var normalizedStage = normalizeQueueUiStage(stage);
+        var payload = source && typeof source === 'object' ? source : {};
+        var snapshot = queueInfo && queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
+            ? queueInfo.snapshot
+            : {};
+        var activeCandidate = payload.active_operation && typeof payload.active_operation === 'object'
+            ? payload.active_operation
+            : {};
+        var active = queueUiOperationMatchesStage(normalizedStage, activeCandidate.operation) ? activeCandidate : {};
+        var nestedData = payload.data && typeof payload.data === 'object' ? payload.data : {};
+        var nestedActiveCandidate = nestedData.active_operation && typeof nestedData.active_operation === 'object'
+            ? nestedData.active_operation
+            : {};
+        var nestedActive = queueUiOperationMatchesStage(normalizedStage, nestedActiveCandidate.operation) ? nestedActiveCandidate : {};
+        var payloadOperation = String(payload.operation || '').trim();
+        var payloadMatchesStage = payloadOperation === '' || queueUiOperationMatchesStage(normalizedStage, payloadOperation);
+        var nestedOperation = String(nestedData.operation || '').trim();
+        var nestedMatchesStage = nestedOperation === '' || queueUiOperationMatchesStage(normalizedStage, nestedOperation);
+        return Number(
+            (payloadMatchesStage ? (payload.queue_id || payload.id) : 0)
+            || active.queue_id
+            || (nestedMatchesStage ? nestedData.queue_id : 0)
+            || nestedActive.queue_id
+            || queueInfo.queue_id
+            || queueInfo.id
+            || snapshot.queue_id
+            || snapshot.id
+            || 0
+        ) || 0;
+    }
+
+    function buildQueueUiState(stage, partial) {
+        var normalizedStage = normalizeQueueUiStage(stage);
+        var payload = partial && typeof partial === 'object' ? partial : {};
+        var queueInfo = pickQueueInfoForUiState(normalizedStage, payload);
+        var snapshot = queueInfo && queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
+            ? queueInfo.snapshot
+            : {};
+        var activeCandidate = payload.active_operation && typeof payload.active_operation === 'object'
+            ? payload.active_operation
+            : {};
+        var active = queueUiOperationMatchesStage(normalizedStage, activeCandidate.operation) ? activeCandidate : {};
+        var nestedData = payload.data && typeof payload.data === 'object' ? payload.data : {};
+        var nestedActiveCandidate = nestedData.active_operation && typeof nestedData.active_operation === 'object'
+            ? nestedData.active_operation
+            : {};
+        var nestedActive = queueUiOperationMatchesStage(normalizedStage, nestedActiveCandidate.operation) ? nestedActiveCandidate : {};
+        var payloadOperation = String(payload.operation || '').trim();
+        var payloadMatchesStage = payloadOperation === '' || queueUiOperationMatchesStage(normalizedStage, payloadOperation);
+        var nestedOperation = String(nestedData.operation || '').trim();
+        var nestedMatchesStage = nestedOperation === '' || queueUiOperationMatchesStage(normalizedStage, nestedOperation);
+        var status = (payloadMatchesStage ? (payload.status
+            || payload.queue_status
+            || payload.job_status) : '')
+            || active.status
+            || (nestedMatchesStage ? (nestedData.status
+                || nestedData.queue_status
+                || nestedData.job_status) : '')
+            || nestedActive.status
+            || snapshot.job_status
+            || snapshot.status
+            || snapshot.queue_status
+            || queueInfo.job_status
+            || queueInfo.status
+            || queueInfo.queue_status
+            || '';
+        var stateName = payload.state
+            ? normalizeQueueUiStateName(payload.state, queueInfo)
+            : normalizeQueueUiStateName(status, queueInfo);
+        var queueId = readQueueUiId(normalizedStage, payload, queueInfo);
+        var message = String(
+            (payloadMatchesStage ? (payload.message
+                || payload.text) : '')
+            || queueInfo.message
+            || queueInfo.error
+            || snapshot.message
+            || snapshot.error
+            || ''
+        ).trim();
+        return {
+            stage: normalizedStage,
+            state: stateName,
+            status: normalizeQueueStatusForPrompt(status || stateName),
+            queue_id: queueId,
+            message: message,
+            percent: Number(payload.percent || payload.progress_percent || snapshot.progress_percent || 0) || 0
+        };
+    }
+
+    function getQueueUiStageLabel(stage) {
+        var normalizedStage = normalizeQueueUiStage(stage);
+        if (normalizedStage === 'task_plan') {
+            return <?= \json_encode((string)__('第二阶段任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        }
+        if (normalizedStage === 'build') {
+            return <?= \json_encode((string)__('构建任务'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        }
+        return <?= \json_encode((string)__('第一阶段方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    }
+
+    function getQueueUiStateLabel(stateName) {
+        var normalized = String(stateName || '').trim();
+        var labels = {
+            idle: <?= \json_encode((string)__('空闲'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+            saving: <?= \json_encode((string)__('保存需求中'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+            queued: <?= \json_encode((string)__('已入队'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+            waiting: <?= \json_encode((string)__('等待调度'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+            running: <?= \json_encode((string)__('生成中'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+            failed: <?= \json_encode((string)__('失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+            completed: <?= \json_encode((string)__('已完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+        };
+        return labels[normalized] || normalized || labels.idle;
+    }
+
+    function buildQueueUiDetailText(queueState) {
+        var state = queueState && typeof queueState === 'object' ? queueState : {};
+        var parts = [getQueueUiStageLabel(state.stage) + '：' + getQueueUiStateLabel(state.state)];
+        if (state.queue_id > 0) {
+            parts.push('Queue #' + String(state.queue_id));
+        }
+        if (state.state === 'waiting' || state.state === 'queued') {
+            parts.push(<?= \json_encode((string)__('队列由后端调度器执行，通常 1 分钟内开始。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+        } else if (state.state === 'failed') {
+            parts.push(<?= \json_encode((string)__('失败后可使用重试入口继续，不要重复启动新任务。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+        }
+        if (state.message) {
+            parts.push(state.message);
+        }
+        return parts.join(' · ');
+    }
+
+    function renderQueueUiState(stage, partial, options) {
+        var opts = options && typeof options === 'object' ? options : {};
+        var queueState = buildQueueUiState(stage, partial);
+        queueUiStateByStage[queueState.stage] = queueState;
+        var detailText = buildQueueUiDetailText(queueState);
+        document.querySelectorAll('[data-pb-queue-state-detail="' + queueState.stage + '"]').forEach(function (el) {
+            el.textContent = detailText;
+            el.classList.toggle('text-danger', queueState.state === 'failed');
+            el.classList.toggle('text-muted', queueState.state !== 'failed');
+        });
+        if (opts.updateStatus === true) {
+            var statusEl = queueState.stage === 'task_plan'
+                ? document.getElementById('pb-ai-task-plan-status')
+                : (queueState.stage === 'build' ? document.getElementById('pb-ai-build-guard-detail') : document.getElementById('pb-ai-plan-status'));
+            if (statusEl && queueState.message) {
+                statusEl.textContent = queueState.message;
+                applyStatusTone(statusEl, queueState.message, queueState.state === 'failed' ? 'error' : '');
+            }
+        }
+        if (document.body && document.body.dataset) {
+            document.body.dataset.pbAiQueueStage = queueState.stage;
+            document.body.dataset.pbAiQueueState = queueState.state;
+        }
+        syncGenerationPrimaryActions();
+        return queueState;
+    }
+
+    function syncQueueUiStateFromWorkspace(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : getLatestWorkspaceStateForQueuePrompt();
+        ['plan', 'task_plan', 'build'].forEach(function (stage) {
+            renderQueueUiState(stage, state, { updateStatus: false });
+        });
+    }
+
+    function syncGenerationPrimaryActions() {
+        if (typeof applyRunVirtualThemeButtonsDisabledState === 'function') {
+            applyRunVirtualThemeButtonsDisabledState();
+        }
+        if (typeof syncTaskPlanRegenerateButtonVisibility === 'function') {
+            syncTaskPlanRegenerateButtonVisibility();
+        }
+        if (typeof syncTaskPlanBuildButtonState === 'function') {
+            syncTaskPlanBuildButtonState();
+        }
+    }
+
     function countRetryableAiFailureBucket(bucket) {
         if (!bucket) {
             return 0;
@@ -1117,7 +1376,8 @@
         return !!buildStartupPending
             || isThemeBuildGenerationRunning()
             || hasBuildQueueRunningForUi(workspaceState)
-            || hasAnyRunningQueueForUi();
+            || hasAnyRunningQueueForUi()
+            || isQueueUiStateBusy('build');
     }
 
     function getActiveOperationForPublishRepairState() {
@@ -1217,7 +1477,7 @@
 
     function applyRunVirtualThemeButtonsDisabledState() {
         var domainLocked = !isTargetDomainRequiredForPlanActionSatisfied();
-        var queueLocked = isPhaseOneQueueUnfinished();
+        var queueLocked = isPhaseOneQueueUnfinished() || isQueueUiStateBusy('plan');
         var retryableLocked = hasRetryableAiFailures(null, 'plan') || hasRetryableAiFailures(null, 'task_plan');
         getRunVirtualThemeButtons().forEach(function (b) {
             b.disabled = planGenerationActionLockActive || globalRunVirtualThemeDisabled || domainLocked || queueLocked || retryableLocked;
@@ -1502,6 +1762,7 @@
             // 忽略：仅用于队列面板复用最近工作区状态。
         }
         // 用后端/持久化返回的状态填充工作区：页面、方案、任务计划、SSE 地址与按钮状态等。
+        syncQueueUiStateFromWorkspace(workspaceState);
         syncRetryableAiFailureActionGuards(workspaceState);
         if (workspaceState.task_plan_stage_entry && typeof workspaceState.task_plan_stage_entry === 'object') {
             taskPlanStageEntryDecision = workspaceState.task_plan_stage_entry;
@@ -1962,7 +2223,7 @@
     window.updatePlanModalContent = function (markdown) {
         return updatePlanModalContent(markdown);
     };
-    
+
     function mergeVirtualPagesByTypeState(pages) {
         if (!pages || typeof pages !== 'object') {
             return;
@@ -2620,6 +2881,8 @@
         var messageEl = document.getElementById('pb-ai-build-guard-message');
         var detailEl = document.getElementById('pb-ai-build-guard-detail');
         var progressBar = document.getElementById('pb-ai-build-guard-progress-bar');
+        var percent = parseInt(progressPercent || 0, 10) || 0;
+        var boundedPercent = Math.min(100, Math.max(0, percent));
         if (messageEl) {
             messageEl.textContent = String(message || '');
         }
@@ -2627,9 +2890,13 @@
             detailEl.textContent = String(detail || '');
         }
         if (progressBar) {
-            var percent = parseInt(progressPercent || 0, 10) || 0;
-            progressBar.style.width = Math.min(100, Math.max(0, percent)) + '%';
+            progressBar.style.width = boundedPercent + '%';
         }
+        renderQueueUiState('build', {
+            state: boundedPercent >= 100 ? 'completed' : (boundedPercent > 0 ? 'running' : 'queued'),
+            message: String(detail || message || ''),
+            percent: boundedPercent
+        }, { updateStatus: false });
     }
 
     function resetBuildGuardProgress() {
@@ -2637,6 +2904,7 @@
         if (progressBar) {
             progressBar.style.width = '0%';
         }
+        renderQueueUiState('build', { state: 'idle', message: '', percent: 0 }, { updateStatus: false });
     }
 
     function hideBuildGuard() {
@@ -4152,6 +4420,75 @@
         });
         return ensureRequiredPageTypeSelected(out);
     }
+
+    function normalizeSkillCodes(values) {
+        var seen = Object.create(null);
+        var out = [];
+        (Array.isArray(values) ? values : []).forEach(function (value) {
+            var code = String(value || '').trim();
+            if (!code || seen[code]) {
+                return;
+            }
+            seen[code] = true;
+            out.push(code);
+        });
+        return out;
+    }
+
+    var needsFormSkillOptions = [];
+    var needsFormSelectedSkillCodes = normalizeSkillCodes(initialSelectedSkillCodes);
+
+    function readNeedsFormDomState(selectedTypesOverride) {
+        var fb = guidedScopeDefaults();
+        var titleEl = document.getElementById('pb-ai-site-title');
+        var taglineEl = document.getElementById('pb-ai-site-tagline');
+        var briefEl = document.getElementById('pb-ai-brief-description');
+        var rawDomain = getTargetDomainTrimmed();
+        var domainVal = rawDomain !== '' ? rawDomain.toLowerCase() : '';
+        var fbDomain = typeof fb.target_domain === 'string' ? String(fb.target_domain).trim().toLowerCase() : '';
+        var localeVal = getPrimaryDefaultLocaleValue();
+        var planLocaleVal = getPrimaryPlanLocaleValue();
+        var pageTypes = Array.isArray(selectedTypesOverride) && selectedTypesOverride.length
+            ? ensureRequiredPageTypeSelected(selectedTypesOverride)
+            : selectedPageTypes();
+        return {
+            site_title: titleEl ? titleEl.value : (fb.site_title || ''),
+            site_tagline: taglineEl ? taglineEl.value : (fb.site_tagline || ''),
+            target_domain: domainVal !== '' ? domainVal : fbDomain,
+            default_locale: localeVal !== '' ? localeVal : (fb.default_locale || ''),
+            plan_locale: planLocaleVal,
+            brief_description: briefEl ? briefEl.value : (fb.brief_description || ''),
+            user_description: briefEl ? briefEl.value : (fb.brief_description || ''),
+            page_types: pageTypes,
+            selected_skill_codes: normalizeSkillCodes(needsFormSelectedSkillCodes)
+        };
+    }
+
+    function serializeNeedsFormState(selectedTypesOverride) {
+        var extraPanelEl = document.getElementById('pb-guided-extra-types-panel');
+        var state = readNeedsFormDomState(selectedTypesOverride);
+        state.page_types_user_customized = (pageTypesUserCustomized || pageTypesSelectionLocallyCustomized) ? 1 : 0;
+        state.extra_page_types_panel_open = extraPanelEl ? (extraPanelEl.classList.contains('open') ? 1 : 0) : 1;
+        state.site_profile_manual = Object.assign({}, siteProfileManual);
+        return state;
+    }
+
+    function setNeedsFormSelectedSkillCodes(codes) {
+        needsFormSelectedSkillCodes = normalizeSkillCodes(codes);
+        renderNeedsFormSkillSelection();
+        renderGenerationSkillSummaries();
+    }
+
+    function getNeedsFormSelectedSkillCodes() {
+        return normalizeSkillCodes(needsFormSelectedSkillCodes);
+    }
+
+    window.PbAiNeedsFormState = {
+        read: readNeedsFormDomState,
+        serialize: serializeNeedsFormState,
+        setSelectedSkillCodes: setNeedsFormSelectedSkillCodes,
+        getSelectedSkillCodes: getNeedsFormSelectedSkillCodes
+    };
     workspaceApi.ensureRequiredPageTypeSelected = ensureRequiredPageTypeSelected;
     workspaceApi.selectedPageTypes = selectedPageTypes;
     workspaceApi.getTaskAlwaysVisiblePageTypeMap = function () {
@@ -4295,11 +4632,13 @@
             plan_locale: typeof scope.plan_locale === 'string' && String(scope.plan_locale).trim() !== ''
                 ? scope.plan_locale
                 : (scope.default_language || ''),
+            selected_skill_codes: Array.isArray(scope.selected_skill_codes) ? normalizeSkillCodes(scope.selected_skill_codes) : getNeedsFormSelectedSkillCodes(),
             site_profile_manual: scope.site_profile_manual && typeof scope.site_profile_manual === 'object'
                 ? scope.site_profile_manual
                 : {}
         };
         patchGuidedScopeDefaults(patch);
+        setNeedsFormSelectedSkillCodes(patch.selected_skill_codes);
         siteProfileManual = normalizeSiteProfileManual(patch.site_profile_manual || {});
         hydrateGuidedProfileInputs();
     }
@@ -4360,34 +4699,489 @@
     }
 
     function buildVirtualThemePatch(selectedTypesOverride) {
-        var fb = guidedScopeDefaults();
-        var pageTypes = Array.isArray(selectedTypesOverride) && selectedTypesOverride.length
-            ? ensureRequiredPageTypeSelected(selectedTypesOverride)
-            : selectedPageTypes();
-        var titleEl = document.getElementById('pb-ai-site-title');
-        var taglineEl = document.getElementById('pb-ai-site-tagline');
-        var briefEl = document.getElementById('pb-ai-brief-description');
-        var rawDomain = getTargetDomainTrimmed();
-        var domainVal = rawDomain !== '' ? rawDomain.toLowerCase() : '';
-        var fbDomain = typeof fb.target_domain === 'string' ? String(fb.target_domain).trim().toLowerCase() : '';
-        var localeVal = getPrimaryDefaultLocaleValue();
-        var planLocaleVal = getPrimaryPlanLocaleValue();
-        var extraPanelEl = document.getElementById('pb-guided-extra-types-panel');
-        var extraPageTypesPanelOpen = 1;
-        var patch = {
-            site_title: titleEl ? titleEl.value : (fb.site_title || ''),
-            site_tagline: taglineEl ? taglineEl.value : (fb.site_tagline || ''),
-            target_domain: domainVal !== '' ? domainVal : fbDomain,
-            default_locale: localeVal !== '' ? localeVal : (fb.default_locale || ''),
-            plan_locale: planLocaleVal,
-            brief_description: briefEl ? briefEl.value : (fb.brief_description || ''),
-            user_description: briefEl ? briefEl.value : (fb.brief_description || ''),
-            page_types: pageTypes,
-            page_types_user_customized: (pageTypesUserCustomized || pageTypesSelectionLocallyCustomized) ? 1 : 0,
-            extra_page_types_panel_open: extraPageTypesPanelOpen,
-            site_profile_manual: Object.assign({}, siteProfileManual)
+        return serializeNeedsFormState(selectedTypesOverride);
+    }
+
+    function normalizeSkillOption(raw) {
+        if (!raw || typeof raw !== 'object') {
+            return null;
+        }
+        var code = String(raw.code || raw.skill_code || raw.value || raw.key || '').trim();
+        if (!code) {
+            return null;
+        }
+        var label = String(raw.label || raw.name || raw.title || code).trim() || code;
+        var disabled = raw.disabled === true
+            || raw.is_disabled === true
+            || raw.enabled === false
+            || String(raw.status || '').toLowerCase() === 'disabled';
+        return {
+            code: code,
+            label: label,
+            description: String(raw.description || '').trim(),
+            source: String(raw.source || '').trim(),
+            readonly: raw.readonly === true || String(raw.source || '').trim() !== 'custom_db',
+            disabled: disabled
         };
-        return patch;
+    }
+
+    function normalizeSkillListPayload(payload) {
+        var list = [];
+        if (Array.isArray(payload)) {
+            list = payload;
+        } else if (payload && typeof payload === 'object') {
+            if (Array.isArray(payload.skills)) {
+                list = payload.skills;
+            } else if (Array.isArray(payload.items)) {
+                list = payload.items;
+            } else if (payload.data && typeof payload.data === 'object') {
+                if (Array.isArray(payload.data.skills)) {
+                    list = payload.data.skills;
+                } else if (Array.isArray(payload.data.items)) {
+                    list = payload.data.items;
+                } else if (Array.isArray(payload.data.list)) {
+                    list = payload.data.list;
+                }
+            }
+        }
+        return list.map(normalizeSkillOption).filter(function (item) { return !!item; });
+    }
+
+    function getSkillOptionByCode(code) {
+        var normalized = String(code || '').trim();
+        for (var i = 0; i < needsFormSkillOptions.length; i += 1) {
+            if (String(needsFormSkillOptions[i].code || '') === normalized) {
+                return needsFormSkillOptions[i];
+            }
+        }
+        return null;
+    }
+
+    function getSkillLabelByCode(code) {
+        var option = getSkillOptionByCode(code);
+        return option ? option.label : String(code || '').trim();
+    }
+
+    function renderSkillCodeChips(container, codes, emptyText, tone) {
+        if (!container) {
+            return;
+        }
+        var normalizedCodes = normalizeSkillCodes(codes);
+        container.innerHTML = '';
+        if (normalizedCodes.length === 0) {
+            var empty = document.createElement('span');
+            empty.className = 'small text-muted';
+            empty.textContent = String(emptyText || <?= \json_encode((string)__('使用默认技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+            container.appendChild(empty);
+            return;
+        }
+        normalizedCodes.forEach(function (code) {
+            var option = getSkillOptionByCode(code);
+            var chip = document.createElement('span');
+            chip.className = 'badge rounded-pill ' + (tone || (!option || option.disabled ? 'text-bg-warning' : 'text-bg-primary'));
+            chip.textContent = getSkillLabelByCode(code);
+            container.appendChild(chip);
+        });
+    }
+
+    function summarizeSkillCodesForText(codes) {
+        var labels = normalizeSkillCodes(codes).map(getSkillLabelByCode).filter(function (label) {
+            return String(label || '').trim() !== '';
+        });
+        if (labels.length === 0) {
+            return <?= \json_encode((string)__('默认技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        }
+        if (labels.length <= 3) {
+            return labels.join(' / ');
+        }
+        return labels.slice(0, 3).join(' / ') + <?= \json_encode((string)__(' 等'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + String(labels.length) + <?= \json_encode((string)__(' 个技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    }
+
+    function getTaskPlanInheritedSkillCodes() {
+        return getNeedsFormSelectedSkillCodes();
+    }
+
+    function getTaskPlanEffectiveSkillCodes() {
+        return taskPlanSkillOverrideEnabled
+            ? normalizeSkillCodes(taskPlanOverrideSkillCodes)
+            : getTaskPlanInheritedSkillCodes();
+    }
+
+    function renderGenerationSkillSummaries() {
+        var planSummary = <?= \json_encode((string)__('本次第一阶段生成将使用：%{skills}'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+            .replace('%{skills}', summarizeSkillCodesForText(getNeedsFormSelectedSkillCodes()));
+        document.querySelectorAll('[data-pb-skill-summary-stage="plan"]').forEach(function (el) {
+            el.textContent = planSummary;
+        });
+
+        var taskModeText = taskPlanSkillOverrideEnabled
+            ? <?= \json_encode((string)__('本次第二阶段将显式覆盖技能：%{skills}'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+            : <?= \json_encode((string)__('第二阶段默认继承第一阶段技能：%{skills}'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        var taskSummary = taskModeText.replace('%{skills}', summarizeSkillCodesForText(getTaskPlanEffectiveSkillCodes()));
+        document.querySelectorAll('[data-pb-skill-summary-stage="task_plan"]').forEach(function (el) {
+            el.textContent = taskSummary;
+            el.classList.toggle('text-warning', taskPlanSkillOverrideEnabled);
+            el.classList.toggle('text-muted', !taskPlanSkillOverrideEnabled);
+        });
+        renderTaskPlanSkillOverrideUi();
+    }
+
+    function validateSkillCodesForGeneration(codes, message) {
+        var selectedCodes = normalizeSkillCodes(codes);
+        if (selectedCodes.length === 0 || !String(skillListUrl || '').trim()) {
+            return true;
+        }
+        for (var i = 0; i < selectedCodes.length; i += 1) {
+            var option = getSkillOptionByCode(selectedCodes[i]);
+            if (!option) {
+                toast('warning', message || <?= \json_encode((string)__('已选择的技能不存在，请重新选择后再生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+                return false;
+            }
+            if (option.disabled) {
+                toast('warning', <?= \json_encode((string)__('已选择的技能已停用，请移除后再生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function renderTaskPlanSkillOverrideUi() {
+        var panel = document.getElementById('pb-ai-task-plan-skill-override-panel');
+        if (!panel) {
+            return;
+        }
+        renderSkillCodeChips(
+            document.getElementById('pb-ai-task-plan-inherited-skill-list'),
+            getTaskPlanInheritedSkillCodes(),
+            <?= \json_encode((string)__('继承默认技能'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+            'text-bg-secondary'
+        );
+        var toggle = document.getElementById('pb-ai-task-plan-skill-override-enabled');
+        if (toggle) {
+            toggle.checked = taskPlanSkillOverrideEnabled;
+        }
+        var optionWrap = document.getElementById('pb-ai-task-plan-skill-override-options');
+        if (optionWrap) {
+            optionWrap.classList.toggle('d-none', !taskPlanSkillOverrideEnabled);
+        }
+        var status = document.getElementById('pb-ai-task-plan-skill-override-status');
+        if (status) {
+            status.textContent = taskPlanSkillOverrideEnabled
+                ? <?= \json_encode((string)__('已启用覆盖：只影响第二阶段任务合同，不会回写第一阶段需求。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+                : <?= \json_encode((string)__('未启用覆盖时，第二阶段会继承第一阶段已确认技能。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            status.classList.toggle('text-warning', taskPlanSkillOverrideEnabled);
+            status.classList.toggle('text-muted', !taskPlanSkillOverrideEnabled);
+        }
+        var optionList = document.getElementById('pb-ai-task-plan-skill-override-list');
+        if (!optionList) {
+            return;
+        }
+        var selectedCodes = normalizeSkillCodes(taskPlanOverrideSkillCodes);
+        optionList.innerHTML = '';
+        needsFormSkillOptions.forEach(function (option) {
+            var id = 'pb-ai-task-plan-skill-override-' + option.code.replace(/[^a-zA-Z0-9_-]/g, '-');
+            var label = document.createElement('label');
+            label.className = 'form-check-label border rounded-pill px-3 py-2 mb-0 ' + (selectedCodes.indexOf(option.code) !== -1 ? 'bg-warning-subtle border-warning' : 'bg-white');
+            label.style.cursor = option.disabled ? 'not-allowed' : 'pointer';
+            var input = document.createElement('input');
+            input.type = 'checkbox';
+            input.className = 'form-check-input me-2 pb-ai-task-plan-skill-override-check';
+            input.id = id;
+            input.value = option.code;
+            input.checked = selectedCodes.indexOf(option.code) !== -1;
+            input.disabled = !!option.disabled;
+            var text = document.createElement('span');
+            text.textContent = option.label + (option.disabled ? <?= \json_encode((string)__('（已停用）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> : '');
+            label.appendChild(input);
+            label.appendChild(text);
+            optionList.appendChild(label);
+        });
+        if (needsFormSkillOptions.length === 0) {
+            var empty = document.createElement('span');
+            empty.className = 'small text-muted';
+            empty.textContent = <?= \json_encode((string)__('暂无可覆盖技能。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            optionList.appendChild(empty);
+        }
+    }
+
+    function initTaskPlanSkillOverride() {
+        var panel = document.getElementById('pb-ai-task-plan-skill-override-panel');
+        if (!panel || panel.dataset.pbBound === '1') {
+            renderTaskPlanSkillOverrideUi();
+            return;
+        }
+        panel.dataset.pbBound = '1';
+        panel.addEventListener('change', function (event) {
+            var toggle = event.target && event.target.closest ? event.target.closest('#pb-ai-task-plan-skill-override-enabled') : null;
+            if (toggle) {
+                taskPlanSkillOverrideEnabled = !!toggle.checked;
+                if (taskPlanSkillOverrideEnabled && normalizeSkillCodes(taskPlanOverrideSkillCodes).length === 0) {
+                    taskPlanOverrideSkillCodes = getTaskPlanInheritedSkillCodes();
+                }
+                renderGenerationSkillSummaries();
+                return;
+            }
+            var input = event.target && event.target.closest ? event.target.closest('.pb-ai-task-plan-skill-override-check') : null;
+            if (!input) {
+                return;
+            }
+            var current = normalizeSkillCodes(taskPlanOverrideSkillCodes);
+            var code = String(input.value || '').trim();
+            if (input.checked && current.indexOf(code) === -1) {
+                current.push(code);
+            }
+            if (!input.checked) {
+                current = current.filter(function (item) { return item !== code; });
+            }
+            taskPlanOverrideSkillCodes = current;
+            renderGenerationSkillSummaries();
+        });
+        renderTaskPlanSkillOverrideUi();
+    }
+
+    function setSkillStatusText(text) {
+        var status = document.getElementById('pb-ai-skill-select-status');
+        if (status) {
+            status.textContent = String(text || '');
+        }
+    }
+
+    function renderNeedsFormSkillSelection() {
+        var chipList = document.getElementById('pb-ai-skill-chip-list');
+        var optionList = document.getElementById('pb-ai-skill-option-list');
+        if (!chipList || !optionList) {
+            return;
+        }
+        var selectedCodes = getNeedsFormSelectedSkillCodes();
+        chipList.innerHTML = '';
+        selectedCodes.forEach(function (code) {
+            var option = getSkillOptionByCode(code);
+            var chip = document.createElement('span');
+            chip.className = 'badge rounded-pill ' + (!option || option.disabled ? 'text-bg-warning' : 'text-bg-primary');
+            chip.textContent = option ? option.label : code;
+            chip.setAttribute('data-skill-chip', code);
+            chipList.appendChild(chip);
+        });
+        if (selectedCodes.length === 0) {
+            var empty = document.createElement('span');
+            empty.className = 'small text-muted';
+            empty.textContent = '使用默认技能';
+            chipList.appendChild(empty);
+        }
+
+        optionList.innerHTML = '';
+        needsFormSkillOptions.forEach(function (option) {
+            var id = 'pb-ai-skill-option-' + option.code.replace(/[^a-zA-Z0-9_-]/g, '-');
+            var label = document.createElement('label');
+            label.className = 'form-check-label border rounded-pill px-3 py-2 mb-0 ' + (selectedCodes.indexOf(option.code) !== -1 ? 'bg-primary text-white' : 'bg-white');
+            label.style.cursor = option.disabled ? 'not-allowed' : 'pointer';
+            var input = document.createElement('input');
+            input.type = 'checkbox';
+            input.className = 'form-check-input me-2 pb-ai-skill-check';
+            input.id = id;
+            input.value = option.code;
+            input.checked = selectedCodes.indexOf(option.code) !== -1;
+            input.disabled = !!option.disabled;
+            var text = document.createElement('span');
+            text.textContent = option.label + (option.disabled ? '（已停用）' : '');
+            label.appendChild(input);
+            label.appendChild(text);
+            optionList.appendChild(label);
+        });
+        if (needsFormSkillOptions.length === 0) {
+            optionList.classList.add('d-none');
+        } else {
+            optionList.classList.remove('d-none');
+        }
+        renderGenerationSkillSummaries();
+    }
+
+    function validateSelectedSkillsForGeneration() {
+        return validateSkillCodesForGeneration(
+            getNeedsFormSelectedSkillCodes(),
+            <?= \json_encode((string)__('已选择的技能不存在，请重新选择后再生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+        );
+    }
+
+    function validateTaskPlanSkillOverrideForGeneration() {
+        if (!taskPlanSkillOverrideEnabled) {
+            return true;
+        }
+        return validateSkillCodesForGeneration(
+            getTaskPlanEffectiveSkillCodes(),
+            <?= \json_encode((string)__('第二阶段覆盖技能不存在，请重新选择后再生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+        );
+    }
+
+    function setSkillManagerStatus(text, mode) {
+        var status = document.getElementById('pb-ai-skill-manager-status');
+        if (!status) {
+            return;
+        }
+        status.textContent = String(text || '');
+        status.classList.remove('text-danger', 'text-success', 'text-muted');
+        status.classList.add(mode === 'error' ? 'text-danger' : (mode === 'success' ? 'text-success' : 'text-muted'));
+    }
+
+    function mergeSkillOption(option) {
+        if (!option || !option.code) {
+            return;
+        }
+        var replaced = false;
+        needsFormSkillOptions = needsFormSkillOptions.map(function (item) {
+            if (String(item.code || '') === option.code) {
+                replaced = true;
+                return option;
+            }
+            return item;
+        });
+        if (!replaced) {
+            needsFormSkillOptions.push(option);
+        }
+        needsFormSkillOptions.sort(function (a, b) {
+            return String(a.code || '').localeCompare(String(b.code || ''));
+        });
+    }
+
+    function loadNeedsFormSkills() {
+        if (!String(skillListUrl || '').trim()) {
+            setSkillStatusText('未配置技能列表，保留默认生成行为');
+            return Promise.resolve([]);
+        }
+        setSkillStatusText('正在加载技能...');
+        return fetch(skillListUrl, {
+            method: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        }).then(function (response) {
+            if (!response.ok) {
+                throw new Error(String(response.status || ''));
+            }
+            return response.json();
+        }).then(function (payload) {
+            needsFormSkillOptions = normalizeSkillListPayload(payload);
+            renderNeedsFormSkillSelection();
+            setSkillStatusText(needsFormSkillOptions.length > 0 ? '可选择一个或多个技能' : '暂无可选技能，保留默认生成行为');
+            return needsFormSkillOptions;
+        }).catch(function () {
+            needsFormSkillOptions = [];
+            renderNeedsFormSkillSelection();
+            setSkillStatusText('技能列表暂不可用，保留默认生成行为');
+            return [];
+        });
+    }
+
+    function resetSkillManagerForm() {
+        ['pb-ai-skill-code', 'pb-ai-skill-name', 'pb-ai-skill-description', 'pb-ai-skill-body'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) {
+                el.value = '';
+            }
+        });
+        setSkillManagerStatus('', 'muted');
+    }
+
+    function saveCustomSkillFromForm() {
+        if (!String(skillSaveUrl || '').trim()) {
+            setSkillManagerStatus('未配置技能保存接口', 'error');
+            return;
+        }
+        var codeEl = document.getElementById('pb-ai-skill-code');
+        var nameEl = document.getElementById('pb-ai-skill-name');
+        var descriptionEl = document.getElementById('pb-ai-skill-description');
+        var bodyEl = document.getElementById('pb-ai-skill-body');
+        var code = codeEl ? String(codeEl.value || '').trim() : '';
+        var name = nameEl ? String(nameEl.value || '').trim() : '';
+        var body = bodyEl ? String(bodyEl.value || '').trim() : '';
+        if (!code || !name || !body) {
+            setSkillManagerStatus('请填写技能编码、名称和规则', 'error');
+            return;
+        }
+        setSkillManagerStatus('正在保存技能...', 'muted');
+        postForm(skillSaveUrl, {
+            code: code,
+            name: name,
+            description: descriptionEl ? String(descriptionEl.value || '').trim() : '',
+            body: body,
+            status: 'active'
+        }).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error(String((payload && payload.message) || '保存技能失败'));
+            }
+            var option = normalizeSkillOption(payload.item || payload.skill || {});
+            if (option) {
+                mergeSkillOption(option);
+                setNeedsFormSelectedSkillCodes(getNeedsFormSelectedSkillCodes().concat([option.code]));
+                autoSaveScope();
+            }
+            renderNeedsFormSkillSelection();
+            resetSkillManagerForm();
+            setSkillManagerStatus('已保存并选择技能', 'success');
+        }).catch(function (error) {
+            setSkillManagerStatus(error && error.message ? error.message : '保存技能失败', 'error');
+        });
+    }
+
+    function initNeedsFormSkillManager(panel) {
+        var toggle = document.getElementById('pb-ai-skill-create-toggle');
+        var manager = document.getElementById('pb-ai-skill-manager-panel');
+        var saveBtn = document.getElementById('pb-ai-skill-save-btn');
+        var cancelBtn = document.getElementById('pb-ai-skill-cancel-btn');
+        if (!panel || !toggle || !manager) {
+            return;
+        }
+        if (!String(skillSaveUrl || '').trim()) {
+            toggle.classList.add('d-none');
+            return;
+        }
+        toggle.addEventListener('click', function () {
+            manager.classList.toggle('d-none');
+            if (!manager.classList.contains('d-none')) {
+                var codeEl = document.getElementById('pb-ai-skill-code');
+                if (codeEl && typeof codeEl.focus === 'function') {
+                    codeEl.focus();
+                }
+            }
+        });
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', function () {
+                resetSkillManagerForm();
+                manager.classList.add('d-none');
+            });
+        }
+        if (saveBtn) {
+            saveBtn.addEventListener('click', saveCustomSkillFromForm);
+        }
+    }
+
+    function initNeedsFormSkillSelect() {
+        var panel = document.getElementById('pb-ai-skill-select-panel');
+        if (!panel) {
+            initTaskPlanSkillOverride();
+            renderGenerationSkillSummaries();
+            return;
+        }
+        renderNeedsFormSkillSelection();
+        initNeedsFormSkillManager(panel);
+        initTaskPlanSkillOverride();
+        renderGenerationSkillSummaries();
+        panel.addEventListener('change', function (event) {
+            var input = event.target && event.target.closest ? event.target.closest('.pb-ai-skill-check') : null;
+            if (!input) {
+                return;
+            }
+            var current = getNeedsFormSelectedSkillCodes();
+            var code = String(input.value || '').trim();
+            if (input.checked && current.indexOf(code) === -1) {
+                current.push(code);
+            }
+            if (!input.checked) {
+                current = current.filter(function (item) { return item !== code; });
+            }
+            setNeedsFormSelectedSkillCodes(current);
+            autoSaveScope();
+        });
+        loadNeedsFormSkills();
     }
 
     function validateVirtualThemeInputs() {
@@ -4415,6 +5209,9 @@
             if (briefEl && typeof briefEl.focus === 'function') {
                 briefEl.focus();
             }
+            return false;
+        }
+        if (!validateSelectedSkillsForGeneration()) {
             return false;
         }
 
@@ -4573,6 +5370,66 @@
         };
     }
 
+    var needsFormAutoSaveInFlight = false;
+    var needsFormPendingScopePatch = null;
+    var needsFormLastSavePayloadKey = '';
+    var needsFormBaseSaveHint = '';
+
+    function setNeedsFormSaveStatus(status) {
+        var hint = document.querySelector('.pb-ai-primary-action-hint');
+        if (!hint) {
+            return;
+        }
+        if (needsFormBaseSaveHint === '') {
+            needsFormBaseSaveHint = String(hint.textContent || '');
+        }
+        if (status === 'saving') {
+            hint.textContent = '正在保存需求...';
+        } else if (status === 'saved') {
+            hint.textContent = '需求已保存。';
+        } else if (status === 'failed') {
+            hint.textContent = messages.saveFailed || '自动保存失败';
+        } else {
+            hint.textContent = needsFormBaseSaveHint;
+        }
+    }
+
+    function postNeedsFormScopePatch(scopePatch) {
+        var payloadKey = JSON.stringify(scopePatch || {});
+        if (needsFormAutoSaveInFlight) {
+            if (payloadKey !== needsFormLastSavePayloadKey) {
+                needsFormPendingScopePatch = scopePatch;
+            }
+            return;
+        }
+        needsFormAutoSaveInFlight = true;
+        needsFormLastSavePayloadKey = payloadKey;
+        setNeedsFormSaveStatus('saving');
+        postJson(mergeScopeUrl, { public_id: publicId, autosave: '1', scope_patch: scopePatch }).then(function (data) {
+            if (!data || !data.success) {
+                setNeedsFormSaveStatus('failed');
+                toast('error', (data && data.message) ? String(data.message) : messages.saveFailed);
+                return;
+            }
+            setNeedsFormSaveStatus('saved');
+            if (data.data && typeof data.data === 'object') {
+                syncWorkspacePageTypeState(data.data);
+                hydrateWorkspaceFromState(data.data);
+            }
+        }).catch(function (err) {
+            console.error('Auto-save error:', err);
+            setNeedsFormSaveStatus('failed');
+            toast('error', typeof err === 'object' && err.message ? String(err.message) : messages.networkError);
+        }).finally(function () {
+            var pending = needsFormPendingScopePatch;
+            needsFormPendingScopePatch = null;
+            needsFormAutoSaveInFlight = false;
+            if (pending && JSON.stringify(pending || {}) !== needsFormLastSavePayloadKey) {
+                postNeedsFormScopePatch(pending);
+            }
+        });
+    }
+
     var autoSaveScope = debounce(function () {
         if (!mergeScopeUrl || !publicId) {
             console.warn('Auto-save skipped: missing mergeScopeUrl or publicId', { mergeScopeUrl, publicId });
@@ -4580,21 +5437,10 @@
         }
         try {
             var scopePatch = buildVirtualThemePatch();
-            postJson(mergeScopeUrl, { public_id: publicId, autosave: '1', scope_patch: scopePatch }).then(function (data) {
-                if (!data || !data.success) {
-                    toast('error', (data && data.message) ? String(data.message) : messages.saveFailed);
-                    return;
-                }
-                if (data.data && typeof data.data === 'object') {
-                    syncWorkspacePageTypeState(data.data);
-                    hydrateWorkspaceFromState(data.data);
-                }
-            }).catch(function (err) {
-                console.error('Auto-save error:', err);
-                toast('error', typeof err === 'object' && err.message ? String(err.message) : messages.networkError);
-            });
+            postNeedsFormScopePatch(scopePatch);
         } catch (err) {
             console.error('Auto-save scope construction error:', err);
+            setNeedsFormSaveStatus('failed');
             toast('error', messages.networkError);
         }
     }, 500);
@@ -7746,6 +8592,7 @@
         });
     });
     hydrateGuidedProfileInputs();
+    initNeedsFormSkillSelect();
     syncDomPageTypeChecks(selectedPageTypes());
     if (typeof window.applyTaskSummarySelectionFilter === 'function') {
         window.applyTaskSummarySelectionFilter();
@@ -11931,13 +12778,20 @@
     function setPlanModalProgress(message, percent, enableConfirm, level) {
         var statusEl = document.getElementById('pb-ai-plan-status');
         var progressBar = document.getElementById('pb-ai-plan-progress-bar');
+        var boundedPercent = Math.max(0, Math.min(100, percent || 0));
+        var tone = resolveStatusTone(message, level);
         if (statusEl) {
             statusEl.textContent = String(message || '');
             applyStatusTone(statusEl, message, level);
         }
         if (progressBar) {
-            progressBar.style.width = String(Math.max(0, Math.min(100, percent || 0))) + '%';
+            progressBar.style.width = String(boundedPercent) + '%';
         }
+        renderQueueUiState('plan', {
+            state: tone === 'error' ? 'failed' : (enableConfirm === true ? 'completed' : (boundedPercent > 0 ? 'running' : 'idle')),
+            message: String(message || ''),
+            percent: boundedPercent
+        }, { updateStatus: false });
         if (enableConfirm === true) {
             lastPhaseOnePlanPresent = true;
         }
@@ -12947,7 +13801,7 @@
     }
 
     function applyTaskPlanEditingLockFromActiveOperation() {
-        var locked = isThemeBuildGenerationRunning() || hasAnyRunningQueueForUi();
+        var locked = isThemeBuildGenerationRunning() || hasAnyRunningQueueForUi() || isQueueUiStateBusy('task_plan');
         [
             'pb-ai-task-plan-mode-refine',
             'pb-ai-task-plan-mode-rebuild',
@@ -13057,7 +13911,8 @@
             btn.disabled = isThemeBuildGenerationRunning()
                 || taskPlanStartRequestInFlight
                 || taskPlanSseRunning
-                || isTaskPlanQueueOperationRunning();
+                || isTaskPlanQueueOperationRunning()
+                || isQueueUiStateBusy('task_plan');
         }
     }
 
@@ -13581,6 +14436,9 @@
             toast('warning', messages.taskPlanStartUnavailable);
             return false;
         }
+        if (!validateTaskPlanSkillOverrideForGeneration()) {
+            return false;
+        }
         currentPlanSelection = ensureRequiredPageTypeSelected(selectedPageTypes()).slice();
         currentPlanTriggerButton = currentPlanTriggerButton || null;
         bindTaskPlanModeSwitchers();
@@ -13588,18 +14446,27 @@
         setTaskPlanMode(currentTaskPlanMode);
         setTaskPlanModeStatus(String(taskPlanSseUrl || '').trim() ? messages.taskPlanModeReady : messages.taskPlanModeUnavailable);
         currentTaskPlanPayload = null;
-            updateTaskPlanModalContent(messages.taskPlanDetecting, { persistField: false });
+        updateTaskPlanModalContent(messages.taskPlanDetecting, { persistField: false });
         setTaskPlanModalProgress(messages.taskPlanDetecting, 8, false);
+        renderQueueUiState('task_plan', { state: 'saving', message: messages.taskPlanDetecting, percent: 8 }, { updateStatus: false });
         taskPlanSseRunning = true;
-        postForm(startTaskPlanUrl, {
+        var detectPayload = {
             public_id: publicId,
             scope_patch: JSON.stringify(buildVirtualThemePatch()),
             prompt_mode: TASK_PLAN_PROMPT_MODE_DETECT_BOOTSTRAP,
             round: '1'
-        }).then(function (data) {
+        };
+        if (taskPlanSkillOverrideEnabled) {
+            detectPayload.selected_skill_codes = JSON.stringify(getTaskPlanEffectiveSkillCodes());
+        }
+        postForm(startTaskPlanUrl, detectPayload).then(function (data) {
             if (data && data.data && typeof data.data === 'object') {
                 hydrateWorkspaceFromState(data.data);
             }
+            renderQueueUiState('task_plan', Object.assign({
+                state: data && data.success ? 'queued' : 'failed',
+                message: (data && data.message) ? String(data.message) : messages.operationStreamMissing
+            }, data || {}), { updateStatus: false });
             if (data && data.success && window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function' && window.PbAiOperationRunner.startFromResponse(data, 'task_plan')) {
                 return;
             }
@@ -13613,6 +14480,7 @@
             var message = (error && error.message) ? String(error.message) : messages.networkError;
             setTaskPlanModeStatus(message);
             setTaskPlanModalProgress(message, 100, false);
+            renderQueueUiState('task_plan', { state: 'failed', message: message, percent: 100 }, { updateStatus: false });
             toast('error', message);
         });
         return true;
@@ -13836,13 +14704,20 @@
         var progressBar = document.getElementById('pb-ai-task-plan-progress-bar');
         var confirmBtn = document.getElementById('pb-ai-confirm-task-plan');
         var buildBtn = document.getElementById('pb-ai-start-build-site');
+        var boundedPercent = Math.max(0, Math.min(100, percent || 0));
+        var tone = resolveStatusTone(message, level);
         if (statusEl) {
             statusEl.textContent = String(message || '');
             applyStatusTone(statusEl, message, level);
         }
         if (progressBar) {
-            progressBar.style.width = String(Math.max(0, Math.min(100, percent || 0))) + '%';
+            progressBar.style.width = String(boundedPercent) + '%';
         }
+        renderQueueUiState('task_plan', {
+            state: tone === 'error' ? 'failed' : (enableConfirm === true ? 'completed' : (boundedPercent > 0 ? 'running' : 'idle')),
+            message: String(message || ''),
+            percent: boundedPercent
+        }, { updateStatus: false });
         if (confirmBtn) {
             confirmBtn.disabled = isThemeBuildGenerationRunning()
                 || hasAnyRunningQueueForUi()
@@ -14051,6 +14926,9 @@
         if (taskPlanStartRequestInFlight) {
             return Promise.resolve(false);
         }
+        if (!validateTaskPlanSkillOverrideForGeneration()) {
+            return Promise.resolve(false);
+        }
         taskPlanStartRequestInFlight = true;
         currentPlanSelection = normalizedTypes.slice();
         currentPlanTriggerButton = triggerBtn || currentPlanTriggerButton || null;
@@ -14065,6 +14943,12 @@
             : messages.taskPlanGenerating;
         updateTaskPlanModalContent(startingMessage, { persistField: false });
         setTaskPlanModalProgress(startingMessage, 20, false);
+        renderQueueUiState('task_plan', {
+            state: 'saving',
+            message: startingMessage,
+            percent: 20
+        }, { updateStatus: false });
+        renderGenerationSkillSummaries();
 
         if (!opts.suppressAutoShowPanel) {
             showTaskPlanPanel();
@@ -14101,14 +14985,24 @@
             return attemptStart(0);
         }
 
-        return postForm(startTaskPlanUrl, {
+        var startTaskPlanPayload = {
             public_id: publicId,
             scope_patch: JSON.stringify(buildVirtualThemePatch()),
             prompt_mode: requestedPromptMode,
             round: requestedPromptMode === 'rebuild_task_plan' ? '1' : ''
-        }).then(function (data) {
+        };
+        if (taskPlanSkillOverrideEnabled) {
+            startTaskPlanPayload.selected_skill_codes = JSON.stringify(getTaskPlanEffectiveSkillCodes());
+        }
+
+        return postForm(startTaskPlanUrl, startTaskPlanPayload).then(function (data) {
             if (!data || !data.success) {
                 setTaskPlanModalProgress((data && data.message) ? String(data.message) : messages.networkError, 100, false);
+                renderQueueUiState('task_plan', {
+                    state: 'failed',
+                    message: (data && data.message) ? String(data.message) : messages.networkError,
+                    percent: 100
+                }, { updateStatus: false });
                 if (!opts.silentFailure) {
                     toast('error', (data && data.message) ? String(data.message) : messages.networkError);
                 }
@@ -14117,6 +15011,10 @@
             if (data.data && typeof data.data === 'object') {
                 hydrateWorkspaceFromState(data.data);
             }
+            renderQueueUiState('task_plan', Object.assign({
+                state: jsonTruthyFlag(data && data.start_sse) ? 'queued' : 'completed',
+                message: (data && data.message) ? String(data.message) : messages.taskPlanGenerating
+            }, data || {}), { updateStatus: false });
             if (jsonTruthyFlag(data && data.start_sse)) {
                 setTaskPlanModalProgress((data && data.message) ? String(data.message) : messages.taskPlanGenerating, 28, false);
                 if (!(window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function' && window.PbAiOperationRunner.startFromResponse(data, 'task_plan'))) {
@@ -14139,6 +15037,7 @@
         }).catch(function (error) {
             var message = (error && error.message) ? String(error.message) : messages.networkError;
             setTaskPlanModalProgress(message, 100, false);
+            renderQueueUiState('task_plan', { state: 'failed', message: message, percent: 100 }, { updateStatus: false });
             if (!opts.silentFailure) {
                 toast('error', message);
             }
@@ -14213,6 +15112,12 @@
         setPlanPrimaryPane('preview');
         setPlanModeStatus(forceRebuild ? messages.planSchemeRebuilding : messages.planSaving);
         setPlanModalProgress(forceRebuild ? messages.planSchemeRebuilding : messages.planSaving, 20, false);
+        renderQueueUiState('plan', {
+            state: 'saving',
+            message: forceRebuild ? messages.planSchemeRebuilding : messages.planSaving,
+            percent: 20
+        }, { updateStatus: false });
+        renderGenerationSkillSummaries();
         setPlanRetryButtonVisible(false);
         scrollIntoPlanInlinePanel();
 
@@ -14275,6 +15180,7 @@
             if (!data || !data.success) {
                 var startErrorMessage = normalizePlanFailureMessage((data && data.message) ? String(data.message) : messages.networkError);
                 setPlanModalProgress(startErrorMessage, 100, false);
+                renderQueueUiState('plan', { state: 'failed', message: startErrorMessage, percent: 100 }, { updateStatus: false });
                 setPlanRetryButtonVisible(true);
                 toast('error', startErrorMessage);
                 planStartRequestPending = false;
@@ -14284,6 +15190,10 @@
             if (data.data && typeof data.data === 'object') {
                 hydrateWorkspaceFromState(data.data);
             }
+            renderQueueUiState('plan', Object.assign({
+                state: jsonTruthyFlag(data && data.start_sse) ? 'queued' : 'completed',
+                message: (data && data.message) ? String(data.message) : messages.planGenerating
+            }, data || {}), { updateStatus: false });
             var markdownAfterHydrate = String((currentPlanPayload && currentPlanPayload.markdown) || '');
             if (markdownAfterHydrate === '' && previousPlanMarkdown !== '') {
                 updatePlanModalContent(previousPlanMarkdown);
@@ -14394,6 +15304,7 @@
         }).catch(function (error) {
             var message = normalizePlanFailureMessage((error && error.message) ? String(error.message) : messages.networkError);
             setPlanModalProgress(message, 100, false);
+            renderQueueUiState('plan', { state: 'failed', message: message, percent: 100 }, { updateStatus: false });
             setPlanRetryButtonVisible(true);
             toast('error', message);
             planStartRequestPending = false;
@@ -15479,5 +16390,3 @@
     bindPublishStageLogic();
 })();
 </script>
-
-

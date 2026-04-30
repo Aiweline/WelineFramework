@@ -1,24 +1,25 @@
 <?php
 /**
  * PokerArena - Blog List Component
- *
+ * 
+ * Blog grid with poker strategy categories
+ * 
  * @var \Weline\Framework\View\Template $this
- * @var array $colors
- * @var array $component_config
- *
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
  * @fields_start
+ * 
  * group:content => 内容设置
  * content.badge => 徽章文字:text:Blog & Strategy
  * content.title => 标题:text:Poker Strategy & News
  * content.description => 描述:textarea:Stay ahead of the game with expert strategy articles, tournament recaps, and the latest poker news.
+ * 
  * @fields_end
  */
 
 $config = $component_config ?? [];
-
-if (!isset($colors) || !is_array($colors)) {
-    $colors = [];
-}
+if (!isset($colors) || !is_array($colors)) { $colors = []; }
 
 $sectionBg = $colors['section_bg_1'] ?? '#071209';
 $textPrimary = $colors['text_primary'] ?? '#ecfdf5';
@@ -32,15 +33,18 @@ $borderLight = $colors['border_light'] ?? 'rgba(134, 239, 172, 0.1)';
 $badge = $config['content.badge'] ?? 'Blog & Strategy';
 $title = $config['content.title'] ?? 'Poker Strategy & News';
 $description = $config['content.description'] ?? 'Stay ahead of the game with expert strategy articles, tournament recaps, and the latest poker news.';
-$isPreview = (bool)($this->getData('is_preview') ?? false);
 
+$instanceId = 'pa-blog-list-' . uniqid();
+
+// 从页面获取博客数据
 $page = $this->getData('page');
-$blogPosts = $this->getData('blog_posts');
-if ((!is_array($blogPosts) || $blogPosts === []) && $page && method_exists($page, 'getData')) {
+$blogPosts = [];
+if ($page && method_exists($page, 'getData')) {
     $blogPosts = $page->getData('blog_posts') ?? [];
 }
 
-if ((!is_array($blogPosts) || $blogPosts === []) && $isPreview) {
+// 默认文章
+if (empty($blogPosts)) {
     $blogPosts = [
         ['title' => 'Mastering Position Play in Texas Hold\'em', 'excerpt' => 'Learn how position affects your decision-making and how to exploit late position for maximum profit.', 'category' => 'Strategy', 'date' => 'Feb 1, 2026', 'url' => '#'],
         ['title' => 'Top 10 Tournament Tips for Beginners', 'excerpt' => 'Essential strategies for your first MTT. From bankroll management to ICM considerations.', 'category' => 'Tournaments', 'date' => 'Jan 28, 2026', 'url' => '#'],
@@ -50,8 +54,6 @@ if ((!is_array($blogPosts) || $blogPosts === []) && $isPreview) {
         ['title' => 'Omaha PLO: The Action Player\'s Guide', 'excerpt' => 'Why PLO is the fastest-growing poker variant and how to transition from Hold\'em.', 'category' => 'Game Guide', 'date' => 'Jan 10, 2026', 'url' => '#'],
     ];
 }
-
-$instanceId = 'pa-blog-list-' . uniqid();
 ?>
 
 <section class="pa-blog-list" id="<?= $instanceId ?>">
@@ -59,7 +61,7 @@ $instanceId = 'pa-blog-list-' . uniqid();
         #<?= $instanceId ?> { background: <?= $sectionBg ?>; padding: 100px 0; }
         #<?= $instanceId ?> .pa-blog-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
         #<?= $instanceId ?> .pa-blog-header { text-align: center; margin-bottom: 60px; }
-
+        
         #<?= $instanceId ?> .pa-blog-badge {
             display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px;
             background: rgba(4, 120, 87, 0.15); border: 1px solid rgba(4, 120, 87, 0.3);
@@ -67,107 +69,63 @@ $instanceId = 'pa-blog-list-' . uniqid();
             color: <?= $accentPrimaryLight ?>; margin-bottom: 20px;
             text-transform: uppercase; letter-spacing: 0.05em;
         }
-
+        
         #<?= $instanceId ?> .pa-blog-title { font-size: 2.75rem; font-weight: 800; color: <?= $textPrimary ?>; margin-bottom: 16px; }
         #<?= $instanceId ?> .pa-blog-subtitle { font-size: 1.125rem; color: <?= $textSecondary ?>; max-width: 600px; margin: 0 auto; line-height: 1.7; }
+        
         #<?= $instanceId ?> .pa-blog-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
-
+        
         #<?= $instanceId ?> .pa-blog-card {
             background: <?= $cardBg ?>; border: 1px solid <?= $borderLight ?>;
             border-radius: 16px; overflow: hidden; transition: all 0.3s ease;
         }
-
+        
         #<?= $instanceId ?> .pa-blog-card:hover { border-color: rgba(4, 120, 87, 0.3); transform: translateY(-4px); }
+        
         #<?= $instanceId ?> .pa-blog-card-body { padding: 24px; }
-
+        
         #<?= $instanceId ?> .pa-blog-card-category {
             display: inline-block; padding: 4px 12px; background: rgba(4, 120, 87, 0.15);
             border-radius: 6px; font-size: 0.75rem; font-weight: 600;
             color: <?= $accentPrimaryLight ?>; margin-bottom: 12px; text-transform: uppercase;
         }
-
+        
         #<?= $instanceId ?> .pa-blog-card-title { font-size: 1.15rem; font-weight: 700; color: <?= $textPrimary ?>; margin-bottom: 10px; line-height: 1.4; }
         #<?= $instanceId ?> .pa-blog-card-excerpt { font-size: 0.9rem; color: <?= $textMuted ?>; line-height: 1.6; margin-bottom: 16px; }
         #<?= $instanceId ?> .pa-blog-card-date { font-size: 0.8rem; color: <?= $textMuted ?>; }
-
+        
         #<?= $instanceId ?> .pa-blog-card-link {
             display: inline-flex; align-items: center; gap: 6px;
             font-size: 0.9rem; font-weight: 600; color: <?= $accentSecondaryLight ?>;
             transition: gap 0.3s ease;
         }
-
         #<?= $instanceId ?> .pa-blog-card-link:hover { gap: 10px; }
-
-        #<?= $instanceId ?> .pa-blog-empty {
-            padding: 56px 32px;
-            text-align: center;
-            color: <?= $textSecondary ?>;
-            background: <?= $cardBg ?>;
-            border: 1px dashed <?= $borderLight ?>;
-            border-radius: 16px;
-        }
-
-        @media (max-width: 992px) {
-            #<?= $instanceId ?> .pa-blog-grid { grid-template-columns: repeat(2, 1fr); }
-            #<?= $instanceId ?> .pa-blog-title { font-size: 2rem; }
-        }
-
-        @media (max-width: 576px) {
-            #<?= $instanceId ?> .pa-blog-grid { grid-template-columns: 1fr; }
-            #<?= $instanceId ?> { padding: 60px 0; }
-        }
+        
+        @media (max-width: 992px) { #<?= $instanceId ?> .pa-blog-grid { grid-template-columns: repeat(2, 1fr); } #<?= $instanceId ?> .pa-blog-title { font-size: 2rem; } }
+        @media (max-width: 576px) { #<?= $instanceId ?> .pa-blog-grid { grid-template-columns: 1fr; } #<?= $instanceId ?> { padding: 60px 0; } }
     </style>
-
+    
     <div class="pa-blog-container">
         <div class="pa-blog-header">
-            <div class="pa-blog-badge"><?= htmlspecialchars($badge, ENT_QUOTES, 'UTF-8') ?></div>
-            <h2 class="pa-blog-title"><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></h2>
-            <p class="pa-blog-subtitle"><?= htmlspecialchars($description, ENT_QUOTES, 'UTF-8') ?></p>
+            <div class="pa-blog-badge"><?= htmlspecialchars($badge) ?></div>
+            <h2 class="pa-blog-title"><?= htmlspecialchars($title) ?></h2>
+            <p class="pa-blog-subtitle"><?= htmlspecialchars($description) ?></p>
         </div>
-
-        <?php if (empty($blogPosts)): ?>
-        <div class="pa-blog-empty"><?= __('No blog posts have been published for this site yet.') ?></div>
-        <?php else: ?>
+        
         <div class="pa-blog-grid">
             <?php foreach ($blogPosts as $post): ?>
-            <?php
-            if (!is_array($post)) {
-                continue;
-            }
-            $category = trim((string)($post['category_name'] ?? $post['category'] ?? 'Strategy'));
-            $excerpt = trim((string)($post['excerpt'] ?? $post['summary'] ?? ''));
-            $content = trim(strip_tags((string)($post['content'] ?? '')));
-            if ($excerpt === '' && $content !== '') {
-                $excerpt = function_exists('mb_substr') ? mb_substr($content, 0, 140) : substr($content, 0, 140);
-                $contentLength = function_exists('mb_strlen') ? mb_strlen($content) : strlen($content);
-                $excerptLength = function_exists('mb_strlen') ? mb_strlen($excerpt) : strlen($excerpt);
-                if ($contentLength > $excerptLength) {
-                    $excerpt .= '...';
-                }
-            }
-            $dateLabel = trim((string)($post['date'] ?? ''));
-            if ($dateLabel === '') {
-                $publishedAt = trim((string)($post['published_at'] ?? ''));
-                if ($publishedAt !== '') {
-                    $timestamp = strtotime($publishedAt);
-                    $dateLabel = $timestamp ? date('M d, Y', $timestamp) : $publishedAt;
-                }
-            }
-            $url = trim((string)($post['url'] ?? '#'));
-            ?>
             <article class="pa-blog-card">
                 <div class="pa-blog-card-body">
-                    <span class="pa-blog-card-category"><?= htmlspecialchars($category, ENT_QUOTES, 'UTF-8') ?></span>
-                    <h3 class="pa-blog-card-title"><?= htmlspecialchars((string)($post['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
-                    <p class="pa-blog-card-excerpt"><?= htmlspecialchars($excerpt, ENT_QUOTES, 'UTF-8') ?></p>
+                    <span class="pa-blog-card-category"><?= htmlspecialchars($post['category'] ?? 'Strategy') ?></span>
+                    <h3 class="pa-blog-card-title"><?= htmlspecialchars($post['title'] ?? '') ?></h3>
+                    <p class="pa-blog-card-excerpt"><?= htmlspecialchars($post['excerpt'] ?? '') ?></p>
                     <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <span class="pa-blog-card-date"><?= htmlspecialchars($dateLabel, ENT_QUOTES, 'UTF-8') ?></span>
-                        <a href="<?= htmlspecialchars($url !== '' ? $url : '#', ENT_QUOTES, 'UTF-8') ?>" class="pa-blog-card-link">Read More <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
+                        <span class="pa-blog-card-date"><?= htmlspecialchars($post['date'] ?? '') ?></span>
+                        <a href="<?= htmlspecialchars($post['url'] ?? '#') ?>" class="pa-blog-card-link">Read More <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
                     </div>
                 </div>
             </article>
             <?php endforeach; ?>
         </div>
-        <?php endif; ?>
     </div>
 </section>
