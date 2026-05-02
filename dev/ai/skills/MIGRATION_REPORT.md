@@ -58,3 +58,4 @@ No listed mandatory or original source files were missing at migration time.
 - The Technical Director role is intentionally excluded, per repository requirements.
 - Each skill is self-contained and does not require loading the legacy source files at runtime.
 - Shared Weline constraints were redistributed only to the roles they materially affect.
+- The legacy topic-based skill directories were removed after the role-based consolidation was validated.
