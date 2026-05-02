@@ -42,6 +42,7 @@
     var resumeBuildUrl = <?= \json_encode($resumeBuildUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var runVirtualThemeUrl = <?= \json_encode($runVirtualThemeUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startAssetGenerationUrl = <?= \json_encode((string)$this->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-asset-generation'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var uploadReferenceImageUrl = <?= \json_encode((string)$this->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-upload-reference-image'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startRegeneratePageUrl = <?= \json_encode($startRegeneratePageUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startRefineComponentUrl = <?= \json_encode($startRefineComponentUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startPatchBlockUrl = <?= \json_encode($startPatchBlockUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -1010,6 +1011,19 @@
                     }
                 });
             }
+            var queueState = buildQueueUiState(normalizedOperation, state);
+            var activeStatus = String(active.status || '').trim().toLowerCase();
+            var activeRetryAllowed = !!active.retry_allowed || String(active.failure_mode || '').trim() === 'partial_retry_required';
+            var failedButRetryable = queueState.state === 'failed'
+                && activeRetryAllowed
+                && ['error', 'failed', 'cancelled', 'done', 'completed', ''].indexOf(activeStatus) !== -1;
+            if (failedButRetryable) {
+                candidates.push(Math.max(
+                    parseInt(String(state.retryable_ai_failure_count || 0), 10) || 0,
+                    parseInt(String(scope.retryable_ai_failure_count || 0), 10) || 0,
+                    1
+                ));
+            }
         } else {
             candidates.push(parseInt(String(state.retryable_ai_failure_count || 0), 10) || 0);
             candidates.push(parseInt(String(scope.retryable_ai_failure_count || 0), 10) || 0);
@@ -1965,6 +1979,7 @@
             window.__pbPhase2TaskProgress.syncFromWorkspaceState(workspaceState);
         }
         syncAssetPanelFromWorkspaceState(workspaceState);
+        syncReferenceImagePanelFromWorkspaceState(workspaceState);
         syncPublishStageEntryFromWorkspaceState(workspaceState);
         normalizeGuidedStaticLabels();
         syncConfirmPlanButtonEnabled();
@@ -2722,12 +2737,149 @@
         }).join('');
     }
 
+    function readReferenceImagesFromWorkspaceState(workspaceState) {
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return [];
+        }
+        if (Array.isArray(workspaceState.reference_images)) {
+            return workspaceState.reference_images;
+        }
+        if (workspaceState.scope && typeof workspaceState.scope === 'object' && Array.isArray(workspaceState.scope.reference_images)) {
+            return workspaceState.scope.reference_images;
+        }
+        return [];
+    }
+
+    function syncReferenceImagePanelFromWorkspaceState(workspaceState) {
+        var list = document.getElementById('pb-ai-reference-image-list');
+        var status = document.getElementById('pb-ai-reference-image-status');
+        if (!list) {
+            return;
+        }
+        var images = readReferenceImagesFromWorkspaceState(workspaceState);
+        if (status && images.length > 0) {
+            status.textContent = String(images.length) + ' reference image(s) available to the AI.';
+        }
+        if (!images.length) {
+            list.innerHTML = '<span class="small text-muted">No reference images uploaded.</span>';
+            return;
+        }
+        list.innerHTML = images.map(function (image) {
+            var url = image && image.url ? String(image.url) : '';
+            var name = image && image.name ? String(image.name) : 'reference image';
+            return '<div class="border rounded bg-body p-2" style="width:8.5rem;">'
+                + (url ? '<img src="' + escapeHtml(url) + '" alt="' + escapeHtml(name) + '" class="d-block w-100 rounded mb-2" style="height:5rem;object-fit:cover;">' : '')
+                + '<div class="small text-truncate" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</div>'
+                + '</div>';
+        }).join('');
+    }
+
+    function bindReferenceImageUploadLogic() {
+        var input = document.getElementById('pb-ai-reference-image-input');
+        if (!input || input.dataset.pbBound === '1') {
+            return;
+        }
+        input.dataset.pbBound = '1';
+        input.addEventListener('change', function () {
+            var status = document.getElementById('pb-ai-reference-image-status');
+            var file = input.files && input.files[0] ? input.files[0] : null;
+            if (!file) {
+                return;
+            }
+            if (!uploadReferenceImageUrl) {
+                if (status) {
+                    status.textContent = 'Reference image upload endpoint is not configured.';
+                }
+                input.value = '';
+                return;
+            }
+            if (status) {
+                status.textContent = 'Uploading reference image...';
+            }
+            postForm(uploadReferenceImageUrl, {
+                public_id: publicId,
+                reference_image: file
+            }).then(function (data) {
+                if (!data || !data.success) {
+                    throw new Error((data && (data.message || data.error)) ? String(data.message || data.error) : 'Reference image upload failed.');
+                }
+                if (data.data && typeof data.data === 'object') {
+                    hydrateWorkspaceFromState(data.data);
+                } else {
+                    var nextState = latestWorkspaceState && typeof latestWorkspaceState === 'object' ? Object.assign({}, latestWorkspaceState) : {};
+                    nextState.reference_images = Array.isArray(data.reference_images) ? data.reference_images : readReferenceImagesFromWorkspaceState(nextState);
+                    nextState.scope = Object.assign({}, nextState.scope || {}, { reference_images: nextState.reference_images });
+                    hydrateWorkspaceFromState(nextState);
+                }
+                if (status) {
+                    status.textContent = 'Reference image uploaded.';
+                }
+            }).catch(function (error) {
+                if (status) {
+                    status.textContent = error && error.message ? error.message : 'Reference image upload failed.';
+                }
+            }).finally(function () {
+                input.value = '';
+            });
+        });
+    }
+
     function bindAssetPanelLogic() {
         var root = document.getElementById('pb-ai-asset-panel');
         if (!root || root.dataset.pbBound === '1') {
             return;
         }
         root.dataset.pbBound = '1';
+        var toolButton = document.getElementById('pb-ai-image-tool-generate');
+        if (toolButton && toolButton.dataset.pbBound !== '1') {
+            toolButton.dataset.pbBound = '1';
+            toolButton.addEventListener('click', function () {
+                var promptInput = document.getElementById('pb-ai-image-tool-prompt');
+                var typeInput = document.getElementById('pb-ai-image-tool-type');
+                var pageInput = document.getElementById('pb-ai-image-tool-page');
+                var status = document.getElementById('pb-ai-image-tool-status');
+                var prompt = promptInput ? String(promptInput.value || '').trim() : '';
+                if (!prompt || !startAssetGenerationUrl) {
+                    if (status) {
+                        status.textContent = prompt ? '' : 'Prompt required';
+                    }
+                    return;
+                }
+                toolButton.disabled = true;
+                if (status) {
+                    status.textContent = 'queue...';
+                }
+                postForm(startAssetGenerationUrl, {
+                    public_id: publicId,
+                    prompt_brief: prompt,
+                    slot_type: typeInput ? String(typeInput.value || 'section_image') : 'section_image',
+                    page_type: pageInput ? String(pageInput.value || '').trim() : '',
+                    label: 'AI Image Tool',
+                    mode: 'generate',
+                    execution_token: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
+                }).then(function (data) {
+                    var payload = data && data.data && typeof data.data === 'object' ? data.data : (data || {});
+                    var queueId = String(payload.queue_id || (payload.queue && payload.queue.queue_id) || '');
+                    var slotId = String(payload.slot_id || '');
+                    if (status) {
+                        status.textContent = 'queue_id=' + (queueId || '-') + (slotId ? ' slot=' + slotId : '');
+                    }
+                    var nextState = payload.state || payload.workspace_state || payload;
+                    if (nextState && typeof nextState === 'object' && (nextState.scope || nextState.asset_manifest)) {
+                        hydrateWorkspaceFromState(nextState);
+                    }
+                    if (promptInput) {
+                        promptInput.value = '';
+                    }
+                }).catch(function (error) {
+                    if (status) {
+                        status.textContent = String(error && error.message ? error.message : messages.networkError);
+                    }
+                }).finally(function () {
+                    toolButton.disabled = false;
+                });
+            });
+        }
         root.addEventListener('click', function (event) {
             var button = event.target && event.target.closest ? event.target.closest('[data-asset-generate]') : null;
             if (!button || button.disabled) {
@@ -4437,12 +4589,22 @@
 
     var needsFormSkillOptions = [];
     var needsFormSelectedSkillCodes = normalizeSkillCodes(initialSelectedSkillCodes);
+    var needsFormFieldDefs = [
+        { id: 'pb-ai-site-title', scopeKey: 'site_title' },
+        { id: 'pb-ai-brief-description', scopeKey: 'brief_description' },
+        { id: 'pb-ai-target-domain', scopeKey: 'target_domain' }
+    ];
+
+    function getNeedsFormFieldValue(fieldId, fallbackValue) {
+        var el = document.getElementById(fieldId);
+        if (!el || typeof el.value !== 'string') {
+            return typeof fallbackValue === 'string' ? fallbackValue : '';
+        }
+        return String(el.value || '');
+    }
 
     function readNeedsFormDomState(selectedTypesOverride) {
         var fb = guidedScopeDefaults();
-        var titleEl = document.getElementById('pb-ai-site-title');
-        var taglineEl = document.getElementById('pb-ai-site-tagline');
-        var briefEl = document.getElementById('pb-ai-brief-description');
         var rawDomain = getTargetDomainTrimmed();
         var domainVal = rawDomain !== '' ? rawDomain.toLowerCase() : '';
         var fbDomain = typeof fb.target_domain === 'string' ? String(fb.target_domain).trim().toLowerCase() : '';
@@ -4452,14 +4614,15 @@
             ? ensureRequiredPageTypeSelected(selectedTypesOverride)
             : selectedPageTypes();
         return {
-            site_title: titleEl ? titleEl.value : (fb.site_title || ''),
-            site_tagline: taglineEl ? taglineEl.value : (fb.site_tagline || ''),
+            site_title: getNeedsFormFieldValue('pb-ai-site-title', fb.site_title || ''),
+            site_tagline: typeof fb.site_tagline === 'string' ? fb.site_tagline : '',
             target_domain: domainVal !== '' ? domainVal : fbDomain,
             default_locale: localeVal !== '' ? localeVal : (fb.default_locale || ''),
             plan_locale: planLocaleVal,
-            brief_description: briefEl ? briefEl.value : (fb.brief_description || ''),
-            user_description: briefEl ? briefEl.value : (fb.brief_description || ''),
+            brief_description: getNeedsFormFieldValue('pb-ai-brief-description', fb.brief_description || ''),
+            user_description: getNeedsFormFieldValue('pb-ai-brief-description', fb.brief_description || ''),
             page_types: pageTypes,
+            reference_images: readReferenceImagesFromWorkspaceState(latestWorkspaceState),
             selected_skill_codes: normalizeSkillCodes(needsFormSelectedSkillCodes)
         };
     }
@@ -4665,17 +4828,15 @@
 
     function hydrateGuidedProfileInputs() {
         var fb = guidedScopeDefaults();
-        [
-            ['pb-ai-site-title', 'site_title'],
-            ['pb-ai-site-tagline', 'site_tagline'],
-            ['pb-ai-brief-description', 'brief_description']
-        ].forEach(function (pair) {
-            var el = document.getElementById(pair[0]);
+        needsFormFieldDefs.forEach(function (fieldDef) {
+            var fieldId = fieldDef && fieldDef.id ? String(fieldDef.id) : '';
+            var scopeKey = fieldDef && fieldDef.scopeKey ? String(fieldDef.scopeKey) : '';
+            var el = document.getElementById(fieldId);
             if (!el) {
                 return;
             }
             var currentValue = typeof el.value === 'string' ? el.value.trim() : '';
-            var fallbackValue = typeof fb[pair[1]] === 'string' ? String(fb[pair[1]]) : '';
+            var fallbackValue = typeof fb[scopeKey] === 'string' ? String(fb[scopeKey]) : '';
             if (currentValue === '' && fallbackValue !== '') {
                 el.value = fallbackValue;
             }
@@ -5061,11 +5222,15 @@
         }).then(function (payload) {
             needsFormSkillOptions = normalizeSkillListPayload(payload);
             renderNeedsFormSkillSelection();
+            renderTaskPlanSkillOverrideUi();
+            renderGenerationSkillSummaries();
             setSkillStatusText(needsFormSkillOptions.length > 0 ? '可选择一个或多个技能' : '暂无可选技能，保留默认生成行为');
             return needsFormSkillOptions;
         }).catch(function () {
             needsFormSkillOptions = [];
             renderNeedsFormSkillSelection();
+            renderTaskPlanSkillOverrideUi();
+            renderGenerationSkillSummaries();
             setSkillStatusText('技能列表暂不可用，保留默认生成行为');
             return [];
         });
@@ -5159,6 +5324,7 @@
         if (!panel) {
             initTaskPlanSkillOverride();
             renderGenerationSkillSummaries();
+            loadNeedsFormSkills();
             return;
         }
         renderNeedsFormSkillSelection();
@@ -8487,7 +8653,6 @@
 
     var siteProfileManualFieldMap = {
         'pb-ai-site-title': 'site_title',
-        'pb-ai-site-tagline': 'site_tagline',
         'pb-ai-brief-description': 'brief_description',
         'pb-ai-target-domain': 'target_domain',
         'pb-ai-target-domain-summary': 'target_domain'
@@ -8528,7 +8693,8 @@
         needsSectionRoot.addEventListener('change', onNeedsSectionPersist);
     }
 
-    ['pb-ai-site-title', 'pb-ai-site-tagline', 'pb-ai-brief-description'].forEach(function (id) {
+    needsFormFieldDefs.forEach(function (fieldDef) {
+        var id = fieldDef && fieldDef.id ? String(fieldDef.id) : '';
         var el = document.getElementById(id);
         if (!el) {
             return;
@@ -16387,6 +16553,8 @@
         showWorkspaceEntryQueueNotice(initialWorkspaceState);
     }
     bindAssetPanelLogic();
+    bindReferenceImageUploadLogic();
+    syncReferenceImagePanelFromWorkspaceState(initialWorkspaceState);
     bindPublishStageLogic();
 })();
 </script>

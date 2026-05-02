@@ -73,4 +73,27 @@ class ModelSyncServiceTest extends TestCore
         $this->assertSame('gpt-4', $providerConfigData['model'] ?? '');
         $this->assertSame(180, $providerConfigData['timeout'] ?? 0);
     }
+
+    public function testBuildModelConfigKeepsImageModelModalityAndStatus(): void
+    {
+        $providerConfig = [
+            'base_url' => 'https://api.openai.com/v1',
+            'model_field' => 'model',
+        ];
+        $modelMeta = [
+            'code' => 'gpt-image-1',
+            'name' => 'GPT Image 1',
+            'primary_modality' => 'text2image',
+            'capabilities' => ['image_generation', 'image_output'],
+            'is_active' => 1,
+            'is_default' => 1,
+        ];
+
+        $config = $this->service->buildModelConfig('openai', $modelMeta, $providerConfig);
+
+        $this->assertSame('text2image', $config['primary_modality'] ?? '');
+        $this->assertSame(1, $config['is_active'] ?? 0);
+        $this->assertSame(1, $config['is_default'] ?? 0);
+        $this->assertSame(['image_generation', 'image_output'], $config['capabilities'] ?? []);
+    }
 }

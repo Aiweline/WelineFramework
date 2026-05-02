@@ -1112,6 +1112,10 @@ class Model extends BackendController
         if (!$hasSelfConfig) {
             throw new \Exception(__('模型自配置不完整'));
         }
+
+        if ((string)$model->getData(AiModel::schema_fields_PRIMARY_MODALITY) === AiModel::PRIMARY_MODALITY_TEXT_TO_IMAGE) {
+            return $this->testImageModelSelfConfig($model);
+        }
         
         // 创建临时模型用于测试
         
@@ -1128,7 +1132,7 @@ class Model extends BackendController
         }
         
         $startTime = microtime(true);
-        $result = $provider->generate($model, $prompt, ['temperature' => 0, 'test_mode' => true]);
+        $result = $provider->generate($model, $prompt, ['temperature' => 0, 'test_mode' => true, 'timeout' => 12]);
         $duration = round((microtime(true) - $startTime) * 1000, 2);
         
         if (empty($result['content'])) {
@@ -1139,6 +1143,79 @@ class Model extends BackendController
             'success' => true,
             'response' => $result['content'],
             'duration' => $duration
+        ];
+    }
+
+    private function testImageModelSelfConfig(AiModel $model): array
+    {
+        $started = microtime(true);
+        $providerConfig = $model->getProviderConfig();
+        $config = array_replace($model->getConfig(), $providerConfig);
+        $apiKey = trim((string)($config['api_key'] ?? ''));
+        $baseUrl = trim((string)($config['image_api_url'] ?? $config['api_url'] ?? $config['base_url'] ?? ''));
+        if ($apiKey === '' || $baseUrl === '') {
+            throw new \Exception(__('模型自配置不完整'));
+        }
+
+        $probeUrl = rtrim($baseUrl, '/') . '/models';
+        $headers = [
+            'Authorization: Bearer ' . $apiKey,
+            'Accept: application/json',
+            'User-Agent: Weline-Ai-Model-Self-Test/1.0',
+        ];
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'GET',
+                'timeout' => 12,
+                'ignore_errors' => true,
+                'header' => implode("\r\n", $headers) . "\r\n",
+            ],
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+            ],
+        ]);
+        $body = @file_get_contents($probeUrl, false, $context);
+        $statusCode = 0;
+        foreach (($http_response_header ?? []) as $header) {
+            if (preg_match('/^HTTP\/\S+\s+(\d+)/', (string)$header, $matches)) {
+                $statusCode = (int)$matches[1];
+                break;
+            }
+        }
+        $duration = round((microtime(true) - $started) * 1000, 2);
+        if ($body === false) {
+            throw new \Exception('Provider self config probe failed: ' . (string)(error_get_last()['message'] ?? 'empty response'));
+        }
+        $rawBody = trim((string)$body);
+        if ($statusCode < 200 || $statusCode >= 300) {
+            $decoded = json_decode($rawBody, true);
+            if (is_array($decoded)) {
+                $code = trim((string)($decoded['code'] ?? $decoded['error']['code'] ?? ''));
+                $message = trim((string)($decoded['message'] ?? $decoded['error']['message'] ?? ''));
+                if ($code !== '' || $message !== '') {
+                    throw new \Exception(trim(($code !== '' ? $code . ': ' : '') . ($message !== '' ? $message : ('HTTP ' . $statusCode))));
+                }
+            }
+            throw new \Exception('Provider self config probe failed: HTTP ' . $statusCode . ($rawBody !== '' ? ' ' . substr($rawBody, 0, 300) : ''));
+        }
+
+        $modelCode = (string)$model->getData(AiModel::schema_fields_MODEL_CODE);
+        $decoded = json_decode($rawBody, true);
+        $found = false;
+        if (is_array($decoded['data'] ?? null)) {
+            foreach ($decoded['data'] as $item) {
+                if (is_array($item) && (string)($item['id'] ?? '') === $modelCode) {
+                    $found = true;
+                    break;
+                }
+            }
+        }
+
+        return [
+            'success' => true,
+            'response' => $found ? ('model found: ' . $modelCode) : ('provider probe ok: ' . $probeUrl),
+            'duration' => $duration,
         ];
     }
     
@@ -1228,7 +1305,9 @@ class Model extends BackendController
                 'success' => false,
                 'message' => __('自配置测试失败: %{msg}', ['msg' => $e->getMessage()]),
                 'data' => [
-                    'model_code' => $modelCode
+                    'model_code' => $modelCode,
+                    'primary_modality' => isset($testModel) && $testModel instanceof AiModel ? (string)$testModel->getData(AiModel::schema_fields_PRIMARY_MODALITY) : '',
+                    'base_url' => isset($testModel) && $testModel instanceof AiModel ? (string)(($testModel->getProviderConfig()['base_url'] ?? $testModel->getConfig()['base_url'] ?? '')) : '',
                 ]
             ]);
         }
