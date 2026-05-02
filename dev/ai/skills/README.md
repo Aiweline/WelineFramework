@@ -11,7 +11,7 @@
 
 ## 导入规则
 
-- 目录格式固定为 `dev/ai/multica-skills/{角色}-{技能名}/SKILL.md`
+- 目录格式固定为 `dev/ai/skills/{角色}-{技能名}/SKILL.md`
 - 目录名与 `SKILL.md` frontmatter 中的 `name` 必须完全一致
 - 技能名使用中文
 - `SKILL.md` 正文使用英文，便于 Multica 路由与复用
@@ -50,4 +50,3 @@
 - `[ROLE_SKILL_BINDING.md](ROLE_SKILL_BINDING.md)`：角色与原技能映射
 - `[TEAM_WORKFLOW.md](TEAM_WORKFLOW.md)`：团队协作流程
 - `[MIGRATION_REPORT.md](MIGRATION_REPORT.md)`：迁移说明与缺失源记录
-
