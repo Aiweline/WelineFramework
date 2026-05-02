@@ -2722,6 +2722,72 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(28001, $decoded['port'] ?? null);
     }
 
+    public function testWorkerPoolRejectNotifiesWorkerBeforeSelfHealRetry(): void
+    {
+        $mockControl = new class extends MasterControlServer {
+            /** @var list<array{clientId:int, message:string}> */
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = ['clientId' => $clientId, 'message' => $message];
+
+                return true;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        $context = $this->createWorkerInfraContext();
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $mockControl);
+
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'worker-lease-new',
+            pid: 3101,
+            port: 28001,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 301,
+        );
+        $worker->setMeta('worker_id', 1);
+        $worker->setMeta('slot_id', 'worker#1');
+        $worker->setMeta('lease_id', 'worker-lease-new');
+        $worker->setMeta('generation', 2);
+        $worker->setMeta('lease_state', 'ready_pending_pool');
+        $registry->addInstance($worker);
+
+        $this->invokePrivateWithArgs($orchestrator, 'handleWorkerPoolAck', [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'port' => 28001,
+            'in_pool' => false,
+            'slot_id' => 'worker#1',
+            'lease_id' => 'worker-lease-new',
+            'generation' => 2,
+            'msg_id' => 'pool-reject-1',
+        ], 401]);
+
+        $current = $registry->getInstance(ControlMessage::ROLE_WORKER, 1);
+        self::assertInstanceOf(ServiceInstance::class, $current);
+        self::assertNotNull($current->getMeta('dispatcher_pool_rejected_at'));
+        self::assertSame(1, $current->getMeta('dispatcher_pool_reject_count'));
+        self::assertCount(1, $mockControl->sent);
+
+        $decoded = \json_decode(\rtrim($mockControl->sent[0]['message'], "\n"), true);
+        self::assertIsArray($decoded);
+        self::assertSame(301, $mockControl->sent[0]['clientId']);
+        self::assertSame(ControlMessage::TYPE_WORKER_POOL_ACK, $decoded['type'] ?? null);
+        self::assertFalse((bool)($decoded['in_pool'] ?? true));
+        self::assertSame('dispatcher_not_in_pool', $decoded['reason'] ?? null);
+        self::assertTrue((bool)($decoded['retrying'] ?? false));
+        self::assertSame('worker#1', $decoded['slot_id'] ?? null);
+        self::assertSame('worker-lease-new', $decoded['lease_id'] ?? null);
+        self::assertSame(2, $decoded['generation'] ?? null);
+        self::assertSame('pool-reject-1', $decoded['msg_id'] ?? null);
+    }
+
     public function testReadyWorkerIpcDisconnectRemovesDispatcherPoolBeforeResurrection(): void
     {
         $mockControl = new class extends MasterControlServer {

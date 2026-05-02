@@ -32,13 +32,12 @@ moduleDescribe(test, 'Weline_Ai', 'AI模块 E2E 冒烟测试', () => {
     expect(text).not.toMatch(FATAL_PATTERN);
     expect(errors, errors.join('\n')).toEqual([]);
 
-    // 验证页面包含AI管理相关元素
-    await expect(page.locator('text=AI管理')).toBeVisible({ timeout: 10000 });
+    await expect(page).toHaveURL(/ai\/backend\/manager/i);
 
     // 验证三个Tab都存在
-    await expect(page.locator('text=模型')).toBeVisible();
-    await expect(page.locator('text=适配器')).toBeVisible();
-    await expect(page.locator('text=供应商账户')).toBeVisible();
+    await expect(page.locator('a[href*="ai/backend/model"]').first()).toBeVisible();
+    await expect(page.locator('a[href*="ai/backend/adapter"]').first()).toBeVisible();
+    await expect(page.locator('a[href*="ai/backend/provider"]').first()).toBeVisible();
   });
 
   moduleCase(test, { module: 'Weline_Ai', id: 'tc02' }, 'AI模型列表页能正确加载并显示模型表格', async ({ page }) => {
@@ -58,9 +57,9 @@ moduleDescribe(test, 'Weline_Ai', 'AI模块 E2E 冒烟测试', () => {
     await expect(page.locator('text=筛选条件')).toBeVisible();
 
     // 验证表格区域存在（包含表头）
-    await expect(page.locator('text=模型名称')).toBeVisible();
-    await expect(page.locator('text=供应商')).toBeVisible();
-    await expect(page.locator('text=模型代码')).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: '模型名称', exact: true })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: '供应商', exact: true })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: '模型代码', exact: true })).toBeVisible();
   });
 
   moduleCase(test, { module: 'Weline_Ai', id: 'tc03' }, 'AI适配器列表页能正确加载', async ({ page }) => {
@@ -87,7 +86,7 @@ moduleDescribe(test, 'Weline_Ai', 'AI模块 E2E 冒烟测试', () => {
     expect(text).not.toMatch(FATAL_PATTERN);
     expect(errors, errors.join('\n')).toEqual([]);
 
-    // 验证页面包含供应商账户相关内容
-    await expect(page.locator('text=供应商账户').or(page.locator('text=Account')).or(page.locator('text=账户'))).toBeVisible({ timeout: 10000 });
+    await expect(page).toHaveURL(/ai\/backend\/provider/i);
+    await expect(page.getByRole('columnheader', { name: '供应商连通性', exact: true })).toBeVisible({ timeout: 10000 });
   });
 });
