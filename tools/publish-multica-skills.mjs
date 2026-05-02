@@ -19,7 +19,7 @@ const manifestPath = join(scriptDir, "clawhub-skill-manifest.json");
 const changelog = version
   ? `Publish_WelineFramework_Multica_role_skills_${version}`
   : "Publish_WelineFramework_Multica_role_skills";
-const publishVersion = isSemver(version) ? version : "";
+const publishVersion = "1.0.0";
 
 function printDivider() {
   console.log("=".repeat(72));
@@ -51,10 +51,6 @@ function colorUrls(text) {
 
 function errorText(text) {
   return red(colorUrls(text));
-}
-
-function isSemver(value) {
-  return /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/u.test(value);
 }
 
 function isInteractiveTerminal() {
@@ -227,6 +223,34 @@ function failWithRateLimit(publishedCount, failedSkillName, output = "") {
   process.exit(2);
 }
 
+function ensureSkillFrontmatterVersion(skillPath) {
+  const content = readFileSync(skillPath, "utf8");
+
+  if (!content.startsWith("---")) {
+    failWithGuide("Missing YAML frontmatter.", [
+      `Skill file: ${skillPath}`,
+      "Every ClawHub skill must start with YAML frontmatter.",
+    ]);
+  }
+
+  const end = content.indexOf("---", 3);
+  if (end === -1) {
+    failWithGuide("Invalid YAML frontmatter.", [
+      `Skill file: ${skillPath}`,
+      "Could not find the closing --- marker.",
+    ]);
+  }
+
+  const frontmatter = content.slice(3, end);
+  const nextContent = /^version:\s*.+$/m.test(frontmatter)
+    ? content.replace(/^version:\s*.+$/m, `version: ${publishVersion}`)
+    : `${content.slice(0, end)}version: ${publishVersion}\n${content.slice(end)}`;
+
+  if (nextContent !== content) {
+    writeFileSync(skillPath, nextContent, "utf8");
+  }
+}
+
 function slugify(name) {
   return name
     .normalize("NFKD")
@@ -291,10 +315,6 @@ if (dryRun) {
   process.exit(0);
 }
 
-if (version && !publishVersion) {
-  console.log(`SKILL_VERSION is not semver, so it will be used only in the changelog: ${version}`);
-}
-
 if (clawhubToken) {
   console.log("Using CLAWHUB_TOKEN for non-interactive publish.");
 } else {
@@ -333,13 +353,22 @@ let publishedCount = 0;
 
 try {
   for (const dir of skillDirs) {
+    const skillPath = join(dir, "SKILL.md");
     const skillName = manifest.find((item) => item.path === dir)?.name || dir;
-    const args = ["clawhub", "skill", "publish", dir, "--changelog", changelog, "--tags", "latest"];
+    const args = [
+      "clawhub",
+      "skill",
+      "publish",
+      dir,
+      "--version",
+      publishVersion,
+      "--changelog",
+      changelog,
+      "--tags",
+      "latest",
+    ];
 
-    if (publishVersion) {
-      args.push("--version", publishVersion);
-    }
-
+    ensureSkillFrontmatterVersion(skillPath);
     console.log(`Publishing ${skillName}...`);
     run(getNpxCommand(), args, { captureOutput: true, echoOutput: true });
     publishedCount += 1;
