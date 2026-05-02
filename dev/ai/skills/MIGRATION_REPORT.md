@@ -2,7 +2,7 @@
 
 ## Scope
 
-This migration rewrites the legacy Weline AI skill set into a Multica-compatible role-based directory under `dev/ai/multica-skills/`.
+This migration rewrites the legacy Weline AI skill set into a Multica-compatible role-based directory under `dev/ai/skills/`.
 
 ## Mandatory Sources Checked
 
@@ -58,4 +58,3 @@ No listed mandatory or original source files were missing at migration time.
 - The Technical Director role is intentionally excluded, per repository requirements.
 - Each skill is self-contained and does not require loading the legacy source files at runtime.
 - Shared Weline constraints were redistributed only to the roles they materially affect.
-
