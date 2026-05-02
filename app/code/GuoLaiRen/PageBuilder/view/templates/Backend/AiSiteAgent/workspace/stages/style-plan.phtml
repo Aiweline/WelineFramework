@@ -3,4 +3,108 @@
 [data-stage-panel="plan"] .card-title {
     color: var(--backend-color-primary, #2563eb);
 }
+[data-stage-panel="plan"] #pb-ai-plan-inline-panel {
+    border-color: color-mix(in srgb, var(--backend-color-card-border, #dbe3ee) 82%, var(--backend-color-primary, #2563eb)) !important;
+    background:
+        radial-gradient(circle at top right, color-mix(in srgb, var(--backend-color-primary, #2563eb) 8%, transparent), transparent 28%),
+        linear-gradient(180deg, color-mix(in srgb, var(--backend-color-bg-primary, #ffffff) 96%, #eef4ff) 0%, var(--backend-color-card-bg, #ffffff) 100%);
+    overflow: hidden;
+}
+[data-stage-panel="plan"] .pb-ai-plan-action-summary {
+    padding: .9rem 1rem 1rem;
+    border: 1px solid color-mix(in srgb, var(--backend-color-card-border, #dbe3ee) 72%, var(--backend-color-primary, #2563eb));
+    border-radius: 1rem;
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--backend-color-primary, #2563eb) 7%, #ffffff), color-mix(in srgb, var(--backend-color-bg-secondary, #f8fafc) 92%, #ffffff));
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+}
+[data-stage-panel="plan"] #pb-ai-plan-status.pb-ai-plan-status-banner {
+    margin: 0;
+    padding: .85rem 1rem;
+    border-radius: .85rem;
+    border: 1px solid color-mix(in srgb, var(--backend-color-card-border, #dbe3ee) 78%, transparent);
+    background: color-mix(in srgb, var(--backend-color-bg-primary, #ffffff) 88%, var(--backend-color-primary, #2563eb) 12%);
+    color: var(--backend-color-text-primary, #0f172a);
+    font-size: .95rem;
+    line-height: 1.55;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .65);
+}
+[data-stage-panel="plan"] #pb-ai-plan-status.pb-ai-plan-status-banner.text-danger {
+    border-color: rgba(220, 38, 38, .28);
+    background: linear-gradient(135deg, rgba(254, 242, 242, .98), rgba(255, 237, 213, .95));
+    color: #b91c1c;
+}
+[data-stage-panel="plan"] .pb-ai-plan-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .75rem;
+}
+[data-stage-panel="plan"] .pb-ai-plan-meta-item {
+    min-width: 0;
+    padding: .8rem .9rem;
+    border-radius: .85rem;
+    background: rgba(255, 255, 255, .74);
+    border: 1px solid rgba(148, 163, 184, .2);
+    color: var(--backend-color-text-secondary, #475569);
+    font-size: .85rem;
+    line-height: 1.5;
+}
+[data-stage-panel="plan"] .pb-ai-plan-meta-item.text-danger {
+    background: rgba(254, 242, 242, .92);
+    border-color: rgba(220, 38, 38, .22);
+}
+[data-stage-panel="plan"] .pb-ai-plan-footer-actions {
+    gap: 1rem !important;
+    padding-bottom: .75rem;
+}
+[data-stage-panel="plan"] .pb-ai-plan-primary-actions {
+    margin-left: auto;
+    min-width: 0;
+}
+[data-stage-panel="plan"] .pb-ai-plan-danger-action {
+    border-color: rgba(225, 29, 72, .28);
+    color: #be123c;
+    background: rgba(255, 241, 242, .84);
+}
+[data-stage-panel="plan"] .pb-ai-plan-danger-action:hover,
+[data-stage-panel="plan"] .pb-ai-plan-danger-action:focus {
+    border-color: rgba(225, 29, 72, .45);
+    background: rgba(255, 228, 230, .98);
+    color: #9f1239;
+}
+[data-stage-panel="plan"] .pb-ai-plan-confirm-action {
+    min-height: 2.85rem;
+    padding-inline: 1.25rem;
+    border: none;
+    border-radius: .85rem;
+    background: linear-gradient(135deg, #14b8a6 0%, #0ea5e9 100%);
+    box-shadow: 0 14px 26px rgba(14, 165, 233, .22);
+    font-weight: 700;
+}
+[data-stage-panel="plan"] .pb-ai-plan-confirm-action:hover,
+[data-stage-panel="plan"] .pb-ai-plan-confirm-action:focus {
+    background: linear-gradient(135deg, #0f766e 0%, #0284c7 100%);
+    box-shadow: 0 18px 32px rgba(14, 165, 233, .28);
+}
+@media (max-width: 767.98px) {
+    [data-stage-panel="plan"] #pb-ai-plan-inline-panel .mx-3 {
+        margin-left: .75rem !important;
+        margin-right: .75rem !important;
+    }
+    [data-stage-panel="plan"] .pb-ai-plan-meta-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    [data-stage-panel="plan"] .pb-ai-plan-footer-actions {
+        justify-content: stretch !important;
+    }
+    [data-stage-panel="plan"] .pb-ai-plan-primary-actions {
+        width: 100%;
+        margin-left: 0;
+        justify-content: stretch;
+    }
+    [data-stage-panel="plan"] .pb-ai-plan-primary-actions > .btn {
+        flex: 1 1 auto;
+        min-width: min(100%, 12rem);
+    }
+}
 </style>

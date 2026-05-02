@@ -1616,6 +1616,22 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     );
                     break;
 
+                case \Weline\Server\IPC\ControlMessage::TYPE_WORKER_POOL_ACK:
+                    if (($msg['role'] ?? '') !== \Weline\Server\IPC\ControlMessage::ROLE_WORKER) {
+                        break;
+                    }
+                    if ((bool)($msg['in_pool'] ?? false)) {
+                        break;
+                    }
+                    $reason = (string)($msg['reason'] ?? 'dispatcher_not_in_pool');
+                    $retrying = (bool)($msg['retrying'] ?? false);
+                    $ackPort = (int)($msg['port'] ?? 0);
+                    WlsLogger::warning_(
+                        "Master ACK 确认结果：失败（reason={$reason}, port={$ackPort}）"
+                        . ($retrying ? '，已触发自愈重试，继续等待闭环 ACK' : '')
+                    );
+                    break;
+
                 case \Weline\Server\IPC\ControlMessage::TYPE_RELOAD:
                     // 代码重载：先清 opcache（共享内存级），确保新 Worker 加载最新文件
                     if (\function_exists('opcache_reset')) {

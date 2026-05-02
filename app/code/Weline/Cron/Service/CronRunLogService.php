@@ -16,13 +16,39 @@ use Weline\Framework\Manager\ObjectManager;
  */
 final class CronRunLogService
 {
-    private const EXECUTE_NAME_PATTERN = '/^[a-zA-Z0-9_-]+$/';
-
     private const CONTENT_MAX_BYTES = 2097152;
 
     public function isValidExecuteName(string $executeName): bool
     {
-        return $executeName !== '' && (bool) \preg_match(self::EXECUTE_NAME_PATTERN, $executeName);
+        $executeName = \trim($executeName);
+        if ($executeName === '') {
+            return false;
+        }
+        if (\str_contains($executeName, '/') || \str_contains($executeName, '\\') || \str_contains($executeName, '..')) {
+            return false;
+        }
+
+        return !\preg_match('/[\x00-\x1F\x7F]/u', $executeName);
+    }
+
+    private function resolveTaskByIdentifier(string $identifier): ?CronTask
+    {
+        /** @var CronTask $task */
+        $task = ObjectManager::make(CronTask::class)->reset()
+            ->where(CronTask::schema_fields_EXECUTE_NAME, $identifier)
+            ->find()
+            ->fetch();
+        if ($task->getId()) {
+            return $task;
+        }
+
+        /** @var CronTask $byName */
+        $byName = ObjectManager::make(CronTask::class)->reset()
+            ->where(CronTask::schema_fields_NAME, $identifier)
+            ->find()
+            ->fetch();
+
+        return $byName->getId() ? $byName : null;
     }
 
     public function liveLogPath(string $executeName): string
@@ -47,14 +73,11 @@ final class CronRunLogService
         if (!$this->isValidExecuteName($executeName)) {
             return ['success' => false, 'message' => (string) \__('参数 execute_name 无效')];
         }
-        /** @var CronTask $task */
-        $task = ObjectManager::make(CronTask::class)->reset()
-            ->where(CronTask::schema_fields_EXECUTE_NAME, $executeName)
-            ->find()
-            ->fetch();
-        if (!$task->getId()) {
+        $task = $this->resolveTaskByIdentifier($executeName);
+        if (!$task) {
             return ['success' => false, 'message' => (string) \__('任务不存在')];
         }
+        $executeName = \trim((string) ($task->getData(CronTask::schema_fields_EXECUTE_NAME) ?? $executeName));
         $live = $this->liveLogPath($executeName);
         $liveExists = \is_file($live);
         $liveSize = $liveExists ? (int) \filesize($live) : 0;
@@ -127,14 +150,11 @@ final class CronRunLogService
         if (!$this->isValidExecuteName($executeName)) {
             return ['success' => false, 'message' => (string) \__('参数 execute_name 无效')];
         }
-        /** @var CronTask $task */
-        $task = ObjectManager::make(CronTask::class)->reset()
-            ->where(CronTask::schema_fields_EXECUTE_NAME, $executeName)
-            ->find()
-            ->fetch();
-        if (!$task->getId()) {
+        $task = $this->resolveTaskByIdentifier($executeName);
+        if (!$task) {
             return ['success' => false, 'message' => (string) \__('任务不存在')];
         }
+        $executeName = \trim((string) ($task->getData(CronTask::schema_fields_EXECUTE_NAME) ?? $executeName));
         $path = $this->liveLogPath($executeName);
         if (!\is_file($path)) {
             @\touch($path);
@@ -145,12 +165,8 @@ final class CronRunLogService
 
     public function isTaskProcessRunning(string $executeName): bool
     {
-        /** @var CronTask $task */
-        $task = ObjectManager::make(CronTask::class)->reset()
-            ->where(CronTask::schema_fields_EXECUTE_NAME, $executeName)
-            ->find()
-            ->fetch();
-        if (!$task->getId()) {
+        $task = $this->resolveTaskByIdentifier($executeName);
+        if (!$task) {
             return false;
         }
         $status = (string) ($task->getData(CronTask::schema_fields_STATUS) ?? '');

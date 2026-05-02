@@ -992,7 +992,9 @@ class ControlMessage
         string $slotId = '',
         string $leaseId = '',
         int $generation = 0,
-        string $msgId = ''
+        string $msgId = '',
+        string $reason = '',
+        bool $retrying = false
     ): string
     {
         $data = [
@@ -1003,6 +1005,12 @@ class ControlMessage
         ];
         if ($msgId !== '') {
             $data['msg_id'] = $msgId;
+        }
+        if ($reason !== '') {
+            $data['reason'] = $reason;
+        }
+        if ($retrying) {
+            $data['retrying'] = true;
         }
         self::appendLeaseIdentity($data, $slotId, $leaseId, $generation);
         return self::encode($data);

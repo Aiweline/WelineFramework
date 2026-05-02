@@ -28,7 +28,7 @@ use Weline\Framework\Http\Sse\SseContext;
  * - 错误处理和重试机制
  * - Token使用量统计
  */
-class OpenAiProvider implements ProviderInterface
+class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterface
 {
     /**
      * 最大重试次数
@@ -182,6 +182,57 @@ class OpenAiProvider implements ProviderInterface
         }
 
         return $result;
+    }
+
+    /**
+     * @return array<string,mixed>
+     * @throws Exception
+     */
+    public function generateImage(AiModel $model, string $prompt, array $params = []): array
+    {
+        $config = $model->getConfig();
+        $providerConfig = $model->getData('provider_config');
+        if (!empty($providerConfig)) {
+            $providerData = is_string($providerConfig) ? json_decode($providerConfig, true) : $providerConfig;
+            if (is_array($providerData)) {
+                foreach ($providerData as $key => $value) {
+                    if ($value !== '' && $value !== null) {
+                        $config[$key] = $value;
+                    }
+                }
+            }
+        }
+        if (is_array($params['resolved_config'] ?? null)) {
+            $config = array_merge($config, $params['resolved_config']);
+        }
+
+        $apiKey = $this->getApiKey($config);
+        if (empty($apiKey)) {
+            throw new Exception(__('API key is required for image generation.'));
+        }
+
+        $proxyInfo = $model->getProxyInfo();
+        if (is_string($proxyInfo) && !empty($proxyInfo)) {
+            $proxyInfo = json_decode($proxyInfo, true) ?: [];
+        }
+        if (!is_array($proxyInfo)) {
+            $proxyInfo = [];
+        }
+        if ($proxyInfo === [] && is_array($config['proxy'] ?? null)) {
+            $proxyInfo = $config['proxy'];
+        }
+
+        $requestData = $this->buildImageGenerationRequest($model, $prompt, $params, $config);
+        $timeout = isset($params['timeout']) ? (int)($params['timeout']) : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
+        $response = $this->callApiWithRetry(
+            $this->resolveImageGenerationUrl($config),
+            $apiKey,
+            $requestData,
+            $proxyInfo,
+            $timeout
+        );
+
+        return $this->normalizeImageGenerationResponse($response, (string)$requestData['model'], $requestData);
     }
 
     /**
@@ -613,6 +664,113 @@ class OpenAiProvider implements ProviderInterface
     }
 
     /**
+     * @param array<string,mixed> $config
+     */
+    private function resolveImageGenerationUrl(array $config): string
+    {
+        $apiUrl = trim((string)($config['image_api_url'] ?? $config['api_url'] ?? $config['base_url'] ?? 'https://api.openai.com/v1'));
+        if ($apiUrl === '') {
+            $apiUrl = 'https://api.openai.com/v1';
+        }
+        if (!str_ends_with($apiUrl, '/images/generations')) {
+            $apiUrl = rtrim($apiUrl, '/') . '/images/generations';
+        }
+
+        return $apiUrl;
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @param array<string,mixed> $config
+     * @return array<string,mixed>
+     */
+    private function buildImageGenerationRequest(AiModel $model, string $prompt, array $params, array $config): array
+    {
+        $modelCode = (string)$model->getModelCode();
+        $requestData = [
+            'model' => $modelCode,
+            'prompt' => $prompt,
+            'n' => max(1, (int)($params['n'] ?? $params['count'] ?? 1)),
+            'size' => (string)($params['size'] ?? $config['image_size'] ?? $config['size'] ?? '1024x1024'),
+        ];
+
+        foreach ([
+            'quality' => $params['quality'] ?? $config['quality'] ?? null,
+            'style' => $params['style'] ?? $config['style'] ?? null,
+            'background' => $params['background'] ?? $config['background'] ?? null,
+            'output_format' => $params['output_format'] ?? $config['output_format'] ?? null,
+        ] as $key => $value) {
+            if ($value !== null && $value !== '') {
+                $requestData[$key] = $value;
+            }
+        }
+
+        $responseFormat = $params['response_format'] ?? $config['response_format'] ?? null;
+        if ($responseFormat !== null && $responseFormat !== '' && !str_starts_with($modelCode, 'gpt-image')) {
+            $requestData['response_format'] = $responseFormat;
+        }
+
+        return $requestData;
+    }
+
+    /**
+     * @param array<string,mixed> $response
+     * @param array<string,mixed> $requestData
+     * @return array<string,mixed>
+     */
+    private function normalizeImageGenerationResponse(array $response, string $modelCode, array $requestData): array
+    {
+        $images = [];
+        foreach (is_array($response['data'] ?? null) ? $response['data'] : [] as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $image = [];
+            foreach (['url', 'b64_json', 'revised_prompt'] as $key) {
+                if (isset($item[$key]) && is_scalar($item[$key]) && trim((string)$item[$key]) !== '') {
+                    $image[$key] = (string)$item[$key];
+                }
+            }
+
+            $mimeType = $this->normalizeImageMimeType(
+                (string)($item['mime_type'] ?? ''),
+                (string)($requestData['output_format'] ?? $requestData['response_format'] ?? '')
+            );
+            if ($mimeType !== '') {
+                $image['mime_type'] = $mimeType;
+            }
+
+            if ($image !== []) {
+                $images[] = $image;
+            }
+        }
+
+        return [
+            'images' => $images,
+            'usage' => is_array($response['usage'] ?? null) ? $response['usage'] : [],
+            'model' => (string)($response['model'] ?? $modelCode),
+            'finish_reason' => 'stop',
+            'raw' => $response,
+        ];
+    }
+
+    private function normalizeImageMimeType(string $mimeType, string $format): string
+    {
+        $mimeType = strtolower(trim($mimeType));
+        if ($mimeType !== '') {
+            return $mimeType;
+        }
+
+        $format = strtolower(trim($format));
+        return match ($format) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'webp' => 'image/webp',
+            default => 'image/png',
+        };
+    }
+
+    /**
      * 构建消息数组
      * 
      * @param string $prompt
@@ -802,7 +960,7 @@ class OpenAiProvider implements ProviderInterface
                 sleep(self::RETRY_DELAY * ($retryCount + 1));
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
-            throw new Exception("API调用失败（已重试{$retryCount}次）: " . $e->getMessage());
+            throw new Exception("API调用失败（已重试{$retryCount}次，URL: {$url}）: " . $e->getMessage());
         }
     }
 
@@ -1088,11 +1246,14 @@ class OpenAiProvider implements ProviderInterface
     public function supports(string $modelCode): bool
     {
         // 支持OpenAI和兼容OpenAI API的模型（如DeepSeek等，但不包括Claude，Claude使用AnthropicProvider）
-        return str_contains($modelCode, 'gpt') 
-            || str_contains($modelCode, 'openai') 
+        return str_contains($modelCode, 'gpt')
+            || str_contains($modelCode, 'openai')
+            || str_contains($modelCode, 'gpt-image')
+            || str_contains($modelCode, 'dall-e')
             || str_contains($modelCode, 'deepseek')
             || str_starts_with($modelCode, 'o1-')
-            || str_starts_with($modelCode, 'o3-');
+            || str_starts_with($modelCode, 'o3-')
+            || str_starts_with($modelCode, 'o4-');
     }
 
     /**
