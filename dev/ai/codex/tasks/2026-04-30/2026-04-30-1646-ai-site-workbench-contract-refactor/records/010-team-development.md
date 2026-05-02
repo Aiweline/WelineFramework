@@ -39,4 +39,16 @@ The main thread will not edit worker-owned skill files until the skill worker re
 - Implemented Stage1 contract wrapper output for P01-P03 in `AiSiteExecutionBlueprintService`.
 - Finished F04 browser-facing skill manager behavior and fixed the two defects found during browser testing.
 - Added regression coverage for `selected_skill_codes` normalization and session scope whitelist retention.
-- Left F08 as partial because the existing Playwright spec is dirty/unowned; browser verification was completed through the in-app browser instead.
+- F08 was partial in this early team-development checkpoint because the existing Playwright spec was dirty/unowned; it was later completed in `020-implementation-results.md` with targeted Playwright coverage.
+
+## 2026-05-01 Status Refresh
+
+- Re-read the strong-contract refactor plan and revalidated development against `01-contract-flow.md` and `REL02-final-target-tests.md`.
+- Re-ran the contract-target PHPUnit suite: pass, `213 tests / 2516 assertions`.
+- Continued main-thread hardening on:
+  - persisted virtual-theme layout reconciliation for build publish gating,
+  - same-origin + `expert=1` browser workspace routing,
+  - queue observer/task-plan scheduler-state handling in Playwright helpers.
+- Current split of responsibility is now explicit:
+  - contract-plan acceptance: satisfied by REL02 target scope,
+  - remaining historical long-chain browser failures: follow-up compatibility/stability work, mainly blocked by WLS HTTPS instability and old UI assumptions.

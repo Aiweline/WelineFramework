@@ -1,6 +1,6 @@
 ---
 name: sse-streaming
-description: SSE（Server-Sent Events）流式响应。SSE组件=theme:sse-terminal 标签（控制台）；后端 SseWriter；POST 流式用 terminal.start(url, { method: 'POST', body })。SSE。
+description: SSE（Server-Sent Events）流式响应。SSE组件=theme:sse-terminal 标签（控制台）；后端 SseWriter；`terminal.start(url, { method: 'POST', body })` 只是参数序列化便捷写法，底层订阅仍是 EventSource GET。
 globs:
   - "**/Controller/**/*.php"
   - "**/view/**/*.phtml"
@@ -29,8 +29,8 @@ alwaysApply: false
 
 ## 前端（JS）
 
-- **SSE 组件（控制台）**：`<w:theme:sse-terminal id="xxx" title="..." height="240px" events="start,progress,chunk,done,error"/>`。通过 `window.WelineSseTerminal['xxx']` 获取实例，`terminal.start(url)` 为 GET；**POST 流式**用 `terminal.start(url, { method: 'POST', body: formData })`，控制台会解析 event-stream 并显示 start/progress/chunk/done/error。`terminal.on('done', fn)` / `terminal.on('error', fn)` 接收事件。
-- **POST 流式**（无控制台时）：不能用 EventSource（仅 GET）。用 `fetch` + `res.body.getReader()` + `TextDecoder`，按 `\n\n` 拆事件，解析 `event:` 与 `data:`。
+- **SSE 组件（控制台）**：`<w:theme:sse-terminal id="xxx" title="..." height="240px" events="start,progress,chunk,done,error"/>`。通过 `window.WelineSseTerminal['xxx']` 获取实例，`terminal.start(url)` 为 GET。若写成 `terminal.start(url, { method: 'POST', body: formData })`，当前组件会先把 body 序列化进 query，再用 `EventSource(url)` 发起 **GET** 订阅；因此后端必须提供 GET 路由，并从 `getGet()/getPost()` 兼容取参。`terminal.on('done', fn)` / `terminal.on('error', fn)` 接收事件。
+- **POST 流式**（无控制台时）：不能用 EventSource（仅 GET）。用 `fetch` + `res.body.getReader()` + `TextDecoder`，按 `\n\n` 拆事件，解析 `event:` 与 `data:`。如果必须用原生 EventSource/`theme:sse-terminal`，请把 SSE 路由设计成 GET。
 - **GET 流式**：可用 `new EventSource(url)`，或控制台不传 options 即 GET。
 
 ## 事件约定（示例）
@@ -43,7 +43,8 @@ alwaysApply: false
 ## 禁止
 
 - 在 SSE 接口里用 `return json_encode(...)` 或非流式一次性输出
-- 前端用 EventSource 请求 POST 流式接口（必须用 fetch + body + getReader）
+- 把 `terminal.start(url, { method: 'POST', body })` 误当成真实 HTTP POST；它只是参数编码辅助，底层仍是 EventSource GET
+- 前端用 EventSource 请求只提供 POST 路由的 SSE 接口（必须改成 GET 订阅，或改用 fetch + body + getReader）
 - **在 SSE 长连接循环中使用 `\usleep()` 或 `\sleep()`** — 必须用 `SchedulerSystem::yieldDelay()` 替代
 
 ## SSE 长连接循环必须使用 SchedulerSystem

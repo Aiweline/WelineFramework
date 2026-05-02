@@ -389,20 +389,22 @@ class ModelCollector
     private function createNewModel(array $modelData): AiModel
     {
         // 新收集的模型一律置为未激活，等待连通性测试通过后再启用
-        $isActive = 0;
+        $isActive = (int)($modelData['is_active'] ?? 0) === 1 ? 1 : 0;
 
         $data = [
             'model_code' => $modelData['model_code'],
             'name' => $modelData['name'] ?? $modelData['model_code'], // 如果没有name，使用model_code作为name
             'supplier' => $modelData['vendor'],
             'version' => $modelData['model_version'] ?? '1.0',
+            'primary_modality' => AiModel::normalizePrimaryModality((string)($modelData['primary_modality'] ?? '')),
             'config' => json_encode($modelData['config'] ?? []),
             'cost_per_token' => (string)($modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000),
             // TODO(临时): 注释掉这两个字段，因为ORM报告字段不存在（虽然数据库中确实有这些字段）
             // 'token_price_input' => (float)($modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000),
             // 'token_price_output' => (float)($modelData['token_price_output'] ?? $modelData['token_price'] ?? 0.000000),
-            'status' => 'inactive',
-            'is_active' => 0,
+            'status' => $isActive === 1 ? 'active' : 'inactive',
+            'is_active' => $isActive,
+            'is_default' => (int)($modelData['is_default'] ?? 0) === 1 ? 1 : 0,
             'is_copy' => 0,
             'origin_model_id' => null,
             'capabilities' => json_encode($modelData['capabilities'] ?? []),
@@ -450,6 +452,13 @@ class ModelCollector
         
         if (empty($existingModel->getData('version')) && !empty($modelData['model_version'])) {
             $existingModel->setData('version', $modelData['model_version'] ?? '1.0');
+        }
+
+        if (
+            empty($existingModel->getData(AiModel::schema_fields_PRIMARY_MODALITY))
+            && !empty($modelData['primary_modality'])
+        ) {
+            $existingModel->setPrimaryModality((string)$modelData['primary_modality']);
         }
 
         // 2. 配置字段：合并配置，只添加不存在的项
