@@ -462,7 +462,7 @@ class AiSitePageComponentGenerationService
             return;
         }
 
-        if ($this->isTestEnvironment() || !\class_exists(\Fiber::class)) {
+        if ($this->shouldUseStubAiGeneration() || $this->isTestEnvironment() || !\class_exists(\Fiber::class)) {
             foreach ($components as $region => $spec) {
                 yield $region => $this->generateComponent(
                     $spec['componentCode'],
@@ -532,7 +532,7 @@ class AiSitePageComponentGenerationService
             return;
         }
 
-        if ($this->isTestEnvironment() || !\class_exists(\Fiber::class)) {
+        if ($this->shouldUseStubAiGeneration() || $this->isTestEnvironment() || !\class_exists(\Fiber::class)) {
             foreach ($components as $componentKey => $spec) {
                 try {
                     yield $componentKey => [
@@ -2204,9 +2204,7 @@ class AiSitePageComponentGenerationService
      */
     private function runAiGeneration(string $region, string $prompt): array
     {
-        $forceRealAiInTest = (bool)RequestContext::get(self::REQUEST_KEY_FORCE_REAL_AI_IN_TEST, false);
-        $allowStubAiInTest = (bool)RequestContext::get(self::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST, false);
-        if ($this->isTestEnvironment() && !$forceRealAiInTest && $allowStubAiInTest) {
+        if ($this->shouldUseStubAiGeneration()) {
             return $this->buildStubAiPayload($region, $prompt);
         }
 
@@ -2713,6 +2711,7 @@ class AiSitePageComponentGenerationService
             'is_preview' => true,
             '_content_locale' => $this->resolvePrimaryLocale($websiteProfile, $scope),
             '_content_locale_explicit' => \trim((string)($scope['content_locale'] ?? $websiteProfile['content_locale'] ?? '')) !== '',
+            'asset_manifest' => \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : ['version' => 1, 'slots' => []],
             'verified_assets' => \is_array($scope['verified_assets'] ?? null) ? $scope['verified_assets'] : $this->extractVerifiedAssetsFromManifest($scope),
         ], $blogContext);
     }
@@ -2737,6 +2736,101 @@ class AiSitePageComponentGenerationService
         }
 
         return $assets;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return list<array<string,mixed>>
+     */
+    private function extractManifestSlots(array $scope): array
+    {
+        $manifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [];
+        $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
+
+        return \array_values(\array_filter($slots, static fn($slot): bool => \is_array($slot)));
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function resolveHeaderAssetUrl(array $scope): string
+    {
+        foreach ($this->extractManifestSlots($scope) as $slot) {
+            $slotType = \trim((string)($slot['slot_type'] ?? ''));
+            if (!\in_array($slotType, ['logo_icon', 'trust_brand_image'], true)) {
+                continue;
+            }
+            $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+            if ($finalUrl !== '') {
+                return $finalUrl;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string,mixed> $section
+     * @param array<string,mixed> $scope
+     */
+    private function resolveSectionAssetUrl(string $pageType, array $section, array $scope): string
+    {
+        $candidates = [];
+        foreach ([
+            (string)($section['key'] ?? ''),
+            (string)($section['source_block_key'] ?? ''),
+            (string)($section['code'] ?? ''),
+            (string)($section['name'] ?? ''),
+        ] as $candidate) {
+            $candidate = \strtolower(\trim($candidate));
+            if ($candidate !== '') {
+                $candidates[$candidate] = true;
+            }
+        }
+
+        $preferredTypes = (string)($section['template'] ?? '') === 'hero'
+            ? ['hero_image', 'section_image', 'trust_brand_image']
+            : ['section_image', 'trust_brand_image', 'hero_image'];
+
+        $slots = $this->extractManifestSlots($scope);
+        foreach ($preferredTypes as $preferredType) {
+            foreach ($slots as $slot) {
+                $slotType = \trim((string)($slot['slot_type'] ?? ''));
+                $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+                if ($slotType !== $preferredType || $finalUrl === '') {
+                    continue;
+                }
+                $slotPageType = \trim((string)($slot['page_type'] ?? ''));
+                if ($slotPageType !== '' && $slotPageType !== $pageType) {
+                    continue;
+                }
+                $haystack = \strtolower(\implode(' ', [
+                    (string)($slot['slot_id'] ?? ''),
+                    (string)($slot['block_key'] ?? ''),
+                    (string)($slot['task_key'] ?? ''),
+                    (string)($slot['label'] ?? ''),
+                    (string)($slot['brief'] ?? ''),
+                ]));
+                foreach (\array_keys($candidates) as $needle) {
+                    if ($needle !== '' && \str_contains($haystack, $needle)) {
+                        return $finalUrl;
+                    }
+                }
+            }
+        }
+
+        foreach ($preferredTypes as $preferredType) {
+            foreach ($slots as $slot) {
+                $slotType = \trim((string)($slot['slot_type'] ?? ''));
+                $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+                $slotPageType = \trim((string)($slot['page_type'] ?? ''));
+                if ($slotType === $preferredType && $finalUrl !== '' && ($slotPageType === '' || $slotPageType === $pageType)) {
+                    return $finalUrl;
+                }
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -3839,6 +3933,7 @@ class AiSitePageComponentGenerationService
             'logo.display' => 'yes',
             'logo.text' => $siteDisplayName,
             'logo.image' => (string)($websiteProfile['logo'] ?? ''),
+            'logo.url' => (string)($websiteProfile['logo'] ?? ''),
             'navigation.display' => 'yes',
             'navigation.items' => \implode("\n", $navTextLines),
             'nav_items' => \array_map(static fn(array $item): array => [
@@ -3849,6 +3944,15 @@ class AiSitePageComponentGenerationService
             'cta.text' => $this->resolvePrimaryCtaText($scope),
             'cta.url' => '#contact',
         ];
+        $logoAssetUrl = $this->resolveHeaderAssetUrl($scope);
+        if ($logoAssetUrl !== '') {
+            if (\trim((string)($defaultConfig['logo.image'] ?? '')) === '') {
+                $defaultConfig['logo.image'] = $logoAssetUrl;
+            }
+            if (\trim((string)($defaultConfig['logo.url'] ?? '')) === '') {
+                $defaultConfig['logo.url'] = $logoAssetUrl;
+            }
+        }
         $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'header'));
 
         return $this->applyTaskPlanDefaults($defaultConfig, $this->resolveSharedTaskPlanTask($scope, 'header'), $locale);
@@ -3988,6 +4092,13 @@ class AiSitePageComponentGenerationService
             'style.title_color' => ((string)($section['template'] ?? '') === 'cta') ? '#ffffff' : '#0f172a',
             'style.accent_color' => '#2563eb',
         ];
+        $sectionImageUrl = $this->resolveSectionAssetUrl($pageType, $section, $scope);
+        if ($sectionImageUrl !== '') {
+            $defaultConfig['visual.image_url'] = $sectionImageUrl;
+            $defaultConfig['visual.image_alt'] = $title !== '' ? $title : (string)($section['name'] ?? 'Section image');
+            $defaultConfig['image.url'] = $sectionImageUrl;
+            $defaultConfig['media.image_url'] = $sectionImageUrl;
+        }
         $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'content'));
 
         $taskPlanTask = $this->resolveSectionTaskPlanTask(
@@ -4792,6 +4903,12 @@ class AiSitePageComponentGenerationService
         return (\defined('ENV_TEST') && ENV_TEST === true)
             || \defined('PHPUNIT_COMPOSER_INSTALL')
             || \defined('__PHPUNIT_PHAR__');
+    }
+
+    private function shouldUseStubAiGeneration(): bool
+    {
+        return !(bool)RequestContext::get(self::REQUEST_KEY_FORCE_REAL_AI_IN_TEST, false)
+            && (bool)RequestContext::get(self::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST, false);
     }
 
     private function getFrameworkBuilder(): FrameworkBuilder

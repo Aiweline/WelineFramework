@@ -643,6 +643,22 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString("'fresh_repair_failed_tasks' => 1", $handleSource);
     }
 
+    public function testConfirmedTaskPlanBuildDiscardsLingeringTaskPlanActiveOperationBeforeQueueStart(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $handleSource = $this->extractControllerMethodSource($source, 'handleStartBuild');
+
+        $confirmedOffset = \strpos($handleSource, "if (!\$this->isTaskPlanConfirmedForBuild(\$mergedScope))");
+        $discardOffset = \strpos($handleSource, "\$mergedScope = \$this->markRunningTaskPlanAsDiscardedForRebuild(\$mergedScope, \$activeOperation);");
+        $startOffset = \strpos($handleSource, "\$startResult = \$this->startOperation(");
+
+        self::assertNotFalse($confirmedOffset, 'build must still guard on confirmed stage-two task plan');
+        self::assertNotFalse($discardOffset, 'confirmed build should discard lingering task_plan active_operation before queue start');
+        self::assertNotFalse($startOffset, 'build startOperation call missing');
+        self::assertGreaterThan($confirmedOffset, $discardOffset);
+        self::assertLessThan($startOffset, $discardOffset);
+    }
+
     public function testBuildAutoResumeCountsOnlyRetryableIncompleteTasks(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();

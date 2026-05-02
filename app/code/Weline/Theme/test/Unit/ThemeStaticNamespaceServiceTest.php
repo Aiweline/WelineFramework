@@ -92,6 +92,19 @@ class ThemeStaticNamespaceServiceTest extends TestCase
         );
     }
 
+    public function testModuleNotationOriginPathResolvesToPublicThemePath(): void
+    {
+        $service = $this->createService(false, [
+            'frontend_theme_id' => 0,
+            'preview_token' => '',
+        ]);
+
+        $this->assertSame(
+            'Weline/Theme/view/theme',
+            $service->resolvePublicThemePath($this->createTheme('Weline_Theme::view/theme'))
+        );
+    }
+
     public function testModuleThemeAbsoluteOriginPathStaysRelativeInPreviewStaticPath(): void
     {
         $service = $this->createService(true, [

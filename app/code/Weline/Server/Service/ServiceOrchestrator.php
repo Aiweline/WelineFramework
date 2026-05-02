@@ -8947,6 +8947,20 @@ class ServiceOrchestrator
                 (int) ($worker->getMeta('dispatcher_pool_reject_count') ?? 0) + 1
             );
             $this->registry->updateInstance($worker);
+            $targetClientId = $worker->ipcClientId;
+            if ($targetClientId !== null && $this->controlServer !== null) {
+                $this->controlServer->sendTo($targetClientId, ControlMessage::workerPoolAck(
+                    $port,
+                    false,
+                    ControlMessage::ROLE_WORKER,
+                    $this->getInstanceSlotId($worker),
+                    $this->getInstanceLeaseId($worker),
+                    $this->getInstanceGeneration($worker),
+                    (string)($msg['msg_id'] ?? ''),
+                    'dispatcher_not_in_pool',
+                    true
+                ));
+            }
             // 关键：清空签名，避免同一签名下次被 syncDispatcherFullWorkerPoolFromRegistry() 误判“已同步”而跳过重试。
             $this->lastDispatcherWorkerPoolSignature = '';
             $taskKey = "worker_pool_recover:{$port}";
