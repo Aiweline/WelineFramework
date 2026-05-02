@@ -24,6 +24,7 @@ use GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspaceStateHelperService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentWebsitesMirrorService;
 use GuoLaiRen\PageBuilder\Service\AiSiteBlockPartialPatchService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAssetManifestService;
+use GuoLaiRen\PageBuilder\Service\AiSiteAutoAssetGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSiteDraftWebsiteService;
 use GuoLaiRen\PageBuilder\Service\AiSiteMaterializationService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
@@ -779,6 +780,9 @@ SCRIPT;
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI site agent API', 'mdi-api', 'Start AI asset generation', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartAssetGeneration(): string { return $this->handleStartAssetGeneration(); }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI site agent API', 'mdi-api', 'Upload AI site reference image', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postUploadReferenceImage(): string { return $this->handleUploadReferenceImage(); }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI site agent API', 'mdi-api', 'Start AI asset generation', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function startAssetGeneration(): string { return $this->handleStartAssetGeneration(); }
@@ -3080,6 +3084,21 @@ SCRIPT;
                 ['public_id', 'task_plan_confirmed']
             );
         }
+        $activeOperation = \is_array($mergedScope['active_operation'] ?? null) ? $mergedScope['active_operation'] : [];
+        $activeTaskPlanOperation = \trim((string)($activeOperation['operation'] ?? '')) === 'task_plan'
+            && \in_array(\strtolower(\trim((string)($activeOperation['status'] ?? ''))), ['queued', 'pending', 'running', 'processing'], true);
+        if ($activeTaskPlanOperation) {
+            $mergedScope = $this->markRunningTaskPlanAsDiscardedForRebuild($mergedScope, $activeOperation);
+            $scopePatch['active_operation'] = \is_array($mergedScope['active_operation'] ?? null) ? $mergedScope['active_operation'] : [];
+            $scopePatch['active_operations'] = \is_array($mergedScope['active_operations'] ?? null) ? $mergedScope['active_operations'] : [];
+            $saved = $this->sessionService->mergeScope($session->getId(), $adminId, [
+                'active_operation' => $scopePatch['active_operation'],
+                'active_operations' => $scopePatch['active_operations'],
+            ]);
+            if ($saved) {
+                $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            }
+        }
         if ($isResume) {
             $pendingSummary = $this->buildTaskService->summarize($mergedScope);
             $pendingCount = (int)($pendingSummary['pending'] ?? 0);
@@ -3123,6 +3142,10 @@ SCRIPT;
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         $slotId = \trim((string)$this->getRequestBodyValue('slot_id', ''));
+        $promptBrief = \trim((string)$this->getRequestBodyValue('prompt_brief', ''));
+        $slotType = \trim((string)$this->getRequestBodyValue('slot_type', 'section_image'));
+        $pageType = \trim((string)$this->getRequestBodyValue('page_type', ''));
+        $label = \trim((string)$this->getRequestBodyValue('label', ''));
         $mode = \trim((string)$this->getRequestBodyValue('mode', 'generate'));
         $executionToken = \trim((string)$this->getRequestBodyValue('execution_token', ''));
         if ($executionToken === '') {
@@ -3130,6 +3153,12 @@ SCRIPT;
         }
         if (!\in_array($mode, ['generate', 'regenerate'], true)) {
             $mode = 'generate';
+        }
+        if ($slotId === '' && $promptBrief !== '') {
+            $slotId = 'agent_tool_' . \substr(\sha1($promptBrief . ':' . \microtime(true)), 0, 12);
+        }
+        if (!\in_array($slotType, ['hero_image', 'trust_brand_image', 'section_image', 'logo_icon'], true)) {
+            $slotType = 'section_image';
         }
         if ($adminId <= 0 || $publicId === '' || $slotId === '') {
             return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), ['public_id', 'slot_id']);
@@ -3146,6 +3175,22 @@ SCRIPT;
         $assetManifestService = $this->assetManifestService();
         $manifest = $assetManifestService->syncFromTaskPlan($scope);
         $slot = $assetManifestService->getSlot($manifest, $slotId);
+        if ($slot === [] && $promptBrief !== '') {
+            $manifest = $assetManifestService->upsert($manifest, [
+                'slot_id' => $slotId,
+                'slot_type' => $slotType,
+                'kind' => $slotType,
+                'page_type' => $pageType,
+                'label' => $label !== '' ? $label : 'AI generated image',
+                'brief' => $promptBrief,
+                'prompt_brief' => $promptBrief,
+                'status' => 'pending',
+                'source' => 'agent_tool',
+                'final_url' => '',
+                'locked_by_user' => 0,
+            ]);
+            $slot = $assetManifestService->getSlot($manifest, $slotId);
+        }
         if ($slot === []) {
             return $this->jsonError('ASSET_SLOT_NOT_FOUND', 'Asset slot does not exist.', ['public_id', 'slot_id']);
         }
@@ -3280,6 +3325,111 @@ SCRIPT;
             'queue_status' => 'pending',
             'reused' => false,
         ];
+    }
+
+    private function handleUploadReferenceImage(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
+        if ($adminId <= 0 || $publicId === '') {
+            return $this->jsonError('INVALID_PARAMS', 'Invalid public_id.', ['public_id']);
+        }
+
+        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            return $this->jsonError('SESSION_NOT_FOUND', 'Session does not exist or is not accessible.', ['public_id']);
+        }
+
+        $file = $this->resolveReferenceImageUploadFile();
+        if ($file === []) {
+            return $this->jsonError('REFERENCE_IMAGE_REQUIRED', 'Reference image is required.', ['reference_image']);
+        }
+        if ((int)($file['error'] ?? \UPLOAD_ERR_OK) !== \UPLOAD_ERR_OK) {
+            return $this->jsonError('REFERENCE_IMAGE_UPLOAD_FAILED', 'Reference image upload failed.', ['reference_image']);
+        }
+
+        $tmpName = (string)($file['tmp_name'] ?? '');
+        if ($tmpName === '' || !\is_file($tmpName)) {
+            return $this->jsonError('REFERENCE_IMAGE_TMP_MISSING', 'Uploaded reference image is missing.', ['reference_image']);
+        }
+
+        $size = (int)($file['size'] ?? \filesize($tmpName) ?: 0);
+        if ($size <= 0 || $size > 10 * 1024 * 1024) {
+            return $this->jsonError('REFERENCE_IMAGE_SIZE_INVALID', 'Reference image must be smaller than 10MB.', ['reference_image']);
+        }
+
+        $imageInfo = @\getimagesize($tmpName);
+        $mimeType = \is_array($imageInfo) ? \strtolower((string)($imageInfo['mime'] ?? '')) : '';
+        $extensionByMime = [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            'image/gif' => 'gif',
+        ];
+        if (!isset($extensionByMime[$mimeType])) {
+            return $this->jsonError('REFERENCE_IMAGE_TYPE_INVALID', 'Only jpg, png, webp and gif reference images are supported.', ['reference_image']);
+        }
+
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, $this->scopeCompatibilityService->normalizeStage($session->getStage()))
+        );
+        $handle = $this->resolveAiSiteAssetTargetHandle($scope, $session);
+        $originalName = \basename((string)($file['name'] ?? 'reference-image'));
+        $safeName = $this->sanitizeAiSiteAssetPathSegment(\pathinfo($originalName, \PATHINFO_FILENAME));
+        $hash = \substr(\sha1_file($tmpName) ?: \sha1($tmpName . ':' . \microtime(true)), 0, 16);
+        $relativePath = 'pub/media/page-build/' . $handle . '/reference/' . $safeName . '-' . $hash . '.' . $extensionByMime[$mimeType];
+        $targetPath = \rtrim((string)BP, '/\\') . DS . \str_replace(['/', '\\'], DS, $relativePath);
+        $targetDir = \dirname($targetPath);
+        if (!\is_dir($targetDir) && !@\mkdir($targetDir, 0775, true) && !\is_dir($targetDir)) {
+            return $this->jsonError('REFERENCE_IMAGE_SAVE_DIR_FAILED', 'Failed to create reference image directory.', ['reference_image']);
+        }
+
+        $moved = \is_uploaded_file($tmpName) ? @\move_uploaded_file($tmpName, $targetPath) : @\copy($tmpName, $targetPath);
+        if (!$moved) {
+            return $this->jsonError('REFERENCE_IMAGE_SAVE_FAILED', 'Failed to save reference image.', ['reference_image']);
+        }
+
+        $referenceImage = [
+            'url' => '/' . \str_replace('\\', '/', $relativePath),
+            'path' => $relativePath,
+            'mime_type' => $mimeType,
+            'size' => $size,
+            'name' => $originalName,
+            'uploaded_at' => \date('Y-m-d H:i:s'),
+        ];
+        $referenceImages = \is_array($scope['reference_images'] ?? null) ? $scope['reference_images'] : [];
+        $referenceImages[] = $referenceImage;
+        $referenceImages = \array_values(\array_slice($referenceImages, -12));
+
+        $saved = $this->sessionService->mergeScope((int)$session->getId(), $adminId, [
+            'reference_images' => $referenceImages,
+        ]);
+        if (!$saved) {
+            return $this->jsonError('REFERENCE_IMAGE_SCOPE_SAVE_FAILED', 'Failed to save reference image into workspace.', ['reference_image']);
+        }
+
+        $fresh = $this->sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+        return $this->fetchJson([
+            'success' => true,
+            'message' => 'Reference image uploaded.',
+            'reference_image' => $referenceImage,
+            'reference_images' => $referenceImages,
+            'data' => $this->buildWorkspaceState($fresh, $adminId, 24, true),
+        ]);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function resolveReferenceImageUploadFile(): array
+    {
+        foreach (['reference_image', 'image', 'file'] as $key) {
+            if (isset($_FILES[$key]) && \is_array($_FILES[$key])) {
+                return $_FILES[$key];
+            }
+        }
+
+        return [];
     }
 
     private function buildAiSiteAssetQueueBizKey(int $sessionId, string $slotId): string
@@ -8071,6 +8221,21 @@ SCRIPT;
     }
 
     /**
+     * @param array<string,mixed> $scope
+     * @return array{
+     *   scope:array<string,mixed>,
+     *   generated_slots:list<string>,
+     *   failed_slots:list<array{slot_id:string,message:string}>
+     * }
+     */
+    private function prepareBuildImageAssets(AiSiteAgentSession $session, int $adminId, array $scope): array
+    {
+        /** @var AiSiteAutoAssetGenerationService $service */
+        $service = ObjectManager::getInstance(AiSiteAutoAssetGenerationService::class);
+        return $service->prepareBuildAssets($session, $adminId, $scope);
+    }
+
+    /**
      * @param array<string, mixed> $activeOperation
      * @param array<string, mixed>|null $queueInfo
      *
@@ -10442,6 +10607,7 @@ SCRIPT;
             'build_summary' => \is_array($normalized['build_summary'] ?? null) ? $normalized['build_summary'] : [],
             'asset_manifest' => \is_array($normalized['asset_manifest'] ?? null) ? $normalized['asset_manifest'] : ['version' => 1, 'slots' => []],
             'verified_assets' => \is_array($normalized['verified_assets'] ?? null) ? $normalized['verified_assets'] : [],
+            'reference_images' => \is_array($normalized['reference_images'] ?? null) ? $normalized['reference_images'] : [],
             'top_logs' => $topLogs,
             'scope' => $clientScope,
             'events' => $events,
@@ -11875,7 +12041,7 @@ SCRIPT;
             return ['success' => false, 'message' => __('所选页面类型不在当前工作区中')];
         }
 
-        if ($this->requiresFrontendAiProviderReadinessCheck($operation)) {
+        if ((int)($scope['fake_mode'] ?? 0) !== 1 && $this->requiresFrontendAiProviderReadinessCheck($operation)) {
             try {
                 $this->assertFrontendAiProviderReadyBeforeQueue($operation);
             } catch (\Throwable $throwable) {
@@ -13390,6 +13556,33 @@ SCRIPT;
         $scope['draft_website_id'] = (int)$draftWebsite['website_id'];
         $scope['website_id'] = (int)$draftWebsite['website_id'];
         $scope['selected_website_id'] = (int)$draftWebsite['website_id'];
+        $autoAssetResult = $this->prepareBuildImageAssets($session, $adminId, $scope);
+        $scope = $autoAssetResult['scope'];
+        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+        if ($autoAssetResult['generated_slots'] !== []) {
+            $this->emitBuildInfoEvent(
+                $sse,
+                (string)__('Generated %{count} AI image assets before page build.', ['count' => (string)\count($autoAssetResult['generated_slots'])]),
+                [
+                    'event_type' => 'build_asset_generation_completed',
+                    'generated_slots' => $autoAssetResult['generated_slots'],
+                ]
+            );
+        }
+        foreach ($autoAssetResult['failed_slots'] as $failedSlot) {
+            $this->emitBuildInfoEvent(
+                $sse,
+                (string)__('AI image asset generation failed for %{slot}: %{message}', [
+                    'slot' => (string)($failedSlot['slot_id'] ?? ''),
+                    'message' => (string)($failedSlot['message'] ?? ''),
+                ]),
+                [
+                    'event_type' => 'build_asset_generation_failed',
+                    'slot_id' => (string)($failedSlot['slot_id'] ?? ''),
+                    'message' => (string)($failedSlot['message'] ?? ''),
+                ]
+            );
+        }
 
         /** @var AiSitePageComponentGenerationService $pageComponentGenerationService */
         $pageComponentGenerationService = ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
@@ -14558,6 +14751,33 @@ SCRIPT;
         $scope['draft_website_id'] = (int)$draftWebsite['website_id'];
         $scope['website_id'] = (int)$draftWebsite['website_id'];
         $scope['selected_website_id'] = (int)$draftWebsite['website_id'];
+        $autoAssetResult = $this->prepareBuildImageAssets($session, $adminId, $scope);
+        $scope = $autoAssetResult['scope'];
+        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+        if ($autoAssetResult['generated_slots'] !== []) {
+            $this->emitBuildInfoEvent(
+                $sse,
+                (string)__('Generated %{count} AI image assets before page build.', ['count' => (string)\count($autoAssetResult['generated_slots'])]),
+                [
+                    'event_type' => 'build_asset_generation_completed',
+                    'generated_slots' => $autoAssetResult['generated_slots'],
+                ]
+            );
+        }
+        foreach ($autoAssetResult['failed_slots'] as $failedSlot) {
+            $this->emitBuildInfoEvent(
+                $sse,
+                (string)__('AI image asset generation failed for %{slot}: %{message}', [
+                    'slot' => (string)($failedSlot['slot_id'] ?? ''),
+                    'message' => (string)($failedSlot['message'] ?? ''),
+                ]),
+                [
+                    'event_type' => 'build_asset_generation_failed',
+                    'slot_id' => (string)($failedSlot['slot_id'] ?? ''),
+                    'message' => (string)($failedSlot['message'] ?? ''),
+                ]
+            );
+        }
         $themeShell = $this->virtualThemeService->ensureThemeShell($scope, $scope['website_profile'], $session->getId());
         $scope['virtual_theme_id'] = (int)$themeShell['virtual_theme_id'];
 
